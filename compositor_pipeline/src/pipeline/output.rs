@@ -5,6 +5,7 @@ use compositor_render::{
 };
 use crossbeam_channel::{bounded, Receiver, Sender};
 use mp4::{Mp4AudioEncoderConfig, Mp4EncoderConfig, Mp4FileWriter, Mp4OutputOptions};
+use rtmp::RtmpSenderOptions;
 use tracing::debug;
 
 use crate::{audio_mixer::OutputSamples, error::RegisterOutputError, queue::PipelineEvent};
@@ -19,6 +20,7 @@ use super::{
 use whip::{WhipSender, WhipSenderOptions};
 
 pub mod mp4;
+pub mod rtmp;
 pub mod rtp;
 pub mod whip;
 
@@ -33,6 +35,7 @@ pub struct OutputOptions {
 #[derive(Debug, Clone)]
 pub enum OutputProtocolOptions {
     Rtp(RtpSenderOptions),
+    Rtmp(RtmpSenderOptions),
     Mp4(Mp4OutputOptions),
     Whip(WhipSenderOptions),
 }
@@ -68,6 +71,10 @@ pub struct RawAudioOptions;
 pub enum Output {
     Rtp {
         sender: RtpSender,
+        encoder: Encoder,
+    },
+    Rtmp {
+        sender: rtmp::RmtpSender,
         encoder: Encoder,
     },
     Mp4 {
@@ -122,6 +129,17 @@ impl OutputOptionsExt<Option<Port>> for OutputOptions {
                         .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
 
                 Ok((Output::Rtp { sender, encoder }, Some(port)))
+            }
+            OutputProtocolOptions::Rtmp(rtmp_options) => {
+                let sender = rtmp::RmtpSender::new(
+                    output_id,
+                    rtmp_options.clone(),
+                    packets,
+                    ctx.mixing_sample_rate,
+                )
+                .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
+
+                Ok((Output::Rtmp { sender, encoder }, None))
             }
             OutputProtocolOptions::Mp4(mp4_opt) => {
                 let encoder_config = Mp4EncoderConfig {
@@ -229,6 +247,7 @@ impl Output {
     pub fn frame_sender(&self) -> Option<&Sender<PipelineEvent<Frame>>> {
         match &self {
             Output::Rtp { encoder, .. } => encoder.frame_sender(),
+            Output::Rtmp { encoder, .. } => encoder.frame_sender(),
             Output::Mp4 { encoder, .. } => encoder.frame_sender(),
             Output::Whip { encoder, .. } => encoder.frame_sender(),
             Output::EncodedData { encoder } => encoder.frame_sender(),
@@ -239,6 +258,7 @@ impl Output {
     pub fn samples_batch_sender(&self) -> Option<&Sender<PipelineEvent<OutputSamples>>> {
         match &self {
             Output::Rtp { encoder, .. } => encoder.samples_batch_sender(),
+            Output::Rtmp { encoder, .. } => encoder.samples_batch_sender(),
             Output::Mp4 { encoder, .. } => encoder.samples_batch_sender(),
             Output::Whip { encoder, .. } => encoder.samples_batch_sender(),
             Output::EncodedData { encoder } => encoder.samples_batch_sender(),
@@ -249,6 +269,7 @@ impl Output {
     pub fn resolution(&self) -> Option<Resolution> {
         match &self {
             Output::Rtp { encoder, .. } => encoder.video.as_ref().map(|v| v.resolution()),
+            Output::Rtmp { encoder, .. } => encoder.video.as_ref().map(|v| v.resolution()),
             Output::Mp4 { encoder, .. } => encoder.video.as_ref().map(|v| v.resolution()),
             Output::Whip { encoder, .. } => encoder.video.as_ref().map(|v| v.resolution()),
             Output::EncodedData { encoder } => encoder.video.as_ref().map(|v| v.resolution()),
@@ -259,6 +280,7 @@ impl Output {
     pub fn request_keyframe(&self, output_id: OutputId) -> Result<(), RequestKeyframeError> {
         let encoder = match &self {
             Output::Rtp { encoder, .. } => encoder,
+            Output::Rtmp { encoder, .. } => encoder,
             Output::Mp4 { encoder, .. } => encoder,
             Output::Whip { encoder, .. } => encoder,
             Output::EncodedData { encoder } => encoder,
@@ -282,6 +304,10 @@ impl Output {
     pub(super) fn output_frame_format(&self) -> Option<OutputFrameFormat> {
         match &self {
             Output::Rtp { encoder, .. } => encoder
+                .video
+                .as_ref()
+                .map(|_| OutputFrameFormat::PlanarYuv420Bytes),
+            Output::Rtmp { encoder, .. } => encoder
                 .video
                 .as_ref()
                 .map(|_| OutputFrameFormat::PlanarYuv420Bytes),

@@ -29,6 +29,16 @@ pub struct RtpOutput {
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct RtmpOutput {
+    pub url: String,
+    /// Video stream configuration.
+    pub video: Option<OutputVideoOptions>,
+    /// Audio stream configuration.
+    pub audio: Option<OutputMp4AudioOptions>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct Mp4Output {
     /// Path to output MP4 file.
     pub path: String,
