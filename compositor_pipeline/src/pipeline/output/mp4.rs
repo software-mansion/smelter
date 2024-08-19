@@ -47,6 +47,15 @@ pub enum Mp4AudioEncoderConfig {
     Aac(bytes::Bytes),
 }
 
+pub enum Mp4OutputVideoTrack {
+    H264 { width: u32, height: u32 },
+}
+
+pub struct Mp4WriterOptions {
+    pub output_path: PathBuf,
+    pub video: Option<Mp4OutputVideoTrack>,
+}
+
 pub struct Mp4FileWriter;
 
 impl Mp4FileWriter {
@@ -128,13 +137,13 @@ fn init_ffmpeg_output(
             };
 
             let mut stream = output_ctx
-                .add_stream(ffmpeg::codec::Id::H264)
+                .add_stream(codec)
                 .map_err(OutputInitError::FfmpegMp4Error)?;
 
             stream.set_time_base(ffmpeg::Rational::new(1, VIDEO_TIME_BASE));
 
             let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
-            codecpar.codec_id = codec.into();
+            codecpar.codec_id = ffmpeg::codec::Id::H264.into();
             codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
             codecpar.width = v.width as i32;
             codecpar.height = v.height as i32;
