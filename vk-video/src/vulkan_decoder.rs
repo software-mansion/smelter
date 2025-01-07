@@ -1,21 +1,18 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use ash::vk;
 
 use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 use session_resources::VideoSessionResources;
 use tracing::error;
-use wrappers::*;
 
 use crate::parser::{DecodeInformation, DecoderInstruction, ReferenceId};
+use crate::{wrappers::*, VulkanCtxError, VulkanDevice};
 
 mod frame_sorter;
 mod session_resources;
-mod vulkan_ctx;
-mod wrappers;
 
 pub(crate) use frame_sorter::FrameSorter;
-pub use vulkan_ctx::*;
 
 pub struct VulkanDecoder<'a> {
     vulkan_device: Arc<VulkanDevice>,
@@ -32,6 +29,11 @@ struct SyncStructures {
     fence_memory_barrier_completed: Fence,
 }
 
+pub(crate) struct CommandPools {
+    pub(crate) _decode_pool: Arc<CommandPool>,
+    pub(crate) _transfer_pool: Arc<CommandPool>,
+}
+
 struct CommandBuffers {
     decode_buffer: CommandBuffer,
     gpu_to_mem_transfer_buffer: CommandBuffer,
@@ -41,9 +43,8 @@ struct CommandBuffers {
 /// this cannot outlive the image and semaphore it borrows, but it seems impossible to encode that
 /// in the lifetimes
 struct DecodeSubmission {
-    image: vk::Image,
+    image: Arc<Mutex<Image>>,
     dimensions: vk::Extent2D,
-    current_layout: vk::ImageLayout,
     layer: u32,
     wait_semaphore: vk::Semaphore,
     _input_buffer: Buffer,
@@ -60,9 +61,6 @@ pub enum VulkanDecoderError {
 
     #[error("A NALU requiring a session received before a session was created (probably before receiving first SPS)")]
     NoSession,
-
-    #[error("A slot in the Decoded Pictures Buffer was requested, but all slots are taken")]
-    NoFreeSlotsInDpb,
 
     #[error("A picture which is not in the decoded pictures buffer was requested as a reference picture")]
     NonExistentReferenceRequested,
@@ -89,12 +87,12 @@ pub enum VulkanDecoderError {
 impl VulkanDecoder<'_> {
     pub fn new(vulkan_ctx: Arc<VulkanDevice>) -> Result<Self, VulkanDecoderError> {
         let decode_pool = Arc::new(CommandPool::new(
-            vulkan_ctx.device.clone(),
+            vulkan_ctx.clone(),
             vulkan_ctx.queues.h264_decode.idx,
         )?);
 
         let transfer_pool = Arc::new(CommandPool::new(
-            vulkan_ctx.device.clone(),
+            vulkan_ctx.clone(),
             vulkan_ctx.queues.transfer.idx,
         )?);
 
@@ -287,6 +285,7 @@ impl VulkanDecoder<'_> {
         let size = Self::pad_size_to_alignment(
             decode_information.rbsp_bytes.len() as u64,
             self.vulkan_device
+                .decode_capabilities
                 .video_capabilities
                 .min_bitstream_buffer_offset_alignment,
         );
@@ -450,7 +449,7 @@ impl VulkanDecoder<'_> {
             .unwrap();
 
         // these 3 veriables are for copying the result later
-        let (target_image, target_image_layout, target_layer) = video_session_resources
+        let (target_image, target_layer) = video_session_resources
             .decoding_images
             .target_info(new_reference_slot_index);
 
@@ -516,7 +515,6 @@ impl VulkanDecoder<'_> {
             image: target_image,
             wait_semaphore: *self.sync_structures.sem_decode_done,
             layer: target_layer as u32,
-            current_layout: target_image_layout,
             dimensions,
             _input_buffer: decode_buffer,
             picture_order_cnt: decode_information.picture_info.PicOrderCnt_for_decoding[0],
@@ -559,58 +557,31 @@ impl VulkanDecoder<'_> {
             .queue_family_indices(&queue_indices)
             .initial_layout(vk::ImageLayout::UNDEFINED);
 
-        let image = Arc::new(Image::new(
-            self.vulkan_device.allocator.clone(),
-            &create_info,
-        )?);
+        let mut image = Image::new(self.vulkan_device.allocator.clone(), &create_info)?;
 
         self.command_buffers
             .vulkan_to_wgpu_transfer_buffer
             .begin()?;
 
-        let memory_barrier_src = vk::ImageMemoryBarrier2::default()
-            .src_stage_mask(vk::PipelineStageFlags2::NONE)
-            .src_access_mask(vk::AccessFlags2::NONE)
-            .dst_stage_mask(vk::PipelineStageFlags2::COPY)
-            .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
-            .old_layout(decode_output.current_layout)
-            .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .image(decode_output.image)
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: decode_output.layer,
-                layer_count: 1,
-            });
+        let old_layout = decode_output
+            .image
+            .lock()
+            .unwrap()
+            .transition_layout_single_layer(
+                &self.command_buffers.vulkan_to_wgpu_transfer_buffer,
+                vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
+                vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_READ,
+                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                decode_output.layer,
+            )?;
 
-        let memory_barrier_dst = vk::ImageMemoryBarrier2::default()
-            .src_stage_mask(vk::PipelineStageFlags2::NONE)
-            .src_access_mask(vk::AccessFlags2::NONE)
-            .dst_stage_mask(vk::PipelineStageFlags2::COPY)
-            .dst_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
-            .old_layout(vk::ImageLayout::UNDEFINED)
-            .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .image(**image)
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            });
-
-        unsafe {
-            self.vulkan_device.device.cmd_pipeline_barrier2(
-                *self.command_buffers.vulkan_to_wgpu_transfer_buffer,
-                &vk::DependencyInfo::default()
-                    .image_memory_barriers(&[memory_barrier_src, memory_barrier_dst]),
-            )
-        };
+        image.transition_layout_single_layer(
+            &self.command_buffers.vulkan_to_wgpu_transfer_buffer,
+            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
+            vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_WRITE,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            0,
+        )?;
 
         let copy_info = [
             vk::ImageCopy::default()
@@ -654,37 +625,33 @@ impl VulkanDecoder<'_> {
         unsafe {
             self.vulkan_device.device.cmd_copy_image(
                 *self.command_buffers.vulkan_to_wgpu_transfer_buffer,
-                decode_output.image,
+                decode_output.image.lock().unwrap().image,
                 vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                **image,
+                *image,
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 &copy_info,
             );
         }
 
-        let memory_barrier_src = memory_barrier_src
-            .src_stage_mask(vk::PipelineStageFlags2::COPY)
-            .src_access_mask(vk::AccessFlags2::TRANSFER_READ)
-            .dst_stage_mask(vk::PipelineStageFlags2::NONE)
-            .dst_access_mask(vk::AccessFlags2::NONE)
-            .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .new_layout(decode_output.current_layout);
+        decode_output
+            .image
+            .lock()
+            .unwrap()
+            .transition_layout_single_layer(
+                &self.command_buffers.vulkan_to_wgpu_transfer_buffer,
+                vk::PipelineStageFlags2::COPY..vk::PipelineStageFlags2::NONE,
+                vk::AccessFlags2::TRANSFER_READ..vk::AccessFlags2::NONE,
+                old_layout,
+                decode_output.layer,
+            )?;
 
-        let memory_barrier_dst = memory_barrier_dst
-            .src_stage_mask(vk::PipelineStageFlags2::COPY)
-            .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
-            .dst_stage_mask(vk::PipelineStageFlags2::NONE)
-            .dst_access_mask(vk::AccessFlags2::NONE)
-            .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-            .new_layout(vk::ImageLayout::GENERAL);
-
-        unsafe {
-            self.vulkan_device.device.cmd_pipeline_barrier2(
-                *self.command_buffers.vulkan_to_wgpu_transfer_buffer,
-                &vk::DependencyInfo::default()
-                    .image_memory_barriers(&[memory_barrier_src, memory_barrier_dst]),
-            )
-        };
+        image.transition_layout_single_layer(
+            &self.command_buffers.vulkan_to_wgpu_transfer_buffer,
+            vk::PipelineStageFlags2::COPY..vk::PipelineStageFlags2::NONE,
+            vk::AccessFlags2::TRANSFER_WRITE..vk::AccessFlags2::NONE,
+            vk::ImageLayout::GENERAL,
+            0,
+        )?;
 
         self.command_buffers.vulkan_to_wgpu_transfer_buffer.end()?;
 
@@ -692,6 +659,7 @@ impl VulkanDecoder<'_> {
             &self.command_buffers.vulkan_to_wgpu_transfer_buffer,
             &[(
                 decode_output.wait_semaphore,
+                // TODO: why?? why not something weaker?
                 vk::PipelineStageFlags2::TOP_OF_PIPE,
             )],
             &[],
@@ -715,6 +683,7 @@ impl VulkanDecoder<'_> {
             }
         }
 
+        let image = Arc::new(image);
         let image_clone = image.clone();
 
         let hal_texture = unsafe {
@@ -775,9 +744,8 @@ impl VulkanDecoder<'_> {
         decode_output: DecodeSubmission,
     ) -> Result<Vec<u8>, VulkanDecoderError> {
         let mut dst_buffer = self.copy_image_to_buffer(
-            decode_output.image,
+            &mut decode_output.image.lock().unwrap(),
             decode_output.dimensions,
-            decode_output.current_layout,
             decode_output.layer,
             &[(decode_output.wait_semaphore, vk::PipelineStageFlags2::COPY)],
             &[],
@@ -861,9 +829,8 @@ impl VulkanDecoder<'_> {
     #[allow(clippy::too_many_arguments)]
     fn copy_image_to_buffer(
         &self,
-        image: vk::Image,
+        image: &mut Image,
         dimensions: vk::Extent2D,
-        current_image_layout: vk::ImageLayout,
         layer: u32,
         wait_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
         signal_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
@@ -871,30 +838,13 @@ impl VulkanDecoder<'_> {
     ) -> Result<Buffer, VulkanDecoderError> {
         self.command_buffers.gpu_to_mem_transfer_buffer.begin()?;
 
-        let memory_barrier = vk::ImageMemoryBarrier2::default()
-            .src_stage_mask(vk::PipelineStageFlags2::NONE)
-            .src_access_mask(vk::AccessFlags2::NONE)
-            .dst_stage_mask(vk::PipelineStageFlags2::COPY)
-            .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
-            .old_layout(current_image_layout)
-            .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .image(image)
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: layer,
-                layer_count: 1,
-            });
-
-        unsafe {
-            self.vulkan_device.device.cmd_pipeline_barrier2(
-                *self.command_buffers.gpu_to_mem_transfer_buffer,
-                &vk::DependencyInfo::default().image_memory_barriers(&[memory_barrier]),
-            )
-        };
+        let old_layout = image.transition_layout_single_layer(
+            &self.command_buffers.gpu_to_mem_transfer_buffer,
+            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
+            vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_READ,
+            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+            layer,
+        )?;
 
         let y_plane_size = dimensions.width as u64 * dimensions.height as u64;
 
@@ -942,27 +892,20 @@ impl VulkanDecoder<'_> {
         unsafe {
             self.vulkan_device.device.cmd_copy_image_to_buffer(
                 *self.command_buffers.gpu_to_mem_transfer_buffer,
-                image,
+                **image,
                 vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                 *dst_buffer,
                 &copy_info,
             )
         };
 
-        let memory_barrier = memory_barrier
-            .src_stage_mask(vk::PipelineStageFlags2::COPY)
-            .src_access_mask(vk::AccessFlags2::TRANSFER_READ)
-            .dst_stage_mask(vk::PipelineStageFlags2::NONE)
-            .dst_access_mask(vk::AccessFlags2::NONE)
-            .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .new_layout(current_image_layout);
-
-        unsafe {
-            self.vulkan_device.device.cmd_pipeline_barrier2(
-                *self.command_buffers.gpu_to_mem_transfer_buffer,
-                &vk::DependencyInfo::default().image_memory_barriers(&[memory_barrier]),
-            )
-        };
+        image.transition_layout_single_layer(
+            &self.command_buffers.gpu_to_mem_transfer_buffer,
+            vk::PipelineStageFlags2::COPY..vk::PipelineStageFlags2::NONE,
+            vk::AccessFlags2::TRANSFER_READ..vk::AccessFlags2::NONE,
+            old_layout,
+            layer,
+        )?;
 
         self.command_buffers.gpu_to_mem_transfer_buffer.end()?;
 
