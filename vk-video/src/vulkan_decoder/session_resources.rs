@@ -8,22 +8,24 @@ use h264_reader::nal::{
 use images::DecodingImages;
 use parameters::VideoSessionParametersManager;
 
+use crate::wrappers::H264DecodeProfileInfo;
+
 use super::{
-    h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc, CommandBuffer, DecodeQueryPool, Fence,
-    H264ProfileInfo, SeqParameterSetExt, VideoSession, VulkanDecoderError, VulkanDevice,
+    h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc, CommandBuffer, DecodingQueryPool, Fence,
+    ProfileInfo, SeqParameterSetExt, VideoSession, VulkanDecoderError, VulkanDevice,
 };
 
 mod images;
 mod parameters;
 
 pub(super) struct VideoSessionResources<'a> {
-    pub(crate) profile_info: H264ProfileInfo<'a>,
+    pub(crate) profile_info: ProfileInfo<'a, vk::VideoDecodeH264ProfileInfoKHR<'a>>,
     pub(crate) video_session: VideoSession,
     pub(crate) parameters_manager: VideoSessionParametersManager,
     pub(crate) decoding_images: DecodingImages<'a>,
     pub(crate) sps: HashMap<u8, SeqParameterSet>,
     pub(crate) pps: HashMap<(u8, u8), PicParameterSet>,
-    pub(crate) decode_query_pool: Option<DecodeQueryPool>,
+    pub(crate) decode_query_pool: Option<DecodingQueryPool>,
     pub(crate) level_idc: u8,
     pub(crate) max_num_reorder_frames: u64,
 }
@@ -60,10 +62,15 @@ impl VideoSessionResources<'_> {
         sps: SeqParameterSet,
         fence_memory_barrier_completed: &Fence,
     ) -> Result<Self, VulkanDecoderError> {
-        let profile_info = H264ProfileInfo::from_sps_decode(&sps)?;
+        let profile_info = ProfileInfo::from_sps_decode(&sps)?;
 
         let level_idc = sps.level_idc;
-        let max_level_idc = vk_to_h264_level_idc(vulkan_ctx.h264_caps.max_level_idc)?;
+        let max_level_idc = vk_to_h264_level_idc(
+            vulkan_ctx
+                .decode_capabilities
+                .h264_decode_capabilities
+                .max_level_idc,
+        )?;
 
         if level_idc > max_level_idc {
             return Err(VulkanDecoderError::InvalidInputData(
@@ -83,7 +90,11 @@ impl VideoSessionResources<'_> {
             max_coded_extent,
             max_dpb_slots,
             max_active_references,
-            &vulkan_ctx.video_capabilities.std_header_version,
+            vk::VideoSessionCreateFlagsKHR::empty(),
+            &vulkan_ctx
+                .decode_capabilities
+                .video_capabilities
+                .std_header_version,
         )?;
 
         let mut parameters_manager =
@@ -106,7 +117,7 @@ impl VideoSessionResources<'_> {
             .h264_decode
             .supports_result_status_queries()
         {
-            Some(DecodeQueryPool::new(
+            Some(DecodingQueryPool::new(
                 vulkan_ctx.device.clone(),
                 profile_info.profile_info,
             )?)
@@ -134,7 +145,7 @@ impl VideoSessionResources<'_> {
         sps: SeqParameterSet,
         fence_memory_barrier_completed: &Fence,
     ) -> Result<(), VulkanDecoderError> {
-        let new_profile = H264ProfileInfo::from_sps_decode(&sps)?;
+        let new_profile = ProfileInfo::from_sps_decode(&sps)?;
 
         if self.profile_info != new_profile {
             return Err(VulkanDecoderError::ProfileChangeUnsupported);
@@ -164,7 +175,11 @@ impl VideoSessionResources<'_> {
             max_coded_extent,
             max_dpb_slots,
             max_active_references,
-            &vulkan_ctx.video_capabilities.std_header_version,
+            vk::VideoSessionCreateFlagsKHR::empty(),
+            &vulkan_ctx
+                .decode_capabilities
+                .video_capabilities
+                .std_header_version,
         )?;
 
         self.parameters_manager
@@ -196,7 +211,7 @@ impl VideoSessionResources<'_> {
 
     fn new_decoding_images<'a>(
         vulkan_ctx: &VulkanDevice,
-        profile: &H264ProfileInfo,
+        profile: &H264DecodeProfileInfo,
         max_coded_extent: vk::Extent2D,
         max_dpb_slots: u32,
         decode_buffer: &CommandBuffer,
@@ -207,23 +222,17 @@ impl VideoSessionResources<'_> {
         // sps nal to arrive in between P-frames. This would cause us to loose the reference
         // pictures we need to decode the stream until we receive a new IDR. Don't know if this is
         // an issue worth fixing, I don't think I ever saw a stream like this.
-        let (decoding_images, memory_barrier) = DecodingImages::new(
+        decode_buffer.begin()?;
+
+        let decoding_images = DecodingImages::new(
             vulkan_ctx,
+            decode_buffer,
             profile,
-            &vulkan_ctx.h264_dpb_format_properties,
-            &vulkan_ctx.h264_dst_format_properties,
+            &vulkan_ctx.decode_capabilities.h264_dpb_format_properties,
+            &vulkan_ctx.decode_capabilities.h264_dst_format_properties,
             max_coded_extent,
             max_dpb_slots,
         )?;
-
-        decode_buffer.begin()?;
-
-        unsafe {
-            vulkan_ctx.device.cmd_pipeline_barrier2(
-                **decode_buffer,
-                &vk::DependencyInfo::default().image_memory_barriers(&memory_barrier),
-            );
-        }
 
         decode_buffer.end()?;
 
@@ -240,7 +249,7 @@ impl VideoSessionResources<'_> {
         Ok(decoding_images)
     }
 
-    pub(crate) fn free_reference_picture(&mut self, i: usize) -> Result<(), VulkanDecoderError> {
-        self.decoding_images.free_reference_picture(i)
+    pub(crate) fn free_reference_picture(&mut self, i: usize) {
+        self.decoding_images.free_reference_picture(i);
     }
 }

@@ -33,6 +33,7 @@ impl VideoSessionParametersManager {
                 &[],
                 &[],
                 None,
+                None,
             )?,
             sps: HashMap::new(),
             pps: HashMap::new(),
@@ -58,7 +59,7 @@ impl VideoSessionParametersManager {
         let pps = self.pps.values().map(|pps| pps.pps).collect::<Vec<_>>();
 
         self.parameters =
-            VideoSessionParameters::new(self.device.clone(), session, &sps, &pps, None)?;
+            VideoSessionParameters::new(self.device.clone(), session, &sps, &pps, None, None)?;
 
         Ok(())
     }
@@ -77,6 +78,7 @@ impl VideoSessionParametersManager {
                     &[self.sps[&key].sps],
                     &[],
                     Some(&self.parameters),
+                    None,
                 )?
             }
             std::collections::hash_map::Entry::Vacant(e) => {
@@ -101,6 +103,7 @@ impl VideoSessionParametersManager {
                     &[],
                     &[self.pps[&key].pps],
                     Some(&self.parameters),
+                    None,
                 )?;
             }
 

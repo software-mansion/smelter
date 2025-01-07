@@ -1,12 +1,17 @@
 #![cfg(not(target_os = "macos"))]
 mod parser;
+pub(crate) mod vulkan_ctx;
 mod vulkan_decoder;
+mod vulkan_encoder;
+pub(crate) mod wrappers;
 
 use parser::Parser;
 use vulkan_decoder::{FrameSorter, VulkanDecoder};
 
 pub use parser::ParserError;
-pub use vulkan_decoder::{VulkanCtxError, VulkanDecoderError, VulkanDevice, VulkanInstance};
+pub use vulkan_ctx::{H264Profile, VulkanCtxError, VulkanDevice, VulkanInstance};
+pub use vulkan_decoder::VulkanDecoderError;
+pub use vulkan_encoder::{RateControl, VulkanEncoderError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DecoderError {
@@ -20,6 +25,12 @@ pub enum DecoderError {
 pub struct Frame<T> {
     pub frame: T,
     pub pts: Option<u64>,
+}
+
+pub struct RawFrame {
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
 }
 
 pub struct WgpuTexturesDecoder<'a> {
