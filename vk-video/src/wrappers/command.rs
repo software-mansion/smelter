@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ash::vk;
 
-use crate::vulkan_decoder::{VulkanCtxError, VulkanDecoderError};
+use crate::VulkanCtxError;
 
 use super::Device;
 
@@ -51,7 +51,7 @@ pub(crate) struct CommandBuffer {
 }
 
 impl CommandBuffer {
-    pub(crate) fn new_primary(pool: Arc<CommandPool>) -> Result<Self, VulkanDecoderError> {
+    pub(crate) fn new_primary(pool: Arc<CommandPool>) -> Result<Self, VulkanCtxError> {
         let allocate_info = vk::CommandBufferAllocateInfo::default()
             .command_pool(**pool)
             .level(vk::CommandBufferLevel::PRIMARY)
@@ -62,7 +62,7 @@ impl CommandBuffer {
         Ok(Self { pool, buffer })
     }
 
-    pub(crate) fn begin(&self) -> Result<(), VulkanDecoderError> {
+    pub(crate) fn begin(&self) -> Result<(), VulkanCtxError> {
         unsafe {
             self.device().begin_command_buffer(
                 self.buffer,
@@ -73,7 +73,7 @@ impl CommandBuffer {
         Ok(())
     }
 
-    pub(crate) fn end(&self) -> Result<(), VulkanDecoderError> {
+    pub(crate) fn end(&self) -> Result<(), VulkanCtxError> {
         unsafe { self.device().end_command_buffer(self.buffer)? };
 
         Ok(())

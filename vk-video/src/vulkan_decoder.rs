@@ -5,17 +5,15 @@ use ash::vk;
 use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 use session_resources::VideoSessionResources;
 use tracing::error;
-use wrappers::*;
 
 use crate::parser::{DecodeInformation, DecoderInstruction, ReferenceId};
+use crate::vulkan_ctx::CommandPools;
+use crate::{wrappers::*, VulkanCtxError, VulkanDevice};
 
 mod frame_sorter;
 mod session_resources;
-mod vulkan_ctx;
-mod wrappers;
 
 pub(crate) use frame_sorter::FrameSorter;
-pub use vulkan_ctx::*;
 
 pub struct VulkanDecoder<'a> {
     vulkan_device: Arc<VulkanDevice>,
@@ -287,6 +285,7 @@ impl VulkanDecoder<'_> {
         let size = Self::pad_size_to_alignment(
             decode_information.rbsp_bytes.len() as u64,
             self.vulkan_device
+                .decode_capabilities
                 .video_capabilities
                 .min_bitstream_buffer_offset_alignment,
         );

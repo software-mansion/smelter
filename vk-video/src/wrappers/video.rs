@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ash::vk;
 
-use crate::{vulkan_decoder::VulkanDecoderError, VulkanDevice};
+use crate::{VulkanCtxError, VulkanDevice};
 
 use super::{Device, MemoryAllocation, VideoQueueExt};
 
@@ -19,7 +19,7 @@ impl VideoSessionParameters {
         initial_sps: &[vk::native::StdVideoH264SequenceParameterSet],
         initial_pps: &[vk::native::StdVideoH264PictureParameterSet],
         template: Option<&Self>,
-    ) -> Result<Self, VulkanDecoderError> {
+    ) -> Result<Self, VulkanCtxError> {
         let parameters_add_info = vk::VideoDecodeH264SessionParametersAddInfoKHR::default()
             .std_sp_ss(initial_sps)
             .std_pp_ss(initial_pps);
@@ -56,7 +56,7 @@ impl VideoSessionParameters {
         &mut self,
         sps: &[vk::native::StdVideoH264SequenceParameterSet],
         pps: &[vk::native::StdVideoH264PictureParameterSet],
-    ) -> Result<(), VulkanDecoderError> {
+    ) -> Result<(), VulkanCtxError> {
         let mut parameters_add_info = vk::VideoDecodeH264SessionParametersAddInfoKHR::default()
             .std_sp_ss(sps)
             .std_pp_ss(pps);
@@ -102,7 +102,7 @@ impl VideoSession {
         max_dpb_slots: u32,
         max_active_references: u32,
         std_header_version: &vk::ExtensionProperties,
-    ) -> Result<Self, VulkanDecoderError> {
+    ) -> Result<Self, VulkanCtxError> {
         // TODO: this probably works, but this format needs to be detected and set
         // based on what the GPU supports
         let format = vk::Format::G8_B8R8_2PLANE_420_UNORM;

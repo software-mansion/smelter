@@ -9,7 +9,7 @@ use images::DecodingImages;
 use parameters::VideoSessionParametersManager;
 
 use super::{
-    h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc, CommandBuffer, DecodeQueryPool, Fence,
+    h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc, CodingQueryPool, CommandBuffer, Fence,
     H264ProfileInfo, SeqParameterSetExt, VideoSession, VulkanDecoderError, VulkanDevice,
 };
 
@@ -23,7 +23,7 @@ pub(super) struct VideoSessionResources<'a> {
     pub(crate) decoding_images: DecodingImages<'a>,
     pub(crate) sps: HashMap<u8, SeqParameterSet>,
     pub(crate) pps: HashMap<(u8, u8), PicParameterSet>,
-    pub(crate) decode_query_pool: Option<DecodeQueryPool>,
+    pub(crate) decode_query_pool: Option<CodingQueryPool>,
     pub(crate) level_idc: u8,
     pub(crate) max_num_reorder_frames: u64,
 }
@@ -63,7 +63,7 @@ impl VideoSessionResources<'_> {
         let profile_info = H264ProfileInfo::from_sps_decode(&sps)?;
 
         let level_idc = sps.level_idc;
-        let max_level_idc = vk_to_h264_level_idc(vulkan_ctx.h264_caps.max_level_idc)?;
+        let max_level_idc = vk_to_h264_level_idc(vulkan_ctx.decode_capabilities.h264_decode_capabilities.max_level_idc)?;
 
         if level_idc > max_level_idc {
             return Err(VulkanDecoderError::InvalidInputData(
@@ -83,7 +83,7 @@ impl VideoSessionResources<'_> {
             max_coded_extent,
             max_dpb_slots,
             max_active_references,
-            &vulkan_ctx.video_capabilities.std_header_version,
+            &vulkan_ctx.decode_capabilities.video_capabilities.std_header_version,
         )?;
 
         let mut parameters_manager =
@@ -106,7 +106,7 @@ impl VideoSessionResources<'_> {
             .h264_decode
             .supports_result_status_queries()
         {
-            Some(DecodeQueryPool::new(
+            Some(CodingQueryPool::new(
                 vulkan_ctx.device.clone(),
                 profile_info.profile_info,
             )?)
@@ -164,7 +164,7 @@ impl VideoSessionResources<'_> {
             max_coded_extent,
             max_dpb_slots,
             max_active_references,
-            &vulkan_ctx.video_capabilities.std_header_version,
+            &vulkan_ctx.decode_capabilities.video_capabilities.std_header_version,
         )?;
 
         self.parameters_manager
@@ -210,8 +210,8 @@ impl VideoSessionResources<'_> {
         let (decoding_images, memory_barrier) = DecodingImages::new(
             vulkan_ctx,
             profile,
-            &vulkan_ctx.h264_dpb_format_properties,
-            &vulkan_ctx.h264_dst_format_properties,
+            &vulkan_ctx.decode_capabilities.h264_dpb_format_properties,
+            &vulkan_ctx.decode_capabilities.h264_dst_format_properties,
             max_coded_extent,
             max_dpb_slots,
         )?;
