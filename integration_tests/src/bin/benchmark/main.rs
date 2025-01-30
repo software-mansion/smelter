@@ -137,28 +137,24 @@ fn run_args_maximize(
     arguments: Box<[Argument]>,
     reports: &mut Vec<SingleBenchConfig>,
 ) -> FurtherIterationPossible {
+    let test_fn = |count, i| {
+        let mut arguments = arguments.clone();
+        arguments[i] = Argument::Constant(count);
+        let config = args.with_arguments(&arguments);
+        config.log_running_config();
+        run_single_test(ctx.clone(), config)
+    };
+
     for (i, argument) in arguments.iter().enumerate() {
-        if matches!(argument, Argument::Maximize) {
-            let upper_bound = find_upper_bound(1, |count| {
-                let mut arguments = arguments.clone();
-                arguments[i] = Argument::Constant(count);
-                let config = args.with_arguments(&arguments);
-                config.log_running_config();
-                run_single_test(ctx.clone(), config)
-            });
+        if *argument == Argument::Maximize {
+            let upper_bound = find_upper_bound(1, |count| test_fn(count, i));
 
             if upper_bound == 0 {
                 // the configuration is not runnable anymore
                 return FurtherIterationPossible(false);
             }
 
-            let result = binsearch(upper_bound / 2, upper_bound, |count| {
-                let mut arguments = arguments.clone();
-                arguments[i] = Argument::Constant(count);
-                let config = args.with_arguments(&arguments);
-                config.log_running_config();
-                run_single_test(ctx.clone(), config)
-            });
+            let result = binsearch(upper_bound / 2, upper_bound, |count| test_fn(count, i));
 
             let mut arguments = arguments.clone();
             arguments[i] = Argument::Constant(result);
@@ -268,8 +264,8 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
                 end_condition: PipelineOutputEndCondition::AnyInput,
                 initial: Component::Tiles(TilesComponent {
                     id: None,
-                    width: Some(bench_config.output_width as f32),
-                    height: Some(bench_config.output_height as f32),
+                    width: Some(bench_config.output_resolution.width as f32),
+                    height: Some(bench_config.output_resolution.height as f32),
                     margin: 2.0,
                     padding: 0.0,
                     children: inputs
@@ -295,8 +291,8 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
                 video: Some(VideoEncoderOptions::H264(H264OutputOptions {
                     preset: bench_config.output_encoder_preset,
                     resolution: Resolution {
-                        width: bench_config.output_width as usize,
-                        height: bench_config.output_height as usize,
+                        width: bench_config.output_resolution.width as usize,
+                        height: bench_config.output_resolution.height as usize,
                     },
                     raw_options: Vec::new(),
                 })),
@@ -304,21 +300,21 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
         },
     );
 
-    let Ok(receiver) = receiver_result else {
+    let Ok(pipeline_receiver) = receiver_result else {
         return false;
     };
 
     Pipeline::start(&pipeline);
 
     let start_time = Instant::now();
-    while Instant::now() - start_time < bench_config.warm_up_time {
-        _ = receiver.recv().unwrap();
+    while start_time.elapsed() < bench_config.warm_up_time {
+        _ = pipeline_receiver.recv().unwrap();
     }
 
     let start_time = Instant::now();
     let mut produced_frames: usize = 0;
     while start_time.elapsed() < bench_config.measured_time {
-        _ = receiver.recv().unwrap();
+        _ = pipeline_receiver.recv().unwrap();
         produced_frames += 1;
     }
 
