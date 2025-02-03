@@ -1,5 +1,6 @@
 use std::{
-    sync::{Arc, Mutex},
+    sync::{mpsc, Arc, Mutex},
+    thread,
     time::{Duration, Instant},
 };
 
@@ -255,72 +256,98 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
         }
     }
 
-    let output_id = OutputId("output".into());
-    let receiver_result = Pipeline::register_encoded_data_output(
-        &pipeline,
-        output_id,
-        RegisterOutputOptions {
-            video: Some(OutputVideoOptions {
-                end_condition: PipelineOutputEndCondition::AnyInput,
-                initial: Component::Tiles(TilesComponent {
-                    id: None,
-                    width: Some(bench_config.output_resolution.width as f32),
-                    height: Some(bench_config.output_resolution.height as f32),
-                    margin: 2.0,
-                    padding: 0.0,
-                    children: inputs
-                        .into_iter()
-                        .map(|i| {
-                            Component::InputStream(InputStreamComponent {
-                                id: None,
-                                input_id: i,
+    let mut receivers = Vec::new();
+    for i in 0..bench_config.encoder_count {
+        let output_id = OutputId(format!("output_{i}").into());
+        let receiver_result = Pipeline::register_encoded_data_output(
+            &pipeline,
+            output_id,
+            RegisterOutputOptions {
+                video: Some(OutputVideoOptions {
+                    end_condition: PipelineOutputEndCondition::AnyInput,
+                    initial: Component::Tiles(TilesComponent {
+                        id: None,
+                        width: Some(bench_config.output_resolution.width as f32),
+                        height: Some(bench_config.output_resolution.height as f32),
+                        margin: 2.0,
+                        padding: 0.0,
+                        children: inputs
+                            .clone()
+                            .into_iter()
+                            .map(|i| {
+                                Component::InputStream(InputStreamComponent {
+                                    id: None,
+                                    input_id: i,
+                                })
                             })
-                        })
-                        .collect(),
-                    transition: None,
-                    vertical_align: VerticalAlign::Center,
-                    horizontal_align: HorizontalAlign::Center,
-                    background_color: RGBAColor(128, 128, 128, 0),
-                    tile_aspect_ratio: (16, 9),
+                            .collect(),
+                        transition: None,
+                        vertical_align: VerticalAlign::Center,
+                        horizontal_align: HorizontalAlign::Center,
+                        background_color: RGBAColor(128, 128, 128, 0),
+                        tile_aspect_ratio: (16, 9),
+                    }),
                 }),
-            }),
 
-            audio: None,
-            output_options: EncodedDataOutputOptions {
                 audio: None,
-                video: Some(VideoEncoderOptions::H264(H264OutputOptions {
-                    preset: bench_config.output_encoder_preset,
-                    resolution: Resolution {
-                        width: bench_config.output_resolution.width as usize,
-                        height: bench_config.output_resolution.height as usize,
-                    },
-                    raw_options: Vec::new(),
-                })),
+                output_options: EncodedDataOutputOptions {
+                    audio: None,
+                    video: Some(VideoEncoderOptions::H264(H264OutputOptions {
+                        preset: bench_config.output_encoder_preset.clone(),
+                        resolution: Resolution {
+                            width: bench_config.output_resolution.width as usize,
+                            height: bench_config.output_resolution.height as usize,
+                        },
+                        raw_options: Vec::new(),
+                    })),
+                },
             },
-        },
-    );
+        );
 
-    let Ok(pipeline_receiver) = receiver_result else {
-        return false;
-    };
+        let Ok(pipeline_receiver) = receiver_result else {
+            return false;
+        };
+
+        receivers.push(pipeline_receiver);
+    }
+
+    let (result_sender, result_receiver) = mpsc::channel::<bool>();
 
     Pipeline::start(&pipeline);
+    for pipeline_receiver in receivers {
+        let result_sender_clone = result_sender.clone();
+        thread::spawn(move || {
+            let start_time = Instant::now();
+            while start_time.elapsed() < bench_config.warm_up_time {
+                _ = pipeline_receiver.recv().unwrap();
+            }
 
-    let start_time = Instant::now();
-    while start_time.elapsed() < bench_config.warm_up_time {
-        _ = pipeline_receiver.recv().unwrap();
+            let start_time = Instant::now();
+            let mut produced_frames: usize = 0;
+            while start_time.elapsed() < bench_config.measured_time {
+                _ = pipeline_receiver.recv().unwrap();
+                produced_frames += 1;
+            }
+
+            let end_time = Instant::now();
+
+            let framerate = produced_frames as f64 / (end_time - start_time).as_secs_f64();
+
+            let _ = result_sender_clone.send(
+                framerate * bench_config.framerate_tolerance_multiplier
+                    > bench_config.framerate as f64,
+            );
+        });
     }
-
-    let start_time = Instant::now();
-    let mut produced_frames: usize = 0;
-    while start_time.elapsed() < bench_config.measured_time {
-        _ = pipeline_receiver.recv().unwrap();
-        produced_frames += 1;
+    for _ in 0..bench_config.encoder_count {
+        match result_receiver.recv() {
+            Ok(test_result) => {
+                if !test_result {
+                    return false;
+                }
+            }
+            Err(_) => return false,
+        }
     }
-
-    let end_time = Instant::now();
-
-    let framerate = produced_frames as f64 / (end_time - start_time).as_secs_f64();
-
-    framerate * bench_config.framerate_tolerance_multiplier > bench_config.framerate as f64
+    true
 }

@@ -262,6 +262,10 @@ pub struct Args {
     #[arg(long)]
     pub decoder_count: Argument,
 
+    /// [possible values: iterate_exp, maximize or a number]
+    #[arg(long)]
+    pub encoder_count: Argument,
+
     #[arg(long)]
     pub file_path: PathBuf,
 
@@ -291,13 +295,14 @@ pub struct Args {
 
 impl Args {
     pub fn arguments(&self) -> Box<[Argument]> {
-        vec![self.framerate, self.decoder_count].into_boxed_slice()
+        vec![self.framerate, self.decoder_count, self.encoder_count].into_boxed_slice()
     }
 
     pub fn with_arguments(&self, arguments: &[Argument]) -> SingleBenchConfig {
         SingleBenchConfig {
             framerate: arguments[0].as_constant().unwrap(),
             decoder_count: arguments[1].as_constant().unwrap(),
+            encoder_count: arguments[2].as_constant().unwrap(),
 
             file_path: self.file_path.clone(),
             output_resolution: self.output_resolution.into(),
@@ -313,6 +318,7 @@ impl Args {
 #[derive(Debug)]
 pub struct SingleBenchConfig {
     pub decoder_count: u64,
+    pub encoder_count: u64,
     pub framerate: u64,
     pub file_path: PathBuf,
     pub output_resolution: Resolution,
@@ -327,14 +333,16 @@ impl SingleBenchConfig {
     pub fn log_running_config(&self) {
         tracing::info!("config: {:?}", self);
         tracing::info!(
-            "checking configuration: framerate: {}, decoder count: {}",
+            "checking configuration: framerate: {}, decoder count: {}, encoder count: {}",
             self.framerate,
-            self.decoder_count
+            self.decoder_count,
+            self.encoder_count
         );
     }
 
     pub fn log_as_report(&self) {
         print!("{}\t", self.decoder_count);
+        print!("{}\t", self.encoder_count);
         print!("{}\t", self.framerate);
         print!("{:?}\t", self.output_resolution);
         print!("{:?}\t", self.output_encoder_preset);
