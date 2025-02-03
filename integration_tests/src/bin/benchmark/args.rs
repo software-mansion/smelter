@@ -33,7 +33,7 @@ impl std::str::FromStr for Argument {
 
         s.parse::<u64>()
             .map(Argument::Constant)
-            .map_err(|e| format!("{e}"))
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -102,23 +102,33 @@ impl From<EncoderPreset> for ffmpeg_h264::EncoderPreset {
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 #[clap(rename_all = "snake_case")]
 pub enum ResolutionPreset {
-    UHD,
-    QHD,
-    FHD,
-    HD,
-    SD,
+    Uhd,
+    Qhd,
+    Fhd,
+    Hd,
+    Sd,
 }
+
+//impl ResolutionPreset {
+//    pub const ALL: [ResolutionPreset; 5] = [
+//        ResolutionPreset::SD,
+//        ResolutionPreset::HD,
+//        ResolutionPreset::FHD,
+//        ResolutionPreset::QHD,
+//        ResolutionPreset::UHD,
+//    ];
+//}
 
 impl std::str::FromStr for ResolutionPreset {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "uhd" => Ok(ResolutionPreset::UHD),
-            "qhd" => Ok(ResolutionPreset::QHD),
-            "fhd" => Ok(ResolutionPreset::FHD),
-            "hd" => Ok(ResolutionPreset::HD),
-            "sd" => Ok(ResolutionPreset::SD),
+            "uhd" => Ok(ResolutionPreset::Uhd),
+            "qhd" => Ok(ResolutionPreset::Qhd),
+            "fhd" => Ok(ResolutionPreset::Fhd),
+            "hd" => Ok(ResolutionPreset::Hd),
+            "sd" => Ok(ResolutionPreset::Sd),
             _ => Err(
                 "invalid resolution preset, available options: sd, hd, fhd, qhd, uhd".to_string(),
             ),
@@ -127,33 +137,77 @@ impl std::str::FromStr for ResolutionPreset {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum ResolutionArgument {
+pub enum ResolutionConstant {
     Preset(ResolutionPreset),
     Value(u32, u32),
 }
 
-impl std::str::FromStr for ResolutionArgument {
+impl std::str::FromStr for ResolutionConstant {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.as_bytes()
-            .get(0)
+            .first()
             .ok_or("error while parsing resolution argument".to_string())?
             .is_ascii_digit()
         {
             let (width, height) = s
                 .split_once("x")
                 .ok_or("invalid resolution value, should look like eg. `1920x1080`")?;
-            return Ok(ResolutionArgument::Value(
-                width.parse::<u32>().map_err(|e| format!("{e}"))?,
-                height.parse::<u32>().map_err(|e| format!("{e}"))?,
-            ));
+            Ok(ResolutionConstant::Value(
+                width.parse::<u32>().map_err(|e| e.to_string())?,
+                height.parse::<u32>().map_err(|e| e.to_string())?,
+            ))
         } else {
-            let preset = s.parse::<ResolutionPreset>().map_err(|e| format!("{e}"))?;
-            return Ok(ResolutionArgument::Preset(preset));
+            let preset = s.parse::<ResolutionPreset>().map_err(|e| e.to_string())?;
+            Ok(ResolutionConstant::Preset(preset))
         }
     }
 }
+
+//#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+//pub enum IterateArgument<T>
+//where
+//    T: FromStr,
+//    T::Err: Display,
+//    T: Copy,
+//{
+//    Iterate,
+//    Constant(T),
+//}
+//
+//impl<T> IterateArgument<T>
+//where
+//    T: FromStr,
+//    T::Err: Display,
+//    T: Copy,
+//{
+//    pub fn as_constant(&self) -> Option<T> {
+//        if let Self::Constant(v) = self {
+//            Some(*v)
+//        } else {
+//            None
+//        }
+//    }
+//}
+//
+//impl<T> std::str::FromStr for IterateArgument<T>
+//where
+//    T: FromStr,
+//    T::Err: Display,
+//    T: Copy,
+//{
+//    type Err = String;
+//
+//    fn from_str(s: &str) -> Result<Self, Self::Err> {
+//        if s == "iterate" {
+//            return Ok(IterateArgument::Iterate);
+//        }
+//        s.parse::<T>()
+//            .map(|c| IterateArgument::Constant(c))
+//            .map_err(|e| e.to_string())
+//    }
+//}
 
 #[derive(Debug)]
 pub struct Resolution {
@@ -161,11 +215,11 @@ pub struct Resolution {
     pub height: u32,
 }
 
-impl From<ResolutionArgument> for Resolution {
-    fn from(value: ResolutionArgument) -> Self {
+impl From<ResolutionConstant> for Resolution {
+    fn from(value: ResolutionConstant) -> Self {
         match value {
-            ResolutionArgument::Value(width, height) => Resolution { width, height },
-            ResolutionArgument::Preset(preset) => preset.into(),
+            ResolutionConstant::Value(width, height) => Resolution { width, height },
+            ResolutionConstant::Preset(preset) => preset.into(),
         }
     }
 }
@@ -173,23 +227,23 @@ impl From<ResolutionArgument> for Resolution {
 impl From<ResolutionPreset> for Resolution {
     fn from(value: ResolutionPreset) -> Self {
         match value {
-            ResolutionPreset::UHD => Resolution {
+            ResolutionPreset::Uhd => Resolution {
                 width: 3840,
                 height: 2160,
             },
-            ResolutionPreset::QHD => Resolution {
+            ResolutionPreset::Qhd => Resolution {
                 width: 2560,
                 height: 1440,
             },
-            ResolutionPreset::FHD => Resolution {
+            ResolutionPreset::Fhd => Resolution {
                 width: 1920,
                 height: 1080,
             },
-            ResolutionPreset::HD => Resolution {
+            ResolutionPreset::Hd => Resolution {
                 width: 1280,
                 height: 720,
             },
-            ResolutionPreset::SD => Resolution {
+            ResolutionPreset::Sd => Resolution {
                 width: 640,
                 height: 480,
             },
@@ -213,7 +267,7 @@ pub struct Args {
 
     /// [possible values: uhd, qhd, fhd, hd, sd or `<width>x<height>`]
     #[arg(long)]
-    pub output_resolution: ResolutionArgument,
+    pub output_resolution: ResolutionConstant,
 
     #[arg(long)]
     pub encoder_preset: EncoderPreset,
