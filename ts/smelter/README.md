@@ -31,7 +31,7 @@ function ExampleApp() {
 
 Check out [@swmansion/smelter-node](https://www.npmjs.com/package/@swmansion/smelter-node) to learn how to use those components for video composition.
 
-See our [docs](https://compositor.live/docs) to learn more.
+See our [docs](https://smelter.dev/docs) to learn more.
 
 ## License
 

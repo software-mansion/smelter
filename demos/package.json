@@ -22,7 +22,7 @@
   "bugs": {
     "url": "https://github.com/software-mansion/live-compositor/issues"
   },
-  "homepage": "https://github.com/software-mansion/live-compositor#readme",
+  "homepage": "https://smelter.dev",
   "dependencies": {
     "@live-compositor/node": "^0.1.0",
     "@types/fs-extra": "^11.0.2",

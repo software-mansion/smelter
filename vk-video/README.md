@@ -10,9 +10,9 @@ A library for hardware video coding using Vulkan Video, with [wgpu] integration.
 [crates-badge]: https://img.shields.io/crates/v/vk-video
 [crates-url]: https://crates.io/crates/vk-video
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
-[mit-url]: https://github.com/software-mansion/live-compositor/blob/master/vk-video/LICENSE
-[actions-badge]: https://github.com/software-mansion/live-compositor/actions/workflows/test.yml/badge.svg
-[actions-url]: https://github.com/software-mansion/live-compositor/actions/workflows/test.yml?query=branch%3Amaster
+[mit-url]: https://github.com/software-mansion/smelter/blob/master/vk-video/LICENSE
+[actions-badge]: https://github.com/software-mansion/smelter/actions/workflows/test.yml/badge.svg
+[actions-url]: https://github.com/software-mansion/smelter/actions/workflows/test.yml?query=branch%3Amaster
 [docs-badge]: https://img.shields.io/docsrs/vk-video
 [docs-url]: https://docs.rs/vk-video/latest/vk-video/
 
@@ -66,8 +66,8 @@ ffmpeg -i input.mp4 -c:v copy -bsf:v h264_mp4toannexb -an output.h264
 Then you can run the example with:
 
 ```sh
-git clone https://github.com/software-mansion/live-compositor.git
-cd live-compositor/vk-video
+git clone https://github.com/software-mansion/smelter.git
+cd smelter/vk-video
 cargo run --example player -- output.h264 FRAMERATE
 ```
 
@@ -86,6 +86,6 @@ It should work on Windows with recent drivers out of the box. Be sure to submit 
 
 ## vk-video is created by Software Mansion
 
-[![swm](https://logo.swmansion.com/logo?color=white&variant=desktop&width=150&tag=live-compositor-vk-video 'Software Mansion')](https://swmansion.com)
+[![swm](https://logo.swmansion.com/logo?color=white&variant=desktop&width=150&tag=smelter-vk-video 'Software Mansion')](https://swmansion.com)
 
-Since 2012 [Software Mansion](https://swmansion.com) is a software agency with experience in building web and mobile apps as well as complex multimedia solutions. We are Core React Native Contributors and experts in live streaming and broadcasting technologies. We can help you build your next dream product – [Hire us](https://swmansion.com/contact/projects?utm_source=live-compositor-vk-video&utm_medium=readme).
+Since 2012 [Software Mansion](https://swmansion.com) is a software agency with experience in building web and mobile apps as well as complex multimedia solutions. We are Core React Native Contributors and experts in live streaming and broadcasting technologies. We can help you build your next dream product – [Hire us](https://swmansion.com/contact/projects?utm_source=smelter-vk-video&utm_medium=readme).
