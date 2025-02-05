@@ -18,7 +18,7 @@ type CreateInstanceOptions = {
 /**
  * SmelterManager that will connect to existing instance
  */
-class ExistingInstance implements SmelterManager {
+class ExistingInstanceManager implements SmelterManager {
   private ip: string;
   private port: number;
   private protocol: 'http' | 'https';
@@ -62,4 +62,4 @@ class ExistingInstance implements SmelterManager {
   }
 }
 
-export default ExistingInstance;
+export default ExistingInstanceManager;

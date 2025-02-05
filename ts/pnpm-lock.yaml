@@ -82,7 +82,7 @@ importers:
         specifier: workspace:^0.2.0-rc.0
         version: link:../../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:^0.2.0-rc.1
+        specifier: workspace:^0.2.0-rc.2
         version: link:../../../smelter-node
       express:
         specifier: ^4.21.0
@@ -110,7 +110,7 @@ importers:
         specifier: workspace:^0.2.0-rc.0
         version: link:../../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:^0.2.0-rc.1
+        specifier: workspace:^0.2.0-rc.2
         version: link:../../../smelter-node
       react:
         specifier: ^18.3.1
@@ -132,7 +132,7 @@ importers:
         specifier: workspace:^0.2.0-rc.0
         version: link:../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:^0.2.0-rc.1
+        specifier: workspace:^0.2.0-rc.2
         version: link:../../smelter-node
       fs-extra:
         specifier: ^11.2.0

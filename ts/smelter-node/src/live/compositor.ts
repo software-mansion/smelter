@@ -5,7 +5,7 @@ import type {
 } from '@swmansion/smelter-core';
 import { Smelter as CoreSmelter } from '@swmansion/smelter-core';
 import { createLogger } from '../logger';
-import LocallySpawnedInstance from '../manager/locallySpawnedInstance';
+import LocallySpawnedInstanceManager from '../manager/locallySpawnedInstance';
 import type { ReactElement } from 'react';
 import type { Renderers } from '@swmansion/smelter';
 import FormData from 'form-data';
@@ -16,7 +16,7 @@ export default class Smelter {
 
   public constructor(manager?: SmelterManager) {
     this.coreSmelter = new CoreSmelter(
-      manager ?? LocallySpawnedInstance.defaultManager(),
+      manager ?? LocallySpawnedInstanceManager.defaultManager(),
       createLogger()
     );
   }

@@ -13,7 +13,7 @@ import WasmInstance from '../mainContext/instance';
 import type { RegisterOutputResponse } from '../mainContext/output';
 
 export type SmelterOptions = {
-  framerate?: Framerate;
+  framerate?: Framerate | number;
   streamFallbackTimeoutMs?: number;
 };
 
@@ -38,8 +38,8 @@ export default class Smelter {
   private options: SmelterOptions;
   private logger: Logger = pino({ level: 'warn' });
 
-  public constructor(options: SmelterOptions) {
-    this.options = options;
+  public constructor(options?: SmelterOptions) {
+    this.options = options ?? {};
   }
 
   /*
@@ -49,7 +49,7 @@ export default class Smelter {
   public async init(): Promise<void> {
     assert(wasmBundleUrl, 'Location of WASM bundle is not defined, call setWasmBundleUrl() first.');
     this.instance = new WasmInstance({
-      framerate: this.options.framerate ?? { num: 30, den: 1 },
+      framerate: resolveFramerate(this.options.framerate),
       wasmBundleUrl,
       logger: this.logger.child({ element: 'wasmInstance' }),
     });
@@ -118,5 +118,15 @@ export default class Smelter {
    */
   public async terminate(): Promise<void> {
     await this.coreSmelter?.terminate();
+  }
+}
+
+function resolveFramerate(framerate?: number | Framerate): Framerate {
+  if (!framerate) {
+    return { num: 30, den: 1 };
+  } else if (typeof framerate === 'number') {
+    return { num: framerate, den: 1 };
+  } else {
+    return framerate;
   }
 }
