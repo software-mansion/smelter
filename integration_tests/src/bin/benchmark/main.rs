@@ -12,7 +12,7 @@ use compositor_pipeline::{
             mp4::{Mp4Options, Source},
             InputOptions,
         },
-        output::EncodedDataOutputOptions,
+        output::{EncodedDataOutputOptions, RawDataOutputOptions, RawVideoOptions},
         GraphicsContext, Options, OutputVideoOptions, PipelineOutputEndCondition,
         RegisterInputOptions, RegisterOutputOptions,
     },
@@ -28,6 +28,7 @@ use compositor_render::{
     web_renderer::WebRendererInitOptions,
     Framerate, InputId, OutputId, Resolution,
 };
+use crossbeam_channel::Receiver;
 use smelter::{
     config::{read_config, LoggerConfig},
     logger,
@@ -37,6 +38,16 @@ use tracing::warn;
 mod args;
 
 use args::{Args, Argument, SingleBenchConfig};
+
+trait PipelineReceiver {
+    fn receive(&self) {}
+}
+
+impl<T> PipelineReceiver for Receiver<T> {
+    fn receive(&self) {
+        let _ = self.recv();
+    }
+}
 
 fn main() {
     let args = Args::parse();
@@ -230,7 +241,7 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
     let pipeline = Arc::new(Mutex::new(pipeline));
 
     let mut inputs = Vec::new();
-    for i in 0..bench_config.decoder_count {
+    for i in 0..bench_config.input_count {
         let input_id = InputId(format!("input_{i}").into());
         inputs.push(input_id.clone());
 
@@ -257,52 +268,45 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
     }
 
     let mut receivers = Vec::new();
-    for i in 0..bench_config.encoder_count {
+    for i in 0..bench_config.output_count {
         let output_id = OutputId(format!("output_{i}").into());
-        let receiver_result = Pipeline::register_encoded_data_output(
-            &pipeline,
-            output_id,
-            RegisterOutputOptions {
-                video: Some(OutputVideoOptions {
-                    end_condition: PipelineOutputEndCondition::AnyInput,
-                    initial: Component::Tiles(TilesComponent {
-                        id: None,
-                        width: Some(bench_config.output_resolution.width as f32),
-                        height: Some(bench_config.output_resolution.height as f32),
-                        margin: 2.0,
-                        padding: 0.0,
-                        children: inputs
-                            .clone()
-                            .into_iter()
-                            .map(|i| {
-                                Component::InputStream(InputStreamComponent {
-                                    id: None,
-                                    input_id: i,
-                                })
-                            })
-                            .collect(),
-                        transition: None,
-                        vertical_align: VerticalAlign::Center,
-                        horizontal_align: HorizontalAlign::Center,
-                        background_color: RGBAColor(128, 128, 128, 0),
-                        tile_aspect_ratio: (16, 9),
-                    }),
-                }),
-
-                audio: None,
-                output_options: EncodedDataOutputOptions {
-                    audio: None,
-                    video: Some(VideoEncoderOptions::H264(H264OutputOptions {
-                        preset: bench_config.output_encoder_preset.clone(),
-                        resolution: Resolution {
-                            width: bench_config.output_resolution.width as usize,
-                            height: bench_config.output_resolution.height as usize,
-                        },
-                        raw_options: Vec::new(),
-                    })),
-                },
-            },
-        );
+        let output_video_options = OutputVideoOptions {
+            end_condition: PipelineOutputEndCondition::AnyInput,
+            initial: Component::Tiles(TilesComponent {
+                id: None,
+                width: Some(bench_config.output_resolution.width as f32),
+                height: Some(bench_config.output_resolution.height as f32),
+                margin: 2.0,
+                padding: 0.0,
+                children: inputs
+                    .clone()
+                    .into_iter()
+                    .map(|i| {
+                        Component::InputStream(InputStreamComponent {
+                            id: None,
+                            input_id: i,
+                        })
+                    })
+                    .collect(),
+                transition: None,
+                vertical_align: VerticalAlign::Center,
+                horizontal_align: HorizontalAlign::Center,
+                background_color: RGBAColor(128, 128, 128, 0),
+                tile_aspect_ratio: (16, 9),
+            }),
+        };
+        let receiver_result: Result<Box<dyn PipelineReceiver + Send>, Box<dyn std::error::Error>> =
+            match bench_config.disable_encoder {
+                true => {
+                    pipeline_raw_output(&pipeline, output_id, output_video_options, &bench_config)
+                }
+                false => pipeline_encoded_output(
+                    &pipeline,
+                    output_id,
+                    output_video_options,
+                    &bench_config,
+                ),
+            };
 
         let Ok(pipeline_receiver) = receiver_result else {
             return false;
@@ -319,13 +323,13 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
         thread::spawn(move || {
             let start_time = Instant::now();
             while start_time.elapsed() < bench_config.warm_up_time {
-                _ = pipeline_receiver.recv().unwrap();
+                pipeline_receiver.receive();
             }
 
             let start_time = Instant::now();
             let mut produced_frames: usize = 0;
             while start_time.elapsed() < bench_config.measured_time {
-                _ = pipeline_receiver.recv().unwrap();
+                pipeline_receiver.receive();
                 produced_frames += 1;
             }
 
@@ -339,7 +343,7 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
             );
         });
     }
-    for _ in 0..bench_config.encoder_count {
+    for _ in 0..bench_config.output_count {
         match result_receiver.recv() {
             Ok(test_result) => {
                 if !test_result {
@@ -350,4 +354,61 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
         }
     }
     true
+}
+
+fn pipeline_encoded_output(
+    pipeline: &Arc<Mutex<Pipeline>>,
+    output_id: OutputId,
+    output_video_options: OutputVideoOptions,
+    bench_config: &SingleBenchConfig,
+) -> Result<Box<dyn PipelineReceiver + Send>, Box<dyn std::error::Error>> {
+    let preset = bench_config.output_encoder_preset.clone().unwrap();
+    Ok(Box::new(Pipeline::register_encoded_data_output(
+        pipeline,
+        output_id,
+        RegisterOutputOptions {
+            video: Some(output_video_options),
+
+            audio: None,
+            output_options: EncodedDataOutputOptions {
+                audio: None,
+                video: Some(VideoEncoderOptions::H264(H264OutputOptions {
+                    preset,
+                    resolution: Resolution {
+                        width: bench_config.output_resolution.width as usize,
+                        height: bench_config.output_resolution.height as usize,
+                    },
+                    raw_options: Vec::new(),
+                })),
+            },
+        },
+    )?))
+}
+
+fn pipeline_raw_output(
+    pipeline: &Arc<Mutex<Pipeline>>,
+    output_id: OutputId,
+    output_video_options: OutputVideoOptions,
+    bench_config: &SingleBenchConfig,
+) -> Result<Box<dyn PipelineReceiver + Send>, Box<dyn std::error::Error>> {
+    let x = Pipeline::register_raw_data_output(
+        pipeline,
+        output_id,
+        RegisterOutputOptions {
+            video: Some(output_video_options),
+
+            audio: None,
+            output_options: RawDataOutputOptions {
+                audio: None,
+                video: Some(RawVideoOptions {
+                    resolution: Resolution {
+                        width: bench_config.output_resolution.width as usize,
+                        height: bench_config.output_resolution.height as usize,
+                    },
+                }),
+            },
+        },
+    )?;
+    let x = x.video.unwrap();
+    Ok(Box::new(x))
 }

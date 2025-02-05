@@ -109,16 +109,6 @@ pub enum ResolutionPreset {
     Sd,
 }
 
-//impl ResolutionPreset {
-//    pub const ALL: [ResolutionPreset; 5] = [
-//        ResolutionPreset::SD,
-//        ResolutionPreset::HD,
-//        ResolutionPreset::FHD,
-//        ResolutionPreset::QHD,
-//        ResolutionPreset::UHD,
-//    ];
-//}
-
 impl std::str::FromStr for ResolutionPreset {
     type Err = String;
 
@@ -164,50 +154,6 @@ impl std::str::FromStr for ResolutionConstant {
         }
     }
 }
-
-//#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-//pub enum IterateArgument<T>
-//where
-//    T: FromStr,
-//    T::Err: Display,
-//    T: Copy,
-//{
-//    Iterate,
-//    Constant(T),
-//}
-//
-//impl<T> IterateArgument<T>
-//where
-//    T: FromStr,
-//    T::Err: Display,
-//    T: Copy,
-//{
-//    pub fn as_constant(&self) -> Option<T> {
-//        if let Self::Constant(v) = self {
-//            Some(*v)
-//        } else {
-//            None
-//        }
-//    }
-//}
-//
-//impl<T> std::str::FromStr for IterateArgument<T>
-//where
-//    T: FromStr,
-//    T::Err: Display,
-//    T: Copy,
-//{
-//    type Err = String;
-//
-//    fn from_str(s: &str) -> Result<Self, Self::Err> {
-//        if s == "iterate" {
-//            return Ok(IterateArgument::Iterate);
-//        }
-//        s.parse::<T>()
-//            .map(|c| IterateArgument::Constant(c))
-//            .map_err(|e| e.to_string())
-//    }
-//}
 
 #[derive(Debug)]
 pub struct Resolution {
@@ -260,11 +206,11 @@ pub struct Args {
 
     /// [possible values: iterate_exp, maximize or a number]
     #[arg(long)]
-    pub decoder_count: Argument,
+    pub input_count: Argument,
 
     /// [possible values: iterate_exp, maximize or a number]
     #[arg(long)]
-    pub encoder_count: Argument,
+    pub output_count: Argument,
 
     #[arg(long)]
     pub file_path: PathBuf,
@@ -274,7 +220,10 @@ pub struct Args {
     pub output_resolution: ResolutionConstant,
 
     #[arg(long)]
-    pub encoder_preset: EncoderPreset,
+    pub disable_encoder: bool,
+
+    #[arg(long, global = true, required_unless_present("disable_encoder"))]
+    pub encoder_preset: Option<EncoderPreset>,
 
     /// warm-up time in seconds
     #[arg(long)]
@@ -295,21 +244,22 @@ pub struct Args {
 
 impl Args {
     pub fn arguments(&self) -> Box<[Argument]> {
-        vec![self.framerate, self.decoder_count, self.encoder_count].into_boxed_slice()
+        vec![self.framerate, self.input_count, self.output_count].into_boxed_slice()
     }
 
     pub fn with_arguments(&self, arguments: &[Argument]) -> SingleBenchConfig {
         SingleBenchConfig {
             framerate: arguments[0].as_constant().unwrap(),
-            decoder_count: arguments[1].as_constant().unwrap(),
-            encoder_count: arguments[2].as_constant().unwrap(),
+            input_count: arguments[1].as_constant().unwrap(),
+            output_count: arguments[2].as_constant().unwrap(),
 
             file_path: self.file_path.clone(),
             output_resolution: self.output_resolution.into(),
             warm_up_time: self.warm_up_time.0,
             measured_time: self.measured_time.0,
             video_decoder: self.video_decoder.into(),
-            output_encoder_preset: self.encoder_preset.into(),
+            disable_encoder: self.disable_encoder,
+            output_encoder_preset: self.encoder_preset.map(|preset| preset.into()),
             framerate_tolerance_multiplier: self.framerate_tolerance,
         }
     }
@@ -317,12 +267,13 @@ impl Args {
 
 #[derive(Debug)]
 pub struct SingleBenchConfig {
-    pub decoder_count: u64,
-    pub encoder_count: u64,
+    pub input_count: u64,
+    pub output_count: u64,
     pub framerate: u64,
     pub file_path: PathBuf,
     pub output_resolution: Resolution,
-    pub output_encoder_preset: ffmpeg_h264::EncoderPreset,
+    pub disable_encoder: bool,
+    pub output_encoder_preset: Option<ffmpeg_h264::EncoderPreset>,
     pub warm_up_time: Duration,
     pub measured_time: Duration,
     pub video_decoder: pipeline::VideoDecoder,
@@ -335,16 +286,17 @@ impl SingleBenchConfig {
         tracing::info!(
             "checking configuration: framerate: {}, decoder count: {}, encoder count: {}",
             self.framerate,
-            self.decoder_count,
-            self.encoder_count
+            self.input_count,
+            self.output_count
         );
     }
 
     pub fn log_as_report(&self) {
-        print!("{}\t", self.decoder_count);
-        print!("{}\t", self.encoder_count);
+        print!("{}\t", self.input_count);
+        print!("{}\t", self.output_count);
         print!("{}\t", self.framerate);
         print!("{:?}\t", self.output_resolution);
+        print!("{:?}\t", self.disable_encoder);
         print!("{:?}\t", self.output_encoder_preset);
         print!("{:?}\t", self.warm_up_time);
         print!("{:?}\t", self.measured_time);
