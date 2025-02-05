@@ -30,7 +30,7 @@ type ManagedInstanceOptions = {
 /**
  * SmelterManager that will download and spawn it's own Smelter instance locally.
  */
-class LocallySpawnedInstance implements SmelterManager {
+class LocallySpawnedInstanceManager implements SmelterManager {
   private port: number;
   private workingdir: string;
   private executablePath?: string;
@@ -46,9 +46,9 @@ class LocallySpawnedInstance implements SmelterManager {
     this.wsConnection = new WebSocketConnection(`ws://127.0.0.1:${this.port}/ws`);
   }
 
-  public static defaultManager(): LocallySpawnedInstance {
+  public static defaultManager(): LocallySpawnedInstanceManager {
     const port = process.env.SMELTER_API_PORT ? Number(process.env.SMELTER_API_PORT) : 8000;
-    return new LocallySpawnedInstance({
+    return new LocallySpawnedInstanceManager({
       port,
       executablePath: process.env.SMELTER_PATH,
     });
@@ -157,4 +157,4 @@ function smelterTarGzUrl(withWebRenderer?: boolean): string {
   return `https://github.com/software-mansion/smelter/releases/download/${VERSION}/${archiveName}`;
 }
 
-export default LocallySpawnedInstance;
+export default LocallySpawnedInstanceManager;

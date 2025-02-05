@@ -5,7 +5,7 @@ import type {
 } from '@swmansion/smelter-core';
 import { OfflineSmelter as CoreSmelter } from '@swmansion/smelter-core';
 import { createLogger } from '../logger';
-import LocallySpawnedInstance from '../manager/locallySpawnedInstance';
+import LocallySpawnedInstanceManager from '../manager/locallySpawnedInstance';
 import type { ReactElement } from 'react';
 import type { Renderers } from '@swmansion/smelter';
 import fetch from 'node-fetch';
@@ -16,7 +16,7 @@ export default class OfflineSmelter {
 
   public constructor(manager?: SmelterManager) {
     this.coreSmelter = new CoreSmelter(
-      manager ?? LocallySpawnedInstance.defaultManager(),
+      manager ?? LocallySpawnedInstanceManager.defaultManager(),
       createLogger()
     );
   }
