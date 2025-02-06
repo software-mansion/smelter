@@ -7,6 +7,7 @@ import { newInternalImageId } from '../context/internalImageIdManager.js';
 import { newBlockingTask } from '../hooks.js';
 import { SmelterContext } from '../context/index.js';
 import { isValidImageType } from '../types/utils.js';
+import type { RegisterImage } from '../types/registerRenderer.js';
 
 export type ImageProps = Omit<ComponentBaseProps, 'children'> &
   (
@@ -41,12 +42,10 @@ function Image(props: ImageProps) {
     setIsImageRegistered(false);
 
     const newImageId = newInternalImageId();
-    setInternalImageId(newImageId);
-    const task = newBlockingTask(ctx);
-    const pathOrUrl =
+    const pathOrUrl: Pick<RegisterImage, 'serverPath' | 'url'> =
       props.source?.startsWith('http://') || props.source?.startsWith('https://')
         ? { url: props.source }
-        : { path: props.source };
+        : { serverPath: props.source };
     const extension = props.source?.split('.').pop();
     const assetType = extension && isValidImageType(extension) ? extension : undefined;
 
@@ -56,6 +55,8 @@ function Image(props: ImageProps) {
       throw new Error('Unsupported image type');
     }
 
+    const task = newBlockingTask(ctx);
+    setInternalImageId(newImageId);
     void (async () => {
       try {
         registerPromise = ctx.registerImage(newImageId, {

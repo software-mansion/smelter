@@ -103,11 +103,14 @@ export class ApiClient {
     });
   }
 
-  public async unregisterImage(imageRef: ImageRef): Promise<object> {
+  public async unregisterImage(
+    imageRef: ImageRef,
+    body: { schedule_time_ms?: number }
+  ): Promise<object> {
     return this.serverManager.sendRequest({
       method: 'POST',
       route: `/api/image/${encodeURIComponent(imageRefIntoRawId(imageRef))}/unregister`,
-      body: {},
+      body,
     });
   }
 
