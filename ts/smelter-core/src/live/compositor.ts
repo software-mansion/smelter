@@ -119,7 +119,7 @@ export class Smelter {
     this.logger.info({ imageId }, 'Unregister image');
     const imageRef = { type: 'global', id: imageId } as const satisfies ImageRef;
 
-    return this.api.unregisterImage(imageRef);
+    return this.api.unregisterImage(imageRef, {});
   }
 
   public async registerWebRenderer(

@@ -188,11 +188,14 @@ class OutputContext implements SmelterOutputContext {
     });
   }
   public async unregisterImage(imageId: number) {
-    await this.output.api.unregisterImage({
-      type: 'output-specific-image',
-      outputId: this.outputId,
-      id: imageId,
-    });
+    await this.output.api.unregisterImage(
+      {
+        type: 'output-specific-image',
+        outputId: this.outputId,
+        id: imageId,
+      },
+      {}
+    );
   }
 }
 
