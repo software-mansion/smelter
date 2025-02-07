@@ -99,14 +99,17 @@ impl From<EncoderPreset> for ffmpeg_h264::EncoderPreset {
     }
 }
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
-#[clap(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy)]
 pub enum ResolutionPreset {
-    Uhd,
-    Qhd,
-    Fhd,
-    Hd,
-    Sd,
+    Res4320p,
+    Res2160p,
+    Res1440p,
+    Res1080p,
+    Res720p,
+    Res480p,
+    Res360p,
+    Res240p,
+    Res144p,
 }
 
 impl std::str::FromStr for ResolutionPreset {
@@ -114,11 +117,15 @@ impl std::str::FromStr for ResolutionPreset {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "uhd" => Ok(ResolutionPreset::Uhd),
-            "qhd" => Ok(ResolutionPreset::Qhd),
-            "fhd" => Ok(ResolutionPreset::Fhd),
-            "hd" => Ok(ResolutionPreset::Hd),
-            "sd" => Ok(ResolutionPreset::Sd),
+            "4320p" => Ok(ResolutionPreset::Res4320p),
+            "2160p" => Ok(ResolutionPreset::Res2160p),
+            "1440p" => Ok(ResolutionPreset::Res1440p),
+            "1080p" => Ok(ResolutionPreset::Res1080p),
+            "720p" => Ok(ResolutionPreset::Res720p),
+            "480p" => Ok(ResolutionPreset::Res480p),
+            "360p" => Ok(ResolutionPreset::Res360p),
+            "240p" => Ok(ResolutionPreset::Res240p),
+            "144p" => Ok(ResolutionPreset::Res144p),
             _ => Err(
                 "invalid resolution preset, available options: sd, hd, fhd, qhd, uhd".to_string(),
             ),
@@ -129,7 +136,7 @@ impl std::str::FromStr for ResolutionPreset {
 #[derive(Debug, Clone, Copy)]
 pub enum ResolutionConstant {
     Preset(ResolutionPreset),
-    Value(u32, u32),
+    Value(Resolution),
 }
 
 impl std::str::FromStr for ResolutionConstant {
@@ -144,10 +151,10 @@ impl std::str::FromStr for ResolutionConstant {
             let (width, height) = s
                 .split_once("x")
                 .ok_or("invalid resolution value, should look like eg. `1920x1080`")?;
-            Ok(ResolutionConstant::Value(
-                width.parse::<u32>().map_err(|e| e.to_string())?,
-                height.parse::<u32>().map_err(|e| e.to_string())?,
-            ))
+            Ok(ResolutionConstant::Value(Resolution {
+                width: width.parse::<u32>().map_err(|e| e.to_string())?,
+                height: height.parse::<u32>().map_err(|e| e.to_string())?,
+            }))
         } else {
             let preset = s.parse::<ResolutionPreset>().map_err(|e| e.to_string())?;
             Ok(ResolutionConstant::Preset(preset))
@@ -155,7 +162,7 @@ impl std::str::FromStr for ResolutionConstant {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Resolution {
     pub width: u32,
     pub height: u32,
@@ -164,7 +171,7 @@ pub struct Resolution {
 impl From<ResolutionConstant> for Resolution {
     fn from(value: ResolutionConstant) -> Self {
         match value {
-            ResolutionConstant::Value(width, height) => Resolution { width, height },
+            ResolutionConstant::Value(resolution) => resolution,
             ResolutionConstant::Preset(preset) => preset.into(),
         }
     }
@@ -173,25 +180,41 @@ impl From<ResolutionConstant> for Resolution {
 impl From<ResolutionPreset> for Resolution {
     fn from(value: ResolutionPreset) -> Self {
         match value {
-            ResolutionPreset::Uhd => Resolution {
+            ResolutionPreset::Res4320p => Resolution {
+                width: 7680,
+                height: 4320,
+            },
+            ResolutionPreset::Res2160p => Resolution {
                 width: 3840,
                 height: 2160,
             },
-            ResolutionPreset::Qhd => Resolution {
+            ResolutionPreset::Res1440p => Resolution {
                 width: 2560,
                 height: 1440,
             },
-            ResolutionPreset::Fhd => Resolution {
+            ResolutionPreset::Res1080p => Resolution {
                 width: 1920,
                 height: 1080,
             },
-            ResolutionPreset::Hd => Resolution {
+            ResolutionPreset::Res720p => Resolution {
                 width: 1280,
                 height: 720,
             },
-            ResolutionPreset::Sd => Resolution {
-                width: 640,
+            ResolutionPreset::Res480p => Resolution {
+                width: 854,
                 height: 480,
+            },
+            ResolutionPreset::Res360p => Resolution {
+                width: 640,
+                height: 360,
+            },
+            ResolutionPreset::Res240p => Resolution {
+                width: 426,
+                height: 240,
+            },
+            ResolutionPreset::Res144p => Resolution {
+                width: 256,
+                height: 144,
             },
         }
     }
@@ -222,7 +245,7 @@ pub struct Args {
     #[arg(long)]
     pub disable_encoder: bool,
 
-    #[arg(long, global = true, required_unless_present("disable_encoder"))]
+    #[arg(long, required_unless_present("disable_encoder"))]
     pub encoder_preset: Option<EncoderPreset>,
 
     /// warm-up time in seconds
