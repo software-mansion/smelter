@@ -224,44 +224,49 @@ impl From<ResolutionPreset> for Resolution {
 #[derive(Debug, Clone, clap::Parser)]
 pub struct Args {
     /// [possible values: iterate_exp, maximize or a number]
-    #[arg(long)]
+    #[arg(long, default_value("24"))]
     pub framerate: Argument,
 
     /// [possible values: iterate_exp, maximize or a number]
-    #[arg(long)]
+    #[arg(long, default_value("maximize"))]
     pub input_count: Argument,
 
     /// [possible values: iterate_exp, maximize or a number]
-    #[arg(long)]
+    #[arg(long, default_value("1"))]
     pub output_count: Argument,
 
     #[arg(long)]
     pub file_path: PathBuf,
 
-    /// [possible values: uhd, qhd, fhd, hd, sd or `<width>x<height>`]
-    #[arg(long)]
+    /// [possible values: 4320p, 2160p, 1440p, 1080p, 720p, 480p, 360p, 240p, 144p or `<width>x<height>`]
+    #[arg(long, default_value("1080p"))]
     pub output_resolution: ResolutionConstant,
 
-    #[arg(long)]
+    #[arg(long, default_value("false"))]
     pub disable_encoder: bool,
 
-    #[arg(long, required_unless_present("disable_encoder"))]
+    #[arg(
+        long,
+        default_value("ultrafast"),
+        required_unless_present("disable_encoder")
+    )]
     pub encoder_preset: Option<EncoderPreset>,
 
     /// warm-up time in seconds
-    #[arg(long)]
+    #[arg(long, default_value("10"))]
     pub warm_up_time: DurationWrapper,
 
     /// measuring time in seconds
-    #[arg(long)]
+    #[arg(long, default_value("10"))]
     pub measured_time: DurationWrapper,
 
-    #[arg(long)]
+    /// [possible values: ffmpegh264, vulkan_video_h264 (if your device supports vulkan)]
+    #[arg(long, default_value("ffmpeg_h264"))]
     pub video_decoder: VideoDecoder,
 
     /// in the end of the benchmark the framerate achieved by the compositor is multiplied by this
     /// number, before comparing to the target framerate
-    #[arg(long)]
+    #[arg(long, default_value("1.05"))]
     pub framerate_tolerance: f64,
 }
 
