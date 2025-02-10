@@ -143,29 +143,29 @@ impl std::str::FromStr for ResolutionConstant {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.as_bytes()
-            .first()
+        if s.chars()
+            .last()
             .ok_or("error while parsing resolution argument".to_string())?
-            .is_ascii_digit()
+            == 'p'
         {
+            let preset = s.parse::<ResolutionPreset>().map_err(|e| e.to_string())?;
+            Ok(ResolutionConstant::Preset(preset))
+        } else {
             let (width, height) = s
                 .split_once("x")
                 .ok_or("invalid resolution value, should look like eg. `1920x1080`")?;
             Ok(ResolutionConstant::Value(Resolution {
-                width: width.parse::<u32>().map_err(|e| e.to_string())?,
-                height: height.parse::<u32>().map_err(|e| e.to_string())?,
+                width: width.parse::<usize>().map_err(|e| e.to_string())?,
+                height: height.parse::<usize>().map_err(|e| e.to_string())?,
             }))
-        } else {
-            let preset = s.parse::<ResolutionPreset>().map_err(|e| e.to_string())?;
-            Ok(ResolutionConstant::Preset(preset))
         }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Resolution {
-    pub width: u32,
-    pub height: u32,
+    pub width: usize,
+    pub height: usize,
 }
 
 impl From<ResolutionConstant> for Resolution {
@@ -235,6 +235,7 @@ pub struct Args {
     #[arg(long, default_value("1"))]
     pub output_count: Argument,
 
+    /// path to .mp4 file or .nv12 if decoder is disabled
     #[arg(long)]
     pub file_path: PathBuf,
 
@@ -245,12 +246,8 @@ pub struct Args {
     #[arg(long, default_value("false"))]
     pub disable_encoder: bool,
 
-    #[arg(
-        long,
-        default_value("ultrafast"),
-        required_unless_present("disable_encoder")
-    )]
-    pub encoder_preset: Option<EncoderPreset>,
+    #[arg(long, default_value("ultrafast"))]
+    pub encoder_preset: EncoderPreset,
 
     /// warm-up time in seconds
     #[arg(long, default_value("10"))]
@@ -259,6 +256,18 @@ pub struct Args {
     /// measuring time in seconds
     #[arg(long, default_value("10"))]
     pub measured_time: DurationWrapper,
+
+    /// disable decoder, use raw input with .nv12 file
+    #[arg(long, default_value("false"))]
+    pub disable_decoder: bool,
+
+    /// resolution of raw input frames, used when decoder disabled
+    #[arg(long, required_if_eq("disable_decoder", "true"))]
+    pub input_resolution: Option<ResolutionConstant>,
+
+    /// framerate of raw input frames, used when decoder disabled
+    #[arg(long, required_if_eq("disable_decoder", "true"))]
+    pub input_framerate: Option<u32>,
 
     /// [possible values: ffmpegh264, vulkan_video_h264 (if your device supports vulkan)]
     #[arg(long, default_value("ffmpeg_h264"))]
@@ -285,15 +294,18 @@ impl Args {
             output_resolution: self.output_resolution.into(),
             warm_up_time: self.warm_up_time.0,
             measured_time: self.measured_time.0,
+            disable_decoder: self.disable_decoder,
             video_decoder: self.video_decoder.into(),
             disable_encoder: self.disable_encoder,
-            output_encoder_preset: self.encoder_preset.map(|preset| preset.into()),
+            input_resolution: self.input_resolution.map(|res| res.into()),
+            input_framerate: self.input_framerate.map(|fr| fr.into()),
+            output_encoder_preset: self.encoder_preset.into(),
             framerate_tolerance_multiplier: self.framerate_tolerance,
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SingleBenchConfig {
     pub input_count: u64,
     pub output_count: u64,
@@ -301,10 +313,13 @@ pub struct SingleBenchConfig {
     pub file_path: PathBuf,
     pub output_resolution: Resolution,
     pub disable_encoder: bool,
-    pub output_encoder_preset: Option<ffmpeg_h264::EncoderPreset>,
+    pub output_encoder_preset: ffmpeg_h264::EncoderPreset,
     pub warm_up_time: Duration,
     pub measured_time: Duration,
+    pub disable_decoder: bool,
     pub video_decoder: pipeline::VideoDecoder,
+    pub input_resolution: Option<Resolution>,
+    pub input_framerate: Option<u32>,
     pub framerate_tolerance_multiplier: f64,
 }
 
@@ -312,7 +327,7 @@ impl SingleBenchConfig {
     pub fn log_running_config(&self) {
         tracing::info!("config: {:?}", self);
         tracing::info!(
-            "checking configuration: framerate: {}, decoder count: {}, encoder count: {}",
+            "checking configuration: framerate: {}, input count: {}, output count: {}",
             self.framerate,
             self.input_count,
             self.output_count
@@ -323,17 +338,19 @@ impl SingleBenchConfig {
         print!("{}\t", self.input_count);
         print!("{}\t", self.output_count);
         print!("{}\t", self.framerate);
-        print!("{:?}\t", self.output_resolution);
-        print!("{:?}\t", self.disable_encoder);
+        print!("{}\t", self.output_resolution.width);
+        print!("{}\t", self.output_resolution.height);
+        print!("{}\t", self.disable_encoder);
+        print!("{:?}\t", self.disable_decoder);
+        print!("{:?}\t", self.video_decoder);
         print!("{:?}\t", self.output_encoder_preset);
         print!("{:?}\t", self.warm_up_time);
         print!("{:?}\t", self.measured_time);
-        print!("{:?}\t", self.video_decoder);
         print!("{}\t", self.framerate_tolerance_multiplier);
         println!();
     }
 
     pub fn log_report_header() {
-        println!("dec cnt\tfps\twidth\theight\tpreset\twarmup\tmeasured\tdec\ttol")
+        println!("input cnt\toutput count\tfps\twidth\theight\tdisable enc\tpreset\tdisable dec\tenc\twarmup\tmeasured\tdec\ttol")
     }
 }

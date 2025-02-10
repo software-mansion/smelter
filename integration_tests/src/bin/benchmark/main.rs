@@ -1,4 +1,6 @@
 use std::{
+    fs::File,
+    io::Read,
     sync::{mpsc, Arc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -6,17 +8,18 @@ use std::{
 
 use clap::Parser;
 use compositor_pipeline::{
+    error::RegisterInputError,
     pipeline::{
         encoder::VideoEncoderOptions,
         input::{
             mp4::{Mp4Options, Source},
-            InputOptions,
+            InputInitInfo, InputOptions, RawDataInputOptions,
         },
         output::{EncodedDataOutputOptions, RawDataOutputOptions, RawVideoOptions},
         GraphicsContext, Options, OutputVideoOptions, PipelineOutputEndCondition,
         RegisterInputOptions, RegisterOutputOptions,
     },
-    queue::{self, QueueInputOptions, QueueOptions},
+    queue::{self, PipelineEvent, QueueInputOptions, QueueOptions},
     Pipeline,
 };
 
@@ -26,14 +29,14 @@ use compositor_render::{
         Component, HorizontalAlign, InputStreamComponent, RGBAColor, TilesComponent, VerticalAlign,
     },
     web_renderer::WebRendererInitOptions,
-    Framerate, InputId, OutputId, Resolution,
+    Frame, Framerate, InputId, OutputId, Resolution, YuvPlanes,
 };
-use crossbeam_channel::Receiver;
+use crossbeam_channel::{Receiver, Sender};
 use smelter::{
     config::{read_config, LoggerConfig},
     logger,
 };
-use tracing::warn;
+use tracing::{info, warn};
 
 mod args;
 
@@ -241,29 +244,22 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
     let pipeline = Arc::new(Mutex::new(pipeline));
 
     let mut inputs = Vec::new();
+    let mut frame_senders = Vec::new();
     for i in 0..bench_config.input_count {
         let input_id = InputId(format!("input_{i}").into());
         inputs.push(input_id.clone());
-
-        let result = Pipeline::register_input(
-            &pipeline,
-            input_id,
-            RegisterInputOptions {
-                input_options: InputOptions::Mp4(Mp4Options {
-                    should_loop: true,
-                    video_decoder: bench_config.video_decoder,
-                    source: Source::File(bench_config.file_path.clone()),
-                }),
-                queue_options: QueueInputOptions {
-                    offset: Some(Duration::ZERO),
-                    required: true,
-                    buffer_duration: None,
-                },
-            },
-        );
-
-        if result.is_err() {
-            return false;
+        match bench_config.disable_decoder {
+            true => {
+                let Ok(pipeline_sender) = register_pipeline_raw_input(&pipeline, input_id) else {
+                    return false;
+                };
+                frame_senders.push(pipeline_sender);
+            }
+            false => {
+                if register_pipeline_mp4_input(&pipeline, input_id, &bench_config).is_err() {
+                    return false;
+                }
+            }
         }
     }
 
@@ -297,10 +293,13 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
         };
         let receiver_result: Result<Box<dyn PipelineReceiver + Send>, Box<dyn std::error::Error>> =
             match bench_config.disable_encoder {
-                true => {
-                    pipeline_raw_output(&pipeline, output_id, output_video_options, &bench_config)
-                }
-                false => pipeline_encoded_output(
+                true => register_pipeline_raw_output(
+                    &pipeline,
+                    output_id,
+                    output_video_options,
+                    &bench_config,
+                ),
+                false => register_pipeline_encoded_output(
                     &pipeline,
                     output_id,
                     output_video_options,
@@ -318,6 +317,10 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
     let (result_sender, result_receiver) = mpsc::channel::<bool>();
 
     Pipeline::start(&pipeline);
+    if bench_config.disable_decoder {
+        let config = bench_config.clone();
+        thread::spawn(move || raw_data_sender(config, frame_senders));
+    }
     for pipeline_receiver in receivers {
         let result_sender_clone = result_sender.clone();
         thread::spawn(move || {
@@ -343,7 +346,7 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
             );
         });
     }
-    for _ in 0..bench_config.output_count {
+    for i in 0..bench_config.output_count {
         match result_receiver.recv() {
             Ok(test_result) => {
                 if !test_result {
@@ -356,13 +359,13 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
     true
 }
 
-fn pipeline_encoded_output(
+fn register_pipeline_encoded_output(
     pipeline: &Arc<Mutex<Pipeline>>,
     output_id: OutputId,
     output_video_options: OutputVideoOptions,
     bench_config: &SingleBenchConfig,
 ) -> Result<Box<dyn PipelineReceiver + Send>, Box<dyn std::error::Error>> {
-    let preset = bench_config.output_encoder_preset.clone().unwrap();
+    let preset = bench_config.output_encoder_preset.clone();
     Ok(Box::new(Pipeline::register_encoded_data_output(
         pipeline,
         output_id,
@@ -385,7 +388,7 @@ fn pipeline_encoded_output(
     )?))
 }
 
-fn pipeline_raw_output(
+fn register_pipeline_raw_output(
     pipeline: &Arc<Mutex<Pipeline>>,
     output_id: OutputId,
     output_video_options: OutputVideoOptions,
@@ -409,6 +412,80 @@ fn pipeline_raw_output(
             },
         },
     )?;
-    let x = x.video.unwrap();
-    Ok(Box::new(x))
+    Ok(Box::new(x.video.unwrap()))
+}
+
+fn register_pipeline_mp4_input(
+    pipeline: &Arc<Mutex<Pipeline>>,
+    input_id: InputId,
+    bench_config: &SingleBenchConfig,
+) -> Result<InputInitInfo, RegisterInputError> {
+    let video_decoder = bench_config.video_decoder.clone();
+    Pipeline::register_input(
+        pipeline,
+        input_id,
+        RegisterInputOptions {
+            input_options: InputOptions::Mp4(Mp4Options {
+                should_loop: true,
+                video_decoder,
+                source: Source::File(bench_config.file_path.clone()),
+            }),
+            queue_options: QueueInputOptions {
+                offset: Some(Duration::ZERO),
+                required: true,
+                buffer_duration: None,
+            },
+        },
+    )
+}
+
+fn register_pipeline_raw_input(
+    pipeline: &Arc<Mutex<Pipeline>>,
+    input_id: InputId,
+) -> Result<Sender<PipelineEvent<Frame>>, RegisterInputError> {
+    let x = Pipeline::register_raw_data_input(
+        pipeline,
+        input_id,
+        RawDataInputOptions {
+            video: true,
+            audio: false,
+        },
+        QueueInputOptions {
+            offset: Some(Duration::ZERO),
+            required: true,
+            buffer_duration: None,
+        },
+    )?;
+    Ok(x.video.unwrap())
+}
+
+fn raw_data_sender(bench_config: SingleBenchConfig, senders: Vec<Sender<PipelineEvent<Frame>>>) {
+    let mut file = File::open(bench_config.file_path).unwrap();
+
+    let args::Resolution { width, height } = bench_config.input_resolution.unwrap();
+    let dimensions = width * height;
+    let mut buffer = vec![0u8; dimensions * 3 / 2];
+
+    let mut frame_nr = 0;
+    while let Ok(()) = file.read_exact(&mut buffer) {
+        if buffer.len() < dimensions * 3 / 2 {
+            return;
+        }
+        let y_plane = &buffer[..dimensions];
+        let u_plane = &buffer[dimensions..dimensions * 5 / 4];
+        let v_plane = &buffer[dimensions * 5 / 4..];
+        let frame = Frame {
+            data: compositor_render::FrameData::PlanarYuv420(YuvPlanes {
+                y_plane: bytes::Bytes::from(y_plane.to_vec()),
+                u_plane: bytes::Bytes::from(u_plane.to_vec()),
+                v_plane: bytes::Bytes::from(v_plane.to_vec()),
+            }),
+            resolution: Resolution { width, height },
+            pts: Duration::from_secs((frame_nr / bench_config.input_framerate.unwrap()).into()),
+        };
+        for sender in &senders {
+            let _ = sender.send(PipelineEvent::Data(frame.clone()));
+        }
+        frame_nr = frame_nr + 1;
+    }
 }
