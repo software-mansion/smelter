@@ -103,6 +103,9 @@ importers:
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.17
+      typescript:
+        specifier: ^5.5.3
+        version: 5.7.2
 
   create-smelter-app/templates/node-minimal:
     dependencies:
