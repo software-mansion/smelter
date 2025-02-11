@@ -715,6 +715,8 @@ impl VulkanDecoder<'_> {
             }
         }
 
+        let image_clone = image.clone();
+
         let hal_texture = unsafe {
             wgpu::hal::vulkan::Device::texture_from_raw(
                 **image,
@@ -735,7 +737,9 @@ impl VulkanDecoder<'_> {
                     format: wgpu::TextureFormat::NV12,
                     mip_level_count: 1,
                 },
-                Some(Box::new(image.clone())),
+                Some(Box::new(move || {
+                    drop(image_clone);
+                })),
             )
         };
 

@@ -412,13 +412,13 @@ fn copy_texture_to_node_texture(ctx: &WgpuCtx, source: &RGBATexture, target: &mu
     );
 
     encoder.copy_texture_to_texture(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             aspect: wgpu::TextureAspect::All,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             texture: &source.texture().texture,
         },
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             aspect: wgpu::TextureAspect::All,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
