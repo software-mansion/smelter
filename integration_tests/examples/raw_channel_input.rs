@@ -211,14 +211,14 @@ fn create_texture(index: usize, device: &wgpu::Device, queue: &wgpu::Queue) -> A
     });
 
     queue.write_texture(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             aspect: wgpu::TextureAspect::All,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             texture: &texture,
         },
         &input.data,
-        wgpu::ImageDataLayout {
+        wgpu::TexelCopyBufferLayout {
             offset: 0,
             bytes_per_row: Some(texture.width() * 4),
             rows_per_image: Some(texture.height()),

@@ -74,7 +74,7 @@ impl InputUploader {
                 queue.write_texture(
                     texture.texture.as_image_copy(),
                     &frame.data,
-                    wgpu::ImageDataLayout {
+                    wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(4 * size.width),
                         rows_per_image: Some(size.height),

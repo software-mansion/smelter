@@ -289,6 +289,7 @@ fn eval_array_size(size: ArraySize) -> Result<u64, ConstArraySizeEvalError> {
     match size {
         ArraySize::Constant(c) => Ok(c.get().into()),
         ArraySize::Dynamic => Err(ConstArraySizeEvalError::DynamicSize),
+        ArraySize::Pending(_) => Err(ConstArraySizeEvalError::OverrideSize),
     }
 }
 
@@ -633,6 +634,7 @@ impl TypeInnerExt for naga::TypeInner {
                 let size: Option<u32> = match size {
                     ArraySize::Constant(size) => Some(size.get()),
                     ArraySize::Dynamic => None, // TODO: not sure how to handle this
+                    ArraySize::Pending(_) => None, // TODO: not sure how to handle this
                 };
                 let base: &naga::Type = &module.types[*base];
                 format!(

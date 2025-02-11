@@ -715,10 +715,7 @@ impl VulkanDecoder<'_> {
             }
         }
 
-        // this has to be done with Option and mut, because the closure we create has to be FnMut.
-        // this means we cannot consume its captures, so we have to take the option to be able to
-        // drop the resource.
-        let mut image_clone = Some(image.clone());
+        let image_clone = image.clone();
 
         let hal_texture = unsafe {
             wgpu::hal::vulkan::Device::texture_from_raw(
@@ -741,7 +738,7 @@ impl VulkanDecoder<'_> {
                     mip_level_count: 1,
                 },
                 Some(Box::new(move || {
-                    image_clone.take();
+                    drop(image_clone);
                 })),
             )
         };
