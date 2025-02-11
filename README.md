@@ -1,7 +1,7 @@
 <h1 align="center">
   <img src="assets/lc_logo_large.svg" width=600 alt="Smelter">
 
-  <a href="https://compositor.live/docs/intro">Documentation</a> |
+  <a href="https://smelter.dev/docs">Documentation</a> |
   <a href="https://discord.gg/Cxj3rzTTag">Discord</a>
 </h1>
 
@@ -16,11 +16,11 @@ https://github.com/user-attachments/assets/d8716866-67bd-4721-b1c2-1a1d31e1c5b5
 
 ## Where to start?
 
-Check out our [`Getting started`](https://compositor.live/docs/intro) section.
+Check out our [`Getting started`](https://smelter.dev/docs) section.
 
 Smelter supports Linux and macOS and can be used in 3 ways:
-- TypeScript SDK - [TypeScript SDK Reference](https://compositor.live/docs/typescript/api)
-- Standalone media server - [API Reference](https://compositor.live/docs/api/routes).
+- TypeScript SDK - [TypeScript SDK Reference](https://smelter.dev/docs/typescript/api)
+- Standalone media server - [API Reference](https://smelter.dev/docs/api/routes).
 - Element in a Membrane Framework pipeline - [https://hexdocs.pm/membrane_live_compositor_plugin](https://hexdocs.pm/membrane_live_compositor_plugin).
 
 ## Demos

@@ -46,7 +46,7 @@ async function run() {
 run();
 ```
 
-See our [docs](https://compositor.live/docs) to learn more.
+See our [docs](https://smelter.dev/docs) to learn more.
 
 ## License
 

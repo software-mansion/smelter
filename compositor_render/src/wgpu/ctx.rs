@@ -145,7 +145,7 @@ pub fn create_wgpu_ctx(
     let missing_features = required_features.difference(adapter.features());
     if !missing_features.is_empty() {
         error!("Selected adapter or its driver does not support required wgpu features. Missing features: {missing_features:?}).");
-        error!("You can configure some of the required features using \"SMELTER_REQUIRED_WGPU_FEATURES\" environment variable. Check https://compositor.live/docs for more.");
+        error!("You can configure some of the required features using \"SMELTER_REQUIRED_WGPU_FEATURES\" environment variable. Check https://smelter.dev/docs for more.");
         return Err(CreateWgpuCtxError::NoAdapter);
     }
 

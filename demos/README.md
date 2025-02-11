@@ -13,7 +13,7 @@ Before running demos, install JS dependencies with:
 ```console
 npm install
 ```
-Smelter should run on any computer with modern GPU, but if you want to check detailed requirements, visit [requirements section in docs](https://compositor.live/docs/deployment/requirements).
+Smelter should run on any computer with modern GPU, but if you want to check detailed requirements, visit [requirements section in docs](https://smelter.dev/docs/deployment/requirements).
 
 ### MacOS installation guide
 
@@ -91,5 +91,5 @@ export SMELTER_WEBCAM=false
 
 ## Learn more
 
-You can learn more from [documentation](https://compositor.live/docs/intro).
+You can learn more from [documentation](https://smelter.dev/docs).
 API reference and guides can be found there.

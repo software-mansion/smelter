@@ -176,7 +176,7 @@ function BreakingNewsText() {
           align="center"
           color="#000000"
           backgroundColor="#FFFF00">
-          Leaked docs can be found at https://compositor.live/docs
+          Leaked docs can be found at https://smelter.dev/docs
         </Text>
       </View>
     </View>
