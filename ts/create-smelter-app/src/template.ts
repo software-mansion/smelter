@@ -50,5 +50,10 @@ export function transformPackageJson(packageJson: any, projectName: string): any
       packageJson['peerDependencies'][dep] = depValue.substring(LABEL.length);
     }
   }
+
+  const devDependencies = packageJson['devDependencies'] as any;
+  if (devDependencies['ts-node']) {
+    delete devDependencies['ts-node'];
+  }
   return packageJson;
 }

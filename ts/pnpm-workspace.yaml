@@ -9,3 +9,5 @@ packages:
   - 'create-smelter-app'
   - 'create-smelter-app/templates/node-minimal'
   - 'create-smelter-app/templates/node-express-zustand'
+  - 'create-smelter-app/templates/node-offline-minimal'
+  - 'create-smelter-app/templates/node-offline-showcase'
