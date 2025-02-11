@@ -127,6 +127,11 @@ impl VulkanInstance {
             None
         };
 
+        // this has to be done with Option and mut, because the closure we create has to be FnMut.
+        // this means we cannot consume its captures, so we have to take the option to be able to
+        // drop the resource.
+        let mut instance_clone = Some(instance.clone());
+
         let wgpu_instance = unsafe {
             wgpu::hal::vulkan::Instance::from_raw(
                 (*entry).clone(),
@@ -137,7 +142,9 @@ impl VulkanInstance {
                 extensions,
                 wgpu::InstanceFlags::empty(),
                 false,
-                None,
+                Some(Box::new(move || {
+                    instance_clone.take();
+                })),
             )?
         };
 
@@ -267,10 +274,17 @@ impl VulkanInstance {
             },
         };
 
+        // this has to be done with Option and mut, because the closure we create has to be FnMut.
+        // this means we cannot consume its captures, so we have to take the option to be able to
+        // drop the resource.
+        let mut device_clone = Some(device.clone());
+
         let wgpu_device = unsafe {
             wgpu_adapter.adapter.device_from_raw(
                 device.device.clone(),
-                false,
+                Some(Box::new(move || {
+                    device_clone.take();
+                })),
                 &required_extensions,
                 wgpu_features,
                 &wgpu::MemoryHints::default(),

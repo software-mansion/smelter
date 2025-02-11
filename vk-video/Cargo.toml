@@ -22,7 +22,7 @@ memchr = "2.7.4"
 thiserror = "1.0.59"
 tracing = "0.1.40"
 vk-mem = "0.4.0"
-wgpu =  "22.1.0"
+wgpu =  "23.0.0"
 
 [dev-dependencies]
 bytemuck = { version = "1.19.0", features = ["derive"] }

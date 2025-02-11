@@ -22,7 +22,7 @@ glyphon = { workspace = true }
 crossbeam-channel = { workspace = true }
 resvg = "0.35.0"
 nalgebra-glm = { version = "0.18.0", features = ["convert-bytemuck"] }
-naga = "22.1.0"
+naga = "23.0.0"
 rand = { workspace = true }
 tracing = { workspace = true }
 shared_memory = { workspace = true, optional = true }
