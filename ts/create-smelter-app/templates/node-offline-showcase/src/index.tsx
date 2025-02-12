@@ -10,6 +10,15 @@ import {
   useCurrentTimestamp,
 } from '@swmansion/smelter';
 import { useEffect, useState } from 'react';
+import chalk from 'chalk';
+
+function useLogOnMount(msg: string) {
+  const currentTimestamp = useCurrentTimestamp();
+  useEffect(() => {
+    const time = (currentTimestamp / 1000).toFixed(1);
+    console.log(`- [${time}s] ${msg}`);
+  }, []);
+}
 
 function Instructions() {
   return (
@@ -33,6 +42,7 @@ function Instructions() {
 }
 
 function TitleSlide(props: { title: string; text: string }) {
+  useLogOnMount(`Show text slide (${props.title}: ${props.text})`);
   return (
     <View style={{ direction: 'column', paddingLeft: 200 }}>
       <View />
@@ -44,6 +54,8 @@ function TitleSlide(props: { title: string; text: string }) {
 }
 
 function Timer() {
+  useLogOnMount(`Adding <Timer /> component`);
+
   const currentTimestamp = useCurrentTimestamp();
   const [startTimestamp, _setStartTimestamp] = useState(currentTimestamp);
   const [nextTimestamp, setNextTimestamp] = useState(0);
@@ -76,36 +88,59 @@ function Timer() {
   );
 }
 
+function FirstVideo() {
+  useLogOnMount(`Show video (racing game)`);
+  return (
+    <Rescaler>
+      <Mp4 source="https://smelter.dev/videos/template-scene-race.mp4" />
+    </Rescaler>
+  );
+}
+
+function SecondVideo() {
+  useLogOnMount(`Show video (streamer camera + gameplay)`);
+  return (
+    <>
+      <Rescaler>
+        <Mp4 source="https://smelter.dev/videos/template-scene-gameplay.mp4" />
+      </Rescaler>
+      <Rescaler
+        style={{
+          top: 20,
+          left: 20,
+          borderRadius: 44,
+          rescaleMode: 'fill',
+          height: 200,
+          width: 355,
+        }}>
+        <Mp4 source="https://smelter.dev/videos/template-scene-streamer.mp4" />
+      </Rescaler>
+    </>
+  );
+}
+
 function App() {
+  useEffect(() => {
+    return () => {
+      console.log(`- React render complete`);
+      console.log();
+      console.log('Generating MP4 file ...');
+    };
+  }, []);
   return (
     <View style={{ backgroundColor: '#161127' }}>
       <SlideShow>
         <Slide durationMs={2000}>
-          <TitleSlide title="Example 1" text="Video from a racing game." />
+          <TitleSlide title="Example 1" text="Racing game gameplay." />
         </Slide>
         <Slide>
-          <Rescaler>
-            <Mp4 source="https://smelter.dev/videos/template-scene-race.mp4" />
-          </Rescaler>
+          <FirstVideo />
         </Slide>
         <Slide durationMs={2000}>
           <TitleSlide title="Example 2" text="Streamer camera + gameplay." />
         </Slide>
         <Slide>
-          <Rescaler>
-            <Mp4 source="https://smelter.dev/videos/template-scene-gameplay.mp4" />
-          </Rescaler>
-          <Rescaler
-            style={{
-              top: 20,
-              left: 20,
-              borderRadius: 44,
-              rescaleMode: 'fill',
-              height: 200,
-              width: 355,
-            }}>
-            <Mp4 source="https://smelter.dev/videos/template-scene-streamer.mp4" />
-          </Rescaler>
+          <SecondVideo />
         </Slide>
       </SlideShow>
       <Instructions />
@@ -117,6 +152,10 @@ function App() {
 async function run() {
   const smelter = new OfflineSmelter();
   await smelter.init();
+  console.log('✔ Started offline smelter instance.');
+
+  console.log();
+  console.log('Starting rendering.');
   await smelter.render(<App />, {
     type: 'mp4',
     serverPath: './output.mp4',
@@ -131,5 +170,8 @@ async function run() {
       encoder: { type: 'aac', channels: 'stereo' },
     },
   });
+
+  console.log();
+  console.log(chalk.green(`Mp4 successfully written to ${chalk.bold('./output.mp4')}`));
 }
 void run();
