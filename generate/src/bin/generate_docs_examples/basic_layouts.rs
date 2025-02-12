@@ -11,14 +11,14 @@ pub(super) fn generate_basic_layouts_guide() -> Result<()> {
         "basic_layouts_1.webp",
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
         }),
     )?;
     generate_scene(
         "basic_layouts_2.webp",
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 { "type": "input_stream", "input_id": "input_1" },
             ]
@@ -28,7 +28,7 @@ pub(super) fn generate_basic_layouts_guide() -> Result<()> {
         "basic_layouts_3.webp",
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 {
                     "type": "rescaler",
@@ -41,7 +41,7 @@ pub(super) fn generate_basic_layouts_guide() -> Result<()> {
         "basic_layouts_4.webp",
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 {
                     "type": "rescaler",
@@ -58,7 +58,7 @@ pub(super) fn generate_basic_layouts_guide() -> Result<()> {
         "basic_layouts_5.webp",
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 {
                     "type": "rescaler",

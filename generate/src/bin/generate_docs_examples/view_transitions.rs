@@ -11,7 +11,7 @@ pub(super) fn generate_view_transition_guide() -> Result<()> {
         "view_transition_1.webp",
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 {
                     "id": "rescaler_1",
@@ -23,7 +23,7 @@ pub(super) fn generate_view_transition_guide() -> Result<()> {
         }),
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 {
                     "id": "rescaler_1",
@@ -42,7 +42,7 @@ pub(super) fn generate_view_transition_guide() -> Result<()> {
         "view_transition_2.webp",
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 {
                     "id": "rescaler_1",
@@ -59,7 +59,7 @@ pub(super) fn generate_view_transition_guide() -> Result<()> {
         }),
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 {
                     "id": "rescaler_1",
@@ -82,7 +82,7 @@ pub(super) fn generate_view_transition_guide() -> Result<()> {
         "view_transition_3.webp",
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 {
                     "id": "rescaler_1",
@@ -94,7 +94,7 @@ pub(super) fn generate_view_transition_guide() -> Result<()> {
         }),
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 {
                     "id": "rescaler_1",
@@ -113,7 +113,7 @@ pub(super) fn generate_view_transition_guide() -> Result<()> {
         "view_transition_4.webp",
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 {
                     "id": "rescaler_1",
@@ -143,7 +143,7 @@ pub(super) fn generate_view_transition_guide() -> Result<()> {
         }),
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 {
                     "id": "rescaler_1",
