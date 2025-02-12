@@ -1,24 +1,22 @@
 {
-  "name": "template-node-express-zustand",
+  "name": "template-node-offline-showcase",
   "private": true,
   "description": "Smelter app",
   "version": "1.0.0",
   "main": "./dist/index.js",
   "license": "MIT",
   "scripts": {
-    "start": "ts-node ./src/index.ts",
+    "start": "ts-node ./src/index.tsx",
     "build": "tsc",
     "lint": "eslint ."
   },
   "dependencies": {
     "@swmansion/smelter": "workspace:^0.2.0-rc.0",
     "@swmansion/smelter-node": "workspace:^0.2.0-rc.2",
-    "express": "^4.21.0",
-    "react": "^18.3.1",
-    "zustand": "4.5.5"
+    "chalk": "^4.1.2",
+    "react": "^18.3.1"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
     "@types/node": "^20.14.10",
     "@types/react": "^18.3.3",
     "ts-node": "^10.9.2",
