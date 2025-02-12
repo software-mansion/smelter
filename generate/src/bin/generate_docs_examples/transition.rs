@@ -216,7 +216,7 @@ fn scene(inputs: Vec<&str>) -> serde_json::Value {
             "id": "tile",
             "children": inputs,
             "margin": 20,
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "transition": {
                 "duration_ms": 500,
                 "easing_function": {

@@ -8,12 +8,12 @@ fn main() {
     let _ = fs::remove_dir_all(workingdir());
     fs::create_dir_all(workingdir()).unwrap();
 
-    // HSV 240°, 50%, 65% (dark blue)
-    generate_video(workingdir().join("input_1.rtp"), "Input 1", "#5353a6ff").unwrap();
-    // HSV 120°, 50%, 65% (green)
-    generate_video(workingdir().join("input_2.rtp"), "Input 2", "#53a653ff").unwrap();
-    // HSV 0°, 50%, 65% (red)
-    generate_video(workingdir().join("input_3.rtp"), "Input 3", "#a65353ff").unwrap();
+    // HSV 255°, 56%, 67% (navy blue)
+    generate_video(workingdir().join("input_1.rtp"), "Input 1", "#624baaff").unwrap();
+    // HSV 350°, 71%, 75% (red)
+    generate_video(workingdir().join("input_2.rtp"), "Input 2", "#bf374eff").unwrap();
+    // HSV 142°, 63%, 64% (green)
+    generate_video(workingdir().join("input_3.rtp"), "Input 3", "#3da362ff").unwrap();
     // HSV 60°, 50%, 65% (yellow)
     generate_video(workingdir().join("input_4.rtp"), "Input 4", "#a6a653ff").unwrap();
     // HSV 180°, 50%, 65% (light blue)
