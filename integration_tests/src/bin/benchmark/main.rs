@@ -41,8 +41,8 @@ use tracing::warn;
 mod args;
 
 use args::{
-    Args, Argument, ExpIterator, NumericArgument, ResolutionArgument, ResolutionConstant,
-    ResolutionPreset, SingleBenchConfig,
+    Args, Argument, ExpIterator, NumericArgument, ResolutionArgument, ResolutionPreset,
+    SingleBenchConfig,
 };
 
 trait PipelineReceiver {
@@ -122,9 +122,7 @@ fn run_args_iterate(
             Argument::ResolutionArgument(resolution_argument) => {
                 if matches!(resolution_argument, args::ResolutionArgument::Iterate) {
                     let iterator = ResolutionPreset::iter().map(|v| {
-                        Argument::ResolutionArgument(ResolutionArgument::Constant(
-                            ResolutionConstant::Value(v.into()),
-                        ))
+                        Argument::ResolutionArgument(ResolutionArgument::Constant(v.into()))
                     });
                     return run_fn_iterate(ctx, reports, args, i, arguments, iterator);
                 }
@@ -211,11 +209,8 @@ fn run_args_maximize(
             Argument::ResolutionArgument(resolution_argument)
                 if *resolution_argument == ResolutionArgument::Maximize =>
             {
-                let iterator = ResolutionPreset::iter().map(|v| {
-                    Argument::ResolutionArgument(ResolutionArgument::Constant(
-                        ResolutionConstant::Value(v.into()),
-                    ))
-                });
+                let iterator = ResolutionPreset::iter()
+                    .map(|v| Argument::ResolutionArgument(ResolutionArgument::Constant(v.into())));
                 for preset in iterator {
                     let mut arguments = arguments.clone();
                     arguments[i] = preset.clone();

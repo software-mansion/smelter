@@ -23,17 +23,14 @@ impl std::str::FromStr for NumericArgument {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "iterate" {
-            return Ok(NumericArgument::IterateExp);
+        match s {
+            "iterate" => Ok(NumericArgument::IterateExp),
+            "maximize" => Ok(NumericArgument::Maximize),
+            _ => s
+                .parse::<u64>()
+                .map(NumericArgument::Constant)
+                .map_err(|e| e.to_string()),
         }
-
-        if s == "maximize" {
-            return Ok(NumericArgument::Maximize);
-        }
-
-        s.parse::<u64>()
-            .map(NumericArgument::Constant)
-            .map_err(|e| e.to_string())
     }
 }
 
@@ -266,30 +263,28 @@ impl From<ResolutionPreset> for Resolution {
 pub enum ResolutionArgument {
     Maximize,
     Iterate,
-    Constant(ResolutionConstant),
+    Constant(Resolution),
 }
 
 impl FromStr for ResolutionArgument {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "iterate" {
-            return Ok(ResolutionArgument::Iterate);
+        match s {
+            "iterate" => Ok(ResolutionArgument::Iterate),
+            "maximize" => Ok(ResolutionArgument::Maximize),
+            _ => s
+                .parse::<ResolutionConstant>()
+                .map(Resolution::from)
+                .map(ResolutionArgument::Constant),
         }
-
-        if s == "maximize" {
-            return Ok(ResolutionArgument::Maximize);
-        }
-
-        s.parse::<ResolutionConstant>()
-            .map(ResolutionArgument::Constant)
     }
 }
 
 impl ResolutionArgument {
     pub fn as_constant(&self) -> Option<Resolution> {
         if let Self::Constant(v) = self {
-            Some((*v).into())
+            Some(*v)
         } else {
             None
         }
