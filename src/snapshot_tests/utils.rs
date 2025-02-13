@@ -110,15 +110,15 @@ fn copy_to_buffer(
     let size = texture.size();
     let block_size = texture.format().block_copy_size(None).unwrap();
     encoder.copy_texture_to_buffer(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             aspect: wgpu::TextureAspect::All,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             texture,
         },
-        wgpu::ImageCopyBuffer {
+        wgpu::TexelCopyBufferInfo {
             buffer,
-            layout: wgpu::ImageDataLayout {
+            layout: wgpu::TexelCopyBufferLayout {
                 bytes_per_row: Some(pad_to_256(size.width * block_size)),
                 rows_per_image: Some(size.height),
                 offset: 0,

@@ -30,13 +30,13 @@ impl R8FillWithValue {
             primitive: PRIMITIVE_STATE,
             vertex: wgpu::VertexState {
                 module: &shader_module,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[Vertex::LAYOUT],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader_module,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::R8Unorm,
                     write_mask: wgpu::ColorWrites::all(),

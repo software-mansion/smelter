@@ -111,6 +111,9 @@ pub enum TypeEquivalenceError {
 pub enum ConstArraySizeEvalError {
     #[error("Dynamic array size is not allowed.")]
     DynamicSize,
+
+    #[error("Overridden array size is not allowed.")]
+    OverrideSize,
 }
 
 #[derive(Debug, thiserror::Error)]

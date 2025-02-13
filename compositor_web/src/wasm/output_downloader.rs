@@ -122,9 +122,9 @@ impl OutputDownloader {
         let size = texture.size();
         encoder.copy_texture_to_buffer(
             texture.as_image_copy(),
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(pad_to_256(4 * size.width)),
                     rows_per_image: Some(size.height),

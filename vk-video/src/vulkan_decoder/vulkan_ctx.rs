@@ -127,6 +127,8 @@ impl VulkanInstance {
             None
         };
 
+        let instance_clone = instance.clone();
+
         let wgpu_instance = unsafe {
             wgpu::hal::vulkan::Instance::from_raw(
                 (*entry).clone(),
@@ -137,7 +139,9 @@ impl VulkanInstance {
                 extensions,
                 wgpu::InstanceFlags::empty(),
                 false,
-                None,
+                Some(Box::new(move || {
+                    drop(instance_clone);
+                })),
             )?
         };
 
@@ -267,10 +271,14 @@ impl VulkanInstance {
             },
         };
 
+        let device_clone = device.clone();
+
         let wgpu_device = unsafe {
             wgpu_adapter.adapter.device_from_raw(
                 device.device.clone(),
-                false,
+                Some(Box::new(move || {
+                    drop(device_clone);
+                })),
                 &required_extensions,
                 wgpu_features,
                 &wgpu::MemoryHints::default(),

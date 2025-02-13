@@ -116,7 +116,7 @@ pub fn create_wgpu_ctx(
     limits: wgpu::Limits,
     compatible_surface: Option<&wgpu::Surface<'_>>,
 ) -> Result<WgpuComponents, CreateWgpuCtxError> {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::all(),
         ..Default::default()
     });
