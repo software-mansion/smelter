@@ -10,15 +10,6 @@ import {
   useCurrentTimestamp,
 } from '@swmansion/smelter';
 import { useEffect, useState } from 'react';
-import chalk from 'chalk';
-
-function useLogOnMount(msg: string) {
-  const currentTimestamp = useCurrentTimestamp();
-  useEffect(() => {
-    const time = (currentTimestamp / 1000).toFixed(1);
-    console.log(`- [${time}s] ${msg}`);
-  }, []);
-}
 
 function Instructions() {
   return (
@@ -42,7 +33,6 @@ function Instructions() {
 }
 
 function TitleSlide(props: { title: string; text: string }) {
-  useLogOnMount(`Show text slide (${props.title}: ${props.text})`);
   return (
     <View style={{ direction: 'column', paddingLeft: 200 }}>
       <View />
@@ -54,8 +44,6 @@ function TitleSlide(props: { title: string; text: string }) {
 }
 
 function Timer() {
-  useLogOnMount(`Adding <Timer /> component`);
-
   const currentTimestamp = useCurrentTimestamp();
   const [startTimestamp, _setStartTimestamp] = useState(currentTimestamp);
   const [nextTimestamp, setNextTimestamp] = useState(0);
@@ -89,7 +77,6 @@ function Timer() {
 }
 
 function FirstVideo() {
-  useLogOnMount(`Show video (racing game)`);
   return (
     <Rescaler>
       <Mp4 source="https://smelter.dev/videos/template-scene-race.mp4" />
@@ -98,7 +85,6 @@ function FirstVideo() {
 }
 
 function SecondVideo() {
-  useLogOnMount(`Show video (streamer camera + gameplay)`);
   return (
     <>
       <Rescaler>
@@ -120,13 +106,6 @@ function SecondVideo() {
 }
 
 function App() {
-  useEffect(() => {
-    return () => {
-      console.log(`- React render complete`);
-      console.log();
-      console.log('Generating MP4 file ...');
-    };
-  }, []);
   return (
     <View style={{ backgroundColor: '#161127' }}>
       <SlideShow>
@@ -152,10 +131,8 @@ function App() {
 async function run() {
   const smelter = new OfflineSmelter();
   await smelter.init();
-  console.log('✔ Started offline smelter instance.');
 
-  console.log();
-  console.log('Starting rendering.');
+  console.log('Starting rendering ...');
   await smelter.render(<App />, {
     type: 'mp4',
     serverPath: './output.mp4',
@@ -171,7 +148,6 @@ async function run() {
     },
   });
 
-  console.log();
-  console.log(chalk.green(`Mp4 successfully written to ${chalk.bold('./output.mp4')}`));
+  console.log(`Mp4 successfully written to ./output.mp4`);
 }
 void run();
