@@ -11,7 +11,7 @@ pub(super) fn generate_quick_start_guide() -> Result<()> {
         "quick_start_1.webp",
         json!({
             "type": "view",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": []
         }),
     )?;
@@ -19,7 +19,7 @@ pub(super) fn generate_quick_start_guide() -> Result<()> {
         "quick_start_2.webp",
         json!({
             "type": "tiles",
-            "background_color": "#4d4d4dff",
+            "background_color": "#52505bff",
             "children": [
                 { "type": "input_stream", "input_id": "input_1" },
                 { "type": "input_stream", "input_id": "input_2" },
