@@ -36,11 +36,14 @@ use smelter::{
     config::{read_config, LoggerConfig},
     logger,
 };
-use tracing::{info, warn};
+use tracing::warn;
 
 mod args;
 
-use args::{Args, Argument, SingleBenchConfig};
+use args::{
+    Args, Argument, ExpIterator, NumericArgument, ResolutionArgument, ResolutionConstant,
+    ResolutionPreset, SingleBenchConfig,
+};
 
 trait PipelineReceiver {
     fn receive(&self) {}
@@ -87,10 +90,7 @@ fn run_args(ctx: GraphicsContext, args: &Args) -> Vec<SingleBenchConfig> {
     let mut reports = Vec::new();
 
     // check maximize count
-    let maximize_count = arguments
-        .iter()
-        .filter(|arg| matches!(arg, Argument::Maximize))
-        .count();
+    let maximize_count = arguments.iter().filter(|arg| arg.is_maximize()).count();
 
     if maximize_count != 1 {
         println!("Exactly one argument should be set to 'maximize'");
@@ -111,31 +111,22 @@ fn run_args_iterate(
     reports: &mut Vec<SingleBenchConfig>,
 ) -> FurtherIterationPossible {
     for (i, argument) in arguments.iter().enumerate() {
-        if matches!(argument, Argument::IterateExp) {
-            let mut any_succeeded = false;
-            let mut count = 1;
-
-            // run the rest of the benchmark, multiplying the argument by 2 each iteration
-            loop {
-                let mut arguments = arguments.clone();
-                arguments[i] = Argument::Constant(count);
-
-                if let FurtherIterationPossible(true) =
-                    run_args_iterate(ctx.clone(), args, arguments, reports)
-                {
-                    any_succeeded = true;
-                    count *= 2;
-                    continue;
-                } else {
-                    // If no benchmarks finished successfully, even with the argument set to 1, we
-                    // have to tell the previous recurrent invocation of this function that the configuration
-                    // it gave us is too hard to run already and that it can stop iterating,
-                    // because it has reached the maximum for its argument.
-                    //
-                    // If some benchmarks finished successfully, then the previous recurrent
-                    // invocation can increase its arguments again, until we get to the situation
-                    // where no further iteration is possible.
-                    return FurtherIterationPossible(any_succeeded);
+        match argument {
+            Argument::NumericArgument(numeric_argument) => {
+                if matches!(numeric_argument, NumericArgument::IterateExp) {
+                    let iterator = ExpIterator::default()
+                        .map(|v| Argument::NumericArgument(NumericArgument::Constant(v)));
+                    return run_fn_iterate(ctx, reports, args, i, arguments, iterator);
+                }
+            }
+            Argument::ResolutionArgument(resolution_argument) => {
+                if matches!(resolution_argument, args::ResolutionArgument::Iterate) {
+                    let iterator = ResolutionPreset::iter().map(|v| {
+                        Argument::ResolutionArgument(ResolutionArgument::Constant(
+                            ResolutionConstant::Value(v.into()),
+                        ))
+                    });
+                    return run_fn_iterate(ctx, reports, args, i, arguments, iterator);
                 }
             }
         }
@@ -146,35 +137,97 @@ fn run_args_iterate(
     run_args_maximize(ctx, args, arguments, reports)
 }
 
+fn run_fn_iterate(
+    ctx: GraphicsContext,
+    reports: &mut Vec<SingleBenchConfig>,
+    args: &Args,
+    i: usize,
+    arguments: Box<[Argument]>,
+    iterator: impl Iterator<Item = Argument>,
+) -> FurtherIterationPossible {
+    let mut any_succeeded = false;
+
+    // run the rest of the benchmark, multiplying the argument by 2 each iteration
+    for argument in iterator {
+        let mut arguments = arguments.clone();
+        arguments[i] = argument;
+        if let FurtherIterationPossible(true) =
+            run_args_iterate(ctx.clone(), args, arguments, reports)
+        {
+            any_succeeded = true;
+            continue;
+        } else {
+            // If no benchmarks finished successfully, even with the argument set to 1, we
+            // have to tell the previous recurrent invocation of this function that the configuration
+            // it gave us is too hard to run already and that it can stop iterating,
+            // because it has reached the maximum for its argument.
+            //
+            // If some benchmarks finished successfully, then the previous recurrent
+            // invocation can increase its arguments again, until we get to the situation
+            // where no further iteration is possible.
+            return FurtherIterationPossible(any_succeeded);
+        }
+    }
+    FurtherIterationPossible(any_succeeded)
+}
 fn run_args_maximize(
     ctx: GraphicsContext,
     args: &Args,
     arguments: Box<[Argument]>,
     reports: &mut Vec<SingleBenchConfig>,
 ) -> FurtherIterationPossible {
-    let test_fn = |count, i| {
+    let test_fn = |argument, i| {
         let mut arguments = arguments.clone();
-        arguments[i] = Argument::Constant(count);
+        arguments[i] = argument;
         let config = args.with_arguments(&arguments);
         config.log_running_config();
         run_single_test(ctx.clone(), config)
     };
-
+    let to_numeric_const = |x| Argument::NumericArgument(NumericArgument::Constant(x));
     for (i, argument) in arguments.iter().enumerate() {
-        if *argument == Argument::Maximize {
-            let upper_bound = find_upper_bound(1, |count| test_fn(count, i));
+        match argument {
+            Argument::NumericArgument(numeric_argument) => {
+                if *numeric_argument == NumericArgument::Maximize {
+                    {
+                        let upper_bound =
+                            find_upper_bound(1, |count| test_fn(to_numeric_const(count), i));
 
-            if upper_bound == 0 {
-                // the configuration is not runnable anymore
-                return FurtherIterationPossible(false);
+                        if upper_bound == 0 {
+                            // the configuration is not runnable anymore
+                            return FurtherIterationPossible(false);
+                        }
+
+                        let result = binsearch(upper_bound / 2, upper_bound, |count| {
+                            test_fn(to_numeric_const(count), i)
+                        });
+
+                        let mut arguments = arguments.clone();
+                        arguments[i] = Argument::NumericArgument(NumericArgument::Constant(result));
+                        reports.push(args.with_arguments(&arguments));
+                        return FurtherIterationPossible(true);
+                    }
+                }
             }
-
-            let result = binsearch(upper_bound / 2, upper_bound, |count| test_fn(count, i));
-
-            let mut arguments = arguments.clone();
-            arguments[i] = Argument::Constant(result);
-            reports.push(args.with_arguments(&arguments));
-            return FurtherIterationPossible(true);
+            Argument::ResolutionArgument(resolution_argument)
+                if *resolution_argument == ResolutionArgument::Maximize =>
+            {
+                let iterator = ResolutionPreset::iter().map(|v| {
+                    Argument::ResolutionArgument(ResolutionArgument::Constant(
+                        ResolutionConstant::Value(v.into()),
+                    ))
+                });
+                for preset in iterator {
+                    let mut arguments = arguments.clone();
+                    arguments[i] = preset.clone();
+                    if !test_fn(preset.clone(), i) {
+                        let mut arguments = arguments.clone();
+                        arguments[i] = preset;
+                        reports.push(args.with_arguments(&arguments));
+                        return FurtherIterationPossible(true);
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -346,7 +399,7 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
             );
         });
     }
-    for i in 0..bench_config.output_count {
+    for _ in 0..bench_config.output_count {
         match result_receiver.recv() {
             Ok(test_result) => {
                 if !test_result {
@@ -378,8 +431,8 @@ fn register_pipeline_encoded_output(
                 video: Some(VideoEncoderOptions::H264(H264OutputOptions {
                     preset,
                     resolution: Resolution {
-                        width: bench_config.output_resolution.width as usize,
-                        height: bench_config.output_resolution.height as usize,
+                        width: bench_config.output_resolution.width,
+                        height: bench_config.output_resolution.height,
                     },
                     raw_options: Vec::new(),
                 })),
@@ -405,8 +458,8 @@ fn register_pipeline_raw_output(
                 audio: None,
                 video: Some(RawVideoOptions {
                     resolution: Resolution {
-                        width: bench_config.output_resolution.width as usize,
-                        height: bench_config.output_resolution.height as usize,
+                        width: bench_config.output_resolution.width,
+                        height: bench_config.output_resolution.height,
                     },
                 }),
             },
@@ -420,7 +473,7 @@ fn register_pipeline_mp4_input(
     input_id: InputId,
     bench_config: &SingleBenchConfig,
 ) -> Result<InputInitInfo, RegisterInputError> {
-    let video_decoder = bench_config.video_decoder.clone();
+    let video_decoder = bench_config.video_decoder;
     Pipeline::register_input(
         pipeline,
         input_id,
@@ -486,6 +539,6 @@ fn raw_data_sender(bench_config: SingleBenchConfig, senders: Vec<Sender<Pipeline
         for sender in &senders {
             let _ = sender.send(PipelineEvent::Data(frame.clone()));
         }
-        frame_nr = frame_nr + 1;
+        frame_nr += 1;
     }
 }

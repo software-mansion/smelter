@@ -1,15 +1,15 @@
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, str::FromStr, time::Duration};
 
 use compositor_pipeline::pipeline::{self, encoder::ffmpeg_h264};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Argument {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NumericArgument {
     IterateExp,
     Maximize,
     Constant(u64),
 }
 
-impl Argument {
+impl NumericArgument {
     pub fn as_constant(&self) -> Option<u64> {
         if let Self::Constant(v) = self {
             Some(*v)
@@ -19,21 +19,45 @@ impl Argument {
     }
 }
 
-impl std::str::FromStr for Argument {
+impl std::str::FromStr for NumericArgument {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "iterate_exp" {
-            return Ok(Argument::IterateExp);
+        if s == "iterate" {
+            return Ok(NumericArgument::IterateExp);
         }
 
         if s == "maximize" {
-            return Ok(Argument::Maximize);
+            return Ok(NumericArgument::Maximize);
         }
 
         s.parse::<u64>()
-            .map(Argument::Constant)
+            .map(NumericArgument::Constant)
             .map_err(|e| e.to_string())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ExpIterator(u64);
+
+impl Iterator for ExpIterator {
+    type Item = u64;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let tmp = self.0;
+        match tmp {
+            0 => None,
+            _ => {
+                self.0 *= 2;
+                Some(tmp)
+            }
+        }
+    }
+}
+
+impl Default for ExpIterator {
+    fn default() -> Self {
+        ExpIterator(1)
     }
 }
 
@@ -99,7 +123,7 @@ impl From<EncoderPreset> for ffmpeg_h264::EncoderPreset {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolutionPreset {
     Res4320p,
     Res2160p,
@@ -133,7 +157,25 @@ impl std::str::FromStr for ResolutionPreset {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+impl ResolutionPreset {
+    const ORDER: &[ResolutionPreset] = &[
+        ResolutionPreset::Res144p,
+        ResolutionPreset::Res240p,
+        ResolutionPreset::Res360p,
+        ResolutionPreset::Res480p,
+        ResolutionPreset::Res720p,
+        ResolutionPreset::Res1080p,
+        ResolutionPreset::Res1440p,
+        ResolutionPreset::Res2160p,
+        ResolutionPreset::Res4320p,
+    ];
+
+    pub fn iter() -> impl Iterator<Item = ResolutionPreset> {
+        ResolutionPreset::ORDER.iter().copied()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolutionConstant {
     Preset(ResolutionPreset),
     Value(Resolution),
@@ -162,7 +204,7 @@ impl std::str::FromStr for ResolutionConstant {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Resolution {
     pub width: usize,
     pub height: usize,
@@ -220,28 +262,93 @@ impl From<ResolutionPreset> for Resolution {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolutionArgument {
+    Maximize,
+    Iterate,
+    Constant(ResolutionConstant),
+}
+
+impl FromStr for ResolutionArgument {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "iterate" {
+            return Ok(ResolutionArgument::Iterate);
+        }
+
+        if s == "maximize" {
+            return Ok(ResolutionArgument::Maximize);
+        }
+
+        s.parse::<ResolutionConstant>()
+            .map(ResolutionArgument::Constant)
+    }
+}
+
+impl ResolutionArgument {
+    pub fn as_constant(&self) -> Option<Resolution> {
+        if let Self::Constant(v) = self {
+            Some((*v).into())
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum Argument {
+    NumericArgument(NumericArgument),
+    ResolutionArgument(ResolutionArgument),
+}
+
+impl Argument {
+    fn as_numeric(&self) -> Option<NumericArgument> {
+        if let Self::NumericArgument(n) = self {
+            Some(n.clone())
+        } else {
+            None
+        }
+    }
+
+    fn as_resolution(&self) -> Option<ResolutionArgument> {
+        if let Self::ResolutionArgument(n) = self {
+            Some(n.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn is_maximize(&self) -> bool {
+        match self {
+            Self::NumericArgument(a) => matches!(a, NumericArgument::Maximize),
+            Self::ResolutionArgument(a) => matches!(a, ResolutionArgument::Maximize),
+        }
+    }
+}
+
 /// Only one option can be set to "maximize"
 #[derive(Debug, Clone, clap::Parser)]
 pub struct Args {
-    /// [possible values: iterate_exp, maximize or a number]
+    /// [possible values: maximize, number or iterate (to iterate exponentially)]
     #[arg(long, default_value("24"))]
-    pub framerate: Argument,
+    pub framerate: NumericArgument,
 
-    /// [possible values: iterate_exp, maximize or a number]
+    /// [possible values: maximize, number or iterate (to iterate exponentially)]
     #[arg(long, default_value("maximize"))]
-    pub input_count: Argument,
+    pub input_count: NumericArgument,
 
-    /// [possible values: iterate_exp, maximize or a number]
+    /// [possible values: maximize, number or iterate (to iterate exponentially)]
     #[arg(long, default_value("1"))]
-    pub output_count: Argument,
+    pub output_count: NumericArgument,
 
-    /// path to .mp4 file or .nv12 if decoder is disabled
+    /// path to .mp4 file or yuv420p file if decoder is disabled
     #[arg(long)]
     pub file_path: PathBuf,
 
     /// [possible values: 4320p, 2160p, 1440p, 1080p, 720p, 480p, 360p, 240p, 144p or `<width>x<height>`]
     #[arg(long, default_value("1080p"))]
-    pub output_resolution: ResolutionConstant,
+    pub output_resolution: ResolutionArgument,
 
     #[arg(long, default_value("false"))]
     pub disable_encoder: bool,
@@ -257,7 +364,7 @@ pub struct Args {
     #[arg(long, default_value("10"))]
     pub measured_time: DurationWrapper,
 
-    /// disable decoder, use raw input with .nv12 file
+    /// disable decoder, use raw input with yuv420p file
     #[arg(long, default_value("false"))]
     pub disable_decoder: bool,
 
@@ -281,24 +388,30 @@ pub struct Args {
 
 impl Args {
     pub fn arguments(&self) -> Box<[Argument]> {
-        vec![self.framerate, self.input_count, self.output_count].into_boxed_slice()
+        vec![
+            Argument::NumericArgument(self.framerate.clone()),
+            Argument::NumericArgument(self.input_count.clone()),
+            Argument::NumericArgument(self.output_count.clone()),
+            Argument::ResolutionArgument(self.output_resolution.clone()),
+        ]
+        .into_boxed_slice()
     }
 
     pub fn with_arguments(&self, arguments: &[Argument]) -> SingleBenchConfig {
         SingleBenchConfig {
-            framerate: arguments[0].as_constant().unwrap(),
-            input_count: arguments[1].as_constant().unwrap(),
-            output_count: arguments[2].as_constant().unwrap(),
+            framerate: arguments[0].as_numeric().unwrap().as_constant().unwrap(),
+            input_count: arguments[1].as_numeric().unwrap().as_constant().unwrap(),
+            output_count: arguments[2].as_numeric().unwrap().as_constant().unwrap(),
+            output_resolution: arguments[3].as_resolution().unwrap().as_constant().unwrap(),
 
             file_path: self.file_path.clone(),
-            output_resolution: self.output_resolution.into(),
             warm_up_time: self.warm_up_time.0,
             measured_time: self.measured_time.0,
             disable_decoder: self.disable_decoder,
             video_decoder: self.video_decoder.into(),
             disable_encoder: self.disable_encoder,
             input_resolution: self.input_resolution.map(|res| res.into()),
-            input_framerate: self.input_framerate.map(|fr| fr.into()),
+            input_framerate: self.input_framerate,
             output_encoder_preset: self.encoder_preset.into(),
             framerate_tolerance_multiplier: self.framerate_tolerance,
         }
@@ -341,9 +454,9 @@ impl SingleBenchConfig {
         print!("{}\t", self.output_resolution.width);
         print!("{}\t", self.output_resolution.height);
         print!("{}\t", self.disable_encoder);
+        print!("{:?}\t", self.output_encoder_preset);
         print!("{:?}\t", self.disable_decoder);
         print!("{:?}\t", self.video_decoder);
-        print!("{:?}\t", self.output_encoder_preset);
         print!("{:?}\t", self.warm_up_time);
         print!("{:?}\t", self.measured_time);
         print!("{}\t", self.framerate_tolerance_multiplier);
@@ -351,6 +464,6 @@ impl SingleBenchConfig {
     }
 
     pub fn log_report_header() {
-        println!("input cnt\toutput count\tfps\twidth\theight\tdisable enc\tpreset\tdisable dec\tenc\twarmup\tmeasured\tdec\ttol")
+        println!("input cnt\toutput count\tfps\twidth\theight\tdisable enc\tenc preset\tdisable dec\tenc\twarmup\tmeasured\tdec\ttol")
     }
 }
