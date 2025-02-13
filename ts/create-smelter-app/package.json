@@ -1,6 +1,6 @@
 {
   "name": "create-smelter-app",
-  "version": "0.2.0-rc.0",
+  "version": "0.2.0-rc.1",
   "author": "Software Mansion <contact@swmansion.com>",
   "license": "MIT",
   "description": "Generate smelter appllication from template",
