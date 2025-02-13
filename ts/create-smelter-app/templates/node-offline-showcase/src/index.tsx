@@ -81,7 +81,7 @@ function Timer() {
         backgroundColor: '#161127',
         borderRadius: 44,
       }}>
-      <Text style={{ fontSize: 48, color: 'red' }}>
+      <Text style={{ fontSize: 48, color: '#F24664' }}>
         {minutes.toFixed(0).padStart(2, '0')}:{seconds.toFixed(1).padStart(4, '0')}
       </Text>
     </View>
