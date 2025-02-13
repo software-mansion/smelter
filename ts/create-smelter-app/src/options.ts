@@ -81,6 +81,8 @@ export async function resolveNodeOptions(): Promise<NodeOptions> {
   const templateName = await selectPrompt('Select project template: ', [
     { title: 'Minimal example', value: 'node-minimal' },
     { title: 'Express.js + Zustand', value: 'node-express-zustand' },
+    { title: 'Offline processing - minimal example', value: 'node-offline-minimal' },
+    { title: 'Offline processing - showcase', value: 'node-offline-showcase' },
   ] as const);
   return {
     type: 'node',

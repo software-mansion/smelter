@@ -26,6 +26,16 @@ export async function applyTemplate(
 
 export function transformPackageJson(packageJson: any, projectName: string): any {
   delete packageJson?.scripts?.['start'];
+  delete packageJson?.scripts?.['lint'];
+  if (packageJson?.scripts?.['_lint']) {
+    packageJson.scripts['lint'] = packageJson?.scripts?.['_lint'];
+    delete packageJson?.scripts?.['_lint'];
+  }
+  if (packageJson?.scripts?.['_start']) {
+    packageJson.scripts['start'] = packageJson?.scripts?.['_start'];
+    delete packageJson?.scripts?.['_start'];
+  }
+
   delete packageJson['private'];
   packageJson.name = projectName;
   const LABEL = 'workspace:';
@@ -49,6 +59,11 @@ export function transformPackageJson(packageJson: any, projectName: string): any
     if (depValue && depValue.startsWith(LABEL)) {
       packageJson['peerDependencies'][dep] = depValue.substring(LABEL.length);
     }
+  }
+
+  const devDependencies = packageJson['devDependencies'] as any;
+  if (devDependencies['ts-node']) {
+    delete devDependencies['ts-node'];
   }
   return packageJson;
 }

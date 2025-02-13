@@ -103,6 +103,9 @@ importers:
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.17
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@types/node@20.17.10)(typescript@5.7.2)
       typescript:
         specifier: ^5.5.3
         version: 5.7.2
@@ -125,6 +128,62 @@ importers:
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.17
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@types/node@20.17.10)(typescript@5.7.2)
+      typescript:
+        specifier: ^5.5.3
+        version: 5.7.2
+
+  create-smelter-app/templates/node-offline-minimal:
+    dependencies:
+      '@swmansion/smelter':
+        specifier: workspace:^0.2.0-rc.0
+        version: link:../../../smelter
+      '@swmansion/smelter-node':
+        specifier: workspace:^0.2.0-rc.2
+        version: link:../../../smelter-node
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.17.10
+      '@types/react':
+        specifier: ^18.3.3
+        version: 18.3.17
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@types/node@20.17.10)(typescript@5.7.2)
+      typescript:
+        specifier: ^5.5.3
+        version: 5.7.2
+
+  create-smelter-app/templates/node-offline-showcase:
+    dependencies:
+      '@swmansion/smelter':
+        specifier: workspace:^0.2.0-rc.0
+        version: link:../../../smelter
+      '@swmansion/smelter-node':
+        specifier: workspace:^0.2.0-rc.2
+        version: link:../../../smelter-node
+      chalk:
+        specifier: ^4.1.2
+        version: 4.1.2
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.17.10
+      '@types/react':
+        specifier: ^18.3.3
+        version: 18.3.17
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@types/node@20.17.10)(typescript@5.7.2)
       typescript:
         specifier: ^5.5.3
         version: 5.7.2
