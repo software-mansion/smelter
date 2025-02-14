@@ -34,10 +34,7 @@ async function run() {
       resolution: { width: 1920, height: 1080 },
     },
     audio: {
-      encoder: {
-        type: 'opus',
-        channels: 'stereo',
-      },
+      encoder: { type: 'opus', channels: 'stereo' },
     },
   });
 
