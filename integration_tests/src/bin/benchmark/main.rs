@@ -41,7 +41,7 @@ use tracing::warn;
 mod args;
 
 use args::{
-    Args, Argument, ExpIterator, NumericArgument, ResolutionArgument, ResolutionPreset,
+    Args, Argument, CsvWriter, ExpIterator, NumericArgument, ResolutionArgument, ResolutionPreset,
     SingleBenchConfig,
 };
 
@@ -78,10 +78,12 @@ fn main() {
         warn!("This benchmark is running in debug mode. Make sure to run in release mode for reliable results.");
     }
 
+    let mut csv_writer = args.csv_path.clone().map(CsvWriter::init);
+
     let reports = run_args(ctx, &args);
-    SingleBenchConfig::log_report_header();
+    SingleBenchConfig::log_report_header(&mut csv_writer);
     for report in reports {
-        report.log_as_report();
+        report.log_as_report(&mut csv_writer);
     }
 }
 
