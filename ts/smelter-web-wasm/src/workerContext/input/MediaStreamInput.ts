@@ -1,4 +1,4 @@
-import type { Frame, InputId } from '@swmansion/smelter-browser-render';
+import type { Frame, FrameFormat, InputId } from '@swmansion/smelter-browser-render';
 import type { Input, InputStartResult } from './input';
 import { InputVideoFrameRef } from './frame';
 import type { Interval } from '../../utils';
@@ -69,7 +69,10 @@ export class MediaStreamInput implements Input {
 
   public updateQueueStartTime(_queueStartTimeMs: number) {}
 
-  public async getFrame(_currentQueuePts: number): Promise<Frame | undefined> {
+  public async getFrame(
+    _currentQueuePts: number,
+    frameFormat: FrameFormat
+  ): Promise<Frame | undefined> {
     if (this.receivedEos) {
       if (!this.sentEos) {
         this.sentEos = true;
@@ -91,7 +94,7 @@ export class MediaStreamInput implements Input {
       }
       // using Ref just to cache downloading frames if the same frame is used more than once
       frameRef.incrementRefCount();
-      const frame = await frameRef.getFrame();
+      const frame = await frameRef.getFrame(frameFormat);
       frameRef.decrementRefCount();
 
       return frame;

@@ -5,6 +5,7 @@ import type {
   OutputId,
   Renderer,
 } from '@swmansion/smelter-browser-render';
+import { FrameFormat } from '@swmansion/smelter-browser-render';
 import type { Framerate } from '../compositor/compositor';
 import type { Input } from './input/input';
 import type { Output } from './output/output';
@@ -20,11 +21,13 @@ export class Queue {
   private logger: Logger;
   private frameTicker: FrameTicker;
   private startTimeMs?: number;
+  private inputFrameFormat: FrameFormat;
 
-  public constructor(framerate: Framerate, renderer: Renderer, logger: Logger) {
+  public constructor(framerate: Framerate, renderer: Renderer, logger: Logger, isSafari: boolean) {
     this.renderer = renderer;
     this.logger = logger;
     this.frameTicker = new FrameTicker(framerate, logger);
+    this.inputFrameFormat = isSafari ? FrameFormat.YUV_BYTES : FrameFormat.RGBA_BYTES;
   }
 
   public start() {
@@ -93,7 +96,7 @@ export class Queue {
     const frames: Array<[InputId, Frame | undefined]> = await Promise.all(
       Object.entries(this.inputs).map(async ([inputId, input]) => [
         inputId,
-        await input.getFrame(currentPtsMs),
+        await input.getFrame(currentPtsMs, this.inputFrameFormat),
       ])
     );
     const validFrames = frames.filter((entry): entry is [string, Frame] => !!entry[1]);

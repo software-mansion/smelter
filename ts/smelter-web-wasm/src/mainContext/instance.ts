@@ -55,6 +55,7 @@ class WasmInstance implements SmelterManager {
       framerate: this.framerate,
       wasmBundleUrl: this.wasmBundleUrl,
       loggerLevel: this.logger.level,
+      isSafari: !!(window as any).safari,
     });
     this.logger.debug('WASM instance initialized');
   }

@@ -17,7 +17,7 @@ export type InputVideoFrame = {
 export class InputVideoFrameRef {
   private frame: InputVideoFrame;
   private refCount: number;
-  private downloadedFrame?: Frame;
+  private cachedFrame?: Frame;
   private logger: Logger;
 
   public constructor(frame: InputVideoFrame, logger: Logger) {
@@ -55,38 +55,60 @@ export class InputVideoFrameRef {
   /**
    * Returns underlying frame. Fails if frame was freed from memory.
    */
-  public async getFrame(): Promise<Frame> {
+  public async getFrame(format: FrameFormat): Promise<Frame> {
     assert(this.refCount > 0);
 
-    if (!this.downloadedFrame) {
-      this.downloadedFrame = await this.downloadFrame(this.frame);
+    if (!this.cachedFrame || this.cachedFrame.format !== format) {
+      this.cachedFrame = await this.downloadFrame(this.frame, format);
     }
-    return this.downloadedFrame;
+    return this.cachedFrame;
   }
 
-  private async downloadFrame(inputFrame: InputVideoFrame): Promise<Frame> {
-    // TODO: Add support back from safari
-    // Safari does not support conversion to RGBA
-    // Chrome does not support conversion to YUV
-
+  private async downloadFrame(inputFrame: InputVideoFrame, format: FrameFormat): Promise<Frame> {
     const frame = inputFrame.frame;
 
     // visibleRect is undefined when inputFrame is detached
     assert(frame.visibleRect);
 
-    const options = {
-      format: 'RGBA',
-      layout: [
-        {
-          offset: 0,
-          stride: frame.visibleRect.width * 4,
-        },
-      ],
-    };
+    // Safari does not support conversion to RGBA
+    // Chrome does not support conversion to YUV
+    let options: VideoFrameCopyToOptions = {};
+    if (format === FrameFormat.RGBA_BYTES) {
+      options = {
+        format: 'RGBA',
+        layout: [
+          {
+            offset: 0,
+            stride: frame.visibleRect.width * 4,
+          },
+        ],
+      };
+    } else if (format === FrameFormat.YUV_BYTES) {
+      options = {
+        format: 'I420',
+        layout: [
+          {
+            offset: 0,
+            stride: frame.visibleRect.width,
+          },
+          {
+            offset: frame.visibleRect.width * frame.visibleRect.height,
+            stride: frame.visibleRect.width / 2,
+          },
+          {
+            offset: frame.visibleRect.width * frame.visibleRect.height * 1.25,
+            stride: frame.visibleRect.width / 2,
+          },
+        ],
+      };
+    } else {
+      throw new Error('Unsupported video format');
+    }
 
-    const buffer = new Uint8ClampedArray(frame.allocationSize(options as VideoFrameCopyToOptions));
-    const planeLayouts = await frame.copyTo(buffer, options as VideoFrameCopyToOptions);
+    const buffer = new Uint8ClampedArray(frame.allocationSize(options));
+    const planeLayouts = await frame.copyTo(buffer, options);
 
+    assert(options.layout);
     if (!checkPlaneLayouts(options.layout, planeLayouts)) {
       const frameInfo = {
         displayWidth: frame.displayWidth,
@@ -111,7 +133,7 @@ export class InputVideoFrameRef {
         width: frame.visibleRect.width,
         height: frame.visibleRect.height,
       },
-      format: FrameFormat.RGBA_BYTES,
+      format,
       data: buffer,
     };
   }

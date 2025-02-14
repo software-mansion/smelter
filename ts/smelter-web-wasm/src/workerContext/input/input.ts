@@ -1,7 +1,7 @@
 import Mp4Source from './source/Mp4Source';
 import { QueuedInput } from './QueuedInput';
 import type { InputVideoFrame } from './frame';
-import type { Frame } from '@swmansion/smelter-browser-render';
+import type { Frame, FrameFormat } from '@swmansion/smelter-browser-render';
 import { MediaStreamInput } from './MediaStreamInput';
 import type { RegisterInput } from '../../workerApi';
 import type { Logger } from 'pino';
@@ -22,7 +22,7 @@ export type ContainerInfo = {
 export interface Input {
   start(): InputStartResult;
   updateQueueStartTime(queueStartTimeMs: number): void;
-  getFrame(currentQueuePts: number): Promise<Frame | undefined>;
+  getFrame(currentQueuePts: number, frameFormat: FrameFormat): Promise<Frame | undefined>;
   close(): void;
 }
 
@@ -63,6 +63,11 @@ export async function createInput(
   } else if (request.type === 'stream') {
     assert(request.videoStream);
     return new MediaStreamInput(inputId, request.videoStream, inputLogger);
+  } else if (request.type === 'track') {
+    assert(request.videoTrack);
+    // @ts-ignore
+    const videoTrackProcessor = new MediaStreamTrackProcessor({ track: request.videoTrack });
+    return new MediaStreamInput(inputId, videoTrackProcessor.readable, inputLogger);
   }
   throw new Error(`Unknown input type ${(request as any).type}`);
 }
