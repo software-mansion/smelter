@@ -193,9 +193,9 @@ Everything in the same PR.
 
 - Update Rust code.
 - Run `cargo run --bin generate_from_types` in **`./generate`** that will generate **`./schemas/scene.schema.json`**.
-- Run `pnpm run generate-types` in **`./ts`** that will generate **`./ts/live-compositor/src/api.generated.ts`**.
+- Run `pnpm run generate-types` in **`./ts`** that will generate **`./ts/smelter/src/api.generated.ts`**.
 - Update TypeScript code to support new changes.
 - Update CHANGELOG
 
 > To avoid problems with forgetting about adding some changes to TS, everything that shows up in PR diff for
-  `./ts/live-compositor/src/api.generated.ts` should be addressed in the PR that regenerated those types.
+  `./ts/smelter/src/api.generated.ts` should be addressed in the PR that regenerated those types.

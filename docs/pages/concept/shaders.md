@@ -29,7 +29,7 @@ Each video passed in as input gets a separate rectangle.
 
 If there are no input textures, `plane_id` is equal to -1 and a single rectangle is passed to the shader. It is only useful for shaders that generate something in the fragment shader.
 
-Since the compositor doesn't deal with complex geometry and most positioning/resizing/cropping should be taken care of by [layouts](https://compositor.live/docs/concept/layouts), we don't expect the users to write nontrivial vertex shaders very often. For just applying some effects to the video, fragment shaders are the way to go. This vertex shader should take care of most of your needs (for transformations that receive a single video and only process it in the fragment shader):
+Since the compositor doesn't deal with complex geometry and most positioning/resizing/cropping should be taken care of by [layouts](https://smelter.dev/docs/concept/layouts), we don't expect the users to write nontrivial vertex shaders very often. For just applying some effects to the video, fragment shaders are the way to go. This vertex shader should take care of most of your needs (for transformations that receive a single video and only process it in the fragment shader):
 
 ```wgsl
 struct VertexOutput {
