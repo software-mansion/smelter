@@ -137,7 +137,7 @@ export class QueuedInput implements Input {
       this.firstFramePtsMs = frame.ptsMs;
     }
     frame.ptsMs = frame.ptsMs - this.firstFramePtsMs;
-    return new InputVideoFrameRef(frame);
+    return new InputVideoFrameRef(frame, this.logger);
   }
 
   /**

@@ -62,7 +62,7 @@ export async function createInput(
     return new QueuedInput(inputId, source, inputLogger);
   } else if (request.type === 'stream') {
     assert(request.videoStream);
-    return new MediaStreamInput(inputId, request.videoStream);
+    return new MediaStreamInput(inputId, request.videoStream, inputLogger);
   }
   throw new Error(`Unknown input type ${(request as any).type}`);
 }
