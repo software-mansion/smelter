@@ -3,6 +3,8 @@
 Provides API to create and manage Smelter instances for browser environment. Smelter rendering engine is compiled to WASM and
 runs entirely in the browser without any additional infrastructure.
 
+> Caution: Browser support is limited to Google Chrome and other Chromium based browsers. Support for Safari and Firefox is planned.
+
 ## Usage
 
 ```tsx
