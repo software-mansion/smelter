@@ -3,6 +3,17 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+  --color-purple-100: #302555;
+  --color-purple-80: #493880;
+  --color-black-100: #161127;
+
+  --color-red-100: #86081E;
+  --color-red-80: #BF0D2A;
+  --color-red-60: #EF193E;
+  --color-red-40: #F24664;
+  --color-red-20: #F78D9E;
+  --color-red-0: #FBC6CF;
 }
 
 html,
@@ -12,4 +23,6 @@ body {
   @media (prefers-color-scheme: dark) {
     color-scheme: dark;
   }
+
+  background-color: #161127 
 }

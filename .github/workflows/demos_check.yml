@@ -35,14 +35,11 @@ jobs:
               with:
                   node-version: "20"
 
-            - name: Install project dependencies
-              working-directory: ./demos
-              run: pnpm install --frozen-lockfile
+            - name: Check vite+react demo
+              working-directory: ./demos/vite-demo
+              run: pnpm install --frozen-lockfile && pnpm run build && pnpm run lint
 
-            - name: Lint code
-              working-directory: ./demos
-              run: pnpm run lint
+            - name: Check react-router demo
+              working-directory: ./demos/vite-react-router-demo
+              run: pnpm install --frozen-lockfile && pnpm run build && pnpm run typecheck
 
-            - name: Typecheck code
-              working-directory: ./demos
-              run: pnpm run typecheck

@@ -1,5 +1,5 @@
 import type { Logger } from 'pino';
-import type { ApiRequest, MultipartRequest } from './api.js';
+import type { ApiRequest, MultipartRequest } from './api';
 
 export interface SetupInstanceOptions {
   /**

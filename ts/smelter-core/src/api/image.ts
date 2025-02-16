@@ -1,4 +1,4 @@
-import type { Api } from '../api.js';
+import type { Api } from '../api';
 import { _smelterInternals } from '@swmansion/smelter';
 
 export type RegisterInputRequest = Api.RegisterInput;

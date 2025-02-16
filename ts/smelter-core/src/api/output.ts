@@ -6,7 +6,7 @@ import type {
   RegisterWhipOutput,
   _smelterInternals,
 } from '@swmansion/smelter';
-import { inputRefIntoRawId } from './input.js';
+import { inputRefIntoRawId } from './input';
 
 /**
  * It represents HTTP request that can be sent to

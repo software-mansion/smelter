@@ -1,6 +1,6 @@
 {
   "name": "@swmansion/smelter-core",
-  "version": "0.2.0-rc.0",
+  "version": "0.2.0-rc.2",
   "author": "Software Mansion <contact@swmansion.com>",
   "license": "MIT",
   "description": "Smelter core implementation - used by runtime specific packages",
@@ -9,34 +9,41 @@
   },
   "homepage": "https://smelter.dev",
   "files": [
-    "/esm",
-    "/cjs"
+    "/dist"
   ],
-  "type": "module",
-  "main": "cjs/index.js",
+  "main": "./dist/cjs/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
-    "import": "./esm/index.js",
-    "require": "./cjs/index.js",
-    "types": "./esm/index.d.ts"
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/esm/index.mjs"
+      },
+      "default": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/cjs/index.cjs"
+      }
+    }
   },
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "watch": "concurrently \"pnpm run watch:esm\" \"pnpm run watch:cjs\"",
-    "watch:esm": "tsc --watch --preserveWatchOutput",
-    "watch:cjs": "tsc --watch --preserveWatchOutput -p ./tsconfig.cjs.json",
-    "build": "pnpm run build:esm && pnpm run build:cjs",
-    "build:esm": "tsc && echo '{\"type\": \"module\"}' > esm/package.json",
-    "build:cjs": "tsc -p ./tsconfig.cjs.json && echo '{\"type\": \"commonjs\"}' > cjs/package.json",
-    "clean": "rimraf esm cjs",
+    "watch": "rollup -w --no-watch.clearScreen -c",
+    "build": "rollup -c",
+    "clean": "rimraf dist",
     "prepublishOnly": "pnpm run clean && pnpm run build"
   },
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.2",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-typescript": "^11.1.6",
     "@types/react": "^18.3.3",
-    "@types/react-reconciler": "0.28.8"
+    "@types/react-reconciler": "0.28.8",
+    "pino": "^9.5.0",
+    "rollup": "^4.21.2",
+    "rollup-plugin-dts": "^6.1.1"
   },
   "dependencies": {
-    "pino": "^9.5.0",
     "react-reconciler": "0.29.2"
   },
   "peerDependencies": {
