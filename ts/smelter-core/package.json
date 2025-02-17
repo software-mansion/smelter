@@ -1,6 +1,6 @@
 {
   "name": "@swmansion/smelter-core",
-  "version": "0.2.0-rc.2",
+  "version": "0.2.0",
   "author": "Software Mansion <contact@swmansion.com>",
   "license": "MIT",
   "description": "Smelter core implementation - used by runtime specific packages",
@@ -47,7 +47,7 @@
     "react-reconciler": "0.29.2"
   },
   "peerDependencies": {
-    "@swmansion/smelter": "workspace:^0.2.0-rc.0",
+    "@swmansion/smelter": "workspace:^0.2.0",
     "react": "*"
   }
 }

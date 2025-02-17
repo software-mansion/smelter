@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Smelter } from '@swmansion/smelter-web-wasm';
+import type Smelter from '@swmansion/smelter-web-wasm';
 import { InputStream, Rescaler, Text, View } from '@swmansion/smelter';
 import CompositorCanvas from '../components/SmelterCanvas';
 import NotoSansFont from '../../assets/NotoSans.ttf';
