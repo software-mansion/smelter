@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Smelter } from '@swmansion/smelter-web-wasm';
+import Smelter from '@swmansion/smelter-web-wasm';
 
 type CanvasProps = React.DetailedHTMLProps<
   React.CanvasHTMLAttributes<HTMLCanvasElement>,

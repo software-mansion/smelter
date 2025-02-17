@@ -1,6 +1,6 @@
 import { InputStream, Tiles, useInputStreams, Text, View } from '@swmansion/smelter';
-import { setWasmBundleUrl, Smelter } from '@swmansion/smelter-web-wasm';
-import { useCallback, useEffect, useState } from 'react';
+import Smelter, { setWasmBundleUrl } from '@swmansion/smelter-web-wasm';
+import { useCallback, useState } from 'react';
 import WhipStream from '~/stream/WhipStreamPreview';
 
 setWasmBundleUrl('/assets/smelter.wasm');
@@ -22,8 +22,8 @@ export default function CanvasPage() {
 }
 
 function StreamSetup(props: { onStreamStart(streamInfo: { endpointUrl: string, token?: string }): void }) {
-  const [token, setToken] = useState('live_613738214_SjLUY19u1wcgsZUfjV4GOwlSQt1FDH');
-  const [endpointUrl, setEndpointUrl] = useState('https://g.webrtc.live-video.net:4443/v2/offer');
+  const [token, setToken] = useState('');
+  const [endpointUrl, setEndpointUrl] = useState('');
 
   const onSubmit = () => {
     props.onStreamStart({

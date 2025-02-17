@@ -11,8 +11,8 @@
   "dependencies": {
     "@react-router/node": "^7.1.5",
     "@react-router/serve": "^7.1.5",
-    "@swmansion/smelter": "0.2.0-rc.0",
-    "@swmansion/smelter-web-wasm": "0.2.0-rc.2",
+    "@swmansion/smelter": "0.2.0",
+    "@swmansion/smelter-web-wasm": "0.2.0",
     "isbot": "^5.1.17",
     "pino": "^9.6.0",
     "react": "^18.3.1",
