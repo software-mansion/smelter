@@ -1,6 +1,6 @@
 {
   "name": "@swmansion/smelter-web-wasm",
-  "version": "0.2.0-rc.0",
+  "version": "0.2.0-rc.2",
   "author": "Software Mansion <contact@swmansion.com>",
   "license": "SEE LICENSE IN ./LICENSE",
   "description": "Smelter server running directlly in browser",
@@ -12,25 +12,44 @@
     "/dist",
     "/LICENSE"
   ],
-  "main": "dist/index.js",
+  "type": "commonjs",
+  "main": "./dist/cjs/index.cjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/esm/index.mjs"
+      },
+      "default": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/cjs/index.cjs"
+      }
+    }
+  },
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "watch": "tsc --watch --preserveWatchOutput",
-    "build": "tsc",
+    "watch": "rollup -w --no-watch.clearScreen -c",
+    "build": "rollup -c",
     "clean": "rimraf dist",
     "prepublishOnly": "pnpm run clean && pnpm run build"
   },
   "dependencies": {
     "@datastructures-js/queue": "^4.2.3",
     "@swmansion/smelter-browser-render": "workspace:0.2.0-rc.0",
-    "@swmansion/smelter-core": "workspace:0.2.0-rc.0",
+    "@swmansion/smelter-core": "workspace:0.2.0-rc.2",
     "mp4box": "^0.5.2",
     "path-parser": "^6.1.0",
     "pino": "^9.5.0"
   },
   "devDependencies": {
-    "@types/react": "^18.3.3"
+    "@rollup/plugin-commonjs": "^28.0.2",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@types/react": "^18.3.3",
+    "rollup": "^4.21.2",
+    "rollup-plugin-dts": "^6.1.1"
   },
   "peerDependencies": {
     "@swmansion/smelter": "workspace:^0.2.0-rc.0"

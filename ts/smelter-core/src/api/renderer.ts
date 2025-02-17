@@ -1,4 +1,4 @@
-import type { Api } from '../api.js';
+import type { Api } from '../api';
 import type { Renderers } from '@swmansion/smelter';
 
 export function intoRegisterImage(image: Renderers.RegisterImage): Api.ImageSpec {

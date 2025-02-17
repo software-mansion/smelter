@@ -1,4 +1,4 @@
-import type { Api } from '../api.js';
+import type { Api } from '../api';
 import type {
   RegisterMp4Input,
   RegisterRtpInput,

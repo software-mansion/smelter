@@ -1,18 +1,18 @@
 import type { Renderers } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
-import { ApiClient } from '../api.js';
-import Output from './output.js';
-import type { SmelterManager } from '../smelterManager.js';
-import type { RegisterOutput } from '../api/output.js';
-import { intoRegisterOutput } from '../api/output.js';
-import type { RegisterInput } from '../api/input.js';
-import { intoRegisterInput } from '../api/input.js';
-import { parseEvent } from '../event.js';
-import { intoRegisterImage, intoRegisterWebRenderer } from '../api/renderer.js';
-import { handleEvent } from './event.js';
+import { ApiClient } from '../api';
+import Output from './output';
+import type { SmelterManager } from '../smelterManager';
+import type { RegisterOutput } from '../api/output';
+import { intoRegisterOutput } from '../api/output';
+import type { RegisterInput } from '../api/input';
+import { intoRegisterInput } from '../api/input';
+import { parseEvent } from '../event';
+import { intoRegisterImage, intoRegisterWebRenderer } from '../api/renderer';
+import { handleEvent } from './event';
 import type { ReactElement } from 'react';
 import type { Logger } from 'pino';
-import type { ImageRef } from '../api/image.js';
+import type { ImageRef } from '../api/image';
 
 export class Smelter {
   public readonly manager: SmelterManager;

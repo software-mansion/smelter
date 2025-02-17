@@ -1,8 +1,8 @@
 import { Api } from '@swmansion/smelter';
-import type { SmelterManager } from './smelterManager.js';
-import type { RegisterOutputRequest } from './api/output.js';
-import { inputRefIntoRawId, type InputRef, type RegisterInputRequest } from './api/input.js';
-import { imageRefIntoRawId, type ImageRef } from './api/image.js';
+import type { SmelterManager } from './smelterManager';
+import type { RegisterOutputRequest } from './api/output';
+import { inputRefIntoRawId, type InputRef, type RegisterInputRequest } from './api/input';
+import { imageRefIntoRawId, type ImageRef } from './api/image';
 
 export { Api };
 
