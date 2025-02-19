@@ -14,7 +14,7 @@ With Smelter you can:
 - Do it all effortlessly with ready-to-use React components
 
 <div align="left" style="margin-top: 32px;">
-  <video width="840" autoplay muted loop src="https://www.smelter.dev/videos/smelter-commercial.mp4" />
+  <video width="840" src="https://www.smelter.dev/videos/smelter-commercial.mp4"></video>
 </div>
 
 
