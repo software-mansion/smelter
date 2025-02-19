@@ -4,6 +4,8 @@
 
 **[Documentation](https://smelter.dev/docs)** | **[Discord](https://discord.gg/Cxj3rzTTag)**
 
+<br>
+
 Smelter is a toolkit for real-time, low-latency, programmable video and audio composition.
 
 With Smelter, you can:
@@ -14,7 +16,7 @@ With Smelter, you can:
 <br>
 
 <div align="left">
-  <video width="840" src="https://www.smelter.dev/videos/smelter-commercial.mp4"></video>
+  <video width="840" src="https://github.com/user-attachments/assets/5c06c831-63bf-4755-a725-a61a217afb3"></video>
 </div>
 
 ## Where to start?
