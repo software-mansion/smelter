@@ -1,32 +1,26 @@
-<h1 align="center">
-  <img src="assets/smelter-logo.svg" width=600 alt="Smelter">
-
-  <a href="https://smelter.dev/docs">Documentation</a> |
-  <a href="https://discord.gg/Cxj3rzTTag">Discord</a>
+<h1>
+  <img src="assets/smelter-logo-transparent.svg" width=400 alt="Smelter" style="margin-bottom: 16px;">
+  <div style="display: flex; justify-content: flex-start; align-items: center;margin-bottom: 16px;">
+    <a href="https://smelter.dev/docs" style="font-size: 24px; margin-right: 8px;">Documentation</a> 
+    <a href="https://discord.gg/Cxj3rzTTag" style="font-size: 24px; margin-left: 8px;">Discord</a>
+  </div>
 </h1>
 
-Smelter is a media server for real-time, low latency, programmable video and audio mixing.
+Smelter is a toolkit for real-time, low-latency, programmable video and audio composition.
 
-Smelter targets real-time use cases, with a significant focus on situations where latency is critical. It is a great fit
-for any video conferencing, live-streaming, or broadcasting solutions where you need to combine or modify video on the fly.
-However, you can also use it for non-real-time use cases, for example, apply some effect on a video from an MP4 file and write the output
-to the new MP4.
+With Smelter you can:
+- Combine multimedia from different sources into a single video or live stream
+- Erich your content with text, custom shaders, and embedded websites
+- Do it all effortlessly with ready-to-use React components
 
-https://github.com/user-attachments/assets/d8716866-67bd-4721-b1c2-1a1d31e1c5b5
+<div align="left" style="margin-top: 32px;">
+  <video width="840" autoplay muted loop src="https://www.smelter.dev/videos/smelter-commercial.mp4" />
+</div>
+
 
 ## Where to start?
 
-Check out our [`Getting started`](https://smelter.dev/docs) section.
-
-Smelter supports Linux and macOS and can be used in 3 ways:
-- TypeScript SDK - [TypeScript SDK Reference](https://smelter.dev/ts-sdk)
-- Standalone media server - [API Reference](https://smelter.dev/http-api).
-- Element in a Membrane Framework pipeline - [https://hexdocs.pm/membrane_live_compositor_plugin](https://hexdocs.pm/membrane_live_compositor_plugin).
-
-## Demos
-
-This is just a sample of effects that you can achieve with Smelter. It is a compilation of a few demo projects
-written in TypeScript that you can find in [`demos`](./demos) directory.
+Check out our [`Getting Started`](https://smelter.dev/docs) section, or jump right into [`the set of guides`](https://www.smelter.dev/ts-sdk/guides/quick-start/) we've prepared.
 
 ## Smelter is created by Software Mansion
 
