@@ -88,7 +88,7 @@
               inputsFrom = [ packageWithoutChromium ];
             };
             nixos = pkgs.mkShell {
-              packages = devDependencies ++ [ pkgs.blackmagic-desktop-video];
+              packages = devDependencies ++ [ pkgs.mesa.drivers  pkgs.blackmagic-desktop-video ];
 
               env.LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
               env.LD_LIBRARY_PATH = lib.makeLibraryPath (libcefDependencies ++ [ pkgs.blackmagic-desktop-video ]);

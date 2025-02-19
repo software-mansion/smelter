@@ -44,35 +44,9 @@ impl ApiState {
         config: Config,
         runtime: Arc<Runtime>,
     ) -> Result<(ApiState, Arc<dyn EventLoop>), InitPipelineError> {
-        let Config {
-            queue_options,
-            stream_fallback_timeout,
-            web_renderer,
-            force_gpu,
-            download_root,
-            mixing_sample_rate,
-            stun_servers,
-            required_wgpu_features,
-            load_system_fonts,
-            start_whip_whep,
-            whip_whep_server_port,
-            ..
-        } = config.clone();
-        let (pipeline, event_loop) = Pipeline::new(pipeline::Options {
-            queue_options,
-            stream_fallback_timeout,
-            web_renderer,
-            force_gpu,
-            download_root,
-            mixing_sample_rate,
-            stun_servers,
-            wgpu_features: required_wgpu_features,
-            wgpu_ctx: None,
-            load_system_fonts: Some(load_system_fonts),
-            start_whip_whep,
-            whip_whep_server_port: Some(whip_whep_server_port),
-            tokio_rt: Some(runtime),
-        })?;
+        let mut options: pipeline::Options = (&config).into();
+        options.tokio_rt = Some(runtime);
+        let (pipeline, event_loop) = Pipeline::new(options)?;
         Ok((
             ApiState {
                 pipeline: Mutex::new(pipeline).into(),
@@ -84,5 +58,25 @@ impl ApiState {
 
     pub(crate) fn pipeline(&self) -> MutexGuard<'_, Pipeline> {
         self.pipeline.lock().unwrap()
+    }
+}
+
+impl From<&Config> for pipeline::Options {
+    fn from(val: &Config) -> Self {
+        pipeline::Options {
+            queue_options: val.queue_options,
+            stream_fallback_timeout: val.stream_fallback_timeout,
+            web_renderer: val.web_renderer,
+            force_gpu: val.force_gpu,
+            download_root: val.download_root.clone(),
+            mixing_sample_rate: val.mixing_sample_rate,
+            stun_servers: val.stun_servers.clone(),
+            wgpu_features: val.required_wgpu_features,
+            wgpu_ctx: None,
+            load_system_fonts: Some(val.load_system_fonts),
+            start_whip_whep: val.start_whip_whep,
+            whip_whep_server_port: Some(val.whip_whep_server_port),
+            tokio_rt: None,
+        }
     }
 }
