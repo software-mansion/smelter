@@ -78,9 +78,16 @@ async function downloadFrame(inputFrame: InputVideoFrame): Promise<Frame> {
 
   // TODO: Add support back from safari
   // const isSafari = !!(window as any).safari;
-  const isSafari = false;
   const options = {
-    format: isSafari ? 'I420' : 'RGBA',
+    // format: isSafari ? 'I420' : 'RGBA',
+    format: 'RGBA',
+    // TODO(noituri): This is a quick fix for calculating correct buffer size.
+    layout: [
+      {
+        offset: 0,
+        stride: inputFrame.frame.codedWidth * 4,
+      },
+    ],
   };
 
   const frame = inputFrame.frame;
@@ -89,10 +96,10 @@ async function downloadFrame(inputFrame: InputVideoFrame): Promise<Frame> {
 
   return {
     resolution: {
-      width: frame.displayWidth,
-      height: frame.displayHeight,
+      width: frame.codedWidth,
+      height: frame.codedHeight,
     },
-    format: isSafari ? FrameFormat.YUV_BYTES : FrameFormat.RGBA_BYTES,
+    format: FrameFormat.RGBA_BYTES,
     data: buffer,
   };
 }

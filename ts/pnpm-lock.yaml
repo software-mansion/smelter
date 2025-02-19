@@ -129,6 +129,52 @@ importers:
         specifier: ^5.5.3
         version: 5.7.2
 
+  examples/movie-example:
+    dependencies:
+      '@swmansion/smelter':
+        specifier: workspace:^0.2.0-rc.0
+        version: link:../../smelter
+      '@swmansion/smelter-browser-render':
+        specifier: workspace:0.2.0-rc.0
+        version: link:../../smelter-browser-render
+      '@swmansion/smelter-web-wasm':
+        specifier: workspace:0.2.0-rc.0
+        version: link:../../smelter-web-wasm
+      mp4box:
+        specifier: ^0.5.2
+        version: 0.5.3
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+      zustand:
+        specifier: 4.5.5
+        version: 4.5.5(@types/react@18.3.17)(react@18.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.3
+        version: 18.3.17
+      '@types/react-dom':
+        specifier: ^18.3.0
+        version: 18.3.5(@types/react@18.3.17)
+      '@vitejs/plugin-react':
+        specifier: ^4.3.1
+        version: 4.3.4(vite@5.4.14(@types/node@20.17.10))
+      typescript:
+        specifier: ^5.5.3
+        version: 5.7.2
+      typescript-eslint:
+        specifier: ^8.0.1
+        version: 8.22.0(eslint@9.17.0)(typescript@5.7.2)
+      vite:
+        specifier: ^5.4.1
+        version: 5.4.14(@types/node@20.17.10)
+      vite-plugin-static-copy:
+        specifier: ^1.0.6
+        version: 1.0.6(vite@5.4.14(@types/node@20.17.10))
+
   examples/node-examples:
     dependencies:
       '@swmansion/smelter':

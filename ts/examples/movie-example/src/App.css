@@ -1,0 +1,57 @@
+#root {
+  text-align: center;
+  background-color: #161127;
+  width: 100svw;
+  height: 100svh;
+  max-height: 100svh;
+}
+
+body {
+  max-width: 1280px;
+  max-height: 100svh;
+  background-color: #161127;
+}
+
+nav {
+  display: flex;
+  height: 5rem;
+  align-items: center;
+  width: 100%;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.mainWrapper {
+  width: 100svw;
+  max-height: 100svh;
+}
+
+button {
+  width: 10rem;
+  border-radius: 1000px;
+  background: linear-gradient(to bottom right, #f24664, #302555);
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 400;
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+}
+
+.buttonWrapper {
+  display: flex;
+  flex-direction: row;
+  column-gap: 1rem;
+  align-self: flex-end;
+}
+
+.streamWrapper {
+  padding: 2rem 4rem 0 4rem;
+  display: flex;
+  column-gap: 2rem;
+}
+
+.card {
+  display: flex;
+}

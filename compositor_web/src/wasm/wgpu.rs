@@ -31,6 +31,7 @@ pub async fn create_wgpu_context() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue
                 required_features: wgpu::Features::PUSH_CONSTANTS,
                 required_limits: wgpu::Limits {
                     max_push_constant_size: 128,
+                    max_texture_dimension_2d: 4096,
                     ..wgpu::Limits::downlevel_webgl2_defaults()
                 },
                 memory_hints: wgpu::MemoryHints::default(),
