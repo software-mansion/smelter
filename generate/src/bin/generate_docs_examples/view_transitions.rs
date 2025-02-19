@@ -1,14 +1,17 @@
-use std::{fs, process::Command, thread};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
-use generate::{compositor_instance::CompositorInstance, packet_sender::PacketSender};
+use generate::compositor_instance::CompositorInstance;
 use serde_json::json;
 
-use crate::{pages_dir, workingdir};
+use crate::workingdir;
 
-pub(super) fn generate_view_transition_guide() -> Result<()> {
+pub(super) fn generate_view_transition_guide(root_dir: &Path) -> Result<()> {
     generate_scene(
-        "view_transition_1.webp",
+        root_dir.join("guides/transition-width.mp4"),
         json!({
             "type": "view",
             "background_color": "#52505bff",
@@ -39,7 +42,7 @@ pub(super) fn generate_view_transition_guide() -> Result<()> {
     )?;
 
     generate_scene(
-        "view_transition_2.webp",
+        root_dir.join("guides/transition-sibling-width.mp4"),
         json!({
             "type": "view",
             "background_color": "#52505bff",
@@ -78,39 +81,38 @@ pub(super) fn generate_view_transition_guide() -> Result<()> {
         }),
     )?;
 
-    generate_scene(
-        "view_transition_3.webp",
-        json!({
-            "type": "view",
-            "background_color": "#52505bff",
-            "children": [
-                {
-                    "id": "rescaler_1",
-                    "type": "rescaler",
-                    "width": 480,
-                    "child": { "type": "input_stream", "input_id": "input_1" },
-                },
-            ]
-        }),
-        json!({
-            "type": "view",
-            "background_color": "#52505bff",
-            "children": [
-                {
-                    "id": "rescaler_1",
-                    "type": "rescaler",
-                    "width": 1280,
-                    "top": 0,
-                    "left": 0,
-                    "transition": { "duration_ms": 2000 },
-                    "child": { "type": "input_stream", "input_id": "input_1" },
-                },
-            ]
-        }),
-    )?;
+    // generate_scene(
+    //     json!({
+    //         "type": "view",
+    //         "background_color": "#52505bff",
+    //         "children": [
+    //             {
+    //                 "id": "rescaler_1",
+    //                 "type": "rescaler",
+    //                 "width": 480,
+    //                 "child": { "type": "input_stream", "input_id": "input_1" },
+    //             },
+    //         ]
+    //     }),
+    //     json!({
+    //         "type": "view",
+    //         "background_color": "#52505bff",
+    //         "children": [
+    //             {
+    //                 "id": "rescaler_1",
+    //                 "type": "rescaler",
+    //                 "width": 1280,
+    //                 "top": 0,
+    //                 "left": 0,
+    //                 "transition": { "duration_ms": 2000 },
+    //                 "child": { "type": "input_stream", "input_id": "input_1" },
+    //             },
+    //         ]
+    //     }),
+    // )?;
 
     generate_scene(
-        "view_transition_4.webp",
+        root_dir.join("guides/transition-interpolation-functions.mp4"),
         json!({
             "type": "view",
             "background_color": "#52505bff",
@@ -192,23 +194,19 @@ pub(super) fn generate_view_transition_guide() -> Result<()> {
 }
 
 pub(super) fn generate_scene(
-    filename: &str,
+    mp4_path: PathBuf,
     scene_start: serde_json::Value,
     scene_change: serde_json::Value,
 ) -> Result<()> {
     let instance = CompositorInstance::start();
-    let output_port = instance.get_port();
-    let input_1_port = instance.get_port();
-    let input_2_port = instance.get_port();
-    let input_3_port = instance.get_port();
-    let input_4_port = instance.get_port();
+
+    let _ = fs::remove_file(&mp4_path);
 
     instance.send_request(
         "output/output_1/register",
         json!({
-            "type": "rtp_stream",
-            "transport_protocol": "tcp_server",
-            "port": output_port,
+            "type": "mp4",
+            "path": mp4_path.to_str().unwrap(),
             "video": {
                 "resolution": {
                     "width": 1280,
@@ -228,71 +226,42 @@ pub(super) fn generate_scene(
     instance.send_request(
         "input/input_1/register",
         json!({
-            "type": "rtp_stream",
-            "transport_protocol": "tcp_server",
-            "port": input_1_port,
-            "video": {
-                "decoder": "ffmpeg_h264"
-            },
-            "required": true
+            "type": "mp4",
+            "path": workingdir().join("input_1.mp4").to_str().unwrap(),
+            "required": true,
+            "offset_ms": 0
         }),
     )?;
 
     instance.send_request(
         "input/input_2/register",
         json!({
-            "type": "rtp_stream",
-            "transport_protocol": "tcp_server",
-            "port": input_2_port,
-            "video": {
-                "decoder": "ffmpeg_h264"
-            },
-            "required": true
+            "type": "mp4",
+            "path": workingdir().join("input_2.mp4").to_str().unwrap(),
+            "required": true,
+            "offset_ms": 0
         }),
     )?;
 
     instance.send_request(
         "input/input_3/register",
         json!({
-            "type": "rtp_stream",
-            "transport_protocol": "tcp_server",
-            "port": input_3_port,
-            "video": {
-                "decoder": "ffmpeg_h264"
-            },
-            "required": true
+            "type": "mp4",
+            "path": workingdir().join("input_3.mp4").to_str().unwrap(),
+            "required": true,
+            "offset_ms": 0
         }),
     )?;
 
     instance.send_request(
         "input/input_4/register",
         json!({
-            "type": "rtp_stream",
-            "transport_protocol": "tcp_server",
-            "port": input_4_port,
-            "video": {
-                "decoder": "ffmpeg_h264"
-            },
-            "required": true
+            "type": "mp4",
+            "path": workingdir().join("input_4.mp4").to_str().unwrap(),
+            "required": true,
+            "offset_ms": 0
         }),
     )?;
-
-    PacketSender::new(input_1_port)
-        .unwrap()
-        .send(&fs::read(workingdir().join("input_1.rtp")).unwrap())
-        .unwrap();
-    PacketSender::new(input_2_port)
-        .unwrap()
-        .send(&fs::read(workingdir().join("input_2.rtp")).unwrap())
-        .unwrap();
-    PacketSender::new(input_3_port)
-        .unwrap()
-        .send(&fs::read(workingdir().join("input_3.rtp")).unwrap())
-        .unwrap();
-    PacketSender::new(input_4_port)
-        .unwrap()
-        .send(&fs::read(workingdir().join("input_4.rtp")).unwrap())
-        .unwrap();
 
     instance.send_request(
         "output/output_1/unregister",
@@ -311,19 +280,8 @@ pub(super) fn generate_scene(
         }),
     )?;
 
-    let path = pages_dir().join("guides").join("assets").join(filename);
-    let gst_thread = thread::Builder::new().name("gst sink".to_string()).spawn(move  ||{
-        let gst_cmd = format!(
-            "gst-launch-1.0 -v tcpclientsrc host=127.0.0.1 port={} ! \"application/x-rtp-stream\" ! rtpstreamdepay ! rtph264depay ! video/x-h264,framerate=30/1 ! h264parse ! h264timestamper ! decodebin ! webpenc animated=true speed=6 quality=50 ! filesink location={}",
-            output_port,
-            path.to_string_lossy(),
-        );
-        Command::new("bash").arg("-c").arg(gst_cmd).status().unwrap();
-    }).unwrap();
-
     instance.send_request("start", json!({}))?;
-
-    gst_thread.join().unwrap();
+    instance.wait_for_output_end();
 
     Ok(())
 }

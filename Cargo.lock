@@ -1817,6 +1817,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "compositor_api",
+ "compositor_pipeline",
  "compositor_render",
  "crossbeam-channel",
  "ffmpeg-next",
