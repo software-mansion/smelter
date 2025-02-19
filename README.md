@@ -1,11 +1,12 @@
 <h1>
-  <img src="assets/smelter-logo-transparent.svg" width=400 alt="Smelter" style="margin-bottom: 16px;">
-  <div style="display: flex; justify-content: flex-start; align-items: center;margin-bottom: 16px;">
-    <a href="https://smelter.dev/docs" style="font-size: 24px; margin-right: 8px;">Documentation</a> 
-    <a href="https://discord.gg/Cxj3rzTTag" style="font-size: 24px; margin-left: 8px;">Discord</a>
+  <img src="assets/smelter-logo-transparent.svg" width=400 alt="Smelter">
+  <br />
+  <div style="display: flex; justify-content: flex-start; align-items: center;">
+    <a href="https://smelter.dev/docs" style="font-size: 24px; margin-right: 8px;">Documentation </a> |
+    <a href="https://discord.gg/Cxj3rzTTag" style="font-size: 24px; margin-left: 8px;"> Discord</a>
   </div>
 </h1>
-
+<br />
 Smelter is a toolkit for real-time, low-latency, programmable video and audio composition.
 
 With Smelter you can:
