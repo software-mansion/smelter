@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
-use crossbeam_channel::Sender;
+use compositor_pipeline::event::Event;
+use crossbeam_channel::{Receiver, Sender};
 use reqwest::StatusCode;
 use smelter::{config::read_config, logger, server::run_api, state::ApiState};
 use std::{
@@ -18,6 +19,7 @@ pub struct CompositorInstance {
     pub api_port: u16,
     pub http_client: reqwest::blocking::Client,
     pub should_close_sender: Sender<()>,
+    pub events: Receiver<compositor_pipeline::event::Event>,
 }
 
 impl Drop for CompositorInstance {
@@ -42,6 +44,7 @@ impl CompositorInstance {
         let runtime = Arc::new(Runtime::new().unwrap());
         let (state, _event_loop) = ApiState::new(config, runtime.clone()).unwrap();
 
+        let events = state.pipeline.lock().unwrap().subscribe_pipeline_events();
         thread::Builder::new()
             .name("HTTP server startup thread".to_string())
             .spawn(move || {
@@ -50,6 +53,7 @@ impl CompositorInstance {
             .unwrap();
 
         let instance = CompositorInstance {
+            events,
             api_port,
             http_client: reqwest::blocking::Client::new(),
             should_close_sender,
@@ -97,6 +101,18 @@ impl CompositorInstance {
                 return Err(anyhow!("Failed to connect to instance."));
             }
         }
+    }
+
+    pub fn wait_for_output_end(&self) {
+        loop {
+            if let Event::OutputDone(_) = self.events.recv().unwrap() {
+                return;
+            }
+        }
+    }
+
+    pub fn terminate(&self) {
+        self.should_close_sender.send(()).unwrap()
     }
 }
 
