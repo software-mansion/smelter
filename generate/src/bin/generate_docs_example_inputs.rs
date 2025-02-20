@@ -20,6 +20,27 @@ fn main() {
     generate_video(workingdir().join("input_5.mp4"), "Input 5", "#53a6a6ff").unwrap();
     // HSV 300°, 50%, 65% (purple)
     generate_video(workingdir().join("input_6.mp4"), "Input 6", "#a653a6ff").unwrap();
+
+    generate_video(workingdir().join("mp4_1.mp4"), "Example MP4", "#624baaff").unwrap();
+
+    generate_video(
+        workingdir().join("mp4_example_1.mp4"),
+        "Example MP4 - 1",
+        "#624baaff",
+    )
+    .unwrap();
+    generate_video(
+        workingdir().join("mp4_example_2.mp4"),
+        "Example MP4 - 2",
+        "#bf374eff",
+    )
+    .unwrap();
+    generate_video(
+        workingdir().join("mp4_example_3.mp4"),
+        "Example MP4 - 3",
+        "#3da362ff",
+    )
+    .unwrap();
 }
 
 fn workingdir() -> PathBuf {
@@ -43,7 +64,6 @@ fn generate_video(path: PathBuf, text: &str, rgba_color: &str) -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
                 },
                 "initial": scene(text, rgba_color, Duration::ZERO)
             },
@@ -57,7 +77,7 @@ fn generate_video(path: PathBuf, text: &str, rgba_color: &str) -> Result<()> {
         }),
     )?;
 
-    const EVENT_COUNT: u64 = 1_000;
+    const EVENT_COUNT: u64 = 2_000;
     for i in 0..EVENT_COUNT {
         let pts = Duration::from_millis(20_000 * i / EVENT_COUNT);
         instance.send_request(
@@ -86,7 +106,7 @@ fn scene(text: &str, rgba_color: &str, pts: Duration) -> serde_json::Value {
                 {
                     "type": "text",
                     "text": text,
-                    "font_size": 250,
+                    "font_size": 230,
                     "width": 1920,
                     "align": "center",
                     "font_family": "Comic Sans MS",

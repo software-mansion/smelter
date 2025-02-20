@@ -98,7 +98,6 @@ pub(super) fn generate_scene(mp4_path: PathBuf, scene: serde_json::Value) -> Res
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
                 },
                 "initial": {
                     "root": scene,

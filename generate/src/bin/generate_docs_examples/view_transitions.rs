@@ -214,7 +214,6 @@ pub(super) fn generate_scene(
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
                 },
                 "initial": {
                     "root": scene_start,

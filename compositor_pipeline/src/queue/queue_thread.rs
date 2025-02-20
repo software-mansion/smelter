@@ -137,7 +137,7 @@ impl QueueThreadAfterStart {
     }
 
     fn on_handle_tick(&mut self) {
-        loop {
+        while !self.queue.should_close.load(Ordering::Relaxed) {
             let audio_pts_range = self.audio_processor.next_buffer_pts_range();
             let video_pts = self.video_processor.next_buffer_pts();
             let event_pts = self.scheduled_events.first_key_value().map(|(pts, _)| *pts);

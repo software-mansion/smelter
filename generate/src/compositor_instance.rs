@@ -1,5 +1,10 @@
 use anyhow::{anyhow, Result};
-use compositor_pipeline::event::Event;
+use compositor_pipeline::{
+    event::Event,
+    pipeline::{self, GraphicsContext},
+    Pipeline,
+};
+use compositor_render::WgpuFeatures;
 use crossbeam_channel::{Receiver, Sender};
 use reqwest::StatusCode;
 use smelter::{config::read_config, logger, server::run_api, state::ApiState};
@@ -7,7 +12,7 @@ use std::{
     env,
     sync::{
         atomic::{AtomicU16, Ordering},
-        Arc, OnceLock,
+        Arc, Mutex, OnceLock,
     },
     thread,
     time::{Duration, Instant},
@@ -32,23 +37,29 @@ impl CompositorInstance {
     pub fn start() -> Self {
         init_compositor_prerequisites();
         let mut config = read_config();
+        let mut options: pipeline::Options = (&config).into();
         let api_port = get_free_port();
         config.api_port = api_port;
-        config.queue_options.ahead_of_time_processing = true;
-        config.queue_options.never_drop_output_frames = true;
-        config.start_whip_whep = false;
+        options.queue_options.ahead_of_time_processing = true;
+        options.queue_options.never_drop_output_frames = true;
+        options.start_whip_whep = false;
+        options.wgpu_ctx = Some(graphics_context());
+        options.tokio_rt = Some(runtime());
 
         info!("Starting Smelter Integration Test with config:\n{config:#?}",);
 
         let (should_close_sender, should_close_receiver) = crossbeam_channel::bounded(1);
-        let runtime = Arc::new(Runtime::new().unwrap());
-        let (state, _event_loop) = ApiState::new(config, runtime.clone()).unwrap();
+        let (pipeline, _) = Pipeline::new(options).unwrap();
+        let state = ApiState {
+            pipeline: Arc::new(Mutex::new(pipeline)),
+            config,
+        };
 
         let events = state.pipeline.lock().unwrap().subscribe_pipeline_events();
         thread::Builder::new()
             .name("HTTP server startup thread".to_string())
             .spawn(move || {
-                run_api(state, runtime.clone(), should_close_receiver).unwrap();
+                run_api(state, runtime(), should_close_receiver).unwrap();
             })
             .unwrap();
 
@@ -110,10 +121,6 @@ impl CompositorInstance {
             }
         }
     }
-
-    pub fn terminate(&self) {
-        self.should_close_sender.send(()).unwrap()
-    }
 }
 
 fn get_free_port() -> u16 {
@@ -129,4 +136,25 @@ fn init_compositor_prerequisites() {
         ffmpeg_next::format::network::init();
         logger::init_logger(read_config().logger);
     });
+}
+
+fn graphics_context() -> GraphicsContext {
+    static CTX: OnceLock<GraphicsContext> = OnceLock::new();
+    CTX.get_or_init(|| {
+        GraphicsContext::new(
+            false,
+            WgpuFeatures::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+                | WgpuFeatures::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+            Default::default(),
+            None,
+        )
+        .unwrap()
+    })
+    .clone()
+}
+
+fn runtime() -> Arc<Runtime> {
+    static CTX: OnceLock<Arc<Runtime>> = OnceLock::new();
+    CTX.get_or_init(|| Arc::new(Runtime::new().unwrap()))
+        .clone()
 }
