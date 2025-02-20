@@ -58,6 +58,7 @@ jobs:
 
             - name: 🧪 Run tests
               run: |
+                cargo clean
                 cargo nextest run --workspace --profile ci
 
             - name: 📦 Upload failed snapshot test artifacts
