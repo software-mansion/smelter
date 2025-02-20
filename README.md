@@ -16,7 +16,7 @@ With Smelter, you can:
 <br>
 
 <div align="left">
-  <video width="840" src="https://github.com/user-attachments/assets/8170d10a-ff90-49d5-9eb6-ca42db9b2d9b"></video>
+  <video width="840" src="https://github.com/user-attachments/assets/70b450ed-e809-4be2-8178-0fc11e6a69d7"></video>
 </div>
 
 ## Where to start?
