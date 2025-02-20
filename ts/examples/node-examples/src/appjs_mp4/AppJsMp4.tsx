@@ -1,28 +1,40 @@
 import { OfflineSmelter } from '@swmansion/smelter-node';
-import { SlideShow, Slide } from '@swmansion/smelter';
+import { View, Rescaler, Mp4, useAfterTimestamp } from '@swmansion/smelter';
 import { downloadAllAssets } from '../utils';
 import path from 'path';
-import { TitleSlide } from './TitleSlide';
-import { DayOneScene } from './DayOne';
-import { DayTwoScene } from './DayTwo';
-import { AfterpartyScene } from './Afterparty';
 
 function AppJs() {
+  const isGameActive = useAfterTimestamp(4000);
+  const isLoopActive = useAfterTimestamp(13000);
+
+  const cameraPosition =
+    isGameActive && !isLoopActive
+      ? {
+          top: 16,
+          left: 16,
+          width: 256 * 2,
+          height: 180 * 2,
+        }
+      : {
+          top: 1,
+          left: 1,
+          width: 1920,
+          height: 1080,
+        };
+
   return (
-    <SlideShow>
-      <Slide durationMs={3000}>
-        <TitleSlide text="App.js conf 2024" />
-      </Slide>
-      <Slide>
-        <DayOneScene />
-      </Slide>
-      <Slide>
-        <DayTwoScene />
-      </Slide>
-      <Slide>
-        <AfterpartyScene />
-      </Slide>
-    </SlideShow>
+    <View>
+      {isGameActive && (
+        <Rescaler style={{ rescaleMode: 'fill' }}>
+          <Mp4 source={path.join(__dirname, 'assets/game.mp4')} />
+        </Rescaler>
+      )}
+      <Rescaler
+        transition={{ durationMs: 650 }}
+        style={{ ...cameraPosition, rescaleMode: 'fill', borderRadius: 24 }}>
+        <Mp4 source={path.join(__dirname, 'assets/streamer.mp4')} />
+      </Rescaler>
+    </View>
   );
 }
 
@@ -31,32 +43,30 @@ async function run() {
   const smelter = new OfflineSmelter();
   await smelter.init();
 
-  await smelter.registerInput('input_1', {
-    type: 'mp4',
-    serverPath: path.join(__dirname, '../../.assets/BigBuckBunny.mp4'),
-    offsetMs: 0,
-    required: true,
-  });
+  await smelter.render(
+    <AppJs />,
+    {
+      type: 'mp4',
+      serverPath: path.join(__dirname, '../../.assets/appjss_output.mp4'),
 
-  await smelter.render(<AppJs />, {
-    type: 'mp4',
-    serverPath: path.join(__dirname, '../../.assets/appjss_output.mp4'),
-    video: {
-      encoder: {
-        type: 'ffmpeg_h264',
-        preset: 'ultrafast',
+      video: {
+        encoder: {
+          type: 'ffmpeg_h264',
+          preset: 'ultrafast',
+        },
+        resolution: {
+          width: 1920,
+          height: 1080,
+        },
       },
-      resolution: {
-        width: 1920,
-        height: 1080,
-      },
-    },
-    audio: {
-      encoder: {
-        type: 'aac',
-        channels: 'stereo',
+      audio: {
+        encoder: {
+          type: 'aac',
+          channels: 'stereo',
+        },
       },
     },
-  });
+    26000
+  );
 }
 void run();
