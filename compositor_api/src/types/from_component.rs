@@ -63,8 +63,8 @@ impl TryFrom<View> for scene::ViewComponent {
                 (Some(_), Some(_)) => return Err(TypeError::new(HORIZONTAL_ONLY_ONE_MSG)),
             };
             Position::Absolute(scene::AbsolutePosition {
-                width: view.width.map(Into::into),
-                height: view.height.map(Into::into),
+                width: view.width,
+                height: view.height,
                 position_horizontal,
                 position_vertical,
                 rotation_degrees: view.rotation.unwrap_or(0.0),
@@ -175,8 +175,8 @@ impl TryFrom<Rescaler> for scene::RescalerComponent {
                 (Some(_), Some(_)) => return Err(TypeError::new(HORIZONTAL_ONLY_ONE_MSG)),
             };
             Position::Absolute(scene::AbsolutePosition {
-                width: rescaler.width.map(Into::into),
-                height: rescaler.height.map(Into::into),
+                width: rescaler.width,
+                height: rescaler.height,
                 position_horizontal,
                 position_vertical,
                 rotation_degrees: rescaler.rotation.unwrap_or(0.0),
