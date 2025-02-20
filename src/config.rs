@@ -333,10 +333,10 @@ fn wgpu_features_from_str(s: &str) -> Result<WgpuFeatures, String> {
             "MULTIVIEW" => WgpuFeatures::MULTIVIEW,
             "VERTEX_ATTRIBUTE_64BIT" => WgpuFeatures::VERTEX_ATTRIBUTE_64BIT,
             "TEXTURE_FORMAT_NV12" => WgpuFeatures::TEXTURE_FORMAT_NV12,
-            "RAY_TRACING_ACCELERATION_STRUCTURE" => {
-                WgpuFeatures::RAY_TRACING_ACCELERATION_STRUCTURE
+            "EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE" => {
+                WgpuFeatures::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
             }
-            "RAY_QUERY" => WgpuFeatures::RAY_QUERY,
+            "EXPERIMENTAL_RAY_QUERY" => WgpuFeatures::EXPERIMENTAL_RAY_QUERY,
             "SHADER_F64" => WgpuFeatures::SHADER_F64,
             "SHADER_I16" => WgpuFeatures::SHADER_I16,
             "SHADER_PRIMITIVE_INDEX" => WgpuFeatures::SHADER_PRIMITIVE_INDEX,

@@ -29,11 +29,10 @@ pub struct UnregisterOutput {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum UnregisterRenderer {
-    Shader { shader_id: RendererId },
-    WebRenderer { instance_id: RendererId },
-    Image { image_id: RendererId },
+pub struct UnregisterRenderer {
+    /// Time in milliseconds when this request should be applied. Value `0` represents
+    /// time of the start request.
+    schedule_time_ms: Option<f64>,
 }
 
 pub(super) async fn handle_input(
@@ -101,26 +100,101 @@ pub(super) async fn handle_output(
 pub(super) async fn handle_shader(
     State(api): State<ApiState>,
     Path(shader_id): Path<RendererId>,
+    Json(request): Json<UnregisterRenderer>,
 ) -> Result<Response, ApiError> {
-    api.pipeline()
-        .unregister_renderer(&shader_id.into(), RegistryType::Shader)?;
+    match request.schedule_time_ms {
+        Some(schedule_time_ms) => {
+            let pipeline = api.pipeline.clone();
+            let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
+            api.pipeline().queue().schedule_event(
+                schedule_time,
+                Box::new(move || {
+                    if let Err(err) = pipeline
+                        .lock()
+                        .unwrap()
+                        .unregister_renderer(&shader_id.into(), RegistryType::Shader)
+                    {
+                        error!(
+                            "Error while running scheduled shader unregister for pts {}ms: {}",
+                            schedule_time.as_millis(),
+                            ErrorStack::new(&err).into_string()
+                        )
+                    }
+                }),
+            );
+        }
+        None => {
+            api.pipeline()
+                .unregister_renderer(&shader_id.into(), RegistryType::Shader)?;
+        }
+    }
     Ok(Response::Ok {})
 }
 
 pub(super) async fn handle_web_renderer(
     State(api): State<ApiState>,
     Path(instance_id): Path<RendererId>,
+    Json(request): Json<UnregisterRenderer>,
 ) -> Result<Response, ApiError> {
-    api.pipeline()
-        .unregister_renderer(&instance_id.into(), RegistryType::WebRenderer)?;
+    match request.schedule_time_ms {
+        Some(schedule_time_ms) => {
+            let pipeline = api.pipeline.clone();
+            let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
+            api.pipeline().queue().schedule_event(
+                schedule_time,
+                Box::new(move || {
+                    if let Err(err) = pipeline
+                        .lock()
+                        .unwrap()
+                        .unregister_renderer(&instance_id.into(), RegistryType::WebRenderer)
+                    {
+                        error!(
+                            "Error while running scheduled web renderer unregister for pts {}ms: {}",
+                            schedule_time.as_millis(),
+                            ErrorStack::new(&err).into_string()
+                        )
+                    }
+                }),
+            );
+        }
+        None => {
+            api.pipeline()
+                .unregister_renderer(&instance_id.into(), RegistryType::WebRenderer)?;
+        }
+    }
     Ok(Response::Ok {})
 }
 
 pub(super) async fn handle_image(
     State(api): State<ApiState>,
     Path(image_id): Path<RendererId>,
+    Json(request): Json<UnregisterRenderer>,
 ) -> Result<Response, ApiError> {
-    api.pipeline()
-        .unregister_renderer(&image_id.into(), RegistryType::Image)?;
+    match request.schedule_time_ms {
+        Some(schedule_time_ms) => {
+            let pipeline = api.pipeline.clone();
+            let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
+            api.pipeline().queue().schedule_event(
+                schedule_time,
+                Box::new(move || {
+                    if let Err(err) = pipeline
+                        .lock()
+                        .unwrap()
+                        .unregister_renderer(&image_id.into(), RegistryType::Image)
+                    {
+                        error!(
+                            "Error while running scheduled image unregister for pts {}ms: {}",
+                            schedule_time.as_millis(),
+                            ErrorStack::new(&err).into_string()
+                        )
+                    }
+                }),
+            );
+        }
+        None => {
+            api.pipeline()
+                .unregister_renderer(&image_id.into(), RegistryType::Image)?;
+        }
+    }
     Ok(Response::Ok {})
 }

@@ -5,7 +5,7 @@ use wasm_bindgen::JsValue;
 use super::types::to_js_error;
 
 pub async fn create_wgpu_context() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue>), JsValue> {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::GL,
         ..Default::default()
     });
@@ -31,6 +31,7 @@ pub async fn create_wgpu_context() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue
                 required_features: wgpu::Features::PUSH_CONSTANTS,
                 required_limits: wgpu::Limits {
                     max_push_constant_size: 128,
+                    max_color_attachments: 6,
                     ..wgpu::Limits::downlevel_webgl2_defaults()
                 },
                 memory_hints: wgpu::MemoryHints::default(),

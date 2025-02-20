@@ -1,7 +1,7 @@
 import type { _smelterInternals } from '@swmansion/smelter';
-import type { SmelterEvent } from '../event.js';
-import { SmelterEventType } from '../event.js';
-import type Output from './output.js';
+import type { SmelterEvent } from '../event';
+import { SmelterEventType } from '../event';
+import type Output from './output';
 
 type LiveInputStreamStore<Id> = _smelterInternals.LiveInputStreamStore<Id>;
 

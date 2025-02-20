@@ -1,16 +1,16 @@
-import type { RegisterMp4Input } from '@swmansion/smelter';
+import type { RegisterMp4Input, Renderers } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
 import type { ReactElement } from 'react';
 import { createElement } from 'react';
-import type { ApiClient, Api } from '../api.js';
-import Renderer from '../renderer.js';
-import type { RegisterOutput } from '../api/output.js';
-import { intoAudioInputsConfiguration } from '../api/output.js';
-import { sleep } from '../utils.js';
-import { OFFLINE_OUTPUT_ID } from './compositor.js';
-import { OutputRootComponent } from '../rootComponent.js';
+import type { ApiClient, Api } from '../api';
+import Renderer from '../renderer';
+import type { RegisterOutput } from '../api/output';
+import { intoAudioInputsConfiguration } from '../api/output';
+import { sleep } from '../utils';
+import { OFFLINE_OUTPUT_ID } from './compositor';
+import { OutputRootComponent } from '../rootComponent';
 import type { Logger } from 'pino';
-import type { ImageRef } from '../api/image.js';
+import type { ImageRef } from '../api/image';
 
 type AudioContext = _smelterInternals.AudioContext;
 type OfflineTimeContext = _smelterInternals.OfflineTimeContext;
@@ -156,7 +156,10 @@ class OutputContext implements SmelterOutputContext {
       await this.output.api.registerInput(inputRef, {
         type: 'mp4',
         offset_ms: offsetMs,
-        ...registerRequest,
+        path: registerRequest.serverPath,
+        url: registerRequest.url,
+        required: registerRequest.required,
+        video_decoder: registerRequest.videoDecoder,
       });
     this.output.internalInputStreamStore.addInput({
       inputId,
@@ -192,7 +195,7 @@ class OutputContext implements SmelterOutputContext {
       { schedule_time_ms: this.timeContext.timestampMs() }
     );
   }
-  public async registerImage(imageId: number, imageSpec: any) {
+  public async registerImage(imageId: number, imageSpec: Renderers.RegisterImage) {
     const imageRef = {
       type: 'output-specific-image',
       outputId: this.outputId,
@@ -201,18 +204,22 @@ class OutputContext implements SmelterOutputContext {
 
     await this.output.api.registerImage(imageRef, {
       url: imageSpec.url,
-      path: imageSpec.path,
+      path: imageSpec.serverPath,
       asset_type: imageSpec.assetType,
     });
   }
-  public async unregisterImage(_imageId: number) {
-    // await this.output.api.unregisterImage({
-    //   type: 'output-specific-image',
-    //   outputId: this.outputId,
-    //   id: imageId,
-    // });
+  public async unregisterImage(imageId: number) {
+    await this.output.api.unregisterImage(
+      {
+        type: 'output-specific-image',
+        outputId: this.outputId,
+        id: imageId,
+      },
+      { schedule_time_ms: this.timeContext.timestampMs() }
+    );
   }
 }
+
 async function waitForBlockingTasks(offlineContext: OfflineTimeContext): Promise<void> {
   while (offlineContext.isBlocked()) {
     await sleep(100);

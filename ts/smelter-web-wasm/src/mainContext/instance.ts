@@ -36,7 +36,7 @@ class WasmInstance implements SmelterManager {
     this.framerate = options.framerate;
     this.wasmBundleUrl = options.wasmBundleUrl;
 
-    const worker = new Worker(new URL('../workerContext/runWorker.js', import.meta.url), {
+    const worker = new Worker(new URL('../esm/runWorker.mjs', import.meta.url), {
       type: 'module',
     });
     const onEvent = (event: WorkerEvent) => {

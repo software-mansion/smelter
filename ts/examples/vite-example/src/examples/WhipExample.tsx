@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Smelter } from '@swmansion/smelter-web-wasm';
+import Smelter from '@swmansion/smelter-web-wasm';
 import { Mp4, Rescaler, Text, View } from '@swmansion/smelter';
 
 function WhipExample() {

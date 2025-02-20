@@ -4,6 +4,7 @@ import { InputVideoFrameRef } from './frame';
 import type { Interval } from '../../utils';
 import { SmelterEventType } from '../../eventSender';
 import { workerPostEvent } from '../bridge';
+import type { Logger } from 'pino';
 
 export type InputState = 'started' | 'playing' | 'finished';
 
@@ -18,9 +19,12 @@ export class MediaStreamInput implements Input {
   private sentEos: boolean = false;
   private sentFirstFrame: boolean = false;
 
-  public constructor(inputId: InputId, source: ReadableStream) {
+  private logger: Logger;
+
+  public constructor(inputId: InputId, source: ReadableStream, logger: Logger) {
     this.reader = source.getReader();
     this.inputId = inputId;
+    this.logger = logger;
   }
 
   public start(): InputStartResult {
@@ -35,10 +39,13 @@ export class MediaStreamInput implements Input {
         if (this.frameRef) {
           this.frameRef.decrementRefCount();
         }
-        this.frameRef = new InputVideoFrameRef({
-          frame: readResult.value,
-          ptsMs: 0, // pts does not matter here
-        });
+        this.frameRef = new InputVideoFrameRef(
+          {
+            frame: readResult.value,
+            ptsMs: 0, // pts does not matter here
+          },
+          this.logger
+        );
       }
 
       if (readResult.done) {

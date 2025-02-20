@@ -1,8 +1,8 @@
 import { Api } from '@swmansion/smelter';
-import type { SmelterManager } from './smelterManager.js';
-import type { RegisterOutputRequest } from './api/output.js';
-import { inputRefIntoRawId, type InputRef, type RegisterInputRequest } from './api/input.js';
-import { imageRefIntoRawId, type ImageRef } from './api/image.js';
+import type { SmelterManager } from './smelterManager';
+import type { RegisterOutputRequest } from './api/output';
+import { inputRefIntoRawId, type InputRef, type RegisterInputRequest } from './api/input';
+import { imageRefIntoRawId, type ImageRef } from './api/image';
 
 export { Api };
 
@@ -103,11 +103,14 @@ export class ApiClient {
     });
   }
 
-  public async unregisterImage(imageRef: ImageRef): Promise<object> {
+  public async unregisterImage(
+    imageRef: ImageRef,
+    body: { schedule_time_ms?: number }
+  ): Promise<object> {
     return this.serverManager.sendRequest({
       method: 'POST',
       route: `/api/image/${encodeURIComponent(imageRefIntoRawId(imageRef))}/unregister`,
-      body: {},
+      body,
     });
   }
 

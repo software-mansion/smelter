@@ -6,6 +6,7 @@ import { InnerInputStream } from './InputStream.js';
 import { newInternalStreamId } from '../context/internalStreamIdManager.js';
 import type { ComponentBaseProps } from '../component.js';
 import { useTimeLimitedComponent } from '../context/childrenLifetimeContext.js';
+import type { RegisterMp4Input } from '../types/registerInput.js';
 
 export type Mp4Props = Omit<ComponentBaseProps, 'children'> & {
   /**
@@ -31,13 +32,13 @@ function Mp4(props: Mp4Props) {
   useEffect(() => {
     const newInputId = newInternalStreamId();
     setInputId(newInputId);
-    const task = newBlockingTask(ctx);
-    const pathOrUrl =
+    const pathOrUrl: Pick<RegisterMp4Input, 'url' | 'serverPath'> =
       props.source.startsWith('http://') || props.source.startsWith('https://')
         ? { url: props.source }
-        : { path: props.source };
+        : { serverPath: props.source };
     let registerPromise: Promise<any>;
 
+    const task = newBlockingTask(ctx);
     void (async () => {
       try {
         registerPromise = ctx.registerMp4Input(newInputId, {

@@ -5,7 +5,7 @@ use crate::{
     wgpu::common_pipeline::VERTEX_ENTRYPOINT_NAME,
 };
 
-const HEADER_DOCS_URL: &str = "https://compositor.live/docs/concept/shaders#header";
+const HEADER_DOCS_URL: &str = "https://smelter.dev/docs/concept/shaders#header";
 
 #[derive(Debug, thiserror::Error)]
 pub struct ShaderParseError {
@@ -111,6 +111,9 @@ pub enum TypeEquivalenceError {
 pub enum ConstArraySizeEvalError {
     #[error("Dynamic array size is not allowed.")]
     DynamicSize,
+
+    #[error("Overridden array size is not allowed.")]
+    OverrideSize,
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -1,7 +1,7 @@
 // eslint-disable-next-line import/no-named-as-default
 import Reconciler from 'react-reconciler';
-import { DefaultEventPriority, LegacyRoot } from 'react-reconciler/constants.js';
-import type { Api } from './api.js';
+import { DefaultEventPriority, LegacyRoot } from 'react-reconciler/constants';
+import type { Api } from './api';
 import type { _smelterInternals } from '@swmansion/smelter';
 import type React from 'react';
 import type { Logger } from 'pino';

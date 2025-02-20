@@ -34,10 +34,7 @@ async function run() {
       resolution: { width: 1920, height: 1080 },
     },
     audio: {
-      encoder: {
-        type: 'opus',
-        channels: 'stereo',
-      },
+      encoder: { type: 'opus', channels: 'stereo' },
     },
   });
 
@@ -46,7 +43,7 @@ async function run() {
 run();
 ```
 
-See our [docs](https://compositor.live/docs) to learn more.
+See our [docs](https://smelter.dev/docs) to learn more.
 
 ## License
 

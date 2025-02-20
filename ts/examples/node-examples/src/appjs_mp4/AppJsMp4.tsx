@@ -1,39 +1,45 @@
 import { OfflineSmelter } from '@swmansion/smelter-node';
-import { View, Rescaler, Mp4, useAfterTimestamp } from '@swmansion/smelter';
+import { View, Rescaler, Mp4, useAfterTimestamp, Image } from '@swmansion/smelter';
 import { downloadAllAssets } from '../utils';
 import path from 'path';
 
 function AppJs() {
   const isGameActive = useAfterTimestamp(4000);
-  const isLoopActive = useAfterTimestamp(13000);
+  const isChatActive = useAfterTimestamp(8000);
 
-  const cameraPosition =
-    isGameActive && !isLoopActive
-      ? {
-          top: 16,
-          left: 16,
-          width: 256 * 2,
-          height: 180 * 2,
-        }
-      : {
-          top: 1,
-          left: 1,
-          width: 1920,
-          height: 1080,
-        };
+  const cameraPosition = isGameActive
+    ? {
+        top: 16,
+        left: 16,
+        width: 256 * 2,
+        height: 180 * 2,
+      }
+    : {
+        top: 1,
+        left: 1,
+        width: 1920,
+        height: 1080,
+      };
 
   return (
     <View>
       {isGameActive && (
         <Rescaler style={{ rescaleMode: 'fill' }}>
-          <Mp4 source={path.join(__dirname, 'assets/game.mp4')} />
+          <Mp4 source={path.join(__dirname, 'assets/game2.mp4')} />
         </Rescaler>
       )}
+
       <Rescaler
         transition={{ durationMs: 650 }}
         style={{ ...cameraPosition, rescaleMode: 'fill', borderRadius: 24 }}>
-        <Mp4 source={path.join(__dirname, 'assets/streamer.mp4')} />
+        <Mp4 source={path.join(__dirname, 'assets/streamer2.mp4')} />
       </Rescaler>
+
+      {isChatActive && (
+        <Rescaler style={{ rescaleMode: 'fill' }}>
+          <Image source={new URL(Background, import.meta.url).toString()} />
+        </Rescaler>
+      )}
     </View>
   );
 }
@@ -66,7 +72,7 @@ async function run() {
         },
       },
     },
-    26000
+    16000
   );
 }
 void run();

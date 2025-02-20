@@ -435,6 +435,4 @@ pub struct Tiles {
     /// Defines how this component will behave during a scene update. This will only have an
     /// effect if the previous scene already contained a `Tiles` component with the same id.
     pub transition: Option<Transition>,
-
-    pub border_radius: Option<f32>,
 }

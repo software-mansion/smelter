@@ -75,15 +75,15 @@ fn download_wgpu_texture(
     });
 
     encoder.copy_texture_to_buffer(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             aspect: wgpu::TextureAspect::Plane0,
             origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
             texture: &frame,
             mip_level: 0,
         },
-        wgpu::ImageCopyBuffer {
+        wgpu::TexelCopyBufferInfo {
             buffer: &buffer,
-            layout: wgpu::ImageDataLayout {
+            layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(y_plane_bytes_per_row as u32),
                 rows_per_image: None,
@@ -97,15 +97,15 @@ fn download_wgpu_texture(
     );
 
     encoder.copy_texture_to_buffer(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             aspect: wgpu::TextureAspect::Plane1,
             origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
             texture: &frame,
             mip_level: 0,
         },
-        wgpu::ImageCopyBuffer {
+        wgpu::TexelCopyBufferInfo {
             buffer: &buffer,
-            layout: wgpu::ImageDataLayout {
+            layout: wgpu::TexelCopyBufferLayout {
                 offset: y_plane_size,
                 bytes_per_row: Some(uv_plane_bytes_per_row as u32),
                 rows_per_image: None,

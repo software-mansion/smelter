@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Smelter } from '@swmansion/smelter-web-wasm';
+import Smelter from '@swmansion/smelter-web-wasm';
 import { InputStream, Mp4, Rescaler, Text, useInputStreams, View } from '@swmansion/smelter';
 
 function DemoExample() {

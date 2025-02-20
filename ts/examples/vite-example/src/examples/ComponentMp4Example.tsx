@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Smelter } from '@swmansion/smelter-web-wasm';
+import type Smelter from '@swmansion/smelter-web-wasm';
 import { Mp4, Slide, SlideShow, Text, View } from '@swmansion/smelter';
 import CompositorCanvas from '../components/SmelterCanvas';
 

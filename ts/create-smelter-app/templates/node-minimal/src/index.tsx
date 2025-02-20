@@ -4,11 +4,15 @@ import { ffplayStartPlayerAsync } from './smelterFfplayHelper';
 
 function App() {
   return (
-    <View style={{ direction: 'column' }}>
+    <View
+      style={{
+        direction: 'column',
+        backgroundColor: '#161127',
+        paddingLeft: 200,
+      }}>
       <View />
-      <Text style={{ fontSize: 50 }}>Open index.ts and get started</Text>
-      <View style={{ height: 20 }} />
-      <Text style={{ width: 1000, fontSize: 30, wrap: 'word' }}>
+      <Text style={{ fontSize: 50, lineHeight: 80 }}>Open index.tsx and get started.</Text>
+      <Text style={{ fontSize: 30, lineHeight: 35, width: 1000, wrap: 'word' }}>
         This example renders static text and sends the output stream via RTP to local port 8001.
         Generated code includes helpers in smelterFfplayHelper.ts that display the output stream
         using ffplay, make sure to remove them for any real production use.

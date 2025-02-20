@@ -1,13 +1,13 @@
 {
   "name": "@swmansion/smelter-browser-render",
-  "version": "0.2.0-rc.0",
+  "version": "0.2.0",
   "author": "Software Mansion <contact@swmansion.com>",
   "license": "SEE LICENSE IN ./LICENSE",
   "description": "Smelter rendering engine compiled to WASM",
   "bugs": {
     "url": "https://github.com/software-mansion/smelter/issues"
   },
-  "homepage": "https://github.com/software-mansion/smelter",
+  "homepage": "https://smelter.dev",
   "files": [
     "/dist",
     "/LICENSE"
@@ -30,6 +30,6 @@
     "wasm-pack": "^0.13.0"
   },
   "peerDependencies": {
-    "@swmansion/smelter": "workspace:0.2.0-rc.0"
+    "@swmansion/smelter": "workspace:0.2.0"
   }
 }

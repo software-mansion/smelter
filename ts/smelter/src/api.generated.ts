@@ -576,7 +576,6 @@ export type Component =
        * effect if the previous scene already contained a `Tiles` component with the same id.
        */
       transition?: Transition | null;
-      border_radius?: number | null;
     }
   | {
       type: "rescaler";

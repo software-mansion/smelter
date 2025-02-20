@@ -227,7 +227,7 @@ impl<'a> Renderer<'a> {
                 module: &shader_module,
                 buffers: &[Vertex::LAYOUT],
                 compilation_options: Default::default(),
-                entry_point: "vs_main",
+                entry_point: None,
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader_module,
@@ -237,7 +237,7 @@ impl<'a> Renderer<'a> {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: Default::default(),
-                entry_point: "fs_main",
+                entry_point: None,
             }),
 
             primitive: wgpu::PrimitiveState {
