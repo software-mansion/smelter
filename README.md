@@ -1,4 +1,8 @@
-<img src="assets/smelter-logo-transparent.svg" width="400" alt="Smelter">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/smelter-logo-transparent.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/smelter-logo-background.svg">
+  <img width="400" alt="Smelter" src="assets/smelter-logo-background.svg">
+</picture>
 
 <br>
 
