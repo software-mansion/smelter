@@ -85,10 +85,14 @@ class OfflineOutput {
       ? intoAudioInputsConfiguration(this.audioContext.getAudioConfig())
       : undefined;
     const video = this.supportsVideo ? { root: this.renderer.scene() } : undefined;
+    const schedule_time_ms = this.timeContext.timestampMs();
+    if (schedule_time_ms === Infinity) {
+      throw new Error('Generating a scene without timestamp.');
+    }
     return {
       video,
       audio,
-      schedule_time_ms: this.timeContext.timestampMs(),
+      schedule_time_ms,
     };
   }
 
@@ -186,13 +190,17 @@ class OutputContext implements SmelterOutputContext {
     };
   }
   public async unregisterMp4Input(inputId: number): Promise<void> {
+    const schedule_time_ms = this.timeContext.timestampMs();
+    if (schedule_time_ms === Infinity) {
+      return;
+    }
     await this.output.api.unregisterInput(
       {
         type: 'output-specific-input',
         outputId: this.outputId,
         id: inputId,
       },
-      { schedule_time_ms: this.timeContext.timestampMs() }
+      { schedule_time_ms }
     );
   }
   public async registerImage(imageId: number, imageSpec: Renderers.RegisterImage) {
@@ -209,13 +217,17 @@ class OutputContext implements SmelterOutputContext {
     });
   }
   public async unregisterImage(imageId: number) {
+    const schedule_time_ms = this.timeContext.timestampMs();
+    if (schedule_time_ms === Infinity) {
+      return;
+    }
     await this.output.api.unregisterImage(
       {
         type: 'output-specific-image',
         outputId: this.outputId,
         id: imageId,
       },
-      { schedule_time_ms: this.timeContext.timestampMs() }
+      { schedule_time_ms }
     );
   }
 }
