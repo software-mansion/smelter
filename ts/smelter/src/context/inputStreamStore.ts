@@ -153,17 +153,20 @@ type OfflineAddInput<Id> = {
 };
 
 export class OfflineInputStreamStore<Id> {
+  private lastTimestamp: number = 0;
   private context: InstanceContext<Id> = {};
   private inputs: OfflineAddInput<Id>[] = [];
   private onChangeCallbacks: Set<() => void> = new Set();
 
   public addInput(update: OfflineAddInput<Id>) {
     this.inputs.push(update);
+    this.setCurrentTimestamp(this.lastTimestamp);
   }
 
   // TimeContext should call that function. It will always trigger re-render, but there
   // is no point to optimize it right now.
   public setCurrentTimestamp(timestampMs: number) {
+    this.lastTimestamp = timestampMs;
     this.context = Object.fromEntries(
       this.inputs
         .filter(input => timestampMs >= input.offsetMs)
