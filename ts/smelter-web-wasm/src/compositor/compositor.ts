@@ -36,7 +36,16 @@ export default class Smelter {
   private coreSmelter?: CoreSmelter;
   private instance?: WasmInstance;
   private options: SmelterOptions;
-  private logger: Logger = pino({ level: 'warn' });
+  private logger: Logger = pino({
+    level: 'warn',
+    browser: {
+      asObject: true,
+      write: {
+        debug: console.log,
+        trace: console.log,
+      },
+    },
+  });
 
   public constructor(options?: SmelterOptions) {
     this.options = options ?? {};
