@@ -20,6 +20,10 @@ const nextConfig =  {
         ],
       })
     );
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      "compositor_web_bg.wasm": false,
+    };
 
     if (isServer) {
       config.externals = config.externals || [];

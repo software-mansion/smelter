@@ -14,9 +14,6 @@ importers:
       '@swmansion/smelter-web-wasm':
         specifier: 0.2.0
         version: 0.2.0(@swmansion/smelter@0.2.0(react@18.3.1))(react@18.3.1)
-      copy-webpack-plugin:
-        specifier: 12.0.2
-        version: 12.0.2(webpack@5.98.0)
       next:
         specifier: 14.2.24
         version: 14.2.24(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -36,6 +33,9 @@ importers:
       '@types/react-dom':
         specifier: ^18
         version: 18.3.5(@types/react@18.3.18)
+      copy-webpack-plugin:
+        specifier: 12.0.2
+        version: 12.0.2(webpack@5.98.0)
       eslint:
         specifier: ^8
         version: 8.57.1
