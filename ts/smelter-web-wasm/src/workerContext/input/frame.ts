@@ -8,6 +8,11 @@ export type InputVideoFrame = {
   ptsMs: number;
 };
 
+export type InputAudioData = {
+  data: Omit<AudioData, 'timestamp'>;
+  ptsMs: number;
+};
+
 /**
  * Represents frame produced by decoder.
  * Memory has to be manually managed by incrementing reference count on `FrameRef` copy and decrementing it once it's no longer used

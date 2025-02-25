@@ -5,7 +5,7 @@ import CompositorCanvas from '../components/SmelterCanvas';
 import NotoSansFont from '../../assets/NotoSans.ttf';
 
 function ScreenCaptureExample() {
-  const onCanvasCreate = useCallback(async (smelter: Smelter) => {
+  const onCanvasStarted = useCallback(async (smelter: Smelter) => {
     await smelter.registerFont(NotoSansFont);
     try {
       await smelter.registerInput('screen', { type: 'screen_capture' });
@@ -16,7 +16,7 @@ function ScreenCaptureExample() {
 
   return (
     <div className="card">
-      <CompositorCanvas onCanvasCreate={onCanvasCreate} width={1280} height={720}>
+      <CompositorCanvas onCanvasStarted={onCanvasStarted} width={1280} height={720}>
         <Scene />
       </CompositorCanvas>
     </div>

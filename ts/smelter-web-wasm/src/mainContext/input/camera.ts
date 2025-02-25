@@ -1,22 +1,27 @@
 import type { Input, RegisterInputResult } from '../input';
+import type { InstanceContext } from '../instance';
 
 export class CameraInput implements Input {
+  private inputId: string;
+  private ctx: InstanceContext;
   private mediaStream: MediaStream;
 
-  constructor(mediaStream: MediaStream) {
+  constructor(inputId: string, mediaStream: MediaStream, ctx: InstanceContext) {
+    this.inputId = inputId;
+    this.ctx = ctx;
     this.mediaStream = mediaStream;
-  }
-
-  public get audioTrack(): MediaStreamTrack | undefined {
-    return this.mediaStream.getAudioTracks()[0];
   }
 
   public async terminate(): Promise<void> {
     this.mediaStream.getTracks().forEach(track => track.stop());
+    await this.ctx.audioMixer.removeInput(this.inputId);
   }
 }
 
-export async function handleRegisterCameraInput(inputId: string): Promise<RegisterInputResult> {
+export async function handleRegisterCameraInput(
+  ctx: InstanceContext,
+  inputId: string
+): Promise<RegisterInputResult> {
   const mediaStream = await navigator.mediaDevices.getUserMedia({
     audio: {
       noiseSuppression: { ideal: true },
@@ -24,6 +29,7 @@ export async function handleRegisterCameraInput(inputId: string): Promise<Regist
     video: true,
   });
   const videoTrack = mediaStream.getVideoTracks()[0];
+  const audioTrack = mediaStream.getAudioTracks()[0];
   const transferable = [];
 
   // @ts-ignore
@@ -34,8 +40,12 @@ export async function handleRegisterCameraInput(inputId: string): Promise<Regist
     transferable.push(videoTrackProcessor.readable);
   }
 
+  if (audioTrack) {
+    ctx.audioMixer.addMediaStreamInput(inputId, audioTrack);
+  }
+
   return {
-    input: new CameraInput(mediaStream),
+    input: new CameraInput(inputId, mediaStream, ctx),
     workerMessage: [
       {
         type: 'registerInput',

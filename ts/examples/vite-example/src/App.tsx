@@ -9,6 +9,8 @@ import ScreenCapture from './examples/ScreenCaptureExample';
 import { setWasmBundleUrl } from '@swmansion/smelter-web-wasm';
 import WhipExample from './examples/WhipExample';
 import DemoExample from './examples/Demo';
+import MultipleOutputs from './examples/MultipleOutputs';
+import MediaStreamInput from './examples/MediaStreamExample';
 
 setWasmBundleUrl('/assets/smelter.wasm');
 
@@ -19,8 +21,10 @@ function App() {
     componentMp4: <ComponentMp4Example />,
     whip: <WhipExample />,
     multipleCompositors: <MultipleInstances />,
+    multipleOutputs: <MultipleOutputs />,
     camera: <Camera />,
     screenCapture: <ScreenCapture />,
+    mediaStream: <MediaStreamInput />,
     home: <Home />,
     demo: <DemoExample />,
   };
@@ -41,8 +45,10 @@ function App() {
         <button onClick={() => setCurrentExample('multipleCompositors')}>
           Multiple Smelter instances
         </button>
+        <button onClick={() => setCurrentExample('multipleOutputs')}>Multiple outputs</button>
         <button onClick={() => setCurrentExample('camera')}>Camera</button>
         <button onClick={() => setCurrentExample('screenCapture')}>Screen Capture</button>
+        <button onClick={() => setCurrentExample('mediaStream')}>MediaStream</button>
 
         <h3>Smelter rendering engine examples</h3>
         <button onClick={() => setCurrentExample('counter')}>Counter</button>
@@ -83,10 +89,17 @@ function Home() {
         <code>Multiple Smelter instances</code> - Runs multiple Smelter instances at the same time.
       </li>
       <li>
+        <code>Multiple outputs</code> - Runs single smelter instance with multiple outputs.
+      </li>
+      <li>
         <code>Camera</code> - Use webcam as an input and render output on canvas.
       </li>
       <li>
         <code>Screen Capture</code> - Use screen capture as an input and render output on canvas.
+      </li>
+      <li>
+        <code>MediaStream</code> - Pass MediaStream object as an input. In this example it will be
+        camera.
       </li>
       <h3>
         <code>@swmansion/smelter-browser-render</code> - Rendering engine from Smelter

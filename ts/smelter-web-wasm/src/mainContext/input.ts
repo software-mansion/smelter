@@ -4,21 +4,11 @@ import { assert } from '../utils';
 import { handleRegisterCameraInput } from './input/camera';
 import { handleRegisterScreenCaptureInput } from './input/screenCapture';
 import { handleRegisterStreamInput } from './input/stream';
+import { handleRegisterMp4Input } from './input/mp4';
+import type { InstanceContext } from './instance';
 
 export interface Input {
-  get audioTrack(): MediaStreamTrack | undefined;
   terminate(): Promise<void>;
-}
-
-/**
- * Can be used if entire code for the input runs in worker.
- */
-class NoopInput implements Input {
-  public async terminate(): Promise<void> {}
-
-  public get audioTrack(): MediaStreamTrack | undefined {
-    return undefined;
-  }
 }
 
 export type RegisterInputResult = {
@@ -27,31 +17,19 @@ export type RegisterInputResult = {
 };
 
 export async function handleRegisterInputRequest(
+  ctx: InstanceContext,
   inputId: string,
   body: CoreInput.RegisterInputRequest
 ): Promise<RegisterInputResult> {
   if (body.type === 'mp4') {
     assert(body.url, 'mp4 URL is required');
-    return {
-      input: new NoopInput(),
-      workerMessage: [
-        {
-          type: 'registerInput',
-          inputId,
-          input: {
-            type: 'mp4',
-            url: body.url,
-          },
-        },
-        [],
-      ],
-    };
+    return handleRegisterMp4Input(ctx, inputId, body.url);
   } else if (body.type === 'camera') {
-    return await handleRegisterCameraInput(inputId);
+    return await handleRegisterCameraInput(ctx, inputId);
   } else if (body.type === 'screen_capture') {
-    return await handleRegisterScreenCaptureInput(inputId);
+    return await handleRegisterScreenCaptureInput(ctx, inputId);
   } else if (body.type === 'stream') {
-    return await handleRegisterStreamInput(inputId, body.stream);
+    return await handleRegisterStreamInput(ctx, inputId, body.stream);
   } else {
     throw new Error(`Unknown input type ${body.type}`);
   }

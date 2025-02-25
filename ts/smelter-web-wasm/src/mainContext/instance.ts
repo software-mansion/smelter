@@ -18,9 +18,16 @@ import type { RegisterOutputResponse, Output } from './output';
 import { handleRegisterOutputRequest } from './output';
 import type { Input } from './input';
 import { handleRegisterInputRequest } from './input';
+import { AudioMixer } from './AudioMixer';
 
 const apiPath = new Path('/api/:type/:id/:operation');
 const apiStartPath = new Path('/api/start');
+
+export type InstanceContext = {
+  logger: Logger;
+  audioMixer: AudioMixer;
+  framerate: Framerate;
+};
 
 class WasmInstance implements SmelterManager {
   private eventSender: EventSender = new EventSender();
@@ -30,11 +37,13 @@ class WasmInstance implements SmelterManager {
   private wasmBundleUrl: string;
   private outputs: Record<string, Output> = {};
   private inputs: Record<string, Input> = {};
+  private audioMixer: AudioMixer;
 
   public constructor(options: { framerate: Framerate; wasmBundleUrl: string; logger: Logger }) {
     this.logger = options.logger;
     this.framerate = options.framerate;
     this.wasmBundleUrl = options.wasmBundleUrl;
+    this.audioMixer = new AudioMixer(this.logger);
 
     const worker = new Worker(new URL('../esm/runWorker.mjs', import.meta.url), {
       type: 'module',
@@ -49,6 +58,14 @@ class WasmInstance implements SmelterManager {
     this.worker = new AsyncWorker(worker, onEvent, this.logger);
   }
 
+  private get ctx(): InstanceContext {
+    return {
+      logger: this.logger,
+      framerate: this.framerate,
+      audioMixer: this.audioMixer,
+    };
+  }
+
   public async setupInstance(): Promise<void> {
     await this.worker.postMessage({
       type: 'init',
@@ -56,6 +73,7 @@ class WasmInstance implements SmelterManager {
       wasmBundleUrl: this.wasmBundleUrl,
       loggerLevel: this.logger.level,
     });
+    await this.audioMixer.init();
     this.logger.debug('WASM instance initialized');
   }
 
@@ -80,7 +98,13 @@ class WasmInstance implements SmelterManager {
     await Promise.all(Object.values(this.outputs).map(output => output.terminate()));
     await Promise.all(Object.values(this.inputs).map(input => input.terminate()));
     await this.worker.postMessage({ type: 'terminate' });
+    await this.audioMixer.close();
     this.worker.terminate();
+
+    // WasmInstance might be kept in the memory by some React state
+    (this.audioMixer as any) = undefined;
+    this.inputs = {};
+    this.outputs = {};
   }
 
   private async handleRequest(request: ApiRequest): Promise<any> {
@@ -131,9 +155,7 @@ class WasmInstance implements SmelterManager {
       } else if (route.operation === 'update') {
         const body = request.body as Api.UpdateOutputRequest;
         if (body.audio) {
-          for (const output of Object.values(this.outputs)) {
-            output.audioMixer?.update(body.audio.inputs);
-          }
+          this.audioMixer.update(route.id, body.audio.inputs);
         }
         return await this.worker.postMessage({
           type: 'updateScene',
@@ -169,10 +191,9 @@ class WasmInstance implements SmelterManager {
     request: CoreOutput.RegisterOutputRequest
   ): Promise<RegisterOutputResponse | undefined> {
     const { output, result, workerMessage } = await handleRegisterOutputRequest(
+      this.ctx,
       outputId,
-      request,
-      this.logger.child({ outputId }),
-      this.framerate
+      request
     );
     try {
       await this.worker.postMessage(workerMessage[0], workerMessage[1]);
@@ -182,14 +203,8 @@ class WasmInstance implements SmelterManager {
       });
       throw err;
     }
-    for (const [inputId, input] of Object.entries(this.inputs)) {
-      const audioTrack = input.audioTrack;
-      if (audioTrack) {
-        output.audioMixer?.addInput(inputId, input.audioTrack);
-      }
-    }
     if ('initial' in request && request.initial && request.initial.audio?.inputs) {
-      output.audioMixer?.update(request.initial.audio.inputs);
+      this.audioMixer.update(outputId, request.initial.audio.inputs);
     }
     this.outputs[outputId] = output;
     return result;
@@ -199,7 +214,7 @@ class WasmInstance implements SmelterManager {
     inputId: string,
     request: CoreInput.RegisterInputRequest
   ): Promise<{ video_duration_ms?: number; audio_duration_ms?: number }> {
-    const { input, workerMessage } = await handleRegisterInputRequest(inputId, request);
+    const { input, workerMessage } = await handleRegisterInputRequest(this.ctx, inputId, request);
     let result;
     try {
       result = await this.worker.postMessage(workerMessage[0], workerMessage[1]);
@@ -210,11 +225,6 @@ class WasmInstance implements SmelterManager {
       throw err;
     }
     this.inputs[inputId] = input;
-    for (const output of Object.values(this.outputs)) {
-      if (input.audioTrack) {
-        output.audioMixer?.addInput(inputId, input.audioTrack);
-      }
-    }
     assert(result?.type === 'registerInput');
     return result.body;
   }

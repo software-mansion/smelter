@@ -3,11 +3,11 @@ import type { Logger } from 'pino';
 import { Queue } from '@datastructures-js/queue';
 import { workerPostEvent } from '../pipeline';
 import { SmelterEventType } from '../../eventSender';
-import type { Interval } from '../../utils';
-import { assert } from '../../utils';
-import type { Input, InputStartResult, InputVideoFrameSource } from './input';
-import type { InputVideoFrame } from './frame';
+import { assert, sleep } from '../../utils';
+import type { Input, InputStartResult, QueuedInputSource } from './input';
+import type { InputAudioData, InputVideoFrame } from './frame';
 import { InputVideoFrameRef } from './frame';
+import type { AudioWorkletMessage } from '../../audioWorkletContext/workletApi';
 
 export type InputState = 'started' | 'playing' | 'finished';
 
@@ -16,15 +16,14 @@ const ENQUEUE_INTERVAL_MS = 50;
 
 export class QueuedInput implements Input {
   private inputId: InputId;
-  private source: InputVideoFrameSource;
+  private source: QueuedInputSource;
   private logger: Logger;
   /**
    * frames PTS start from 0, where 0 represents first frame
    */
   private frames: Queue<InputVideoFrameRef>;
 
-  private enqueueInterval?: Interval;
-  private enqueuePromise?: Promise<void>;
+  private shouldClose: boolean = false;
 
   /**
    * Queue PTS of the first frame
@@ -43,7 +42,7 @@ export class QueuedInput implements Input {
   private receivedEos: boolean = false;
   private sentFirstFrame: boolean = false;
 
-  public constructor(inputId: InputId, source: InputVideoFrameSource, logger: Logger) {
+  public constructor(inputId: InputId, source: QueuedInputSource, logger: Logger) {
     this.inputId = inputId;
     this.source = source;
     this.logger = logger;
@@ -51,14 +50,8 @@ export class QueuedInput implements Input {
   }
 
   public start(): InputStartResult {
-    this.enqueueInterval = setInterval(async () => {
-      if (this.enqueuePromise) {
-        return;
-      }
-      this.enqueuePromise = this.tryEnqueue();
-      await this.enqueuePromise;
-      this.enqueuePromise = undefined;
-    }, ENQUEUE_INTERVAL_MS);
+    void this.startAudioProcessor();
+    void this.startVideoProcessor();
 
     workerPostEvent({
       type: SmelterEventType.VIDEO_INPUT_DELIVERED,
@@ -68,13 +61,64 @@ export class QueuedInput implements Input {
   }
 
   public close() {
-    if (this.enqueueInterval) {
-      clearInterval(this.enqueueInterval);
-    }
+    this.shouldClose = true;
   }
 
   public updateQueueStartTime(queueStartTimeMs: number) {
     this.queueStartTimeMs = queueStartTimeMs;
+  }
+
+  private async startAudioProcessor() {
+    const port = this.source.audioWorkletMessagePort();
+    if (!port) {
+      return;
+    }
+    const buffer = new AudioBatchBuffer();
+    while (!this.shouldClose) {
+      const payload = this.source.nextBatch();
+      if (!payload) {
+        const workletMessage = buffer.flush();
+        if (workletMessage) {
+          await port.postMessage(workletMessage);
+        }
+        await sleep(50);
+        continue;
+      }
+      if (payload.type === 'eos') {
+        const workletMessage = buffer.flush();
+        if (workletMessage) {
+          await port.postMessage(workletMessage);
+        }
+        await port.postMessage({ type: 'eos' });
+        port.terminate();
+        return;
+      } else if (payload.type === 'sampleBatch') {
+        const workletMessage = buffer.next(payload.sampleBatch);
+        if (workletMessage) {
+          await port.postMessage(workletMessage);
+        }
+      }
+    }
+  }
+
+  private async startVideoProcessor() {
+    while (!this.shouldClose) {
+      if (this.frames.size() >= MAX_BUFFER_FRAME_COUNT) {
+        await sleep(ENQUEUE_INTERVAL_MS);
+        continue;
+      }
+      const payload = this.source.nextFrame();
+      if (!payload) {
+        await sleep(ENQUEUE_INTERVAL_MS);
+        continue;
+      }
+      if (payload?.type === 'eos') {
+        this.receivedEos = true;
+        return;
+      } else if (payload.type === 'frame') {
+        this.frames.push(this.newFrameRef(payload.frame));
+      }
+    }
   }
 
   /**
@@ -111,24 +155,6 @@ export class QueuedInput implements Input {
     return;
   }
 
-  private async tryEnqueue() {
-    // TODO: try dropping old frames that will not be used
-    while (this.frames.size() < MAX_BUFFER_FRAME_COUNT) {
-      const nextFrame = this.source.nextFrame();
-      if (!nextFrame) {
-        return;
-      } else if (nextFrame.type === 'frame') {
-        this.frames.push(this.newFrameRef(nextFrame.frame));
-      } else if (nextFrame.type === 'eos') {
-        this.receivedEos = true;
-        if (this.enqueueInterval) {
-          clearInterval(this.enqueueInterval);
-        }
-        return;
-      }
-    }
-  }
-
   private newFrameRef(frame: InputVideoFrame): InputVideoFrameRef {
     if (!this.firstFrameTimeMs) {
       this.firstFrameTimeMs = Date.now();
@@ -141,7 +167,7 @@ export class QueuedInput implements Input {
   }
 
   /**
-   * Finds frame with PTS closest to `framePts` and removes frames older than it
+   * Finds frame with PTS closest to `queuePts` and removes frames older than it
    */
   private dropOldFrames(queuePts: number): void {
     if (this.frames.isEmpty()) {
@@ -169,5 +195,45 @@ export class QueuedInput implements Input {
     // TODO: handle before start
     const offsetMs = this.firstFrameTimeMs - this.queueStartTimeMs;
     return queuePts - offsetMs;
+  }
+}
+
+const BATCH_SIZE = 10;
+
+class AudioBatchBuffer {
+  private buffer: Float32Array[][] = [];
+
+  public next(audioData: InputAudioData): AudioWorkletMessage | undefined {
+    const channelCount = audioData.data.numberOfChannels;
+    const channels = [...Array(channelCount)].map((_, index) => {
+      const size = audioData.data.allocationSize({
+        format: 'f32-planar',
+        planeIndex: index,
+      });
+      const buffer = new Float32Array(size / Float32Array.BYTES_PER_ELEMENT);
+      audioData.data.copyTo(buffer, {
+        format: 'f32-planar',
+        planeIndex: index,
+      });
+      return buffer;
+    });
+    audioData.data.close();
+    this.buffer.push(channels);
+    if (this.buffer.length > BATCH_SIZE) {
+      return this.flush();
+    }
+    return;
+  }
+
+  public flush(): AudioWorkletMessage | undefined {
+    if (this.buffer.length === 0) {
+      return;
+    }
+    const chunks = this.buffer;
+    this.buffer = [];
+    return {
+      type: 'chunk',
+      chunks,
+    };
   }
 }

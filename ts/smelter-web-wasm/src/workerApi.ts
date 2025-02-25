@@ -5,13 +5,12 @@ import type { Framerate } from './compositor/compositor';
 export type RegisterInput =
   | {
       type: 'mp4';
-      url: string;
+      arrayBuffer: ArrayBuffer;
+      audioWorkletMessagePort?: MessagePort;
     }
   | {
       type: 'stream';
       videoStream?: ReadableStream;
-      // For now audio stream is handled on a main context
-      // audioStream?: ReadableStream;
     };
 
 export type RegisterOutput = {

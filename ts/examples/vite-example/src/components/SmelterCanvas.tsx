@@ -7,13 +7,13 @@ type CanvasProps = React.DetailedHTMLProps<
 >;
 
 type CompositorCanvasProps = {
-  onCanvasCreate?: (smelter: Smelter) => Promise<void>;
+  onCanvasCreated?: (smelter: Smelter) => Promise<void>;
   onCanvasStarted?: (smelter: Smelter) => Promise<void>;
   children: React.ReactElement;
 } & CanvasProps;
 
 export default function CompositorCanvas(props: CompositorCanvasProps) {
-  const { onCanvasCreate, onCanvasStarted, children, ...canvasProps } = props;
+  const { onCanvasCreated, onCanvasStarted, children, ...canvasProps } = props;
   const [smelter, setSmelter] = useState<Smelter | undefined>(undefined);
 
   const canvasRef = useCallback(
@@ -26,8 +26,8 @@ export default function CompositorCanvas(props: CompositorCanvasProps) {
 
       await smelter.init();
 
-      if (onCanvasCreate) {
-        await onCanvasCreate(smelter);
+      if (onCanvasCreated) {
+        await onCanvasCreated(smelter);
       }
 
       await smelter.registerOutput('output', children, {
@@ -49,7 +49,7 @@ export default function CompositorCanvas(props: CompositorCanvasProps) {
         await onCanvasStarted(smelter);
       }
     },
-    [onCanvasCreate, onCanvasStarted, canvasProps.width, canvasProps.height, children]
+    [onCanvasCreated, onCanvasStarted, canvasProps.width, canvasProps.height, children]
   );
 
   useEffect(() => {

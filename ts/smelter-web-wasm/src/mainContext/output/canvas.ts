@@ -1,46 +1,39 @@
 import type { Output, RegisterOutputResult, RegisterWasmCanvasOutput } from '../output';
 import type { RegisterOutput } from '../../workerApi';
-import type { AudioMixer } from '../AudioMixer';
-import { PlaybackAudioMixer } from '../AudioMixer';
+import type { InstanceContext } from '../instance';
+
+type VideoTrackResult = {
+  workerMessage: RegisterOutput['video'];
+  transferable: Transferable[];
+};
+
+type AudioTrackResult = {
+  transferable: Transferable[];
+};
 
 export class CanvasOutput implements Output {
-  private mixer?: PlaybackAudioMixer;
+  private outputId: string;
+  private ctx: InstanceContext;
 
-  constructor(mixer?: PlaybackAudioMixer) {
-    this.mixer = mixer;
+  constructor(outputId: string, ctx: InstanceContext) {
+    this.outputId = outputId;
+    this.ctx = ctx;
   }
 
   public async terminate(): Promise<void> {
-    await this.mixer?.close();
-  }
-
-  public get audioMixer(): AudioMixer | undefined {
-    return this.mixer;
+    await this.ctx.audioMixer.removeOutput(this.outputId);
   }
 }
 
 export async function handleRegisterCanvasOutput(
+  ctx: InstanceContext,
   outputId: string,
   request: RegisterWasmCanvasOutput
 ): Promise<RegisterOutputResult> {
-  let video: RegisterOutput['video'] | undefined = undefined;
-  let transferable: Transferable[] = [];
+  const videoResult = await handleVideo(ctx, outputId, request);
+  const audioResult = await handleAudio(ctx, outputId, request);
 
-  if (request.video && request.initial.video) {
-    const canvas = request.video.canvas;
-    canvas.width = request.video.resolution.width;
-    canvas.height = request.video.resolution.height;
-    const offscreen = canvas.transferControlToOffscreen();
-
-    transferable.push(offscreen);
-    video = {
-      resolution: request.video.resolution,
-      initial: request.initial.video,
-      canvas: offscreen,
-    };
-  }
-
-  const output = new CanvasOutput(request.audio ? new PlaybackAudioMixer() : undefined);
+  const output = new CanvasOutput(outputId, ctx);
   return {
     output,
     workerMessage: [
@@ -49,10 +42,49 @@ export async function handleRegisterCanvasOutput(
         outputId,
         output: {
           type: 'stream',
-          video,
+          video: videoResult?.workerMessage,
         },
       },
-      transferable,
+      [...(videoResult?.transferable ?? []), ...(audioResult?.transferable ?? [])],
     ],
+  };
+}
+
+async function handleVideo(
+  _ctx: InstanceContext,
+  _outputId: string,
+  request: RegisterWasmCanvasOutput
+): Promise<VideoTrackResult | undefined> {
+  if (!request.video || !request.initial.video) {
+    return undefined;
+  }
+  const canvas = request.video.canvas;
+  canvas.width = request.video.resolution.width;
+  canvas.height = request.video.resolution.height;
+  const offscreen = canvas.transferControlToOffscreen();
+
+  return {
+    workerMessage: {
+      resolution: request.video.resolution,
+      initial: request.initial.video,
+      canvas: offscreen,
+    },
+    transferable: [offscreen],
+  };
+}
+
+async function handleAudio(
+  ctx: InstanceContext,
+  outputId: string,
+  request: RegisterWasmCanvasOutput
+): Promise<AudioTrackResult | undefined> {
+  if (!request.audio || !request.initial.audio) {
+    return undefined;
+  }
+
+  ctx.audioMixer.addPlaybackOutput(outputId);
+
+  return {
+    transferable: [],
   };
 }

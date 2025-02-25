@@ -1,23 +1,23 @@
 import { useCallback } from 'react';
 import type Smelter from '@swmansion/smelter-web-wasm';
 import { InputStream, Text, useInputStreams, View } from '@swmansion/smelter';
-import CompositorCanvas from '../components/SmelterCanvas';
+import SmelterCanvas from '../components/SmelterCanvas';
 import NotoSansFont from '../../assets/NotoSans.ttf';
 
 const MP4_URL =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
 
 function InputMp4Example() {
-  const onCanvasCreate = useCallback(async (compositor: Smelter) => {
+  const onCanvasCreated = useCallback(async (compositor: Smelter) => {
     await compositor.registerFont(NotoSansFont);
     await compositor.registerInput('video', { type: 'mp4', url: MP4_URL });
   }, []);
 
   return (
     <div className="card">
-      <CompositorCanvas onCanvasCreate={onCanvasCreate} width={1280} height={720}>
+      <SmelterCanvas onCanvasCreated={onCanvasCreated} width={1280} height={720}>
         <Scene />
-      </CompositorCanvas>
+      </SmelterCanvas>
     </div>
   );
 }
