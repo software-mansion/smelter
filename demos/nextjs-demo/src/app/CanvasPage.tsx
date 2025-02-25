@@ -5,7 +5,7 @@ import Smelter, { setWasmBundleUrl } from '@swmansion/smelter-web-wasm';
 import { useCallback, useState } from 'react';
 import SmelterCanvas from './SmelterCanvas';
 
-setWasmBundleUrl('/smelter.wasm');
+setWasmBundleUrl('smelter.wasm');
 
 const CAMERA_ID = 'camera';
 const SCREEN_SHARE_ID = 'screen';
