@@ -1,6 +1,6 @@
 use std::{fs, io, path::PathBuf};
 
-use compositor_api::types::{self, Component};
+use compositor_api::types;
 use schemars::{
     schema::{RootSchema, Schema, SchemaObject},
     schema_for, JsonSchema,
@@ -38,11 +38,6 @@ pub fn generate_json_schema(check_flag: bool) {
         schema_for!(ApiTypes),
         "../schemas/api_types.schema.json",
         api_schema_action,
-    );
-    generate_schema(
-        schema_for!(Component),
-        "../docs/component_types.schema.json",
-        SchemaAction::Update,
     );
 }
 
