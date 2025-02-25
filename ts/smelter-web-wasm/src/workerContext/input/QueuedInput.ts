@@ -113,18 +113,18 @@ export class QueuedInput implements Input {
 
   private async tryEnqueue() {
     // TODO: try dropping old frames that will not be used
-    if (this.frames.size() >= MAX_BUFFER_FRAME_COUNT) {
-      return;
-    }
-    const nextFrame = this.source.nextFrame();
-    if (!nextFrame) {
-      return;
-    } else if (nextFrame.type === 'frame') {
-      this.frames.push(this.newFrameRef(nextFrame.frame));
-    } else if (nextFrame.type === 'eos') {
-      this.receivedEos = true;
-      if (this.enqueueInterval) {
-        clearInterval(this.enqueueInterval);
+    while (this.frames.size() < MAX_BUFFER_FRAME_COUNT) {
+      const nextFrame = this.source.nextFrame();
+      if (!nextFrame) {
+        return;
+      } else if (nextFrame.type === 'frame') {
+        this.frames.push(this.newFrameRef(nextFrame.frame));
+      } else if (nextFrame.type === 'eos') {
+        this.receivedEos = true;
+        if (this.enqueueInterval) {
+          clearInterval(this.enqueueInterval);
+        }
+        return;
       }
     }
   }
