@@ -3,7 +3,7 @@ use std::{fs::File, io::Write, path::PathBuf, str::FromStr, time::Duration};
 use compositor_pipeline::pipeline::{self, encoder::ffmpeg_h264};
 use tracing::error;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericArgument {
     IterateExp,
     Maximize,
@@ -149,7 +149,7 @@ impl std::str::FromStr for ResolutionPreset {
             "240p" => Ok(ResolutionPreset::Res240p),
             "144p" => Ok(ResolutionPreset::Res144p),
             _ => Err(
-                "invalid resolution preset, available options: sd, hd, fhd, qhd, uhd".to_string(),
+                "invalid resolution preset, available options: 144p, 240p, 360p, 480p, 720p, 1080p, 1440p, 2160p, 4320p".to_string(),
             ),
         }
     }
@@ -260,7 +260,7 @@ impl From<ResolutionPreset> for Resolution {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolutionArgument {
     Maximize,
     Iterate,
@@ -301,7 +301,7 @@ pub enum Argument {
 impl Argument {
     fn as_numeric(&self) -> Option<NumericArgument> {
         if let Self::NumericArgument(n) = self {
-            Some(n.clone())
+            Some(*n)
         } else {
             None
         }
@@ -309,7 +309,7 @@ impl Argument {
 
     fn as_resolution(&self) -> Option<ResolutionArgument> {
         if let Self::ResolutionArgument(n) = self {
-            Some(n.clone())
+            Some(*n)
         } else {
             None
         }
@@ -326,74 +326,74 @@ impl Argument {
 /// Only one option can be set to "maximize"
 #[derive(Debug, Clone, clap::Parser)]
 pub struct Args {
-    /// possible values: maximize, number or iterate (to iterate exponentially); default: 24
+    /// [possible values: maximize, number or iterate (to iterate exponentially)]
     #[arg(long, default_value("24"))]
     pub framerate: NumericArgument,
 
-    /// possible values: maximize, number or iterate (to iterate exponentially); default: "maximize"
+    /// [possible values: maximize, number or iterate (to iterate exponentially)]
     #[arg(long, default_value("maximize"))]
     pub input_count: NumericArgument,
 
-    /// possible values: maximize, number or iterate (to iterate exponentially); default: 1
+    /// [possible values: maximize, number or iterate (to iterate exponentially)]
     #[arg(long, default_value("1"))]
     pub output_count: NumericArgument,
 
-    /// path to .mp4 file or yuv420p file if decoder is disabled
+    /// path to an mp4 file
     #[arg(long)]
     pub file_path: PathBuf,
 
-    /// possible values: 4320p, 2160p, 1440p, 1080p, 720p, 480p, 360p, 240p, 144p or `<width>x<height>`; default: 1080p
+    /// [possible values: 4320p, 2160p, 1440p, 1080p, 720p, 480p, 360p, 240p, 144p, <width>x<height>, iterate or maximize]
     #[arg(long, default_value("1080p"))]
     pub output_resolution: ResolutionArgument,
 
-    /// disable encoder; default: false
+    /// disable encoder
     #[arg(long, default_value("false"))]
     pub disable_encoder: bool,
 
-    /// FFmpeg_H264 encoder preset; default: ultrafast
+    /// FFmpeg_H264 encoder preset
     #[arg(long, default_value("ultrafast"))]
     pub encoder_preset: EncoderPreset,
 
-    /// warm-up time in seconds; default: 10s
+    /// warm-up time in seconds
     #[arg(long, default_value("10"))]
     pub warm_up_time: DurationWrapper,
 
-    /// measuring time in seconds; default: 10s
+    /// measuring time in seconds
     #[arg(long, default_value("10"))]
     pub measured_time: DurationWrapper,
 
-    /// disable decoder, use raw input with yuv420p file; default: false
+    /// disable decoder, use raw input
     #[arg(long, default_value("false"))]
     pub disable_decoder: bool,
 
-    /// resolution of raw input frames, required if decoder is disabled
-    #[arg(long, required_if_eq("disable_decoder", "true"))]
-    pub input_resolution: Option<ResolutionConstant>,
-
-    /// framerate of raw input frames, requires if decoder is disabled
-    #[arg(long, required_if_eq("disable_decoder", "true"))]
-    pub input_framerate: Option<u32>,
-
-    /// possible values: ffmpeg_h264, vulkan_video_h264 (if your device supports vulkan); default: ffmpeg_h264
     #[arg(long, default_value("ffmpeg_h264"))]
     pub video_decoder: VideoDecoder,
 
-    /// in the end of the benchmark the framerate achieved by the compositor is multiplied by this number, before comparing to the target framerate; default: 1.05
+    /// in the end of the benchmark the framerate achieved by the compositor is multiplied by this number, before comparing to the target framerate
     #[arg(long, default_value("1.05"))]
     pub framerate_tolerance: f64,
 
     /// if present, result will be saved in specified .csv file
     #[arg(long)]
     pub csv_path: Option<PathBuf>,
+
+    #[arg(skip)]
+    pub input_options: Option<RawInputOptions>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RawInputOptions {
+    pub resolution: Resolution,
+    pub framerate: u32,
 }
 
 impl Args {
     pub fn arguments(&self) -> Box<[Argument]> {
         vec![
-            Argument::NumericArgument(self.framerate.clone()),
-            Argument::NumericArgument(self.input_count.clone()),
-            Argument::NumericArgument(self.output_count.clone()),
-            Argument::ResolutionArgument(self.output_resolution.clone()),
+            Argument::NumericArgument(self.framerate),
+            Argument::NumericArgument(self.input_count),
+            Argument::NumericArgument(self.output_count),
+            Argument::ResolutionArgument(self.output_resolution),
         ]
         .into_boxed_slice()
     }
@@ -411,10 +411,10 @@ impl Args {
             disable_decoder: self.disable_decoder,
             video_decoder: self.video_decoder.into(),
             disable_encoder: self.disable_encoder,
-            input_resolution: self.input_resolution.map(|res| res.into()),
-            input_framerate: self.input_framerate,
             output_encoder_preset: self.encoder_preset.into(),
             framerate_tolerance_multiplier: self.framerate_tolerance,
+            input_framerate: self.input_options.map(|o| o.framerate),
+            input_resolution: self.input_options.map(|o| o.resolution),
         }
     }
 }
@@ -456,16 +456,10 @@ impl SingleBenchConfig {
     const COLUMN_WIDTH: usize = 13;
 
     pub fn log_running_config(&self) {
-        tracing::info!("config: {:?}", self);
-        tracing::info!(
-            "checking configuration: framerate: {}, input count: {}, output count: {}",
-            self.framerate,
-            self.input_count,
-            self.output_count
-        );
+        tracing::info!("config: {:#?}", self);
     }
 
-    pub fn log_as_report(&self, csv_writer: &mut Option<CsvWriter>) {
+    pub fn log_as_report(&self, csv_writer: Option<&mut CsvWriter>) {
         let values = vec![
             self.input_count.to_string(),
             self.output_count.to_string(),
@@ -481,7 +475,7 @@ impl SingleBenchConfig {
             self.framerate_tolerance_multiplier.to_string(),
         ];
         match csv_writer {
-            Some(ref mut writer) => writer.write_line(values),
+            Some(writer) => writer.write_line(values),
             None => SingleBenchConfig::print_vec(values),
         }
     }
@@ -511,6 +505,7 @@ impl SingleBenchConfig {
         }
         println!();
     }
+
     fn print_line() {
         for i in 0..SingleBenchConfig::LABELS.len() {
             if i == 0 {
@@ -537,23 +532,10 @@ impl CsvWriter {
     }
 
     pub fn write_line(&mut self, values: Vec<String>) {
-        let mut buf = String::new();
-        for (i, val) in values.iter().enumerate() {
-            if i == 0 {
-                buf.push_str(val.as_str())
-            }
-            buf.push_str(format!(",{}", val).as_str())
-        }
-        buf.push('\n');
-        match self.file.write(buf.as_bytes()) {
-            Ok(len_written) => {
-                if len_written != buf.len() {
-                    error!("Unknown error while writing to .csv");
-                }
-            }
-            Err(err) => {
-                error!("Error while writing to .csv: {err}");
-            }
+        let mut line = values.join(",");
+        line.push('\n');
+        if let Err(err) = self.file.write_all(line.as_bytes()) {
+            error!("Error while writing to .csv: {err}");
         }
     }
 }

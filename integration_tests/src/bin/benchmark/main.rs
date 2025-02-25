@@ -56,7 +56,7 @@ impl<T> PipelineReceiver for Receiver<T> {
 }
 
 fn main() {
-    let args = Args::parse();
+    let mut args = Args::parse();
     let config = read_config();
     ffmpeg_next::format::network::init();
     let logger_config = LoggerConfig {
@@ -78,13 +78,85 @@ fn main() {
         warn!("This benchmark is running in debug mode. Make sure to run in release mode for reliable results.");
     }
 
+    if args.disable_decoder {
+        let time = args.measured_time.0 + args.warm_up_time.0;
+        convert_mp4_to_yuv(&mut args, time).unwrap();
+    }
+
     let mut csv_writer = args.csv_path.clone().map(CsvWriter::init);
 
     let reports = run_args(ctx, &args);
     SingleBenchConfig::log_report_header(&mut csv_writer);
     for report in reports {
-        report.log_as_report(&mut csv_writer);
+        report.log_as_report(csv_writer.as_mut());
     }
+}
+
+fn convert_mp4_to_yuv(args: &mut Args, duration: Duration) -> Result<(), String> {
+    let output_path = std::path::PathBuf::from(format!(
+        "/tmp/smelter_benchmark_input_{}.yuv",
+        std::time::UNIX_EPOCH.elapsed().unwrap().as_millis()
+    ));
+
+    let mut probe_cmd = std::process::Command::new("ffprobe");
+    probe_cmd
+        .arg("-v")
+        .arg("error")
+        .arg("-select_streams")
+        .arg("v:0")
+        .arg("-show_entries")
+        .arg("stream=width,height,r_frame_rate")
+        .arg("-of")
+        .arg("csv=p=0")
+        .arg(&args.file_path)
+        .stdout(std::process::Stdio::piped());
+
+    let probe_result = probe_cmd
+        .spawn()
+        .map_err(|err| err.to_string())?
+        .wait_with_output()
+        .map_err(|err| err.to_string())?;
+
+    if !probe_result.status.success() {
+        return Err("ffprobe command failed".into());
+    }
+
+    let probe_result = String::from_utf8(probe_result.stdout).unwrap();
+    let mut probe_parts = probe_result.trim().split(",");
+    let width = probe_parts.next().unwrap().parse::<usize>().unwrap();
+    let height = probe_parts.next().unwrap().parse::<usize>().unwrap();
+    let mut framerate = probe_parts.next().unwrap().split("/");
+    let num = framerate.next().unwrap().parse::<u32>().unwrap();
+    let den = framerate.next().unwrap().parse::<u32>().unwrap();
+
+    let mut convert_cmd = std::process::Command::new("ffmpeg");
+    convert_cmd
+        .arg("-i")
+        .arg(&args.file_path)
+        .arg("-pix_fmt")
+        .arg("yuv420p")
+        .arg("-t")
+        .arg((duration.mul_f64(1.5)).as_secs().to_string())
+        .arg(&output_path)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
+    let mut ffmpeg = convert_cmd.spawn().map_err(|e| e.to_string())?;
+    let status = ffmpeg
+        .wait()
+        .expect("wait for ffmpeg to finish yuv conversion");
+
+    if !status.success() {
+        return Err("ffmpeg for yuv conversion terminated unsuccessfully".into());
+    }
+
+    args.file_path = output_path.clone();
+    args.input_options = Some(args::RawInputOptions {
+        resolution: args::Resolution { width, height },
+        framerate: num / den,
+    });
+
+    Ok(())
 }
 
 fn run_args(ctx: GraphicsContext, args: &Args) -> Vec<SingleBenchConfig> {
@@ -386,27 +458,33 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
                 produced_frames += 1;
             }
 
-            let end_time = Instant::now();
+            let framerate = produced_frames as f64 / (start_time.elapsed()).as_secs_f64();
 
-            let framerate = produced_frames as f64 / (end_time - start_time).as_secs_f64();
-
-            let _ = result_sender_clone.send(
+            if let Err(err) = result_sender_clone.send(
                 framerate * bench_config.framerate_tolerance_multiplier
                     > bench_config.framerate as f64,
-            );
+            ) {
+                warn!("Error while sending bench results: {}", err);
+            }
         });
     }
+
+    let mut successful = true;
     for _ in 0..bench_config.output_count {
         match result_receiver.recv() {
             Ok(test_result) => {
                 if !test_result {
-                    return false;
+                    successful = false;
                 }
             }
-            Err(_) => return false,
+            Err(err) => {
+                warn!("Error while receiving bench results: {}", err);
+                return false;
+            }
         }
     }
-    true
+
+    successful
 }
 
 fn register_pipeline_encoded_output(
@@ -493,7 +571,7 @@ fn register_pipeline_raw_input(
     pipeline: &Arc<Mutex<Pipeline>>,
     input_id: InputId,
 ) -> Result<Sender<PipelineEvent<Frame>>, RegisterInputError> {
-    let x = Pipeline::register_raw_data_input(
+    let input = Pipeline::register_raw_data_input(
         pipeline,
         input_id,
         RawDataInputOptions {
@@ -506,7 +584,8 @@ fn register_pipeline_raw_input(
             buffer_duration: None,
         },
     )?;
-    Ok(x.video.unwrap())
+
+    Ok(input.video.unwrap())
 }
 
 fn raw_data_sender(bench_config: SingleBenchConfig, senders: Vec<Sender<PipelineEvent<Frame>>>) {
