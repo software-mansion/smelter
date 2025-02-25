@@ -1,10 +1,25 @@
-import type { MP4ArrayBuffer, MP4File, MP4Info, Sample } from 'mp4box';
+import type {
+  MP4ArrayBuffer,
+  MP4AudioTrack,
+  MP4File,
+  MP4Info,
+  MP4VideoTrack,
+  Sample,
+} from 'mp4box';
 import MP4Box, { DataStream } from 'mp4box';
-import type { ContainerInfo, EncodedVideoPayload, EncodedVideoSource } from '../input';
+import type {
+  ContainerInfo,
+  EncodedAudioPayload,
+  EncodedVideoPayload,
+  EncodedSource,
+} from '../input';
 import type { Logger } from 'pino';
 import { Queue } from '@datastructures-js/queue';
 import type { Framerate } from '../../../compositor/compositor';
 import { assert } from '../../../utils';
+
+const AudioTrack = { type: 'audio-track' };
+const VideoTrack = { type: 'video-track' };
 
 export type Mp4Metadata = {
   video: {
@@ -14,9 +29,15 @@ export type Mp4Metadata = {
     frameCount: number;
     durationMs: number;
   };
+  audio: {
+    decoderConfig: AudioDecoderConfig;
+    trackId: number;
+    durationMs: number;
+    sampleCount: number;
+  };
 };
 
-export class Mp4Demuxer implements EncodedVideoSource {
+export class Mp4Demuxer implements EncodedSource {
   private file: MP4File;
   private logger: Logger;
   private ptsOffset?: number;
@@ -24,8 +45,13 @@ export class Mp4Demuxer implements EncodedVideoSource {
   private videoChunks: Queue<EncodedVideoChunk>;
   private videoTrackFinished: boolean = false;
 
-  private readyPromise: Promise<Mp4Metadata>;
+  private audioChunks: Queue<EncodedAudioChunk>;
+  private audioTrackFinished: boolean = false;
+
   private firstVideoChunkPromise: Promise<void>;
+  private firstAudioChunkPromise: Promise<void>;
+
+  private readyPromise: Promise<Mp4Metadata>;
   private mp4Metadata?: Mp4Metadata;
 
   public constructor(data: ArrayBuffer, logger: Logger) {
@@ -52,10 +78,23 @@ export class Mp4Demuxer implements EncodedVideoSource {
       firstVideoChunkCb = res;
     });
 
-    this.file.onSamples = (id, _user, samples) => {
-      this.onSamples(samples);
-      if (id === this.mp4Metadata?.video.trackId) {
-        firstVideoChunkCb?.();
+    let firstAudioChunkCb: (() => void) | undefined;
+    this.firstAudioChunkPromise = new Promise<void>((res, _rej) => {
+      firstAudioChunkCb = res;
+    });
+
+    this.file.onSamples = (id, user, samples) => {
+      if (user === AudioTrack) {
+        this.onAudioSamples(samples);
+        if (id === this.mp4Metadata?.audio.trackId) {
+          firstAudioChunkCb?.();
+        }
+      }
+      if (user == VideoTrack) {
+        this.onVideoSamples(samples);
+        if (id === this.mp4Metadata?.video.trackId) {
+          firstVideoChunkCb?.();
+        }
       }
     };
 
@@ -67,7 +106,8 @@ export class Mp4Demuxer implements EncodedVideoSource {
 
   public async init(): Promise<void> {
     this.mp4Metadata = await this.readyPromise;
-    this.file.setExtractionOptions(this.mp4Metadata.video.trackId);
+    this.file.setExtractionOptions(this.mp4Metadata.video.trackId, VideoTrack);
+    this.file.setExtractionOptions(this.mp4Metadata.audio.trackId, AudioTrack);
     this.file.start();
 
     // by flushing we are signaling that there won't be any new
@@ -75,6 +115,7 @@ export class Mp4Demuxer implements EncodedVideoSource {
     this.file.flush();
 
     await this.firstVideoChunkPromise;
+    await this.firstAudioChunkPromise;
   }
 
   public getMetadata(): ContainerInfo {
@@ -87,7 +128,17 @@ export class Mp4Demuxer implements EncodedVideoSource {
     };
   }
 
-  public nextChunk(): EncodedVideoPayload | undefined {
+  public nextAudioChunk(): EncodedAudioPayload | undefined {
+    const chunk = this.audioChunks.pop();
+    if (chunk) {
+      return { type: 'chunk', chunk };
+    } else if (this.videoTrackFinished) {
+      return { type: 'eos' };
+    }
+    return;
+  }
+
+  public nextVideoChunk(): EncodedVideoPayload | undefined {
     const chunk = this.videoChunks.pop();
     if (chunk) {
       return { type: 'chunk', chunk };
@@ -102,38 +153,13 @@ export class Mp4Demuxer implements EncodedVideoSource {
   }
 
   private parseMp4Info(info: MP4Info): Mp4Metadata {
-    if (info.videoTracks.length == 0) {
-      throw new Error('No video tracks');
-    }
-
-    const videoTrack = info.videoTracks[0];
-    const videoDurationMs = (videoTrack.movie_duration / videoTrack.movie_timescale) * 1000;
-    const codecDescription = this.getCodecDescription(videoTrack.id);
-    const frameCount = videoTrack.nb_samples;
-
-    const decoderConfig = {
-      codec: videoTrack.codec,
-      codedWidth: videoTrack.video.width,
-      codedHeight: videoTrack.video.height,
-      description: codecDescription,
-    };
-    const framerate = {
-      num: videoTrack.timescale,
-      den: 1000,
-    };
-
     return {
-      video: {
-        decoderConfig,
-        framerate,
-        trackId: videoTrack.id,
-        frameCount,
-        durationMs: videoDurationMs,
-      },
+      video: info.videoTracks[0] && parseMp4VideoInfo(this.file, info.videoTracks[0]),
+      audio: info.audioTracks[0] && parseMp4AudioInfo(this.file, info.audioTracks[0]),
     };
   }
 
-  private onSamples(samples: Sample[]) {
+  private onVideoSamples(samples: Sample[]) {
     assert(this.mp4Metadata);
 
     for (const sample of samples) {
@@ -157,21 +183,89 @@ export class Mp4Demuxer implements EncodedVideoSource {
     }
   }
 
-  private getCodecDescription(trackId: number): Uint8Array {
-    const track = this.file.getTrackById(trackId);
-    if (!track) {
-      throw new Error('Track does not exist');
-    }
+  private onAudioSamples(samples: Sample[]) {
+    assert(this.mp4Metadata);
 
-    for (const entry of track.mdia.minf.stbl.stsd.entries) {
-      const box = entry.avcC || entry.hvcC || entry.vpcC || entry.av1C;
-      if (box) {
-        const stream = new DataStream(undefined, 0, DataStream.BIG_ENDIAN);
-        box.write(stream);
-        return new Uint8Array(stream.buffer, 8);
+    for (const sample of samples) {
+      const pts = (sample.cts * 1_000_000) / sample.timescale;
+      if (this.ptsOffset === undefined) {
+        this.ptsOffset = -pts;
+      }
+
+      const chunk = new EncodedAudioChunk({
+        type: sample.is_sync ? 'key' : 'delta',
+        timestamp: pts + this.ptsOffset,
+        duration: (sample.duration * 1_000_000) / sample.timescale,
+        data: sample.data,
+      });
+
+      this.audioChunks.push(chunk);
+
+      if (sample.number === this.mp4Metadata.audio.sampleCount - 1) {
+        this.audioTrackFinished = true;
       }
     }
-
-    throw new Error('Codec description not found');
   }
+}
+
+function parseMp4AudioInfo(file: MP4File, track: MP4AudioTrack): Mp4Metadata['audio'] {
+  const durationMs = (track.movie_duration / track.movie_timescale) * 1000;
+  const codecDescription = getCodecDescription(file, track.id);
+
+  const decoderConfig: AudioDecoderConfig = {
+    codec: track.codec,
+    description: codecDescription,
+    numberOfChannels: track.audio.channel_count,
+    sampleRate: track.audio.sample_rate,
+  };
+
+  return {
+    trackId: track.id,
+    durationMs,
+    decoderConfig,
+    sampleCount: track.nb_samples,
+  };
+}
+
+function parseMp4VideoInfo(file: MP4File, track: MP4VideoTrack): Mp4Metadata['video'] {
+  const durationMs = (track.movie_duration / track.movie_timescale) * 1000;
+  const codecDescription = getCodecDescription(file, track.id);
+  const frameCount = track.nb_samples;
+
+  const decoderConfig = {
+    codec: track.codec,
+    codedWidth: track.video.width,
+    codedHeight: track.video.height,
+    description: codecDescription,
+  };
+  const framerate = {
+    num: track.timescale,
+    den: 1000,
+  };
+
+  return {
+    trackId: track.id,
+    durationMs,
+    frameCount,
+    decoderConfig,
+    framerate,
+  };
+}
+
+function getCodecDescription(file: MP4File, trackId: number): Uint8Array {
+  const track = file.getTrackById(trackId);
+  if (!track) {
+    throw new Error('Track does not exist');
+  }
+
+  for (const entry of track.mdia.minf.stbl.stsd.entries) {
+    const box = entry.avcC || entry.hvcC || entry.vpcC || entry.av1C;
+    if (box) {
+      const stream = new DataStream(undefined, 0, DataStream.BIG_ENDIAN);
+      box.write(stream);
+      return new Uint8Array(stream.buffer, 8);
+    }
+  }
+
+  throw new Error('Codec description not found');
 }

@@ -23,10 +23,13 @@ export interface Input {
   start(): InputStartResult;
   updateQueueStartTime(queueStartTimeMs: number): void;
   getFrame(currentQueuePts: number): Promise<Frame | undefined>;
+  getSamples(currentQueuePts: number): Promise<Frame | undefined>;
   close(): void;
 }
 
 export type VideoFramePayload = { type: 'frame'; frame: InputVideoFrame } | { type: 'eos' };
+
+export type AudioDataPayload = { type: 'samples'; samples: AudioData } | { type: 'eos' };
 
 export interface InputVideoFrameSource {
   init(): Promise<void>;
@@ -35,15 +38,25 @@ export interface InputVideoFrameSource {
   close(): void;
 }
 
+export interface InputAudioSamplesSource {
+  init(): Promise<void>;
+  getMetadata(): InputStartResult;
+  nextFrame(): AudioDataPayload | undefined;
+  close(): void;
+}
+
 export type EncodedVideoPayload = { type: 'chunk'; chunk: EncodedVideoChunk } | { type: 'eos' };
+
+export type EncodedAudioPayload = { type: 'chunk'; chunk: EncodedAudioChunk } | { type: 'eos' };
 
 /**
  * `EncodedVideoSource` produces encoded video chunks required for decoding.
  */
-export interface EncodedVideoSource {
+export interface EncodedSource {
   init(): Promise<void>;
   getMetadata(): ContainerInfo;
-  nextChunk(): EncodedVideoPayload | undefined;
+  nextVideoChunk(): EncodedVideoPayload | undefined;
+  nextAudioChunk(): EncodedAudioPayload | undefined;
   close(): void;
 }
 
