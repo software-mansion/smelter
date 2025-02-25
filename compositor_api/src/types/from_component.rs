@@ -316,12 +316,26 @@ impl TryFrom<Text> for scene::TextComponent {
                 max_height: max_height.unwrap_or(MAX_NODE_RESOLUTION.height as f32),
             },
         };
+
+        if text.font_size <= 0.0 {
+            return Err(TypeError::new(
+                "\"font_size\" property has to be larger than 0",
+            ));
+        }
+
+        let line_height = text.line_height.unwrap_or(text.font_size);
+        if line_height <= 0.0 {
+            return Err(TypeError::new(
+                "\"line_height\" property has to be larger than 0",
+            ));
+        }
+
         let text = Self {
             id: text.id.map(Into::into),
             text: text.text,
             font_size: text.font_size,
             dimensions,
-            line_height: text.line_height.unwrap_or(text.font_size),
+            line_height,
             color: text
                 .color
                 .map(TryInto::try_into)
