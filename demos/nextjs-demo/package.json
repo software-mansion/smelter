@@ -13,8 +13,7 @@
     "@swmansion/smelter-web-wasm": "0.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "next": "14.2.24",
-    "copy-webpack-plugin": "12.0.2" 
+    "next": "14.2.24"
   },
   "devDependencies": {
     "typescript": "^5",
@@ -24,6 +23,7 @@
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "eslint": "^8",
-    "eslint-config-next": "14.2.24"
+    "eslint-config-next": "14.2.24",
+    "copy-webpack-plugin": "12.0.2" 
   }
 }
