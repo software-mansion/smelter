@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use compositor_render::{Frame, FrameData, OutputId, Resolution};
+use compositor_render::{Frame, FrameData, Framerate, OutputId, Resolution};
 use crossbeam_channel::{Receiver, Sender};
 use ffmpeg_next::{
     codec::{Context, Id},
@@ -97,6 +97,7 @@ impl LibavH264Encoder {
     pub fn new(
         output_id: &OutputId,
         options: Options,
+        framerate: Framerate,
         chunks_sender: Sender<EncoderOutputEvent>,
     ) -> Result<Self, EncoderInitError> {
         let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
@@ -117,6 +118,7 @@ impl LibavH264Encoder {
                 .entered();
                 let encoder_result = run_encoder_thread(
                     options_clone,
+                    framerate,
                     frame_receiver,
                     keyframe_req_receiver,
                     chunks_sender,
@@ -157,6 +159,7 @@ impl LibavH264Encoder {
 
 fn run_encoder_thread(
     options: Options,
+    framerate: Framerate,
     frame_receiver: Receiver<PipelineEvent<Frame>>,
     keyframe_req_receiver: Receiver<()>,
     packet_sender: Sender<EncoderOutputEvent>,
@@ -172,6 +175,7 @@ fn run_encoder_thread(
     encoder.set_format(Pixel::YUV420P);
     encoder.set_width(options.resolution.width as u32);
     encoder.set_height(options.resolution.height as u32);
+    encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
 
     // TODO: audit settings below
     // Those values are copied from somewhere, they have to be set because libx264
