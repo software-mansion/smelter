@@ -115,6 +115,10 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
                                 decoder: pipeline::VideoDecoder::FFmpegH264,
                             },
 
+                            VideoDecoder::FfmpegVp8 => decoder::VideoDecoderOptions {
+                                decoder: pipeline::VideoDecoder::FFmpegVp8,
+                            },
+
                             #[cfg(feature = "vk-video")]
                             VideoDecoder::VulkanVideo => decoder::VideoDecoderOptions {
                                 decoder: pipeline::VideoDecoder::VulkanVideoH264,
@@ -196,6 +200,7 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                             VideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions {
                                 decoder: pipeline::VideoDecoder::FFmpegH264,
                             },
+                            VideoDecoder::FfmpegVp8 => todo!(),
                             #[cfg(feature = "vk-video")]
                             VideoDecoder::VulkanVideo => decoder::VideoDecoderOptions {
                                 decoder: pipeline::VideoDecoder::VulkanVideoH264,
@@ -258,6 +263,7 @@ impl TryFrom<Mp4Input> for pipeline::RegisterInputOptions {
 
         let video_decoder = match video_decoder.unwrap_or(VideoDecoder::FfmpegH264) {
             VideoDecoder::FfmpegH264 => pipeline::VideoDecoder::FFmpegH264,
+            VideoDecoder::FfmpegVp8 => todo!(),
 
             #[cfg(feature = "vk-video")]
             VideoDecoder::VulkanVideo => pipeline::VideoDecoder::VulkanVideoH264,
