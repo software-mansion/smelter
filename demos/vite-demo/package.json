@@ -12,7 +12,6 @@
   "dependencies": {
     "@swmansion/smelter": "0.2.0",
     "@swmansion/smelter-web-wasm": "0.2.0",
-    "pino": "^9.6.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
