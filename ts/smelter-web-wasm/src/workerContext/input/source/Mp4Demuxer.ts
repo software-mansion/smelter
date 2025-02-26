@@ -22,14 +22,14 @@ const AudioTrack = { type: 'audio-track' };
 const VideoTrack = { type: 'video-track' };
 
 export type Mp4Metadata = {
-  video: {
+  video?: {
     decoderConfig: VideoDecoderConfig;
     framerate: Framerate;
     trackId: number;
     frameCount: number;
     durationMs: number;
   };
-  audio: {
+  audio?: {
     decoderConfig: AudioDecoderConfig;
     trackId: number;
     durationMs: number;
@@ -86,13 +86,13 @@ export class Mp4Demuxer implements EncodedSource {
     this.file.onSamples = (id, user, samples) => {
       if (user === AudioTrack) {
         this.onAudioSamples(samples);
-        if (id === this.mp4Metadata?.audio.trackId) {
+        if (id === this.mp4Metadata?.audio?.trackId) {
           firstAudioChunkCb?.();
         }
       }
       if (user == VideoTrack) {
         this.onVideoSamples(samples);
-        if (id === this.mp4Metadata?.video.trackId) {
+        if (id === this.mp4Metadata?.video?.trackId) {
           firstVideoChunkCb?.();
         }
       }
@@ -106,8 +106,12 @@ export class Mp4Demuxer implements EncodedSource {
 
   public async init(): Promise<void> {
     this.mp4Metadata = await this.readyPromise;
-    this.file.setExtractionOptions(this.mp4Metadata.video.trackId, VideoTrack);
-    this.file.setExtractionOptions(this.mp4Metadata.audio.trackId, AudioTrack);
+    if (this.mp4Metadata.video) {
+      this.file.setExtractionOptions(this.mp4Metadata.video.trackId, VideoTrack);
+    }
+    if (this.mp4Metadata.audio) {
+      this.file.setExtractionOptions(this.mp4Metadata.audio.trackId, AudioTrack);
+    }
     this.file.start();
 
     // by flushing we are signaling that there won't be any new
@@ -121,9 +125,13 @@ export class Mp4Demuxer implements EncodedSource {
   public getMetadata(): ContainerInfo {
     assert(this.mp4Metadata, 'Mp4 metadata not available, call `init` first.');
     return {
-      video: {
+      video: this.mp4Metadata.video && {
         durationMs: this.mp4Metadata.video.durationMs,
         decoderConfig: this.mp4Metadata.video.decoderConfig,
+      },
+      audio: this.mp4Metadata.audio && {
+        durationMs: this.mp4Metadata.audio.durationMs,
+        decoderConfig: this.mp4Metadata.audio.decoderConfig,
       },
     };
   }
@@ -160,7 +168,7 @@ export class Mp4Demuxer implements EncodedSource {
   }
 
   private onVideoSamples(samples: Sample[]) {
-    assert(this.mp4Metadata);
+    assert(this.mp4Metadata?.video);
 
     for (const sample of samples) {
       const pts = (sample.cts * 1_000_000) / sample.timescale;
@@ -184,7 +192,7 @@ export class Mp4Demuxer implements EncodedSource {
   }
 
   private onAudioSamples(samples: Sample[]) {
-    assert(this.mp4Metadata);
+    assert(this.mp4Metadata?.audio);
 
     for (const sample of samples) {
       const pts = (sample.cts * 1_000_000) / sample.timescale;
@@ -201,7 +209,8 @@ export class Mp4Demuxer implements EncodedSource {
 
       this.audioChunks.push(chunk);
 
-      if (sample.number === this.mp4Metadata.audio.sampleCount - 1) {
+      // TODO: check that
+      if (sample.number === (this.mp4Metadata.audio?.sampleCount ?? 0) - 1) {
         this.audioTrackFinished = true;
       }
     }

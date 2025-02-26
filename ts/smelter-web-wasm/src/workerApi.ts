@@ -6,6 +6,9 @@ export type RegisterInput =
   | {
       type: 'mp4';
       url: string;
+      audio?: {
+        stream?: WritableStream;
+      };
     }
   | {
       type: 'stream';

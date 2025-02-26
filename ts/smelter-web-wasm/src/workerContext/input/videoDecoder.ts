@@ -7,11 +7,11 @@ import type {
   InputStartResult,
 } from './input';
 import type { Logger } from 'pino';
-import { sleep } from '../../utils';
+import { assert, sleep } from '../../utils';
 
 const MAX_DECODED_FRAMES = 10;
 
-export class Decoder implements InputVideoFrameSource {
+export class InputVideoDecoder implements InputVideoFrameSource {
   private source: EncodedSource;
   private decoder: VideoDecoder;
   private offsetMs?: number;
@@ -44,6 +44,7 @@ export class Decoder implements InputVideoFrameSource {
 
   public async init(): Promise<void> {
     const metadata = this.source.getMetadata();
+    assert(metadata.video);
     this.decoder.configure(metadata.video.decoderConfig);
     while (!this.trySchedulingDecoding()) {
       await sleep(100);
@@ -88,7 +89,7 @@ export class Decoder implements InputVideoFrameSource {
       return true;
     }
     while (this.frames.size() + this.decoder.decodeQueueSize < MAX_DECODED_FRAMES) {
-      const payload = this.source.nextChunk();
+      const payload = this.source.nextVideoChunk();
       if (!payload) {
         return false;
       } else if (payload.type === 'eos') {

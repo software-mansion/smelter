@@ -4,6 +4,7 @@ import { assert } from '../utils';
 import { handleRegisterCameraInput } from './input/camera';
 import { handleRegisterScreenCaptureInput } from './input/screenCapture';
 import { handleRegisterStreamInput } from './input/stream';
+import { handleRegisterMp4Input } from './input/mp4';
 
 export interface Input {
   get audioTrack(): MediaStreamTrack | undefined;
@@ -32,20 +33,7 @@ export async function handleRegisterInputRequest(
 ): Promise<RegisterInputResult> {
   if (body.type === 'mp4') {
     assert(body.url, 'mp4 URL is required');
-    return {
-      input: new NoopInput(),
-      workerMessage: [
-        {
-          type: 'registerInput',
-          inputId,
-          input: {
-            type: 'mp4',
-            url: body.url,
-          },
-        },
-        [],
-      ],
-    };
+    return handleRegisterMp4Input(inputId, body.url);
   } else if (body.type === 'camera') {
     return await handleRegisterCameraInput(inputId);
   } else if (body.type === 'screen_capture') {

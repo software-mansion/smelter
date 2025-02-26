@@ -1,61 +1,62 @@
 import { Queue } from '@datastructures-js/queue';
-import type { InputVideoFrame } from './frame';
+import type { InputAudioData } from './frame';
 import type {
-  InputVideoFrameSource,
   EncodedSource,
-  VideoFramePayload,
   InputStartResult,
+  AudioDataPayload,
+  InputAudioSamplesSource,
 } from './input';
 import type { Logger } from 'pino';
-import { sleep } from '../../utils';
+import { assert, sleep } from '../../utils';
 
-const MAX_DECODED_FRAMES = 10;
+const MAX_DECODED_CHUNKS = 10;
 
-export class Decoder implements InputVideoFrameSource {
+export class InputAudioDecoder implements InputAudioSamplesSource {
   private source: EncodedSource;
   private decoder: VideoDecoder;
   private offsetMs?: number;
-  private frames: Queue<InputVideoFrame>;
+  private samples: Queue<InputAudioData>;
   private receivedEos: boolean = false;
-  private firstFramePromise: Promise<void>;
+  private firstChunkPromise: Promise<void>;
 
   public constructor(source: EncodedSource, logger: Logger) {
     this.source = source;
-    this.frames = new Queue();
+    this.samples = new Queue();
 
-    let onFirstFrame: (() => void) | undefined;
+    let onFirstDecodedBatch: (() => void) | undefined;
     let onDecoderError: ((err: Error) => void) | undefined;
-    this.firstFramePromise = new Promise<void>((res, rej) => {
-      onFirstFrame = res;
+    this.firstChunkPromise = new Promise<void>((res, rej) => {
+      onFirstDecodedBatch = res;
       onDecoderError = rej;
     });
 
-    this.decoder = new VideoDecoder({
-      output: videoFrame => {
-        onFirstFrame?.();
-        this.onFrameDecoded(videoFrame);
+    this.decoder = new AudioDecoder({
+      output: sampleBatch => {
+        onFirstDecodedBatch?.();
+        this.onBatchDecoded(sampleBatch);
       },
       error: error => {
         onDecoderError?.(error);
-        logger.error(`H264Decoder error: ${error}`);
+        logger.error(`AudioDecoder error: ${error}`);
       },
     });
   }
 
   public async init(): Promise<void> {
     const metadata = this.source.getMetadata();
-    this.decoder.configure(metadata.video.decoderConfig);
+    assert(metadata.audio);
+    this.decoder.configure(metadata.audio.decoderConfig);
     while (!this.trySchedulingDecoding()) {
       await sleep(100);
     }
-    await this.firstFramePromise;
+    await this.firstChunkPromise;
   }
 
-  public nextFrame(): VideoFramePayload | undefined {
-    const frame = this.frames.pop();
+  public nextBatch(): AudioDataPayload | undefined {
+    const sampleBatch = this.samples.pop();
     this.trySchedulingDecoding();
-    if (frame) {
-      return { type: 'frame', frame: frame };
+    if (sampleBatch) {
+      return { type: 'sampleBatch', sampleBatch };
     } else if (this.receivedEos && this.decoder.decodeQueueSize === 0) {
       return { type: 'eos' };
     }
@@ -71,14 +72,14 @@ export class Decoder implements InputVideoFrameSource {
     this.source.close();
   }
 
-  private onFrameDecoded(videoFrame: VideoFrame) {
-    const frameTimeMs = videoFrame.timestamp / 1000;
+  private onBatchDecoded(data: AudioData) {
+    const frameTimeMs = data.timestamp / 1000;
     if (this.offsetMs === undefined) {
       this.offsetMs = -frameTimeMs;
     }
 
-    this.frames.push({
-      frame: videoFrame,
+    this.samples.push({
+      data,
       ptsMs: this.offsetMs + frameTimeMs,
     });
   }
@@ -87,8 +88,8 @@ export class Decoder implements InputVideoFrameSource {
     if (this.receivedEos) {
       return true;
     }
-    while (this.frames.size() + this.decoder.decodeQueueSize < MAX_DECODED_FRAMES) {
-      const payload = this.source.nextChunk();
+    while (this.samples.size() + this.decoder.decodeQueueSize < MAX_DECODED_CHUNKS) {
+      const payload = this.source.nextAudioChunk();
       if (!payload) {
         return false;
       } else if (payload.type === 'eos') {

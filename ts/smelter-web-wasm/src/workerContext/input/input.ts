@@ -1,6 +1,6 @@
 import Mp4Source from './source/Mp4Source';
 import { QueuedInput } from './QueuedInput';
-import type { InputVideoFrame } from './frame';
+import type { InputAudioData, InputVideoFrame } from './frame';
 import type { Frame } from '@swmansion/smelter-browser-render';
 import { MediaStreamInput } from './MediaStreamInput';
 import type { RegisterInput } from '../../workerApi';
@@ -13,9 +13,13 @@ export type InputStartResult = {
 };
 
 export type ContainerInfo = {
-  video: {
+  video?: {
     durationMs?: number;
     decoderConfig: VideoDecoderConfig;
+  };
+  audio?: {
+    durationMs?: number;
+    decoderConfig: AudioDecoderConfig;
   };
 };
 
@@ -23,13 +27,14 @@ export interface Input {
   start(): InputStartResult;
   updateQueueStartTime(queueStartTimeMs: number): void;
   getFrame(currentQueuePts: number): Promise<Frame | undefined>;
-  getSamples(currentQueuePts: number): Promise<Frame | undefined>;
   close(): void;
 }
 
 export type VideoFramePayload = { type: 'frame'; frame: InputVideoFrame } | { type: 'eos' };
 
-export type AudioDataPayload = { type: 'samples'; samples: AudioData } | { type: 'eos' };
+export type AudioDataPayload =
+  | { type: 'sampleBatch'; sampleBatch: InputAudioData }
+  | { type: 'eos' };
 
 export interface InputVideoFrameSource {
   init(): Promise<void>;
@@ -41,7 +46,7 @@ export interface InputVideoFrameSource {
 export interface InputAudioSamplesSource {
   init(): Promise<void>;
   getMetadata(): InputStartResult;
-  nextFrame(): AudioDataPayload | undefined;
+  nextBatch(): AudioDataPayload | undefined;
   close(): void;
 }
 
