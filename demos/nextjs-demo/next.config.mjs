@@ -15,7 +15,7 @@ const nextConfig =  {
               path.dirname(require.resolve('@swmansion/smelter-browser-render')),
               'smelter.wasm'
             ),
-            to: 'static/chunks',
+            to: path.join(import.meta.dirname, "public"),
           },
         ],
       })
