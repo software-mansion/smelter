@@ -120,6 +120,7 @@ fn init_ffmpeg_output(
 
             let codec = match v.codec {
                 VideoCodec::H264 => ffmpeg::codec::Id::H264,
+                VideoCodec::VP8 => ffmpeg::codec::Id::VP8,
             };
 
             let mut stream = output_ctx
