@@ -2,24 +2,31 @@ import { Mp4Demuxer } from './Mp4Demuxer';
 import type {
   ContainerInfo,
   InputStartResult,
-  InputVideoFrameSource,
+  QueuedInputSource,
   VideoFramePayload,
 } from '../input';
 import type { Logger } from 'pino';
 import { InputVideoDecoder } from '../videoDecoder';
 import { InputAudioDecoder } from '../audioDecoder';
 import { assert } from '../../../utils';
+import type { AudioWorkletMessagePort } from '../../../audioWorkletContext/workletApi';
 
-export default class Mp4Source implements InputVideoFrameSource {
+export default class Mp4Source implements QueuedInputSource {
   private fileUrl: string;
   private logger: Logger;
+  private messagePort: AudioWorkletMessagePort;
   private videoDecoder?: InputVideoDecoder;
   private audioDecoder?: InputAudioDecoder;
   private metadata?: ContainerInfo;
 
-  public constructor(fileUrl: string, logger: Logger) {
+  public constructor(fileUrl: string, logger: Logger, messagePort: AudioWorkletMessagePort) {
     this.fileUrl = fileUrl;
     this.logger = logger;
+    this.messagePort = messagePort;
+  }
+
+  public audioWorkletMessagePort(): AudioWorkletMessagePort {
+    return this.messagePort;
   }
 
   public async init(): Promise<void> {

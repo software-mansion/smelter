@@ -4,8 +4,8 @@ import { Queue } from '@datastructures-js/queue';
 import { workerPostEvent } from '../pipeline';
 import { SmelterEventType } from '../../eventSender';
 import type { Interval } from '../../utils';
-import { assert } from '../../utils';
-import type { Input, InputStartResult, InputVideoFrameSource } from './input';
+import { assert, sleep } from '../../utils';
+import type { Input, InputStartResult, InputVideoFrameSource, QueuedInputSource } from './input';
 import type { InputVideoFrame } from './frame';
 import { InputVideoFrameRef } from './frame';
 
@@ -16,15 +16,14 @@ const ENQUEUE_INTERVAL_MS = 50;
 
 export class QueuedInput implements Input {
   private inputId: InputId;
-  private source: InputVideoFrameSource;
+  private source: QueuedInputSource;
   private logger: Logger;
   /**
    * frames PTS start from 0, where 0 represents first frame
    */
   private frames: Queue<InputVideoFrameRef>;
 
-  private enqueueInterval?: Interval;
-  private enqueuePromise?: Promise<void>;
+  private shouldClose: boolean = false;
 
   /**
    * Queue PTS of the first frame
@@ -43,7 +42,7 @@ export class QueuedInput implements Input {
   private receivedEos: boolean = false;
   private sentFirstFrame: boolean = false;
 
-  public constructor(inputId: InputId, source: InputVideoFrameSource, logger: Logger) {
+  public constructor(inputId: InputId, source: QueuedInputSource, logger: Logger) {
     this.inputId = inputId;
     this.source = source;
     this.logger = logger;
@@ -51,14 +50,8 @@ export class QueuedInput implements Input {
   }
 
   public start(): InputStartResult {
-    this.enqueueInterval = setInterval(async () => {
-      if (this.enqueuePromise) {
-        return;
-      }
-      this.enqueuePromise = this.tryEnqueue();
-      await this.enqueuePromise;
-      this.enqueuePromise = undefined;
-    }, ENQUEUE_INTERVAL_MS);
+    void this.startAudioProcessor();
+    void this.startVideoProcessor();
 
     workerPostEvent({
       type: SmelterEventType.VIDEO_INPUT_DELIVERED,
@@ -68,13 +61,50 @@ export class QueuedInput implements Input {
   }
 
   public close() {
-    if (this.enqueueInterval) {
-      clearInterval(this.enqueueInterval);
-    }
+    this.shouldClose = true;
   }
 
   public updateQueueStartTime(queueStartTimeMs: number) {
     this.queueStartTimeMs = queueStartTimeMs;
+  }
+
+  private async startAudioProcessor() {
+    const port = this.source.audioWorkletMessagePort();
+    while (!this.shouldClose) {
+      const payload = this.source.nextBatch();
+      if (!payload) {
+        await sleep(50);
+        continue;
+      }
+      if (payload.type === 'eos') {
+        // TODO: maybe send EOS to worklet
+        return;
+      } else if (payload.type === 'sampleBatch') {
+        await port.postMessage({ type: 'chunk', data: payload.sampleBatch.data as any }, [
+          payload.sampleBatch.data,
+        ]);
+      }
+    }
+  }
+
+  private async startVideoProcessor() {
+    while (!this.shouldClose) {
+      if (this.frames.size() >= MAX_BUFFER_FRAME_COUNT) {
+        await sleep(ENQUEUE_INTERVAL_MS);
+        continue;
+      }
+      const payload = this.source.nextFrame();
+      if (!payload) {
+        await sleep(ENQUEUE_INTERVAL_MS);
+        continue;
+      }
+      if (payload?.type === 'eos') {
+        this.receivedEos = true;
+        return;
+      } else if (payload.type === 'frame') {
+        this.frames.push(this.newFrameRef(payload.frame));
+      }
+    }
   }
 
   /**
@@ -109,24 +139,6 @@ export class QueuedInput implements Input {
       return frame;
     }
     return;
-  }
-
-  private async tryEnqueue() {
-    // TODO: try dropping old frames that will not be used
-    while (this.frames.size() < MAX_BUFFER_FRAME_COUNT) {
-      const nextFrame = this.source.nextFrame();
-      if (!nextFrame) {
-        return;
-      } else if (nextFrame.type === 'frame') {
-        this.frames.push(this.newFrameRef(nextFrame.frame));
-      } else if (nextFrame.type === 'eos') {
-        this.receivedEos = true;
-        if (this.enqueueInterval) {
-          clearInterval(this.enqueueInterval);
-        }
-        return;
-      }
-    }
   }
 
   private newFrameRef(frame: InputVideoFrame): InputVideoFrameRef {

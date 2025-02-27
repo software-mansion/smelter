@@ -47,6 +47,7 @@
     "@rollup/plugin-commonjs": "^28.0.2",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-typescript": "^11.1.6",
+    "@types/audioworklet": "^0.0.71",
     "@types/react": "^18.3.3",
     "rollup": "^4.21.2",
     "rollup-plugin-dts": "^6.1.1"

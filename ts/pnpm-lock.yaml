@@ -422,6 +422,9 @@ importers:
       '@rollup/plugin-typescript':
         specifier: ^11.1.6
         version: 11.1.6(rollup@4.28.1)(tslib@2.8.1)(typescript@5.7.2)
+      '@types/audioworklet':
+        specifier: ^0.0.71
+        version: 0.0.71
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.17
@@ -929,6 +932,9 @@ packages:
 
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
+
+  '@types/audioworklet@0.0.71':
+    resolution: {integrity: sha512-bi5UKn9UXQaDPN9C3gVIT7D1CbPRlJyUPqfTqpLOUVh2cRoPdCscrVPuBkXiJV2JvHH/4bXvmYDSg7SmC7wuXA==}
 
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
@@ -3437,6 +3443,8 @@ snapshots:
   '@tsconfig/node14@1.0.3': {}
 
   '@tsconfig/node16@1.0.4': {}
+
+  '@types/audioworklet@0.0.71': {}
 
   '@types/babel__core@7.20.5':
     dependencies:

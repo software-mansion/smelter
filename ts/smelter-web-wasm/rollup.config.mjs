@@ -29,6 +29,30 @@ export default [
     ]
   },
   {
+    input: './src/audioWorkletContext/runAudioDataProcessor.ts',
+    output: [
+      {
+        file: 'dist/cjs/runAudioDataProcessor.cjs',
+        format: "cjs",
+      },
+      {
+        file: 'dist/esm/runAudioDataProcessor.mjs',
+        format: "esm",
+      },
+    ],
+    plugins: [
+      commonjs(),
+      resolve(),
+      typescript(),
+    ],
+    external: [
+      '@swmansion/smelter',
+      '@swmansion/smelter-core',
+      '@swmansion/smelter-browser-render',
+      'pino',
+    ]
+  },
+  {
     input: 'src/workerContext/runWorker.ts',
     output: [
       {

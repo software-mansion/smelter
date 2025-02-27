@@ -4,12 +4,9 @@ import { handleRegisterCanvasOutput } from './output/canvas';
 import { handleRegisterWhipOutput } from './output/whip';
 import type { Api } from '@swmansion/smelter';
 import { handleRegisterStreamOutput } from './output/stream';
-import type { Logger } from 'pino';
-import type { Framerate } from '../compositor/compositor';
-import type { AudioMixer } from './AudioMixer';
+import type { InstanceContext } from './instance';
 
 export interface Output {
-  get audioMixer(): AudioMixer | undefined;
   terminate(): Promise<void>;
 }
 
@@ -38,17 +35,16 @@ export type RegisterWasmStreamOutput = CoreOutput.RegisterWasmStreamOutput & Ini
 export type RegisterWasmCanvasOutput = CoreOutput.RegisterWasmCanvasOutput & InitialScene;
 
 export async function handleRegisterOutputRequest(
+  ctx: InstanceContext,
   outputId: string,
-  body: CoreOutput.RegisterOutputRequest,
-  logger: Logger,
-  framerate: Framerate
+  body: CoreOutput.RegisterOutputRequest
 ): Promise<RegisterOutputResult> {
   if (body.type === 'web-wasm-whip') {
-    return await handleRegisterWhipOutput(outputId, body, logger, framerate);
+    return await handleRegisterWhipOutput(ctx, outputId, body);
   } else if (body.type === 'web-wasm-stream') {
-    return await handleRegisterStreamOutput(outputId, body);
+    return await handleRegisterStreamOutput(ctx, outputId, body);
   } else if (body.type === 'web-wasm-canvas') {
-    return await handleRegisterCanvasOutput(outputId, body);
+    return await handleRegisterCanvasOutput(ctx, outputId, body);
   } else {
     throw new Error(`Unknown output type ${body.type}`);
   }

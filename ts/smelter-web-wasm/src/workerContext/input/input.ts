@@ -6,6 +6,8 @@ import { MediaStreamInput } from './MediaStreamInput';
 import type { RegisterInput } from '../../workerApi';
 import type { Logger } from 'pino';
 import { assert } from '../../utils';
+import type { AsyncMessagePort } from '../../audioWorkletContext/bridge';
+import type { AudioWorkletMessage } from '../../audioWorkletContext/workletApi';
 
 export type InputStartResult = {
   videoDurationMs?: number;
@@ -48,6 +50,10 @@ export interface InputAudioSamplesSource {
   getMetadata(): InputStartResult;
   nextBatch(): AudioDataPayload | undefined;
   close(): void;
+}
+
+export interface QueuedInputSource extends InputVideoFrameSource, InputAudioSamplesSource {
+  audioWorkletMessagePort(): AsyncMessagePort<AudioWorkletMessage, boolean>;
 }
 
 export type EncodedVideoPayload = { type: 'chunk'; chunk: EncodedVideoChunk } | { type: 'eos' };

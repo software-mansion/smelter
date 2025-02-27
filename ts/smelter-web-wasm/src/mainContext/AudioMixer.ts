@@ -1,12 +1,92 @@
 import type { Api } from '@swmansion/smelter';
-import { assert } from '../utils';
 
 type AudioInput = {
-  source: MediaStreamAudioSourceNode;
+  source: MediaStreamAudioSourceNode | AudioWorkletNode;
   gain: GainNode;
 };
 
-export class AudioMixer<OutputNode extends AudioNode = AudioNode> {
+type AudioMixerInput =
+  | {
+      type: 'mediaStream';
+      track: MediaStreamTrack;
+    }
+  | {
+      type: 'worklet';
+      node: AudioWorkletNode;
+    };
+
+export class AudioMixer {
+  private ctx: AudioContext;
+  private outputs: Record<string, AudioMixerOutput> = {};
+  private inputs: Record<string, AudioMixerInput> = {};
+
+  constructor() {
+    this.ctx = new AudioContext();
+  }
+
+  public async init(): Promise<void> {
+    console.log('init AudioMixerr')
+    await this.ctx.audioWorklet.addModule(
+      new URL('../esm/runAudioDataProcossor.js', import.meta.url)
+    );
+    console.log('init AudioMixerr done')
+  }
+
+  public addMediaStreamOutput(outputId: string): MediaStreamTrack {
+    const outputNode = this.ctx.createMediaStreamDestination();
+    const silence = this.ctx.createConstantSource();
+    silence.offset.value = 0;
+    silence.connect(outputNode);
+    silence.start();
+
+    this.outputs[outputId] = new AudioMixerOutput(this.ctx, outputNode);
+
+    return outputNode.stream.getAudioTracks()[0];
+  }
+
+  public addPlaybackOutput(outputId: string): void {
+    this.outputs[outputId] = new AudioMixerOutput(this.ctx, this.ctx.destination);
+  }
+
+  public addMediaStreamInput(inputId: string, track: MediaStreamTrack) {
+    this.inputs[inputId] = { type: 'mediaStream', track };
+    for (const output of Object.values(this.outputs)) {
+      output.addMediaStreamInput(inputId, track);
+    }
+  }
+  public addWorkletInput(inputId: string): MessagePort {
+    const node = new AudioWorkletNode(this.ctx, 'audio-data-source');
+    this.inputs[inputId] = { type: 'worklet', node };
+    for (const output of Object.values(this.outputs)) {
+      output.addAudioDataWorkletInput(inputId, node);
+    }
+    return node.port;
+  }
+
+  public removeInput(inputId: string) {
+    for (const output of Object.values(this.outputs)) {
+      output.removeInput(inputId);
+    }
+  }
+
+  public removeOutput(outputId: string): void {
+    this.outputs[outputId].close();
+    delete this.outputs[outputId];
+  }
+
+  public update(outputId: string, inputConfig: Api.InputAudio[]) {
+    this.outputs[outputId]?.update(inputConfig);
+  }
+
+  public async close() {
+    await this.ctx.close();
+    for (const outputId of Object.keys(this.outputs)) {
+      this.removeOutput(outputId);
+    }
+  }
+}
+
+export class AudioMixerOutput<OutputNode extends AudioNode = AudioNode> {
   private ctx: AudioContext;
   private inputs: Record<string, AudioInput> = {};
   protected outputNode: OutputNode;
@@ -16,7 +96,7 @@ export class AudioMixer<OutputNode extends AudioNode = AudioNode> {
     this.outputNode = outputNode;
   }
 
-  public addInput(inputId: string, track: MediaStreamTrack) {
+  public addMediaStreamInput(inputId: string, track: MediaStreamTrack) {
     const stream = new MediaStream();
     stream.addTrack(track);
     const source = this.ctx.createMediaStreamSource(stream);
@@ -25,6 +105,17 @@ export class AudioMixer<OutputNode extends AudioNode = AudioNode> {
     gain.connect(this.outputNode ?? this.ctx.destination);
     this.inputs[inputId] = {
       source,
+      gain,
+    };
+  }
+
+  public addAudioDataWorkletInput(inputId: string, node: AudioWorkletNode) {
+    const gain = this.ctx.createGain();
+
+    node.connect(gain);
+    gain.connect(this.outputNode ?? this.ctx.destination);
+    this.inputs[inputId] = {
+      source: node,
       gain,
     };
   }
@@ -42,35 +133,9 @@ export class AudioMixer<OutputNode extends AudioNode = AudioNode> {
     }
   }
 
-  public async close() {
-    await this.ctx.close();
+  public close() {
     for (const inputId of Object.keys(this.inputs)) {
       this.removeInput(inputId);
     }
-  }
-}
-
-export class MediaStreamAudioMixer extends AudioMixer<MediaStreamAudioDestinationNode> {
-  constructor() {
-    const ctx = new AudioContext();
-    const outputNode = ctx.createMediaStreamDestination();
-    const silence = ctx.createConstantSource();
-    silence.offset.value = 0;
-    silence.connect(outputNode);
-    silence.start();
-    super(ctx, outputNode);
-  }
-
-  public outputMediaStreamTrack(): MediaStreamTrack {
-    const audioTrack = this.outputNode.stream.getAudioTracks()[0];
-    assert(audioTrack);
-    return audioTrack;
-  }
-}
-
-export class PlaybackAudioMixer extends AudioMixer<AudioDestinationNode> {
-  constructor() {
-    const ctx = new AudioContext();
-    super(ctx, ctx.destination);
   }
 }
