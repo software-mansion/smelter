@@ -113,6 +113,8 @@ fn main() {
 
     let mut h264_dump =
         File::create(root_dir.join("examples/encoded_channel_output_dump.h264")).unwrap();
+    let mut vp8_dump =
+        File::create(root_dir.join("examples/encoded_channel_output_dump.vp8")).unwrap();
     let mut opus_dump =
         File::create(root_dir.join("examples/encoded_channel_output_dump.opus")).unwrap();
 
@@ -125,6 +127,7 @@ fn main() {
         };
         match chunk.kind {
             EncodedChunkKind::Video(VideoCodec::H264) => h264_dump.write_all(&chunk.data).unwrap(),
+            EncodedChunkKind::Video(VideoCodec::VP8) => vp8_dump.write_all(&chunk.data).unwrap(),
             EncodedChunkKind::Audio(AudioCodec::Opus) => opus_dump.write_all(&chunk.data).unwrap(),
             EncodedChunkKind::Audio(AudioCodec::Aac) => panic!("AAC is not supported on output"),
         }

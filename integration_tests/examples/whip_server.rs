@@ -22,30 +22,41 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    let token_input_1 = examples::post(
+    // let token_input_1 = examples::post(
+    //     "input/input_1/register",
+    //     &json!({
+    //         "type": "whip",
+    //         "video": {
+    //             "decoder": "ffmpeg_vp8"
+    //         },
+    //         "audio": {
+    //             "decoder": "opus"
+    //         },
+    //     }),
+    // )?
+    // .json::<serde_json::Value>();
+
+    // if let Ok(token) = token_input_1 {
+    //     info!("Bearer token for input_1: {}", token["bearer_token"]);
+    // }
+
+    examples::post(
         "input/input_1/register",
         &json!({
-            "type": "whip",
+            "type": "rtp_stream",
+            "port": 8002,
             "video": {
-                "decoder": "ffmpeg_h264"
-            },
-            "audio": {
-                "decoder": "opus"
-            },
+                "decoder": "ffmpeg_vp8"
+            }
         }),
-    )?
-    .json::<serde_json::Value>();
-
-    if let Ok(token) = token_input_1 {
-        info!("Bearer token for input_1: {}", token["bearer_token"]);
-    }
+    )?;
 
     let token_input_2 = examples::post(
         "input/input_2/register",
         &json!({
             "type": "whip",
             "video": {
-                "decoder": "ffmpeg_h264"
+                "decoder": "ffmpeg_vp8"
             },
         }),
     )?
@@ -82,8 +93,7 @@ fn client_code() -> Result<()> {
                     "height": VIDEO_RESOLUTION.height,
                 },
                 "encoder": {
-                    "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
+                    "type": "ffmpeg_vp8",
                 },
                 "initial": {
                     "root": {

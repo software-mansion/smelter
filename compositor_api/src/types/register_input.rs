@@ -167,8 +167,11 @@ pub struct InputWhipVideoOptions {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum VideoDecoder {
-    /// Use the software decoder based on ffmpeg.
+    /// Use the software h264 decoder based on ffmpeg.
     FfmpegH264,
+
+    /// Use the software vp8 decoder based on ffmpeg.
+    FfmpegVp8,
 
     /// Use hardware decoder based on Vulkan Video.
     ///

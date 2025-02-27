@@ -8,7 +8,7 @@ use std::sync::Arc;
 use webrtc::{
     api::{
         interceptor_registry::register_default_interceptors,
-        media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS},
+        media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8},
         APIBuilder,
     },
     ice_transport::ice_server::RTCIceServer,
@@ -100,6 +100,13 @@ fn video_codec_capability(video: VideoCodec) -> RTCRtpCodecCapability {
             sdp_fmtp_line: "".to_owned(),
             rtcp_feedback: vec![],
         },
+        VideoCodec::VP8 => RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            clock_rate: 90000,
+            channels: 0,
+            sdp_fmtp_line: "".to_owned(),
+            rtcp_feedback: vec![],
+        },
     }
 }
 
@@ -157,6 +164,17 @@ fn register_codecs(media_engine: &mut MediaEngine) -> webrtc::error::Result<()> 
         },
     ];
     let video_codecs = vec![
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_VP8.to_owned(),
+                clock_rate: 90000,
+                channels: 0,
+                sdp_fmtp_line: "".to_owned(),
+                rtcp_feedback: video_rtcp_feedback.clone(),
+            },
+            payload_type: 96,
+            ..Default::default()
+        },
         RTCRtpCodecParameters {
             capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_H264.to_owned(),

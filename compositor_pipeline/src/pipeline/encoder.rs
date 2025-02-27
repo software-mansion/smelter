@@ -10,12 +10,13 @@ use crate::{
     queue::PipelineEvent,
 };
 
-use self::{ffmpeg_h264::LibavH264Encoder, opus::OpusEncoder};
+use self::{ffmpeg_h264::LibavH264Encoder, ffmpeg_vp8::LibavVp8Encoder, opus::OpusEncoder};
 
 use super::types::EncoderOutputEvent;
 
 pub mod fdk_aac;
 pub mod ffmpeg_h264;
+pub mod ffmpeg_vp8;
 pub mod opus;
 mod resampler;
 
@@ -27,6 +28,7 @@ pub struct EncoderOptions {
 #[derive(Debug, Clone)]
 pub enum VideoEncoderOptions {
     H264(ffmpeg_h264::Options),
+    VP8(ffmpeg_vp8::Options),
 }
 
 #[derive(Debug, Clone)]
@@ -49,6 +51,7 @@ pub struct Encoder {
 
 pub enum VideoEncoder {
     H264(LibavH264Encoder),
+    VP8(LibavVp8Encoder),
 }
 
 pub enum AudioEncoder {
@@ -97,6 +100,7 @@ impl Encoder {
     pub fn frame_sender(&self) -> Option<&Sender<PipelineEvent<Frame>>> {
         match &self.video {
             Some(VideoEncoder::H264(encoder)) => Some(encoder.frame_sender()),
+            Some(VideoEncoder::VP8(encoder)) => Some(encoder.frame_sender()),
             None => {
                 error!("Non video encoder received frame to send.");
                 None
@@ -107,6 +111,7 @@ impl Encoder {
     pub fn keyframe_request_sender(&self) -> Option<Sender<()>> {
         match self.video.as_ref() {
             Some(VideoEncoder::H264(encoder)) => Some(encoder.keyframe_request_sender().clone()),
+            Some(VideoEncoder::VP8(encoder)) => Some(encoder.keyframe_request_sender().clone()),
             None => {
                 error!("Non video encoder received keyframe request.");
                 None
@@ -129,6 +134,7 @@ impl VideoEncoderOptions {
     pub fn resolution(&self) -> Resolution {
         match self {
             VideoEncoderOptions::H264(opt) => opt.resolution,
+            VideoEncoderOptions::VP8(opt) => opt.resolution,
         }
     }
 }
@@ -144,18 +150,23 @@ impl VideoEncoder {
             VideoEncoderOptions::H264(options) => Ok(Self::H264(LibavH264Encoder::new(
                 output_id, options, framerate, sender,
             )?)),
+            VideoEncoderOptions::VP8(options) => {
+                Ok(Self::VP8(LibavVp8Encoder::new(output_id, options, sender)?))
+            }
         }
     }
 
     pub fn resolution(&self) -> Resolution {
         match self {
             Self::H264(encoder) => encoder.resolution(),
+            Self::VP8(encoder) => encoder.resolution(),
         }
     }
 
     pub fn keyframe_request_sender(&self) -> Sender<()> {
         match self {
             Self::H264(encoder) => encoder.keyframe_request_sender(),
+            Self::VP8(encoder) => encoder.keyframe_request_sender(),
         }
     }
 }
