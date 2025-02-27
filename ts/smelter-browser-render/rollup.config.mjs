@@ -11,6 +11,7 @@ export default [
     },
     plugins: [
       typescript(),
+      removeCompositorWebOccurences(),
       copy({
         targets: [
           {
@@ -36,3 +37,25 @@ export default [
     plugins: [dts()],
   },
 ];
+
+function removeCompositorWebOccurences() {
+  return {
+    name: 'remove-compositor-web-bg-occurences',
+    transform(code, id) {
+      if (id.includes('compositor_web.js')) {
+        const new_code = code.replace(
+          "module_or_path = new URL('compositor_web_bg.wasm', import.meta.url)",
+          'throw new Error("WASM module path not provided")'
+        );
+
+        if (new_code === code) {
+          this.error('Failed to remove \'compositor_web_bg.wasm\' path');
+          return null;
+        }
+
+        return new_code;
+      }
+      return code;
+    },
+  };
+}
