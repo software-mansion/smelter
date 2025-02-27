@@ -15,7 +15,12 @@ async function initInstance(options: InitOptions) {
   });
   const logger = pino({ level: options.loggerLevel }).child({ runtime: 'worker' });
   onMessageLogger = logger.child({ element: 'onMessage' });
-  instance = new Pipeline({ renderer, framerate: options.framerate, logger });
+  instance = new Pipeline({
+    renderer,
+    framerate: options.framerate,
+    logger,
+    isSafari: options.isSafari,
+  });
 }
 
 registerWorkerEntrypoint<WorkerMessage, WorkerResponse>(

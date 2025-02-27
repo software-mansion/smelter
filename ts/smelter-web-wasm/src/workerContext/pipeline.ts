@@ -17,10 +17,15 @@ export class Pipeline {
   private logger: Logger;
   private started = false;
 
-  public constructor(options: { renderer: Renderer; framerate: Framerate; logger: Logger }) {
+  public constructor(options: {
+    renderer: Renderer;
+    framerate: Framerate;
+    logger: Logger;
+    isSafari: boolean;
+  }) {
     this.renderer = options.renderer;
     this.logger = options.logger.child({ element: 'pipeline' });
-    this.queue = new Queue(options.framerate, options.renderer, options.logger);
+    this.queue = new Queue(options.framerate, options.renderer, options.logger, options.isSafari);
   }
 
   public start() {

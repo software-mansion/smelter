@@ -12,6 +12,10 @@ export type RegisterInput =
       videoStream?: ReadableStream;
       // For now audio stream is handled on a main context
       // audioStream?: ReadableStream;
+    }
+  | {
+      type: 'track';
+      videoTrack?: MediaStreamTrack;
     };
 
 export type RegisterOutput = {
@@ -27,6 +31,7 @@ export type InitOptions = {
   framerate: Framerate;
   wasmBundleUrl: string;
   loggerLevel: string;
+  isSafari: boolean;
 };
 
 export type WorkerMessage =

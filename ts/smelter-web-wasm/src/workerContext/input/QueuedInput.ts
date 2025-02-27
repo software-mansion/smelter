@@ -1,4 +1,4 @@
-import type { Frame, InputId } from '@swmansion/smelter-browser-render';
+import type { Frame, FrameFormat, InputId } from '@swmansion/smelter-browser-render';
 import type { Logger } from 'pino';
 import { Queue } from '@datastructures-js/queue';
 import { workerPostEvent } from '../pipeline';
@@ -80,12 +80,15 @@ export class QueuedInput implements Input {
   /**
    * Retrieves reference of a frame closest to the provided `currentQueuePts`.
    */
-  public async getFrame(currentQueuePts: number): Promise<Frame | undefined> {
+  public async getFrame(
+    currentQueuePts: number,
+    frameFormat: FrameFormat
+  ): Promise<Frame | undefined> {
     this.dropOldFrames(currentQueuePts);
     const frameRef = this.frames.front();
     if (frameRef) {
       frameRef.incrementRefCount();
-      const frame = await frameRef.getFrame();
+      const frame = await frameRef.getFrame(frameFormat);
       frameRef.decrementRefCount();
 
       if (!this.sentFirstFrame) {
