@@ -1,3 +1,7 @@
+use bytemuck::bytes_of;
+use tracing::info;
+use wgpu::util::DeviceExt;
+
 use crate::wgpu::{
     common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE},
     texture::{PlanarYuvTextures, RGBATexture},
@@ -9,22 +13,55 @@ use super::WgpuCtx;
 pub struct RgbaToYuvConverter {
     pipeline: wgpu::RenderPipeline,
     sampler: Sampler,
+    uniform_bgl: wgpu::BindGroupLayout,
+}
+
+pub struct PlaneUniform {
+    pub buffer: wgpu::Buffer,
+    pub bind_group: wgpu::BindGroup,
+}
+
+impl PlaneUniform {
+    pub fn new(wgpu_ctx: &WgpuCtx, uniform_bgl: &wgpu::BindGroupLayout, plane: u32) -> Self {
+        let buffer = wgpu_ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("PlaneUniform"),
+                contents: &(plane as u32).to_le_bytes(),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
+        let bind_group = wgpu_ctx
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("PlaneUniform bind group"),
+                layout: uniform_bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffer.as_entire_binding(),
+                }],
+            });
+
+        Self { buffer, bind_group }
+    }
 }
 
 impl RgbaToYuvConverter {
     pub fn new(
         device: &wgpu::Device,
         single_texture_bind_group_layout: &wgpu::BindGroupLayout,
+        single_uniform_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let sampler = Sampler::new(device);
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("RGBA to YUV color converter pipeline layout"),
-            bind_group_layouts: &[single_texture_bind_group_layout, &sampler.bind_group_layout],
-            push_constant_ranges: &[wgpu::PushConstantRange {
-                stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                range: 0..4,
-            }],
+            bind_group_layouts: &[
+                single_texture_bind_group_layout,
+                &sampler.bind_group_layout,
+                single_uniform_bind_group_layout,
+            ],
+            push_constant_ranges: &[],
         });
 
         let shader_module = device.create_shader_module(wgpu::include_wgsl!("rgba_to_yuv.wgsl"));
@@ -61,7 +98,11 @@ impl RgbaToYuvConverter {
             cache: None,
         });
 
-        Self { pipeline, sampler }
+        Self {
+            pipeline,
+            sampler,
+            uniform_bgl: single_uniform_bind_group_layout.clone(),
+        }
     }
 
     pub fn convert(
@@ -76,7 +117,14 @@ impl RgbaToYuvConverter {
                 label: Some("RGBA to YUV color converter command encoder"),
             });
 
+        // TODO(noituri): This should be created only once
+        let plane_uniforms = &[
+            PlaneUniform::new(ctx, &self.uniform_bgl, 0),
+            PlaneUniform::new(ctx, &self.uniform_bgl, 1),
+            PlaneUniform::new(ctx, &self.uniform_bgl, 2),
+        ];
         for plane in [0, 1, 2] {
+            //plane_uniform.update(ctx, plane);
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("YUV to RGBA color converter render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -101,7 +149,7 @@ impl RgbaToYuvConverter {
                         }),
                         store: wgpu::StoreOp::Store,
                     },
-                    view: &dst.plane(plane).view,
+                    view: &dst.plane(plane as usize).view,
                     resolve_target: None,
                 })],
                 depth_stencil_attachment: None,
@@ -110,13 +158,9 @@ impl RgbaToYuvConverter {
             });
 
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_push_constants(
-                wgpu::ShaderStages::VERTEX_FRAGMENT,
-                0,
-                &(plane as u32).to_le_bytes(),
-            );
             render_pass.set_bind_group(0, src.1, &[]);
             render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
+            render_pass.set_bind_group(2, &plane_uniforms[plane].bind_group, &[]);
             ctx.plane.draw(&mut render_pass);
         }
         ctx.queue.submit(Some(encoder.finish()));

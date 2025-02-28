@@ -166,7 +166,7 @@ pub fn create_wgpu_ctx(
     })
 }
 
-fn uniform_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+pub fn uniform_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("uniform bind group layout"),
         entries: &[wgpu::BindGroupLayoutEntry {

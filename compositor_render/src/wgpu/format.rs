@@ -4,6 +4,7 @@ use nv12_to_rgba::Nv12ToRgbaConverter;
 use self::{planar_yuv_to_rgba::PlanarYuvToRgbaConverter, rgba_to_yuv::RgbaToYuvConverter};
 
 use super::{
+    ctx::uniform_bind_group_layout,
     texture::{InterleavedYuv422Texture, NV12TextureView, PlanarYuvTextures, RGBATexture},
     WgpuCtx,
 };
@@ -32,8 +33,10 @@ impl TextureFormat {
         let interleaved_yuv_layout = InterleavedYuv422Texture::new_bind_group_layout(device);
         let rgba_layout = RGBATexture::new_bind_group_layout(device);
         let nv12_layout = NV12TextureView::new_bind_group_layout(device);
+        let uniform_layout = uniform_bind_group_layout(device);
+
         let planar_yuv_to_rgba = PlanarYuvToRgbaConverter::new(device, &planar_yuv_layout);
-        let rgba_to_yuv = RgbaToYuvConverter::new(device, &rgba_layout);
+        let rgba_to_yuv = RgbaToYuvConverter::new(device, &rgba_layout, &uniform_layout);
         let interleaved_yuv_to_rgba =
             InterleavedYuv422ToRgbaConverter::new(device, &interleaved_yuv_layout);
         let nv12_to_rgba = Nv12ToRgbaConverter::new(device, &nv12_layout);

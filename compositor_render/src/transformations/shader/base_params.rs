@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use crate::Resolution;
+use wgpu::util::DeviceExt;
+
+use crate::{wgpu::WgpuCtx, Resolution};
 
 #[repr(C)]
 #[derive(Debug, bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
@@ -39,5 +41,41 @@ impl BaseShaderParameters {
 
     pub fn push_constant(&self) -> &[u8] {
         bytemuck::bytes_of(self)
+    }
+}
+
+pub struct BaseShaderParamsUniform {
+    pub buffer: wgpu::Buffer,
+    pub bind_group: wgpu::BindGroup,
+}
+
+impl BaseShaderParamsUniform {
+    pub fn new(wgpu_ctx: &WgpuCtx, params: BaseShaderParameters) -> Self {
+        let buffer = wgpu_ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("BaseShaderParamsUniform"),
+                contents: params.push_constant(),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
+        let bind_group = wgpu_ctx
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("BaseShaderParamsUniform bind group"),
+                layout: &wgpu_ctx.uniform_bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffer.as_entire_binding(),
+                }],
+            });
+
+        Self { buffer, bind_group }
+    }
+
+    pub fn update(&mut self, wgpu_ctx: &WgpuCtx, params: BaseShaderParameters) {
+        wgpu_ctx
+            .queue
+            .write_buffer(&self.buffer, 0, params.push_constant());
     }
 }
