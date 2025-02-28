@@ -5,21 +5,10 @@ import { handleRegisterCameraInput } from './input/camera';
 import { handleRegisterScreenCaptureInput } from './input/screenCapture';
 import { handleRegisterStreamInput } from './input/stream';
 import { handleRegisterMp4Input } from './input/mp4';
-import { InstanceContext } from './instance';
+import type { InstanceContext } from './instance';
 
 export interface Input {
   terminate(): Promise<void>;
-}
-
-/**
- * Can be used if entire code for the input runs in worker.
- */
-class NoopInput implements Input {
-  public async terminate(): Promise<void> {}
-
-  public get audioTrack(): MediaStreamTrack | undefined {
-    return undefined;
-  }
 }
 
 export type RegisterInputResult = {

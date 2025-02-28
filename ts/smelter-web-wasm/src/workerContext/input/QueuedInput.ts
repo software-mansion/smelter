@@ -50,6 +50,7 @@ export class QueuedInput implements Input {
   }
 
   public start(): InputStartResult {
+    console.log('start');
     void this.startAudioProcessor();
     void this.startVideoProcessor();
 
@@ -80,9 +81,29 @@ export class QueuedInput implements Input {
         // TODO: maybe send EOS to worklet
         return;
       } else if (payload.type === 'sampleBatch') {
-        await port.postMessage({ type: 'chunk', data: payload.sampleBatch.data as any }, [
-          payload.sampleBatch.data,
-        ]);
+        console.log({
+          numberOfFrames: payload.sampleBatch.data.numberOfFrames,
+          sampleRate: payload.sampleBatch.data.sampleRate,
+          duration: payload.sampleBatch.data.duration,
+          numberOfChannels: payload.sampleBatch.data.numberOfChannels,
+          forrmat: payload.sampleBatch.data.format,
+        });
+
+        const channelCount = payload.sampleBatch.data.numberOfChannels;
+        const channels = [...Array(channelCount)].map((_, index) => {
+          console.log('index', index);
+          const size = payload.sampleBatch.data.allocationSize({
+            format: 'f32-planar',
+            planeIndex: index,
+          });
+          const buffer = new Float32Array(size / Float32Array.BYTES_PER_ELEMENT);
+          payload.sampleBatch.data.copyTo(buffer, {
+            format: 'f32-planar',
+            planeIndex: index,
+          });
+          return buffer;
+        });
+        await port.postMessage({ type: 'chunk', data: channels });
       }
     }
   }

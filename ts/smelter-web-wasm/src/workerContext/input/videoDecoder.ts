@@ -45,6 +45,11 @@ export class InputVideoDecoder implements InputVideoFrameSource {
   public async init(): Promise<void> {
     const metadata = this.source.getMetadata();
     assert(metadata.video);
+    console.log(
+      'video configuresdklfjsldkfjsdkljf',
+      metadata.video.decoderConfig,
+      await VideoDecoder.isConfigSupported(metadata.video.decoderConfig)
+    );
     this.decoder.configure(metadata.video.decoderConfig);
     while (!this.trySchedulingDecoding()) {
       await sleep(100);

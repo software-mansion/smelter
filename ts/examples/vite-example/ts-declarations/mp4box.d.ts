@@ -106,6 +106,8 @@ declare module 'mp4box' {
     hvcC?: Box;
     vpcC?: Box;
     av1C?: Box;
+
+    mp4a?: Box;
   }
 
   export function createFile(): MP4File;

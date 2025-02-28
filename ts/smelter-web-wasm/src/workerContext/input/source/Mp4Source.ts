@@ -1,5 +1,6 @@
 import { Mp4Demuxer } from './Mp4Demuxer';
 import type {
+  AudioDataPayload,
   ContainerInfo,
   InputStartResult,
   QueuedInputSource,
@@ -46,6 +47,11 @@ export default class Mp4Source implements QueuedInputSource {
   public nextFrame(): VideoFramePayload | undefined {
     assert(this.videoDecoder, 'Decoder was not initialized, call init() first.');
     return this.videoDecoder.nextFrame();
+  }
+
+  nextBatch(): AudioDataPayload | undefined {
+    assert(this.audioDecoder, 'Decoder was not initialized, call init() first.');
+    return this.audioDecoder.nextBatch();
   }
 
   public getMetadata(): InputStartResult {

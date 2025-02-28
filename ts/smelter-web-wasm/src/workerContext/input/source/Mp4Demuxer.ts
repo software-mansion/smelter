@@ -46,6 +46,7 @@ export class Mp4Demuxer implements EncodedSource {
   private videoTrackFinished: boolean = false;
 
   private audioChunks: Queue<EncodedAudioChunk>;
+  // @ts-ignore
   private audioTrackFinished: boolean = false;
 
   private firstVideoChunkPromise: Promise<void>;
@@ -57,6 +58,7 @@ export class Mp4Demuxer implements EncodedSource {
   public constructor(data: ArrayBuffer, logger: Logger) {
     this.logger = logger;
     this.videoChunks = new Queue();
+    this.audioChunks = new Queue();
 
     this.file = MP4Box.createFile();
     this.readyPromise = new Promise<Mp4Metadata>((res, rej) => {
@@ -219,7 +221,7 @@ export class Mp4Demuxer implements EncodedSource {
 
 function parseMp4AudioInfo(file: MP4File, track: MP4AudioTrack): Mp4Metadata['audio'] {
   const durationMs = (track.movie_duration / track.movie_timescale) * 1000;
-  const codecDescription = getCodecDescription(file, track.id);
+  const codecDescription = getAudioCodecDescription(file, track.id);
 
   const decoderConfig: AudioDecoderConfig = {
     codec: track.codec,
@@ -267,13 +269,29 @@ function getCodecDescription(file: MP4File, trackId: number): Uint8Array {
     throw new Error('Track does not exist');
   }
 
+  console.log('video track', track);
   for (const entry of track.mdia.minf.stbl.stsd.entries) {
     const box = entry.avcC || entry.hvcC || entry.vpcC || entry.av1C;
     if (box) {
+      console.log('videobox', entry);
       const stream = new DataStream(undefined, 0, DataStream.BIG_ENDIAN);
       box.write(stream);
       return new Uint8Array(stream.buffer, 8);
     }
+  }
+
+  throw new Error('Codec description not found');
+}
+
+function getAudioCodecDescription(file: MP4File, trackId: number): Uint8Array {
+  const track = file.getTrackById(trackId);
+  if (!track) {
+    throw new Error('Track does not exist');
+  }
+  console.log(track);
+
+  for (const entry of track.mdia.minf.stbl.stsd.entries) {
+    return (entry as any).esds.esd.descs[0].descs[0].data;
   }
 
   throw new Error('Codec description not found');

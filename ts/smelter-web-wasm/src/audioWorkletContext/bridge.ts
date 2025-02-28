@@ -25,14 +25,15 @@ export function listenForMessages<Request, Response>(
 ) {
   port.onmessage = async (event: MessageEvent<RequestMessage<Request>>) => {
     try {
+      console.log('received', event.data);
       const response = await onMessage(event.data.request);
-      self.postMessage({
+      port.postMessage({
         type: 'workerResponse',
         id: event.data.id,
         response,
       } as ResponseMessage<Response>);
     } catch (error: any) {
-      self.postMessage({
+      port.postMessage({
         type: 'workerResponse',
         id: event.data.id,
         error,
@@ -67,6 +68,7 @@ export class AsyncMessagePort<Request, Response> {
     });
     this.pendingMessages[requestId] = pendingMessage;
 
+    console.log('postMssage', { id: requestId, request });
     if (transferable) {
       this.port.postMessage({ id: requestId, request }, transferable);
     } else {

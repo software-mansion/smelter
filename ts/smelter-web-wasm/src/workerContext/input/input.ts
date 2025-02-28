@@ -6,7 +6,7 @@ import { MediaStreamInput } from './MediaStreamInput';
 import type { RegisterInput } from '../../workerApi';
 import type { Logger } from 'pino';
 import { assert } from '../../utils';
-import type { AsyncMessagePort } from '../../audioWorkletContext/bridge';
+import { AsyncMessagePort } from '../../audioWorkletContext/bridge';
 import type { AudioWorkletMessage } from '../../audioWorkletContext/workletApi';
 
 export type InputStartResult = {
@@ -81,7 +81,15 @@ export async function createInput(
     if (!request.url) {
       throw new Error('Mp4 url is required');
     }
-    const source = new Mp4Source(request.url, inputLogger);
+    console.log(request.audioWorkletMessagePort);
+    const source = new Mp4Source(
+      request.url,
+      inputLogger,
+      new AsyncMessagePort<AudioWorkletMessage, boolean>(
+        request.audioWorkletMessagePort,
+        inputLogger
+      )
+    );
     await source.init();
     return new QueuedInput(inputId, source, inputLogger);
   } else if (request.type === 'stream') {

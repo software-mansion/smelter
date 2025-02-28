@@ -50,7 +50,7 @@ export default [
       '@swmansion/smelter-core',
       '@swmansion/smelter-browser-render',
       'pino',
-    ]
+    ],
   },
   {
     input: 'src/workerContext/runWorker.ts',
@@ -74,7 +74,7 @@ export default [
       '@swmansion/smelter-core',
       '@swmansion/smelter-browser-render',
       'pino',
-    ]
+    ],
   },
   {
     input: './src/index.ts',

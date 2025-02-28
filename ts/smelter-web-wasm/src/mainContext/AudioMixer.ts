@@ -25,11 +25,9 @@ export class AudioMixer {
   }
 
   public async init(): Promise<void> {
-    console.log('init AudioMixerr')
     await this.ctx.audioWorklet.addModule(
-      new URL('../esm/runAudioDataProcossor.js', import.meta.url)
+      new URL('../esm/runAudioDataProcessor.mjs', import.meta.url)
     );
-    console.log('init AudioMixerr done')
   }
 
   public addMediaStreamOutput(outputId: string): MediaStreamTrack {
@@ -56,6 +54,10 @@ export class AudioMixer {
   }
   public addWorkletInput(inputId: string): MessagePort {
     const node = new AudioWorkletNode(this.ctx, 'audio-data-source');
+    node.onprocessorerror = ev => {
+      console.log('event', ev);
+    };
+    console.log('event');
     this.inputs[inputId] = { type: 'worklet', node };
     for (const output of Object.values(this.outputs)) {
       output.addAudioDataWorkletInput(inputId, node);
@@ -127,6 +129,7 @@ export class AudioMixerOutput<OutputNode extends AudioNode = AudioNode> {
   }
 
   public update(inputConfig: Api.InputAudio[]) {
+    console.log('update', inputConfig);
     for (const [inputId, input] of Object.entries(this.inputs)) {
       const config = inputConfig.find(input => input.input_id === inputId);
       input.gain.gain.value = config?.volume || 0;

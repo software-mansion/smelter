@@ -13,7 +13,7 @@ const MAX_DECODED_CHUNKS = 10;
 
 export class InputAudioDecoder implements InputAudioSamplesSource {
   private source: EncodedSource;
-  private decoder: VideoDecoder;
+  private decoder: AudioDecoder;
   private offsetMs?: number;
   private samples: Queue<InputAudioData>;
   private receivedEos: boolean = false;
@@ -45,6 +45,11 @@ export class InputAudioDecoder implements InputAudioSamplesSource {
   public async init(): Promise<void> {
     const metadata = this.source.getMetadata();
     assert(metadata.audio);
+    console.log(
+      'configuresdklfjsldkfjsdkljf',
+      metadata.audio.decoderConfig,
+      await AudioDecoder.isConfigSupported(metadata.audio.decoderConfig)
+    );
     this.decoder.configure(metadata.audio.decoderConfig);
     while (!this.trySchedulingDecoding()) {
       await sleep(100);
