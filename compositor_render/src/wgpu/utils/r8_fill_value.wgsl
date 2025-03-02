@@ -18,7 +18,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     return output;
 }
 
-var<push_constant> value: f32;
+@group(0) @binding(0) var<uniform> value: f32;
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) f32 {

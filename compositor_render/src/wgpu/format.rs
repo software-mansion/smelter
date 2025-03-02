@@ -35,7 +35,8 @@ impl TextureFormat {
         let nv12_layout = NV12TextureView::new_bind_group_layout(device);
         let uniform_layout = uniform_bind_group_layout(device);
 
-        let planar_yuv_to_rgba = PlanarYuvToRgbaConverter::new(device, &planar_yuv_layout);
+        let planar_yuv_to_rgba =
+            PlanarYuvToRgbaConverter::new(device, &planar_yuv_layout, &uniform_layout);
         let rgba_to_yuv = RgbaToYuvConverter::new(device, &rgba_layout, &uniform_layout);
         let interleaved_yuv_to_rgba =
             InterleavedYuv422ToRgbaConverter::new(device, &interleaved_yuv_layout);

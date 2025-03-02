@@ -40,7 +40,34 @@ impl LayoutShader {
         shader_module: wgpu::ShaderModule,
     ) -> Result<Self, CreateShaderError> {
         let sampler = Sampler::new(&wgpu_ctx.device);
-        let texture_bgl = common_pipeline::create_single_texture_bgl(&wgpu_ctx.device);
+        let texture_bgl =
+            wgpu_ctx
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: None,
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            count: None,
+                            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                multisampled: false,
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                            },
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            count: None,
+                            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                        },
+                    ],
+                });
         let params_bind_groups = ParamsBindGroups::new(wgpu_ctx);
 
         let pipeline_layout =

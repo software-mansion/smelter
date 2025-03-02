@@ -30,7 +30,7 @@ struct PushConstantParams {
     pixel_format: u32,
 }
 
-var<push_constant> params: PushConstantParams;
+@group(2) @binding(0) var<uniform> params: PushConstantParams;
 
 fn srgb_to_linear(srgb: vec3<f32>) -> vec3<f32> {
     let cutoff = step(srgb, vec3(0.04045));

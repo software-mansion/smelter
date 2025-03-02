@@ -9,15 +9,17 @@ use crate::wgpu::{
 #[derive(Debug)]
 pub struct R8FillWithValue {
     pipeline: wgpu::RenderPipeline,
+    value_buffer: wgpu::Buffer,
+    value_bind_group: wgpu::BindGroup,
 }
 
 impl R8FillWithValue {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, single_uniform_bgl: &wgpu::BindGroupLayout) -> Self {
         let shader_module = device.create_shader_module(wgpu::include_wgsl!("r8_fill_value.wgsl"));
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Fill with value render pipeline layout"),
-            bind_group_layouts: &[],
+            bind_group_layouts: &[single_uniform_bgl],
             push_constant_ranges: &[wgpu::PushConstantRange {
                 stages: wgpu::ShaderStages::FRAGMENT,
                 range: 0..4,
@@ -54,10 +56,30 @@ impl R8FillWithValue {
             cache: None,
         });
 
-        Self { pipeline }
+        let value_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Fill with value buffer"),
+            size: std::mem::size_of::<f32>() as u64,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+            mapped_at_creation: false,
+        });
+        let value_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Fill with value bind group"),
+            layout: single_uniform_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: value_buffer.as_entire_binding(),
+            }],
+        });
+
+        Self {
+            pipeline,
+            value_buffer,
+            value_bind_group,
+        }
     }
 
     pub fn fill(&self, ctx: &WgpuCtx, dst: &Texture, value: f32) {
+        ctx.queue.write_buffer(&self.value_buffer, 0, bytemuck::bytes_of(&value));
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -81,7 +103,7 @@ impl R8FillWithValue {
             });
 
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&value));
+            render_pass.set_bind_group(0, &self.value_bind_group, &[]);
             ctx.plane.draw(&mut render_pass);
         }
 

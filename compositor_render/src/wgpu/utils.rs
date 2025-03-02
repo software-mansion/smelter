@@ -10,9 +10,9 @@ pub struct TextureUtils {
 }
 
 impl TextureUtils {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, single_uniform_bgl: &wgpu::BindGroupLayout) -> Self {
         Self {
-            r8_fill_with_value: R8FillWithValue::new(device),
+            r8_fill_with_value: R8FillWithValue::new(device, single_uniform_bgl),
         }
     }
 

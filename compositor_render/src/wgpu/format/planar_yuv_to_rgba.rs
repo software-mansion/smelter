@@ -1,4 +1,4 @@
-use wgpu::ShaderStages;
+use wgpu::{util::DeviceExt, ShaderStages};
 
 use crate::wgpu::{
     common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE},
@@ -11,12 +11,14 @@ use super::WgpuCtx;
 pub struct PlanarYuvToRgbaConverter {
     pipeline: wgpu::RenderPipeline,
     sampler: Sampler,
+    uniform_bgl: wgpu::BindGroupLayout,
 }
 
 impl PlanarYuvToRgbaConverter {
     pub fn new(
         device: &wgpu::Device,
         yuv_textures_bind_group_layout: &wgpu::BindGroupLayout,
+        single_uniform_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let shader_module =
             device.create_shader_module(wgpu::include_wgsl!("planar_yuv_to_rgba.wgsl"));
@@ -24,11 +26,12 @@ impl PlanarYuvToRgbaConverter {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Planar YUV 4:2:0 to RGBA color converter render pipeline layout"),
-            bind_group_layouts: &[yuv_textures_bind_group_layout, &sampler.bind_group_layout],
-            push_constant_ranges: &[wgpu::PushConstantRange {
-                stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                range: 0..YUVToRGBAPushConstants::push_constant_size(),
-            }],
+            bind_group_layouts: &[
+                yuv_textures_bind_group_layout,
+                &sampler.bind_group_layout,
+                single_uniform_bind_group_layout,
+            ],
+            push_constant_ranges: &[],
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -64,7 +67,11 @@ impl PlanarYuvToRgbaConverter {
             cache: None,
         });
 
-        Self { pipeline, sampler }
+        Self {
+            pipeline,
+            sampler,
+            uniform_bgl: single_uniform_bind_group_layout.clone(),
+        }
     }
 
     pub fn convert(
@@ -73,6 +80,8 @@ impl PlanarYuvToRgbaConverter {
         src: (&PlanarYuvTextures, &wgpu::BindGroup),
         dst: &RGBATexture,
     ) {
+        let settings = YUVToRGBASettings::new(src.0.variant());
+        let settings_uniform = SettingsUniform::new(&ctx.device, &self.uniform_bgl, settings);
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -98,11 +107,7 @@ impl PlanarYuvToRgbaConverter {
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, src.1, &[]);
             render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
-            render_pass.set_push_constants(
-                ShaderStages::VERTEX_FRAGMENT,
-                0,
-                YUVToRGBAPushConstants::new(src.0.variant()).push_constant(),
-            );
+            render_pass.set_bind_group(2, &settings_uniform.bind_group, &[]);
 
             ctx.plane.draw(&mut render_pass);
         }
@@ -113,27 +118,45 @@ impl PlanarYuvToRgbaConverter {
 
 #[repr(C)]
 #[derive(Debug, bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
-struct YUVToRGBAPushConstants {
+struct YUVToRGBASettings {
     pixel_format: u32,
 }
 
-impl YUVToRGBAPushConstants {
+impl YUVToRGBASettings {
     fn new(variant: PlanarYuvVariant) -> Self {
         match variant {
             PlanarYuvVariant::YUV420 => Self { pixel_format: 0 },
             PlanarYuvVariant::YUVJ420 => Self { pixel_format: 1 },
         }
     }
+}
 
-    fn push_constant_size() -> u32 {
-        let size = std::mem::size_of::<YUVToRGBAPushConstants>() as u32;
-        match size % 4 {
-            0 => size,
-            rest => size + (4 - rest),
-        }
-    }
+struct SettingsUniform {
+    buffer: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+}
 
-    fn push_constant(&self) -> &[u8] {
-        bytemuck::bytes_of(self)
+impl SettingsUniform {
+    fn new(
+        device: &wgpu::Device,
+        uniform_bgl: &wgpu::BindGroupLayout,
+        settings: YUVToRGBASettings,
+    ) -> Self {
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("YUV to RGBA settings uniform buffer"),
+            contents: bytemuck::bytes_of(&settings),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("YUV to RGBA settings bind group"),
+            layout: &uniform_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+
+        Self { buffer, bind_group }
     }
 }

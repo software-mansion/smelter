@@ -61,10 +61,10 @@ impl WgpuCtx {
 
         let scope = WgpuErrorScope::push(&device);
 
-        let format = TextureFormat::new(&device);
-        let utils = TextureUtils::new(&device);
-
         let uniform_bgl = uniform_bind_group_layout(&device);
+
+        let format = TextureFormat::new(&device);
+        let utils = TextureUtils::new(&device, &uniform_bgl);
 
         let plane = Plane::new(&device);
         let empty_texture = Texture::empty(&device);
