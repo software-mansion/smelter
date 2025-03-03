@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::{
-    base_params::BaseShaderParameters,
+    base_params::{BaseShaderParameters, BaseShaderParamsUniform},
     validation::{
         error::{ParametersValidationError, ShaderParseError},
         validate_contains_header, validate_params,
@@ -28,6 +28,7 @@ pub(super) struct ShaderPipeline {
     sampler: Sampler,
     textures_bgl: wgpu::BindGroupLayout,
     module: naga::Module,
+    base_params_uniform: BaseShaderParamsUniform,
 }
 
 impl ShaderPipeline {
@@ -49,14 +50,15 @@ impl ShaderPipeline {
                     entries: &[wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         count: NonZeroU32::new(super::SHADER_INPUT_TEXTURES_AMOUNT),
-                        visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
                             sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
+                            view_dimension: wgpu::TextureViewDimension::D2Array,
                         },
                     }],
                 });
+        let base_params_uniform = BaseShaderParamsUniform::new(wgpu_ctx);
         let shader_module = wgpu_ctx
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -72,11 +74,11 @@ impl ShaderPipeline {
                         &textures_bgl,
                         &wgpu_ctx.uniform_bgl,
                         &sampler.bind_group_layout,
+                        // TODO(noituri): Maybe we should use exiting BG instead of creating
+                        // another one
+                        &wgpu_ctx.uniform_bgl,
                     ],
-                    push_constant_ranges: &[wgpu::PushConstantRange {
-                        stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        range: 0..BaseShaderParameters::push_constant_size(),
-                    }],
+                    push_constant_ranges: &[],
                 });
         let pipeline = common_pipeline::create_render_pipeline(
             &wgpu_ctx.device,
@@ -91,6 +93,7 @@ impl ShaderPipeline {
             sampler,
             textures_bgl,
             module,
+            base_params_uniform
         })
     }
 
@@ -114,8 +117,16 @@ impl ShaderPipeline {
                 false => wgpu::LoadOp::Load,
             };
 
-            let base_params =
-                BaseShaderParameters::new(plane_id, pts, sources.len() as u32, target.resolution());
+            // TODO(noituri): Does it work with multiple planes?
+            self.base_params_uniform.update(
+                wgpu_ctx,
+                BaseShaderParameters::new(
+                    plane_id,
+                    pts,
+                    sources.len() as u32,
+                    target.resolution(),
+                ),
+            );
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -133,15 +144,10 @@ impl ShaderPipeline {
 
             render_pass.set_pipeline(&self.pipeline);
 
-            render_pass.set_push_constants(
-                ShaderStages::VERTEX_FRAGMENT,
-                0,
-                base_params.push_constant(),
-            );
-
             render_pass.set_bind_group(0, &input_textures_bg, &[]);
             render_pass.set_bind_group(USER_DEFINED_BUFFER_GROUP, params, &[]);
             render_pass.set_bind_group(2, &self.sampler.bind_group, &[]);
+            render_pass.set_bind_group(3, &self.base_params_uniform.bind_group, &[]);
 
             wgpu_ctx.plane.draw(&mut render_pass);
         };

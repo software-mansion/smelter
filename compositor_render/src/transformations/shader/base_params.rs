@@ -11,6 +11,7 @@ pub struct BaseShaderParameters {
     time: f32,
     output_resolution: [u32; 2],
     texture_count: u32,
+    _padding: u32,
 }
 
 impl BaseShaderParameters {
@@ -28,14 +29,7 @@ impl BaseShaderParameters {
                 output_resolution.height as u32,
             ],
             plane_id,
-        }
-    }
-
-    pub fn push_constant_size() -> u32 {
-        let size = std::mem::size_of::<BaseShaderParameters>() as u32;
-        match size % 4 {
-            0 => size,
-            rest => size + (4 - rest),
+            _padding: 0,
         }
     }
 
@@ -44,20 +38,20 @@ impl BaseShaderParameters {
     }
 }
 
+#[derive(Debug)]
 pub struct BaseShaderParamsUniform {
     pub buffer: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
 }
 
 impl BaseShaderParamsUniform {
-    pub fn new(wgpu_ctx: &WgpuCtx, params: BaseShaderParameters) -> Self {
-        let buffer = wgpu_ctx
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("BaseShaderParamsUniform"),
-                contents: params.push_constant(),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
+    pub fn new(wgpu_ctx: &WgpuCtx) -> Self {
+        let buffer = wgpu_ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("BaseShaderParamsUniform buffer"),
+            size: std::mem::size_of::<BaseShaderParameters>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
         let bind_group = wgpu_ctx
             .device
@@ -73,7 +67,7 @@ impl BaseShaderParamsUniform {
         Self { buffer, bind_group }
     }
 
-    pub fn update(&mut self, wgpu_ctx: &WgpuCtx, params: BaseShaderParameters) {
+    pub fn update(&self, wgpu_ctx: &WgpuCtx, params: BaseShaderParameters) {
         wgpu_ctx
             .queue
             .write_buffer(&self.buffer, 0, params.push_constant());
