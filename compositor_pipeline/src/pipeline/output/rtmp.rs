@@ -1,96 +1,65 @@
-use std::{fs, path::PathBuf, ptr, sync::Arc, time::Duration};
+use std::{ptr, time::Duration};
 
-use compositor_render::OutputId;
+use compositor_render::{event_handler::emit_event, OutputId};
 use crossbeam_channel::Receiver;
 use ffmpeg_next as ffmpeg;
-use log::error;
-use tracing::{debug, warn};
+use tracing::{debug, error};
 
 use crate::{
     audio_mixer::AudioChannels,
     error::OutputInitError,
     event::Event,
-    pipeline::{
-        types::IsKeyframe, EncodedChunk, EncodedChunkKind, EncoderOutputEvent, PipelineCtx,
-        VideoCodec,
-    },
+    pipeline::{EncodedChunk, EncodedChunkKind, EncoderOutputEvent},
 };
 
 #[derive(Debug, Clone)]
-pub struct Mp4OutputOptions {
-    pub output_path: PathBuf,
-    pub video: Option<Mp4VideoTrack>,
-    pub audio: Option<Mp4AudioTrack>,
+pub struct RtmpSenderOptions {
+    pub url: String,
+    pub video: Option<RtmpVideoTrack>,
+    pub audio: Option<RtmpAudioTrack>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Mp4VideoTrack {
-    pub codec: VideoCodec,
+pub struct RtmpVideoTrack {
     pub width: u32,
     pub height: u32,
 }
 
 #[derive(Debug, Clone)]
-pub struct Mp4AudioTrack {
+pub struct RtmpAudioTrack {
     pub channels: AudioChannels,
     pub sample_rate: u32,
 }
 
-pub struct Mp4FileWriter;
+pub struct RmtpSender;
 
-impl Mp4FileWriter {
+impl RmtpSender {
     pub fn new(
-        output_id: OutputId,
-        options: Mp4OutputOptions,
+        output_id: &OutputId,
+        options: RtmpSenderOptions,
         packets_receiver: Receiver<EncoderOutputEvent>,
-        pipeline_ctx: Arc<PipelineCtx>,
     ) -> Result<Self, OutputInitError> {
-        if options.output_path.exists() {
-            let mut old_index = 0;
-            let mut new_path_for_old_file;
-            loop {
-                new_path_for_old_file = PathBuf::from(format!(
-                    "{}.old.{}",
-                    options.output_path.to_string_lossy(),
-                    old_index
-                ));
-                if !new_path_for_old_file.exists() {
-                    break;
-                }
-                old_index += 1;
-            }
-
-            warn!(
-                "Output file {} already exists. Renaming to {}.",
-                options.output_path.to_string_lossy(),
-                new_path_for_old_file.to_string_lossy()
-            );
-            if let Err(err) = fs::rename(options.output_path.clone(), new_path_for_old_file) {
-                error!("Failed to rename existing output file. Error: {}", err);
-            };
-        }
-
         let (output_ctx, video_stream, audio_stream) = init_ffmpeg_output(options)?;
 
-        let event_emitter = pipeline_ctx.event_emitter.clone();
+        let output_id = output_id.clone();
         std::thread::Builder::new()
-            .name(format!("MP4 writer thread for output {}", output_id))
+            .name(format!("RTMP sender thread for output {}", output_id))
             .spawn(move || {
                 let _span =
-                    tracing::info_span!("MP4 writer", output_id = output_id.to_string()).entered();
+                    tracing::info_span!("RTMP sender  writer", output_id = output_id.to_string())
+                        .entered();
 
                 run_ffmpeg_output_thread(output_ctx, video_stream, audio_stream, packets_receiver);
-                event_emitter.emit(Event::OutputDone(output_id));
-                debug!("Closing MP4 writer thread.");
+                emit_event(Event::OutputDone(output_id));
+                debug!("Closing RTMP sender thread.");
             })
             .unwrap();
-
-        Ok(Mp4FileWriter)
+        Ok(Self)
     }
 }
 
 fn init_ffmpeg_output(
-    options: Mp4OutputOptions,
+    options: RtmpSenderOptions,
 ) -> Result<
     (
         ffmpeg::format::context::Output,
@@ -99,21 +68,17 @@ fn init_ffmpeg_output(
     ),
     OutputInitError,
 > {
-    let mut output_ctx = ffmpeg::format::output_as(&options.output_path, "mp4")
-        .map_err(OutputInitError::FfmpegMp4Error)?;
+    let mut output_ctx =
+        ffmpeg::format::output_as(&options.url, "flv").map_err(OutputInitError::FfmpegMp4Error)?;
 
     let mut stream_count = 0;
 
     let video_stream = options
         .video
         .map(|v| {
-            const VIDEO_TIME_BASE: i32 = 90000;
-
             let mut stream = output_ctx
                 .add_stream(ffmpeg::codec::Id::H264)
                 .map_err(OutputInitError::FfmpegMp4Error)?;
-
-            stream.set_time_base(ffmpeg::Rational::new(1, VIDEO_TIME_BASE));
 
             let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
             codecpar.codec_id = ffmpeg::codec::Id::H264.into();
@@ -126,7 +91,6 @@ fn init_ffmpeg_output(
 
             Ok::<StreamState, OutputInitError>(StreamState {
                 id,
-                time_base: VIDEO_TIME_BASE as f64,
                 timestamp_offset: None,
             })
         })
@@ -135,7 +99,6 @@ fn init_ffmpeg_output(
     let audio_stream = options
         .audio
         .map(|a| {
-            let codec = ffmpeg::codec::Id::AAC;
             let channels = match a.channels {
                 AudioChannels::Mono => 1,
                 AudioChannels::Stereo => 2,
@@ -143,14 +106,14 @@ fn init_ffmpeg_output(
             let sample_rate = a.sample_rate as i32;
 
             let mut stream = output_ctx
-                .add_stream(codec)
+                .add_stream(ffmpeg::codec::Id::AAC)
                 .map_err(OutputInitError::FfmpegMp4Error)?;
 
             // If audio time base doesn't match sample rate, ffmpeg muxer produces incorrect timestamps.
             stream.set_time_base(ffmpeg::Rational::new(1, sample_rate));
 
             let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
-            codecpar.codec_id = codec.into();
+            codecpar.codec_id = ffmpeg::codec::Id::AAC.into();
             codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_AUDIO;
             codecpar.sample_rate = sample_rate;
             codecpar.ch_layout = ffmpeg::ffi::AVChannelLayout {
@@ -167,16 +130,13 @@ fn init_ffmpeg_output(
 
             Ok::<StreamState, OutputInitError>(StreamState {
                 id,
-                time_base: sample_rate as f64,
                 timestamp_offset: None,
             })
         })
         .transpose()?;
 
-    let ffmpeg_options = ffmpeg::Dictionary::from_iter(&[("movflags", "faststart")]);
-
     output_ctx
-        .write_header_with(ffmpeg_options)
+        .write_header()
         .map_err(OutputInitError::FfmpegMp4Error)?;
 
     Ok((output_ctx, video_stream, audio_stream))
@@ -218,7 +178,7 @@ fn run_ffmpeg_output_thread(
 
         if received_video_eos.unwrap_or(true) && received_audio_eos.unwrap_or(true) {
             if let Err(err) = output_ctx.write_trailer() {
-                error!("Failed to write trailer to mp4 file: {}.", err);
+                error!("Failed to write trailer to RTMP stream: {}.", err);
             };
             break;
         }
@@ -234,7 +194,7 @@ fn write_chunk(
     let packet = create_packet(chunk, video_stream, audio_stream);
     if let Some(packet) = packet {
         if let Err(err) = packet.write(output_ctx) {
-            error!("Failed to write packet to mp4 file: {}.", err);
+            error!("Failed to write packet to RTMP stream: {}.", err);
         }
     }
 }
@@ -246,7 +206,7 @@ fn create_packet(
 ) -> Option<ffmpeg::Packet> {
     let stream_state = match chunk.kind {
         EncodedChunkKind::Video(_) => {
-            match video_stream {
+            match video_stream.as_mut() {
                 Some(stream_state) => Some(stream_state),
                 None => {
                     error!("Failed to create packet for video chunk. No video stream registered on init.");
@@ -255,7 +215,7 @@ fn create_packet(
             }
         }
         EncodedChunkKind::Audio(_) => {
-            match audio_stream {
+            match audio_stream.as_mut() {
                 Some(stream_state) => Some(stream_state),
                 None => {
                     error!("Failed to create packet for audio chunk. No audio stream registered on init.");
@@ -264,26 +224,16 @@ fn create_packet(
             }
         }
     }?;
-
-    // Starting output PTS from 0
     let timestamp_offset = stream_state.timestamp_offset(&chunk);
-    let pts = chunk.pts.saturating_sub(timestamp_offset);
-    let dts = chunk
-        .dts
-        .map(|dts| dts.saturating_sub(timestamp_offset))
-        .unwrap_or(pts);
+    let pts = chunk.pts - timestamp_offset;
+    // let dts = chunk.dts.map(|dts| dts - timestamp_offset).unwrap_or(pts);
+    let dts = chunk.dts.map(|dts| dts - timestamp_offset);
 
     let mut packet = ffmpeg::Packet::copy(&chunk.data);
-    packet.set_pts(Some((pts.as_secs_f64() * stream_state.time_base) as i64));
-    packet.set_dts(Some((dts.as_secs_f64() * stream_state.time_base) as i64));
-    packet.set_time_base(ffmpeg::Rational::new(1, stream_state.time_base as i32));
+    packet.set_pts(Some((pts.as_secs_f64() * 1000.0) as i64));
+    packet.set_dts(dts.map(|dts| (dts.as_secs_f64() * 1000.0) as i64));
+    packet.set_time_base(ffmpeg::Rational::new(1, 1000));
     packet.set_stream(stream_state.id);
-
-    match chunk.is_keyframe {
-        IsKeyframe::Yes => packet.set_flags(ffmpeg::packet::Flags::KEY),
-        IsKeyframe::Unknown => warn!("The MP4 output received an encoded chunk with is_keyframe set to Unknown. This output needs this information to produce correct mp4s."),
-        IsKeyframe::NoKeyframes | IsKeyframe::No => {},
-    }
 
     Some(packet)
 }
@@ -291,7 +241,6 @@ fn create_packet(
 #[derive(Debug, Clone)]
 struct StreamState {
     id: usize,
-    time_base: f64,
     timestamp_offset: Option<Duration>,
 }
 
