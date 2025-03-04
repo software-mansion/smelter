@@ -3,7 +3,7 @@ name: deploy to gh-pages
 on:
     workflow_dispatch: {}
     push:
-        branches: [master]
+        branches: [docs]
         paths:
             - "docs/**"
             - "schemas/**"
@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+    cancel-in-progress: ${{ github.ref != 'refs/heads/docs' }}
 
 jobs:
     deploy:
