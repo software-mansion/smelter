@@ -32,8 +32,8 @@ jobs:
               run: |
                   set -e
 
-                  apt-get update -y -qq
-                  apt-get install -y libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
+                  sudo apt-get update -y -qq
+                  sudo apt-get install -y libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
 
             - name: 🛠 Setup Node.JS
               uses: actions/setup-node@v4
