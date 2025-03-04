@@ -36,13 +36,15 @@ pub struct Mp4AudioTrack {
     pub sample_rate: u32,
 }
 
-pub enum Mp4OutputVideoTrack {
-    H264 { width: u32, height: u32 },
+#[derive(Debug, Clone)]
+pub struct Mp4EncoderConfig {
+    pub video: Option<()>,
+    pub audio: Option<Mp4AudioEncoderConfig>,
 }
 
-pub struct Mp4WriterOptions {
-    pub output_path: PathBuf,
-    pub video: Option<Mp4OutputVideoTrack>,
+#[derive(Debug, Clone)]
+pub enum Mp4AudioEncoderConfig {
+    Aac(bytes::Bytes),
 }
 
 pub struct Mp4FileWriter;
@@ -51,6 +53,7 @@ impl Mp4FileWriter {
     pub fn new(
         output_id: OutputId,
         options: Mp4OutputOptions,
+        encoder_config: Mp4EncoderConfig,
         packets_receiver: Receiver<EncoderOutputEvent>,
         pipeline_ctx: Arc<PipelineCtx>,
     ) -> Result<Self, OutputInitError> {
@@ -79,7 +82,7 @@ impl Mp4FileWriter {
             };
         }
 
-        let (output_ctx, video_stream, audio_stream) = init_ffmpeg_output(options)?;
+        let (output_ctx, video_stream, audio_stream) = init_ffmpeg_output(options, encoder_config)?;
 
         let event_emitter = pipeline_ctx.event_emitter.clone();
         std::thread::Builder::new()
@@ -100,6 +103,7 @@ impl Mp4FileWriter {
 
 fn init_ffmpeg_output(
     options: Mp4OutputOptions,
+    encoder_config: Mp4EncoderConfig,
 ) -> Result<
     (
         ffmpeg::format::context::Output,
@@ -145,46 +149,56 @@ fn init_ffmpeg_output(
         })
         .transpose()?;
 
-    let audio_stream = options
-        .audio
-        .map(|a| {
-            let codec = ffmpeg::codec::Id::AAC;
-            let channels = match a.channels {
-                AudioChannels::Mono => 1,
-                AudioChannels::Stereo => 2,
-            };
-            let sample_rate = a.sample_rate as i32;
+    let audio_stream = if let (Some(a), Some(encoder)) = (options.audio, encoder_config.audio) {
+        let codec = ffmpeg::codec::Id::AAC;
+        let channels = match a.channels {
+            AudioChannels::Mono => 1,
+            AudioChannels::Stereo => 2,
+        };
+        let sample_rate = a.sample_rate as i32;
 
-            let mut stream = output_ctx
-                .add_stream(codec)
-                .map_err(OutputInitError::FfmpegMp4Error)?;
+        let mut stream = output_ctx
+            .add_stream(codec)
+            .map_err(OutputInitError::FfmpegMp4Error)?;
 
-            // If audio time base doesn't match sample rate, ffmpeg muxer produces incorrect timestamps.
-            stream.set_time_base(ffmpeg::Rational::new(1, sample_rate));
+        // If audio time base doesn't match sample rate, ffmpeg muxer produces incorrect timestamps.
+        stream.set_time_base(ffmpeg::Rational::new(1, sample_rate));
 
-            let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
-            codecpar.codec_id = codec.into();
-            codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_AUDIO;
-            codecpar.sample_rate = sample_rate;
-            codecpar.ch_layout = ffmpeg::ffi::AVChannelLayout {
-                nb_channels: channels,
-                order: ffmpeg::ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC,
-                // This value is ignored when order is AV_CHANNEL_ORDER_UNSPEC
-                u: ffmpeg::ffi::AVChannelLayout__bindgen_ty_1 { mask: 0 },
-                // Field doc: "For some private data of the user."
-                opaque: ptr::null_mut(),
-            };
+        let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
+        let Mp4AudioEncoderConfig::Aac(encoder_config) = encoder;
+        unsafe {
+            codecpar.extradata = ffmpeg_next::ffi::av_malloc(encoder_config.len()) as *mut u8;
+            std::ptr::copy(
+                encoder_config.as_ptr(),
+                codecpar.extradata,
+                encoder_config.len(),
+            );
+            codecpar.extradata_size = encoder_config.len() as i32;
+        }
+        codecpar.codec_id = codec.into();
+        codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_AUDIO;
+        codecpar.sample_rate = sample_rate;
+        codecpar.profile = ffmpeg::ffi::FF_PROFILE_AAC_LOW;
+        codecpar.ch_layout = ffmpeg::ffi::AVChannelLayout {
+            nb_channels: channels,
+            order: ffmpeg::ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC,
+            // This value is ignored when order is AV_CHANNEL_ORDER_UNSPEC
+            u: ffmpeg::ffi::AVChannelLayout__bindgen_ty_1 { mask: 0 },
+            // Field doc: "For some private data of the user."
+            opaque: ptr::null_mut(),
+        };
 
-            let id = stream_count;
-            stream_count += 1;
+        let id = stream_count;
+        // stream_count += 1;
 
-            Ok::<StreamState, OutputInitError>(StreamState {
-                id,
-                time_base: sample_rate as f64,
-                timestamp_offset: None,
-            })
+        Some(StreamState {
+            id,
+            time_base: sample_rate as f64,
+            timestamp_offset: None,
         })
-        .transpose()?;
+    } else {
+        None
+    };
 
     let ffmpeg_options = ffmpeg::Dictionary::from_iter(&[("movflags", "faststart")]);
 

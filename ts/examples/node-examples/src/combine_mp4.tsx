@@ -91,6 +91,12 @@ async function run() {
           height: 1080,
         },
       },
+      audio: {
+        encoder: {
+          type: 'aac',
+          channels: 'stereo',
+        },
+      },
     },
     10000
   );
