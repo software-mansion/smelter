@@ -21,8 +21,6 @@ jobs:
     deploy:
         name: Deploy to GitHub Pages
         runs-on: ubuntu-latest
-        container:
-            image: ubuntu:mantic-20231011
         defaults:
             run:
                 working-directory: ./docs
@@ -36,9 +34,6 @@ jobs:
 
                   apt-get update -y -qq
                   apt-get install -y libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
-
-                  # required when job is running in docker container
-                  apt-get install -y build-essential curl pkg-config git libssl-dev libclang-dev libnss3 libatk1.0-0 libatk-bridge2.0-0 libgdk-pixbuf2.0-0 libgtk-3-0
 
             - name: 🛠 Setup Node.JS
               uses: actions/setup-node@v4
