@@ -1,5 +1,5 @@
 import type { _smelterInternals, Api } from '@swmansion/smelter';
-import type { ImageSpec, Resolution } from '@swmansion/smelter-browser-render';
+import type { ImageSpec, Resolution, ShaderSpec } from '@swmansion/smelter-browser-render';
 import type { Framerate } from './compositor/compositor';
 
 export type RegisterInput =
@@ -64,6 +64,15 @@ export type WorkerMessage =
   | {
       type: 'unregisterImage';
       imageId: string;
+    }
+  | {
+      type: 'registerShader';
+      shaderId: string;
+      shader: ShaderSpec;
+    }
+  | {
+      type: 'unregisterShader';
+      shaderId: string;
     }
   | {
       type: 'registerFont';

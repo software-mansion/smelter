@@ -30,12 +30,16 @@ registerWorkerEntrypoint<WorkerMessage, WorkerResponse>(
       return instance.registerOutput(request.outputId, request.output);
     } else if (request.type === 'registerImage') {
       return await instance.registerImage(request.imageId, request.image);
+    } else if (request.type === 'registerShader') {
+      return await instance.registerShader(request.shaderId, request.shader);
     } else if (request.type === 'unregisterInput') {
       return await instance.unregisterInput(request.inputId);
     } else if (request.type === 'unregisterOutput') {
       return await instance.unregisterOutput(request.outputId);
     } else if (request.type === 'unregisterImage') {
       return instance.unregisterImage(request.imageId);
+    } else if (request.type === 'unregisterShader') {
+      return instance.unregisterShader(request.shaderId);
     } else if (request.type === 'updateScene') {
       return instance.updateScene(request.outputId, request.output);
     } else if (request.type === 'registerFont') {

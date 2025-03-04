@@ -10,8 +10,12 @@ use error::{
 };
 
 pub fn shader_header() -> Module {
-    naga::front::wgsl::parse_str(include_str!("./validation/shader_header.wgsl"))
-        .expect("failed to parse the shader header file")
+    let header_code = match cfg!(target_arch = "wasm32") {
+        false => include_str!("./validation/shader_header.wgsl"),
+        true => include_str!("./validation/shader_header_web.wgsl"),
+    };
+
+    naga::front::wgsl::parse_str(header_code).expect("failed to parse the shader header file")
 }
 
 pub(super) fn validate_contains_header(

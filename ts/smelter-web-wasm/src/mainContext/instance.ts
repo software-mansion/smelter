@@ -10,7 +10,7 @@ import type { WorkerEvent, WorkerMessage, WorkerResponse } from '../workerApi';
 import { EventSender } from '../eventSender';
 import { Path } from 'path-parser';
 import { assert } from '../utils';
-import type { ImageSpec } from '@swmansion/smelter-browser-render';
+import type { ImageSpec, ShaderSpec } from '@swmansion/smelter-browser-render';
 import type { Api } from '@swmansion/smelter';
 import type { Logger } from 'pino';
 import { AsyncWorker } from '../workerContext/bridge';
@@ -102,7 +102,11 @@ class WasmInstance implements SmelterManager {
         return await this.instance.handleUnregisterImage(route.id);
       }
     } else if (route.type === 'shader') {
-      throw new Error('Shaders are not supported');
+      if (route.operation === 'register') {
+        return await this.instance.handleRegisterShader(route.id, request.body as ShaderSpec);
+      } else if (route.operation === 'unregister') {
+        return await this.instance.handleUnregisterShader(route.id);
+      }
     } else if (route.type === 'web-renderer') {
       throw new Error('Web renderers are not supported');
     }
@@ -270,6 +274,21 @@ class InnerInstance {
     return await this.worker.postMessage({
       type: 'unregisterImage',
       imageId,
+    });
+  }
+
+  public async handleRegisterShader(shaderId: string, spec: ShaderSpec) {
+    return await this.worker.postMessage({
+      type: 'registerShader',
+      shaderId,
+      shader: spec,
+    });
+  }
+
+  public async handleUnregisterShader(shaderId: string) {
+    return await this.worker.postMessage({
+      type: 'unregisterShader',
+      shaderId,
     });
   }
 }

@@ -1,4 +1,4 @@
-import type { Component, ImageSpec, Renderer } from '@swmansion/smelter-browser-render';
+import type { Component, ShaderSpec, ImageSpec, Renderer } from '@swmansion/smelter-browser-render';
 import type { Framerate } from '../compositor/compositor';
 import type { Logger } from 'pino';
 import type { Api } from '@swmansion/smelter';
@@ -109,6 +109,14 @@ export class Pipeline {
 
   public unregisterImage(imageId: string) {
     this.renderer.unregisterImage(imageId);
+  }
+
+  public async registerShader(shaderId: string, request: ShaderSpec) {
+    await this.renderer.registerShader(shaderId, request);
+  }
+
+  public unregisterShader(shaderId: string) {
+    this.renderer.unregisterShader(shaderId);
   }
 
   public async registerFont(url: string): Promise<void> {
