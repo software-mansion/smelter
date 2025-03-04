@@ -63,6 +63,10 @@ export class Renderer {
     await this.renderer.register_image(rendererId, imageSpec);
   }
 
+  public async registerShader(rendererId: Api.RendererId, shaderSpec: Api.ShaderSpec) {
+    await this.renderer.register_shader(rendererId, shaderSpec);
+  }
+
   public async registerFont(fontUrl: string) {
     await this.renderer.register_font(fontUrl);
   }
@@ -73,6 +77,10 @@ export class Renderer {
 
   public unregisterImage(rendererId: Api.RendererId) {
     this.renderer.unregister_image(rendererId);
+  }
+
+  public unregisterShader(rendererId: Api.RendererId) {
+    this.renderer.unregister_shader(rendererId);
   }
 
   public unregisterOutput(outputId: Api.OutputId) {

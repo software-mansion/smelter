@@ -10,7 +10,7 @@ import type { WorkerEvent, WorkerMessage, WorkerResponse } from '../workerApi';
 import { EventSender } from '../eventSender';
 import { Path } from 'path-parser';
 import { assert } from '../utils';
-import type { ImageSpec } from '@swmansion/smelter-browser-render';
+import type { ImageSpec, ShaderSpec } from '@swmansion/smelter-browser-render';
 import type { Api } from '@swmansion/smelter';
 import type { Logger } from 'pino';
 import { AsyncWorker } from '../workerContext/bridge';
@@ -156,7 +156,19 @@ class WasmInstance implements SmelterManager {
         });
       }
     } else if (route.type === 'shader') {
-      throw new Error('Shaders are not supported');
+      if (route.operation === 'register') {
+        assert(request.body);
+        return await this.worker.postMessage({
+          type: 'registerShader',
+          shaderId: route.id,
+          shader: request.body as ShaderSpec,
+        });
+      } else if (route.operation === 'unregister') {
+        return await this.worker.postMessage({
+          type: 'unregisterShader',
+          shaderId: route.id,
+        });
+      }
     } else if (route.type === 'web-renderer') {
       throw new Error('Web renderers are not supported');
     }

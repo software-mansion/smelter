@@ -7,6 +7,7 @@ import {
   type RegisterOutput,
   type RegisterInput,
   type RegisterImage,
+  type RegisterShader,
   intoRegisterOutputRequest,
 } from './api';
 import WasmInstance from '../mainContext/instance';
@@ -103,6 +104,11 @@ export default class Smelter {
   public async registerImage(imageId: string, request: RegisterImage): Promise<void> {
     assert(this.coreSmelter);
     await this.coreSmelter.registerImage(imageId, request);
+  }
+
+  public async registerShader(shaderId: string, shaderSpec: RegisterShader): Promise<void> {
+    assert(this.coreSmelter);
+    await this.coreSmelter.registerShader(shaderId, shaderSpec);
   }
 
   public async unregisterImage(imageId: string): Promise<void> {

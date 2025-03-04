@@ -226,17 +226,26 @@ impl TryFrom<Shader> for scene::ShaderComponent {
     type Error = TypeError;
 
     fn try_from(shader: Shader) -> Result<Self, Self::Error> {
+        let children = shader
+            .children
+            .unwrap_or_default()
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        #[cfg(target_arch = "wasm32")]
+        if children.len() > 1 {
+            return Err(TypeError::new(
+                "Shader component can have only one child on web platform.",
+            ));
+        }
+
         Ok(Self {
             id: shader.id.map(Into::into),
             shader_id: shader.shader_id.into(),
             shader_param: shader.shader_param.map(Into::into),
             size: shader.resolution.into(),
-            children: shader
-                .children
-                .unwrap_or_default()
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<Vec<_>, _>>()?,
+            children,
         })
     }
 }

@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use compositor_api::types as api;
 use compositor_render::{
-    image::ImageSpec, InputId, OutputFrameFormat, OutputId, RegistryType, RendererId,
-    RendererOptions, RendererSpec,
+    image::ImageSpec, shader::ShaderSpec, InputId, OutputFrameFormat, OutputId, RegistryType,
+    RendererId, RendererOptions, RendererSpec,
 };
 use glyphon::fontdb::Source;
 use wasm_bindgen::JsValue;
@@ -69,14 +69,13 @@ impl Renderer {
         self.renderer.register_input(InputId(input_id.into()));
     }
 
-    pub async fn register_image(
+    pub async fn register_renderer(
         &mut self,
         renderer_id: String,
-        image_spec: ImageSpec,
+        spec: RendererSpec,
     ) -> Result<(), JsValue> {
-        let renderer_spec = RendererSpec::Image(image_spec);
         self.renderer
-            .register_renderer(RendererId(renderer_id.into()), renderer_spec)
+            .register_renderer(RendererId(renderer_id.into()), spec)
             .map_err(types::to_js_error)
     }
 
@@ -96,9 +95,13 @@ impl Renderer {
         self.output_downloader.remove_output(&output_id);
     }
 
-    pub fn unregister_image(&mut self, renderer_id: String) -> Result<(), JsValue> {
+    pub fn unregister_renderer(
+        &mut self,
+        renderer_id: String,
+        registry: RegistryType,
+    ) -> Result<(), JsValue> {
         self.renderer
-            .unregister_renderer(&RendererId(renderer_id.into()), RegistryType::Image)
+            .unregister_renderer(&RendererId(renderer_id.into()), registry)
             .map_err(types::to_js_error)
     }
 }
