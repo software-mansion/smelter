@@ -25,7 +25,7 @@ jobs:
                   fc-cache -f
 
             - name: 🔧 Install the rust toolchain
-              uses: dtolnay/rust-toolchain@stable
+              uses: dtolnay/rust-toolchain@1.81.0
               with:
                   components: rustfmt, clippy
 
