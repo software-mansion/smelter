@@ -1,8 +1,11 @@
 use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
-use compositor_api::types::{Component, ImageSpec, Resolution};
-use compositor_render::image::{ImageSource, ImageType};
+use compositor_api::types::{Component, ImageSpec, Resolution, ShaderSpec};
+use compositor_render::{
+    image::{ImageSource, ImageType},
+    RegistryType, RendererSpec,
+};
 use glyphon::fontdb::Source;
 use wasm_bindgen::prelude::*;
 use wgpu::create_wgpu_context;
@@ -85,15 +88,28 @@ impl SmelterRenderer {
         };
 
         let bytes = download(&url).await?;
+        let image_spec = compositor_render::image::ImageSpec {
+            src: ImageSource::Bytes { bytes },
+            image_type,
+        };
 
         let mut renderer = self.0.lock().unwrap();
         renderer
-            .register_image(
-                renderer_id,
-                compositor_render::image::ImageSpec {
-                    src: ImageSource::Bytes { bytes },
-                    image_type,
-                },
+            .register_renderer(renderer_id, RendererSpec::Image(image_spec))
+            .await
+    }
+
+    pub async fn register_shader(
+        &self,
+        shader_id: String,
+        shader_spec: JsValue,
+    ) -> Result<(), JsValue> {
+        let shader_spec = types::from_js_value::<ShaderSpec>(shader_spec)?;
+        let mut renderer = self.0.lock().unwrap();
+        renderer
+            .register_renderer(
+                shader_id,
+                shader_spec.try_into().map_err(types::to_js_error)?,
             )
             .await
     }
@@ -120,7 +136,12 @@ impl SmelterRenderer {
 
     pub fn unregister_image(&self, renderer_id: String) -> Result<(), JsValue> {
         let mut renderer = self.0.lock().unwrap();
-        renderer.unregister_image(renderer_id)
+        renderer.unregister_renderer(renderer_id, RegistryType::Image)
+    }
+
+    pub fn unregister_shader(&self, renderer_id: String) -> Result<(), JsValue> {
+        let mut renderer = self.0.lock().unwrap();
+        renderer.unregister_renderer(renderer_id, RegistryType::Shader)
     }
 }
 

@@ -3,6 +3,8 @@ import type { Api, Renderers } from '@swmansion/smelter';
 
 export type RegisterImage = Required<Pick<Renderers.RegisterImage, 'assetType' | 'url'>>;
 
+export type RegisterShader = Renderers.RegisterShader;
+
 export type RegisterOutput =
   | {
       type: 'stream';

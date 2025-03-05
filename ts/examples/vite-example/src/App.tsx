@@ -9,6 +9,7 @@ import ScreenCapture from './examples/ScreenCaptureExample';
 import { setWasmBundleUrl } from '@swmansion/smelter-web-wasm';
 import WhipExample from './examples/WhipExample';
 import DemoExample from './examples/Demo';
+import ShaderExample from './examples/ShaderExample';
 
 setWasmBundleUrl('/assets/smelter.wasm');
 
@@ -21,6 +22,7 @@ function App() {
     multipleCompositors: <MultipleInstances />,
     camera: <Camera />,
     screenCapture: <ScreenCapture />,
+    shader: <ShaderExample />,
     home: <Home />,
     demo: <DemoExample />,
   };
@@ -43,6 +45,7 @@ function App() {
         </button>
         <button onClick={() => setCurrentExample('camera')}>Camera</button>
         <button onClick={() => setCurrentExample('screenCapture')}>Screen Capture</button>
+        <button onClick={() => setCurrentExample('shader')}>Shader</button>
 
         <h3>Smelter rendering engine examples</h3>
         <button onClick={() => setCurrentExample('counter')}>Counter</button>
@@ -87,6 +90,9 @@ function Home() {
       </li>
       <li>
         <code>Screen Capture</code> - Use screen capture as an input and render output on canvas.
+      </li>
+      <li>
+        <code>Shader</code> - Render video with a custom shader effect.
       </li>
       <h3>
         <code>@swmansion/smelter-browser-render</code> - Rendering engine from Smelter
