@@ -200,7 +200,9 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                             VideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions {
                                 decoder: pipeline::VideoDecoder::FFmpegH264,
                             },
-                            VideoDecoder::FfmpegVp8 => unimplemented!("WHIP VP8 input"),
+                            VideoDecoder::FfmpegVp8 => decoder::VideoDecoderOptions {
+                                decoder: pipeline::VideoDecoder::FFmpegVp8,
+                            },
                             #[cfg(feature = "vk-video")]
                             VideoDecoder::VulkanVideo => decoder::VideoDecoderOptions {
                                 decoder: pipeline::VideoDecoder::VulkanVideoH264,
