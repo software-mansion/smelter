@@ -1,27 +1,25 @@
 import { Queue } from '@datastructures-js/queue';
 import type { InputVideoFrame } from './frame';
-import type {
-  InputVideoFrameSource,
-  EncodedVideoSource,
-  VideoFramePayload,
-  InputStartResult,
-} from './input';
+import type { InputVideoFrameSource, EncodedSource, VideoFramePayload } from './input';
 import type { Logger } from 'pino';
-import { sleep } from '../../utils';
+import { assert, sleep } from '../../utils';
+import type { WorkloadBalancer, WorkloadBalancerNode } from '../queue';
 
-const MAX_DECODED_FRAMES = 10;
+const MAX_DECODED_FRAMES = 20;
 
-export class Decoder implements InputVideoFrameSource {
-  private source: EncodedVideoSource;
+export class InputVideoDecoder implements InputVideoFrameSource {
+  private source: EncodedSource;
   private decoder: VideoDecoder;
   private offsetMs?: number;
   private frames: Queue<InputVideoFrame>;
   private receivedEos: boolean = false;
   private firstFramePromise: Promise<void>;
+  private workloadBalancerNode: WorkloadBalancerNode;
 
-  public constructor(source: EncodedVideoSource, logger: Logger) {
+  public constructor(source: EncodedSource, logger: Logger, workloadBalancer: WorkloadBalancer) {
     this.source = source;
     this.frames = new Queue();
+    this.workloadBalancerNode = workloadBalancer.highPriorityNode();
 
     let onFirstFrame: (() => void) | undefined;
     let onDecoderError: ((err: Error) => void) | undefined;
@@ -44,6 +42,7 @@ export class Decoder implements InputVideoFrameSource {
 
   public async init(): Promise<void> {
     const metadata = this.source.getMetadata();
+    assert(metadata.video);
     this.decoder.configure(metadata.video.decoderConfig);
     while (!this.trySchedulingDecoding()) {
       await sleep(100);
@@ -52,23 +51,24 @@ export class Decoder implements InputVideoFrameSource {
   }
 
   public nextFrame(): VideoFramePayload | undefined {
+    this.workloadBalancerNode.setState(
+      this.receivedEos ? 1 : this.frames.size() / MAX_DECODED_FRAMES
+    );
     const frame = this.frames.pop();
     this.trySchedulingDecoding();
     if (frame) {
       return { type: 'frame', frame: frame };
     } else if (this.receivedEos && this.decoder.decodeQueueSize === 0) {
+      this.workloadBalancerNode.close();
       return { type: 'eos' };
     }
     return;
   }
 
-  public getMetadata(): InputStartResult {
-    throw new Error('Decoder does not provide metadata');
-  }
-
   public close() {
     this.decoder.close();
     this.source.close();
+    this.workloadBalancerNode.close();
   }
 
   private onFrameDecoded(videoFrame: VideoFrame) {
@@ -88,7 +88,7 @@ export class Decoder implements InputVideoFrameSource {
       return true;
     }
     while (this.frames.size() + this.decoder.decodeQueueSize < MAX_DECODED_FRAMES) {
-      const payload = this.source.nextChunk();
+      const payload = this.source.nextVideoChunk();
       if (!payload) {
         return false;
       } else if (payload.type === 'eos') {

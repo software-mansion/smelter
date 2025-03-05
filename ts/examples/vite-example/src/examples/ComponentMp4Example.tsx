@@ -18,7 +18,7 @@ function InputMp4Example() {
 
   return (
     <div className="card">
-      <CompositorCanvas onCanvasCreate={onCanvasCreate} width={1280} height={720}>
+      <CompositorCanvas onCanvasCreated={onCanvasCreate} width={1280} height={720}>
         <Scene />
       </CompositorCanvas>
     </div>
