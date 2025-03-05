@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use compositor_render::OutputId;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use fdk_aac_sys as fdk;
@@ -25,6 +25,7 @@ use super::resampler::OutputResampler;
 /// https://github.com/mstorsjo/fdk-aac/blob/master/documentation/aacEncoder.pdf
 pub struct AacEncoder {
     samples_batch_sender: Sender<PipelineEvent<OutputSamples>>,
+    pub config: Bytes,
 }
 
 #[derive(Debug, Clone)]
@@ -61,13 +62,14 @@ impl AacEncoder {
             })
             .unwrap();
 
-        init_result_receiver
+        let config = init_result_receiver
             .recv()
             .unwrap()
             .map_err(EncoderInitError::AacError)?;
 
         Ok(Self {
             samples_batch_sender,
+            config,
         })
     }
 
@@ -87,7 +89,7 @@ struct AacEncoderInner {
 }
 
 impl AacEncoderInner {
-    fn new(options: AacEncoderOptions) -> Result<Self, fdk::AACENC_ERROR> {
+    fn new(options: AacEncoderOptions) -> Result<(Self, Bytes), fdk::AACENC_ERROR> {
         // Section 2.3 of the fdk-aac Encoder documentation - encoder initialization.
         let mut encoder = ptr::null_mut();
         // For mono and stereo audio, those values are the same, but it's not the case for other channel modes.
@@ -152,15 +154,18 @@ impl AacEncoderInner {
             info = maybe_info.assume_init();
         }
 
-        Ok(Self {
-            encoder,
-            input_buffer: Vec::new(),
-            output_buffer: vec![0; info.maxOutBufBytes as usize],
-            sample_rate: options.sample_rate,
-            start_pts: None,
-            sent_samples: 0,
-            channels,
-        })
+        Ok((
+            Self {
+                encoder,
+                input_buffer: Vec::new(),
+                output_buffer: vec![0; info.maxOutBufBytes as usize],
+                sample_rate: options.sample_rate,
+                start_pts: None,
+                sent_samples: 0,
+                channels,
+            },
+            Bytes::copy_from_slice(&info.confBuf[0..(info.confSize as usize)]),
+        ))
     }
 
     fn encode(
@@ -303,15 +308,15 @@ impl Drop for AacEncoderInner {
 }
 
 fn run_encoder_thread(
-    init_result_sender: Sender<Result<(), fdk::AACENC_ERROR>>,
+    init_result_sender: Sender<Result<Bytes, fdk::AACENC_ERROR>>,
     options: AacEncoderOptions,
     samples_batch_receiver: Receiver<PipelineEvent<OutputSamples>>,
     packets_sender: Sender<EncoderOutputEvent>,
     mut resampler: Option<OutputResampler>,
 ) {
     let mut encoder = match AacEncoderInner::new(options) {
-        Ok(encoder) => {
-            init_result_sender.send(Ok(())).unwrap();
+        Ok((encoder, config)) => {
+            init_result_sender.send(Ok(config)).unwrap();
             encoder
         }
         Err(err) => {

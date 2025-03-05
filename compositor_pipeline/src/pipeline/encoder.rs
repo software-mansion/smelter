@@ -44,7 +44,7 @@ pub enum AudioEncoderPreset {
 
 pub struct Encoder {
     pub video: Option<VideoEncoder>,
-    audio: Option<AudioEncoder>,
+    pub audio: Option<AudioEncoder>,
 }
 
 pub enum VideoEncoder {
