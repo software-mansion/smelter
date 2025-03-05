@@ -2,6 +2,7 @@ use anyhow::Result;
 use compositor_api::types::Resolution;
 use serde_json::json;
 use std::{process::Command, thread::sleep, time::Duration};
+use tracing::info;
 
 use integration_tests::{
     examples::{self, run_example},
@@ -33,6 +34,24 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
+    let token_input_1 = examples::post(
+        "input/input_2/register",
+        &json!({
+            "type": "whip",
+            "video": {
+                "decoder": "ffmpeg_vp8"
+            },
+            "audio": {
+                "decoder": "opus"
+            },
+        }),
+    )?
+    .json::<serde_json::Value>();
+
+    if let Ok(token) = token_input_1 {
+        info!("Bearer token for input_2: {}", token["bearer_token"]);
+    }
+
     examples::post(
         "output/output_1/register",
         &json!({
@@ -54,13 +73,18 @@ fn client_code() -> Result<()> {
                         "background_color": "#4d4d4dff",
                         "children": [
                             {
-                              "type": "rescaler",
-                              "width": VIDEO_RESOLUTION.width,
-                              "height": VIDEO_RESOLUTION.height,
-                              "child": {
-                                "type": "input_stream",
-                                "input_id": "input_1"
-                              }
+                                "type": "rescaler",
+                                    "child": {
+                                    "type": "input_stream",
+                                    "input_id": "input_1"
+                                }
+                            },
+                            {
+                                "type": "rescaler",
+                                "child": {
+                                    "type": "input_stream",
+                                    "input_id": "input_2"
+                                }
                             }
                         ]
                     }
