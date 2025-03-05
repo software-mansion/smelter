@@ -33,17 +33,6 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    //   examples::post(
-    //     "input/input_1/register",
-    //     &json!({
-    //         "type": "rtp_stream",
-    //         "port": INPUT_PORT,
-    //         "video": {
-    //             "decoder": "ffmpeg_h264"
-    //         }
-    //     }),
-    // )?;
-
     examples::post(
         "output/output_1/register",
         &json!({
@@ -97,7 +86,6 @@ fn client_code() -> Result<()> {
     examples::post("start", &json!({}))?;
 
     let gst_input_command = format!("gst-launch-1.0 videotestsrc pattern=ball ! video/x-raw,width=1280,height=720 ! vp8enc ! rtpvp8pay ! udpsink host=127.0.0.1 port={INPUT_PORT}");
-    // let gst_input_command = format!("gst-launch-1.0 videotestsrc ! video/x-raw,format=I420,width=1280,height=720 ! vp8enc ! rtpvp8pay ! udpsink host=127.0.0.1 port={INPUT_PORT}");
     Command::new("bash")
         .arg("-c")
         .arg(gst_input_command)
