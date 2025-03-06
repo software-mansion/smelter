@@ -24,3 +24,8 @@ export async function sleep(timeoutMs: number): Promise<void> {
 export function framerateToDurationMs(framerate: Framerate): number {
   return (1000 * framerate.den) / framerate.num;
 }
+
+export async function downloadToArrayBuffer(url: string): Promise<ArrayBuffer> {
+  const response = await fetch(url);
+  return await response.arrayBuffer();
+}

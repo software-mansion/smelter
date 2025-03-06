@@ -52,7 +52,9 @@ export function intoRegisterOutputRequest(request: RegisterOutput): Output.Regis
 }
 
 export type RegisterInput =
-  | { type: 'mp4'; url: string }
+  | ({ type: 'mp4' } & RegisterMP4Input)
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: MediaStream };
+
+type RegisterMP4Input = { url: string } | { blob: Blob };

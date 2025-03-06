@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import Smelter from '@swmansion/smelter-web-wasm';
+import React, { useCallback } from 'react';
+import type Smelter from '@swmansion/smelter-web-wasm';
 
 type VideoProps = React.DetailedHTMLProps<
   React.VideoHTMLAttributes<HTMLVideoElement>,
@@ -7,14 +7,14 @@ type VideoProps = React.DetailedHTMLProps<
 >;
 
 type CompositorVideoProps = {
-  onVideoCreate?: (smelter: Smelter) => Promise<void>;
-  onVideoStarted?: (smelter: Smelter) => Promise<void>;
+  outputId: string;
+  onVideoCreated?: (smelter: Smelter) => Promise<void>;
+  smelter: Smelter;
   children: React.ReactElement;
 } & VideoProps;
 
 export default function CompositorVideo(props: CompositorVideoProps) {
-  const { onVideoCreate, onVideoStarted, children, ...videoProps } = props;
-  const [smelter, setSmelter] = useState<Smelter | undefined>(undefined);
+  const { outputId, onVideoCreated, children, smelter, ...videoProps } = props;
 
   const videoRef = useCallback(
     async (video: HTMLVideoElement | null) => {
@@ -22,15 +22,11 @@ export default function CompositorVideo(props: CompositorVideoProps) {
         return;
       }
 
-      const smelter = new Smelter({});
-
-      await smelter.init();
-
-      if (onVideoCreate) {
-        await onVideoCreate(smelter);
+      if (onVideoCreated) {
+        await onVideoCreated(smelter);
       }
 
-      const { stream } = await smelter.registerOutput('output', children, {
+      const { stream } = await smelter.registerOutput(outputId, children, {
         type: 'stream',
         video: {
           resolution: {
@@ -41,27 +37,13 @@ export default function CompositorVideo(props: CompositorVideoProps) {
         audio: true,
       });
 
-      await smelter.start();
-      setSmelter(smelter);
-
-      if (onVideoStarted) {
-        await onVideoStarted(smelter);
-      }
       if (stream) {
         video.srcObject = stream;
         await video.play();
       }
     },
-    [onVideoCreate, onVideoStarted, videoProps.width, videoProps.height, children]
+    [onVideoCreated, videoProps.width, videoProps.height, smelter, outputId]
   );
-
-  useEffect(() => {
-    return () => {
-      if (smelter) {
-        void smelter.terminate();
-      }
-    };
-  }, [smelter]);
 
   return <video ref={videoRef} {...videoProps} />;
 }

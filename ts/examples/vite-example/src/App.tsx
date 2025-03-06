@@ -11,6 +11,7 @@ import WhipExample from './examples/WhipExample';
 import DemoExample from './examples/Demo';
 import MultipleOutputs from './examples/MultipleOutputs';
 import MediaStreamInput from './examples/MediaStreamExample';
+import UploadMp4Example from './examples/UploadMp4Example';
 
 setWasmBundleUrl('/assets/smelter.wasm');
 
@@ -25,6 +26,7 @@ function App() {
     camera: <Camera />,
     screenCapture: <ScreenCapture />,
     mediaStream: <MediaStreamInput />,
+    uploadMp4: <UploadMp4Example />,
     home: <Home />,
     demo: <DemoExample />,
   };
@@ -49,6 +51,7 @@ function App() {
         <button onClick={() => setCurrentExample('camera')}>Camera</button>
         <button onClick={() => setCurrentExample('screenCapture')}>Screen Capture</button>
         <button onClick={() => setCurrentExample('mediaStream')}>MediaStream</button>
+        <button onClick={() => setCurrentExample('uploadMp4')}>Upload MP4</button>
 
         <h3>Smelter rendering engine examples</h3>
         <button onClick={() => setCurrentExample('counter')}>Counter</button>

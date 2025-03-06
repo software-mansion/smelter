@@ -13,6 +13,7 @@ import { _smelterInternals } from '@swmansion/smelter';
  */
 export type RegisterInputRequest =
   | Api.RegisterInput
+  | { type: 'mp4_blob'; blob: any }
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any };
@@ -52,6 +53,13 @@ export function intoRegisterInput(input: RegisterInput): RegisterInputRequest {
 }
 
 function intoMp4RegisterInput(input: Inputs.RegisterMp4Input): RegisterInputRequest {
+  if (input.blob) {
+    return {
+      type: 'mp4_blob',
+      blob: input.blob,
+    };
+  }
+
   return {
     type: 'mp4',
     url: input.url,
