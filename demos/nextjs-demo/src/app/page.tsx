@@ -1,11 +1,23 @@
+'use client';
+
 import './page.css'
 import CanvasPage from './CanvasPage'
+import { useState } from 'react';
 
 function Home() {
+  const [showExample, setShowExample] = useState(false);
+
   return (
-    <>
-      <CanvasPage />
-    </>
+    showExample
+      ? <CanvasPage />
+      : (
+        <div>
+          <button onClick={() => setShowExample(true)} style={{ margin: 10 }}>
+            Launch example
+          </button>
+        </div>
+      )
+
   )
 }
 
