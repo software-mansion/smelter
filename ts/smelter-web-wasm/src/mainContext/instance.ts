@@ -30,6 +30,88 @@ export type InstanceContext = {
 };
 
 class WasmInstance implements SmelterManager {
+  private instance?: InnerInstance;
+
+  public constructor(options: { framerate: Framerate; wasmBundleUrl: string; logger: Logger }) {
+    this.instance = new InnerInstance(options);
+  }
+
+  public async setupInstance(): Promise<void> {
+    return this.instance?.setupInstance();
+  }
+
+  public async sendRequest(request: ApiRequest): Promise<object> {
+    return await this.handleRequest(request);
+  }
+
+  sendMultipartRequest(_request: MultipartRequest): Promise<object> {
+    throw new Error('Method sendMultipartRequest not implemented for web-wasm.');
+  }
+
+  public async registerFont(fontUrl: string): Promise<void> {
+    await this.instance?.registerFont(fontUrl);
+  }
+
+  public registerEventListener(cb: (event: unknown) => void): void {
+    this.instance?.registerEventListener(cb);
+  }
+
+  public async terminate(): Promise<void> {
+    await this.instance?.terminate();
+    this.instance = undefined;
+  }
+
+  private async handleRequest(request: ApiRequest): Promise<any> {
+    assert(this.instance, 'Failed to handle the request: instance terminated.');
+    const route = apiPath.test(request.route);
+    if (!route) {
+      if (apiStartPath.test(request.route)) {
+        await this.instance.handleStart();
+        return;
+      }
+      throw new Error('Unknown route');
+    }
+
+    if (route.type == 'input') {
+      if (route.operation === 'register') {
+        return await this.instance.handleRegisterInput(
+          route.id,
+          request.body as CoreInput.RegisterInputRequest
+        );
+      } else if (route.operation === 'unregister') {
+        return await this.instance.handleUnregisterInput(route.id);
+      }
+    } else if (route.type === 'output') {
+      if (route.operation === 'register') {
+        return await this.instance.handleRegisterOutput(
+          route.id,
+          request.body as CoreOutput.RegisterOutputRequest
+        );
+      } else if (route.operation === 'unregister') {
+        return await this.instance.handleUnregisterOutput(route.id);
+      } else if (route.operation === 'update') {
+        return await this.instance.handleUpdateOutput(
+          route.id,
+          request.body as Api.UpdateOutputRequest
+        );
+      }
+    } else if (route.type === 'image') {
+      if (route.operation === 'register') {
+        return await this.instance.handleRegisterImage(route.id, request.body as ImageSpec);
+      } else if (route.operation === 'unregister') {
+        return await this.instance.handleUnregisterImage(route.id);
+      }
+    } else if (route.type === 'shader') {
+      throw new Error('Shaders are not supported');
+    } else if (route.type === 'web-renderer') {
+      throw new Error('Web renderers are not supported');
+    }
+
+    throw new Error('Unknown request');
+  }
+}
+
+class InnerInstance {
   private eventSender: EventSender = new EventSender();
   private worker: AsyncWorker<WorkerMessage, WorkerResponse, WorkerEvent>;
   private logger: Logger;
@@ -77,14 +159,6 @@ class WasmInstance implements SmelterManager {
     this.logger.debug('WASM instance initialized');
   }
 
-  public async sendRequest(request: ApiRequest): Promise<object> {
-    return await this.handleRequest(request);
-  }
-
-  sendMultipartRequest(_request: MultipartRequest): Promise<object> {
-    throw new Error('Method sendMultipartRequest not implemented for web-wasm.');
-  }
-
   public async registerFont(fontUrl: string): Promise<void> {
     await this.worker.postMessage({ type: 'registerFont', url: fontUrl });
   }
@@ -100,93 +174,13 @@ class WasmInstance implements SmelterManager {
     await this.worker.postMessage({ type: 'terminate' });
     await this.audioMixer.close();
     this.worker.terminate();
-
-    // WasmInstance might be kept in the memory by some React state
-    (this.audioMixer as any) = undefined;
-    this.inputs = {};
-    this.outputs = {};
   }
 
-  private async handleRequest(request: ApiRequest): Promise<any> {
-    const route = apiPath.test(request.route);
-    if (!route) {
-      if (apiStartPath.test(request.route)) {
-        await this.worker.postMessage({ type: 'start' });
-        return;
-      }
-      throw new Error('Unknown route');
-    }
-
-    if (route.type == 'input') {
-      if (route.operation === 'register') {
-        assert(request.body);
-        return await this.handleRegisterInput(
-          route.id,
-          request.body as CoreInput.RegisterInputRequest
-        );
-      } else if (route.operation === 'unregister') {
-        const input = this.inputs[route.id];
-        if (input) {
-          delete this.inputs[route.id];
-          await input.terminate();
-        }
-        return await this.worker.postMessage({
-          type: 'unregisterInput',
-          inputId: route.id,
-        });
-      }
-    } else if (route.type === 'output') {
-      if (route.operation === 'register') {
-        assert(request.body);
-        return await this.handleRegisterOutput(
-          route.id,
-          request.body as CoreOutput.RegisterOutputRequest
-        );
-      } else if (route.operation === 'unregister') {
-        const output = this.outputs[route.id];
-        if (output) {
-          delete this.outputs[route.id];
-          await output.terminate();
-        }
-        return await this.worker.postMessage({
-          type: 'unregisterOutput',
-          outputId: route.id,
-        });
-      } else if (route.operation === 'update') {
-        const body = request.body as Api.UpdateOutputRequest;
-        if (body.audio) {
-          this.audioMixer.update(route.id, body.audio.inputs);
-        }
-        return await this.worker.postMessage({
-          type: 'updateScene',
-          outputId: route.id,
-          output: body,
-        });
-      }
-    } else if (route.type === 'image') {
-      if (route.operation === 'register') {
-        assert(request.body);
-        return await this.worker.postMessage({
-          type: 'registerImage',
-          imageId: route.id,
-          image: request.body as ImageSpec,
-        });
-      } else if (route.operation === 'unregister') {
-        return await this.worker.postMessage({
-          type: 'unregisterImage',
-          imageId: route.id,
-        });
-      }
-    } else if (route.type === 'shader') {
-      throw new Error('Shaders are not supported');
-    } else if (route.type === 'web-renderer') {
-      throw new Error('Web renderers are not supported');
-    }
-
-    throw new Error('Unknown request');
+  public async handleStart() {
+    await this.worker.postMessage({ type: 'start' });
   }
 
-  private async handleRegisterOutput(
+  public async handleRegisterOutput(
     outputId: string,
     request: CoreOutput.RegisterOutputRequest
   ): Promise<RegisterOutputResponse | undefined> {
@@ -210,7 +204,7 @@ class WasmInstance implements SmelterManager {
     return result;
   }
 
-  private async handleRegisterInput(
+  public async handleRegisterInput(
     inputId: string,
     request: CoreInput.RegisterInputRequest
   ): Promise<{ video_duration_ms?: number; audio_duration_ms?: number }> {
@@ -227,6 +221,56 @@ class WasmInstance implements SmelterManager {
     this.inputs[inputId] = input;
     assert(result?.type === 'registerInput');
     return result.body;
+  }
+
+  public async handleUnregisterOutput(outputId: string) {
+    const output = this.outputs[outputId];
+    if (output) {
+      delete this.outputs[outputId];
+      await output.terminate();
+    }
+    return await this.worker.postMessage({
+      type: 'unregisterOutput',
+      outputId,
+    });
+  }
+
+  public async handleUnregisterInput(inputId: string) {
+    const input = this.inputs[inputId];
+    if (input) {
+      delete this.inputs[inputId];
+      await input.terminate();
+    }
+    return await this.worker.postMessage({
+      type: 'unregisterInput',
+      inputId: inputId,
+    });
+  }
+
+  public async handleUpdateOutput(outputId: string, update: Api.UpdateOutputRequest) {
+    if (update.audio) {
+      this.audioMixer.update(outputId, update.audio.inputs);
+    }
+    return await this.worker.postMessage({
+      type: 'updateScene',
+      outputId,
+      output: update,
+    });
+  }
+
+  public async handleRegisterImage(imageId: string, spec: ImageSpec) {
+    return await this.worker.postMessage({
+      type: 'registerImage',
+      imageId,
+      image: spec,
+    });
+  }
+
+  public async handleUnregisterImage(imageId: string) {
+    return await this.worker.postMessage({
+      type: 'unregisterImage',
+      imageId,
+    });
   }
 }
 
