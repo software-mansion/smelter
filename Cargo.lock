@@ -929,10 +929,13 @@ dependencies = [
  "compositor_render",
  "crossbeam-channel",
  "decklink",
+ "derivative",
  "fdk-aac-sys",
  "ffmpeg-next",
  "glyphon",
+ "h264-reader 0.8.0",
  "log",
+ "memchr",
  "mp4",
  "opus",
  "rand",
@@ -2079,6 +2082,19 @@ dependencies = [
 name = "h264-reader"
 version = "0.7.1-dev"
 source = "git+https://github.com/membraneframework-labs/h264-reader.git?branch=live-compositor#9292ad0ab24b75e07815f546f41cef24b30b09c9"
+dependencies = [
+ "bitstream-io",
+ "hex-slice",
+ "log",
+ "memchr",
+ "rfc6381-codec",
+]
+
+[[package]]
+name = "h264-reader"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "036a78b2620d92f0ec57690bc792b3bb87348632ee5225302ba2e66a48021c6c"
 dependencies = [
  "bitstream-io",
  "hex-slice",
@@ -5506,7 +5522,7 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "clap",
  "derivative",
- "h264-reader",
+ "h264-reader 0.7.1-dev",
  "memchr",
  "thiserror",
  "tracing",

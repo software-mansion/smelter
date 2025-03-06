@@ -12,6 +12,8 @@ use crate::{
     pipeline::{EncodedChunk, EncodedChunkKind, EncoderOutputEvent},
 };
 
+mod parser;
+
 #[derive(Debug, Clone)]
 pub struct RtmpSenderOptions {
     pub url: String,
@@ -39,8 +41,6 @@ impl RmtpSender {
         options: RtmpSenderOptions,
         packets_receiver: Receiver<EncoderOutputEvent>,
     ) -> Result<Self, OutputInitError> {
-        let (output_ctx, video_stream, audio_stream) = init_ffmpeg_output(options)?;
-
         let output_id = output_id.clone();
         std::thread::Builder::new()
             .name(format!("RTMP sender thread for output {}", output_id))
@@ -49,7 +49,7 @@ impl RmtpSender {
                     tracing::info_span!("RTMP sender  writer", output_id = output_id.to_string())
                         .entered();
 
-                run_ffmpeg_output_thread(output_ctx, video_stream, audio_stream, packets_receiver);
+                run_ffmpeg_output_thread(options, packets_receiver);
                 emit_event(Event::OutputDone(output_id));
                 debug!("Closing RTMP sender thread.");
             })
@@ -143,11 +143,81 @@ fn init_ffmpeg_output(
 }
 
 fn run_ffmpeg_output_thread(
-    mut output_ctx: ffmpeg::format::context::Output,
-    mut video_stream: Option<StreamState>,
-    mut audio_stream: Option<StreamState>,
+    options: RtmpSenderOptions,
     packets_receiver: Receiver<EncoderOutputEvent>,
 ) {
+    let mut parser = parser::Parser::default();
+
+    let mut spss = Vec::new();
+    let mut pps = Vec::new();
+    let mut first_nalus = Vec::new();
+    let mut audio_packets = Vec::new();
+    for packet in packets_receiver.clone() {
+        match packet {
+            EncoderOutputEvent::Data(chunk) => {
+                if let EncodedChunkKind::Audio(_) = chunk.kind {
+                    audio_packets.push(chunk);
+                    continue;
+                }
+
+                let nalus = parser.parse(&chunk.data, chunk.pts.as_millis() as u64);
+                let mut spss_pps_finished = false;
+                for (nalu, pts) in nalus {
+                    match nalu {
+                        Ok(nalu) => {
+                            first_nalus.push(nalu.clone());
+                            match nalu {
+                                parser::ParsedNalu::Sps(seq_parameter_set) => {
+                                    spss.push(seq_parameter_set);
+                                }
+                                parser::ParsedNalu::Pps(pic_parameter_set) => {
+                                    pps.push(pic_parameter_set);
+                                }
+                                parser::ParsedNalu::Slice(_) => {
+                                    spss_pps_finished = true;
+                                }
+                                parser::ParsedNalu::Other(_) => {
+                                    spss_pps_finished = true;
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            error!("Failed to parse NALU: {}.", err);
+                        }
+                    }
+                }
+
+                if spss_pps_finished {
+                    break;
+                }
+            }
+            EncoderOutputEvent::VideoEOS => {
+                return;
+            }
+            EncoderOutputEvent::AudioEOS => {
+                return;
+            }
+        }
+    }
+
+    // TODO: use spss, pps, first_nalus, audio_packets to initialize output
+    // Create extradata:
+    // for video (AVCDecoderConfigurationRecord) from SPS and PPS (https://membrane.stream/learn/h264/3)
+    // for audio using audio spec (channels etc. - like in membrane rtmp plugin)
+    //
+    // Write all nalus received previously to output (in AVCC format)
+    // Push packets to parser and create AVCC format (to change Annex B to AVCC format)
+
+    // Posibly, parser needs to have au_splitter as well
+
+    let (mut output_ctx, mut video_stream, mut audio_stream) = match init_ffmpeg_output(options) {
+        Ok((output_ctx, video_stream, audio_stream)) => (output_ctx, video_stream, audio_stream),
+        Err(err) => {
+            error!("Failed to initialize RTMP output: {}.", err);
+            return;
+        }
+    };
+
     let mut received_video_eos = video_stream.as_ref().map(|_| false);
     let mut received_audio_eos = audio_stream.as_ref().map(|_| false);
 
