@@ -27,7 +27,7 @@ impl InterleavedYuv422Texture {
                 // g - y1
                 // b - v
                 // a - y2
-                wgpu::TextureFormat::Rgba8UnormSrgb,
+                wgpu::TextureFormat::Rgba8Unorm,
                 wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::COPY_DST
                     | wgpu::TextureUsages::COPY_SRC
