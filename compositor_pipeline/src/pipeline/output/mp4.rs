@@ -167,7 +167,10 @@ fn init_ffmpeg_output(
         let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
         let Mp4AudioEncoderConfig::Aac(encoder_config) = encoder;
         unsafe {
-            codecpar.extradata = ffmpeg_next::ffi::av_malloc(encoder_config.len()) as *mut u8;
+            // The allocated size of extradata must be at least extradata_size + AV_INPUT_BUFFER_PADDING_SIZE, with the padding bytes zeroed.
+            codecpar.extradata = ffmpeg_next::ffi::av_mallocz(
+                encoder_config.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
+            ) as *mut u8;
             std::ptr::copy(
                 encoder_config.as_ptr(),
                 codecpar.extradata,

@@ -4,6 +4,18 @@
 
 ### 💥 Breaking changes
 
+### ✨ New features
+
+### 🐛 Bug fixes
+
+- Fix AAC codec information in MP4 output. ([#998](https://github.com/software-mansion/live-compositor/pull/998), [#999](https://github.com/software-mansion/live-compositor/pull/999) by [@wkozyra95](https://github.com/wkozyra95))
+
+### 🔧 Others
+
+## [v0.4.0](https://github.com/software-mansion/live-compositor/releases/tag/v0.4.0)
+
+### 💥 Breaking changes
+
 - Drop support for `SHADER_UNUSED_VERTEX_OUTPUT` `wgpu` feature.  ([#733](https://github.com/software-mansion/live-compositor/pull/733) by [@jerzywilczek](https://github.com/jerzywilczek))
 - Rename component properties describing color. Remove `_rgba` suffix. ([#896](https://github.com/software-mansion/live-compositor/issues/896) by [@BrtqKr](https://github.com/BrtqKr))
 - Replace the `LIVE_COMPOSITOR_OUTPUT_SAMPLE_RATE` configuration environment variable with `LIVE_COMPOSITOR_MIXING_SAMPLE_RATE`. The output sample rate is now determined using encoder options on `register_output`. Change the default output sample rate for AAC codec to 44100 Hz. ([#925](https://github.com/software-mansion/live-compositor/pull/925) by [@WojciechBarczynski](https://github.com/WojciechBarczynski))
@@ -23,7 +35,7 @@
 
 ### 🐛 Bug fixes
 
-- Fix AAC output unregister before the first sample. ([#714](https://github.com/software-mansion/live-compositor/pull/714) by [@WojciechBarczynski](https://github.com/WojciechBarczynskipull/714))
+- Fix AAC output unregister before the first sample. ([#714](https://github.com/software-mansion/live-compositor/pull/714) by [@WojciechBarczynski](https://github.com/WojciechBarczynski))
 - Fix output mp4 timestamps when output is registered after pipeline start. ([#731](https://github.com/software-mansion/live-compositor/pull/731) by [@WojciechBarczynski](https://github.com/WojciechBarczynski))
 
 ### 🔧 Others
