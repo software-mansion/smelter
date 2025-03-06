@@ -148,19 +148,23 @@ export class AudioMixer {
       output.removeInput(inputId);
     }
     const input = this.inputs[inputId];
-    delete this.inputs[inputId];
+    if (input) {
+      delete this.inputs[inputId];
 
-    if (input.type === 'worklet') {
-      input.workletSourceNode.disconnect();
-    } else if (input.type === 'worklet-resampler') {
-      await input.resamplerContext.close();
+      if (input.type === 'worklet') {
+        input.workletSourceNode.disconnect();
+      } else if (input.type === 'worklet-resampler') {
+        await input.resamplerContext.close();
+      }
     }
   }
 
   public removeOutput(outputId: string): void {
     const output = this.outputs[outputId];
-    delete this.outputs[outputId];
-    output.close();
+    if (output) {
+      delete this.outputs[outputId];
+      output.close();
+    }
   }
 
   public update(outputId: string, inputConfig: Api.InputAudio[]) {

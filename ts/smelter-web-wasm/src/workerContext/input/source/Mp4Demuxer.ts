@@ -120,8 +120,12 @@ export class Mp4Demuxer implements EncodedSource {
     // chunks added
     this.file.flush();
 
-    await this.firstVideoChunkPromise;
-    await this.firstAudioChunkPromise;
+    if (this.mp4Metadata.video) {
+      await this.firstVideoChunkPromise;
+    }
+    if (this.mp4Metadata.audio) {
+      await this.firstAudioChunkPromise;
+    }
   }
 
   public getMetadata(): ContainerInfo {
