@@ -9,7 +9,9 @@ const FIRST_MP4_URL =
 const SECOND_MP4_URL =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
 
-function InputMp4Example() {
+const NO_AUDIO_MP4_URL = 'https://smelter.dev/videos/template-scene-race.mp4';
+
+function ComponentMp4Example() {
   const onCanvasCreate = useCallback(async (compositor: Smelter) => {
     await compositor.registerFont(
       'https://fonts.gstatic.com/s/notosans/v36/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A-9a6Vc.ttf'
@@ -33,6 +35,9 @@ function Scene() {
           <Mp4 source={FIRST_MP4_URL} />
         </Slide>
         <Slide>
+          <Mp4 source={NO_AUDIO_MP4_URL} />
+        </Slide>
+        <Slide>
           <Mp4 source={SECOND_MP4_URL} />
         </Slide>
       </SlideShow>
@@ -43,4 +48,4 @@ function Scene() {
   );
 }
 
-export default InputMp4Example;
+export default ComponentMp4Example;

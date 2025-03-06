@@ -47,12 +47,13 @@ export default class Mp4Source implements QueuedInputSource {
   public async init(): Promise<void> {
     const demuxer = new Mp4Demuxer(this.data, this.logger);
     await demuxer.init();
-
-    this.videoDecoder = new InputVideoDecoder(demuxer, this.logger, this.workloadBalancer);
-    this.audioDecoder = new InputAudioDecoder(demuxer, this.logger, this.workloadBalancer);
-    await Promise.all([this.videoDecoder.init(), this.audioDecoder.init()]);
-
     this.metadata = demuxer.getMetadata();
+
+    this.videoDecoder =
+      this.metadata.video && new InputVideoDecoder(demuxer, this.logger, this.workloadBalancer);
+    this.audioDecoder =
+      this.metadata.audio && new InputAudioDecoder(demuxer, this.logger, this.workloadBalancer);
+    await Promise.all([this.videoDecoder?.init(), this.audioDecoder?.init()]);
   }
 
   public nextFrame(): VideoFramePayload | undefined {
