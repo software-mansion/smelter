@@ -1,32 +1,39 @@
-import { useCallback, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import Smelter from '@swmansion/smelter-web-wasm';
 import { InputStream, Rescaler, View } from '@swmansion/smelter';
-import CompositorCanvas from '../components/SmelterCanvas';
+import CompositorVideo from '../components/SmelterVideo';
+
+// TODO(noituri): Make the upload button nicer and the whole example nicer
 
 function UploadMp4Example() {
-  const uploadRef = useRef<HTMLInputElement | null>(null);
-  const onCanvasCreate = useCallback(async (compositor: Smelter) => {
-    uploadRef.current!.onchange = (e: Event): any => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) {
-        console.error("no file");
-        return;
-      }
-      console.log(file);
-      compositor.registerInput('file', { type: 'mp4', blob: file });
-    };
-    try {
-    } catch (err: any) {
-      console.warn('Failed to register camera input', err);
+  const smelter = useSmelter();
+  const onUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) {
+      console.error("no files");
+      return;
     }
-  }, []);
+
+    let file = e.target.files[0];
+    console.log(file);
+
+    if (!smelter) {
+      console.error("no smelter");
+      return;
+    }
+
+    smelter.registerInput('file', { type: 'mp4', blob: file });
+  }
+
+  if (!smelter) {
+    return <div className="card" />;
+  }
 
   return (
     <div className="card">
-      <input type='file' ref={uploadRef} />
-      <CompositorCanvas onCanvasCreated={onCanvasCreate} width={1280} height={720}>
+      <input type='file' onChange={onUpload} />
+      <CompositorVideo outputId='output' width={1280} height={720} smelter={smelter}>
         <Scene />
-      </CompositorCanvas>
+      </CompositorVideo>
     </div>
   );
 }
@@ -39,6 +46,31 @@ function Scene() {
       </Rescaler>
     </View>
   );
+}
+
+function useSmelter(): Smelter | undefined {
+  const [smelter, setSmelter] = useState<Smelter>();
+  useEffect(() => {
+    const smelter = new Smelter();
+
+    let cancel = false;
+    const promise = (async () => {
+      await smelter.init();
+      await smelter.start();
+      if (!cancel) {
+        setSmelter(smelter);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+      void (async () => {
+        await promise.catch(() => { });
+        await smelter.terminate();
+      })();
+    };
+  }, []);
+  return smelter;
 }
 
 export default UploadMp4Example;

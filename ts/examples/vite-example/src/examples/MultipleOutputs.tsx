@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Smelter from '@swmansion/smelter-web-wasm';
 import { InputStream, Rescaler, Text, Tiles, useInputStreams, View } from '@swmansion/smelter';
 import NotoSansFont from '../../assets/NotoSans.ttf';
+import CompositorVideo from '../components/SmelterVideo';
 
 const FIRST_MP4_URL =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
@@ -130,60 +131,12 @@ function useSmelter(): Smelter | undefined {
     return () => {
       cancel = true;
       void (async () => {
-        await promise.catch(() => {});
+        await promise.catch(() => { });
         await smelter.terminate();
       })();
     };
   }, []);
   return smelter;
-}
-
-type VideoProps = React.DetailedHTMLProps<
-  React.VideoHTMLAttributes<HTMLVideoElement>,
-  HTMLVideoElement
->;
-
-type CompositorVideoProps = {
-  outputId: string;
-  onVideoCreated?: (smelter: Smelter) => Promise<void>;
-  smelter: Smelter;
-  children: React.ReactElement;
-} & VideoProps;
-
-function CompositorVideo(props: CompositorVideoProps) {
-  const { outputId, onVideoCreated, children, smelter: initialSmelter, ...videoProps } = props;
-  const [smelter, _setSmelter] = useState<Smelter>(initialSmelter);
-
-  const videoRef = useCallback(
-    async (video: HTMLVideoElement | null) => {
-      if (!video) {
-        return;
-      }
-
-      if (onVideoCreated) {
-        await onVideoCreated(smelter);
-      }
-
-      const { stream } = await smelter.registerOutput(outputId, children, {
-        type: 'stream',
-        video: {
-          resolution: {
-            width: Number(videoProps.width ?? video.width),
-            height: Number(videoProps.height ?? video.height),
-          },
-        },
-        audio: true,
-      });
-
-      if (stream) {
-        video.srcObject = stream;
-        await video.play();
-      }
-    },
-    [onVideoCreated, videoProps.width, videoProps.height, smelter, outputId]
-  );
-
-  return <video ref={videoRef} {...videoProps} />;
 }
 
 export default MultipleOutputs;
