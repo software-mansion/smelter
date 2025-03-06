@@ -110,7 +110,7 @@ export class Queue {
     for (const [outputId, frame] of Object.entries(outputs.frames)) {
       const output = this.outputs[outputId];
       if (!output) {
-        this.logger.warn(`Output "${outputId}" not found`);
+        this.logger.info(`Output "${outputId}" not found`);
         continue;
       }
       void output.send(frame);
