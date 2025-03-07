@@ -10,6 +10,7 @@ use crate::{
 use super::VideoDecoderOptions;
 
 mod ffmpeg_h264;
+mod ffmpeg_vp8;
 #[cfg(feature = "vk-video")]
 mod vulkan_video;
 
@@ -22,6 +23,13 @@ pub fn start_video_decoder_thread(
 ) -> Result<(), InputInitError> {
     match options.decoder {
         VideoDecoder::FFmpegH264 => ffmpeg_h264::start_ffmpeg_decoder_thread(
+            pipeline_ctx,
+            chunks_receiver,
+            frame_sender,
+            input_id,
+        ),
+
+        VideoDecoder::FFmpegVp8 => ffmpeg_vp8::start_ffmpeg_decoder_thread(
             pipeline_ctx,
             chunks_receiver,
             frame_sender,
