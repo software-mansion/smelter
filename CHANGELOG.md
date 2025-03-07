@@ -8,9 +8,14 @@
 
 ### 🐛 Bug fixes
 
-- Fix AAC codec information in MP4 output. ([#998](https://github.com/software-mansion/live-compositor/pull/998), [#999](https://github.com/software-mansion/live-compositor/pull/999) by [@wkozyra95](https://github.com/wkozyra95))
-
 ### 🔧 Others
+
+## [v0.4.1](https://github.com/software-mansion/live-compositor/releases/tag/v0.4.1)
+
+### 🐛 Bug fixes
+
+- Fix DeckLink color tint (green tint on output). ([#1000](https://github.com/software-mansion/live-compositor/pull/1000) by [@wkozyra95](https://github.com/wkozyra95))
+- Fix AAC codec information in MP4 output. ([#998](https://github.com/software-mansion/live-compositor/pull/998), [#999](https://github.com/software-mansion/live-compositor/pull/999) by [@wkozyra95](https://github.com/wkozyra95))
 
 ## [v0.4.0](https://github.com/software-mansion/live-compositor/releases/tag/v0.4.0)
 
