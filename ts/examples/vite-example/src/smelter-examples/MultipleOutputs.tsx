@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import Smelter from '@swmansion/smelter-web-wasm';
+import { useEffect } from 'react';
 import { InputStream, Rescaler, Text, Tiles, useInputStreams, View } from '@swmansion/smelter';
 import NotoSansFont from '../../assets/NotoSans.ttf';
+import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
+import { useSmelter } from '../hooks/useSmelter';
+import SmelterVideoOutput from '../components/SmelterVideoOutput';
 
 const FIRST_MP4_URL =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
@@ -32,37 +34,28 @@ function MultipleOutputs() {
     <div className="card">
       <h2>Inputs</h2>
       <div style={{ flexDirection: 'row', display: 'flex' }}>
-        <CompositorVideo
-          style={{ margin: 20 }}
-          outputId="input1_preview"
-          width={600}
-          height={340}
-          smelter={smelter}>
+        <SmelterCanvasOutput style={{ margin: 20 }} width={600} height={340} smelter={smelter}>
           <Rescaler style={{ borderWidth: 5, borderColor: 'white', rescaleMode: 'fill' }}>
             <InputStream inputId="input_1" muted={true} />
           </Rescaler>
-        </CompositorVideo>
-        <CompositorVideo
-          style={{ margin: 20 }}
-          outputId="input2_preview"
-          width={600}
-          height={340}
-          smelter={smelter}>
+        </SmelterCanvasOutput>
+        <SmelterCanvasOutput style={{ margin: 20 }} width={600} height={340} smelter={smelter}>
           <Rescaler style={{ borderWidth: 5, borderColor: 'white', rescaleMode: 'fill' }}>
             <InputStream inputId="input_2" muted={true} />
           </Rescaler>
-        </CompositorVideo>
+        </SmelterCanvasOutput>
       </div>
 
       <h2>Outputs</h2>
-      <CompositorVideo
+      <SmelterVideoOutput
         style={{ margin: 20 }}
-        outputId="output"
         width={1280}
         height={720}
-        smelter={smelter}>
+        smelter={smelter}
+        audio
+        controls>
         <Scene />
-      </CompositorVideo>
+      </SmelterVideoOutput>
     </div>
   );
 }
@@ -111,79 +104,6 @@ function Scene() {
       </Tiles>
     </View>
   );
-}
-
-function useSmelter(): Smelter | undefined {
-  const [smelter, setSmelter] = useState<Smelter>();
-  useEffect(() => {
-    const smelter = new Smelter();
-
-    let cancel = false;
-    const promise = (async () => {
-      await smelter.init();
-      await smelter.start();
-      if (!cancel) {
-        setSmelter(smelter);
-      }
-    })();
-
-    return () => {
-      cancel = true;
-      void (async () => {
-        await promise.catch(() => {});
-        await smelter.terminate();
-      })();
-    };
-  }, []);
-  return smelter;
-}
-
-type VideoProps = React.DetailedHTMLProps<
-  React.VideoHTMLAttributes<HTMLVideoElement>,
-  HTMLVideoElement
->;
-
-type CompositorVideoProps = {
-  outputId: string;
-  onVideoCreated?: (smelter: Smelter) => Promise<void>;
-  smelter: Smelter;
-  children: React.ReactElement;
-} & VideoProps;
-
-function CompositorVideo(props: CompositorVideoProps) {
-  const { outputId, onVideoCreated, children, smelter: initialSmelter, ...videoProps } = props;
-  const [smelter, _setSmelter] = useState<Smelter>(initialSmelter);
-
-  const videoRef = useCallback(
-    async (video: HTMLVideoElement | null) => {
-      if (!video) {
-        return;
-      }
-
-      if (onVideoCreated) {
-        await onVideoCreated(smelter);
-      }
-
-      const { stream } = await smelter.registerOutput(outputId, children, {
-        type: 'stream',
-        video: {
-          resolution: {
-            width: Number(videoProps.width ?? video.width),
-            height: Number(videoProps.height ?? video.height),
-          },
-        },
-        audio: true,
-      });
-
-      if (stream) {
-        video.srcObject = stream;
-        await video.play();
-      }
-    },
-    [onVideoCreated, videoProps.width, videoProps.height, smelter, outputId]
-  );
-
-  return <video ref={videoRef} {...videoProps} />;
 }
 
 export default MultipleOutputs;

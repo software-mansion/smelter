@@ -1,64 +1,24 @@
-import { useEffect, useRef, useState } from 'react';
-import Smelter from '@swmansion/smelter-web-wasm';
+import { useEffect, useState } from 'react';
 import { InputStream, Mp4, Rescaler, Text, useInputStreams, View } from '@swmansion/smelter';
+import { useSmelter } from '../hooks/useSmelter';
+import SmelterWhipOutput from '../components/SmelterWhipOutput';
 
 function DemoExample() {
-  const [smelter, setSmelter] = useState<Smelter | undefined>();
-  const previewRef = useRef<HTMLVideoElement>(null);
+  const smelter = useSmelter();
+
+  const [bearerToken, setBearerToken] = useState<string | undefined>();
   const [hasCamera, setCamera] = useState<boolean>();
   const [hasScreenCapture, setScreenCapture] = useState<boolean>();
 
   useEffect(() => {
-    const smelter = new Smelter({});
-    let terminate = false;
-
-    const startPromise = (async () => {
-      await smelter.init();
-      if (!terminate) {
-        setSmelter(smelter);
-      }
-    })();
-
-    return () => {
-      terminate = true;
-      void (async () => {
-        await startPromise;
-        await smelter.terminate();
-      })();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!smelter) {
+    const queryParams = new URLSearchParams(window.location.search);
+    const streamKey = queryParams.get('twitchKey');
+    if (!streamKey) {
+      alert('Add "twitchKey" query params with your Twitch stream key.');
       return;
     }
-
-    void (async () => {
-      const queryParams = new URLSearchParams(window.location.search);
-      const streamKey = queryParams.get('twitchKey');
-      if (!streamKey) {
-        throw new Error('Add "twitchKey" query params with your Twitch stream key.');
-      }
-
-      const { stream } = await smelter.registerOutput('output', <Scene />, {
-        type: 'whip',
-        endpointUrl: 'https://g.webrtc.live-video.net:4443/v2/offer',
-        bearerToken: streamKey,
-        video: {
-          resolution: { width: 1920, height: 1080 },
-          maxBitrate: 6_000_000,
-        },
-        audio: true,
-      });
-
-      await smelter.start();
-
-      if (stream && previewRef.current) {
-        previewRef.current.srcObject = stream;
-        await previewRef.current.play();
-      }
-    })();
-  }, [smelter]);
+    setBearerToken(streamKey);
+  }, []);
 
   const toggleCamera = async () => {
     try {
@@ -96,7 +56,19 @@ function DemoExample() {
           Toggle share screen
         </button>
       </div>
-      <video ref={previewRef} style={{ width: 1280, height: 720 }} />
+      {smelter && (
+        <SmelterWhipOutput
+          smelter={smelter}
+          endpointUrl="https://g.webrtc.live-video.net:4443/v2/offer"
+          bearerToken={bearerToken}
+          video={{
+            resolution: { width: 1920, height: 1080 },
+            maxBitrate: 6_000_000,
+          }}
+          audio>
+          <Scene />
+        </SmelterWhipOutput>
+      )}
     </div>
   );
 }

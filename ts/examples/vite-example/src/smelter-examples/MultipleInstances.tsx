@@ -1,26 +1,48 @@
-import { useCallback } from 'react';
-import type Smelter from '@swmansion/smelter-web-wasm';
+import { useEffect } from 'react';
 import { InputStream, Text, useInputStreams, View } from '@swmansion/smelter';
-import CompositorCanvas from '../components/SmelterCanvas';
 import NotoSansFont from '../../assets/NotoSans.ttf';
+import { useSmelter } from '../hooks/useSmelter';
+import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
 
 const MP4_URL =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
 
 function MultipleCompositors() {
-  const onCanvasCreate = useCallback(async (compositor: Smelter) => {
-    await compositor.registerFont(NotoSansFont);
-    await compositor.registerInput('bunny_video', { type: 'mp4', url: MP4_URL });
-  }, []);
+  const smelter1 = useSmelter();
+  const smelter2 = useSmelter();
+
+  useEffect(() => {
+    if (!smelter1) {
+      return;
+    }
+    void (async () => {
+      await smelter1.registerFont(NotoSansFont);
+      await smelter1.registerInput('bunny_video', { type: 'mp4', url: MP4_URL });
+    })();
+  }, [smelter1]);
+
+  useEffect(() => {
+    if (!smelter2) {
+      return;
+    }
+    void (async () => {
+      await smelter2.registerFont(NotoSansFont);
+      await smelter2.registerInput('bunny_video', { type: 'mp4', url: MP4_URL });
+    })();
+  }, [smelter2]);
 
   return (
     <div className="card">
-      <CompositorCanvas onCanvasCreated={onCanvasCreate} width={1280} height={720}>
-        <Scene />
-      </CompositorCanvas>
-      <CompositorCanvas onCanvasCreated={onCanvasCreate} width={1280} height={720}>
-        <Scene />
-      </CompositorCanvas>
+      {smelter1 && (
+        <SmelterCanvasOutput smelter={smelter1} width={1280} height={720} audio>
+          <Scene />
+        </SmelterCanvasOutput>
+      )}
+      {smelter2 && (
+        <SmelterCanvasOutput smelter={smelter2} width={1280} height={720} audio>
+          <Scene />
+        </SmelterCanvasOutput>
+      )}
     </div>
   );
 }

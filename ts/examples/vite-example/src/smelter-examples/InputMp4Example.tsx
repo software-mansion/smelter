@@ -1,23 +1,31 @@
-import { useCallback } from 'react';
-import type Smelter from '@swmansion/smelter-web-wasm';
+import { useEffect } from 'react';
 import { InputStream, Text, useInputStreams, View } from '@swmansion/smelter';
-import SmelterCanvas from '../components/SmelterCanvas';
 import NotoSansFont from '../../assets/NotoSans.ttf';
+import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
+import { useSmelter } from '../hooks/useSmelter';
 
 const MP4_URL =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
 
 function InputMp4Example() {
-  const onCanvasCreated = useCallback(async (compositor: Smelter) => {
-    await compositor.registerFont(NotoSansFont);
-    await compositor.registerInput('video', { type: 'mp4', url: MP4_URL });
-  }, []);
+  const smelter = useSmelter();
+  useEffect(() => {
+    if (!smelter) {
+      return;
+    }
+    void (async () => {
+      await smelter.registerFont(NotoSansFont);
+      await smelter.registerInput('video', { type: 'mp4', url: MP4_URL });
+    })();
+  }, [smelter]);
 
   return (
     <div className="card">
-      <SmelterCanvas onCanvasCreated={onCanvasCreated} width={1280} height={720}>
-        <Scene />
-      </SmelterCanvas>
+      {smelter && (
+        <SmelterCanvasOutput smelter={smelter} width={1280} height={720} audio>
+          <Scene />
+        </SmelterCanvasOutput>
+      )}
     </div>
   );
 }
