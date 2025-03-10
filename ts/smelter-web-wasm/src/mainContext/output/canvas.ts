@@ -21,7 +21,7 @@ export class CanvasOutput implements Output {
   }
 
   public async terminate(): Promise<void> {
-    await this.ctx.audioMixer.removeOutput(this.outputId);
+    this.ctx.audioMixer.removeOutput(this.outputId);
   }
 }
 
