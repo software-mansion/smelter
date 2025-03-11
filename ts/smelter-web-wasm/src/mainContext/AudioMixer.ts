@@ -61,24 +61,17 @@ export class AudioMixer {
     silence.start();
 
     this.outputs[outputId] = new AudioMixerOutput(this.ctx, outputNode);
-    for (const [inputId, input] of Object.entries(this.inputs)) {
-      if (input.type === 'stream') {
-        this.outputs[outputId].addMediaStreamInput(inputId, input.stream);
-      } else if (input.type === 'worklet') {
-        this.outputs[outputId].addAudioDataWorkletInput(inputId, input.workletSourceNode);
-      } else if (input.type === 'worklet-resampler') {
-        this.outputs[outputId].addMediaStreamInput(
-          inputId,
-          input.mediaStreamDestinationNode.stream
-        );
-      }
-    }
+    this.addExistingInputsToOutput(outputId);
 
     return outputNode.stream.getAudioTracks()[0];
   }
 
   public addPlaybackOutput(outputId: string): void {
     this.outputs[outputId] = new AudioMixerOutput(this.ctx, this.ctx.destination);
+    this.addExistingInputsToOutput(outputId);
+  }
+
+  private addExistingInputsToOutput(outputId: string) {
     for (const [inputId, input] of Object.entries(this.inputs)) {
       if (input.type === 'stream') {
         this.outputs[outputId].addMediaStreamInput(inputId, input.stream);
@@ -154,6 +147,8 @@ export class AudioMixer {
       if (input.type === 'worklet') {
         input.workletSourceNode.disconnect();
       } else if (input.type === 'worklet-resampler') {
+        input.workletSourceNode.disconnect();
+        input.mediaStreamDestinationNode.disconnect();
         await input.resamplerContext.close();
       }
     }
@@ -176,11 +171,8 @@ export class AudioMixer {
     for (const outputId of Object.keys(this.outputs)) {
       this.removeOutput(outputId);
     }
-    for (const input of Object.values(this.inputs)) {
-      if (input.type === 'worklet-resampler') {
-        input.mediaStreamDestinationNode.disconnect();
-        await input.resamplerContext.close();
-      }
+    for (const inputId of Object.keys(this.inputs)) {
+      await this.removeInput(inputId);
     }
   }
 }
@@ -188,7 +180,8 @@ export class AudioMixer {
 export class AudioMixerOutput<OutputNode extends AudioNode = AudioNode> {
   private ctx: AudioContext;
   private inputs: Record<string, AudioInput> = {};
-  protected outputNode: OutputNode;
+  private outputNode: OutputNode;
+  private lastUpdate: Api.InputAudio[] = [];
 
   constructor(ctx: AudioContext, outputNode: OutputNode) {
     this.ctx = ctx;
@@ -199,7 +192,9 @@ export class AudioMixerOutput<OutputNode extends AudioNode = AudioNode> {
     const mediaStreamSourceNode = this.ctx.createMediaStreamSource(stream);
     const gainNode = this.ctx.createGain();
     mediaStreamSourceNode.connect(gainNode);
-    gainNode.connect(this.outputNode ?? this.ctx.destination);
+    gainNode.connect(this.outputNode);
+
+    gainNode.gain.value = this.gainFromLastUpdate(inputId);
     this.inputs[inputId] = {
       type: 'stream',
       mediaStreamSourceNode,
@@ -212,11 +207,21 @@ export class AudioMixerOutput<OutputNode extends AudioNode = AudioNode> {
 
     sourceNode.connect(gainNode);
     gainNode.connect(this.outputNode ?? this.ctx.destination);
+
+    gainNode.gain.value = this.gainFromLastUpdate(inputId);
     this.inputs[inputId] = {
       type: 'worklet',
       workletSourceNode: sourceNode,
       gainNode: gainNode,
     };
+  }
+
+  private gainFromLastUpdate(inputId: string): number {
+    const lastUpdate = this.lastUpdate.find(update => update.input_id === inputId);
+    if (lastUpdate) {
+      return lastUpdate.volume || 1.0;
+    }
+    return 0.0;
   }
 
   public removeInput(inputId: string) {
@@ -236,6 +241,7 @@ export class AudioMixerOutput<OutputNode extends AudioNode = AudioNode> {
   }
 
   public update(inputConfig: Api.InputAudio[]) {
+    this.lastUpdate = inputConfig;
     for (const [inputId, input] of Object.entries(this.inputs)) {
       const config = inputConfig.find(input => input.input_id === inputId);
       input.gainNode.gain.value = config?.volume || 0;
@@ -246,6 +252,5 @@ export class AudioMixerOutput<OutputNode extends AudioNode = AudioNode> {
     for (const inputId of Object.keys(this.inputs)) {
       this.removeInput(inputId);
     }
-    this.outputNode.disconnect();
   }
 }

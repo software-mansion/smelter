@@ -61,7 +61,7 @@ export class WhipOutput implements Output {
     }
     this.pc?.close();
     this.canvasStream?.getTracks().forEach(track => track.stop());
-    await this.ctx.audioMixer.removeOutput(this.outputId);
+    this.ctx.audioMixer.removeOutput(this.outputId);
   }
 }
 

@@ -215,7 +215,6 @@ export class Mp4Demuxer implements EncodedSource {
 
       this.audioChunks.push(chunk);
 
-      // TODO: check that
       if (sample.number === (this.mp4Metadata.audio?.sampleCount ?? 0) - 1) {
         this.audioTrackFinished = true;
       }
@@ -292,7 +291,24 @@ function getAudioCodecDescription(file: MP4File, trackId: number): Uint8Array {
   }
 
   for (const entry of track.mdia.minf.stbl.stsd.entries) {
-    return (entry as any).esds.esd.descs[0].descs[0].data;
+    const descs = (entry as any).esds.esd.descs;
+    if (descs) {
+      for (const entry of descs) {
+        const descs = entry.descs;
+        // 0x04 is the DecoderConfigDescrTag
+        const correctTag = entry.tag === 0x04;
+        // 0x40 is the Audio OTI, per table 5 of ISO 14496-1
+        const correctOti = entry.oti === 0x40;
+        if (correctTag && correctOti && descs) {
+          for (const entry of descs) {
+            // 0x05 is the DecSpecificInfoTag
+            if (entry.tag == 0x05 && entry.data) {
+              return entry.descs.data;
+            }
+          }
+        }
+      }
+    }
   }
 
   throw new Error('Codec description not found');

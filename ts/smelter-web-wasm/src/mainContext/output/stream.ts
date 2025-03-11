@@ -36,7 +36,7 @@ export class StreamOutput implements Output {
   public async terminate(): Promise<void> {
     this.outputStream.getTracks().forEach(track => track.stop());
     this.canvasStream?.getTracks().forEach(track => track.stop());
-    await this.ctx.audioMixer.removeOutput(this.outputId);
+    this.ctx.audioMixer.removeOutput(this.outputId);
   }
 }
 
