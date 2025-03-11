@@ -21,11 +21,8 @@ export class Mp4Input implements Input {
 export async function handleRegisterMp4Input(
   ctx: InstanceContext,
   inputId: string,
-  url: string
+  arrayBuffer: ArrayBuffer
 ): Promise<RegisterInputResult> {
-  const response = await fetch(url);
-  const arrayBuffer = await response.arrayBuffer();
-
   const metadata = await parseMp4(arrayBuffer);
 
   let messagePort;
