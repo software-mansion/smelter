@@ -11,7 +11,10 @@ export type InputsState = {
 };
 
 export type OutputsState = {
-  whipStream?: {
+  whipStream: {
+    enable: boolean;
+    audio: boolean;
+    url: string;
     token?: string;
   };
   canvas: { enable: boolean; audio: boolean };
@@ -23,6 +26,11 @@ export default function DynamicExample() {
 
   const [inputs, setInputs] = useState<InputsState>({});
   const [outputs, setOutputs] = useState<OutputsState>({
+    whipStream: {
+      enable: false,
+      audio: true,
+      url: 'https://g.webrtc.live-video.net:4443/v2/offer',
+    },
     stream: { enable: false, audio: true },
     canvas: { enable: false, audio: true },
   });

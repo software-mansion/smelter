@@ -56,7 +56,16 @@ export default function SmelterWhipOutput(props: SmelterWhipProps) {
         .then(() => smelter.unregisterOutput(outputId))
         .catch(console.error);
     };
-  }, [videoProps.width, videoProps.height, smelter, audio, videoElement]);
+  }, [
+    smelter,
+    audio,
+    video?.resolution?.width,
+    video?.resolution?.height,
+    video?.maxBitrate,
+    videoElement,
+    bearerToken,
+    endpointUrl,
+  ]);
 
   return <video ref={videoRef} {...videoProps} />;
 }

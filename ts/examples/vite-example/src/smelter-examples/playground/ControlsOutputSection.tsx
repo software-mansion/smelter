@@ -1,7 +1,8 @@
 import type Smelter from '@swmansion/smelter-web-wasm';
 import type { OutputsState } from './PlaygroundPage';
 import type { OutputStore } from './state';
-import { useCanvasOutputStore, useStreamOutputStore } from './state';
+import { useCanvasOutputStore, useStreamOutputStore, useWhipOutputStore } from './state';
+import type { ChangeEvent } from 'react';
 
 type OutputProps = {
   outputs: OutputsState;
@@ -50,8 +51,51 @@ export default function OutputControls(props: OutputProps) {
     });
   };
 
+  const toggleWhipStreamOutput = async () => {
+    props.setOutputs({
+      ...props.outputs,
+      whipStream: {
+        ...props.outputs.whipStream,
+        enable: !props.outputs.whipStream.enable,
+      },
+    });
+  };
+
+  const toggleWhipStreamAudioOutput = async () => {
+    props.setOutputs({
+      ...props.outputs,
+      whipStream: {
+        ...props.outputs.whipStream,
+        audio: !props.outputs.whipStream.audio,
+      },
+    });
+  };
+
+  const onWhipEndpointUrlChange = (ev: ChangeEvent<HTMLInputElement>) => {
+    ev.target.value;
+    props.setOutputs({
+      ...props.outputs,
+      whipStream: {
+        ...props.outputs.whipStream,
+        url: ev.target.value,
+      },
+    });
+  };
+
+  const onWhipTokenChange = (ev: ChangeEvent<HTMLInputElement>) => {
+    ev.target.value;
+    props.setOutputs({
+      ...props.outputs,
+      whipStream: {
+        ...props.outputs.whipStream,
+        token: ev.target.value,
+      },
+    });
+  };
+
   const canvasStore = useCanvasOutputStore();
   const streamStore = useStreamOutputStore();
+  const whipStore = useWhipOutputStore();
 
   return (
     <div>
@@ -63,6 +107,7 @@ export default function OutputControls(props: OutputProps) {
         {props.outputs.canvas.audio ? 'Disable audio' : 'Enable audio'}
       </button>
       <VolumeSliders store={canvasStore} />
+
       <h3>Output 2 - stream</h3>
       <button style={{ margin: 8 }} onClick={toggleStreamOutput}>
         {props.outputs.stream.enable ? 'Remove' : 'Add'}
@@ -71,6 +116,39 @@ export default function OutputControls(props: OutputProps) {
         {props.outputs.stream.audio ? 'Disable audio' : 'Enable audio'}
       </button>
       <VolumeSliders store={streamStore} />
+
+      <h3>Output 3 - whip</h3>
+      <button style={{ margin: 8 }} onClick={toggleWhipStreamOutput}>
+        {props.outputs.whipStream.enable ? 'Remove' : 'Add'}
+      </button>
+      <button style={{ margin: 8 }} onClick={toggleWhipStreamAudioOutput}>
+        {props.outputs.whipStream.audio ? 'Disable audio' : 'Enable audio'}
+      </button>
+      <form style={{ flexDirection: 'column', display: 'flex', justifyContent: 'stretch' }}>
+        <div style={{ flexDirection: 'row', display: 'flex' }}>
+          <p style={{ width: 100 }}>url:</p>
+          <input
+            style={{ margin: 4, fontSize: 18, flex: 1 }}
+            placeholder="WHIP url"
+            defaultValue="https://g.webrtc.live-video.net:4443/v2/offer"
+            type="text"
+            id="whipUrl"
+            onChange={onWhipEndpointUrlChange}
+          />
+        </div>
+        <div style={{ flexDirection: 'row', display: 'flex' }}>
+          <p style={{ width: 100 }}>token:</p>
+          <input
+            autoComplete="current-password"
+            style={{ margin: 4, fontSize: 18, flex: 1 }}
+            type="password"
+            id="whipToken"
+            onChange={onWhipTokenChange}
+          />
+        </div>
+      </form>
+
+      <VolumeSliders store={whipStore} />
     </div>
   );
 }

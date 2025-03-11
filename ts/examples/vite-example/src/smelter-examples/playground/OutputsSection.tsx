@@ -3,7 +3,8 @@ import type { OutputsState } from './PlaygroundPage';
 import Scene from './Scene';
 import SmelterCanvasOutput from '../../components/SmelterCanvasOutput';
 import SmelterVideoOutput from '../../components/SmelterVideoOutput';
-import { useCanvasOutputStore, useStreamOutputStore } from './state';
+import { useCanvasOutputStore, useStreamOutputStore, useWhipOutputStore } from './state';
+import SmelterWhipOutput from '../../components/SmelterWhipOutput';
 
 type Props = {
   smelter: Smelter;
@@ -42,6 +43,27 @@ export default function OutputsSection(props: Props) {
           height={720}>
           <Scene useStore={useStreamOutputStore} />
         </SmelterVideoOutput>
+      )}
+      <h2>Output 3 - WHIP</h2>
+      <p>
+        {props.outputs.whipStream.enable ? 'Enabled' : 'Disabled'}{' '}
+        {props.outputs.whipStream.enable && !props.outputs.whipStream.audio ? '(Muted)' : ''}
+      </p>
+      {props.outputs.whipStream.enable && (
+        <SmelterWhipOutput
+          controls
+          endpointUrl={props.outputs.whipStream.url}
+          bearerToken={props.outputs.whipStream.token}
+          smelter={props.smelter}
+          audio={!!props.outputs.whipStream.audio}
+          video={{
+            resolution: { width: 1920, height: 1080 },
+            maxBitrate: 6_000_000,
+          }}
+          width={1280}
+          height={720}>
+          <Scene useStore={useWhipOutputStore} />
+        </SmelterWhipOutput>
       )}
     </div>
   );
