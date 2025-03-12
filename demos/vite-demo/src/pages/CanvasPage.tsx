@@ -1,7 +1,6 @@
 import { View, Text, useInputStreams, InputStream, Tiles } from '@swmansion/smelter';
-import Smelter, { setWasmBundleUrl } from '@swmansion/smelter-web-wasm';
+import { setWasmBundleUrl } from '@swmansion/smelter-web-wasm';
 import { useCallback, useState } from 'react';
-import SmelterCanvas from '../components/SmelterCanvasOutput';
 import { useSmelter } from '../hooks/useSmelter';
 import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
 

@@ -1,9 +1,10 @@
 'use client';
 
+import SmelterCanvasOutput from '@/app/components/SmelterCanvasOutput';
+import { useSmelter } from '@/app/hooks/useSmelter';
 import { View, Text, useInputStreams, InputStream, Tiles } from '@swmansion/smelter';
-import Smelter, { setWasmBundleUrl } from '@swmansion/smelter-web-wasm';
+import { setWasmBundleUrl } from '@swmansion/smelter-web-wasm';
 import { useCallback, useState } from 'react';
-import SmelterCanvas from './SmelterCanvas';
 
 setWasmBundleUrl('/smelter.wasm');
 
@@ -11,7 +12,7 @@ const CAMERA_ID = 'camera';
 const SCREEN_SHARE_ID = 'screen';
 
 export default function CanvasPage() {
-  const [smelter, setSmelter] = useState<Smelter>();
+  const smelter = useSmelter();
   const [camera, setCamera] = useState<boolean>();
   const [screen, setScreen] = useState<boolean>();
 
@@ -62,12 +63,15 @@ export default function CanvasPage() {
         <button onClick={toggleScreenShare} style={{ margin: 10 }}>
           Toggle screen capture
         </button>
-        <p className="">Canvas: </p>
+        <p>Canvas: </p>
       </div>
       <div>
-        <SmelterCanvas width={1280} height={720} onSmelterCreated={setSmelter}>
-          <SmelterComponent />
-        </SmelterCanvas>
+        {
+          smelter &&
+          <SmelterCanvasOutput smelter={smelter} width={1280} height={720} audio>
+            <SmelterComponent />
+          </SmelterCanvasOutput>
+        }
       </div>
     </div>
   );
