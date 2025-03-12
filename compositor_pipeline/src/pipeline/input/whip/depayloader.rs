@@ -3,7 +3,7 @@ use std::{mem, time::Duration};
 use bytes::Bytes;
 use log::error;
 use rtp::{
-    codecs::{h264::H264Packet, opus::OpusPacket},
+    codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet},
     packetizer::Depacketizer,
 };
 use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
@@ -31,7 +31,7 @@ pub struct Depayloader {
 }
 
 impl Depayloader {
-    pub fn new(stream: &WhipReceiverOptions) -> Self {
+    pub fn new(stream: WhipReceiverOptions ) -> Self {
         let video = stream
             .video
             .as_ref()
@@ -47,6 +47,8 @@ impl Depayloader {
         packet: rtp::packet::Packet,
         track_kind: RTPCodecType,
     ) -> Result<Vec<EncodedChunk>, DepayloadingError> {
+        println!("{:?}", packet.header.payload_type);
+
         match track_kind {
             RTPCodecType::Video => match self.video.as_mut() {
                 Some(video_depayloader) => video_depayloader.depayload(packet),
@@ -74,6 +76,11 @@ pub enum VideoDepayloader {
         buffer: Vec<Bytes>,
         rollover_state: RolloverState,
     },
+    VP8 {
+        depayloader: Vp8Packet,
+        buffer: Vec<Bytes>,
+        rollover_state: RolloverState,
+    },
 }
 
 impl VideoDepayloader {
@@ -85,7 +92,11 @@ impl VideoDepayloader {
                 rollover_state: RolloverState::default(),
             },
 
-            VideoDecoder::FFmpegVp8 => unimplemented!(),
+            VideoDecoder::FFmpegVp8 => VideoDepayloader::VP8 {
+                depayloader: Vp8Packet::default(),
+                buffer: vec![],
+                rollover_state: RolloverState::default(),
+            },
 
             #[cfg(feature = "vk-video")]
             VideoDecoder::VulkanVideoH264 => VideoDepayloader::H264 {
@@ -114,6 +125,35 @@ impl VideoDepayloader {
                 }
 
                 buffer.push(h264_chunk);
+                if !packet.header.marker {
+                    // the marker bit is set on the last packet of an access unit
+                    return Ok(Vec::new());
+                }
+
+                let timestamp = rollover_state.timestamp(packet.header.timestamp);
+                let new_chunk = EncodedChunk {
+                    data: mem::take(buffer).concat().into(),
+                    pts: Duration::from_secs_f64(timestamp as f64 / 90000.0),
+                    dts: None,
+                    is_keyframe: IsKeyframe::Unknown,
+                    kind,
+                };
+
+                Ok(vec![new_chunk])
+            }
+            VideoDepayloader::VP8 {
+                depayloader,
+                buffer,
+                rollover_state,
+            } => {
+                let kind = EncodedChunkKind::Video(VideoCodec::VP8);
+                let vp8_chunk = depayloader.depacketize(&packet.payload)?;
+
+                if vp8_chunk.is_empty() {
+                    return Ok(Vec::new());
+                }
+
+                buffer.push(vp8_chunk);
                 if !packet.header.marker {
                     // the marker bit is set on the last packet of an access unit
                     return Ok(Vec::new());
