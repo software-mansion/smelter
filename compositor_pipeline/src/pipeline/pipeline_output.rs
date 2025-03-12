@@ -50,7 +50,7 @@ pub(super) fn register_pipeline_output<NewOutputResult>(
         return Err(RegisterOutputError::AlreadyRegistered(output_id));
     }
 
-    let pipeline_ctx = Arc::new(pipeline.lock().unwrap().ctx.clone());
+    let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
 
     let (output, output_result) = output_options.new_output(&output_id, pipeline_ctx)?;
 

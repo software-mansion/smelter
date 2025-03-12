@@ -110,7 +110,7 @@ pub struct OutputScene {
 }
 
 pub struct Pipeline {
-    ctx: PipelineCtx,
+    ctx: Arc<PipelineCtx>,
     inputs: HashMap<InputId, PipelineInput>,
     outputs: HashMap<OutputId, PipelineOutput>,
     queue: Arc<Queue>,
@@ -203,13 +203,28 @@ impl Pipeline {
         let stun_servers = opts.stun_servers;
         let whip_whep_state = WhipWhepState::new(stun_servers.clone());
         let start_whip_whep = opts.start_whip_whep;
+        let event_emitter = Arc::new(EventEmitter::new());
+        let pipeline_ctx = Arc::new(PipelineCtx {
+            mixing_sample_rate: opts.mixing_sample_rate,
+            output_framerate: opts.queue_options.output_framerate,
+            stun_servers,
+            download_dir: download_dir.into(),
+            event_emitter: event_emitter.clone(),
+            tokio_rt: tokio_rt.clone(),
+            whip_whep_state,
+            start_whip_whep,
+            #[cfg(feature = "vk-video")]
+            vulkan_ctx: preinitialized_ctx.and_then(|ctx| ctx.vulkan_ctx),
+        });
+
         let shutdown_whip_whep_sender = if start_whip_whep {
             if let Some(port) = opts.whip_whep_server_port {
-                let whip_whep_state = whip_whep_state.clone();
                 let (sender, receiver) = oneshot::channel();
                 let (init_result_sender, init_result_receiver) = oneshot::channel();
+                let pipeline_ctx_clone = pipeline_ctx.clone();
                 tokio_rt.spawn(async move {
-                    run_whip_whep_server(port, whip_whep_state, receiver, init_result_sender).await
+                    run_whip_whep_server(port, pipeline_ctx_clone, receiver, init_result_sender)
+                        .await
                 });
                 match init_result_receiver.blocking_recv() {
                     Ok(init_result) => init_result?,
@@ -228,7 +243,6 @@ impl Pipeline {
         } else {
             None
         };
-        let event_emitter = Arc::new(EventEmitter::new());
         let pipeline = Pipeline {
             outputs: HashMap::new(),
             inputs: HashMap::new(),
@@ -237,18 +251,7 @@ impl Pipeline {
             audio_mixer: AudioMixer::new(opts.mixing_sample_rate),
             is_started: false,
             shutdown_whip_whep_sender,
-            ctx: PipelineCtx {
-                mixing_sample_rate: opts.mixing_sample_rate,
-                output_framerate: opts.queue_options.output_framerate,
-                stun_servers,
-                download_dir: download_dir.into(),
-                event_emitter,
-                tokio_rt,
-                whip_whep_state,
-                start_whip_whep,
-                #[cfg(feature = "vk-video")]
-                vulkan_ctx: preinitialized_ctx.and_then(|ctx| ctx.vulkan_ctx),
-            },
+            ctx: pipeline_ctx,
         };
 
         Ok((pipeline, event_loop))

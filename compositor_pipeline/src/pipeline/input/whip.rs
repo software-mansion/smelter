@@ -1,28 +1,34 @@
+use rtp::codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet};
 use std::{
+    collections::HashMap,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
 use tokio::sync::mpsc;
-use webrtc::track::track_remote::TrackRemote;
+use webrtc::{rtp_transceiver::rtp_codec::RTPCodecType, track::track_remote::TrackRemote};
 
-use depayloader::Depayloader;
+use depayloader::{AudioDepayloader, Depayloader, RolloverState, VideoDepayloader};
 use tracing::{error, warn, Span};
 
 use crate::{
+    audio_mixer::InputSamples,
     pipeline::{
-        decoder,
+        decoder::{
+            self, start_audio_decoder_thread, start_video_decoder_thread, AudioDecoderOptions,
+            OpusDecoderOptions, VideoDecoderOptions,
+        },
         types::EncodedChunk,
         whip_whep::{bearer_token::generate_token, WhipInputConnectionOptions, WhipWhepState},
-        PipelineCtx,
+        PipelineCtx, VideoDecoder,
     },
     queue::PipelineEvent,
 };
-use compositor_render::InputId;
-use crossbeam_channel::Sender;
+use compositor_render::{Frame, InputId};
+use crossbeam_channel::{Receiver, Sender};
 use tracing::{debug, span, Level};
 
-use super::{AudioInputReceiver, Input, InputInitInfo, InputInitResult, VideoInputReceiver};
+use super::{Input, InputInitInfo};
 
 pub mod depayloader;
 
@@ -53,59 +59,48 @@ pub struct WhipReceiver {
     input_id: InputId,
 }
 
+struct DecoderChannelsOptions {
+    frame_sender: Sender<PipelineEvent<Frame>>,
+    input_samples_sender: Sender<PipelineEvent<InputSamples>>,
+    video_chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
+    audio_chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
+}
+
 impl WhipReceiver {
     pub(super) fn start_new_input(
         input_id: &InputId,
-        opts: WhipReceiverOptions,
         pipeline_ctx: &PipelineCtx,
-    ) -> Result<InputInitResult, WhipReceiverError> {
+        frame_sender: Sender<PipelineEvent<Frame>>,
+        input_samples_sender: Sender<PipelineEvent<InputSamples>>,
+    ) -> Result<(Input, InputInitInfo), WhipReceiverError> {
         if !pipeline_ctx.start_whip_whep {
             return Err(WhipReceiverError::WhipWhepServerNotRunning);
         }
         let bearer_token = generate_token();
         let whip_whep_state = pipeline_ctx.whip_whep_state.clone();
-        let depayloader = Arc::from(Mutex::new(Depayloader::new(&opts)));
 
-        let (video_sender_async, video) = match opts.video {
-            Some(stream) => {
-                let (async_sender, async_receiver) = mpsc::channel(100);
-                let (sync_sender, sync_receiver) = crossbeam_channel::bounded(100);
-                let span = span!(
-                    Level::INFO,
-                    "WHIP server video async-to-sync bridge",
-                    input_id = input_id.to_string()
-                );
-                Self::start_forwarding_thread(async_receiver, sync_sender, span);
-                (
-                    Some(async_sender),
-                    Some(VideoInputReceiver::Encoded {
-                        chunk_receiver: sync_receiver,
-                        decoder_options: stream.options,
-                    }),
-                )
-            }
-            None => (None, None),
+        let (video_sender_async, video_chunk_receiver) = {
+            let (async_sender, async_receiver) = mpsc::channel(100);
+            let (sync_sender, sync_receiver) = crossbeam_channel::bounded(100);
+            let span = span!(
+                Level::INFO,
+                "WHIP server video async-to-sync bridge",
+                input_id = input_id.to_string()
+            );
+            Self::start_forwarding_thread(async_receiver, sync_sender, span);
+            (async_sender, sync_receiver)
         };
 
-        let (audio_sender_async, audio) = match opts.audio {
-            Some(stream) => {
-                let (async_sender, async_receiver) = mpsc::channel(100);
-                let (sync_sender, sync_receiver) = crossbeam_channel::bounded(100);
-                let span = span!(
-                    Level::INFO,
-                    "WHIP server audio async-to-sync bridge",
-                    input_id = input_id.to_string(),
-                );
-                Self::start_forwarding_thread(async_receiver, sync_sender, span);
-                (
-                    Some(async_sender),
-                    Some(AudioInputReceiver::Encoded {
-                        chunk_receiver: sync_receiver,
-                        decoder_options: decoder::AudioDecoderOptions::Opus(stream.options),
-                    }),
-                )
-            }
-            None => (None, None),
+        let (audio_sender_async, audio_chunk_receiver) = {
+            let (async_sender, async_receiver) = mpsc::channel(100);
+            let (sync_sender, sync_receiver) = crossbeam_channel::bounded(100);
+            let span = span!(
+                Level::INFO,
+                "WHIP server audio async-to-sync bridge",
+                input_id = input_id.to_string(),
+            );
+            Self::start_forwarding_thread(async_receiver, sync_sender, span);
+            (async_sender, sync_receiver)
         };
 
         let mut input_connections = whip_whep_state.input_connections.lock().unwrap();
@@ -118,19 +113,20 @@ impl WhipReceiver {
                 peer_connection: None,
                 start_time_vid: None,
                 start_time_aud: None,
-                depayloader,
+                frame_sender,
+                input_samples_sender,
+                video_chunk_receiver,
+                audio_chunk_receiver,
             },
         );
 
-        Ok(InputInitResult {
-            input: Input::Whip(Self {
+        Ok((
+            Input::Whip(Self {
                 whip_whep_state: whip_whep_state.clone(),
                 input_id: input_id.clone(),
             }),
-            video,
-            audio,
-            init_info: InputInitInfo::Whip { bearer_token },
-        })
+            InputInitInfo::Whip { bearer_token },
+        ))
     }
 
     fn start_forwarding_thread(
@@ -174,21 +170,79 @@ impl Drop for WhipReceiver {
 
 pub async fn process_track_stream(
     track: Arc<TrackRemote>,
-    state: Arc<WhipWhepState>,
+    state: Arc<PipelineCtx>,
     input_id: InputId,
-    depayloader: Arc<Mutex<Depayloader>>,
     sender: mpsc::Sender<PipelineEvent<EncodedChunk>>,
+    codecs: Arc<HashMap<u8, String>>,
 ) {
+    let input_id_clone = input_id.clone();
     let track_kind = track.kind();
-    let time_elapsed_from_input_start =
-        state.get_time_elapsed_from_input_start(input_id, track_kind);
+    let time_elapsed_from_input_start = state
+        .whip_whep_state
+        .get_time_elapsed_from_input_start(input_id.clone(), track_kind);
 
     //TODO send PipelineEvent::NewPeerConnection to reset queue and decoder(drop remaining frames from previous stream)
 
+    let mut video_depayloader = None;
+    let mut audio_depayloader = None;
+
     let mut first_pts_current_stream = None;
+    let mut depayloader: Option<Arc<Mutex<Depayloader>>> = None;
+    let mut flag = true;
+
+    let DecoderChannelsOptions {
+        frame_sender,
+        input_samples_sender,
+        video_chunks_receiver,
+        audio_chunks_receiver,
+    } = get_decoder_channels_options(state.clone(), &input_id_clone);
 
     while let Ok((rtp_packet, _)) = track.read_rtp().await {
+        if flag && track_kind == RTPCodecType::Video {
+            flag = false;
+
+            //dynamically choose codec
+            let (video_decoder, video_depayloader_local) =
+                parse_negotiated_video_codec(codecs.clone(), rtp_packet.header.payload_type);
+            video_depayloader = Some(video_depayloader_local);
+            depayloader = Some(Arc::new(Mutex::new(Depayloader {
+                video: video_depayloader.clone(),
+                audio: audio_depayloader.clone(),
+            })));
+
+            let _ = start_video_decoder_thread(
+                video_decoder,
+                &state,
+                video_chunks_receiver.clone(),
+                frame_sender.clone(),
+                input_id_clone.clone(),
+            );
+
+            // depayloader = Some(Arc::new(Mutex::new(Depayloader {video: Some(VideoDepayloader::H264 { depayloader: H264Packet::default(), buffer: vec![], rollover_state:RolloverState::default() }), audio: None })));
+        } else if flag && track_kind == RTPCodecType::Audio {
+            flag = false;
+
+            //dynamically choose codec
+            let (audio_decoder, audio_depayloader_local) =
+                parse_negotiated_audio_codec(codecs.clone(), rtp_packet.header.payload_type);
+            audio_depayloader = Some(audio_depayloader_local);
+            depayloader = Some(Arc::new(Mutex::new(Depayloader {
+                video: video_depayloader.clone(),
+                audio: audio_depayloader.clone(),
+            })));
+
+            let _ = start_audio_decoder_thread(
+                audio_decoder,
+                state.mixing_sample_rate,
+                audio_chunks_receiver.clone(),
+                input_samples_sender.clone(),
+                input_id_clone.clone(),
+            );
+        }
+
         let chunks = match depayloader
+            .clone()
+            .unwrap()
             .lock()
             .unwrap()
             .depayload(rtp_packet, track_kind)
@@ -211,5 +265,67 @@ pub async fn process_track_stream(
                 debug!("Failed to send audio RTP packet: {e}");
             }
         }
+    }
+}
+
+fn parse_negotiated_video_codec(
+    codecs: Arc<HashMap<u8, String>>,
+    payload_type: u8,
+) -> (VideoDecoderOptions, VideoDepayloader) {
+    match codecs.get(&payload_type) {
+        Some(val) if val == &"video/H264".to_string() => (
+            VideoDecoderOptions {
+                decoder: VideoDecoder::FFmpegH264,
+            },
+            VideoDepayloader::H264 {
+                depayloader: H264Packet::default(),
+                buffer: vec![],
+                rollover_state: RolloverState::default(),
+            },
+        ),
+        Some(val) if val == &"video/VP8".to_string() => (
+            VideoDecoderOptions {
+                decoder: VideoDecoder::FFmpegVp8,
+            },
+            VideoDepayloader::VP8 {
+                depayloader: Vp8Packet::default(),
+                buffer: vec![],
+                rollover_state: RolloverState::default(),
+            },
+        ),
+        _ => unreachable!(),
+    }
+}
+
+fn parse_negotiated_audio_codec(
+    codecs: Arc<HashMap<u8, String>>,
+    payload_type: u8,
+) -> (AudioDecoderOptions, AudioDepayloader) {
+    match codecs.get(&payload_type) {
+        Some(val) if val == &"audio/opus".to_string() => (
+            AudioDecoderOptions::Opus(OpusDecoderOptions {
+                forward_error_correction: false,
+            }),
+            AudioDepayloader::Opus {
+                depayloader: OpusPacket,
+                rollover_state: RolloverState::default(),
+            },
+        ),
+        _ => unreachable!(),
+    }
+}
+
+fn get_decoder_channels_options(
+    state: Arc<PipelineCtx>,
+    input_id: &InputId,
+) -> DecoderChannelsOptions {
+    let input_connections = state.whip_whep_state.input_connections.lock().unwrap();
+    let connection = input_connections.get(input_id).unwrap();
+
+    DecoderChannelsOptions {
+        frame_sender: connection.frame_sender.clone(),
+        input_samples_sender: connection.input_samples_sender.clone(),
+        video_chunks_receiver: connection.video_chunk_receiver.clone(),
+        audio_chunks_receiver: connection.audio_chunk_receiver.clone(),
     }
 }

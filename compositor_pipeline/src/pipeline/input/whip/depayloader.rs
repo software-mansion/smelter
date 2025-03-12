@@ -31,7 +31,7 @@ pub struct Depayloader {
 }
 
 impl Depayloader {
-    pub fn new(stream: &WhipReceiverOptions) -> Self {
+    pub fn new(stream: WhipReceiverOptions) -> Self {
         let video = stream
             .video
             .as_ref()
@@ -47,6 +47,8 @@ impl Depayloader {
         packet: rtp::packet::Packet,
         track_kind: RTPCodecType,
     ) -> Result<Vec<EncodedChunk>, DepayloadingError> {
+        println!("{:?}", packet.header.payload_type);
+
         match track_kind {
             RTPCodecType::Video => match self.video.as_mut() {
                 Some(video_depayloader) => video_depayloader.depayload(packet),
@@ -67,7 +69,7 @@ impl Depayloader {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum VideoDepayloader {
     H264 {
         depayloader: H264Packet,
@@ -172,7 +174,7 @@ impl VideoDepayloader {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AudioDepayloader {
     Opus {
         depayloader: OpusPacket,
@@ -222,7 +224,7 @@ impl AudioDepayloader {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct RolloverState {
     previous_timestamp: Option<u32>,
     rollover_count: usize,

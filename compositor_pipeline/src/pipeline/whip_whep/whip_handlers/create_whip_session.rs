@@ -1,8 +1,7 @@
 use crate::pipeline::{
     input::whip::process_track_stream,
-    whip_whep::{
-        bearer_token::validate_token, error::WhipServerError, init_peer_connection, WhipWhepState,
-    },
+    whip_whep::{bearer_token::validate_token, error::WhipServerError, init_peer_connection},
+    PipelineCtx,
 };
 use axum::{
     body::Body,
@@ -11,7 +10,7 @@ use axum::{
 };
 use compositor_render::InputId;
 use init_peer_connection::init_peer_connection;
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{sync::watch, time::timeout};
 use tracing::{debug, info};
 use urlencoding::encode;
@@ -23,7 +22,7 @@ use webrtc::{
 
 pub async fn handle_create_whip_session(
     Path(id): Path<String>,
-    State(state): State<Arc<WhipWhepState>>,
+    State(state): State<Arc<PipelineCtx>>,
     headers: HeaderMap,
     offer: String,
 ) -> Result<Response<Body>, WhipServerError> {
@@ -31,7 +30,11 @@ pub async fn handle_create_whip_session(
 
     validate_sdp_content_type(&headers)?;
 
-    let input_components = state.get_input_connection_options(input_id.clone())?;
+    info!("SDP offer: {}", offer);
+
+    let input_components = state
+        .whip_whep_state
+        .get_input_connection_options(input_id.clone())?;
 
     validate_token(input_components.bearer_token, headers.get("Authorization")).await?;
 
@@ -44,47 +47,12 @@ pub async fn handle_create_whip_session(
         }
     }
 
-    let peer_connection = init_peer_connection(
-        input_components.video_sender.is_some(),
-        input_components.audio_sender.is_some(),
-        state.stun_servers.to_vec(),
-    )
-    .await?;
+    let peer_connection = init_peer_connection(state.stun_servers.to_vec()).await?;
 
     state
+        .whip_whep_state
         .update_peer_connection(input_id.clone(), peer_connection.clone())
         .await?;
-
-    peer_connection.on_track(Box::new(move |track, _, _| {
-        let track_kind = track.kind();
-        let state_clone = state.clone();
-        let input_id_clone = input_id.clone();
-        let depayloader_clone = input_components.depayloader.clone();
-        let sender = match track_kind {
-            RTPCodecType::Video => input_components.video_sender.clone(),
-            RTPCodecType::Audio => input_components.audio_sender.clone(),
-            _ => {
-                debug!("RTPCodecType not supported!");
-                None
-            }
-        };
-
-        //tokio::spawn is necessary to concurrently process audio and video track
-        Box::pin(async {
-            if let Some(sender) = sender {
-                tokio::spawn(async move {
-                    process_track_stream(
-                        track,
-                        state_clone,
-                        input_id_clone,
-                        depayloader_clone,
-                        sender,
-                    )
-                    .await;
-                });
-            }
-        })
-    }));
 
     peer_connection.on_ice_connection_state_change(Box::new(move |state| {
         info!("ICE connection state changed: {state:?}");
@@ -103,7 +71,55 @@ pub async fn handle_create_whip_session(
             "Local description is not set, cannot read it".to_string(),
         ));
     };
-    debug!("Sending SDP answer: {sdp:?}");
+    info!("Sending SDP answer: {sdp:?}");
+
+    let mut codec_map = HashMap::new();
+
+    let transceivers = peer_connection.get_transceivers().await;
+
+    for transceiver in transceivers {
+        let receiver = transceiver.receiver().await;
+        let codecs = receiver.get_parameters().await.codecs;
+
+        println!("Payload Type -> Codec Mapping:");
+        for codec in codecs {
+            codec_map.insert(codec.payload_type, codec.capability.mime_type);
+            // println!("{} -> {}", codec.payload_type, codec.capability.mime_type);
+        }
+    }
+
+    println!("{:?}", codec_map);
+
+    peer_connection.on_track(Box::new(move |track, _, _| {
+        let track_kind = track.kind();
+        let state_clone = state.clone();
+        let input_id_clone = input_id.clone();
+        let codec_map_clone = codec_map.clone();
+        let sender = match track_kind {
+            RTPCodecType::Video => Some(input_components.video_sender.clone()),
+            RTPCodecType::Audio => Some(input_components.audio_sender.clone()),
+            _ => {
+                debug!("RTPCodecType not supported!");
+                None
+            }
+        };
+
+        //tokio::spawn is necessary to concurrently process audio and video track
+        Box::pin(async {
+            if let Some(sender) = sender {
+                tokio::spawn(async move {
+                    process_track_stream(
+                        track,
+                        state_clone,
+                        input_id_clone,
+                        sender,
+                        Arc::new(codec_map_clone),
+                    )
+                    .await;
+                });
+            }
+        })
+    }));
 
     let body = Body::from(sdp.sdp.to_string());
     let response = Response::builder()
