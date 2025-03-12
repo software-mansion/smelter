@@ -1,7 +1,6 @@
-import { useCallback } from 'react';
-import type Smelter from '@swmansion/smelter-web-wasm';
 import { Mp4, Slide, SlideShow, Text, View } from '@swmansion/smelter';
-import CompositorCanvas from '../components/SmelterCanvas';
+import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
+import { useSmelter } from '../hooks/useSmelter';
 
 const FIRST_MP4_URL =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
@@ -12,17 +11,14 @@ const SECOND_MP4_URL =
 const NO_AUDIO_MP4_URL = 'https://smelter.dev/videos/template-scene-race.mp4';
 
 function ComponentMp4Example() {
-  const onCanvasCreate = useCallback(async (compositor: Smelter) => {
-    await compositor.registerFont(
-      'https://fonts.gstatic.com/s/notosans/v36/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A-9a6Vc.ttf'
-    );
-  }, []);
-
+  const smelter = useSmelter();
   return (
     <div className="card">
-      <CompositorCanvas onCanvasCreated={onCanvasCreate} width={1280} height={720}>
-        <Scene />
-      </CompositorCanvas>
+      {smelter && (
+        <SmelterCanvasOutput smelter={smelter} width={1280} height={720}>
+          <Scene />
+        </SmelterCanvasOutput>
+      )}
     </div>
   );
 }
