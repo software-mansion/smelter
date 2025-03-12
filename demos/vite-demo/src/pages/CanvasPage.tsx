@@ -1,7 +1,9 @@
 import { View, Text, useInputStreams, InputStream, Tiles } from '@swmansion/smelter';
 import Smelter, { setWasmBundleUrl } from '@swmansion/smelter-web-wasm';
 import { useCallback, useState } from 'react';
-import SmelterCanvas from '../components/SmelterCanvas';
+import SmelterCanvas from '../components/SmelterCanvasOutput';
+import { useSmelter } from '../hooks/useSmelter';
+import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
 
 setWasmBundleUrl('/assets/smelter.wasm');
 
@@ -9,7 +11,7 @@ const CAMERA_ID = 'camera';
 const SCREEN_SHARE_ID = 'screen';
 
 export default function CanvasPage() {
-  const [smelter, setSmelter] = useState<Smelter>();
+  const smelter = useSmelter();
   const [camera, setCamera] = useState<boolean>();
   const [screen, setScreen] = useState<boolean>();
 
@@ -63,9 +65,9 @@ export default function CanvasPage() {
         <p className="">Canvas: </p>
       </div>
       <div>
-        <SmelterCanvas width={1280} height={720} onSmelterCreated={setSmelter}>
+        {smelter && <SmelterCanvasOutput smelter={smelter} width={1280} height={720} audio>
           <SmelterComponent />
-        </SmelterCanvas>
+        </SmelterCanvasOutput>}
       </div>
     </div>
   );
