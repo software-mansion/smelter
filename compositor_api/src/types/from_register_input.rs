@@ -178,47 +178,11 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
 
     fn try_from(value: WhipInput) -> Result<Self, Self::Error> {
         let WhipInput {
-            video,
-            audio,
             required,
             offset_ms,
         } = value;
 
-        const NO_VIDEO_AUDIO_SPEC: &str =
-            "At least one of `video` and `audio` has to be specified in `register_input` request.";
-
-        if video.is_none() && audio.is_none() {
-            return Err(TypeError::new(NO_VIDEO_AUDIO_SPEC));
-        }
-
-        let whip_receiver_options = input::whip::WhipReceiverOptions {
-            video: video
-                .as_ref()
-                .map(|video| {
-                    Ok(input::whip::InputVideoStream {
-                        options: match video.decoder {
-                            VideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions {
-                                decoder: pipeline::VideoDecoder::FFmpegH264,
-                            },
-                            VideoDecoder::FfmpegVp8 => decoder::VideoDecoderOptions {
-                                decoder: pipeline::VideoDecoder::FFmpegVp8,
-                            },
-                            #[cfg(feature = "vk-video")]
-                            VideoDecoder::VulkanVideo => decoder::VideoDecoderOptions {
-                                decoder: pipeline::VideoDecoder::VulkanVideoH264,
-                            },
-                            #[cfg(not(feature = "vk-video"))]
-                            VideoDecoder::VulkanVideo => {
-                                return Err(TypeError::new(NO_VULKAN_VIDEO))
-                            }
-                        },
-                    })
-                })
-                .transpose()?,
-            audio: audio.map(TryFrom::try_from).transpose()?,
-        };
-
-        let input_options = input::InputOptions::Whip(whip_receiver_options);
+        let input_options = input::InputOptions::Whip;
 
         let queue_options = queue::QueueInputOptions {
             required: required.unwrap_or(false),

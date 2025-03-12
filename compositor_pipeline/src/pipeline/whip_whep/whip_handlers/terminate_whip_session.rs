@@ -1,5 +1,6 @@
-use crate::pipeline::whip_whep::{
-    bearer_token::validate_token, error::WhipServerError, WhipWhepState,
+use crate::pipeline::{
+    whip_whep::{bearer_token::validate_token, error::WhipServerError},
+    PipelineCtx,
 };
 use axum::{
     extract::{Path, State},
@@ -11,13 +12,13 @@ use tracing::info;
 
 pub async fn handle_terminate_whip_session(
     Path(id): Path<String>,
-    State(state): State<Arc<WhipWhepState>>,
+    State(state): State<Arc<PipelineCtx>>,
     headers: HeaderMap,
 ) -> Result<StatusCode, WhipServerError> {
     let input_id = InputId(Arc::from(id));
 
     let bearer_token = {
-        let connections = state.input_connections.lock().unwrap();
+        let connections = state.whip_whep_state.input_connections.lock().unwrap();
         connections
             .get(&input_id)
             .map(|connection| connection.bearer_token.clone())
@@ -27,7 +28,7 @@ pub async fn handle_terminate_whip_session(
     validate_token(bearer_token, headers.get("Authorization")).await?;
 
     let peer_connection = {
-        let mut connections = state.input_connections.lock().unwrap();
+        let mut connections = state.whip_whep_state.input_connections.lock().unwrap();
         if let Some(connection) = connections.get_mut(&input_id) {
             connection.peer_connection.take()
         } else {

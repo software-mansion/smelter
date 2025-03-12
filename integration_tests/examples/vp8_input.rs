@@ -38,12 +38,6 @@ fn client_code() -> Result<()> {
         "input/input_2/register",
         &json!({
             "type": "whip",
-            "video": {
-                "decoder": "ffmpeg_vp8"
-            },
-            "audio": {
-                "decoder": "opus"
-            },
         }),
     )?
     .json::<serde_json::Value>();

@@ -32,10 +32,6 @@ pub struct RtpInput {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct WhipInput {
-    /// Parameters of a video source included in the RTP stream.
-    pub video: Option<InputWhipVideoOptions>,
-    /// Parameters of an audio source included in the RTP stream.
-    pub audio: Option<InputWhipAudioOptions>,
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,

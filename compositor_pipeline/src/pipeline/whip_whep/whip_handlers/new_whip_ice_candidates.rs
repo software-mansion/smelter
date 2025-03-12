@@ -1,5 +1,6 @@
-use crate::pipeline::whip_whep::{
-    bearer_token::validate_token, error::WhipServerError, WhipWhepState,
+use crate::pipeline::{
+    whip_whep::{bearer_token::validate_token, error::WhipServerError},
+    PipelineCtx,
 };
 use axum::{
     extract::{Path, State},
@@ -12,7 +13,7 @@ use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
 
 pub async fn handle_new_whip_ice_candidates(
     Path(id): Path<String>,
-    State(state): State<Arc<WhipWhepState>>,
+    State(state): State<Arc<PipelineCtx>>,
     headers: HeaderMap,
     sdp_fragment_content: String,
 ) -> Result<StatusCode, WhipServerError> {
@@ -29,7 +30,7 @@ pub async fn handle_new_whip_ice_candidates(
 
     let input_id = InputId(Arc::from(id));
     let (bearer_token, peer_connection) = {
-        let connections = state.input_connections.lock().unwrap();
+        let connections = state.whip_whep_state.input_connections.lock().unwrap();
         connections
             .get(&input_id)
             .map(|conn| (conn.bearer_token.clone(), conn.peer_connection.clone()))

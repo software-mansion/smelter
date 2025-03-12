@@ -19,8 +19,6 @@ use webrtc::{
 use super::error::WhipServerError;
 
 pub async fn init_peer_connection(
-    add_video_track: bool,
-    add_audio_track: bool,
     stun_servers: Vec<String>,
 ) -> Result<Arc<RTCPeerConnection>, WhipServerError> {
     let mut media_engine = MediaEngine::default();
@@ -45,28 +43,26 @@ pub async fn init_peer_connection(
     };
 
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
-    if add_video_track {
-        peer_connection
-            .add_transceiver_from_kind(
-                RTPCodecType::Audio,
-                Some(RTCRtpTransceiverInit {
-                    direction: RTCRtpTransceiverDirection::Recvonly,
-                    send_encodings: vec![],
-                }),
-            )
-            .await?;
-    }
-    if add_audio_track {
-        peer_connection
-            .add_transceiver_from_kind(
-                RTPCodecType::Video,
-                Some(RTCRtpTransceiverInit {
-                    direction: RTCRtpTransceiverDirection::Recvonly,
-                    send_encodings: vec![],
-                }),
-            )
-            .await?;
-    }
+
+    peer_connection
+        .add_transceiver_from_kind(
+            RTPCodecType::Video,
+            Some(RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Recvonly,
+                send_encodings: vec![],
+            }),
+        )
+        .await?;
+
+    peer_connection
+        .add_transceiver_from_kind(
+            RTPCodecType::Audio,
+            Some(RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Recvonly,
+                send_encodings: vec![],
+            }),
+        )
+        .await?;
 
     Ok(peer_connection)
 }
