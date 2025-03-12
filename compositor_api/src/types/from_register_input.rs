@@ -200,7 +200,9 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                             VideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions {
                                 decoder: pipeline::VideoDecoder::FFmpegH264,
                             },
-                            VideoDecoder::FfmpegVp8 => unimplemented!("WHIP VP8 input"),
+                            VideoDecoder::FfmpegVp8 => {
+                                return Err(TypeError::new("WHIP VP8 input not implemented"))
+                            }
                             #[cfg(feature = "vk-video")]
                             VideoDecoder::VulkanVideo => decoder::VideoDecoderOptions {
                                 decoder: pipeline::VideoDecoder::VulkanVideoH264,
@@ -263,7 +265,7 @@ impl TryFrom<Mp4Input> for pipeline::RegisterInputOptions {
 
         let video_decoder = match video_decoder.unwrap_or(VideoDecoder::FfmpegH264) {
             VideoDecoder::FfmpegH264 => pipeline::VideoDecoder::FFmpegH264,
-            VideoDecoder::FfmpegVp8 => unimplemented!("MP4 VP8 input"),
+            VideoDecoder::FfmpegVp8 => return Err(TypeError::new("MP4 VP8 input not implemented")),
 
             #[cfg(feature = "vk-video")]
             VideoDecoder::VulkanVideo => pipeline::VideoDecoder::VulkanVideoH264,

@@ -100,7 +100,7 @@ fn video_codec_capability(video: VideoCodec) -> RTCRtpCodecCapability {
             sdp_fmtp_line: "".to_owned(),
             rtcp_feedback: vec![],
         },
-        VideoCodec::VP8 => unimplemented!(),
+        VideoCodec::VP8 => unreachable!(),
     }
 }
 

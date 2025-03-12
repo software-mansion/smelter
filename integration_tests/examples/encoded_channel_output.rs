@@ -125,7 +125,7 @@ fn main() {
         };
         match chunk.kind {
             EncodedChunkKind::Video(VideoCodec::H264) => h264_dump.write_all(&chunk.data).unwrap(),
-            EncodedChunkKind::Video(VideoCodec::VP8) => unimplemented!(),
+            EncodedChunkKind::Video(VideoCodec::VP8) => unreachable!(),
             EncodedChunkKind::Audio(AudioCodec::Opus) => opus_dump.write_all(&chunk.data).unwrap(),
             EncodedChunkKind::Audio(AudioCodec::Aac) => panic!("AAC is not supported on output"),
         }
