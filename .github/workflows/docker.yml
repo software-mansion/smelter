@@ -1,4 +1,4 @@
-name: docker
+name: Docker - build
 on:
     workflow_dispatch: {}
     schedule:
@@ -19,7 +19,7 @@ concurrency:
     cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
-    dockerfile:
+    docker_build:
         runs-on: ubuntu-latest
 
         steps:

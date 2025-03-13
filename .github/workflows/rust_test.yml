@@ -1,4 +1,4 @@
-name: build and test
+name: Rust - build and test
 on:
     workflow_dispatch: {}
     push:
@@ -11,19 +11,14 @@ concurrency:
     cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
-    check:
+    build_and_test_linux:
         runs-on: ubuntu-24.04
         steps:
             - name: 🛠 Install system dependencies
               run: |
                   set -e
-
-                  echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
-
                   sudo apt-get update -y -qq
-                  sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev ttf-mscorefonts-installer libopus-dev
-
-                  fc-cache -f
+                  sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
 
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -71,3 +66,30 @@ jobs:
 
             - name: 📚 Run doctests
               run: cargo test --workspace --doc
+
+    build_macos:
+        runs-on: macos-14
+        steps:
+            - name: 🛠 Install system dependencies
+              run: brew install ffmpeg
+
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: rustfmt, clippy
+
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v4
+
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+
+            - name: 🪢 Generate Chromium Embedded Framework bindings
+              run: cargo build --package compositor_chromium
+
+            - name: 📖 Check formatting
+              run: cargo fmt --all --check
+
+            - name: 📎 Run clippy
+              run: cargo clippy --workspace --all-targets -- -D clippy::todo -D warnings
+

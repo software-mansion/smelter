@@ -1,4 +1,4 @@
-name: macos lint
+name: Rust - lint
 on:
     workflow_dispatch: {}
     push:
@@ -11,16 +11,23 @@ concurrency:
     cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
-    check:
-        runs-on: macos-14
+    lint:
+        runs-on: ubuntu-24.04
         steps:
             - name: 🛠 Install system dependencies
-              run: brew install ffmpeg
+              run: |
+                  sudo apt-get update -y -qq
+                  sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
 
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
                   components: rustfmt, clippy
+
+            - name: Install pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 9
 
             - name: 📥 Checkout repo
               uses: actions/checkout@v4
@@ -35,5 +42,9 @@ jobs:
               run: cargo fmt --all --check
 
             - name: 📎 Run clippy
-              run: cargo clippy --workspace --all-targets -- -D clippy::todo -D warnings
+              run: cargo clippy --workspace --all-targets --all-features -- -D clippy::todo -D warnings
 
+            - name: 📄 Generate JSON schema
+              working-directory: ./generate
+              run: |
+                cargo run --bin generate_from_types -- --check
