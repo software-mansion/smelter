@@ -1,4 +1,4 @@
-name: TypeScript SDK - build and check
+name: TypeScript SDK - check
 
 on:
     workflow_dispatch: {}

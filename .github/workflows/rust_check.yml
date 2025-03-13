@@ -1,4 +1,4 @@
-name: Rust - build and test
+name: Rust - check
 on:
     workflow_dispatch: {}
     push:
@@ -93,3 +93,40 @@ jobs:
             - name: 📎 Run clippy
               run: cargo clippy --workspace --all-targets -- -D clippy::todo -D warnings
 
+    lint:
+        runs-on: ubuntu-24.04
+        steps:
+            - name: 🛠 Install system dependencies
+              run: |
+                  sudo apt-get update -y -qq
+                  sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
+
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: rustfmt, clippy
+
+            - name: Install pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 9
+
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v4
+
+            - name: 📁 Rust cache
+              uses: Swatinem/rust-cache@v2
+
+            - name: 🪢 Generate Chromium Embedded Framework bindings
+              run: cargo build --package compositor_chromium
+
+            - name: 📖 Check formatting
+              run: cargo fmt --all --check
+
+            - name: 📎 Run clippy
+              run: cargo clippy --workspace --all-targets --all-features -- -D clippy::todo -D warnings
+
+            - name: 📄 Generate JSON schema
+              working-directory: ./generate
+              run: |
+                cargo run --bin generate_from_types -- --check
