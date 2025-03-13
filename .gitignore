@@ -23,6 +23,7 @@ target/
 
 # Assets
 **/*.mp4
+**/*.yuv
 
 # Generated MP4s
 **/*.mp4\.old\.*
