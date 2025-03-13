@@ -1,4 +1,4 @@
-name: TS SDK check
+name: TypeScript SDK - check
 
 on:
     workflow_dispatch: {}
@@ -12,7 +12,7 @@ concurrency:
     cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
-    check:
+    ts_build_and_check:
         runs-on: ubuntu-latest
 
         steps:
@@ -27,7 +27,7 @@ jobs:
             - name: Install pnpm
               uses: pnpm/action-setup@v4
               with: 
-                  version: 9
+                  version: 10
 
             - name: Setup Node.js
               uses: actions/setup-node@v4
