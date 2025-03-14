@@ -1,9 +1,9 @@
-use crate::{audio_mixer::InputSamples, error::InitPipelineError};
+use crate::error::InitPipelineError;
 use axum::{
     routing::{delete, get, patch, post},
     Router,
 };
-use compositor_render::{Frame, InputId};
+use compositor_render::InputId;
 use error::WhipServerError;
 use reqwest::StatusCode;
 use serde_json::json;
@@ -31,13 +31,16 @@ use whip_handlers::{
 };
 
 pub mod bearer_token;
-mod error;
+pub mod error;
 mod init_peer_connection;
 mod whip_handlers;
 
 use crate::queue::PipelineEvent;
 
-use super::{EncodedChunk, PipelineCtx};
+use super::{
+    input::whip::{depayloader::Depayloader, DecoderChannels},
+    EncodedChunk, PipelineCtx,
+};
 
 pub async fn run_whip_whep_server(
     port: u16,
@@ -90,10 +93,8 @@ pub struct WhipInputConnectionOptions {
     pub peer_connection: Option<Arc<RTCPeerConnection>>,
     pub start_time_vid: Option<Instant>,
     pub start_time_aud: Option<Instant>,
-    pub frame_sender: crossbeam_channel::Sender<PipelineEvent<Frame>>,
-    pub input_samples_sender: crossbeam_channel::Sender<PipelineEvent<InputSamples>>,
-    pub video_chunk_receiver: crossbeam_channel::Receiver<PipelineEvent<EncodedChunk>>,
-    pub audio_chunk_receiver: crossbeam_channel::Receiver<PipelineEvent<EncodedChunk>>,
+    pub decoder_channels: DecoderChannels,
+    pub depayloader: Arc<Mutex<Depayloader>>,
 }
 
 impl WhipInputConnectionOptions {

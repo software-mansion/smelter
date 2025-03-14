@@ -59,11 +59,12 @@ pub struct WhipReceiver {
     input_id: InputId,
 }
 
-struct DecoderChannelsOptions {
+#[derive(Debug, Clone)]
+pub struct DecoderChannels {
     frame_sender: Sender<PipelineEvent<Frame>>,
     input_samples_sender: Sender<PipelineEvent<InputSamples>>,
-    video_chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
-    audio_chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
+    video_chunk_receiver: Receiver<PipelineEvent<EncodedChunk>>,
+    audio_chunk_receiver: Receiver<PipelineEvent<EncodedChunk>>,
 }
 
 impl WhipReceiver {
@@ -103,6 +104,13 @@ impl WhipReceiver {
             (async_sender, sync_receiver)
         };
 
+        let decoder_channels = DecoderChannels {
+            frame_sender,
+            input_samples_sender,
+            video_chunk_receiver,
+            audio_chunk_receiver,
+        };
+
         let mut input_connections = whip_whep_state.input_connections.lock().unwrap();
         input_connections.insert(
             input_id.clone(),
@@ -113,10 +121,11 @@ impl WhipReceiver {
                 peer_connection: None,
                 start_time_vid: None,
                 start_time_aud: None,
-                frame_sender,
-                input_samples_sender,
-                video_chunk_receiver,
-                audio_chunk_receiver,
+                decoder_channels,
+                depayloader: Arc::new(Mutex::new(Depayloader {
+                    video: None,
+                    audio: None,
+                })),
             },
         );
 
@@ -182,67 +191,75 @@ pub async fn process_track_stream(
         .get_time_elapsed_from_input_start(input_id.clone(), track_kind);
 
     //TODO send PipelineEvent::NewPeerConnection to reset queue and decoder(drop remaining frames from previous stream)
-
-    let mut video_depayloader = None;
-    let mut audio_depayloader = None;
-
     let mut first_pts_current_stream = None;
-    let mut depayloader: Option<Arc<Mutex<Depayloader>>> = None;
     let mut flag = true;
 
-    let DecoderChannelsOptions {
+    let DecoderChannels {
         frame_sender,
         input_samples_sender,
-        video_chunks_receiver,
-        audio_chunks_receiver,
-    } = get_decoder_channels_options(state.clone(), &input_id_clone);
+        video_chunk_receiver,
+        audio_chunk_receiver,
+    } = get_decoder_channels(state.clone(), &input_id_clone);
+    let mut depayloader = Arc::new(Mutex::new(Depayloader {
+        video: None,
+        audio: None,
+    }));
 
     while let Ok((rtp_packet, _)) = track.read_rtp().await {
         if flag && track_kind == RTPCodecType::Video {
             flag = false;
 
             //dynamically choose codec
-            let (video_decoder, video_depayloader_local) =
+            let (video_decoder, video_depayloader) =
                 parse_negotiated_video_codec(codecs.clone(), rtp_packet.header.payload_type);
-            video_depayloader = Some(video_depayloader_local);
-            depayloader = Some(Arc::new(Mutex::new(Depayloader {
-                video: video_depayloader.clone(),
-                audio: audio_depayloader.clone(),
-            })));
+            if let Some(connection) = state
+                .whip_whep_state
+                .input_connections
+                .lock()
+                .unwrap()
+                .get(&input_id)
+            {
+                connection.depayloader.lock().unwrap().video = Some(video_depayloader);
+                depayloader = connection.depayloader.clone();
+            }
 
-            let _ = start_video_decoder_thread(
+            if let Err(err) = start_video_decoder_thread(
                 video_decoder,
                 &state,
-                video_chunks_receiver.clone(),
+                video_chunk_receiver.clone(),
                 frame_sender.clone(),
                 input_id_clone.clone(),
-            );
-
-            // depayloader = Some(Arc::new(Mutex::new(Depayloader {video: Some(VideoDepayloader::H264 { depayloader: H264Packet::default(), buffer: vec![], rollover_state:RolloverState::default() }), audio: None })));
+            ) {
+                error!("Cannot start video decoder thread: {err:?}");
+            }
         } else if flag && track_kind == RTPCodecType::Audio {
             flag = false;
 
-            //dynamically choose codec
-            let (audio_decoder, audio_depayloader_local) =
+            let (audio_decoder, audio_depayloader) =
                 parse_negotiated_audio_codec(codecs.clone(), rtp_packet.header.payload_type);
-            audio_depayloader = Some(audio_depayloader_local);
-            depayloader = Some(Arc::new(Mutex::new(Depayloader {
-                video: video_depayloader.clone(),
-                audio: audio_depayloader.clone(),
-            })));
+            if let Some(connection) = state
+                .whip_whep_state
+                .input_connections
+                .lock()
+                .unwrap()
+                .get(&input_id)
+            {
+                connection.depayloader.lock().unwrap().audio = Some(audio_depayloader);
+                depayloader = connection.depayloader.clone();
+            };
 
-            let _ = start_audio_decoder_thread(
+            if let Err(err) = start_audio_decoder_thread(
                 audio_decoder,
                 state.mixing_sample_rate,
-                audio_chunks_receiver.clone(),
+                audio_chunk_receiver.clone(),
                 input_samples_sender.clone(),
                 input_id_clone.clone(),
-            );
+            ) {
+                error!("Cannot start audio decoder thread: {err:?}");
+            }
         }
 
         let chunks = match depayloader
-            .clone()
-            .unwrap()
             .lock()
             .unwrap()
             .depayload(rtp_packet, track_kind)
@@ -315,17 +332,8 @@ fn parse_negotiated_audio_codec(
     }
 }
 
-fn get_decoder_channels_options(
-    state: Arc<PipelineCtx>,
-    input_id: &InputId,
-) -> DecoderChannelsOptions {
+fn get_decoder_channels(state: Arc<PipelineCtx>, input_id: &InputId) -> DecoderChannels {
     let input_connections = state.whip_whep_state.input_connections.lock().unwrap();
     let connection = input_connections.get(input_id).unwrap();
-
-    DecoderChannelsOptions {
-        frame_sender: connection.frame_sender.clone(),
-        input_samples_sender: connection.input_samples_sender.clone(),
-        video_chunks_receiver: connection.video_chunk_receiver.clone(),
-        audio_chunks_receiver: connection.audio_chunk_receiver.clone(),
-    }
+    connection.decoder_channels.clone()
 }
