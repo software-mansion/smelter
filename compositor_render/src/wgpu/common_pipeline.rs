@@ -120,7 +120,15 @@ pub fn create_render_pipeline(
             targets: &[Some(wgpu::ColorTargetState {
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 write_mask: wgpu::ColorWrites::all(),
-                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING)
+                //blend: Some(wgpu::BlendState {
+                //    color: wgpu::BlendComponent {
+                //        src_factor: wgpu::BlendFactor::Src1Alpha,
+                //        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                //        operation: wgpu::BlendOperation::Add,
+                //    },
+                //    alpha: wgpu::BlendComponent::OVER,
+                //}),
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),

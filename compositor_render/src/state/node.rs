@@ -4,7 +4,7 @@ use std::time::Duration;
 use std::vec;
 
 use crate::scene::{self, ComponentId, ShaderComponentParams};
-use crate::transformations::image_renderer::Image;
+use crate::transformations::image::Image;
 use crate::transformations::layout::LayoutNode;
 use crate::transformations::shader::node::ShaderNode;
 use crate::transformations::shader::Shader;
@@ -13,7 +13,7 @@ use crate::InputId;
 use crate::transformations::text_renderer::TextRenderParams;
 use crate::transformations::web_renderer::WebRenderer;
 use crate::transformations::{
-    image_renderer::ImageNode, text_renderer::TextRendererNode, web_renderer::node::WebRendererNode,
+    image::ImageNode, text_renderer::TextRendererNode, web_renderer::node::WebRendererNode,
 };
 use crate::wgpu::texture::{InputTexture, NodeTexture};
 

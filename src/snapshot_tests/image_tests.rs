@@ -1,6 +1,6 @@
 use compositor_render::{
     image::{ImageSource, ImageSpec, ImageType},
-    RendererId, RendererSpec,
+    OutputFrameFormat, RendererId, RendererSpec, Resolution,
 };
 
 use super::{
@@ -16,19 +16,26 @@ fn image_tests() {
         RendererId("image_jpeg".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::Url {
-                url: "https://www.rust-lang.org/static/images/rust-social.jpg".to_string(),
+                url: "https://www.smelter.dev/images/smelter-logo.svg".to_string(),
             },
-            image_type: ImageType::Jpeg,
+            image_type: ImageType::Svg {
+                resolution: Some(Resolution {
+                    width: 130*10,
+                    height: 17*10,
+                }),
+            },
         }),
     );
 
     runner.add(TestCase {
         name: "image/jpeg_as_root",
+        only: true,
         scene_updates: scene_from_json(include_str!(
             "../../snapshot_tests/image/jpeg_as_root.scene.json"
         )),
         renderers: vec![image_renderer.clone()],
         inputs: vec![TestInput::new(1)],
+        output_format: OutputFrameFormat::RgbaWgpuTexture,
         ..Default::default()
     });
     runner.add(TestCase {

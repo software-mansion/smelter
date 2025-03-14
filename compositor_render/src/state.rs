@@ -6,7 +6,7 @@ use glyphon::fontdb;
 use crate::error::{RegisterRendererError, UnregisterRendererError};
 
 use crate::scene::{Component, OutputScene};
-use crate::transformations::image_renderer::Image;
+use crate::transformations::image::Image;
 use crate::transformations::shader::Shader;
 use crate::transformations::web_renderer::{self, WebRenderer};
 use crate::{

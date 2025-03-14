@@ -8,6 +8,7 @@ use std::{
 use bytes::{Bytes, BytesMut};
 
 use image::{codecs::gif::GifDecoder, AnimationDecoder, ImageFormat};
+use pipeline::RemoveAlphaPremult;
 use resvg::{
     tiny_skia,
     usvg::{self, TreeParsing},
@@ -21,6 +22,8 @@ use crate::{
     },
     Resolution,
 };
+
+mod pipeline;
 
 #[derive(Debug, Clone)]
 pub struct ImageSpec {
@@ -219,6 +222,7 @@ pub struct SvgNodeState {
 #[derive(Debug)]
 pub struct SvgAsset {
     texture: RGBATexture,
+    remove_alpha_premult: RemoveAlphaPremult,
 }
 
 impl SvgAsset {
@@ -260,7 +264,11 @@ impl SvgAsset {
         texture.upload(ctx, pixmap.data_mut());
         ctx.queue.submit([]);
 
-        Ok(Self { texture })
+        let remove_alpha_premult = RemoveAlphaPremult::new(&ctx.device, ctx.format.rgba_layout());
+        Ok(Self {
+            texture,
+            remove_alpha_premult,
+        })
     }
 
     fn render(&self, ctx: &WgpuCtx, target: &mut NodeTexture, state: &Mutex<SvgNodeState>) {
@@ -269,7 +277,14 @@ impl SvgAsset {
             return;
         }
 
-        copy_texture_to_node_texture(ctx, &self.texture, target);
+        self.remove_alpha_premult.convert(
+            ctx,
+            (
+                &self.texture,
+                &self.texture.new_bind_group(ctx, ctx.format.rgba_layout()),
+            ),
+            target.texture().unwrap(),
+        );
         state.was_rendered = true;
     }
 

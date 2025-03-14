@@ -1,4 +1,4 @@
-use compositor_render::Resolution;
+use compositor_render::{OutputFrameFormat, Resolution};
 
 use super::{input::TestInput, scene_from_json, snapshots_path, test_case::TestCase, TestRunner};
 
@@ -137,10 +137,13 @@ fn view_tests() {
         ..default.clone()
     });
     runner.add(TestCase {
+        only: true,
+        allowed_error: 0.0,
         name: "view/border_radius_border_box_shadow",
         scene_updates: scene_from_json(include_str!(
             "../../snapshot_tests/view/border_radius_border_box_shadow.scene.json"
         )),
+        output_format: OutputFrameFormat::RgbaWgpuTexture,
         ..default.clone()
     });
     runner.add(TestCase {
