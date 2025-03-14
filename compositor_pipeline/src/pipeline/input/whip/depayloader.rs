@@ -85,6 +85,8 @@ impl VideoDepayloader {
                 rollover_state: RolloverState::default(),
             },
 
+            VideoDecoder::FFmpegVp8 => unreachable!(),
+
             #[cfg(feature = "vk-video")]
             VideoDecoder::VulkanVideoH264 => VideoDepayloader::H264 {
                 depayloader: H264Packet::default(),
