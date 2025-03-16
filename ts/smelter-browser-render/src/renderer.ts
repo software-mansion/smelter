@@ -7,7 +7,7 @@ export type RendererOptions = {
    */
   streamFallbackTimeoutMs: number;
 
-  logger_level?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
+  loggerLevel?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
 };
 
 export type FrameSet = {
@@ -36,7 +36,7 @@ export class Renderer {
   public static async create(options: RendererOptions): Promise<Renderer> {
     const renderer = await wasm.create_renderer({
       stream_fallback_timeout_ms: options.streamFallbackTimeoutMs,
-      logger_level: options.logger_level ?? 'warn',
+      logger_level: options.loggerLevel ?? 'warn',
     });
     return new Renderer(renderer);
   }

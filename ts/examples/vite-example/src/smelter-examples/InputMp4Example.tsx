@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { InputStream, Text, useInputStreams, View } from '@swmansion/smelter';
+import { Image, InputStream, Text, useInputStreams, View } from '@swmansion/smelter';
 import NotoSansFont from '../../assets/NotoSans.ttf';
 import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
 import { useSmelter } from '../hooks/useSmelter';
@@ -15,6 +15,14 @@ function InputMp4Example() {
     }
     void (async () => {
       await smelter.registerFont(NotoSansFont);
+      await smelter.registerImage('image', {
+        assetType: 'svg',
+        url: 'https://www.smelter.dev/images/smelter-logo.svg',
+        resolution: {
+          width: 1000,
+          height: 1000,
+        },
+      } as any);
       await smelter.registerInput('video', { type: 'mp4', url: MP4_URL });
     })();
   }, [smelter]);
@@ -36,7 +44,9 @@ function Scene() {
 
   if (inputState === 'playing') {
     return (
-      <View style={{ width: 1280, height: 720 }}>
+      <View style={{ width: 1280, height: 720, backgroundColor: 'white' }}>
+        <Image source="https://upload.wikimedia.org/wikipedia/commons/7/70/Example.png" />
+        <Image imageId="image" />
         <InputStream inputId="video" />
         <View style={{ width: 230, height: 40, backgroundColor: '#000000', bottom: 20, left: 500 }}>
           <Text style={{ fontSize: 30, fontFamily: 'Noto Sans' }}>Playing MP4 file</Text>

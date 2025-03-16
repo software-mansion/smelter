@@ -25,7 +25,7 @@ use compositor_pipeline::{
 use compositor_render::{
     error::ErrorStack,
     scene::{Component, InputStreamComponent},
-    Frame, FrameData, InputId, OutputId, Resolution,
+    Frame, FrameData, InputId, OutputId, RenderingMode, Resolution,
 };
 use integration_tests::{gstreamer::start_gst_receive_tcp, test_input::TestInput};
 use smelter::{
@@ -64,6 +64,7 @@ fn main() {
         whip_whep_server_port: Some(config.whip_whep_server_port),
         start_whip_whep: config.start_whip_whep,
         tokio_rt: Some(Arc::new(Runtime::new().unwrap())),
+        rendering_mode: RenderingMode::GpuOptimized,
     })
     .unwrap_or_else(|err| {
         panic!(

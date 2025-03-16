@@ -1,0 +1,13 @@
+{
+    "video": {
+        "root": {
+            "type": "view",
+            "children": [
+                {
+                    "type": "image",
+                    "image_id": "image_svg"
+                }
+            ]
+        }
+    }
+}

@@ -27,7 +27,7 @@ decklink = ["compositor_api/decklink"]
 web_renderer = ["dep:compositor_chromium", "compositor_api/web_renderer"]
 
 [workspace.dependencies]
-smelter = { path = "." }
+smelter = { path = ".", default-features = false }
 compositor_api = { path = "compositor_api" }
 compositor_pipeline = { path = "compositor_pipeline" }
 compositor_chromium = { path = "compositor_chromium" }

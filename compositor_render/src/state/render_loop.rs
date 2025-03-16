@@ -5,8 +5,12 @@ use tracing::error;
 use crate::{
     scene::RGBColor,
     state::{node::RenderNode, render_graph::RenderGraph, RenderCtx},
-    wgpu::texture::{InputTexture, NodeTexture, PlanarYuvPendingDownload, RGBATexture},
-    Frame, FrameData, FrameSet, InputId, OutputFrameFormat, OutputId, Resolution,
+    wgpu::texture::{PlanarYuvPendingDownload, RgbaLinearTexture, RgbaSrgbTexture, TextureExt},
+    Frame, FrameData, FrameSet, InputId, OutputId, RenderingMode, Resolution,
+};
+
+use super::{
+    input_texture::InputTexture, node_texture::NodeTexture, output_texture::OutputTexture,
 };
 
 pub(super) fn populate_inputs(
@@ -57,32 +61,25 @@ pub(super) fn read_outputs(
     let mut partial_textures = Vec::with_capacity(scene.outputs.len());
     for (output_id, output) in &scene.outputs {
         match output.root.output_texture(&scene.inputs).state() {
-            Some(node) => match output.output_format {
-                OutputFrameFormat::PlanarYuv420Bytes => {
-                    ctx.wgpu_ctx.format.convert_rgba_to_yuv(
+            Some(node) => match &output.output_texture {
+                OutputTexture::PlanarYuv420Textures(yuv_output) => {
+                    ctx.wgpu_ctx.format.rgba_to_yuv.convert(
                         ctx.wgpu_ctx,
-                        (node.rgba_texture(), node.bind_group()),
-                        output.output_texture.yuv_textures(),
+                        node.output_texture_bind_group(),
+                        yuv_output.yuv_textures(),
                     );
-                    let pending_download = output.output_texture.start_download(ctx.wgpu_ctx);
+                    let pending_download = yuv_output.start_download(ctx.wgpu_ctx);
                     partial_textures.push(PartialOutputFrame::PendingYuvDownload {
                         output_id: output_id.clone(),
                         pending_download,
-                        resolution: output.output_texture.resolution().to_owned(),
+                        resolution: yuv_output.resolution(),
                     });
                 }
-                OutputFrameFormat::RgbaWgpuTexture => {
-                    let texture = node
-                        .rgba_texture()
-                        .texture()
-                        .copy_wgpu_texture(ctx.wgpu_ctx);
-                    let size = texture.size();
+                OutputTexture::Rgba8UnormWgpuTexture { .. } => {
+                    let texture = node.texture().clone_texture(ctx.wgpu_ctx);
                     let frame = Frame {
+                        resolution: texture.size().into(),
                         data: FrameData::Rgba8UnormWgpuTexture(texture.into()),
-                        resolution: Resolution {
-                            width: size.width as usize,
-                            height: size.height as usize,
-                        },
                         pts,
                     };
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
@@ -91,44 +88,36 @@ pub(super) fn read_outputs(
                     })
                 }
             },
-            None => match output.output_format {
-                OutputFrameFormat::PlanarYuv420Bytes => {
-                    let (y, u, v) = RGBColor::BLACK.to_yuv();
-                    ctx.wgpu_ctx.utils.fill_r8_with_value(
-                        ctx.wgpu_ctx,
-                        output.output_texture.yuv_textures().plane(0),
-                        y,
-                    );
-                    ctx.wgpu_ctx.utils.fill_r8_with_value(
-                        ctx.wgpu_ctx,
-                        output.output_texture.yuv_textures().plane(1),
-                        u,
-                    );
-                    ctx.wgpu_ctx.utils.fill_r8_with_value(
-                        ctx.wgpu_ctx,
-                        output.output_texture.yuv_textures().plane(2),
-                        v,
-                    );
+            // fallback if root node in render graph is empty
+            None => match &output.output_texture {
+                OutputTexture::PlanarYuv420Textures(yuv_output) => {
+                    yuv_output
+                        .yuv_textures()
+                        .fill_with_color(ctx.wgpu_ctx, RGBColor::BLACK);
 
-                    let pending_download = output.output_texture.start_download(ctx.wgpu_ctx);
+                    let pending_download = yuv_output.start_download(ctx.wgpu_ctx);
                     partial_textures.push(PartialOutputFrame::PendingYuvDownload {
                         output_id: output_id.clone(),
                         pending_download,
-                        resolution: output.output_texture.resolution().to_owned(),
+                        resolution: yuv_output.resolution(),
                     });
                 }
-                OutputFrameFormat::RgbaWgpuTexture => {
-                    let resolution = output.output_texture.resolution();
-                    let rgba_texture = RGBATexture::new(ctx.wgpu_ctx, resolution);
-                    let wgpu_texture = rgba_texture.texture_owned().texture;
-                    let frame = Frame {
-                        data: FrameData::Rgba8UnormWgpuTexture(Arc::new(wgpu_texture)),
-                        resolution,
-                        pts,
+                OutputTexture::Rgba8UnormWgpuTexture { resolution } => {
+                    let wgpu_texture = match ctx.wgpu_ctx.mode {
+                        RenderingMode::GpuOptimized | RenderingMode::WebGl => {
+                            RgbaSrgbTexture::new(ctx.wgpu_ctx, *resolution).texture_owned()
+                        }
+                        RenderingMode::CpuOptimized => {
+                            RgbaLinearTexture::new(ctx.wgpu_ctx, *resolution).texture_owned()
+                        }
                     };
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
                         output_id: output_id.clone(),
-                        frame,
+                        frame: Frame {
+                            data: FrameData::Rgba8UnormWgpuTexture(Arc::new(wgpu_texture)),
+                            resolution: *resolution,
+                            pts,
+                        },
                     })
                 }
             },

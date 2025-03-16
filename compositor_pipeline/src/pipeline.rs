@@ -15,6 +15,7 @@ use compositor_render::FrameSet;
 use compositor_render::Framerate;
 use compositor_render::RegistryType;
 use compositor_render::RendererOptions;
+use compositor_render::RenderingMode;
 use compositor_render::WgpuFeatures;
 use compositor_render::{error::UpdateSceneError, Renderer};
 use compositor_render::{EventLoop, InputId, OutputId, RendererId, RendererSpec};
@@ -135,6 +136,7 @@ pub struct Options {
     pub whip_whep_server_port: Option<u16>,
     pub start_whip_whep: bool,
     pub tokio_rt: Option<Arc<Runtime>>,
+    pub rendering_mode: RenderingMode,
 }
 
 #[derive(Clone)]
@@ -188,6 +190,7 @@ impl Pipeline {
             wgpu_features: opts.wgpu_features,
             load_system_fonts: opts.load_system_fonts.unwrap_or(true),
             wgpu_ctx,
+            rendering_mode: opts.rendering_mode,
         })?;
 
         let download_dir = opts

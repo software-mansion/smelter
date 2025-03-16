@@ -39,17 +39,19 @@ fn client_code() -> Result<()> {
                 },
                 "initial": {
                     "root": {
-                        "type": "text",
-                        "text": "VideoCompositor🚀\nSecond Line\nLorem ipsum dolor sit amet consectetur adipisicing elit. Soluta delectus optio fugit maiores eaque ab totam, veritatis aperiam provident, aliquam consectetur deserunt cumque est? Saepe tenetur impedit culpa asperiores id?",
-                        "font_size": 100.0,
-                        "font_family": "Comic Sans MS",
-                        "align": "center",
-                        "wrap": "word",
-                        "background_color": "#00800000",
-                        "weight": "bold",
-                        "width": VIDEO_RESOLUTION.width,
-                        "height": VIDEO_RESOLUTION.height,
-                    }
+                        "type": "view",
+                        "children": [{
+                            "type": "text",
+                            "text": "VideoCompositor🚀\nSecond Line\nLorem ipsum dolor sit amet consectetur adipisicing elit. Soluta delectus optio fugit maiores eaque ab totam, veritatis aperiam provident, aliquam consectetur deserunt cumque est? Saepe tenetur impedit culpa asperiores id?",
+                            "font_size": 100.0,
+                            "font_family": "Comic Sans MS",
+                            "align": "center",
+                            "wrap": "word",
+                            "background_color": "#008000FF",
+                            "weight": "bold",
+                            "width": VIDEO_RESOLUTION.width,
+                            "height": VIDEO_RESOLUTION.height,
+                        }]}
                 }
             }
         }),

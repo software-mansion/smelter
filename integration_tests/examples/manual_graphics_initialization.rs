@@ -7,6 +7,7 @@ fn main() {
         pipeline::{GraphicsContext, Options},
         Pipeline,
     };
+    use compositor_render::RenderingMode;
     use smelter::config::read_config;
     use std::sync::Arc;
     use tokio::runtime::Runtime;
@@ -34,6 +35,7 @@ fn main() {
         tokio_rt: Some(Arc::new(Runtime::new().unwrap())),
         whip_whep_server_port: Some(config.whip_whep_server_port),
         start_whip_whep: config.start_whip_whep,
+        rendering_mode: RenderingMode::GpuOptimized,
     })
     .unwrap();
 }

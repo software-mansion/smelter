@@ -4,15 +4,16 @@ use bytes::Bytes;
 use log::info;
 
 use crate::{
-    state::{RegisterCtx, RenderCtx},
+    state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
     transformations::web_renderer::{
         browser_client::BrowserClient, chromium_sender::ChromiumSender,
     },
     wgpu::{
         common_pipeline::CreateShaderError,
-        texture::{BGRATexture, NodeTexture, Texture},
+        texture::{BgraLinearTexture, BgraSrgbTexture},
+        WgpuCtx,
     },
-    RendererId, Resolution,
+    RendererId, RenderingMode, Resolution,
 };
 
 use super::{
@@ -29,8 +30,14 @@ pub struct WebRenderer {
     source_transforms: SourceTransforms,
     embedding_helper: EmbeddingHelper,
 
-    website_texture: BGRATexture,
+    website_texture: WebsiteTexture,
     render_website_shader: WebRendererShader,
+}
+
+#[derive(Debug)]
+pub enum WebsiteTexture {
+    Srgb(BgraSrgbTexture),
+    Linear(BgraLinearTexture),
 }
 
 impl WebRenderer {
@@ -56,7 +63,7 @@ impl WebRenderer {
         let chromium_sender = ChromiumSender::new(ctx, instance_id, &spec, client);
         let embedding_helper = EmbeddingHelper::new(ctx, chromium_sender, spec.embedding_method);
         let render_website_shader = WebRendererShader::new(&ctx.wgpu_ctx)?;
-        let website_texture = BGRATexture::new(&ctx.wgpu_ctx, spec.resolution);
+        let website_texture = WebsiteTexture::new(&ctx.wgpu_ctx, spec.resolution);
 
         Ok(Self {
             spec,
@@ -82,7 +89,6 @@ impl WebRenderer {
         if let Some(frame) = self.retrieve_frame() {
             let target = target.ensure_size(ctx.wgpu_ctx, self.spec.resolution);
             self.website_texture.upload(ctx.wgpu_ctx, &frame);
-
             let render_textures = self.prepare_textures(sources);
 
             self.render_website_shader
@@ -95,19 +101,19 @@ impl WebRenderer {
     fn prepare_textures<'a>(
         &'a self,
         sources: &'a [&NodeTexture],
-    ) -> Vec<(Option<&'a Texture>, RenderInfo)> {
+    ) -> Vec<(Option<&'a wgpu::TextureView>, RenderInfo)> {
         let mut source_info = sources
             .iter()
             .zip(self.source_transforms.lock().unwrap().iter())
             .map(|(node_texture, transform)| {
                 (
-                    node_texture.texture(),
+                    node_texture.state().map(|t| t.view()),
                     RenderInfo::source_transform(transform),
                 )
             })
             .collect();
 
-        let website_info = (Some(self.website_texture.texture()), RenderInfo::website());
+        let website_info = (Some(self.website_texture.view()), RenderInfo::website());
 
         let mut result = Vec::new();
         match self.spec.embedding_method {
@@ -137,6 +143,30 @@ impl WebRenderer {
 
     pub fn resolution(&self) -> Resolution {
         self.spec.resolution
+    }
+}
+
+impl WebsiteTexture {
+    fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
+        match ctx.mode {
+            RenderingMode::GpuOptimized | RenderingMode::WebGl => {
+                Self::Srgb(BgraSrgbTexture::new(ctx, resolution))
+            }
+            RenderingMode::CpuOptimized => Self::Linear(BgraLinearTexture::new(ctx, resolution)),
+        }
+    }
+    fn view(&self) -> &wgpu::TextureView {
+        match &self {
+            WebsiteTexture::Srgb(texture) => texture.view(),
+            WebsiteTexture::Linear(texture) => texture.view(),
+        }
+    }
+
+    fn upload(&self, ctx: &WgpuCtx, data: &[u8]) {
+        match &self {
+            WebsiteTexture::Srgb(texture) => texture.upload(ctx, data),
+            WebsiteTexture::Linear(texture) => texture.upload(ctx, data),
+        }
     }
 }
 

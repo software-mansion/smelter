@@ -2,131 +2,86 @@ use crate::wgpu::WgpuCtx;
 
 use super::utils::pad_to_256;
 
-#[derive(Debug)]
-pub struct Texture {
-    pub texture: wgpu::Texture,
-    pub view: wgpu::TextureView,
+pub(super) const DEFAULT_BINDING_TYPE: wgpu::BindingType = wgpu::BindingType::Texture {
+    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+    view_dimension: wgpu::TextureViewDimension::D2,
+    multisampled: false,
+};
+
+pub fn new_texture(
+    device: &wgpu::Device,
+    label: Option<&str>,
+    size: wgpu::Extent3d,
+    format: wgpu::TextureFormat,
+    usage: wgpu::TextureUsages,
+    view_formats: &[wgpu::TextureFormat],
+) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label,
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage,
+        view_formats,
+    })
 }
 
-impl Texture {
-    pub(super) const DEFAULT_BINDING_TYPE: wgpu::BindingType = wgpu::BindingType::Texture {
-        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-        view_dimension: wgpu::TextureViewDimension::D2,
-        multisampled: false,
-    };
+pub trait TextureExt {
+    fn clone_texture(&self, ctx: &WgpuCtx) -> wgpu::Texture;
 
-    pub fn new(
-        device: &wgpu::Device,
-        label: Option<&str>,
-        size: wgpu::Extent3d,
-        format: wgpu::TextureFormat,
-        usage: wgpu::TextureUsages,
-    ) -> Self {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label,
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format,
-            usage,
-            view_formats: &[format],
-        });
+    fn upload_data(&self, queue: &wgpu::Queue, data: &[u8], bytes_per_pixel: u32);
 
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    /// Returns `None` for some depth formats
+    fn block_size(&self) -> Option<u32>;
 
-        Self { texture, view }
-    }
+    fn new_download_buffer(&self, ctx: &WgpuCtx) -> wgpu::Buffer;
 
-    pub fn copy_wgpu_texture(&self, ctx: &WgpuCtx) -> wgpu::Texture {
+    /// [`wgpu::Queue::submit`] has to be called afterwards
+    fn copy_to_buffer(&self, encoder: &mut wgpu::CommandEncoder, buffer: &wgpu::Buffer);
+}
+
+impl TextureExt for wgpu::Texture {
+    fn clone_texture(&self, ctx: &WgpuCtx) -> wgpu::Texture {
         let destination = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
-            size: self.texture.size(),
-            mip_level_count: self.texture.mip_level_count(),
-            sample_count: self.texture.sample_count(),
-            dimension: self.texture.dimension(),
-            format: self.texture.format(),
-            usage: self.texture.usage(),
-            view_formats: &[self.texture.format()],
+            size: self.size(),
+            mip_level_count: self.mip_level_count(),
+            sample_count: self.sample_count(),
+            dimension: self.dimension(),
+            format: self.format(),
+            usage: self.usage(),
+            view_formats: &[self.format()],
         });
-        copy_texture_to_texture(ctx, &self.texture, &destination);
+        copy_texture_to_texture(ctx, self, &destination);
         destination
     }
 
-    pub fn fill_from_wgpu_texture(
-        &self,
-        ctx: &WgpuCtx,
-        source: &wgpu::Texture,
-    ) -> Result<(), TextureCopyError> {
-        let expected = (
-            self.texture.size(),
-            self.texture.mip_level_count(),
-            self.texture.sample_count(),
-            self.texture.dimension(),
-            self.texture.format(),
-            self.texture.usage(),
-        );
-        let actual = (
-            source.size(),
-            source.mip_level_count(),
-            source.sample_count(),
-            source.dimension(),
-            source.format(),
-            source.usage(),
-        );
-
-        if expected != actual {
-            return Err(TextureCopyError {
-                expected: format!("{expected:?}"),
-                actual: format!("{actual:?}"),
-            });
-        }
-        copy_texture_to_texture(ctx, source, &self.texture);
-        Ok(())
-    }
-
-    pub fn empty(device: &wgpu::Device) -> Self {
-        Self::new(
-            device,
-            Some("empty texture"),
-            wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: 1,
-            },
-            wgpu::TextureFormat::Rgba8UnormSrgb,
-            wgpu::TextureUsages::TEXTURE_BINDING,
-        )
-    }
-
-    pub fn size(&self) -> wgpu::Extent3d {
-        self.texture.size()
-    }
-
-    pub(super) fn upload_data(&self, queue: &wgpu::Queue, data: &[u8], bytes_per_pixel: u32) {
+    fn upload_data(&self, queue: &wgpu::Queue, data: &[u8], bytes_per_pixel: u32) {
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 aspect: wgpu::TextureAspect::All,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
-                texture: &self.texture,
+                texture: self,
             },
             data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(self.texture.width() * bytes_per_pixel),
-                rows_per_image: Some(self.texture.height()),
+                bytes_per_row: Some(self.width() * bytes_per_pixel),
+                rows_per_image: Some(self.height()),
             },
-            self.texture.size(),
+            self.size(),
         );
     }
 
     /// Returns `None` for some depth formats
-    pub(super) fn block_size(&self) -> Option<u32> {
-        self.texture.format().block_copy_size(None)
+    fn block_size(&self) -> Option<u32> {
+        self.format().block_copy_size(None)
     }
 
-    pub(super) fn new_download_buffer(&self, ctx: &WgpuCtx) -> wgpu::Buffer {
+    fn new_download_buffer(&self, ctx: &WgpuCtx) -> wgpu::Buffer {
         let size = self.size();
         let block_size = self.block_size().unwrap();
 
@@ -139,7 +94,7 @@ impl Texture {
     }
 
     /// [`wgpu::Queue::submit`] has to be called afterwards
-    pub(super) fn copy_to_buffer(&self, encoder: &mut wgpu::CommandEncoder, buffer: &wgpu::Buffer) {
+    fn copy_to_buffer(&self, encoder: &mut wgpu::CommandEncoder, buffer: &wgpu::Buffer) {
         let size = self.size();
         let block_size = self.block_size().unwrap();
 
@@ -148,7 +103,7 @@ impl Texture {
                 aspect: wgpu::TextureAspect::All,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
-                texture: &self.texture,
+                texture: self,
             },
             wgpu::TexelCopyBufferInfo {
                 buffer,

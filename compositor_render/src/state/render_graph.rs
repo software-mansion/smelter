@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
 use crate::scene::{self, OutputNode};
-use crate::wgpu::texture::{InputTexture, NodeTexture, OutputTexture};
 use crate::{error::UpdateSceneError, wgpu::WgpuErrorScope};
 use crate::{InputId, OutputFrameFormat, OutputId};
 
+use super::input_texture::InputTexture;
+use super::node_texture::NodeTexture;
+use super::output_texture::OutputTexture;
 use super::{node::RenderNode, RenderCtx};
 
 pub(super) struct RenderGraph {
@@ -15,7 +17,6 @@ pub(super) struct RenderGraph {
 pub(super) struct OutputRenderTree {
     pub(super) root: RenderNode,
     pub(super) output_texture: OutputTexture,
-    pub(super) output_format: OutputFrameFormat,
 }
 
 impl RenderGraph {
@@ -51,8 +52,7 @@ impl RenderGraph {
 
         let output_tree = OutputRenderTree {
             root: Self::create_node(ctx, output.node)?,
-            output_texture: OutputTexture::new(ctx.wgpu_ctx, output.resolution),
-            output_format,
+            output_texture: OutputTexture::new(ctx.wgpu_ctx, output.resolution, output_format),
         };
 
         scope.pop(&ctx.wgpu_ctx.device)?;

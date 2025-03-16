@@ -2,11 +2,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use glyphon::fontdb;
+use tracing::trace;
 
 use crate::error::{RegisterRendererError, UnregisterRendererError};
 
 use crate::scene::{Component, OutputScene};
-use crate::transformations::image_renderer::Image;
+use crate::transformations::image::Image;
 use crate::transformations::shader::Shader;
 use crate::transformations::web_renderer::{self, WebRenderer};
 use crate::{
@@ -17,7 +18,7 @@ use crate::{
     types::Framerate,
     EventLoop, FrameSet, InputId, OutputId,
 };
-use crate::{image, OutputFrameFormat, Resolution};
+use crate::{image, OutputFrameFormat, RenderingMode, Resolution};
 use crate::{
     scene::SceneState,
     wgpu::{WgpuCtx, WgpuErrorScope},
@@ -29,6 +30,10 @@ use self::{
     render_loop::{populate_inputs, read_outputs, run_transforms},
     renderers::Renderers,
 };
+
+pub mod input_texture;
+pub mod node_texture;
+pub mod output_texture;
 
 pub mod node;
 pub mod render_graph;
@@ -43,6 +48,7 @@ pub struct RendererOptions {
     pub wgpu_features: wgpu::Features,
     pub wgpu_ctx: Option<(Arc<wgpu::Device>, Arc<wgpu::Queue>)>,
     pub load_system_fonts: bool,
+    pub rendering_mode: RenderingMode,
 }
 
 #[derive(Clone)]
@@ -189,7 +195,12 @@ impl Renderer {
 
 impl InnerRenderer {
     pub fn new(opts: RendererOptions) -> Result<Self, InitRendererEngineError> {
-        let wgpu_ctx = WgpuCtx::new(opts.force_gpu, opts.wgpu_features, opts.wgpu_ctx)?;
+        let wgpu_ctx = WgpuCtx::new(
+            opts.force_gpu,
+            opts.wgpu_features,
+            opts.wgpu_ctx,
+            opts.rendering_mode,
+        )?;
 
         Ok(Self {
             wgpu_ctx: wgpu_ctx.clone(),
@@ -234,8 +245,11 @@ impl InnerRenderer {
             .register_render_event(inputs.pts, input_resolutions);
 
         let pts = inputs.pts;
+        trace!("Upload input textures");
         populate_inputs(ctx, &mut self.render_graph, inputs);
+        trace!("Run render graph");
         run_transforms(ctx, &mut self.render_graph, pts);
+        trace!("Download output textures");
         let frames = read_outputs(ctx, &mut self.render_graph, pts);
 
         scope.pop(&ctx.wgpu_ctx.device)?;

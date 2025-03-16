@@ -4,8 +4,8 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     scene::ShaderParam,
-    state::RenderCtx,
-    wgpu::{texture::NodeTexture, WgpuCtx},
+    state::{node_texture::NodeTexture, RenderCtx},
+    wgpu::WgpuCtx,
     Resolution,
 };
 

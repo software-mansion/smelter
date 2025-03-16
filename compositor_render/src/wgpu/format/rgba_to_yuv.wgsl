@@ -23,18 +23,9 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
 var<push_constant> plane_selector: u32;
 
-fn linear_to_srgb(linear: vec3<f32>) -> vec3<f32> {
-    let cutoff = step(linear, vec3<f32>(0.0031308));
-    let higher = vec3<f32>(1.055)*pow(linear, vec3<f32>(1.0/2.4)) - vec3<f32>(0.055);
-    let lower = linear * vec3<f32>(12.92);
-
-    return mix(higher, lower, cutoff);
-}
-
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) f32 {
-    let linear = textureSample(texture, sampler_, input.tex_coords);
-    let color = linear_to_srgb(linear.rgb);
+    let color = textureSample(texture, sampler_, input.tex_coords);
     var conversion_weights: vec3<f32>;
     var conversion_bias: f32;
 
@@ -54,5 +45,5 @@ fn fs_main(input: VertexOutput) -> @location(0) f32 {
         conversion_weights = vec3<f32>();
     }
 
-    return clamp(dot(color, conversion_weights) + conversion_bias, 0.0, 1.0);
+    return clamp(dot(color.rgb, conversion_weights) + conversion_bias, 0.0, 1.0);
 }

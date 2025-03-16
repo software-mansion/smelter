@@ -2,7 +2,6 @@ use wgpu::ShaderStages;
 
 use crate::wgpu::{
     common_pipeline::{Vertex, PRIMITIVE_STATE},
-    texture::Texture,
     WgpuCtx,
 };
 
@@ -57,7 +56,7 @@ impl R8FillWithValue {
         Self { pipeline }
     }
 
-    pub fn fill(&self, ctx: &WgpuCtx, dst: &Texture, value: f32) {
+    pub fn fill(&self, ctx: &WgpuCtx, dst: &wgpu::TextureView, value: f32) {
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -72,7 +71,7 @@ impl R8FillWithValue {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
-                    view: &dst.view,
+                    view: dst,
                     resolve_target: None,
                 })],
                 depth_stencil_attachment: None,
