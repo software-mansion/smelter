@@ -104,7 +104,7 @@ impl LayoutShader {
                         load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                         store: wgpu::StoreOp::Store,
                     },
-                    view: &target.rgba_texture().texture().view,
+                    view: &target.rgba_texture().default_view(),
                     resolve_target: None,
                 })],
                 // TODO: depth stencil attachments
@@ -148,8 +148,8 @@ impl LayoutShader {
             .map(|texture| {
                 texture
                     .and_then(|texture| texture.state())
-                    .map(|state| &state.rgba_texture().texture().view)
-                    .unwrap_or(&wgpu_ctx.empty_texture.view)
+                    .map(|state| state.rgba_texture().default_view())
+                    .unwrap_or(wgpu_ctx.empty_rgba_texture.default_view())
             })
             .map(|view| {
                 wgpu_ctx

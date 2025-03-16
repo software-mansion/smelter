@@ -5,7 +5,7 @@ use tracing::error;
 use crate::{
     scene::RGBColor,
     state::{node::RenderNode, render_graph::RenderGraph, RenderCtx},
-    wgpu::texture::{InputTexture, NodeTexture, PlanarYuvPendingDownload, RGBATexture},
+    wgpu::texture::{InputTexture, NodeTexture, PlanarYuvPendingDownload, RGBATexture, TextureExt},
     Frame, FrameData, FrameSet, InputId, OutputFrameFormat, OutputId, Resolution,
 };
 
@@ -61,7 +61,7 @@ pub(super) fn read_outputs(
                 OutputFrameFormat::PlanarYuv420Bytes => {
                     ctx.wgpu_ctx.format.convert_rgba_to_yuv(
                         ctx.wgpu_ctx,
-                        (node.rgba_texture(), node.bind_group()),
+                        (node.rgba_texture(), node.raw_bind_group()),
                         output.output_texture.yuv_textures(),
                     );
                     let pending_download = output.output_texture.start_download(ctx.wgpu_ctx);
@@ -96,17 +96,17 @@ pub(super) fn read_outputs(
                     let (y, u, v) = RGBColor::BLACK.to_yuv();
                     ctx.wgpu_ctx.utils.fill_r8_with_value(
                         ctx.wgpu_ctx,
-                        output.output_texture.yuv_textures().plane(0),
+                        output.output_texture.yuv_textures().plane_view(0),
                         y,
                     );
                     ctx.wgpu_ctx.utils.fill_r8_with_value(
                         ctx.wgpu_ctx,
-                        output.output_texture.yuv_textures().plane(1),
+                        output.output_texture.yuv_textures().plane_view(1),
                         u,
                     );
                     ctx.wgpu_ctx.utils.fill_r8_with_value(
                         ctx.wgpu_ctx,
-                        output.output_texture.yuv_textures().plane(2),
+                        output.output_texture.yuv_textures().plane_view(2),
                         v,
                     );
 
@@ -120,7 +120,7 @@ pub(super) fn read_outputs(
                 OutputFrameFormat::RgbaWgpuTexture => {
                     let resolution = output.output_texture.resolution();
                     let rgba_texture = RGBATexture::new(ctx.wgpu_ctx, resolution);
-                    let wgpu_texture = rgba_texture.texture_owned().texture;
+                    let wgpu_texture = rgba_texture.texture_owned();
                     let frame = Frame {
                         data: FrameData::Rgba8UnormWgpuTexture(Arc::new(wgpu_texture)),
                         resolution,

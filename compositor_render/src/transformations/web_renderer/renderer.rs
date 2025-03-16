@@ -14,7 +14,7 @@ use crate::{
     },
     wgpu::{
         common_pipeline::CreateShaderError,
-        texture::{BGRATexture, NodeTexture, Texture},
+        texture::{BGRATexture, NodeTexture},
     },
     RendererId, Resolution,
 };
@@ -99,19 +99,22 @@ impl WebRenderer {
     fn prepare_textures<'a>(
         &'a self,
         sources: &'a [&NodeTexture],
-    ) -> Vec<(Option<&'a Texture>, RenderInfo)> {
+    ) -> Vec<(Option<&'a wgpu::TextureView>, RenderInfo)> {
         let mut source_info = sources
             .iter()
             .zip(self.source_transforms.lock().unwrap().iter())
             .map(|(node_texture, transform)| {
                 (
-                    node_texture.texture(),
+                    node_texture.texture().as_ref().map(|t| t.default_view()),
                     RenderInfo::source_transform(transform),
                 )
             })
             .collect();
 
-        let website_info = (Some(self.website_texture.texture()), RenderInfo::website());
+        let website_info = (
+            Some(self.website_texture.default_view()),
+            RenderInfo::website(),
+        );
 
         let mut result = Vec::new();
         match self.spec.embedding_method {

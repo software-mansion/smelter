@@ -148,7 +148,7 @@ impl TextRendererNode {
                 });
 
         let target_state = target.ensure_size(renderer_ctx.wgpu_ctx, self.resolution);
-        let view = &target_state.rgba_texture().texture().view;
+        let view = &target_state.rgba_texture().default_view();
         {
             let background_color = wgpu::Color {
                 r: srgb_to_linear(self.background_color.r),

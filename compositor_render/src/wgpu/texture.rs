@@ -26,8 +26,7 @@ pub type PlanarYuvVariant = planar_yuv::YuvVariant;
 pub type InterleavedYuv422Texture = interleaved_yuv422::InterleavedYuv422Texture;
 pub type NV12TextureView<'a> = nv12::NV12TextureView<'a>;
 
-pub type Texture = base::Texture;
-
+pub use base::TextureExt;
 pub use planar_yuv::YuvPendingDownload as PlanarYuvPendingDownload;
 
 enum InputTextureState {
@@ -219,17 +218,17 @@ impl Default for InputTexture {
 
 pub struct NodeTextureState {
     texture: RGBATexture,
-    bind_group: wgpu::BindGroup,
+    raw_bind_group: wgpu::BindGroup,
 }
 
 impl NodeTextureState {
     fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
         let texture = RGBATexture::new(ctx, resolution);
-        let bind_group = texture.new_bind_group(ctx, ctx.format.rgba_layout());
+        let raw_bind_group = texture.new_raw_bind_group(ctx, ctx.format.rgba_layout());
 
         Self {
             texture,
-            bind_group,
+            raw_bind_group,
         }
     }
 
@@ -237,8 +236,8 @@ impl NodeTextureState {
         &self.texture
     }
 
-    pub fn bind_group(&self) -> &wgpu::BindGroup {
-        &self.bind_group
+    pub fn raw_bind_group(&self) -> &wgpu::BindGroup {
+        &self.raw_bind_group
     }
 
     pub fn resolution(&self) -> Resolution {
@@ -287,8 +286,8 @@ impl NodeTexture {
         self.0.state().map(NodeTextureState::resolution)
     }
 
-    pub fn texture(&self) -> Option<&Texture> {
-        self.state().map(|state| state.rgba_texture().texture())
+    pub fn texture(&self) -> Option<&RGBATexture> {
+        self.state().map(|state| state.rgba_texture())
     }
 }
 
@@ -335,9 +334,9 @@ impl OutputTexture {
         self.textures.copy_to_buffers(ctx, &self.buffers);
 
         PlanarYuvPendingDownload::new(
-            self.download_buffer(self.textures.planes[0].texture.size(), &self.buffers[0]),
-            self.download_buffer(self.textures.planes[1].texture.size(), &self.buffers[1]),
-            self.download_buffer(self.textures.planes[2].texture.size(), &self.buffers[2]),
+            self.download_buffer(self.textures.planes_textures[0].size(), &self.buffers[0]),
+            self.download_buffer(self.textures.planes_textures[1].size(), &self.buffers[1]),
+            self.download_buffer(self.textures.planes_textures[2].size(), &self.buffers[2]),
         )
     }
 

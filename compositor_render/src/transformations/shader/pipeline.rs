@@ -108,7 +108,7 @@ impl ShaderPipeline {
                         load,
                         store: wgpu::StoreOp::Store,
                     },
-                    view: &target.rgba_texture().texture().view,
+                    view: &target.rgba_texture().default_view(),
                     resolve_target: None,
                 })],
                 depth_stencil_attachment: None,
@@ -205,7 +205,7 @@ impl ShaderPipeline {
 
                 texture_views.extend(
                     (sources.len()..super::SHADER_INPUT_TEXTURES_AMOUNT as usize)
-                        .map(|_| &wgpu_ctx.empty_texture.view),
+                        .map(|_| &wgpu_ctx.empty_rgba_texture.default_view()),
                 );
 
                 wgpu_ctx

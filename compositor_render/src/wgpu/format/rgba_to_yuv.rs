@@ -1,5 +1,6 @@
 use crate::wgpu::{
     common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE},
+    ctx::RenderingMode,
     texture::{PlanarYuvTextures, RGBATexture},
 };
 
@@ -14,6 +15,7 @@ pub struct RgbaToYuvConverter {
 impl RgbaToYuvConverter {
     pub fn new(
         device: &wgpu::Device,
+        mode: RenderingMode,
         single_texture_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let sampler = Sampler::new(device);
@@ -27,7 +29,14 @@ impl RgbaToYuvConverter {
             }],
         });
 
-        let shader_module = device.create_shader_module(wgpu::include_wgsl!("rgba_to_yuv.wgsl"));
+        let shader_module = match mode {
+            RenderingMode::Gpu | RenderingMode::CpuOptimzied => {
+                device.create_shader_module(wgpu::include_wgsl!("rgba_to_yuv.wgsl"))
+            }
+            RenderingMode::WebGl => {
+                device.create_shader_module(wgpu::include_wgsl!("rgba_to_yuv_for_webgl.wgsl"))
+            }
+        };
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("RGBA to YUV color converter pipeline"),
@@ -101,7 +110,7 @@ impl RgbaToYuvConverter {
                         }),
                         store: wgpu::StoreOp::Store,
                     },
-                    view: &dst.plane(plane).view,
+                    view: dst.plane_view(plane),
                     resolve_target: None,
                 })],
                 depth_stencil_attachment: None,

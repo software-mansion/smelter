@@ -1,5 +1,6 @@
 use crate::wgpu::{
     common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE},
+    ctx::RenderingMode,
     texture::{NV12TextureView, RGBATexture},
 };
 
@@ -14,9 +15,19 @@ pub struct Nv12ToRgbaConverter {
 impl Nv12ToRgbaConverter {
     pub fn new(
         device: &wgpu::Device,
+        mode: RenderingMode,
         nv12_texture_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let shader_module = device.create_shader_module(wgpu::include_wgsl!("nv12_to_rgba.wgsl"));
+        let (shader_module, dest_view_format) = match mode {
+            RenderingMode::Gpu | RenderingMode::CpuOptimzied => (
+                device.create_shader_module(wgpu::include_wgsl!("nv12_to_rgba.wgsl")),
+                wgpu::TextureFormat::Rgba8Unorm,
+            ),
+            RenderingMode::WebGl => (
+                device.create_shader_module(wgpu::include_wgsl!("nv12_to_rgba_for_webgl.wgsl")),
+                wgpu::TextureFormat::Rgba8UnormSrgb,
+            ),
+        };
         let sampler = Sampler::new(device);
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -41,7 +52,7 @@ impl Nv12ToRgbaConverter {
                 module: &shader_module,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    format: dest_view_format,
                     write_mask: wgpu::ColorWrites::all(),
                     blend: None,
                 })],
@@ -74,6 +85,9 @@ impl Nv12ToRgbaConverter {
             });
 
         {
+            // fallback to default view should only happen for WebGL
+            let dest_view = dst.raw_view().unwrap_or(dst.default_view());
+
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("NV12 to RGBA color converter render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -81,7 +95,7 @@ impl Nv12ToRgbaConverter {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
-                    view: &dst.texture().view,
+                    view: dest_view,
                     resolve_target: None,
                 })],
                 depth_stencil_attachment: None,

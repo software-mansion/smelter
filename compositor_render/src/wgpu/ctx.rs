@@ -3,14 +3,15 @@ use std::sync::Arc;
 use log::{error, info};
 
 use super::{
-    common_pipeline::plane::Plane, format::TextureFormat, texture::Texture, utils::TextureUtils,
-    CreateWgpuCtxError, WgpuErrorScope,
+    common_pipeline::plane::Plane, format::TextureFormat, texture::RGBATexture,
+    utils::TextureUtils, CreateWgpuCtxError, WgpuErrorScope,
 };
 
 #[derive(Debug)]
 pub struct WgpuCtx {
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
+    pub mode: RenderingMode,
 
     pub shader_header: naga::Module,
 
@@ -19,7 +20,19 @@ pub struct WgpuCtx {
 
     pub uniform_bgl: wgpu::BindGroupLayout,
     pub plane: Plane,
-    pub empty_texture: Texture,
+    pub empty_rgba_texture: RGBATexture,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum RenderingMode {
+    // - Leverage multiple views per texture
+    // - Color blending in linear space
+    Gpu,
+    // - Color blending in sRGB space
+    CpuOptimzied,
+    // - Single view per texture
+    // - Color blending in linear space (but requires additional processing)
+    WebGl,
 }
 
 impl WgpuCtx {
@@ -58,16 +71,17 @@ impl WgpuCtx {
         queue: Arc<wgpu::Queue>,
     ) -> Result<Self, CreateWgpuCtxError> {
         let shader_header = crate::transformations::shader::validation::shader_header();
+        let mode = RenderingMode::Gpu;
 
         let scope = WgpuErrorScope::push(&device);
 
-        let format = TextureFormat::new(&device);
+        let format = TextureFormat::new(&device, mode);
         let utils = TextureUtils::new(&device);
 
         let uniform_bgl = uniform_bind_group_layout(&device);
 
         let plane = Plane::new(&device);
-        let empty_texture = Texture::empty(&device);
+        let empty_rgba_texture = RGBATexture::empty(&device, mode);
 
         scope.pop(&device)?;
 
@@ -76,6 +90,7 @@ impl WgpuCtx {
         }));
 
         Ok(Self {
+            mode,
             device,
             queue,
             shader_header,
@@ -83,7 +98,7 @@ impl WgpuCtx {
             utils,
             uniform_bgl,
             plane,
-            empty_texture,
+            empty_rgba_texture,
         })
     }
 }

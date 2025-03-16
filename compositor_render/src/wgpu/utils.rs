@@ -1,6 +1,6 @@
 use self::r8_fill_with_color::R8FillWithValue;
 
-use super::{texture::Texture, WgpuCtx};
+use super::WgpuCtx;
 
 mod r8_fill_with_color;
 
@@ -16,7 +16,7 @@ impl TextureUtils {
         }
     }
 
-    pub fn fill_r8_with_value(&self, ctx: &WgpuCtx, dst: &Texture, value: f32) {
+    pub fn fill_r8_with_value(&self, ctx: &WgpuCtx, dst: &wgpu::TextureView, value: f32) {
         self.r8_fill_with_value.fill(ctx, dst, value)
     }
 }
