@@ -99,6 +99,10 @@
 }
 */
 
+#smelter-redirect-content {
+  font-size: 14px;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

@@ -527,22 +527,24 @@ function ContactUs() {
 
 export default function Home(): JSX.Element {
   return (
-    <Layout>
-      <HomepageHeader />
-      <div className={styles.sectionSeparator} />
-      <HowItWorks />
-      <div className={styles.sectionSeparator} />
-      <UseCases />
-      <div className={styles.sectionSeparator} />
-      <VisionCards />
-      <div className={styles.sectionSeparator} />
-      <Features />
-      <div className={styles.sectionSeparator} />
-      <Usage />
-      <div className={styles.sectionSeparator} />
-      <Licensing />
-      <div className={styles.sectionSeparator} />
-      <ContactUs />
-    </Layout>
+    <>
+      <Layout>
+        <HomepageHeader />
+        <div className={styles.sectionSeparator} />
+        <HowItWorks />
+        <div className={styles.sectionSeparator} />
+        <UseCases />
+        <div className={styles.sectionSeparator} />
+        <VisionCards />
+        <div className={styles.sectionSeparator} />
+        <Features />
+        <div className={styles.sectionSeparator} />
+        <Usage />
+        <div className={styles.sectionSeparator} />
+        <Licensing />
+        <div className={styles.sectionSeparator} />
+        <ContactUs />
+      </Layout>
+    </>
   );
 }
