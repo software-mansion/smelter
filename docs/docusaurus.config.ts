@@ -112,6 +112,14 @@ const config: Config = {
         },
       ],
     },
+    announcementBar: {
+      id: 'smelter-redirect',
+      content:
+        '<span id="smelter-redirect-content"><strong>Live Compositor is now Smelter. <span style="color: #F24664;"><a target="_blank" rel="noopener noreferrer" style="text-decoration: none;" href="https://smelter.dev">Visit smelter.dev</a></span> to see the most recent version.</span></strong>',
+      backgroundColor: '#161127',
+      textColor: '#FFFFFF',
+      isCloseable: false,
+    },
     footer: {
       style: 'dark',
       copyright: `Copyright © ${new Date().getFullYear()} Software Mansion S.A.`,
