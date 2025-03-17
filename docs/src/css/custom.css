@@ -100,7 +100,11 @@
 */
 
 #smelter-redirect-content {
-  font-size: 14px;
+  font-size: 18px;
+}
+
+.announcementBar_node_modules-\@docusaurus-theme-classic-lib-theme-AnnouncementBar-styles-module {
+  min-height: 68px;
 }
 
 @tailwind base;
