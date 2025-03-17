@@ -77,7 +77,7 @@ impl RGBATexture {
         common_pipeline::create_single_texture_bgl(device)
     }
 
-    pub(super) fn new_bind_group(
+    pub fn new_bind_group(
         &self,
         ctx: &WgpuCtx,
         layout: &wgpu::BindGroupLayout,
@@ -92,7 +92,7 @@ impl RGBATexture {
         })
     }
 
-    pub(super) fn new_raw_bind_group(
+    pub fn new_raw_bind_group(
         &self,
         ctx: &WgpuCtx,
         layout: &wgpu::BindGroupLayout,

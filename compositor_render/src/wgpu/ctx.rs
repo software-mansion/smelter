@@ -76,7 +76,7 @@ impl WgpuCtx {
         let scope = WgpuErrorScope::push(&device);
 
         let format = TextureFormat::new(&device, mode);
-        let utils = TextureUtils::new(&device);
+        let utils = TextureUtils::new(&device, &format);
 
         let uniform_bgl = uniform_bind_group_layout(&device);
 

@@ -1,17 +1,14 @@
 use std::{
     fs, io,
-    str::{from_utf8, Utf8Error},
+    str::Utf8Error,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 
 use image::{codecs::gif::GifDecoder, AnimationDecoder, ImageFormat};
-use resvg::{
-    tiny_skia,
-    usvg::{self, TreeParsing},
-};
+use resvg::usvg;
 
 use crate::{
     state::{RegisterCtx, RenderCtx},
@@ -21,6 +18,10 @@ use crate::{
     },
     Resolution,
 };
+
+pub use svg_image::{SvgAsset, SvgNodeState};
+
+mod svg_image;
 
 #[derive(Debug, Clone)]
 pub struct ImageSpec {
@@ -127,7 +128,7 @@ pub enum ImageNode {
 }
 
 impl ImageNode {
-    pub fn new(image: Image) -> Self {
+    pub fn new(ctx: &WgpuCtx, image: Image) -> Self {
         match image {
             Image::Bitmap(asset) => Self::Bitmap {
                 asset,
@@ -142,10 +143,7 @@ impl ImageNode {
             },
             Image::Svg(asset) => Self::Svg {
                 asset,
-                state: SvgNodeState {
-                    was_rendered: false,
-                }
-                .into(),
+                state: SvgNodeState::new(ctx).into(),
             },
         }
     }
@@ -211,77 +209,6 @@ impl BitmapAsset {
         }
     }
 }
-
-pub struct SvgNodeState {
-    was_rendered: bool,
-}
-
-#[derive(Debug)]
-pub struct SvgAsset {
-    texture: RGBATexture,
-}
-
-impl SvgAsset {
-    fn new(
-        ctx: &WgpuCtx,
-        data: Bytes,
-        maybe_resolution: Option<Resolution>,
-    ) -> Result<Self, SvgError> {
-        let text_svg = from_utf8(&data)?;
-        let tree = usvg::Tree::from_str(text_svg, &Default::default())?;
-        let tree = resvg::Tree::from_usvg(&tree);
-        let resolution = maybe_resolution.unwrap_or_else(|| Resolution {
-            width: tree.size.width() as usize,
-            height: tree.size.height() as usize,
-        });
-
-        let mut buffer = BytesMut::zeroed(resolution.width * resolution.height * 4);
-        let mut pixmap = tiny_skia::PixmapMut::from_bytes(
-            &mut buffer,
-            resolution.width as u32,
-            resolution.height as u32,
-        )
-        .unwrap();
-
-        let transform = match maybe_resolution {
-            Some(_) => {
-                let scale_multiplier = f32::min(
-                    resolution.width as f32 / tree.size.width(),
-                    resolution.height as f32 / tree.size.height(),
-                );
-                tiny_skia::Transform::from_scale(scale_multiplier, scale_multiplier)
-            }
-            None => tiny_skia::Transform::default(),
-        };
-
-        tree.render(transform, &mut pixmap);
-
-        let texture = RGBATexture::new(ctx, resolution);
-        texture.upload(ctx, pixmap.data_mut());
-        ctx.queue.submit([]);
-
-        Ok(Self { texture })
-    }
-
-    fn render(&self, ctx: &WgpuCtx, target: &mut NodeTexture, state: &Mutex<SvgNodeState>) {
-        let mut state = state.lock().unwrap();
-        if state.was_rendered {
-            return;
-        }
-
-        copy_texture_to_node_texture(ctx, &self.texture, target);
-        state.was_rendered = true;
-    }
-
-    fn resolution(&self) -> Resolution {
-        let size = self.texture.size();
-        Resolution {
-            width: size.width as usize,
-            height: size.height as usize,
-        }
-    }
-}
-
 pub struct AnimatedNodeState {
     first_pts: Option<Duration>,
 }

@@ -127,6 +127,15 @@ impl Resolution {
     }
 }
 
+impl From<wgpu::Extent3d> for Resolution {
+    fn from(value: wgpu::Extent3d) -> Self {
+        Self {
+            width: value.width as usize,
+            height: value.height as usize,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum OutputFrameFormat {
     PlanarYuv420Bytes,

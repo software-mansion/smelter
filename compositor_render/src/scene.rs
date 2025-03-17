@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::transformations::image_renderer::Image;
+use crate::transformations::image::Image;
 use crate::transformations::shader::validation::error::ParametersValidationError;
 use crate::transformations::shader::Shader;
 use crate::transformations::text_renderer::TextRenderParams;
