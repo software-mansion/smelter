@@ -19,9 +19,9 @@ export type Mp4Props = Omit<ComponentBaseProps, 'children'> & {
   muted?: boolean;
 
   /**
-   *  Url or path to the mp4 file. File path refers to the filesystem where Smelter server is deployed.
+   *  Url, path to the mp4 file or `Blob` of the mp4 file. File path refers to the filesystem where Smelter server is deployed.
    */
-  source: string;
+  source: string | Blob;
 };
 
 function Mp4(props: Mp4Props) {
@@ -32,17 +32,23 @@ function Mp4(props: Mp4Props) {
   useEffect(() => {
     const newInputId = newInternalStreamId();
     setInputId(newInputId);
-    const pathOrUrl: Pick<RegisterMp4Input, 'url' | 'serverPath'> =
-      props.source.startsWith('http://') || props.source.startsWith('https://')
-        ? { url: props.source }
-        : { serverPath: props.source };
+
+    let source: Pick<RegisterMp4Input, 'url' | 'serverPath' | 'blob'>;
+    if (props.source instanceof Blob) {
+      source = { blob: props.source };
+    } else if (props.source.startsWith('http://') || props.source.startsWith('https://')) {
+      source = { url: props.source };
+    } else {
+      source = { serverPath: props.source };
+    }
+
     let registerPromise: Promise<any>;
 
     const task = newBlockingTask(ctx);
     void (async () => {
       try {
         registerPromise = ctx.registerMp4Input(newInputId, {
-          ...pathOrUrl,
+          ...source,
           required: ctx.timeContext instanceof OfflineTimeContext,
           // offsetMs will be overridden by registerMp4Input implementation
         });

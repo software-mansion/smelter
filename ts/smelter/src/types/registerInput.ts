@@ -40,6 +40,10 @@ export type RegisterMp4Input = {
    */
   serverPath?: string | null;
   /**
+   * Blob of the MP4 file (only available in smelter-web-wasm).
+   */
+  blob?: any;
+  /**
    * (**default=`false`**) If input should be played in the loop. <span class="badge badge--primary">Added in v0.4.0</span>
    */
   loop?: boolean | null;
