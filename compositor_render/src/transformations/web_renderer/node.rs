@@ -7,7 +7,7 @@ use crate::{
     scene::ComponentId,
     state::RenderCtx,
     wgpu::{
-        texture::{utils::pad_to_256, NodeTexture, RGBATexture},
+        texture::{utils::pad_to_256, NodeTexture, RgbaMultiViewTexture},
         WgpuCtx,
     },
 };
@@ -70,7 +70,7 @@ impl WebRendererNode {
         }
     }
 
-    fn ensure_buffer_size(ctx: &WgpuCtx, buffer: &mut Arc<wgpu::Buffer>, texture: &RGBATexture) {
+    fn ensure_buffer_size(ctx: &WgpuCtx, buffer: &mut Arc<wgpu::Buffer>, texture: &RgbaMultiViewTexture) {
         let texture_size = texture.size();
         let texture_size = (pad_to_256(4 * texture_size.width) * texture_size.height) as u64;
         if buffer.size() != texture_size {

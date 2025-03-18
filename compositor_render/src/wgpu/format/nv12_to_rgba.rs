@@ -1,7 +1,7 @@
 use crate::wgpu::{
     common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE},
     ctx::RenderingMode,
-    texture::{NV12TextureView, RGBATexture},
+    texture::{NV12TextureView, RgbaMultiViewTexture},
 };
 
 use super::WgpuCtx;
@@ -72,12 +72,7 @@ impl Nv12ToRgbaConverter {
         Self { pipeline, sampler }
     }
 
-    pub fn convert(
-        &self,
-        ctx: &WgpuCtx,
-        src: (&NV12TextureView, &wgpu::BindGroup),
-        dst: &RGBATexture,
-    ) {
+    pub fn convert(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst_view: &wgpu::TextureView) {
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -85,9 +80,6 @@ impl Nv12ToRgbaConverter {
             });
 
         {
-            // fallback to default view should only happen for WebGL
-            let dest_view = dst.raw_view().unwrap_or(dst.default_view());
-
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("NV12 to RGBA color converter render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -95,7 +87,7 @@ impl Nv12ToRgbaConverter {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
-                    view: dest_view,
+                    view: dst_view,
                     resolve_target: None,
                 })],
                 depth_stencil_attachment: None,
@@ -104,7 +96,7 @@ impl Nv12ToRgbaConverter {
             });
 
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, src.1, &[]);
+            render_pass.set_bind_group(0, src_bg, &[]);
             render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
 
             ctx.plane.draw(&mut render_pass);

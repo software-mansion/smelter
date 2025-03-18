@@ -1,13 +1,13 @@
-use std::{io::Write, mem, sync::Arc};
+use std::{io::Write, sync::Arc};
 
 use bytes::{BufMut, Bytes, BytesMut};
 use crossbeam_channel::bounded;
 use log::error;
 use wgpu::{Buffer, BufferAsyncError, MapMode};
 
-use crate::{Frame, FrameData, Resolution, YuvPlanes};
+use crate::{state::node_texture::NodeTexture, Frame, FrameData, Resolution, YuvPlanes};
 
-use self::utils::{pad_to_256, texture_size_to_resolution};
+use self::utils::pad_to_256;
 
 use super::WgpuCtx;
 
@@ -16,11 +16,15 @@ mod bgra;
 mod interleaved_yuv422;
 mod nv12;
 mod planar_yuv;
-mod rgba;
+mod rgba_linear;
+mod rgba_multiview;
+mod rgba_srgb;
 pub mod utils;
 
 pub type BGRATexture = bgra::BGRATexture;
-pub type RGBATexture = rgba::RGBATexture;
+pub type RgbaMultiViewTexture = rgba_multiview::RgbaMultiViewTexture;
+pub type RgbaLinearTexture = rgba_linear::RgbaLinearTexture;
+pub type RgbaSrgbTexture = rgba_srgb::RgbaSrgbTexture;
 pub type PlanarYuvTextures = planar_yuv::PlanarYuvTextures;
 pub type PlanarYuvVariant = planar_yuv::YuvVariant;
 pub type InterleavedYuv422Texture = interleaved_yuv422::InterleavedYuv422Texture;
@@ -113,7 +117,7 @@ impl InputTexture {
 
         if should_recreate {
             let textures = PlanarYuvTextures::new(ctx, resolution);
-            let bind_group = textures.new_bind_group(ctx, ctx.format.planar_yuv_layout());
+            let bind_group = textures.new_bind_group(ctx, &ctx.format.planar_yuv_layout);
             self.0 = Some(InputTextureState::PlanarYuvTextures {
                 textures,
                 bind_group,
@@ -142,7 +146,7 @@ impl InputTexture {
 
         if should_recreate {
             let texture = InterleavedYuv422Texture::new(ctx, resolution);
-            let bind_group = texture.new_bind_group(ctx, ctx.format.interleaved_yuv_layout());
+            let bind_group = texture.new_bind_group(ctx, &ctx.format.single_texture_layout);
 
             self.0 = Some(InputTextureState::InterleavedYuv422Texture {
                 texture,
@@ -166,7 +170,7 @@ impl InputTexture {
                     InputTextureState::PlanarYuvTextures {
                         textures,
                         bind_group,
-                    } => ctx.format.convert_planar_yuv_to_rgba(
+                    } => ctx.format.planar_yuv_to_rgba_srgb.convert(
                         ctx,
                         (textures, bind_group),
                         dest_state.rgba_texture(),
@@ -196,12 +200,10 @@ impl InputTexture {
                                 return;
                             }
                         };
-                        let bind_group = texture.new_bind_group(ctx, ctx.format.nv12_layout());
-                        ctx.format.convert_nv12_to_rgba(
-                            ctx,
-                            (&texture, &bind_group),
-                            dest_state.rgba_texture(),
-                        )
+                        let bind_group = texture.new_bind_group(ctx, &ctx.format.nv12_layout);
+                        ctx.format
+                            .nv12_to_rgba
+                            .convert(ctx, &bind_group, dest_state.rgba_texture())
                     }
                 }
             }
@@ -211,87 +213,6 @@ impl InputTexture {
 }
 
 impl Default for InputTexture {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-pub struct NodeTextureState {
-    texture: RGBATexture,
-    raw_bind_group: wgpu::BindGroup,
-}
-
-impl NodeTextureState {
-    fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
-        let texture = RGBATexture::new(ctx, resolution);
-        let raw_bind_group = texture.new_raw_bind_group(ctx, ctx.format.rgba_layout());
-
-        Self {
-            texture,
-            raw_bind_group,
-        }
-    }
-
-    pub fn rgba_texture(&self) -> &RGBATexture {
-        &self.texture
-    }
-
-    pub fn raw_bind_group(&self) -> &wgpu::BindGroup {
-        &self.raw_bind_group
-    }
-
-    pub fn resolution(&self) -> Resolution {
-        texture_size_to_resolution(&self.texture.size())
-    }
-}
-
-pub struct NodeTexture(OptionalState<NodeTextureState>);
-
-impl NodeTexture {
-    pub fn new() -> Self {
-        Self(OptionalState::new())
-    }
-
-    pub fn clear(&mut self) {
-        self.0.clear()
-    }
-
-    pub fn ensure_size<'a>(
-        &'a mut self,
-        ctx: &WgpuCtx,
-        new_resolution: Resolution,
-    ) -> &'a NodeTextureState {
-        self.0 = match self.0.replace(OptionalState::None) {
-            OptionalState::NoneWithOldState(state) | OptionalState::Some(state) => {
-                if texture_size_to_resolution(&state.texture.size()) == new_resolution {
-                    OptionalState::Some(state)
-                } else {
-                    let new_inner = NodeTextureState::new(ctx, new_resolution);
-                    OptionalState::Some(new_inner)
-                }
-            }
-            OptionalState::None => {
-                let new_inner = NodeTextureState::new(ctx, new_resolution);
-                OptionalState::Some(new_inner)
-            }
-        };
-        self.0.state().unwrap()
-    }
-
-    pub fn state(&self) -> Option<&NodeTextureState> {
-        self.0.state()
-    }
-
-    pub fn resolution(&self) -> Option<Resolution> {
-        self.0.state().map(NodeTextureState::resolution)
-    }
-
-    pub fn texture(&self) -> Option<&RGBATexture> {
-        self.state().map(|state| state.rgba_texture())
-    }
-}
-
-impl Default for NodeTexture {
     fn default() -> Self {
         Self::new()
     }
@@ -366,47 +287,5 @@ impl OutputTexture {
             source.unmap();
             Ok(buffer.into_inner().into())
         }
-    }
-}
-
-/// Type that behaves like Option, but when is set to None
-/// it keeps ownership of the value it had before.
-enum OptionalState<State> {
-    None,
-    /// It should be treated as None, but hold on the old state, so
-    /// it can be reused in the future.
-    NoneWithOldState(State),
-    Some(State),
-}
-
-impl<State> OptionalState<State> {
-    fn new() -> Self {
-        Self::None
-    }
-
-    fn clear(&mut self) {
-        *self = match self.replace(Self::None) {
-            Self::None => Self::None,
-            Self::NoneWithOldState(state) => Self::NoneWithOldState(state),
-            Self::Some(state) => Self::NoneWithOldState(state),
-        }
-    }
-
-    fn state(&self) -> Option<&State> {
-        match self {
-            OptionalState::None => None,
-            OptionalState::NoneWithOldState(_) => None,
-            OptionalState::Some(ref state) => Some(state),
-        }
-    }
-
-    fn replace(&mut self, replacement: Self) -> Self {
-        mem::replace(self, replacement)
-    }
-}
-
-impl<State> Default for OptionalState<State> {
-    fn default() -> Self {
-        Self::None
     }
 }

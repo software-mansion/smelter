@@ -3,7 +3,7 @@ use std::sync::Arc;
 use log::{error, info};
 
 use super::{
-    common_pipeline::plane::Plane, format::TextureFormat, texture::RGBATexture,
+    common_pipeline::plane::Plane, format::TextureFormat, texture::RgbaMultiViewTexture,
     utils::TextureUtils, CreateWgpuCtxError, WgpuErrorScope,
 };
 
@@ -20,7 +20,7 @@ pub struct WgpuCtx {
 
     pub uniform_bgl: wgpu::BindGroupLayout,
     pub plane: Plane,
-    pub empty_rgba_texture: RGBATexture,
+    pub empty_rgba_texture: RgbaMultiViewTexture,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -81,7 +81,7 @@ impl WgpuCtx {
         let uniform_bgl = uniform_bind_group_layout(&device);
 
         let plane = Plane::new(&device);
-        let empty_rgba_texture = RGBATexture::empty(&device, mode);
+        let empty_rgba_texture = RgbaMultiViewTexture::empty(&device, mode);
 
         scope.pop(&device)?;
 

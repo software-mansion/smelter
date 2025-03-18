@@ -41,10 +41,6 @@ impl InterleavedYuv422Texture {
         }
     }
 
-    pub fn new_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        common_pipeline::create_single_texture_bgl(device)
-    }
-
     pub(super) fn new_bind_group(
         &self,
         ctx: &WgpuCtx,

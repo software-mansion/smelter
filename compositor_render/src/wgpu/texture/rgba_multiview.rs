@@ -6,22 +6,13 @@ use crate::{
 use super::base::{new_texture, TextureExt};
 
 #[derive(Debug)]
-pub struct RGBATexture {
+pub struct RgbaMultiViewTexture {
     texture: wgpu::Texture,
-    view: RgbaTextureView,
+    linear_view: wgpu::TextureView,
+    srgb_view: wgpu::TextureView,
 }
 
-#[derive(Debug)]
-pub enum RgbaTextureView {
-    MultiView {
-        rgb_view: wgpu::TextureView,
-        srgb_view: wgpu::TextureView,
-    },
-    Rgb(wgpu::TextureView),
-    Srgb(wgpu::TextureView),
-}
-
-impl RGBATexture {
+impl RgbaMultiViewTexture {
     pub fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
         Self::new_texture(&ctx.device, ctx.mode, resolution)
     }
@@ -68,16 +59,27 @@ impl RGBATexture {
             },
         );
 
-        let view = RgbaTextureView::new(mode, &texture);
+        let linear_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            ..Default::default()
+        });
+        let srgb_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(wgpu::TextureFormat::Rgba8UnormSrgb),
+            ..Default::default()
+        });
 
-        Self { texture, view }
+        Self {
+            texture,
+            linear_view,
+            srgb_view,
+        }
     }
 
     pub fn new_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         common_pipeline::create_single_texture_bgl(device)
     }
 
-    pub fn new_bind_group(
+    pub fn new_srgb_bind_group(
         &self,
         ctx: &WgpuCtx,
         layout: &wgpu::BindGroupLayout,
@@ -87,12 +89,12 @@ impl RGBATexture {
             layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(self.view.default_view()),
+                resource: wgpu::BindingResource::TextureView(&self.srgb_view),
             }],
         })
     }
 
-    pub fn new_raw_bind_group(
+    pub fn new_linear_bind_group(
         &self,
         ctx: &WgpuCtx,
         layout: &wgpu::BindGroupLayout,
@@ -102,9 +104,7 @@ impl RGBATexture {
             layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(
-                    self.raw_view().unwrap_or(self.view.default_view()),
-                ),
+                resource: wgpu::BindingResource::TextureView(&self.linear_view),
             }],
         })
     }
@@ -133,53 +133,11 @@ impl RGBATexture {
         self.texture
     }
 
-    pub fn default_view(&self) -> &wgpu::TextureView {
-        self.view.default_view()
+    pub fn linear_view(&self) -> &wgpu::TextureView {
+        &self.linear_view
     }
 
-    /**
-     * Returns Rgba8Unorm when possible
-     */
-    pub fn raw_view(&self) -> Option<&wgpu::TextureView> {
-        match &self.view {
-            RgbaTextureView::MultiView { rgb_view, .. } => Some(&rgb_view),
-            RgbaTextureView::Rgb(texture_view) => Some(&texture_view),
-            RgbaTextureView::Srgb(_) => None,
-        }
-    }
-}
-
-impl RgbaTextureView {
-    fn new(mode: RenderingMode, texture: &wgpu::Texture) -> Self {
-        match mode {
-            RenderingMode::Gpu => Self::MultiView {
-                rgb_view: texture.create_view(&wgpu::TextureViewDescriptor {
-                    format: Some(wgpu::TextureFormat::Rgba8Unorm),
-                    ..Default::default()
-                }),
-                srgb_view: texture.create_view(&wgpu::TextureViewDescriptor {
-                    format: Some(wgpu::TextureFormat::Rgba8UnormSrgb),
-                    ..Default::default()
-                }),
-            },
-            RenderingMode::CpuOptimzied => {
-                Self::Rgb(texture.create_view(&wgpu::TextureViewDescriptor {
-                    format: Some(wgpu::TextureFormat::Rgba8Unorm),
-                    ..Default::default()
-                }))
-            }
-            RenderingMode::WebGl => Self::Srgb(texture.create_view(&wgpu::TextureViewDescriptor {
-                format: Some(wgpu::TextureFormat::Rgba8UnormSrgb),
-                ..Default::default()
-            })),
-        }
-    }
-
-    fn default_view(&self) -> &wgpu::TextureView {
-        match self {
-            RgbaTextureView::MultiView { srgb_view, .. } => srgb_view,
-            RgbaTextureView::Rgb(texture_view) => texture_view,
-            RgbaTextureView::Srgb(texture_view) => texture_view,
-        }
+    pub fn srgb_view(&self) -> &wgpu::TextureView {
+        &self.linear_view
     }
 }

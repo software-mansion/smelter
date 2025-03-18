@@ -1,7 +1,7 @@
 use crate::wgpu::{
     common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE},
     ctx::RenderingMode,
-    texture::{InterleavedYuv422Texture, RGBATexture},
+    texture::{InterleavedYuv422Texture, RgbaMultiViewTexture},
 };
 
 use super::WgpuCtx;
@@ -78,7 +78,7 @@ impl InterleavedYuv422ToRgbaConverter {
         &self,
         ctx: &WgpuCtx,
         src: (&InterleavedYuv422Texture, &wgpu::BindGroup),
-        dst: &RGBATexture,
+        dst: &RgbaMultiViewTexture,
     ) {
         let mut encoder = ctx
             .device

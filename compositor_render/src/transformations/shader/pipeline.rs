@@ -6,7 +6,7 @@ use crate::{
     scene::ShaderParam,
     wgpu::{
         common_pipeline::{self, CreateShaderError, Sampler},
-        texture::{NodeTexture, NodeTextureState, RGBATexture},
+        texture::{NodeTexture, NodeTextureState, RgbaMultiViewTexture},
         WgpuCtx, WgpuErrorScope,
     },
 };

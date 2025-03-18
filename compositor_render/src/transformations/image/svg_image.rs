@@ -9,13 +9,13 @@ use resvg::{
 
 use crate::{
     wgpu::{
-        texture::{NodeTexture, RGBATexture},
+        texture::{NodeTexture, RgbaMultiViewTexture},
         RenderingMode, WgpuCtx,
     },
     Resolution,
 };
 
-use super::{copy_texture_to_node_texture, SvgError};
+use super::SvgError;
 
 pub struct SvgNodeState {
     pub was_rendered: bool,
@@ -119,7 +119,7 @@ impl Renderer {
         &mut self,
         ctx: &WgpuCtx,
         tree: &resvg::Tree,
-        target: &RGBATexture,
+        target: &RgbaMultiViewTexture,
         resolution: Resolution,
     ) {
         match self {
@@ -132,22 +132,22 @@ impl Renderer {
 }
 
 struct GpuRenderer {
-    original_texture: RGBATexture,
+    original_texture: RgbaMultiViewTexture,
     original_texture_bg: wgpu::BindGroup,
-    non_premultiplied_texture: RGBATexture,
+    non_premultiplied_texture: RgbaMultiViewTexture,
     non_premultiplied_texture_bg: wgpu::BindGroup,
 }
 
 impl GpuRenderer {
     fn new(ctx: &WgpuCtx) -> Self {
-        let original_texture = RGBATexture::new(
+        let original_texture = RgbaMultiViewTexture::new(
             ctx,
             Resolution {
                 width: 1,
                 height: 1,
             },
         );
-        let non_premultiplied_texture = RGBATexture::new(
+        let non_premultiplied_texture = RgbaMultiViewTexture::new(
             ctx,
             Resolution {
                 width: 1,
@@ -168,14 +168,14 @@ impl GpuRenderer {
         &mut self,
         ctx: &WgpuCtx,
         tree: &resvg::Tree,
-        target: &RGBATexture,
+        target: &RgbaMultiViewTexture,
         resolution: Resolution,
     ) {
         self.ensure_texture_size(ctx, resolution);
         render_to_texture(ctx, tree, &self.original_texture, resolution);
 
         // interpret source and destination as non-srgb when removing pre-multiplication
-        ctx.utils.raw_rgb_remove_premult_alpha.render(
+        ctx.utils.linear_rgba_remove_premult_alpha.render(
             ctx,
             &self.original_texture_bg,
             self.non_premultiplied_texture
@@ -184,7 +184,7 @@ impl GpuRenderer {
         );
 
         // interpret source and destination as srgb when adding pre-multiplication
-        ctx.utils.srgb_add_premult_alpha.render(
+        ctx.utils.srgb_rgba_add_premult_alpha.render(
             ctx,
             &self.non_premultiplied_texture_bg,
             target.default_view(),
@@ -193,10 +193,10 @@ impl GpuRenderer {
 
     fn ensure_texture_size(&mut self, ctx: &WgpuCtx, resolution: Resolution) {
         if Resolution::from(self.original_texture.size()) != resolution {
-            self.original_texture = RGBATexture::new(ctx, resolution)
+            self.original_texture = RgbaMultiViewTexture::new(ctx, resolution)
         }
         if Resolution::from(self.non_premultiplied_texture.size()) != resolution {
-            self.non_premultiplied_texture = RGBATexture::new(ctx, resolution)
+            self.non_premultiplied_texture = RgbaMultiViewTexture::new(ctx, resolution)
         }
     }
 }
@@ -204,7 +204,7 @@ impl GpuRenderer {
 fn render_to_texture(
     ctx: &WgpuCtx,
     tree: &resvg::Tree,
-    texture: &RGBATexture,
+    texture: &RgbaMultiViewTexture,
     resolution: Resolution,
 ) {
     let mut buffer = BytesMut::zeroed(resolution.width * resolution.height * 4);

@@ -13,7 +13,7 @@ use resvg::usvg;
 use crate::{
     state::{RegisterCtx, RenderCtx},
     wgpu::{
-        texture::{NodeTexture, RGBATexture},
+        texture::{NodeTexture, RgbaMultiViewTexture},
         WgpuCtx,
     },
     Resolution,
@@ -172,13 +172,13 @@ pub struct BitmapNodeState {
 
 #[derive(Debug)]
 pub struct BitmapAsset {
-    texture: RGBATexture,
+    texture: RgbaMultiViewTexture,
 }
 
 impl BitmapAsset {
     fn new(ctx: &WgpuCtx, data: Bytes, format: ImageFormat) -> Result<Self, image::ImageError> {
         let img = image::load_from_memory_with_format(&data, format)?;
-        let texture = RGBATexture::new(
+        let texture = RgbaMultiViewTexture::new(
             ctx,
             Resolution {
                 width: img.width() as usize,
@@ -221,7 +221,7 @@ pub struct AnimatedAsset {
 
 #[derive(Debug)]
 struct AnimationFrame {
-    texture: RGBATexture,
+    texture: RgbaMultiViewTexture,
     pts: Duration,
 }
 
@@ -237,7 +237,7 @@ impl AnimatedAsset {
         for frame in decoded_frames {
             let frame = &frame?;
             let buffer = frame.buffer();
-            let texture = RGBATexture::new(
+            let texture = RgbaMultiViewTexture::new(
                 ctx,
                 Resolution {
                     width: buffer.width() as usize,
@@ -322,7 +322,7 @@ impl AnimatedAsset {
     }
 }
 
-fn copy_texture_to_node_texture(ctx: &WgpuCtx, source: &RGBATexture, target: &mut NodeTexture) {
+fn copy_texture_to_node_texture(ctx: &WgpuCtx, source: &RgbaMultiViewTexture, target: &mut NodeTexture) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {

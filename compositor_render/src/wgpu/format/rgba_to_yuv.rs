@@ -1,7 +1,6 @@
 use crate::wgpu::{
     common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE},
-    ctx::RenderingMode,
-    texture::{PlanarYuvTextures, RGBATexture},
+    texture::PlanarYuvTextures,
 };
 
 use super::WgpuCtx;
@@ -15,7 +14,6 @@ pub struct RgbaToYuvConverter {
 impl RgbaToYuvConverter {
     pub fn new(
         device: &wgpu::Device,
-        mode: RenderingMode,
         single_texture_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let sampler = Sampler::new(device);
@@ -29,14 +27,7 @@ impl RgbaToYuvConverter {
             }],
         });
 
-        let shader_module = match mode {
-            RenderingMode::Gpu | RenderingMode::CpuOptimzied => {
-                device.create_shader_module(wgpu::include_wgsl!("rgba_to_yuv.wgsl"))
-            }
-            RenderingMode::WebGl => {
-                device.create_shader_module(wgpu::include_wgsl!("rgba_to_yuv_for_webgl.wgsl"))
-            }
-        };
+        let shader_module = device.create_shader_module(wgpu::include_wgsl!("rgba_to_yuv.wgsl"));
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("RGBA to YUV color converter pipeline"),
@@ -73,12 +64,7 @@ impl RgbaToYuvConverter {
         Self { pipeline, sampler }
     }
 
-    pub fn convert(
-        &self,
-        ctx: &WgpuCtx,
-        src: (&RGBATexture, &wgpu::BindGroup),
-        dst: &PlanarYuvTextures,
-    ) {
+    pub fn convert(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst: &PlanarYuvTextures) {
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -124,7 +110,7 @@ impl RgbaToYuvConverter {
                 0,
                 &(plane as u32).to_le_bytes(),
             );
-            render_pass.set_bind_group(0, src.1, &[]);
+            render_pass.set_bind_group(0, src_bg, &[]);
             render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
             ctx.plane.draw(&mut render_pass);
         }
