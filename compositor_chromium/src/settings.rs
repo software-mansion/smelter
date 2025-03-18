@@ -1,4 +1,4 @@
-use std::{env, os::raw::c_int};
+use std::{env, os::raw::c_int, path::PathBuf};
 
 use chromium_sys::_cef_string_utf16_t;
 
@@ -9,6 +9,8 @@ pub const PROCESS_HELPER_PATH_ENV: &str = "SMELTER_PROCESS_HELPER_PATH";
 /// Main process settings
 #[derive(Default)]
 pub struct Settings {
+    /// Path to root directory of CEF cache. The path should be unique for each running instance.
+    pub root_cache_path: PathBuf,
     /// If set to `true` message loop can run on a separate thread. **Not supported by MacOS**
     pub multi_threaded_message_loop: bool,
     /// If set to `true` it makes it possible to control message pump scheduling.
@@ -38,7 +40,7 @@ impl Settings {
             windowless_rendering_enabled: self.windowless_rendering_enabled as c_int,
             command_line_args_disabled: false as c_int,
             cache_path: CefString::empty_raw(),
-            root_cache_path: CefString::empty_raw(),
+            root_cache_path: CefString::new_raw(self.root_cache_path.display().to_string()),
             persist_session_cookies: false as c_int,
             user_agent: CefString::empty_raw(),
             user_agent_product: CefString::empty_raw(),
