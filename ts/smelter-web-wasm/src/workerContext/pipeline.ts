@@ -4,7 +4,7 @@ import type { Logger } from 'pino';
 import type { Api } from '@swmansion/smelter';
 import { createInput } from './input/input';
 import { Output } from './output/output';
-import { Queue } from './queue';
+import { Queue, WorkloadBalancer } from './queue';
 import type { RegisterInput, RegisterOutput, WorkerEvent, WorkerResponse } from '../workerApi';
 import { workerPostEvent as genericWorkerPostEvent } from './bridge';
 import { SmelterEventType } from '../eventSender';
@@ -12,6 +12,7 @@ import { SmelterEventType } from '../eventSender';
 export const workerPostEvent = genericWorkerPostEvent<WorkerEvent>;
 
 export class Pipeline {
+  private workloadBalancer: WorkloadBalancer = new WorkloadBalancer();
   private renderer: Renderer;
   private queue: Queue;
   private logger: Logger;
@@ -20,7 +21,12 @@ export class Pipeline {
   public constructor(options: { renderer: Renderer; framerate: Framerate; logger: Logger }) {
     this.renderer = options.renderer;
     this.logger = options.logger.child({ element: 'pipeline' });
-    this.queue = new Queue(options.framerate, options.renderer, options.logger);
+    this.queue = new Queue(
+      options.framerate,
+      options.renderer,
+      options.logger,
+      this.workloadBalancer
+    );
   }
 
   public start() {
@@ -36,7 +42,7 @@ export class Pipeline {
   }
 
   public async registerInput(inputId: string, request: RegisterInput): Promise<WorkerResponse> {
-    const input = await createInput(inputId, request, this.logger);
+    const input = await createInput(inputId, request, this.logger, this.workloadBalancer);
     // `addInput` will throw an exception if input already exists
     this.queue.addInput(inputId, input);
     this.renderer.registerInput(inputId);

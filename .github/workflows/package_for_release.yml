@@ -1,10 +1,10 @@
-name: package for release
+name: Release - package binaries + publish docker images
 on:
     workflow_dispatch: {}
 
 jobs:
-    linux:
-        runs-on: ubuntu-latest
+    binaries-linux-x86_64:
+        runs-on: ubuntu-24.04
         steps:
             - name: 🛠 Install system dependencies
               run: |
@@ -29,14 +29,13 @@ jobs:
                 name: smelter_with_web_renderer_linux_x86_64.tar.gz
                 path: smelter_with_web_renderer_linux_x86_64.tar.gz
 
-    linux-aarch64:
+    binaries-linux-aarch64:
         runs-on: ubuntu-24.04-arm
         steps:
             - name: 🛠 Install system dependencies
               run: |
                   sudo apt-get update -y -qq
                   sudo apt-get install -y libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev curl git build-essential libssl-dev pkg-config libclang-dev
-                  sudo rm -rf /var/lib/apt/lists/*
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
 
@@ -51,7 +50,7 @@ jobs:
                 name: smelter_linux_aarch64.tar.gz
                 path: smelter_linux_aarch64.tar.gz
 
-    macos_x86_64:
+    binaries-macos-x86_64:
         runs-on: macos-13
         steps:
             - name: 🛠 Install system dependencies
@@ -76,7 +75,7 @@ jobs:
                 name: smelter_with_web_renderer_darwin_x86_64.tar.gz
                 path: smelter_with_web_renderer_darwin_x86_64.tar.gz
 
-    macos-aarch64:
+    binaries-macos-aarch64:
         runs-on: macos-14
         steps:
             - name: 🛠 Install system dependencies
@@ -119,7 +118,7 @@ jobs:
             run: docker push ghcr.io/software-mansion/smelter:${{ github.sha }}
 
     docker-arm64:
-      needs: docker-amd64
+      needs: [docker-amd64, docker-with-web-renderer-arm64]
       runs-on: ubuntu-24.04-arm
       steps:
           - name: 📥 Checkout repo

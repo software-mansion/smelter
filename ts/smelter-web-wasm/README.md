@@ -74,38 +74,7 @@ See our [docs](https://smelter.dev/docs) to learn more.
 In the example above, we are calling `setWasmBundleUrl` that should point to the WASM bundle that
 is part of the `@swmansion/smelter-browser-render` package.
 
-For example, in vite projects you can configure with `vite.config.ts` like this:
-
-```js
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { viteStaticCopy } from 'vite-plugin-static-copy';
-import { createRequire } from 'node:module';
-import path from 'node:path';
-
-const require = createRequire(import.meta.url);
-
-// https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [
-    react(),
-    viteStaticCopy({
-      targets: [
-        {
-          src: path.join(
-            path.dirname(require.resolve('@swmansion/smelter-browser-render')),
-            'smelter.wasm'
-          ),
-          dest: 'assets',
-        },
-      ],
-    }),
-  ],
-  optimizeDeps: {
-    exclude: ['@rollup/browser'],
-  },
-});
-```
+To learn how to configure it in your project check out our [example configurations](https://smelter.dev/ts-sdk/configuration#configuration).
 
 ## License
 

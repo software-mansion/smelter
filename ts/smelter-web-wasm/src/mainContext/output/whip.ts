@@ -1,157 +1,106 @@
-import type { Api } from '@swmansion/smelter';
 import type { RegisterOutput } from '../../workerApi';
 import type { Output, RegisterOutputResult, RegisterWasmWhipOutput } from '../output';
-import type { Logger } from 'pino';
-import type { Framerate } from '../../compositor/compositor';
-import type { AudioMixer } from '../AudioMixer';
-import { MediaStreamAudioMixer } from '../AudioMixer';
+import type { InstanceContext } from '../instance';
 
 type PeerConnectionOptions = {
-  logger: Logger;
-  endpointUrl: RegisterWasmWhipOutput['endpointUrl'];
-  bearerToken?: RegisterWasmWhipOutput['bearerToken'];
-  iceServers?: RegisterWasmWhipOutput['iceServers'];
-  video?: {
-    stream: MediaStream;
-    track: MediaStreamTrack;
-    resolution: Api.Resolution;
-    maxBitrate?: number;
-  };
-  audio: boolean;
+  ctx: InstanceContext;
+  pc: RTCPeerConnection;
+
+  locationUrl: string;
+  bearerToken?: string;
+
+  canvasStream?: MediaStream;
+};
+
+type VideoTrackResult = {
+  workerMessage: RegisterOutput['video'];
+  canvasStream: MediaStream;
+  track: MediaStreamTrack;
+  transferable: Transferable[];
+};
+
+type AudioTrackResult = {
+  track: MediaStreamTrack;
+  transferable: Transferable[];
 };
 
 export class WhipOutput implements Output {
-  private mixer?: MediaStreamAudioMixer = undefined;
-  private options: PeerConnectionOptions;
-  private pc?: RTCPeerConnection;
-  private location?: string;
+  private ctx: InstanceContext;
+  private pc: RTCPeerConnection;
+  private outputId: string;
 
-  constructor(options: PeerConnectionOptions) {
-    this.options = options;
-  }
+  private locationUrl: string;
+  private bearerToken?: string;
 
-  public get audioMixer(): AudioMixer | undefined {
-    return this.mixer;
-  }
+  private canvasStream?: MediaStream;
 
-  async init(): Promise<MediaStream> {
-    const pc = new RTCPeerConnection({
-      iceServers: this.options.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }],
-      bundlePolicy: 'max-bundle',
-    });
-    const negotiationNeededPromise = new Promise<void>(res => {
-      pc.addEventListener('negotiationneeded', () => {
-        res();
-      });
-    });
-    const mediaStream = new MediaStream();
+  constructor(outputId: string, options: PeerConnectionOptions) {
+    this.outputId = outputId;
+    this.ctx = options.ctx;
+    this.pc = options.pc;
 
-    if (this.options.video) {
-      mediaStream.addTrack(this.options.video.track);
-      const videoSender = pc.addTransceiver(this.options.video.track, {
-        direction: 'sendonly',
-        sendEncodings: [
-          {
-            maxBitrate: this.options.video.maxBitrate,
-            priority: 'high',
-            networkPriority: 'high',
-            scaleResolutionDownBy: 1.0,
-          },
-        ],
-      });
+    this.locationUrl = options.locationUrl;
+    this.bearerToken = options.bearerToken;
 
-      const params = videoSender.sender.getParameters();
-      params.degradationPreference = 'maintain-resolution';
-      await videoSender.sender.setParameters(params);
-    }
-
-    if (this.options.audio) {
-      this.mixer = new MediaStreamAudioMixer();
-      const track = this.mixer.outputMediaStreamTrack();
-      mediaStream.addTrack(track);
-      pc.addTransceiver(track, { direction: 'sendonly' });
-    }
-
-    await negotiationNeededPromise;
-    this.location = await establishWhipConnection(
-      pc,
-      this.options.endpointUrl,
-      this.options.bearerToken
-    );
-
-    this.pc = pc;
-    return mediaStream;
+    this.canvasStream = options.canvasStream;
   }
 
   public async terminate(): Promise<void> {
-    this.options.logger.debug('terminate WHIP connection');
+    this.ctx.logger.debug('Terminate WHIP connection.');
     try {
-      await fetch(this.location ?? this.options.endpointUrl, {
+      await fetch(this.locationUrl, {
         method: 'DELETE',
         mode: 'cors',
         headers: {
-          ...(this.options.bearerToken
-            ? { authorization: `Bearer ${this.options.bearerToken}` }
-            : {}),
+          ...(this.bearerToken ? { authorization: `Bearer ${this.bearerToken}` } : {}),
         },
       });
     } catch (err: any) {
       // Some services like Twitch do not implement DELETE endpoint
-      this.options.logger.debug({ err });
+      this.ctx.logger.debug({ err });
     }
     this.pc?.close();
-    this.options.video?.stream.getTracks().forEach(track => track.stop());
-    await this.audioMixer?.close();
+    this.canvasStream?.getTracks().forEach(track => track.stop());
+    this.ctx.audioMixer.removeOutput(this.outputId);
   }
 }
 
 export async function handleRegisterWhipOutput(
+  ctx: InstanceContext,
   outputId: string,
-  request: RegisterWasmWhipOutput,
-  logger: Logger,
-  framerate: Framerate
+  request: RegisterWasmWhipOutput
 ): Promise<RegisterOutputResult> {
-  let video: RegisterOutput['video'] = undefined;
-  let videoPeerConnection: PeerConnectionOptions['video'];
-  let transferable: Transferable[] = [];
-
-  if (request.video && request.initial.video) {
-    const canvas = document.createElement('canvas');
-    canvas.width = request.video.resolution.width;
-    canvas.height = request.video.resolution.height;
-    const stream = canvas.captureStream(framerate.num / framerate.den);
-    const track = stream.getVideoTracks()[0];
-    const offscreen = canvas.transferControlToOffscreen();
-
-    await track.applyConstraints({
-      width: { exact: request.video.resolution.width },
-      height: { exact: request.video.resolution.height },
-      frameRate: { ideal: framerate.num / framerate.den },
-    });
-
-    videoPeerConnection = {
-      track,
-      stream,
-      resolution: request.video.resolution,
-      maxBitrate: request.video.maxBitrate,
-    };
-    transferable.push(offscreen);
-    video = {
-      resolution: request.video.resolution,
-      initial: request.initial.video,
-      canvas: offscreen,
-    };
-  }
-
-  const output = new WhipOutput({
-    logger,
-    iceServers: request.iceServers,
-    bearerToken: request.bearerToken,
-    endpointUrl: request.endpointUrl,
-    video: videoPeerConnection,
-    audio: !!request.audio,
+  const outputStream = new MediaStream();
+  const pc = new RTCPeerConnection({
+    iceServers: request.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }],
+    bundlePolicy: 'max-bundle',
   });
-  const outputStream = await output.init();
+  const negotiationNeededPromise = new Promise<void>(res => {
+    pc.addEventListener('negotiationneeded', () => {
+      res();
+    });
+  });
+
+  const videoResult = await handleVideo(ctx, pc, outputId, request);
+  const audioResult = await handleAudio(ctx, pc, outputId, request);
+
+  await negotiationNeededPromise;
+  const locationUrl = await establishWhipConnection(pc, request.endpointUrl, request.bearerToken);
+
+  const output = new WhipOutput(outputId, {
+    ctx,
+    pc,
+    bearerToken: request.bearerToken,
+    locationUrl,
+    canvasStream: videoResult?.canvasStream,
+  });
+
+  if (videoResult) {
+    outputStream.addTrack(videoResult.track);
+  }
+  if (audioResult) {
+    outputStream.addTrack(audioResult.track);
+  }
 
   return {
     output,
@@ -165,11 +114,79 @@ export async function handleRegisterWhipOutput(
         outputId,
         output: {
           type: 'stream',
-          video,
+          video: videoResult?.workerMessage,
         },
       },
-      transferable,
+      [...(videoResult?.transferable ?? []), ...(audioResult?.transferable ?? [])],
     ],
+  };
+}
+
+async function handleVideo(
+  ctx: InstanceContext,
+  pc: RTCPeerConnection,
+  _outputId: string,
+  request: RegisterWasmWhipOutput
+): Promise<VideoTrackResult | undefined> {
+  if (!request.video || !request.initial.video) {
+    return undefined;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = request.video.resolution.width;
+  canvas.height = request.video.resolution.height;
+  const canvasStream = canvas.captureStream(ctx.framerate.num / ctx.framerate.den);
+  const track = canvasStream.getVideoTracks()[0];
+  const offscreen = canvas.transferControlToOffscreen();
+
+  await track.applyConstraints({
+    width: { exact: request.video.resolution.width },
+    height: { exact: request.video.resolution.height },
+    frameRate: { ideal: ctx.framerate.num / ctx.framerate.den },
+  });
+
+  const videoSender = pc.addTransceiver(track, {
+    direction: 'sendonly',
+    sendEncodings: [
+      {
+        maxBitrate: request.video?.maxBitrate,
+        priority: 'high',
+        networkPriority: 'high',
+        scaleResolutionDownBy: 1.0,
+      },
+    ],
+  });
+
+  const params = videoSender.sender.getParameters();
+  params.degradationPreference = 'maintain-resolution';
+  await videoSender.sender.setParameters(params);
+
+  return {
+    workerMessage: {
+      resolution: request.video.resolution,
+      initial: request.initial.video,
+      canvas: offscreen,
+    },
+    canvasStream,
+    track,
+    transferable: [offscreen],
+  };
+}
+
+async function handleAudio(
+  ctx: InstanceContext,
+  pc: RTCPeerConnection,
+  outputId: string,
+  request: RegisterWasmWhipOutput
+): Promise<AudioTrackResult | undefined> {
+  if (!request.audio || !request.initial.audio) {
+    return undefined;
+  }
+  const track = ctx.audioMixer.addMediaStreamOutput(outputId);
+  pc.addTransceiver(track, { direction: 'sendonly' });
+  return {
+    track,
+    transferable: [],
   };
 }
 
@@ -193,7 +210,7 @@ async function establishWhipConnection(
   let { sdp: sdpAnswer, location } = await postSdpOffer(endpoint, offer.sdp, token);
 
   await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: sdpAnswer }));
-  return location;
+  return location ?? endpoint;
 }
 
 async function gatherICECandidates(

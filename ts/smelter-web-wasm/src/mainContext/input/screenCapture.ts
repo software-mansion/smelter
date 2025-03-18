@@ -1,22 +1,25 @@
 import type { Input, RegisterInputResult } from '../input';
+import type { InstanceContext } from '../instance';
 
 export class ScreenCaptureInput implements Input {
+  private inputId: string;
+  private ctx: InstanceContext;
   private mediaStream: MediaStream;
 
-  constructor(mediaStream: MediaStream) {
+  constructor(inputId: string, mediaStream: MediaStream, ctx: InstanceContext) {
+    this.inputId = inputId;
+    this.ctx = ctx;
     this.mediaStream = mediaStream;
-  }
-
-  public get audioTrack(): MediaStreamTrack | undefined {
-    return this.mediaStream.getAudioTracks()[0];
   }
 
   public async terminate(): Promise<void> {
     this.mediaStream.getTracks().forEach(track => track.stop());
+    await this.ctx.audioMixer.removeInput(this.inputId);
   }
 }
 
 export async function handleRegisterScreenCaptureInput(
+  ctx: InstanceContext,
   inputId: string
 ): Promise<RegisterInputResult> {
   const mediaStream = await navigator.mediaDevices.getDisplayMedia({
@@ -27,6 +30,7 @@ export async function handleRegisterScreenCaptureInput(
     },
   });
   const videoTrack = mediaStream.getVideoTracks()[0];
+  const audioTrack = mediaStream.getAudioTracks()[0];
   const transferable = [];
 
   // @ts-ignore
@@ -37,8 +41,12 @@ export async function handleRegisterScreenCaptureInput(
     transferable.push(videoTrackProcessor.readable);
   }
 
+  if (audioTrack) {
+    ctx.audioMixer.addMediaStreamInput(inputId, audioTrack);
+  }
+
   return {
-    input: new ScreenCaptureInput(mediaStream),
+    input: new ScreenCaptureInput(inputId, mediaStream, ctx),
     workerMessage: [
       {
         type: 'registerInput',

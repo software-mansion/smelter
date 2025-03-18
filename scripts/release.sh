@@ -47,8 +47,9 @@ gh run download "$WORKFLOW_RUN_ID" -n smelter_with_web_renderer_darwin_x86_64.ta
 gh run download "$WORKFLOW_RUN_ID" -n smelter_with_web_renderer_darwin_aarch64.tar.gz
 
 IMAGE_NAME="ghcr.io/software-mansion/smelter"
-docker buildx imagetools create -t "${IMAGE_NAME}:${RELEASE_TAG}" "${IMAGE_NAME}:${COMMIT_HASH}"
 docker buildx imagetools create -t "${IMAGE_NAME}:${RELEASE_TAG}-web-renderer" "${IMAGE_NAME}:${COMMIT_HASH}-web-renderer"
+docker buildx imagetools create -t "${IMAGE_NAME}:${RELEASE_TAG}" "${IMAGE_NAME}:${COMMIT_HASH}"
+docker buildx imagetools create -t "${IMAGE_NAME}:latest" "${IMAGE_NAME}:${COMMIT_HASH}"
 
 gh release create "$RELEASE_TAG"
 gh release upload "$RELEASE_TAG" smelter_linux_x86_64.tar.gz

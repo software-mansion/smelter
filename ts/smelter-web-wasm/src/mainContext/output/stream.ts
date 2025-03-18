@@ -1,72 +1,73 @@
 import type { RegisterOutput } from '../../workerApi';
-import type { AudioMixer } from '../AudioMixer';
-import { MediaStreamAudioMixer } from '../AudioMixer';
+import type { InstanceContext } from '../instance';
 import type { Output, RegisterOutputResult, RegisterWasmStreamOutput } from '../output';
 
 type StreamOptions = {
-  stream: MediaStream;
-  mixer?: AudioMixer;
+  ctx: InstanceContext;
+  canvasStream?: MediaStream;
+  outputStream: MediaStream;
+};
+
+type VideoTrackResult = {
+  workerMessage: RegisterOutput['video'];
+  canvasStream: MediaStream;
+  track: MediaStreamTrack;
+  transferable: Transferable[];
+};
+
+type AudioTrackResult = {
+  track: MediaStreamTrack;
+  transferable: Transferable[];
 };
 
 export class StreamOutput implements Output {
-  private stream: MediaStream;
-  private mixer?: AudioMixer;
+  private outputId: string;
+  private ctx: InstanceContext;
+  private outputStream: MediaStream;
+  private canvasStream?: MediaStream;
 
-  constructor(options: StreamOptions) {
-    this.stream = options.stream;
-    this.mixer = options.mixer;
-  }
-
-  public get audioMixer(): AudioMixer | undefined {
-    return this.mixer;
+  constructor(outputId: string, options: StreamOptions) {
+    this.outputId = outputId;
+    this.canvasStream = options.canvasStream;
+    this.outputStream = options.outputStream;
+    this.ctx = options.ctx;
   }
 
   public async terminate(): Promise<void> {
-    this.stream.getTracks().forEach(track => track.stop());
-    await this.mixer?.close();
+    this.outputStream.getTracks().forEach(track => track.stop());
+    this.canvasStream?.getTracks().forEach(track => track.stop());
+    this.ctx.audioMixer.removeOutput(this.outputId);
   }
 }
 
 export async function handleRegisterStreamOutput(
+  ctx: InstanceContext,
   outputId: string,
   request: RegisterWasmStreamOutput
 ): Promise<RegisterOutputResult> {
-  let video: RegisterOutput['video'] = undefined;
-  let stream = new MediaStream();
-  let transferable: Transferable[] = [];
+  let outputStream = new MediaStream();
 
-  if (request.video && request.initial.video) {
-    const canvas = document.createElement('canvas');
-    canvas.width = request.video.resolution.width;
-    canvas.height = request.video.resolution.height;
-    const stream = canvas.captureStream(60);
-    const track = stream.getVideoTracks()[0];
-    const offscreen = canvas.transferControlToOffscreen();
+  const videoResult = await handleVideo(ctx, outputId, request);
+  const audioResult = await handleAudio(ctx, outputId, request);
 
-    transferable.push(canvas);
+  const output = new StreamOutput(outputId, {
+    canvasStream: videoResult?.canvasStream,
+    outputStream,
+    ctx,
+  });
 
-    stream.addTrack(track);
-
-    video = {
-      resolution: request.video.resolution,
-      initial: request.initial.video,
-      canvas: offscreen,
-    };
+  if (videoResult) {
+    outputStream.addTrack(videoResult.track);
   }
-
-  let mixer: MediaStreamAudioMixer | undefined;
-  if (request.audio) {
-    mixer = new MediaStreamAudioMixer();
-    stream.addTrack(mixer.outputMediaStreamTrack());
+  if (audioResult) {
+    outputStream.addTrack(audioResult.track);
   }
-
-  const output = new StreamOutput({ stream, mixer });
 
   return {
     output,
     result: {
       type: 'web-wasm-stream',
-      stream,
+      stream: outputStream,
     },
     workerMessage: [
       {
@@ -74,10 +75,52 @@ export async function handleRegisterStreamOutput(
         outputId,
         output: {
           type: 'stream',
-          video,
+          video: videoResult?.workerMessage,
         },
       },
-      transferable,
+      [...(videoResult?.transferable ?? []), ...(audioResult?.transferable ?? [])],
     ],
+  };
+}
+
+async function handleVideo(
+  ctx: InstanceContext,
+  _outputId: string,
+  request: RegisterWasmStreamOutput
+): Promise<VideoTrackResult | undefined> {
+  if (!request.video || !request.initial.video) {
+    return undefined;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = request.video.resolution.width;
+  canvas.height = request.video.resolution.height;
+  const canvasStream = canvas.captureStream(ctx.framerate.num / ctx.framerate.den);
+  const track = canvasStream.getVideoTracks()[0];
+  const offscreen = canvas.transferControlToOffscreen();
+
+  return {
+    workerMessage: {
+      resolution: request.video.resolution,
+      initial: request.initial.video,
+      canvas: offscreen,
+    },
+    canvasStream,
+    track,
+    transferable: [offscreen],
+  };
+}
+
+async function handleAudio(
+  ctx: InstanceContext,
+  outputId: string,
+  request: RegisterWasmStreamOutput
+): Promise<AudioTrackResult | undefined> {
+  if (!request.audio || !request.initial.audio) {
+    return undefined;
+  }
+  const track = ctx.audioMixer.addMediaStreamOutput(outputId);
+  return {
+    track,
+    transferable: [],
   };
 }

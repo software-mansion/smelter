@@ -1,4 +1,4 @@
-name: shellcheck
+name: Bash - shellcheck
 on:
     workflow_dispatch: {}
     push:

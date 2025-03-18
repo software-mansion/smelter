@@ -1,4 +1,4 @@
-use compositor_render::{Frame, OutputId, Resolution};
+use compositor_render::{Frame, Framerate, OutputId, Resolution};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use fdk_aac::AacEncoder;
 use log::error;
@@ -44,7 +44,7 @@ pub enum AudioEncoderPreset {
 
 pub struct Encoder {
     pub video: Option<VideoEncoder>,
-    audio: Option<AudioEncoder>,
+    pub audio: Option<AudioEncoder>,
 }
 
 pub enum VideoEncoder {
@@ -60,6 +60,7 @@ impl Encoder {
     pub fn new(
         output_id: &OutputId,
         options: EncoderOptions,
+        framerate: Framerate,
         sample_rate: u32,
     ) -> Result<(Self, Receiver<EncoderOutputEvent>), EncoderInitError> {
         let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
@@ -68,6 +69,7 @@ impl Encoder {
             Some(video_encoder_options) => Some(VideoEncoder::new(
                 output_id,
                 video_encoder_options,
+                framerate,
                 encoded_chunks_sender.clone(),
             )?),
             None => None,
@@ -135,11 +137,12 @@ impl VideoEncoder {
     pub fn new(
         output_id: &OutputId,
         options: VideoEncoderOptions,
+        framerate: Framerate,
         sender: Sender<EncoderOutputEvent>,
     ) -> Result<Self, EncoderInitError> {
         match options {
             VideoEncoderOptions::H264(options) => Ok(Self::H264(LibavH264Encoder::new(
-                output_id, options, sender,
+                output_id, options, framerate, sender,
             )?)),
         }
     }

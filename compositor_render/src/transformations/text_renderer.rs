@@ -150,13 +150,19 @@ impl TextRendererNode {
         let target_state = target.ensure_size(renderer_ctx.wgpu_ctx, self.resolution);
         let view = &target_state.rgba_texture().texture().view;
         {
+            let background_color = wgpu::Color {
+                r: srgb_to_linear(self.background_color.r),
+                g: srgb_to_linear(self.background_color.g),
+                b: srgb_to_linear(self.background_color.b),
+                a: self.background_color.a,
+            };
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view,
                     resolve_target: None,
                     ops: Operations {
-                        load: LoadOp::Clear(self.background_color),
+                        load: LoadOp::Clear(background_color),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -368,5 +374,13 @@ impl TextRendererCtx {
         let last_line_padding = font_size / 5.0;
         let height = (lines_count as f32 * line_height.ceil() + last_line_padding) as usize;
         Resolution { width, height }
+    }
+}
+
+fn srgb_to_linear(color: f64) -> f64 {
+    if color < 0.04045 {
+        color / 12.92
+    } else {
+        f64::powf((color + 0.055) / 1.055, 2.4)
     }
 }

@@ -27,6 +27,6 @@ export default defineConfig({
   ],
   optimizeDeps: {
     exclude: ['@swmansion/smelter-web-wasm'],
-    include: ['pino']
+    include: ['@swmansion/smelter-web-wasm > pino']
   },
 });

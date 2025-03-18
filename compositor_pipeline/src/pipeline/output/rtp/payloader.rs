@@ -186,7 +186,7 @@ impl VideoPayloader {
                 payloader: H264Payloader::default(),
                 context: RtpStreamContext::new(),
             },
-            VideoCodec::VP8 => unimplemented!(),
+            VideoCodec::VP8 => unreachable!(),
         }
     }
 

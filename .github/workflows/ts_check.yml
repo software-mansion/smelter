@@ -1,0 +1,51 @@
+name: TypeScript SDK - check
+
+on:
+    workflow_dispatch: {}
+    push:
+        branches: [master]
+    pull_request:
+        types: [opened, synchronize]
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+    ts_build_and_check:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repo
+              uses: actions/checkout@v2
+
+            - name: 🔧 Install the rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.81.0
+
+            - name: Install pnpm
+              uses: pnpm/action-setup@v4
+              with: 
+                  version: 10
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
+            - name: Install project dependencies
+              working-directory: ./ts
+              run: pnpm install --frozen-lockfile
+
+            - name: Build
+              working-directory: ./ts
+              run: pnpm run build:all
+
+            - name: Lint code
+              working-directory: ./ts
+              run: pnpm run lint
+
+            - name: Typecheck code
+              working-directory: ./ts
+              run: pnpm run typecheck
