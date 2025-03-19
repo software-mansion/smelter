@@ -4,9 +4,9 @@ use wgpu::ShaderStages;
 
 use crate::{
     scene::ShaderParam,
+    state::node_texture::{NodeTexture, NodeTextureState},
     wgpu::{
         common_pipeline::{self, CreateShaderError, Sampler},
-        texture::{NodeTexture, NodeTextureState, RgbaMultiViewTexture},
         WgpuCtx, WgpuErrorScope,
     },
 };
@@ -108,7 +108,7 @@ impl ShaderPipeline {
                         load,
                         store: wgpu::StoreOp::Store,
                     },
-                    view: &target.rgba_texture().default_view(),
+                    view: target.view(),
                     resolve_target: None,
                 })],
                 depth_stencil_attachment: None,
@@ -197,15 +197,14 @@ impl ShaderPipeline {
                     .map(|texture| {
                         texture
                             .state()
-                            .map(NodeTextureState::rgba_texture)
-                            .map(RGBATexture::texture)
-                            .map_or(&wgpu_ctx.empty_texture.view, |texture| &texture.view)
+                            .map(NodeTextureState::view)
+                            .unwrap_or_else(|| wgpu_ctx.default_empty_view())
                     })
                     .collect();
 
                 texture_views.extend(
                     (sources.len()..super::SHADER_INPUT_TEXTURES_AMOUNT as usize)
-                        .map(|_| &wgpu_ctx.empty_rgba_texture.default_view()),
+                        .map(|_| wgpu_ctx.default_empty_view()),
                 );
 
                 wgpu_ctx
@@ -223,8 +222,8 @@ impl ShaderPipeline {
                 let texture_view = sources
                     .first()
                     .and_then(|texture| texture.state())
-                    .map(|state| state.rgba_texture().texture())
-                    .map_or(&wgpu_ctx.empty_texture.view, |texture| &texture.view);
+                    .map(|state| state.view())
+                    .unwrap_or_else(|| wgpu_ctx.default_empty_view());
 
                 wgpu_ctx
                     .device

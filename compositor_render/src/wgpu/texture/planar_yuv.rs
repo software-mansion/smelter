@@ -56,7 +56,7 @@ pub struct PlanarYuvTextures {
     pub(super) variant: YuvVariant,
     pub(super) planes_textures: [wgpu::Texture; 3],
     pub(super) planes_views: [wgpu::TextureView; 3],
-    pub(super) resolution: Resolution,
+    pub(crate) resolution: Resolution,
 }
 
 impl PlanarYuvTextures {
@@ -116,7 +116,7 @@ impl PlanarYuvTextures {
         })
     }
 
-    pub(super) fn new_bind_group(
+    pub fn new_bind_group(
         &self,
         ctx: &WgpuCtx,
         layout: &wgpu::BindGroupLayout,

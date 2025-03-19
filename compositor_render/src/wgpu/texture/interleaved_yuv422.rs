@@ -1,7 +1,4 @@
-use crate::{
-    wgpu::{common_pipeline, WgpuCtx},
-    Resolution,
-};
+use crate::{wgpu::WgpuCtx, Resolution};
 
 use super::{base::new_texture, TextureExt};
 
@@ -9,7 +6,7 @@ use super::{base::new_texture, TextureExt};
 pub struct InterleavedYuv422Texture {
     pub(super) texture: wgpu::Texture,
     pub(super) view: wgpu::TextureView,
-    pub(super) resolution: Resolution,
+    pub(crate) resolution: Resolution,
 }
 
 impl InterleavedYuv422Texture {

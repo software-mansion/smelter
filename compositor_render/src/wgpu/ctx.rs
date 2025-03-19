@@ -3,8 +3,11 @@ use std::sync::Arc;
 use log::{error, info};
 
 use super::{
-    common_pipeline::plane::Plane, format::TextureFormat, texture::RgbaMultiViewTexture,
-    utils::TextureUtils, CreateWgpuCtxError, WgpuErrorScope,
+    common_pipeline::plane::Plane,
+    format::TextureFormat,
+    texture::{RgbaLinearTexture, RgbaMultiViewTexture, RgbaSrgbTexture},
+    utils::TextureUtils,
+    CreateWgpuCtxError, WgpuErrorScope,
 };
 
 #[derive(Debug)]
@@ -20,7 +23,8 @@ pub struct WgpuCtx {
 
     pub uniform_bgl: wgpu::BindGroupLayout,
     pub plane: Plane,
-    pub empty_rgba_texture: RgbaMultiViewTexture,
+    pub empty_rgba_linear_texture: RgbaLinearTexture,
+    pub empty_rgba_srgb_texture: RgbaSrgbTexture,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -55,6 +59,22 @@ impl WgpuCtx {
         Ok(Arc::new(ctx))
     }
 
+    pub fn default_empty_view(&self) -> &wgpu::TextureView {
+        match self.mode {
+            RenderingMode::Gpu => self.empty_rgba_srgb_texture.view(),
+            RenderingMode::CpuOptimzied => self.empty_rgba_linear_texture.view(),
+            RenderingMode::WebGl => self.empty_rgba_srgb_texture.view(),
+        }
+    }
+
+    pub fn default_view_format(&self) -> wgpu::TextureFormat {
+        match self.mode {
+            RenderingMode::Gpu => wgpu::TextureFormat::Rgba8UnormSrgb,
+            RenderingMode::CpuOptimzied => wgpu::TextureFormat::Rgba8Unorm,
+            RenderingMode::WebGl => wgpu::TextureFormat::Rgba8UnormSrgb,
+        }
+    }
+
     fn check_wgpu_ctx(device: &wgpu::Device, features: wgpu::Features) {
         let expected_features = features | required_wgpu_features();
 
@@ -81,7 +101,8 @@ impl WgpuCtx {
         let uniform_bgl = uniform_bind_group_layout(&device);
 
         let plane = Plane::new(&device);
-        let empty_rgba_texture = RgbaMultiViewTexture::empty(&device, mode);
+        let empty_rgba_linear_texture = RgbaLinearTexture::empty(&device);
+        let empty_rgba_srgb_texture = RgbaSrgbTexture::empty(&device);
 
         scope.pop(&device)?;
 
@@ -98,7 +119,8 @@ impl WgpuCtx {
             utils,
             uniform_bgl,
             plane,
-            empty_rgba_texture,
+            empty_rgba_linear_texture,
+            empty_rgba_srgb_texture,
         })
     }
 }

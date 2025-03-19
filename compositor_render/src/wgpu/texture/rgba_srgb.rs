@@ -16,6 +16,16 @@ impl RgbaSrgbTexture {
         Self::new_texture(&ctx.device, resolution)
     }
 
+    pub fn empty(device: &wgpu::Device) -> Self {
+        Self::new_texture(
+            device,
+            Resolution {
+                width: 1,
+                height: 1,
+            },
+        )
+    }
+
     fn new_texture(device: &wgpu::Device, resolution: Resolution) -> Self {
         let size = wgpu::Extent3d {
             width: resolution.width as u32,
