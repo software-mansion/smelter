@@ -1,8 +1,4 @@
-use crate::wgpu::{
-    common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE},
-    ctx::RenderingMode,
-    texture::{InterleavedYuv422Texture, RgbaMultiViewTexture},
-};
+use crate::wgpu::common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE};
 
 use super::WgpuCtx;
 
@@ -15,21 +11,11 @@ pub struct InterleavedYuv422ToRgbaConverter {
 impl InterleavedYuv422ToRgbaConverter {
     pub fn new(
         device: &wgpu::Device,
-        mode: RenderingMode,
         yuv_textures_bind_group_layout: &wgpu::BindGroupLayout,
+        dst_view_format: wgpu::TextureFormat,
     ) -> Self {
-        let (shader_module, dest_view_format) = match mode {
-            RenderingMode::Gpu | RenderingMode::CpuOptimzied => (
-                device.create_shader_module(wgpu::include_wgsl!("interleaved_yuv_to_rgba.wgsl")),
-                wgpu::TextureFormat::Rgba8Unorm,
-            ),
-            RenderingMode::WebGl => (
-                device.create_shader_module(wgpu::include_wgsl!(
-                    "interleaved_yuv_to_rgba_for_webgl.wgsl"
-                )),
-                wgpu::TextureFormat::Rgba8UnormSrgb,
-            ),
-        };
+        let shader_module =
+            device.create_shader_module(wgpu::include_wgsl!("interleaved_yuv_to_rgba.wgsl"));
         let sampler = Sampler::new(device);
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -54,7 +40,7 @@ impl InterleavedYuv422ToRgbaConverter {
                 module: &shader_module,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: dest_view_format,
+                    format: dst_view_format,
                     write_mask: wgpu::ColorWrites::all(),
                     blend: None,
                 })],
@@ -74,12 +60,7 @@ impl InterleavedYuv422ToRgbaConverter {
         Self { pipeline, sampler }
     }
 
-    pub fn convert(
-        &self,
-        ctx: &WgpuCtx,
-        src: (&InterleavedYuv422Texture, &wgpu::BindGroup),
-        dst: &RgbaMultiViewTexture,
-    ) {
+    pub fn convert(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst_view: &wgpu::TextureView) {
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -87,9 +68,6 @@ impl InterleavedYuv422ToRgbaConverter {
             });
 
         {
-            // fallback to default view should only happen for WebGL
-            let dest_view = dst.raw_view().unwrap_or(dst.default_view());
-
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Interleaved YUV 4:2:2 to RGBA color converter render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -97,7 +75,7 @@ impl InterleavedYuv422ToRgbaConverter {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
-                    view: dest_view,
+                    view: dst_view,
                     resolve_target: None,
                 })],
                 depth_stencil_attachment: None,
@@ -106,7 +84,7 @@ impl InterleavedYuv422ToRgbaConverter {
             });
 
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, src.1, &[]);
+            render_pass.set_bind_group(0, src_bg, &[]);
             render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
 
             ctx.plane.draw(&mut render_pass);

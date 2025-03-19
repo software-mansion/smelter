@@ -38,14 +38,10 @@ impl InterleavedYuv422Texture {
         }
     }
 
-    pub(super) fn new_bind_group(
-        &self,
-        ctx: &WgpuCtx,
-        layout: &wgpu::BindGroupLayout,
-    ) -> wgpu::BindGroup {
+    pub fn new_bind_group(&self, ctx: &WgpuCtx) -> wgpu::BindGroup {
         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Interleaved YUV 4:2:2 texture bind group"),
-            layout,
+            layout: &ctx.format.single_texture_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::TextureView(&self.view),

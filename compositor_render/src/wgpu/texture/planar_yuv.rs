@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use bytes::Bytes;
+use tracing::warn;
 use wgpu::Buffer;
 
 use crate::{wgpu::WgpuCtx, FrameData, Resolution, YuvPlanes};
@@ -116,14 +117,10 @@ impl PlanarYuvTextures {
         })
     }
 
-    pub fn new_bind_group(
-        &self,
-        ctx: &WgpuCtx,
-        layout: &wgpu::BindGroupLayout,
-    ) -> wgpu::BindGroup {
+    pub fn new_bind_group(&self, ctx: &WgpuCtx) -> wgpu::BindGroup {
         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Planar YUV 4:2:0 all textures bind group"),
-            layout,
+            layout: &ctx.format.planar_yuv_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,

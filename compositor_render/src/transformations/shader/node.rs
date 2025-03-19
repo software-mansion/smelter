@@ -2,12 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use wgpu::util::DeviceExt;
 
-use crate::{
-    scene::ShaderParam,
-    state::RenderCtx,
-    wgpu::{texture::NodeTexture, WgpuCtx},
-    Resolution,
-};
+use crate::{scene::ShaderParam, state::{node_texture::NodeTexture, RenderCtx}, wgpu::WgpuCtx, Resolution};
 
 use super::Shader;
 

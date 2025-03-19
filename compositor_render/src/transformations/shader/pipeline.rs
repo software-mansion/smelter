@@ -64,9 +64,11 @@ impl ShaderPipeline {
                     }],
                 });
         let pipeline = common_pipeline::create_render_pipeline(
+            "Shader node",
             &wgpu_ctx.device,
             &pipeline_layout,
             &shader_module,
+            wgpu_ctx.default_view_format(),
         );
 
         scope.pop(&wgpu_ctx.device)?;

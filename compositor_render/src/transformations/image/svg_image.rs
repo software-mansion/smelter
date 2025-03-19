@@ -8,10 +8,8 @@ use resvg::{
 };
 
 use crate::{
-    wgpu::{
-        texture::{NodeTexture, RgbaMultiViewTexture},
-        RenderingMode, WgpuCtx,
-    },
+    state::node_texture::{NodeTexture, NodeTextureState},
+    wgpu::{texture::RgbaMultiViewTexture, RenderingMode, WgpuCtx},
     Resolution,
 };
 
@@ -26,6 +24,11 @@ pub struct SvgAsset {
     tree: resvg::Tree,
     maybe_resolution: Option<Resolution>,
 }
+
+// TODO: tmp figure out something else
+// It should work because all those RC inside are internal
+unsafe impl Send for SvgAsset {}
+unsafe impl Sync for SvgAsset {}
 
 impl fmt::Debug for SvgAsset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -74,12 +77,19 @@ impl SvgAsset {
 
         let target_texture_state = target.ensure_size(ctx, resolution);
 
-        state.renderer.render(
-            ctx,
-            &self.tree,
-            target_texture_state.rgba_texture(),
-            resolution,
-        );
+        match target_texture_state {
+            NodeTextureState::Gpu { texture, .. } => {
+                state.renderer.render(ctx, &self.tree, texture, resolution);
+            }
+            NodeTextureState::CpuOptimized {
+                texture,
+                linear_bind_group,
+            } => todo!(),
+            NodeTextureState::WebGl {
+                texture,
+                srgb_bind_group,
+            } => todo!(),
+        };
 
         state.was_rendered = true;
     }
@@ -133,31 +143,18 @@ impl Renderer {
 
 struct GpuRenderer {
     original_texture: RgbaMultiViewTexture,
-    original_texture_bg: wgpu::BindGroup,
+    original_texture_linear_bg: wgpu::BindGroup,
     non_premultiplied_texture: RgbaMultiViewTexture,
-    non_premultiplied_texture_bg: wgpu::BindGroup,
+    non_premultiplied_texture_srgb_bg: wgpu::BindGroup,
 }
 
 impl GpuRenderer {
     fn new(ctx: &WgpuCtx) -> Self {
-        let original_texture = RgbaMultiViewTexture::new(
-            ctx,
-            Resolution {
-                width: 1,
-                height: 1,
-            },
-        );
-        let non_premultiplied_texture = RgbaMultiViewTexture::new(
-            ctx,
-            Resolution {
-                width: 1,
-                height: 1,
-            },
-        );
+        let original_texture = RgbaMultiViewTexture::new(ctx, Resolution::ONE_PIXEL);
+        let non_premultiplied_texture = RgbaMultiViewTexture::new(ctx, Resolution::ONE_PIXEL);
         Self {
-            original_texture_bg: original_texture.new_raw_bind_group(ctx, ctx.format.rgba_layout()),
-            non_premultiplied_texture_bg: non_premultiplied_texture
-                .new_bind_group(ctx, ctx.format.rgba_layout()),
+            original_texture_linear_bg: original_texture.new_linear_bind_group(ctx),
+            non_premultiplied_texture_srgb_bg: non_premultiplied_texture.new_srgb_bind_group(ctx),
 
             original_texture,
             non_premultiplied_texture,
@@ -177,17 +174,15 @@ impl GpuRenderer {
         // interpret source and destination as non-srgb when removing pre-multiplication
         ctx.utils.linear_rgba_remove_premult_alpha.render(
             ctx,
-            &self.original_texture_bg,
-            self.non_premultiplied_texture
-                .raw_view()
-                .unwrap_or(self.non_premultiplied_texture.default_view()),
+            &self.original_texture_linear_bg,
+            self.non_premultiplied_texture.linear_view(),
         );
 
         // interpret source and destination as srgb when adding pre-multiplication
         ctx.utils.srgb_rgba_add_premult_alpha.render(
             ctx,
-            &self.non_premultiplied_texture_bg,
-            target.default_view(),
+            &self.non_premultiplied_texture_srgb_bg,
+            target.srgb_view(),
         );
     }
 

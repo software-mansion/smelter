@@ -122,6 +122,16 @@ pub struct Resolution {
 }
 
 impl Resolution {
+    pub const ONE_PIXEL: Self = Resolution {
+        width: 1,
+        height: 1,
+    };
+
+    pub const ZERO: Self = Resolution {
+        width: 0,
+        height: 0,
+    };
+
     pub fn ratio(&self) -> f32 {
         self.width as f32 / self.height as f32
     }

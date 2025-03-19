@@ -2,10 +2,12 @@ use std::sync::Arc;
 
 use wgpu::ShaderStages;
 
-use crate::wgpu::{
-    common_pipeline::{self, CreateShaderError, Sampler},
-    texture::NodeTextureState,
-    WgpuCtx, WgpuErrorScope,
+use crate::{
+    state::node_texture::NodeTextureState,
+    wgpu::{
+        common_pipeline::{self, CreateShaderError, Sampler},
+        WgpuCtx, WgpuErrorScope,
+    },
 };
 
 use super::embedder::RenderInfo;
@@ -13,7 +15,6 @@ use super::embedder::RenderInfo;
 #[derive(Debug)]
 pub(super) struct WebRendererShader {
     pipeline: wgpu::RenderPipeline,
-    texture_bgl: wgpu::BindGroupLayout,
     sampler: Sampler,
 }
 
@@ -23,16 +24,18 @@ impl WebRendererShader {
 
         let shader_module = wgpu_ctx
             .device
-            .create_shader_module(wgpu::include_wgsl!("../web_renderer/render_website.wgsl"));
+            .create_shader_module(wgpu::include_wgsl!("./render_website.wgsl"));
         let sampler = Sampler::new(&wgpu_ctx.device);
-        let texture_bgl = common_pipeline::create_single_texture_bgl(&wgpu_ctx.device);
 
         let pipeline_layout =
             wgpu_ctx
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Web renderer pipeline layout"),
-                    bind_group_layouts: &[&texture_bgl, &sampler.bind_group_layout],
+                    bind_group_layouts: &[
+                        &wgpu_ctx.format.single_texture_layout,
+                        &sampler.bind_group_layout,
+                    ],
                     push_constant_ranges: &[wgpu::PushConstantRange {
                         stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
                         range: 0..RenderInfo::size(),
@@ -40,18 +43,16 @@ impl WebRendererShader {
                 });
 
         let pipeline = common_pipeline::create_render_pipeline(
+            "Web renderer node",
             &wgpu_ctx.device,
             &pipeline_layout,
             &shader_module,
+            wgpu_ctx.default_view_format(),
         );
 
         scope.pop(&wgpu_ctx.device)?;
 
-        Ok(Self {
-            pipeline,
-            texture_bgl,
-            sampler,
-        })
+        Ok(Self { pipeline, sampler })
     }
 
     pub(super) fn render(
@@ -70,15 +71,14 @@ impl WebRendererShader {
                     false => wgpu::LoadOp::Load,
                 };
 
-                let texture_view =
-                    texture_view.unwrap_or(&wgpu_ctx.empty_rgba_texture.default_view());
+                let texture_view = texture_view.unwrap_or(&wgpu_ctx.default_empty_view());
 
                 let input_texture_bg =
                     wgpu_ctx
                         .device
                         .create_bind_group(&wgpu::BindGroupDescriptor {
                             label: Some("Web renderer input textures bgl"),
-                            layout: &self.texture_bgl,
+                            layout: &wgpu_ctx.format.single_texture_layout,
                             entries: &[wgpu::BindGroupEntry {
                                 binding: 0,
                                 resource: wgpu::BindingResource::TextureView(texture_view),
@@ -92,7 +92,7 @@ impl WebRendererShader {
                             load,
                             store: wgpu::StoreOp::Store,
                         },
-                        view: &target.rgba_texture().default_view(),
+                        view: &target.view(),
                         resolve_target: None,
                     })],
                     depth_stencil_attachment: None,

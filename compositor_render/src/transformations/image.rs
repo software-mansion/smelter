@@ -11,11 +11,8 @@ use image::{codecs::gif::GifDecoder, AnimationDecoder, ImageFormat};
 use resvg::usvg;
 
 use crate::{
-    state::{RegisterCtx, RenderCtx},
-    wgpu::{
-        texture::{NodeTexture, RgbaMultiViewTexture},
-        WgpuCtx,
-    },
+    state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
+    wgpu::{texture::RgbaMultiViewTexture, WgpuCtx},
     Resolution,
 };
 
@@ -322,7 +319,11 @@ impl AnimatedAsset {
     }
 }
 
-fn copy_texture_to_node_texture(ctx: &WgpuCtx, source: &RgbaMultiViewTexture, target: &mut NodeTexture) {
+fn copy_texture_to_node_texture(
+    ctx: &WgpuCtx,
+    source: &RgbaMultiViewTexture,
+    target: &mut NodeTexture,
+) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -349,7 +350,7 @@ fn copy_texture_to_node_texture(ctx: &WgpuCtx, source: &RgbaMultiViewTexture, ta
             aspect: wgpu::TextureAspect::All,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
-            texture: target.rgba_texture().texture(),
+            texture: target.texture(),
         },
         size,
     );

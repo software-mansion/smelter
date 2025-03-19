@@ -1,6 +1,7 @@
+use crate::state::node_texture::NodeTexture;
 use crate::state::RegisterCtx;
 use crate::transformations::web_renderer::chromium_sender::ChromiumSender;
-use crate::wgpu::texture::NodeTexture;
+use crate::wgpu::texture::TextureExt;
 use crate::wgpu::WgpuCtx;
 use bytes::Bytes;
 use crossbeam_channel::bounded;
@@ -66,7 +67,7 @@ impl EmbeddingHelper {
             let Some(texture_state) = texture.state() else {
                 continue;
             };
-            let size = texture_state.rgba_texture().size();
+            let size = texture_state.texture().size();
             pending_downloads.push(self.copy_buffer_to_shmem(source_idx, size, buffer.clone()));
         }
 
@@ -95,9 +96,7 @@ impl EmbeddingHelper {
             let Some(texture_state) = texture.state() else {
                 continue;
             };
-            texture_state
-                .rgba_texture()
-                .copy_to_buffer(&mut encoder, buffer);
+            texture_state.texture().copy_to_buffer(&mut encoder, buffer);
         }
         self.wgpu_ctx.queue.submit(Some(encoder.finish()));
 

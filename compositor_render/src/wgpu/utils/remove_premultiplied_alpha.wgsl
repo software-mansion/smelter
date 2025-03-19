@@ -29,7 +29,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(
         clamp(color.r/a, 0.0, 1.0),
         clamp(color.g/a, 0.0, 1.0),
-        clamp(color.b/a, 0.0, 1.0)
+        clamp(color.b/a, 0.0, 1.0),
         clamp(color.a, 0.0, 1.0)
     );
 }

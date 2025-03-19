@@ -1,7 +1,4 @@
-use crate::{
-    wgpu::{common_pipeline, WgpuCtx},
-    Resolution,
-};
+use crate::{wgpu::WgpuCtx, Resolution};
 
 use super::base::{new_texture, TextureExt};
 
@@ -53,14 +50,10 @@ impl RgbaLinearTexture {
         Self { texture, view }
     }
 
-    pub fn new_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        common_pipeline::create_single_texture_bgl(device)
-    }
-
-    pub fn new_bind_group(&self, ctx: &WgpuCtx, layout: &wgpu::BindGroupLayout) -> wgpu::BindGroup {
+    pub fn new_bind_group(&self, ctx: &WgpuCtx) -> wgpu::BindGroup {
         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("texture bind group"),
-            layout,
+            layout: &ctx.format.single_texture_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::TextureView(&self.view),

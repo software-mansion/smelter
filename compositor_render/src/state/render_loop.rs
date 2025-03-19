@@ -5,11 +5,11 @@ use tracing::error;
 use crate::{
     scene::RGBColor,
     state::{node::RenderNode, render_graph::RenderGraph, RenderCtx},
-    wgpu::texture::{InputTexture, PlanarYuvPendingDownload, RgbaMultiViewTexture, TextureExt},
+    wgpu::texture::{PlanarYuvPendingDownload, RgbaMultiViewTexture, TextureExt},
     Frame, FrameData, FrameSet, InputId, OutputFrameFormat, OutputId, Resolution,
 };
 
-use super::node_texture::NodeTexture;
+use super::{input_texture::InputTexture, node_texture::NodeTexture};
 
 pub(super) fn populate_inputs(
     ctx: &RenderCtx,
@@ -62,8 +62,8 @@ pub(super) fn read_outputs(
             Some(node) => match output.output_format {
                 OutputFrameFormat::PlanarYuv420Bytes => {
                     ctx.wgpu_ctx.format.rgba_to_yuv.convert(
-                        &ctx,
-                        node,
+                        &ctx.wgpu_ctx,
+                        node.output_texture_bind_group(),
                         output.output_texture.yuv_textures(),
                     );
                     let pending_download = output.output_texture.start_download(ctx.wgpu_ctx);
@@ -74,10 +74,7 @@ pub(super) fn read_outputs(
                     });
                 }
                 OutputFrameFormat::RgbaWgpuTexture => {
-                    let texture = node
-                        .rgba_texture()
-                        .texture()
-                        .copy_wgpu_texture(ctx.wgpu_ctx);
+                    let texture = node.texture().copy_wgpu_texture(ctx.wgpu_ctx);
                     let size = texture.size();
                     let frame = Frame {
                         data: FrameData::Rgba8UnormWgpuTexture(texture.into()),

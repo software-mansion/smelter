@@ -8,14 +8,11 @@ use bytes::Bytes;
 use log::info;
 
 use crate::{
-    state::{RegisterCtx, RenderCtx},
+    state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
     transformations::web_renderer::{
         browser_client::BrowserClient, chromium_sender::ChromiumSender,
     },
-    wgpu::{
-        common_pipeline::CreateShaderError,
-        texture::{BGRATexture, NodeTexture},
-    },
+    wgpu::{common_pipeline::CreateShaderError, texture::BGRATexture},
     RendererId, Resolution,
 };
 
@@ -105,7 +102,7 @@ impl WebRenderer {
             .zip(self.source_transforms.lock().unwrap().iter())
             .map(|(node_texture, transform)| {
                 (
-                    node_texture.texture().as_ref().map(|t| t.default_view()),
+                    node_texture.state().map(|t| t.view()),
                     RenderInfo::source_transform(transform),
                 )
             })

@@ -5,7 +5,7 @@ use crossbeam_channel::bounded;
 use log::error;
 use wgpu::{Buffer, BufferAsyncError, MapMode};
 
-use crate::{state::node_texture::NodeTexture, Frame, FrameData, Resolution, YuvPlanes};
+use crate::Resolution;
 
 use self::utils::pad_to_256;
 
@@ -28,9 +28,10 @@ pub type RgbaSrgbTexture = rgba_srgb::RgbaSrgbTexture;
 pub type PlanarYuvTextures = planar_yuv::PlanarYuvTextures;
 pub type PlanarYuvVariant = planar_yuv::YuvVariant;
 pub type InterleavedYuv422Texture = interleaved_yuv422::InterleavedYuv422Texture;
-pub type NV12TextureView<'a> = nv12::NV12TextureView<'a>;
+pub type NV12Texture = nv12::NV12Texture;
 
 pub use base::TextureExt;
+pub use nv12::NV12TextureViewCreateError;
 pub use planar_yuv::YuvPendingDownload as PlanarYuvPendingDownload;
 
 pub struct OutputTexture {

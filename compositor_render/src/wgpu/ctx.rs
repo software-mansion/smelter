@@ -5,7 +5,7 @@ use log::{error, info};
 use super::{
     common_pipeline::plane::Plane,
     format::TextureFormat,
-    texture::{RgbaLinearTexture, RgbaMultiViewTexture, RgbaSrgbTexture},
+    texture::{RgbaLinearTexture, RgbaSrgbTexture},
     utils::TextureUtils,
     CreateWgpuCtxError, WgpuErrorScope,
 };
@@ -95,7 +95,7 @@ impl WgpuCtx {
 
         let scope = WgpuErrorScope::push(&device);
 
-        let format = TextureFormat::new(&device, mode);
+        let format = TextureFormat::new(&device);
         let utils = TextureUtils::new(&device, &format);
 
         let uniform_bgl = uniform_bind_group_layout(&device);

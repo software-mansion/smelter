@@ -1,8 +1,4 @@
-use crate::wgpu::{
-    common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE},
-    ctx::RenderingMode,
-    texture::{NV12TextureView, RgbaMultiViewTexture},
-};
+use crate::wgpu::common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE};
 
 use super::WgpuCtx;
 
@@ -15,19 +11,10 @@ pub struct Nv12ToRgbaConverter {
 impl Nv12ToRgbaConverter {
     pub fn new(
         device: &wgpu::Device,
-        mode: RenderingMode,
         nv12_texture_bind_group_layout: &wgpu::BindGroupLayout,
+        dst_view_format: wgpu::TextureFormat,
     ) -> Self {
-        let (shader_module, dest_view_format) = match mode {
-            RenderingMode::Gpu | RenderingMode::CpuOptimzied => (
-                device.create_shader_module(wgpu::include_wgsl!("nv12_to_rgba.wgsl")),
-                wgpu::TextureFormat::Rgba8Unorm,
-            ),
-            RenderingMode::WebGl => (
-                device.create_shader_module(wgpu::include_wgsl!("nv12_to_rgba_for_webgl.wgsl")),
-                wgpu::TextureFormat::Rgba8UnormSrgb,
-            ),
-        };
+        let shader_module = device.create_shader_module(wgpu::include_wgsl!("nv12_to_rgba.wgsl"));
         let sampler = Sampler::new(device);
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -52,7 +39,7 @@ impl Nv12ToRgbaConverter {
                 module: &shader_module,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: dest_view_format,
+                    format: dst_view_format,
                     write_mask: wgpu::ColorWrites::all(),
                     blend: None,
                 })],

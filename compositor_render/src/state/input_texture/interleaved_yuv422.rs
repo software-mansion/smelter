@@ -2,28 +2,25 @@ use tracing::error;
 
 use crate::{
     state::node_texture::NodeTextureState,
-    wgpu::{
-        texture::{PlanarYuvTextures, PlanarYuvVariant},
-        RenderingMode, WgpuCtx,
-    },
-    Resolution, YuvPlanes,
+    wgpu::{texture::InterleavedYuv422Texture, RenderingMode, WgpuCtx},
+    Resolution,
 };
 
 use super::rgb_to_srgb::RgbToSrgbConverter;
 
-pub(super) struct PlanarYuv420Input {
-    upload_textures: PlanarYuvTextures,
+pub(super) struct InterleavedYuv422Input {
+    upload_textures: InterleavedYuv422Texture,
     yuv_bind_group: wgpu::BindGroup,
     color_space_converter: Option<RgbToSrgbConverter>,
 }
 
-impl PlanarYuv420Input {
+impl InterleavedYuv422Input {
     pub fn new(ctx: &WgpuCtx) -> Self {
-        let upload_textures = PlanarYuvTextures::new(
+        let upload_textures = InterleavedYuv422Texture::new(
             ctx,
             Resolution {
-                width: 2,
-                height: 2,
+                width: 1,
+                height: 1,
             },
         );
         let yuv_bind_group = upload_textures.new_bind_group(ctx);
@@ -39,32 +36,24 @@ impl PlanarYuv420Input {
         self.upload_textures.resolution
     }
 
-    pub fn upload(
-        &mut self,
-        ctx: &WgpuCtx,
-        planes: YuvPlanes,
-        variant: PlanarYuvVariant,
-        resolution: Resolution,
-    ) {
+    pub fn upload(&mut self, ctx: &WgpuCtx, data: &[u8], resolution: Resolution) {
         self.maybe_recreate(ctx, resolution);
-        self.upload_textures.upload(ctx, &planes, variant);
+        self.upload_textures.upload(ctx, data);
     }
 
     pub fn convert(&self, ctx: &WgpuCtx, dest: &NodeTextureState) {
         match dest {
             NodeTextureState::Gpu { texture, .. } => {
                 // write to sRGB texture as if it was linear
-                ctx.format.planar_yuv_to_rgba_linear.convert(
+                ctx.format.interleaved_yuv_to_rgba_linear.convert(
                     ctx,
-                    self.upload_textures.variant(),
                     &self.yuv_bind_group,
                     texture.linear_view(),
                 );
             }
             NodeTextureState::CpuOptimized { texture, .. } => {
-                ctx.format.planar_yuv_to_rgba_linear.convert(
+                ctx.format.interleaved_yuv_to_rgba_linear.convert(
                     ctx,
-                    self.upload_textures.variant(),
                     &self.yuv_bind_group,
                     texture.view(),
                 );
@@ -74,12 +63,12 @@ impl PlanarYuv420Input {
                     error!("Missing color space converter");
                     return;
                 };
-                ctx.format.planar_yuv_to_rgba_linear.convert(
+                ctx.format.interleaved_yuv_to_rgba_linear.convert(
                     ctx,
-                    self.upload_textures.variant(),
                     &self.yuv_bind_group,
                     color_space_converter.texture.view(),
                 );
+                // copy from rgb texture to srgb texture
                 color_space_converter.convert(ctx, texture.texture());
             }
         }
@@ -89,7 +78,7 @@ impl PlanarYuv420Input {
         if resolution == self.upload_textures.resolution {
             return;
         }
-        self.upload_textures = PlanarYuvTextures::new(ctx, resolution);
+        self.upload_textures = InterleavedYuv422Texture::new(ctx, resolution);
         self.yuv_bind_group = self.upload_textures.new_bind_group(ctx);
         if ctx.mode == RenderingMode::WebGl {
             self.color_space_converter = Some(RgbToSrgbConverter::new(ctx, resolution))

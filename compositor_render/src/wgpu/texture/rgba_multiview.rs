@@ -75,18 +75,10 @@ impl RgbaMultiViewTexture {
         }
     }
 
-    pub fn new_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        common_pipeline::create_single_texture_bgl(device)
-    }
-
-    pub fn new_srgb_bind_group(
-        &self,
-        ctx: &WgpuCtx,
-        layout: &wgpu::BindGroupLayout,
-    ) -> wgpu::BindGroup {
+    pub fn new_srgb_bind_group(&self, ctx: &WgpuCtx) -> wgpu::BindGroup {
         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("texture bind group"),
-            layout,
+            layout: &ctx.format.single_texture_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::TextureView(&self.srgb_view),
@@ -94,14 +86,10 @@ impl RgbaMultiViewTexture {
         })
     }
 
-    pub fn new_linear_bind_group(
-        &self,
-        ctx: &WgpuCtx,
-        layout: &wgpu::BindGroupLayout,
-    ) -> wgpu::BindGroup {
+    pub fn new_linear_bind_group(&self, ctx: &WgpuCtx) -> wgpu::BindGroup {
         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("texture bind group"),
-            layout,
+            layout: &ctx.format.single_texture_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::TextureView(&self.linear_view),
@@ -138,6 +126,6 @@ impl RgbaMultiViewTexture {
     }
 
     pub fn srgb_view(&self) -> &wgpu::TextureView {
-        &self.linear_view
+        &self.srgb_view
     }
 }

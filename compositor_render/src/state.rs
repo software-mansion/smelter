@@ -30,12 +30,12 @@ use self::{
     renderers::Renderers,
 };
 
+pub mod input_texture;
 pub mod node;
+pub mod node_texture;
 pub mod render_graph;
 mod render_loop;
 pub mod renderers;
-pub mod node_texture;
-pub mod input_texture;
 
 pub struct RendererOptions {
     pub web_renderer: web_renderer::WebRendererInitOptions,

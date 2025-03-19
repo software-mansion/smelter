@@ -15,8 +15,9 @@ use crate::transformations::web_renderer::WebRenderer;
 use crate::transformations::{
     image::ImageNode, text_renderer::TextRendererNode, web_renderer::node::WebRendererNode,
 };
-use crate::wgpu::texture::{InputTexture, NodeTexture};
 
+use super::input_texture::InputTexture;
+use super::node_texture::NodeTexture;
 use super::RenderCtx;
 
 pub(super) enum InnerRenderNode {

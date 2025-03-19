@@ -74,27 +74,26 @@ pub enum NodeTextureState {
 
 impl NodeTextureState {
     fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
-        let bgl = &ctx.format.single_texture_layout;
         match ctx.mode {
             RenderingMode::Gpu => {
                 let texture = RgbaMultiViewTexture::new(ctx, resolution);
                 NodeTextureState::Gpu {
-                    linear_bind_group: texture.new_linear_bind_group(ctx, bgl),
-                    srgb_bind_group: texture.new_linear_bind_group(ctx, bgl),
+                    linear_bind_group: texture.new_linear_bind_group(ctx),
+                    srgb_bind_group: texture.new_srgb_bind_group(ctx),
                     texture,
                 }
             }
             RenderingMode::CpuOptimzied => {
                 let texture = RgbaLinearTexture::new(ctx, resolution);
                 NodeTextureState::CpuOptimized {
-                    linear_bind_group: texture.new_bind_group(ctx, bgl),
+                    linear_bind_group: texture.new_bind_group(ctx),
                     texture,
                 }
             }
             RenderingMode::WebGl => {
                 let texture = RgbaSrgbTexture::new(ctx, resolution);
                 NodeTextureState::WebGl {
-                    srgb_bind_group: texture.new_bind_group(ctx, bgl),
+                    srgb_bind_group: texture.new_bind_group(ctx),
                     texture,
                 }
             }
@@ -139,11 +138,23 @@ impl NodeTextureState {
         }
     }
 
-    pub fn resolution(&self) -> Resolution {
+    pub fn texture(&self) -> &wgpu::Texture {
         match &self {
-            NodeTextureState::Gpu { texture, .. } => texture.size().into(),
-            NodeTextureState::CpuOptimized { texture, .. } => texture.size().into(),
-            NodeTextureState::WebGl { texture, .. } => texture.size().into(),
+            NodeTextureState::Gpu { texture, .. } => texture.texture(),
+            NodeTextureState::CpuOptimized { texture, .. } => texture.texture(),
+            NodeTextureState::WebGl { texture, .. } => texture.texture(),
+        }
+    }
+
+    pub fn resolution(&self) -> Resolution {
+        self.texture().size().into()
+    }
+
+    pub fn upload(&self, ctx: &WgpuCtx, data: &[u8]) {
+        match self {
+            NodeTextureState::Gpu { texture, .. } => texture.upload(ctx, data),
+            NodeTextureState::CpuOptimized { texture, .. } => texture.upload(ctx, data),
+            NodeTextureState::WebGl { texture, .. } => texture.upload(ctx, data),
         }
     }
 }

@@ -1,3 +1,5 @@
+use tracing::warn;
+
 use crate::wgpu::WgpuCtx;
 
 use super::utils::pad_to_256;
