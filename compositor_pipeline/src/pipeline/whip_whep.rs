@@ -14,10 +14,7 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
-use tokio::sync::{
-    mpsc,
-    oneshot::{self, Sender},
-};
+use tokio::sync::oneshot::{self, Sender};
 use tower_http::cors::CorsLayer;
 use tracing::error;
 use webrtc::{
@@ -35,12 +32,7 @@ pub mod error;
 mod init_peer_connection;
 mod whip_handlers;
 
-use crate::queue::PipelineEvent;
-
-use super::{
-    input::whip::{depayloader::Depayloader, DecoderChannels},
-    EncodedChunk, PipelineCtx,
-};
+use super::{input::whip::DecodedDataSender, PipelineCtx};
 
 pub async fn run_whip_whep_server(
     port: u16,
@@ -87,14 +79,11 @@ async fn shutdown_signal(receiver: oneshot::Receiver<()>) {
 
 #[derive(Debug, Clone)]
 pub struct WhipInputConnectionOptions {
-    pub video_sender: mpsc::Sender<PipelineEvent<EncodedChunk>>,
-    pub audio_sender: mpsc::Sender<PipelineEvent<EncodedChunk>>,
     pub bearer_token: Option<String>,
     pub peer_connection: Option<Arc<RTCPeerConnection>>,
     pub start_time_vid: Option<Instant>,
     pub start_time_aud: Option<Instant>,
-    pub decoder_channels: DecoderChannels,
-    pub depayloader: Arc<Mutex<Depayloader>>,
+    pub decoded_data_sender: DecodedDataSender,
 }
 
 impl WhipInputConnectionOptions {

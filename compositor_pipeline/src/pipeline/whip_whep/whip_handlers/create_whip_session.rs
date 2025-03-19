@@ -1,5 +1,5 @@
 use crate::pipeline::{
-    input::whip::process_track_stream,
+    input::whip::{process_track_stream, start_decoders::start_decoders_threads},
     whip_whep::{bearer_token::validate_token, error::WhipServerError, init_peer_connection},
     PipelineCtx,
 };
@@ -10,14 +10,13 @@ use axum::{
 };
 use compositor_render::InputId;
 use init_peer_connection::init_peer_connection;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::{sync::watch, time::timeout};
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 use urlencoding::encode;
 use webrtc::{
     ice_transport::ice_gatherer_state::RTCIceGathererState,
     peer_connection::{sdp::session_description::RTCSessionDescription, RTCPeerConnection},
-    rtp_transceiver::rtp_codec::RTPCodecType,
 };
 
 pub async fn handle_create_whip_session(
@@ -30,7 +29,7 @@ pub async fn handle_create_whip_session(
 
     validate_sdp_content_type(&headers)?;
 
-    info!("SDP offer: {}", offer);
+    trace!("SDP offer: {}", offer);
 
     let input_components = state
         .whip_whep_state
@@ -59,9 +58,13 @@ pub async fn handle_create_whip_session(
         Box::pin(async {})
     }));
 
-    let description = RTCSessionDescription::offer(offer)?;
+    let description = RTCSessionDescription::offer(offer.clone())?;
 
     peer_connection.set_remote_description(description).await?;
+
+    let (video_decoder_map, audio_decoder_map) =
+        start_decoders_threads(state.clone(), input_id.clone()).await?;
+
     let answer = peer_connection.create_answer(None).await?;
     peer_connection.set_local_description(answer).await?;
     gather_ice_candidates_for_one_second(peer_connection.clone()).await;
@@ -71,53 +74,26 @@ pub async fn handle_create_whip_session(
             "Local description is not set, cannot read it".to_string(),
         ));
     };
-    info!("Sending SDP answer: {sdp:?}");
-
-    let mut codec_map = HashMap::new();
-
-    let transceivers = peer_connection.get_transceivers().await;
-
-    for transceiver in transceivers {
-        let receiver = transceiver.receiver().await;
-        let codecs = receiver.get_parameters().await.codecs;
-
-        println!("Payload Type -> Codec Mapping:");
-        for codec in codecs {
-            codec_map.insert(codec.payload_type, codec.capability.mime_type);
-            // println!("{} -> {}", codec.payload_type, codec.capability.mime_type);
-        }
-    }
-
-    println!("{:?}", codec_map);
+    trace!("Sending SDP answer: {sdp:?}");
 
     peer_connection.on_track(Box::new(move |track, _, _| {
-        let track_kind = track.kind();
         let state_clone = state.clone();
         let input_id_clone = input_id.clone();
-        let codec_map_clone = codec_map.clone();
-        let sender = match track_kind {
-            RTPCodecType::Video => Some(input_components.video_sender.clone()),
-            RTPCodecType::Audio => Some(input_components.audio_sender.clone()),
-            _ => {
-                debug!("RTPCodecType not supported!");
-                None
-            }
-        };
+        let video_decoder_map_clone = video_decoder_map.clone();
+        let audio_decoder_map_clone = audio_decoder_map.clone();
 
         //tokio::spawn is necessary to concurrently process audio and video track
         Box::pin(async {
-            if let Some(sender) = sender {
-                tokio::spawn(async move {
-                    process_track_stream(
-                        track,
-                        state_clone,
-                        input_id_clone,
-                        sender,
-                        Arc::new(codec_map_clone),
-                    )
-                    .await;
-                });
-            }
+            tokio::spawn(async move {
+                process_track_stream(
+                    track,
+                    state_clone,
+                    input_id_clone,
+                    video_decoder_map_clone,
+                    audio_decoder_map_clone,
+                )
+                .await;
+            });
         })
     }));
 

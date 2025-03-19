@@ -34,6 +34,18 @@ fn client_code() -> Result<()> {
     )?;
 
     examples::post(
+        "input/input_2/register",
+        &json!({
+            "type": "rtp_stream",
+            "port": 8008,
+            "audio": {
+                "decoder": "opus",
+                "forward_error_correction": true,
+            }
+        }),
+    )?;
+
+    examples::post(
         "output/output_1/register",
         &json!({
             "type": "rtp_stream",
@@ -71,10 +83,11 @@ fn client_code() -> Result<()> {
                 "encoder": {
                     "type": "opus",
                     "channels": "stereo",
+                    "forward_error_correction": true,
                 },
                 "initial": {
                     "inputs": [
-                        {"input_id": "input_1"}
+                        {"input_id": "input_2"}
                     ]
                 }
             }

@@ -227,6 +227,7 @@ fn setup_audio_video_start_decoder(
                     chunk_receiver,
                     sender,
                     input_id.clone(),
+                    true,
                 )?;
                 Some(receiver)
             }
@@ -262,6 +263,7 @@ fn setup_audio_video_start_decoder(
                     chunk_receiver,
                     sender,
                     input_id.clone(),
+                    true,
                 )?;
                 Some(receiver)
             }

@@ -16,6 +16,7 @@ pub fn start_vulkan_video_decoder_thread(
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
     input_id: InputId,
+    send_eos: bool,
 ) -> Result<(), InputInitError> {
     let Some(vulkan_ctx) = pipeline_ctx.vulkan_ctx.clone() else {
         return Err(InputInitError::VulkanContextRequiredForVulkanDecoder);
@@ -106,7 +107,9 @@ fn run_decoder_thread(
             }
         }
     }
-    if frame_sender.send(PipelineEvent::EOS).is_err() {
-        debug!("Failed to send EOS from H264 decoder. Channel closed.")
+    if send_eos {
+        if frame_sender.send(PipelineEvent::EOS).is_err() {
+            debug!("Failed to send EOS from H264 decoder. Channel closed.")
+        }
     }
 }

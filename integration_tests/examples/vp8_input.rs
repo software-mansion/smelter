@@ -23,16 +23,16 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    examples::post(
-        "input/input_1/register",
-        &json!({
-            "type": "rtp_stream",
-            "port": INPUT_PORT,
-            "video": {
-                "decoder": "ffmpeg_vp8"
-            }
-        }),
-    )?;
+    // examples::post(
+    //     "input/input_1/register",
+    //     &json!({
+    //         "type": "rtp_stream",
+    //         "port": INPUT_PORT,
+    //         "video": {
+    //             "decoder": "ffmpeg_vp8"
+    //         }
+    //     }),
+    // )?;
 
     let token_input_1 = examples::post(
         "input/input_2/register",
@@ -66,13 +66,13 @@ fn client_code() -> Result<()> {
                         "type": "view",
                         "background_color": "#4d4d4dff",
                         "children": [
-                            {
-                                "type": "rescaler",
-                                    "child": {
-                                    "type": "input_stream",
-                                    "input_id": "input_1"
-                                }
-                            },
+                            // {
+                            //     "type": "rescaler",
+                            //         "child": {
+                            //         "type": "input_stream",
+                            //         "input_id": "input_1"
+                            //     }
+                            // },
                             {
                                 "type": "rescaler",
                                 "child": {

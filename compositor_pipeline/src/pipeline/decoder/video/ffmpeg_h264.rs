@@ -25,6 +25,7 @@ pub fn start_ffmpeg_decoder_thread(
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
     input_id: InputId,
+    send_eos: bool,
 ) -> Result<(), InputInitError> {
     let (init_result_sender, init_result_receiver) = crossbeam_channel::bounded(0);
 
@@ -50,6 +51,7 @@ pub fn start_ffmpeg_decoder_thread(
                 init_result_sender,
                 chunks_receiver,
                 frame_sender,
+                send_eos,
             )
         })
         .unwrap();
@@ -72,6 +74,7 @@ fn run_decoder_thread(
     init_result_sender: Sender<Result<(), InputInitError>>,
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
+    send_eos: bool,
 ) {
     let decoder = Context::from_parameters(parameters.clone())
         .map_err(InputInitError::FfmpegError)
@@ -103,7 +106,10 @@ fn run_decoder_thread(
     let mut pts_offset = None;
     for chunk in chunks_receiver {
         let chunk = match chunk {
-            PipelineEvent::Data(chunk) => chunk,
+            PipelineEvent::Data(chunk) => {
+                println!("chunk pts: {:?}", chunk.pts);
+                chunk
+            }
             PipelineEvent::EOS => {
                 break;
             }
@@ -148,8 +154,10 @@ fn run_decoder_thread(
             }
         }
     }
-    if frame_sender.send(PipelineEvent::EOS).is_err() {
-        debug!("Failed to send EOS from H264 decoder. Channel closed.")
+    if send_eos {
+        if frame_sender.send(PipelineEvent::EOS).is_err() {
+            debug!("Failed to send EOS from H264 decoder. Channel closed.")
+        }
     }
 }
 
@@ -180,14 +188,9 @@ fn frame_from_av(
     pts_offset: &mut Option<i64>,
 ) -> Result<Frame, DecoderFrameConversionError> {
     let original_pts = decoded.pts();
-    if let (Some(pts), None) = (decoded.pts(), &pts_offset) {
-        *pts_offset = Some(-pts)
-    }
-    let pts = original_pts
-        .map(|original_pts| original_pts + pts_offset.unwrap_or(0))
-        .ok_or_else(|| {
-            DecoderFrameConversionError::FrameConversionError("missing pts".to_owned())
-        })?;
+    let pts = original_pts.ok_or_else(|| {
+        DecoderFrameConversionError::FrameConversionError("missing pts".to_owned())
+    })?;
     if pts < 0 {
         error!(pts, pts_offset, "Received negative PTS. PTS values of the decoder output are not monotonically increasing.")
     }

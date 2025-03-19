@@ -20,6 +20,7 @@ pub fn start_video_decoder_thread(
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
     input_id: InputId,
+    send_eos: bool,
 ) -> Result<(), InputInitError> {
     match options.decoder {
         VideoDecoder::FFmpegH264 => ffmpeg_h264::start_ffmpeg_decoder_thread(
@@ -27,6 +28,7 @@ pub fn start_video_decoder_thread(
             chunks_receiver,
             frame_sender,
             input_id,
+            send_eos,
         ),
 
         VideoDecoder::FFmpegVp8 => ffmpeg_vp8::start_ffmpeg_decoder_thread(
@@ -34,6 +36,7 @@ pub fn start_video_decoder_thread(
             chunks_receiver,
             frame_sender,
             input_id,
+            send_eos,
         ),
 
         #[cfg(feature = "vk-video")]
@@ -42,6 +45,7 @@ pub fn start_video_decoder_thread(
             chunks_receiver,
             frame_sender,
             input_id,
+            send_eos,
         ),
     }
 }
