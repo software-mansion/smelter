@@ -52,7 +52,7 @@ fn client_code() -> Result<()> {
         "children": [
             {
                 "type": "view",
-                "id": "resized",
+                "id": "test2",
                 "width": VIDEO_RESOLUTION.width,
                 "height": VIDEO_RESOLUTION.height,
                 "top": 0.0,
@@ -67,6 +67,9 @@ fn client_code() -> Result<()> {
                         "color": "#00000088",
                     }
                 ],
+                "transition": {
+                    "duration_ms": 2000,
+                },
                 "children": [
                     {
                         "type": "rescaler",
@@ -87,7 +90,7 @@ fn client_code() -> Result<()> {
         "children": [
             {
                 "type": "view",
-                "id": "resized",
+                "id": "test2",
                 "width": 300,
                 "height": 300,
                 "top": (VIDEO_RESOLUTION.height as f32 - 330.0) / 2.0 ,
@@ -105,11 +108,7 @@ fn client_code() -> Result<()> {
                     }
                 ],
                 "transition": {
-                    "duration_ms": 1500,
-                    "easing_function": {
-                        "function_name": "cubic_bezier",
-                        "points": [0.33, 1, 0.68, 1]
-                    }
+                    "duration_ms": 2000,
                 },
                 "children": [
                     {
@@ -151,7 +150,7 @@ fn client_code() -> Result<()> {
 
     start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::TestPattern)?;
 
-    thread::sleep(Duration::from_secs(5));
+    thread::sleep(Duration::from_secs(3));
 
     examples::post(
         "output/output_1/update",
@@ -161,6 +160,19 @@ fn client_code() -> Result<()> {
             }
         }),
     )?;
+
+    for _ in 0..5 {
+        thread::sleep(Duration::from_millis(1000));
+
+        examples::post(
+            "output/output_1/update",
+            &json!({
+                "video": {
+                    "root": scene2,
+                }
+            }),
+        )?;
+    }
 
     Ok(())
 }

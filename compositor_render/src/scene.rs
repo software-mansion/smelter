@@ -38,14 +38,14 @@ mod validation;
 mod view_component;
 mod web_view_component;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OutputScene {
     pub output_id: OutputId,
     pub scene_root: Component,
     pub resolution: Resolution,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Component {
     InputStream(InputStreamComponent),
     Shader(ShaderComponent),

@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use tracing::warn;
+
 use crate::{
     scene::{
         layout::StatefulLayoutComponent, BorderRadius, Overflow, Position, RGBAColor, Size,
@@ -138,6 +140,7 @@ impl ViewComponentParam {
                 let height = opts
                     .height
                     .unwrap_or(opts.parent_size.height - self.padding.vertical());
+                // warn!("layout: {:?} : {}", opts.height, self.padding.left);
                 let top = opts.parent_border_width + self.padding.top;
                 let left = static_offset + self.padding.left;
                 static_offset += width;

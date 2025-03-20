@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use tracing::error;
+
 use crate::{scene::ViewChildrenDirection, transformations::layout::NestedLayout};
 
 use super::{
@@ -114,28 +116,35 @@ impl ViewComponent {
         // TODO: to handle cases like transition from top to bottom this view needs
         // to be further processed to use the same type of coordinates as end
         let start = previous_state.map(|state| state.view(ctx.last_render_pts));
+        let end = ViewComponentParam {
+            id: self.id,
+            direction: self.direction,
+            position: self.position,
+            background_color: self.background_color,
+            overflow: self.overflow,
+            border_radius: self.border_radius,
+            border_width: self.border_width,
+            border_color: self.border_color,
+            box_shadow: self.box_shadow,
+            padding: self.padding,
+        };
+
+        let should_reset_transition = self
+            .transition
+            .map(|t| t.reset_on_update && ctx.is_scene_different)
+            .unwrap_or(false);
         let transition = TransitionState::new(
             self.transition.map(|transition| TransitionOptions {
                 duration: transition.duration,
                 interpolation_kind: transition.interpolation_kind,
             }),
             previous_state.and_then(|s| s.transition.clone()),
+            should_reset_transition,
             ctx.last_render_pts,
         );
         let view = StatefulViewComponent {
             start,
-            end: ViewComponentParam {
-                id: self.id,
-                direction: self.direction,
-                position: self.position,
-                background_color: self.background_color,
-                overflow: self.overflow,
-                border_radius: self.border_radius,
-                border_width: self.border_width,
-                border_color: self.border_color,
-                box_shadow: self.box_shadow,
-                padding: self.padding,
-            },
+            end,
             transition,
             children: self
                 .children

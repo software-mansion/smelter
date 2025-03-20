@@ -1,6 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use log::error;
+use tracing::warn;
 
 use crate::{
     state::renderers::Renderers, transformations::text_renderer::TextRendererCtx, InputId,
@@ -20,6 +21,7 @@ use super::{
 
 pub(super) struct BuildStateTreeCtx<'a> {
     pub(super) prev_state: HashMap<ComponentId, &'a StatefulComponent>,
+    pub(super) is_scene_different: bool,
     pub(super) last_render_pts: Duration,
     pub(super) renderers: &'a Renderers,
     pub(super) text_renderer_ctx: &'a TextRendererCtx,
@@ -99,6 +101,7 @@ impl SceneState {
                     components
                 })
                 .unwrap_or_default(),
+            is_scene_different: self.output_scenes.get(&output_id) != Some(&output_scene),
             last_render_pts: self.last_pts,
             input_resolutions: &self.input_resolutions,
             text_renderer_ctx,

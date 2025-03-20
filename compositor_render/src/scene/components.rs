@@ -19,13 +19,13 @@ impl Display for ComponentId {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InputStreamComponent {
     pub id: Option<ComponentId>,
     pub input_id: InputId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ShaderComponent {
     pub id: Option<ComponentId>,
     pub children: Vec<Component>,
@@ -36,7 +36,7 @@ pub struct ShaderComponent {
     pub size: Size,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ShaderParam {
     F32(f32),
     U32(u32),
@@ -45,13 +45,13 @@ pub enum ShaderParam {
     Struct(Vec<ShaderParamStructField>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ShaderParamStructField {
     pub field_name: String,
     pub value: ShaderParam,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WebViewComponent {
     pub id: Option<ComponentId>,
     pub children: Vec<Component>,
@@ -59,13 +59,13 @@ pub struct WebViewComponent {
     pub instance_id: RendererId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ImageComponent {
     pub id: Option<ComponentId>,
     pub image_id: RendererId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TextComponent {
     pub id: Option<ComponentId>,
     pub text: Arc<str>,
@@ -85,21 +85,21 @@ pub struct TextComponent {
     pub dimensions: TextDimensions,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TextStyle {
     Normal,
     Italic,
     Oblique,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TextWrap {
     None,
     Glyph,
     Word,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TextWeight {
     Thin,
     ExtraLight,
@@ -112,7 +112,7 @@ pub enum TextWeight {
     Black,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TextDimensions {
     /// Renders text and "trims" texture to smallest possible size
     Fitted {
@@ -131,7 +131,7 @@ pub enum TextDimensions {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ViewComponent {
     pub id: Option<ComponentId>,
     pub children: Vec<Component>,
@@ -152,20 +152,21 @@ pub struct ViewComponent {
     pub padding: Padding,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Overflow {
     Visible,
     Hidden,
     Fit,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Transition {
     pub duration: Duration,
     pub interpolation_kind: InterpolationKind,
+    pub reset_on_update: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Position {
     Static {
         width: Option<f32>,
@@ -174,13 +175,13 @@ pub enum Position {
     Absolute(AbsolutePosition),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ViewChildrenDirection {
     Row,
     Column,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Padding {
     pub top: f32,
     pub right: f32,
@@ -198,7 +199,7 @@ impl Padding {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RescalerComponent {
     pub id: Option<ComponentId>,
     pub child: Box<Component>,
@@ -217,13 +218,13 @@ pub struct RescalerComponent {
     pub box_shadow: Vec<BoxShadow>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RescaleMode {
     Fit,
     Fill,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TilesComponent {
     pub id: Option<ComponentId>,
     pub children: Vec<Component>,

@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { InputStream, Text, useInputStreams, View } from '@swmansion/smelter';
+import { useEffect, useState } from 'react';
+import { InputStream, Text, useAfterTimestamp, useInputStreams, View } from '@swmansion/smelter';
 import NotoSansFont from '../../assets/NotoSans.ttf';
 import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
 import { useSmelter } from '../hooks/useSmelter';
@@ -33,13 +33,27 @@ function InputMp4Example() {
 function Scene() {
   const inputs = useInputStreams();
   const inputState = inputs['video']?.videoState;
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (inputState === 'playing') {
+      const interval = setInterval(() => {
+        setCount((c) => c + 1);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [inputState]);
+
+  const transition = useAfterTimestamp(5000);
 
   if (inputState === 'playing') {
     return (
-      <View style={{ width: 1280, height: 720 }}>
-        <InputStream inputId="video" />
-        <View style={{ width: 230, height: 40, backgroundColor: '#000000', bottom: 20, left: 500 }}>
-          <Text style={{ fontSize: 30, fontFamily: 'Noto Sans' }}>Playing MP4 file</Text>
+      <View id="test" style={{ width: 1280, height: 720, backgroundColor: 'aqua' }}>
+        <View id="test2" transition={{ durationMs: 2000 }} style={{ padding: transition ? 500 : 0 }}>
+          <InputStream inputId="video" />
+          <View style={{ width: 400, height: 40, backgroundColor: '#000000', bottom: 20, left: 500 }}>
+            <Text style={{ fontSize: 30, fontFamily: 'Noto Sans' }}>Playing MP4 file for {count}s</Text>
+          </View>
         </View>
       </View>
     );
