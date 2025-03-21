@@ -50,6 +50,11 @@ impl TransitionState {
             }
             Some(transition)
         });
+        let previous_transition = match reset_transition {
+            true => None,
+            false => previous_transition,
+        };
+
         match (current_transition, previous_transition) {
             (None, None) => None,
             (_, Some(previous_transition)) => {

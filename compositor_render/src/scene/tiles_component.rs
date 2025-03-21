@@ -131,12 +131,17 @@ impl TilesComponent {
             });
 
         let start = previous_state.and_then(|state| state.last_layout.clone());
+        let should_reset_transition = self
+            .transition
+            .map(|t| t.reset_on_update && ctx.is_scene_different)
+            .unwrap_or(false);
         let transition = TransitionState::new(
             self.transition.map(|transition| TransitionOptions {
                 duration: transition.duration,
                 interpolation_kind: transition.interpolation_kind,
             }),
             previous_state.and_then(|s| s.transition.clone()),
+            should_reset_transition,
             ctx.last_render_pts,
         );
 

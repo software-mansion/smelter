@@ -49,7 +49,7 @@ function Scene() {
   if (inputState === 'playing') {
     return (
       <View id="test" style={{ width: 1280, height: 720, backgroundColor: 'aqua' }}>
-        <View id="test2" transition={{ durationMs: 2000 }} style={{ padding: transition ? 500 : 0 }}>
+        <View id="test2" transition={{ durationMs: 2000, resetOnUpdate: true }} style={{ padding: transition ? 500 : 0 }}>
           <InputStream inputId="video" />
           <View style={{ width: 400, height: 40, backgroundColor: '#000000', bottom: 20, left: 500 }}>
             <Text style={{ fontSize: 30, fontFamily: 'Noto Sans' }}>Playing MP4 file for {count}s</Text>

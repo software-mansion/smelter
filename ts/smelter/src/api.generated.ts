@@ -132,7 +132,7 @@ export type RegisterInput =
     };
 export type PortOrPortRange = string | number;
 export type TransportProtocol = "udp" | "tcp_server";
-export type VideoDecoder = "ffmpeg_h264" | "vulkan_video";
+export type VideoDecoder = "ffmpeg_h264" | "ffmpeg_vp8" | "vulkan_video";
 export type InputRtpAudioOptions =
   | {
       decoder: "opus";
@@ -901,6 +901,10 @@ export interface Transition {
    * (**default=`"linear"`**) Easing function to be used for the transition.
    */
   easing_function?: EasingFunction | null;
+  /**
+   * (**default=`false`**) If `true`, the transition will reset on scene update.
+   */
+  reset_on_update?: boolean | null;
 }
 export interface BoxShadow {
   offset_x?: number | null;
