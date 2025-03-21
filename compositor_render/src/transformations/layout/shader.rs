@@ -13,6 +13,8 @@ use crate::{
 
 use super::{params::ParamsBindGroups, RenderLayout};
 
+const LABEL: Option<&str> = Some("layout node");
+
 #[derive(Debug)]
 pub struct LayoutShader {
     pipeline: wgpu::RenderPipeline,
@@ -45,7 +47,7 @@ impl LayoutShader {
             wgpu_ctx
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("shader transformation pipeline layout"),
+                    label: LABEL,
                     bind_group_layouts: &[
                         &wgpu_ctx.format.single_texture_layout,
                         &params_bind_groups.bind_group_1_layout,
@@ -96,12 +98,10 @@ impl LayoutShader {
 
         let mut encoder = wgpu_ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Layout node command encoder"),
-            });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: LABEL });
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Layout node render pass"),
+                label: LABEL,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
@@ -159,7 +159,7 @@ impl LayoutShader {
                     .device
                     .create_bind_group(&wgpu::BindGroupDescriptor {
                         layout: &wgpu_ctx.format.single_texture_layout,
-                        label: None,
+                        label: LABEL,
                         entries: &[wgpu::BindGroupEntry {
                             binding: 0,
                             resource: wgpu::BindingResource::TextureView(view),

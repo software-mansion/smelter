@@ -3,6 +3,8 @@ use compositor_render::{
     RendererId, RendererSpec,
 };
 
+use crate::{config::{LoggerConfig, LoggerFormat}, logger::{init_logger, FfmpegLogLevel}};
+
 use super::{
     input::TestInput, scene_from_json, scenes_from_json, snapshots_path, test_case::TestCase,
     TestRunner,
@@ -10,9 +12,15 @@ use super::{
 
 #[test]
 fn image_tests() {
+    init_logger(LoggerConfig {
+        ffmpeg_logger_level: FfmpegLogLevel::Info ,
+        format: LoggerFormat::Compact ,
+        level: "trace,naga=info".to_string(),
+        log_file: None,
+    });
     let mut runner = TestRunner::new(snapshots_path().join("image"));
 
-    let image_renderer = (
+    let jpeg = (
         RendererId("image_jpeg".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::Url {
@@ -22,12 +30,25 @@ fn image_tests() {
         }),
     );
 
+    let svg = (
+        RendererId("image_svg".into()),
+        RendererSpec::Image(ImageSpec {
+            src: ImageSource::LocalPath {
+                path: format!(
+                    "{}/integration_tests/assets/image.svg",
+                    env!("CARGO_MANIFEST_DIR")
+                ),
+            },
+            image_type: ImageType::Svg { resolution: None },
+        }),
+    );
+
     runner.add(TestCase {
         name: "image/jpeg_as_root",
         scene_updates: scene_from_json(include_str!(
             "../../snapshot_tests/image/jpeg_as_root.scene.json"
         )),
-        renderers: vec![image_renderer.clone()],
+        renderers: vec![jpeg.clone()],
         inputs: vec![TestInput::new(1)],
         ..Default::default()
     });
@@ -36,7 +57,7 @@ fn image_tests() {
         scene_updates: scene_from_json(include_str!(
             "../../snapshot_tests/image/jpeg_in_view.scene.json"
         )),
-        renderers: vec![image_renderer.clone()],
+        renderers: vec![jpeg.clone()],
         inputs: vec![TestInput::new(1)],
         ..Default::default()
     });
@@ -45,7 +66,7 @@ fn image_tests() {
         scene_updates: scene_from_json(include_str!(
             "../../snapshot_tests/image/jpeg_in_view_overflow_fit.scene.json"
         )),
-        renderers: vec![image_renderer.clone()],
+        renderers: vec![jpeg.clone()],
         inputs: vec![TestInput::new(1)],
         ..Default::default()
     });
@@ -56,7 +77,7 @@ fn image_tests() {
             include_str!("../../snapshot_tests/image/jpeg_as_root.scene.json"),
             include_str!("../../snapshot_tests/view/empty_view.scene.json"),
         ]),
-        renderers: vec![image_renderer.clone()],
+        renderers: vec![jpeg.clone()],
         inputs: vec![TestInput::new(1)],
         ..Default::default()
     });
@@ -67,8 +88,19 @@ fn image_tests() {
             include_str!("../../snapshot_tests/image/jpeg_in_view.scene.json"),
             include_str!("../../snapshot_tests/view/empty_view.scene.json"),
         ]),
-        renderers: vec![image_renderer.clone()],
+        renderers: vec![jpeg.clone()],
         inputs: vec![TestInput::new(1)],
+        ..Default::default()
+    });
+
+    runner.add(TestCase {
+        name: "image/svg_as_root",
+        only: true,
+        scene_updates: scene_from_json(include_str!(
+            "../../snapshot_tests/image/svg_as_root.scene.json"
+        )),
+        renderers: vec![svg.clone()],
+        inputs: vec![],
         ..Default::default()
     });
 

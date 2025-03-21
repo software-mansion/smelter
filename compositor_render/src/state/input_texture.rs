@@ -94,20 +94,20 @@ impl InputTexture {
                         input.update(ctx, texture);
                     }
                     state => {
-                        *state = Some(InputTextureState::Nv12WgpuTexture(
-                            NV12TextureInput::new(ctx, texture).unwrap(), // TODO: tmp
+                        *state = Some(InputTextureState::Rgba8UnormWgpuTexture(
+                            RgbaTextureInput::new(ctx, texture),
                         ));
                     }
                 };
             }
             FrameData::Nv12WgpuTexture(texture) => {
                 match &mut self.0 {
-                    Some(InputTextureState::Rgba8UnormWgpuTexture(input)) => {
-                        input.update(ctx, texture);
+                    Some(InputTextureState::Nv12WgpuTexture(input)) => {
+                        input.update(ctx, texture).unwrap();
                     }
                     state => {
-                        *state = Some(InputTextureState::Rgba8UnormWgpuTexture(
-                            RgbaTextureInput::new(ctx, texture),
+                        *state = Some(InputTextureState::Nv12WgpuTexture(
+                            NV12TextureInput::new(ctx, texture).unwrap(),
                         ));
                     }
                 };

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { InputStream, Text, useInputStreams, View } from '@swmansion/smelter';
+import { Image, InputStream, Text, useInputStreams, View } from '@swmansion/smelter';
 import NotoSansFont from '../../assets/NotoSans.ttf';
 import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
 import { useSmelter } from '../hooks/useSmelter';
@@ -37,6 +37,7 @@ function Scene() {
   if (inputState === 'playing') {
     return (
       <View style={{ width: 1280, height: 720 }}>
+        <Image source="https://upload.wikimedia.org/wikipedia/commons/7/70/Example.png" />
         <InputStream inputId="video" />
         <View style={{ width: 230, height: 40, backgroundColor: '#000000', bottom: 20, left: 500 }}>
           <Text style={{ fontSize: 30, fontFamily: 'Noto Sans' }}>Playing MP4 file</Text>

@@ -8,7 +8,7 @@ use resvg::{
 };
 
 use crate::{
-    state::node_texture::{NodeTexture, NodeTextureState},
+    state::node_texture::NodeTextureState,
     wgpu::{texture::RgbaMultiViewTexture, RenderingMode, WgpuCtx},
     Resolution,
 };
@@ -16,8 +16,8 @@ use crate::{
 use super::SvgError;
 
 pub struct SvgNodeState {
-    pub was_rendered: bool,
-    pub renderer: Renderer,
+    was_rendered: bool,
+    renderer: Renderer,
 }
 
 pub struct SvgAsset {
@@ -64,7 +64,7 @@ impl SvgAsset {
      *   - remove pre-multiplied (to non-srgb) -> copy-to-srgb-texture -> add pre-multiplied
      *   - [two intermediate textures]
      */
-    pub fn render(&self, ctx: &WgpuCtx, target: &mut NodeTexture, state: &Mutex<SvgNodeState>) {
+    pub fn render(&self, ctx: &WgpuCtx, target: &NodeTextureState, state: &Mutex<SvgNodeState>) {
         let mut state = state.lock().unwrap();
         if state.was_rendered {
             return;
@@ -75,9 +75,7 @@ impl SvgAsset {
             height: self.tree.size.height() as usize,
         });
 
-        let target_texture_state = target.ensure_size(ctx, resolution);
-
-        match target_texture_state {
+        match target {
             NodeTextureState::Gpu { texture, .. } => {
                 state.renderer.render(ctx, &self.tree, texture, resolution);
             }
@@ -91,7 +89,7 @@ impl SvgAsset {
             } => todo!(),
         };
 
-        state.was_rendered = true;
+        //  state.was_rendered = true;
     }
 
     pub fn resolution(&self) -> Resolution {
@@ -136,6 +134,7 @@ impl Renderer {
             Renderer::Gpu(renderer) => renderer.render(ctx, tree, target, resolution),
             Renderer::CpuOptimizded => {
                 render_to_texture(ctx, tree, target, resolution);
+                todo!();
             }
         }
     }
@@ -188,10 +187,13 @@ impl GpuRenderer {
 
     fn ensure_texture_size(&mut self, ctx: &WgpuCtx, resolution: Resolution) {
         if Resolution::from(self.original_texture.size()) != resolution {
-            self.original_texture = RgbaMultiViewTexture::new(ctx, resolution)
+            self.original_texture = RgbaMultiViewTexture::new(ctx, resolution);
+            self.original_texture_linear_bg = self.original_texture.new_linear_bind_group(ctx);
         }
         if Resolution::from(self.non_premultiplied_texture.size()) != resolution {
-            self.non_premultiplied_texture = RgbaMultiViewTexture::new(ctx, resolution)
+            self.non_premultiplied_texture = RgbaMultiViewTexture::new(ctx, resolution);
+            self.non_premultiplied_texture_srgb_bg =
+                self.non_premultiplied_texture.new_srgb_bind_group(ctx);
         }
     }
 }

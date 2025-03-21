@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use tracing::warn;
+
 use crate::{
     state::node_texture::NodeTextureState,
     wgpu::{RenderingMode, WgpuCtx},
@@ -66,6 +68,7 @@ impl RgbaTextureInput {
                     copy_texture_to_texture(ctx, texture.texture(), dest.texture());
                 }
                 wgpu::TextureFormat::Rgba8UnormSrgb => {
+                    warn!("convert");
                     copy_texture_to_texture(ctx, texture.texture(), dest.texture());
                 }
                 _ => return,

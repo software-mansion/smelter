@@ -11,8 +11,11 @@ use image::{codecs::gif::GifDecoder, AnimationDecoder, ImageFormat};
 use resvg::usvg;
 
 use crate::{
-    state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
-    wgpu::{texture::RgbaMultiViewTexture, WgpuCtx},
+    state::{
+        node_texture::{NodeTexture, NodeTextureState},
+        RegisterCtx, RenderCtx,
+    },
+    wgpu::{texture::RgbaSrgbTexture, WgpuCtx},
     Resolution,
 };
 
@@ -146,7 +149,7 @@ impl ImageNode {
     }
 
     pub fn render(&self, ctx: &mut RenderCtx, target: &mut NodeTexture, pts: Duration) {
-        target.ensure_size(ctx.wgpu_ctx, self.resolution());
+        let target = target.ensure_size(ctx.wgpu_ctx, self.resolution());
         match self {
             ImageNode::Bitmap { asset, state } => asset.render(ctx.wgpu_ctx, target, state),
             ImageNode::Animated { asset, state } => asset.render(ctx.wgpu_ctx, target, state, pts),
@@ -169,13 +172,13 @@ pub struct BitmapNodeState {
 
 #[derive(Debug)]
 pub struct BitmapAsset {
-    texture: RgbaMultiViewTexture,
+    texture: RgbaSrgbTexture,
 }
 
 impl BitmapAsset {
     fn new(ctx: &WgpuCtx, data: Bytes, format: ImageFormat) -> Result<Self, image::ImageError> {
         let img = image::load_from_memory_with_format(&data, format)?;
-        let texture = RgbaMultiViewTexture::new(
+        let texture = RgbaSrgbTexture::new(
             ctx,
             Resolution {
                 width: img.width() as usize,
@@ -188,7 +191,7 @@ impl BitmapAsset {
         Ok(Self { texture })
     }
 
-    fn render(&self, ctx: &WgpuCtx, target: &mut NodeTexture, state: &Mutex<BitmapNodeState>) {
+    fn render(&self, ctx: &WgpuCtx, target: &NodeTextureState, state: &Mutex<BitmapNodeState>) {
         let mut state = state.lock().unwrap();
         if state.was_rendered {
             return;
@@ -218,7 +221,7 @@ pub struct AnimatedAsset {
 
 #[derive(Debug)]
 struct AnimationFrame {
-    texture: RgbaMultiViewTexture,
+    texture: RgbaSrgbTexture,
     pts: Duration,
 }
 
@@ -234,7 +237,7 @@ impl AnimatedAsset {
         for frame in decoded_frames {
             let frame = &frame?;
             let buffer = frame.buffer();
-            let texture = RgbaMultiViewTexture::new(
+            let texture = RgbaSrgbTexture::new(
                 ctx,
                 Resolution {
                     width: buffer.width() as usize,
@@ -285,7 +288,7 @@ impl AnimatedAsset {
     fn render(
         &self,
         ctx: &WgpuCtx,
-        target: &mut NodeTexture,
+        target: &NodeTextureState,
         state: &Mutex<AnimatedNodeState>,
         pts: Duration,
     ) {
@@ -321,8 +324,8 @@ impl AnimatedAsset {
 
 fn copy_texture_to_node_texture(
     ctx: &WgpuCtx,
-    source: &RgbaMultiViewTexture,
-    target: &mut NodeTexture,
+    source: &RgbaSrgbTexture,
+    target: &NodeTextureState,
 ) {
     let mut encoder = ctx
         .device
@@ -331,13 +334,6 @@ fn copy_texture_to_node_texture(
         });
 
     let size = source.size();
-    let target = target.ensure_size(
-        ctx,
-        Resolution {
-            width: size.width as usize,
-            height: size.height as usize,
-        },
-    );
 
     encoder.copy_texture_to_texture(
         wgpu::TexelCopyTextureInfo {

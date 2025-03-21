@@ -91,7 +91,7 @@ impl WgpuCtx {
         queue: Arc<wgpu::Queue>,
     ) -> Result<Self, CreateWgpuCtxError> {
         let shader_header = crate::transformations::shader::validation::shader_header();
-        let mode = RenderingMode::Gpu;
+        let mode = RenderingMode::WebGl;
 
         let scope = WgpuErrorScope::push(&device);
 

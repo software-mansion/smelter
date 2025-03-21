@@ -14,13 +14,7 @@ impl RgbaSrgbTexture {
     }
 
     pub fn empty(device: &wgpu::Device) -> Self {
-        Self::new_texture(
-            device,
-            Resolution {
-                width: 1,
-                height: 1,
-            },
-        )
+        Self::new_texture(device, Resolution::ONE_PIXEL)
     }
 
     fn new_texture(device: &wgpu::Device, resolution: Resolution) -> Self {

@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use glyphon::fontdb;
+use tracing::trace;
 
 use crate::error::{RegisterRendererError, UnregisterRendererError};
 
@@ -236,8 +237,11 @@ impl InnerRenderer {
             .register_render_event(inputs.pts, input_resolutions);
 
         let pts = inputs.pts;
+        trace!("Upload input textures");
         populate_inputs(ctx, &mut self.render_graph, inputs);
+        trace!("Run render graph");
         run_transforms(ctx, &mut self.render_graph, pts);
+        trace!("Download output textures");
         let frames = read_outputs(ctx, &mut self.render_graph, pts);
 
         scope.pop(&ctx.wgpu_ctx.device)?;
