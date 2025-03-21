@@ -3,6 +3,7 @@ import MP4Box from 'mp4box';
 import type { Input, RegisterInputResult } from '../input';
 import type { InstanceContext } from '../instance';
 import { MAIN_SAMPLE_RATE } from '../AudioMixer';
+import type { Input as CoreInput } from '@swmansion/smelter-core';
 
 export class Mp4Input implements Input {
   private inputId: string;
@@ -21,10 +22,17 @@ export class Mp4Input implements Input {
 export async function handleRegisterMp4Input(
   ctx: InstanceContext,
   inputId: string,
-  url: string
+  request: CoreInput.RegisterMp4InputRequest
 ): Promise<RegisterInputResult> {
-  const response = await fetch(url);
-  const arrayBuffer = await response.arrayBuffer();
+  let arrayBuffer: ArrayBuffer;
+  if (request.blob) {
+    arrayBuffer = await request.blob.arrayBuffer();
+  } else if (request.url) {
+    const response = await fetch(request.url);
+    arrayBuffer = await response.arrayBuffer();
+  } else {
+    throw new Error('mp4 URL or Blob is required');
+  }
 
   const metadata = await parseMp4(arrayBuffer);
 
