@@ -184,6 +184,7 @@ fn start_input_threads(
                     chunk_receiver,
                     sender,
                     input_id.clone(),
+                    true,
                 )?;
                 Some(receiver)
             }
@@ -219,6 +220,7 @@ fn start_input_threads(
                     chunk_receiver,
                     sender,
                     input_id.clone(),
+                    true,
                 )?;
                 Some(receiver)
             }
