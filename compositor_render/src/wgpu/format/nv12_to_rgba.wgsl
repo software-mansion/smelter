@@ -23,14 +23,6 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
 @group(1) @binding(0) var sampler_: sampler;
 
-fn srgb_to_linear(srgb: vec3<f32>) -> vec3<f32> {
-    let cutoff = step(srgb, vec3(0.04045));
-    let higher = pow((srgb + vec3<f32>(0.055))/vec3<f32>(1.055), vec3<f32>(2.4));
-    let lower = srgb/vec3(12.92);
-
-    return mix(higher, lower, cutoff);
-}
-
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     var y = textureSample(y_texture, sampler_, input.tex_coords).x;
@@ -42,6 +34,5 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let g = y - 0.34414 * (u - 128.0 / 255.0) - 0.71414 * (v - 128.0 / 255.0);
     let b = y + 1.77200 * (u - 128.0 / 255.0);
 
-    let srgb = vec3<f32>(clamp(r, 0.0, 1.0), clamp(g, 0.0, 1.0), clamp(b, 0.0, 1.0));
-    return vec4(srgb_to_linear(srgb), 1.0);
+    return vec4<f32>(clamp(r, 0.0, 1.0), clamp(g, 0.0, 1.0), clamp(b, 0.0, 1.0), 1.0);
 }

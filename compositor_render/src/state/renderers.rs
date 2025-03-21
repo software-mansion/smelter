@@ -4,7 +4,7 @@ use crate::{
     error::InitRendererEngineError,
     registry::{RegistryType, RendererRegistry},
     transformations::{
-        image_renderer::Image, layout::LayoutRenderer, shader::Shader, web_renderer::WebRenderer,
+        image::Image, layout::LayoutRenderer, shader::Shader, web_renderer::WebRenderer,
     },
 };
 

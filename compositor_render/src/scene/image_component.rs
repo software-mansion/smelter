@@ -1,4 +1,4 @@
-use crate::transformations::image_renderer::Image;
+use crate::transformations::image::Image;
 
 use super::{
     scene_state::BuildStateTreeCtx, ComponentId, ImageComponent, IntermediateNode, SceneError,

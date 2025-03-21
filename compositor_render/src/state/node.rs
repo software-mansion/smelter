@@ -4,7 +4,7 @@ use std::time::Duration;
 use std::vec;
 
 use crate::scene::{self, ComponentId, ShaderComponentParams};
-use crate::transformations::image_renderer::Image;
+use crate::transformations::image::Image;
 use crate::transformations::layout::LayoutNode;
 use crate::transformations::shader::node::ShaderNode;
 use crate::transformations::shader::Shader;
@@ -13,10 +13,11 @@ use crate::InputId;
 use crate::transformations::text_renderer::TextRenderParams;
 use crate::transformations::web_renderer::WebRenderer;
 use crate::transformations::{
-    image_renderer::ImageNode, text_renderer::TextRendererNode, web_renderer::node::WebRendererNode,
+    image::ImageNode, text_renderer::TextRendererNode, web_renderer::node::WebRendererNode,
 };
-use crate::wgpu::texture::{InputTexture, NodeTexture};
 
+use super::input_texture::InputTexture;
+use super::node_texture::NodeTexture;
 use super::RenderCtx;
 
 pub(super) enum InnerRenderNode {
@@ -78,7 +79,7 @@ impl RenderNode {
             scene::NodeParams::Web(children_ids, web_renderer) => {
                 Self::new_web_renderer_node(ctx, children, children_ids, web_renderer)
             }
-            scene::NodeParams::Image(image) => Self::new_image_node(image),
+            scene::NodeParams::Image(image) => Self::new_image_node(ctx, image),
             scene::NodeParams::Text(text_params) => Self::new_text_node(text_params),
             scene::NodeParams::Layout(layout_provider) => {
                 Self::new_layout_node(ctx, children, layout_provider)
@@ -142,8 +143,8 @@ impl RenderNode {
         }
     }
 
-    pub(super) fn new_image_node(image: Image) -> Self {
-        let node = InnerRenderNode::Image(ImageNode::new(image));
+    pub(super) fn new_image_node(ctx: &RenderCtx, image: Image) -> Self {
+        let node = InnerRenderNode::Image(ImageNode::new(&ctx.wgpu_ctx, image));
         let output = NodeTexture::new();
 
         Self {

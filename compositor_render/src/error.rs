@@ -5,7 +5,7 @@ use crate::{
     registry,
     scene::SceneError,
     transformations::{
-        image_renderer::ImageError, web_renderer::chromium_context::WebRendererContextError,
+        image::ImageError, web_renderer::chromium_context::WebRendererContextError,
     },
 };
 use crate::{OutputId, RendererId};

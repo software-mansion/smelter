@@ -1,26 +1,27 @@
 use std::{
     fs, io,
-    str::{from_utf8, Utf8Error},
+    str::Utf8Error,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 
 use image::{codecs::gif::GifDecoder, AnimationDecoder, ImageFormat};
-use resvg::{
-    tiny_skia,
-    usvg::{self, TreeParsing},
-};
+use resvg::usvg;
 
 use crate::{
-    state::{RegisterCtx, RenderCtx},
-    wgpu::{
-        texture::{NodeTexture, RGBATexture},
-        WgpuCtx,
+    state::{
+        node_texture::{NodeTexture, NodeTextureState},
+        RegisterCtx, RenderCtx,
     },
+    wgpu::{texture::RgbaSrgbTexture, WgpuCtx},
     Resolution,
 };
+
+pub use svg_image::{SvgAsset, SvgNodeState};
+
+mod svg_image;
 
 #[derive(Debug, Clone)]
 pub struct ImageSpec {
@@ -127,7 +128,7 @@ pub enum ImageNode {
 }
 
 impl ImageNode {
-    pub fn new(image: Image) -> Self {
+    pub fn new(ctx: &WgpuCtx, image: Image) -> Self {
         match image {
             Image::Bitmap(asset) => Self::Bitmap {
                 asset,
@@ -142,16 +143,13 @@ impl ImageNode {
             },
             Image::Svg(asset) => Self::Svg {
                 asset,
-                state: SvgNodeState {
-                    was_rendered: false,
-                }
-                .into(),
+                state: SvgNodeState::new(ctx).into(),
             },
         }
     }
 
     pub fn render(&self, ctx: &mut RenderCtx, target: &mut NodeTexture, pts: Duration) {
-        target.ensure_size(ctx.wgpu_ctx, self.resolution());
+        let target = target.ensure_size(ctx.wgpu_ctx, self.resolution());
         match self {
             ImageNode::Bitmap { asset, state } => asset.render(ctx.wgpu_ctx, target, state),
             ImageNode::Animated { asset, state } => asset.render(ctx.wgpu_ctx, target, state, pts),
@@ -174,13 +172,13 @@ pub struct BitmapNodeState {
 
 #[derive(Debug)]
 pub struct BitmapAsset {
-    texture: RGBATexture,
+    texture: RgbaSrgbTexture,
 }
 
 impl BitmapAsset {
     fn new(ctx: &WgpuCtx, data: Bytes, format: ImageFormat) -> Result<Self, image::ImageError> {
         let img = image::load_from_memory_with_format(&data, format)?;
-        let texture = RGBATexture::new(
+        let texture = RgbaSrgbTexture::new(
             ctx,
             Resolution {
                 width: img.width() as usize,
@@ -193,7 +191,7 @@ impl BitmapAsset {
         Ok(Self { texture })
     }
 
-    fn render(&self, ctx: &WgpuCtx, target: &mut NodeTexture, state: &Mutex<BitmapNodeState>) {
+    fn render(&self, ctx: &WgpuCtx, target: &NodeTextureState, state: &Mutex<BitmapNodeState>) {
         let mut state = state.lock().unwrap();
         if state.was_rendered {
             return;
@@ -211,77 +209,6 @@ impl BitmapAsset {
         }
     }
 }
-
-pub struct SvgNodeState {
-    was_rendered: bool,
-}
-
-#[derive(Debug)]
-pub struct SvgAsset {
-    texture: RGBATexture,
-}
-
-impl SvgAsset {
-    fn new(
-        ctx: &WgpuCtx,
-        data: Bytes,
-        maybe_resolution: Option<Resolution>,
-    ) -> Result<Self, SvgError> {
-        let text_svg = from_utf8(&data)?;
-        let tree = usvg::Tree::from_str(text_svg, &Default::default())?;
-        let tree = resvg::Tree::from_usvg(&tree);
-        let resolution = maybe_resolution.unwrap_or_else(|| Resolution {
-            width: tree.size.width() as usize,
-            height: tree.size.height() as usize,
-        });
-
-        let mut buffer = BytesMut::zeroed(resolution.width * resolution.height * 4);
-        let mut pixmap = tiny_skia::PixmapMut::from_bytes(
-            &mut buffer,
-            resolution.width as u32,
-            resolution.height as u32,
-        )
-        .unwrap();
-
-        let transform = match maybe_resolution {
-            Some(_) => {
-                let scale_multiplier = f32::min(
-                    resolution.width as f32 / tree.size.width(),
-                    resolution.height as f32 / tree.size.height(),
-                );
-                tiny_skia::Transform::from_scale(scale_multiplier, scale_multiplier)
-            }
-            None => tiny_skia::Transform::default(),
-        };
-
-        tree.render(transform, &mut pixmap);
-
-        let texture = RGBATexture::new(ctx, resolution);
-        texture.upload(ctx, pixmap.data_mut());
-        ctx.queue.submit([]);
-
-        Ok(Self { texture })
-    }
-
-    fn render(&self, ctx: &WgpuCtx, target: &mut NodeTexture, state: &Mutex<SvgNodeState>) {
-        let mut state = state.lock().unwrap();
-        if state.was_rendered {
-            return;
-        }
-
-        copy_texture_to_node_texture(ctx, &self.texture, target);
-        state.was_rendered = true;
-    }
-
-    fn resolution(&self) -> Resolution {
-        let size = self.texture.size();
-        Resolution {
-            width: size.width as usize,
-            height: size.height as usize,
-        }
-    }
-}
-
 pub struct AnimatedNodeState {
     first_pts: Option<Duration>,
 }
@@ -294,7 +221,7 @@ pub struct AnimatedAsset {
 
 #[derive(Debug)]
 struct AnimationFrame {
-    texture: RGBATexture,
+    texture: RgbaSrgbTexture,
     pts: Duration,
 }
 
@@ -310,7 +237,7 @@ impl AnimatedAsset {
         for frame in decoded_frames {
             let frame = &frame?;
             let buffer = frame.buffer();
-            let texture = RGBATexture::new(
+            let texture = RgbaSrgbTexture::new(
                 ctx,
                 Resolution {
                     width: buffer.width() as usize,
@@ -361,7 +288,7 @@ impl AnimatedAsset {
     fn render(
         &self,
         ctx: &WgpuCtx,
-        target: &mut NodeTexture,
+        target: &NodeTextureState,
         state: &Mutex<AnimatedNodeState>,
         pts: Duration,
     ) {
@@ -395,7 +322,11 @@ impl AnimatedAsset {
     }
 }
 
-fn copy_texture_to_node_texture(ctx: &WgpuCtx, source: &RGBATexture, target: &mut NodeTexture) {
+fn copy_texture_to_node_texture(
+    ctx: &WgpuCtx,
+    source: &RgbaSrgbTexture,
+    target: &NodeTextureState,
+) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -403,26 +334,19 @@ fn copy_texture_to_node_texture(ctx: &WgpuCtx, source: &RGBATexture, target: &mu
         });
 
     let size = source.size();
-    let target = target.ensure_size(
-        ctx,
-        Resolution {
-            width: size.width as usize,
-            height: size.height as usize,
-        },
-    );
 
     encoder.copy_texture_to_texture(
         wgpu::TexelCopyTextureInfo {
             aspect: wgpu::TextureAspect::All,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
-            texture: &source.texture().texture,
+            texture: source.texture(),
         },
         wgpu::TexelCopyTextureInfo {
             aspect: wgpu::TextureAspect::All,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
-            texture: &target.rgba_texture().texture().texture,
+            texture: target.texture(),
         },
         size,
     );

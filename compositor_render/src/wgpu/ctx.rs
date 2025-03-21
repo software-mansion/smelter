@@ -3,7 +3,10 @@ use std::sync::Arc;
 use log::{error, info};
 
 use super::{
-    common_pipeline::plane::Plane, format::TextureFormat, texture::Texture, utils::TextureUtils,
+    common_pipeline::plane::Plane,
+    format::TextureFormat,
+    texture::{RgbaLinearTexture, RgbaSrgbTexture},
+    utils::TextureUtils,
     CreateWgpuCtxError, WgpuErrorScope,
 };
 
@@ -11,6 +14,7 @@ use super::{
 pub struct WgpuCtx {
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
+    pub mode: RenderingMode,
 
     pub shader_header: naga::Module,
 
@@ -19,7 +23,20 @@ pub struct WgpuCtx {
 
     pub uniform_bgl: wgpu::BindGroupLayout,
     pub plane: Plane,
-    pub empty_texture: Texture,
+    pub empty_rgba_linear_texture: RgbaLinearTexture,
+    pub empty_rgba_srgb_texture: RgbaSrgbTexture,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum RenderingMode {
+    // - Leverage multiple views per texture
+    // - Color blending in linear space
+    Gpu,
+    // - Color blending in sRGB space
+    CpuOptimzied,
+    // - Single view per texture
+    // - Color blending in linear space (but requires additional processing)
+    WebGl,
 }
 
 impl WgpuCtx {
@@ -42,6 +59,22 @@ impl WgpuCtx {
         Ok(Arc::new(ctx))
     }
 
+    pub fn default_empty_view(&self) -> &wgpu::TextureView {
+        match self.mode {
+            RenderingMode::Gpu => self.empty_rgba_srgb_texture.view(),
+            RenderingMode::CpuOptimzied => self.empty_rgba_linear_texture.view(),
+            RenderingMode::WebGl => self.empty_rgba_srgb_texture.view(),
+        }
+    }
+
+    pub fn default_view_format(&self) -> wgpu::TextureFormat {
+        match self.mode {
+            RenderingMode::Gpu => wgpu::TextureFormat::Rgba8UnormSrgb,
+            RenderingMode::CpuOptimzied => wgpu::TextureFormat::Rgba8Unorm,
+            RenderingMode::WebGl => wgpu::TextureFormat::Rgba8UnormSrgb,
+        }
+    }
+
     fn check_wgpu_ctx(device: &wgpu::Device, features: wgpu::Features) {
         let expected_features = features | required_wgpu_features();
 
@@ -58,16 +91,18 @@ impl WgpuCtx {
         queue: Arc<wgpu::Queue>,
     ) -> Result<Self, CreateWgpuCtxError> {
         let shader_header = crate::transformations::shader::validation::shader_header();
+        let mode = RenderingMode::WebGl;
 
         let scope = WgpuErrorScope::push(&device);
 
         let format = TextureFormat::new(&device);
-        let utils = TextureUtils::new(&device);
+        let utils = TextureUtils::new(&device, &format);
 
         let uniform_bgl = uniform_bind_group_layout(&device);
 
         let plane = Plane::new(&device);
-        let empty_texture = Texture::empty(&device);
+        let empty_rgba_linear_texture = RgbaLinearTexture::empty(&device);
+        let empty_rgba_srgb_texture = RgbaSrgbTexture::empty(&device);
 
         scope.pop(&device)?;
 
@@ -76,6 +111,7 @@ impl WgpuCtx {
         }));
 
         Ok(Self {
+            mode,
             device,
             queue,
             shader_header,
@@ -83,7 +119,8 @@ impl WgpuCtx {
             utils,
             uniform_bgl,
             plane,
-            empty_texture,
+            empty_rgba_linear_texture,
+            empty_rgba_srgb_texture,
         })
     }
 }

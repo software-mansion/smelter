@@ -19,9 +19,8 @@ use crate::{
     scene::{
         HorizontalAlign, RGBAColor, TextComponent, TextDimensions, TextStyle, TextWeight, TextWrap,
     },
-    state::RenderCtx,
+    state::{node_texture::NodeTexture, RenderCtx},
     utils::rgba_to_wgpu_color,
-    wgpu::texture::NodeTexture,
     Resolution,
 };
 
@@ -84,9 +83,7 @@ impl TextRendererNode {
                 },
             );
 
-            target_state
-                .rgba_texture()
-                .upload(renderer_ctx.wgpu_ctx, &[0; 4]);
+            target_state.upload(renderer_ctx.wgpu_ctx, &[0; 4]);
 
             self.was_rendered = true;
             return;
@@ -148,7 +145,7 @@ impl TextRendererNode {
                 });
 
         let target_state = target.ensure_size(renderer_ctx.wgpu_ctx, self.resolution);
-        let view = &target_state.rgba_texture().texture().view;
+        let view = &target_state.view();
         {
             let background_color = wgpu::Color {
                 r: srgb_to_linear(self.background_color.r),

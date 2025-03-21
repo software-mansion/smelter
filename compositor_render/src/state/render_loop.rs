@@ -5,9 +5,11 @@ use tracing::error;
 use crate::{
     scene::RGBColor,
     state::{node::RenderNode, render_graph::RenderGraph, RenderCtx},
-    wgpu::texture::{InputTexture, NodeTexture, PlanarYuvPendingDownload, RGBATexture},
+    wgpu::texture::{PlanarYuvPendingDownload, RgbaMultiViewTexture, TextureExt},
     Frame, FrameData, FrameSet, InputId, OutputFrameFormat, OutputId, Resolution,
 };
+
+use super::{input_texture::InputTexture, node_texture::NodeTexture};
 
 pub(super) fn populate_inputs(
     ctx: &RenderCtx,
@@ -59,9 +61,9 @@ pub(super) fn read_outputs(
         match output.root.output_texture(&scene.inputs).state() {
             Some(node) => match output.output_format {
                 OutputFrameFormat::PlanarYuv420Bytes => {
-                    ctx.wgpu_ctx.format.convert_rgba_to_yuv(
-                        ctx.wgpu_ctx,
-                        (node.rgba_texture(), node.bind_group()),
+                    ctx.wgpu_ctx.format.rgba_to_yuv.convert(
+                        &ctx.wgpu_ctx,
+                        node.output_texture_bind_group(),
                         output.output_texture.yuv_textures(),
                     );
                     let pending_download = output.output_texture.start_download(ctx.wgpu_ctx);
@@ -72,10 +74,7 @@ pub(super) fn read_outputs(
                     });
                 }
                 OutputFrameFormat::RgbaWgpuTexture => {
-                    let texture = node
-                        .rgba_texture()
-                        .texture()
-                        .copy_wgpu_texture(ctx.wgpu_ctx);
+                    let texture = node.texture().copy_wgpu_texture(ctx.wgpu_ctx);
                     let size = texture.size();
                     let frame = Frame {
                         data: FrameData::Rgba8UnormWgpuTexture(texture.into()),
@@ -96,17 +95,17 @@ pub(super) fn read_outputs(
                     let (y, u, v) = RGBColor::BLACK.to_yuv();
                     ctx.wgpu_ctx.utils.fill_r8_with_value(
                         ctx.wgpu_ctx,
-                        output.output_texture.yuv_textures().plane(0),
+                        output.output_texture.yuv_textures().plane_view(0),
                         y,
                     );
                     ctx.wgpu_ctx.utils.fill_r8_with_value(
                         ctx.wgpu_ctx,
-                        output.output_texture.yuv_textures().plane(1),
+                        output.output_texture.yuv_textures().plane_view(1),
                         u,
                     );
                     ctx.wgpu_ctx.utils.fill_r8_with_value(
                         ctx.wgpu_ctx,
-                        output.output_texture.yuv_textures().plane(2),
+                        output.output_texture.yuv_textures().plane_view(2),
                         v,
                     );
 
@@ -119,8 +118,8 @@ pub(super) fn read_outputs(
                 }
                 OutputFrameFormat::RgbaWgpuTexture => {
                     let resolution = output.output_texture.resolution();
-                    let rgba_texture = RGBATexture::new(ctx.wgpu_ctx, resolution);
-                    let wgpu_texture = rgba_texture.texture_owned().texture;
+                    let rgba_texture = RgbaMultiViewTexture::new(ctx.wgpu_ctx, resolution);
+                    let wgpu_texture = rgba_texture.texture_owned();
                     let frame = Frame {
                         data: FrameData::Rgba8UnormWgpuTexture(Arc::new(wgpu_texture)),
                         resolution,

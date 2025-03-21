@@ -8,14 +8,11 @@ use bytes::Bytes;
 use log::info;
 
 use crate::{
-    state::{RegisterCtx, RenderCtx},
+    state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
     transformations::web_renderer::{
         browser_client::BrowserClient, chromium_sender::ChromiumSender,
     },
-    wgpu::{
-        common_pipeline::CreateShaderError,
-        texture::{BGRATexture, NodeTexture, Texture},
-    },
+    wgpu::{common_pipeline::CreateShaderError, texture::BGRATexture},
     RendererId, Resolution,
 };
 
@@ -99,19 +96,22 @@ impl WebRenderer {
     fn prepare_textures<'a>(
         &'a self,
         sources: &'a [&NodeTexture],
-    ) -> Vec<(Option<&'a Texture>, RenderInfo)> {
+    ) -> Vec<(Option<&'a wgpu::TextureView>, RenderInfo)> {
         let mut source_info = sources
             .iter()
             .zip(self.source_transforms.lock().unwrap().iter())
             .map(|(node_texture, transform)| {
                 (
-                    node_texture.texture(),
+                    node_texture.state().map(|t| t.view()),
                     RenderInfo::source_transform(transform),
                 )
             })
             .collect();
 
-        let website_info = (Some(self.website_texture.texture()), RenderInfo::website());
+        let website_info = (
+            Some(self.website_texture.default_view()),
+            RenderInfo::website(),
+        );
 
         let mut result = Vec::new();
         match self.spec.embedding_method {

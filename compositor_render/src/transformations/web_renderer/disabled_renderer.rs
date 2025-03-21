@@ -1,8 +1,5 @@
-use std::sync::Arc;
-
 use crate::{
-    state::{RegisterCtx, RenderCtx},
-    wgpu::texture::NodeTexture,
+    state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
     RendererId, Resolution,
 };
 

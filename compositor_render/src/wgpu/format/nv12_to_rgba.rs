@@ -1,7 +1,4 @@
-use crate::wgpu::{
-    common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE},
-    texture::{NV12TextureView, RGBATexture},
-};
+use crate::wgpu::common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE};
 
 use super::WgpuCtx;
 
@@ -15,6 +12,7 @@ impl Nv12ToRgbaConverter {
     pub fn new(
         device: &wgpu::Device,
         nv12_texture_bind_group_layout: &wgpu::BindGroupLayout,
+        dst_view_format: wgpu::TextureFormat,
     ) -> Self {
         let shader_module = device.create_shader_module(wgpu::include_wgsl!("nv12_to_rgba.wgsl"));
         let sampler = Sampler::new(device);
@@ -41,7 +39,7 @@ impl Nv12ToRgbaConverter {
                 module: &shader_module,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    format: dst_view_format,
                     write_mask: wgpu::ColorWrites::all(),
                     blend: None,
                 })],
@@ -61,12 +59,7 @@ impl Nv12ToRgbaConverter {
         Self { pipeline, sampler }
     }
 
-    pub fn convert(
-        &self,
-        ctx: &WgpuCtx,
-        src: (&NV12TextureView, &wgpu::BindGroup),
-        dst: &RGBATexture,
-    ) {
+    pub fn convert(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst_view: &wgpu::TextureView) {
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -81,7 +74,7 @@ impl Nv12ToRgbaConverter {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
-                    view: &dst.texture().view,
+                    view: dst_view,
                     resolve_target: None,
                 })],
                 depth_stencil_attachment: None,
@@ -90,7 +83,7 @@ impl Nv12ToRgbaConverter {
             });
 
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, src.1, &[]);
+            render_pass.set_bind_group(0, src_bg, &[]);
             render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
 
             ctx.plane.draw(&mut render_pass);

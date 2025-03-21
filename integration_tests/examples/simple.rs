@@ -60,9 +60,8 @@ fn client_code() -> Result<()> {
                 },
                 "initial": {
                     "root": {
-                        "type": "shader",
+                        "type": "view",
                         "id": "shader_node_1",
-                        "shader_id": "shader_example_1",
                         "children": [
                             {
                                 "id": "input_1",
@@ -70,7 +69,6 @@ fn client_code() -> Result<()> {
                                 "input_id": "input_1",
                             }
                         ],
-                        "resolution": { "width": VIDEO_RESOLUTION.width, "height": VIDEO_RESOLUTION.height },
                     }
                 }
             }

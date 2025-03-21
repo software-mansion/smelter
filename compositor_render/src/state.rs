@@ -2,11 +2,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use glyphon::fontdb;
+use tracing::trace;
 
 use crate::error::{RegisterRendererError, UnregisterRendererError};
 
 use crate::scene::{Component, OutputScene};
-use crate::transformations::image_renderer::Image;
+use crate::transformations::image::Image;
 use crate::transformations::shader::Shader;
 use crate::transformations::web_renderer::{self, WebRenderer};
 use crate::{
@@ -30,7 +31,9 @@ use self::{
     renderers::Renderers,
 };
 
+pub mod input_texture;
 pub mod node;
+pub mod node_texture;
 pub mod render_graph;
 mod render_loop;
 pub mod renderers;
@@ -234,8 +237,11 @@ impl InnerRenderer {
             .register_render_event(inputs.pts, input_resolutions);
 
         let pts = inputs.pts;
+        trace!("Upload input textures");
         populate_inputs(ctx, &mut self.render_graph, inputs);
+        trace!("Run render graph");
         run_transforms(ctx, &mut self.render_graph, pts);
+        trace!("Download output textures");
         let frames = read_outputs(ctx, &mut self.render_graph, pts);
 
         scope.pop(&ctx.wgpu_ctx.device)?;

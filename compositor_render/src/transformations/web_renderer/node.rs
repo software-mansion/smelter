@@ -5,9 +5,9 @@ use log::error;
 use crate::{
     error::ErrorStack,
     scene::ComponentId,
-    state::RenderCtx,
+    state::{node_texture::NodeTexture, RenderCtx},
     wgpu::{
-        texture::{utils::pad_to_256, NodeTexture, RGBATexture},
+        texture::{utils::pad_to_256, TextureExt},
         WgpuCtx,
     },
 };
@@ -65,12 +65,11 @@ impl WebRendererNode {
                 continue;
             };
 
-            let texture = texture_state.rgba_texture();
-            Self::ensure_buffer_size(wgpu_ctx, buffer, texture);
+            Self::ensure_buffer_size(wgpu_ctx, buffer, texture_state.texture());
         }
     }
 
-    fn ensure_buffer_size(ctx: &WgpuCtx, buffer: &mut Arc<wgpu::Buffer>, texture: &RGBATexture) {
+    fn ensure_buffer_size(ctx: &WgpuCtx, buffer: &mut Arc<wgpu::Buffer>, texture: &wgpu::Texture) {
         let texture_size = texture.size();
         let texture_size = (pad_to_256(4 * texture_size.width) * texture_size.height) as u64;
         if buffer.size() != texture_size {

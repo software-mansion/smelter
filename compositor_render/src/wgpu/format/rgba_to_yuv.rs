@@ -1,6 +1,6 @@
 use crate::wgpu::{
     common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE},
-    texture::{PlanarYuvTextures, RGBATexture},
+    texture::PlanarYuvTextures,
 };
 
 use super::WgpuCtx;
@@ -64,12 +64,7 @@ impl RgbaToYuvConverter {
         Self { pipeline, sampler }
     }
 
-    pub fn convert(
-        &self,
-        ctx: &WgpuCtx,
-        src: (&RGBATexture, &wgpu::BindGroup),
-        dst: &PlanarYuvTextures,
-    ) {
+    pub fn convert(&self, ctx: &WgpuCtx, src_bg: &wgpu::BindGroup, dst: &PlanarYuvTextures) {
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -101,7 +96,7 @@ impl RgbaToYuvConverter {
                         }),
                         store: wgpu::StoreOp::Store,
                     },
-                    view: &dst.plane(plane).view,
+                    view: dst.plane_view(plane),
                     resolve_target: None,
                 })],
                 depth_stencil_attachment: None,
@@ -115,7 +110,7 @@ impl RgbaToYuvConverter {
                 0,
                 &(plane as u32).to_le_bytes(),
             );
-            render_pass.set_bind_group(0, src.1, &[]);
+            render_pass.set_bind_group(0, src_bg, &[]);
             render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
             ctx.plane.draw(&mut render_pass);
         }

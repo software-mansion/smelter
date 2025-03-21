@@ -1,11 +1,15 @@
 use std::marker::PhantomData;
 
 use bytes::Bytes;
+use tracing::warn;
 use wgpu::Buffer;
 
 use crate::{wgpu::WgpuCtx, FrameData, Resolution, YuvPlanes};
 
-use super::base::Texture;
+use super::{
+    base::{new_texture, DEFAULT_BINDING_TYPE},
+    TextureExt,
+};
 
 pub struct YuvPendingDownload<'a, F, E>
 where
@@ -51,33 +55,38 @@ pub enum YuvVariant {
 
 pub struct PlanarYuvTextures {
     pub(super) variant: YuvVariant,
-    pub(super) planes: [Texture; 3],
-    pub(super) resolution: Resolution,
+    pub(super) planes_textures: [wgpu::Texture; 3],
+    pub(super) planes_views: [wgpu::TextureView; 3],
+    pub(crate) resolution: Resolution,
 }
 
 impl PlanarYuvTextures {
     pub fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
+        let y = Self::new_plane(ctx, resolution.width, resolution.height);
+        let u = Self::new_plane(ctx, resolution.width / 2, resolution.height / 2);
+        let v = Self::new_plane(ctx, resolution.width / 2, resolution.height / 2);
         Self {
             variant: YuvVariant::YUV420,
-            planes: [
-                Self::new_plane(ctx, resolution.width, resolution.height),
-                Self::new_plane(ctx, resolution.width / 2, resolution.height / 2),
-                Self::new_plane(ctx, resolution.width / 2, resolution.height / 2),
+            planes_views: [
+                y.create_view(&wgpu::TextureViewDescriptor::default()),
+                u.create_view(&wgpu::TextureViewDescriptor::default()),
+                v.create_view(&wgpu::TextureViewDescriptor::default()),
             ],
+            planes_textures: [y, u, v],
             resolution,
         }
     }
 
-    pub fn plane(&self, i: usize) -> &Texture {
-        &self.planes[i]
+    pub fn plane_view(&self, i: usize) -> &wgpu::TextureView {
+        &self.planes_views[i]
     }
 
     pub fn variant(&self) -> YuvVariant {
         self.variant
     }
 
-    fn new_plane(ctx: &WgpuCtx, width: usize, height: usize) -> Texture {
-        Texture::new(
+    fn new_plane(ctx: &WgpuCtx, width: usize, height: usize) -> wgpu::Texture {
+        new_texture(
             &ctx.device,
             None,
             wgpu::Extent3d {
@@ -91,13 +100,14 @@ impl PlanarYuvTextures {
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::TEXTURE_BINDING,
+            &[wgpu::TextureFormat::R8Unorm],
         )
     }
 
     pub fn new_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         let create_entry = |binding: u32| wgpu::BindGroupLayoutEntry {
             binding,
-            ty: Texture::DEFAULT_BINDING_TYPE,
+            ty: DEFAULT_BINDING_TYPE,
             visibility: wgpu::ShaderStages::FRAGMENT,
             count: None,
         };
@@ -107,26 +117,22 @@ impl PlanarYuvTextures {
         })
     }
 
-    pub(super) fn new_bind_group(
-        &self,
-        ctx: &WgpuCtx,
-        layout: &wgpu::BindGroupLayout,
-    ) -> wgpu::BindGroup {
+    pub fn new_bind_group(&self, ctx: &WgpuCtx) -> wgpu::BindGroup {
         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Planar YUV 4:2:0 all textures bind group"),
-            layout,
+            layout: &ctx.format.planar_yuv_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.planes[0].view),
+                    resource: wgpu::BindingResource::TextureView(&self.planes_views[0]),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&self.planes[1].view),
+                    resource: wgpu::BindingResource::TextureView(&self.planes_views[1]),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&self.planes[2].view),
+                    resource: wgpu::BindingResource::TextureView(&self.planes_views[2]),
                 },
             ],
         })
@@ -134,9 +140,9 @@ impl PlanarYuvTextures {
 
     pub(super) fn new_download_buffers(&self, ctx: &WgpuCtx) -> [Buffer; 3] {
         [
-            self.planes[0].new_download_buffer(ctx),
-            self.planes[1].new_download_buffer(ctx),
-            self.planes[2].new_download_buffer(ctx),
+            self.planes_textures[0].new_download_buffer(ctx),
+            self.planes_textures[1].new_download_buffer(ctx),
+            self.planes_textures[2].new_download_buffer(ctx),
         ]
     }
 
@@ -148,7 +154,7 @@ impl PlanarYuvTextures {
             });
 
         for plane in [0, 1, 2] {
-            self.planes[plane].copy_to_buffer(&mut encoder, &buffers[plane]);
+            self.planes_textures[plane].copy_to_buffer(&mut encoder, &buffers[plane]);
         }
 
         ctx.queue.submit(Some(encoder.finish()));
@@ -156,8 +162,8 @@ impl PlanarYuvTextures {
 
     pub fn upload(&mut self, ctx: &WgpuCtx, planes: &YuvPlanes, variant: YuvVariant) {
         self.variant = variant;
-        self.planes[0].upload_data(&ctx.queue, &planes.y_plane, 1);
-        self.planes[1].upload_data(&ctx.queue, &planes.u_plane, 1);
-        self.planes[2].upload_data(&ctx.queue, &planes.v_plane, 1);
+        self.planes_textures[0].upload_data(&ctx.queue, &planes.y_plane, 1);
+        self.planes_textures[1].upload_data(&ctx.queue, &planes.u_plane, 1);
+        self.planes_textures[2].upload_data(&ctx.queue, &planes.v_plane, 1);
     }
 }
