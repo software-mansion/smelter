@@ -38,6 +38,7 @@ impl ViewComponentParam {
             width: f32::max(size.width - 2.0 * self.border_width, 0.0),
             height: f32::max(size.height - 2.0 * self.border_width, 0.0),
         };
+        let border_radius = self.border_radius.clip_to_size(size);
         let static_child_size = self.static_child_size(content_size, children, pts);
         let (scale, crop, mask) = match self.overflow {
             Overflow::Visible => (1.0, None, None),
@@ -45,7 +46,7 @@ impl ViewComponentParam {
                 1.0,
                 None,
                 Some(Mask {
-                    radius: self.border_radius - self.border_width,
+                    radius: border_radius - self.border_width,
                     top: self.border_width,
                     left: self.border_width,
                     width: content_size.width,
@@ -56,7 +57,7 @@ impl ViewComponentParam {
                 self.scale_factor_for_overflow_fit(content_size, children, pts),
                 None,
                 Some(Mask {
-                    radius: self.border_radius - self.border_width,
+                    radius: border_radius - self.border_width,
                     top: self.border_width,
                     left: self.border_width,
                     width: content_size.width,
@@ -120,7 +121,7 @@ impl ViewComponentParam {
             children,
             border_width: self.border_width,
             border_color: self.border_color,
-            border_radius: self.border_radius,
+            border_radius,
             box_shadow: self.box_shadow.clone(),
         }
     }
