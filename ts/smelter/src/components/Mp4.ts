@@ -20,12 +20,13 @@ export type Mp4Props = Omit<ComponentBaseProps, 'children'> & {
 
   /**
    *  Url, path to the mp4 file or `Blob` of the mp4 file. File path refers to the filesystem where Smelter server is deployed.
+   *  `Blob` is only supported on `@swmansion/smelter-web-wasm`.
    */
   source: string | Blob;
 };
 
 function Mp4(props: Mp4Props) {
-  const { muted, volume, ...otherProps } = props;
+  const { muted, volume, source, ...otherProps } = props;
   const ctx = useContext(SmelterContext);
   const [inputId, setInputId] = useState(0);
 
@@ -33,13 +34,18 @@ function Mp4(props: Mp4Props) {
     const newInputId = newInternalStreamId();
     setInputId(newInputId);
 
-    let source: Pick<RegisterMp4Input, 'url' | 'serverPath' | 'blob'>;
-    if (props.source instanceof Blob) {
-      source = { blob: props.source };
-    } else if (props.source.startsWith('http://') || props.source.startsWith('https://')) {
-      source = { url: props.source };
+    let sourceObject: Pick<RegisterMp4Input, 'url' | 'serverPath' | 'blob'>;
+    if (source instanceof Blob) {
+      sourceObject = { blob: source };
+    } else if (source.startsWith('http://') || source.startsWith('https://')) {
+      sourceObject = { url: source };
     } else {
-      source = { serverPath: props.source };
+      sourceObject = { serverPath: source };
+    }
+
+    // If blob and run on Node.js
+    if (sourceObject.blob && typeof window === 'undefined') {
+      throw new Error('Blob as a source is not supported on Node.js');
     }
 
     let registerPromise: Promise<any>;
@@ -48,7 +54,7 @@ function Mp4(props: Mp4Props) {
     void (async () => {
       try {
         registerPromise = ctx.registerMp4Input(newInputId, {
-          ...source,
+          ...sourceObject,
           required: ctx.timeContext instanceof OfflineTimeContext,
           // offsetMs will be overridden by registerMp4Input implementation
         });
