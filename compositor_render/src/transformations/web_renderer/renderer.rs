@@ -1,8 +1,4 @@
-use std::{
-    env,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
 use log::info;
@@ -141,13 +137,6 @@ impl WebRenderer {
 
     pub fn resolution(&self) -> Resolution {
         self.spec.resolution
-    }
-
-    pub fn shared_memory_root_path(compositor_instance_id: &str, web_renderer_id: &str) -> PathBuf {
-        env::temp_dir()
-            .join("smelter")
-            .join(format!("instance_{compositor_instance_id}"))
-            .join(web_renderer_id)
     }
 }
 

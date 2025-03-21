@@ -8,6 +8,8 @@
 
 ### 🐛 Bug fixes
 
+- Fix web renderer crashing when multiple Smelter instances are run. ([#1016](https://github.com/software-mansion/smelter/pull/1016) by [@noituri](https://github.com/noituri))
+
 ### 🔧 Others
 
 ## [v0.4.1](https://github.com/software-mansion/live-compositor/releases/tag/v0.4.1)

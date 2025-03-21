@@ -11,6 +11,7 @@ mod renderer;
 mod renderer;
 
 mod tranformation_matrices;
+mod utils;
 
 pub use renderer::*;
 
