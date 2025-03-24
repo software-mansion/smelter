@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use compositor_chromium::cef;
 use log::info;
 
-use crate::{handler::RenderProcessHandler, state::State};
+use super::{handler::RenderProcessHandler, state::State};
 
 pub struct App {
     // `Arc` is used instead of `Rc` because we are not sure what CEF does underneath

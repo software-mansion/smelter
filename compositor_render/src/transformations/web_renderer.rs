@@ -6,6 +6,9 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "web_renderer")]
 mod renderer;
 
+#[cfg(feature = "web_renderer")]
+pub mod process_helper;
+
 #[cfg(not(feature = "web_renderer"))]
 #[path = "web_renderer/disabled_renderer.rs"]
 mod renderer;
