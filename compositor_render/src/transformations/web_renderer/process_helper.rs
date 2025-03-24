@@ -7,12 +7,9 @@ mod app;
 mod handler;
 mod state;
 
-// Subprocess used by chromium
-fn main() -> Result<(), Box<dyn Error>> {
-    tracing_subscriber::fmt().json().init();
-
+pub fn run_process_helper() -> Result<i32, Box<dyn Error>> {
     let app = App::new();
     let context = cef::Context::new_helper()?;
     let exit_code = context.execute_process(app);
-    std::process::exit(exit_code);
+    Ok(exit_code)
 }

@@ -110,5 +110,5 @@ compositor_api = { workspace = true, features = ["vk-video"] }
 
 [[bin]]
 name = "process_helper"
-path = "src/bin/process_helper/main.rs"
+path = "src/bin/process_helper.rs"
 required-features = ["web_renderer"]
