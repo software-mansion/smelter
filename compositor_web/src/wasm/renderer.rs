@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use compositor_api::types as api;
 use compositor_render::{
-    image::ImageSpec, shader::ShaderSpec, InputId, OutputFrameFormat, OutputId, RegistryType,
-    RendererId, RendererOptions, RendererSpec,
+    InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RendererOptions, RendererSpec,
 };
 use glyphon::fontdb::Source;
 use wasm_bindgen::JsValue;
