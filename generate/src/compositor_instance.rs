@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use compositor_pipeline::{
     event::Event,
-    pipeline::{self, GraphicsContext},
+    pipeline::{self, GraphicsContext, GraphicsContextOptions},
     Pipeline,
 };
 use compositor_render::WgpuFeatures;
@@ -141,13 +141,11 @@ fn init_compositor_prerequisites() {
 fn graphics_context() -> GraphicsContext {
     static CTX: OnceLock<GraphicsContext> = OnceLock::new();
     CTX.get_or_init(|| {
-        GraphicsContext::new(
-            false,
-            WgpuFeatures::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-                | WgpuFeatures::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            Default::default(),
-            None,
-        )
+        GraphicsContext::new(GraphicsContextOptions {
+            features: WgpuFeatures::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+                | WgpuFeatures::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            ..Default::default()
+        })
         .unwrap()
     })
     .clone()

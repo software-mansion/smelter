@@ -72,7 +72,7 @@ pub use self::types::{
 };
 pub use pipeline_output::PipelineOutputEndCondition;
 
-pub use graphics_context::GraphicsContext;
+pub use graphics_context::{GraphicsContext, GraphicsContextOptions};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Port(pub u16);
@@ -167,12 +167,11 @@ impl Pipeline {
         let preinitialized_ctx = match opts.wgpu_ctx {
             Some(ctx) => Some(ctx),
             #[cfg(feature = "vk-video")]
-            None => Some(GraphicsContext::new(
-                opts.force_gpu,
-                opts.wgpu_features,
-                Default::default(),
-                None,
-            )?),
+            None => Some(GraphicsContext::new(GraphicsContextOptions {
+                force_gpu: opts.force_gpu,
+                features: opts.wgpu_features,
+                ..Default::default()
+            })?),
             #[cfg(not(feature = "vk-video"))]
             None => None,
         };
