@@ -15,12 +15,12 @@ use crate::transformations::web_renderer::chromium_sender::{
     ChromiumSenderMessage, UpdateSharedMemoryInfo,
 };
 use crate::transformations::web_renderer::shared_memory::{SharedMemory, SharedMemoryError};
-use crate::transformations::web_renderer::{WebRenderer, UNEMBED_SOURCE_FRAMES_MESSAGE};
+use crate::transformations::web_renderer::UNEMBED_SOURCE_FRAMES_MESSAGE;
 use crate::wgpu::texture::utils::pad_to_256;
 use crate::{RendererId, Resolution};
 
 use super::{browser_client::BrowserClient, chromium_context::ChromiumContext};
-use super::{WebRendererSpec, EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE};
+use super::{utils, WebRendererSpec, EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE};
 
 pub(super) struct ChromiumSenderThread {
     chromium_ctx: Arc<ChromiumContext>,
@@ -231,7 +231,7 @@ impl Drop for ThreadState {
 impl ThreadState {
     fn new(browser: cef::Browser, compositor_id: &str, web_renderer_id: &RendererId) -> Self {
         let shared_memory_root_path =
-            WebRenderer::shared_memory_root_path(compositor_id, &web_renderer_id.to_string());
+            utils::get_smelter_instance_tmp_path(compositor_id).join(web_renderer_id.to_string());
         let shared_memory = Vec::new();
 
         Self {
