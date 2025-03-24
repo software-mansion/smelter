@@ -101,6 +101,16 @@ impl BorderRadius {
             bottom_left: radius,
         }
     }
+
+    pub fn clip_to_size(&self, size: Size) -> Self {
+        let max_radius = f32::min(size.width, size.height) / 2.0;
+        Self {
+            top_left: f32::clamp(self.top_left, 0.0, max_radius),
+            top_right: f32::clamp(self.top_right, 0.0, max_radius),
+            bottom_right: f32::clamp(self.bottom_right, 0.0, max_radius),
+            bottom_left: f32::clamp(self.bottom_left, 0.0, max_radius),
+        }
+    }
 }
 
 impl Mul<f32> for BorderRadius {

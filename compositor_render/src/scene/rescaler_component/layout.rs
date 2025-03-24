@@ -23,14 +23,23 @@ impl RescalerComponentParam {
         };
         let child_width = child.width(pts);
         let child_height = child.height(pts);
+        let border_radius = self.border_radius.clip_to_size(size);
         match (child_width, child_height) {
-            (None, None) => self.layout_with_scale(content_size, child, pts, 1.0),
-            (None, Some(child_height)) => {
-                self.layout_with_scale(content_size, child, pts, content_size.height / child_height)
-            }
-            (Some(child_width), None) => {
-                self.layout_with_scale(content_size, child, pts, content_size.width / child_width)
-            }
+            (None, None) => self.layout_with_scale(content_size, border_radius, child, pts, 1.0),
+            (None, Some(child_height)) => self.layout_with_scale(
+                content_size,
+                border_radius,
+                child,
+                pts,
+                content_size.height / child_height,
+            ),
+            (Some(child_width), None) => self.layout_with_scale(
+                content_size,
+                border_radius,
+                child,
+                pts,
+                content_size.width / child_width,
+            ),
             (Some(child_width), Some(child_height)) => {
                 let scale = match self.mode {
                     RescaleMode::Fit => f32::min(
@@ -42,7 +51,7 @@ impl RescalerComponentParam {
                         content_size.height / child_height,
                     ),
                 };
-                self.layout_with_scale(content_size, child, pts, scale)
+                self.layout_with_scale(content_size, border_radius, child, pts, scale)
             }
         }
     }
@@ -50,6 +59,7 @@ impl RescalerComponentParam {
     fn layout_with_scale(
         &self,
         max_size: Size, // without borders
+        border_radius: BorderRadius,
         child: &mut StatefulComponent,
         pts: Duration,
         scale: f32,
@@ -117,7 +127,7 @@ impl RescalerComponentParam {
             scale_y: 1.0,
             crop: None,
             mask: Some(Mask {
-                radius: self.border_radius - self.border_width,
+                radius: border_radius - self.border_width,
                 top: self.border_width,
                 left: self.border_width,
                 width: max_size.width,
@@ -145,7 +155,7 @@ impl RescalerComponentParam {
             child_nodes_count,
             border_width: self.border_width,
             border_color: self.border_color,
-            border_radius: self.border_radius,
+            border_radius,
             box_shadow: self.box_shadow.clone(),
         }
     }
