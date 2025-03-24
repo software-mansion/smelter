@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use bytes::Bytes;
-use compositor_render::{Frame, FrameData, FrameSet, InputId, YuvPlanes};
+use compositor_render::{Frame, FrameData, FrameSet, InputId};
 use wasm_bindgen::JsValue;
 
 use super::types;
@@ -21,23 +20,38 @@ impl InputUploader {
         let pts = Duration::from_millis(input.pts_ms as u64);
         let mut frames = HashMap::new();
         for frame in input.frames.entries() {
-            let frame: types::Frame = frame?.try_into()?;
-            self.upload_input_frame(device, queue, &frame);
-
-            let data = match frame.format {
-                types::FrameFormat::RgbaBytes => FrameData::Rgba8UnormWgpuTexture(
-                    self.textures.get(&frame.id).unwrap().texture.clone(),
-                ),
-                types::FrameFormat::YuvBytes => {
-                    FrameData::PlanarYuv420(Self::create_yuv_planes(&frame))
-                }
+            let types::InputFrame { id, frame } = frame?.try_into()?;
+            let resolution = frame
+                .visible_rect()
+                .expect("Input frame should have visible rect defined");
+            let size = wgpu::Extent3d {
+                width: resolution.width() as u32,
+                height: resolution.height() as u32,
+                depth_or_array_layers: 1,
             };
 
+            let texture = self.texture(&id, device, size);
+            queue.copy_external_image_to_texture(
+                &wgpu::CopyExternalImageSourceInfo {
+                    source: wgpu::ExternalImageSource::VideoFrame(frame),
+                    origin: wgpu::Origin2d::ZERO,
+                    flip_y: false,
+                },
+                wgpu::CopyExternalImageDestInfo {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                    color_space: wgpu::PredefinedColorSpace::Srgb,
+                    premultiplied_alpha: false,
+                },
+                size,
+            );
             frames.insert(
-                frame.id,
+                id,
                 Frame {
-                    data,
-                    resolution: frame.resolution,
+                    data: FrameData::Rgba8UnormWgpuTexture(texture),
+                    resolution: size.into(),
                     pts,
                 },
             );
@@ -50,48 +64,24 @@ impl InputUploader {
         self.textures.remove(input_id);
     }
 
-    fn upload_input_frame(
+    fn texture(
         &mut self,
+        input_id: &InputId,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        frame: &types::Frame,
-    ) {
-        match frame.format {
-            types::FrameFormat::RgbaBytes => {
-                let size = wgpu::Extent3d {
-                    width: frame.resolution.width as u32,
-                    height: frame.resolution.height as u32,
-                    depth_or_array_layers: 1,
-                };
-                let texture = self
-                    .textures
-                    .entry(frame.id.clone())
-                    .or_insert_with(|| Self::create_texture(device, frame));
-                if size != texture.size {
-                    *texture = Self::create_texture(device, frame);
-                }
-
-                queue.write_texture(
-                    texture.texture.as_image_copy(),
-                    &frame.data,
-                    wgpu::TexelCopyBufferLayout {
-                        offset: 0,
-                        bytes_per_row: Some(4 * size.width),
-                        rows_per_image: Some(size.height),
-                    },
-                    size,
-                );
-            }
-            types::FrameFormat::YuvBytes => {}
+        size: wgpu::Extent3d,
+    ) -> Arc<wgpu::Texture> {
+        let texture = self
+            .textures
+            .entry(input_id.clone())
+            .or_insert_with(|| Self::create_texture(device, size));
+        if size != texture.size {
+            *texture = Self::create_texture(device, size);
         }
+
+        texture.texture.clone()
     }
 
-    fn create_texture(device: &wgpu::Device, frame: &types::Frame) -> Texture {
-        let size = wgpu::Extent3d {
-            width: frame.resolution.width as u32,
-            height: frame.resolution.height as u32,
-            depth_or_array_layers: 1,
-        };
+    fn create_texture(device: &wgpu::Device, size: wgpu::Extent3d) -> Texture {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size,
             mip_level_count: 1,
@@ -103,29 +93,12 @@ impl InputUploader {
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::TEXTURE_BINDING,
-            label: Some(&format!("Input texture: {}", frame.id)),
+            label: None,
         });
 
         Texture {
             size,
             texture: Arc::new(texture),
-        }
-    }
-
-    fn create_yuv_planes(frame: &types::Frame) -> YuvPlanes {
-        let width = frame.resolution.width;
-        let height = frame.resolution.height;
-
-        let y_plane_len = width * height;
-        let uv_planes_len = (width * height) / 4;
-        let y_plane = &frame.data[..y_plane_len];
-        let u_plane = &frame.data[y_plane_len..(y_plane_len + uv_planes_len)];
-        let v_plane = &frame.data[(y_plane_len + uv_planes_len)..];
-
-        YuvPlanes {
-            y_plane: Bytes::copy_from_slice(y_plane),
-            u_plane: Bytes::copy_from_slice(u_plane),
-            v_plane: Bytes::copy_from_slice(v_plane),
         }
     }
 }

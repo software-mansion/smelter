@@ -10,12 +10,12 @@ export type RendererOptions = {
   loggerLevel?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
 };
 
-export type FrameSet = {
+export type FrameSet<T> = {
   ptsMs: number;
-  frames: { [id: string]: Frame };
+  frames: { [id: string]: T };
 };
 
-export type Frame = {
+export type OutputFrame = {
   resolution: Api.Resolution;
   format: FrameFormat;
   data: Uint8ClampedArray;
@@ -41,7 +41,7 @@ export class Renderer {
     return new Renderer(renderer);
   }
 
-  public render(input: FrameSet): FrameSet {
+  public render(input: FrameSet<VideoFrame>): FrameSet<OutputFrame> {
     const frames = new Map(Object.entries(input.frames));
     const inputFrameSet = new wasm.FrameSet(input.ptsMs, frames);
     const output = this.renderer.render(inputFrameSet);
