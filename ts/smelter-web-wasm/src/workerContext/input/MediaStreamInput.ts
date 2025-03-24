@@ -1,10 +1,9 @@
-import type { Frame, InputId } from '@swmansion/smelter-browser-render';
+import type { InputId } from '@swmansion/smelter-browser-render';
 import type { Input, InputStartResult } from './input';
 import { InputVideoFrameRef } from './frame';
 import type { Interval } from '../../utils';
 import { SmelterEventType } from '../../eventSender';
 import { workerPostEvent } from '../bridge';
-import type { Logger } from 'pino';
 
 export type InputState = 'started' | 'playing' | 'finished';
 
@@ -19,12 +18,9 @@ export class MediaStreamInput implements Input {
   private sentEos: boolean = false;
   private sentFirstFrame: boolean = false;
 
-  private logger: Logger;
-
-  public constructor(inputId: InputId, source: ReadableStream, logger: Logger) {
+  public constructor(inputId: InputId, source: ReadableStream) {
     this.reader = source.getReader();
     this.inputId = inputId;
-    this.logger = logger;
   }
 
   public start(): InputStartResult {
@@ -39,13 +35,10 @@ export class MediaStreamInput implements Input {
         if (this.frameRef) {
           this.frameRef.decrementRefCount();
         }
-        this.frameRef = new InputVideoFrameRef(
-          {
-            frame: readResult.value,
-            ptsMs: 0, // pts does not matter here
-          },
-          this.logger
-        );
+        this.frameRef = new InputVideoFrameRef({
+          frame: readResult.value,
+          ptsMs: 0, // pts does not matter here
+        });
       }
 
       if (readResult.done) {
@@ -69,7 +62,7 @@ export class MediaStreamInput implements Input {
 
   public updateQueueStartTime(_queueStartTimeMs: number) {}
 
-  public async getFrame(_currentQueuePts: number): Promise<Frame | undefined> {
+  public async getFrame(_currentQueuePts: number): Promise<InputVideoFrameRef | undefined> {
     if (this.receivedEos) {
       if (!this.sentEos) {
         this.sentEos = true;
@@ -91,11 +84,9 @@ export class MediaStreamInput implements Input {
       }
       // using Ref just to cache downloading frames if the same frame is used more than once
       frameRef.incrementRefCount();
-      const frame = await frameRef.getFrame();
-      frameRef.decrementRefCount();
-
-      return frame;
+      return frameRef;
     }
-    return frameRef;
+
+    return;
   }
 }
