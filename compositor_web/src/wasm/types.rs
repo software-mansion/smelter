@@ -64,7 +64,7 @@ pub struct Frame {
     pub id: InputId,
     pub resolution: Resolution,
     pub format: FrameFormat,
-    pub data: Vec<u8>,
+    pub data: web_sys::VideoFrame,
 }
 
 #[wasm_bindgen]

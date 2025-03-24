@@ -23,7 +23,8 @@ web-sys = { version = "0.3.77", features = [
     "Window",
     "Element",
     "CanvasRenderingContext2d",
-    "ImageData"
+    "ImageData",
+    "VideoFrame"
 ] }
 serde = { workspace = true }
 serde-wasm-bindgen = "0.6.5"

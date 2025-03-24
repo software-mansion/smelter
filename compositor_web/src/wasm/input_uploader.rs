@@ -22,16 +22,36 @@ impl InputUploader {
         let mut frames = HashMap::new();
         for frame in input.frames.entries() {
             let frame: types::Frame = frame?.try_into()?;
-            self.upload_input_frame(device, queue, &frame);
+            queue.copy_external_image_to_texture(
+                &wgpu::CopyExternalImageSourceInfo {
+                    source: wgpu::ExternalImageSource::VideoFrame(frame.data),
+                    origin: wgpu::Origin2d::ZERO,
+                    flip_y: false,
+                },
+                &wgpu::CopyExternalImageDestInfo {
+                    texture: todo!(),
+                    mip_level: todo!(),
+                    origin: todo!(),
+                    aspect: todo!(),
+                    color_space: todo!(),
+                    premultiplied_alpha: todo!(),
+                },
+                wgpu::Extent3d {
+                    width: frame.resolution.width,
+                    height: frame.resolution.height,
+                    depth_or_array_layers: 1,
+                },
+            );
+            // self.upload_input_frame(device, queue, &frame);
 
-            let data = match frame.format {
-                types::FrameFormat::RgbaBytes => FrameData::Rgba8UnormWgpuTexture(
-                    self.textures.get(&frame.id).unwrap().texture.clone(),
-                ),
-                types::FrameFormat::YuvBytes => {
-                    FrameData::PlanarYuv420(Self::create_yuv_planes(&frame))
-                }
-            };
+            // let data = match frame.format {
+            //     types::FrameFormat::RgbaBytes => FrameData::Rgba8UnormWgpuTexture(
+            //         self.textures.get(&frame.id).unwrap().texture.clone(),
+            //     ),
+            //     types::FrameFormat::YuvBytes => {
+            //         FrameData::PlanarYuv420(Self::create_yuv_planes(&frame))
+            //     }
+            // };
 
             frames.insert(
                 frame.id,
