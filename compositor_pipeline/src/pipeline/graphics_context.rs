@@ -20,28 +20,46 @@ pub struct GraphicsContext {
     pub vulkan_ctx: Option<VulkanCtx>,
 }
 
+#[derive(Debug, Default)]
+pub struct GraphicsContextOptions<'a> {
+    pub force_gpu: bool,
+    pub features: wgpu::Features,
+    pub limits: wgpu::Limits,
+    pub compatible_surface: Option<&'a mut wgpu::Surface<'a>>,
+    pub libvulkan_path: Option<&'a std::ffi::OsStr>,
+}
+
 impl GraphicsContext {
     #[cfg(feature = "vk-video")]
-    pub fn new(
-        force_gpu: bool,
-        features: wgpu::Features,
-        limits: wgpu::Limits,
-        mut compatible_surface: Option<&mut wgpu::Surface<'_>>,
-    ) -> Result<Self, InitPipelineError> {
+    pub fn new(opts: GraphicsContextOptions) -> Result<Self, InitPipelineError> {
         use compositor_render::{required_wgpu_features, set_required_wgpu_limits};
         use tracing::warn;
+        use vk_video::VulkanCtxError;
+
+        let GraphicsContextOptions {
+            force_gpu,
+            features,
+            limits,
+            mut compatible_surface,
+            libvulkan_path,
+        } = opts;
 
         let vulkan_features =
             features | required_wgpu_features() | wgpu::Features::TEXTURE_FORMAT_NV12;
 
         let limits = set_required_wgpu_limits(limits);
 
-        match vk_video::VulkanInstance::new().and_then(|instance| {
+        let mut new_instance = || -> Result<_, VulkanCtxError> {
+            let instance = match libvulkan_path {
+                Some(path) => vk_video::VulkanInstance::new_from(path),
+                None => vk_video::VulkanInstance::new(),
+            }?;
             let device =
                 instance.create_device(vulkan_features, limits.clone(), &mut compatible_surface)?;
-
             Ok((instance, device))
-        }) {
+        };
+
+        match new_instance() {
             Ok((instance, device)) => Ok(GraphicsContext {
                 device: device.wgpu_device.clone(),
                 queue: device.wgpu_queue.clone(),
@@ -73,12 +91,14 @@ impl GraphicsContext {
     }
 
     #[cfg(not(feature = "vk-video"))]
-    pub fn new(
-        force_gpu: bool,
-        features: wgpu::Features,
-        limits: wgpu::Limits,
-        compatible_surface: Option<&mut wgpu::Surface<'_>>,
-    ) -> Result<Self, InitPipelineError> {
+    pub fn new(opts: GraphicsContextOptions) -> Result<Self, InitPipelineError> {
+        let GraphicsContextOptions {
+            force_gpu,
+            features,
+            limits,
+            compatible_surface,
+            ..
+        } = opts;
         let WgpuComponents {
             instance,
             adapter,

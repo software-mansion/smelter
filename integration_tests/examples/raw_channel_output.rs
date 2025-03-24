@@ -54,7 +54,7 @@ fn main() {
     logger::init_logger(read_config().logger);
     let mut config = read_config();
     config.queue_options.ahead_of_time_processing = true;
-    let ctx = GraphicsContext::new(false, Default::default(), Default::default(), None).unwrap();
+    let ctx = GraphicsContext::new(Default::default()).unwrap();
     let (wgpu_device, wgpu_queue) = (ctx.device.clone(), ctx.queue.clone());
     // no chromium support, so we can ignore _event_loop
     let (pipeline, _event_loop) = Pipeline::new(Options {

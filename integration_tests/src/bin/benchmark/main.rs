@@ -16,8 +16,8 @@ use compositor_pipeline::{
             InputInitInfo, InputOptions, RawDataInputOptions,
         },
         output::{EncodedDataOutputOptions, RawDataOutputOptions, RawVideoOptions},
-        GraphicsContext, Options, OutputVideoOptions, PipelineOutputEndCondition,
-        RegisterInputOptions, RegisterOutputOptions,
+        GraphicsContext, GraphicsContextOptions, Options, OutputVideoOptions,
+        PipelineOutputEndCondition, RegisterInputOptions, RegisterOutputOptions,
     },
     queue::{self, PipelineEvent, QueueInputOptions, QueueOptions},
     Pipeline,
@@ -65,13 +65,11 @@ fn main() {
     };
     logger::init_logger(logger_config);
 
-    let ctx = GraphicsContext::new(
-        false,
-        wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+    let ctx = GraphicsContext::new(GraphicsContextOptions {
+        features: wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
             | wgpu::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-        Default::default(),
-        None,
-    )
+        ..Default::default()
+    })
     .unwrap();
 
     if cfg!(debug_assertions) {

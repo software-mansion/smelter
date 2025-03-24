@@ -17,8 +17,8 @@ use compositor_pipeline::{
             OutputOptions, OutputProtocolOptions,
         },
         rtp::RequestedPort,
-        GraphicsContext, Options, Pipeline, PipelineOutputEndCondition, RegisterOutputOptions,
-        VideoCodec,
+        GraphicsContext, GraphicsContextOptions, Options, Pipeline, PipelineOutputEndCondition,
+        RegisterOutputOptions, VideoCodec,
     },
     queue::{PipelineEvent, QueueInputOptions},
 };
@@ -41,7 +41,13 @@ fn main() {
     ffmpeg_next::format::network::init();
     let config = read_config();
     logger::init_logger(config.logger);
-    let ctx = GraphicsContext::new(false, Default::default(), Default::default(), None).unwrap();
+    let ctx = GraphicsContext::new(GraphicsContextOptions {
+        features: wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+            | wgpu::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        ..Default::default()
+    })
+    .unwrap();
+
     let (wgpu_device, wgpu_queue) = (ctx.device.clone(), ctx.queue.clone());
     // no chromium support, so we can ignore _event_loop
     let (pipeline, _event_loop) = Pipeline::new(Options {

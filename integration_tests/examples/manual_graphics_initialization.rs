@@ -11,13 +11,7 @@ fn main() {
     use std::sync::Arc;
     use tokio::runtime::Runtime;
 
-    let graphics_context = GraphicsContext::new(
-        false,
-        wgpu::Features::default(),
-        wgpu::Limits::default(),
-        None,
-    )
-    .unwrap();
+    let graphics_context = GraphicsContext::new(Default::default()).unwrap();
 
     let _device = graphics_context.device.clone();
     let _queue = graphics_context.queue.clone();
