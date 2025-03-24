@@ -1,4 +1,4 @@
-use compositor_render::error::ErrorStack;
+use compositor_render::{error::ErrorStack, EventLoopError};
 use crossbeam_channel::Receiver;
 use log::info;
 use signal_hook::{consts, iterator::Signals};
@@ -33,15 +33,18 @@ pub fn run() {
             }
         })
         .unwrap();
-    let event_loop_fallback = || {
-        let mut signals = Signals::new([consts::SIGINT]).unwrap();
-        signals.forever().next();
-    };
-    if let Err(err) = event_loop.run_with_fallback(&event_loop_fallback) {
-        panic!(
-            "Failed to start event loop.\n{}",
-            ErrorStack::new(&err).into_string()
-        )
+    match event_loop.run() {
+        Ok(_) => {}
+        Err(EventLoopError::NoEventLoop) => {
+            let mut signals = Signals::new([consts::SIGINT]).unwrap();
+            signals.forever().next();
+        }
+        Err(err) => {
+            panic!(
+                "Failed to start event loop.\n{}",
+                ErrorStack::new(&err).into_string()
+            )
+        }
     }
 }
 

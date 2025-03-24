@@ -11,7 +11,7 @@ mod event_loop;
 mod state;
 mod types;
 
-pub use event_loop::EventLoop;
+pub use event_loop::{EventLoop, EventLoopError};
 pub use types::*;
 
 pub use registry::RegistryType;
