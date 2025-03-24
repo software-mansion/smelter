@@ -17,6 +17,8 @@ pub struct Transition {
     pub duration_ms: f64,
     /// (**default=`"linear"`**) Easing function to be used for the transition.
     pub easing_function: Option<EasingFunction>,
+    /// (**default=`false`**) If `true`, the ongoing transition will reset on scene update.
+    pub reset_on_update: Option<bool>,
 }
 
 /// Easing functions are used to interpolate between two values over time.

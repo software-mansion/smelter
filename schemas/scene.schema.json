@@ -949,6 +949,13 @@
               "type": "null"
             }
           ]
+        },
+        "reset_on_update": {
+          "description": "(**default=`false`**) If `true`, the ongoing transition will reset on scene update.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       }
     },

@@ -9,6 +9,10 @@ export interface Transition {
    * (**default=`"linear"`**) Easing function to be used for the transition.
    */
   easingFunction?: EasingFunction | null;
+  /**
+   * (**default=`false`**) If `true`, the ongoing transition will reset on update.
+   */
+  resetOnUpdate?: boolean;
 }
 
 export function intoApiTransition(transition: Transition): Api.Transition {
@@ -17,6 +21,7 @@ export function intoApiTransition(transition: Transition): Api.Transition {
     easing_function: transition.easingFunction
       ? intoApiEasingFunction(transition.easingFunction)
       : undefined,
+    reset_on_update: transition.resetOnUpdate,
   };
 }
 
