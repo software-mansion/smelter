@@ -175,13 +175,11 @@ fn frame_from_av(
     decoded: &mut Video,
     pts_offset: &mut Option<i64>,
 ) -> Result<Frame, DecoderFrameConversionError> {
-    let original_pts = decoded.pts();
-    if let (Some(pts), None) = (decoded.pts(), &pts_offset) {
-        *pts_offset = Some(-pts)
-    }
-    let pts = original_pts.ok_or_else(|| {
-        DecoderFrameConversionError::FrameConversionError("missing pts".to_owned())
-    })?;
+    let Some(pts) = decoded.pts() else {
+        return Err(DecoderFrameConversionError::FrameConversionError(
+            "missing pts".to_owned(),
+        ));
+    };
     if pts < 0 {
         error!(pts, pts_offset, "Received negative PTS. PTS values of the decoder output are not monotonically increasing.")
     }

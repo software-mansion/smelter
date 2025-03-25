@@ -12,6 +12,7 @@ import DemoExample from './smelter-examples/Demo';
 import MultipleOutputs from './smelter-examples/MultipleOutputs';
 import MediaStreamInput from './smelter-examples/MediaStreamExample';
 import DynamicExample from './smelter-examples/playground/PlaygroundPage';
+import ShaderExample from './smelter-examples/ShaderExample';
 
 setWasmBundleUrl('/assets/smelter.wasm');
 
@@ -26,6 +27,7 @@ function App() {
     camera: <Camera />,
     screenCapture: <ScreenCapture />,
     mediaStream: <MediaStreamInput />,
+    shader: <ShaderExample />,
     home: <Home />,
     demo: <DemoExample />,
     playground: <DynamicExample />,
@@ -52,6 +54,7 @@ function App() {
         <button onClick={() => setCurrentExample('camera')}>Camera</button>
         <button onClick={() => setCurrentExample('screenCapture')}>Screen Capture</button>
         <button onClick={() => setCurrentExample('mediaStream')}>MediaStream</button>
+        <button onClick={() => setCurrentExample('shader')}>Shader</button>
 
         <h3>Smelter rendering engine examples</h3>
         <button onClick={() => setCurrentExample('counter')}>Counter</button>
@@ -107,6 +110,9 @@ function Home() {
       <li>
         <code>MediaStream</code> - Pass MediaStream object as an input. In this example it will be
         camera.
+      </li>
+      <li>
+        <code>Shader</code> - Render video with a custom shader effect.
       </li>
       <h3>
         <code>@swmansion/smelter-browser-render</code> - Rendering engine from Smelter

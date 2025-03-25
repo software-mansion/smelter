@@ -11,7 +11,7 @@ mod event_loop;
 mod state;
 mod types;
 
-pub use event_loop::EventLoop;
+pub use event_loop::{EventLoop, EventLoopError};
 pub use types::*;
 
 pub use registry::RegistryType;
@@ -35,4 +35,7 @@ pub mod web_renderer {
         WebEmbeddingMethod, WebRendererInitOptions, WebRendererSpec, EMBED_SOURCE_FRAMES_MESSAGE,
         GET_FRAME_POSITIONS_MESSAGE, UNEMBED_SOURCE_FRAMES_MESSAGE,
     };
+
+    #[cfg(feature = "web_renderer")]
+    pub use crate::transformations::web_renderer::process_helper;
 }

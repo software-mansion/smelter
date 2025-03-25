@@ -1,6 +1,5 @@
 import type { Input as CoreInput } from '@swmansion/smelter-core';
 import type { WorkerMessage } from '../workerApi';
-import { assert } from '../utils';
 import { handleRegisterCameraInput } from './input/camera';
 import { handleRegisterScreenCaptureInput } from './input/screenCapture';
 import { handleRegisterStreamInput } from './input/stream';
@@ -22,8 +21,7 @@ export async function handleRegisterInputRequest(
   body: CoreInput.RegisterInputRequest
 ): Promise<RegisterInputResult> {
   if (body.type === 'mp4') {
-    assert(body.url, 'mp4 URL is required');
-    return handleRegisterMp4Input(ctx, inputId, body.url);
+    return handleRegisterMp4Input(ctx, inputId, body);
   } else if (body.type === 'camera') {
     return await handleRegisterCameraInput(ctx, inputId);
   } else if (body.type === 'screen_capture') {

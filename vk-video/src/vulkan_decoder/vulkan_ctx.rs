@@ -57,7 +57,15 @@ pub struct VulkanInstance {
 impl VulkanInstance {
     pub fn new() -> Result<Arc<Self>, VulkanCtxError> {
         let entry = Arc::new(unsafe { Entry::load()? });
+        Self::new_from_entry(entry)
+    }
 
+    pub fn new_from(path: impl AsRef<std::ffi::OsStr>) -> Result<Arc<Self>, VulkanCtxError> {
+        let entry = Arc::new(unsafe { Entry::load_from(path)? });
+        Self::new_from_entry(entry)
+    }
+
+    fn new_from_entry(entry: Arc<Entry>) -> Result<Arc<Self>, VulkanCtxError> {
         let api_version = vk::make_api_version(0, 1, 3, 0);
         let app_info = vk::ApplicationInfo {
             api_version,

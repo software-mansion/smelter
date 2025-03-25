@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::{
-    event_loop::{EventLoop, EventLoopRunError},
+    event_loop::{EventLoop, EventLoopError},
+    transformations::web_renderer::utils,
     types::Framerate,
     utils::random_string,
 };
@@ -54,6 +55,8 @@ impl ChromiumContext {
                 enable_gpu: opts.enable_gpu,
             };
             let settings = cef::Settings {
+                root_cache_path: utils::get_smelter_instance_tmp_path(&instance_id)
+                    .join("cef_cache"),
                 windowless_rendering_enabled: true,
                 log_severity: cef::LogSeverity::Info,
                 ..Default::default()
@@ -156,12 +159,21 @@ impl cef::App for ChromiumApp {
 
 #[cfg(feature = "web_renderer")]
 impl EventLoop for cef::Context {
-    fn run_with_fallback(&self, _fallback: &dyn Fn()) -> Result<(), EventLoopRunError> {
+    fn run(&self) -> Result<(), EventLoopError> {
         if !self.currently_on_thread(cef::ThreadId::UI) {
-            return Err(EventLoopRunError::WrongThread);
+            return Err(EventLoopError::WrongThread);
         }
 
         self.run_message_loop();
+        Ok(())
+    }
+
+    fn run_single_loop(&self) -> Result<(), EventLoopError> {
+        if !self.currently_on_thread(cef::ThreadId::UI) {
+            return Err(EventLoopError::WrongThread);
+        }
+
+        self.do_message_loop_work();
         Ok(())
     }
 }
@@ -169,9 +181,12 @@ impl EventLoop for cef::Context {
 struct FallbackEventLoop;
 
 impl EventLoop for FallbackEventLoop {
-    fn run_with_fallback(&self, fallback: &dyn Fn()) -> Result<(), EventLoopRunError> {
-        fallback();
-        Ok(())
+    fn run(&self) -> Result<(), EventLoopError> {
+        Err(EventLoopError::NoEventLoop)
+    }
+
+    fn run_single_loop(&self) -> Result<(), EventLoopError> {
+        Err(EventLoopError::NoEventLoop)
     }
 }
 

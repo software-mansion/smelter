@@ -146,10 +146,8 @@ pub fn start_audio_decoder_thread(
                 init_result_sender,
             );
 
-            if send_eos {
-                if samples_sender.send(PipelineEvent::EOS).is_err() {
-                    debug!("Failed to send EOS message.")
-                }
+            if send_eos && samples_sender.send(PipelineEvent::EOS).is_err() {
+                debug!("Failed to send EOS message.")
             }
         })
         .unwrap();

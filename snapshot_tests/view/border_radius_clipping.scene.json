@@ -1,0 +1,19 @@
+{
+  "video": {
+    "root": {
+      "type": "view",
+      "background_color": "yellow",
+      "children": [
+        {
+          "type": "view",
+          "background_color": "red",
+          "top": 50,
+          "left": 50,
+          "width": 400,
+          "height": 200,
+          "border_radius": 500
+        }
+      ]
+    }
+  }
+}

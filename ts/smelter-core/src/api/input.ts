@@ -12,10 +12,18 @@ import { _smelterInternals } from '@swmansion/smelter';
  * to compositor, but also additional variants that are specific to WASM like camera
  */
 export type RegisterInputRequest =
-  | Api.RegisterInput
+  | RegisterRtpStreamInputRequest
+  | RegisterMp4InputRequest
+  | RegisterWhipInputRequest
+  | RegisterDecklinkInputRequest
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any };
+
+export type RegisterRtpStreamInputRequest = Extract<Api.RegisterInput, { type: 'rtp_stream' }>;
+export type RegisterMp4InputRequest = { blob?: any } & Extract<Api.RegisterInput, { type: 'mp4' }>;
+export type RegisterWhipInputRequest = Extract<Api.RegisterInput, { type: 'whip' }>;
+export type RegisterDecklinkInputRequest = Extract<Api.RegisterInput, { type: 'decklink' }>;
 
 export type InputRef = _smelterInternals.InputRef;
 export const inputRefIntoRawId = _smelterInternals.inputRefIntoRawId;
@@ -56,6 +64,7 @@ function intoMp4RegisterInput(input: Inputs.RegisterMp4Input): RegisterInputRequ
     type: 'mp4',
     url: input.url,
     path: input.serverPath,
+    blob: input.blob,
     loop: input.loop,
     required: input.required,
     offset_ms: input.offsetMs,

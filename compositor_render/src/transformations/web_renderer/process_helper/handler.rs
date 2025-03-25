@@ -1,14 +1,15 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use anyhow::{anyhow, Result};
-use compositor_chromium::cef;
-use compositor_render::web_renderer::{
-    EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE, UNEMBED_SOURCE_FRAMES_MESSAGE,
-};
+use compositor_chromium::cef::{self, V8ObjectError};
 use log::{debug, error};
 
-use crate::state::{FrameInfo, State};
+use crate::web_renderer::process_helper::state::FrameInfo;
+use crate::web_renderer::{
+    EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE, UNEMBED_SOURCE_FRAMES_MESSAGE,
+};
+
+use super::state::State;
 
 pub struct RenderProcessHandler {
     state: Arc<Mutex<State>>,
@@ -35,7 +36,10 @@ impl cef::RenderProcessHandler for RenderProcessHandler {
             EMBED_SOURCE_FRAMES_MESSAGE => self.embed_sources(message, frame),
             UNEMBED_SOURCE_FRAMES_MESSAGE => self.unembed_source(message, frame),
             GET_FRAME_POSITIONS_MESSAGE => self.send_frame_positions(message, frame),
-            name => Err(anyhow!("Unknown message type: {name}")),
+            name => {
+                error!("Error occurred while processing IPC message: Unknown message type: {name}");
+                return false;
+            }
         };
 
         if let Err(err) = result {
@@ -54,7 +58,11 @@ impl RenderProcessHandler {
         Self { state }
     }
 
-    fn embed_sources(&self, msg: &cef::ProcessMessage, surface: &cef::Frame) -> Result<()> {
+    fn embed_sources(
+        &self,
+        msg: &cef::ProcessMessage,
+        surface: &cef::Frame,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let ctx = surface.v8_context()?;
         let ctx_entered = ctx.enter()?;
         let mut global = ctx.global()?;
@@ -88,7 +96,7 @@ impl RenderProcessHandler {
         frame_info: FrameInfo,
         global: &mut cef::V8Global,
         ctx_entered: &cef::V8ContextEntered,
-    ) -> Result<()> {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut state = self.state.lock().unwrap();
         let source = match state.source(&frame_info.shmem_path) {
             Some(source) => {
@@ -112,7 +120,11 @@ impl RenderProcessHandler {
         Ok(())
     }
 
-    fn unembed_source(&self, msg: &cef::ProcessMessage, surface: &cef::Frame) -> Result<()> {
+    fn unembed_source(
+        &self,
+        msg: &cef::ProcessMessage,
+        surface: &cef::Frame,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut state = self.state.lock().unwrap();
         let shmem_path = msg.read_string(0)?;
         let shmem_path = PathBuf::from(shmem_path);
@@ -131,7 +143,11 @@ impl RenderProcessHandler {
         Ok(())
     }
 
-    fn send_frame_positions(&self, msg: &cef::ProcessMessage, surface: &cef::Frame) -> Result<()> {
+    fn send_frame_positions(
+        &self,
+        msg: &cef::ProcessMessage,
+        surface: &cef::Frame,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let ctx = surface.v8_context()?;
         let ctx_entered = ctx.enter()?;
         let global = ctx.global()?;
@@ -143,9 +159,7 @@ impl RenderProcessHandler {
             let element = match document.element_by_id(&id_attribute, &ctx_entered) {
                 Ok(element) => element,
                 Err(err) => {
-                    return Err(anyhow!(
-                        "Failed to retrieve element \"{id_attribute}\": {err}"
-                    ));
+                    return Err(MissingElementError { id_attribute, err }.into());
                 }
             };
 
@@ -160,4 +174,11 @@ impl RenderProcessHandler {
 
         Ok(())
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Failed to retrieve element \"{id_attribute}\": {err}")]
+pub struct MissingElementError {
+    id_attribute: String,
+    err: V8ObjectError,
 }

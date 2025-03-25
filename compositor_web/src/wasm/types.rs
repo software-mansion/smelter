@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use compositor_render::{web_renderer::WebRendererInitOptions, InputId, Resolution};
+use compositor_render::{
+    error::ErrorStack, web_renderer::WebRendererInitOptions, InputId, Resolution,
+};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -130,8 +132,9 @@ pub fn from_js_value<T: DeserializeOwned>(value: JsValue) -> Result<T, JsValue> 
     serde_wasm_bindgen::from_value(value).map_err(to_js_error)
 }
 
-pub fn to_js_error(error: impl std::error::Error) -> JsValue {
-    JsValue::from_str(&error.to_string())
+pub fn to_js_error(error: impl std::error::Error + 'static) -> JsValue {
+    let error_stack = ErrorStack::new(&error);
+    JsValue::from_str(&error_stack.into_string())
 }
 
 trait JsValueExt {

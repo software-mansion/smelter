@@ -1,9 +1,8 @@
-use anyhow::Result;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use compositor_chromium::cef;
-use shared_memory::{Shmem, ShmemConf};
+use shared_memory::{Shmem, ShmemConf, ShmemError};
 
 pub struct State {
     sources: HashMap<PathBuf, Source>,
@@ -24,7 +23,7 @@ impl State {
         &mut self,
         frame_info: FrameInfo,
         ctx_entered: &cef::V8ContextEntered,
-    ) -> Result<&mut Source> {
+    ) -> Result<&mut Source, ShmemError> {
         let shmem_path = frame_info.shmem_path.clone();
         let source = Source::new(frame_info, ctx_entered)?;
 
@@ -47,7 +46,10 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn new(frame_info: FrameInfo, ctx_entered: &cef::V8ContextEntered) -> Result<Self> {
+    pub fn new(
+        frame_info: FrameInfo,
+        ctx_entered: &cef::V8ContextEntered,
+    ) -> Result<Self, ShmemError> {
         let shmem = ShmemConf::new().flink(&frame_info.shmem_path).open()?;
         let data_ptr = shmem.as_ptr();
 
@@ -79,7 +81,7 @@ impl Source {
         &mut self,
         frame_info: &FrameInfo,
         ctx_entered: &cef::V8ContextEntered,
-    ) -> Result<()> {
+    ) -> Result<(), ShmemError> {
         if self.frame_info != *frame_info {
             *self = Self::new(frame_info.clone(), ctx_entered)?;
         }

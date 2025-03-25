@@ -116,6 +116,20 @@ fn view_tests() {
         ..default.clone()
     });
     runner.add(TestCase {
+        name: "view/border_radius_clipping",
+        scene_updates: scene_from_json(include_str!(
+            "../../snapshot_tests/view/border_radius_clipping.scene.json"
+        )),
+        ..default.clone()
+    });
+    runner.add(TestCase {
+        name: "view/border_radius_clipping_large_border_width",
+        scene_updates: scene_from_json(include_str!(
+            "../../snapshot_tests/view/border_radius_clipping_large_border_width.scene.json"
+        )),
+        ..default.clone()
+    });
+    runner.add(TestCase {
         name: "view/border_width",
         scene_updates: scene_from_json(include_str!(
             "../../snapshot_tests/view/border_width.scene.json"

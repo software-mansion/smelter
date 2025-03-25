@@ -3,6 +3,8 @@ import type { Api, Renderers } from '@swmansion/smelter';
 
 export type RegisterImage = Required<Pick<Renderers.RegisterImage, 'assetType' | 'url'>>;
 
+export type RegisterShader = Renderers.RegisterShader;
+
 export type RegisterOutput =
   | {
       type: 'stream';
@@ -52,7 +54,7 @@ export function intoRegisterOutputRequest(request: RegisterOutput): Output.Regis
 }
 
 export type RegisterInput =
-  | { type: 'mp4'; url: string }
+  | { type: 'mp4'; url?: string; blob?: Blob }
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: MediaStream };
