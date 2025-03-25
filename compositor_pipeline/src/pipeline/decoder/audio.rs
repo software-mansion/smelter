@@ -118,6 +118,7 @@ pub fn start_audio_decoder_thread(
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
     samples_sender: Sender<PipelineEvent<InputSamples>>,
     input_id: InputId,
+    send_eos: bool,
 ) -> Result<(), InputInitError> {
     let (init_result_sender, init_result_receiver) = bounded(0);
     std::thread::Builder::new()
@@ -145,7 +146,7 @@ pub fn start_audio_decoder_thread(
                 init_result_sender,
             );
 
-            if samples_sender.send(PipelineEvent::EOS).is_err() {
+            if send_eos && samples_sender.send(PipelineEvent::EOS).is_err() {
                 debug!("Failed to send EOS message.")
             }
         })
