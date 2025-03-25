@@ -23,19 +23,8 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    // examples::post(
-    //     "input/input_1/register",
-    //     &json!({
-    //         "type": "rtp_stream",
-    //         "port": INPUT_PORT,
-    //         "video": {
-    //             "decoder": "ffmpeg_vp8"
-    //         }
-    //     }),
-    // )?;
-
     let token_input_1 = examples::post(
-        "input/input_2/register",
+        "input/input_1/register",
         &json!({
             "type": "whip",
         }),
@@ -43,6 +32,18 @@ fn client_code() -> Result<()> {
     .json::<serde_json::Value>();
 
     if let Ok(token) = token_input_1 {
+        info!("Bearer token for input_1: {}", token["bearer_token"]);
+    }
+
+    let token_input_2 = examples::post(
+        "input/input_2/register",
+        &json!({
+            "type": "whip",
+        }),
+    )?
+    .json::<serde_json::Value>();
+
+    if let Ok(token) = token_input_2 {
         info!("Bearer token for input_2: {}", token["bearer_token"]);
     }
 
@@ -66,13 +67,13 @@ fn client_code() -> Result<()> {
                         "type": "view",
                         "background_color": "#4d4d4dff",
                         "children": [
-                            // {
-                            //     "type": "rescaler",
-                            //         "child": {
-                            //         "type": "input_stream",
-                            //         "input_id": "input_1"
-                            //     }
-                            // },
+                            {
+                                "type": "rescaler",
+                                    "child": {
+                                    "type": "input_stream",
+                                    "input_id": "input_1"
+                                }
+                            },
                             {
                                 "type": "rescaler",
                                 "child": {

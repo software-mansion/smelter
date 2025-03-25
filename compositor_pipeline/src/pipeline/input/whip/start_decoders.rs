@@ -68,10 +68,15 @@ pub async fn start_decoders_threads(
         );
 
         start_forwarding_thread(async_receiver, sync_sender, span);
+
+        #[cfg(feature = "vk-video")]
+        let decoder = pipeline::VideoDecoder::VulkanVideoH264;
+
+        #[cfg(not(feature = "vk-video"))]
+        let decoder = pipeline::VideoDecoder::FFmpegH264;
+
         start_video_decoder_thread(
-            VideoDecoderOptions {
-                decoder: pipeline::VideoDecoder::FFmpegH264,
-            },
+            VideoDecoderOptions { decoder },
             &pipeline_ctx,
             sync_receiver,
             decoded_data_sender.frame_sender.clone(),

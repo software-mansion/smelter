@@ -106,10 +106,7 @@ fn run_decoder_thread(
     let mut pts_offset = None;
     for chunk in chunks_receiver {
         let chunk = match chunk {
-            PipelineEvent::Data(chunk) => {
-                println!("chunk pts: {:?}", chunk.pts);
-                chunk
-            }
+            PipelineEvent::Data(chunk) => chunk,
             PipelineEvent::EOS => {
                 break;
             }

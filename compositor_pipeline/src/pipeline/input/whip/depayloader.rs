@@ -47,8 +47,6 @@ impl Depayloader {
         packet: rtp::packet::Packet,
         track_kind: RTPCodecType,
     ) -> Result<Vec<EncodedChunk>, DepayloadingError> {
-        // println!("{:?}", packet.header.payload_type);
-
         match track_kind {
             RTPCodecType::Video => match self.video.as_mut() {
                 Some(video_depayloader) => video_depayloader.depayload(packet),
