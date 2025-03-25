@@ -20,7 +20,7 @@ With Smelter, you can:
 <br>
 
 <div align="left">
-  <video width="840" src="https://github.com/user-attachments/assets/70b450ed-e809-4be2-8178-0fc11e6a69d7"></video>
+  <image width="840" src="https://github.com/user-attachments/assets/892c1de4-57ca-4858-9f7d-a040aaf0e695"></image>
 </div>
 
 ## Where to start?
