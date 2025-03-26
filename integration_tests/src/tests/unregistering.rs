@@ -15,10 +15,11 @@ pub fn unregistering() -> Result<()> {
     const OUTPUT_DUMP_FILE: &str = "unregistering_test_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_port = instance.get_port();
-    let output_port = instance.get_port();
+    let output_port_1 = instance.get_port();
+    let output_port_2 = instance.get_port();
 
     // This should fail because image is not registered yet.
-    register_output_with_initial_scene(&instance, output_port)
+    register_output_with_initial_scene(&instance, output_port_1)
         .expect_err("Image has to be registered first");
 
     instance.send_request(
@@ -29,7 +30,7 @@ pub fn unregistering() -> Result<()> {
         }),
     )?;
 
-    register_output_with_initial_scene(&instance, output_port)?;
+    register_output_with_initial_scene(&instance, output_port_2)?;
 
     instance.send_request(
         "output/output_1/unregister",
@@ -38,7 +39,7 @@ pub fn unregistering() -> Result<()> {
         }),
     )?;
 
-    let output_receiver = OutputReceiver::start(output_port, CommunicationProtocol::Tcp)?;
+    let output_receiver = OutputReceiver::start(output_port_2, CommunicationProtocol::Tcp)?;
 
     instance.send_request(
         "input/input_1/register",
