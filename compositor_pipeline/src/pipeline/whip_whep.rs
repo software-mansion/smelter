@@ -36,7 +36,7 @@ use super::{input::whip::DecodedDataSender, PipelineCtx};
 
 pub async fn run_whip_whep_server(
     port: u16,
-    state: Arc<PipelineCtx>,
+    pipeline_ctx: Arc<PipelineCtx>,
     shutdown_signal_receiver: oneshot::Receiver<()>,
     init_result_sender: Sender<Result<(), InitPipelineError>>,
 ) {
@@ -46,7 +46,7 @@ pub async fn run_whip_whep_server(
         .route("/session/:id", patch(handle_new_whip_ice_candidates))
         .route("/session/:id", delete(handle_terminate_whip_session))
         .layer(CorsLayer::permissive())
-        .with_state(state.clone());
+        .with_state(pipeline_ctx);
 
     let Ok(listener) = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await
     else {

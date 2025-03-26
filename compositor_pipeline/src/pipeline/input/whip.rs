@@ -1,14 +1,8 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    thread,
-    time::Duration,
-};
+use start_decoders::PayloadTypeMap;
+use std::{sync::Arc, thread, time::Duration};
 use tokio::sync::mpsc;
-use webrtc::{rtp_transceiver::rtp_codec::RTPCodecType, track::track_remote::TrackRemote};
-
-use depayloader::{AudioDepayloader, Depayloader, VideoDepayloader};
-use tracing::{error, warn, Span};
+use tracing::{error, span, warn, Level};
+use webrtc::track::track_remote::TrackRemote;
 
 use crate::{
     audio_mixer::InputSamples,
@@ -21,7 +15,7 @@ use crate::{
     queue::PipelineEvent,
 };
 use compositor_render::{Frame, InputId};
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Receiver, Sender};
 use tracing::debug;
 
 use super::{Input, InputInitInfo};
@@ -120,96 +114,79 @@ impl Drop for WhipReceiver {
 }
 
 pub fn start_forwarding_thread(
-    mut async_receiver: mpsc::Receiver<PipelineEvent<EncodedChunk>>,
-    sync_sender: Sender<PipelineEvent<EncodedChunk>>,
-    span: Span,
+    input_id: InputId,
+) -> (
+    mpsc::Sender<PipelineEvent<EncodedChunk>>,
+    Receiver<PipelineEvent<EncodedChunk>>,
 ) {
+    let (whip_client_to_bridge_sender, mut whip_client_to_bridge_receiver): (
+        mpsc::Sender<PipelineEvent<EncodedChunk>>,
+        mpsc::Receiver<PipelineEvent<EncodedChunk>>,
+    ) = mpsc::channel(10);
+    let (bridge_to_decoder_sender, bridge_to_decoder_receiver): (
+        Sender<PipelineEvent<EncodedChunk>>,
+        Receiver<PipelineEvent<EncodedChunk>>,
+    ) = crossbeam_channel::bounded(10);
     thread::spawn(move || {
-        let _span = span.entered();
+        let _span: span::EnteredSpan = span!(
+            Level::INFO,
+            "WHIP server async-to-sync bridge",
+            input_id = input_id.to_string(),
+        )
+        .entered();
         loop {
-            let Some(chunk) = async_receiver.blocking_recv() else {
+            let Some(chunk) = whip_client_to_bridge_receiver.blocking_recv() else {
                 debug!("Closing WHIP async-to-sync bridge.");
                 break;
             };
 
-            if let Err(err) = sync_sender.send(chunk) {
+            if let Err(err) = bridge_to_decoder_sender.send(chunk) {
                 debug!("Failed to send Encoded Chunk. Channel closed: {:?}", err);
                 break;
             }
         }
     });
+    (whip_client_to_bridge_sender, bridge_to_decoder_receiver)
 }
 
 pub async fn process_track_stream(
     track: Arc<TrackRemote>,
     state: Arc<PipelineCtx>,
     input_id: InputId,
-    video_decoder_map: HashMap<u8, (mpsc::Sender<PipelineEvent<EncodedChunk>>, VideoDepayloader)>,
-    audio_decoder_map: HashMap<u8, (mpsc::Sender<PipelineEvent<EncodedChunk>>, AudioDepayloader)>,
+    payload_type_map: PayloadTypeMap,
 ) {
     let track_kind = track.kind();
     let time_elapsed_from_input_start = state
         .whip_whep_state
         .get_time_elapsed_from_input_start(input_id.clone(), track_kind);
 
-    //TODO send PipelineEvent::NewPeerConnection to reset queue and decoder(drop remaining frames from previous stream)
     let mut first_pts_current_stream = None;
-    let mut flag = true;
-
-    let depayloader = Arc::new(Mutex::new(Depayloader {
-        video: None,
-        audio: None,
-    }));
-
-    let mut sender_global = None;
 
     while let Ok((rtp_packet, _)) = track.read_rtp().await {
-        if flag && track_kind == RTPCodecType::Video {
-            flag = false;
-
-            if let Some((sender, video_depayloader)) =
-                video_decoder_map.get(&rtp_packet.header.payload_type)
+        if let Some((sender, depayloader)) = payload_type_map.get(&rtp_packet.header.payload_type) {
+            let chunks = match depayloader
+                .lock()
+                .unwrap()
+                .depayload(rtp_packet, track_kind)
             {
-                sender_global = Some(sender);
-                depayloader.lock().unwrap().video = Some(video_depayloader.clone());
-            }
-        } else if flag && track_kind == RTPCodecType::Audio {
-            flag = false;
+                Ok(chunks) => chunks,
+                Err(err) => {
+                    warn!("RTP depayloading error: {err:?}");
+                    continue;
+                }
+            };
 
-            if let Some((sender, audio_depayloader)) =
-                audio_decoder_map.get(&rtp_packet.header.payload_type)
-            {
-                sender_global = Some(sender);
-                depayloader.lock().unwrap().audio = Some(audio_depayloader.clone());
+            if let Some(first_chunk) = chunks.first() {
+                first_pts_current_stream.get_or_insert(first_chunk.pts);
             }
-        }
 
-        let chunks = match depayloader
-            .lock()
-            .unwrap()
-            .depayload(rtp_packet, track_kind)
-        {
-            Ok(chunks) => chunks,
-            Err(err) => {
-                warn!("RTP depayloading error: {err:?}");
-                continue;
+            for mut chunk in chunks {
+                chunk.pts = chunk.pts + time_elapsed_from_input_start.unwrap_or(Duration::ZERO)
+                    - first_pts_current_stream.unwrap_or(Duration::ZERO);
+                if let Err(e) = sender.send(PipelineEvent::Data(chunk)).await {
+                    debug!("Failed to send audio RTP packet: {e}");
+                }
             }
         };
-
-        if let Some(first_chunk) = chunks.first() {
-            first_pts_current_stream.get_or_insert(first_chunk.pts);
-        }
-
-        for mut chunk in chunks {
-            chunk.pts = chunk.pts + time_elapsed_from_input_start.unwrap_or(Duration::ZERO)
-                - first_pts_current_stream.unwrap_or(Duration::ZERO);
-            if let Err(e) = sender_global
-                .unwrap()
-                .send(PipelineEvent::Data(chunk))
-                .await
-            {
-                debug!("Failed to send audio RTP packet: {e}");
-            }
-        }
     }
 }

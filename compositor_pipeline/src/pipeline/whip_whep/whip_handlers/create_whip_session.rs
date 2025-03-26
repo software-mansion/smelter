@@ -21,7 +21,7 @@ use webrtc::{
 
 pub async fn handle_create_whip_session(
     Path(id): Path<String>,
-    State(state): State<Arc<PipelineCtx>>,
+    State(pipeline_ctx): State<Arc<PipelineCtx>>,
     headers: HeaderMap,
     offer: String,
 ) -> Result<Response<Body>, WhipServerError> {
@@ -31,14 +31,14 @@ pub async fn handle_create_whip_session(
 
     trace!("SDP offer: {}", offer);
 
-    let input_components = state
+    let input_state = pipeline_ctx
         .whip_whep_state
         .get_input_connection_options(input_id.clone())?;
 
-    validate_token(input_components.bearer_token, headers.get("Authorization")).await?;
+    validate_token(input_state.bearer_token, headers.get("Authorization")).await?;
 
     //Deleting previous peer_connection on this input which was not in Connected state
-    if let Some(connection) = input_components.peer_connection {
+    if let Some(connection) = input_state.peer_connection {
         if let Err(err) = connection.close().await {
             return Err(WhipServerError::InternalError(format!(
                 "Cannot close previously existing peer connection {input_id:?}: {err:?}"
@@ -46,9 +46,10 @@ pub async fn handle_create_whip_session(
         }
     }
 
-    let peer_connection = init_peer_connection(state.stun_servers.to_vec()).await?;
+    let (peer_connection, video_transceiver, audio_transceiver) =
+        init_peer_connection(pipeline_ctx.stun_servers.to_vec()).await?;
 
-    state
+    pipeline_ctx
         .whip_whep_state
         .update_peer_connection(input_id.clone(), peer_connection.clone())
         .await?;
@@ -62,8 +63,13 @@ pub async fn handle_create_whip_session(
 
     peer_connection.set_remote_description(description).await?;
 
-    let (video_decoder_map, audio_decoder_map) =
-        start_decoders_threads(state.clone(), input_id.clone()).await?;
+    let payload_type_map = start_decoders_threads(
+        pipeline_ctx.clone(),
+        input_id.clone(),
+        video_transceiver,
+        audio_transceiver,
+    )
+    .await?;
 
     let answer = peer_connection.create_answer(None).await?;
     peer_connection.set_local_description(answer).await?;
@@ -77,20 +83,18 @@ pub async fn handle_create_whip_session(
     trace!("Sending SDP answer: {sdp:?}");
 
     peer_connection.on_track(Box::new(move |track, _, _| {
-        let state_clone = state.clone();
         let input_id_clone = input_id.clone();
-        let video_decoder_map_clone = video_decoder_map.clone();
-        let audio_decoder_map_clone = audio_decoder_map.clone();
+        let payload_type_map_clone = payload_type_map.clone();
+        let pipeline_ctx_clone = pipeline_ctx.clone();
 
         //tokio::spawn is necessary to concurrently process audio and video track
         Box::pin(async {
             tokio::spawn(async move {
                 process_track_stream(
                     track,
-                    state_clone,
+                    pipeline_ctx_clone,
                     input_id_clone,
-                    video_decoder_map_clone,
-                    audio_decoder_map_clone,
+                    payload_type_map_clone,
                 )
                 .await;
             });

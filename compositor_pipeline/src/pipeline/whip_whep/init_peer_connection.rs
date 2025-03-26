@@ -12,7 +12,7 @@ use webrtc::{
     rtp_transceiver::{
         rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
         rtp_transceiver_direction::RTCRtpTransceiverDirection,
-        RTCPFeedback, RTCRtpTransceiverInit,
+        RTCPFeedback, RTCRtpTransceiver, RTCRtpTransceiverInit,
     },
 };
 
@@ -20,7 +20,14 @@ use super::error::WhipServerError;
 
 pub async fn init_peer_connection(
     stun_servers: Vec<String>,
-) -> Result<Arc<RTCPeerConnection>, WhipServerError> {
+) -> Result<
+    (
+        Arc<RTCPeerConnection>,
+        Arc<RTCRtpTransceiver>,
+        Arc<RTCRtpTransceiver>,
+    ),
+    WhipServerError,
+> {
     let mut media_engine = MediaEngine::default();
 
     register_codecs(&mut media_engine)?;
@@ -44,7 +51,7 @@ pub async fn init_peer_connection(
 
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
 
-    peer_connection
+    let video_transciver = peer_connection
         .add_transceiver_from_kind(
             RTPCodecType::Video,
             Some(RTCRtpTransceiverInit {
@@ -54,7 +61,7 @@ pub async fn init_peer_connection(
         )
         .await?;
 
-    peer_connection
+    let audio_transciver = peer_connection
         .add_transceiver_from_kind(
             RTPCodecType::Audio,
             Some(RTCRtpTransceiverInit {
@@ -64,7 +71,7 @@ pub async fn init_peer_connection(
         )
         .await?;
 
-    Ok(peer_connection)
+    Ok((peer_connection, video_transciver, audio_transciver))
 }
 
 fn register_codecs(media_engine: &mut MediaEngine) -> webrtc::error::Result<()> {

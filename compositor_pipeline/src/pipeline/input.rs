@@ -164,7 +164,7 @@ fn start_input_threads(
                 init_info,
             } = RtpReceiver::start_new_input(input_id, opts)?;
             let decoder_data_receiver =
-                setup_audio_video_start_decoder(pipeline_ctx, input_id, video, audio)?;
+                setup_and_start_decoders_threads(pipeline_ctx, input_id, video, audio)?;
             Ok((input, decoder_data_receiver, init_info))
         }
         InputOptions::Mp4(opts) => {
@@ -175,7 +175,7 @@ fn start_input_threads(
                 init_info,
             } = Mp4::start_new_input(input_id, opts, &pipeline_ctx.download_dir)?;
             let decoder_data_receiver =
-                setup_audio_video_start_decoder(pipeline_ctx, input_id, video, audio)?;
+                setup_and_start_decoders_threads(pipeline_ctx, input_id, video, audio)?;
             Ok((input, decoder_data_receiver, init_info))
         }
         InputOptions::Whip => {
@@ -201,13 +201,13 @@ fn start_input_threads(
                 init_info,
             } = decklink::DeckLink::start_new_input(input_id, opts)?;
             let decoder_data_receiver =
-                setup_audio_video_start_decoder(pipeline_ctx, input_id, video, audio)?;
+                setup_and_start_decoders_threads(pipeline_ctx, input_id, video, audio)?;
             Ok((input, decoder_data_receiver, init_info))
         }
     }
 }
 
-fn setup_audio_video_start_decoder(
+fn setup_and_start_decoders_threads(
     pipeline_ctx: &PipelineCtx,
     input_id: &InputId,
     video: Option<VideoInputReceiver>,
