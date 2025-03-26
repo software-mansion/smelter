@@ -43,7 +43,7 @@ fn client_code() -> Result<()> {
                 "type": "rtp_stream",
                 "port": INPUT_PORT + i * 2,
                 "video": {
-                    "decoder": "vulkan_video"
+                    "decoder": "vulkan_h264"
                 }
             }),
         )?;

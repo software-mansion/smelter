@@ -8,6 +8,7 @@ use compositor_pipeline::{
     },
     queue,
 };
+use tracing::warn;
 
 use super::register_input::*;
 use super::util::*;
@@ -83,7 +84,7 @@ impl TryFrom<InputRtpAudioOptions> for rtp::InputAudioStream {
 
 #[cfg(not(feature = "vk-video"))]
 const NO_VULKAN_VIDEO: &str =
-    "Requested `vulkan_video` decoder, but this binary was compiled without the `vk-video` feature.";
+    "Requested `vulkan_h264` decoder, but this binary was compiled without the `vk-video` feature.";
 
 impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
     type Error = TypeError;
@@ -120,12 +121,22 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
                             },
 
                             #[cfg(feature = "vk-video")]
-                            VideoDecoder::VulkanVideo => decoder::VideoDecoderOptions {
+                            VideoDecoder::VulkanH264 => decoder::VideoDecoderOptions {
                                 decoder: pipeline::VideoDecoder::VulkanVideoH264,
                             },
 
-                            #[cfg(not(feature = "vk-video"))]
+                            #[cfg(feature = "vk-video")]
                             VideoDecoder::VulkanVideo => {
+                                warn!(
+                                    "vulkan_video option is deprecated, use vulkan_h264 instead."
+                                );
+                                decoder::VideoDecoderOptions {
+                                    decoder: pipeline::VideoDecoder::VulkanVideoH264,
+                                }
+                            }
+
+                            #[cfg(not(feature = "vk-video"))]
+                            VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
                                 return Err(TypeError::new(NO_VULKAN_VIDEO))
                             }
                         },
@@ -204,11 +215,22 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                                 return Err(TypeError::new("WHIP VP8 input not implemented"))
                             }
                             #[cfg(feature = "vk-video")]
-                            VideoDecoder::VulkanVideo => decoder::VideoDecoderOptions {
+                            VideoDecoder::VulkanH264 => decoder::VideoDecoderOptions {
                                 decoder: pipeline::VideoDecoder::VulkanVideoH264,
                             },
-                            #[cfg(not(feature = "vk-video"))]
+
+                            #[cfg(feature = "vk-video")]
                             VideoDecoder::VulkanVideo => {
+                                warn!(
+                                    "vulkan_video option is deprecated, use vulkan_h264 instead."
+                                );
+                                decoder::VideoDecoderOptions {
+                                    decoder: pipeline::VideoDecoder::VulkanVideoH264,
+                                }
+                            }
+
+                            #[cfg(not(feature = "vk-video"))]
+                            VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
                                 return Err(TypeError::new(NO_VULKAN_VIDEO))
                             }
                         },
@@ -263,15 +285,23 @@ impl TryFrom<Mp4Input> for pipeline::RegisterInputOptions {
             buffer_duration: None,
         };
 
+        if video_decoder.is_some() {
+            warn!("video_decoder option is deprecated.")
+        }
+
         let video_decoder = match video_decoder.unwrap_or(VideoDecoder::FfmpegH264) {
             VideoDecoder::FfmpegH264 => pipeline::VideoDecoder::FFmpegH264,
             VideoDecoder::FfmpegVp8 => return Err(TypeError::new("MP4 VP8 input not implemented")),
 
             #[cfg(feature = "vk-video")]
-            VideoDecoder::VulkanVideo => pipeline::VideoDecoder::VulkanVideoH264,
+            VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
+                pipeline::VideoDecoder::VulkanVideoH264
+            }
 
             #[cfg(not(feature = "vk-video"))]
-            VideoDecoder::VulkanVideo => return Err(TypeError::new(NO_VULKAN_VIDEO)),
+            VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
+                return Err(TypeError::new(NO_VULKAN_VIDEO))
+            }
         };
 
         Ok(pipeline::RegisterInputOptions {

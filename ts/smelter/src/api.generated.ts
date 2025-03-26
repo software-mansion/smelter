@@ -132,7 +132,7 @@ export type RegisterInput =
     };
 export type PortOrPortRange = string | number;
 export type TransportProtocol = "udp" | "tcp_server";
-export type VideoDecoder = "ffmpeg_h264" | "vulkan_video";
+export type VideoDecoder = "ffmpeg_h264" | "ffmpeg_vp8" | "vulkan_h264" | "vulkan_video";
 export type InputRtpAudioOptions =
   | {
       decoder: "opus";

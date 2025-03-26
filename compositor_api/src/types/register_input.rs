@@ -181,5 +181,8 @@ pub enum VideoDecoder {
     /// This requires hardware that supports Vulkan Video. Another requirement is this program has
     /// to be compiled with the `vk-video` feature enabled (enabled by default on platforms which
     /// support Vulkan, i.e. non-Apple operating systems and not the web).
+    VulkanH264,
+
+    /// Deprected
     VulkanVideo,
 }
