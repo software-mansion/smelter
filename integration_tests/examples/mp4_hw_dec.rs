@@ -28,7 +28,7 @@ fn client_code() -> Result<()> {
         &json!({
             "type": "mp4",
             "path": "examples/assets/BigBuckBunny.mp4",
-            "video_decoder": "vulkan_video",
+            "video_decoder": "vulkan_h264",
         }),
     )?;
 

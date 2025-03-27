@@ -1,5 +1,7 @@
 import type * as Api from '../api.js';
 
+export type VideoDecoder = 'ffmpeg_h264' | 'ffmpeg_vp8' | 'vulkan_h264';
+
 export type RegisterRtpInput = {
   /**
    * UDP port or port range on which the smelter should listen for the stream.
@@ -12,7 +14,7 @@ export type RegisterRtpInput = {
   /**
    * Parameters of a video source included in the RTP stream.
    */
-  video?: Api.InputRtpVideoOptions | null;
+  video?: InputRtpVideoOptions | null;
   /**
    * Parameters of an audio source included in the RTP stream.
    */
@@ -60,14 +62,14 @@ export type RegisterMp4Input = {
   /**
    * (**default=`ffmpeg_h264`**) The decoder to use for decoding video.
    */
-  videoDecoder?: Api.VideoDecoder | null;
+  videoDecoder?: VideoDecoder | null;
 };
 
 export type RegisterWhipInput = {
   /**
    * Parameters of a video source included in the RTP stream.
    */
-  video?: Api.InputWhipVideoOptions | null;
+  video?: InputWhipVideoOptions | null;
   /**
    * Parameters of an audio source included in the RTP stream.
    */
@@ -83,6 +85,10 @@ export type RegisterWhipInput = {
    * frames.
    */
   offsetMs?: number | null;
+};
+
+export type InputRtpVideoOptions = {
+  decoder: VideoDecoder;
 };
 
 export type InputRtpAudioOptions =
@@ -121,6 +127,10 @@ export type InputRtpAudioAacOptions = {
    * that should be used when depacketizing this stream.
    */
   rtpMode?: Api.AacRtpMode | null;
+};
+
+export type InputWhipVideoOptions = {
+  decoder: VideoDecoder;
 };
 
 export type InputWhipAudioOptions = {
