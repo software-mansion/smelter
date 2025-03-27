@@ -36,7 +36,7 @@ pub(super) struct StatefulTilesComponent {
     children: Vec<StatefulComponent>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct TilesComponentParams {
     id: Option<ComponentId>,
 
@@ -131,29 +131,38 @@ impl TilesComponent {
             });
 
         let start = previous_state.and_then(|state| state.last_layout.clone());
+        let component = TilesComponentParams {
+            id: self.id,
+            width: self.width,
+            height: self.height,
+            background_color: self.background_color,
+            tile_aspect_ratio: self.tile_aspect_ratio,
+            margin: self.margin,
+            padding: self.padding,
+            horizontal_align: self.horizontal_align,
+            vertical_align: self.vertical_align,
+        };
+
+        let props_changed = previous_state
+            .map(|state| {
+                state.component != component || state.children.len() != self.children.len()
+            })
+            .unwrap_or(true);
+        let should_reset_transition = self.transition.map(|t| t.reset_on_update).unwrap_or(false);
         let transition = TransitionState::new(
             self.transition.map(|transition| TransitionOptions {
                 duration: transition.duration,
                 interpolation_kind: transition.interpolation_kind,
             }),
             previous_state.and_then(|s| s.transition.clone()),
+            props_changed,
+            should_reset_transition,
             ctx.last_render_pts,
         );
-
         let tiles = StatefulTilesComponent {
             start,
             last_layout: previous_state.and_then(|state| state.last_layout.clone()),
-            component: TilesComponentParams {
-                id: self.id,
-                width: self.width,
-                height: self.height,
-                background_color: self.background_color,
-                tile_aspect_ratio: self.tile_aspect_ratio,
-                margin: self.margin,
-                padding: self.padding,
-                horizontal_align: self.horizontal_align,
-                vertical_align: self.vertical_align,
-            },
+            component,
             transition,
             children: self
                 .children
