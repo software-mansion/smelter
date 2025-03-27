@@ -27,13 +27,13 @@ let
     darwin.apple_sdk.frameworks.QuartzCore
     darwin.libobjc
   ] ++ lib.optionals stdenv.isLinux [
-    mesa.drivers
+    mesa
   ];
   rpath = lib.makeLibraryPath buildInputs;
 in
 rustPlatform.buildRustPackage {
   pname = "smelter";
-  version = "0.4.0";
+  version = "0.4.1";
   src = ../..;
   cargoLock = {
     lockFile = ../../Cargo.lock;
@@ -58,8 +58,8 @@ rustPlatform.buildRustPackage {
       lib.optionalString stdenv.isLinux ''
         patchelf --set-rpath ${rpath} $out/bin/smelter
         wrapProgram $out/bin/smelter \
-        --prefix XDG_DATA_DIRS : "${mesa.drivers}/share" \
-        --prefix LD_LIBRARY_PATH : "${mesa.drivers}/lib"
+        --prefix XDG_DATA_DIRS : "${mesa}/share" \
+        --prefix LD_LIBRARY_PATH : "${mesa}/lib"
       ''
     );
 }
