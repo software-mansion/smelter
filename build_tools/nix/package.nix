@@ -27,13 +27,13 @@ let
     darwin.apple_sdk.frameworks.QuartzCore
     darwin.libobjc
   ] ++ lib.optionals stdenv.isLinux [
-    mesa.drivers
+    mesa
   ];
   rpath = lib.makeLibraryPath buildInputs;
 in
 rustPlatform.buildRustPackage {
   pname = "smelter";
-  version = "0.4.0";
+  version = "0.4.1";
   src = ../..;
   cargoLock = {
     lockFile = ../../Cargo.lock;

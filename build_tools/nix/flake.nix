@@ -39,6 +39,7 @@
           ] ++ (
             pkgs.lib.optionals pkgs.stdenv.isLinux [
               libdrm
+              libgbm
               udev
               alsa-lib
             ]
@@ -73,13 +74,13 @@
           devShells = {
             default = if pkgs.stdenv.isLinux then self'.devShells.linux else self'.devShells.macos;
             linux = pkgs.mkShell {
-              packages = devDependencies ++ [ pkgs.mesa.drivers pkgs.blackmagic-desktop-video ];
+              packages = devDependencies ++ [ pkgs.mesa pkgs.blackmagic-desktop-video ];
 
               # Fixes "ffplay" used in examples on Linux (not needed on NixOS)
-              env.LIBGL_DRIVERS_PATH = "${pkgs.mesa.drivers}/lib/dri";
+              env.LIBGL_DRIVERS_PATH = "${pkgs.mesa}/lib/dri";
 
               env.LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-              env.LD_LIBRARY_PATH = lib.makeLibraryPath (libcefDependencies ++ [ pkgs.mesa.drivers pkgs.libGL pkgs.blackmagic-desktop-video ]);
+              env.LD_LIBRARY_PATH = lib.makeLibraryPath (libcefDependencies ++ [ pkgs.mesa pkgs.libGL pkgs.blackmagic-desktop-video ]);
 
               inputsFrom = [ packageWithoutChromium ];
             };
@@ -88,7 +89,7 @@
               inputsFrom = [ packageWithoutChromium ];
             };
             nixos = pkgs.mkShell {
-              packages = devDependencies ++ [ pkgs.mesa.drivers  pkgs.blackmagic-desktop-video ];
+              packages = devDependencies ++ [ pkgs.mesa pkgs.blackmagic-desktop-video ];
 
               env.LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
               env.LD_LIBRARY_PATH = lib.makeLibraryPath (libcefDependencies ++ [ pkgs.libGL pkgs.blackmagic-desktop-video ]);
