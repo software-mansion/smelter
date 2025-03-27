@@ -3,9 +3,9 @@ use std::sync::Arc;
 use tracing::error;
 
 use crate::{
+    state::node_texture::{NodeTexture, NodeTextureState},
     wgpu::{
         common_pipeline::{self, CreateShaderError, Sampler},
-        texture::{NodeTexture, NodeTextureState},
         WgpuCtx, WgpuErrorScope,
     },
     Resolution,
@@ -13,11 +13,12 @@ use crate::{
 
 use super::{params::ParamsBindGroups, RenderLayout};
 
+const LABEL: Option<&str> = Some("layout node");
+
 #[derive(Debug)]
 pub struct LayoutShader {
     pipeline: wgpu::RenderPipeline,
     sampler: Sampler,
-    texture_bgl: wgpu::BindGroupLayout,
     params_bind_groups: ParamsBindGroups,
 }
 
@@ -40,16 +41,15 @@ impl LayoutShader {
         shader_module: wgpu::ShaderModule,
     ) -> Result<Self, CreateShaderError> {
         let sampler = Sampler::new(&wgpu_ctx.device);
-        let texture_bgl = common_pipeline::create_single_texture_bgl(&wgpu_ctx.device);
         let params_bind_groups = ParamsBindGroups::new(wgpu_ctx);
 
         let pipeline_layout =
             wgpu_ctx
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("shader transformation pipeline layout"),
+                    label: LABEL,
                     bind_group_layouts: &[
-                        &texture_bgl,
+                        &wgpu_ctx.format.single_texture_layout,
                         &params_bind_groups.bind_group_1_layout,
                         &params_bind_groups.bind_group_2_layout,
                         &sampler.bind_group_layout,
@@ -61,15 +61,16 @@ impl LayoutShader {
                 });
 
         let pipeline = common_pipeline::create_render_pipeline(
+            "Layout node",
             &wgpu_ctx.device,
             &pipeline_layout,
             &shader_module,
+            wgpu_ctx.default_view_format(),
         );
 
         Ok(Self {
             pipeline,
             sampler,
-            texture_bgl,
             params_bind_groups,
         })
     }
@@ -95,16 +96,18 @@ impl LayoutShader {
             );
         }
 
-        let mut encoder = wgpu_ctx.device.create_command_encoder(&Default::default());
+        let mut encoder = wgpu_ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: LABEL });
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
+                label: LABEL,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                         store: wgpu::StoreOp::Store,
                     },
-                    view: &target.rgba_texture().texture().view,
+                    view: target.view(),
                     resolve_target: None,
                 })],
                 // TODO: depth stencil attachments
@@ -148,15 +151,15 @@ impl LayoutShader {
             .map(|texture| {
                 texture
                     .and_then(|texture| texture.state())
-                    .map(|state| &state.rgba_texture().texture().view)
-                    .unwrap_or(&wgpu_ctx.empty_texture.view)
+                    .map(|state| state.view())
+                    .unwrap_or(wgpu_ctx.default_empty_view())
             })
             .map(|view| {
                 wgpu_ctx
                     .device
                     .create_bind_group(&wgpu::BindGroupDescriptor {
-                        layout: &self.texture_bgl,
-                        label: None,
+                        layout: &wgpu_ctx.format.single_texture_layout,
+                        label: LABEL,
                         entries: &[wgpu::BindGroupEntry {
                             binding: 0,
                             resource: wgpu::BindingResource::TextureView(view),

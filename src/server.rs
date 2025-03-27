@@ -18,7 +18,7 @@ pub fn run() {
     let runtime = Arc::new(Runtime::new().unwrap());
     let (state, event_loop) = ApiState::new(config, runtime.clone()).unwrap_or_else(|err| {
         panic!(
-            "Failed to start event loop.\n{}",
+            "Failed to start Smelter instance.\n{}",
             ErrorStack::new(&err).into_string()
         )
     });

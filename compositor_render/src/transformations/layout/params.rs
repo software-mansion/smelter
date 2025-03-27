@@ -4,7 +4,11 @@ use wgpu::{
     BindGroupLayoutDescriptor, BufferUsages,
 };
 
-use crate::{scene::RGBAColor, wgpu::WgpuCtx, Resolution};
+use crate::{
+    scene::RGBAColor,
+    wgpu::{utils::convert_to_shader_color, WgpuCtx},
+    Resolution,
+};
 
 use super::{BorderRadius, RenderLayout};
 
@@ -219,8 +223,8 @@ impl ParamsBindGroups {
                     };
                     let mut color_params_bytes = [0u8; 80];
                     color_params_bytes[0..16].copy_from_slice(&border_radius_bytes);
-                    color_params_bytes[16..32].copy_from_slice(&color_to_bytes(*border_color));
-                    color_params_bytes[32..48].copy_from_slice(&color_to_bytes(*color));
+                    color_params_bytes[16..32].copy_from_slice(&color_to_bytes(ctx, border_color));
+                    color_params_bytes[32..48].copy_from_slice(&color_to_bytes(ctx, color));
                     color_params_bytes[48..52].copy_from_slice(&top.to_le_bytes());
                     color_params_bytes[52..56].copy_from_slice(&left.to_le_bytes());
                     color_params_bytes[56..60].copy_from_slice(&width.to_le_bytes());
@@ -243,7 +247,8 @@ impl ParamsBindGroups {
                     };
                     let mut texture_params_bytes = [0u8; 80];
                     texture_params_bytes[0..16].copy_from_slice(&border_radius_bytes);
-                    texture_params_bytes[16..32].copy_from_slice(&color_to_bytes(*border_color));
+                    texture_params_bytes[16..32]
+                        .copy_from_slice(&color_to_bytes(ctx, border_color));
                     texture_params_bytes[32..36].copy_from_slice(&top.to_le_bytes());
                     texture_params_bytes[36..40].copy_from_slice(&left.to_le_bytes());
                     texture_params_bytes[40..44].copy_from_slice(&width.to_le_bytes());
@@ -265,7 +270,7 @@ impl ParamsBindGroups {
                     };
                     let mut box_shadow_params_bytes = [0u8; 64];
                     box_shadow_params_bytes[0..16].copy_from_slice(&border_radius_bytes);
-                    box_shadow_params_bytes[16..32].copy_from_slice(&color_to_bytes(*color));
+                    box_shadow_params_bytes[16..32].copy_from_slice(&color_to_bytes(ctx, color));
                     box_shadow_params_bytes[32..36].copy_from_slice(&top.to_le_bytes());
                     box_shadow_params_bytes[36..40].copy_from_slice(&left.to_le_bytes());
                     box_shadow_params_bytes[40..44].copy_from_slice(&width.to_le_bytes());
@@ -346,21 +351,12 @@ fn borders_radius_to_bytes(border_radius: BorderRadius) -> [u8; 16] {
     result
 }
 
-fn color_to_bytes(color: RGBAColor) -> [u8; 16] {
-    let RGBAColor(r, g, b, a) = color;
+fn color_to_bytes(ctx: &WgpuCtx, color: &RGBAColor) -> [u8; 16] {
+    let [r, g, b, a] = convert_to_shader_color(ctx, color);
     let mut result = [0u8; 16];
-    result[0..4].copy_from_slice(&srgb_to_linear(r).to_le_bytes());
-    result[4..8].copy_from_slice(&srgb_to_linear(g).to_le_bytes());
-    result[8..12].copy_from_slice(&srgb_to_linear(b).to_le_bytes());
-    result[12..16].copy_from_slice(&(a as f32 / 255.0).to_le_bytes());
+    result[0..4].copy_from_slice(&(r as f32).to_le_bytes());
+    result[4..8].copy_from_slice(&(g as f32).to_le_bytes());
+    result[8..12].copy_from_slice(&(b as f32).to_le_bytes());
+    result[12..16].copy_from_slice(&(a as f32).to_le_bytes());
     result
-}
-
-fn srgb_to_linear(color: u8) -> f32 {
-    let color = color as f32 / 255.0;
-    if color < 0.04045 {
-        color / 12.92
-    } else {
-        f32::powf((color + 0.055) / 1.055, 2.4)
-    }
 }

@@ -7,7 +7,9 @@ use std::{
 };
 
 use compositor_pipeline::queue::{self, QueueOptions};
-use compositor_render::{web_renderer::WebRendererInitOptions, Framerate, WgpuFeatures};
+use compositor_render::{
+    web_renderer::WebRendererInitOptions, Framerate, RenderingMode, WgpuFeatures,
+};
 use rand::Rng;
 use tracing::error;
 
@@ -29,6 +31,7 @@ pub struct Config {
     pub load_system_fonts: bool,
     pub whip_whep_server_port: u16,
     pub start_whip_whep: bool,
+    pub rendering_mode: RenderingMode,
 }
 
 #[derive(Debug, Clone)]
@@ -228,6 +231,14 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => default_stun_servers,
     };
 
+    let rendering_mode = match env::var("SMELTER_FORCE_CPU_OPTIMIZED_RENDERING_MODE") {
+        Ok(enable) => match bool_env_from_str(&enable) {
+            Some(true) => RenderingMode::CpuOptimized,
+            Some(false) | None => RenderingMode::GpuOptimized,
+        },
+        Err(_) => RenderingMode::GpuOptimized,
+    };
+
     let config = Config {
         instance_id,
         api_port,
@@ -257,6 +268,7 @@ fn try_read_config() -> Result<Config, String> {
         load_system_fonts,
         whip_whep_server_port,
         start_whip_whep,
+        rendering_mode,
     };
     Ok(config)
 }

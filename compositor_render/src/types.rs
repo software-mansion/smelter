@@ -5,6 +5,18 @@ use std::{
     time::Duration,
 };
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum RenderingMode {
+    // - Leverage multiple views per texture
+    // - Color blending in linear space
+    GpuOptimized,
+    // - Color blending in sRGB space
+    CpuOptimized,
+    // - Single view per texture
+    // - Color blending in linear space (but requires additional processing)
+    WebGl,
+}
+
 #[derive(Debug, Clone)]
 pub struct Frame {
     pub data: FrameData,
@@ -122,8 +134,32 @@ pub struct Resolution {
 }
 
 impl Resolution {
+    pub const ZERO: Self = Resolution {
+        width: 0,
+        height: 0,
+    };
+
+    pub const ONE_PIXEL: Self = Resolution {
+        width: 1,
+        height: 1,
+    };
+
+    pub const MIN_2X2: Self = Resolution {
+        width: 2,
+        height: 2,
+    };
+
     pub fn ratio(&self) -> f32 {
         self.width as f32 / self.height as f32
+    }
+}
+
+impl From<wgpu::Extent3d> for Resolution {
+    fn from(value: wgpu::Extent3d) -> Self {
+        Self {
+            width: value.width as usize,
+            height: value.height as usize,
+        }
     }
 }
 

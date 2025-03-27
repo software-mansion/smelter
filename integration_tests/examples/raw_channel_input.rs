@@ -40,7 +40,7 @@ const VIDEO_OUTPUT_PORT: u16 = 8002;
 fn main() {
     ffmpeg_next::format::network::init();
     let config = read_config();
-    logger::init_logger(config.logger);
+    logger::init_logger(config.logger.clone());
     let ctx = GraphicsContext::new(GraphicsContextOptions {
         features: wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
             | wgpu::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
@@ -51,19 +51,9 @@ fn main() {
     let (wgpu_device, wgpu_queue) = (ctx.device.clone(), ctx.queue.clone());
     // no chromium support, so we can ignore _event_loop
     let (pipeline, _event_loop) = Pipeline::new(Options {
-        queue_options: config.queue_options,
-        stream_fallback_timeout: config.stream_fallback_timeout,
-        web_renderer: config.web_renderer,
-        force_gpu: config.force_gpu,
-        download_root: config.download_root,
-        mixing_sample_rate: config.mixing_sample_rate,
-        stun_servers: config.stun_servers,
-        wgpu_features: config.required_wgpu_features,
-        load_system_fonts: Some(true),
         wgpu_ctx: Some(ctx),
-        whip_whep_server_port: Some(config.whip_whep_server_port),
-        start_whip_whep: config.start_whip_whep,
         tokio_rt: Some(Arc::new(Runtime::new().unwrap())),
+        ..(&config).into()
     })
     .unwrap_or_else(|err| {
         panic!(

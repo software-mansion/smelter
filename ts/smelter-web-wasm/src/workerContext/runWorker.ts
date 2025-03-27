@@ -4,14 +4,19 @@ import { pino, type Logger } from 'pino';
 import type { InitOptions, WorkerMessage, WorkerResponse } from '../workerApi';
 import { registerWorkerEntrypoint } from './bridge';
 import { assert } from '../utils';
+import { LoggerLevel } from '@swmansion/smelter-core';
 
 let instance: Pipeline | undefined;
 let onMessageLogger: Logger = pino({ level: 'warn' });
 
 async function initInstance(options: InitOptions) {
   await loadWasmModule(options.wasmBundleUrl);
+  const loggerLevel = (
+    Object.values(LoggerLevel).includes(options.loggerLevel as any) ? options.loggerLevel : 'warn'
+  ) as LoggerLevel;
   const renderer = await Renderer.create({
     streamFallbackTimeoutMs: 500,
+    loggerLevel,
   });
   const logger = pino({ level: options.loggerLevel }).child({ runtime: 'worker' });
   onMessageLogger = logger.child({ element: 'onMessage' });

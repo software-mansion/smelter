@@ -11,7 +11,7 @@ use serde_json::json;
 ///
 /// Show image and stream for 4 seconds. After that only image is displayed.
 #[test]
-pub fn unregistering() -> Result<()> {
+pub fn unregistering_flaky() -> Result<()> {
     const OUTPUT_DUMP_FILE: &str = "unregistering_test_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_port = instance.get_port();
@@ -50,6 +50,8 @@ pub fn unregistering() -> Result<()> {
             "video": {
                 "decoder": "ffmpeg_h264"
             },
+            "required": true,
+            "offset_ms": 0,
         }),
     )?;
 

@@ -77,6 +77,7 @@ impl From<&Config> for pipeline::Options {
             start_whip_whep: val.start_whip_whep,
             whip_whep_server_port: Some(val.whip_whep_server_port),
             tokio_rt: None,
+            rendering_mode: val.rendering_mode,
         }
     }
 }

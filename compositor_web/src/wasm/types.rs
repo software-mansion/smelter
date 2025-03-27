@@ -22,14 +22,14 @@ pub enum LoggerLevel {
     Trace,
 }
 
-impl From<LoggerLevel> for log::Level {
+impl From<LoggerLevel> for tracing::Level {
     fn from(value: LoggerLevel) -> Self {
         match value {
-            LoggerLevel::Error => log::Level::Error,
-            LoggerLevel::Warn => log::Level::Warn,
-            LoggerLevel::Info => log::Level::Info,
-            LoggerLevel::Debug => log::Level::Debug,
-            LoggerLevel::Trace => log::Level::Trace,
+            LoggerLevel::Error => tracing::Level::ERROR,
+            LoggerLevel::Warn => tracing::Level::WARN,
+            LoggerLevel::Info => tracing::Level::INFO,
+            LoggerLevel::Debug => tracing::Level::DEBUG,
+            LoggerLevel::Trace => tracing::Level::TRACE,
         }
     }
 }
@@ -98,6 +98,7 @@ impl From<RendererOptions> for compositor_render::RendererOptions {
             wgpu_features: wgpu::Features::empty(),
             wgpu_ctx: None,
             load_system_fonts: true,
+            rendering_mode: compositor_render::RenderingMode::WebGl,
         }
     }
 }

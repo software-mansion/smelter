@@ -22,14 +22,13 @@ const OUTPUT_PORT: u16 = 8004;
 fn main() {
     env::set_var("SMELTER_WEB_RENDERER_ENABLE", "1");
 
-    use compositor_chromium::cef::bundle_for_development;
-
     let target_path = &std::env::current_exe()
         .unwrap()
         .parent()
         .unwrap()
         .join("..");
-    if let Err(err) = bundle_for_development(target_path) {
+    #[cfg(feature = "web_renderer")]
+    if let Err(err) = compositor_chromium::cef::bundle_for_development(target_path) {
         panic!(
             "Build process helper first. For release profile use: cargo build -r --bin process_helper. {:?}",
             err
