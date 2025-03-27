@@ -12,6 +12,9 @@
 
 ### 🔧 Others
 
+- Deprecate `vulkan_video` option in favor of `vulkan_h264`. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
+- Deprecate `video_decoder` option in MP4 input. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
+
 ## [v0.4.1](https://github.com/software-mansion/live-compositor/releases/tag/v0.4.1)
 
 ### 🐛 Bug fixes
