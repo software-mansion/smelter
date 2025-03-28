@@ -24,7 +24,6 @@ impl OutputDownloader {
         outputs: FrameSet<OutputId>,
     ) -> Result<types::FrameSet, JsValue> {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
         for (id, frame) in outputs.frames.iter() {
             let FrameData::Rgba8UnormWgpuTexture(texture) = &frame.data else {
                 panic!("Expected Rgba8UnormWgpuTexture");

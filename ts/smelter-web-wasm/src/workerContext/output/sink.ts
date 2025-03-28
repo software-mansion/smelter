@@ -1,5 +1,5 @@
-import type { Frame } from '@swmansion/smelter-browser-render';
+import { OutputFrame } from "@swmansion/smelter-browser-render";
 
 export interface OutputSink {
-  send(frame: Frame): Promise<void>;
+  send(frame: OutputFrame): Promise<void>;
 }

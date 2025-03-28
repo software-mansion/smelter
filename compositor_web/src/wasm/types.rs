@@ -3,8 +3,10 @@ use std::time::Duration;
 use compositor_render::{
     error::ErrorStack, web_renderer::WebRendererInitOptions, InputId, Resolution,
 };
+use js_sys::Uint8ClampedArray;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+use web_sys::VideoFrame;
 
 #[derive(Debug, Deserialize)]
 pub struct RendererOptions {
@@ -60,11 +62,9 @@ impl FrameSet {
     }
 }
 
-pub struct Frame {
+pub struct InputFrame {
     pub id: InputId,
-    pub resolution: Resolution,
-    pub format: FrameFormat,
-    pub data: web_sys::VideoFrame,
+    pub frame: web_sys::VideoFrame,
 }
 
 #[wasm_bindgen]
@@ -103,7 +103,7 @@ impl From<RendererOptions> for compositor_render::RendererOptions {
     }
 }
 
-impl TryFrom<JsValue> for Frame {
+impl TryFrom<JsValue> for InputFrame {
     type Error = JsValue;
 
     fn try_from(entry: JsValue) -> Result<Self, Self::Error> {
@@ -114,18 +114,8 @@ impl TryFrom<JsValue> for Frame {
         let id = InputId(id.into());
 
         // 1 - map value
-        let value = js_sys::Reflect::get_u32(&entry, 1)?;
-        let resolution =
-            from_js_value::<compositor_api::types::Resolution>(value.get("resolution")?)?.into();
-        let format: FrameFormat = from_js_value(value.get("format")?)?;
-        let data: js_sys::Uint8ClampedArray = value.get("data")?.into();
-
-        Ok(Self {
-            id,
-            resolution,
-            format,
-            data: data.to_vec(),
-        })
+        let frame: VideoFrame = js_sys::Reflect::get_u32(&entry, 1)?.into();
+        Ok(Self { id, frame })
     }
 }
 

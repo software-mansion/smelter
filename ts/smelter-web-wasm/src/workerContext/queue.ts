@@ -1,7 +1,7 @@
 import type {
-  Frame,
   FrameSet,
   InputId,
+  OutputFrame,
   OutputId,
   Renderer,
 } from '@swmansion/smelter-browser-render';
@@ -94,19 +94,19 @@ export class Queue {
     this.sendOutputs(outputs);
   }
 
-  private async getInputFrames(currentPtsMs: number): Promise<Record<InputId, Frame>> {
-    const frames: Array<[InputId, Frame | undefined]> = await Promise.all(
+  private async getInputFrames(currentPtsMs: number): Promise<Record<InputId, VideoFrame>> {
+    const frames: Array<[InputId, VideoFrame | undefined]> = await Promise.all(
       Object.entries(this.inputs).map(async ([inputId, input]) => [
         inputId,
         await input.getFrame(currentPtsMs),
       ])
     );
-    const validFrames = frames.filter((entry): entry is [string, Frame] => !!entry[1]);
+    const validFrames = frames.filter((entry): entry is [string, VideoFrame] => !!entry[1]);
 
     return Object.fromEntries(validFrames);
   }
 
-  private sendOutputs(outputs: FrameSet) {
+  private sendOutputs(outputs: FrameSet<OutputFrame>) {
     for (const [outputId, frame] of Object.entries(outputs.frames)) {
       const output = this.outputs[outputId];
       if (!output) {
