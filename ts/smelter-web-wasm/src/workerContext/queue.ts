@@ -10,8 +10,10 @@ import type { Input } from './input/input';
 import type { Output } from './output/output';
 import { sleep } from '../utils';
 import type { Logger } from 'pino';
+import { InputVideoFrameRef } from './input/frame';
 
 export type StopQueueFn = () => void;
+type CleanUpInputFramesFn = () => void;
 
 export class Queue {
   private inputs: Record<InputId, Input> = {};
@@ -84,26 +86,37 @@ export class Queue {
   }
 
   private async onTick(currentPtsMs: number): Promise<void> {
-    const frames = await this.getInputFrames(currentPtsMs);
+    const [frames, cleanUpInputFrames] = await this.getInputFrames(currentPtsMs);
     this.logger.trace({ frames }, 'onQueueTick');
 
-    const outputs = this.renderer.render({
-      ptsMs: currentPtsMs,
-      frames,
-    });
-    this.sendOutputs(outputs);
+    try {
+      const outputs = this.renderer.render({
+        ptsMs: currentPtsMs,
+        frames,
+      });
+      this.sendOutputs(outputs);
+    } finally {
+      cleanUpInputFrames();
+    }
+
   }
 
-  private async getInputFrames(currentPtsMs: number): Promise<Record<InputId, VideoFrame>> {
-    const frames: Array<[InputId, VideoFrame | undefined]> = await Promise.all(
+  private async getInputFrames(currentPtsMs: number): Promise<[Record<InputId, VideoFrame>, CleanUpInputFramesFn]> {
+    const frames: Array<[InputId, InputVideoFrameRef | undefined]> = await Promise.all(
       Object.entries(this.inputs).map(async ([inputId, input]) => [
         inputId,
         await input.getFrame(currentPtsMs),
       ])
     );
-    const validFrames = frames.filter((entry): entry is [string, VideoFrame] => !!entry[1]);
+    const validFrameRefs = frames.filter((entry): entry is [string, InputVideoFrameRef] => !!entry[1]);
+    const validFrames = validFrameRefs.map(entry => [entry[0], entry[1].getFrame()]);
+    const cleanUpFrames = () => {
+      for (const [_, frameRef] of validFrameRefs) {
+        frameRef.decrementRefCount();
+      }
+    }
 
-    return Object.fromEntries(validFrames);
+    return [Object.fromEntries(validFrames), cleanUpFrames];
   }
 
   private sendOutputs(outputs: FrameSet<OutputFrame>) {

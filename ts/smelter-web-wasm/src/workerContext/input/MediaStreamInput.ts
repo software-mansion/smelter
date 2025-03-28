@@ -62,7 +62,7 @@ export class MediaStreamInput implements Input {
 
   public updateQueueStartTime(_queueStartTimeMs: number) {}
 
-  public async getFrame(_currentQueuePts: number): Promise<VideoFrame | undefined> {
+  public async getFrame(_currentQueuePts: number): Promise<InputVideoFrameRef | undefined> {
     if (this.receivedEos) {
       if (!this.sentEos) {
         this.sentEos = true;
@@ -84,11 +84,9 @@ export class MediaStreamInput implements Input {
       }
       // using Ref just to cache downloading frames if the same frame is used more than once
       frameRef.incrementRefCount();
-      const frame = frameRef.getFrame();
-      frameRef.decrementRefCount();
-
-      return frame;
+      return frameRef;
     }
-    return frameRef;
+
+    return;
   }
 }

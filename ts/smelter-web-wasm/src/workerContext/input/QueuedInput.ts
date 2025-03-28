@@ -124,14 +124,11 @@ export class QueuedInput implements Input {
   /**
    * Retrieves reference of a frame closest to the provided `currentQueuePts`.
    */
-  public async getFrame(currentQueuePts: number): Promise<VideoFrame | undefined> {
+  public async getFrame(currentQueuePts: number): Promise<InputVideoFrameRef | undefined> {
     this.dropOldFrames(currentQueuePts);
     const frameRef = this.frames.front();
     if (frameRef) {
       frameRef.incrementRefCount();
-      const frame = frameRef.getFrame();
-      frameRef.decrementRefCount();
-
       if (!this.sentFirstFrame) {
         this.sentFirstFrame = true;
         this.logger.debug('Input started');
@@ -150,7 +147,7 @@ export class QueuedInput implements Input {
         });
       }
 
-      return frame;
+      return frameRef;
     }
     return;
   }

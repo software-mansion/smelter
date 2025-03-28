@@ -1,6 +1,6 @@
 import Mp4Source from './source/Mp4Source';
 import { QueuedInput } from './QueuedInput';
-import type { InputAudioData, InputVideoFrame } from './frame';
+import type { InputAudioData, InputVideoFrame, InputVideoFrameRef } from './frame';
 import { MediaStreamInput } from './MediaStreamInput';
 import type { RegisterInput } from '../../workerApi';
 import type { Logger } from 'pino';
@@ -28,7 +28,7 @@ export type ContainerInfo = {
 export interface Input {
   start(): InputStartResult;
   updateQueueStartTime(queueStartTimeMs: number): void;
-  getFrame(currentQueuePts: number): Promise<VideoFrame | undefined>;
+  getFrame(currentQueuePts: number): Promise<InputVideoFrameRef | undefined>;
   close(): void;
 }
 

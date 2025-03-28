@@ -1,4 +1,4 @@
-import { OutputFrame } from '@swmansion/smelter-browser-render';
+import type { OutputFrame } from '@swmansion/smelter-browser-render';
 import type { OutputSink } from './sink';
 import { assert } from '../../utils';
 
