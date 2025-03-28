@@ -77,7 +77,7 @@ fn init_ffmpeg_output(
     let video_stream = options
         .video
         .map(|v| {
-            const VIDEO_TIME_BASE: i32 = 90000;
+            const VIDEO_TIME_BASE: i32 = 1000;
 
             let mut stream = output_ctx
                 .add_stream(ffmpeg::codec::Id::H264)
