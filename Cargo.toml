@@ -32,6 +32,7 @@ compositor_api = { path = "compositor_api" }
 compositor_pipeline = { path = "compositor_pipeline" }
 compositor_chromium = { path = "compositor_chromium" }
 compositor_render = { path = "compositor_render" }
+vk-video = { path = "vk-video" }
 bytes = "1.4.0"
 serde_json = { version = "1.0.99", features = ["preserve_order"] }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
@@ -54,11 +55,8 @@ rubato = "0.15.0"
 glyphon = "0.8.0"
 futures-util = "0.3.30"
 tokio = { version = "1", features = ["full"] }
-schemars = { git = "https://github.com/membraneframework-labs/schemars", rev = "a5ad1f9", features = [
-    "preserve_order",
-] }
+schemars = { version = "0.8.22", features = ["preserve_order"] }
 shared_memory = "0.12.4"
-vk-video = { path = "vk-video" }
 wgpu = { version = "24.0.1", default-features = false, features = [
     "wgsl",
     "dx12",

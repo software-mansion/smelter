@@ -116,7 +116,7 @@
               }
             },
             "width": {
-              "description": "Width of a component in pixels (without a border). Exact behavior might be different\nbased on the parent component:\n- If the parent component is a layout, check sections \"Absolute positioning\" and \"Static\npositioning\" of that component.\n- If the parent component is not a layout, then this field is required.",
+              "description": "Width of a component in pixels (without a border). Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections \"Absolute positioning\" and \"Static positioning\" of that component. - If the parent component is not a layout, then this field is required.",
               "type": [
                 "number",
                 "null"
@@ -124,7 +124,7 @@
               "format": "float"
             },
             "height": {
-              "description": "Height of a component in pixels (without a border). Exact behavior might be different\nbased on the parent component:\n- If the parent component is a layout, check sections \"Absolute positioning\" and \"Static\npositioning\" of that component.\n- If the parent component is not a layout, then this field is required.",
+              "description": "Height of a component in pixels (without a border). Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections \"Absolute positioning\" and \"Static positioning\" of that component. - If the parent component is not a layout, then this field is required.",
               "type": [
                 "number",
                 "null"
@@ -143,7 +143,7 @@
               ]
             },
             "top": {
-              "description": "Distance in pixels between this component's top edge and its parent's top edge (including a border).\nIf this field is defined, then the component will ignore a layout defined by its parent.",
+              "description": "Distance in pixels between this component's top edge and its parent's top edge (including a border). If this field is defined, then the component will ignore a layout defined by its parent.",
               "type": [
                 "number",
                 "null"
@@ -151,7 +151,7 @@
               "format": "float"
             },
             "left": {
-              "description": "Distance in pixels between this component's left edge and its parent's left edge (including a border).\nIf this field is defined, this element will be absolutely positioned, instead of being\nlaid out by its parent.",
+              "description": "Distance in pixels between this component's left edge and its parent's left edge (including a border). If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.",
               "type": [
                 "number",
                 "null"
@@ -159,7 +159,7 @@
               "format": "float"
             },
             "bottom": {
-              "description": "Distance in pixels between the bottom edge of this component and the bottom edge of its\nparent (including a border). If this field is defined, this element will be absolutely\npositioned, instead of being laid out by its parent.",
+              "description": "Distance in pixels between the bottom edge of this component and the bottom edge of its parent (including a border). If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.",
               "type": [
                 "number",
                 "null"
@@ -167,7 +167,7 @@
               "format": "float"
             },
             "right": {
-              "description": "Distance in pixels between this component's right edge and its parent's right edge.\nIf this field is defined, this element will be absolutely positioned, instead of being\nlaid out by its parent.",
+              "description": "Distance in pixels between this component's right edge and its parent's right edge. If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.",
               "type": [
                 "number",
                 "null"
@@ -175,7 +175,7 @@
               "format": "float"
             },
             "rotation": {
-              "description": "Rotation of a component in degrees. If this field is defined, this element will be\nabsolutely positioned, instead of being laid out by its parent.",
+              "description": "Rotation of a component in degrees. If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.",
               "type": [
                 "number",
                 "null"
@@ -183,7 +183,7 @@
               "format": "float"
             },
             "transition": {
-              "description": "Defines how this component will behave during a scene update. This will only have an\neffect if the previous scene already contained a `View` component with the same id.",
+              "description": "Defines how this component will behave during a scene update. This will only have an effect if the previous scene already contained a `View` component with the same id.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/Transition"
@@ -347,7 +347,7 @@
               }
             },
             "instance_id": {
-              "description": "Id of a web renderer instance. It identifies an instance registered using a\n[`register web renderer`](../routes.md#register-web-renderer-instance) request.\n\n:::warning\nYou can only refer to specific instances in one Component at a time.\n:::",
+              "description": "Id of a web renderer instance. It identifies an instance registered using a [`register web renderer`](../routes.md#register-web-renderer-instance) request.\n\n:::warning You can only refer to specific instances in one Component at a time. :::",
               "allOf": [
                 {
                   "$ref": "#/definitions/RendererId"
@@ -401,7 +401,7 @@
               ]
             },
             "shader_param": {
-              "description": "Object that will be serialized into a `struct` and passed inside the shader as:\n\n```wgsl\n@group(1) @binding(0) var<uniform>\n```\n:::note\nThis object's structure must match the structure defined in a shader source code.\nCurrently, we do not handle memory layout automatically. To achieve the correct memory\nalignment, you might need to pad your data with additional fields. See\n[WGSL documentation](https://www.w3.org/TR/WGSL/#alignment-and-size) for more details.\n:::",
+              "description": "Object that will be serialized into a `struct` and passed inside the shader as:\n\n```wgsl @group(1) @binding(0) var<uniform> ``` :::note This object's structure must match the structure defined in a shader source code. Currently, we do not handle memory layout automatically. To achieve the correct memory alignment, you might need to pad your data with additional fields. See [WGSL documentation](https://www.w3.org/TR/WGSL/#alignment-and-size) for more details. :::",
               "anyOf": [
                 {
                   "$ref": "#/definitions/ShaderParam"
@@ -487,7 +487,7 @@
               "type": "string"
             },
             "width": {
-              "description": "Width of a texture that text will be rendered on. If not provided, the resulting texture\nwill be sized based on the defined text but limited to `max_width` value.",
+              "description": "Width of a texture that text will be rendered on. If not provided, the resulting texture will be sized based on the defined text but limited to `max_width` value.",
               "type": [
                 "number",
                 "null"
@@ -495,7 +495,7 @@
               "format": "float"
             },
             "height": {
-              "description": "Height of a texture that text will be rendered on. If not provided, the resulting texture\nwill be sized based on the defined text but limited to `max_height` value.\nIt's an error to provide `height` if `width` is not defined.",
+              "description": "Height of a texture that text will be rendered on. If not provided, the resulting texture will be sized based on the defined text but limited to `max_height` value. It's an error to provide `height` if `width` is not defined.",
               "type": [
                 "number",
                 "null"
@@ -503,7 +503,7 @@
               "format": "float"
             },
             "max_width": {
-              "description": "(**default=`7682`**) Maximal `width`. Limits the width of the texture that the text will be rendered on.\nValue is ignored if `width` is defined.",
+              "description": "(**default=`7682`**) Maximal `width`. Limits the width of the texture that the text will be rendered on. Value is ignored if `width` is defined.",
               "type": [
                 "number",
                 "null"
@@ -511,7 +511,7 @@
               "format": "float"
             },
             "max_height": {
-              "description": "(**default=`4320`**) Maximal `height`. Limits the height of the texture that the text will be rendered on.\nValue is ignored if height is defined.",
+              "description": "(**default=`4320`**) Maximal `height`. Limits the height of the texture that the text will be rendered on. Value is ignored if height is defined.",
               "type": [
                 "number",
                 "null"
@@ -554,7 +554,7 @@
               ]
             },
             "font_family": {
-              "description": "(**default=`\"Verdana\"`**) Font family. Provide [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value)\nfor a specific font. \"generic-family\" values like e.g. \"sans-serif\" will not work.",
+              "description": "(**default=`\"Verdana\"`**) Font family. Provide [family-name](https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#family-name-value) for a specific font. \"generic-family\" values like e.g. \"sans-serif\" will not work.",
               "type": [
                 "string",
                 "null"
@@ -641,7 +641,7 @@
               }
             },
             "width": {
-              "description": "Width of a component in pixels. Exact behavior might be different based on the parent\ncomponent:\n- If the parent component is a layout, check sections \"Absolute positioning\" and \"Static\npositioning\" of that component.\n- If the parent component is not a layout, then this field is required.",
+              "description": "Width of a component in pixels. Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections \"Absolute positioning\" and \"Static positioning\" of that component. - If the parent component is not a layout, then this field is required.",
               "type": [
                 "number",
                 "null"
@@ -649,7 +649,7 @@
               "format": "float"
             },
             "height": {
-              "description": "Height of a component in pixels. Exact behavior might be different based on the parent\ncomponent:\n- If the parent component is a layout, check sections \"Absolute positioning\" and \"Static\npositioning\" of that component.\n- If the parent component is not a layout, then this field is required.",
+              "description": "Height of a component in pixels. Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections \"Absolute positioning\" and \"Static positioning\" of that component. - If the parent component is not a layout, then this field is required.",
               "type": [
                 "number",
                 "null"
@@ -717,7 +717,7 @@
               ]
             },
             "transition": {
-              "description": "Defines how this component will behave during a scene update. This will only have an\neffect if the previous scene already contained a `Tiles` component with the same id.",
+              "description": "Defines how this component will behave during a scene update. This will only have an effect if the previous scene already contained a `Tiles` component with the same id.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/Transition"
@@ -796,7 +796,7 @@
               ]
             },
             "width": {
-              "description": "Width of a component in pixels (without a border). Exact behavior might be different\nbased on the parent component:\n- If the parent component is a layout, check sections \"Absolute positioning\" and \"Static\npositioning\" of that component.\n- If the parent component is not a layout, then this field is required.",
+              "description": "Width of a component in pixels (without a border). Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections \"Absolute positioning\" and \"Static positioning\" of that component. - If the parent component is not a layout, then this field is required.",
               "type": [
                 "number",
                 "null"
@@ -804,7 +804,7 @@
               "format": "float"
             },
             "height": {
-              "description": "Height of a component in pixels (without a border). Exact behavior might be different\nbased on the parent component:\n- If the parent component is a layout, check sections \"Absolute positioning\" and \"Static\npositioning\" of that component.\n- If the parent component is not a layout, then this field is required.",
+              "description": "Height of a component in pixels (without a border). Exact behavior might be different based on the parent component: - If the parent component is a layout, check sections \"Absolute positioning\" and \"Static positioning\" of that component. - If the parent component is not a layout, then this field is required.",
               "type": [
                 "number",
                 "null"
@@ -812,7 +812,7 @@
               "format": "float"
             },
             "top": {
-              "description": "Distance in pixels between this component's top edge and its parent's top edge (including a border).\nIf this field is defined, then the component will ignore a layout defined by its parent.",
+              "description": "Distance in pixels between this component's top edge and its parent's top edge (including a border). If this field is defined, then the component will ignore a layout defined by its parent.",
               "type": [
                 "number",
                 "null"
@@ -820,7 +820,7 @@
               "format": "float"
             },
             "left": {
-              "description": "Distance in pixels between this component's left edge and its parent's left edge (including a border).\nIf this field is defined, this element will be absolutely positioned, instead of being\nlaid out by its parent.",
+              "description": "Distance in pixels between this component's left edge and its parent's left edge (including a border). If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.",
               "type": [
                 "number",
                 "null"
@@ -828,7 +828,7 @@
               "format": "float"
             },
             "bottom": {
-              "description": "Distance in pixels between the bottom edge of this component and the bottom edge of its\nparent (including a border). If this field is defined, this element will be absolutely\npositioned, instead of being laid out by its parent.",
+              "description": "Distance in pixels between the bottom edge of this component and the bottom edge of its parent (including a border). If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.",
               "type": [
                 "number",
                 "null"
@@ -836,7 +836,7 @@
               "format": "float"
             },
             "right": {
-              "description": "Distance in pixels between this component's right edge and its parent's right edge.\nIf this field is defined, this element will be absolutely positioned, instead of being\nlaid out by its parent.",
+              "description": "Distance in pixels between this component's right edge and its parent's right edge. If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.",
               "type": [
                 "number",
                 "null"
@@ -844,7 +844,7 @@
               "format": "float"
             },
             "rotation": {
-              "description": "Rotation of a component in degrees. If this field is defined, this element will be\nabsolutely positioned, instead of being laid out by its parent.",
+              "description": "Rotation of a component in degrees. If this field is defined, this element will be absolutely positioned, instead of being laid out by its parent.",
               "type": [
                 "number",
                 "null"
@@ -852,7 +852,7 @@
               "format": "float"
             },
             "transition": {
-              "description": "Defines how this component will behave during a scene update. This will only have an\neffect if the previous scene already contained a `Rescaler` component with the same id.",
+              "description": "Defines how this component will behave during a scene update. This will only have an effect if the previous scene already contained a `Rescaler` component with the same id.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/Transition"
@@ -953,7 +953,7 @@
       }
     },
     "EasingFunction": {
-      "description": "Easing functions are used to interpolate between two values over time.\n\nCustom easing functions can be implemented with cubic Bézier.\nThe control points are defined with `points` field by providing four numerical values: `x1`, `y1`, `x2` and `y2`. The `x1` and `x2` values have to be in the range `[0; 1]`. The cubic Bézier result is clamped to the range `[0; 1]`.\nYou can find example control point configurations [here](https://easings.net/).",
+      "description": "Easing functions are used to interpolate between two values over time.\n\nCustom easing functions can be implemented with cubic Bézier. The control points are defined with `points` field by providing four numerical values: `x1`, `y1`, `x2` and `y2`. The `x1` and `x2` values have to be in the range `[0; 1]`. The cubic Bézier result is clamped to the range `[0; 1]`. You can find example control point configurations [here](https://easings.net/).",
       "oneOf": [
         {
           "type": "object",
@@ -1026,7 +1026,7 @@
           ]
         },
         {
-          "description": "If children components are too big to fit inside the parent, resize everything inside to fit.\n\nComponents that have unknown sizes will be treated as if they had a size 0 when calculating\nscaling factor.\n\n:::warning\nThis will resize everything inside, even absolutely positioned elements. For example, if\nyou have an element in the bottom right corner and the content will be rescaled by a factor 0.5x,\nthen that component will end up in the middle of its parent\n:::",
+          "description": "If children components are too big to fit inside the parent, resize everything inside to fit.\n\nComponents that have unknown sizes will be treated as if they had a size 0 when calculating scaling factor.\n\n:::warning This will resize everything inside, even absolutely positioned elements. For example, if you have an element in the bottom right corner and the content will be rescaled by a factor 0.5x, then that component will end up in the middle of its parent :::",
           "type": "string",
           "enum": [
             "fit"
@@ -1465,14 +1465,14 @@
     "RescaleMode": {
       "oneOf": [
         {
-          "description": "Resize the component proportionally, so one of the dimensions is the same as its parent,\nbut it still fits inside it.",
+          "description": "Resize the component proportionally, so one of the dimensions is the same as its parent, but it still fits inside it.",
           "type": "string",
           "enum": [
             "fit"
           ]
         },
         {
-          "description": "Resize the component proportionally, so one of the dimensions is the same as its parent\nand the entire area of the parent is covered. Parts of a child that do not fit inside the parent are not rendered.",
+          "description": "Resize the component proportionally, so one of the dimensions is the same as its parent and the entire area of the parent is covered. Parts of a child that do not fit inside the parent are not rendered.",
           "type": "string",
           "enum": [
             "fill"
