@@ -16,6 +16,7 @@ use super::types::EncoderOutputEvent;
 
 pub mod fdk_aac;
 pub mod ffmpeg_h264;
+pub mod ffmpeg_vp8;
 pub mod opus;
 mod resampler;
 
