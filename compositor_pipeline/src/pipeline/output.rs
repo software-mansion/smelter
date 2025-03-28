@@ -4,7 +4,7 @@ use compositor_render::{
     error::RequestKeyframeError, Frame, OutputFrameFormat, OutputId, Resolution,
 };
 use crossbeam_channel::{bounded, Receiver, Sender};
-use mp4::{Mp4AudioEncoderConfig, Mp4EncoderConfig, Mp4FileWriter, Mp4OutputOptions};
+use mp4::{Mp4FileWriter, Mp4OutputOptions};
 use rtmp::RtmpSenderOptions;
 use tracing::debug;
 
@@ -13,7 +13,7 @@ use crate::{audio_mixer::OutputSamples, error::RegisterOutputError, queue::Pipel
 use self::rtp::{RtpSender, RtpSenderOptions};
 
 use super::{
-    encoder::{AudioEncoder, AudioEncoderOptions, Encoder, EncoderOptions, VideoEncoderOptions},
+    encoder::{AudioEncoderOptions, Encoder, EncoderOptions, VideoEncoderOptions},
     types::EncoderOutputEvent,
     PipelineCtx, Port, RawDataReceiver,
 };
@@ -114,13 +114,8 @@ impl OutputOptionsExt<Option<Port>> for OutputOptions {
             audio: self.audio.clone(),
         };
 
-        let (encoder, packets) = Encoder::new(
-            output_id,
-            encoder_opts,
-            ctx.output_framerate,
-            ctx.mixing_sample_rate,
-        )
-        .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
+        let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
+            .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
 
         match &self.output_protocol {
             OutputProtocolOptions::Rtp(rtp_options) => {
@@ -135,34 +130,17 @@ impl OutputOptionsExt<Option<Port>> for OutputOptions {
                     output_id,
                     rtmp_options.clone(),
                     packets,
-                    ctx.mixing_sample_rate,
+                    encoder.context(),
                 )
                 .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
 
                 Ok((Output::Rtmp { sender, encoder }, None))
             }
             OutputProtocolOptions::Mp4(mp4_opt) => {
-                let encoder_config = Mp4EncoderConfig {
-                    video: encoder.video.as_ref().map(|_| ()),
-                    audio: encoder
-                        .audio
-                        .as_ref()
-                        .map(|encoder| match encoder {
-                            AudioEncoder::Opus(_opus_encoder) => {
-                                Err(RegisterOutputError::UnknownError(
-                                    "Opus audio is not supported in Mp4 output".to_string(),
-                                ))
-                            }
-                            AudioEncoder::Aac(aac_encoder) => {
-                                Ok(Mp4AudioEncoderConfig::Aac(aac_encoder.config.clone()))
-                            }
-                        })
-                        .transpose()?,
-                };
                 let writer = Mp4FileWriter::new(
                     output_id.clone(),
                     mp4_opt.clone(),
-                    encoder_config,
+                    encoder.context(),
                     packets,
                     ctx,
                 )
@@ -197,13 +175,8 @@ impl OutputOptionsExt<Receiver<EncoderOutputEvent>> for EncodedDataOutputOptions
             audio: self.audio.clone(),
         };
 
-        let (encoder, packets) = Encoder::new(
-            output_id,
-            encoder_opts,
-            ctx.output_framerate,
-            ctx.mixing_sample_rate,
-        )
-        .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
+        let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
+            .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
 
         Ok((Output::EncodedData { encoder }, packets))
     }

@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf, ptr, sync::Arc, time::Duration};
 
 use compositor_render::OutputId;
 use crossbeam_channel::Receiver;
-use ffmpeg_next as ffmpeg;
+use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
 use log::error;
 use tracing::{debug, warn};
 
@@ -11,8 +11,9 @@ use crate::{
     error::OutputInitError,
     event::Event,
     pipeline::{
-        types::IsKeyframe, EncodedChunk, EncodedChunkKind, EncoderOutputEvent, PipelineCtx,
-        VideoCodec,
+        encoder::{AudioEncoderContext, EncoderContext, VideoEncoderContext},
+        types::IsKeyframe,
+        EncodedChunk, EncodedChunkKind, EncoderOutputEvent, PipelineCtx, VideoCodec,
     },
 };
 
@@ -36,17 +37,6 @@ pub struct Mp4AudioTrack {
     pub sample_rate: u32,
 }
 
-#[derive(Debug, Clone)]
-pub struct Mp4EncoderConfig {
-    pub video: Option<()>,
-    pub audio: Option<Mp4AudioEncoderConfig>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Mp4AudioEncoderConfig {
-    Aac(bytes::Bytes),
-}
-
 pub enum Mp4OutputVideoTrack {
     H264 { width: u32, height: u32 },
 }
@@ -56,13 +46,20 @@ pub struct Mp4WriterOptions {
     pub video: Option<Mp4OutputVideoTrack>,
 }
 
+#[derive(Debug, Clone)]
+struct StreamState {
+    index: usize,
+    time_base: Rational,
+    timestamp_offset: Option<Duration>,
+}
+
 pub struct Mp4FileWriter;
 
 impl Mp4FileWriter {
     pub fn new(
         output_id: OutputId,
         options: Mp4OutputOptions,
-        encoder_config: Mp4EncoderConfig,
+        encoder_ctx: EncoderContext,
         packets_receiver: Receiver<EncoderOutputEvent>,
         pipeline_ctx: Arc<PipelineCtx>,
     ) -> Result<Self, OutputInitError> {
@@ -91,7 +88,7 @@ impl Mp4FileWriter {
             };
         }
 
-        let (output_ctx, video_stream, audio_stream) = init_ffmpeg_output(options, encoder_config)?;
+        let (output_ctx, video_stream, audio_stream) = init_ffmpeg_output(options, encoder_ctx)?;
 
         let event_emitter = pipeline_ctx.event_emitter.clone();
         std::thread::Builder::new()
@@ -110,9 +107,12 @@ impl Mp4FileWriter {
     }
 }
 
+const VIDEO_TIME_BASE: Rational = Rational(1, 90_000);
+const NS_TIME_BASE: Rational = Rational(1, 1_000_000_000);
+
 fn init_ffmpeg_output(
     options: Mp4OutputOptions,
-    encoder_config: Mp4EncoderConfig,
+    encoder_ctx: EncoderContext,
 ) -> Result<
     (
         ffmpeg::format::context::Output,
@@ -122,71 +122,69 @@ fn init_ffmpeg_output(
     OutputInitError,
 > {
     let mut output_ctx = ffmpeg::format::output_as(&options.output_path, "mp4")
-        .map_err(OutputInitError::FfmpegMp4Error)?;
+        .map_err(OutputInitError::FfmpegError)?;
 
-    let mut stream_count = 0;
-
-    let video_stream = options
-        .video
-        .map(|v| {
-            const VIDEO_TIME_BASE: i32 = 90000;
-
-            let codec = match v.codec {
-                VideoCodec::H264 => ffmpeg::codec::Id::H264,
-                VideoCodec::VP8 => unreachable!(),
-            };
-
-            let mut stream = output_ctx
-                .add_stream(codec)
-                .map_err(OutputInitError::FfmpegMp4Error)?;
-
-            stream.set_time_base(ffmpeg::Rational::new(1, VIDEO_TIME_BASE));
-
-            let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
-            codecpar.codec_id = ffmpeg::codec::Id::H264.into();
-            codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
-            codecpar.width = v.width as i32;
-            codecpar.height = v.height as i32;
-
-            let id = stream_count;
-            stream_count += 1;
-
-            Ok::<StreamState, OutputInitError>(StreamState {
-                id,
-                time_base: VIDEO_TIME_BASE as f64,
-                timestamp_offset: None,
-            })
-        })
-        .transpose()?;
-
-    let audio_stream = if let (Some(a), Some(encoder)) = (options.audio, encoder_config.audio) {
-        let codec = ffmpeg::codec::Id::AAC;
-        let channels = match a.channels {
-            AudioChannels::Mono => 1,
-            AudioChannels::Stereo => 2,
+    let video = if let (Some(opts), Some(encoder_ctx)) = (&options.video, encoder_ctx.video) {
+        let codec = match opts.codec {
+            VideoCodec::H264 => ffmpeg::codec::Id::H264,
+            VideoCodec::VP8 => unreachable!(),
         };
-        let sample_rate = a.sample_rate as i32;
 
         let mut stream = output_ctx
             .add_stream(codec)
-            .map_err(OutputInitError::FfmpegMp4Error)?;
+            .map_err(OutputInitError::FfmpegError)?;
+
+        stream.set_time_base(VIDEO_TIME_BASE);
+
+        let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
+
+        if let VideoEncoderContext::H264(Some(ctx)) = encoder_ctx {
+            unsafe {
+                // The allocated size of extradata must be at least extradata_size + AV_INPUT_BUFFER_PADDING_SIZE, with the padding bytes zeroed.
+                codecpar.extradata = ffmpeg_next::ffi::av_mallocz(
+                    ctx.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
+                ) as *mut u8;
+                std::ptr::copy(ctx.as_ptr(), codecpar.extradata, ctx.len());
+                codecpar.extradata_size = ctx.len() as i32;
+            };
+        }
+
+        codecpar.codec_id = ffmpeg::codec::Id::H264.into();
+        codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
+        codecpar.width = opts.width as i32;
+        codecpar.height = opts.height as i32;
+
+        Some(stream.index())
+    } else {
+        None
+    };
+
+    let audio = if let (Some(opts), Some(encoder_ctx)) = (&options.audio, encoder_ctx.audio) {
+        let codec = ffmpeg::codec::Id::AAC;
+        let channels = match opts.channels {
+            AudioChannels::Mono => 1,
+            AudioChannels::Stereo => 2,
+        };
+        let sample_rate = opts.sample_rate as i32;
+
+        let mut stream = output_ctx
+            .add_stream(codec)
+            .map_err(OutputInitError::FfmpegError)?;
 
         // If audio time base doesn't match sample rate, ffmpeg muxer produces incorrect timestamps.
         stream.set_time_base(ffmpeg::Rational::new(1, sample_rate));
 
         let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
-        let Mp4AudioEncoderConfig::Aac(encoder_config) = encoder;
-        unsafe {
-            // The allocated size of extradata must be at least extradata_size + AV_INPUT_BUFFER_PADDING_SIZE, with the padding bytes zeroed.
-            codecpar.extradata = ffmpeg_next::ffi::av_mallocz(
-                encoder_config.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
-            ) as *mut u8;
-            std::ptr::copy(
-                encoder_config.as_ptr(),
-                codecpar.extradata,
-                encoder_config.len(),
-            );
-            codecpar.extradata_size = encoder_config.len() as i32;
+
+        if let AudioEncoderContext::Aac(ctx) = encoder_ctx {
+            unsafe {
+                // The allocated size of extradata must be at least extradata_size + AV_INPUT_BUFFER_PADDING_SIZE, with the padding bytes zeroed.
+                codecpar.extradata = ffmpeg_next::ffi::av_mallocz(
+                    ctx.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
+                ) as *mut u8;
+                std::ptr::copy(ctx.as_ptr(), codecpar.extradata, ctx.len());
+                codecpar.extradata_size = ctx.len() as i32;
+            }
         }
         codecpar.codec_id = codec.into();
         codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_AUDIO;
@@ -201,14 +199,7 @@ fn init_ffmpeg_output(
             opaque: ptr::null_mut(),
         };
 
-        let id = stream_count;
-        // stream_count += 1;
-
-        Some(StreamState {
-            id,
-            time_base: sample_rate as f64,
-            timestamp_offset: None,
-        })
+        Some(stream.index())
     } else {
         None
     };
@@ -217,9 +208,20 @@ fn init_ffmpeg_output(
 
     output_ctx
         .write_header_with(ffmpeg_options)
-        .map_err(OutputInitError::FfmpegMp4Error)?;
+        .map_err(OutputInitError::FfmpegError)?;
 
-    Ok((output_ctx, video_stream, audio_stream))
+    let video = video.map(|index| StreamState {
+        index,
+        timestamp_offset: None,
+        time_base: output_ctx.stream(index).unwrap().time_base(),
+    });
+    let audio = audio.map(|index| StreamState {
+        index,
+        timestamp_offset: None,
+        time_base: output_ctx.stream(index).unwrap().time_base(),
+    });
+
+    Ok((output_ctx, video, audio))
 }
 
 fn run_ffmpeg_output_thread(
@@ -271,42 +273,30 @@ fn write_chunk(
     audio_stream: &mut Option<StreamState>,
     output_ctx: &mut ffmpeg::format::context::Output,
 ) {
-    let packet = create_packet(chunk, video_stream, audio_stream);
-    if let Some(packet) = packet {
-        if let Err(err) = packet.write(output_ctx) {
-            error!("Failed to write packet to mp4 file: {}.", err);
-        }
-    }
-}
-
-fn create_packet(
-    chunk: EncodedChunk,
-    video_stream: &mut Option<StreamState>,
-    audio_stream: &mut Option<StreamState>,
-) -> Option<ffmpeg::Packet> {
-    let stream_state = match chunk.kind {
+    let stream = match chunk.kind {
         EncodedChunkKind::Video(_) => {
             match video_stream {
-                Some(stream_state) => Some(stream_state),
+                Some(stream) => stream,
                 None => {
                     error!("Failed to create packet for video chunk. No video stream registered on init.");
-                    None
+                    return;
                 }
             }
         }
         EncodedChunkKind::Audio(_) => {
             match audio_stream {
-                Some(stream_state) => Some(stream_state),
+                Some(stream) => stream,
                 None => {
                     error!("Failed to create packet for audio chunk. No audio stream registered on init.");
-                    None
+                    return;
                 }
             }
         }
-    }?;
+    };
 
     // Starting output PTS from 0
-    let timestamp_offset = stream_state.timestamp_offset(&chunk);
+    let timestamp_offset = *stream.timestamp_offset.get_or_insert(chunk.pts);
+
     let pts = chunk.pts.saturating_sub(timestamp_offset);
     let dts = chunk
         .dts
@@ -314,10 +304,18 @@ fn create_packet(
         .unwrap_or(pts);
 
     let mut packet = ffmpeg::Packet::copy(&chunk.data);
-    packet.set_pts(Some((pts.as_secs_f64() * stream_state.time_base) as i64));
-    packet.set_dts(Some((dts.as_secs_f64() * stream_state.time_base) as i64));
-    packet.set_time_base(ffmpeg::Rational::new(1, stream_state.time_base as i32));
-    packet.set_stream(stream_state.id);
+    packet.set_pts(Some(Rescale::rescale(
+        &(pts.as_nanos() as i64),
+        NS_TIME_BASE,
+        stream.time_base,
+    )));
+    packet.set_dts(Some(Rescale::rescale(
+        &(dts.as_nanos() as i64),
+        NS_TIME_BASE,
+        stream.time_base,
+    )));
+    packet.set_time_base(stream.time_base);
+    packet.set_stream(stream.index);
 
     match chunk.is_keyframe {
         IsKeyframe::Yes => packet.set_flags(ffmpeg::packet::Flags::KEY),
@@ -325,18 +323,7 @@ fn create_packet(
         IsKeyframe::NoKeyframes | IsKeyframe::No => {},
     }
 
-    Some(packet)
-}
-
-#[derive(Debug, Clone)]
-struct StreamState {
-    id: usize,
-    time_base: f64,
-    timestamp_offset: Option<Duration>,
-}
-
-impl StreamState {
-    fn timestamp_offset(&mut self, chunk: &EncodedChunk) -> Duration {
-        *self.timestamp_offset.get_or_insert(chunk.pts)
+    if let Err(err) = packet.write(output_ctx) {
+        error!("Failed to write packet to mp4 file: {}.", err);
     }
 }

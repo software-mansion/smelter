@@ -1,4 +1,6 @@
-use compositor_render::{Frame, Framerate, OutputId, Resolution};
+use std::sync::Arc;
+
+use compositor_render::{Frame, OutputId, Resolution};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use fdk_aac::AacEncoder;
 use ffmpeg_vp8::LibvpxVP8Encoder;
@@ -13,7 +15,7 @@ use crate::{
 
 use self::{ffmpeg_h264::LibavH264Encoder, opus::OpusEncoder};
 
-use super::types::EncoderOutputEvent;
+use super::{types::EncoderOutputEvent, PipelineCtx};
 
 pub mod fdk_aac;
 pub mod ffmpeg_h264;
@@ -36,6 +38,23 @@ pub enum VideoEncoderOptions {
 pub enum AudioEncoderOptions {
     Opus(opus::OpusEncoderOptions),
     Aac(fdk_aac::AacEncoderOptions),
+}
+
+pub struct EncoderContext {
+    pub video: Option<VideoEncoderContext>,
+    pub audio: Option<AudioEncoderContext>,
+}
+
+#[derive(Debug, Clone)]
+pub enum VideoEncoderContext {
+    H264(Option<bytes::Bytes>),
+    VP8,
+}
+
+#[derive(Debug, Clone)]
+pub enum AudioEncoderContext {
+    Opus,
+    Aac(bytes::Bytes),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -64,8 +83,7 @@ impl Encoder {
     pub fn new(
         output_id: &OutputId,
         options: EncoderOptions,
-        framerate: Framerate,
-        sample_rate: u32,
+        ctx: &Arc<PipelineCtx>,
     ) -> Result<(Self, Receiver<EncoderOutputEvent>), EncoderInitError> {
         let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
 
@@ -73,7 +91,7 @@ impl Encoder {
             Some(video_encoder_options) => Some(VideoEncoder::new(
                 output_id,
                 video_encoder_options,
-                framerate,
+                ctx,
                 encoded_chunks_sender.clone(),
             )?),
             None => None,
@@ -83,7 +101,7 @@ impl Encoder {
             Some(audio_encoder_options) => Some(AudioEncoder::new(
                 output_id,
                 audio_encoder_options,
-                sample_rate,
+                ctx,
                 encoded_chunks_sender,
             )?),
             None => None,
@@ -129,6 +147,21 @@ impl Encoder {
             }
         }
     }
+
+    pub fn context(&self) -> EncoderContext {
+        EncoderContext {
+            video: match &self.video {
+                Some(VideoEncoder::H264(e)) => Some(VideoEncoderContext::H264(e.context())),
+                Some(VideoEncoder::VP8(_)) => Some(VideoEncoderContext::VP8),
+                None => None,
+            },
+            audio: match &self.audio {
+                Some(AudioEncoder::Aac(e)) => Some(AudioEncoderContext::Aac(e.config.clone())),
+                Some(AudioEncoder::Opus(_)) => Some(AudioEncoderContext::Opus),
+                None => None,
+            },
+        }
+    }
 }
 
 impl VideoEncoderOptions {
@@ -144,15 +177,21 @@ impl VideoEncoder {
     pub fn new(
         output_id: &OutputId,
         options: VideoEncoderOptions,
-        framerate: Framerate,
+        ctx: &Arc<PipelineCtx>,
         sender: Sender<EncoderOutputEvent>,
     ) -> Result<Self, EncoderInitError> {
         match options {
             VideoEncoderOptions::H264(options) => Ok(Self::H264(LibavH264Encoder::new(
-                output_id, options, framerate, sender,
+                output_id,
+                options,
+                ctx.output_framerate,
+                sender,
             )?)),
             VideoEncoderOptions::VP8(options) => Ok(Self::VP8(LibvpxVP8Encoder::new(
-                output_id, options, framerate, sender,
+                output_id,
+                options,
+                ctx.output_framerate,
+                sender,
             )?)),
         }
     }
@@ -176,12 +215,12 @@ impl AudioEncoder {
     fn new(
         output_id: &OutputId,
         options: AudioEncoderOptions,
-        mixing_sample_rate: u32,
+        ctx: &Arc<PipelineCtx>,
         sender: Sender<EncoderOutputEvent>,
     ) -> Result<Self, EncoderInitError> {
-        let resampler = if options.sample_rate() != mixing_sample_rate {
+        let resampler = if options.sample_rate() != ctx.mixing_sample_rate {
             Some(OutputResampler::new(
-                mixing_sample_rate,
+                ctx.mixing_sample_rate,
                 options.sample_rate(),
             )?)
         } else {

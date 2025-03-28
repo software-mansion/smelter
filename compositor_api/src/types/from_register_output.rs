@@ -276,11 +276,11 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
     }
 }
 
-impl TryFrom<RtmpOutput> for pipeline::RegisterOutputOptions<output::OutputOptions> {
+impl TryFrom<RtmpClient> for pipeline::RegisterOutputOptions<output::OutputOptions> {
     type Error = TypeError;
 
-    fn try_from(value: RtmpOutput) -> Result<Self, Self::Error> {
-        let RtmpOutput { url, video, audio } = value;
+    fn try_from(value: RtmpClient) -> Result<Self, Self::Error> {
+        let RtmpClient { url, video, audio } = value;
 
         if video.is_none() && audio.is_none() {
             return Err(TypeError::new(
@@ -288,24 +288,31 @@ impl TryFrom<RtmpOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             ));
         }
 
-        let rtmp_video = video.as_ref().map(|v| match v.encoder {
-            VideoEncoderOptions::FfmpegH264 { .. } => RtmpVideoTrack {
-                width: v.resolution.width as u32,
-                height: v.resolution.height as u32,
-            },
-        });
+        let rtmp_video = video
+            .as_ref()
+            .map(|v| match v.encoder {
+                VideoEncoderOptions::FfmpegH264 { .. } => Ok(RtmpVideoTrack {
+                    width: v.resolution.width as u32,
+                    height: v.resolution.height as u32,
+                }),
+                VideoEncoderOptions::FfmpegVp8 { .. } => {
+                    Err(TypeError::new("RTMP output does not support VP8 codec"))
+                }
+            })
+            .transpose()?;
         let rtmp_audio = audio.as_ref().map(|a| match &a.encoder {
-            Mp4AudioEncoderOptions::Aac {
+            RtmpAudioEncoderOptions::Aac {
                 channels,
                 sample_rate,
             } => RtmpAudioTrack {
                 channels: channels.clone().into(),
+                sample_rate: sample_rate.unwrap_or(44100),
             },
         });
 
         let (video_encoder_options, output_video_options) = maybe_video_options(video)?;
         let (audio_encoder_options, output_audio_options) = match audio {
-            Some(OutputMp4AudioOptions {
+            Some(OutputRtmpAudioOptions {
                 mixing_strategy,
                 send_eos_when,
                 encoder,
@@ -384,6 +391,20 @@ impl From<Mp4AudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
     fn from(value: Mp4AudioEncoderOptions) -> Self {
         match value {
             Mp4AudioEncoderOptions::Aac {
+                channels,
+                sample_rate,
+            } => AudioEncoderOptions::Aac(AacEncoderOptions {
+                channels: channels.into(),
+                sample_rate: sample_rate.unwrap_or(44100),
+            }),
+        }
+    }
+}
+
+impl From<RtmpAudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
+    fn from(value: RtmpAudioEncoderOptions) -> Self {
+        match value {
+            RtmpAudioEncoderOptions::Aac {
                 channels,
                 sample_rate,
             } => AudioEncoderOptions::Aac(AacEncoderOptions {
