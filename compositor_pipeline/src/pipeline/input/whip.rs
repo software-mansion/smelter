@@ -1,4 +1,4 @@
-use start_decoders::PayloadTypeMap;
+use start_decoders::WhipInputDecoders;
 use std::{sync::Arc, thread, time::Duration};
 use tokio::sync::mpsc;
 use tracing::{error, span, warn, Level};
@@ -9,7 +9,7 @@ use crate::{
     pipeline::{
         decoder,
         types::EncodedChunk,
-        whip_whep::{bearer_token::generate_token, WhipInputConnectionOptions, WhipWhepState},
+        whip_whep::{bearer_token::generate_token, WhipInputConnectionState, WhipInputState},
         PipelineCtx,
     },
     queue::PipelineEvent,
@@ -45,8 +45,8 @@ pub struct InputAudioStream {
     pub options: decoder::OpusDecoderOptions,
 }
 
-pub struct WhipReceiver {
-    whip_whep_state: Arc<WhipWhepState>,
+pub struct WhipInput {
+    whip_inputs_state: WhipInputState,
     input_id: InputId,
 }
 
@@ -56,39 +56,37 @@ pub struct DecodedDataSender {
     pub input_samples_sender: Sender<PipelineEvent<InputSamples>>,
 }
 
-impl WhipReceiver {
+impl WhipInput {
     pub(super) fn start_new_input(
         input_id: &InputId,
         pipeline_ctx: &PipelineCtx,
         frame_sender: Sender<PipelineEvent<Frame>>,
         input_samples_sender: Sender<PipelineEvent<InputSamples>>,
     ) -> Result<(Input, InputInitInfo), WhipReceiverError> {
-        if !pipeline_ctx.start_whip_whep {
+        let Some(state) = &pipeline_ctx.whip_inputs_state else {
             return Err(WhipReceiverError::WhipWhepServerNotRunning);
-        }
+        };
         let bearer_token = generate_token();
-        let whip_whep_state = pipeline_ctx.whip_whep_state.clone();
 
         let decoded_data_sender = DecodedDataSender {
             frame_sender,
             input_samples_sender,
         };
 
-        let mut input_connections = whip_whep_state.input_connections.lock().unwrap();
-        input_connections.insert(
-            input_id.clone(),
-            WhipInputConnectionOptions {
+        state.add_input(
+            input_id,
+            WhipInputConnectionState {
                 bearer_token: Some(bearer_token.clone()),
                 peer_connection: None,
-                start_time_vid: None,
-                start_time_aud: None,
+                start_time_video: None,
+                start_time_audio: None,
                 decoded_data_sender,
             },
         );
 
         Ok((
             Input::Whip(Self {
-                whip_whep_state: whip_whep_state.clone(),
+                whip_inputs_state: state.clone(),
                 input_id: input_id.clone(),
             }),
             InputInitInfo::Whip { bearer_token },
@@ -96,20 +94,9 @@ impl WhipReceiver {
     }
 }
 
-impl Drop for WhipReceiver {
+impl Drop for WhipInput {
     fn drop(&mut self) {
-        let mut connections = self.whip_whep_state.input_connections.lock().unwrap();
-        if let Some(connection) = connections.get_mut(&self.input_id) {
-            if let Some(peer_connection) = connection.peer_connection.clone() {
-                let input_id = self.input_id.clone();
-                tokio::spawn(async move {
-                    if let Err(err) = peer_connection.close().await {
-                        error!("Cannot close peer_connection for {:?}: {:?}", input_id, err);
-                    };
-                });
-            }
-        }
-        connections.remove(&self.input_id);
+        self.whip_inputs_state.close_input(&self.input_id);
     }
 }
 
@@ -145,14 +132,13 @@ pub fn start_forwarding_thread(
 
 pub async fn process_track_stream(
     track: Arc<TrackRemote>,
-    state: Arc<PipelineCtx>,
+    inputs: WhipInputState,
     input_id: InputId,
-    payload_type_map: PayloadTypeMap,
+    payload_type_map: WhipInputDecoders,
 ) {
     let track_kind = track.kind();
-    let time_elapsed_from_input_start = state
-        .whip_whep_state
-        .get_time_elapsed_from_input_start(input_id.clone(), track_kind);
+    let time_elapsed_from_input_start =
+        inputs.get_time_elapsed_from_input_start(input_id.clone(), track_kind);
 
     let mut first_pts_current_stream = None;
 

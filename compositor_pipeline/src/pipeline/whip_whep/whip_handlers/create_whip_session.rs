@@ -1,7 +1,8 @@
 use crate::pipeline::{
     input::whip::{process_track_stream, start_decoders::start_decoders_threads},
-    whip_whep::{bearer_token::validate_token, error::WhipServerError, init_peer_connection},
-    PipelineCtx,
+    whip_whep::{
+        bearer_token::validate_token, error::WhipServerError, init_peer_connection, WhipWhepState,
+    },
 };
 use axum::{
     body::Body,
@@ -21,7 +22,7 @@ use webrtc::{
 
 pub async fn handle_create_whip_session(
     Path(id): Path<String>,
-    State(pipeline_ctx): State<Arc<PipelineCtx>>,
+    State(state): State<WhipWhepState>,
     headers: HeaderMap,
     offer: String,
 ) -> Result<Response<Body>, WhipServerError> {
@@ -31,8 +32,8 @@ pub async fn handle_create_whip_session(
 
     trace!("SDP offer: {}", offer);
 
-    let input_state = pipeline_ctx
-        .whip_whep_state
+    let input_state = state
+        .inputs
         .get_input_connection_options(input_id.clone())?;
 
     validate_token(input_state.bearer_token, headers.get("Authorization")).await?;
@@ -47,10 +48,10 @@ pub async fn handle_create_whip_session(
     }
 
     let (peer_connection, video_transceiver, audio_transceiver) =
-        init_peer_connection(pipeline_ctx.stun_servers.to_vec()).await?;
+        init_peer_connection(state.pipeline_ctx.stun_servers.to_vec()).await?;
 
-    pipeline_ctx
-        .whip_whep_state
+    state
+        .inputs
         .update_peer_connection(input_id.clone(), peer_connection.clone())
         .await?;
 
@@ -64,7 +65,7 @@ pub async fn handle_create_whip_session(
     peer_connection.set_remote_description(description).await?;
 
     let payload_type_map = start_decoders_threads(
-        pipeline_ctx.clone(),
+        &state,
         input_id.clone(),
         video_transceiver,
         audio_transceiver,
@@ -86,7 +87,7 @@ pub async fn handle_create_whip_session(
         //tokio::spawn is necessary to concurrently process audio and video track
         tokio::spawn(process_track_stream(
             track,
-            pipeline_ctx.clone(),
+            state.inputs.clone(),
             input_id.clone(),
             payload_type_map.clone(),
         ));

@@ -32,7 +32,7 @@ use tokio::sync::oneshot;
 use tracing::{error, info, trace, warn};
 use types::RawDataSender;
 use whip_whep::run_whip_whep_server;
-use whip_whep::WhipWhepState;
+use whip_whep::WhipInputState;
 
 use crate::audio_mixer::AudioMixer;
 use crate::audio_mixer::MixingStrategy;
@@ -133,7 +133,7 @@ pub struct Options {
     pub wgpu_features: WgpuFeatures,
     pub load_system_fonts: Option<bool>,
     pub wgpu_ctx: Option<GraphicsContext>,
-    pub whip_whep_server_port: Option<u16>,
+    pub whip_whep_server_port: u16,
     pub start_whip_whep: bool,
     pub tokio_rt: Option<Arc<Runtime>>,
     pub rendering_mode: RenderingMode,
@@ -146,9 +146,9 @@ pub struct PipelineCtx {
     pub stun_servers: Arc<Vec<String>>,
     pub download_dir: Arc<PathBuf>,
     pub event_emitter: Arc<EventEmitter>,
-    pub whip_whep_state: Arc<WhipWhepState>,
+    pub whip_inputs_state: Option<WhipInputState>,
+    pub whip_whep_server_port: u16,
     pub tokio_rt: Arc<Runtime>,
-    pub start_whip_whep: bool,
     #[cfg(feature = "vk-video")]
     pub vulkan_ctx: Option<graphics_context::VulkanCtx>,
 }
@@ -203,45 +203,36 @@ impl Pipeline {
             None => Arc::new(Runtime::new().map_err(InitPipelineError::CreateTokioRuntime)?),
         };
         let stun_servers = opts.stun_servers;
-        let whip_whep_state = WhipWhepState::new(stun_servers.clone());
-        let start_whip_whep = opts.start_whip_whep;
+
+        let whip_inputs_state = match opts.start_whip_whep {
+            true => Some(WhipInputState::new()),
+            false => None,
+        };
         let event_emitter = Arc::new(EventEmitter::new());
-        let pipeline_ctx = Arc::new(PipelineCtx {
+        let ctx = Arc::new(PipelineCtx {
             mixing_sample_rate: opts.mixing_sample_rate,
             output_framerate: opts.queue_options.output_framerate,
             stun_servers,
             download_dir: download_dir.into(),
             event_emitter: event_emitter.clone(),
             tokio_rt: tokio_rt.clone(),
-            whip_whep_state,
-            start_whip_whep,
+            whip_inputs_state,
+            whip_whep_server_port: opts.whip_whep_server_port,
             #[cfg(feature = "vk-video")]
             vulkan_ctx: preinitialized_ctx.and_then(|ctx| ctx.vulkan_ctx),
         });
 
-        let shutdown_whip_whep_sender = if start_whip_whep {
-            if let Some(port) = opts.whip_whep_server_port {
-                let (sender, receiver) = oneshot::channel();
-                let (init_result_sender, init_result_receiver) = oneshot::channel();
-                let pipeline_ctx_clone = pipeline_ctx.clone();
-                tokio_rt.spawn(async move {
-                    run_whip_whep_server(port, pipeline_ctx_clone, receiver, init_result_sender)
-                        .await
-                });
-                match init_result_receiver.blocking_recv() {
-                    Ok(init_result) => init_result?,
-                    Err(err) => {
-                        error!(
-                            "Error while receiving WHIP WHEP server initialization result {:?}",
-                            err
-                        )
-                    }
-                }
-                Some(sender)
-            } else {
-                error!("WHIP WHEP server port not specified.");
-                None
-            }
+        let shutdown_whip_whep_sender = if let Some(state) = &ctx.whip_inputs_state {
+            let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+            let (init_result_sender, init_result_receiver) = oneshot::channel();
+            tokio_rt.spawn(run_whip_whep_server(
+                ctx.clone(),
+                state.clone(),
+                shutdown_receiver,
+                init_result_sender,
+            ));
+            init_result_receiver.blocking_recv().unwrap()?;
+            Some(shutdown_sender)
         } else {
             None
         };
@@ -253,7 +244,7 @@ impl Pipeline {
             audio_mixer: AudioMixer::new(opts.mixing_sample_rate),
             is_started: false,
             shutdown_whip_whep_sender,
-            ctx: pipeline_ctx,
+            ctx,
         };
 
         Ok((pipeline, event_loop))

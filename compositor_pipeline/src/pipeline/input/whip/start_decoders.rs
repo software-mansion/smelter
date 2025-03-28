@@ -9,7 +9,7 @@ use crate::{
             depayloader::{AudioDepayloader, RolloverState, VideoDepayloader},
             start_forwarding_thread,
         },
-        whip_whep::error::WhipServerError,
+        whip_whep::{error::WhipServerError, WhipWhepState},
         EncodedChunk, PipelineCtx,
     },
     queue::PipelineEvent,
@@ -33,33 +33,38 @@ struct CodecsPayloadTypes {
     opus: Vec<PayloadType>,
 }
 
-pub type PayloadTypeMap =
+pub type WhipInputDecoders =
     HashMap<PayloadType, (Sender<PipelineEvent<EncodedChunk>>, Arc<Mutex<Depayloader>>)>;
 
-pub struct WhipDecodersSetup {
-    pub payload_type_map: PayloadTypeMap,
+struct WhipDecodersBuilder {
+    decoders: WhipInputDecoders,
     pipeline_ctx: Arc<PipelineCtx>,
     input_id: InputId,
     decoded_data_sender: DecodedDataSender,
 }
 
-impl WhipDecodersSetup {
+impl WhipDecodersBuilder {
     fn new(
-        pipeline_ctx: Arc<PipelineCtx>,
+        state: &WhipWhepState,
         input_id: InputId,
-    ) -> Result<WhipDecodersSetup, WhipServerError> {
-        let decoded_data_sender = pipeline_ctx
-            .whip_whep_state
+    ) -> Result<WhipDecodersBuilder, WhipServerError> {
+        let decoded_data_sender = state
+            .inputs
             .get_input_connection_options(input_id.clone())?
             .decoded_data_sender;
 
         Ok(Self {
-            payload_type_map: HashMap::new(),
-            pipeline_ctx,
+            decoders: HashMap::new(),
+            pipeline_ctx: state.pipeline_ctx.clone(),
             input_id,
             decoded_data_sender,
         })
     }
+
+    fn build(self) -> WhipInputDecoders {
+        self.decoders
+    }
+
     fn add_h264(&mut self, payload_types: Vec<PayloadType>) -> Result<(), WhipServerError> {
         let (whip_client_to_bridge_sender, bridge_to_decoder_receiver) =
             start_forwarding_thread(self.input_id.clone());
@@ -87,13 +92,14 @@ impl WhipDecodersSetup {
             audio: None,
         }));
         for payload_type in payload_types {
-            self.payload_type_map.insert(
+            self.decoders.insert(
                 payload_type,
                 (whip_client_to_bridge_sender.clone(), depayloader.clone()),
             );
         }
         Ok(())
     }
+
     fn add_vp8(&mut self, payload_types: Vec<PayloadType>) -> Result<(), WhipServerError> {
         let (whip_client_to_bridge_sender, bridge_to_decoder_receiver) =
             start_forwarding_thread(self.input_id.clone());
@@ -117,13 +123,14 @@ impl WhipDecodersSetup {
             audio: None,
         }));
         for payload_type in payload_types {
-            self.payload_type_map.insert(
+            self.decoders.insert(
                 payload_type,
                 (whip_client_to_bridge_sender.clone(), depayloader.clone()),
             );
         }
         Ok(())
     }
+
     fn add_opus(&mut self, payload_types: Vec<PayloadType>) -> Result<(), WhipServerError> {
         let (whip_client_to_bridge_sender, bridge_to_decoder_receiver) =
             start_forwarding_thread(self.input_id.clone());
@@ -148,7 +155,7 @@ impl WhipDecodersSetup {
         }));
 
         for payload_type in payload_types {
-            self.payload_type_map.insert(
+            self.decoders.insert(
                 payload_type,
                 (whip_client_to_bridge_sender.clone(), depayloader.clone()),
             );
@@ -158,13 +165,13 @@ impl WhipDecodersSetup {
 }
 
 pub async fn start_decoders_threads(
-    pipeline_ctx: Arc<PipelineCtx>,
+    state: &WhipWhepState,
     input_id: InputId,
     video_transceiver: Arc<RTCRtpTransceiver>,
     audio_transceiver: Arc<RTCRtpTransceiver>,
-) -> Result<PayloadTypeMap, WhipServerError> {
+) -> Result<WhipInputDecoders, WhipServerError> {
     let negotiated_codecs = get_codec_map(video_transceiver, audio_transceiver).await;
-    let mut whip_decoders_setup = WhipDecodersSetup::new(pipeline_ctx, input_id)?;
+    let mut whip_decoders_setup = WhipDecodersBuilder::new(state, input_id)?;
 
     if !negotiated_codecs.h264.is_empty() {
         whip_decoders_setup.add_h264(negotiated_codecs.h264)?;
@@ -178,12 +185,12 @@ pub async fn start_decoders_threads(
         whip_decoders_setup.add_opus(negotiated_codecs.opus)?;
     }
 
-    if whip_decoders_setup.payload_type_map.is_empty() {
+    if whip_decoders_setup.decoders.is_empty() {
         return Err(WhipServerError::CodecNegotiationError(
             "None of negotiated codecs are supported in the Smelter!".to_string(),
         ));
     }
-    Ok(whip_decoders_setup.payload_type_map)
+    Ok(whip_decoders_setup.build())
 }
 
 async fn get_codec_map(

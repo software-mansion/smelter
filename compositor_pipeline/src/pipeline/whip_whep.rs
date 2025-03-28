@@ -3,7 +3,7 @@ use axum::{
     routing::{delete, get, patch, post},
     Router,
 };
-use compositor_render::InputId;
+use compositor_render::{error::ErrorStack, InputId};
 use error::WhipServerError;
 use reqwest::StatusCode;
 use serde_json::json;
@@ -35,69 +35,73 @@ mod whip_handlers;
 use super::{input::whip::DecodedDataSender, PipelineCtx};
 
 pub async fn run_whip_whep_server(
-    port: u16,
     pipeline_ctx: Arc<PipelineCtx>,
+    whip_inputs_state: WhipInputState,
     shutdown_signal_receiver: oneshot::Receiver<()>,
     init_result_sender: Sender<Result<(), InitPipelineError>>,
 ) {
+    let port = pipeline_ctx.whip_whep_server_port;
     let app = Router::new()
         .route("/status", get((StatusCode::OK, axum::Json(json!({})))))
         .route("/whip/:id", post(handle_create_whip_session))
         .route("/session/:id", patch(handle_new_whip_ice_candidates))
         .route("/session/:id", delete(handle_terminate_whip_session))
         .layer(CorsLayer::permissive())
-        .with_state(pipeline_ctx);
+        .with_state(WhipWhepState {
+            pipeline_ctx,
+            inputs: whip_inputs_state,
+        });
 
-    let Ok(listener) = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await
-    else {
-        if let Err(err) = init_result_sender.send(Err(InitPipelineError::WhipWhepServerInitError)) {
-            error!("Cannot send init WHIP WHEP server result {err:?}");
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => {
+            init_result_sender.send(Ok(())).unwrap();
+            listener
         }
-        return;
-    };
-
-    if let Err(err) = init_result_sender.send(Ok(())) {
-        error!("Cannot send init WHIP WHEP server result {err:?}");
+        Err(err) => {
+            init_result_sender
+                .send(Err(InitPipelineError::WhipWhepServerInitError(err)))
+                .unwrap();
+            return;
+        }
     };
 
     if let Err(err) = axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal(shutdown_signal_receiver))
+        .with_graceful_shutdown(async move {
+            if shutdown_signal_receiver.await.is_err() {
+                error!("Channel closed before sending shutdown signal.");
+            }
+        })
         .await
     {
-        error!("Cannot start WHIP WHEP server: {err:?}");
+        error!(
+            "WHIP WHEP server exited with an error {}",
+            ErrorStack::new(&err).into_string()
+        );
     };
 }
 
-async fn shutdown_signal(receiver: oneshot::Receiver<()>) {
-    if let Err(err) = receiver.await {
-        error!(
-            "Error while receiving WHIP WHEP server shutdown signal {:?}",
-            err
-        );
-    }
-}
-
 #[derive(Debug, Clone)]
-pub struct WhipInputConnectionOptions {
+pub struct WhipInputConnectionState {
     pub bearer_token: Option<String>,
     pub peer_connection: Option<Arc<RTCPeerConnection>>,
-    pub start_time_vid: Option<Instant>,
-    pub start_time_aud: Option<Instant>,
+    pub start_time_video: Option<Instant>,
+    pub start_time_audio: Option<Instant>,
     pub decoded_data_sender: DecodedDataSender,
 }
 
-impl WhipInputConnectionOptions {
+impl WhipInputConnectionState {
     pub fn get_or_initialize_elapsed_start_time(
         &mut self,
         track_kind: RTPCodecType,
     ) -> Option<Duration> {
         match track_kind {
             RTPCodecType::Video => {
-                let start_time = self.start_time_vid.get_or_insert_with(Instant::now);
+                let start_time = self.start_time_video.get_or_insert_with(Instant::now);
                 Some(start_time.elapsed())
             }
             RTPCodecType::Audio => {
-                let start_time = self.start_time_aud.get_or_insert_with(Instant::now);
+                let start_time = self.start_time_audio.get_or_insert_with(Instant::now);
                 Some(start_time.elapsed())
             }
             _ => None,
@@ -105,25 +109,41 @@ impl WhipInputConnectionOptions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WhipWhepState {
-    pub input_connections: Arc<Mutex<HashMap<InputId, WhipInputConnectionOptions>>>,
-    pub stun_servers: Arc<Vec<String>>,
+    pub pipeline_ctx: Arc<PipelineCtx>,
+    pub inputs: WhipInputState,
 }
 
 impl WhipWhepState {
-    pub fn new(stun_servers: Arc<Vec<String>>) -> Arc<Self> {
-        Arc::new(WhipWhepState {
-            input_connections: Arc::from(Mutex::new(HashMap::new())),
-            stun_servers,
-        })
+    pub fn new(pipeline_ctx: &Arc<PipelineCtx>) -> Arc<Self> {
+        Self {
+            pipeline_ctx: pipeline_ctx.clone(),
+            inputs: WhipInputState::new(),
+        }
+        .into()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WhipInputState(Arc<Mutex<HashMap<InputId, WhipInputConnectionState>>>);
+
+impl Default for WhipInputState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WhipInputState {
+    pub fn new() -> Self {
+        Self(Arc::from(Mutex::new(HashMap::new())))
     }
 
     pub fn get_input_connection_options(
         &self,
         input_id: InputId,
-    ) -> Result<WhipInputConnectionOptions, WhipServerError> {
-        let connections = self.input_connections.lock().unwrap();
+    ) -> Result<WhipInputConnectionState, WhipServerError> {
+        let connections = self.0.lock().unwrap();
         if let Some(connection) = connections.get(&input_id) {
             if let Some(peer_connection) = connection.peer_connection.clone() {
                 if peer_connection.connection_state() == RTCPeerConnectionState::Connected {
@@ -144,7 +164,7 @@ impl WhipWhepState {
         input_id: InputId,
         peer_connection: Arc<RTCPeerConnection>,
     ) -> Result<(), WhipServerError> {
-        let mut connections = self.input_connections.lock().unwrap();
+        let mut connections = self.0.lock().unwrap();
         if let Some(connection) = connections.get_mut(&input_id) {
             connection.peer_connection = Some(peer_connection);
             Ok(())
@@ -161,7 +181,7 @@ impl WhipWhepState {
         input_id: InputId,
         track_kind: RTPCodecType,
     ) -> Option<Duration> {
-        let mut connections = self.input_connections.lock().unwrap();
+        let mut connections = self.0.lock().unwrap();
         match connections.get_mut(&input_id) {
             Some(connection) => connection.get_or_initialize_elapsed_start_time(track_kind),
             None => {
@@ -169,5 +189,25 @@ impl WhipWhepState {
                 None
             }
         }
+    }
+
+    pub fn add_input(&self, input_id: &InputId, input: WhipInputConnectionState) {
+        let mut guard = self.0.lock().unwrap();
+        guard.insert(input_id.clone(), input);
+    }
+
+    pub fn close_input(&self, input_id: &InputId) {
+        let mut guard = self.0.lock().unwrap();
+        if let Some(input) = guard.get_mut(input_id) {
+            if let Some(peer_connection) = input.peer_connection.clone() {
+                let input_id = input_id.clone();
+                tokio::spawn(async move {
+                    if let Err(err) = peer_connection.close().await {
+                        error!("Cannot close peer_connection for {:?}: {:?}", input_id, err);
+                    };
+                });
+            }
+        }
+        guard.remove(input_id);
     }
 }
