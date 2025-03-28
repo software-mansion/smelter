@@ -8,7 +8,7 @@ use crate::{
 use compositor_render::{Frame, InputId};
 use crossbeam_channel::{bounded, Receiver};
 use rtp::{RtpReceiver, RtpReceiverOptions};
-use whip::{WhipReceiver, WhipReceiverOptions};
+use whip::WhipInput;
 
 use self::mp4::{Mp4, Mp4Options};
 
@@ -30,7 +30,7 @@ pub mod whip;
 pub enum Input {
     Rtp(RtpReceiver),
     Mp4(Mp4),
-    Whip(WhipReceiver),
+    Whip(WhipInput),
     #[cfg(feature = "decklink")]
     DeckLink(decklink::DeckLink),
     RawDataInput,
@@ -40,7 +40,7 @@ pub enum Input {
 pub enum InputOptions {
     Rtp(RtpReceiverOptions),
     Mp4(Mp4Options),
-    Whip(WhipReceiverOptions),
+    Whip,
     #[cfg(feature = "decklink")]
     DeckLink(decklink::DeckLinkOptions),
 }
@@ -155,21 +155,64 @@ fn start_input_threads(
     options: InputOptions,
     pipeline_ctx: &PipelineCtx,
 ) -> Result<(Input, DecodedDataReceiver, InputInitInfo), InputInitError> {
-    let InputInitResult {
-        input,
-        video,
-        audio,
-        init_info,
-    } = match options {
-        InputOptions::Rtp(opts) => RtpReceiver::start_new_input(input_id, opts)?,
-        InputOptions::Mp4(opts) => {
-            Mp4::start_new_input(input_id, opts, &pipeline_ctx.download_dir)?
+    match options {
+        InputOptions::Rtp(opts) => {
+            let InputInitResult {
+                input,
+                video,
+                audio,
+                init_info,
+            } = RtpReceiver::start_new_input(input_id, opts)?;
+            let decoder_data_receiver =
+                setup_and_start_decoders_threads(pipeline_ctx, input_id, video, audio)?;
+            Ok((input, decoder_data_receiver, init_info))
         }
-        InputOptions::Whip(opts) => WhipReceiver::start_new_input(input_id, opts, pipeline_ctx)?,
+        InputOptions::Mp4(opts) => {
+            let InputInitResult {
+                input,
+                video,
+                audio,
+                init_info,
+            } = Mp4::start_new_input(input_id, opts, &pipeline_ctx.download_dir)?;
+            let decoder_data_receiver =
+                setup_and_start_decoders_threads(pipeline_ctx, input_id, video, audio)?;
+            Ok((input, decoder_data_receiver, init_info))
+        }
+        InputOptions::Whip => {
+            let (video_sender, video_receiver) = bounded(10);
+            let (audio_sender, audio_receiver) = bounded(10);
+            let (input, init_info) =
+                WhipInput::start_new_input(input_id, pipeline_ctx, video_sender, audio_sender)?;
+            Ok((
+                input,
+                DecodedDataReceiver {
+                    video: Some(video_receiver),
+                    audio: Some(audio_receiver),
+                },
+                init_info,
+            ))
+        }
         #[cfg(feature = "decklink")]
-        InputOptions::DeckLink(opts) => decklink::DeckLink::start_new_input(input_id, opts)?,
-    };
+        InputOptions::DeckLink(opts) => {
+            let InputInitResult {
+                input,
+                video,
+                audio,
+                init_info,
+            } = decklink::DeckLink::start_new_input(input_id, opts)?;
+            let decoder_data_receiver =
+                setup_and_start_decoders_threads(pipeline_ctx, input_id, video, audio)?;
+            Ok((input, decoder_data_receiver, init_info))
+        }
+    }
+}
 
+fn setup_and_start_decoders_threads(
+    pipeline_ctx: &PipelineCtx,
+    input_id: &InputId,
+    video: Option<VideoInputReceiver>,
+    audio: Option<AudioInputReceiver>,
+) -> Result<DecodedDataReceiver, InputInitError> {
     let video = if let Some(video) = video {
         match video {
             VideoInputReceiver::Raw { frame_receiver } => Some(frame_receiver),
@@ -228,5 +271,6 @@ fn start_input_threads(
     } else {
         None
     };
-    Ok((input, DecodedDataReceiver { video, audio }, init_info))
+
+    Ok(DecodedDataReceiver { video, audio })
 }

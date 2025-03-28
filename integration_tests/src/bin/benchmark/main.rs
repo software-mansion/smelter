@@ -353,7 +353,7 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
         stream_fallback_timeout: Duration::from_millis(500),
         tokio_rt: None,
         stun_servers: Vec::new().into(),
-        whip_whep_server_port: None,
+        whip_whep_server_port: 9000,
         start_whip_whep: false,
         rendering_mode: compositor_render::RenderingMode::GpuOptimized,
     });

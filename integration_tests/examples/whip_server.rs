@@ -26,12 +26,6 @@ fn client_code() -> Result<()> {
         "input/input_1/register",
         &json!({
             "type": "whip",
-            "video": {
-                "decoder": "ffmpeg_h264"
-            },
-            "audio": {
-                "decoder": "opus"
-            },
         }),
     )?
     .json::<serde_json::Value>();
@@ -44,9 +38,6 @@ fn client_code() -> Result<()> {
         "input/input_2/register",
         &json!({
             "type": "whip",
-            "video": {
-                "decoder": "ffmpeg_h264"
-            },
         }),
     )?
     .json::<serde_json::Value>();
@@ -59,9 +50,6 @@ fn client_code() -> Result<()> {
         "input/input_3/register",
         &json!({
             "type": "whip",
-            "video": {
-                "decoder": "ffmpeg_h264"
-            },
         }),
     )?
     .json::<serde_json::Value>();

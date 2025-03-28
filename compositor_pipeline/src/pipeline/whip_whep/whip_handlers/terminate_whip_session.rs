@@ -11,14 +11,15 @@ use tracing::info;
 
 pub async fn handle_terminate_whip_session(
     Path(id): Path<String>,
-    State(state): State<Arc<WhipWhepState>>,
+    State(state): State<WhipWhepState>,
     headers: HeaderMap,
 ) -> Result<StatusCode, WhipServerError> {
     let input_id = InputId(Arc::from(id));
 
+    let connections = state.inputs.0;
     let bearer_token = {
-        let connections = state.input_connections.lock().unwrap();
-        connections
+        let guard = connections.lock().unwrap();
+        guard
             .get(&input_id)
             .map(|connection| connection.bearer_token.clone())
             .ok_or_else(|| WhipServerError::NotFound(format!("{input_id:?} not found")))?
@@ -27,12 +28,11 @@ pub async fn handle_terminate_whip_session(
     validate_token(bearer_token, headers.get("Authorization")).await?;
 
     let peer_connection = {
-        let mut connections = state.input_connections.lock().unwrap();
-        if let Some(connection) = connections.get_mut(&input_id) {
-            connection.peer_connection.take()
-        } else {
+        let mut guard = connections.lock().unwrap();
+        let Some(connection) = guard.get_mut(&input_id) else {
             return Err(WhipServerError::NotFound(format!("{input_id:?} not found")));
-        }
+        };
+        connection.peer_connection.take()
     };
 
     if let Some(peer_connection) = peer_connection {

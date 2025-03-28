@@ -1,5 +1,5 @@
 use crate::pipeline::{
-    input::whip::process_track_stream,
+    input::whip::{process_track_stream, start_decoders::start_decoders_threads},
     whip_whep::{
         bearer_token::validate_token, error::WhipServerError, init_peer_connection, WhipWhepState,
     },
@@ -13,17 +13,16 @@ use compositor_render::InputId;
 use init_peer_connection::init_peer_connection;
 use std::{sync::Arc, time::Duration};
 use tokio::{sync::watch, time::timeout};
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 use urlencoding::encode;
 use webrtc::{
     ice_transport::ice_gatherer_state::RTCIceGathererState,
     peer_connection::{sdp::session_description::RTCSessionDescription, RTCPeerConnection},
-    rtp_transceiver::rtp_codec::RTPCodecType,
 };
 
 pub async fn handle_create_whip_session(
     Path(id): Path<String>,
-    State(state): State<Arc<WhipWhepState>>,
+    State(state): State<WhipWhepState>,
     headers: HeaderMap,
     offer: String,
 ) -> Result<Response<Body>, WhipServerError> {
@@ -31,12 +30,16 @@ pub async fn handle_create_whip_session(
 
     validate_sdp_content_type(&headers)?;
 
-    let input_components = state.get_input_connection_options(input_id.clone())?;
+    trace!("SDP offer: {}", offer);
 
-    validate_token(input_components.bearer_token, headers.get("Authorization")).await?;
+    let input_state = state
+        .inputs
+        .get_input_connection_options(input_id.clone())?;
+
+    validate_token(input_state.bearer_token, headers.get("Authorization")).await?;
 
     //Deleting previous peer_connection on this input which was not in Connected state
-    if let Some(connection) = input_components.peer_connection {
+    if let Some(connection) = input_state.peer_connection {
         if let Err(err) = connection.close().await {
             return Err(WhipServerError::InternalError(format!(
                 "Cannot close previously existing peer connection {input_id:?}: {err:?}"
@@ -44,56 +47,31 @@ pub async fn handle_create_whip_session(
         }
     }
 
-    let peer_connection = init_peer_connection(
-        input_components.video_sender.is_some(),
-        input_components.audio_sender.is_some(),
-        state.stun_servers.to_vec(),
-    )
-    .await?;
+    let (peer_connection, video_transceiver, audio_transceiver) =
+        init_peer_connection(state.pipeline_ctx.stun_servers.to_vec()).await?;
 
     state
+        .inputs
         .update_peer_connection(input_id.clone(), peer_connection.clone())
         .await?;
-
-    peer_connection.on_track(Box::new(move |track, _, _| {
-        let track_kind = track.kind();
-        let state_clone = state.clone();
-        let input_id_clone = input_id.clone();
-        let depayloader_clone = input_components.depayloader.clone();
-        let sender = match track_kind {
-            RTPCodecType::Video => input_components.video_sender.clone(),
-            RTPCodecType::Audio => input_components.audio_sender.clone(),
-            _ => {
-                debug!("RTPCodecType not supported!");
-                None
-            }
-        };
-
-        //tokio::spawn is necessary to concurrently process audio and video track
-        Box::pin(async {
-            if let Some(sender) = sender {
-                tokio::spawn(async move {
-                    process_track_stream(
-                        track,
-                        state_clone,
-                        input_id_clone,
-                        depayloader_clone,
-                        sender,
-                    )
-                    .await;
-                });
-            }
-        })
-    }));
 
     peer_connection.on_ice_connection_state_change(Box::new(move |state| {
         info!("ICE connection state changed: {state:?}");
         Box::pin(async {})
     }));
 
-    let description = RTCSessionDescription::offer(offer)?;
+    let description = RTCSessionDescription::offer(offer.clone())?;
 
     peer_connection.set_remote_description(description).await?;
+
+    let payload_type_map = start_decoders_threads(
+        &state,
+        input_id.clone(),
+        video_transceiver,
+        audio_transceiver,
+    )
+    .await?;
+
     let answer = peer_connection.create_answer(None).await?;
     peer_connection.set_local_description(answer).await?;
     gather_ice_candidates_for_one_second(peer_connection.clone()).await;
@@ -103,7 +81,18 @@ pub async fn handle_create_whip_session(
             "Local description is not set, cannot read it".to_string(),
         ));
     };
-    debug!("Sending SDP answer: {sdp:?}");
+    trace!("Sending SDP answer: {sdp:?}");
+
+    peer_connection.on_track(Box::new(move |track, _, _| {
+        //tokio::spawn is necessary to concurrently process audio and video track
+        tokio::spawn(process_track_stream(
+            track,
+            state.inputs.clone(),
+            input_id.clone(),
+            payload_type_map.clone(),
+        ));
+        Box::pin(async {})
+    }));
 
     let body = Body::from(sdp.sdp.to_string());
     let response = Response::builder()

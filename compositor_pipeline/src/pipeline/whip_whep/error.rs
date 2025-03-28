@@ -6,6 +6,7 @@ pub enum WhipServerError {
     BadRequest(String),
     InternalError(String),
     Unauthorized(String),
+    CodecNegotiationError(String),
     NotFound(String),
 }
 
@@ -24,6 +25,7 @@ impl std::fmt::Display for WhipServerError {
             WhipServerError::InternalError(message) => message,
             WhipServerError::BadRequest(message) => message,
             WhipServerError::Unauthorized(message) => message,
+            WhipServerError::CodecNegotiationError(message) => message,
             WhipServerError::NotFound(message) => message,
         })
     }
@@ -40,6 +42,9 @@ impl IntoResponse for WhipServerError {
             }
             WhipServerError::Unauthorized(message) => {
                 (StatusCode::UNAUTHORIZED, message).into_response()
+            }
+            WhipServerError::CodecNegotiationError(message) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, message).into_response()
             }
             WhipServerError::NotFound(message) => (StatusCode::NOT_FOUND, message).into_response(),
         }

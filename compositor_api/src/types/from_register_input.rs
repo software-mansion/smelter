@@ -195,52 +195,15 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
             offset_ms,
         } = value;
 
-        const NO_VIDEO_AUDIO_SPEC: &str =
-            "At least one of `video` and `audio` has to be specified in `register_input` request.";
-
-        if video.is_none() && audio.is_none() {
-            return Err(TypeError::new(NO_VIDEO_AUDIO_SPEC));
+        if video.is_some() {
+            warn!("Field 'video' is deprecated. The codec will now be set automatically based on WHIP negotiation, manual specification is no longer needed.")
         }
 
-        let whip_receiver_options = input::whip::WhipReceiverOptions {
-            video: video
-                .as_ref()
-                .map(|video| {
-                    Ok(input::whip::InputVideoStream {
-                        options: match video.decoder {
-                            VideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions {
-                                decoder: pipeline::VideoDecoder::FFmpegH264,
-                            },
-                            VideoDecoder::FfmpegVp8 => {
-                                return Err(TypeError::new("WHIP VP8 input not implemented"))
-                            }
-                            #[cfg(feature = "vk-video")]
-                            VideoDecoder::VulkanH264 => decoder::VideoDecoderOptions {
-                                decoder: pipeline::VideoDecoder::VulkanVideoH264,
-                            },
+        if audio.is_some() {
+            warn!("Field 'audio' is deprecated. The codec will now be set automatically based on WHIP negotiation, manual specification is no longer needed.")
+        }
 
-                            #[cfg(feature = "vk-video")]
-                            VideoDecoder::VulkanVideo => {
-                                warn!(
-                                    "vulkan_video option is deprecated, use vulkan_h264 instead."
-                                );
-                                decoder::VideoDecoderOptions {
-                                    decoder: pipeline::VideoDecoder::VulkanVideoH264,
-                                }
-                            }
-
-                            #[cfg(not(feature = "vk-video"))]
-                            VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
-                                return Err(TypeError::new(NO_VULKAN_VIDEO))
-                            }
-                        },
-                    })
-                })
-                .transpose()?,
-            audio: audio.map(TryFrom::try_from).transpose()?,
-        };
-
-        let input_options = input::InputOptions::Whip(whip_receiver_options);
+        let input_options = input::InputOptions::Whip;
 
         let queue_options = queue::QueueInputOptions {
             required: required.unwrap_or(false),

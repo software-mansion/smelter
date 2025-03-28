@@ -75,7 +75,7 @@ impl From<&Config> for pipeline::Options {
             wgpu_ctx: None,
             load_system_fonts: Some(val.load_system_fonts),
             start_whip_whep: val.start_whip_whep,
-            whip_whep_server_port: Some(val.whip_whep_server_port),
+            whip_whep_server_port: val.whip_whep_server_port,
             tokio_rt: None,
             rendering_mode: val.rendering_mode,
         }
