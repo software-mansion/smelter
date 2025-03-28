@@ -12,16 +12,15 @@ use glyphon::{
 use tracing::warn;
 use wgpu::{
     CommandEncoderDescriptor, LoadOp, MultisampleState, Operations, RenderPassColorAttachment,
-    RenderPassDescriptor, TextureFormat,
+    RenderPassDescriptor,
 };
 
 use crate::{
     scene::{
         HorizontalAlign, RGBAColor, TextComponent, TextDimensions, TextStyle, TextWeight, TextWrap,
     },
-    state::RenderCtx,
-    utils::rgba_to_wgpu_color,
-    wgpu::texture::NodeTexture,
+    state::{node_texture::NodeTexture, RenderCtx},
+    wgpu::{utils::convert_to_shader_color, WgpuCtx},
     Resolution,
 };
 
@@ -58,8 +57,8 @@ pub(crate) struct TextRendererNode {
 }
 
 impl TextRendererNode {
-    pub(crate) fn new(params: TextRenderParams) -> Self {
-        let background_color = rgba_to_wgpu_color(&params.background_color);
+    pub(crate) fn new(ctx: &RenderCtx, params: TextRenderParams) -> Self {
+        let background_color = rgba_to_wgpu_color(ctx.wgpu_ctx, &params.background_color);
 
         Self {
             buffer: params.buffer,
@@ -76,17 +75,9 @@ impl TextRendererNode {
 
         if self.resolution.width == 0 || self.resolution.height == 0 {
             // We can't use zero-sized textures
-            let target_state = target.ensure_size(
-                renderer_ctx.wgpu_ctx,
-                Resolution {
-                    width: 1,
-                    height: 1,
-                },
-            );
+            let target_state = target.ensure_size(renderer_ctx.wgpu_ctx, Resolution::ONE_PIXEL);
 
-            target_state
-                .rgba_texture()
-                .upload(renderer_ctx.wgpu_ctx, &[0; 4]);
+            target_state.upload(renderer_ctx.wgpu_ctx, &[0; 4]);
 
             self.was_rendered = true;
             return;
@@ -100,7 +91,7 @@ impl TextRendererNode {
         let mut viewport = glyphon::Viewport::new(&renderer_ctx.wgpu_ctx.device, cache);
         viewport.update(&renderer_ctx.wgpu_ctx.queue, self.resolution.into());
 
-        let swapchain_format = TextureFormat::Rgba8UnormSrgb;
+        let swapchain_format = renderer_ctx.wgpu_ctx.default_view_format();
         let mut atlas = TextAtlas::new(
             &renderer_ctx.wgpu_ctx.device,
             &renderer_ctx.wgpu_ctx.queue,
@@ -148,21 +139,15 @@ impl TextRendererNode {
                 });
 
         let target_state = target.ensure_size(renderer_ctx.wgpu_ctx, self.resolution);
-        let view = &target_state.rgba_texture().texture().view;
+        let view = &target_state.view();
         {
-            let background_color = wgpu::Color {
-                r: srgb_to_linear(self.background_color.r),
-                g: srgb_to_linear(self.background_color.g),
-                b: srgb_to_linear(self.background_color.b),
-                a: self.background_color.a,
-            };
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view,
                     resolve_target: None,
                     ops: Operations {
-                        load: LoadOp::Clear(background_color),
+                        load: LoadOp::Clear(self.background_color),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -377,10 +362,7 @@ impl TextRendererCtx {
     }
 }
 
-fn srgb_to_linear(color: f64) -> f64 {
-    if color < 0.04045 {
-        color / 12.92
-    } else {
-        f64::powf((color + 0.055) / 1.055, 2.4)
-    }
+fn rgba_to_wgpu_color(ctx: &WgpuCtx, rgba_color: &RGBAColor) -> wgpu::Color {
+    let [r, g, b, a] = convert_to_shader_color(ctx, rgba_color);
+    wgpu::Color { r, g, b, a }
 }

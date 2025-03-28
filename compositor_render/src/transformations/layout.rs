@@ -2,8 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use crate::{
     scene::{BorderRadius, BoxShadow, RGBAColor, Size},
-    state::RenderCtx,
-    wgpu::texture::NodeTexture,
+    state::{node_texture::NodeTexture, RenderCtx},
     Resolution,
 };
 

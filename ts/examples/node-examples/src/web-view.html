@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Web Renderer Example</title>
+    </head>
+
+    <style>
+        html,
+        body {
+            color: white;
+            background-color: transparent;
+        }
+
+        #example_video {
+            border: 2px solid;
+            animation: anim infinite ease-in-out;
+            animation-duration: 3s;
+            width: 800px;
+            height: 600px;
+        }
+
+        #example_image {
+            animation: anim infinite ease-in-out;
+            animation-duration: 3s;
+            width: 800px;
+            height: 200px;
+        }
+
+        @keyframes anim {
+            0%,
+            100% {
+                margin-left: 0;
+            }
+
+            50% {
+                margin-left: 250px;
+            }
+        }
+    </style>
+
+    <body>
+        <h2>Frame embedding (image):</h2>
+        <canvas id="example_image"></canvas>
+        <h2>Frame embedding (video):</h2>
+        <canvas id="example_video"></canvas>
+    </body>
+</html>

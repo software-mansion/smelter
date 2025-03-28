@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
-use crate::{scene::ComponentId, state::RegisterCtx, RendererId, Resolution};
+use crate::{
+    scene::ComponentId,
+    state::{node_texture::NodeTexture, RegisterCtx},
+    RendererId, Resolution,
+};
 use crossbeam_channel::{Receiver, Sender};
 use log::error;
-
-use crate::wgpu::texture::NodeTexture;
 
 use super::{
     browser_client::BrowserClient, chromium_sender_thread::ChromiumSenderThread, WebRendererSpec,

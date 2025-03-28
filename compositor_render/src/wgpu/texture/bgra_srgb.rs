@@ -1,13 +1,16 @@
 use crate::{wgpu::WgpuCtx, Resolution};
 
-use super::base::Texture;
+use super::{base::new_texture, TextureExt};
 
 #[derive(Debug)]
-pub struct BGRATexture(Texture);
+pub struct BgraSrgbTexture {
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+}
 
-impl BGRATexture {
+impl BgraSrgbTexture {
     pub fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
-        Self(Texture::new(
+        let texture = new_texture(
             &ctx.device,
             None,
             wgpu::Extent3d {
@@ -17,14 +20,17 @@ impl BGRATexture {
             },
             wgpu::TextureFormat::Rgba8UnormSrgb,
             wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
-        ))
+            &[wgpu::TextureFormat::Rgba8UnormSrgb],
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        Self { texture, view }
     }
 
     pub fn upload(&self, ctx: &WgpuCtx, data: &[u8]) {
-        self.0.upload_data(&ctx.queue, data, 4);
+        self.texture.upload_data(&ctx.queue, data, 4);
     }
 
-    pub fn texture(&self) -> &Texture {
-        &self.0
+    pub fn view(&self) -> &wgpu::TextureView {
+        &self.view
     }
 }

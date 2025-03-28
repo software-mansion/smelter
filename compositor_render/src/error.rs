@@ -4,9 +4,7 @@ use crate::wgpu::CreateWgpuCtxError;
 use crate::{
     registry,
     scene::SceneError,
-    transformations::{
-        image_renderer::ImageError, web_renderer::chromium_context::WebRendererContextError,
-    },
+    transformations::{image::ImageError, web_renderer::chromium_context::WebRendererContextError},
 };
 use crate::{OutputId, RendererId};
 
@@ -86,10 +84,10 @@ pub enum RequestKeyframeError {
     NoVideoOutput(OutputId),
 }
 
-pub struct ErrorStack<'a>(Option<&'a (dyn std::error::Error + 'static)>);
+pub struct ErrorStack<'a>(Option<&'a (dyn std::error::Error)>);
 
 impl<'a> ErrorStack<'a> {
-    pub fn new(value: &'a (dyn std::error::Error + 'static)) -> Self {
+    pub fn new(value: &'a (dyn std::error::Error)) -> Self {
         ErrorStack(Some(value))
     }
 
@@ -100,7 +98,7 @@ impl<'a> ErrorStack<'a> {
 }
 
 impl<'a> Iterator for ErrorStack<'a> {
-    type Item = &'a (dyn std::error::Error + 'static);
+    type Item = &'a (dyn std::error::Error);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.inspect(|err| {

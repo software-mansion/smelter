@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use compositor_chromium::cef::{self, V8ObjectError};
 use log::{debug, error};
 
+use crate::error::ErrorStack;
 use crate::web_renderer::process_helper::state::FrameInfo;
 use crate::web_renderer::{
     EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE, UNEMBED_SOURCE_FRAMES_MESSAGE,
@@ -43,7 +44,10 @@ impl cef::RenderProcessHandler for RenderProcessHandler {
         };
 
         if let Err(err) = result {
-            error!("Error occurred while processing IPC message: {err}");
+            error!(
+                "Error occurred while processing IPC message: {}",
+                ErrorStack::new(err.as_ref()).into_string()
+            );
             // Message was not handled
             return false;
         }

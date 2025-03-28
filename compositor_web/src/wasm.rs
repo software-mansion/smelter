@@ -7,6 +7,8 @@ use compositor_render::{
     RegistryType, RendererSpec,
 };
 use glyphon::fontdb::Source;
+use tracing_subscriber::{layer::SubscriberExt, Registry};
+use tracing_wasm::WASMLayer;
 use wasm_bindgen::prelude::*;
 use wgpu::create_wgpu_context;
 
@@ -20,7 +22,6 @@ mod wgpu;
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
-    tracing_wasm::set_as_global_default();
 
     Ok(())
 }
@@ -28,8 +29,12 @@ pub fn start() -> Result<(), JsValue> {
 #[wasm_bindgen]
 pub async fn create_renderer(options: JsValue) -> Result<SmelterRenderer, JsValue> {
     let options = types::from_js_value::<types::RendererOptions>(options)?;
-    // This option will only be respected for the first renderer
-    let _ = wasm_log::try_init(wasm_log::Config::new(options.logger_level.into()));
+
+    let mut logger_config = tracing_wasm::WASMLayerConfigBuilder::new();
+    logger_config.set_max_level(options.logger_level.into());
+    let _ = tracing::subscriber::set_global_default(
+        Registry::default().with(WASMLayer::new(logger_config.build())),
+    );
 
     let (device, queue) = create_wgpu_context().await?;
     let renderer = renderer::Renderer::new(device, queue, options.into())?;

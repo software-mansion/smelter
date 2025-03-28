@@ -252,7 +252,7 @@ fn roundedRectSDF(dist: vec2<f32>, size: vec2<f32>, radius: vec4<f32>, rotation:
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let transparent = vec4<f32>(1.0, 1.0, 1.0, 0.0);
+    let transparent = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 
     var mask_alpha = 1.0;
 
@@ -294,7 +294,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
             if (border_width < 1.0) {
                 let content_alpha = smoothstep(-0.5, 0.5, edge_distance);
-                return vec4<f32>(sample.rgb, sample.a * content_alpha * mask_alpha);
+                return sample * content_alpha * mask_alpha;
             } else if (mask_alpha < 0.01) {
                 return vec4<f32>(0, 0, 0, 0);
             } else {
@@ -302,11 +302,11 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                     // border <-> content
                     let border_alpha = smoothstep(border_width - 0.5, border_width + 0.5, edge_distance);
                     let border_or_content = mix(border_color, sample, border_alpha);
-                    return vec4<f32>(border_or_content.rgb, border_or_content.a * mask_alpha);
+                    return border_or_content * mask_alpha;
                 } else {
                     // border <-> outside
                     let content_alpha = smoothstep(-0.5, 0.5, edge_distance);
-                    return vec4<f32>(border_color.rgb, border_color.a * content_alpha * mask_alpha);
+                    return border_color * content_alpha * mask_alpha;
                 }
             }
         }
@@ -330,17 +330,17 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
             if (border_width < 1.0) {
               let content_alpha = smoothstep(-0.5, 0.5, edge_distance);
-              return vec4<f32>(color.rgb, color.a * content_alpha * mask_alpha);
+              return color * content_alpha * mask_alpha;
             } else {
                 if (edge_distance > border_width / 2.0) {
                     // border <-> content
                     let border_alpha = smoothstep(border_width, border_width + 1.0, edge_distance);
                     let border_or_content = mix(border_color, color, border_alpha);
-                    return vec4<f32>(border_or_content.rgb, border_or_content.a * mask_alpha);
+                    return border_or_content * mask_alpha;
                 } else {
                     // border <-> outside
                     let content_alpha = smoothstep(-0.5, 0.5, edge_distance);
-                    return vec4<f32>(border_color.rgb, border_color.a * content_alpha * mask_alpha);
+                    return border_color * content_alpha * mask_alpha;
                 }
             }
         }
@@ -363,7 +363,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             
             let blur_alpha = smoothstep(-blur_radius / 2.0, blur_radius / 2.0, edge_distance) * mask_alpha;
 
-            return vec4<f32>(color.rgb, color.a * blur_alpha);
+            return color * blur_alpha;
         }
         default {
             return vec4(0.0, 0.0, 0.0, 0.0);

@@ -355,6 +355,7 @@ fn run_single_test(ctx: GraphicsContext, bench_config: SingleBenchConfig) -> boo
         stun_servers: Vec::new().into(),
         whip_whep_server_port: None,
         start_whip_whep: false,
+        rendering_mode: compositor_render::RenderingMode::GpuOptimized,
     });
 
     let Ok((pipeline, _event_loop)) = pipeline_result else {
