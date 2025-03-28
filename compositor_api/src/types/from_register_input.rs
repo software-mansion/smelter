@@ -8,6 +8,7 @@ use compositor_pipeline::{
     },
     queue,
 };
+use tracing::warn;
 
 use super::register_input::*;
 use super::util::*;
@@ -178,9 +179,19 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
 
     fn try_from(value: WhipInput) -> Result<Self, Self::Error> {
         let WhipInput {
+            video,
+            audio,
             required,
             offset_ms,
         } = value;
+
+        if video.is_some() {
+            warn!("Field 'video' is deprecated. The codec will now be set automatically based on WHIP negotiation, manual specification is no longer needed.")
+        }
+
+        if audio.is_some() {
+            warn!("Field 'audio' is deprecated. The codec will now be set automatically based on WHIP negotiation, manual specification is no longer needed.")
+        }
 
         let input_options = input::InputOptions::Whip;
 

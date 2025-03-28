@@ -17,13 +17,10 @@ pub async fn handle_terminate_whip_session(
 ) -> Result<StatusCode, WhipServerError> {
     let input_id = InputId(Arc::from(id));
 
+    let connections = pipeline_ctx.whip_whep_state.input_connections.clone();
     let bearer_token = {
-        let connections = pipeline_ctx
-            .whip_whep_state
-            .input_connections
-            .lock()
-            .unwrap();
-        connections
+        let guard = connections.lock().unwrap();
+        guard
             .get(&input_id)
             .map(|connection| connection.bearer_token.clone())
             .ok_or_else(|| WhipServerError::NotFound(format!("{input_id:?} not found")))?
@@ -32,16 +29,11 @@ pub async fn handle_terminate_whip_session(
     validate_token(bearer_token, headers.get("Authorization")).await?;
 
     let peer_connection = {
-        let mut connections = pipeline_ctx
-            .whip_whep_state
-            .input_connections
-            .lock()
-            .unwrap();
-        if let Some(connection) = connections.get_mut(&input_id) {
-            connection.peer_connection.take()
-        } else {
+        let mut guard = connections.lock().unwrap();
+        let Some(connection) = guard.get_mut(&input_id) else {
             return Err(WhipServerError::NotFound(format!("{input_id:?} not found")));
-        }
+        };
+        connection.peer_connection.take()
     };
 
     if let Some(peer_connection) = peer_connection {

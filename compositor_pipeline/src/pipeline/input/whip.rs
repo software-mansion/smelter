@@ -119,14 +119,8 @@ pub fn start_forwarding_thread(
     mpsc::Sender<PipelineEvent<EncodedChunk>>,
     Receiver<PipelineEvent<EncodedChunk>>,
 ) {
-    let (whip_client_to_bridge_sender, mut whip_client_to_bridge_receiver): (
-        mpsc::Sender<PipelineEvent<EncodedChunk>>,
-        mpsc::Receiver<PipelineEvent<EncodedChunk>>,
-    ) = mpsc::channel(10);
-    let (bridge_to_decoder_sender, bridge_to_decoder_receiver): (
-        Sender<PipelineEvent<EncodedChunk>>,
-        Receiver<PipelineEvent<EncodedChunk>>,
-    ) = crossbeam_channel::bounded(10);
+    let (whip_client_to_bridge_sender, mut whip_client_to_bridge_receiver) = mpsc::channel(50);
+    let (bridge_to_decoder_sender, bridge_to_decoder_receiver) = crossbeam_channel::bounded(50);
     thread::spawn(move || {
         let _span: span::EnteredSpan = span!(
             Level::INFO,

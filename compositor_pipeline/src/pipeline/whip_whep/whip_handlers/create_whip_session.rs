@@ -83,22 +83,14 @@ pub async fn handle_create_whip_session(
     trace!("Sending SDP answer: {sdp:?}");
 
     peer_connection.on_track(Box::new(move |track, _, _| {
-        let input_id_clone = input_id.clone();
-        let payload_type_map_clone = payload_type_map.clone();
-        let pipeline_ctx_clone = pipeline_ctx.clone();
-
         //tokio::spawn is necessary to concurrently process audio and video track
-        Box::pin(async {
-            tokio::spawn(async move {
-                process_track_stream(
-                    track,
-                    pipeline_ctx_clone,
-                    input_id_clone,
-                    payload_type_map_clone,
-                )
-                .await;
-            });
-        })
+        tokio::spawn(process_track_stream(
+            track,
+            pipeline_ctx.clone(),
+            input_id.clone(),
+            payload_type_map.clone(),
+        ));
+        Box::pin(async {})
     }));
 
     let body = Body::from(sdp.sdp.to_string());
