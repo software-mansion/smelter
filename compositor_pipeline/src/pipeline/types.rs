@@ -140,7 +140,10 @@ impl fmt::Debug for Samples {
 impl fmt::Debug for EncodedChunk {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("EncodedChunk")
-            .field("data", &format!("len={}", self.data.len()))
+            .field(
+                "data",
+                &format!("len={}, {:?}", self.data.len(), &self.data[0..10]),
+            )
             .field("pts", &self.pts)
             .field("dts", &self.dts)
             .field("kind", &self.kind)

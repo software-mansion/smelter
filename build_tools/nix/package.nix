@@ -14,8 +14,11 @@
 , makeWrapper
 }:
 let
+  ffmpeg = ffmpeg_7-headless.override {
+    withRtmp = false;
+  };
   buildInputs = [
-    ffmpeg_7-headless
+    ffmpeg
     openssl
     libopus
     libGL

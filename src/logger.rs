@@ -61,7 +61,7 @@ extern "C" fn ffmpeg_log_callback(
             FfmpegLogLevel::Info if log_level <= 32 => {
                 ffmpeg_next::sys::av_log_default_callback(arg1, log_level, fmt, va_list_tag)
             }
-            FfmpegLogLevel::Debug if log_level <= 48 => {
+            FfmpegLogLevel::Debug if log_level <= 1000 => {
                 ffmpeg_next::sys::av_log_default_callback(arg1, log_level, fmt, va_list_tag)
             }
             _ => (),

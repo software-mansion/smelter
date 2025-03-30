@@ -3,6 +3,7 @@ use crossbeam_channel::{bounded, Receiver, Sender};
 use fdk_aac::AacEncoder;
 use log::error;
 use resampler::OutputResampler;
+use tracing::warn;
 
 use crate::{
     audio_mixer::{AudioChannels, OutputSamples},
@@ -168,11 +169,13 @@ impl AudioEncoder {
         sender: Sender<EncoderOutputEvent>,
     ) -> Result<Self, EncoderInitError> {
         let resampler = if options.sample_rate() != mixing_sample_rate {
+            warn!("Resampler {:?} {:?}", options.sample_rate(), mixing_sample_rate);
             Some(OutputResampler::new(
                 mixing_sample_rate,
                 options.sample_rate(),
             )?)
         } else {
+            warn!("no Resampler {:?} {:?}", options.sample_rate(), mixing_sample_rate);
             None
         };
 

@@ -282,17 +282,18 @@ impl TryFrom<RtmpOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             },
         });
         let rtmp_audio = audio.as_ref().map(|a| match &a.encoder {
-            Mp4AudioEncoderOptions::Aac {
+            RtmpAudioEncoderOptions::Aac {
                 channels,
                 sample_rate,
             } => RtmpAudioTrack {
                 channels: channels.clone().into(),
+                sample_rate: sample_rate.unwrap_or(44100),
             },
         });
 
         let (video_encoder_options, output_video_options) = maybe_video_options(video)?;
         let (audio_encoder_options, output_audio_options) = match audio {
-            Some(OutputMp4AudioOptions {
+            Some(OutputRtmpAudioOptions {
                 mixing_strategy,
                 send_eos_when,
                 encoder,
@@ -365,6 +366,20 @@ impl From<Mp4AudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
     fn from(value: Mp4AudioEncoderOptions) -> Self {
         match value {
             Mp4AudioEncoderOptions::Aac {
+                channels,
+                sample_rate,
+            } => AudioEncoderOptions::Aac(AacEncoderOptions {
+                channels: channels.into(),
+                sample_rate: sample_rate.unwrap_or(44100),
+            }),
+        }
+    }
+}
+
+impl From<RtmpAudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
+    fn from(value: RtmpAudioEncoderOptions) -> Self {
+        match value {
+            RtmpAudioEncoderOptions::Aac {
                 channels,
                 sample_rate,
             } => AudioEncoderOptions::Aac(AacEncoderOptions {

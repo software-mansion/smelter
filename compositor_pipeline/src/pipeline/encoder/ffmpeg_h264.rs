@@ -1,14 +1,15 @@
+use core::slice;
 use std::time::Duration;
 
 use compositor_render::{Frame, FrameData, Framerate, OutputId, Resolution};
 use crossbeam_channel::{Receiver, Sender};
 use ffmpeg_next::{
-    codec::{Context, Id},
+    codec::{Context, Flags, Id},
     encoder::Video,
     format::Pixel,
     frame, Dictionary, Packet, Rational,
 };
-use tracing::{debug, error, span, trace, warn, Level};
+use tracing::{debug, error, span, warn, Level};
 
 use crate::{
     error::EncoderInitError,
@@ -91,6 +92,7 @@ pub struct LibavH264Encoder {
     resolution: Resolution,
     frame_sender: Sender<PipelineEvent<Frame>>,
     keyframe_req_sender: Sender<()>,
+    pub config: bytes::Bytes,
 }
 
 impl LibavH264Encoder {
@@ -135,12 +137,13 @@ impl LibavH264Encoder {
             })
             .unwrap();
 
-        result_receiver.recv().unwrap()?;
+        let encoder_config = result_receiver.recv().unwrap()?;
 
         Ok(Self {
             frame_sender,
             resolution: options.resolution,
             keyframe_req_sender,
+            config: encoder_config,
         })
     }
 
@@ -163,7 +166,7 @@ fn run_encoder_thread(
     frame_receiver: Receiver<PipelineEvent<Frame>>,
     keyframe_req_receiver: Receiver<()>,
     packet_sender: Sender<EncoderOutputEvent>,
-    result_sender: &Sender<Result<(), EncoderInitError>>,
+    result_sender: &Sender<Result<bytes::Bytes, EncoderInitError>>,
 ) -> Result<(), EncoderInitError> {
     let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
 
@@ -171,6 +174,7 @@ fn run_encoder_thread(
 
     // We set this to 1 / 1_000_000, bc we use `as_micros` to convert frames to AV packets.
     let pts_unit_secs = Rational::new(1, 1_000_000);
+    encoder.set_flags(Flags::GLOBAL_HEADER);
     encoder.set_time_base(pts_unit_secs);
     encoder.set_format(Pixel::YUV420P);
     encoder.set_width(options.resolution.width as u32);
@@ -211,7 +215,14 @@ fn run_encoder_thread(
     let encoder_opts_iter = merge_options_with_defaults(&defaults, &options.raw_options);
     let mut encoder = encoder.open_as_with(codec, Dictionary::from_iter(encoder_opts_iter))?;
 
-    result_sender.send(Ok(())).unwrap();
+    let extradata = unsafe {
+        let encoder_ptr = encoder.0 .0 .0.as_ptr();
+        let size = (*encoder_ptr).extradata_size;
+        let extradata_slice = slice::from_raw_parts((*encoder_ptr).extradata, size as usize);
+        bytes::Bytes::copy_from_slice(extradata_slice)
+    };
+
+    result_sender.send(Ok(extradata)).unwrap();
 
     let mut packet = Packet::empty();
 
@@ -246,6 +257,7 @@ fn run_encoder_thread(
         }
 
         while let Some(chunk) = receive_chunk(&mut encoder, &mut packet) {
+            warn!("{chunk:?}");
             if packet_sender.send(EncoderOutputEvent::Data(chunk)).is_err() {
                 warn!("Failed to send encoded video from H264 encoder. Channel closed.");
                 return Ok(());
@@ -279,7 +291,7 @@ fn receive_chunk(encoder: &mut Video, packet: &mut Packet) -> Option<EncodedChun
                 1_000_000,
             ) {
                 Ok(chunk) => {
-                    trace!(pts=?packet.pts(), "H264 encoder produced an encoded packet.");
+                    warn!(pts=?packet.pts(), ?chunk, "H264 encoder produced an encoded packet.");
                     Some(chunk)
                 }
                 Err(e) => {

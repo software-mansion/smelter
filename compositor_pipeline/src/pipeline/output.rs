@@ -13,7 +13,10 @@ use crate::{audio_mixer::OutputSamples, error::RegisterOutputError, queue::Pipel
 use self::rtp::{RtpSender, RtpSenderOptions};
 
 use super::{
-    encoder::{AudioEncoder, AudioEncoderOptions, Encoder, EncoderOptions, VideoEncoderOptions},
+    encoder::{
+        fdk_aac::AacEncoder, ffmpeg_h264::LibavH264Encoder, AudioEncoder, AudioEncoderOptions,
+        Encoder, EncoderOptions, VideoEncoder, VideoEncoderOptions,
+    },
     types::EncoderOutputEvent,
     PipelineCtx, Port, RawDataReceiver,
 };
@@ -131,11 +134,27 @@ impl OutputOptionsExt<Option<Port>> for OutputOptions {
                 Ok((Output::Rtp { sender, encoder }, Some(port)))
             }
             OutputProtocolOptions::Rtmp(rtmp_options) => {
+                let Some(VideoEncoder::H264(LibavH264Encoder { config, .. })) = &encoder.video
+                else {
+                    panic!("slkdjflsdkjf")
+                };
+                let Some(AudioEncoder::Aac(AacEncoder {
+                    config: audio_config,
+                    ..
+                })) = &encoder.audio
+                else {
+                    panic!("slkdjflsdkjf")
+                };
                 let sender = rtmp::RmtpSender::new(
                     output_id,
                     rtmp_options.clone(),
                     packets,
-                    ctx.mixing_sample_rate,
+                    (&rtmp_options.audio)
+                        .as_ref()
+                        .map(|audio| audio.sample_rate)
+                        .unwrap_or(ctx.mixing_sample_rate),
+                    config.clone(),
+                    audio_config.clone(),
                 )
                 .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
 
