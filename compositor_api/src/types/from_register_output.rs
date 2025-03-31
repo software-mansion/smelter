@@ -124,14 +124,19 @@ impl TryFrom<Mp4Output> for pipeline::RegisterOutputOptions<output::OutputOption
             ));
         }
 
-        let mp4_video = video.as_ref().map(|v| match v.encoder {
-            VideoEncoderOptions::FfmpegH264 { .. } => Mp4VideoTrack {
-                codec: pipeline::VideoCodec::H264,
-                width: v.resolution.width as u32,
-                height: v.resolution.height as u32,
-            },
-            VideoEncoderOptions::FfmpegVp8 { .. } => unimplemented!(),
-        });
+        let mp4_video = video
+            .as_ref()
+            .map(|v| match v.encoder {
+                VideoEncoderOptions::FfmpegH264 { .. } => Ok(Mp4VideoTrack {
+                    codec: pipeline::VideoCodec::H264,
+                    width: v.resolution.width as u32,
+                    height: v.resolution.height as u32,
+                }),
+                VideoEncoderOptions::FfmpegVp8 { .. } => {
+                    Err(TypeError::new("MP4 VP8 output not supported"))
+                }
+            })
+            .transpose()?;
         let mp4_audio = audio.as_ref().map(|a| match &a.encoder {
             Mp4AudioEncoderOptions::Aac {
                 channels,
@@ -197,10 +202,15 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 "At least one of \"video\" and \"audio\" fields have to be specified.",
             ));
         }
-        let video_codec = video.as_ref().map(|v| match v.encoder {
-            VideoEncoderOptions::FfmpegH264 { .. } => pipeline::VideoCodec::H264,
-            VideoEncoderOptions::FfmpegVp8 { .. } => unimplemented!(),
-        });
+        let video_codec = video
+            .as_ref()
+            .map(|v| match v.encoder {
+                VideoEncoderOptions::FfmpegH264 { .. } => Ok(pipeline::VideoCodec::H264),
+                VideoEncoderOptions::FfmpegVp8 { .. } => {
+                    Err(TypeError::new("WHIP VP8 output not implemented"))
+                }
+            })
+            .transpose()?;
         let audio_options = audio.as_ref().map(|a| match &a.encoder {
             WhipAudioEncoderOptions::Opus {
                 channels,
