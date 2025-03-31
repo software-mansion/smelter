@@ -25,7 +25,7 @@ pub enum InitPipelineError {
     CreateTokioRuntime(#[source] std::io::Error),
 
     #[error("Failed to initialize WHIP WHEP server.")]
-    WhipWhepServerInitError,
+    WhipWhepServerInitError(#[source] std::io::Error),
 }
 
 #[derive(Debug, thiserror::Error)]
