@@ -11,6 +11,7 @@ use super::VideoDecoderOptions;
 
 mod ffmpeg_h264;
 mod ffmpeg_vp8;
+mod ffmpeg_vp9;
 #[cfg(feature = "vk-video")]
 mod vulkan_video;
 
@@ -32,6 +33,14 @@ pub fn start_video_decoder_thread(
         ),
 
         VideoDecoder::FFmpegVp8 => ffmpeg_vp8::start_ffmpeg_decoder_thread(
+            pipeline_ctx,
+            chunks_receiver,
+            frame_sender,
+            input_id,
+            send_eos,
+        ),
+
+        VideoDecoder::FFmpegVp9 => ffmpeg_vp9::start_ffmpeg_decoder_thread(
             pipeline_ctx,
             chunks_receiver,
             frame_sender,

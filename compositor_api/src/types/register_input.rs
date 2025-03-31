@@ -173,6 +173,9 @@ pub enum VideoDecoder {
     /// Use the software vp8 decoder based on ffmpeg.
     FfmpegVp8,
 
+    /// Use the software vp9 decoder based on ffmpeg.
+    FfmpegVp9,
+
     /// Use hardware decoder based on Vulkan Video.
     ///
     /// This should be faster and more scalable than teh ffmpeg decoder, if the hardware and OS

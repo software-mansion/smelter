@@ -125,6 +125,7 @@ fn init_ffmpeg_output(
             let codec = match v.codec {
                 VideoCodec::H264 => ffmpeg::codec::Id::H264,
                 VideoCodec::VP8 => unreachable!(),
+                VideoCodec::VP9 => unreachable!(),
             };
 
             let mut stream = output_ctx
