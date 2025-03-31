@@ -1,6 +1,6 @@
 import type { InputId } from '@swmansion/smelter-browser-render';
 import type { Input, InputStartResult } from './input';
-import { InputVideoFrameRef } from './frame';
+import { InputVideoFrame, InputVideoFrameRef } from './frame';
 import type { Interval } from '../../utils';
 import { SmelterEventType } from '../../eventSender';
 import { workerPostEvent } from '../bridge';
@@ -10,7 +10,7 @@ export type InputState = 'started' | 'playing' | 'finished';
 export class MediaStreamInput implements Input {
   private inputId: InputId;
 
-  private frameRef?: InputVideoFrameRef;
+  private frame?: InputVideoFrameRef;
   private reader: ReadableStreamDefaultReader<VideoFrame>;
   private readInterval?: Interval;
 
@@ -32,13 +32,10 @@ export class MediaStreamInput implements Input {
       readPromise = this.reader.read();
       const readResult = await readPromise;
       if (readResult.value) {
-        if (this.frameRef) {
-          this.frameRef.decrementRefCount();
+        if (this.frame) {
+          this.frame.decrementRefCount();
         }
-        this.frameRef = new InputVideoFrameRef({
-          frame: readResult.value,
-          ptsMs: 0, // pts does not matter here
-        });
+        this.frame = new InputVideoFrameRef(readResult.value);
       }
 
       if (readResult.done) {
@@ -58,11 +55,15 @@ export class MediaStreamInput implements Input {
     if (this.readInterval) {
       clearInterval(this.readInterval);
     }
+    if (this.frame) {
+      this.frame.decrementRefCount();
+      this.frame = undefined;
+    }
   }
 
   public updateQueueStartTime(_queueStartTimeMs: number) {}
 
-  public async getFrame(_currentQueuePts: number): Promise<InputVideoFrameRef | undefined> {
+  public async getFrame(currentQueuePts: number): Promise<InputVideoFrame | undefined> {
     if (this.receivedEos) {
       if (!this.sentEos) {
         this.sentEos = true;
@@ -73,8 +74,9 @@ export class MediaStreamInput implements Input {
       }
       return;
     }
-    const frameRef = this.frameRef;
-    if (frameRef) {
+    const frame = this.frame;
+    frame?.incrementRefCount();
+    if (frame) {
       if (!this.sentFirstFrame) {
         this.sentFirstFrame = true;
         workerPostEvent({
@@ -83,8 +85,7 @@ export class MediaStreamInput implements Input {
         });
       }
       // using Ref just to cache downloading frames if the same frame is used more than once
-      frameRef.incrementRefCount();
-      return frameRef;
+      return new InputVideoFrame(frame, currentQueuePts);
     }
 
     return;

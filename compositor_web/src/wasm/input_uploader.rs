@@ -7,7 +7,7 @@ use super::types;
 
 #[derive(Default)]
 pub struct InputUploader {
-    textures: HashMap<InputId, Texture>,
+    textures: HashMap<InputId, Arc<wgpu::Texture>>,
 }
 
 impl InputUploader {
@@ -20,7 +20,8 @@ impl InputUploader {
         let pts = Duration::from_millis(input.pts_ms as u64);
         let mut frames = HashMap::new();
         for frame in input.frames.entries() {
-            let types::InputFrame { id, frame } = frame?.try_into()?;
+            // TODO: MP4 are not calculated correctly
+            let types::InputFrame { id, frame, .. } = frame?.try_into()?;
             let resolution = frame
                 .visible_rect()
                 .expect("Input frame should have visible rect defined");
@@ -74,36 +75,27 @@ impl InputUploader {
             .textures
             .entry(input_id.clone())
             .or_insert_with(|| Self::create_texture(device, size));
-        if size != texture.size {
+        if size != texture.size() {
             *texture = Self::create_texture(device, size);
         }
-
-        texture.texture.clone()
+        texture.clone()
     }
 
-    fn create_texture(device: &wgpu::Device, size: wgpu::Extent3d) -> Texture {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::COPY_SRC
-                | wgpu::TextureUsages::TEXTURE_BINDING,
-            label: None,
-        });
-
-        Texture {
-            size,
-            texture: Arc::new(texture),
-        }
+    fn create_texture(device: &wgpu::Device, size: wgpu::Extent3d) -> Arc<wgpu::Texture> {
+        device
+            .create_texture(&wgpu::TextureDescriptor {
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::COPY_DST
+                    | wgpu::TextureUsages::COPY_SRC
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                label: None,
+            })
+            .into()
     }
-}
-
-struct Texture {
-    size: wgpu::Extent3d,
-    texture: Arc<wgpu::Texture>,
 }
