@@ -5,7 +5,7 @@ use compositor_pipeline::pipeline::{
         self,
         fdk_aac::AacEncoderOptions,
         ffmpeg_h264::{self},
-        AudioEncoderOptions,
+        ffmpeg_vp8, AudioEncoderOptions,
     },
     output::{
         self,
@@ -37,6 +37,7 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions<output::OutputOption
         }
         let video_codec = video.as_ref().map(|v| match v.encoder {
             VideoEncoderOptions::FfmpegH264 { .. } => pipeline::VideoCodec::H264,
+            VideoEncoderOptions::FfmpegVp8 { .. } => pipeline::VideoCodec::VP8,
         });
         let audio_codec = audio.as_ref().map(|a| match a.encoder {
             RtpAudioEncoderOptions::Opus { .. } => pipeline::AudioCodec::Opus,
@@ -129,6 +130,7 @@ impl TryFrom<Mp4Output> for pipeline::RegisterOutputOptions<output::OutputOption
                 width: v.resolution.width as u32,
                 height: v.resolution.height as u32,
             },
+            VideoEncoderOptions::FfmpegVp8 { .. } => unimplemented!(),
         });
         let mp4_audio = audio.as_ref().map(|a| match &a.encoder {
             Mp4AudioEncoderOptions::Aac {
@@ -197,6 +199,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
         }
         let video_codec = video.as_ref().map(|v| match v.encoder {
             VideoEncoderOptions::FfmpegH264 { .. } => pipeline::VideoCodec::H264,
+            VideoEncoderOptions::FfmpegVp8 { .. } => unimplemented!(),
         });
         let audio_options = audio.as_ref().map(|a| match &a.encoder {
             WhipAudioEncoderOptions::Opus {
@@ -284,6 +287,12 @@ fn maybe_video_options(
             resolution: options.resolution.into(),
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         }),
+        VideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
+            pipeline::encoder::VideoEncoderOptions::VP8(ffmpeg_vp8::Options {
+                resolution: options.resolution.into(),
+                raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+            })
+        }
     };
 
     let output_options = pipeline::OutputVideoOptions {
