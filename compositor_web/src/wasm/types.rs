@@ -3,7 +3,6 @@ use std::time::Duration;
 use compositor_render::{error::ErrorStack, web_renderer::WebRendererInitOptions, InputId};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use web_sys::VideoFrame;
 
 #[derive(Debug, Deserialize)]
 pub struct RendererOptions {
@@ -62,6 +61,8 @@ impl FrameSet {
 pub struct InputFrame {
     pub id: InputId,
     pub frame: web_sys::VideoFrame,
+    #[allow(dead_code)]
+    pub pts: Duration,
 }
 
 #[wasm_bindgen]
@@ -111,8 +112,15 @@ impl TryFrom<JsValue> for InputFrame {
         let id = InputId(id.into());
 
         // 1 - map value
-        let frame: VideoFrame = js_sys::Reflect::get_u32(&entry, 1)?.into();
-        Ok(Self { id, frame })
+        let value = js_sys::Reflect::get_u32(&entry, 1)?;
+        let frame: web_sys::VideoFrame = js_sys::Reflect::get(&value, &"frame".into())?.into();
+        let pts = Duration::from_secs_f64(
+            js_sys::Reflect::get(&value, &"ptsMs".into())?
+                .as_f64()
+                .unwrap_or(0.0)
+                / 1000.0,
+        );
+        Ok(Self { id, frame, pts })
     }
 }
 

@@ -1,5 +1,5 @@
 import { Queue } from '@datastructures-js/queue';
-import type { InputVideoFrame } from './frame';
+import type { InternalVideoFrame } from './frame';
 import type { InputVideoFrameSource, EncodedSource, VideoFramePayload } from './input';
 import type { Logger } from 'pino';
 import { assert, sleep } from '../../utils';
@@ -11,7 +11,7 @@ export class InputVideoDecoder implements InputVideoFrameSource {
   private source: EncodedSource;
   private decoder: VideoDecoder;
   private offsetMs?: number;
-  private frames: Queue<InputVideoFrame>;
+  private frames: Queue<InternalVideoFrame>;
   private receivedEos: boolean = false;
   private firstFramePromise: Promise<void>;
   private workloadBalancerNode: WorkloadBalancerNode;

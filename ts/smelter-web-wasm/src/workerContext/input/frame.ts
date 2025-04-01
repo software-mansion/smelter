@@ -1,6 +1,9 @@
 import { assert } from '../../utils';
 
-export type InputVideoFrame = {
+/**
+ * Frame used internally (between decoder and input)
+ */
+export type InternalVideoFrame = {
   frame: VideoFrame;
   ptsMs: number;
 };
@@ -10,23 +13,34 @@ export type InputAudioData = {
   ptsMs: number;
 };
 
-/**
- * Represents frame produced by decoder.
- * Memory has to be manually managed by incrementing reference count on `FrameRef` copy and decrementing it once it's no longer used
- * `Input` manages memory in `getFrameRef()`
- * `Queue` on tick pulls `FrameRef` for each input and once render finishes, decrements the ref count
- */
-export class InputVideoFrameRef {
-  private frame: InputVideoFrame;
-  private refCount: number;
+export class InputVideoFrame {
+  private readonly ref: InputVideoFrameRef;
+  public readonly ptsMs: number;
 
-  public constructor(frame: InputVideoFrame) {
-    this.frame = frame;
-    this.refCount = 1;
+  constructor(ref: InputVideoFrameRef, ptsMs: number) {
+    this.ref = ref;
+    this.ptsMs = ptsMs;
   }
 
-  public get ptsMs(): number {
-    return this.frame.ptsMs;
+  get frame(): VideoFrame {
+    return this.ref.getFrame();
+  }
+
+  close(): void {
+    this.ref.decrementRefCount();
+  }
+}
+
+/**
+ * Represents ref counted frame.
+ */
+export class InputVideoFrameRef {
+  public readonly frame: VideoFrame;
+  private refCount: number;
+
+  public constructor(frame: VideoFrame) {
+    this.frame = frame;
+    this.refCount = 1;
   }
 
   /**
@@ -47,7 +61,7 @@ export class InputVideoFrameRef {
 
     this.refCount--;
     if (this.refCount === 0) {
-      this.frame.frame.close();
+      this.frame.close();
     }
   }
 
@@ -56,6 +70,6 @@ export class InputVideoFrameRef {
    */
   public getFrame(): VideoFrame {
     assert(this.refCount > 0);
-    return this.frame.frame;
+    return this.frame;
   }
 }
