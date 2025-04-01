@@ -15,6 +15,11 @@ export type FrameSet<T> = {
   frames: { [id: string]: T };
 };
 
+export type InputFrame = {
+  readonly frame: VideoFrame;
+  readonly ptsMs: number;
+};
+
 export type OutputFrame = {
   resolution: Api.Resolution;
   format: FrameFormat;
@@ -41,7 +46,7 @@ export class Renderer {
     return new Renderer(renderer);
   }
 
-  public render(input: FrameSet<VideoFrame>): FrameSet<OutputFrame> {
+  public render(input: FrameSet<InputFrame>): FrameSet<OutputFrame> {
     const frames = new Map(Object.entries(input.frames));
     const inputFrameSet = new wasm.FrameSet(input.ptsMs, frames);
     const output = this.renderer.render(inputFrameSet);
