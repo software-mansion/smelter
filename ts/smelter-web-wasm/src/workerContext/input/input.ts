@@ -1,6 +1,6 @@
 import Mp4Source from './source/Mp4Source';
 import { QueuedInput } from './QueuedInput';
-import type { InputAudioData, InputVideoFrame, InputVideoFrameRef } from './frame';
+import type { InputAudioData, InputVideoFrame, InternalVideoFrame } from './frame';
 import { MediaStreamInput } from './MediaStreamInput';
 import type { RegisterInput } from '../../workerApi';
 import type { Logger } from 'pino';
@@ -28,11 +28,14 @@ export type ContainerInfo = {
 export interface Input {
   start(): InputStartResult;
   updateQueueStartTime(queueStartTimeMs: number): void;
-  getFrame(currentQueuePts: number): Promise<InputVideoFrameRef | undefined>;
+  /*
+   * Return frame for the specified pts. Close method has to be called on the returned InputVideoFrame.
+   */
+  getFrame(currentQueuePts: number): Promise<InputVideoFrame | undefined>;
   close(): void;
 }
 
-export type VideoFramePayload = { type: 'frame'; frame: InputVideoFrame } | { type: 'eos' };
+export type VideoFramePayload = { type: 'frame'; frame: InternalVideoFrame } | { type: 'eos' };
 
 export type AudioDataPayload =
   | { type: 'sampleBatch'; sampleBatch: InputAudioData }
