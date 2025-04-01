@@ -10,7 +10,8 @@ export interface Transition {
    */
   easingFunction?: EasingFunction | null;
   /**
-   * (**default=`false`**) If `true`, the ongoing transition will reset on update.
+   * (**default=`false`**) On scene update, if there is already a transition in progress,
+   * it will be canceled and the new transition will start from the current state.
    */
   resetOnUpdate?: boolean;
 }

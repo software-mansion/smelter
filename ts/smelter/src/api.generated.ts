@@ -833,7 +833,8 @@ export interface Transition {
    */
   easing_function?: EasingFunction | null;
   /**
-   * (**default=`false`**) If `true`, the ongoing transition will reset on scene update.
+   * (**default=`false`**) On scene update, if there is already a transition in progress,
+   * it will be canceled and the new transition will start from the current state.
    */
   reset_on_update?: boolean | null;
 }
