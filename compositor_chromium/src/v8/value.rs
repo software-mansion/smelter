@@ -184,8 +184,10 @@ impl V8Value {
 
 impl Validatable for chromium_sys::cef_v8value_t {
     fn is_valid(&mut self) -> bool {
-        let is_valid = self.is_valid.unwrap();
-        unsafe { is_valid(self) == 1 }
+        match self.is_valid {
+            Some(is_valid) => unsafe { is_valid(self) == 1 },
+            None => false,
+        }
     }
 }
 
