@@ -17,7 +17,8 @@ pub struct Transition {
     pub duration_ms: f64,
     /// (**default=`"linear"`**) Easing function to be used for the transition.
     pub easing_function: Option<EasingFunction>,
-    /// (**default=`false`**) If `true`, the ongoing transition will reset on scene update.
+    /// (**default=`false`**) On scene update, if there is already a transition in progress,
+    /// it will be canceled and the new transition will start from the current state.
     pub reset_on_update: Option<bool>,
 }
 
