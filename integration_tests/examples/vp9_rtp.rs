@@ -28,19 +28,7 @@ fn client_code() -> Result<()> {
             "type": "rtp_stream",
             "port": INPUT_PORT,
             "video": {
-                "decoder": "ffmpeg_vp8"
-            }
-        }),
-    )?;
-
-    examples::post(
-        "input/input_2/register",
-        &json!({
-            "type": "rtp_stream",
-            "port": 8008,
-            "audio": {
-                "decoder": "opus",
-                "forward_error_correction": true,
+                "decoder": "ffmpeg_vp9"
             }
         }),
     )?;
@@ -86,17 +74,18 @@ fn client_code() -> Result<()> {
                 },
                 "initial": {
                     "inputs": [
-                        {"input_id": "input_2"}
+                        {"input_id": "input_1"}
                     ]
                 }
             }
         }),
     )?;
 
+    std::thread::sleep(Duration::from_millis(500));
     start_gst_receive_tcp(IP, OUTPUT_PORT, true, true)?;
     examples::post("start", &json!({}))?;
 
-    let gst_input_command = format!("gst-launch-1.0 videotestsrc pattern=ball ! video/x-raw,width=1280,height=720 ! vp8enc ! rtpvp8pay ! udpsink host=127.0.0.1 port={INPUT_PORT}");
+    let gst_input_command = format!("gst-launch-1.0 videotestsrc pattern=ball ! video/x-raw,width=1280,height=720,format=I420 ! vp9enc ! rtpvp9pay ! udpsink host=127.0.0.1 port={INPUT_PORT}");
     Command::new("bash")
         .arg("-c")
         .arg(gst_input_command)

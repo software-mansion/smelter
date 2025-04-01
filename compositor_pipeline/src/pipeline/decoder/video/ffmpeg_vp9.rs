@@ -108,7 +108,7 @@ fn run_decoder_thread(
             }
         };
         if chunk.kind != EncodedChunkKind::Video(VideoCodec::VP9) {
-            error!("9 decoder received chunk of wrong kind: {:?}", chunk.kind);
+            error!("VP9 decoder received chunk of wrong kind: {:?}", chunk.kind);
             continue;
         }
 
@@ -184,6 +184,8 @@ fn frame_from_av(
         error!(pts, pts_offset, "Received negative PTS. PTS values of the decoder output are not monotonically increasing.")
     }
     let pts = Duration::from_micros(i64::max(pts, 0) as u64);
+
+    // TODO add yuv422 and yuv444
     let data = match decoded.format() {
         Pixel::YUV420P => FrameData::PlanarYuv420(YuvPlanes {
             y_plane: copy_plane_from_av(decoded, 0),
