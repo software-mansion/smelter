@@ -127,8 +127,11 @@ impl ViewComponent {
             padding: self.padding,
         };
 
-        let props_changed = previous_state.map(|state| state.end != end).unwrap_or(true);
-        let should_reset_transition = self.transition.map(|t| t.reset_on_update).unwrap_or(false);
+        let props_changed = previous_state
+            .map(|state| state.end != end)
+            .unwrap_or(false);
+        let interrupt_previous_transition =
+            self.transition.map(|t| t.should_interrupt).unwrap_or(false);
         let transition = TransitionState::new(
             self.transition.map(|transition| TransitionOptions {
                 duration: transition.duration,
@@ -136,7 +139,7 @@ impl ViewComponent {
             }),
             previous_state.and_then(|s| s.transition.clone()),
             props_changed,
-            should_reset_transition,
+            interrupt_previous_transition,
             ctx.last_render_pts,
         );
         let view = StatefulViewComponent {

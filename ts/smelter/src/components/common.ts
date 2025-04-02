@@ -11,9 +11,9 @@ export interface Transition {
   easingFunction?: EasingFunction | null;
   /**
    * (**default=`false`**) On scene update, if there is already a transition in progress,
-   * it will be canceled and the new transition will start from the current state.
+   * it will be interrupted and the new transition will start from the current state.
    */
-  resetOnUpdate?: boolean;
+  shouldInterrupt?: boolean;
 }
 
 export function intoApiTransition(transition: Transition): Api.Transition {
@@ -22,7 +22,7 @@ export function intoApiTransition(transition: Transition): Api.Transition {
     easing_function: transition.easingFunction
       ? intoApiEasingFunction(transition.easingFunction)
       : undefined,
-    reset_on_update: transition.resetOnUpdate,
+    should_interrupt: transition.shouldInterrupt,
   };
 }
 
