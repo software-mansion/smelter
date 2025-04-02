@@ -833,10 +833,9 @@ export interface Transition {
    */
   easing_function?: EasingFunction | null;
   /**
-   * (**default=`false`**) On scene update, if there is already a transition in progress,
-   * it will be canceled and the new transition will start from the current state.
+   * (**default=`false`**) On scene update, if there is already a transition in progress, it will be interrupted and the new transition will start from the current state.
    */
-  reset_on_update?: boolean | null;
+  should_interrupt?: boolean | null;
 }
 export interface BoxShadow {
   offset_x?: number | null;

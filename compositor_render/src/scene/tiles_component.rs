@@ -153,8 +153,9 @@ impl TilesComponent {
                 state.component != component
                     || Self::did_child_order_change(&state.children, &children)
             })
-            .unwrap_or(true);
-        let should_reset_transition = self.transition.map(|t| t.reset_on_update).unwrap_or(false);
+            .unwrap_or(false);
+        let interrupt_previous_transition =
+            self.transition.map(|t| t.should_interrupt).unwrap_or(false);
         let transition = TransitionState::new(
             self.transition.map(|transition| TransitionOptions {
                 duration: transition.duration,
@@ -162,7 +163,7 @@ impl TilesComponent {
             }),
             previous_state.and_then(|s| s.transition.clone()),
             props_changed,
-            should_reset_transition,
+            interrupt_previous_transition,
             ctx.last_render_pts,
         );
         let tiles = StatefulTilesComponent {

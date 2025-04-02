@@ -18,8 +18,8 @@ pub struct Transition {
     /// (**default=`"linear"`**) Easing function to be used for the transition.
     pub easing_function: Option<EasingFunction>,
     /// (**default=`false`**) On scene update, if there is already a transition in progress,
-    /// it will be canceled and the new transition will start from the current state.
-    pub reset_on_update: Option<bool>,
+    /// it will be interrupted and the new transition will start from the current state.
+    pub should_interrupt: Option<bool>,
 }
 
 /// Easing functions are used to interpolate between two values over time.

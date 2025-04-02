@@ -163,7 +163,7 @@ pub enum Overflow {
 pub struct Transition {
     pub duration: Duration,
     pub interpolation_kind: InterpolationKind,
-    pub reset_on_update: bool,
+    pub should_interrupt: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

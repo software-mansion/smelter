@@ -40,55 +40,49 @@ impl TransitionState {
         current_transition: Option<TransitionOptions>,
         previous_transition: Option<TransitionState>,
         component_props_changed: bool,
-        reset_transition: bool,
+        interrupt_previous_transition: bool,
         last_pts: Duration,
     ) -> Option<Self> {
-        // Props didn't change therefor there is nothing to transition to
-        let current_transition = match component_props_changed {
-            true => current_transition,
-            false => None,
-        };
-        let previous_transition = match reset_transition {
-            true => None,
-            false => previous_transition,
-        };
-        let previous_transition = previous_transition.and_then(|transition| {
-            if transition.start_pts + transition.duration <= last_pts {
-                return None;
+        match previous_transition {
+            Some(previous_transition) if !previous_transition.is_finished(last_pts) => {
+                match (component_props_changed, interrupt_previous_transition) {
+                    (true, true) => current_transition.map(|opt| Self::from_options(opt, last_pts)),
+                    _ => {
+                        let remaining_duration = (previous_transition.start_pts
+                            + previous_transition.duration)
+                            .saturating_sub(last_pts);
+                        let progress_offset = TransitionProgress(
+                            1.0 - (remaining_duration.as_secs_f64()
+                                / previous_transition.duration.as_secs_f64()),
+                        );
+                        let state_offset = previous_transition
+                            .interpolation_kind
+                            .state(progress_offset.0);
+                        Some(Self {
+                            initial_offset: (progress_offset, state_offset),
+                            start_pts: last_pts,
+                            duration: remaining_duration,
+                            interpolation_kind: current_transition
+                                .map(|t| t.interpolation_kind)
+                                .unwrap_or(previous_transition.interpolation_kind),
+                        })
+                    }
+                }
             }
-            Some(transition)
-        });
-
-        if let Some(previous_transition) = previous_transition {
-            let remaining_duration = (previous_transition.start_pts + previous_transition.duration)
-                .saturating_sub(last_pts);
-            let progress_offset = TransitionProgress(
-                1.0 - (remaining_duration.as_secs_f64()
-                    / previous_transition.duration.as_secs_f64()),
-            );
-            let state_offset = previous_transition
-                .interpolation_kind
-                .state(progress_offset.0);
-            return Some(Self {
-                initial_offset: (progress_offset, state_offset),
-                start_pts: last_pts,
-                duration: remaining_duration,
-                interpolation_kind: current_transition
-                    .map(|t| t.interpolation_kind)
-                    .unwrap_or(previous_transition.interpolation_kind),
-            });
+            _ => match component_props_changed {
+                true => current_transition.map(|opts| Self::from_options(opts, last_pts)),
+                false => None,
+            },
         }
+    }
 
-        if let Some(current_transition) = current_transition {
-            return Some(Self {
-                initial_offset: (TransitionProgress(0.0), InterpolationState(0.0)),
-                start_pts: last_pts,
-                duration: current_transition.duration,
-                interpolation_kind: current_transition.interpolation_kind,
-            });
+    fn from_options(options: TransitionOptions, start_pts: Duration) -> Self {
+        Self {
+            initial_offset: (TransitionProgress(0.0), InterpolationState(0.0)),
+            start_pts,
+            duration: options.duration,
+            interpolation_kind: options.interpolation_kind,
         }
-
-        None
     }
 
     pub fn state(&self, pts: Duration) -> InterpolationState {
@@ -104,6 +98,10 @@ impl TransitionState {
         let state = self.interpolation_kind.state(progress);
         // Value in range [0, 1].
         InterpolationState((state.0 - self.initial_offset.1 .0) / (1.0 - self.initial_offset.1 .0))
+    }
+
+    fn is_finished(&self, current_pts: Duration) -> bool {
+        self.start_pts + self.duration <= current_pts
     }
 }
 
