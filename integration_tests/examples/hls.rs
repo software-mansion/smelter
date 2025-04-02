@@ -5,7 +5,7 @@ use std::{process::Command, time::Duration};
 
 use integration_tests::{
     examples::{self, run_example},
-    gstreamer::start_gst_receive_tcp,
+    gstreamer::start_gst_receive_tcp_h264,
 };
 
 const HLS_URL: &str = "https://raw.githubusercontent.com/membraneframework/membrane_http_adaptive_stream_plugin/master/test/membrane_http_adaptive_stream/integration_test/fixtures/audio_multiple_video_tracks/index.m3u8";
@@ -77,7 +77,7 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    start_gst_receive_tcp(IP, OUTPUT_PORT, true, false)?;
+    start_gst_receive_tcp_h264(IP, OUTPUT_PORT, false)?;
     std::thread::sleep(Duration::from_millis(500));
 
     examples::post("start", &json!({}))?;

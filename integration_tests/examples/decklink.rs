@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use integration_tests::{
     examples::{self, run_example},
-    gstreamer::start_gst_receive_tcp,
+    gstreamer::start_gst_receive_tcp_h264,
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -80,7 +80,7 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    start_gst_receive_tcp(IP, OUTPUT_VIDEO_PORT, true, false)?;
+    start_gst_receive_tcp_h264(IP, OUTPUT_VIDEO_PORT, false)?;
 
     std::thread::sleep(Duration::from_millis(1000));
 

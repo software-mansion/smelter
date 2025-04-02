@@ -7,7 +7,10 @@ use std::{
     time::Duration,
 };
 
-use integration_tests::examples::{self, run_example};
+use integration_tests::{
+    examples::{self, run_example},
+    gstreamer::start_gst_receive_tcp_vp8,
+};
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
     width: 1280,
@@ -83,7 +86,6 @@ fn client_code() -> Result<()> {
                 "encoder": {
                     "type": "opus",
                     "channels": "stereo",
-                    "forward_error_correction": true,
                 },
                 "initial": {
                     "inputs": [
@@ -94,23 +96,7 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    //TODO only temporary
-    let mut gst_output_command = [
-        "gst-launch-1.0 -v ",
-        "rtpptdemux name=demux ",
-        &format!("tcpclientsrc host={} port={} ! \"application/x-rtp-stream\" ! rtpstreamdepay ! queue ! demux. ", IP, OUTPUT_PORT)
-        ].concat();
-    gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=VP8\" ! queue ! rtpvp8depay ! decodebin ! videoconvert ! autovideosink ");
-    gst_output_command.push_str("demux.src_97 ! \"application/x-rtp,media=audio,clock-rate=48000,encoding-name=OPUS\" ! queue ! rtpopusdepay ! decodebin ! audioconvert ! autoaudiosink ");
-
-    Command::new("bash")
-        .arg("-c")
-        .arg(gst_output_command)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()?;
-    sleep(Duration::from_secs(2));
-
+    start_gst_receive_tcp_vp8(IP, OUTPUT_PORT, true)?;
     examples::post("start", &json!({}))?;
 
     let gst_input_command = format!("gst-launch-1.0 videotestsrc pattern=ball ! video/x-raw,width=1280,height=720 ! vp8enc ! rtpvp8pay ! udpsink host=127.0.0.1 port={INPUT_PORT}");
