@@ -949,6 +949,13 @@
               "type": "null"
             }
           ]
+        },
+        "should_interrupt": {
+          "description": "(**default=`false`**) On scene update, if there is already a transition in progress, it will be interrupted and the new transition will start from the current state.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       }
     },

@@ -36,7 +36,7 @@ pub(super) struct StatefulTilesComponent {
     children: Vec<StatefulComponent>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct TilesComponentParams {
     id: Option<ComponentId>,
 
@@ -131,39 +131,64 @@ impl TilesComponent {
             });
 
         let start = previous_state.and_then(|state| state.last_layout.clone());
+        let component = TilesComponentParams {
+            id: self.id,
+            width: self.width,
+            height: self.height,
+            background_color: self.background_color,
+            tile_aspect_ratio: self.tile_aspect_ratio,
+            margin: self.margin,
+            padding: self.padding,
+            horizontal_align: self.horizontal_align,
+            vertical_align: self.vertical_align,
+        };
+        let children = self
+            .children
+            .into_iter()
+            .map(|c| Component::stateful_component(c, ctx))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let props_changed = previous_state
+            .map(|state| {
+                state.component != component
+                    || Self::did_child_order_change(&state.children, &children)
+            })
+            .unwrap_or(false);
+        let interrupt_previous_transition =
+            self.transition.map(|t| t.should_interrupt).unwrap_or(false);
         let transition = TransitionState::new(
             self.transition.map(|transition| TransitionOptions {
                 duration: transition.duration,
                 interpolation_kind: transition.interpolation_kind,
             }),
             previous_state.and_then(|s| s.transition.clone()),
+            props_changed,
+            interrupt_previous_transition,
             ctx.last_render_pts,
         );
-
         let tiles = StatefulTilesComponent {
             start,
             last_layout: previous_state.and_then(|state| state.last_layout.clone()),
-            component: TilesComponentParams {
-                id: self.id,
-                width: self.width,
-                height: self.height,
-                background_color: self.background_color,
-                tile_aspect_ratio: self.tile_aspect_ratio,
-                margin: self.margin,
-                padding: self.padding,
-                horizontal_align: self.horizontal_align,
-                vertical_align: self.vertical_align,
-            },
+            component,
             transition,
-            children: self
-                .children
-                .into_iter()
-                .map(|c| Component::stateful_component(c, ctx))
-                .collect::<Result<_, _>>()?,
+            children,
         };
 
         Ok(StatefulComponent::Layout(StatefulLayoutComponent::Tiles(
             tiles,
         )))
+    }
+
+    fn did_child_order_change(
+        previous_children: &[StatefulComponent],
+        current_children: &[StatefulComponent],
+    ) -> bool {
+        if current_children.len() != previous_children.len() {
+            return true;
+        }
+        previous_children
+            .iter()
+            .zip(current_children.iter())
+            .any(|(c1, c2)| c1.component_id() != c2.component_id())
     }
 }

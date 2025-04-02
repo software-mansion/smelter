@@ -9,6 +9,11 @@ export interface Transition {
    * (**default=`"linear"`**) Easing function to be used for the transition.
    */
   easingFunction?: EasingFunction | null;
+  /**
+   * (**default=`false`**) On scene update, if there is already a transition in progress,
+   * it will be interrupted and the new transition will start from the current state.
+   */
+  shouldInterrupt?: boolean;
 }
 
 export function intoApiTransition(transition: Transition): Api.Transition {
@@ -17,6 +22,7 @@ export function intoApiTransition(transition: Transition): Api.Transition {
     easing_function: transition.easingFunction
       ? intoApiEasingFunction(transition.easingFunction)
       : undefined,
+    should_interrupt: transition.shouldInterrupt,
   };
 }
 
