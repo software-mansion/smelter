@@ -7,8 +7,9 @@ use std::{
     env,
     fs::{self, File},
     io,
-    path::PathBuf,
-    process, thread,
+    path::{Path, PathBuf},
+    process::{self, Command},
+    thread,
     time::{Duration, Instant},
 };
 use tokio_tungstenite::tungstenite;
@@ -181,17 +182,25 @@ fn get_formated_body(body_str: &str) -> String {
 
 pub enum TestSample {
     /// 10 minute animated video with sound
-    BigBuckBunny,
+    BigBuckBunnyH264Opus,
     /// 10 minute animated video with ACC encoded sound
-    BigBuckBunnyAAC,
+    BigBuckBunnyH264AAC,
+    /// 10 minute animated VP8 video with sound
+    BigBuckBunnyVP8Opus,
     /// 11 minute animated video with sound
-    ElephantsDream,
+    ElephantsDreamH264Opus,
+    /// 11 minute animated VP8 video with sound
+    ElephantsDreamVP8Opus,
     /// 28 sec video with no sound
-    Sample,
+    SampleH264,
+    /// 28 sec VP8 video with no sound
+    SampleVP8,
     /// looped 28 sec video with no sound
-    SampleLoop,
+    SampleLoopH264,
     /// generated sample video with no sound (also with second timer when using ffmpeg)
-    TestPattern,
+    TestPatternH264,
+    /// generated sample VP8 video with no sound (also with second timer when using ffmpeg)
+    TestPatternVP8,
 }
 
 #[derive(Debug)]
@@ -218,6 +227,30 @@ pub fn download_all_assets() -> Result<()> {
         if let Err(err) = download_asset(&asset) {
             warn!(?asset, "Error while downloading asset: {err}");
         }
+        if let Err(err) = convert_to_webm(&asset.path) {
+            eprintln!("Error while converting video: {:?}", err);
+        }
+    }
+
+    Ok(())
+}
+
+fn convert_to_webm(input_path: &Path) -> Result<()> {
+    let output_path = input_path.with_extension("webm");
+    if output_path.exists() {
+        return Ok(());
+    }
+    let status = Command::new("ffmpeg")
+        .arg("-i")
+        .arg(input_path.to_str().unwrap())
+        .args([
+            "-c:v", "libvpx", "-crf", "10", "-b:v", "2M", "-quality", "good",
+        ])
+        .arg(output_path.to_str().unwrap())
+        .status()?;
+
+    if !status.success() {
+        return Err(anyhow::Error::msg("ffmpeg failed to convert video"));
     }
 
     Ok(())
@@ -225,16 +258,25 @@ pub fn download_all_assets() -> Result<()> {
 
 fn map_asset_to_path(asset: &TestSample) -> Option<PathBuf> {
     match asset {
-        TestSample::BigBuckBunny | TestSample::BigBuckBunnyAAC => {
+        TestSample::BigBuckBunnyH264Opus | TestSample::BigBuckBunnyH264AAC => {
             Some(examples_root_dir().join("examples/assets/BigBuckBunny.mp4"))
         }
-        TestSample::ElephantsDream => {
+        TestSample::BigBuckBunnyVP8Opus => {
+            Some(examples_root_dir().join("examples/assets/BigBuckBunny.webm"))
+        }
+        TestSample::ElephantsDreamH264Opus => {
             Some(examples_root_dir().join("examples/assets/ElephantsDream.mp4"))
         }
-        TestSample::Sample | TestSample::SampleLoop => {
+        TestSample::ElephantsDreamVP8Opus => {
+            Some(examples_root_dir().join("examples/assets/ElephantsDream.webm"))
+        }
+        TestSample::SampleH264 | TestSample::SampleLoopH264 => {
             Some(examples_root_dir().join("examples/assets/sample_1280_720.mp4"))
         }
-        TestSample::TestPattern => None,
+        TestSample::SampleVP8 => {
+            Some(examples_root_dir().join("examples/assets/sample_1280_720.webm"))
+        }
+        TestSample::TestPatternH264 | TestSample::TestPatternVP8 => None,
     }
 }
 

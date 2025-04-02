@@ -66,18 +66,15 @@ fn start_gst_receive_tcp(ip: &str, port: u16, video: Option<Video>, audio: bool)
 }
 
 pub fn start_gst_receive_udp_h264(port: u16, audio: bool) -> Result<()> {
-    start_gst_receive_udp(port, Some(Video::H264), audio)?;
-    Ok(())
+    start_gst_receive_udp(port, Some(Video::H264), audio)
 }
 
 pub fn start_gst_receive_udp_vp8(port: u16, audio: bool) -> Result<()> {
-    start_gst_receive_udp(port, Some(Video::VP8), audio)?;
-    Ok(())
+    start_gst_receive_udp(port, Some(Video::VP8), audio)
 }
 
 pub fn start_gst_receive_udp_without_video(port: u16, audio: bool) -> Result<()> {
-    start_gst_receive_udp(port, None, audio)?;
-    Ok(())
+    start_gst_receive_udp(port, None, audio)
 }
 
 fn start_gst_receive_udp(port: u16, video: Option<Video>, audio: bool) -> Result<()> {
@@ -125,16 +122,36 @@ pub fn start_gst_send_tcp(
     test_sample: TestSample,
 ) -> Result<()> {
     match test_sample {
-        TestSample::BigBuckBunny | TestSample::ElephantsDream | TestSample::Sample => {
-            start_gst_send_from_file_tcp(ip, video_port, audio_port, get_asset_path(test_sample)?)
-        }
-        TestSample::BigBuckBunnyAAC => Err(anyhow!(
+        TestSample::BigBuckBunnyH264Opus
+        | TestSample::ElephantsDreamH264Opus
+        | TestSample::SampleH264 => start_gst_send_from_file_tcp(
+            ip,
+            video_port,
+            audio_port,
+            get_asset_path(test_sample)?,
+            Some(Video::H264),
+        ),
+        TestSample::BigBuckBunnyVP8Opus
+        | TestSample::ElephantsDreamVP8Opus
+        | TestSample::SampleVP8 => start_gst_send_from_file_tcp(
+            ip,
+            video_port,
+            audio_port,
+            get_asset_path(test_sample)?,
+            Some(Video::VP8),
+        ),
+        TestSample::BigBuckBunnyH264AAC => Err(anyhow!(
             "GStreamer does not support AAC, try ffmpeg instead"
         )),
-        TestSample::SampleLoop => Err(anyhow!(
+        TestSample::SampleLoopH264 => Err(anyhow!(
             "Cannot play sample in loop using gstreamer, try ffmpeg instead."
         )),
-        TestSample::TestPattern => start_gst_send_testsrc_tcp(ip, video_port, audio_port),
+        TestSample::TestPatternH264 => {
+            start_gst_send_testsrc_tcp(ip, video_port, audio_port, Some(Video::H264))
+        }
+        TestSample::TestPatternVP8 => {
+            start_gst_send_testsrc_tcp(ip, video_port, audio_port, Some(Video::VP8))
+        }
     }
 }
 
@@ -145,16 +162,36 @@ pub fn start_gst_send_udp(
     test_sample: TestSample,
 ) -> Result<()> {
     match test_sample {
-        TestSample::BigBuckBunny | TestSample::ElephantsDream | TestSample::Sample => {
-            start_gst_send_from_file_udp(ip, video_port, audio_port, get_asset_path(test_sample)?)
-        }
-        TestSample::BigBuckBunnyAAC => Err(anyhow!(
+        TestSample::BigBuckBunnyH264Opus
+        | TestSample::ElephantsDreamH264Opus
+        | TestSample::SampleH264 => start_gst_send_from_file_udp(
+            ip,
+            video_port,
+            audio_port,
+            get_asset_path(test_sample)?,
+            Some(Video::H264),
+        ),
+        TestSample::BigBuckBunnyVP8Opus
+        | TestSample::ElephantsDreamVP8Opus
+        | TestSample::SampleVP8 => start_gst_send_from_file_udp(
+            ip,
+            video_port,
+            audio_port,
+            get_asset_path(test_sample)?,
+            Some(Video::VP8),
+        ),
+        TestSample::BigBuckBunnyH264AAC => Err(anyhow!(
             "GStreamer does not support AAC, try ffmpeg instead"
         )),
-        TestSample::SampleLoop => Err(anyhow!(
+        TestSample::SampleLoopH264 => Err(anyhow!(
             "Cannot play sample in loop using gstreamer, try ffmpeg instead."
         )),
-        TestSample::TestPattern => start_gst_send_testsrc_udp(ip, video_port, audio_port),
+        TestSample::TestPatternH264 => {
+            start_gst_send_testsrc_udp(ip, video_port, audio_port, Some(Video::H264))
+        }
+        TestSample::TestPatternVP8 => {
+            start_gst_send_testsrc_udp(ip, video_port, audio_port, Some(Video::VP8))
+        }
     }
 }
 
@@ -163,6 +200,7 @@ fn start_gst_send_from_file_tcp(
     video_port: Option<u16>,
     audio_port: Option<u16>,
     path: PathBuf,
+    video_codec: Option<Video>,
 ) -> Result<()> {
     match (video_port, audio_port) {
         (Some(video_port), Some(audio_port)) => info!(
@@ -177,17 +215,28 @@ fn start_gst_send_from_file_tcp(
         }
     }
 
+    let demuxer = match video_codec {
+        Some(Video::VP8) => "matroskademux",
+        _ => "qtdemux",
+    };
+
     let path = path.to_string_lossy();
 
     let mut gst_input_command =
-        format!("gst-launch-1.0 -v filesrc location={path} ! qtdemux name=demux ");
+        format!("gst-launch-1.0 -v filesrc location={path} ! {demuxer} name=demux  ");
 
-    if let Some(port) = video_port {
-        gst_input_command = gst_input_command + &format!("demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! rtpstreampay ! tcpclientsink host={ip} port={port} ");
+    if let (Some(port), Some(codec)) = (video_port, video_codec) {
+        let command_video_spec = match codec {
+            Video::H264 =>  &format!("demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port} "),
+            Video::VP8 => &format!("demux.video_0 ! queue ! vp8parse rtpvp8pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
+        };
+        gst_input_command = gst_input_command + command_video_spec
     }
     if let Some(port) = audio_port {
         gst_input_command = gst_input_command + &format!("demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 !  rtpstreampay ! tcpclientsink host={ip} port={port} ");
     }
+
+    println!("{gst_input_command}");
 
     Command::new("bash")
         .arg("-c")
@@ -204,6 +253,7 @@ fn start_gst_send_from_file_udp(
     video_port: Option<u16>,
     audio_port: Option<u16>,
     path: PathBuf,
+    video_codec: Option<Video>,
 ) -> Result<()> {
     match (video_port, audio_port) {
         (Some(video_port), Some(audio_port)) => info!(
@@ -220,14 +270,23 @@ fn start_gst_send_from_file_udp(
 
     let path = path.to_string_lossy();
 
+    let demuxer = match video_codec {
+        Some(Video::VP8) => "matroskademux",
+        _ => "qtdemux",
+    };
+
     let mut gst_input_command = [
         "gst-launch-1.0 -v ",
-        &format!("filesrc location={path} ! qtdemux name=demux "),
+        &format!("filesrc location={path} ! {demuxer} name=demux ",),
     ]
     .concat();
 
-    if let Some(port) = video_port {
-        gst_input_command = gst_input_command + &format!("demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! udpsink host={ip} port={port} ");
+    if let (Some(port), Some(codec)) = (video_port, video_codec) {
+        let command_video_spec = match codec {
+            Video::H264 =>  &format!(" demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! udpsink host={ip} port={port} "),
+            Video::VP8 => &format!(" demux.video_0 ! queue ! rtpvp8pay !  application/x-rtp,payload=96  ! udpsink host={ip} port={port} "),
+        };
+        gst_input_command = gst_input_command + command_video_spec
     }
     if let Some(port) = audio_port {
         gst_input_command = gst_input_command + &format!("demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! udpsink host={ip} port={port} ");
@@ -247,6 +306,7 @@ fn start_gst_send_testsrc_tcp(
     ip: &str,
     video_port: Option<u16>,
     audio_port: Option<u16>,
+    video_codec: Option<Video>,
 ) -> Result<()> {
     match (video_port, audio_port) {
         (Some(video_port), Some(audio_port)) => info!(
@@ -267,8 +327,12 @@ fn start_gst_send_testsrc_tcp(
     ]
     .concat();
 
-    if let Some(port) = video_port {
-        gst_input_command = gst_input_command + &format!(" x264enc tune=zerolatency speed-preset=superfast ! rtph264pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}");
+    if let (Some(port), Some(codec)) = (video_port, video_codec) {
+        let command_video_spec = match codec {
+            Video::H264 =>  &format!(" x264enc tune=zerolatency speed-preset=superfast ! rtph264pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
+            Video::VP8 => &format!(" vp8enc deadline=1 error-resilient=partitions keyframe-max-dist=30 auto-alt-ref=true cpu-used=-5 ! rtpvp8pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
+        };
+        gst_input_command = gst_input_command + command_video_spec
     }
     if let Some(port) = audio_port {
         gst_input_command = gst_input_command + &format!(" audiotestsrc ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! rtpstreampay ! tcpclientsink host={ip} port={port}");
@@ -288,6 +352,7 @@ fn start_gst_send_testsrc_udp(
     ip: &str,
     video_port: Option<u16>,
     audio_port: Option<u16>,
+    video_codec: Option<Video>,
 ) -> Result<()> {
     match (video_port, audio_port) {
         (Some(video_port), Some(audio_port)) => info!(
@@ -303,13 +368,17 @@ fn start_gst_send_testsrc_udp(
     }
 
     let mut gst_input_command = [
-        "gst-launch-1.0 -v videotestsrc ! ",
+        "gst-launch-1.0 -v videotestsrc pattern=ball ! ",
         "\"video/x-raw,format=I420,width=1920,height=1080,framerate=60/1\" ! ",
     ]
     .concat();
 
-    if let Some(port) = video_port {
-        gst_input_command = gst_input_command + &format!(" x264enc tune=zerolatency speed-preset=superfast ! rtph264pay ! application/x-rtp,payload=96 ! udpsink host={ip} port={port}");
+    if let (Some(port), Some(codec)) = (video_port, video_codec) {
+        let command_video_spec = match codec {
+            Video::H264 =>  &format!(" x264enc tune=zerolatency speed-preset=superfast ! rtph264pay ! application/x-rtp,payload=96 ! udpsink host={ip} port={port}"),
+            Video::VP8 => &format!(" vp8enc deadline=1 error-resilient=partitions keyframe-max-dist=30 auto-alt-ref=true cpu-used=-5 ! rtpvp8pay ! application/x-rtp,payload=96 ! udpsink host={ip} port={port}"),
+        };
+        gst_input_command = gst_input_command + command_video_spec
     }
     if let Some(port) = audio_port {
         gst_input_command = gst_input_command + &format!(" audiotestsrc ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! udpsink host={ip} port={port}");

@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use integration_tests::{
     examples::{self, run_example},
-    ffmpeg::{start_ffmpeg_receive, start_ffmpeg_send},
+    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -24,7 +24,7 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    start_ffmpeg_receive(Some(OUTPUT_VIDEO_PORT), Some(OUTPUT_AUDIO_PORT))?;
+    start_ffmpeg_receive_h264(Some(OUTPUT_VIDEO_PORT), Some(OUTPUT_AUDIO_PORT))?;
 
     examples::post(
         "input/input_1/register",
@@ -108,7 +108,7 @@ fn client_code() -> Result<()> {
         IP,
         Some(INPUT_1_PORT),
         Some(INPUT_2_PORT),
-        examples::TestSample::BigBuckBunnyAAC,
+        examples::TestSample::BigBuckBunnyH264AAC,
     )?;
 
     Ok(())

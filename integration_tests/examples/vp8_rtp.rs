@@ -1,20 +1,17 @@
 use anyhow::Result;
 use compositor_api::types::Resolution;
 use serde_json::json;
-use std::{
-    process::{Command, Stdio},
-    thread::sleep,
-    time::Duration,
-};
+use std::{thread::sleep, time::Duration};
 
 use integration_tests::{
     examples::{self, run_example},
+    ffmpeg::start_ffmpeg_send,
     gstreamer::start_gst_receive_tcp_vp8,
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
-    width: 1280,
-    height: 720,
+    width: 1920,
+    height: 1080,
 };
 
 const IP: &str = "127.0.0.1";
@@ -33,18 +30,6 @@ fn client_code() -> Result<()> {
             "port": INPUT_PORT,
             "video": {
                 "decoder": "ffmpeg_vp8"
-            }
-        }),
-    )?;
-
-    examples::post(
-        "input/input_2/register",
-        &json!({
-            "type": "rtp_stream",
-            "port": 8008,
-            "audio": {
-                "decoder": "opus",
-                "forward_error_correction": true,
             }
         }),
     )?;
@@ -80,30 +65,20 @@ fn client_code() -> Result<()> {
                         ]
                     }
                 },
-
             },
-            "audio": {
-                "encoder": {
-                    "type": "opus",
-                    "channels": "stereo",
-                },
-                "initial": {
-                    "inputs": [
-                        {"input_id": "input_2"}
-                    ]
-                }
-            }
         }),
     )?;
 
-    start_gst_receive_tcp_vp8(IP, OUTPUT_PORT, true)?;
+    start_gst_receive_tcp_vp8(IP, OUTPUT_PORT, false)?;
     examples::post("start", &json!({}))?;
 
-    let gst_input_command = format!("gst-launch-1.0 videotestsrc pattern=ball ! video/x-raw,width=1280,height=720 ! vp8enc ! rtpvp8pay ! udpsink host=127.0.0.1 port={INPUT_PORT}");
-    Command::new("bash")
-        .arg("-c")
-        .arg(gst_input_command)
-        .spawn()?;
+    start_ffmpeg_send(
+        IP,
+        Some(INPUT_PORT),
+        None,
+        examples::TestSample::BigBuckBunnyVP8Opus,
+    )?;
+
     sleep(Duration::from_secs(300));
     examples::post("output/output_1/unregister", &json!({}))?;
 

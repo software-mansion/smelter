@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use integration_tests::{
     examples::{self, run_example, TestSample},
-    ffmpeg::{start_ffmpeg_receive, start_ffmpeg_send},
+    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
     gstreamer::start_gst_send_udp,
 };
 
@@ -30,7 +30,7 @@ fn main() {
 }
 
 fn start_example_client_code() -> Result<()> {
-    start_ffmpeg_receive(Some(OUTPUT_VIDEO_PORT), Some(OUTPUT_AUDIO_PORT))?;
+    start_ffmpeg_receive_h264(Some(OUTPUT_VIDEO_PORT), Some(OUTPUT_AUDIO_PORT))?;
 
     examples::post(
         "input/input_1/register",
@@ -60,7 +60,7 @@ fn start_example_client_code() -> Result<()> {
             "type": "rtp_stream",
             "port": INPUT_3_PORT,
             "video": {
-                "decoder": "ffmpeg_h264"
+                "decoder": "ffmpeg_vp8"
             },
         }),
     )?;
@@ -82,7 +82,7 @@ fn start_example_client_code() -> Result<()> {
             "type": "rtp_stream",
             "port": INPUT_5_PORT,
             "video": {
-                "decoder": "ffmpeg_h264"
+                "decoder": "ffmpeg_vp8"
             },
         }),
     )?;
@@ -104,7 +104,7 @@ fn start_example_client_code() -> Result<()> {
             "type": "rtp_stream",
             "port": INPUT_7_PORT,
             "video": {
-                "decoder": "ffmpeg_h264"
+                "decoder": "ffmpeg_vp8"
             },
         }),
     )?;
@@ -184,17 +184,17 @@ fn start_example_client_code() -> Result<()> {
         IP,
         Some(INPUT_1_PORT),
         Some(INPUT_2_PORT),
-        TestSample::BigBuckBunny,
+        TestSample::BigBuckBunnyH264Opus,
     )?;
     start_ffmpeg_send(
         IP,
         Some(INPUT_3_PORT),
         Some(INPUT_4_PORT),
-        TestSample::ElephantsDream,
+        TestSample::ElephantsDreamVP8Opus,
     )?;
-    start_gst_send_udp(IP, Some(INPUT_5_PORT), None, TestSample::Sample)?;
-    start_ffmpeg_send(IP, Some(INPUT_6_PORT), None, TestSample::SampleLoop)?;
-    start_ffmpeg_send(IP, Some(INPUT_7_PORT), None, TestSample::TestPattern)?;
+    start_gst_send_udp(IP, Some(INPUT_5_PORT), None, TestSample::SampleVP8)?;
+    start_ffmpeg_send(IP, Some(INPUT_6_PORT), None, TestSample::SampleLoopH264)?;
+    start_ffmpeg_send(IP, Some(INPUT_7_PORT), None, TestSample::TestPatternVP8)?;
 
     Ok(())
 }
