@@ -107,7 +107,7 @@ fn client_code() -> Result<()> {
         IP,
         Some(INPUT_1_PORT),
         Some(INPUT_2_PORT),
-        TestSample::BigBuckBunny,
+        TestSample::BigBuckBunnyH264Opus,
     )?;
     Ok(())
 }
