@@ -1,4 +1,4 @@
-import type { Frame } from '@swmansion/smelter-browser-render';
+import type { OutputFrame } from '@swmansion/smelter-browser-render';
 import type { OutputSink } from './sink';
 import { assert } from '../../utils';
 
@@ -11,7 +11,7 @@ export default class CanvasSink implements OutputSink {
     this.ctx = ctx;
   }
 
-  public async send(frame: Frame): Promise<void> {
+  public async send(frame: OutputFrame): Promise<void> {
     const resolution = frame.resolution;
     this.ctx.putImageData(new ImageData(frame.data, resolution.width, resolution.height), 0, 0);
   }
