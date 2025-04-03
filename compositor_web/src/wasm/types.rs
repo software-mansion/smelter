@@ -60,7 +60,7 @@ impl FrameSet {
 
 pub struct InputFrame {
     pub id: InputId,
-    pub frame: web_sys::VideoFrame,
+    pub frame: web_sys::ImageBitmap,
     #[allow(dead_code)]
     pub pts: Duration,
 }
@@ -113,7 +113,7 @@ impl TryFrom<JsValue> for InputFrame {
 
         // 1 - map value
         let value = js_sys::Reflect::get_u32(&entry, 1)?;
-        let frame: web_sys::VideoFrame = js_sys::Reflect::get(&value, &"frame".into())?.into();
+        let frame: web_sys::ImageBitmap = js_sys::Reflect::get(&value, &"frame".into())?.into();
         let pts = Duration::from_secs_f64(
             js_sys::Reflect::get(&value, &"ptsMs".into())?
                 .as_f64()

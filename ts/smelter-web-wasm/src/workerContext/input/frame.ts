@@ -22,7 +22,7 @@ export class InputVideoFrame {
     this.ptsMs = ptsMs;
   }
 
-  get frame(): VideoFrame {
+  get frame(): ImageBitmap {
     return this.ref.getFrame();
   }
 
@@ -35,12 +35,20 @@ export class InputVideoFrame {
  * Represents ref counted frame.
  */
 export class InputVideoFrameRef {
+  // Frame is only needed for cleanup
   public readonly frame: VideoFrame;
+  public readonly frameData: ImageBitmap;
   private refCount: number;
 
-  public constructor(frame: VideoFrame) {
+  private constructor(frameData: ImageBitmap, frame: VideoFrame) {
     this.frame = frame;
+    this.frameData = frameData;
     this.refCount = 1;
+  }
+
+  public static async fromVideoFrame(frame: VideoFrame): Promise<InputVideoFrameRef> {
+    const frameData = await createImageBitmap(frame);
+    return new InputVideoFrameRef(frameData, frame);
   }
 
   /**
@@ -61,6 +69,7 @@ export class InputVideoFrameRef {
 
     this.refCount--;
     if (this.refCount === 0) {
+      this.frameData.close();
       this.frame.close();
     }
   }
@@ -68,8 +77,8 @@ export class InputVideoFrameRef {
   /**
    * Returns underlying frame. Fails if frame was freed from memory.
    */
-  public getFrame(): VideoFrame {
+  public getFrame(): ImageBitmap {
     assert(this.refCount > 0);
-    return this.frame;
+    return this.frameData;
   }
 }

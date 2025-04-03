@@ -35,7 +35,7 @@ export class MediaStreamInput implements Input {
         if (this.frame) {
           this.frame.decrementRefCount();
         }
-        this.frame = new InputVideoFrameRef(readResult.value);
+        this.frame = await InputVideoFrameRef.fromVideoFrame(readResult.value);
       }
 
       if (readResult.done) {

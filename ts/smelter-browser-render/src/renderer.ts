@@ -16,7 +16,7 @@ export type FrameSet<T> = {
 };
 
 export type InputFrame = {
-  readonly frame: VideoFrame;
+  readonly frame: ImageBitmap;
   readonly ptsMs: number;
 };
 
