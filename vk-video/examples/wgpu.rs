@@ -61,7 +61,7 @@ fn download_wgpu_texture(
     use std::io::Write;
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    let y_plane_bytes_per_row = (frame.width() as u64 + 255) / 256 * 256;
+    let y_plane_bytes_per_row = (frame.width() as u64).div_ceil(256) * 256;
     let y_plane_size = y_plane_bytes_per_row * frame.height() as u64;
 
     let uv_plane_bytes_per_row = y_plane_bytes_per_row;

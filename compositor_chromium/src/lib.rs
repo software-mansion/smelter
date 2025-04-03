@@ -65,9 +65,9 @@
 //!
 //! - Details:
 //!     - Resources - contains the bundle's resources, such as icons. Currently it's not being used by this crate
-//!     - MacOS - directory that contains the program's executable unless `browser_subprocess_path` and `main_bundle_path`
-//!               in [`cef_settings_t`](chromium_sys::cef_settings_t) are specified. `browser_subprocess_path` is the path to `program Helper.app`'s executable and
-//!               `main_bundle_path` is the path to `program.app` bundle
+//!     - MacOS - directory that contains the program's executable unless `browser_subprocess_path` and `main_bundle_path` \
+//!       in [`cef_settings_t`](chromium_sys::cef_settings_t) are specified. `browser_subprocess_path` is the path to `program Helper.app`'s executable and \
+//!       `main_bundle_path` is the path to `program.app` bundle
 //!     - Chromium Embedded Framework.framework - bundle that contains compiled CEF library and resources
 //!     - program Helper*.app - bundle which contains subprocess executable (the same executable can be used for every subprocess)
 //!     - Info.plist - contains general information about the bundle
