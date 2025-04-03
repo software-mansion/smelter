@@ -121,7 +121,7 @@ export class QueuedInput implements Input {
         this.receivedEos = true;
         return;
       } else if (payload.type === 'frame') {
-        this.frames.push(this.newFrameRef(payload.frame));
+        this.frames.push(await this.newFrameRef(payload.frame));
       }
     }
   }
@@ -157,7 +157,7 @@ export class QueuedInput implements Input {
     return;
   }
 
-  private newFrameRef(frame: InternalVideoFrame): QueueFrame {
+  private async newFrameRef(frame: InternalVideoFrame): Promise<QueueFrame> {
     if (!this.firstFrameTimeMs) {
       this.firstFrameTimeMs = Date.now();
     }
@@ -166,7 +166,7 @@ export class QueuedInput implements Input {
     }
     frame.ptsMs = frame.ptsMs - this.firstFramePtsMs;
     return {
-      ref: new InputVideoFrameRef(frame.frame),
+      ref: await InputVideoFrameRef.fromVideoFrame(frame.frame),
       ptsMs: frame.ptsMs,
     };
   }

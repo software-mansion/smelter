@@ -22,19 +22,16 @@ impl InputUploader {
         for frame in input.frames.entries() {
             // TODO: MP4 are not calculated correctly
             let types::InputFrame { id, frame, .. } = frame?.try_into()?;
-            let resolution = frame
-                .visible_rect()
-                .expect("Input frame should have visible rect defined");
             let size = wgpu::Extent3d {
-                width: resolution.width() as u32,
-                height: resolution.height() as u32,
+                width: frame.width(),
+                height: frame.height(),
                 depth_or_array_layers: 1,
             };
 
             let texture = self.texture(&id, device, size);
             queue.copy_external_image_to_texture(
                 &wgpu::CopyExternalImageSourceInfo {
-                    source: wgpu::ExternalImageSource::VideoFrame(frame),
+                    source: wgpu::ExternalImageSource::ImageBitmap(frame),
                     origin: wgpu::Origin2d::ZERO,
                     flip_y: false,
                 },
