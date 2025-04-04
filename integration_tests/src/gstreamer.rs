@@ -10,12 +10,33 @@ use std::{
 
 use super::examples::{get_asset_path, TestSample};
 
-pub fn start_gst_receive_tcp(ip: &str, port: u16, video: bool, audio: bool) -> Result<()> {
-    match (video, audio) {
-        (true, true) => info!("[example] Start listening video and audio on port {port}."),
-        (true, false) => info!("[example] Start listening video on port {port}."),
-        (false, true) => info!("[example] Start listening audio on port {port}."),
-        (false, false) => return Err(anyhow!("At least one of: 'video', 'audio' has to be true.")),
+#[derive(Clone)]
+enum Video {
+    H264,
+    VP8,
+}
+
+pub fn start_gst_receive_tcp_h264(ip: &str, port: u16, audio: bool) -> Result<()> {
+    start_gst_receive_tcp(ip, port, Some(Video::H264), audio)?;
+    Ok(())
+}
+
+pub fn start_gst_receive_tcp_vp8(ip: &str, port: u16, audio: bool) -> Result<()> {
+    start_gst_receive_tcp(ip, port, Some(Video::VP8), audio)?;
+    Ok(())
+}
+
+pub fn start_gst_receive_tcp_without_video(ip: &str, port: u16, audio: bool) -> Result<()> {
+    start_gst_receive_tcp(ip, port, None, audio)?;
+    Ok(())
+}
+
+fn start_gst_receive_tcp(ip: &str, port: u16, video: Option<Video>, audio: bool) -> Result<()> {
+    match (video.clone(), audio) {
+        (Some(_), true) => info!("[example] Start listening video and audio on port {port}."),
+        (Some(_), false) => info!("[example] Start listening video on port {port}."),
+        (None, true) => info!("[example] Start listening audio on port {port}."),
+        (None, false) => return Err(anyhow!("At least one of: 'video', 'audio' has to be true.")),
     }
 
     let mut gst_output_command = [
@@ -24,8 +45,10 @@ pub fn start_gst_receive_tcp(ip: &str, port: u16, video: bool, audio: bool) -> R
         &format!("tcpclientsrc host={} port={} ! \"application/x-rtp-stream\" ! rtpstreamdepay ! queue ! demux. ", ip, port)
         ].concat();
 
-    if video {
-        gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264\" ! queue ! rtph264depay ! decodebin ! videoconvert ! autovideosink ");
+    match video {
+        Some(Video::H264) => gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264\" ! queue ! rtph264depay ! decodebin ! videoconvert ! autovideosink "),
+        Some(Video::VP8) => gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=VP8\" ! queue ! rtpvp8depay ! decodebin ! videoconvert ! autovideosink "),
+        None => {}
     }
     if audio {
         gst_output_command.push_str("demux.src_97 ! \"application/x-rtp,media=audio,clock-rate=48000,encoding-name=OPUS\" ! queue ! rtpopusdepay ! decodebin ! audioconvert ! autoaudiosink ");
@@ -42,12 +65,27 @@ pub fn start_gst_receive_tcp(ip: &str, port: u16, video: bool, audio: bool) -> R
     Ok(())
 }
 
-pub fn start_gst_receive_udp(port: u16, video: bool, audio: bool) -> Result<()> {
-    match (video, audio) {
-        (true, true) => info!("[example] Start listening video and audio on port {port}."),
-        (true, false) => info!("[example] Start listening video on port {port}."),
-        (false, true) => info!("[example] Start listening audio on port {port}."),
-        (false, false) => return Err(anyhow!("At least one of: 'video', 'audio' has to be true.")),
+pub fn start_gst_receive_udp_h264(port: u16, audio: bool) -> Result<()> {
+    start_gst_receive_udp(port, Some(Video::H264), audio)?;
+    Ok(())
+}
+
+pub fn start_gst_receive_udp_vp8(port: u16, audio: bool) -> Result<()> {
+    start_gst_receive_udp(port, Some(Video::VP8), audio)?;
+    Ok(())
+}
+
+pub fn start_gst_receive_udp_without_video(port: u16, audio: bool) -> Result<()> {
+    start_gst_receive_udp(port, None, audio)?;
+    Ok(())
+}
+
+fn start_gst_receive_udp(port: u16, video: Option<Video>, audio: bool) -> Result<()> {
+    match (video.clone(), audio) {
+        (Some(_), true) => info!("[example] Start listening video and audio on port {port}."),
+        (Some(_), false) => info!("[example] Start listening video on port {port}."),
+        (None, true) => info!("[example] Start listening audio on port {port}."),
+        (None, false) => return Err(anyhow!("At least one of: 'video', 'audio' has to be true.")),
     }
 
     let mut gst_output_command = [
@@ -60,8 +98,10 @@ pub fn start_gst_receive_udp(port: u16, video: bool, audio: bool) -> Result<()> 
     ]
     .concat();
 
-    if video {
-        gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264\" ! queue ! rtph264depay ! decodebin ! videoconvert ! autovideosink ");
+    match video {
+        Some(Video::H264) => gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264\" ! queue ! rtph264depay ! decodebin ! videoconvert ! autovideosink "),
+        Some(Video::VP8) => gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=VP8\" ! queue ! rtpvp8depay ! decodebin ! videoconvert ! autovideosink "),
+        None => {}
     }
     if audio {
         gst_output_command.push_str("demux.src_97 ! \"application/x-rtp,media=audio,clock-rate=48000,encoding-name=OPUS\" ! queue ! rtpopusdepay ! decodebin ! audioconvert ! autoaudiosink sync=false");

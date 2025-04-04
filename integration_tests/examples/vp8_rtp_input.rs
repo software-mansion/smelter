@@ -5,7 +5,7 @@ use std::{process::Command, thread::sleep, time::Duration};
 
 use integration_tests::{
     examples::{self, run_example},
-    gstreamer::start_gst_receive_tcp,
+    gstreamer::start_gst_receive_tcp_h264,
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -93,7 +93,8 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    start_gst_receive_tcp(IP, OUTPUT_PORT, true, true)?;
+    std::thread::sleep(Duration::from_millis(500));
+    start_gst_receive_tcp_h264(IP, OUTPUT_PORT, true)?;
     examples::post("start", &json!({}))?;
 
     let gst_input_command = format!("gst-launch-1.0 videotestsrc pattern=ball ! video/x-raw,width=1280,height=720 ! vp8enc ! rtpvp8pay ! udpsink host=127.0.0.1 port={INPUT_PORT}");
