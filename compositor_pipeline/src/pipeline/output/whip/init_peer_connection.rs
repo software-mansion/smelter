@@ -101,6 +101,7 @@ fn video_codec_capability(video: VideoCodec) -> RTCRtpCodecCapability {
             rtcp_feedback: vec![],
         },
         VideoCodec::VP8 => unreachable!(),
+        VideoCodec::VP9 => unreachable!(),
     }
 }
 

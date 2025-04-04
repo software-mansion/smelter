@@ -197,6 +197,7 @@ impl VideoPayloader {
                 context: RtpStreamContext::new(),
             },
             VideoCodec::VP8 => unreachable!(),
+            VideoCodec::VP9 => unreachable!(),
         }
     }
 
