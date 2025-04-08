@@ -228,7 +228,7 @@ fn start_gst_send_from_file_tcp(
     if let (Some(port), Some(codec)) = (video_port, video_codec) {
         let command_video_spec = match codec {
             Video::H264 =>  &format!("demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port} "),
-            Video::VP8 => &format!("demux.video_0 ! queue ! vp8parse ! rtpvp8pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
+            Video::VP8 => &format!("demux.video_0 ! queue ! rtpvp8pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
         };
         gst_input_command = gst_input_command + command_video_spec
     }
@@ -282,7 +282,7 @@ fn start_gst_send_from_file_udp(
     if let (Some(port), Some(codec)) = (video_port, video_codec) {
         let command_video_spec = match codec {
             Video::H264 =>  &format!(" demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! udpsink host={ip} port={port} "),
-            Video::VP8 => &format!(" demux.video_0 ! queue ! rtpvp8pay !  application/x-rtp,payload=96  ! udpsink host={ip} port={port} "),
+            Video::VP8 => &format!(" demux.video_0 ! queue ! rtpvp8pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96  ! udpsink host={ip} port={port} "),
         };
         gst_input_command = gst_input_command + command_video_spec
     }

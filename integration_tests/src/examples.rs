@@ -250,7 +250,9 @@ fn convert_to_webm(input_path: &Path) -> Result<()> {
         .status()?;
 
     if !status.success() {
-        return Err(anyhow::Error::msg("ffmpeg failed to convert video"));
+        return Err(anyhow::Error::msg(format!(
+            "ffmpeg failed to convert mp4 {input_path:?} to webm",
+        )));
     }
 
     Ok(())
