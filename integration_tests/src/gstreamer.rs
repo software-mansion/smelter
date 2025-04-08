@@ -228,15 +228,13 @@ fn start_gst_send_from_file_tcp(
     if let (Some(port), Some(codec)) = (video_port, video_codec) {
         let command_video_spec = match codec {
             Video::H264 =>  &format!("demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port} "),
-            Video::VP8 => &format!("demux.video_0 ! queue ! vp8parse rtpvp8pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
+            Video::VP8 => &format!("demux.video_0 ! queue ! vp8parse ! rtpvp8pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
         };
         gst_input_command = gst_input_command + command_video_spec
     }
     if let Some(port) = audio_port {
         gst_input_command = gst_input_command + &format!("demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 !  rtpstreampay ! tcpclientsink host={ip} port={port} ");
     }
-
-    println!("{gst_input_command}");
 
     Command::new("bash")
         .arg("-c")

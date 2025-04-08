@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use integration_tests::{
     examples::{self, run_example, TestSample},
-    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
+    ffmpeg::{start_ffmpeg_receive_vp8, start_ffmpeg_send},
     gstreamer::start_gst_send_udp,
 };
 
@@ -30,7 +30,7 @@ fn main() {
 }
 
 fn start_example_client_code() -> Result<()> {
-    start_ffmpeg_receive_h264(Some(OUTPUT_VIDEO_PORT), Some(OUTPUT_AUDIO_PORT))?;
+    start_ffmpeg_receive_vp8(Some(OUTPUT_VIDEO_PORT), Some(OUTPUT_AUDIO_PORT))?;
 
     examples::post(
         "input/input_1/register",
@@ -121,8 +121,7 @@ fn start_example_client_code() -> Result<()> {
                     "height": VIDEO_RESOLUTION.height,
                 },
                 "encoder": {
-                    "type": "ffmpeg_h264",
-                    "preset": "fast"
+                    "type": "ffmpeg_vp8",
                 },
                 "initial": {
                     "root": {

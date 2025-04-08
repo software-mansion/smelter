@@ -76,7 +76,7 @@ fn client_code() -> Result<()> {
         IP,
         Some(INPUT_PORT),
         None,
-        examples::TestSample::BigBuckBunnyVP8Opus,
+        examples::TestSample::ElephantsDreamVP8Opus,
     )?;
 
     sleep(Duration::from_secs(300));

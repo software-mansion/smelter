@@ -116,22 +116,18 @@ fn run_encoder_thread(
     encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
 
     let defaults = [
-        // Speed preset (0 is best/slowest, 4 is good and faster, 6 worst/fastest)
-        ("speed", "4"),
-        // Constant quality mode (0 to 63, lower is better quality)
-        ("crf", "10"),
-        // Max QP step
-        ("qdiff", "4"),
-        // maximum distance between keyframes
-        ("g", "120"),
-        // QP minimum
-        ("qmin", "0"),
-        // QP maximum
-        ("qmax", "63"),
-        // Error Resilience: higher values might reduce quality loss over bad networks
-        ("error-resilient", "1"),
+        // Quality/Speed ratio modifier
+        ("cpu-used", "0"),
+        // Time to spend encoding.
+        ("deadline", "realtime"),
+        // Near-lossless if bitrate allows
+        ("crf", "4"),
         // Bitrate target
-        ("b:v", "1M"),
+        ("b:v", "2M"),
+        // Enable use of alternate reference frames (2-pass only)
+        ("auto-alt-ref", "1"),
+        // Zero-latency. Disables frame reordering.
+        ("lag-in-frames", "0"),
     ];
 
     let encoder_opts_iter = merge_options_with_defaults(&defaults, &options.raw_options);
