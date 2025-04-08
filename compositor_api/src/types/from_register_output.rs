@@ -202,15 +202,10 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 "At least one of \"video\" and \"audio\" fields have to be specified.",
             ));
         }
-        let video_codec = video
-            .as_ref()
-            .map(|v| match v.encoder {
-                VideoEncoderOptions::FfmpegH264 { .. } => Ok(pipeline::VideoCodec::H264),
-                VideoEncoderOptions::FfmpegVp8 { .. } => {
-                    Err(TypeError::new("WHIP VP8 output not implemented"))
-                }
-            })
-            .transpose()?;
+        let video_codec = video.as_ref().map(|v| match v.encoder {
+            VideoEncoderOptions::FfmpegH264 { .. } => pipeline::VideoCodec::H264,
+            VideoEncoderOptions::FfmpegVp8 { .. } => pipeline::VideoCodec::VP8,
+        });
         let audio_options = audio.as_ref().map(|a| match &a.encoder {
             WhipAudioEncoderOptions::Opus {
                 channels,

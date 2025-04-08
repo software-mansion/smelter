@@ -1,5 +1,5 @@
-use compositor_render::OutputId;
-use crossbeam_channel::{Receiver, Sender};
+use compositor_render::{OutputId, Resolution};
+use crossbeam_channel::Sender;
 use establish_peer_connection::connect;
 use init_peer_connection::init_peer_connection;
 use packet_stream::PacketStream;
@@ -19,7 +19,13 @@ use crate::{
     audio_mixer::AudioChannels,
     error::OutputInitError,
     event::Event,
-    pipeline::{AudioCodec, EncoderOutputEvent, PipelineCtx, VideoCodec},
+    pipeline::{
+        encoder::{
+            ffmpeg_vp8::Options, opus::OpusEncoderOptions, AudioEncoderOptions, AudioEncoderPreset,
+            Encoder, EncoderOptions, VideoEncoderOptions,
+        },
+        AudioCodec, PipelineCtx, VideoCodec,
+    },
 };
 
 mod establish_peer_connection;
@@ -118,15 +124,14 @@ impl WhipSender {
     pub fn new(
         output_id: &OutputId,
         options: WhipSenderOptions,
-        packets_receiver: Receiver<EncoderOutputEvent>,
         request_keyframe_sender: Option<Sender<()>>,
         pipeline_ctx: Arc<PipelineCtx>,
-    ) -> Result<Self, OutputInitError> {
-        let payloader = Payloader::new(options.video, options.audio);
-        let packet_stream = PacketStream::new(packets_receiver, payloader, 1400);
+    ) -> Result<(Self, Encoder), OutputInitError> {
+        // let payloader = Payloader::new(options.video, options.audio);
+        // let packet_stream = PacketStream::new(packets_receiver, payloader, 1400);
         let should_close = Arc::new(AtomicBool::new(false));
         let (init_confirmation_sender, mut init_confirmation_receiver) =
-            oneshot::channel::<Result<(), WhipError>>();
+            oneshot::channel::<Result<Encoder, WhipError>>();
 
         let whip_ctx = WhipCtx {
             output_id: output_id.clone(),
@@ -137,14 +142,16 @@ impl WhipSender {
         };
 
         pipeline_ctx.tokio_rt.spawn(
-            run_whip_sender_task(whip_ctx, packet_stream, init_confirmation_sender).instrument(
-                span!(
-                    Level::INFO,
-                    "WHIP sender",
-                    output_id = output_id.to_string()
-                ),
-            ),
+            run_whip_sender_task(whip_ctx, init_confirmation_sender).instrument(span!(
+                Level::INFO,
+                "WHIP sender",
+                output_id = output_id.to_string()
+            )),
         );
+        let mut encoder_global = Encoder {
+            video: None,
+            audio: None,
+        };
 
         let start_time = Instant::now();
         loop {
@@ -156,7 +163,10 @@ impl WhipSender {
             }
             match init_confirmation_receiver.try_recv() {
                 Ok(result) => match result {
-                    Ok(_) => break,
+                    Ok(encoder) => {
+                        encoder_global = encoder;
+                        break;
+                    }
                     Err(err) => return Err(OutputInitError::WhipInitError(err.into())),
                 },
                 Err(err) => match err {
@@ -168,10 +178,13 @@ impl WhipSender {
             };
         }
 
-        Ok(Self {
-            connection_options: options,
-            should_close,
-        })
+        Ok((
+            Self {
+                connection_options: options,
+                should_close,
+            },
+            encoder_global,
+        ))
     }
 }
 
@@ -184,8 +197,7 @@ impl Drop for WhipSender {
 
 async fn run_whip_sender_task(
     whip_ctx: WhipCtx,
-    packet_stream: PacketStream,
-    init_confirmation_sender: oneshot::Sender<Result<(), WhipError>>,
+    init_confirmation_sender: oneshot::Sender<Result<Encoder, WhipError>>,
 ) {
     let client = Arc::new(reqwest::Client::new());
     let (peer_connection, video_track, audio_track) = match init_peer_connection(&whip_ctx).await {
@@ -199,7 +211,7 @@ async fn run_whip_sender_task(
             return;
         }
     };
-    let whip_session_url = match connect(peer_connection, client.clone(), &whip_ctx).await {
+    let whip_session_url = match connect(peer_connection.clone(), client.clone(), &whip_ctx).await {
         Ok(val) => val,
         Err(err) => {
             if let Err(Err(err)) = init_confirmation_sender.send(Err(err)) {
@@ -210,7 +222,49 @@ async fn run_whip_sender_task(
             return;
         }
     };
-    if let Err(Ok(_)) = init_confirmation_sender.send(Ok(())) {
+
+    let Ok((encoder, packets_receiver)) = Encoder::new(
+        &whip_ctx.output_id,
+        EncoderOptions {
+            video: Some(VideoEncoderOptions::VP8(Options {
+                resolution: Resolution {
+                    width: 1280,
+                    height: 1080,
+                },
+                raw_options: vec![],
+            })),
+            audio: Some(AudioEncoderOptions::Opus(OpusEncoderOptions {
+                channels: AudioChannels::Stereo,
+                preset: AudioEncoderPreset::Quality,
+                sample_rate: 48000,
+            })),
+        },
+        whip_ctx.pipeline_ctx.output_framerate,
+        whip_ctx.pipeline_ctx.mixing_sample_rate,
+    ) else {
+        error!("Cannot init encoder");
+        return;
+    };
+    let payloader = Payloader::new(
+        Some(VideoCodec::VP8),
+        Some(WhipAudioOptions {
+            codec: AudioCodec::Opus,
+            channels: AudioChannels::Stereo,
+        }),
+    ); //get negotiated codecs
+    let packet_stream = PacketStream::new(packets_receiver, payloader, 1400);
+
+    let transceivers = peer_connection.get_transceivers().await;
+    for transceiver in transceivers {
+        let sender = transceiver.sender().await;
+        println!(
+            "senders codecs {:?}",
+            sender.get_parameters().await.rtp_parameters.codecs
+        );
+    }
+
+    // println!("sender task transceivers {:?}", peer_connection.get_transceivers().await);
+    if let Err(Ok(_)) = init_confirmation_sender.send(Ok(encoder)) {
         error!("Whip sender thread initialized successfully, coulnd't send confirmation message.");
         return;
     }
@@ -235,6 +289,7 @@ async fn run_whip_sender_task(
                 match video_track.clone() {
                     Some(video_track) => match video_payload {
                         Ok(video_bytes) => {
+                            println!("video codec {:?}", video_track.codec());
                             if video_track.write(&video_bytes).await.is_err() {
                                 error!("Error occurred while writing to video track, closing connection.");
                                 break;

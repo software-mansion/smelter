@@ -21,6 +21,7 @@ pub struct OpusEncoderOptions {
     pub sample_rate: u32,
 }
 
+#[derive(Debug)]
 pub struct OpusEncoder {
     samples_batch_sender: Sender<PipelineEvent<OutputSamples>>,
 }

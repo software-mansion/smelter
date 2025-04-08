@@ -4,7 +4,7 @@ use tracing::error;
 use webrtc_util::Marshal;
 
 use rand::Rng;
-use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader};
+use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader};
 
 use crate::pipeline::{
     rtp::{AUDIO_PAYLOAD_TYPE, VIDEO_PAYLOAD_TYPE},
@@ -15,6 +15,7 @@ use crate::pipeline::{
 use super::WhipAudioOptions;
 
 const H264_CLOCK_RATE: u32 = 90000;
+const VP8_CLOCK_RATE: u32 = 90000;
 const OPUS_CLOCK_RATE: u32 = 48000;
 
 struct RtpStreamContext {
@@ -89,6 +90,10 @@ pub struct Payloader {
 enum VideoPayloader {
     H264 {
         payloader: H264Payloader,
+        context: RtpStreamContext,
+    },
+    VP8 {
+        payloader: Vp8Payloader,
         context: RtpStreamContext,
     },
 }
@@ -196,13 +201,17 @@ impl VideoPayloader {
                 payloader: H264Payloader::default(),
                 context: RtpStreamContext::new(),
             },
-            VideoCodec::VP8 => unreachable!(),
+            VideoCodec::VP8 => Self::VP8 {
+                payloader: Vp8Payloader::default(),
+                context: RtpStreamContext::new(),
+            },
         }
     }
 
     fn codec(&self) -> VideoCodec {
         match self {
             VideoPayloader::H264 { .. } => VideoCodec::H264,
+            VideoPayloader::VP8 { .. } => VideoCodec::VP8,
         }
     }
 
@@ -223,12 +232,24 @@ impl VideoPayloader {
                 VIDEO_PAYLOAD_TYPE,
                 H264_CLOCK_RATE,
             ),
+            VideoPayloader::VP8 {
+                ref mut payloader,
+                ref mut context,
+            } => payload(
+                payloader,
+                context,
+                chunk,
+                mtu,
+                VIDEO_PAYLOAD_TYPE,
+                VP8_CLOCK_RATE,
+            ),
         }
     }
 
     fn context_mut(&mut self) -> &mut RtpStreamContext {
         match self {
             VideoPayloader::H264 { context, .. } => context,
+            VideoPayloader::VP8 { context, .. } => context,
         }
     }
 }
