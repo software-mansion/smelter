@@ -10,26 +10,10 @@ use super::{context::V8ContextEntered, value::V8Value};
 pub struct V8ArrayBuffer(pub(super) Validated<chromium_sys::cef_v8value_t>);
 
 impl V8ArrayBuffer {
-    pub fn new(buffer: Vec<u8>, _context_entered: &V8ContextEntered) -> Self {
-        let release_callback = V8ArrayBufferReleaseCallback::Delete {
-            buffer_len: buffer.len(),
-            buffer_cap: buffer.capacity(),
-        };
-
-        let buffer = buffer.leak();
-        let inner = unsafe {
-            chromium_sys::cef_v8value_create_array_buffer(
-                buffer.as_mut_ptr() as *mut c_void,
-                buffer.len(),
-                CefRefData::new_ptr(release_callback),
-            )
-        };
-
-        Self(Validated::new(inner))
-    }
-
     /// Creates a new array buffer from raw pointer. It can be only created while in context.
     /// The buffer's memory is shared with V8 engine.
+    ///
+    /// Panics when used with CEF that was compiled with V8 sandbox support.
     ///
     /// # Safety
     /// Make sure the pointer is valid. Invalid pointer can cause undefined behavior.
@@ -50,6 +34,23 @@ impl V8ArrayBuffer {
 
         Self(Validated::new(inner))
     }
+
+    /// Creates a new array buffer from raw pointer. The data is copied to the array buffer.
+    /// It can be only created while in context.
+    ///
+    /// # Safety
+    /// Make sure the pointer is valid. Invalid pointer can cause undefined behavior.
+    pub unsafe fn from_ptr_with_copy(
+        ptr: *mut u8,
+        ptr_len: usize,
+        _context_entered: &V8ContextEntered,
+    ) -> Self {
+        let inner = unsafe {
+            chromium_sys::cef_v8value_create_array_buffer_with_copy(ptr as *mut c_void, ptr_len)
+        };
+
+        Self(Validated::new(inner))
+    }
 }
 
 impl From<V8ArrayBuffer> for V8Value {
@@ -59,6 +60,7 @@ impl From<V8ArrayBuffer> for V8Value {
 }
 
 enum V8ArrayBufferReleaseCallback {
+    #[allow(dead_code)]
     Delete {
         buffer_len: usize,
         buffer_cap: usize,
