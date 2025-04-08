@@ -303,7 +303,7 @@ fn run_args_maximize(
 
 fn binsearch(mut start: u64, mut end: u64, test_fn: impl Fn(u64) -> bool) -> u64 {
     while start < end {
-        let midpoint = (start + end + 1) / 2;
+        let midpoint = (start + end).div_ceil(2);
 
         if test_fn(midpoint) {
             start = midpoint;
