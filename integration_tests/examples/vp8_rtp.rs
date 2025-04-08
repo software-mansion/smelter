@@ -1,11 +1,7 @@
 use anyhow::Result;
 use compositor_api::types::Resolution;
 use serde_json::json;
-use std::{
-    process::{Command, Stdio},
-    thread::sleep,
-    time::Duration,
-};
+use std::{process::Command, thread::sleep, time::Duration};
 
 use integration_tests::{
     examples::{self, run_example},
@@ -33,18 +29,6 @@ fn client_code() -> Result<()> {
             "port": INPUT_PORT,
             "video": {
                 "decoder": "ffmpeg_vp8"
-            }
-        }),
-    )?;
-
-    examples::post(
-        "input/input_2/register",
-        &json!({
-            "type": "rtp_stream",
-            "port": 8008,
-            "audio": {
-                "decoder": "opus",
-                "forward_error_correction": true,
             }
         }),
     )?;
@@ -80,26 +64,14 @@ fn client_code() -> Result<()> {
                         ]
                     }
                 },
-
             },
-            "audio": {
-                "encoder": {
-                    "type": "opus",
-                    "channels": "stereo",
-                },
-                "initial": {
-                    "inputs": [
-                        {"input_id": "input_2"}
-                    ]
-                }
-            }
         }),
     )?;
 
-    start_gst_receive_tcp_vp8(IP, OUTPUT_PORT, true)?;
+    start_gst_receive_tcp_vp8(IP, OUTPUT_PORT, false)?;
     examples::post("start", &json!({}))?;
 
-    let gst_input_command = format!("gst-launch-1.0 videotestsrc pattern=ball ! video/x-raw,width=1280,height=720 ! vp8enc ! rtpvp8pay ! udpsink host=127.0.0.1 port={INPUT_PORT}");
+    let gst_input_command = format!("ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30 -c:v libvpx -format yuv420p -f rtp rtp://{IP}:{INPUT_PORT}");
     Command::new("bash")
         .arg("-c")
         .arg(gst_input_command)
