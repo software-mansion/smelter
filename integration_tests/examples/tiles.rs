@@ -4,7 +4,7 @@ use serde_json::json;
 
 use integration_tests::{
     examples::{self, run_example, TestSample},
-    ffmpeg::{start_ffmpeg_receive, start_ffmpeg_send},
+    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -21,7 +21,7 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    start_ffmpeg_receive(Some(OUTPUT_PORT), None)?;
+    start_ffmpeg_receive_h264(Some(OUTPUT_PORT), None)?;
 
     examples::post(
         "input/input_1/register",
@@ -95,7 +95,7 @@ fn client_code() -> Result<()> {
 
     examples::post("start", &json!({}))?;
 
-    start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::TestPattern)?;
+    start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::TestPatternH264)?;
 
     for i in 0..16 {
         examples::post(

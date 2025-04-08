@@ -23,6 +23,7 @@ target/
 
 # Assets
 **/*.mp4
+**/*.webm
 **/*.yuv
 
 # Generated MP4s
