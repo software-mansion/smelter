@@ -23,6 +23,7 @@ web-sys = { version = "0.3.77", features = [
     "Window",
     "Element",
     "CanvasRenderingContext2d",
+    "OffscreenCanvasRenderingContext2d",
     "ImageData",
     "VideoFrame",
     "DomRectReadOnly", 
@@ -34,6 +35,7 @@ crossbeam-channel = { workspace = true }
 reqwest = { workspace = true }
 bytes = { workspace = true }
 glyphon = { workspace = true }
+bytemuck = "1.22.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }

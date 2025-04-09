@@ -20,12 +20,6 @@ export type InputFrame = {
   readonly ptsMs: number;
 };
 
-export type OutputFrame = {
-  resolution: Api.Resolution;
-  format: FrameFormat;
-  data: Uint8ClampedArray;
-};
-
 export enum FrameFormat {
   RGBA_BYTES = 'RGBA_BYTES',
   YUV_BYTES = 'YUV_BYTES',
@@ -41,19 +35,15 @@ export class Renderer {
   public static async create(options: RendererOptions): Promise<Renderer> {
     const renderer = await wasm.create_renderer({
       stream_fallback_timeout_ms: options.streamFallbackTimeoutMs,
-      logger_level: options.loggerLevel ?? 'warn',
+      logger_level: options.loggerLevel ?? 'info',
     });
     return new Renderer(renderer);
   }
 
-  public render(input: FrameSet<InputFrame>): FrameSet<OutputFrame> {
+  public render(input: FrameSet<InputFrame>): void {
     const frames = new Map(Object.entries(input.frames));
     const inputFrameSet = new wasm.FrameSet(input.ptsMs, frames);
-    const output = this.renderer.render(inputFrameSet);
-    return {
-      ptsMs: output.pts_ms,
-      frames: Object.fromEntries(output.frames),
-    };
+    this.renderer.render(inputFrameSet);
   }
 
   public updateScene(outputId: Api.OutputId, resolution: Api.Resolution, scene: Api.Component) {
@@ -70,6 +60,14 @@ export class Renderer {
 
   public async registerShader(rendererId: Api.RendererId, shaderSpec: Api.ShaderSpec) {
     await this.renderer.register_shader(rendererId, shaderSpec);
+  }
+
+  public registerOutput(outputId: Api.OutputId, canvas: OffscreenCanvas) {
+    const ctx = canvas.getContext('2d', { desynchronized: false });
+    if (!ctx) {
+      throw new Error("No context");
+    }
+    this.renderer.register_output(outputId, ctx!);
   }
 
   public async registerFont(fontUrl: string) {

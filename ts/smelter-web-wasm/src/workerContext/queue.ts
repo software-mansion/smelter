@@ -1,7 +1,5 @@
 import type {
-  FrameSet,
   InputId,
-  OutputFrame,
   OutputId,
   Renderer,
 } from '@swmansion/smelter-browser-render';
@@ -89,11 +87,10 @@ export class Queue {
     this.logger.trace({ frames }, 'onQueueTick');
 
     try {
-      const outputs = this.renderer.render({
+      this.renderer.render({
         ptsMs: currentPtsMs,
         frames,
       });
-      this.sendOutputs(outputs);
     } finally {
       for (const frame of Object.values(frames)) {
         frame.close();
@@ -112,16 +109,16 @@ export class Queue {
     return Object.fromEntries(validFrames);
   }
 
-  private sendOutputs(outputs: FrameSet<OutputFrame>) {
-    for (const [outputId, frame] of Object.entries(outputs.frames)) {
-      const output = this.outputs[outputId];
-      if (!output) {
-        this.logger.info(`Output "${outputId}" not found`);
-        continue;
-      }
-      void output.send(frame);
-    }
-  }
+  // private sendOutputs(outputs: FrameSet<OutputFrame>) {
+  //   for (const [outputId, frame] of Object.entries(outputs.frames)) {
+  //     const output = this.outputs[outputId];
+  //     if (!output) {
+  //       this.logger.info(`Output "${outputId}" not found`);
+  //       continue;
+  //     }
+  //     void output.send(frame);
+  //   }
+  // }
 }
 
 class FrameTicker {

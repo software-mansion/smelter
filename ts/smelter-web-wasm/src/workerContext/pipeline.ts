@@ -65,6 +65,7 @@ export class Pipeline {
     if (request.video) {
       const output = new Output(request);
       this.queue.addOutput(outputId, output);
+      this.renderer.registerOutput(outputId, request.video.canvas);
       try {
         // `updateScene` implicitly registers the output.
         // In case of an error, the output has to be manually cleaned up from the renderer.

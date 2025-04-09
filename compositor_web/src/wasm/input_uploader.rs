@@ -13,8 +13,7 @@ pub struct InputUploader {
 impl InputUploader {
     pub fn upload(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        wgpu_ctx: &super::WgpuContext,
         input: types::FrameSet,
     ) -> Result<FrameSet<InputId>, JsValue> {
         let pts = Duration::from_millis(input.pts_ms as u64);
@@ -28,8 +27,8 @@ impl InputUploader {
                 depth_or_array_layers: 1,
             };
 
-            let texture = self.texture(&id, device, size);
-            queue.copy_external_image_to_texture(
+            let texture = self.texture(&id, &wgpu_ctx.device, size);
+            wgpu_ctx.queue.copy_external_image_to_texture(
                 &wgpu::CopyExternalImageSourceInfo {
                     source: wgpu::ExternalImageSource::ImageBitmap(frame),
                     origin: wgpu::Origin2d::ZERO,

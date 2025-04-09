@@ -10,7 +10,8 @@ use glyphon::fontdb::Source;
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 use tracing_wasm::WASMLayer;
 use wasm_bindgen::prelude::*;
-use wgpu::create_wgpu_context;
+use web_sys::OffscreenCanvasRenderingContext2d;
+use wgpu::WgpuContext;
 
 mod input_uploader;
 mod output_downloader;
@@ -36,8 +37,8 @@ pub async fn create_renderer(options: JsValue) -> Result<SmelterRenderer, JsValu
         Registry::default().with(WASMLayer::new(logger_config.build())),
     );
 
-    let (device, queue) = create_wgpu_context().await?;
-    let renderer = renderer::Renderer::new(device, queue, options.into())?;
+    let wgpu_ctx = WgpuContext::new().await?;
+    let renderer = renderer::Renderer::new(wgpu_ctx, options.into())?;
     Ok(SmelterRenderer(Mutex::new(renderer)))
 }
 
@@ -46,7 +47,7 @@ pub struct SmelterRenderer(Mutex<renderer::Renderer>);
 
 #[wasm_bindgen]
 impl SmelterRenderer {
-    pub fn render(&self, input: types::FrameSet) -> Result<types::FrameSet, JsValue> {
+    pub fn render(&self, input: types::FrameSet) -> Result<(), JsValue> {
         let mut renderer = self.0.lock().unwrap();
         renderer.render(input)
     }
@@ -67,6 +68,11 @@ impl SmelterRenderer {
     pub fn register_input(&self, input_id: String) {
         let mut renderer = self.0.lock().unwrap();
         renderer.register_input(input_id)
+    }
+
+    pub fn register_output(&self, output_id: String, ctx: OffscreenCanvasRenderingContext2d) {
+        let mut renderer = self.0.lock().unwrap();
+        renderer.register_output(output_id, ctx);
     }
 
     pub async fn register_image(
