@@ -6,6 +6,8 @@
 
 ### ✨ New features
 
+- Add RTMP output. ([#1051](https://github.com/software-mansion/live-compositor/pull/1051) by [@WojciechBarczynski](https://github.com/WojciechBarczynski), [@wkozyra95](https://github.com/wkozyra95))
+
 ### 🐛 Bug fixes
 
 - Fix web renderer crashing when multiple Smelter instances are run. ([#1016](https://github.com/software-mansion/smelter/pull/1016) by [@noituri](https://github.com/noituri))
