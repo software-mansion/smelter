@@ -43,13 +43,13 @@ pub struct RGBAColor(pub u8, pub u8, pub u8, pub u8);
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Degree(pub f64);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Size {
     pub width: f32,
     pub height: f32,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AbsolutePosition {
     pub width: Option<f32>,
     pub height: Option<f32>,
@@ -58,26 +58,26 @@ pub struct AbsolutePosition {
     pub rotation_degrees: f32,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VerticalPosition {
     TopOffset(f32),
     BottomOffset(f32),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum HorizontalPosition {
     LeftOffset(f32),
     RightOffset(f32),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InterpolationKind {
     Linear,
     Bounce,
     CubicBezier { x1: f64, y1: f64, x2: f64, y2: f64 },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BorderRadius {
     pub top_left: f32,
     pub top_right: f32,
@@ -155,7 +155,7 @@ impl Sub<f32> for BorderRadius {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BoxShadow {
     pub offset_x: f32,
     pub offset_y: f32,

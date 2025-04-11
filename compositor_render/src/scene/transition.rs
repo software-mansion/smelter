@@ -39,17 +39,18 @@ impl TransitionState {
     pub fn new(
         current_transition: Option<TransitionOptions>,
         previous_transition: Option<TransitionState>,
+        component_props_changed: bool,
+        interrupt_previous_transition_flag: bool,
         last_pts: Duration,
     ) -> Option<Self> {
-        let previous_transition = previous_transition.and_then(|transition| {
-            if transition.start_pts + transition.duration < last_pts {
-                return None;
-            }
-            Some(transition)
-        });
-        match (current_transition, previous_transition) {
-            (None, None) => None,
-            (None, Some(previous_transition)) => {
+        let previous_transition_interrupted =
+            interrupt_previous_transition_flag && component_props_changed;
+        match (
+            previous_transition,
+            previous_transition_interrupted,
+            component_props_changed,
+        ) {
+            (Some(previous_transition), false, _) if !previous_transition.is_finished(last_pts) => {
                 let remaining_duration = (previous_transition.start_pts
                     + previous_transition.duration)
                     .saturating_sub(last_pts);
@@ -64,15 +65,18 @@ impl TransitionState {
                     initial_offset: (progress_offset, state_offset),
                     start_pts: last_pts,
                     duration: remaining_duration,
-                    interpolation_kind: previous_transition.interpolation_kind,
+                    interpolation_kind: current_transition
+                        .map(|t| t.interpolation_kind)
+                        .unwrap_or(previous_transition.interpolation_kind),
                 })
             }
-            (Some(current_transition), _) => Some(Self {
+            (_, _, true) => current_transition.map(|t| Self {
                 initial_offset: (TransitionProgress(0.0), InterpolationState(0.0)),
                 start_pts: last_pts,
-                duration: current_transition.duration,
-                interpolation_kind: current_transition.interpolation_kind,
+                duration: t.duration,
+                interpolation_kind: t.interpolation_kind,
             }),
+            _ => None,
         }
     }
 
@@ -81,7 +85,7 @@ impl TransitionState {
         let progress =
             (pts.as_secs_f64() - self.start_pts.as_secs_f64()) / self.duration.as_secs_f64();
         // Value in range [initial_offset.0 , 1]. Previous progress ([0, 1]) is rescaled to fit
-        // smaller ranger and offset is added.
+        // smaller range and offset is added.
         let progress = self.initial_offset.0 .0 + progress * (1.0 - self.initial_offset.0 .0);
         // Clamp just to handle a case where this function is called after transition is finished.
         let progress = f64::clamp(progress, 0.0, 1.0);
@@ -89,6 +93,10 @@ impl TransitionState {
         let state = self.interpolation_kind.state(progress);
         // Value in range [0, 1].
         InterpolationState((state.0 - self.initial_offset.1 .0) / (1.0 - self.initial_offset.1 .0))
+    }
+
+    fn is_finished(&self, current_pts: Duration) -> bool {
+        self.start_pts + self.duration <= current_pts
     }
 }
 
