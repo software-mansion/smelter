@@ -1,7 +1,7 @@
 import Smelter from '@swmansion/smelter-node';
 import { View, Text, Image } from '@swmansion/smelter';
 import { useEffect, useState } from 'react';
-import { ffplayStartPlayerAsync, sleep } from './utils';
+import { ffplayStartRtmpServerAsync } from './utils';
 
 type PartialTextProps = {
   text: string;
@@ -58,8 +58,7 @@ async function run() {
   const smelter = new Smelter();
   await smelter.init();
 
-  await ffplayStartPlayerAsync('127.0.0.1', 8001);
-  await sleep(2000);
+  await ffplayStartRtmpServerAsync(9002);
 
   await smelter.registerFont(
     'https://fonts.gstatic.com/s/notosans/v36/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A-9a6Vc.ttf'
@@ -71,10 +70,8 @@ async function run() {
   });
 
   await smelter.registerOutput('output_1', <ExampleApp />, {
-    type: 'rtp_stream',
-    port: 8001,
-    ip: '127.0.0.1',
-    transportProtocol: 'udp',
+    type: 'rtmp_client',
+    url: 'rtmp://127.0.0.1:9002',
     video: {
       encoder: {
         type: 'ffmpeg_h264',

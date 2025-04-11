@@ -34,7 +34,7 @@ pub struct RtmpClient {
     /// Video stream configuration.
     pub video: Option<OutputVideoOptions>,
     /// Audio stream configuration.
-    pub audio: Option<OutputRtmpAudioOptions>,
+    pub audio: Option<OutputRtmpClientAudioOptions>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -115,13 +115,13 @@ pub struct OutputWhipAudioOptions {
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct OutputRtmpAudioOptions {
+pub struct OutputRtmpClientAudioOptions {
     /// (**default="sum_clip"**) Specifies how audio should be mixed.
     pub mixing_strategy: Option<MixingStrategy>,
     /// Condition for termination of output stream based on the input streams states.
     pub send_eos_when: Option<OutputEndCondition>,
     /// Audio encoder options.
-    pub encoder: RtmpAudioEncoderOptions,
+    pub encoder: RtmpClientAudioEncoderOptions,
     /// Initial audio mixer configuration for output.
     pub initial: Audio,
 }
@@ -171,7 +171,7 @@ pub enum Mp4AudioEncoderOptions {
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
-pub enum RtmpAudioEncoderOptions {
+pub enum RtmpClientAudioEncoderOptions {
     Aac {
         channels: AudioChannels,
         /// (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].

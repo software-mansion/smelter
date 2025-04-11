@@ -19,7 +19,12 @@ import { SlideShow, Slide, SlideProps, SlideShowProps } from './components/Slide
 import Mp4, { Mp4Props } from './components/Mp4.js';
 
 export { RegisterRtpInput, RegisterMp4Input, RegisterWhipInput } from './types/input.js';
-export { RegisterRtpOutput, RegisterMp4Output, RegisterWhipOutput } from './types/output.js';
+export {
+  RegisterRtpOutput,
+  RegisterMp4Output,
+  RegisterWhipOutput,
+  RegisterRtmpClientOutput,
+} from './types/output.js';
 
 export * as Inputs from './types/input.js';
 export * as Outputs from './types/output.js';

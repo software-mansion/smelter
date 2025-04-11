@@ -1,6 +1,6 @@
 import Smelter from '@swmansion/smelter-node';
 import { Text, InputStream, Tiles, Rescaler, View, useInputStreams } from '@swmansion/smelter';
-import { downloadAllAssets, gstReceiveTcpStream, sleep } from './utils';
+import { downloadAllAssets, ffplayStartRtmpServerAsync, sleep } from './utils';
 import path from 'path';
 import { mkdirp } from 'fs-extra';
 
@@ -46,22 +46,23 @@ async function run() {
     preset: 'ultrafast',
   } as const;
 
+  await ffplayStartRtmpServerAsync(9002);
+
   await smelter.registerOutput('output_stream', <ExampleApp />, {
-    type: 'rtp_stream',
-    port: 8001,
-    transportProtocol: 'tcp_server',
+    type: 'rtmp_client',
+    url: 'rtmp://127.0.0.1:9002',
     video: {
       encoder: VIDEO_ENCODER_OPTS,
       resolution: RESOLUTION,
     },
     audio: {
       encoder: {
-        type: 'opus',
+        type: 'aac',
         channels: 'stereo',
       },
     },
   });
-  void gstReceiveTcpStream('127.0.0.1', 8001);
+
   await smelter.registerOutput('output_recording', <ExampleApp />, {
     type: 'mp4',
     serverPath: path.join(__dirname, '../.workingdir/dynamic_outputs_recording.mp4'),
@@ -81,6 +82,7 @@ async function run() {
     type: 'mp4',
     serverPath: path.join(__dirname, '../.assets/BigBuckBunny.mp4'),
   });
+
   console.log(
     'Start Smelter pipeline with single input ("input_1") and two outputs (RTP "output_stream" and MP4 "output_recording").'
   );
