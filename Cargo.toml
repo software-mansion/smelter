@@ -57,6 +57,7 @@ futures-util = "0.3.30"
 tokio = { version = "1", features = ["full"] }
 schemars = { version = "0.8.22", features = ["preserve_order"] }
 shared_memory = "0.12.4"
+h264-reader = "0.8.0"
 wgpu = { version = "24.0.1", default-features = false, features = [
     "wgsl",
     "dx12",

@@ -13,7 +13,7 @@ vk-video = ["dep:vk-video"]
 compositor_render = { workspace = true }
 bytes = { workspace = true }
 crossbeam-channel = { workspace = true }
-anyhow = "1.0.71"
+anyhow = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }
 ffmpeg-next = { workspace = true }

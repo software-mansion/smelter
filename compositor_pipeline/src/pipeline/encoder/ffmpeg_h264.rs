@@ -1,3 +1,4 @@
+use core::slice;
 use std::time::Duration;
 
 use compositor_render::{Frame, FrameData, Framerate, OutputId, Resolution};
@@ -91,6 +92,7 @@ pub struct LibavH264Encoder {
     resolution: Resolution,
     frame_sender: Sender<PipelineEvent<Frame>>,
     keyframe_req_sender: Sender<()>,
+    extradata: Option<bytes::Bytes>,
 }
 
 impl LibavH264Encoder {
@@ -135,12 +137,13 @@ impl LibavH264Encoder {
             })
             .unwrap();
 
-        result_receiver.recv().unwrap()?;
+        let encoder_config = result_receiver.recv().unwrap()?;
 
         Ok(Self {
             frame_sender,
             resolution: options.resolution,
             keyframe_req_sender,
+            extradata: encoder_config,
         })
     }
 
@@ -155,6 +158,10 @@ impl LibavH264Encoder {
     pub fn keyframe_request_sender(&self) -> Sender<()> {
         self.keyframe_req_sender.clone()
     }
+
+    pub fn context(&self) -> Option<bytes::Bytes> {
+        self.extradata.clone()
+    }
 }
 
 fn run_encoder_thread(
@@ -163,7 +170,7 @@ fn run_encoder_thread(
     frame_receiver: Receiver<PipelineEvent<Frame>>,
     keyframe_req_receiver: Receiver<()>,
     packet_sender: Sender<EncoderOutputEvent>,
-    result_sender: &Sender<Result<(), EncoderInitError>>,
+    result_sender: &Sender<Result<Option<bytes::Bytes>, EncoderInitError>>,
 ) -> Result<(), EncoderInitError> {
     let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
 
@@ -211,7 +218,18 @@ fn run_encoder_thread(
     let encoder_opts_iter = merge_options_with_defaults(&defaults, &options.raw_options);
     let mut encoder = encoder.open_as_with(codec, Dictionary::from_iter(encoder_opts_iter))?;
 
-    result_sender.send(Ok(())).unwrap();
+    let extradata = unsafe {
+        let encoder_ptr = encoder.0 .0 .0.as_ptr();
+        let size = (*encoder_ptr).extradata_size;
+        if size > 0 {
+            let extradata_slice = slice::from_raw_parts((*encoder_ptr).extradata, size as usize);
+            Some(bytes::Bytes::copy_from_slice(extradata_slice))
+        } else {
+            None
+        }
+    };
+
+    result_sender.send(Ok(extradata)).unwrap();
 
     let mut packet = Packet::empty();
 
@@ -279,7 +297,7 @@ fn receive_chunk(encoder: &mut Video, packet: &mut Packet) -> Option<EncodedChun
                 1_000_000,
             ) {
                 Ok(chunk) => {
-                    trace!(pts=?packet.pts(), "H264 encoder produced an encoded packet.");
+                    trace!(pts=?packet.pts(), ?chunk, "H264 encoder produced an encoded packet.");
                     Some(chunk)
                 }
                 Err(e) => {

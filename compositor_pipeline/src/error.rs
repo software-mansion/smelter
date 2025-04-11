@@ -98,7 +98,7 @@ pub enum OutputInitError {
     AllPortsAlreadyInUse { lower_bound: u16, upper_bound: u16 },
 
     #[error("Failed to register output. FFmpeg error: {0}.")]
-    FfmpegMp4Error(ffmpeg_next::Error),
+    FfmpegError(ffmpeg_next::Error),
 
     #[error("Unkown Whip output error.")]
     UnknownWhipError,

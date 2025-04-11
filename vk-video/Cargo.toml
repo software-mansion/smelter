@@ -17,7 +17,7 @@ keywords = ["vulkan", "video", "wgpu", "decoding", "h264"]
 ash = "0.38.0"
 bytes = "1"
 derivative = "2.2.0"
-h264-reader = "0.8.0"
+h264-reader = { workspace = true }
 memchr = "2.7.4"
 thiserror = "1.0.59"
 tracing = "0.1.40"

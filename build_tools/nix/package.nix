@@ -14,8 +14,11 @@
 , makeWrapper
 }:
 let
+  ffmpeg = ffmpeg_7-headless.override {
+    withRtmp = false;
+  };
   buildInputs = [
-    ffmpeg_7-headless
+    ffmpeg
     openssl
     libopus
     libGL
@@ -27,7 +30,7 @@ let
     darwin.apple_sdk.frameworks.QuartzCore
     darwin.libobjc
   ] ++ lib.optionals stdenv.isLinux [
-    mesa.drivers
+    mesa
   ];
   rpath = lib.makeLibraryPath buildInputs;
 in
@@ -58,8 +61,8 @@ rustPlatform.buildRustPackage {
       lib.optionalString stdenv.isLinux ''
         patchelf --set-rpath ${rpath} $out/bin/smelter
         wrapProgram $out/bin/smelter \
-        --prefix XDG_DATA_DIRS : "${mesa.drivers}/share" \
-        --prefix LD_LIBRARY_PATH : "${mesa.drivers}/lib"
+        --prefix XDG_DATA_DIRS : "${mesa}/share" \
+        --prefix LD_LIBRARY_PATH : "${mesa}/lib"
       ''
     );
 }
