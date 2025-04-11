@@ -7,7 +7,7 @@ import { newInternalImageId } from '../context/internalImageIdManager.js';
 import { newBlockingTask } from '../hooks.js';
 import { SmelterContext } from '../context/index.js';
 import { isValidImageType } from '../types/utils.js';
-import type { RegisterImage } from '../types/registerRenderer.js';
+import type { RegisterImage } from '../types/resource.js';
 
 export type ImageProps = Omit<ComponentBaseProps, 'children'> &
   (
