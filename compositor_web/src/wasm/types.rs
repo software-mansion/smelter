@@ -1,8 +1,6 @@
 use std::time::Duration;
 
-use compositor_render::{
-    error::ErrorStack, web_renderer::WebRendererInitOptions, InputId, Resolution,
-};
+use compositor_render::{error::ErrorStack, web_renderer::WebRendererInitOptions, InputId};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -60,11 +58,11 @@ impl FrameSet {
     }
 }
 
-pub struct Frame {
+pub struct InputFrame {
     pub id: InputId,
-    pub resolution: Resolution,
-    pub format: FrameFormat,
-    pub data: Vec<u8>,
+    pub frame: web_sys::ImageBitmap,
+    #[allow(dead_code)]
+    pub pts: Duration,
 }
 
 #[wasm_bindgen]
@@ -103,7 +101,7 @@ impl From<RendererOptions> for compositor_render::RendererOptions {
     }
 }
 
-impl TryFrom<JsValue> for Frame {
+impl TryFrom<JsValue> for InputFrame {
     type Error = JsValue;
 
     fn try_from(entry: JsValue) -> Result<Self, Self::Error> {
@@ -115,17 +113,14 @@ impl TryFrom<JsValue> for Frame {
 
         // 1 - map value
         let value = js_sys::Reflect::get_u32(&entry, 1)?;
-        let resolution =
-            from_js_value::<compositor_api::types::Resolution>(value.get("resolution")?)?.into();
-        let format: FrameFormat = from_js_value(value.get("format")?)?;
-        let data: js_sys::Uint8ClampedArray = value.get("data")?.into();
-
-        Ok(Self {
-            id,
-            resolution,
-            format,
-            data: data.to_vec(),
-        })
+        let frame: web_sys::ImageBitmap = js_sys::Reflect::get(&value, &"frame".into())?.into();
+        let pts = Duration::from_secs_f64(
+            js_sys::Reflect::get(&value, &"ptsMs".into())?
+                .as_f64()
+                .unwrap_or(0.0)
+                / 1000.0,
+        );
+        Ok(Self { id, frame, pts })
     }
 }
 
@@ -136,14 +131,4 @@ pub fn from_js_value<T: DeserializeOwned>(value: JsValue) -> Result<T, JsValue> 
 pub fn to_js_error(error: impl std::error::Error + 'static) -> JsValue {
     let error_stack = ErrorStack::new(&error);
     JsValue::from_str(&error_stack.into_string())
-}
-
-trait JsValueExt {
-    fn get(&self, key: &str) -> Result<JsValue, JsValue>;
-}
-
-impl JsValueExt for JsValue {
-    fn get(&self, key: &str) -> Result<JsValue, JsValue> {
-        js_sys::Reflect::get(self, &JsValue::from_str(key))
-    }
 }
