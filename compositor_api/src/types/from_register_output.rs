@@ -301,18 +301,18 @@ impl TryFrom<RtmpClient> for pipeline::RegisterOutputOptions<output::OutputOptio
             })
             .transpose()?;
         let rtmp_audio = audio.as_ref().map(|a| match &a.encoder {
-            RtmpAudioEncoderOptions::Aac {
+            RtmpClientAudioEncoderOptions::Aac {
                 channels,
                 sample_rate,
             } => RtmpAudioTrack {
                 channels: channels.clone().into(),
-                sample_rate: sample_rate.unwrap_or(44100),
+                sample_rate: sample_rate.unwrap_or(48000),
             },
         });
 
         let (video_encoder_options, output_video_options) = maybe_video_options(video)?;
         let (audio_encoder_options, output_audio_options) = match audio {
-            Some(OutputRtmpAudioOptions {
+            Some(OutputRtmpClientAudioOptions {
                 mixing_strategy,
                 send_eos_when,
                 encoder,
@@ -401,10 +401,10 @@ impl From<Mp4AudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
     }
 }
 
-impl From<RtmpAudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
-    fn from(value: RtmpAudioEncoderOptions) -> Self {
+impl From<RtmpClientAudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
+    fn from(value: RtmpClientAudioEncoderOptions) -> Self {
         match value {
-            RtmpAudioEncoderOptions::Aac {
+            RtmpClientAudioEncoderOptions::Aac {
                 channels,
                 sample_rate,
             } => AudioEncoderOptions::Aac(AacEncoderOptions {

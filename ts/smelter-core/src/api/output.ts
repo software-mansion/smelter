@@ -4,11 +4,13 @@ import type {
   RegisterMp4Output,
   RegisterWhipOutput,
   _smelterInternals,
+  RegisterRtmpClientOutput,
 } from '@swmansion/smelter';
 import { inputRefIntoRawId } from './input';
 import { intoRegisterWhipOutput } from './output/whip';
 import { intoRegisterRtpOutput } from './output/rtp';
 import { intoRegisterMp4Output } from './output/mp4';
+import { intoRegisterRtmpClientOutput } from './output/rtmp';
 
 /**
  * It represents HTTP request that can be sent to
@@ -62,6 +64,7 @@ export type RegisterOutput =
   | ({ type: 'rtp_stream' } & RegisterRtpOutput)
   | ({ type: 'mp4' } & RegisterMp4Output)
   | ({ type: 'whip' } & RegisterWhipOutput)
+  | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput)
   | RegisterWasmSpecificOutput;
 
 export function intoRegisterOutput(
@@ -77,6 +80,8 @@ export function intoRegisterOutput(
     return intoRegisterMp4Output(output, initial);
   } else if (output.type === 'whip') {
     return intoRegisterWhipOutput(output, initial);
+  } else if (output.type === 'rtmp_client') {
+    return intoRegisterRtmpClientOutput(output, initial);
   } else if (['web-wasm-canvas', 'web-wasm-whip', 'web-wasm-stream'].includes(output.type)) {
     // just pass wasm types as they are, they will not be serialized
     return { ...output, initial };

@@ -1,5 +1,6 @@
 import type * as Api from '../api.js';
 import type { Mp4AudioOptions, Mp4VideoOptions } from './output/mp4.js';
+import type { RtmpClientAudioOptions, RtmpClientVideoOptions } from './output/rtmp.js';
 import type { RtpAudioOptions, RtpVideoOptions } from './output/rtp.js';
 import type { WhipAudioOptions, WhipVideoOptions } from './output/whip.js';
 
@@ -7,6 +8,7 @@ export * from './output/mp4.js';
 export * from './output/whip.js';
 export * from './output/rtp.js';
 export * from './output/common.js';
+export * from './output/rtmp.js';
 
 export type RegisterRtpOutput = {
   /**
@@ -59,4 +61,19 @@ export type RegisterWhipOutput = {
    * Audio track configuration.
    */
   audio?: WhipAudioOptions | null;
+};
+
+export type RegisterRtmpClientOutput = {
+  /**
+   * RTMP url.
+   */
+  url: string;
+  /**
+   * Video track configuration.
+   */
+  video?: RtmpClientVideoOptions | null;
+  /**
+   * Audio track configuration.
+   */
+  audio?: RtmpClientAudioOptions | null;
 };

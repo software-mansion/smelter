@@ -27,13 +27,11 @@ async function run() {
   await smelter.init();
 
   // Display output with `ffplay`.
-  await ffplayStartPlayerAsync('127.0.0.0', 8001);
+  await ffplayStartPlayerAsync(8001);
 
   await smelter.registerOutput('output_1', <App />, {
-    type: 'rtp_stream',
-    port: 8001,
-    ip: '127.0.0.1',
-    transportProtocol: 'udp',
+    type: 'rtmp_client',
+    url: 'rtmp://127.0.0.1:8001',
     video: {
       encoder: {
         type: 'ffmpeg_h264',
