@@ -1,21 +1,12 @@
 use anyhow::Result;
 use compositor_api::types::Resolution;
 use serde_json::json;
-<<<<<<< HEAD
-use std::{
-    process::{Command, Stdio},
-    thread::sleep,
-    time::Duration,
-=======
 use std::{process::Command, thread::sleep, time::Duration};
 
 use integration_tests::{
     examples::{self, run_example},
     gstreamer::start_gst_receive_tcp_vp8,
->>>>>>> master
 };
-
-use integration_tests::examples::{self, run_example};
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
     width: 1280,
@@ -77,27 +68,7 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-<<<<<<< HEAD
-    //TODO only temporary
-    let mut gst_output_command = [
-        "gst-launch-1.0 -v ",
-        "rtpptdemux name=demux ",
-        &format!("tcpclientsrc host={} port={} ! \"application/x-rtp-stream\" ! rtpstreamdepay ! queue ! demux. ", IP, OUTPUT_PORT)
-        ].concat();
-    gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=VP8\" ! queue ! rtpvp8depay ! decodebin ! videoconvert ! autovideosink ");
-    gst_output_command.push_str("demux.src_97 ! \"application/x-rtp,media=audio,clock-rate=48000,encoding-name=OPUS\" ! queue ! rtpopusdepay ! decodebin ! audioconvert ! autoaudiosink ");
-
-    Command::new("bash")
-        .arg("-c")
-        .arg(gst_output_command)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()?;
-    sleep(Duration::from_secs(2));
-
-=======
     start_gst_receive_tcp_vp8(IP, OUTPUT_PORT, false)?;
->>>>>>> master
     examples::post("start", &json!({}))?;
 
     let gst_input_command = format!("ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30 -c:v libvpx -format yuv420p -f rtp rtp://{IP}:{INPUT_PORT}");

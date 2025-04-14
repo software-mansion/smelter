@@ -1,5 +1,5 @@
 use compositor_render::{OutputId, Resolution};
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::Sender;
 use establish_peer_connection::connect;
 
 use init_peer_connection::init_peer_connection;
@@ -190,7 +190,7 @@ impl WhipSender {
             };
         }
         init_confirmation_receiver.close();
-        return Err(OutputInitError::WhipInitTimeout);
+        Err(OutputInitError::WhipInitTimeout)
     }
 }
 

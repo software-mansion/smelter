@@ -1,16 +1,21 @@
 use axum::http::HeaderValue;
-use compositor_pipeline::{audio_mixer::AudioChannels, pipeline::{
-    self,
-    encoder::{
-        self, fdk_aac::AacEncoderOptions, ffmpeg_h264::{self}, ffmpeg_vp8, AudioEncoderOptions
-    },
-    output::{
+use compositor_pipeline::{
+    audio_mixer::AudioChannels,
+    pipeline::{
         self,
-        mp4::{Mp4AudioTrack, Mp4OutputOptions, Mp4VideoTrack},
-        rtmp::{RtmpAudioTrack, RtmpSenderOptions, RtmpVideoTrack},
-        whip::WhipVideoOptions,
+        encoder::{
+            self,
+            fdk_aac::AacEncoderOptions,
+            ffmpeg_h264::{self},
+            ffmpeg_vp8, AudioEncoderOptions,
+        },
+        output::{
+            self,
+            mp4::{Mp4AudioTrack, Mp4OutputOptions, Mp4VideoTrack},
+            rtmp::{RtmpAudioTrack, RtmpSenderOptions, RtmpVideoTrack},
+        },
     },
-}};
+};
 use tracing::warn;
 
 use super::register_output::*;
@@ -202,13 +207,13 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             ));
         }
 
-        video.as_ref()
-            .filter(|v| v.encoder.is_some())
-            .map(|_| warn!("Field 'video' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed."));
+        if video.as_ref().filter(|v| v.encoder.is_some()).is_some() {
+            warn!("Field 'video' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.")
+        }
 
-        audio.as_ref()
-            .filter(|a| a.encoder.is_some())
-            .map(|_| warn!("Field 'audio' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed."));
+        if audio.as_ref().filter(|a| a.encoder.is_some()).is_some() {
+            warn!("Field 'audio' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.")
+        }
 
         if let Some(token) = &bearer_token {
             if HeaderValue::from_str(format!("Bearer {token}").as_str()).is_err() {
