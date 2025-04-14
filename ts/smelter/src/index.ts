@@ -18,16 +18,17 @@ import Show, { ShowProps } from './components/Show.js';
 import { SlideShow, Slide, SlideProps, SlideShowProps } from './components/SlideShow.js';
 import Mp4, { Mp4Props } from './components/Mp4.js';
 
-export { RegisterRtpInput, RegisterMp4Input, RegisterWhipInput } from './types/registerInput.js';
+export { RegisterRtpInput, RegisterMp4Input, RegisterWhipInput } from './types/input.js';
 export {
   RegisterRtpOutput,
   RegisterMp4Output,
   RegisterWhipOutput,
-} from './types/registerOutput.js';
+  RegisterRtmpClientOutput,
+} from './types/output.js';
 
-export * as Inputs from './types/registerInput.js';
-export * as Outputs from './types/registerOutput.js';
-export * as Renderers from './types/registerRenderer.js';
+export * as Inputs from './types/input.js';
+export * as Outputs from './types/output.js';
+export * as Renderers from './types/resource.js';
 export * as Api from './api.js';
 export * as _smelterInternals from './internal.js';
 

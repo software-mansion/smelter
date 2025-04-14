@@ -412,8 +412,7 @@ fn create_encoder_and_packet_stream(
                 _ => None,
             },
         },
-        whip_ctx.pipeline_ctx.output_framerate,
-        whip_ctx.pipeline_ctx.mixing_sample_rate,
+        &whip_ctx.pipeline_ctx,
     ) else {
         return Err(WhipError::CannotInitEncoder);
     };

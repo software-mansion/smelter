@@ -1,15 +1,13 @@
-import type {
-  Input as CoreInput,
-  Output as CoreOutput,
-  SmelterManager,
-} from '@swmansion/smelter-core';
-import { OfflineSmelter as CoreSmelter } from '@swmansion/smelter-core';
-import { createLogger } from '../logger';
-import LocallySpawnedInstanceManager from '../manager/locallySpawnedInstance';
-import type { ReactElement } from 'react';
-import type { Renderers } from '@swmansion/smelter';
 import fetch from 'node-fetch';
 import FormData from 'form-data';
+import type { ReactElement } from 'react';
+import type { SmelterManager } from '@swmansion/smelter-core';
+import { OfflineSmelter as CoreSmelter } from '@swmansion/smelter-core';
+import type { Renderers } from '@swmansion/smelter';
+
+import type { RegisterInput, RegisterOutput } from '../api';
+import { createLogger } from '../logger';
+import LocallySpawnedInstanceManager from '../manager/locallySpawnedInstance';
 
 export default class OfflineSmelter {
   private coreSmelter: CoreSmelter;
@@ -25,11 +23,11 @@ export default class OfflineSmelter {
     await this.coreSmelter.init();
   }
 
-  public async render(root: ReactElement, request: CoreOutput.RegisterOutput, durationMs?: number) {
+  public async render(root: ReactElement, request: RegisterOutput, durationMs?: number) {
     await this.coreSmelter.render(root, request, durationMs);
   }
 
-  public async registerInput(inputId: string, request: CoreInput.RegisterInput) {
+  public async registerInput(inputId: string, request: RegisterInput) {
     await this.coreSmelter.registerInput(inputId, request);
   }
 

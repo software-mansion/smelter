@@ -27,7 +27,7 @@ use compositor_render::{
     scene::{Component, InputStreamComponent},
     Frame, FrameData, InputId, OutputId, Resolution,
 };
-use integration_tests::{gstreamer::start_gst_receive_tcp, test_input::TestInput};
+use integration_tests::{gstreamer::start_gst_receive_tcp_h264, test_input::TestInput};
 use smelter::{
     config::read_config,
     logger::{self},
@@ -113,7 +113,7 @@ fn main() {
 
     let frames = generate_frames(&wgpu_device, &wgpu_queue);
 
-    start_gst_receive_tcp("127.0.0.1", VIDEO_OUTPUT_PORT, true, false).unwrap();
+    start_gst_receive_tcp_h264("127.0.0.1", VIDEO_OUTPUT_PORT, false).unwrap();
 
     Pipeline::start(&pipeline);
 

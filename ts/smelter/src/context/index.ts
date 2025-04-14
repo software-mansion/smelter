@@ -3,8 +3,8 @@ import { AudioContext } from './audioOutputContext.js';
 import type { TimeContext } from './timeContext.js';
 import { LiveTimeContext } from './timeContext.js';
 import { LiveInputStreamStore, type InputStreamStore } from './inputStreamStore.js';
-import type { RegisterMp4Input } from '../types/registerInput.js';
-import type { RegisterImage } from '../types/registerRenderer.js';
+import type { RegisterMp4Input } from '../types/input.js';
+import type { RegisterImage } from '../types/resource.js';
 import type { Logger } from '../types/logger.js';
 
 export type SmelterOutputContext = {

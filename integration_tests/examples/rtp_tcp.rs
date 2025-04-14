@@ -4,7 +4,7 @@ use serde_json::json;
 
 use integration_tests::{
     examples::{self, run_example, TestSample},
-    gstreamer::{start_gst_receive_tcp, start_gst_send_tcp},
+    gstreamer::{start_gst_receive_tcp_h264, start_gst_send_tcp},
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -99,7 +99,7 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    start_gst_receive_tcp(IP, OUTPUT_PORT, true, true)?;
+    start_gst_receive_tcp_h264(IP, OUTPUT_PORT, true)?;
 
     examples::post("start", &json!({}))?;
 

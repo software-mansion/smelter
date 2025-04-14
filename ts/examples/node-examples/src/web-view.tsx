@@ -1,6 +1,6 @@
 import Smelter, { LocallySpawnedInstanceManager } from '@swmansion/smelter-node';
 import { Image, View, WebView, Text, Rescaler, Mp4 } from '@swmansion/smelter';
-import { ffplayStartPlayerAsync, sleep } from './utils';
+import { ffplayStartRtmpServerAsync } from './utils';
 import path from 'path';
 
 const WEBSITE_INSTANCE = 'example_website';
@@ -31,8 +31,7 @@ async function run() {
   );
   await smelter.init();
 
-  void ffplayStartPlayerAsync('127.0.0.1', 8001);
-  await sleep(2000);
+  await ffplayStartRtmpServerAsync(9002);
 
   await smelter.registerImage('logo', {
     assetType: 'svg',
@@ -45,10 +44,8 @@ async function run() {
     embeddingMethod: 'native_embedding_over_content',
   });
   await smelter.registerOutput('output_1', <ExampleApp />, {
-    type: 'rtp_stream',
-    port: 8001,
-    ip: '127.0.0.1',
-    transportProtocol: 'udp',
+    type: 'rtmp_client',
+    url: 'rtmp://127.0.0.1:9002',
     video: {
       encoder: {
         type: 'ffmpeg_h264',

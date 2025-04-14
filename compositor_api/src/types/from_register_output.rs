@@ -1,20 +1,16 @@
 use axum::http::HeaderValue;
-use compositor_pipeline::{
-    audio_mixer::AudioChannels,
-    pipeline::{
-        self,
-        encoder::{
-            self,
-            fdk_aac::AacEncoderOptions,
-            ffmpeg_h264::{self},
-            ffmpeg_vp8, AudioEncoderOptions,
-        },
-        output::{
-            self,
-            mp4::{Mp4AudioTrack, Mp4OutputOptions, Mp4VideoTrack}, whip::WhipVideoOptions,
-        },
+use compositor_pipeline::{audio_mixer::AudioChannels, pipeline::{
+    self,
+    encoder::{
+        self, fdk_aac::AacEncoderOptions, ffmpeg_h264::{self}, ffmpeg_vp8, AudioEncoderOptions
     },
-};
+    output::{
+        self,
+        mp4::{Mp4AudioTrack, Mp4OutputOptions, Mp4VideoTrack},
+        rtmp::{RtmpAudioTrack, RtmpSenderOptions, RtmpVideoTrack},
+        whip::WhipVideoOptions,
+    },
+}};
 use tracing::warn;
 
 use super::register_output::*;
@@ -220,7 +216,6 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             };
         }
 
-
         let output_video_options = maybe_whip_video_options(video)?;
         let output_audio_options = match audio {
             Some(OutputWhipAudioOptions {
@@ -250,6 +245,79 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             }),
             video: None,
             audio: None,
+        };
+
+        Ok(Self {
+            output_options,
+            video: output_video_options,
+            audio: output_audio_options,
+        })
+    }
+}
+
+impl TryFrom<RtmpClient> for pipeline::RegisterOutputOptions<output::OutputOptions> {
+    type Error = TypeError;
+
+    fn try_from(value: RtmpClient) -> Result<Self, Self::Error> {
+        let RtmpClient { url, video, audio } = value;
+
+        if video.is_none() && audio.is_none() {
+            return Err(TypeError::new(
+                "At least one of \"video\" and \"audio\" fields have to be specified.",
+            ));
+        }
+
+        let rtmp_video = video
+            .as_ref()
+            .map(|v| match v.encoder {
+                VideoEncoderOptions::FfmpegH264 { .. } => Ok(RtmpVideoTrack {
+                    width: v.resolution.width as u32,
+                    height: v.resolution.height as u32,
+                }),
+                VideoEncoderOptions::FfmpegVp8 { .. } => {
+                    Err(TypeError::new("RTMP output does not support VP8 codec"))
+                }
+            })
+            .transpose()?;
+        let rtmp_audio = audio.as_ref().map(|a| match &a.encoder {
+            RtmpClientAudioEncoderOptions::Aac {
+                channels,
+                sample_rate,
+            } => RtmpAudioTrack {
+                channels: channels.clone().into(),
+                sample_rate: sample_rate.unwrap_or(48000),
+            },
+        });
+
+        let (video_encoder_options, output_video_options) = maybe_video_options(video)?;
+        let (audio_encoder_options, output_audio_options) = match audio {
+            Some(OutputRtmpClientAudioOptions {
+                mixing_strategy,
+                send_eos_when,
+                encoder,
+                initial,
+            }) => {
+                let audio_encoder_options: AudioEncoderOptions = encoder.into();
+                let output_audio_options = pipeline::OutputAudioOptions {
+                    initial: initial.try_into()?,
+                    end_condition: send_eos_when.unwrap_or_default().try_into()?,
+                    mixing_strategy: mixing_strategy.unwrap_or(MixingStrategy::SumClip).into(),
+                    channels: audio_encoder_options.channels(),
+                };
+
+                (Some(audio_encoder_options), Some(output_audio_options))
+            }
+            None => (None, None),
+        };
+
+        let output_options = output::OutputOptions {
+            output_protocol: output::OutputProtocolOptions::Rtmp(RtmpSenderOptions {
+                url,
+                video: rtmp_video,
+                audio: rtmp_audio,
+            }),
+            video: video_encoder_options,
+            audio: audio_encoder_options,
         };
 
         Ok(Self {
@@ -317,6 +385,20 @@ impl From<Mp4AudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
     fn from(value: Mp4AudioEncoderOptions) -> Self {
         match value {
             Mp4AudioEncoderOptions::Aac {
+                channels,
+                sample_rate,
+            } => AudioEncoderOptions::Aac(AacEncoderOptions {
+                channels: channels.into(),
+                sample_rate: sample_rate.unwrap_or(44100),
+            }),
+        }
+    }
+}
+
+impl From<RtmpClientAudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
+    fn from(value: RtmpClientAudioEncoderOptions) -> Self {
+        match value {
+            RtmpClientAudioEncoderOptions::Aac {
                 channels,
                 sample_rate,
             } => AudioEncoderOptions::Aac(AacEncoderOptions {

@@ -10,7 +10,7 @@ const pipeline = promisify(Stream.pipeline);
 
 const TMP_SDP_DIR = '/tmp/smelter-examples';
 
-export async function ffplayStartPlayerAsync(
+export async function ffplayStartRtpServerAsync(
   ip: string,
   video_port: number,
   audio_port: number | undefined = undefined
@@ -26,6 +26,18 @@ export async function ffplayStartPlayerAsync(
   }
 
   const promise = spawn('ffplay', ['-protocol_whitelist', 'file,rtp,udp', sdpFilePath]);
+  await sleep(2000);
+  return { spawn_promise: promise };
+}
+
+export async function ffplayStartRtmpServerAsync(
+  port: number
+): Promise<{ spawn_promise: SpawnPromise }> {
+  const promise = spawn('bash', [
+    '-c',
+    `ffmpeg -f flv -listen 1 -i rtmp://0.0.0.0:${port} -vcodec copy  -f flv - | ffplay -f flv -i -`,
+  ]);
+  await sleep(2000);
   return { spawn_promise: promise };
 }
 
