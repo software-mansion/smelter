@@ -14,11 +14,11 @@ use compositor_pipeline::{
         input::RawDataInputOptions,
         output::{
             rtp::{RtpConnectionOptions, RtpSenderOptions},
-            OutputOptions, OutputProtocolOptions,
+            OutputOptions,
         },
         rtp::RequestedPort,
         GraphicsContext, GraphicsContextOptions, Options, Pipeline, PipelineOutputEndCondition,
-        RegisterOutputOptions, VideoCodec,
+        RegisterOutputOptions,
     },
     queue::{PipelineEvent, QueueInputOptions},
 };
@@ -66,14 +66,10 @@ fn main() {
     let input_id = InputId("input_id".into());
 
     let output_options = RegisterOutputOptions {
-        output_options: OutputOptions {
-            output_protocol: OutputProtocolOptions::Rtp(RtpSenderOptions {
-                connection_options: RtpConnectionOptions::TcpServer {
-                    port: RequestedPort::Exact(VIDEO_OUTPUT_PORT),
-                },
-                video: Some(VideoCodec::H264),
-                audio: None,
-            }),
+        output_options: OutputOptions::Rtp(RtpSenderOptions {
+            connection_options: RtpConnectionOptions::TcpServer {
+                port: RequestedPort::Exact(VIDEO_OUTPUT_PORT),
+            },
             video: Some(VideoEncoderOptions::H264(ffmpeg_h264::Options {
                 preset: EncoderPreset::Ultrafast,
                 resolution: Resolution {
@@ -83,7 +79,7 @@ fn main() {
                 raw_options: vec![],
             })),
             audio: None,
-        },
+        }),
         video: Some(compositor_pipeline::pipeline::OutputVideoOptions {
             initial: Component::InputStream(InputStreamComponent {
                 id: None,

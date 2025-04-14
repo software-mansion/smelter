@@ -24,16 +24,8 @@ pub mod rtmp;
 pub mod rtp;
 pub mod whip;
 
-/// Options to configure public outputs that can be constructed via REST API
 #[derive(Debug, Clone)]
-pub struct OutputOptions {
-    pub output_protocol: OutputProtocolOptions,
-    pub video: Option<VideoEncoderOptions>,
-    pub audio: Option<AudioEncoderOptions>,
-}
-
-#[derive(Debug, Clone)]
-pub enum OutputProtocolOptions {
+pub enum OutputOptions {
     Rtp(RtpSenderOptions),
     Rtmp(RtmpSenderOptions),
     Mp4(Mp4OutputOptions),
@@ -109,23 +101,29 @@ impl OutputOptionsExt<Option<Port>> for OutputOptions {
         output_id: &OutputId,
         ctx: Arc<PipelineCtx>,
     ) -> Result<(Output, Option<Port>), RegisterOutputError> {
-        let encoder_opts = EncoderOptions {
-            video: self.video.clone(),
-            audio: self.audio.clone(),
-        };
+        match &self {
+            OutputOptions::Rtp(rtp_options) => {
+                let encoder_opts = EncoderOptions {
+                    video: rtp_options.video.clone(),
+                    audio: rtp_options.audio.clone(),
+                };
 
-        let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
-            .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
-
-        match &self.output_protocol {
-            OutputProtocolOptions::Rtp(rtp_options) => {
+                let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
+                    .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
                 let (sender, port) =
                     rtp::RtpSender::new(output_id, rtp_options.clone(), packets, ctx)
                         .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
 
                 Ok((Output::Rtp { sender, encoder }, Some(port)))
             }
-            OutputProtocolOptions::Rtmp(rtmp_options) => {
+            OutputOptions::Rtmp(rtmp_options) => {
+                let encoder_opts = EncoderOptions {
+                    video: rtmp_options.video.clone(),
+                    audio: rtmp_options.audio.clone(),
+                };
+
+                let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
+                    .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
                 let sender = rtmp::RmtpSender::new(
                     output_id,
                     rtmp_options.clone(),
@@ -136,7 +134,14 @@ impl OutputOptionsExt<Option<Port>> for OutputOptions {
 
                 Ok((Output::Rtmp { sender, encoder }, None))
             }
-            OutputProtocolOptions::Mp4(mp4_opt) => {
+            OutputOptions::Mp4(mp4_opt) => {
+                let encoder_opts = EncoderOptions {
+                    video: mp4_opt.video.clone(),
+                    audio: mp4_opt.audio.clone(),
+                };
+
+                let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
+                    .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
                 let writer = Mp4FileWriter::new(
                     output_id.clone(),
                     mp4_opt.clone(),
@@ -148,7 +153,15 @@ impl OutputOptionsExt<Option<Port>> for OutputOptions {
 
                 Ok((Output::Mp4 { writer, encoder }, None))
             }
-            OutputProtocolOptions::Whip(whip_options) => {
+            OutputOptions::Whip(whip_options) => {
+                let encoder_opts = EncoderOptions {
+                    video: whip_options.video.clone(),
+                    audio: whip_options.audio.clone(),
+                };
+
+                let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
+                    .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
+
                 let sender = whip::WhipSender::new(
                     output_id,
                     whip_options.clone(),
