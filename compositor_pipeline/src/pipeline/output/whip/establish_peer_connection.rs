@@ -136,7 +136,7 @@ pub async fn connect(
     let answer = response
         .text()
         .await
-        .map_err(|e| WhipError::BodyParsingError("sdp offer", e))?;
+        .map_err(|e| WhipError::BodyParsingError("sdp answer", e))?;
 
     let rtc_answer =
         RTCSessionDescription::answer(answer).map_err(WhipError::RTCSessionDescriptionError)?;

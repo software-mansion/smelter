@@ -1,18 +1,21 @@
 use axum::http::HeaderValue;
-use compositor_pipeline::pipeline::{
-    self,
-    encoder::{
+use compositor_pipeline::{
+    audio_mixer::AudioChannels,
+    pipeline::{
         self,
-        fdk_aac::AacEncoderOptions,
-        ffmpeg_h264::{self},
-        ffmpeg_vp8, AudioEncoderOptions,
-    },
-    output::{
-        self,
-        mp4::{Mp4AudioTrack, Mp4OutputOptions, Mp4VideoTrack},
-        whip::WhipAudioOptions,
+        encoder::{
+            self,
+            fdk_aac::AacEncoderOptions,
+            ffmpeg_h264::{self},
+            ffmpeg_vp8, AudioEncoderOptions,
+        },
+        output::{
+            self,
+            mp4::{Mp4AudioTrack, Mp4OutputOptions, Mp4VideoTrack}, whip::WhipVideoOptions,
+        },
     },
 };
+use tracing::warn;
 
 use super::register_output::*;
 use super::util::*;
@@ -202,27 +205,14 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 "At least one of \"video\" and \"audio\" fields have to be specified.",
             ));
         }
-        let video_codec = video.as_ref().map(|v| match v.encoder {
-            VideoEncoderOptions::FfmpegH264 { .. } => pipeline::VideoCodec::H264,
-            VideoEncoderOptions::FfmpegVp8 { .. } => pipeline::VideoCodec::VP8,
-        });
-        let audio_options = audio.as_ref().map(|a| match &a.encoder {
-            WhipAudioEncoderOptions::Opus {
-                channels,
-                preset: _,
-                sample_rate: _,
-            } => WhipAudioOptions {
-                codec: pipeline::AudioCodec::Opus,
-                channels: match channels {
-                    audio::AudioChannels::Mono => {
-                        compositor_pipeline::audio_mixer::AudioChannels::Mono
-                    }
-                    audio::AudioChannels::Stereo => {
-                        compositor_pipeline::audio_mixer::AudioChannels::Stereo
-                    }
-                },
-            },
-        });
+
+        video.as_ref()
+            .filter(|v| v.encoder.is_some())
+            .map(|_| warn!("Field 'video' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed."));
+
+        audio.as_ref()
+            .filter(|a| a.encoder.is_some())
+            .map(|_| warn!("Field 'audio' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed."));
 
         if let Some(token) = &bearer_token {
             if HeaderValue::from_str(format!("Bearer {token}").as_str()).is_err() {
@@ -230,36 +220,36 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             };
         }
 
-        let (video_encoder_options, output_video_options) = maybe_video_options(video)?;
-        let (audio_encoder_options, output_audio_options) = match audio {
+
+        let output_video_options = maybe_whip_video_options(video)?;
+        let output_audio_options = match audio {
             Some(OutputWhipAudioOptions {
                 mixing_strategy,
                 send_eos_when,
-                encoder,
+                encoder: _,
                 initial,
             }) => {
-                let audio_encoder_options: AudioEncoderOptions = encoder.into();
                 let output_audio_options = pipeline::OutputAudioOptions {
                     initial: initial.try_into()?,
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,
                     mixing_strategy: mixing_strategy.unwrap_or(MixingStrategy::SumClip).into(),
-                    channels: audio_encoder_options.channels(),
+                    channels: AudioChannels::Stereo, // hardcoded just temporarly, TODO when adding preferences
                 };
 
-                (Some(audio_encoder_options), Some(output_audio_options))
+                Some(output_audio_options)
             }
-            None => (None, None),
+            None => None,
         };
 
         let output_options = output::OutputOptions {
             output_protocol: output::OutputProtocolOptions::Whip(output::whip::WhipSenderOptions {
                 endpoint_url,
                 bearer_token,
-                video: video_codec,
-                audio: audio_options,
+                video: None,
+                audio: None,
             }),
-            video: video_encoder_options,
-            audio: audio_encoder_options,
+            video: None,
+            audio: None,
         };
 
         Ok(Self {
@@ -306,6 +296,21 @@ fn maybe_video_options(
     };
 
     Ok((Some(encoder_options), Some(output_options)))
+}
+
+fn maybe_whip_video_options(
+    options: Option<OutputWhipVideoOptions>,
+) -> Result<Option<pipeline::OutputVideoOptions>, TypeError> {
+    let Some(options) = options else {
+        return Ok(None);
+    };
+
+    let output_options = pipeline::OutputVideoOptions {
+        initial: options.initial.try_into()?,
+        end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
+    };
+
+    Ok(Some(output_options))
 }
 
 impl From<Mp4AudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {

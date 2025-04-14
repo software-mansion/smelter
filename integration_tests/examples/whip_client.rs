@@ -34,7 +34,7 @@ fn client_code() -> Result<()> {
         "output/output_1/register",
         &json!({
             "type": "whip",
-            "endpoint_url": "https://whip.vdo.ninja", // Twitch WHIP endpoint URL
+            "endpoint_url": "https://whip.vdo.ninja",//"https://g.webrtc.live-video.net:4443/v2/offer", // Twitch WHIP endpoint URL
             "bearer_token": token,
             "video": {
                 "resolution": {

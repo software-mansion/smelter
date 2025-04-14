@@ -1,9 +1,4 @@
-use crate::{
-    audio_mixer::AudioChannels,
-    pipeline::{AudioCodec, VideoCodec},
-};
-
-use super::{WhipAudioOptions, WhipCtx, WhipError};
+use super::{WhipCtx, WhipError};
 use std::sync::Arc;
 use webrtc::{
     api::{
@@ -17,9 +12,8 @@ use webrtc::{
     rtp_transceiver::{
         rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
         rtp_transceiver_direction::RTCRtpTransceiverDirection,
-        RTCPFeedback,
+        RTCPFeedback, RTCRtpTransceiver, RTCRtpTransceiverInit,
     },
-    track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
 pub async fn init_peer_connection(
@@ -27,8 +21,8 @@ pub async fn init_peer_connection(
 ) -> Result<
     (
         Arc<RTCPeerConnection>,
-        Option<Arc<TrackLocalStaticRTP>>,
-        Option<Arc<TrackLocalStaticRTP>>,
+        Arc<RTCRtpTransceiver>,
+        Arc<RTCRtpTransceiver>,
     ),
     WhipError,
 > {
@@ -52,82 +46,29 @@ pub async fn init_peer_connection(
     };
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
 
-    let video_track = match whip_ctx.options.video {
-        Some(video) => {
-            let video_track = Arc::new(TrackLocalStaticRTP::new(
-                video_codec_capability(video),
-                "video".to_owned(),
-                format!("smelter-{}-video", whip_ctx.output_id).to_owned(),
-            ));
-            peer_connection
-                .add_track(video_track.clone())
-                .await
-                .map_err(WhipError::PeerConnectionInitError)?;
-            Some(video_track)
-        }
-        None => None,
-    };
-    let audio_track = match whip_ctx.options.audio {
-        Some(audio_options) => {
-            let audio_track = Arc::new(TrackLocalStaticRTP::new(
-                audio_codec_capability(audio_options, whip_ctx.pipeline_ctx.mixing_sample_rate)?,
-                "audio".to_owned(),
-                format!("smelter-{}-audio", whip_ctx.output_id).to_owned(),
-            ));
-            peer_connection
-                .add_track(audio_track.clone())
-                .await
-                .map_err(WhipError::PeerConnectionInitError)?;
-            Some(audio_track)
-        }
-        None => None,
-    };
-    let transceivers = peer_connection.get_transceivers().await;
-    println!("{transceivers:?}");
-    for transceiver in transceivers {
-        transceiver
-            .set_direction(RTCRtpTransceiverDirection::Sendonly)
-            .await;
-    }
-    Ok((peer_connection, video_track, audio_track))
-}
+    let video_transceiver = peer_connection
+        .add_transceiver_from_kind(
+            RTPCodecType::Video,
+            Some(RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Sendonly,
+                send_encodings: vec![],
+            }),
+        )
+        .await
+        .map_err(WhipError::PeerConnectionInitError)?;
 
-fn video_codec_capability(video: VideoCodec) -> RTCRtpCodecCapability {
-    match video {
-        VideoCodec::H264 => RTCRtpCodecCapability {
-            mime_type: MIME_TYPE_H264.to_owned(),
-            clock_rate: 90000,
-            channels: 0,
-            sdp_fmtp_line: "".to_owned(),
-            rtcp_feedback: vec![],
-        },
-        VideoCodec::VP8 => RTCRtpCodecCapability {
-            mime_type: MIME_TYPE_VP8.to_owned(),
-            clock_rate: 90000,
-            channels: 0,
-            sdp_fmtp_line: "".to_owned(),
-            rtcp_feedback: vec![],
-        },
-    }
-}
+    let audio_transceiver = peer_connection
+        .add_transceiver_from_kind(
+            RTPCodecType::Audio,
+            Some(RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Sendonly,
+                send_encodings: vec![],
+            }),
+        )
+        .await
+        .map_err(WhipError::PeerConnectionInitError)?;
 
-fn audio_codec_capability(
-    audio_options: WhipAudioOptions,
-    sample_rate: u32,
-) -> Result<RTCRtpCodecCapability, WhipError> {
-    match audio_options.codec {
-        AudioCodec::Opus => Ok(RTCRtpCodecCapability {
-            mime_type: MIME_TYPE_OPUS.to_owned(),
-            clock_rate: sample_rate,
-            channels: match audio_options.channels {
-                AudioChannels::Mono => 1,
-                AudioChannels::Stereo => 2,
-            },
-            sdp_fmtp_line: "".to_owned(),
-            rtcp_feedback: vec![],
-        }),
-        AudioCodec::Aac => Err(WhipError::UnsupportedCodec("AAC")),
-    }
+    Ok((peer_connection, video_transceiver, audio_transceiver))
 }
 
 fn register_codecs(media_engine: &mut MediaEngine) -> webrtc::error::Result<()> {
