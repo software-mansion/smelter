@@ -139,7 +139,7 @@ fn init_ffmpeg_output(
             };
         }
 
-        codecpar.codec_id = ffmpeg::codec::Id::H264.into();
+        codecpar.codec_id = codec.into()
         codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
         codecpar.width = opts.resolution().width as i32;
         codecpar.height = opts.resolution().height as i32;
