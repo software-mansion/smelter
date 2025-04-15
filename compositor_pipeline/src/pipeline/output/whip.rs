@@ -16,10 +16,12 @@ use url::{ParseError, Url};
 use webrtc::track::track_local::TrackLocalWriter;
 
 use crate::{
-    audio_mixer::AudioChannels,
     error::OutputInitError,
     event::Event,
-    pipeline::{AudioCodec, EncoderOutputEvent, PipelineCtx, VideoCodec},
+    pipeline::{
+        encoder::{AudioEncoderOptions, VideoEncoderOptions},
+        EncoderOutputEvent, PipelineCtx,
+    },
 };
 
 mod establish_peer_connection;
@@ -37,14 +39,8 @@ pub struct WhipSender {
 pub struct WhipSenderOptions {
     pub endpoint_url: String,
     pub bearer_token: Option<Arc<str>>,
-    pub video: Option<VideoCodec>,
-    pub audio: Option<WhipAudioOptions>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct WhipAudioOptions {
-    pub codec: AudioCodec,
-    pub channels: AudioChannels,
+    pub video: Option<VideoEncoderOptions>,
+    pub audio: Option<AudioEncoderOptions>,
 }
 
 #[derive(Debug, Clone)]
@@ -122,7 +118,7 @@ impl WhipSender {
         request_keyframe_sender: Option<Sender<()>>,
         pipeline_ctx: Arc<PipelineCtx>,
     ) -> Result<Self, OutputInitError> {
-        let payloader = Payloader::new(options.video, options.audio);
+        let payloader = Payloader::new(options.video.clone(), options.audio.clone());
         let packet_stream = PacketStream::new(packets_receiver, payloader, 1400);
         let should_close = Arc::new(AtomicBool::new(false));
         let (init_confirmation_sender, mut init_confirmation_receiver) =

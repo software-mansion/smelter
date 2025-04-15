@@ -253,7 +253,7 @@ impl AudioEncoderOptions {
         }
     }
 
-    fn sample_rate(&self) -> u32 {
+    pub fn sample_rate(&self) -> u32 {
         match self {
             AudioEncoderOptions::Opus(options) => options.sample_rate,
             AudioEncoderOptions::Aac(options) => options.sample_rate,

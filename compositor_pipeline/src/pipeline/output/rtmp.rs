@@ -10,7 +10,10 @@ use crate::{
     error::OutputInitError,
     event::Event,
     pipeline::{
-        encoder::{AudioEncoderContext, EncoderContext, VideoEncoderContext},
+        encoder::{
+            AudioEncoderContext, AudioEncoderOptions, EncoderContext, VideoEncoderContext,
+            VideoEncoderOptions,
+        },
         types::IsKeyframe,
         EncodedChunk, EncodedChunkKind, EncoderOutputEvent,
     },
@@ -19,20 +22,8 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct RtmpSenderOptions {
     pub url: String,
-    pub video: Option<RtmpVideoTrack>,
-    pub audio: Option<RtmpAudioTrack>,
-}
-
-#[derive(Debug, Clone)]
-pub struct RtmpVideoTrack {
-    pub width: u32,
-    pub height: u32,
-}
-
-#[derive(Debug, Clone)]
-pub struct RtmpAudioTrack {
-    pub channels: AudioChannels,
-    pub sample_rate: u32,
+    pub video: Option<VideoEncoderOptions>,
+    pub audio: Option<AudioEncoderOptions>,
 }
 
 #[derive(Debug, Clone)]
@@ -103,15 +94,15 @@ fn init_ffmpeg_output(
 
         codecpar.codec_id = ffmpeg::codec::Id::H264.into();
         codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
-        codecpar.width = opts.width as i32;
-        codecpar.height = opts.height as i32;
+        codecpar.width = opts.resolution().width as i32;
+        codecpar.height = opts.resolution().height as i32;
         Some(stream.index())
     } else {
         None
     };
 
     let audio = if let (Some(opts), Some(encoder_ctx)) = (&options.audio, encoder_ctx.audio) {
-        let channels = match opts.channels {
+        let channels = match opts.channels() {
             AudioChannels::Mono => 1,
             AudioChannels::Stereo => 2,
         };
@@ -133,7 +124,7 @@ fn init_ffmpeg_output(
         }
         codecpar.codec_id = ffmpeg::codec::Id::AAC.into();
         codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_AUDIO;
-        codecpar.sample_rate = opts.sample_rate as i32;
+        codecpar.sample_rate = opts.sample_rate() as i32;
         codecpar.ch_layout = ffmpeg::ffi::AVChannelLayout {
             nb_channels: channels,
             order: ffmpeg::ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC,
