@@ -8,7 +8,7 @@ use std::{env, process::Command, thread, time::Duration};
 
 use integration_tests::{
     examples::{self, examples_root_dir, start_server_msg_listener, TestSample},
-    ffmpeg::{start_ffmpeg_receive, start_ffmpeg_send},
+    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
 };
 const VIDEO_RESOLUTION: Resolution = Resolution {
     width: 1920,
@@ -103,7 +103,7 @@ fn build_and_start_docker(skip_build: bool) -> Result<()> {
 fn start_example_client_code(host_ip: String) -> Result<()> {
     thread::sleep(Duration::from_secs(5));
 
-    start_ffmpeg_receive(Some(OUTPUT_PORT), None)?;
+    start_ffmpeg_receive_h264(Some(OUTPUT_PORT), None)?;
     start_server_msg_listener();
 
     examples::post(
@@ -159,7 +159,7 @@ fn start_example_client_code(host_ip: String) -> Result<()> {
 
     examples::post("start", &json!({}))?;
 
-    start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::TestPattern)?;
+    start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::TestPatternH264)?;
 
     Ok(())
 }

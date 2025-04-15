@@ -1,16 +1,17 @@
 use anyhow::Result;
 use compositor_api::types::Resolution;
 use serde_json::json;
-use std::{process::Command, thread::sleep, time::Duration};
+use std::{thread::sleep, time::Duration};
 
 use integration_tests::{
     examples::{self, run_example},
+    ffmpeg::start_ffmpeg_send,
     gstreamer::start_gst_receive_tcp_vp8,
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
-    width: 1280,
-    height: 720,
+    width: 1920,
+    height: 1080,
 };
 
 const IP: &str = "127.0.0.1";
@@ -71,11 +72,13 @@ fn client_code() -> Result<()> {
     start_gst_receive_tcp_vp8(IP, OUTPUT_PORT, false)?;
     examples::post("start", &json!({}))?;
 
-    let gst_input_command = format!("ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30 -c:v libvpx -format yuv420p -f rtp rtp://{IP}:{INPUT_PORT}");
-    Command::new("bash")
-        .arg("-c")
-        .arg(gst_input_command)
-        .spawn()?;
+    start_ffmpeg_send(
+        IP,
+        Some(INPUT_PORT),
+        None,
+        examples::TestSample::ElephantsDreamVP8Opus,
+    )?;
+
     sleep(Duration::from_secs(300));
     examples::post("output/output_1/unregister", &json!({}))?;
 
