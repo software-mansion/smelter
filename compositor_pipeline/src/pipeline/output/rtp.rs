@@ -7,7 +7,10 @@ use crate::{
     error::OutputInitError,
     event::Event,
     pipeline::{
-        rtp::RequestedPort, types::EncoderOutputEvent, AudioCodec, PipelineCtx, Port, VideoCodec,
+        encoder::{AudioEncoderOptions, VideoEncoderOptions},
+        rtp::RequestedPort,
+        types::EncoderOutputEvent,
+        PipelineCtx, Port,
     },
 };
 
@@ -35,8 +38,8 @@ pub struct RtpSender {
 #[derive(Debug, Clone)]
 pub struct RtpSenderOptions {
     pub connection_options: RtpConnectionOptions,
-    pub video: Option<VideoCodec>,
-    pub audio: Option<AudioCodec>,
+    pub video: Option<VideoEncoderOptions>,
+    pub audio: Option<AudioEncoderOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

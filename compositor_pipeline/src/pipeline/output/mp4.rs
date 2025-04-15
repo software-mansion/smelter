@@ -11,30 +11,20 @@ use crate::{
     error::OutputInitError,
     event::Event,
     pipeline::{
-        encoder::{AudioEncoderContext, EncoderContext, VideoEncoderContext},
+        encoder::{
+            AudioEncoderContext, AudioEncoderOptions, EncoderContext, VideoEncoderContext,
+            VideoEncoderOptions,
+        },
         types::IsKeyframe,
-        EncodedChunk, EncodedChunkKind, EncoderOutputEvent, PipelineCtx, VideoCodec,
+        EncodedChunk, EncodedChunkKind, EncoderOutputEvent, PipelineCtx,
     },
 };
 
 #[derive(Debug, Clone)]
 pub struct Mp4OutputOptions {
     pub output_path: PathBuf,
-    pub video: Option<Mp4VideoTrack>,
-    pub audio: Option<Mp4AudioTrack>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Mp4VideoTrack {
-    pub codec: VideoCodec,
-    pub width: u32,
-    pub height: u32,
-}
-
-#[derive(Debug, Clone)]
-pub struct Mp4AudioTrack {
-    pub channels: AudioChannels,
-    pub sample_rate: u32,
+    pub video: Option<VideoEncoderOptions>,
+    pub audio: Option<AudioEncoderOptions>,
 }
 
 pub enum Mp4OutputVideoTrack {
@@ -125,9 +115,9 @@ fn init_ffmpeg_output(
         .map_err(OutputInitError::FfmpegError)?;
 
     let video = if let (Some(opts), Some(encoder_ctx)) = (&options.video, encoder_ctx.video) {
-        let codec = match opts.codec {
-            VideoCodec::H264 => ffmpeg::codec::Id::H264,
-            VideoCodec::VP8 => unreachable!(),
+        let codec = match opts {
+            VideoEncoderOptions::H264(_) => ffmpeg::codec::Id::H264,
+            VideoEncoderOptions::VP8(_) => unreachable!(),
         };
 
         let mut stream = output_ctx
@@ -149,10 +139,10 @@ fn init_ffmpeg_output(
             };
         }
 
-        codecpar.codec_id = ffmpeg::codec::Id::H264.into();
+        codecpar.codec_id = codec.into();
         codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
-        codecpar.width = opts.width as i32;
-        codecpar.height = opts.height as i32;
+        codecpar.width = opts.resolution().width as i32;
+        codecpar.height = opts.resolution().height as i32;
 
         Some(stream.index())
     } else {
@@ -161,11 +151,11 @@ fn init_ffmpeg_output(
 
     let audio = if let (Some(opts), Some(encoder_ctx)) = (&options.audio, encoder_ctx.audio) {
         let codec = ffmpeg::codec::Id::AAC;
-        let channels = match opts.channels {
+        let channels = match opts.channels() {
             AudioChannels::Mono => 1,
             AudioChannels::Stereo => 2,
         };
-        let sample_rate = opts.sample_rate as i32;
+        let sample_rate = opts.sample_rate() as i32;
 
         let mut stream = output_ctx
             .add_stream(codec)

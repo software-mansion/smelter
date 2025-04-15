@@ -32,7 +32,7 @@ use crate::{
             opus::OpusEncoderOptions,
             AudioEncoderOptions, AudioEncoderPreset, Encoder, EncoderOptions, VideoEncoderOptions,
         },
-        AudioCodec, PipelineCtx, VideoCodec,
+        PipelineCtx,
     },
 };
 
@@ -51,20 +51,8 @@ pub struct WhipSender {
 pub struct WhipSenderOptions {
     pub endpoint_url: String,
     pub bearer_token: Option<Arc<str>>,
-    pub video: Option<WhipVideoOptions>,
-    pub audio: Option<WhipAudioOptions>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct WhipVideoOptions {
-    pub codec: VideoCodec,
-    pub resolution: Resolution,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct WhipAudioOptions {
-    pub codec: AudioCodec,
-    pub channels: AudioChannels,
+    pub video: Option<VideoEncoderOptions>,
+    pub audio: Option<AudioEncoderOptions>,
 }
 
 #[derive(Debug, Clone)]
@@ -141,7 +129,6 @@ impl WhipSender {
     pub fn new(
         output_id: &OutputId,
         options: WhipSenderOptions,
-        // request_keyframe_sender: Option<Sender<()>>,
         pipeline_ctx: Arc<PipelineCtx>,
     ) -> Result<(Self, Encoder), OutputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
@@ -418,16 +405,30 @@ fn create_encoder_and_packet_stream(
     };
 
     let video = match video_codec.mime_type.as_str() {
-        MIME_TYPE_H264 => Some(VideoCodec::H264),
-        MIME_TYPE_VP8 => Some(VideoCodec::VP8),
+        MIME_TYPE_H264 => Some(VideoEncoderOptions::H264(ffmpeg_h264::Options {
+            preset: EncoderPreset::Fast,
+            resolution: Resolution {
+                width: 1280,
+                height: 720,
+            },
+            raw_options: vec![],
+        })),
+        MIME_TYPE_VP8 => Some(VideoEncoderOptions::VP8(ffmpeg_vp8::Options {
+            resolution: Resolution {
+                width: 1280,
+                height: 720,
+            },
+            raw_options: vec![],
+        })),
         _ => None,
     };
 
     let audio = match audio_codec.mime_type.as_str() {
-        MIME_TYPE_OPUS => Some(WhipAudioOptions {
-            codec: AudioCodec::Opus,
+        MIME_TYPE_OPUS => Some(AudioEncoderOptions::Opus(OpusEncoderOptions {
             channels: AudioChannels::Stereo,
-        }),
+            preset: AudioEncoderPreset::Quality,
+            sample_rate: 48000,
+        })),
         _ => None,
     };
 

@@ -7,12 +7,11 @@ use rand::Rng;
 use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader};
 
 use crate::pipeline::{
+    encoder::{AudioEncoderOptions, VideoEncoderOptions},
     rtp::{AUDIO_PAYLOAD_TYPE, VIDEO_PAYLOAD_TYPE},
     types::{EncodedChunk, EncodedChunkKind},
     AudioCodec, VideoCodec,
 };
-
-use super::WhipAudioOptions;
 
 const H264_CLOCK_RATE: u32 = 90000;
 const VP8_CLOCK_RATE: u32 = 90000;
@@ -111,10 +110,10 @@ pub enum Payload {
 }
 
 impl Payloader {
-    pub fn new(video: Option<VideoCodec>, audio: Option<WhipAudioOptions>) -> Self {
+    pub fn new(video: Option<VideoEncoderOptions>, audio: Option<AudioEncoderOptions>) -> Self {
         Self {
             video: video.map(VideoPayloader::new),
-            audio: audio.map(|audio| AudioPayloader::new(audio.codec)),
+            audio: audio.map(AudioPayloader::new),
         }
     }
 
@@ -195,13 +194,13 @@ impl Payloader {
 }
 
 impl VideoPayloader {
-    fn new(codec: VideoCodec) -> Self {
+    fn new(codec: VideoEncoderOptions) -> Self {
         match codec {
-            VideoCodec::H264 => Self::H264 {
+            VideoEncoderOptions::H264(_) => Self::H264 {
                 payloader: H264Payloader::default(),
                 context: RtpStreamContext::new(),
             },
-            VideoCodec::VP8 => Self::VP8 {
+            VideoEncoderOptions::VP8(_) => Self::VP8 {
                 payloader: Vp8Payloader::default(),
                 context: RtpStreamContext::new(),
             },
@@ -255,13 +254,13 @@ impl VideoPayloader {
 }
 
 impl AudioPayloader {
-    fn new(codec: AudioCodec) -> Self {
+    fn new(codec: AudioEncoderOptions) -> Self {
         match codec {
-            AudioCodec::Opus => Self::Opus {
+            AudioEncoderOptions::Opus(_) => Self::Opus {
                 payloader: OpusPayloader,
                 context: RtpStreamContext::new(),
             },
-            AudioCodec::Aac => panic!("Aac audio output is not supported yet"),
+            AudioEncoderOptions::Aac(_) => panic!("Aac audio output is not supported yet"),
         }
     }
 

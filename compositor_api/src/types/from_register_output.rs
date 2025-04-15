@@ -9,11 +9,7 @@ use compositor_pipeline::{
             ffmpeg_h264::{self},
             ffmpeg_vp8, AudioEncoderOptions,
         },
-        output::{
-            self,
-            mp4::{Mp4AudioTrack, Mp4OutputOptions, Mp4VideoTrack},
-            rtmp::{RtmpAudioTrack, RtmpSenderOptions, RtmpVideoTrack},
-        },
+        output::{self, mp4::Mp4OutputOptions, rtmp::RtmpSenderOptions},
     },
 };
 use tracing::warn;
@@ -39,13 +35,6 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions<output::OutputOption
                 "At least one of \"video\" and \"audio\" fields have to be specified.",
             ));
         }
-        let video_codec = video.as_ref().map(|v| match v.encoder {
-            VideoEncoderOptions::FfmpegH264 { .. } => pipeline::VideoCodec::H264,
-            VideoEncoderOptions::FfmpegVp8 { .. } => pipeline::VideoCodec::VP8,
-        });
-        let audio_codec = audio.as_ref().map(|a| match a.encoder {
-            RtpAudioEncoderOptions::Opus { .. } => pipeline::AudioCodec::Opus,
-        });
 
         let (video_encoder_options, output_video_options) = maybe_video_options(video)?;
         let (audio_encoder_options, output_audio_options) = match audio {
@@ -98,15 +87,11 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions<output::OutputOption
             }
         };
 
-        let output_options = output::OutputOptions {
-            output_protocol: output::OutputProtocolOptions::Rtp(output::rtp::RtpSenderOptions {
-                connection_options,
-                video: video_codec,
-                audio: audio_codec,
-            }),
+        let output_options = output::OutputOptions::Rtp(output::rtp::RtpSenderOptions {
+            connection_options,
             video: video_encoder_options,
             audio: audio_encoder_options,
-        };
+        });
 
         Ok(Self {
             output_options,
@@ -127,29 +112,6 @@ impl TryFrom<Mp4Output> for pipeline::RegisterOutputOptions<output::OutputOption
                 "At least one of \"video\" and \"audio\" fields have to be specified.",
             ));
         }
-
-        let mp4_video = video
-            .as_ref()
-            .map(|v| match v.encoder {
-                VideoEncoderOptions::FfmpegH264 { .. } => Ok(Mp4VideoTrack {
-                    codec: pipeline::VideoCodec::H264,
-                    width: v.resolution.width as u32,
-                    height: v.resolution.height as u32,
-                }),
-                VideoEncoderOptions::FfmpegVp8 { .. } => {
-                    Err(TypeError::new("MP4 VP8 output not supported"))
-                }
-            })
-            .transpose()?;
-        let mp4_audio = audio.as_ref().map(|a| match &a.encoder {
-            Mp4AudioEncoderOptions::Aac {
-                channels,
-                sample_rate,
-            } => Mp4AudioTrack {
-                channels: channels.clone().into(),
-                sample_rate: sample_rate.unwrap_or(44100),
-            },
-        });
 
         let (video_encoder_options, output_video_options) = maybe_video_options(video)?;
         let (audio_encoder_options, output_audio_options) = match audio {
@@ -172,15 +134,11 @@ impl TryFrom<Mp4Output> for pipeline::RegisterOutputOptions<output::OutputOption
             None => (None, None),
         };
 
-        let output_options = output::OutputOptions {
-            output_protocol: output::OutputProtocolOptions::Mp4(Mp4OutputOptions {
-                output_path: path.into(),
-                video: mp4_video,
-                audio: mp4_audio,
-            }),
+        let output_options = output::OutputOptions::Mp4(Mp4OutputOptions {
+            output_path: path.into(),
             video: video_encoder_options,
             audio: audio_encoder_options,
-        };
+        });
 
         Ok(Self {
             output_options,
@@ -241,16 +199,12 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             None => None,
         };
 
-        let output_options = output::OutputOptions {
-            output_protocol: output::OutputProtocolOptions::Whip(output::whip::WhipSenderOptions {
-                endpoint_url,
-                bearer_token,
-                video: None,
-                audio: None,
-            }),
+        let output_options = output::OutputOptions::Whip(output::whip::WhipSenderOptions {
+            endpoint_url,
+            bearer_token,
             video: None,
             audio: None,
-        };
+        });
 
         Ok(Self {
             output_options,
@@ -271,28 +225,6 @@ impl TryFrom<RtmpClient> for pipeline::RegisterOutputOptions<output::OutputOptio
                 "At least one of \"video\" and \"audio\" fields have to be specified.",
             ));
         }
-
-        let rtmp_video = video
-            .as_ref()
-            .map(|v| match v.encoder {
-                VideoEncoderOptions::FfmpegH264 { .. } => Ok(RtmpVideoTrack {
-                    width: v.resolution.width as u32,
-                    height: v.resolution.height as u32,
-                }),
-                VideoEncoderOptions::FfmpegVp8 { .. } => {
-                    Err(TypeError::new("RTMP output does not support VP8 codec"))
-                }
-            })
-            .transpose()?;
-        let rtmp_audio = audio.as_ref().map(|a| match &a.encoder {
-            RtmpClientAudioEncoderOptions::Aac {
-                channels,
-                sample_rate,
-            } => RtmpAudioTrack {
-                channels: channels.clone().into(),
-                sample_rate: sample_rate.unwrap_or(48000),
-            },
-        });
 
         let (video_encoder_options, output_video_options) = maybe_video_options(video)?;
         let (audio_encoder_options, output_audio_options) = match audio {
@@ -315,15 +247,11 @@ impl TryFrom<RtmpClient> for pipeline::RegisterOutputOptions<output::OutputOptio
             None => (None, None),
         };
 
-        let output_options = output::OutputOptions {
-            output_protocol: output::OutputProtocolOptions::Rtmp(RtmpSenderOptions {
-                url,
-                video: rtmp_video,
-                audio: rtmp_audio,
-            }),
+        let output_options = output::OutputOptions::Rtmp(RtmpSenderOptions {
+            url,
             video: video_encoder_options,
             audio: audio_encoder_options,
-        };
+        });
 
         Ok(Self {
             output_options,
