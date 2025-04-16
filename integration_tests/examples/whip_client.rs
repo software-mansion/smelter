@@ -34,15 +34,12 @@ fn client_code() -> Result<()> {
         "output/output_1/register",
         &json!({
             "type": "whip",
-            "endpoint_url": "https://whip.vdo.ninja",//"https://g.webrtc.live-video.net:4443/v2/offer", // Twitch WHIP endpoint URL
+            "endpoint_url": "https://whip.vdo.ninja", // Video ninja (vdo.ninja/whip) WHIP endpoint URL
             "bearer_token": token,
             "video": {
                 "resolution": {
                     "width": VIDEO_RESOLUTION.width,
                     "height": VIDEO_RESOLUTION.height,
-                },
-                "encoder": {
-                    "type": "ffmpeg_vp8",
                 },
                 "initial": {
                     "root": {
@@ -53,10 +50,6 @@ fn client_code() -> Result<()> {
                 }
             },
             "audio": {
-                "encoder": {
-                    "type": "opus",
-                    "channels": "stereo",
-                },
                 "initial": {
                     "inputs": [
                         {"input_id": "input_1"}

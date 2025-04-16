@@ -21,8 +21,8 @@ pub async fn init_peer_connection(
 ) -> Result<
     (
         Arc<RTCPeerConnection>,
-        Arc<RTCRtpTransceiver>,
-        Arc<RTCRtpTransceiver>,
+        Option<Arc<RTCRtpTransceiver>>,
+        Option<Arc<RTCRtpTransceiver>>,
     ),
     WhipError,
 > {
@@ -46,27 +46,38 @@ pub async fn init_peer_connection(
     };
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
 
-    let video_transceiver = peer_connection
-        .add_transceiver_from_kind(
-            RTPCodecType::Video,
-            Some(RTCRtpTransceiverInit {
-                direction: RTCRtpTransceiverDirection::Sendonly,
-                send_encodings: vec![],
-            }),
+    let video_transceiver = if whip_ctx.options.video.is_some() {
+        Some(
+            peer_connection
+                .add_transceiver_from_kind(
+                    RTPCodecType::Video,
+                    Some(RTCRtpTransceiverInit {
+                        direction: RTCRtpTransceiverDirection::Sendonly,
+                        send_encodings: vec![],
+                    }),
+                )
+                .await
+                .map_err(WhipError::PeerConnectionInitError)?,
         )
-        .await
-        .map_err(WhipError::PeerConnectionInitError)?;
-
-    let audio_transceiver = peer_connection
-        .add_transceiver_from_kind(
-            RTPCodecType::Audio,
-            Some(RTCRtpTransceiverInit {
-                direction: RTCRtpTransceiverDirection::Sendonly,
-                send_encodings: vec![],
-            }),
+    } else {
+        None
+    };
+    let audio_transceiver = if whip_ctx.options.audio.is_some() {
+        Some(
+            peer_connection
+                .add_transceiver_from_kind(
+                    RTPCodecType::Audio,
+                    Some(RTCRtpTransceiverInit {
+                        direction: RTCRtpTransceiverDirection::Sendonly,
+                        send_encodings: vec![],
+                    }),
+                )
+                .await
+                .map_err(WhipError::PeerConnectionInitError)?,
         )
-        .await
-        .map_err(WhipError::PeerConnectionInitError)?;
+    } else {
+        None
+    };
 
     Ok((peer_connection, video_transceiver, audio_transceiver))
 }
