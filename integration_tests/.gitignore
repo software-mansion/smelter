@@ -2,3 +2,4 @@
 /examples/encoded_channel_output_dump.h264
 /examples/raw_channel_output_audio_dump.debug
 /examples/raw_channel_output_video_frame_*.png
+/examples/assets/image.png

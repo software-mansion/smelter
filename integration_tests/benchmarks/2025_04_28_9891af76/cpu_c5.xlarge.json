@@ -1,0 +1,758 @@
+[
+  {
+    "id": "1 input per output - preset: Ultrafast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "2",
+      "output_count": "2",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Ultrafast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "1 input per output - preset: Ultrafast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny720p24fps30s.mp4\")",
+      "encoder": "Enabled(Ultrafast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "1 input per output - preset: Ultrafast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny1080p30fps30s.mp4\")",
+      "encoder": "Enabled(Ultrafast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "1 input per output - preset: Ultrafast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "1 input per output - preset: Veryfast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "2",
+      "output_count": "2",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Veryfast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "1 input per output - preset: Veryfast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny720p24fps30s.mp4\")",
+      "encoder": "Enabled(Veryfast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "1 input per output - preset: Veryfast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny1080p30fps30s.mp4\")",
+      "encoder": "Enabled(Veryfast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "1 input per output - preset: Veryfast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "1 input per output - preset: Fast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Fast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "1 input per output - preset: Fast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny720p24fps30s.mp4\")",
+      "encoder": "Enabled(Fast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "1 input per output - preset: Fast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "1 input per output - preset: Fast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Ultrafast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "2",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Ultrafast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "2 inputs per output - preset: Ultrafast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "2",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny720p24fps30s.mp4\")",
+      "encoder": "Enabled(Ultrafast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "2 inputs per output - preset: Ultrafast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Ultrafast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Veryfast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "2",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Veryfast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "2 inputs per output - preset: Veryfast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "2",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny720p24fps30s.mp4\")",
+      "encoder": "Enabled(Veryfast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "2 inputs per output - preset: Veryfast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Veryfast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Fast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "2",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Fast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "2 inputs per output - preset: Fast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "2",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny720p24fps30s.mp4\")",
+      "encoder": "Enabled(Fast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "2 inputs per output - preset: Fast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Fast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Ultrafast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "4",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Ultrafast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "4 inputs per output - preset: Ultrafast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Ultrafast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Ultrafast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Veryfast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "4",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Veryfast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "4 inputs per output - preset: Veryfast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Veryfast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Veryfast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Fast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "4",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Fast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "4 inputs per output - preset: Fast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Fast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Fast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "1 input per output - preset: Ultrafast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 1270, height: 720 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Ultrafast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "1 input per output - preset: Ultrafast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 1270, height: 720 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny720p24fps30s.mp4\")",
+      "encoder": "Enabled(Ultrafast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "1 input per output - preset: Ultrafast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "1 input per output - preset: Ultrafast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "1 input per output - preset: Veryfast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 1270, height: 720 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Veryfast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "1 input per output - preset: Veryfast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "1 input per output - preset: Veryfast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "1 input per output - preset: Veryfast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "1 input per output - preset: Fast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "1 input per output - preset: Fast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "1 input per output - preset: Fast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "1 input per output - preset: Fast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Ultrafast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "2",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 1270, height: 720 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Ultrafast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "2 inputs per output - preset: Ultrafast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Ultrafast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Ultrafast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Veryfast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "2",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 1270, height: 720 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Veryfast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "2 inputs per output - preset: Veryfast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Veryfast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Veryfast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Fast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": {
+      "input_count": "2",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 1270, height: 720 }",
+      "input_file": "Mp4(\"/home/ubuntu/smelter/integration_tests/./examples/assets/BigBuckBunny480p24fps30s.mp4\")",
+      "encoder": "Enabled(Fast)",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "2 inputs per output - preset: Fast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Fast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "2 inputs per output - preset: Fast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Ultrafast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Ultrafast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Ultrafast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Ultrafast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Veryfast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Veryfast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Veryfast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Veryfast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Fast, input: bbb_mp4_480p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Fast, input: bbb_mp4_720p24fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Fast, input: bbb_mp4_1080p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "4 inputs per output - preset: Fast, input: bbb_mp4_2160p30fps, decoder: FFmpegH264",
+    "config": null
+  },
+  {
+    "id": "rendering only - scene: \"blank\"",
+    "config": {
+      "input_count": "1",
+      "output_count": "6",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Raw(RawInputFile)",
+      "encoder": "Disabled",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "rendering only - scene: \"simple_tiles_with_all_inputs\"",
+    "config": {
+      "input_count": "1",
+      "output_count": "3",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Raw(RawInputFile)",
+      "encoder": "Disabled",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "rendering only - scene: \"single_video_layout\"",
+    "config": {
+      "input_count": "1",
+      "output_count": "3",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Raw(RawInputFile)",
+      "encoder": "Disabled",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "rendering only - scene: \"single_video_pass_through\"",
+    "config": {
+      "input_count": "1",
+      "output_count": "23",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Raw(RawInputFile)",
+      "encoder": "Disabled",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "rendering only - scene: \"static_image\"",
+    "config": {
+      "input_count": "1",
+      "output_count": "4",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Raw(RawInputFile)",
+      "encoder": "Disabled",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "rendering only - scene: \"image_with_shader\"",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 854, height: 480 }",
+      "input_file": "Raw(RawInputFile)",
+      "encoder": "Disabled",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "rendering only - scene: \"blank\"",
+    "config": {
+      "input_count": "1",
+      "output_count": "3",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 1270, height: 720 }",
+      "input_file": "Raw(RawInputFile)",
+      "encoder": "Disabled",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "rendering only - scene: \"simple_tiles_with_all_inputs\"",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 1270, height: 720 }",
+      "input_file": "Raw(RawInputFile)",
+      "encoder": "Disabled",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "rendering only - scene: \"single_video_layout\"",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 1270, height: 720 }",
+      "input_file": "Raw(RawInputFile)",
+      "encoder": "Disabled",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "rendering only - scene: \"single_video_pass_through\"",
+    "config": {
+      "input_count": "1",
+      "output_count": "23",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 1270, height: 720 }",
+      "input_file": "Raw(RawInputFile)",
+      "encoder": "Disabled",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "rendering only - scene: \"static_image\"",
+    "config": {
+      "input_count": "1",
+      "output_count": "2",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 1270, height: 720 }",
+      "input_file": "Raw(RawInputFile)",
+      "encoder": "Disabled",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  },
+  {
+    "id": "rendering only - scene: \"image_with_shader\"",
+    "config": {
+      "input_count": "1",
+      "output_count": "1",
+      "framerate": "24",
+      "output_resolution": "Resolution { width: 1270, height: 720 }",
+      "input_file": "Raw(RawInputFile)",
+      "encoder": "Disabled",
+      "decoder": "FFmpegH264",
+      "warm_up_time": {
+        "secs": 3,
+        "nanos": 250000000
+      }
+    }
+  }
+]
