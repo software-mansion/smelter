@@ -30,7 +30,9 @@ use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use tracing::debug;
 
 use crate::{
-    args::Resolution, benchmark::EncoderOptions, scenes::SceneContext,
+    args::Resolution,
+    benchmark::EncoderOptions,
+    scenes::{SceneBuilderFn, SceneContext},
     utils::benchmark_pipeline_options,
 };
 
@@ -81,7 +83,7 @@ impl DurationReceiver for Receiver<EncoderOutputEvent> {
 
 #[derive(Debug, Clone)]
 pub struct SingleBenchmarkPass {
-    pub scene_builder: fn(ctx: &SceneContext, output_id: &OutputId) -> Component,
+    pub scene_builder: SceneBuilderFn,
     pub input_count: u64,
     pub output_count: u64,
     pub framerate: u64,

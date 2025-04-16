@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::{
     fs::{self, File},
     io::{self, Read},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
@@ -149,12 +149,45 @@ fn read_frames(path: &PathBuf, count: usize, resolution: Resolution) -> Vec<YuvP
 const DEFAULT_MP4_URL: &str =
     "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
+const BBB_720P_24FPS: &str = "https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/BigBuckBunny720p24fps30s.mp4";
+const BBB_1080P_30FPS: &str = "https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/BigBuckBunny1080p30fps30s.mp4";
+const BBB_1080P_60FPS: &str = "https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/BigBuckBunny1080p60fps30s.mp4";
+const BBB_2160P_30FPS: &str = "https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/BigBuckBunny2160p30fps30s.mp4";
+
+pub fn ensure_bunny_720p24fps() -> Result<PathBuf> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("./examples/assets/BigBuckBunny720p24fps30s.mp4");
+    ensure_file(path, BBB_720P_24FPS)
+}
+
+pub fn ensure_bunny_1080p30fps() -> Result<PathBuf> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("./examples/assets/BigBuckBunny1080p30fps30s.mp4");
+    ensure_file(path, BBB_1080P_30FPS)
+}
+
+pub fn ensure_bunny_1080p60fps() -> Result<PathBuf> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("./examples/assets/BigBuckBunny1080p60fps30s.mp4");
+    ensure_file(path, BBB_1080P_60FPS)
+}
+
+pub fn ensure_bunny_2160p30fps() -> Result<PathBuf> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("./examples/assets/BigBuckBunny2160p30fps30s.mp4");
+    ensure_file(path, BBB_2160P_30FPS)
+}
+
 pub fn ensure_default_mp4() -> Result<PathBuf> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("./examples/assets/BigBuckBunny.mp4");
+    ensure_file(path, DEFAULT_MP4_URL)
+}
+
+fn ensure_file(path: PathBuf, url: &str) -> Result<PathBuf> {
     fs::create_dir_all(path.parent().unwrap())?;
     if !path.exists() {
-        warn!(?path, "Downloading example asset");
-        let mut resp = reqwest::blocking::get(DEFAULT_MP4_URL)?;
+        warn!(?path, ?url, "Downloading asset");
+        let mut resp = reqwest::blocking::get(url)?;
         let mut out = File::create(path.clone())?;
         io::copy(&mut resp, &mut out)?;
     }

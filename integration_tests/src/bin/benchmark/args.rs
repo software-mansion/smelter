@@ -2,6 +2,8 @@ use std::{path::PathBuf, str::FromStr, time::Duration};
 
 use compositor_pipeline::pipeline::{self, encoder::ffmpeg_h264};
 
+use crate::benchmark::ValueOrMaximized;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericArgument {
     IterateExp,
@@ -20,6 +22,16 @@ impl std::str::FromStr for NumericArgument {
                 .parse::<u64>()
                 .map(NumericArgument::Constant)
                 .map_err(|e| e.to_string()),
+        }
+    }
+}
+
+impl From<NumericArgument> for ValueOrMaximized<u64> {
+    fn from(value: NumericArgument) -> Self {
+        match value {
+            NumericArgument::IterateExp => panic!(),
+            NumericArgument::Maximize => ValueOrMaximized::Maximize,
+            NumericArgument::Constant(v) => ValueOrMaximized::Value(v),
         }
     }
 }
@@ -160,6 +172,16 @@ impl std::str::FromStr for ResolutionPreset {
             _ => Err(
                 "invalid resolution preset, available options: 144p, 240p, 360p, 480p, 720p, 1080p, 1440p, 2160p, 4320p".to_string(),
             ),
+        }
+    }
+}
+
+impl From<ResolutionArgument> for ValueOrMaximized<Resolution> {
+    fn from(value: ResolutionArgument) -> Self {
+        match value {
+            ResolutionArgument::Iterate => panic!(),
+            ResolutionArgument::Maximize => ValueOrMaximized::Maximize,
+            ResolutionArgument::Constant(v) => ValueOrMaximized::Value(v),
         }
     }
 }
