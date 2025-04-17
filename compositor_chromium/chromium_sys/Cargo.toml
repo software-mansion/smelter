@@ -9,7 +9,7 @@ license-file = "../../LICENSE"
 [dependencies]
 
 [build-dependencies]
-anyhow = "1.0.72"
+anyhow = { workspace = true }
 bindgen = "0.66.1"
 cmake = "0.1.50"
 dirs = "5.0.1"

@@ -1,6 +1,6 @@
 import Smelter from '@swmansion/smelter-node';
 import { Text, InputStream, Tiles, Rescaler, View } from '@swmansion/smelter';
-import { downloadAllAssets, gstReceiveTcpStream } from './utils';
+import { downloadAllAssets, ffplayStartRtmpServerAsync } from './utils';
 import path from 'path';
 import { useState, useEffect } from 'react';
 
@@ -36,11 +36,11 @@ function InputTile({ inputId, muted }: { inputId: string; muted: boolean }) {
   }, [volume]);
 
   return (
-    <View>
-      <Rescaler>
+    <View style={{ borderWidth: 8, borderRadius: 16, borderColor: muted ? 'black' : 'white' }}>
+      <Rescaler style={{ rescaleMode: 'fill' }}>
         <InputStream inputId={inputId} volume={volume} muted={muted} />
       </Rescaler>
-      <View style={{ bottom: 10, left: 10, height: 40 }}>
+      <View style={{ bottom: 10, left: 10, height: 40, padding: 20 }}>
         <Text style={{ fontSize: 40 }}>
           Input ID: {inputId}, volume: {volume.toFixed(2)} {muted ? 'muted' : 'live'}
         </Text>
@@ -54,28 +54,25 @@ async function run() {
   const smelter = new Smelter();
   await smelter.init();
 
+  await ffplayStartRtmpServerAsync(9002);
+
   await smelter.registerOutput('output_1', <ExampleApp />, {
-    type: 'rtp_stream',
-    port: 8001,
-    transportProtocol: 'tcp_server',
+    type: 'rtmp_client',
+    url: 'rtmp://127.0.0.1:9002',
     video: {
       encoder: {
         type: 'ffmpeg_h264',
         preset: 'ultrafast',
       },
-      resolution: {
-        width: 1920,
-        height: 1080,
-      },
+      resolution: { width: 1920, height: 1080 },
     },
     audio: {
       encoder: {
-        type: 'opus',
+        type: 'aac',
         channels: 'stereo',
       },
     },
   });
-  void gstReceiveTcpStream('127.0.0.1', 8001);
 
   await smelter.registerInput('input_1', {
     type: 'mp4',

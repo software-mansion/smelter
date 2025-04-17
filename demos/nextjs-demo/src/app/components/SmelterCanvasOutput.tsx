@@ -40,7 +40,7 @@ export default function SmelterCanvasOutput(props: SmelterCanvasProps) {
   const key = useRef<number>(1);
 
   const canvasRef = useCallback(
-    async (updatedCanvas: HTMLCanvasElement | null) => {
+    (updatedCanvas: HTMLCanvasElement | null) => {
       if (!updatedCanvas || !updatedProps || updatedCanvas === registerOptions?.canvas) {
         return;
       }

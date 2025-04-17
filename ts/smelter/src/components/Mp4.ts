@@ -6,7 +6,7 @@ import { InnerInputStream } from './InputStream.js';
 import { newInternalStreamId } from '../context/internalStreamIdManager.js';
 import type { ComponentBaseProps } from '../component.js';
 import { useTimeLimitedComponent } from '../context/childrenLifetimeContext.js';
-import type { RegisterMp4Input } from '../types/registerInput.js';
+import type { RegisterMp4Input } from '../types/input.js';
 
 export type Mp4Props = Omit<ComponentBaseProps, 'children'> & {
   /**

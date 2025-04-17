@@ -29,6 +29,16 @@ pub struct RtpOutput {
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct RtmpClient {
+    pub url: String,
+    /// Video stream configuration.
+    pub video: Option<OutputVideoOptions>,
+    /// Audio stream configuration.
+    pub audio: Option<OutputRtmpClientAudioOptions>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct Mp4Output {
     /// Path to output MP4 file.
     pub path: String,
@@ -104,6 +114,19 @@ pub struct OutputWhipAudioOptions {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OutputRtmpClientAudioOptions {
+    /// (**default="sum_clip"**) Specifies how audio should be mixed.
+    pub mixing_strategy: Option<MixingStrategy>,
+    /// Condition for termination of output stream based on the input streams states.
+    pub send_eos_when: Option<OutputEndCondition>,
+    /// Audio encoder options.
+    pub encoder: RtmpClientAudioEncoderOptions,
+    /// Initial audio mixer configuration for output.
+    pub initial: Audio,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum VideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
@@ -111,6 +134,11 @@ pub enum VideoEncoderOptions {
         /// (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
         preset: Option<H264EncoderPreset>,
 
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<String, String>>,
+    },
+    #[serde(rename = "ffmpeg_vp8")]
+    FfmpegVp8 {
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<String, String>>,
     },
@@ -137,6 +165,16 @@ pub enum Mp4AudioEncoderOptions {
     Aac {
         channels: AudioChannels,
         /// (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+        sample_rate: Option<u32>,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RtmpClientAudioEncoderOptions {
+    Aac {
+        channels: AudioChannels,
+        /// (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
         sample_rate: Option<u32>,
     },
 }

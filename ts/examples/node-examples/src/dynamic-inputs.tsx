@@ -1,6 +1,6 @@
 import Smelter from '@swmansion/smelter-node';
 import { useInputStreams, Text, InputStream, Tiles, Rescaler, View } from '@swmansion/smelter';
-import { downloadAllAssets, ffplayStartPlayerAsync, sleep } from './utils';
+import { downloadAllAssets, ffplayStartRtmpServerAsync, sleep } from './utils';
 import path from 'path';
 
 function ExampleApp() {
@@ -47,14 +47,11 @@ async function run() {
   const smelter = new Smelter();
   await smelter.init();
 
-  void ffplayStartPlayerAsync('127.0.0.1', 8001);
-  await sleep(2000);
+  await ffplayStartRtmpServerAsync(9002);
 
   await smelter.registerOutput('output_1', <ExampleApp />, {
-    type: 'rtp_stream',
-    port: 8001,
-    ip: '127.0.0.1',
-    transportProtocol: 'udp',
+    type: 'rtmp_client',
+    url: 'rtmp://127.0.0.1:9002',
     video: {
       encoder: {
         type: 'ffmpeg_h264',
@@ -65,19 +62,33 @@ async function run() {
         height: 1080,
       },
     },
+    audio: {
+      encoder: {
+        type: 'aac',
+        channels: 'stereo',
+      },
+    },
   });
   await smelter.start();
 
-  await sleep(5000);
-  await smelter.registerInput('input_1', {
-    type: 'mp4',
-    serverPath: path.join(__dirname, '../.assets/BigBuckBunny.mp4'),
-  });
+  while (true) {
+    await sleep(5000);
+    await smelter.registerInput('input_1', {
+      type: 'mp4',
+      serverPath: path.join(__dirname, '../.assets/BigBuckBunny.mp4'),
+    });
 
-  await sleep(5000);
-  await smelter.registerInput('input_2', {
-    type: 'mp4',
-    serverPath: path.join(__dirname, '../.assets/ElephantsDream.mp4'),
-  });
+    await sleep(5000);
+    await smelter.registerInput('input_2', {
+      type: 'mp4',
+      serverPath: path.join(__dirname, '../.assets/ElephantsDream.mp4'),
+    });
+
+    await sleep(5000);
+    await smelter.unregisterInput('input_1');
+
+    await sleep(5000);
+    await smelter.unregisterInput('input_2');
+  }
 }
 void run();

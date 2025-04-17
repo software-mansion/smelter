@@ -38,7 +38,7 @@ serde_json = { version = "1.0.99", features = ["preserve_order"] }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
 log = "0.4.19"
 thiserror = "1.0.40"
-crossbeam-channel = "0.5.8"
+crossbeam-channel = "0.5.15"
 reqwest = { version = "0.12.3", features = ["blocking", "json"] }
 signal-hook = "0.3.15"
 ffmpeg-next = "7.1.0"
@@ -57,6 +57,7 @@ futures-util = "0.3.30"
 tokio = { version = "1", features = ["full"] }
 schemars = { version = "0.8.22", features = ["preserve_order"] }
 shared_memory = "0.12.4"
+h264-reader = "0.8.0"
 wgpu = { version = "24.0.1", default-features = false, features = [
     "wgsl",
     "dx12",

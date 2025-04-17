@@ -5,7 +5,7 @@ use std::env;
 
 use integration_tests::{
     examples::{self, run_example, TestSample},
-    ffmpeg::{start_ffmpeg_receive, start_ffmpeg_send},
+    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
 };
 
 const HTML_FILE_PATH: &str = "examples/web_view.html";
@@ -39,7 +39,7 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    start_ffmpeg_receive(Some(OUTPUT_PORT), None)?;
+    start_ffmpeg_receive_h264(Some(OUTPUT_PORT), None)?;
 
     let html_file_path = env::current_dir()?
         .join(HTML_FILE_PATH)
@@ -100,6 +100,6 @@ fn client_code() -> Result<()> {
 
     examples::post("start", &json!({}))?;
 
-    start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::SampleLoop)?;
+    start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::SampleLoopH264)?;
     Ok(())
 }

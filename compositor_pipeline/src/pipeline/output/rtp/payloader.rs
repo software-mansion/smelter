@@ -4,15 +4,17 @@ use tracing::error;
 use webrtc_util::Marshal;
 
 use rand::Rng;
-use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader};
+use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader};
 
 use crate::pipeline::{
+    encoder::{AudioEncoderOptions, VideoEncoderOptions},
     rtp::{AUDIO_PAYLOAD_TYPE, VIDEO_PAYLOAD_TYPE},
     types::{EncodedChunk, EncodedChunkKind},
     AudioCodec, VideoCodec,
 };
 
 const H264_CLOCK_RATE: u32 = 90000;
+const VP8_CLOCK_RATE: u32 = 90000;
 const OPUS_CLOCK_RATE: u32 = 48000;
 
 struct RtpStreamContext {
@@ -86,6 +88,10 @@ enum VideoPayloader {
         payloader: H264Payloader,
         context: RtpStreamContext,
     },
+    VP8 {
+        payloader: Vp8Payloader,
+        context: RtpStreamContext,
+    },
 }
 
 enum AudioPayloader {
@@ -96,7 +102,7 @@ enum AudioPayloader {
 }
 
 impl Payloader {
-    pub fn new(video: Option<VideoCodec>, audio: Option<AudioCodec>) -> Self {
+    pub fn new(video: Option<VideoEncoderOptions>, audio: Option<AudioEncoderOptions>) -> Self {
         Self {
             video: video.map(VideoPayloader::new),
             audio: audio.map(AudioPayloader::new),
@@ -180,20 +186,23 @@ impl Payloader {
 }
 
 impl VideoPayloader {
-    fn new(codec: VideoCodec) -> Self {
+    fn new(codec: VideoEncoderOptions) -> Self {
         match codec {
-            VideoCodec::H264 => Self::H264 {
+            VideoEncoderOptions::H264(_) => Self::H264 {
                 payloader: H264Payloader::default(),
                 context: RtpStreamContext::new(),
             },
-            VideoCodec::VP8 => unreachable!(),
-            VideoCodec::VP9 => unreachable!(),
+            VideoEncoderOptions::VP8(_) => Self::VP8 {
+                payloader: Vp8Payloader::default(),
+                context: RtpStreamContext::new(),
+            },
         }
     }
 
     fn codec(&self) -> VideoCodec {
         match self {
             VideoPayloader::H264 { .. } => VideoCodec::H264,
+            VideoPayloader::VP8 { .. } => VideoCodec::VP8,
         }
     }
 
@@ -214,24 +223,36 @@ impl VideoPayloader {
                 VIDEO_PAYLOAD_TYPE,
                 H264_CLOCK_RATE,
             ),
+            VideoPayloader::VP8 {
+                ref mut payloader,
+                ref mut context,
+            } => payload(
+                payloader,
+                context,
+                chunk,
+                mtu,
+                VIDEO_PAYLOAD_TYPE,
+                VP8_CLOCK_RATE,
+            ),
         }
     }
 
     fn context_mut(&mut self) -> &mut RtpStreamContext {
         match self {
             VideoPayloader::H264 { context, .. } => context,
+            VideoPayloader::VP8 { context, .. } => context,
         }
     }
 }
 
 impl AudioPayloader {
-    fn new(codec: AudioCodec) -> Self {
+    fn new(codec: AudioEncoderOptions) -> Self {
         match codec {
-            AudioCodec::Opus => Self::Opus {
+            AudioEncoderOptions::Opus(_) => Self::Opus {
                 payloader: OpusPayloader,
                 context: RtpStreamContext::new(),
             },
-            AudioCodec::Aac => panic!("Aac audio output is not supported yet"),
+            AudioEncoderOptions::Aac(_) => panic!("Aac audio output is not supported yet"),
         }
     }
 

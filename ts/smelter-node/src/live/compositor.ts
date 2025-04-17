@@ -1,22 +1,20 @@
-import type {
-  SmelterManager,
-  Input as CoreInput,
-  Output as CoreOutput,
-} from '@swmansion/smelter-core';
-import { Smelter as CoreSmelter } from '@swmansion/smelter-core';
-import { createLogger } from '../logger';
-import LocallySpawnedInstanceManager from '../manager/locallySpawnedInstance';
 import type { ReactElement } from 'react';
-import type { Renderers } from '@swmansion/smelter';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
+import type { Renderers } from '@swmansion/smelter';
+import type { SmelterManager } from '@swmansion/smelter-core';
+import { Smelter as CoreSmelter } from '@swmansion/smelter-core';
+
+import LocallySpawnedInstance from '../manager/locallySpawnedInstance';
+import { createLogger } from '../logger';
+import type { RegisterInput, RegisterOutput } from '../api';
 
 export default class Smelter {
   private coreSmelter: CoreSmelter;
 
   public constructor(manager?: SmelterManager) {
     this.coreSmelter = new CoreSmelter(
-      manager ?? LocallySpawnedInstanceManager.defaultManager(),
+      manager ?? LocallySpawnedInstance.defaultManager(),
       createLogger()
     );
   }
@@ -28,7 +26,7 @@ export default class Smelter {
   public async registerOutput(
     outputId: string,
     root: ReactElement,
-    request: CoreOutput.RegisterOutput
+    request: RegisterOutput
   ): Promise<void> {
     await this.coreSmelter.registerOutput(outputId, root, request);
   }
@@ -37,7 +35,7 @@ export default class Smelter {
     await this.coreSmelter.unregisterOutput(outputId);
   }
 
-  public async registerInput(inputId: string, request: CoreInput.RegisterInput): Promise<void> {
+  public async registerInput(inputId: string, request: RegisterInput): Promise<void> {
     await this.coreSmelter.registerInput(inputId, request);
   }
 
