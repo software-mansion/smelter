@@ -19,6 +19,7 @@ impl Renderer {
     pub fn new(
         device: Arc<wgpu::Device>,
         queue: Arc<wgpu::Queue>,
+        upload_frames_with_copy_external: bool,
         options: RendererOptions,
     ) -> Result<Self, JsValue> {
         let (renderer, _) = compositor_render::Renderer::new(RendererOptions {
@@ -26,7 +27,7 @@ impl Renderer {
             ..options
         })
         .map_err(types::to_js_error)?;
-        let input_uploader = InputUploader::default();
+        let input_uploader = InputUploader::new(upload_frames_with_copy_external);
         let output_downloader = OutputDownloader::default();
 
         Ok(Self {
@@ -36,9 +37,9 @@ impl Renderer {
         })
     }
 
-    pub fn render(&mut self, input: types::FrameSet) -> Result<types::FrameSet, JsValue> {
+    pub async fn render(&mut self, input: types::FrameSet) -> Result<types::FrameSet, JsValue> {
         let (device, queue) = self.renderer.wgpu_ctx();
-        let frame_set = self.input_uploader.upload(&device, &queue, input)?;
+        let frame_set = self.input_uploader.upload(&device, &queue, input).await?;
 
         let outputs = self
             .renderer

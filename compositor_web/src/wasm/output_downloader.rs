@@ -7,7 +7,7 @@ use tracing::error;
 use wasm_bindgen::JsValue;
 
 use super::{
-    types::{self, to_js_error},
+    types::{self, to_js_error, ObjectExt},
     wgpu::pad_to_256,
 };
 
@@ -131,16 +131,5 @@ impl OutputDownloader {
             },
             size,
         );
-    }
-}
-
-trait ObjectExt {
-    fn set<T: Into<JsValue>>(&self, key: &str, value: T) -> Result<(), JsValue>;
-}
-
-impl ObjectExt for Object {
-    fn set<T: Into<JsValue>>(&self, key: &str, value: T) -> Result<(), JsValue> {
-        js_sys::Reflect::set(self, &JsValue::from_str(key), &value.into())?;
-        Ok(())
     }
 }

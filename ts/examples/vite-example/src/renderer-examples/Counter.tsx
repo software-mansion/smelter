@@ -41,12 +41,12 @@ function Counter() {
     );
 
     let pts = 0;
-    const renderInterval = setInterval(() => {
+    const renderInterval = setInterval(async () => {
       const input = {
         ptsMs: pts,
         frames: {},
       };
-      const outputs = renderer.render(input);
+      const outputs = await renderer.render(input);
       const frame = outputs.frames['output'];
       const resolution = frame.resolution;
       const canvas = canvasRef.current;
