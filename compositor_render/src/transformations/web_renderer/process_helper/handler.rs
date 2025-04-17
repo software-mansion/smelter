@@ -104,18 +104,18 @@ impl RenderProcessHandler {
         let mut state = self.state.lock().unwrap();
         let source = match state.source(&frame_info.shmem_path) {
             Some(source) => {
-                source.ensure_v8_values(&frame_info)?;
+                source.ensure_v8_values(&frame_info, ctx_entered)?;
                 source
             }
-            None => state.create_source(frame_info)?,
+            None => state.create_source(frame_info, ctx_entered)?,
         };
 
-        let array_buffer = source.create_buffer(ctx_entered);
+        source.update_buffer(ctx_entered)?;
         global.call_method(
             "smelter_renderFrame",
             &[
                 &source.id_attribute_value,
-                &array_buffer,
+                &source.array_buffer,
                 &source.width,
                 &source.height,
             ],

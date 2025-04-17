@@ -2,7 +2,7 @@ use std::{ops::Deref, os::raw::c_void};
 
 use crate::{
     cef_ref::{CefRefData, CefStruct},
-    validated::Validated,
+    validated::{Validated, ValidatedError},
 };
 
 use super::{context::V8ContextEntered, value::V8Value};
@@ -50,6 +50,30 @@ impl V8ArrayBuffer {
         };
 
         Self(Validated::new(inner))
+    }
+
+    /// # Safety
+    /// Make sure the pointer is valid. Invalid pointer can cause undefined behavior.
+    pub unsafe fn update(
+        &self,
+        data: *mut u8,
+        data_len: usize,
+        _context_entered: &V8ContextEntered,
+    ) -> Result<(), V8ArrayBufferError> {
+        unsafe {
+            let array_buffer = self.0.get()?;
+            let get_array_buffer_len = (*array_buffer).get_array_buffer_byte_length.unwrap();
+            let get_data = (*array_buffer).get_array_buffer_data.unwrap();
+
+            if get_array_buffer_len(array_buffer) != data_len {
+                return Err(V8ArrayBufferError::NotMatchingDataLength);
+            }
+
+            let buffer_data = get_data(array_buffer);
+            std::ptr::copy(data as *mut _, buffer_data, data_len);
+        }
+
+        Ok(())
     }
 }
 
@@ -101,4 +125,16 @@ impl V8ArrayBufferReleaseCallback {
             };
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum V8ArrayBufferError {
+    #[error("ArrayBuffer is not alive")]
+    NotAlive(#[from] ValidatedError),
+
+    #[error("V8Value is not an ArrayBuffer")]
+    NotArrayBuffer,
+
+    #[error("Provided data length is not the same as buffer length")]
+    NotMatchingDataLength,
 }
