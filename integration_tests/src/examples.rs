@@ -187,20 +187,28 @@ pub enum TestSample {
     BigBuckBunnyH264AAC,
     /// 10 minute animated VP8 video with sound
     BigBuckBunnyVP8Opus,
+    /// 10 minute animated VP9 video with sound
+    BigBuckBunnyVP9Opus,
     /// 11 minute animated video with sound
     ElephantsDreamH264Opus,
     /// 11 minute animated VP8 video with sound
     ElephantsDreamVP8Opus,
+    /// 11 minute animated VP9 video with sound
+    ElephantsDreamVP9Opus,
     /// 28 sec video with no sound
     SampleH264,
     /// 28 sec VP8 video with no sound
     SampleVP8,
+    /// 28 sec VP9 video with no sound
+    SampleVP9,
     /// looped 28 sec video with no sound
     SampleLoopH264,
     /// generated sample video with no sound (also with second timer when using ffmpeg)
     TestPatternH264,
     /// generated sample VP8 video with no sound (also with second timer when using ffmpeg)
     TestPatternVP8,
+    /// generated sample VP9 video with no sound (also with second timer when using ffmpeg)
+    TestPatternVP9,
 }
 
 #[derive(Debug)]
@@ -227,7 +235,10 @@ pub fn download_all_assets() -> Result<()> {
         if let Err(err) = download_asset(&asset) {
             warn!(?asset, "Error while downloading asset: {err}");
         }
-        if let Err(err) = convert_to_webm(&asset.path) {
+        if let Err(err) = convert_to_webm(&asset.path, "vp9") {
+            eprintln!("Error while converting video: {:?}", err);
+        }
+        if let Err(err) = convert_to_webm(&asset.path, "vp8") {
             eprintln!("Error while converting video: {:?}", err);
         }
     }
@@ -235,18 +246,46 @@ pub fn download_all_assets() -> Result<()> {
     Ok(())
 }
 
-fn convert_to_webm(input_path: &Path) -> Result<()> {
-    let output_path = input_path.with_extension("webm");
+fn convert_to_webm(input_path: &Path, codec: &str) -> Result<()> {
+    let extension = match codec {
+        "vp8" => "vp8.webm",
+        "vp9" => "vp9.webm",
+        _ => return Err(anyhow!("Unsupported codec: {}", codec)),
+    };
+    let output_path = input_path.with_extension(extension);
     if output_path.exists() {
         return Ok(());
     }
+
+    let codec_args = match codec {
+        "vp8" => vec![
+            "-c:v", "libvpx", "-crf", "10", "-b:v", "2M", "-quality", "good",
+        ],
+        "vp9" => vec![
+            "-c:v",
+            "libvpx-vp9",
+            "-crf",
+            "10",
+            "-b:v",
+            "2M",
+            "-quality",
+            "good",
+        ],
+        _ => return Err(anyhow!("Unsupported codec: {}", codec)),
+    };
     let status = Command::new("ffmpeg")
         .arg("-i")
-        .arg(input_path.to_str().unwrap())
-        .args([
-            "-c:v", "libvpx", "-crf", "10", "-b:v", "2M", "-quality", "good",
-        ])
-        .arg(output_path.to_str().unwrap())
+        .arg(
+            input_path
+                .to_str()
+                .ok_or_else(|| anyhow!("Invalid input path"))?,
+        )
+        .args(codec_args)
+        .arg(
+            output_path
+                .to_str()
+                .ok_or_else(|| anyhow!("Invalid output path"))?,
+        )
         .status()?;
 
     if !status.success() {
@@ -264,21 +303,32 @@ fn map_asset_to_path(asset: &TestSample) -> Option<PathBuf> {
             Some(examples_root_dir().join("examples/assets/BigBuckBunny.mp4"))
         }
         TestSample::BigBuckBunnyVP8Opus => {
-            Some(examples_root_dir().join("examples/assets/BigBuckBunny.webm"))
+            Some(examples_root_dir().join("examples/assets/BigBuckBunny.vp8.webm"))
+        }
+        TestSample::BigBuckBunnyVP9Opus => {
+            Some(examples_root_dir().join("examples/assets/BigBuckBunny.vp9.webm"))
         }
         TestSample::ElephantsDreamH264Opus => {
             Some(examples_root_dir().join("examples/assets/ElephantsDream.mp4"))
         }
         TestSample::ElephantsDreamVP8Opus => {
-            Some(examples_root_dir().join("examples/assets/ElephantsDream.webm"))
+            Some(examples_root_dir().join("examples/assets/ElephantsDream.vp8.webm"))
+        }
+        TestSample::ElephantsDreamVP9Opus => {
+            Some(examples_root_dir().join("examples/assets/ElephantsDream.vp9.webm"))
         }
         TestSample::SampleH264 | TestSample::SampleLoopH264 => {
             Some(examples_root_dir().join("examples/assets/sample_1280_720.mp4"))
         }
         TestSample::SampleVP8 => {
-            Some(examples_root_dir().join("examples/assets/sample_1280_720.webm"))
+            Some(examples_root_dir().join("examples/assets/sample_1280_720.vp8.webm"))
         }
-        TestSample::TestPatternH264 | TestSample::TestPatternVP8 => None,
+        TestSample::SampleVP9 => {
+            Some(examples_root_dir().join("examples/assets/sample_1280_720.vp9.webm"))
+        }
+        TestSample::TestPatternH264 | TestSample::TestPatternVP8 | TestSample::TestPatternVP9 => {
+            None
+        }
     }
 }
 
