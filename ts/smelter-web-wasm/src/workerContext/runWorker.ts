@@ -17,7 +17,7 @@ async function initInstance(options: InitOptions) {
   const renderer = await Renderer.create({
     streamFallbackTimeoutMs: 500,
     loggerLevel,
-    uploadFramesWithCopyExternal: self.navigator.userAgent.includes("Macintosh"),
+    uploadFramesWithCopyExternal: self.navigator.userAgent.includes('Macintosh'),
   });
   const logger = pino({ level: options.loggerLevel }).child({ runtime: 'worker' });
   onMessageLogger = logger.child({ element: 'onMessage' });
