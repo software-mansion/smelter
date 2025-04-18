@@ -20,7 +20,7 @@ use crate::{
     queue::PipelineEvent,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EncoderPreset {
     Ultrafast,
     Superfast,
@@ -35,7 +35,7 @@ pub enum EncoderPreset {
 }
 
 impl EncoderPreset {
-    fn to_str(&self) -> &'static str {
+    fn to_str(self) -> &'static str {
         match self {
             EncoderPreset::Ultrafast => "ultrafast",
             EncoderPreset::Superfast => "superfast",
