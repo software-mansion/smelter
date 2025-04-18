@@ -2,7 +2,7 @@ use std::{ops::Deref, os::raw::c_void};
 
 use crate::{
     cef_ref::{CefRefData, CefStruct},
-    validated::Validated,
+    validated::{Validated, ValidatedError},
 };
 
 use super::{context::V8ContextEntered, value::V8Value};
@@ -10,26 +10,10 @@ use super::{context::V8ContextEntered, value::V8Value};
 pub struct V8ArrayBuffer(pub(super) Validated<chromium_sys::cef_v8value_t>);
 
 impl V8ArrayBuffer {
-    pub fn new(buffer: Vec<u8>, _context_entered: &V8ContextEntered) -> Self {
-        let release_callback = V8ArrayBufferReleaseCallback::Delete {
-            buffer_len: buffer.len(),
-            buffer_cap: buffer.capacity(),
-        };
-
-        let buffer = buffer.leak();
-        let inner = unsafe {
-            chromium_sys::cef_v8value_create_array_buffer(
-                buffer.as_mut_ptr() as *mut c_void,
-                buffer.len(),
-                CefRefData::new_ptr(release_callback),
-            )
-        };
-
-        Self(Validated::new(inner))
-    }
-
     /// Creates a new array buffer from raw pointer. It can be only created while in context.
     /// The buffer's memory is shared with V8 engine.
+    ///
+    /// Panics when used with CEF that was compiled with V8 sandbox support.
     ///
     /// # Safety
     /// Make sure the pointer is valid. Invalid pointer can cause undefined behavior.
@@ -50,6 +34,47 @@ impl V8ArrayBuffer {
 
         Self(Validated::new(inner))
     }
+
+    /// Creates a new array buffer from raw pointer. The data is copied to the array buffer.
+    /// It can be only created while in context.
+    ///
+    /// # Safety
+    /// Make sure the pointer is valid. Invalid pointer can cause undefined behavior.
+    pub unsafe fn from_ptr_with_copy(
+        ptr: *mut u8,
+        ptr_len: usize,
+        _context_entered: &V8ContextEntered,
+    ) -> Self {
+        let inner = unsafe {
+            chromium_sys::cef_v8value_create_array_buffer_with_copy(ptr as *mut c_void, ptr_len)
+        };
+
+        Self(Validated::new(inner))
+    }
+
+    /// # Safety
+    /// Make sure the pointer is valid. Invalid pointer can cause undefined behavior.
+    pub unsafe fn update(
+        &self,
+        data: *mut u8,
+        data_len: usize,
+        _context_entered: &V8ContextEntered,
+    ) -> Result<(), V8ArrayBufferError> {
+        unsafe {
+            let array_buffer = self.0.get()?;
+            let get_array_buffer_len = (*array_buffer).get_array_buffer_byte_length.unwrap();
+            let get_data = (*array_buffer).get_array_buffer_data.unwrap();
+
+            if get_array_buffer_len(array_buffer) != data_len {
+                return Err(V8ArrayBufferError::NotMatchingDataLength);
+            }
+
+            let buffer_data = get_data(array_buffer);
+            std::ptr::copy(data as *mut _, buffer_data, data_len);
+        }
+
+        Ok(())
+    }
 }
 
 impl From<V8ArrayBuffer> for V8Value {
@@ -59,6 +84,7 @@ impl From<V8ArrayBuffer> for V8Value {
 }
 
 enum V8ArrayBufferReleaseCallback {
+    #[allow(dead_code)]
     Delete {
         buffer_len: usize,
         buffer_cap: usize,
@@ -99,4 +125,16 @@ impl V8ArrayBufferReleaseCallback {
             };
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum V8ArrayBufferError {
+    #[error("ArrayBuffer is not alive")]
+    NotAlive(#[from] ValidatedError),
+
+    #[error("V8Value is not an ArrayBuffer")]
+    NotArrayBuffer,
+
+    #[error("Provided data length is not the same as buffer length")]
+    NotMatchingDataLength,
 }
