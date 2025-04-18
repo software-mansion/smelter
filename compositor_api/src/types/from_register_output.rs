@@ -1,14 +1,23 @@
 use axum::http::HeaderValue;
-use compositor_pipeline::pipeline::{
-    self,
-    encoder::{
+use compositor_pipeline::{
+    audio_mixer::AudioChannels,
+    pipeline::{
         self,
-        fdk_aac::AacEncoderOptions,
-        ffmpeg_h264::{self},
-        ffmpeg_vp8, AudioEncoderOptions,
+        encoder::{
+            self,
+            fdk_aac::AacEncoderOptions,
+            ffmpeg_h264::{self},
+            ffmpeg_vp8, AudioEncoderOptions,
+        },
+        output::{
+            self,
+            mp4::Mp4OutputOptions,
+            rtmp::RtmpSenderOptions,
+            whip::{AudioWhipOptions, VideoWhipOptions},
+        },
     },
-    output::{self, mp4::Mp4OutputOptions, rtmp::RtmpSenderOptions},
 };
+use tracing::warn;
 
 use super::register_output::*;
 use super::util::*;
@@ -161,29 +170,36 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             ));
         }
 
+        if video.as_ref().filter(|v| v.encoder.is_some()).is_some() {
+            warn!("Field 'encoder' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.")
+        }
+
+        if audio.as_ref().filter(|a| a.encoder.is_some()).is_some() {
+            warn!("Field 'encoder' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.")
+        }
+
         if let Some(token) = &bearer_token {
             if HeaderValue::from_str(format!("Bearer {token}").as_str()).is_err() {
                 return Err(TypeError::new("Bearer token string is not valid. It must contain only 32-127 ASCII characters"));
             };
         }
 
-        let (video_encoder_options, output_video_options) = maybe_video_options(video)?;
-        let (audio_encoder_options, output_audio_options) = match audio {
+        let (output_video_options, video_whip_options) = maybe_whip_video_options(video)?;
+        let (output_audio_options, audio_whip_options) = match audio {
             Some(OutputWhipAudioOptions {
                 mixing_strategy,
                 send_eos_when,
-                encoder,
+                encoder: _,
                 initial,
             }) => {
-                let audio_encoder_options: AudioEncoderOptions = encoder.into();
                 let output_audio_options = pipeline::OutputAudioOptions {
                     initial: initial.try_into()?,
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,
                     mixing_strategy: mixing_strategy.unwrap_or(MixingStrategy::SumClip).into(),
-                    channels: audio_encoder_options.channels(),
+                    channels: AudioChannels::Stereo, // hardcoded just temporarly, TODO when adding preferences
                 };
-
-                (Some(audio_encoder_options), Some(output_audio_options))
+                let audio_whip_options = AudioWhipOptions; //TODO when adding preferences
+                (Some(output_audio_options), Some(audio_whip_options))
             }
             None => (None, None),
         };
@@ -191,8 +207,8 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
         let output_options = output::OutputOptions::Whip(output::whip::WhipSenderOptions {
             endpoint_url,
             bearer_token,
-            video: video_encoder_options,
-            audio: audio_encoder_options,
+            video: video_whip_options,
+            audio: audio_whip_options,
         });
 
         Ok(Self {
@@ -286,6 +302,29 @@ fn maybe_video_options(
     };
 
     Ok((Some(encoder_options), Some(output_options)))
+}
+
+fn maybe_whip_video_options(
+    options: Option<OutputWhipVideoOptions>,
+) -> Result<
+    (
+        Option<pipeline::OutputVideoOptions>,
+        Option<VideoWhipOptions>,
+    ),
+    TypeError,
+> {
+    let Some(options) = options else {
+        return Ok((None, None));
+    };
+    let output_options = pipeline::OutputVideoOptions {
+        initial: options.initial.try_into()?,
+        end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
+    };
+    let video_whip_options = VideoWhipOptions {
+        resolution: options.resolution.into(),
+    };
+
+    Ok((Some(output_options), Some(video_whip_options)))
 }
 
 impl From<Mp4AudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
