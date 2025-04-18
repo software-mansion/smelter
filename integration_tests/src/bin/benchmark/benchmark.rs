@@ -5,41 +5,21 @@ use compositor_pipeline::pipeline::{
     encoder::ffmpeg_h264::{self, EncoderPreset},
     GraphicsContext, VideoDecoder,
 };
-use compositor_render::{scene::Component, OutputId};
-use serde_json::json;
+use serde_json::{json, Value as JsonValue};
 use tracing::{error, info};
 
 use crate::{
-    args::{NumericArgument, Resolution, ResolutionArgument},
+    args::Resolution,
     benchmark_pass::{InputFile, SingleBenchmarkPass},
     maximize_iter::{Const, MaximizeIter, MaximizeResolution, MaximizeU64},
-    scenes::{simple_tiles_with_all_inputs, SceneContext},
+    scenes::{simple_tiles_with_all_inputs, SceneBuilderFn},
 };
 
 #[derive(Debug, Clone, Copy)]
 pub enum ValueOrMaximized<T: Clone + Copy> {
     Value(T),
     Maximize,
-}
-
-impl From<NumericArgument> for ValueOrMaximized<u64> {
-    fn from(value: NumericArgument) -> Self {
-        match value {
-            NumericArgument::IterateExp => panic!(),
-            NumericArgument::Maximize => ValueOrMaximized::Maximize,
-            NumericArgument::Constant(v) => ValueOrMaximized::Value(v),
-        }
-    }
-}
-
-impl From<ResolutionArgument> for ValueOrMaximized<Resolution> {
-    fn from(value: ResolutionArgument) -> Self {
-        match value {
-            ResolutionArgument::Iterate => panic!(),
-            ResolutionArgument::Maximize => ValueOrMaximized::Maximize,
-            ResolutionArgument::Constant(v) => ValueOrMaximized::Value(v),
-        }
-    }
+    MaximizeWithInitial(T),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -51,7 +31,7 @@ pub enum EncoderOptions {
 #[derive(Debug, Clone)]
 pub struct Benchmark {
     pub id: &'static str,
-    pub scene_builder: fn(ctx: &SceneContext, output_id: &OutputId) -> Component,
+    pub scene_builder: SceneBuilderFn,
 
     pub input_count: ValueOrMaximized<u64>,
     pub output_count: ValueOrMaximized<u64>,
@@ -135,58 +115,28 @@ impl Benchmark {
         Maximizer<u64>,
         Maximizer<Resolution>,
     ) {
-        match (
-            self.input_count,
-            self.output_count,
-            self.framerate,
-            self.output_resolution,
-        ) {
-            (
-                ValueOrMaximized::Maximize,
-                ValueOrMaximized::Value(output_count),
-                ValueOrMaximized::Value(framerate),
-                ValueOrMaximized::Value(output_resolution),
-            ) => (
-                Box::from(MaximizeU64::new(0)),
-                Box::from(Const(output_count)),
-                Box::from(Const(framerate)),
-                Box::from(Const(output_resolution)),
-            ),
-            (
-                ValueOrMaximized::Value(input_count),
-                ValueOrMaximized::Maximize,
-                ValueOrMaximized::Value(framerate),
-                ValueOrMaximized::Value(output_resolution),
-            ) => (
-                Box::from(Const(input_count)),
-                Box::from(MaximizeU64::new(0)),
-                Box::from(Const(framerate)),
-                Box::from(Const(output_resolution)),
-            ),
-            (
-                ValueOrMaximized::Value(input_count),
-                ValueOrMaximized::Value(output_count),
-                ValueOrMaximized::Maximize,
-                ValueOrMaximized::Value(output_resolution),
-            ) => (
-                Box::from(Const(input_count)),
-                Box::from(Const(output_count)),
-                Box::from(MaximizeU64::new(1)),
-                Box::from(Const(output_resolution)),
-            ),
-            (
-                ValueOrMaximized::Value(input_count),
-                ValueOrMaximized::Value(output_count),
-                ValueOrMaximized::Value(framerate),
-                ValueOrMaximized::Maximize,
-            ) => (
-                Box::from(Const(input_count)),
-                Box::from(Const(output_count)),
-                Box::from(Const(framerate)),
-                Box::from(MaximizeResolution::new()),
-            ),
-            _ => panic!("only one option can be set to maximized"),
-        }
+        (
+            match self.input_count {
+                ValueOrMaximized::Value(input_count) => Box::from(Const(input_count)),
+                ValueOrMaximized::Maximize => Box::from(MaximizeU64::new(1)),
+                ValueOrMaximized::MaximizeWithInitial(i) => Box::from(MaximizeU64::new(i)),
+            },
+            match self.output_count {
+                ValueOrMaximized::Value(output_count) => Box::from(Const(output_count)),
+                ValueOrMaximized::Maximize => Box::from(MaximizeU64::new(1)),
+                ValueOrMaximized::MaximizeWithInitial(i) => Box::from(MaximizeU64::new(i)),
+            },
+            match self.framerate {
+                ValueOrMaximized::Value(framerate) => Box::from(Const(framerate)),
+                ValueOrMaximized::Maximize => Box::from(MaximizeU64::new(1)),
+                ValueOrMaximized::MaximizeWithInitial(i) => Box::from(MaximizeU64::new(i)),
+            },
+            match self.output_resolution {
+                ValueOrMaximized::Value(resolution) => Box::from(Const(resolution)),
+                ValueOrMaximized::Maximize => Box::from(MaximizeResolution::new()),
+                ValueOrMaximized::MaximizeWithInitial(_) => panic!(),
+            },
+        )
     }
 
     fn default_single_bench(&self) -> SingleBenchmarkPass {
@@ -233,8 +183,8 @@ impl Default for Benchmark {
             encoder: EncoderOptions::Enabled(EncoderPreset::Ultrafast),
             decoder: VideoDecoder::FFmpegH264,
 
-            warm_up_time: Duration::from_secs(10),
-            measure_time: Duration::from_secs(20),
+            warm_up_time: Duration::from_secs(1),
+            measure_time: Duration::from_secs(5),
 
             error_tolerance_multiplier: 1.10,
         }
@@ -242,14 +192,15 @@ impl Default for Benchmark {
 }
 
 impl BenchmarkResult {
-    pub fn json(&self) -> serde_json::Value {
+    pub fn json(&self) -> JsonValue {
         let config = &self.config;
-        let (key_result, value_result) = self.get_maximized();
+        let result = self
+            .get_maximized()
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), JsonValue::String(value)));
         json!({
           "id": self.config.id,
-          "result": {
-            key_result: value_result
-          },
+          "result": JsonValue::Object(serde_json::Map::from_iter(result)),
           "config": {
             "input_count": format!("{:?}", config.input_count),
             "output_count": format!("{:?}", config.output_count),
@@ -269,27 +220,38 @@ impl BenchmarkResult {
 
     pub fn text(&self) -> String {
         format!(
-            "id: {:?}\nresult:{:?}\n",
+            "id: {:?}\nresult: {:?}\n",
             &self.config.id,
             self.get_maximized()
         )
     }
 
-    fn get_maximized(&self) -> (&str, String) {
-        if let ValueOrMaximized::Maximize = self.config.input_count {
+    fn get_maximized(&self) -> Vec<(&str, String)> {
+        let mut result = vec![];
+        if let ValueOrMaximized::Maximize | ValueOrMaximized::MaximizeWithInitial(_) =
+            self.config.input_count
+        {
             let value = self.pass.as_ref().map(|p| p.input_count);
-            ("input_count", format!("{:?}", value))
-        } else if let ValueOrMaximized::Maximize = self.config.output_count {
-            let value = self.pass.as_ref().map(|p| p.output_count);
-            ("output_count", format!("{:?}", value))
-        } else if let ValueOrMaximized::Maximize = self.config.framerate {
-            let value = self.pass.as_ref().map(|p| p.framerate);
-            ("framerate", format!("{:?}", value))
-        } else if let ValueOrMaximized::Maximize = self.config.output_resolution {
-            let value = self.pass.as_ref().map(|p| p.output_resolution);
-            ("output_resolution", format!("{:?}", value))
-        } else {
-            ("no-maximize", "true".to_string())
+            result.push(("input_count", format!("{:?}", value)))
         }
+        if let ValueOrMaximized::Maximize | ValueOrMaximized::MaximizeWithInitial(_) =
+            self.config.output_count
+        {
+            let value = self.pass.as_ref().map(|p| p.output_count);
+            result.push(("output_count", format!("{:?}", value)))
+        }
+        if let ValueOrMaximized::Maximize | ValueOrMaximized::MaximizeWithInitial(_) =
+            self.config.framerate
+        {
+            let value = self.pass.as_ref().map(|p| p.framerate);
+            result.push(("framerate", format!("{:?}", value)))
+        }
+        if let ValueOrMaximized::Maximize | ValueOrMaximized::MaximizeWithInitial(_) =
+            self.config.output_resolution
+        {
+            let value = self.pass.as_ref().map(|p| p.output_resolution);
+            result.push(("output_resolution", format!("{:?}", value)))
+        }
+        result
     }
 }

@@ -46,7 +46,7 @@ fn main() {
     }
 
     let benchmarks = match args.suite {
-        BenchmarkSuite::Full => full_benchmark_suite(),
+        BenchmarkSuite::Full => full_benchmark_suite(&ctx),
         BenchmarkSuite::Minimal => minimal_benchmark_suite(),
         BenchmarkSuite::None => benchmark_from_args(&args),
     };
