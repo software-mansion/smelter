@@ -929,6 +929,7 @@ dependencies = [
  "compositor_render",
  "console_error_panic_hook",
  "crossbeam-channel",
+ "futures",
  "getrandom 0.2.15",
  "glyphon",
  "js-sys",

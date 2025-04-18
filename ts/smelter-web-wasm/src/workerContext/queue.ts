@@ -1,7 +1,7 @@
 import type {
-  Frame,
   FrameSet,
   InputId,
+  OutputFrame,
   OutputId,
   Renderer,
 } from '@swmansion/smelter-browser-render';
@@ -10,6 +10,7 @@ import type { Input } from './input/input';
 import type { Output } from './output/output';
 import { sleep } from '../utils';
 import type { Logger } from 'pino';
+import type { InputVideoFrame } from './input/frame';
 
 export type StopQueueFn = () => void;
 
@@ -87,26 +88,31 @@ export class Queue {
     const frames = await this.getInputFrames(currentPtsMs);
     this.logger.trace({ frames }, 'onQueueTick');
 
-    const outputs = this.renderer.render({
-      ptsMs: currentPtsMs,
-      frames,
-    });
-    this.sendOutputs(outputs);
+    try {
+      const outputs = await this.renderer.render({
+        ptsMs: currentPtsMs,
+        frames,
+      });
+      this.sendOutputs(outputs);
+    } finally {
+      for (const frame of Object.values(frames)) {
+        frame.close();
+      }
+    }
   }
 
-  private async getInputFrames(currentPtsMs: number): Promise<Record<InputId, Frame>> {
-    const frames: Array<[InputId, Frame | undefined]> = await Promise.all(
+  private async getInputFrames(currentPtsMs: number): Promise<Record<InputId, InputVideoFrame>> {
+    const frames: Array<[InputId, InputVideoFrame | undefined]> = await Promise.all(
       Object.entries(this.inputs).map(async ([inputId, input]) => [
         inputId,
         await input.getFrame(currentPtsMs),
       ])
     );
-    const validFrames = frames.filter((entry): entry is [string, Frame] => !!entry[1]);
-
+    const validFrames = frames.filter((entry): entry is [string, InputVideoFrame] => !!entry[1]);
     return Object.fromEntries(validFrames);
   }
 
-  private sendOutputs(outputs: FrameSet) {
+  private sendOutputs(outputs: FrameSet<OutputFrame>) {
     for (const [outputId, frame] of Object.entries(outputs.frames)) {
       const output = this.outputs[outputId];
       if (!output) {

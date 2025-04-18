@@ -7,7 +7,7 @@ use tracing::error;
 use wasm_bindgen::JsValue;
 
 use super::{
-    types::{self, to_js_error},
+    types::{self, to_js_error, ObjectExt},
     wgpu::pad_to_256,
 };
 
@@ -24,7 +24,6 @@ impl OutputDownloader {
         outputs: FrameSet<OutputId>,
     ) -> Result<types::FrameSet, JsValue> {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
         for (id, frame) in outputs.frames.iter() {
             let FrameData::Rgba8UnormWgpuTexture(texture) = &frame.data else {
                 panic!("Expected Rgba8UnormWgpuTexture");
@@ -132,16 +131,5 @@ impl OutputDownloader {
             },
             size,
         );
-    }
-}
-
-trait ObjectExt {
-    fn set<T: Into<JsValue>>(&self, key: &str, value: T) -> Result<(), JsValue>;
-}
-
-impl ObjectExt for Object {
-    fn set<T: Into<JsValue>>(&self, key: &str, value: T) -> Result<(), JsValue> {
-        js_sys::Reflect::set(self, &JsValue::from_str(key), &value.into())?;
-        Ok(())
     }
 }

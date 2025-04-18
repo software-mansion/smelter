@@ -37,7 +37,12 @@ pub async fn create_renderer(options: JsValue) -> Result<SmelterRenderer, JsValu
     );
 
     let (device, queue) = create_wgpu_context().await?;
-    let renderer = renderer::Renderer::new(device, queue, options.into())?;
+    let renderer = renderer::Renderer::new(
+        device,
+        queue,
+        options.upload_frames_with_copy_external,
+        options.into(),
+    )?;
     Ok(SmelterRenderer(Mutex::new(renderer)))
 }
 
@@ -46,9 +51,9 @@ pub struct SmelterRenderer(Mutex<renderer::Renderer>);
 
 #[wasm_bindgen]
 impl SmelterRenderer {
-    pub fn render(&self, input: types::FrameSet) -> Result<types::FrameSet, JsValue> {
+    pub async fn render(&self, input: types::FrameSet) -> Result<types::FrameSet, JsValue> {
         let mut renderer = self.0.lock().unwrap();
-        renderer.render(input)
+        renderer.render(input).await
     }
 
     pub fn update_scene(
