@@ -832,6 +832,10 @@ export interface Transition {
    * (**default=`"linear"`**) Easing function to be used for the transition.
    */
   easing_function?: EasingFunction | null;
+  /**
+   * (**default=`false`**) On scene update, if there is already a transition in progress, it will be interrupted and the new transition will start from the current state.
+   */
+  should_interrupt?: boolean | null;
 }
 export interface BoxShadow {
   offset_x?: number | null;
