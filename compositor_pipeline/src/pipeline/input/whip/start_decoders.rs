@@ -22,10 +22,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::sync::mpsc::Sender;
-use webrtc::{
-    api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
-    rtp_transceiver::{PayloadType, RTCRtpTransceiver},
-};
+use webrtc::rtp_transceiver::{PayloadType, RTCRtpTransceiver};
 
 use super::{depayloader::Depayloader, DecodedDataSender};
 
@@ -245,11 +242,11 @@ async fn get_codec_map(
     codecs.extend(audio_receiver.get_parameters().await.codecs);
 
     for codec in codecs {
-        match codec.capability.mime_type.as_str() {
-            MIME_TYPE_H264 => codec_payload_types.h264.push(codec.payload_type),
-            MIME_TYPE_VP8 => codec_payload_types.vp8.push(codec.payload_type),
-            MIME_TYPE_VP9 => codec_payload_types.vp9.push(codec.payload_type),
-            MIME_TYPE_OPUS => codec_payload_types.opus.push(codec.payload_type),
+        match codec.capability.mime_type.to_lowercase().as_str() {
+            "video/h264" => codec_payload_types.h264.push(codec.payload_type),
+            "video/vp8" => codec_payload_types.vp8.push(codec.payload_type),
+            "video/vp9" => codec_payload_types.vp9.push(codec.payload_type),
+            "audio/opus" => codec_payload_types.opus.push(codec.payload_type),
             _ => {}
         }
     }
