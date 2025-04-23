@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use std::{collections::VecDeque, fmt::Debug};
 use tracing::error;
+use webrtc::rtp_transceiver::PayloadType;
 use webrtc_util::Marshal;
 
 use rand::Rng;
@@ -8,7 +9,6 @@ use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader};
 
 use crate::pipeline::{
     encoder::{AudioEncoderOptions, VideoEncoderOptions},
-    rtp::{AUDIO_PAYLOAD_TYPE, VIDEO_PAYLOAD_TYPE},
     types::{EncodedChunk, EncodedChunkKind},
     AudioCodec, VideoCodec,
 };
@@ -90,10 +90,12 @@ enum VideoPayloader {
     H264 {
         payloader: H264Payloader,
         context: RtpStreamContext,
+        payload_type: PayloadType,
     },
     VP8 {
         payloader: Vp8Payloader,
         context: RtpStreamContext,
+        payload_type: PayloadType,
     },
 }
 
@@ -101,6 +103,7 @@ enum AudioPayloader {
     Opus {
         payloader: OpusPayloader,
         context: RtpStreamContext,
+        payload_type: PayloadType,
     },
 }
 
@@ -109,8 +112,18 @@ pub enum Payload {
     Audio(Result<Bytes, PayloadingError>),
 }
 
+pub struct VideoPayloaderOptions {
+    pub encoder_options: VideoEncoderOptions,
+    pub payload_type: PayloadType,
+}
+
+pub struct AudioPayloaderOptions {
+    pub encoder_options: AudioEncoderOptions,
+    pub payload_type: PayloadType,
+}
+
 impl Payloader {
-    pub fn new(video: Option<VideoEncoderOptions>, audio: Option<AudioEncoderOptions>) -> Self {
+    pub fn new(video: Option<VideoPayloaderOptions>, audio: Option<AudioPayloaderOptions>) -> Self {
         Self {
             video: video.map(VideoPayloader::new),
             audio: audio.map(AudioPayloader::new),
@@ -194,15 +207,17 @@ impl Payloader {
 }
 
 impl VideoPayloader {
-    fn new(codec: VideoEncoderOptions) -> Self {
-        match codec {
+    fn new(codec: VideoPayloaderOptions) -> Self {
+        match codec.encoder_options {
             VideoEncoderOptions::H264(_) => Self::H264 {
                 payloader: H264Payloader::default(),
                 context: RtpStreamContext::new(),
+                payload_type: codec.payload_type,
             },
             VideoEncoderOptions::VP8(_) => Self::VP8 {
                 payloader: Vp8Payloader::default(),
                 context: RtpStreamContext::new(),
+                payload_type: codec.payload_type,
             },
         }
     }
@@ -219,30 +234,49 @@ impl VideoPayloader {
         mtu: usize,
         chunk: EncodedChunk,
     ) -> Result<VecDeque<Payload>, PayloadingError> {
-        match self {
+        let (payloader, context, payload_type, clock_rate): (
+            &mut dyn rtp::packetizer::Payloader,
+            &mut RtpStreamContext,
+            PayloadType,
+            u32,
+        ) = match self {
             VideoPayloader::H264 {
-                ref mut payloader,
-                ref mut context,
-            } => payload(
                 payloader,
                 context,
-                chunk,
-                mtu,
-                VIDEO_PAYLOAD_TYPE,
-                H264_CLOCK_RATE,
-            ),
+                payload_type,
+            } => (payloader, context, *payload_type, H264_CLOCK_RATE),
             VideoPayloader::VP8 {
-                ref mut payloader,
-                ref mut context,
-            } => payload(
                 payloader,
                 context,
-                chunk,
-                mtu,
-                VIDEO_PAYLOAD_TYPE,
-                VP8_CLOCK_RATE,
-            ),
-        }
+                payload_type,
+            } => (payloader, context, *payload_type, VP8_CLOCK_RATE),
+        };
+
+        let payloads = payloader.payload(mtu, &chunk.data)?;
+        let packets_amount = payloads.len();
+
+        payloads
+            .into_iter()
+            .enumerate()
+            .map(|(i, payload)| {
+                let header = rtp::header::Header {
+                    version: 2,
+                    padding: false,
+                    extension: false,
+                    marker: i == packets_amount - 1, // marker needs to be set on the last packet of each frame
+                    payload_type,
+                    sequence_number: context.next_sequence_number,
+                    timestamp: (chunk.pts.as_secs_f64() * clock_rate as f64) as u32,
+                    ssrc: context.ssrc,
+                    ..Default::default()
+                };
+                context.next_sequence_number = context.next_sequence_number.wrapping_add(1);
+
+                Ok(Payload::Video(Ok(
+                    rtp::packet::Packet { header, payload }.marshal()?
+                )))
+            })
+            .collect()
     }
 
     fn context_mut(&mut self) -> &mut RtpStreamContext {
@@ -254,11 +288,12 @@ impl VideoPayloader {
 }
 
 impl AudioPayloader {
-    fn new(codec: AudioEncoderOptions) -> Self {
-        match codec {
+    fn new(codec: AudioPayloaderOptions) -> Self {
+        match codec.encoder_options {
             AudioEncoderOptions::Opus(_) => Self::Opus {
                 payloader: OpusPayloader,
                 context: RtpStreamContext::new(),
+                payload_type: codec.payload_type,
             },
             AudioEncoderOptions::Aac(_) => panic!("Aac audio output is not supported yet"),
         }
@@ -275,19 +310,44 @@ impl AudioPayloader {
         mtu: usize,
         chunk: EncodedChunk,
     ) -> Result<VecDeque<Payload>, PayloadingError> {
-        match self {
+        let (payloader, context, payload_type, clock_rate): (
+            &mut dyn rtp::packetizer::Payloader,
+            &mut RtpStreamContext,
+            PayloadType,
+            u32,
+        ) = match self {
             AudioPayloader::Opus {
-                ref mut payloader,
-                ref mut context,
-            } => payload(
                 payloader,
                 context,
-                chunk,
-                mtu,
-                AUDIO_PAYLOAD_TYPE,
-                OPUS_CLOCK_RATE,
-            ),
-        }
+                payload_type,
+            } => (payloader, context, *payload_type, OPUS_CLOCK_RATE),
+        };
+
+        let payloads = payloader.payload(mtu, &chunk.data)?;
+        let packets_amount = payloads.len();
+
+        payloads
+            .into_iter()
+            .enumerate()
+            .map(|(i, payload)| {
+                let header = rtp::header::Header {
+                    version: 2,
+                    padding: false,
+                    extension: false,
+                    marker: i == packets_amount - 1, // marker needs to be set on the last packet of each frame
+                    payload_type,
+                    sequence_number: context.next_sequence_number,
+                    timestamp: (chunk.pts.as_secs_f64() * clock_rate as f64) as u32,
+                    ssrc: context.ssrc,
+                    ..Default::default()
+                };
+                context.next_sequence_number = context.next_sequence_number.wrapping_add(1);
+
+                Ok(Payload::Audio(Ok(
+                    rtp::packet::Packet { header, payload }.marshal()?
+                )))
+            })
+            .collect()
     }
 
     fn context_mut(&mut self) -> &mut RtpStreamContext {
@@ -295,49 +355,4 @@ impl AudioPayloader {
             AudioPayloader::Opus { context, .. } => context,
         }
     }
-}
-
-fn payload<T: rtp::packetizer::Payloader>(
-    payloader: &mut T,
-    context: &mut RtpStreamContext,
-    chunk: EncodedChunk,
-    mtu: usize,
-    payload_type: u8,
-    clock_rate: u32,
-) -> Result<VecDeque<Payload>, PayloadingError> {
-    let payloads = payloader.payload(mtu, &chunk.data)?;
-    let packets_amount = payloads.len();
-
-    payloads
-        .into_iter()
-        .enumerate()
-        .map(|(i, payload)| {
-            let header = rtp::header::Header {
-                version: 2,
-                padding: false,
-                extension: false,
-                marker: i == packets_amount - 1, // marker needs to be set on the last packet of each frame
-                payload_type,
-                sequence_number: context.next_sequence_number,
-                timestamp: (chunk.pts.as_secs_f64() * clock_rate as f64) as u32,
-                ssrc: context.ssrc,
-                ..Default::default()
-            };
-            context.next_sequence_number = context.next_sequence_number.wrapping_add(1);
-
-            match payload_type {
-                VIDEO_PAYLOAD_TYPE => {
-                    Ok(Payload::Video(Ok(
-                        rtp::packet::Packet { header, payload }.marshal()?
-                    )))
-                }
-                AUDIO_PAYLOAD_TYPE => {
-                    Ok(Payload::Audio(Ok(
-                        rtp::packet::Packet { header, payload }.marshal()?
-                    )))
-                }
-                _ => Err(PayloadingError::UnsupportedPayloadType),
-            }
-        })
-        .collect()
 }

@@ -83,7 +83,7 @@ pub struct OutputWhipVideoOptions {
     pub send_eos_when: Option<OutputEndCondition>,
     /// Video encoder options.
     pub encoder: Option<VideoEncoderOptions>,
-    /// Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+    /// Root of a component tree/scene that should be rendered for the output.
     pub initial: Video,
 }
 

@@ -28,13 +28,14 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
+    let endpoint_url = env::var("SMELTER_WHIP_OUTPUT_URL").map_err(|err| anyhow!("Couldn't read SMELTER_WHIP_OUTPUT_URL environmental variable. You must provide it in order to run `whip_client` example. Read env error: {}", err))?;
     let token = env::var("SMELTER_WHIP_CLIENT_EXAMPLE_TOKEN").map_err(|err| anyhow!("Couldn't read SMELTER_WHIP_CLIENT_EXAMPLE_TOKEN environmental variable. You must provide it in order to run `whip_client` example. Read env error: {}", err))?;
 
     examples::post(
         "output/output_1/register",
         &json!({
             "type": "whip",
-            "endpoint_url": "https://whip.vdo.ninja", // Video ninja (vdo.ninja/whip) WHIP endpoint URL
+            "endpoint_url": endpoint_url,
             "bearer_token": token,
             "video": {
                 "resolution": {

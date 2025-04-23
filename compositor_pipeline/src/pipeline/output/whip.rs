@@ -4,7 +4,9 @@ use establish_peer_connection::connect;
 
 use init_peer_connection::init_peer_connection;
 use packet_stream::PacketStream;
-use payloader::{Payload, Payloader, PayloadingError};
+use payloader::{
+    AudioPayloaderOptions, Payload, Payloader, PayloadingError, VideoPayloaderOptions,
+};
 use reqwest::{Method, StatusCode};
 use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use std::{
@@ -18,7 +20,7 @@ use url::{ParseError, Url};
 use webrtc::{
     api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8},
     rtp_transceiver::{
-        rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender, RTCRtpTransceiver,
+        rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender, PayloadType, RTCRtpTransceiver,
     },
     track::track_local::{track_local_static_rtp::TrackLocalStaticRTP, TrackLocalWriter},
 };
@@ -228,20 +230,29 @@ async fn run_whip_sender_task(
             return;
         }
     };
-
-    let (video_track, video_codec) =
+    let (video_track, video_codec, video_payload_type) =
         setup_track(video_transceiver.clone(), "video".to_string()).await;
-    let (audio_track, audio_codec) =
+    let (audio_track, audio_codec, audio_payload_type) =
         setup_track(audio_transceiver.clone(), "audio".to_string()).await;
 
-    let (encoder, packet_stream) =
-        match create_encoder_and_packet_stream(whip_ctx.clone(), video_codec, audio_codec) {
-            Ok((encoder, packet_stream)) => (encoder, packet_stream),
-            Err(err) => {
-                error!("Error message: {:?}", err);
-                return;
-            }
-        };
+    println!(
+        "Payload types: {:?}, {:?}",
+        video_payload_type, audio_payload_type
+    );
+
+    let (encoder, packet_stream) = match create_encoder_and_packet_stream(
+        whip_ctx.clone(),
+        video_codec,
+        video_payload_type,
+        audio_codec,
+        audio_payload_type,
+    ) {
+        Ok((encoder, packet_stream)) => (encoder, packet_stream),
+        Err(err) => {
+            error!("Error message: {:?}", err);
+            return;
+        }
+    };
 
     if let Some(keyframe_sender) = encoder.keyframe_request_sender() {
         if let Some(video_transceiver) = video_transceiver {
@@ -328,7 +339,9 @@ async fn run_whip_sender_task(
 fn create_encoder_and_packet_stream(
     whip_ctx: WhipCtx,
     video_codec: Option<RTCRtpCodecCapability>,
+    video_payload_type: Option<PayloadType>,
     audio_codec: Option<RTCRtpCodecCapability>,
+    audio_payload_type: Option<PayloadType>,
 ) -> Result<(Encoder, PacketStream), WhipError> {
     let video_encoder_options = if let Some(video_config) = whip_ctx.options.video {
         let resolution = video_config.resolution;
@@ -373,7 +386,16 @@ fn create_encoder_and_packet_stream(
         return Err(WhipError::CannotInitEncoder);
     };
 
-    let payloader = Payloader::new(video_encoder_options, audio_encoder_options);
+    let video_payloader_options = Some(VideoPayloaderOptions {
+        encoder_options: video_encoder_options.unwrap(),
+        payload_type: video_payload_type.unwrap(),
+    });
+    let audio_payloader_options = Some(AudioPayloaderOptions {
+        encoder_options: audio_encoder_options.unwrap(),
+        payload_type: audio_payload_type.unwrap(),
+    });
+
+    let payloader = Payloader::new(video_payloader_options, audio_payloader_options);
     let packet_stream = PacketStream::new(packets_receiver, payloader, 1400);
 
     Ok((encoder, packet_stream))
@@ -385,26 +407,32 @@ async fn setup_track(
 ) -> (
     Option<Arc<TrackLocalStaticRTP>>,
     Option<RTCRtpCodecCapability>,
+    Option<PayloadType>,
 ) {
     if let Some(transceiver) = transceiver {
         let sender = transceiver.sender().await;
-        let (track, codec) = match sender.get_parameters().await.rtp_parameters.codecs.first() {
-            Some(codec_parameters) => {
-                let track = Arc::new(TrackLocalStaticRTP::new(
-                    codec_parameters.capability.clone(),
-                    track_kind.clone(),
-                    "webrtc-rs".to_string(),
-                ));
-                if let Err(e) = sender.replace_track(Some(track.clone())).await {
-                    error!("Failed to replace {} track: {}", track_kind, e);
+        let (track, codec, payload_type) =
+            match sender.get_parameters().await.rtp_parameters.codecs.first() {
+                Some(codec_parameters) => {
+                    let track = Arc::new(TrackLocalStaticRTP::new(
+                        codec_parameters.capability.clone(),
+                        track_kind.clone(),
+                        "webrtc-rs".to_string(),
+                    ));
+                    if let Err(e) = sender.replace_track(Some(track.clone())).await {
+                        error!("Failed to replace {} track: {}", track_kind, e);
+                    }
+                    (
+                        Some(track),
+                        Some(codec_parameters.capability.clone()),
+                        Some(codec_parameters.payload_type),
+                    )
                 }
-                (Some(track), Some(codec_parameters.capability.clone()))
-            }
-            None => (None, None),
-        };
-        (track, codec)
+                None => (None, None, None),
+            };
+        (track, codec, payload_type)
     } else {
-        (None, None)
+        (None, None, None)
     }
 }
 

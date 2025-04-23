@@ -170,11 +170,19 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             ));
         }
 
-        if video.as_ref().filter(|v| v.encoder.is_some()).is_some() {
+        if let Some(OutputWhipVideoOptions {
+            encoder: Some(_encoder),
+            ..
+        }) = &video
+        {
             warn!("Field 'encoder' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.")
         }
 
-        if audio.as_ref().filter(|a| a.encoder.is_some()).is_some() {
+        if let Some(OutputWhipAudioOptions {
+            encoder: Some(_encoder),
+            ..
+        }) = &audio
+        {
             warn!("Field 'encoder' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.")
         }
 
@@ -184,7 +192,19 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             };
         }
 
-        let (output_video_options, video_whip_options) = maybe_whip_video_options(video)?;
+        let (output_video_options, video_whip_options) = if let Some(options) = video {
+            let output_options = pipeline::OutputVideoOptions {
+                initial: options.initial.try_into()?,
+                end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
+            };
+            let video_whip_options = VideoWhipOptions {
+                resolution: options.resolution.into(),
+            };
+            (Some(output_options), Some(video_whip_options))
+        } else {
+            (None, None)
+        };
+
         let (output_audio_options, audio_whip_options) = match audio {
             Some(OutputWhipAudioOptions {
                 mixing_strategy,
@@ -302,29 +322,6 @@ fn maybe_video_options(
     };
 
     Ok((Some(encoder_options), Some(output_options)))
-}
-
-fn maybe_whip_video_options(
-    options: Option<OutputWhipVideoOptions>,
-) -> Result<
-    (
-        Option<pipeline::OutputVideoOptions>,
-        Option<VideoWhipOptions>,
-    ),
-    TypeError,
-> {
-    let Some(options) = options else {
-        return Ok((None, None));
-    };
-    let output_options = pipeline::OutputVideoOptions {
-        initial: options.initial.try_into()?,
-        end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
-    };
-    let video_whip_options = VideoWhipOptions {
-        resolution: options.resolution.into(),
-    };
-
-    Ok((Some(output_options), Some(video_whip_options)))
 }
 
 impl From<Mp4AudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
