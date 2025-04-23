@@ -57,9 +57,9 @@ fn client_code() -> Result<()> {
                 }
             },
             "audio": {
+                "channels": "stereo",
                 "encoder": {
                     "type": "aac",
-                    "channels": "stereo",
                     "sample_rate": 44100
                 },
                 "initial": {

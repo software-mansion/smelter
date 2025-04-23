@@ -69,9 +69,9 @@ pub fn offline_processing() -> Result<()> {
                 "send_eos_when": { "all_inputs": true }
             },
             "audio": {
+                "channels": "stereo",
                 "encoder": {
                     "type": "aac",
-                    "channels": "stereo"
                 },
                 "initial": {
                     "inputs": [{ "input_id": "input_1" }]
