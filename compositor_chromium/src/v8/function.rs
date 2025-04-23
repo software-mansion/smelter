@@ -1,10 +1,10 @@
 use std::{fmt::Display, os::raw::c_int, panic};
 
-use crate::cef_ref::increment_ref_count;
+use crate::cef_ref::CefRc;
 use crate::{
     cef_ref::{CefRefData, CefStruct},
     cef_string::CefString,
-    validated::{Validated, ValidatedError},
+    validated::ValidatedError,
 };
 
 use super::{
@@ -12,7 +12,7 @@ use super::{
     V8ContextEntered, V8Object,
 };
 
-pub struct V8Function(pub(super) Validated<chromium_sys::cef_v8value_t>);
+pub struct V8Function(pub(super) CefRc<chromium_sys::cef_v8value_t>);
 
 impl V8Function {
     pub fn new<F>(name: &str, func: F) -> Self
@@ -23,7 +23,7 @@ impl V8Function {
         let handler = CefRefData::new_ptr(V8Handler(func));
         let inner = unsafe { chromium_sys::cef_v8value_create_function(&name, handler) };
 
-        Self(Validated::new(inner))
+        Self(CefRc::new(inner))
     }
 
     pub fn call(
@@ -49,17 +49,10 @@ impl V8Function {
         args: &[&V8Value],
         _ctx_entered: &V8ContextEntered,
     ) -> Result<V8Value, V8FunctionError> {
-        let inner = self.0.get()?;
+        let inner = self.0.get_weak_with_validation()?;
 
         let this = match this {
-            Some(this) => {
-                let this = this.0.get()?;
-                unsafe {
-                    increment_ref_count(&mut (*this).base);
-                }
-
-                this
-            }
+            Some(this) => this.0.get_with_validation()?,
             None => std::ptr::null_mut(),
         };
         let args = args
@@ -67,9 +60,6 @@ impl V8Function {
             .enumerate()
             .map(|(i, arg)| {
                 arg.get_raw()
-                    .inspect(|&inner| unsafe {
-                        increment_ref_count(&mut (*inner).base);
-                    })
                     .map_err(|err| V8FunctionError::ArgNotValid(err, i))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -98,14 +88,16 @@ struct V8Handler<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>>(F);
 impl<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>> CefStruct for V8Handler<F> {
     type CefType = chromium_sys::cef_v8handler_t;
 
-    fn cef_data(&self) -> Self::CefType {
+    fn new_cef_data() -> Self::CefType {
         chromium_sys::cef_v8handler_t {
             base: unsafe { std::mem::zeroed() },
             execute: Some(Self::execute),
         }
     }
 
-    fn base_mut(cef_data: &mut Self::CefType) -> &mut chromium_sys::cef_base_ref_counted_t {
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut chromium_sys::cef_base_ref_counted_t {
         &mut cef_data.base
     }
 }
@@ -133,7 +125,7 @@ impl<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>> V8Handler<F> {
                 let self_ref = CefRefData::<Self>::from_cef(self_);
                 self_ref.0(&args)
                     .map_err(V8FunctionError::NativeFuncError)
-                    .and_then(|v| Ok(v.get_raw()?))
+                    .and_then(|v| Ok(v.get_raw_weak()?))
             });
 
             let result = match result {

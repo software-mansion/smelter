@@ -1,29 +1,36 @@
 use std::fmt::Display;
 
-use crate::cef_string::CefString;
+use crate::{
+    cef_ref::{CefRc, CefRefCountable},
+    cef_string::CefString,
+};
 
 /// Used for creating IPC message data and/or reading from it
 pub struct ProcessMessage {
-    pub(crate) inner: *mut chromium_sys::cef_process_message_t,
+    pub(crate) inner: CefRc<chromium_sys::cef_process_message_t>,
 }
 
 impl ProcessMessage {
     pub fn new(name: &str) -> Self {
         let name = CefString::new_raw(name);
         let inner = unsafe { chromium_sys::cef_process_message_create(&name) };
-        Self { inner }
+        Self {
+            inner: CefRc::new(inner),
+        }
     }
 
     pub fn name(&self) -> String {
         unsafe {
-            let get_name = (*self.inner).get_name.unwrap();
-            CefString::from_raw(get_name(self.inner))
+            let inner = self.inner.get_weak();
+            let get_name = (*inner).get_name.unwrap();
+            CefString::from_userfree(get_name(inner))
         }
     }
 
     pub fn size(&self) -> usize {
         unsafe {
             let args = self.arg_list();
+            let args = args.get_weak();
             let get_size = (*args).get_size.unwrap();
             get_size(args)
         }
@@ -32,10 +39,10 @@ impl ProcessMessage {
     pub fn write_string(&mut self, index: usize, data: String) -> Result<(), ProcessMessageError> {
         unsafe {
             let args = self.arg_list();
-            let set_string = (*args).set_string.unwrap();
+            let set_string = (*args.get_weak()).set_string.unwrap();
             let data = CefString::new_raw(data);
 
-            if set_string(args, index, &data) != 1 {
+            if set_string(args.get_weak(), index, &data) != 1 {
                 return Err(ProcessMessageError::WriteFailed {
                     ty: "string",
                     index,
@@ -54,6 +61,7 @@ impl ProcessMessage {
 
         unsafe {
             let args = self.arg_list();
+            let args = args.get_weak();
             let get_string = (*args).get_string.unwrap();
             let get_type = (*args).get_type.unwrap();
 
@@ -67,16 +75,16 @@ impl ProcessMessage {
             }
 
             let data = get_string(args, index);
-            Ok(CefString::from_raw(data))
+            Ok(CefString::from_userfree(data))
         }
     }
 
     pub fn write_int(&mut self, index: usize, data: i32) -> Result<(), ProcessMessageError> {
         unsafe {
             let args = self.arg_list();
-            let set_int = (*args).set_int.unwrap();
+            let set_int = (*args.get_weak()).set_int.unwrap();
 
-            if set_int(args, index, data) != 1 {
+            if set_int(args.get_weak(), index, data) != 1 {
                 return Err(ProcessMessageError::WriteFailed { ty: "int", index });
             }
 
@@ -92,6 +100,7 @@ impl ProcessMessage {
 
         unsafe {
             let args = self.arg_list();
+            let args = args.get_weak();
             let get_int = (*args).get_int.unwrap();
             let get_type = (*args).get_type.unwrap();
 
@@ -111,9 +120,9 @@ impl ProcessMessage {
     pub fn write_double(&mut self, index: usize, data: f64) -> Result<(), ProcessMessageError> {
         unsafe {
             let args = self.arg_list();
-            let set_double = (*args).set_double.unwrap();
+            let set_double = (*args.get_weak()).set_double.unwrap();
 
-            if set_double(args, index, data) != 1 {
+            if set_double(args.get_weak(), index, data) != 1 {
                 return Err(ProcessMessageError::WriteFailed {
                     ty: "double",
                     index,
@@ -132,6 +141,7 @@ impl ProcessMessage {
 
         unsafe {
             let args = self.arg_list();
+            let args = args.get_weak();
             let get_double = (*args).get_double.unwrap();
             let get_type = (*args).get_type.unwrap();
 
@@ -148,11 +158,24 @@ impl ProcessMessage {
         }
     }
 
-    fn arg_list(&self) -> *mut chromium_sys::cef_list_value_t {
+    fn arg_list(&self) -> CefRc<chromium_sys::cef_list_value_t> {
+        let inner = self.inner.get_weak();
         unsafe {
-            let get_argument_list = (*self.inner).get_argument_list.unwrap();
-            get_argument_list(self.inner)
+            let get_argument_list = (*inner).get_argument_list.unwrap();
+            CefRc::new(get_argument_list(inner))
         }
+    }
+}
+
+impl CefRefCountable for chromium_sys::cef_process_message_t {
+    fn base_mut(&mut self) -> *mut chromium_sys::cef_base_ref_counted_t {
+        &mut self.base
+    }
+}
+
+impl CefRefCountable for chromium_sys::cef_list_value_t {
+    fn base_mut(&mut self) -> *mut chromium_sys::cef_base_ref_counted_t {
+        &mut self.base
     }
 }
 

@@ -1,4 +1,7 @@
-use crate::validated::{Validatable, Validated, ValidatedError};
+use crate::{
+    cef_ref::{CefRc, CefRefCountable},
+    validated::{Validatable, ValidatedError},
+};
 
 use super::{
     array::V8Array, array_buffer::V8ArrayBuffer, bool::V8Bool, numbers::*, object::V8Object,
@@ -26,7 +29,7 @@ pub enum V8Value {
 
 impl V8Value {
     pub(crate) fn from_raw(v8_value: *mut chromium_sys::cef_v8value_t) -> Self {
-        let validated_value = Validated::new(v8_value);
+        let validated_value = CefRc::new(v8_value);
         if Self::is_undefined(v8_value) {
             return Self::Undefined(V8Undefined(validated_value));
         }
@@ -70,26 +73,47 @@ impl V8Value {
         unreachable!("Unknown v8 value")
     }
 
+    /// Increments the reference count and returns a V8Value
     pub(crate) fn get_raw(&self) -> Result<*mut chromium_sys::cef_v8value_t, V8ValueError> {
         let raw_value = match self {
-            V8Value::Undefined(V8Undefined(v)) => v.get()?,
-            V8Value::Null(V8Null(v)) => v.get()?,
-            V8Value::Bool(V8Bool(v)) => v.get()?,
-            V8Value::Int(V8Int(v)) => v.get()?,
-            V8Value::Uint(V8Uint(v)) => v.get()?,
-            V8Value::Double(V8Double(v)) => v.get()?,
-            V8Value::String(V8String(v)) => v.get()?,
-            V8Value::Array(V8Array(v)) => v.get()?,
-            V8Value::Object(V8Object(v)) => v.get()?,
-            V8Value::ArrayBuffer(V8ArrayBuffer(v)) => v.get()?,
-            V8Value::Function(V8Function(v)) => v.get()?,
-            V8Value::Date(V8GenericValue(v)) => v.get()?,
-            V8Value::Promise(V8GenericValue(v)) => v.get()?,
+            V8Value::Undefined(V8Undefined(v)) => v.get_with_validation()?,
+            V8Value::Null(V8Null(v)) => v.get_with_validation()?,
+            V8Value::Bool(V8Bool(v)) => v.get_with_validation()?,
+            V8Value::Int(V8Int(v)) => v.get_with_validation()?,
+            V8Value::Uint(V8Uint(v)) => v.get_with_validation()?,
+            V8Value::Double(V8Double(v)) => v.get_with_validation()?,
+            V8Value::String(V8String(v)) => v.get_with_validation()?,
+            V8Value::Array(V8Array(v)) => v.get_with_validation()?,
+            V8Value::Object(V8Object(v)) => v.get_with_validation()?,
+            V8Value::ArrayBuffer(V8ArrayBuffer(v)) => v.get_with_validation()?,
+            V8Value::Function(V8Function(v)) => v.get_with_validation()?,
+            V8Value::Date(V8GenericValue(v)) => v.get_with_validation()?,
+            V8Value::Promise(V8GenericValue(v)) => v.get_with_validation()?,
         };
 
         Ok(raw_value)
     }
 
+    /// Returns a raw pointer to the V8Value without incrementing the reference count
+    pub(crate) fn get_raw_weak(&self) -> Result<*mut chromium_sys::cef_v8value_t, V8ValueError> {
+        let raw_value = match self {
+            V8Value::Undefined(V8Undefined(v)) => v.get_weak_with_validation()?,
+            V8Value::Null(V8Null(v)) => v.get_weak_with_validation()?,
+            V8Value::Bool(V8Bool(v)) => v.get_weak_with_validation()?,
+            V8Value::Int(V8Int(v)) => v.get_weak_with_validation()?,
+            V8Value::Uint(V8Uint(v)) => v.get_weak_with_validation()?,
+            V8Value::Double(V8Double(v)) => v.get_weak_with_validation()?,
+            V8Value::String(V8String(v)) => v.get_weak_with_validation()?,
+            V8Value::Array(V8Array(v)) => v.get_weak_with_validation()?,
+            V8Value::Object(V8Object(v)) => v.get_weak_with_validation()?,
+            V8Value::ArrayBuffer(V8ArrayBuffer(v)) => v.get_weak_with_validation()?,
+            V8Value::Function(V8Function(v)) => v.get_weak_with_validation()?,
+            V8Value::Date(V8GenericValue(v)) => v.get_weak_with_validation()?,
+            V8Value::Promise(V8GenericValue(v)) => v.get_weak_with_validation()?,
+        };
+
+        Ok(raw_value)
+    }
     fn is_undefined(v8_value: *mut chromium_sys::cef_v8value_t) -> bool {
         unsafe {
             let is_undefined = (*v8_value).is_undefined.unwrap();
@@ -184,8 +208,16 @@ impl V8Value {
 
 impl Validatable for chromium_sys::cef_v8value_t {
     fn is_valid(&mut self) -> bool {
-        let is_valid = self.is_valid.unwrap();
-        unsafe { is_valid(self) == 1 }
+        match self.is_valid {
+            Some(is_valid) => unsafe { is_valid(self) == 1 },
+            None => false,
+        }
+    }
+}
+
+impl CefRefCountable for chromium_sys::cef_v8value_t {
+    fn base_mut(&mut self) -> *mut chromium_sys::cef_base_ref_counted_t {
+        &mut self.base
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::{
     cef::{RenderProcessHandler, RenderProcessHandlerWrapper},
-    cef_ref::{CefRefData, CefStruct},
+    cef_ref::{CefRc, CefRefData, CefStruct},
     cef_string::CefString,
     command_line::CommandLine,
 };
@@ -27,12 +27,15 @@ pub trait App {
     }
 }
 
-pub(crate) struct AppWrapper<A: App>(pub A);
+pub(crate) struct AppWrapper<A: App> {
+    app: A,
+    render_process_handler: Option<CefRc<chromium_sys::cef_render_process_handler_t>>,
+}
 
 impl<A: App> CefStruct for AppWrapper<A> {
     type CefType = chromium_sys::cef_app_t;
 
-    fn cef_data(&self) -> Self::CefType {
+    fn new_cef_data() -> Self::CefType {
         chromium_sys::cef_app_t {
             base: unsafe { std::mem::zeroed() },
             on_before_command_line_processing: Some(Self::on_before_command_line_processing),
@@ -43,12 +46,27 @@ impl<A: App> CefStruct for AppWrapper<A> {
         }
     }
 
-    fn base_mut(cef_data: &mut Self::CefType) -> &mut chromium_sys::cef_base_ref_counted_t {
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut chromium_sys::cef_base_ref_counted_t {
         &mut cef_data.base
     }
 }
 
 impl<A: App> AppWrapper<A> {
+    pub(crate) fn new(app: A) -> Self {
+        let render_process_handler = app
+            .render_process_handler()
+            .map(RenderProcessHandlerWrapper)
+            .map(CefRefData::new_ptr)
+            .map(CefRc::new);
+
+        Self {
+            app,
+            render_process_handler,
+        }
+    }
+
     extern "C" fn on_before_command_line_processing(
         self_: *mut chromium_sys::cef_app_t,
         process_type: *const chromium_sys::cef_string_t,
@@ -58,7 +76,7 @@ impl<A: App> AppWrapper<A> {
         let mut command_line = CommandLine(command_line);
         let process_type = CefString::from_raw(process_type);
         self_ref
-            .0
+            .app
             .on_before_command_line_processing(process_type, &mut command_line);
     }
 
@@ -66,8 +84,8 @@ impl<A: App> AppWrapper<A> {
         self_: *mut chromium_sys::cef_app_t,
     ) -> *mut chromium_sys::cef_render_process_handler_t {
         let self_ref = unsafe { CefRefData::<Self>::from_cef(self_) };
-        match self_ref.0.render_process_handler() {
-            Some(handler) => CefRefData::new_ptr(RenderProcessHandlerWrapper(handler)),
+        match self_ref.render_process_handler {
+            Some(ref handler) => handler.get(),
             None => std::ptr::null_mut(),
         }
     }

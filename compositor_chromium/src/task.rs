@@ -10,14 +10,16 @@ pub struct Task<F: FnOnce()> {
 impl<F: FnOnce()> CefStruct for Task<F> {
     type CefType = chromium_sys::cef_task_t;
 
-    fn cef_data(&self) -> Self::CefType {
+    fn new_cef_data() -> Self::CefType {
         chromium_sys::cef_task_t {
             base: unsafe { std::mem::zeroed() },
             execute: Some(Self::execute),
         }
     }
 
-    fn base_mut(cef_data: &mut Self::CefType) -> &mut chromium_sys::cef_base_ref_counted_t {
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut chromium_sys::cef_base_ref_counted_t {
         &mut cef_data.base
     }
 }

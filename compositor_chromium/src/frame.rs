@@ -1,18 +1,19 @@
 use crate::{
     cef::{ProcessId, ProcessMessage, ThreadId, V8Context},
-    validated::{Validatable, Validated, ValidatedError},
+    cef_ref::{CefRc, CefRefCountable},
+    validated::{Validatable, ValidatedError},
 };
 
 /// Represents a renderable surface.
 /// Each browser has a main frame which is the visible web page.
 /// Browser can also have multiple smaller frames (for example when `<iframe>` is used)
 pub struct Frame {
-    inner: Validated<chromium_sys::cef_frame_t>,
+    inner: CefRc<chromium_sys::cef_frame_t>,
 }
 
 impl Frame {
     pub(crate) fn new(frame: *mut chromium_sys::cef_frame_t) -> Self {
-        let inner = Validated::new(frame);
+        let inner = CefRc::new(frame);
         Self { inner }
     }
 
@@ -23,9 +24,9 @@ impl Frame {
         msg: ProcessMessage,
     ) -> Result<(), FrameError> {
         unsafe {
-            let frame = self.inner.get()?;
+            let frame = self.inner.get_weak_with_validation()?;
             let send_message = (*frame).send_process_message.unwrap();
-            send_message(frame, pid as u32, msg.inner);
+            send_message(frame, pid as u32, msg.inner.get());
         }
 
         Ok(())
@@ -33,7 +34,7 @@ impl Frame {
 
     /// If called on the renderer process it returns `Ok(V8Context)`, otherwise it's `Err(FrameError::V8ContextWrongThread)`
     pub fn v8_context(&self) -> Result<V8Context, FrameError> {
-        let frame = self.inner.get()?;
+        let frame = self.inner.get_weak_with_validation()?;
 
         unsafe {
             if chromium_sys::cef_currently_on(ThreadId::Renderer as u32) != 1 {
@@ -58,9 +59,15 @@ pub enum FrameError {
 
 impl Validatable for chromium_sys::cef_frame_t {
     fn is_valid(&mut self) -> bool {
-        unsafe {
-            let is_valid = self.is_valid.unwrap();
-            is_valid(self) == 1
+        match self.is_valid {
+            Some(is_valid) => unsafe { is_valid(self) == 1 },
+            None => false,
         }
+    }
+}
+
+impl CefRefCountable for chromium_sys::cef_frame_t {
+    fn base_mut(&mut self) -> *mut chromium_sys::cef_base_ref_counted_t {
+        &mut self.base
     }
 }

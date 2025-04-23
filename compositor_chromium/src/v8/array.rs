@@ -1,18 +1,18 @@
-use crate::cef_ref::increment_ref_count;
-use crate::validated::{Validated, ValidatedError};
+use crate::cef_ref::CefRc;
+use crate::validated::ValidatedError;
 
 use super::value::{V8Value, V8ValueError};
 
-pub struct V8Array(pub(super) Validated<chromium_sys::cef_v8value_t>);
+pub struct V8Array(pub(super) CefRc<chromium_sys::cef_v8value_t>);
 
 impl V8Array {
     pub fn new(len: usize) -> Self {
         let inner = unsafe { chromium_sys::cef_v8value_create_array(len as i32) };
-        Self(Validated::new(inner))
+        Self(CefRc::new(inner))
     }
 
     pub fn has(&self, index: usize) -> Result<bool, V8ArrayError> {
-        let inner = self.0.get()?;
+        let inner = self.0.get_weak_with_validation()?;
         unsafe {
             let has_value = (*inner).has_value_byindex.unwrap();
             Ok(has_value(inner, index as i32) == 1)
@@ -20,7 +20,7 @@ impl V8Array {
     }
 
     pub fn max_len(&self) -> Result<usize, V8ArrayError> {
-        let inner = self.0.get()?;
+        let inner = self.0.get_weak_with_validation()?;
         unsafe {
             let get_len = (*inner).get_array_length.unwrap();
             Ok(get_len(inner) as usize)
@@ -28,7 +28,7 @@ impl V8Array {
     }
 
     pub fn get(&self, index: usize) -> Result<V8Value, V8ArrayError> {
-        let inner = self.0.get()?;
+        let inner = self.0.get_weak_with_validation()?;
         unsafe {
             let get_value = (*inner).get_value_byindex.unwrap();
             let value = get_value(inner, index as i32);
@@ -41,11 +41,10 @@ impl V8Array {
     }
 
     pub fn set(&mut self, index: usize, value: &V8Value) -> Result<(), V8ArrayError> {
-        let inner = self.0.get()?;
+        let inner = self.0.get_weak_with_validation()?;
         unsafe {
             let set_value = (*inner).set_value_byindex.unwrap();
             let value = value.get_raw()?;
-            increment_ref_count(&mut (*value).base);
             if set_value(inner, index as i32, value) != 1 {
                 return Err(V8ArrayError::SetFailed(index));
             }
@@ -55,7 +54,7 @@ impl V8Array {
     }
 
     pub fn delete(&mut self, index: usize) -> Result<(), V8ArrayError> {
-        let inner = self.0.get()?;
+        let inner = self.0.get_weak_with_validation()?;
         unsafe {
             let delete_value = (*inner).delete_value_byindex.unwrap();
             if delete_value(inner, index as i32) != 1 {

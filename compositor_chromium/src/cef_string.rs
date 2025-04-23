@@ -1,9 +1,32 @@
 use widestring::U16CString;
 
 /// Helper for handling UTF-16 `cef_string_t`
-pub struct CefString;
+pub struct CefString(chromium_sys::cef_string_t);
+
+impl Drop for CefString {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = U16CString::from_raw(self.0.str_);
+        }
+    }
+}
 
 impl CefString {
+    /// The returned string is owned by the caller and automatically freed on drop.
+    ///
+    /// # Safety
+    /// Make sure that CEF does not free it.
+    pub fn new<S: Into<String>>(s: S) -> Self {
+        let str_value = U16CString::from_str(s.into()).unwrap();
+        Self(chromium_sys::cef_string_utf16_t {
+            length: str_value.len(),
+            str_: str_value.into_raw(),
+            dtor: None,
+        })
+    }
+
+    /// The returned string is not automatically freed on drop. It's caller's or CEF's responsibility to
+    /// free it.
     pub fn new_raw<S: Into<String>>(s: S) -> chromium_sys::cef_string_t {
         extern "C" fn dtor(ptr: *mut u16) {
             if !ptr.is_null() {
@@ -19,6 +42,10 @@ impl CefString {
             str_: raw_value,
             dtor: Some(dtor),
         }
+    }
+
+    pub fn raw(&self) -> &chromium_sys::cef_string_t {
+        &self.0
     }
 
     /// Returns Rust's `String` from UTF-16 `cef_string_t`.
@@ -38,8 +65,11 @@ impl CefString {
 
     pub fn from_userfree(ptr: chromium_sys::cef_string_userfree_utf16_t) -> String {
         let cef_string = CefString::from_raw(ptr);
-        unsafe {
-            chromium_sys::cef_string_userfree_utf16_free(ptr);
+        if !ptr.is_null() {
+            unsafe {
+                // `CefString:from_raw` creates a string copy so it's safe to free the memory
+                chromium_sys::cef_string_userfree_utf16_free(ptr);
+            }
         }
 
         cef_string
