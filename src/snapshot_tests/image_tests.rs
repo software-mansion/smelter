@@ -4,8 +4,8 @@ use compositor_render::{
 };
 
 use super::{
-    input::TestInput, scene_from_json, scenes_from_json, snapshots_path, test_case::TestCase,
-    TestRunner,
+    input::TestInput, snapshots_path, test_case::TestCase, test_steps_from_scene,
+    test_steps_from_scenes, TestRunner,
 };
 
 #[test]
@@ -37,7 +37,7 @@ fn image_tests() {
 
     runner.add(TestCase {
         name: "image/jpeg_as_root",
-        scene_updates: scene_from_json(include_str!(
+        steps: test_steps_from_scene(include_str!(
             "../../snapshot_tests/image/jpeg_as_root.scene.json"
         )),
         renderers: vec![jpeg.clone()],
@@ -46,7 +46,7 @@ fn image_tests() {
     });
     runner.add(TestCase {
         name: "image/jpeg_in_view",
-        scene_updates: scene_from_json(include_str!(
+        steps: test_steps_from_scene(include_str!(
             "../../snapshot_tests/image/jpeg_in_view.scene.json"
         )),
         renderers: vec![jpeg.clone()],
@@ -55,7 +55,7 @@ fn image_tests() {
     });
     runner.add(TestCase {
         name: "image/jpeg_in_view_overflow_fit",
-        scene_updates: scene_from_json(include_str!(
+        steps: test_steps_from_scene(include_str!(
             "../../snapshot_tests/image/jpeg_in_view_overflow_fit.scene.json"
         )),
         renderers: vec![jpeg.clone()],
@@ -65,7 +65,7 @@ fn image_tests() {
     runner.add(TestCase {
         // Test if removing image from scene works
         name: "image/remove_jpeg_as_root",
-        scene_updates: scenes_from_json(&[
+        steps: test_steps_from_scenes(&[
             include_str!("../../snapshot_tests/image/jpeg_as_root.scene.json"),
             include_str!("../../snapshot_tests/view/empty_view.scene.json"),
         ]),
@@ -76,7 +76,7 @@ fn image_tests() {
     runner.add(TestCase {
         // Test if removing image from scene works
         name: "image/remove_jpeg_in_view",
-        scene_updates: scenes_from_json(&[
+        steps: test_steps_from_scenes(&[
             include_str!("../../snapshot_tests/image/jpeg_in_view.scene.json"),
             include_str!("../../snapshot_tests/view/empty_view.scene.json"),
         ]),
@@ -88,7 +88,7 @@ fn image_tests() {
     runner.add(TestCase {
         name: "image/svg_as_root",
         only: true,
-        scene_updates: scene_from_json(include_str!(
+        steps: test_steps_from_scene(include_str!(
             "../../snapshot_tests/image/svg_as_root.scene.json"
         )),
         renderers: vec![svg.clone()],
@@ -97,7 +97,7 @@ fn image_tests() {
     });
     runner.add(TestCase {
         name: "image/svg_in_view",
-        scene_updates: scene_from_json(include_str!(
+        steps: test_steps_from_scene(include_str!(
             "../../snapshot_tests/image/svg_in_view.scene.json"
         )),
         renderers: vec![jpeg.clone()],
