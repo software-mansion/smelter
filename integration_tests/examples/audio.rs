@@ -120,6 +120,7 @@ fn client_code() -> Result<()> {
                         {"input_id": "input_4"}
                     ]
                 },
+
                 "encoder": {
                     "type": "opus",
                     "channels": "stereo",

@@ -98,6 +98,21 @@ fn register_codecs(media_engine: &mut MediaEngine) -> webrtc::error::Result<()> 
         RTPCodecType::Audio,
     )?;
 
+    media_engine.register_codec(
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_OPUS.to_owned(),
+                clock_rate: 48000,
+                channels: 1,
+                sdp_fmtp_line: "minptime=10;useinbandfec=1".to_owned(),
+                rtcp_feedback: vec![],
+            },
+            payload_type: 112,
+            ..Default::default()
+        },
+        RTPCodecType::Audio,
+    )?;
+
     let video_rtcp_feedback = vec![
         RTCPFeedback {
             typ: "goog-remb".to_owned(),

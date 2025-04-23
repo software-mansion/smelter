@@ -53,7 +53,8 @@ pub struct WhipSender {
 
 #[derive(Debug, Clone)]
 pub struct VideoWhipOptions {
-    pub resolution: Resolution,
+    pub resolution: Resolution, //TODO field to delete
+    pub codec_preferences: Vec<VideoEncoderOptions>
 }
 
 #[derive(Debug, Clone)]

@@ -197,8 +197,28 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 initial: options.initial.try_into()?,
                 end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
             };
+
+            let codec_preferences: Vec<pipeline::encoder::VideoEncoderOptions> = options.codec_preferences.unwrap().into_iter().map(|codec| {
+                match codec {
+                    VideoEncoderOptions::FfmpegH264 { preset, ffmpeg_options } => {
+                        pipeline::encoder::VideoEncoderOptions::H264(ffmpeg_h264::Options {
+                            preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
+                            resolution: options.resolution.clone().into(),
+                            raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+                        })
+                    },
+                    VideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
+                        pipeline::encoder::VideoEncoderOptions::VP8(ffmpeg_vp8::Options {
+                            resolution: options.resolution.clone().into(),
+                            raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+                        })
+                    }
+                }
+            }).collect();
+
             let video_whip_options = VideoWhipOptions {
                 resolution: options.resolution.into(),
+                codec_preferences, 
             };
             (Some(output_options), Some(video_whip_options))
         } else {
@@ -210,6 +230,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 mixing_strategy,
                 send_eos_when,
                 encoder: _,
+                encoder_preferences,
                 initial,
             }) => {
                 let output_audio_options = pipeline::OutputAudioOptions {

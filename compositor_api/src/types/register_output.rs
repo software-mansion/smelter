@@ -83,6 +83,8 @@ pub struct OutputWhipVideoOptions {
     pub send_eos_when: Option<OutputEndCondition>,
     /// Video encoder options.
     pub encoder: Option<VideoEncoderOptions>,
+    /// Codec preferences list.
+    pub codec_preferences: Option<Vec<VideoEncoderOptions>>,
     /// Root of a component tree/scene that should be rendered for the output.
     pub initial: Video,
 }
@@ -122,6 +124,8 @@ pub struct OutputWhipAudioOptions {
     pub send_eos_when: Option<OutputEndCondition>,
     /// Audio encoder options.
     pub encoder: Option<WhipAudioEncoderOptions>,
+    /// Audio encoder preferences list.
+    pub encoder_preferences: Option<Vec<WhipAudioEncoderOptions>>,
     /// Initial audio mixer configuration for output.
     pub initial: Audio,
 }
