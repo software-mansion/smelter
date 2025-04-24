@@ -249,18 +249,6 @@ impl Buffer {
         Ok(output)
     }
 
-    pub(crate) fn new_with_decode_data(
-        allocator: Arc<Allocator>,
-        data: &[u8],
-        buffer_size: u64,
-        profile_info: &H264DecodeProfileInfo,
-    ) -> Result<Buffer, VulkanCtxError> {
-        let mut decode_buffer = Buffer::new_decode(allocator.clone(), buffer_size, profile_info)?;
-        decode_buffer.copy_data_into(data)?;
-
-        Ok(decode_buffer)
-    }
-
     fn copy_data_into(&mut self, data: &[u8]) -> Result<(), VulkanCtxError> {
         if self.transfer_direction != TransferDirection::MemToGpu {
             return Err(VulkanCtxError::UploadToImproperBuffer);

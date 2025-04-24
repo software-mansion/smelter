@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use ash::vk;
 
-use crate::{H264Profile, VulkanCtxError, VulkanDevice};
+use crate::{VulkanCtxError, VulkanDevice};
 
 use super::{CommandBuffer, Device, Image, ImageView, MemoryAllocation, VideoQueueExt};
 
@@ -283,8 +283,14 @@ impl ImageWithView {
 
     fn image_view(&self, index: u32) -> &ImageView {
         match self {
-            ImageWithView::Single { image_view: _image_view, .. } => _image_view,
-            ImageWithView::Multiple { image_views: _image_views, .. } => &_image_views[index as usize],
+            ImageWithView::Single {
+                image_view: _image_view,
+                ..
+            } => _image_view,
+            ImageWithView::Multiple {
+                image_views: _image_views,
+                ..
+            } => &_image_views[index as usize],
         }
     }
 }
@@ -358,10 +364,8 @@ impl<'a> CodingImageBundle<'a> {
             let images = (0..array_layer_count)
                 .map(|_| {
                     image_create_info = image_create_info.array_layers(1);
-                    let image = Image::new(vulkan_ctx.allocator.clone(), &image_create_info)
-                        .map(|i| Arc::new(Mutex::new(i)));
-
-                    image
+                    Image::new(vulkan_ctx.allocator.clone(), &image_create_info)
+                        .map(|i| Arc::new(Mutex::new(i)))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
@@ -434,10 +438,7 @@ impl<'a> CodingImageBundle<'a> {
                 subresource_range,
             )?;
 
-            ImageWithView::Single {
-                image,
-                image_view,
-            }
+            ImageWithView::Single { image, image_view }
         };
 
         let video_resource_info = (0..array_layer_count)

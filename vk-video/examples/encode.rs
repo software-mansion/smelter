@@ -2,7 +2,7 @@
 fn main() {
     use std::io::{Read, Write};
 
-    use vk_video::{Frame, RawFrame, VulkanInstance};
+    use vk_video::{Frame, RawFrameData, VulkanInstance};
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::INFO)
@@ -29,7 +29,7 @@ fn main() {
                 max_push_constant_size: 128,
                 ..Default::default()
             },
-            &mut None,
+            None,
         )
         .unwrap();
 
@@ -39,7 +39,10 @@ fn main() {
             width,
             height,
             30,
-            vk_video::RateControl::Vbr { average_bitrate: 500000, max_bitrate: 2000000 },
+            vk_video::RateControl::Vbr {
+                average_bitrate: 500000,
+                max_bitrate: 2000000,
+            },
             // vk_video::RateControl::Disabled,
         )
         .expect("create encoder");
@@ -47,15 +50,15 @@ fn main() {
     let mut output_file = std::fs::File::create("output.h264").unwrap();
 
     let mut frame = Frame {
-        frame: RawFrame {
-            data: vec![0; width as usize * height as usize * 3 / 2],
+        data: RawFrameData {
+            frame: vec![0; width as usize * height as usize * 3 / 2],
             width,
             height,
         },
         pts: None,
     };
 
-    while let Ok(()) = nv12.read_exact(&mut frame.frame.data) {
+    while let Ok(()) = nv12.read_exact(&mut frame.data.frame) {
         let h264 = encoder.encode_bytes(&frame, false).expect("encode");
         output_file.write_all(&h264).expect("write");
     }

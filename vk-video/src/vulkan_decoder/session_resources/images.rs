@@ -30,7 +30,13 @@ impl<'a> DecodingImages<'a> {
     ) -> (Arc<Mutex<Image>>, usize) {
         match &self.dst_image {
             Some(image) => (image.image_with_view.target_info(0), 0),
-            None => (self.dpb.image.image_with_view.target_info(new_reference_slot_index), new_reference_slot_index),
+            None => (
+                self.dpb
+                    .image
+                    .image_with_view
+                    .target_info(new_reference_slot_index),
+                new_reference_slot_index,
+            ),
         }
     }
 
