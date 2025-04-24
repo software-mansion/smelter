@@ -1,0 +1,47 @@
+{
+    "video": {
+        "root": {
+            "type": "view",
+            "direction": "column",
+            "children": [
+                {
+                    "type": "view",
+                    "children": [
+                        {
+                            "id": "resize_1",
+                            "type": "view",
+                            "width": 640,
+                            "transition": {
+                                "duration_ms": 10000
+                            },
+                            "background_color": "green"
+                        },
+                        {
+                            "type": "view",
+                            "background_color": "blue"
+                        }
+                    ]
+                },
+                {
+                    "type": "view",
+                    "children": [
+                        {
+                            "id": "resize_2",
+                            "type": "view",
+                            "width": 640,
+                            "transition": {
+                                "should_interrupt": true,
+                                "duration_ms": 10000
+                            },
+                            "background_color": "magenta"
+                        },
+                        {
+                            "type": "view",
+                            "background_color": "blue"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

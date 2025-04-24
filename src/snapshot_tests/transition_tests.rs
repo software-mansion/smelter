@@ -145,6 +145,34 @@ fn transitions_tests() {
         .concat(),
         ..Default::default()
     });
+    runner.add(TestCase {
+        name: "transition/update_scene_with_transition_interrupt",
+        steps: vec![
+            Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_transition_interrupt_start.scene.json")),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
+            Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_transition_interrupt_end_variant1.scene.json")),
+
+            Step::RenderWithSnapshot(Duration::from_millis(5000)),
+            Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_transition_interrupt_end_variant1.scene.json")),
+
+            Step::RenderWithSnapshot(Duration::from_millis(7500)),
+        ],
+        ..Default::default()
+    });
+    runner.add(TestCase {
+        name: "transition/update_scene_with_transition_interrupt_and_changing_props",
+        steps: vec![
+            Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_transition_interrupt_start.scene.json")),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
+            Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_transition_interrupt_end_variant1.scene.json")),
+
+            Step::RenderWithSnapshot(Duration::from_millis(5000)),
+            Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_transition_interrupt_end_variant2.scene.json")),
+
+            Step::RenderWithSnapshot(Duration::from_millis(7500)),
+        ],
+        ..Default::default()
+    });
 
     runner.run()
 }
