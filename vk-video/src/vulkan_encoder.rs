@@ -416,6 +416,113 @@ impl VulkanEncoder<'_> {
         }
     }
 
+    pub fn allocate_input_texture(
+        &self,
+        width: u32,
+        height: u32,
+    ) -> Result<(), VulkanEncoderError> {
+        let queue_family_indices = [
+            self.device.queues.wgpu.idx as u32,
+            self.device.queues.h264_encode.idx as u32,
+        ];
+
+        let image_create_info = vk::ImageCreateInfo::default()
+            .flags(vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE)
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
+            .extent(vk::Extent3D {
+                width,
+                height,
+                depth: 1,
+            })
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(
+                vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR
+                    | vk::ImageUsageFlags::STORAGE
+                    | vk::ImageUsageFlags::TRANSFER_DST
+                    | vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            )
+            .sharing_mode(vk::SharingMode::CONCURRENT)
+            .queue_family_indices(&queue_family_indices)
+            .initial_layout(vk::ImageLayout::UNDEFINED);
+
+        let mut image = Image::new(self.device.allocator.clone(), &image_create_info)?;
+
+        self.command_buffers.encode_buffer.begin()?;
+        image.transition_layout_single_layer(
+            &self.command_buffers.encode_buffer,
+            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::NONE,
+            vk::AccessFlags2::NONE..vk::AccessFlags2::NONE,
+            vk::ImageLayout::GENERAL,
+            0,
+        )?;
+
+        self.command_buffers.encode_buffer.end()?;
+        self.device.queues.h264_encode.submit(
+            &self.command_buffers.encode_buffer,
+            &[],
+            &[],
+            Some(*self.sync_structures.fence_done),
+        )?;
+        self.sync_structures.fence_done.wait_and_reset(u64::MAX)?;
+
+        let image = Arc::new(Mutex::new(image));
+        let image_clone = image.clone();
+
+        let wgpu_size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+
+        let hal_texture = unsafe {
+            wgpu::hal::vulkan::Device::texture_from_raw(
+                **image.lock().unwrap(),
+                &wgpu::hal::TextureDescriptor {
+                    label: Some("vulkan video input texture"),
+                    size: wgpu_size,
+                    format: wgpu::TextureFormat::NV12,
+                    view_formats: Vec::new(),
+                    dimension: wgpu::TextureDimension::D2,
+                    sample_count: 1,
+                    mip_level_count: 1,
+                    memory_flags: wgpu::hal::MemoryFlags::empty(),
+                    usage: wgpu::hal::TextureUses::COPY_DST
+                        | wgpu::hal::TextureUses::RESOURCE
+                        | wgpu::hal::TextureUses::STORAGE_READ_WRITE
+                        | wgpu::hal::TextureUses::COLOR_TARGET,
+                },
+                Some(Box::new(move || drop(image_clone))),
+            )
+        };
+
+        let texture = unsafe {
+            self.device
+                .wgpu_device
+                .create_texture_from_hal::<wgpu::hal::vulkan::Api>(
+                    hal_texture,
+                    &wgpu::TextureDescriptor {
+                        label: Some("vulkan video input texture"),
+                        usage: wgpu::TextureUsages::COPY_DST
+                            | wgpu::TextureUsages::RENDER_ATTACHMENT
+                            | wgpu::TextureUsages::STORAGE_BINDING,
+                        size: wgpu_size,
+                        dimension: wgpu::TextureDimension::D2,
+                        sample_count: 1,
+                        view_formats: &[],
+                        format: wgpu::TextureFormat::NV12,
+                        mip_level_count: 1,
+                    },
+                )
+        };
+        // TODO: take an rgba texture as input instead
+
+        Ok(())
+    }
+
     fn issue_coding_control_reset_for(&mut self, rate_control: RateControl) {
         let mut quality_level = vk::VideoEncodeQualityLevelInfoKHR::default()
             .quality_level(self.session_resources.quality_level);
