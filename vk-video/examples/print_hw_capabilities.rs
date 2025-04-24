@@ -16,7 +16,7 @@ fn main() {
                 max_push_constant_size: 128,
                 ..Default::default()
             },
-            &mut None,
+            None,
         )
         .unwrap();
 

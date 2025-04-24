@@ -7,7 +7,12 @@ use ash::{vk, Entry};
 use tracing::{debug, error, warn};
 use wgpu::hal::Adapter;
 
-use crate::{parser::Parser, vulkan_encoder::VulkanEncoder, wrappers::{Allocator, DebugMessenger, Device, Instance}, BytesDecoder, DecoderError, RateControl, RawFrameData, VulkanEncoderError, WgpuTexturesDecoder};
+use crate::{
+    parser::Parser,
+    vulkan_encoder::{RateControl, VulkanEncoder, VulkanEncoderError},
+    wrappers::*,
+    BytesDecoder, DecoderError, RawFrameData, WgpuTexturesDecoder,
+};
 
 use super::{FrameSorter, VulkanDecoder};
 
@@ -356,9 +361,9 @@ impl VulkanInstance {
             queues,
             decode_capabilities,
             encode_capabilities,
-            wgpu_device: wgpu_device.into(),
-            wgpu_queue: wgpu_queue.into(),
-            wgpu_adapter: wgpu_adapter.into(),
+            wgpu_device,
+            wgpu_queue,
+            wgpu_adapter,
         }
         .into())
     }
@@ -434,6 +439,7 @@ impl EncodeCapabilities {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub(crate) struct EncodeProfileCapabilities {
     pub(crate) video_capabilities: vk::VideoCapabilitiesKHR<'static>,
     pub(crate) encode_capabilities: vk::VideoEncodeCapabilitiesKHR<'static>,
@@ -662,6 +668,7 @@ impl EncodeQualityLevelProperties {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub(crate) struct DecodeCapabilities {
     pub(crate) video_capabilities: vk::VideoCapabilitiesKHR<'static>,
     pub(crate) decode_capabilities: vk::VideoDecodeCapabilitiesKHR<'static>,
@@ -850,20 +857,22 @@ impl VulkanDevice {
         VulkanEncoder::new(self.clone(), profile, width, height, gop_size, rate_control)
     }
 
-    pub(crate) fn queue_from_index(&self, idx: usize) -> Result<&Queue, VulkanCtxError> {
-        self.iter_queues()
-            .find(|q| q.idx == idx)
-            .ok_or(VulkanCtxError::NoQueue(idx))
-    }
-
-    fn iter_queues(&self) -> impl Iterator<Item = &Queue> {
-        [
-            &self.queues.wgpu,
-            &self.queues.h264_decode,
-            &self.queues.h264_encode,
-            &self.queues.transfer,
-        ]
-        .into_iter()
+    pub fn create_converter(
+        self: &Arc<Self>,
+        profile: H264Profile,
+        width: u32,
+        height: u32,
+        gop_size: usize,
+        rate_control: RateControl,
+    ) -> Result<VulkanEncoder, VulkanEncoderError> {
+        VulkanEncoder::new_with_converter(
+            self.clone(),
+            profile,
+            width,
+            height,
+            gop_size,
+            rate_control,
+        )
     }
 }
 

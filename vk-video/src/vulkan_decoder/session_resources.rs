@@ -8,7 +8,14 @@ use h264_reader::nal::{
 use images::DecodingImages;
 use parameters::VideoSessionParametersManager;
 
-use crate::{wrappers::{h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc, CommandBuffer, DecodeInputBuffer, DecodingQueryPool, Fence, H264DecodeProfileInfo, ProfileInfo, VideoSession}, VulkanDecoderError, VulkanDevice};
+use crate::{
+    wrappers::{
+        h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc, CommandBuffer, DecodeInputBuffer,
+        DecodingQueryPool, Fence, H264DecodeProfileInfo, ProfileInfo, SeqParameterSetExt,
+        VideoSession,
+    },
+    VulkanDecoderError, VulkanDevice,
+};
 
 mod images;
 mod parameters;

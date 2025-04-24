@@ -10,7 +10,6 @@ use crate::{
     parser::{DecodeInformation, DecoderInstruction, ReferenceId},
     RawFrameData,
 };
-use crate::parser::{DecodeInformation, DecoderInstruction, ReferenceId};
 use crate::{wrappers::*, VulkanCtxError, VulkanDevice};
 
 mod frame_sorter;
