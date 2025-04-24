@@ -9,7 +9,7 @@ use wgpu::hal::Adapter;
 
 use crate::{
     parser::Parser,
-    vulkan_encoder::{RateControl, VulkanEncoder, VulkanEncoderError},
+    vulkan_encoder::{yuv_converter::{Converter, YuvConverterError}, H264EncodeProfileInfo, RateControl, VulkanEncoder, VulkanEncoderError},
     wrappers::*,
     BytesDecoder, DecoderError, WgpuTexturesDecoder,
 };
@@ -827,6 +827,18 @@ impl VulkanDevice {
         rate_control: RateControl,
     ) -> Result<VulkanEncoder, VulkanEncoderError> {
         VulkanEncoder::new(self.clone(), profile, width, height, gop_size, rate_control)
+    }
+
+    #[deprecated]
+    pub fn create_converter(
+        self: &Arc<Self>,
+        profile: H264Profile,
+        width: u32,
+        height: u32,
+        gop_size: usize,
+        rate_control: RateControl,
+    ) -> Result<VulkanEncoder, VulkanEncoderError> {
+        VulkanEncoder::new_with_converter(self.clone(), profile, width, height, gop_size, rate_control)
     }
 
     pub(crate) fn queue_from_index(&self, idx: usize) -> Result<&Queue, VulkanCtxError> {
