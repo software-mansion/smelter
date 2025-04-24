@@ -1,9 +1,9 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use compositor_render::{Frame, FrameData, InputId, Resolution};
 use crossbeam_channel::{Receiver, Sender};
 use tracing::{debug, error, span, trace, warn, Level};
-use vk_video::VulkanDevice;
+use vk_video::WgpuTexturesDecoder;
 
 use crate::{
     error::InputInitError,
@@ -22,7 +22,7 @@ pub fn start_vulkan_video_decoder_thread(
         return Err(InputInitError::VulkanContextRequiredForVulkanDecoder);
     };
 
-    let (init_result_sender, init_result_receiver) = crossbeam_channel::bounded(0);
+    let decoder = vulkan_ctx.device.create_wgpu_textures_decoder()?;
 
     std::thread::Builder::new()
         .name(format!("h264 vulkan video decoder {}", input_id.0))
@@ -33,39 +33,19 @@ pub fn start_vulkan_video_decoder_thread(
                 input_id = input_id.to_string()
             )
             .entered();
-            run_decoder_thread(
-                vulkan_ctx.device,
-                init_result_sender,
-                chunks_receiver,
-                frame_sender,
-                send_eos,
-            )
+            run_decoder_thread(decoder, chunks_receiver, frame_sender, send_eos)
         })
         .unwrap();
-
-    init_result_receiver.recv().unwrap()?;
 
     Ok(())
 }
 
 fn run_decoder_thread(
-    vulkan_device: Arc<VulkanDevice>,
-    init_result_sender: Sender<Result<(), InputInitError>>,
+    mut decoder: WgpuTexturesDecoder,
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
     send_eos: bool,
 ) {
-    let mut decoder = match vulkan_device.create_wgpu_textures_decoder() {
-        Ok(decoder) => {
-            init_result_sender.send(Ok(())).unwrap();
-            decoder
-        }
-        Err(err) => {
-            init_result_sender.send(Err(err.into())).unwrap();
-            return;
-        }
-    };
-
     for chunk in chunks_receiver {
         let chunk = match chunk {
             PipelineEvent::Data(chunk) => chunk,
