@@ -71,17 +71,21 @@
 //!
 
 #![cfg(not(target_os = "macos"))]
+mod device;
+mod instance;
 mod parser;
-pub(crate) mod vulkan_ctx;
 mod vulkan_decoder;
 mod vulkan_encoder;
 pub(crate) mod wrappers;
 
+use ash::vk;
 use parser::Parser;
 use vulkan_decoder::{FrameSorter, VulkanDecoder};
 
+pub use device::caps::{EncodeCapabilities, EncodeH264Capabilities, EncodeH264ProfileCapabilities};
+pub use device::{EncoderParameters, VideoParameters, VulkanDevice};
+pub use instance::VulkanInstance;
 pub use parser::ParserError;
-pub use vulkan_ctx::{H264Profile, VulkanCtxError, VulkanDevice, VulkanInstance};
 pub use vulkan_decoder::VulkanDecoderError;
 pub use vulkan_encoder::{RateControl, VulkanEncoderError};
 
@@ -92,6 +96,72 @@ pub enum DecoderError {
 
     #[error("H264 parser error: {0}")]
     ParserError(#[from] ParserError),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum VulkanInitError {
+    #[error("Error loading vulkan: {0}")]
+    LoadingError(#[from] ash::LoadingError),
+
+    #[error("Vulkan error: {0}")]
+    VkError(#[from] vk::Result),
+
+    #[error("wgpu instance error: {0}")]
+    WgpuInstanceError(#[from] wgpu::hal::InstanceError),
+
+    #[error("wgpu device error: {0}")]
+    WgpuDeviceError(#[from] wgpu::hal::DeviceError),
+
+    #[error("wgpu request device error: {0}")]
+    WgpuRequestDeviceError(#[from] wgpu::RequestDeviceError),
+
+    #[error("cannot create a wgpu adapter")]
+    WgpuAdapterNotCreated,
+
+    #[error("Cannot find a suitable physical device")]
+    NoDevice,
+
+    #[error("String conversion error: {0}")]
+    StringConversionError(#[from] std::ffi::FromBytesUntilNulError),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum VulkanCommonError {
+    #[error("Vulkan error: {0}")]
+    VkError(#[from] vk::Result),
+
+    #[error("Cannot find a queue with index {0}")]
+    NoQueue(usize),
+
+    #[error("Memory copy requested to a bufer that is not set up for receiving input")]
+    UploadToImproperBuffer,
+
+    #[error("A slot in the Decoded Pictures Buffer was requested, but all slots are taken")]
+    NoFreeSlotsInDpb,
+
+    #[error("DPB can have at most 32 slots, {0} was requested")]
+    DpbTooLong(u32),
+}
+
+/// A profile in H264 is a set of codec features used while encoding a specific video.
+/// Baseline uses the fewest features, Main can use more and High even more than Main.
+#[derive(Debug, Clone, Copy)]
+pub enum H264Profile {
+    Baseline,
+    Main,
+    High,
+}
+
+impl H264Profile {
+    pub(crate) fn to_profile_idc(self) -> vk::native::StdVideoH264ProfileIdc {
+        match self {
+            H264Profile::Baseline => {
+                vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_BASELINE
+            }
+            H264Profile::Main => vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN,
+            H264Profile::High => vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH,
+        }
+    }
 }
 
 /// Represents a chunk of encoded video data.

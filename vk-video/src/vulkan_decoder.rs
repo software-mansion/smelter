@@ -10,8 +10,7 @@ use crate::{
     parser::{DecodeInformation, DecoderInstruction, ReferenceId},
     RawFrameData,
 };
-use crate::parser::{DecodeInformation, DecoderInstruction, ReferenceId};
-use crate::{wrappers::*, VulkanCtxError, VulkanDevice};
+use crate::{wrappers::*, VulkanCommonError, VulkanDevice};
 
 mod frame_sorter;
 mod session_resources;
@@ -84,7 +83,7 @@ pub enum VulkanDecoderError {
     MonochromeChromaFormatUnsupported,
 
     #[error(transparent)]
-    VulkanCtxError(#[from] VulkanCtxError),
+    VulkanCommonError(#[from] VulkanCommonError),
 }
 
 impl VulkanDecoder<'_> {
