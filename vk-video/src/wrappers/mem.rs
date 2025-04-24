@@ -3,14 +3,16 @@ use std::sync::{Arc, Mutex};
 use ash::vk;
 use vk_mem::Alloc;
 
-use crate::{vulkan_encoder::H264EncodeProfileInfo, VulkanCtxError, VulkanDecoderError};
+use crate::{
+    vulkan_encoder::H264EncodeProfileInfo, VulkanCommonError, VulkanDecoderError, VulkanInitError,
+};
 
-use super::{CommandBuffer, Device, H264DecodeProfileInfo, Instance};
+use super::{Device, H264DecodeProfileInfo, Instance};
 
 pub(crate) struct Allocator {
     allocator: vk_mem::Allocator,
     _instance: Arc<Instance>,
-    _device: Arc<Device>,
+    pub(crate) device: Arc<Device>,
 }
 
 impl Allocator {
@@ -18,7 +20,7 @@ impl Allocator {
         instance: Arc<Instance>,
         physical_device: vk::PhysicalDevice,
         device: Arc<Device>,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanInitError> {
         let mut allocator_create_info =
             vk_mem::AllocatorCreateInfo::new(&instance, &device, physical_device);
         allocator_create_info.vulkan_api_version = vk::API_VERSION_1_3;
@@ -27,7 +29,7 @@ impl Allocator {
 
         Ok(Self {
             allocator,
-            _device: device,
+            device,
             _instance: instance,
         })
     }
@@ -51,7 +53,7 @@ impl MemoryAllocation {
         allocator: Arc<Allocator>,
         memory_requirements: &vk::MemoryRequirements,
         alloc_info: &vk_mem::AllocationCreateInfo,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         let allocation = unsafe { allocator.allocate_memory(memory_requirements, alloc_info)? };
 
         Ok(Self {
@@ -143,7 +145,7 @@ impl Buffer {
         allocator: Arc<Allocator>,
         size: u64,
         profile: &H264DecodeProfileInfo,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
             .profiles(std::slice::from_ref(&profile.profile_info));
 
@@ -160,7 +162,7 @@ impl Buffer {
         allocator: Arc<Allocator>,
         size: u64,
         profile: &H264EncodeProfileInfo,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
             .profiles(std::slice::from_ref(&profile.profile_info));
 
@@ -177,7 +179,7 @@ impl Buffer {
         allocator: Arc<Allocator>,
         size: u64,
         direction: TransferDirection,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         let usage = match direction {
             TransferDirection::GpuToMem => vk::BufferUsageFlags::TRANSFER_DST,
             TransferDirection::MemToGpu => vk::BufferUsageFlags::TRANSFER_SRC,
@@ -194,7 +196,7 @@ impl Buffer {
     pub(crate) fn new_transfer_with_data(
         allocator: Arc<Allocator>,
         data: &[u8],
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         let mut result =
             Self::new_transfer(allocator, data.len() as u64, TransferDirection::MemToGpu)?;
         result.copy_data_into(data)?;
@@ -206,7 +208,7 @@ impl Buffer {
         allocator: Arc<Allocator>,
         create_info: vk::BufferCreateInfo,
         transfer_direction: TransferDirection,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         let allocation_flags = match transfer_direction {
             TransferDirection::GpuToMem => vk_mem::AllocationCreateFlags::HOST_ACCESS_RANDOM,
             TransferDirection::MemToGpu => {
@@ -237,7 +239,7 @@ impl Buffer {
     pub(crate) unsafe fn download_data_from_buffer(
         &mut self,
         size: usize,
-    ) -> Result<Vec<u8>, VulkanCtxError> {
+    ) -> Result<Vec<u8>, VulkanCommonError> {
         let output;
         unsafe {
             let memory = self.allocator.map_memory(&mut self.allocation)?;
@@ -249,21 +251,9 @@ impl Buffer {
         Ok(output)
     }
 
-    pub(crate) fn new_with_decode_data(
-        allocator: Arc<Allocator>,
-        data: &[u8],
-        buffer_size: u64,
-        profile_info: &H264DecodeProfileInfo,
-    ) -> Result<Buffer, VulkanCtxError> {
-        let mut decode_buffer = Buffer::new_decode(allocator.clone(), buffer_size, profile_info)?;
-        decode_buffer.copy_data_into(data)?;
-
-        Ok(decode_buffer)
-    }
-
-    fn copy_data_into(&mut self, data: &[u8]) -> Result<(), VulkanCtxError> {
+    fn copy_data_into(&mut self, data: &[u8]) -> Result<(), VulkanCommonError> {
         if self.transfer_direction != TransferDirection::MemToGpu {
-            return Err(VulkanCtxError::UploadToImproperBuffer);
+            return Err(VulkanCommonError::UploadToImproperBuffer);
         }
 
         unsafe {
@@ -298,6 +288,7 @@ pub(crate) struct Image {
     pub(crate) image: vk::Image,
     allocation: vk_mem::Allocation,
     allocator: Arc<Allocator>,
+    pub(crate) device: Arc<Device>,
     pub(crate) layout: Box<[vk::ImageLayout]>,
     pub(crate) extent: vk::Extent3D,
 }
@@ -306,7 +297,7 @@ impl Image {
     pub(crate) fn new(
         allocator: Arc<Allocator>,
         image_create_info: &vk::ImageCreateInfo,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         let extent = image_create_info.extent;
         let layout =
             vec![image_create_info.initial_layout; image_create_info.array_layers as usize]
@@ -322,6 +313,7 @@ impl Image {
         Ok(Image {
             image,
             allocation,
+            device: allocator.device.clone(),
             allocator,
             layout,
             extent,
@@ -330,12 +322,12 @@ impl Image {
 
     pub(crate) fn transition_layout(
         &mut self,
-        command_buffer: &CommandBuffer,
+        command_buffer: vk::CommandBuffer,
         stages: std::ops::Range<vk::PipelineStageFlags2>,
         accesses: std::ops::Range<vk::AccessFlags2>,
         new_layout: vk::ImageLayout,
         subresource_range: vk::ImageSubresourceRange,
-    ) -> Result<vk::ImageLayout, VulkanCtxError> {
+    ) -> Result<vk::ImageLayout, VulkanCommonError> {
         let barrier = vk::ImageMemoryBarrier2::default()
             .src_stage_mask(stages.start)
             .dst_stage_mask(stages.end)
@@ -349,8 +341,8 @@ impl Image {
             .subresource_range(subresource_range);
 
         unsafe {
-            command_buffer.device().cmd_pipeline_barrier2(
-                **command_buffer,
+            self.device.cmd_pipeline_barrier2(
+                command_buffer,
                 &vk::DependencyInfo::default().image_memory_barriers(&[barrier]),
             );
         }
@@ -371,12 +363,12 @@ impl Image {
 
     pub(crate) fn transition_layout_single_layer(
         &mut self,
-        command_buffer: &CommandBuffer,
+        command_buffer: vk::CommandBuffer,
         stages: std::ops::Range<vk::PipelineStageFlags2>,
         accesses: std::ops::Range<vk::AccessFlags2>,
         new_layout: vk::ImageLayout,
         base_array_layer: u32,
-    ) -> Result<vk::ImageLayout, VulkanCtxError> {
+    ) -> Result<vk::ImageLayout, VulkanCommonError> {
         self.transition_layout(
             command_buffer,
             stages,
@@ -421,7 +413,7 @@ impl ImageView {
         device: Arc<Device>,
         image: Arc<Mutex<Image>>,
         create_info: &vk::ImageViewCreateInfo,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         let view = unsafe { device.create_image_view(create_info, None)? };
 
         Ok(ImageView {

@@ -66,7 +66,14 @@ impl SeqParameterSetExt for SeqParameterSet {
 
 pub(crate) struct VkSequenceParameterSet {
     pub(crate) sps: vk::native::StdVideoH264SequenceParameterSet,
+
+    /// # Safety
+    /// Do not modify this pointer or anything it points to
     scaling_lists_ptr: Option<NonNull<H264ScalingLists>>,
+
+    /// # Safety
+    /// Do not modify this pointer or anything it points to
+    offset_for_ref_frame: Option<NonNull<[i32]>>,
     // in the future, heap-allocated VUI and HRD parameters can be put here to have everything
     // together
 }
@@ -164,14 +171,25 @@ impl From<&'_ SeqParameterSet> for VkSequenceParameterSet {
             None => (0, 0, 0, 0),
         };
 
-        let pOffsetForRefFrame = match &sps.pic_order_cnt {
+        let offset_for_ref_frame = match &sps.pic_order_cnt {
             h264_reader::nal::sps::PicOrderCntType::TypeOne {
                 offsets_for_ref_frame,
                 ..
-            } => offsets_for_ref_frame.as_ptr(),
+            } => Some(offsets_for_ref_frame.clone()),
             h264_reader::nal::sps::PicOrderCntType::TypeZero { .. }
-            | h264_reader::nal::sps::PicOrderCntType::TypeTwo => std::ptr::null(),
+            | h264_reader::nal::sps::PicOrderCntType::TypeTwo => None,
         };
+
+        let offset_for_ref_frame = offset_for_ref_frame
+            .map(|o| o.into_boxed_slice())
+            .map(Box::leak);
+
+        let pOffsetForRefFrame = match offset_for_ref_frame.as_ref() {
+            Some(o) => o.as_ptr(),
+            None => std::ptr::null(),
+        };
+
+        let offset_for_ref_frame = offset_for_ref_frame.map(NonNull::from);
 
         let scaling_lists: Option<&mut H264ScalingLists> = sps
             .chroma_info
@@ -219,6 +237,7 @@ impl From<&'_ SeqParameterSet> for VkSequenceParameterSet {
                 pSequenceParameterSetVui,
             },
             scaling_lists_ptr,
+            offset_for_ref_frame,
         }
     }
 }
@@ -227,8 +246,14 @@ impl Drop for VkSequenceParameterSet {
     fn drop(&mut self) {
         self.scaling_lists_ptr
             .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
+
+        self.offset_for_ref_frame
+            .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
     }
 }
+
+unsafe impl Send for VkSequenceParameterSet {}
+unsafe impl Sync for VkSequenceParameterSet {}
 
 pub(crate) struct H264ScalingLists {
     pub(crate) list: vk::native::StdVideoH264ScalingLists,
@@ -437,6 +462,9 @@ fn h264_profile_idc_to_vk(
     }
 }
 
+unsafe impl<'a, T: 'a + vk::ExtendsVideoProfileInfoKHR> Send for ProfileInfo<'a, T> {}
+unsafe impl<'a, T: 'a + vk::ExtendsVideoProfileInfoKHR> Sync for ProfileInfo<'a, T> {}
+
 pub(crate) struct ProfileInfo<'a, T: 'a + vk::ExtendsVideoProfileInfoKHR> {
     pub(crate) profile_info: vk::VideoProfileInfoKHR<'a>,
     additional_info_ptr: NonNull<T>,
@@ -608,6 +636,9 @@ impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkPictureParameterSet 
         }
     }
 }
+
+unsafe impl Send for VkPictureParameterSet {}
+unsafe impl Sync for VkPictureParameterSet {}
 
 impl Drop for VkPictureParameterSet {
     fn drop(&mut self) {

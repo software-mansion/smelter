@@ -3,7 +3,7 @@ use std::{ffi::c_void, sync::Arc};
 use ash::vk::{self, QueryType};
 use tracing::{error, info, trace, warn};
 
-use crate::VulkanCtxError;
+use crate::{VulkanCommonError, VulkanDecoderError, VulkanInitError};
 
 use super::{Device, Instance};
 
@@ -13,7 +13,7 @@ pub(crate) struct DebugMessenger {
 }
 
 impl DebugMessenger {
-    pub(crate) fn new(instance: Arc<Instance>) -> Result<Self, VulkanCtxError> {
+    pub(crate) fn new(instance: Arc<Instance>) -> Result<Self, VulkanInitError> {
         let debug_messenger_create_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
             .message_severity(
                 vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
@@ -107,7 +107,7 @@ impl DecodingQueryPool {
     pub(crate) fn new(
         device: Arc<Device>,
         profile: vk::VideoProfileInfoKHR,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanDecoderError> {
         let pool = QueryPool::new(
             device,
             QueryType::RESULT_STATUS_ONLY_KHR,
@@ -118,7 +118,9 @@ impl DecodingQueryPool {
         Ok(Self { pool })
     }
 
-    pub(crate) fn get_result_blocking(&self) -> Result<vk::QueryResultStatusKHR, VulkanCtxError> {
+    pub(crate) fn get_result_blocking(
+        &self,
+    ) -> Result<vk::QueryResultStatusKHR, VulkanDecoderError> {
         let mut result = vk::QueryResultStatusKHR::NOT_READY;
         unsafe {
             self.pool.device.get_query_pool_results(
@@ -145,7 +147,7 @@ impl QueryPool {
         count: u32,
         mut profile: Option<vk::VideoProfileInfoKHR>,
         mut p_next: Option<T>,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         let mut create_info = vk::QueryPoolCreateInfo::default()
             .query_type(ty)
             .query_count(count);

@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use ash::vk;
 
-use crate::{H264Profile, VulkanCtxError, VulkanDevice};
+use crate::{VulkanCommonError, VulkanDevice};
 
 use super::{CommandBuffer, Device, Image, ImageView, MemoryAllocation, VideoQueueExt};
 
@@ -20,7 +20,7 @@ impl VideoSessionParameters {
         initial_pps: &[vk::native::StdVideoH264PictureParameterSet],
         template: Option<&Self>,
         encode_quality_level: Option<u32>,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         let parameters_add_info = vk::VideoDecodeH264SessionParametersAddInfoKHR::default()
             .std_sp_ss(initial_sps)
             .std_pp_ss(initial_pps);
@@ -76,7 +76,7 @@ impl VideoSessionParameters {
         &mut self,
         sps: &[vk::native::StdVideoH264SequenceParameterSet],
         pps: &[vk::native::StdVideoH264PictureParameterSet],
-    ) -> Result<(), VulkanCtxError> {
+    ) -> Result<(), VulkanCommonError> {
         let mut parameters_add_info = vk::VideoDecodeH264SessionParametersAddInfoKHR::default()
             .std_sp_ss(sps)
             .std_pp_ss(pps);
@@ -123,7 +123,7 @@ impl VideoSession {
         max_active_references: u32,
         flags: vk::VideoSessionCreateFlagsKHR,
         std_header_version: &vk::ExtensionProperties,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         // TODO: this probably works, but this format needs to be detected and set
         // based on what the GPU supports
         let format = vk::Format::G8_B8R8_2PLANE_420_UNORM;
@@ -283,8 +283,14 @@ impl ImageWithView {
 
     fn image_view(&self, index: u32) -> &ImageView {
         match self {
-            ImageWithView::Single { image_view: _image_view, .. } => _image_view,
-            ImageWithView::Multiple { image_views: _image_views, .. } => &_image_views[index as usize],
+            ImageWithView::Single {
+                image_view: _image_view,
+                ..
+            } => _image_view,
+            ImageWithView::Multiple {
+                image_views: _image_views,
+                ..
+            } => &_image_views[index as usize],
         }
     }
 }
@@ -307,7 +313,7 @@ impl<'a> CodingImageBundle<'a> {
         array_layer_count: u32,
         queue_indices: Option<&[u32]>,
         layout: vk::ImageLayout,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         let mut profile_list_info =
             vk::VideoProfileListInfoKHR::default().profiles(std::slice::from_ref(profile_info));
 
@@ -358,10 +364,8 @@ impl<'a> CodingImageBundle<'a> {
             let images = (0..array_layer_count)
                 .map(|_| {
                     image_create_info = image_create_info.array_layers(1);
-                    let image = Image::new(vulkan_ctx.allocator.clone(), &image_create_info)
-                        .map(|i| Arc::new(Mutex::new(i)));
-
-                    image
+                    Image::new(vulkan_ctx.allocator.clone(), &image_create_info)
+                        .map(|i| Arc::new(Mutex::new(i)))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
@@ -390,7 +394,7 @@ impl<'a> CodingImageBundle<'a> {
 
             for image in &images {
                 image.lock().unwrap().transition_layout(
-                    command_buffer,
+                    **command_buffer,
                     stages.clone(),
                     accesses.clone(),
                     layout,
@@ -427,17 +431,14 @@ impl<'a> CodingImageBundle<'a> {
             )?;
 
             image.lock().unwrap().transition_layout(
-                command_buffer,
+                **command_buffer,
                 stages.clone(),
                 accesses.clone(),
                 layout,
                 subresource_range,
             )?;
 
-            ImageWithView::Single {
-                image,
-                image_view,
-            }
+            ImageWithView::Single { image, image_view }
         };
 
         let video_resource_info = (0..array_layer_count)
@@ -480,9 +481,9 @@ impl<'a> DecodedPicturesBuffer<'a> {
         max_dpb_slots: u32,
         queue_indices: Option<&'_ [u32]>,
         layout: vk::ImageLayout,
-    ) -> Result<Self, VulkanCtxError> {
+    ) -> Result<Self, VulkanCommonError> {
         if max_dpb_slots > 32 {
-            return Err(VulkanCtxError::DpbTooLong(max_dpb_slots));
+            return Err(VulkanCommonError::DpbTooLong(max_dpb_slots));
         }
 
         let image = CodingImageBundle::new(
@@ -518,11 +519,11 @@ impl<'a> DecodedPicturesBuffer<'a> {
             .collect()
     }
 
-    pub(crate) fn allocate_reference_picture(&mut self) -> Result<usize, VulkanCtxError> {
+    pub(crate) fn allocate_reference_picture(&mut self) -> Result<usize, VulkanCommonError> {
         let i = self.slot_active_bitmap.trailing_ones();
 
         if i >= self.len.into() {
-            return Err(VulkanCtxError::NoFreeSlotsInDpb);
+            return Err(VulkanCommonError::NoFreeSlotsInDpb);
         }
 
         self.slot_active_bitmap |= 1 << i;

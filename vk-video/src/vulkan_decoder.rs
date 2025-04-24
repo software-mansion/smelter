@@ -10,8 +10,7 @@ use crate::{
     parser::{DecodeInformation, DecoderInstruction, ReferenceId},
     RawFrameData,
 };
-use crate::parser::{DecodeInformation, DecoderInstruction, ReferenceId};
-use crate::{wrappers::*, VulkanCtxError, VulkanDevice};
+use crate::{wrappers::*, VulkanCommonError, VulkanDevice};
 
 mod frame_sorter;
 mod session_resources;
@@ -84,7 +83,7 @@ pub enum VulkanDecoderError {
     MonochromeChromaFormatUnsupported,
 
     #[error(transparent)]
-    VulkanCtxError(#[from] VulkanCtxError),
+    VulkanCommonError(#[from] VulkanCommonError),
 }
 
 impl VulkanDecoder<'_> {
@@ -573,7 +572,7 @@ impl VulkanDecoder<'_> {
             .lock()
             .unwrap()
             .transition_layout_single_layer(
-                &self.command_buffers.vulkan_to_wgpu_transfer_buffer,
+                *self.command_buffers.vulkan_to_wgpu_transfer_buffer,
                 vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
                 vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_READ,
                 vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -581,7 +580,7 @@ impl VulkanDecoder<'_> {
             )?;
 
         image.transition_layout_single_layer(
-            &self.command_buffers.vulkan_to_wgpu_transfer_buffer,
+            *self.command_buffers.vulkan_to_wgpu_transfer_buffer,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
             vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_WRITE,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -643,7 +642,7 @@ impl VulkanDecoder<'_> {
             .lock()
             .unwrap()
             .transition_layout_single_layer(
-                &self.command_buffers.vulkan_to_wgpu_transfer_buffer,
+                *self.command_buffers.vulkan_to_wgpu_transfer_buffer,
                 vk::PipelineStageFlags2::COPY..vk::PipelineStageFlags2::NONE,
                 vk::AccessFlags2::TRANSFER_READ..vk::AccessFlags2::NONE,
                 old_layout,
@@ -651,7 +650,7 @@ impl VulkanDecoder<'_> {
             )?;
 
         image.transition_layout_single_layer(
-            &self.command_buffers.vulkan_to_wgpu_transfer_buffer,
+            *self.command_buffers.vulkan_to_wgpu_transfer_buffer,
             vk::PipelineStageFlags2::COPY..vk::PipelineStageFlags2::NONE,
             vk::AccessFlags2::TRANSFER_WRITE..vk::AccessFlags2::NONE,
             vk::ImageLayout::GENERAL,
@@ -844,7 +843,7 @@ impl VulkanDecoder<'_> {
         self.command_buffers.gpu_to_mem_transfer_buffer.begin()?;
 
         let old_layout = image.transition_layout_single_layer(
-            &self.command_buffers.gpu_to_mem_transfer_buffer,
+            *self.command_buffers.gpu_to_mem_transfer_buffer,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
             vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_READ,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -905,7 +904,7 @@ impl VulkanDecoder<'_> {
         };
 
         image.transition_layout_single_layer(
-            &self.command_buffers.gpu_to_mem_transfer_buffer,
+            *self.command_buffers.gpu_to_mem_transfer_buffer,
             vk::PipelineStageFlags2::COPY..vk::PipelineStageFlags2::NONE,
             vk::AccessFlags2::TRANSFER_READ..vk::AccessFlags2::NONE,
             old_layout,

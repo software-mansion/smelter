@@ -8,46 +8,6 @@ const MACROBLOCK_SIZE: u32 = 16;
 pub(crate) const MAX_FRAME_NUM: u32 = 1 << 7;
 const LOG2_MAX_FRAME_NUM_MINUS_4: u8 = (MAX_FRAME_NUM.ilog2() as u8) - 4;
 
-pub(crate) fn vui(fps: u32) -> Result<vk::native::StdVideoH264SequenceParameterSetVui, VulkanEncoderError> {
-    let vui = vk::native::StdVideoH264SequenceParameterSetVui {
-        flags: vk::native::StdVideoH264SpsVuiFlags {
-            _bitfield_align_1: [],
-            _bitfield_1: vk::native::StdVideoH264SpsVuiFlags::new_bitfield_1(
-                1,
-                1,
-                0,
-                0,
-                0,
-                0,
-                0,
-                1,
-                1,
-                0, // TODO: b-frames
-                0,
-                0
-            ),
-            __bindgen_padding_0: 0,
-        },
-        aspect_ratio_idc: vk::native::StdVideoH264AspectRatioIdc_STD_VIDEO_H264_ASPECT_RATIO_IDC_SQUARE,
-        sar_width: 0,
-        sar_height: 0,
-        video_format: 0,
-        colour_primaries: 0,
-        transfer_characteristics: 0,
-        matrix_coefficients: 0,
-        num_units_in_tick: 1,
-        time_scale: fps * 2,
-        max_num_reorder_frames: 0, // TODO: b-frames
-        max_dec_frame_buffering: 0, // TODO: b-frames
-        chroma_sample_loc_type_top_field: 0,
-        chroma_sample_loc_type_bottom_field: 0,
-        reserved1: 0,
-        pHrdParameters: std::ptr::null(),
-    };
-
-    Ok(vui)
-}
-
 pub(crate) fn sps(
     profile: H264Profile,
     width: u32,

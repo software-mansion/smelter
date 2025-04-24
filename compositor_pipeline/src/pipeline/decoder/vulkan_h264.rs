@@ -8,7 +8,7 @@ use crate::pipeline::decoder::{VideoDecoder, VideoDecoderInstance};
 use crate::prelude::*;
 
 pub struct VulkanH264Decoder {
-    decoder: WgpuTexturesDecoder<'static>,
+    decoder: WgpuTexturesDecoder,
 }
 
 impl VideoDecoder for VulkanH264Decoder {

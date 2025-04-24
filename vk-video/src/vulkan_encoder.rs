@@ -1,22 +1,26 @@
 use std::{
     collections::VecDeque,
+    num::NonZeroU32,
     sync::{Arc, Mutex},
 };
 
 use ash::vk;
-use encode_parameter_sets::{pps, sps, vui};
+use encode_parameter_sets::{pps, sps};
+use wgpu::hal::Device as _;
+use yuv_converter::Converter;
 
 use crate::{
-    vulkan_ctx::H264Profile,
+    device::Rational,
     wrappers::{
         Buffer, CommandBuffer, CommandPool, DecodedPicturesBuffer, Device, Fence, Image, ImageView,
         ProfileInfo, QueryPool, Semaphore, VideoEncodeQueueExt, VideoQueueExt, VideoSession,
         VideoSessionParameters,
     },
-    Frame, RawFrame, VulkanCtxError, VulkanDevice,
+    EncodedChunk, Frame, H264Profile, RawFrameData, VulkanCommonError, VulkanDevice,
 };
 
 mod encode_parameter_sets;
+pub(crate) mod yuv_converter;
 
 const MB: u64 = 1024 * 1024;
 
@@ -32,7 +36,7 @@ pub enum VulkanEncoderError {
     NotNV12Texture(wgpu::TextureFormat),
 
     #[error(transparent)]
-    VulkanCtxError(#[from] VulkanCtxError),
+    VulkanCommonError(#[from] VulkanCommonError),
 
     #[error("The byte length of the provided frame ({bytes}) is not the same as the picture size calculated from the dimensions ({size_from_resolution})")]
     InconsistentPictureDimensions {
@@ -51,6 +55,12 @@ pub enum VulkanEncoderError {
 
     #[error("Encode operation failed with status {0:?}")]
     EncodeOperationFailed(vk::QueryResultStatusKHR),
+
+    #[error("Invalid encoder parameters, field: {field} - problem: {problem}")]
+    ParametersError {
+        field: &'static str,
+        problem: String,
+    },
 }
 
 struct VideoSessionResources<'a> {
@@ -59,29 +69,28 @@ struct VideoSessionResources<'a> {
     parameters: VideoSessionParameters,
     dpb: DecodedPicturesBuffer<'a>,
     quality_level: u32,
-    framerate: (u32, u32),
     rate_control: RateControl,
+    framerate: Rational,
 }
 
 impl VideoSessionResources<'_> {
     fn new(
         device: &VulkanDevice,
         command_buffer: &CommandBuffer,
-        profile: H264Profile,
+        parameters: FullEncoderParameters,
         profile_info: &vk::VideoProfileInfoKHR,
-        extent: vk::Extent2D,
-        quality_level: u32,
-        framerate: (u32, u32),
     ) -> Result<Self, VulkanEncoderError> {
         let encode_capabilities = device
-            .encode_capabilities
-            .profile(profile)
-            .ok_or(VulkanEncoderError::ProfileUnsupported(profile))?;
+            .native_encode_capabilities
+            .profile(parameters.profile)
+            .ok_or(VulkanEncoderError::ProfileUnsupported(parameters.profile))?;
 
-        let max_references = encode_capabilities
-            .h264_encode_capabilities
-            .max_p_picture_l0_reference_count;
-        // let max_references = 2;
+        let extent = vk::Extent2D {
+            width: parameters.width.get(),
+            height: parameters.height.get(),
+        };
+
+        let max_references = parameters.max_references.get();
         let max_dpb_slots = max_references + 1; // +1 for current picture
 
         let video_session = VideoSession::new(
@@ -95,8 +104,8 @@ impl VideoSessionResources<'_> {
         )?;
 
         let use_separate_images = device
-            .encode_capabilities
-            .profile(profile)
+            .native_encode_capabilities
+            .profile(parameters.profile)
             .unwrap()
             .video_capabilities
             .flags
@@ -115,30 +124,31 @@ impl VideoSessionResources<'_> {
             vk::ImageLayout::VIDEO_ENCODE_DPB_KHR,
         )?;
 
-        // TODO: denominator
-        let vui = vui(framerate.0)?;
-        let mut sps = sps(profile, extent.width, extent.height, max_references)?;
-        sps.flags.set_vui_parameters_present_flag(1);
-        sps.pSequenceParameterSetVui = &vui;
+        let sps = sps(
+            parameters.profile,
+            extent.width,
+            extent.height,
+            max_references,
+        )?;
         let pps = pps();
 
-        let parameters = VideoSessionParameters::new(
+        let session_parameters = VideoSessionParameters::new(
             device.device.clone(),
             video_session.session,
             &[sps],
             &[pps],
             None,
-            Some(quality_level),
+            Some(parameters.quality_level),
         )?;
 
         Ok(Self {
             video_session,
             dpb,
-            parameters,
+            parameters: session_parameters,
             max_dpb_slots,
-            quality_level,
-            framerate,
-            rate_control: RateControl::Default,
+            quality_level: parameters.quality_level,
+            rate_control: RateControl::EncoderDefault,
+            framerate: parameters.framerate,
         })
     }
 }
@@ -146,7 +156,7 @@ impl VideoSessionResources<'_> {
 pub(crate) type H264EncodeProfileInfo<'a> = ProfileInfo<'a, vk::VideoEncodeH264ProfileInfoKHR<'a>>;
 
 impl H264EncodeProfileInfo<'_> {
-    fn new_encode(profile: H264Profile) -> Self {
+    pub(crate) fn new_encode(profile: H264Profile) -> Self {
         let h264_profile =
             vk::VideoEncodeH264ProfileInfoKHR::default().std_profile_idc(profile.to_profile_idc());
 
@@ -179,7 +189,7 @@ impl EncodingQueryPool {
         profile_info: vk::VideoProfileInfoKHR,
     ) -> Result<Self, VulkanEncoderError> {
         let encode_capabilities = device
-            .encode_capabilities
+            .native_encode_capabilities
             .profile(profile)
             .ok_or(VulkanEncoderError::ProfileUnsupported(profile))?;
 
@@ -209,12 +219,13 @@ impl EncodingQueryPool {
         Ok(Self { pool })
     }
 
-    pub(crate) fn get_result_blocking(&self) -> Result<EncodeFeedback, VulkanCtxError> {
+    pub(crate) fn get_result_blocking(&self) -> Result<EncodeFeedback, VulkanEncoderError> {
         let mut result = [EncodeFeedback {
             offset: 0,
             bytes_written: 0,
             status: vk::QueryResultStatusKHR::NOT_READY,
         }];
+
         unsafe {
             self.pool.device.get_query_pool_results(
                 self.pool.pool,
@@ -264,14 +275,14 @@ impl CommandPools {
 
 struct SyncStructures {
     fence_done: Fence,
-    sem_transfer_done: Semaphore,
+    sem_ready_to_encode: Semaphore,
 }
 
 impl SyncStructures {
     fn new(device: Arc<Device>) -> Result<Self, VulkanEncoderError> {
         Ok(SyncStructures {
             fence_done: Fence::new(device.clone(), false)?,
-            sem_transfer_done: Semaphore::new(device.clone())?,
+            sem_ready_to_encode: Semaphore::new(device.clone())?,
         })
     }
 }
@@ -285,36 +296,66 @@ pub struct VulkanEncoder<'a> {
     profile: H264Profile,
     profile_info: H264EncodeProfileInfo<'a>,
     session_resources: VideoSessionResources<'a>,
-    gop_counter: usize,
-    gop_size: usize,
+    idr_period_counter: u32,
+    idr_period: u32,
     output_buffer: Buffer,
     idr_pic_id: u16,
     frame_num: u32,
     pic_order_cnt: u8,
     active_reference_slots: VecDeque<(usize, vk::native::StdVideoEncodeH264ReferenceInfo)>,
     rate_control: RateControl,
+    converter: Option<Converter>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FullEncoderParameters {
+    pub(crate) idr_period: NonZeroU32,
+    pub(crate) width: NonZeroU32,
+    pub(crate) height: NonZeroU32,
+    pub(crate) rate_control: RateControl,
+    pub(crate) max_references: NonZeroU32,
+    pub(crate) profile: H264Profile,
+    pub(crate) quality_level: u32,
+    pub(crate) framerate: Rational,
 }
 
 impl VulkanEncoder<'_> {
     const OUTPUT_BUFFER_LEN: u64 = 4 * MB;
-    // TODO: make proper parameters
-    pub fn new(
+
+    pub(crate) fn new_with_converter(
         device: Arc<VulkanDevice>,
-        profile: H264Profile,
-        width: u32,
-        height: u32,
-        gop_size: usize,
-        rate_control: RateControl,
+        parameters: FullEncoderParameters,
     ) -> Result<Self, VulkanEncoderError> {
-        let profile_info = H264EncodeProfileInfo::new_encode(profile);
+        let mut enc = Self::new(device.clone(), parameters)?;
+
+        let conv = Converter::new(
+            device.clone(),
+            parameters.width.get(),
+            parameters.height.get(),
+            &enc.profile_info,
+        )
+        .unwrap();
+
+        enc.converter = Some(conv);
+
+        Ok(enc)
+    }
+
+    pub(crate) fn new(
+        device: Arc<VulkanDevice>,
+        parameters: FullEncoderParameters,
+    ) -> Result<Self, VulkanEncoderError> {
+        let profile_info = H264EncodeProfileInfo::new_encode(parameters.profile);
         let command_pools = CommandPools::new(device.clone())?;
 
         let command_buffers = command_pools.buffers()?;
 
         let sync_structures = SyncStructures::new(device.device.clone())?;
 
-        let query_pool = EncodingQueryPool::new(&device, profile, profile_info.profile_info)?;
+        let query_pool =
+            EncodingQueryPool::new(&device, parameters.profile, profile_info.profile_info)?;
 
+        // TODO: this buffer should grow when necessary
         let output_buffer = Buffer::new_encode(
             device.allocator.clone(),
             Self::OUTPUT_BUFFER_LEN,
@@ -326,11 +367,8 @@ impl VulkanEncoder<'_> {
         let session_resources = VideoSessionResources::new(
             &device,
             &command_buffers.encode_buffer,
-            profile,
+            parameters,
             &profile_info.profile_info,
-            vk::Extent2D { width, height },
-            0,
-            (24, 1),
         )?;
 
         command_buffers.encode_buffer.end()?;
@@ -345,12 +383,12 @@ impl VulkanEncoder<'_> {
         sync_structures.fence_done.wait_and_reset(u64::MAX)?;
 
         Ok(Self {
-            gop_counter: 0,
+            idr_period_counter: 0,
             idr_pic_id: 0,
             frame_num: 0,
             pic_order_cnt: 0,
             active_reference_slots: VecDeque::with_capacity(session_resources.dpb.len as usize),
-            profile,
+            profile: parameters.profile,
             profile_info,
             device,
             _command_pools: command_pools,
@@ -358,9 +396,10 @@ impl VulkanEncoder<'_> {
             sync_structures,
             query_pool,
             session_resources,
-            gop_size,
+            idr_period: parameters.idr_period.get(),
             output_buffer,
-            rate_control,
+            rate_control: parameters.rate_control,
+            converter: None,
         })
     }
 
@@ -393,6 +432,7 @@ impl VulkanEncoder<'_> {
             i
         });
 
+        // Absolutely crucial for nvidia GPUs, nothing works without this.
         reference_slot_info.reverse();
 
         let mut begin_info = vk::VideoBeginCodingInfoKHR::default()
@@ -456,43 +496,21 @@ impl VulkanEncoder<'_> {
         self.session_resources.rate_control = rate_control;
     }
 
-    pub fn encode_bytes(
+    fn transfer_buffer_to_image(
         &mut self,
-        frame: &Frame<RawFrame>,
-        force_idr: bool,
-    ) -> Result<Vec<u8>, VulkanEncoderError> {
-        let is_idr = force_idr || self.gop_counter == 0;
-        let mut idr_pic_id = 0;
-
-        if is_idr {
-            self.gop_counter = 0;
-            idr_pic_id = self.idr_pic_id;
-            self.idr_pic_id = self.idr_pic_id.wrapping_add(1);
-            self.frame_num = 0;
-            self.pic_order_cnt = 0;
-            self.active_reference_slots.clear();
-            self.session_resources.dpb.reset_all_allocations();
-        } else if self.active_reference_slots.len() == self.session_resources.max_dpb_slots as usize
-        {
-            if let Some((oldest_reference, _)) = self.active_reference_slots.pop_front() {
-                self.session_resources
-                    .dpb
-                    .free_reference_picture(oldest_reference);
-            }
-        }
-
+        frame: &Frame<RawFrameData>,
+    ) -> Result<(Image, Buffer), VulkanEncoderError> {
         let extent = vk::Extent3D {
-            width: frame.frame.width,
-            height: frame.frame.height,
+            width: frame.data.width,
+            height: frame.data.height,
             depth: 1,
         };
 
-        if frame.frame.width as usize * frame.frame.height as usize * 3 / 2
-            != frame.frame.data.len()
+        if frame.data.width as usize * frame.data.height as usize * 3 / 2 != frame.data.frame.len()
         {
             return Err(VulkanEncoderError::InconsistentPictureDimensions {
-                bytes: frame.frame.data.len(),
-                size_from_resolution: frame.frame.width as usize * frame.frame.height as usize * 3
+                bytes: frame.data.frame.len(),
+                size_from_resolution: frame.data.width as usize * frame.data.height as usize * 3
                     / 2,
             });
         }
@@ -525,7 +543,7 @@ impl VulkanEncoder<'_> {
         self.command_buffers.transfer_buffer.begin()?;
 
         image.transition_layout_single_layer(
-            &self.command_buffers.transfer_buffer,
+            *self.command_buffers.transfer_buffer,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
             vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_WRITE,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -533,7 +551,7 @@ impl VulkanEncoder<'_> {
         )?;
 
         let buffer =
-            Buffer::new_transfer_with_data(self.device.allocator.clone(), &frame.frame.data)?;
+            Buffer::new_transfer_with_data(self.device.allocator.clone(), &frame.data.frame)?;
 
         unsafe {
             self.device.device.cmd_copy_buffer_to_image(
@@ -554,12 +572,12 @@ impl VulkanEncoder<'_> {
                         })
                         .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
                         .image_extent(vk::Extent3D {
-                            width: frame.frame.width,
-                            height: frame.frame.height,
+                            width: frame.data.width,
+                            height: frame.data.height,
                             depth: 1,
                         }),
                     vk::BufferImageCopy::default()
-                        .buffer_offset(frame.frame.width as u64 * frame.frame.height as u64)
+                        .buffer_offset(frame.data.width as u64 * frame.data.height as u64)
                         .buffer_row_length(0)
                         .buffer_image_height(0)
                         .image_subresource(vk::ImageSubresourceLayers {
@@ -570,8 +588,8 @@ impl VulkanEncoder<'_> {
                         })
                         .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
                         .image_extent(vk::Extent3D {
-                            width: frame.frame.width / 2,
-                            height: frame.frame.height / 2,
+                            width: frame.data.width / 2,
+                            height: frame.data.height / 2,
                             depth: 1,
                         }),
                 ],
@@ -584,40 +602,70 @@ impl VulkanEncoder<'_> {
             &self.command_buffers.transfer_buffer,
             &[],
             &[(
-                *self.sync_structures.sem_transfer_done,
+                *self.sync_structures.sem_ready_to_encode,
                 vk::PipelineStageFlags2::COPY,
             )],
             None,
         )?;
 
+        Ok((image, buffer))
+    }
+
+    fn encode(
+        &mut self,
+        image: Arc<Mutex<Image>>,
+        force_idr: bool,
+        wait_semaphore: vk::Semaphore,
+    ) -> Result<Vec<u8>, VulkanEncoderError> {
+        let is_idr = force_idr || self.idr_period_counter == 0;
+        let mut idr_pic_id = 0;
+
+        if is_idr {
+            self.idr_period_counter = 0;
+            idr_pic_id = self.idr_pic_id;
+            self.idr_pic_id = self.idr_pic_id.wrapping_add(1);
+            self.frame_num = 0;
+            self.pic_order_cnt = 0;
+            self.active_reference_slots.clear();
+            self.session_resources.dpb.reset_all_allocations();
+        } else if self.active_reference_slots.len() == self.session_resources.max_dpb_slots as usize
+        {
+            if let Some((oldest_reference, _)) = self.active_reference_slots.pop_front() {
+                self.session_resources
+                    .dpb
+                    .free_reference_picture(oldest_reference);
+            }
+        }
+
         self.command_buffers.encode_buffer.begin()?;
 
-        image.transition_layout_single_layer(
-            &self.command_buffers.encode_buffer,
+        let old_layout = image.lock().unwrap().transition_layout_single_layer(
+            *self.command_buffers.encode_buffer,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::VIDEO_ENCODE_KHR,
             vk::AccessFlags2::NONE..vk::AccessFlags2::VIDEO_ENCODE_READ_KHR,
             vk::ImageLayout::VIDEO_ENCODE_SRC_KHR,
             0,
         )?;
 
-        let image = Arc::new(Mutex::new(image));
-        let view = ImageView::new(
-            self.device.device.clone(),
-            image.clone(),
-            &vk::ImageViewCreateInfo::default()
-                .flags(vk::ImageViewCreateFlags::empty())
-                .image(image.lock().unwrap().image)
-                .view_type(vk::ImageViewType::TYPE_2D)
-                .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
-                .components(vk::ComponentMapping::default())
-                .subresource_range(vk::ImageSubresourceRange {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    level_count: 1,
-                    base_mip_level: 0,
-                    layer_count: 1,
-                    base_array_layer: 0,
-                }),
-        )?;
+        let mut view_usage_create_info = vk::ImageViewUsageCreateInfo::default()
+            .usage(vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR);
+
+        let view_create_info = vk::ImageViewCreateInfo::default()
+            .flags(vk::ImageViewCreateFlags::empty())
+            .image(image.lock().unwrap().image)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
+            .components(vk::ComponentMapping::default())
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                level_count: 1,
+                base_mip_level: 0,
+                layer_count: 1,
+                base_array_layer: 0,
+            })
+            .push_next(&mut view_usage_create_info);
+
+        let view = ImageView::new(self.device.device.clone(), image.clone(), &view_create_info)?;
 
         self.query_pool.reset(*self.command_buffers.encode_buffer);
 
@@ -634,6 +682,8 @@ impl VulkanEncoder<'_> {
         let pic_order_cnt = self.pic_order_cnt;
         self.pic_order_cnt = self.pic_order_cnt.wrapping_add(2);
 
+        // bugs in nvidia driver I encountered on this journey:
+        //
         // bug1: if primary pic type is set to I instead of IDR, the encode command will submit
         // successfully, the fence will trigger, signalling it has been executed, but if you then
         // query the implementation for the status of the operation, it will behave as though the
@@ -641,8 +691,9 @@ impl VulkanEncoder<'_> {
         // between I and IDR is invented in the vulkan spec, in h264 the values are equivalent.
         //
         // bug2: when rate control is disabled, you have to specify the temporal layer count to 0.
-        // You pass a table length and a pointer. Even when the length is set to 0, the pointer
-        // will be dereferenced. If you set it to NULL, the program will (obviously) segfault.
+        // You pass a table length and a pointer to a bable with temporal layer descriptions. Even
+        // when the length is set to 0, the pointer will be dereferenced. If you set it to NULL,
+        // the program will (obviously) segfault.
         //
         // bug3: each dpb reference picture has to be in a separate VkImage, even though the spec
         // says these can be different layers of the same image (even though using layers of one
@@ -653,9 +704,9 @@ impl VulkanEncoder<'_> {
         // internal implementation expects a very specific order though: from the most recent to
         // the oldest. It was natural for me to keep references in a FIFO queue, where I append
         // new pictures to the back and pop old pictures from the front when they're no longer
-        // needed. After hours of trying to figure out what the problem was I jokingly said that we
-        // should just try reversing the order we have. It ended up working. I don't know how
-        // anyone is supposed to find this.
+        // needed. After hours of trying to figure out what the problem was I jokingly said to a
+        // colleague that we should just try reversing the order we have. It ended up working.
+        // I don't know how anyone is supposed to find this.
 
         let primary_pic_type = if is_idr {
             vk::native::StdVideoH264PictureType_STD_VIDEO_H264_PICTURE_TYPE_IDR
@@ -691,7 +742,7 @@ impl VulkanEncoder<'_> {
             [vk::VideoEncodeH264NaluSliceInfoKHR::default().std_slice_header(&slice_header)];
 
         if let RateControl::Disabled = self.rate_control {
-            if let Some(caps) = self.device.encode_capabilities.profile(self.profile) {
+            if let Some(caps) = self.device.native_encode_capabilities.profile(self.profile) {
                 let quality_properties =
                     &caps.quality_level_properties[self.session_resources.quality_level as usize];
 
@@ -819,6 +870,8 @@ impl VulkanEncoder<'_> {
             .picture_resource(setup_reference_slot_video_resource_info)
             .push_next(&mut new_slot_reference_info);
 
+        let extent = image.lock().unwrap().extent;
+
         let src_picture_resource = vk::VideoPictureResourceInfoKHR::default()
             .coded_offset(vk::Offset2D::default())
             .coded_extent(vk::Extent2D {
@@ -860,19 +913,36 @@ impl VulkanEncoder<'_> {
             );
         }
 
-        self.command_buffers.encode_buffer.end()?;
-
-        self.device.queues.h264_encode.submit(
-            &self.command_buffers.encode_buffer,
-            &[(
-                *self.sync_structures.sem_transfer_done,
-                vk::PipelineStageFlags2::VIDEO_ENCODE_KHR,
-            )],
-            &[],
-            Some(*self.sync_structures.fence_done),
+        image.lock().unwrap().transition_layout_single_layer(
+            *self.command_buffers.encode_buffer,
+            vk::PipelineStageFlags2::VIDEO_ENCODE_KHR..vk::PipelineStageFlags2::NONE,
+            vk::AccessFlags2::VIDEO_ENCODE_READ_KHR..vk::AccessFlags2::NONE,
+            old_layout,
+            0,
         )?;
 
-        let start = std::time::Instant::now();
+        self.command_buffers.encode_buffer.end()?;
+
+        let sem_info = vk::SemaphoreSubmitInfo::default()
+            .value(1)
+            .stage_mask(vk::PipelineStageFlags2::VIDEO_ENCODE_KHR)
+            .semaphore(wait_semaphore);
+
+        let buffer_info = vk::CommandBufferSubmitInfo::default()
+            .command_buffer(self.command_buffers.encode_buffer.buffer);
+
+        let submit_info = vk::SubmitInfo2::default()
+            .wait_semaphore_infos(std::slice::from_ref(&sem_info))
+            .command_buffer_infos(std::slice::from_ref(&buffer_info));
+
+        unsafe {
+            self.device.device.device.queue_submit2(
+                *self.device.queues.h264_encode.queue.lock().unwrap(),
+                &[submit_info],
+                *self.sync_structures.fence_done,
+            )?
+        };
+
         self.sync_structures.fence_done.wait_and_reset(u64::MAX)?;
 
         let feedback = self.query_pool.get_result_blocking()?;
@@ -912,10 +982,60 @@ impl VulkanEncoder<'_> {
 
         output.extend_from_slice(&encoded);
 
-        self.gop_counter += 1;
-        self.gop_counter %= self.gop_size;
+        self.idr_period_counter += 1;
+        self.idr_period_counter %= self.idr_period;
 
         Ok(output)
+    }
+
+    pub fn encode_bytes(
+        &mut self,
+        frame: &Frame<RawFrameData>,
+        force_idr: bool,
+    ) -> Result<EncodedChunk<Vec<u8>>, VulkanEncoderError> {
+        let (image, _buffer) = self.transfer_buffer_to_image(frame)?;
+
+        let image = Arc::new(Mutex::new(image));
+
+        let result = self.encode(image, force_idr, *self.sync_structures.sem_ready_to_encode)?;
+
+        Ok(EncodedChunk {
+            data: result,
+            pts: frame.pts,
+        })
+    }
+
+    /// # Safety
+    /// The texture cannot be a surface texture
+    pub unsafe fn encode_texture(
+        &mut self,
+        frame: Frame<wgpu::Texture>,
+        force_idr: bool,
+    ) -> Result<EncodedChunk<Vec<u8>>, VulkanEncoderError> {
+        let convert_state =
+            unsafe { self.converter.as_ref().unwrap().convert(frame.data) }.unwrap();
+
+        let sem = match convert_state.fence {
+            wgpu::hal::vulkan::Fence::TimelineSemaphore(semaphore) => semaphore,
+            wgpu::hal::vulkan::Fence::FencePool { .. } => {
+                panic!("wgpu fence pools are unsupported")
+            }
+        };
+
+        let result = self.encode(convert_state.image, force_idr, sem)?;
+
+        unsafe {
+            self.device
+                .wgpu_device()
+                .as_hal::<wgpu::hal::vulkan::Api, _, _>(|d| {
+                    d.unwrap().destroy_fence(convert_state.fence)
+                })
+        }
+
+        Ok(EncodedChunk {
+            data: result,
+            pts: frame.pts,
+        })
     }
 
     fn encoder_rate_control_for<'a>(
@@ -926,7 +1046,7 @@ impl VulkanEncoder<'_> {
         let layers = layers?;
 
         match rate_control {
-            RateControl::Default => None,
+            RateControl::EncoderDefault => None,
             RateControl::Vbr { .. } => Some(
                 vk::VideoEncodeRateControlInfoKHR::default()
                     .rate_control_mode(vk::VideoEncodeRateControlModeFlagsKHR::VBR)
@@ -949,13 +1069,13 @@ impl VulkanEncoder<'_> {
         &self,
         rate_control: RateControl,
     ) -> Option<Vec<vk::VideoEncodeH264RateControlLayerInfoKHR>> {
-        let mut layer_info = vk::VideoEncodeH264RateControlLayerInfoKHR::default()
+        let layer_info = vk::VideoEncodeH264RateControlLayerInfoKHR::default()
             .use_min_qp(false)
             .use_max_qp(false)
             .use_max_frame_size(false);
 
         match rate_control {
-            RateControl::Default => return None,
+            RateControl::EncoderDefault => return None,
             RateControl::Vbr { .. } => {}
             RateControl::Disabled => {}
         }
@@ -970,11 +1090,11 @@ impl VulkanEncoder<'_> {
     ) -> Option<Vec<vk::VideoEncodeRateControlLayerInfoKHR<'a>>> {
         let h264_layer_info = h264_layer_info?;
         let mut layer_info = vk::VideoEncodeRateControlLayerInfoKHR::default()
-            .frame_rate_numerator(self.session_resources.framerate.0)
-            .frame_rate_denominator(self.session_resources.framerate.1);
+            .frame_rate_numerator(self.session_resources.framerate.numerator)
+            .frame_rate_denominator(self.session_resources.framerate.denominator.get());
 
         match rate_control {
-            RateControl::Default => return None,
+            RateControl::EncoderDefault => return None,
             RateControl::Vbr {
                 average_bitrate,
                 max_bitrate,
@@ -1004,18 +1124,40 @@ impl VulkanEncoder<'_> {
                         | vk::VideoEncodeH264RateControlFlagsKHR::REFERENCE_PATTERN_FLAT,
                 )
                 .consecutive_b_frame_count(0)
-                .gop_frame_count(self.gop_size as u32)
-                .idr_period(self.gop_size as u32),
+                .gop_frame_count(self.idr_period)
+                .idr_period(self.idr_period),
         )
     }
 }
 
+/// The rate control algorithm to be used by the encoder.
+///
+/// Note: `EncoderDefault` is not a good default! For most implementations it is the same as
+/// specifying `Disabled`.
+///
+/// For most use cases, `Vbr` is the correct option
 #[derive(Debug, Clone, Copy)]
 pub enum RateControl {
-    Default,
+    /// Use the default setting of the encoder implementation.
+    EncoderDefault,
+    /// Variable bitrate rate control. This setting fits most use cases. The encoder will try to
+    /// keep the bitrate around the average, but may increase it temporarily up to the max when
+    /// necessary. Bitrate is measured in bits/second.
     Vbr {
         average_bitrate: u64,
         max_bitrate: u64,
     },
+    /// Rate control is turned off, frames are compressed with a constant rate. A more complicated
+    /// frame will just be bigger.
     Disabled,
+}
+
+impl RateControl {
+    pub(crate) fn to_vk(self) -> vk::VideoEncodeRateControlModeFlagsKHR {
+        match self {
+            RateControl::EncoderDefault => vk::VideoEncodeRateControlModeFlagsKHR::DEFAULT,
+            RateControl::Vbr { .. } => vk::VideoEncodeRateControlModeFlagsKHR::VBR,
+            RateControl::Disabled => vk::VideoEncodeRateControlModeFlagsKHR::DISABLED,
+        }
+    }
 }
