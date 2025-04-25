@@ -1,21 +1,19 @@
 use axum::http::HeaderValue;
-use compositor_pipeline::{
-    audio_mixer::AudioChannels,
-    pipeline::{
+use compositor_pipeline::pipeline::{
+    self,
+    encoder::{
         self,
-        encoder::{
-            self,
-            fdk_aac::AacEncoderOptions,
-            ffmpeg_h264::{self},
-            ffmpeg_vp8,
+        fdk_aac::AacEncoderOptions,
+        ffmpeg_h264::{self},
+        ffmpeg_vp8,
         opus::OpusEncoderOptions,
         AudioEncoderOptions,
-        },
-        output::{
-            self,
-            mp4::Mp4OutputOptions,
-            rtmp::RtmpSenderOptions, whip::{AudioWhipOptions, VideoWhipOptions},
-        },
+    },
+    output::{
+        self,
+        mp4::Mp4OutputOptions,
+        rtmp::RtmpSenderOptions,
+        whip::{AudioWhipOptions, VideoWhipOptions},
     },
 };
 use tracing::warn;
@@ -257,35 +255,19 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 channels,
                 initial,
             }) => {
-                let (audio_encoder_options, resolved_channels) = match encoder {
+                let resolved_channels = match encoder {
                     Some(WhipAudioEncoderOptions::Opus {
-                        preset,
-                        sample_rate,
                         channels: channels_deprecated,
+                        ..
                     }) => {
                         if channels_deprecated.is_some() {
                             warn!("The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.");
                         }
-                        let resolved_channels = channels
+                        channels
                             .or(channels_deprecated)
-                            .unwrap_or(audio::AudioChannels::Stereo);
-                        (
-                            AudioEncoderOptions::Opus(OpusEncoderOptions {
-                                channels: resolved_channels.clone().into(),
-                                preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
-                                sample_rate: sample_rate.unwrap_or(48000),
-                            }),
-                            resolved_channels,
-                        )
+                            .unwrap_or(audio::AudioChannels::Stereo)
                     }
-                    None => (
-                        AudioEncoderOptions::Opus(OpusEncoderOptions {
-                            channels: AudioChannels::Stereo,
-                            preset: encoder::AudioEncoderPreset::Voip,
-                            sample_rate: 48000,
-                        }),
-                        audio::AudioChannels::Stereo,
-                    )
+                    None => channels.unwrap_or(audio::AudioChannels::Stereo),
                 };
                 let output_audio_options = pipeline::OutputAudioOptions {
                     initial: initial.try_into()?,

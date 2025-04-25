@@ -28,8 +28,8 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    let endpoint_url = env::var("SMELTER_WHIP_OUTPUT_URL").map_err(|err| anyhow!("Couldn't read SMELTER_WHIP_OUTPUT_URL environmental variable. You must provide it in order to run `whip_client` example. Read env error: {}", err))?;
-    let token = env::var("SMELTER_WHIP_CLIENT_EXAMPLE_TOKEN").map_err(|err| anyhow!("Couldn't read SMELTER_WHIP_CLIENT_EXAMPLE_TOKEN environmental variable. You must provide it in order to run `whip_client` example. Read env error: {}", err))?;
+    let endpoint_url = env::var("OUTPUT_URL").map_err(|err| anyhow!("Couldn't read OUTPUT_URL environmental variable. You must provide it in order to run `whip_client` example. Read env error: {}", err))?;
+    let token = env::var("EXAMPLE_TOKEN").map_err(|err| anyhow!("Couldn't read EXAMPLE_TOKEN environmental variable. You must provide it in order to run `whip_client` example. Read env error: {}", err))?;
 
     examples::post(
         "output/output_1/register",
@@ -52,9 +52,6 @@ fn client_code() -> Result<()> {
             },
             "audio": {
                 "channels": "stereo",
-                "encoder": {
-                    "type": "opus",
-                },
                 "initial": {
                     "inputs": [
                         {"input_id": "input_1"}
