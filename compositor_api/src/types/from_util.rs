@@ -54,6 +54,7 @@ impl TryFrom<Transition> for scene::Transition {
         Ok(Self {
             duration: Duration::from_secs_f64(transition.duration_ms / 1000.0),
             interpolation_kind,
+            should_interrupt: transition.should_interrupt.unwrap_or(false),
         })
     }
 }

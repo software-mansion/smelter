@@ -168,9 +168,9 @@ fn start_example_client_code() -> Result<()> {
                         {"input_id": "input_4"}
                     ]
                 },
+                "channels": "stereo",
                 "encoder": {
                     "type": "opus",
-                    "channels": "stereo",
                 }
             },
         }),

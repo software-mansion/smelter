@@ -1,4 +1,4 @@
-import type { Frame, Resolution } from '@swmansion/smelter-browser-render';
+import type { OutputFrame, Resolution } from '@swmansion/smelter-browser-render';
 import type { OutputSink } from './sink';
 import CanvasSink from './canvas';
 import type { RegisterOutput } from '../../workerApi';
@@ -16,7 +16,7 @@ export class Output {
     this.resolution = request.video.resolution;
   }
 
-  public async send(frame: Frame): Promise<void> {
+  public async send(frame: OutputFrame): Promise<void> {
     await this.sink.send(frame);
   }
 }

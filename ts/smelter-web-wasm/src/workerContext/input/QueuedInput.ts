@@ -1,18 +1,23 @@
-import type { Frame, InputId } from '@swmansion/smelter-browser-render';
+import type { InputId } from '@swmansion/smelter-browser-render';
 import type { Logger } from 'pino';
 import { Queue } from '@datastructures-js/queue';
 import { workerPostEvent } from '../pipeline';
 import { SmelterEventType } from '../../eventSender';
 import { assert, sleep } from '../../utils';
 import type { Input, InputStartResult, QueuedInputSource } from './input';
-import type { InputAudioData, InputVideoFrame } from './frame';
-import { InputVideoFrameRef } from './frame';
+import type { InputAudioData, InternalVideoFrame } from './frame';
+import { InputVideoFrame, InputVideoFrameRef } from './frame';
 import type { AudioWorkletMessage } from '../../audioWorkletContext/workletApi';
 
 export type InputState = 'started' | 'playing' | 'finished';
 
 const MAX_BUFFER_FRAME_COUNT = 10;
 const ENQUEUE_INTERVAL_MS = 50;
+
+type QueueFrame = {
+  ref: InputVideoFrameRef;
+  ptsMs: number;
+};
 
 export class QueuedInput implements Input {
   private inputId: InputId;
@@ -21,7 +26,7 @@ export class QueuedInput implements Input {
   /**
    * frames PTS start from 0, where 0 represents first frame
    */
-  private frames: Queue<InputVideoFrameRef>;
+  private frames: Queue<QueueFrame>;
 
   private shouldClose: boolean = false;
 
@@ -124,14 +129,11 @@ export class QueuedInput implements Input {
   /**
    * Retrieves reference of a frame closest to the provided `currentQueuePts`.
    */
-  public async getFrame(currentQueuePts: number): Promise<Frame | undefined> {
+  public async getFrame(currentQueuePts: number): Promise<InputVideoFrame | undefined> {
     this.dropOldFrames(currentQueuePts);
-    const frameRef = this.frames.front();
-    if (frameRef) {
-      frameRef.incrementRefCount();
-      const frame = await frameRef.getFrame();
-      frameRef.decrementRefCount();
-
+    const frame = this.frames.front();
+    if (frame) {
+      frame.ref.incrementRefCount();
       if (!this.sentFirstFrame) {
         this.sentFirstFrame = true;
         this.logger.debug('Input started');
@@ -142,7 +144,7 @@ export class QueuedInput implements Input {
       }
 
       if (this.frames.size() === 1 && this.receivedEos) {
-        this.frames.pop().decrementRefCount();
+        this.frames.pop().ref.decrementRefCount();
         this.logger.debug('Input finished');
         workerPostEvent({
           type: SmelterEventType.VIDEO_INPUT_EOS,
@@ -150,12 +152,12 @@ export class QueuedInput implements Input {
         });
       }
 
-      return frame;
+      return new InputVideoFrame(frame.ref, frame.ptsMs);
     }
     return;
   }
 
-  private newFrameRef(frame: InputVideoFrame): InputVideoFrameRef {
+  private newFrameRef(frame: InternalVideoFrame): QueueFrame {
     if (!this.firstFrameTimeMs) {
       this.firstFrameTimeMs = Date.now();
     }
@@ -163,7 +165,10 @@ export class QueuedInput implements Input {
       this.firstFramePtsMs = frame.ptsMs;
     }
     frame.ptsMs = frame.ptsMs - this.firstFramePtsMs;
-    return new InputVideoFrameRef(frame, this.logger);
+    return {
+      ref: new InputVideoFrameRef(frame.frame),
+      ptsMs: frame.ptsMs,
+    };
   }
 
   /**
@@ -182,12 +187,15 @@ export class QueuedInput implements Input {
       return prevPtsDiff < currPtsDiff ? prevFrame : frame;
     });
 
-    for (const frame of frames) {
-      if (frame.ptsMs < targetFrame.ptsMs) {
-        frame.decrementRefCount();
-        this.frames.pop();
-      }
-    }
+    this.frames = Queue.fromArray(
+      frames.filter(frame => {
+        if (frame.ptsMs < targetFrame.ptsMs) {
+          frame.ref.decrementRefCount();
+          return false;
+        }
+        return true;
+      })
+    );
   }
 
   private queuePtsToInputPts(queuePts: number): number {

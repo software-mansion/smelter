@@ -8,9 +8,9 @@ use compositor_render::{
     InputId, RendererId, RendererSpec,
 };
 
-use super::DEFAULT_RESOLUTION;
+use super::{test_steps_from_scene, Step, DEFAULT_RESOLUTION};
 
-use super::{input::TestInput, scene_from_json, snapshots_path, test_case::TestCase, TestRunner};
+use super::{input::TestInput, snapshots_path, test_case::TestCase, TestRunner};
 
 #[test]
 fn shader_tests() {
@@ -55,17 +55,14 @@ fn shader_tests() {
 
     runner.add(TestCase {
         name: "shader/base_params_plane_id_no_inputs",
-        scene_updates: scene_from_json(include_str!(
+        renderers: vec![plane_id_shader.clone()],
+        steps: test_steps_from_scene(include_str!(
             "../../snapshot_tests/shader/base_params_plane_id_no_inputs.scene.json"
         )),
-        renderers: vec![plane_id_shader.clone()],
         ..Default::default()
     });
     runner.add(TestCase {
         name: "shader/base_params_plane_id_5_inputs",
-        scene_updates: scene_from_json(include_str!(
-            "../../snapshot_tests/shader/base_params_plane_id_5_inputs.scene.json"
-        )),
         renderers: vec![plane_id_shader.clone()],
         inputs: vec![
             input1.clone(),
@@ -74,55 +71,58 @@ fn shader_tests() {
             input4.clone(),
             input5.clone(),
         ],
+        steps: test_steps_from_scene(include_str!(
+            "../../snapshot_tests/shader/base_params_plane_id_5_inputs.scene.json"
+        )),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "shader/base_params_time",
-        scene_updates: scene_from_json(include_str!(
-            "../../snapshot_tests/shader/base_params_time.scene.json"
-        )),
+        steps: vec![
+            Step::UpdateSceneJson(include_str!(
+                "../../snapshot_tests/shader/base_params_time.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_secs(0)),
+            Step::RenderWithSnapshot(Duration::from_secs(1)),
+            Step::RenderWithSnapshot(Duration::from_secs(2)),
+        ],
         renderers: vec![time_shader.clone()],
         inputs: vec![input1.clone()],
-        timestamps: vec![
-            Duration::from_secs(0),
-            Duration::from_secs(1),
-            Duration::from_secs(2),
-        ],
         ..Default::default()
     });
     runner.add(TestCase {
         name: "shader/base_params_output_resolution",
-        scene_updates: scene_from_json(include_str!(
-            "../../snapshot_tests/shader/base_params_output_resolution.scene.json"
-        )),
         renderers: vec![output_resolution_shader.clone()],
         inputs: vec![input1.clone()],
+        steps: test_steps_from_scene(include_str!(
+            "../../snapshot_tests/shader/base_params_output_resolution.scene.json"
+        )),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "shader/base_params_texture_count_no_inputs",
-        scene_updates: scene_from_json(include_str!(
+        renderers: vec![texture_count_shader.clone()],
+        steps: test_steps_from_scene(include_str!(
             "../../snapshot_tests/shader/base_params_texture_count_no_inputs.scene.json"
         )),
-        renderers: vec![texture_count_shader.clone()],
         ..Default::default()
     });
     runner.add(TestCase {
         name: "shader/base_params_texture_count_1_input",
-        scene_updates: scene_from_json(include_str!(
-            "../../snapshot_tests/shader/base_params_texture_count_1_input.scene.json"
-        )),
         renderers: vec![texture_count_shader.clone()],
         inputs: vec![input1.clone()],
+        steps: test_steps_from_scene(include_str!(
+            "../../snapshot_tests/shader/base_params_texture_count_1_input.scene.json"
+        )),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "shader/base_params_texture_count_2_inputs",
-        scene_updates: scene_from_json(include_str!(
-            "../../snapshot_tests/shader/base_params_texture_count_2_inputs.scene.json"
-        )),
         renderers: vec![texture_count_shader.clone()],
         inputs: vec![input1.clone(), input2.clone()],
+        steps: test_steps_from_scene(include_str!(
+            "../../snapshot_tests/shader/base_params_texture_count_2_inputs.scene.json"
+        )),
         ..Default::default()
     });
 
@@ -249,7 +249,6 @@ fn user_params_snapshot_tests(runner: &mut TestRunner) {
 
     runner.add(TestCase {
         name: "shader/user_params_circle_layout",
-        scene_updates: vec![circle_layout_scene],
         renderers: vec![(
             shader_id.clone(),
             RendererSpec::Shader(ShaderSpec {
@@ -257,6 +256,10 @@ fn user_params_snapshot_tests(runner: &mut TestRunner) {
             }),
         )],
         inputs: vec![input1, input2, input3, input4],
+        steps: vec![
+            Step::UpdateScene(circle_layout_scene),
+            Step::RenderWithSnapshot(Duration::ZERO),
+        ],
         ..Default::default()
     });
 }

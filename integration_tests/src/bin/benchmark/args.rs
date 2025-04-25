@@ -1,23 +1,12 @@
-use std::{fs::File, io::Write, path::PathBuf, str::FromStr, time::Duration};
+use std::{path::PathBuf, str::FromStr, time::Duration};
 
 use compositor_pipeline::pipeline::{self, encoder::ffmpeg_h264};
-use tracing::error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericArgument {
     IterateExp,
     Maximize,
     Constant(u64),
-}
-
-impl NumericArgument {
-    pub fn as_constant(&self) -> Option<u64> {
-        if let Self::Constant(v) = self {
-            Some(*v)
-        } else {
-            None
-        }
-    }
 }
 
 impl std::str::FromStr for NumericArgument {
@@ -31,6 +20,26 @@ impl std::str::FromStr for NumericArgument {
                 .parse::<u64>()
                 .map(NumericArgument::Constant)
                 .map_err(|e| e.to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BenchmarkSuite {
+    Full,
+    Minimal,
+    None,
+}
+
+impl std::str::FromStr for BenchmarkSuite {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "full" => Ok(BenchmarkSuite::Full),
+            "minimal" => Ok(BenchmarkSuite::Minimal),
+            "none" => Ok(BenchmarkSuite::None),
+            _ => Err("invalid suite name".to_string()),
         }
     }
 }
@@ -282,50 +291,13 @@ impl FromStr for ResolutionArgument {
     }
 }
 
-impl ResolutionArgument {
-    pub fn as_constant(&self) -> Option<Resolution> {
-        if let Self::Constant(v) = self {
-            Some(*v)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum Argument {
-    NumericArgument(NumericArgument),
-    ResolutionArgument(ResolutionArgument),
-}
-
-impl Argument {
-    fn as_numeric(&self) -> Option<NumericArgument> {
-        if let Self::NumericArgument(n) = self {
-            Some(*n)
-        } else {
-            None
-        }
-    }
-
-    fn as_resolution(&self) -> Option<ResolutionArgument> {
-        if let Self::ResolutionArgument(n) = self {
-            Some(*n)
-        } else {
-            None
-        }
-    }
-
-    pub fn is_maximize(&self) -> bool {
-        match self {
-            Self::NumericArgument(a) => matches!(a, NumericArgument::Maximize),
-            Self::ResolutionArgument(a) => matches!(a, ResolutionArgument::Maximize),
-        }
-    }
-}
-
 /// Only one option can be set to "maximize"
 #[derive(Debug, Clone, clap::Parser)]
 pub struct Args {
+    /// [possible values: none, full or minimal] Run entire benchmark suites, this option will ignore most of the other options.
+    #[arg(long, default_value("none"))]
+    pub suite: BenchmarkSuite,
+
     /// [possible values: maximize, number or iterate (to iterate exponentially)]
     #[arg(long, default_value("24"))]
     pub framerate: NumericArgument,
@@ -340,7 +312,7 @@ pub struct Args {
 
     /// path to an mp4 file
     #[arg(long)]
-    pub file_path: PathBuf,
+    pub input_path: Option<PathBuf>,
 
     /// [possible values: 4320p, 2160p, 1440p, 1080p, 720p, 480p, 360p, 240p, 144p, <width>x<height>, iterate or maximize]
     #[arg(long, default_value("1080p"))]
@@ -359,8 +331,8 @@ pub struct Args {
     pub warm_up_time: DurationWrapper,
 
     /// measuring time in seconds
-    #[arg(long, default_value("10"))]
-    pub measured_time: DurationWrapper,
+    #[arg(long, default_value("20"))]
+    pub measure_time: DurationWrapper,
 
     /// disable decoder, use raw input
     #[arg(long, default_value("false"))]
@@ -370,172 +342,14 @@ pub struct Args {
     pub video_decoder: VideoDecoder,
 
     /// in the end of the benchmark the framerate achieved by the compositor is multiplied by this number, before comparing to the target framerate
-    #[arg(long, default_value("1.05"))]
-    pub framerate_tolerance: f64,
+    #[arg(long, default_value("1.10"))]
+    pub error_tolerance: f64,
 
-    /// if present, result will be saved in specified .csv file
+    /// print results as json
+    #[arg(long, default_value("false"))]
+    pub json: bool,
+
+    /// print results as json
     #[arg(long)]
-    pub csv_path: Option<PathBuf>,
-
-    #[arg(skip)]
-    pub input_options: Option<RawInputOptions>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct RawInputOptions {
-    pub resolution: Resolution,
-    pub framerate: u32,
-}
-
-impl Args {
-    pub fn arguments(&self) -> Box<[Argument]> {
-        vec![
-            Argument::NumericArgument(self.framerate),
-            Argument::NumericArgument(self.input_count),
-            Argument::NumericArgument(self.output_count),
-            Argument::ResolutionArgument(self.output_resolution),
-        ]
-        .into_boxed_slice()
-    }
-
-    pub fn with_arguments(&self, arguments: &[Argument]) -> SingleBenchConfig {
-        SingleBenchConfig {
-            framerate: arguments[0].as_numeric().unwrap().as_constant().unwrap(),
-            input_count: arguments[1].as_numeric().unwrap().as_constant().unwrap(),
-            output_count: arguments[2].as_numeric().unwrap().as_constant().unwrap(),
-            output_resolution: arguments[3].as_resolution().unwrap().as_constant().unwrap(),
-
-            file_path: self.file_path.clone(),
-            warm_up_time: self.warm_up_time.0,
-            measured_time: self.measured_time.0,
-            disable_decoder: self.disable_decoder,
-            video_decoder: self.video_decoder.into(),
-            disable_encoder: self.disable_encoder,
-            output_encoder_preset: self.encoder_preset.into(),
-            framerate_tolerance_multiplier: self.framerate_tolerance,
-            input_framerate: self.input_options.map(|o| o.framerate),
-            input_resolution: self.input_options.map(|o| o.resolution),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SingleBenchConfig {
-    pub input_count: u64,
-    pub output_count: u64,
-    pub framerate: u64,
-    pub file_path: PathBuf,
-    pub output_resolution: Resolution,
-    pub disable_encoder: bool,
-    pub output_encoder_preset: ffmpeg_h264::EncoderPreset,
-    pub warm_up_time: Duration,
-    pub measured_time: Duration,
-    pub disable_decoder: bool,
-    pub video_decoder: pipeline::VideoDecoder,
-    pub input_resolution: Option<Resolution>,
-    pub input_framerate: Option<u32>,
-    pub framerate_tolerance_multiplier: f64,
-}
-
-impl SingleBenchConfig {
-    const LABELS: &[&str] = &[
-        "input count",
-        "output count",
-        "output fps",
-        "output width",
-        "output height",
-        "disable enc",
-        "enc preset",
-        "disable dec",
-        "dec",
-        "warmup time",
-        "measured time",
-        "tolerance",
-    ];
-
-    const COLUMN_WIDTH: usize = 13;
-
-    pub fn log_running_config(&self) {
-        tracing::info!("config: {:#?}", self);
-    }
-
-    pub fn log_as_report(&self, csv_writer: Option<&mut CsvWriter>) {
-        let values = vec![
-            self.input_count.to_string(),
-            self.output_count.to_string(),
-            self.framerate.to_string(),
-            self.output_resolution.width.to_string(),
-            self.output_resolution.height.to_string(),
-            self.disable_encoder.to_string(),
-            format!("{:?}", self.output_encoder_preset),
-            format!("{:?}", self.disable_decoder),
-            format!("{:?}", self.video_decoder),
-            format!("{:?}", self.warm_up_time),
-            format!("{:?}", self.measured_time),
-            self.framerate_tolerance_multiplier.to_string(),
-        ];
-        match csv_writer {
-            Some(writer) => writer.write_line(values),
-            None => SingleBenchConfig::print_vec(values),
-        }
-    }
-
-    pub fn log_report_header(csv_writer: &mut Option<CsvWriter>) {
-        let headers = SingleBenchConfig::LABELS
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        match csv_writer {
-            Some(ref mut writer) => writer.write_line(headers),
-            None => {
-                SingleBenchConfig::print_line();
-                SingleBenchConfig::print_vec(headers);
-                SingleBenchConfig::print_line();
-            }
-        }
-    }
-
-    fn print_vec(values: Vec<String>) {
-        for (i, val) in values.iter().enumerate() {
-            if i == 0 {
-                print!("| {:<1$} |", val, SingleBenchConfig::COLUMN_WIDTH);
-            } else {
-                print!(" {:<1$} |", val, SingleBenchConfig::COLUMN_WIDTH);
-            }
-        }
-        println!();
-    }
-
-    fn print_line() {
-        for i in 0..SingleBenchConfig::LABELS.len() {
-            if i == 0 {
-                print!("+");
-            }
-            for _ in 0..SingleBenchConfig::COLUMN_WIDTH + 2 {
-                print!("-");
-            }
-            print!("+")
-        }
-        println!();
-    }
-}
-
-pub struct CsvWriter {
-    pub file: File,
-}
-
-impl CsvWriter {
-    pub fn init(path: PathBuf) -> CsvWriter {
-        CsvWriter {
-            file: File::create(path).unwrap(),
-        }
-    }
-
-    pub fn write_line(&mut self, values: Vec<String>) {
-        let mut line = values.join(",");
-        line.push('\n');
-        if let Err(err) = self.file.write_all(line.as_bytes()) {
-            error!("Error while writing to .csv: {err}");
-        }
-    }
+    pub json_file: Option<PathBuf>,
 }

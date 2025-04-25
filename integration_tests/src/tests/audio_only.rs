@@ -37,9 +37,9 @@ pub fn audio_mixing_with_offset() -> Result<()> {
                         }
                     ]
                 },
+                "channels": "stereo",
                 "encoder": {
                     "type": "opus",
-                    "channels": "stereo",
                 }
             },
         }),
@@ -136,9 +136,9 @@ pub fn audio_mixing_no_offset() -> Result<()> {
                         }
                     ]
                 },
+                "channels": "stereo",
                 "encoder": {
                     "type": "opus",
-                    "channels": "stereo",
                 }
             },
         }),
@@ -236,9 +236,9 @@ pub fn single_input_opus() -> Result<()> {
                         }
                     ]
                 },
+                "channels": "stereo",
                 "encoder": {
                     "type": "opus",
-                    "channels": "stereo",
                 }
             },
         }),
@@ -314,9 +314,9 @@ pub fn single_input_aac() -> Result<()> {
                         },
                     ]
                 },
+                "channels": "stereo",
                 "encoder": {
                     "type": "opus",
-                    "channels": "stereo",
                 }
             },
         }),

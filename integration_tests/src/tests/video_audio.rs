@@ -51,9 +51,9 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
                         }
                     ]
                 },
+                "channels": "stereo",
                 "encoder": {
                     "type": "opus",
-                    "channels": "stereo"
                 }
             }
         }),
