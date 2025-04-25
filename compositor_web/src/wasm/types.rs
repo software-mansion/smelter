@@ -1,15 +1,16 @@
-use std::time::Duration;
-
-use compositor_render::{
-    error::ErrorStack, web_renderer::WebRendererInitOptions, InputId, Resolution,
-};
+use compositor_render::{error::ErrorStack, web_renderer::WebRendererInitOptions, InputId};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
 #[derive(Debug, Deserialize)]
 pub struct RendererOptions {
     pub stream_fallback_timeout_ms: u64,
     pub logger_level: LoggerLevel,
+    /// On most platforms it's more performant to copy input VideoFrame data to CPU
+    /// and then upload it to texture. But on macOS using dedicated wgpu copy_external_image_to_texture function
+    /// results in better performance.
+    pub upload_frames_with_copy_external: bool,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy)]
@@ -60,11 +61,11 @@ impl FrameSet {
     }
 }
 
-pub struct Frame {
+pub struct InputFrame {
     pub id: InputId,
-    pub resolution: Resolution,
-    pub format: FrameFormat,
-    pub data: Vec<u8>,
+    pub frame: web_sys::VideoFrame,
+    #[allow(dead_code)]
+    pub pts: Duration,
 }
 
 #[wasm_bindgen]
@@ -103,29 +104,24 @@ impl From<RendererOptions> for compositor_render::RendererOptions {
     }
 }
 
-impl TryFrom<JsValue> for Frame {
+impl TryFrom<JsValue> for InputFrame {
     type Error = JsValue;
 
     fn try_from(entry: JsValue) -> Result<Self, Self::Error> {
+        use js_sys::Reflect::{get, get_u32};
+
         // 0 - map key
-        let id = js_sys::Reflect::get_u32(&entry, 0)?
+        let id = get_u32(&entry, 0)?
             .as_string()
             .ok_or(JsValue::from_str("Expected string used as a key"))?;
         let id = InputId(id.into());
 
         // 1 - map value
-        let value = js_sys::Reflect::get_u32(&entry, 1)?;
-        let resolution =
-            from_js_value::<compositor_api::types::Resolution>(value.get("resolution")?)?.into();
-        let format: FrameFormat = from_js_value(value.get("format")?)?;
-        let data: js_sys::Uint8ClampedArray = value.get("data")?.into();
-
-        Ok(Self {
-            id,
-            resolution,
-            format,
-            data: data.to_vec(),
-        })
+        let value = get_u32(&entry, 1)?;
+        let frame: web_sys::VideoFrame = get(&value, &"frame".into())?.into();
+        let pts =
+            Duration::from_secs_f64(get(&value, &"ptsMs".into())?.as_f64().unwrap_or(0.0) / 1000.0);
+        Ok(Self { id, frame, pts })
     }
 }
 
@@ -138,12 +134,13 @@ pub fn to_js_error(error: impl std::error::Error + 'static) -> JsValue {
     JsValue::from_str(&error_stack.into_string())
 }
 
-trait JsValueExt {
-    fn get(&self, key: &str) -> Result<JsValue, JsValue>;
+pub trait ObjectExt {
+    fn set<T: Into<JsValue>>(&self, key: &str, value: T) -> Result<(), JsValue>;
 }
 
-impl JsValueExt for JsValue {
-    fn get(&self, key: &str) -> Result<JsValue, JsValue> {
-        js_sys::Reflect::get(self, &JsValue::from_str(key))
+impl ObjectExt for js_sys::Object {
+    fn set<T: Into<JsValue>>(&self, key: &str, value: T) -> Result<(), JsValue> {
+        js_sys::Reflect::set(self, &JsValue::from_str(key), &value.into())?;
+        Ok(())
     }
 }

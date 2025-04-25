@@ -152,7 +152,7 @@ pub struct ViewComponent {
     pub padding: Padding,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Overflow {
     Visible,
     Hidden,
@@ -163,9 +163,10 @@ pub enum Overflow {
 pub struct Transition {
     pub duration: Duration,
     pub interpolation_kind: InterpolationKind,
+    pub should_interrupt: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Position {
     Static {
         width: Option<f32>,
@@ -174,13 +175,13 @@ pub enum Position {
     Absolute(AbsolutePosition),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewChildrenDirection {
     Row,
     Column,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Padding {
     pub top: f32,
     pub right: f32,
@@ -217,7 +218,7 @@ pub struct RescalerComponent {
     pub box_shadow: Vec<BoxShadow>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RescaleMode {
     Fit,
     Fill,

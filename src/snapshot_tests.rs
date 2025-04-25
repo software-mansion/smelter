@@ -5,9 +5,8 @@ use std::{
     time::Duration,
 };
 
-use compositor_api::types::UpdateOutputRequest;
-use compositor_render::{scene::Component, Resolution};
-use test_case::{TestCase, TestResult, OUTPUT_ID};
+use compositor_render::Resolution;
+use test_case::{Step, TestCase, TestResult, OUTPUT_ID};
 use utils::SNAPSHOTS_DIR_NAME;
 
 mod input;
@@ -69,19 +68,22 @@ impl TestRunner {
     }
 }
 
-fn scene_from_json(scene: &'static str) -> Vec<Component> {
-    let scene: UpdateOutputRequest = serde_json::from_str(scene).unwrap();
-    vec![scene.video.unwrap().try_into().unwrap()]
+fn test_steps_from_scene(scene: &'static str) -> Vec<Step> {
+    vec![
+        Step::UpdateSceneJson(scene),
+        Step::RenderWithSnapshot(Duration::ZERO),
+    ]
 }
 
-fn scenes_from_json(scenes: &[&'static str]) -> Vec<Component> {
-    scenes
+fn test_steps_from_scenes(scenes: &[&'static str]) -> Vec<Step> {
+    let mut steps = scenes
         .iter()
-        .map(|scene| {
-            let scene: UpdateOutputRequest = serde_json::from_str(scene).unwrap();
-            scene.video.unwrap().try_into().unwrap()
-        })
-        .collect()
+        .copied()
+        .map(Step::UpdateSceneJson)
+        .collect::<Vec<_>>();
+    steps.push(Step::RenderWithSnapshot(Duration::ZERO));
+
+    steps
 }
 
 fn check_test_names_uniqueness(tests: &[TestCase]) {

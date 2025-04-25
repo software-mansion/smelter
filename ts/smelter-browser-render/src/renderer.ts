@@ -8,14 +8,26 @@ export type RendererOptions = {
   streamFallbackTimeoutMs: number;
 
   loggerLevel?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
+
+  /**
+   * Input frame upload strategy.
+   * On most platforms it's more performant to copy input VideoFrame data to CPU and then upload it to texture.
+   * But on macOS using dedicated wgpu copy_external_image_to_texture function results in better performance.
+   */
+  uploadFramesWithCopyExternal?: boolean;
 };
 
-export type FrameSet = {
+export type FrameSet<T> = {
   ptsMs: number;
-  frames: { [id: string]: Frame };
+  frames: { [id: string]: T };
 };
 
-export type Frame = {
+export type InputFrame = {
+  readonly frame: VideoFrame;
+  readonly ptsMs: number;
+};
+
+export type OutputFrame = {
   resolution: Api.Resolution;
   format: FrameFormat;
   data: Uint8ClampedArray;
@@ -37,14 +49,15 @@ export class Renderer {
     const renderer = await wasm.create_renderer({
       stream_fallback_timeout_ms: options.streamFallbackTimeoutMs,
       logger_level: options.loggerLevel ?? 'warn',
+      upload_frames_with_copy_external: options.uploadFramesWithCopyExternal ?? false,
     });
     return new Renderer(renderer);
   }
 
-  public render(input: FrameSet): FrameSet {
+  public async render(input: FrameSet<InputFrame>): Promise<FrameSet<OutputFrame>> {
     const frames = new Map(Object.entries(input.frames));
     const inputFrameSet = new wasm.FrameSet(input.ptsMs, frames);
-    const output = this.renderer.render(inputFrameSet);
+    const output = await this.renderer.render(inputFrameSet);
     return {
       ptsMs: output.pts_ms,
       frames: Object.fromEntries(output.frames),

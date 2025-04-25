@@ -14,6 +14,7 @@ use super::examples::{get_asset_path, TestSample};
 enum Video {
     H264,
     VP8,
+    VP9,
 }
 
 pub fn start_gst_receive_tcp_h264(ip: &str, port: u16, audio: bool) -> Result<()> {
@@ -23,6 +24,11 @@ pub fn start_gst_receive_tcp_h264(ip: &str, port: u16, audio: bool) -> Result<()
 
 pub fn start_gst_receive_tcp_vp8(ip: &str, port: u16, audio: bool) -> Result<()> {
     start_gst_receive_tcp(ip, port, Some(Video::VP8), audio)?;
+    Ok(())
+}
+
+pub fn start_gst_receive_tcp_vp9(ip: &str, port: u16, audio: bool) -> Result<()> {
+    start_gst_receive_tcp(ip, port, Some(Video::VP9), audio)?;
     Ok(())
 }
 
@@ -48,6 +54,7 @@ fn start_gst_receive_tcp(ip: &str, port: u16, video: Option<Video>, audio: bool)
     match video {
         Some(Video::H264) => gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264\" ! queue ! rtph264depay ! decodebin ! videoconvert ! autovideosink "),
         Some(Video::VP8) => gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=VP8\" ! queue ! rtpvp8depay ! decodebin ! videoconvert ! autovideosink "),
+        Some(Video::VP9) => gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=VP9\" ! queue ! rtpvp9depay ! decodebin ! videoconvert ! autovideosink "),
         None => {}
     }
     if audio {
@@ -71,6 +78,10 @@ pub fn start_gst_receive_udp_h264(port: u16, audio: bool) -> Result<()> {
 
 pub fn start_gst_receive_udp_vp8(port: u16, audio: bool) -> Result<()> {
     start_gst_receive_udp(port, Some(Video::VP8), audio)
+}
+
+pub fn start_gst_receive_udp_vp9(port: u16, audio: bool) -> Result<()> {
+    start_gst_receive_udp(port, Some(Video::VP9), audio)
 }
 
 pub fn start_gst_receive_udp_without_video(port: u16, audio: bool) -> Result<()> {
@@ -98,6 +109,7 @@ fn start_gst_receive_udp(port: u16, video: Option<Video>, audio: bool) -> Result
     match video {
         Some(Video::H264) => gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264\" ! queue ! rtph264depay ! decodebin ! videoconvert ! autovideosink "),
         Some(Video::VP8) => gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=VP8\" ! queue ! rtpvp8depay ! decodebin ! videoconvert ! autovideosink "),
+        Some(Video::VP9) => gst_output_command.push_str("demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=VP9\" ! queue ! rtpvp9depay ! decodebin ! videoconvert ! autovideosink "),
         None => {}
     }
     if audio {
@@ -140,6 +152,15 @@ pub fn start_gst_send_tcp(
             get_asset_path(test_sample)?,
             Some(Video::VP8),
         ),
+        TestSample::BigBuckBunnyVP9Opus
+        | TestSample::ElephantsDreamVP9Opus
+        | TestSample::SampleVP9 => start_gst_send_from_file_tcp(
+            ip,
+            video_port,
+            audio_port,
+            get_asset_path(test_sample)?,
+            Some(Video::VP9),
+        ),
         TestSample::BigBuckBunnyH264AAC => Err(anyhow!(
             "GStreamer does not support AAC, try ffmpeg instead"
         )),
@@ -151,6 +172,9 @@ pub fn start_gst_send_tcp(
         }
         TestSample::TestPatternVP8 => {
             start_gst_send_testsrc_tcp(ip, video_port, audio_port, Some(Video::VP8))
+        }
+        TestSample::TestPatternVP9 => {
+            start_gst_send_testsrc_tcp(ip, video_port, audio_port, Some(Video::VP9))
         }
     }
 }
@@ -180,6 +204,15 @@ pub fn start_gst_send_udp(
             get_asset_path(test_sample)?,
             Some(Video::VP8),
         ),
+        TestSample::BigBuckBunnyVP9Opus
+        | TestSample::ElephantsDreamVP9Opus
+        | TestSample::SampleVP9 => start_gst_send_from_file_udp(
+            ip,
+            video_port,
+            audio_port,
+            get_asset_path(test_sample)?,
+            Some(Video::VP9),
+        ),
         TestSample::BigBuckBunnyH264AAC => Err(anyhow!(
             "GStreamer does not support AAC, try ffmpeg instead"
         )),
@@ -191,6 +224,9 @@ pub fn start_gst_send_udp(
         }
         TestSample::TestPatternVP8 => {
             start_gst_send_testsrc_udp(ip, video_port, audio_port, Some(Video::VP8))
+        }
+        TestSample::TestPatternVP9 => {
+            start_gst_send_testsrc_udp(ip, video_port, audio_port, Some(Video::VP9))
         }
     }
 }
@@ -216,7 +252,7 @@ fn start_gst_send_from_file_tcp(
     }
 
     let demuxer = match video_codec {
-        Some(Video::VP8) => "matroskademux",
+        Some(Video::VP8) | Some(Video::VP9) => "matroskademux",
         _ => "qtdemux",
     };
 
@@ -229,6 +265,7 @@ fn start_gst_send_from_file_tcp(
         let command_video_spec = match codec {
             Video::H264 =>  &format!("demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port} "),
             Video::VP8 => &format!("demux.video_0 ! queue ! rtpvp8pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
+            Video::VP9 => &format!("demux.video_0 ! queue ! rtpvp9pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
         };
         gst_input_command = gst_input_command + command_video_spec
     }
@@ -269,7 +306,7 @@ fn start_gst_send_from_file_udp(
     let path = path.to_string_lossy();
 
     let demuxer = match video_codec {
-        Some(Video::VP8) => "matroskademux",
+        Some(Video::VP8) | Some(Video::VP9) => "matroskademux",
         _ => "qtdemux",
     };
 
@@ -283,7 +320,8 @@ fn start_gst_send_from_file_udp(
         let command_video_spec = match codec {
             Video::H264 =>  &format!(" demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! udpsink host={ip} port={port} "),
             Video::VP8 => &format!(" demux.video_0 ! queue ! rtpvp8pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96  ! udpsink host={ip} port={port} "),
-        };
+            Video::VP9 => &format!(" demux.video_0 ! queue ! rtpvp9pay picture-id-mode=2 mtu=1200 ! application/x-rtp,payload=96 ! udpsink host={ip} port={port} "),
+                };
         gst_input_command = gst_input_command + command_video_spec
     }
     if let Some(port) = audio_port {
@@ -329,6 +367,7 @@ fn start_gst_send_testsrc_tcp(
         let command_video_spec = match codec {
             Video::H264 =>  &format!(" x264enc tune=zerolatency speed-preset=superfast ! rtph264pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
             Video::VP8 => &format!(" vp8enc deadline=1 error-resilient=partitions keyframe-max-dist=30 auto-alt-ref=true cpu-used=-5 ! rtpvp8pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
+            Video::VP9 => &format!(" vp9enc deadline=1 auto-alt-ref=true cpu-used=-5 ! rtpvp9pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
         };
         gst_input_command = gst_input_command + command_video_spec
     }
@@ -366,7 +405,7 @@ fn start_gst_send_testsrc_udp(
     }
 
     let mut gst_input_command = [
-        "gst-launch-1.0 -v videotestsrc pattern=ball ! ",
+        "gst-launch-1.0 -v videotestsrc ! ",
         "\"video/x-raw,format=I420,width=1920,height=1080,framerate=60/1\" ! ",
     ]
     .concat();
@@ -375,6 +414,7 @@ fn start_gst_send_testsrc_udp(
         let command_video_spec = match codec {
             Video::H264 =>  &format!(" x264enc tune=zerolatency speed-preset=superfast ! rtph264pay ! application/x-rtp,payload=96 ! udpsink host={ip} port={port}"),
             Video::VP8 => &format!(" vp8enc deadline=1 error-resilient=partitions keyframe-max-dist=30 auto-alt-ref=true cpu-used=-5 ! rtpvp8pay ! application/x-rtp,payload=96 ! udpsink host={ip} port={port}"),
+            Video::VP9 => &format!(" vp9enc deadline=1 auto-alt-ref=true cpu-used=-5 ! rtpvp9pay ! application/x-rtp,payload=96 ! udpsink host={ip} port={port}"),
         };
         gst_input_command = gst_input_command + command_video_spec
     }

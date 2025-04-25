@@ -57,7 +57,7 @@ pub struct VideoWhipOptions {
 }
 
 #[derive(Debug, Clone)]
-pub struct AudioWhipOptions;
+pub struct AudioWhipOptions {}
 
 #[derive(Debug, Clone)]
 pub struct WhipSenderOptions {

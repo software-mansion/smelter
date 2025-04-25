@@ -51,6 +51,10 @@ fn client_code() -> Result<()> {
                 }
             },
             "audio": {
+                "channels": "stereo",
+                "encoder": {
+                    "type": "opus",
+                },
                 "initial": {
                     "inputs": [
                         {"input_id": "input_1"}

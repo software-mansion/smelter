@@ -71,6 +71,7 @@ pub struct RawDataSender {
 pub enum VideoDecoder {
     FFmpegH264,
     FFmpegVp8,
+    FFmpegVp9,
     #[cfg(feature = "vk-video")]
     VulkanVideoH264,
 }
@@ -79,6 +80,7 @@ pub enum VideoDecoder {
 pub enum VideoCodec {
     H264,
     VP8,
+    VP9,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

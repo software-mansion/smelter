@@ -16,7 +16,7 @@ use crate::{
 };
 
 use compositor_render::InputId;
-use rtp::codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet};
+use rtp::codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet, vp9::Vp9Packet};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -30,6 +30,7 @@ use super::{depayloader::Depayloader, DecodedDataSender};
 struct CodecsPayloadTypes {
     h264: Vec<PayloadType>,
     vp8: Vec<PayloadType>,
+    vp9: Vec<PayloadType>,
     opus: Vec<PayloadType>,
 }
 
@@ -131,6 +132,37 @@ impl WhipDecodersBuilder {
         Ok(())
     }
 
+    fn add_vp9(&mut self, payload_types: Vec<PayloadType>) -> Result<(), WhipServerError> {
+        let (whip_client_to_bridge_sender, bridge_to_decoder_receiver) =
+            start_forwarding_thread(self.input_id.clone());
+
+        start_video_decoder_thread(
+            VideoDecoderOptions {
+                decoder: pipeline::VideoDecoder::FFmpegVp9,
+            },
+            &self.pipeline_ctx,
+            bridge_to_decoder_receiver,
+            self.decoded_data_sender.frame_sender.clone(),
+            self.input_id.clone(),
+            false,
+        )?;
+        let depayloader = Arc::new(Mutex::new(Depayloader {
+            video: Some(VideoDepayloader::VP9 {
+                depayloader: Vp9Packet::default(),
+                buffer: vec![],
+                rollover_state: RolloverState::default(),
+            }),
+            audio: None,
+        }));
+        for payload_type in payload_types {
+            self.decoders.insert(
+                payload_type,
+                (whip_client_to_bridge_sender.clone(), depayloader.clone()),
+            );
+        }
+        Ok(())
+    }
+
     fn add_opus(&mut self, payload_types: Vec<PayloadType>) -> Result<(), WhipServerError> {
         let (whip_client_to_bridge_sender, bridge_to_decoder_receiver) =
             start_forwarding_thread(self.input_id.clone());
@@ -181,6 +213,10 @@ pub async fn start_decoders_threads(
         whip_decoders_setup.add_vp8(negotiated_codecs.vp8)?;
     }
 
+    if !negotiated_codecs.vp9.is_empty() {
+        whip_decoders_setup.add_vp9(negotiated_codecs.vp9)?;
+    }
+
     if !negotiated_codecs.opus.is_empty() {
         whip_decoders_setup.add_opus(negotiated_codecs.opus)?;
     }
@@ -206,9 +242,10 @@ async fn get_codec_map(
     codecs.extend(audio_receiver.get_parameters().await.codecs);
 
     for codec in codecs {
-        match codec.capability.mime_type.as_str() {
-            "video/H264" => codec_payload_types.h264.push(codec.payload_type),
-            "video/VP8" => codec_payload_types.vp8.push(codec.payload_type),
+        match codec.capability.mime_type.to_lowercase().as_str() {
+            "video/h264" => codec_payload_types.h264.push(codec.payload_type),
+            "video/vp8" => codec_payload_types.vp8.push(codec.payload_type),
+            "video/vp9" => codec_payload_types.vp9.push(codec.payload_type),
             "audio/opus" => codec_payload_types.opus.push(codec.payload_type),
             _ => {}
         }

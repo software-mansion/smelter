@@ -7,13 +7,14 @@ use compositor_pipeline::{
             self,
             fdk_aac::AacEncoderOptions,
             ffmpeg_h264::{self},
-            ffmpeg_vp8, AudioEncoderOptions,
+            ffmpeg_vp8,
+        opus::OpusEncoderOptions,
+        AudioEncoderOptions,
         },
         output::{
             self,
             mp4::Mp4OutputOptions,
-            rtmp::RtmpSenderOptions,
-            whip::{AudioWhipOptions, VideoWhipOptions},
+            rtmp::RtmpSenderOptions, whip::{AudioWhipOptions, VideoWhipOptions},
         },
     },
 };
@@ -47,14 +48,37 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions<output::OutputOption
                 mixing_strategy,
                 send_eos_when,
                 encoder,
+                channels,
                 initial,
             }) => {
-                let audio_encoder_options: AudioEncoderOptions = encoder.into();
+                let (audio_encoder_options, resolved_channels) = match encoder {
+                    RtpAudioEncoderOptions::Opus {
+                        preset,
+                        sample_rate,
+                        channels: channels_deprecated,
+                    } => {
+                        if channels_deprecated.is_some() {
+                            warn!("The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.");
+                        }
+                        let resolved_channels = channels
+                            .or(channels_deprecated)
+                            .unwrap_or(audio::AudioChannels::Stereo);
+
+                        (
+                            AudioEncoderOptions::Opus(OpusEncoderOptions {
+                                channels: resolved_channels.clone().into(),
+                                preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
+                                sample_rate: sample_rate.unwrap_or(48000),
+                            }),
+                            resolved_channels,
+                        )
+                    }
+                };
                 let output_audio_options = pipeline::OutputAudioOptions {
                     initial: initial.try_into()?,
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,
                     mixing_strategy: mixing_strategy.unwrap_or(MixingStrategy::SumClip).into(),
-                    channels: audio_encoder_options.channels(),
+                    channels: resolved_channels.into(),
                 };
 
                 (Some(audio_encoder_options), Some(output_audio_options))
@@ -124,14 +148,34 @@ impl TryFrom<Mp4Output> for pipeline::RegisterOutputOptions<output::OutputOption
                 mixing_strategy,
                 send_eos_when,
                 encoder,
+                channels,
                 initial,
             }) => {
-                let audio_encoder_options: AudioEncoderOptions = encoder.into();
+                let (audio_encoder_options, resolved_channels) = match encoder {
+                    Mp4AudioEncoderOptions::Aac {
+                        sample_rate,
+                        channels: channels_deprecated,
+                    } => {
+                        if channels_deprecated.is_some() {
+                            warn!("The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.");
+                        }
+                        let resolved_channels = channels
+                            .or(channels_deprecated)
+                            .unwrap_or(audio::AudioChannels::Stereo);
+                        (
+                            AudioEncoderOptions::Aac(AacEncoderOptions {
+                                channels: resolved_channels.clone().into(),
+                                sample_rate: sample_rate.unwrap_or(44100),
+                            }),
+                            resolved_channels,
+                        )
+                    }
+                };
                 let output_audio_options = pipeline::OutputAudioOptions {
                     initial: initial.try_into()?,
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,
                     mixing_strategy: mixing_strategy.unwrap_or(MixingStrategy::SumClip).into(),
-                    channels: audio_encoder_options.channels(),
+                    channels: resolved_channels.into(),
                 };
 
                 (Some(audio_encoder_options), Some(output_audio_options))
@@ -209,16 +253,47 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             Some(OutputWhipAudioOptions {
                 mixing_strategy,
                 send_eos_when,
-                encoder: _,
+                encoder,
+                channels,
                 initial,
             }) => {
+                let (audio_encoder_options, resolved_channels) = match encoder {
+                    Some(WhipAudioEncoderOptions::Opus {
+                        preset,
+                        sample_rate,
+                        channels: channels_deprecated,
+                    }) => {
+                        if channels_deprecated.is_some() {
+                            warn!("The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.");
+                        }
+                        let resolved_channels = channels
+                            .or(channels_deprecated)
+                            .unwrap_or(audio::AudioChannels::Stereo);
+                        (
+                            AudioEncoderOptions::Opus(OpusEncoderOptions {
+                                channels: resolved_channels.clone().into(),
+                                preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
+                                sample_rate: sample_rate.unwrap_or(48000),
+                            }),
+                            resolved_channels,
+                        )
+                    }
+                    None => (
+                        AudioEncoderOptions::Opus(OpusEncoderOptions {
+                            channels: AudioChannels::Stereo,
+                            preset: encoder::AudioEncoderPreset::Voip,
+                            sample_rate: 48000,
+                        }),
+                        audio::AudioChannels::Stereo,
+                    )
+                };
                 let output_audio_options = pipeline::OutputAudioOptions {
                     initial: initial.try_into()?,
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,
                     mixing_strategy: mixing_strategy.unwrap_or(MixingStrategy::SumClip).into(),
-                    channels: AudioChannels::Stereo, // hardcoded just temporarly, TODO when adding preferences
+                    channels: resolved_channels.into(),
                 };
-                let audio_whip_options = AudioWhipOptions; //TODO when adding preferences
+                let audio_whip_options = AudioWhipOptions {}; //TODO when adding preferences
                 (Some(output_audio_options), Some(audio_whip_options))
             }
             None => (None, None),
@@ -257,14 +332,34 @@ impl TryFrom<RtmpClient> for pipeline::RegisterOutputOptions<output::OutputOptio
                 mixing_strategy,
                 send_eos_when,
                 encoder,
+                channels,
                 initial,
             }) => {
-                let audio_encoder_options: AudioEncoderOptions = encoder.into();
+                let (audio_encoder_options, resolved_channels) = match encoder {
+                    RtmpClientAudioEncoderOptions::Aac {
+                        sample_rate,
+                        channels: channels_deprecated,
+                    } => {
+                        if channels_deprecated.is_some() {
+                            warn!("The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.");
+                        }
+                        let resolved_channels = channels
+                            .or(channels_deprecated)
+                            .unwrap_or(audio::AudioChannels::Stereo);
+                        (
+                            AudioEncoderOptions::Aac(AacEncoderOptions {
+                                channels: resolved_channels.clone().into(),
+                                sample_rate: sample_rate.unwrap_or(44100),
+                            }),
+                            resolved_channels,
+                        )
+                    }
+                };
                 let output_audio_options = pipeline::OutputAudioOptions {
                     initial: initial.try_into()?,
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,
                     mixing_strategy: mixing_strategy.unwrap_or(MixingStrategy::SumClip).into(),
-                    channels: audio_encoder_options.channels(),
+                    channels: resolved_channels.into(),
                 };
 
                 (Some(audio_encoder_options), Some(output_audio_options))
@@ -322,66 +417,6 @@ fn maybe_video_options(
     };
 
     Ok((Some(encoder_options), Some(output_options)))
-}
-
-impl From<Mp4AudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
-    fn from(value: Mp4AudioEncoderOptions) -> Self {
-        match value {
-            Mp4AudioEncoderOptions::Aac {
-                channels,
-                sample_rate,
-            } => AudioEncoderOptions::Aac(AacEncoderOptions {
-                channels: channels.into(),
-                sample_rate: sample_rate.unwrap_or(44100),
-            }),
-        }
-    }
-}
-
-impl From<RtmpClientAudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
-    fn from(value: RtmpClientAudioEncoderOptions) -> Self {
-        match value {
-            RtmpClientAudioEncoderOptions::Aac {
-                channels,
-                sample_rate,
-            } => AudioEncoderOptions::Aac(AacEncoderOptions {
-                channels: channels.into(),
-                sample_rate: sample_rate.unwrap_or(44100),
-            }),
-        }
-    }
-}
-
-impl From<RtpAudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
-    fn from(value: RtpAudioEncoderOptions) -> Self {
-        match value {
-            RtpAudioEncoderOptions::Opus {
-                channels,
-                preset,
-                sample_rate,
-            } => AudioEncoderOptions::Opus(encoder::opus::OpusEncoderOptions {
-                channels: channels.into(),
-                preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
-                sample_rate: sample_rate.unwrap_or(48000),
-            }),
-        }
-    }
-}
-
-impl From<WhipAudioEncoderOptions> for pipeline::encoder::AudioEncoderOptions {
-    fn from(value: WhipAudioEncoderOptions) -> Self {
-        match value {
-            WhipAudioEncoderOptions::Opus {
-                channels,
-                preset,
-                sample_rate,
-            } => AudioEncoderOptions::Opus(encoder::opus::OpusEncoderOptions {
-                channels: channels.into(),
-                preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
-                sample_rate: sample_rate.unwrap_or(48000),
-            }),
-        }
-    }
 }
 
 impl TryFrom<OutputEndCondition> for pipeline::PipelineOutputEndCondition {

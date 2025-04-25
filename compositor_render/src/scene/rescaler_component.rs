@@ -23,7 +23,7 @@ pub(super) struct StatefulRescalerComponent {
     child: Box<StatefulComponent>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct RescalerComponentParam {
     id: Option<ComponentId>,
 
@@ -106,27 +106,36 @@ impl RescalerComponent {
         // TODO: to handle cases like transition from top to bottom this view needs
         // to be further processed to use the same type of coordinates as end
         let start = previous_state.map(|state| state.transition_snapshot(ctx.last_render_pts));
+        let end = RescalerComponentParam {
+            id: self.id,
+            position: self.position,
+            mode: self.mode,
+            horizontal_align: self.horizontal_align,
+            vertical_align: self.vertical_align,
+            border_radius: self.border_radius,
+            border_width: self.border_width,
+            border_color: self.border_color,
+            box_shadow: self.box_shadow,
+        };
+
+        let props_changed = previous_state
+            .map(|state| state.end != end)
+            .unwrap_or(false);
+        let interrupt_previous_transition =
+            self.transition.map(|t| t.should_interrupt).unwrap_or(false);
         let transition = TransitionState::new(
             self.transition.map(|transition| TransitionOptions {
                 duration: transition.duration,
                 interpolation_kind: transition.interpolation_kind,
             }),
             previous_state.and_then(|s| s.transition.clone()),
+            props_changed,
+            interrupt_previous_transition,
             ctx.last_render_pts,
         );
         let rescaler = StatefulRescalerComponent {
             start,
-            end: RescalerComponentParam {
-                id: self.id,
-                position: self.position,
-                mode: self.mode,
-                horizontal_align: self.horizontal_align,
-                vertical_align: self.vertical_align,
-                border_radius: self.border_radius,
-                border_width: self.border_width,
-                border_color: self.border_color,
-                box_shadow: self.box_shadow,
-            },
+            end,
             transition,
             child: Box::new(Component::stateful_component(*self.child, ctx)?),
         };

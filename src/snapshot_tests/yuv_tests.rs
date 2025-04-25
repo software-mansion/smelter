@@ -10,20 +10,17 @@ use compositor_render::{
     OutputFrameFormat, RendererId, RendererSpec, Resolution,
 };
 
-use super::test_case::TestCase;
+use super::{test_case::TestCase, Step};
 
 fn run_case(test_case: TestCase, expected: &[u8]) {
-    let mut renderer = test_case.renderer();
-    let snapshot = test_case
-        .snapshot_for_pts(&mut renderer, Duration::ZERO)
-        .unwrap();
-    let failed = snapshot
+    let snapshots = test_case.generate_snapshots();
+    let failed = snapshots[0]
         .data
         .iter()
         .zip(expected)
         .any(|(actual, expected)| u8::abs_diff(*actual, *expected) > 2);
     if failed {
-        panic!("Sample mismatched {:?}", snapshot.data)
+        panic!("Sample mismatched {:?}", snapshots[0].data)
     }
 }
 
@@ -35,16 +32,6 @@ fn yuv_test_gradient() {
     let height = 2;
 
     let yuv_case = TestCase {
-        scene_updates: vec![Component::Shader(ShaderComponent {
-            id: None,
-            children: vec![],
-            shader_id: shader_id.clone(),
-            shader_param: None,
-            size: Size {
-                width: width as f32,
-                height: height as f32,
-            },
-        })],
         renderers: vec![(
             shader_id.clone(),
             RendererSpec::Shader(ShaderSpec {
@@ -52,6 +39,19 @@ fn yuv_test_gradient() {
             }),
         )],
         resolution: Resolution { width, height },
+        steps: vec![
+            Step::UpdateScene(Component::Shader(ShaderComponent {
+                id: None,
+                children: vec![],
+                shader_id: shader_id.clone(),
+                shader_param: None,
+                size: Size {
+                    width: width as f32,
+                    height: height as f32,
+                },
+            })),
+            Step::RenderWithSnapshot(Duration::ZERO),
+        ],
         ..Default::default()
     };
     let rgb_case = TestCase {
@@ -83,24 +83,27 @@ fn yuv_test_uniform_color() {
     let height = 2;
 
     let yuv_case = TestCase {
-        scene_updates: vec![Component::View(ViewComponent {
-            id: None,
-            children: vec![],
-            direction: ViewChildrenDirection::Row,
-            position: Position::Static {
-                width: None,
-                height: None,
-            },
-            transition: None,
-            overflow: Overflow::Hidden,
-            background_color: RGBAColor(50, 0, 0, 255),
-            border_radius: BorderRadius::ZERO,
-            border_width: 0.0,
-            border_color: RGBAColor(0, 0, 0, 0),
-            box_shadow: vec![],
-            padding: Default::default(),
-        })],
         resolution: Resolution { width, height },
+        steps: vec![
+            Step::UpdateScene(Component::View(ViewComponent {
+                id: None,
+                children: vec![],
+                direction: ViewChildrenDirection::Row,
+                position: Position::Static {
+                    width: None,
+                    height: None,
+                },
+                transition: None,
+                overflow: Overflow::Hidden,
+                background_color: RGBAColor(50, 0, 0, 255),
+                border_radius: BorderRadius::ZERO,
+                border_width: 0.0,
+                border_color: RGBAColor(0, 0, 0, 0),
+                box_shadow: vec![],
+                padding: Default::default(),
+            })),
+            Step::RenderWithSnapshot(Duration::ZERO),
+        ],
         ..Default::default()
     };
     let rgb_case = TestCase {
