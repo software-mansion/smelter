@@ -270,9 +270,9 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
                         },
                     ]
                 },
+                "channels": "stereo",
                 "encoder": {
                     "type": "opus",
-                    "channels": "stereo",
                 }
             },
         }),
@@ -357,9 +357,9 @@ pub fn required_audio_inputs_with_offset() -> Result<()> {
                         },
                     ]
                 },
+                "channels": "stereo",
                 "encoder": {
                     "type": "opus",
-                    "channels": "stereo",
                 }
             },
         }),
@@ -449,9 +449,9 @@ pub fn required_audio_inputs_with_offset_missing_data() -> Result<()> {
                         },
                     ]
                 },
+                "channels": "stereo",
                 "encoder": {
                     "type": "opus",
-                    "channels": "stereo",
                 }
             },
         }),

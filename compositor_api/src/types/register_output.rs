@@ -83,6 +83,8 @@ pub struct OutputRtpAudioOptions {
     pub send_eos_when: Option<OutputEndCondition>,
     /// Audio encoder options.
     pub encoder: RtpAudioEncoderOptions,
+    /// Specifies channels configuration.
+    pub channels: Option<AudioChannels>,
     /// Initial audio mixer configuration for output.
     pub initial: Audio,
 }
@@ -96,6 +98,8 @@ pub struct OutputMp4AudioOptions {
     pub send_eos_when: Option<OutputEndCondition>,
     /// Audio encoder options.
     pub encoder: Mp4AudioEncoderOptions,
+    /// Specifies channels configuration.
+    pub channels: Option<AudioChannels>,
     /// Initial audio mixer configuration for output.
     pub initial: Audio,
 }
@@ -109,6 +113,8 @@ pub struct OutputWhipAudioOptions {
     pub send_eos_when: Option<OutputEndCondition>,
     /// Audio encoder options.
     pub encoder: WhipAudioEncoderOptions,
+    /// Specifies channels configuration.
+    pub channels: Option<AudioChannels>,
     /// Initial audio mixer configuration for output.
     pub initial: Audio,
 }
@@ -122,6 +128,8 @@ pub struct OutputRtmpClientAudioOptions {
     pub send_eos_when: Option<OutputEndCondition>,
     /// Audio encoder options.
     pub encoder: RtmpClientAudioEncoderOptions,
+    /// Specifies channels configuration.
+    pub channels: Option<AudioChannels>,
     /// Initial audio mixer configuration for output.
     pub initial: Audio,
 }
@@ -149,7 +157,7 @@ pub enum VideoEncoderOptions {
 pub enum RtpAudioEncoderOptions {
     Opus {
         /// Specifies channels configuration.
-        channels: AudioChannels,
+        channels: Option<AudioChannels>,
 
         /// (**default="voip"**) Specifies preset for audio output encoder.
         preset: Option<OpusEncoderPreset>,
@@ -163,7 +171,7 @@ pub enum RtpAudioEncoderOptions {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Mp4AudioEncoderOptions {
     Aac {
-        channels: AudioChannels,
+        channels: Option<AudioChannels>,
         /// (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
         sample_rate: Option<u32>,
     },
@@ -173,7 +181,7 @@ pub enum Mp4AudioEncoderOptions {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RtmpClientAudioEncoderOptions {
     Aac {
-        channels: AudioChannels,
+        channels: Option<AudioChannels>,
         /// (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
         sample_rate: Option<u32>,
     },
@@ -184,7 +192,7 @@ pub enum RtmpClientAudioEncoderOptions {
 pub enum WhipAudioEncoderOptions {
     Opus {
         /// Specifies channels configuration.
-        channels: AudioChannels,
+        channels: Option<AudioChannels>,
 
         /// (**default="voip"**) Specifies preset for audio output encoder.
         preset: Option<OpusEncoderPreset>,
