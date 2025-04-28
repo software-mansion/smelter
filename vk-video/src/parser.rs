@@ -150,6 +150,8 @@ impl Parser {
                         continue;
                     };
 
+                    // TODO: warn when not all pts are equal here
+
                     let mut inst = self.reference_ctx.put_picture(slices)?;
                     instructions.append(&mut inst);
                 }
