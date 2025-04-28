@@ -22,6 +22,8 @@ jobs:
 
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.86.0
 
             - name: 🔬 Install nextest
               uses: taiki-e/install-action@v2
@@ -76,6 +78,7 @@ jobs:
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
+                  toolchain: 1.86.0
                   components: rustfmt, clippy
 
             - name: 📥 Checkout repo
@@ -104,6 +107,7 @@ jobs:
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
+                  toolchain: 1.86.0
                   components: rustfmt, clippy
 
             - name: Install pnpm
