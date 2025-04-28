@@ -9,8 +9,9 @@ use images::DecodingImages;
 use parameters::VideoSessionParametersManager;
 
 use super::{
-    h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc, CommandBuffer, DecodeQueryPool, Fence,
-    H264ProfileInfo, SeqParameterSetExt, VideoSession, VulkanDecoderError, VulkanDevice,
+    h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc, wrappers::DecodeInputBuffer,
+    CommandBuffer, DecodeQueryPool, Fence, H264ProfileInfo, SeqParameterSetExt, VideoSession,
+    VulkanDecoderError, VulkanDevice,
 };
 
 mod images;
@@ -26,6 +27,7 @@ pub(super) struct VideoSessionResources<'a> {
     pub(crate) decode_query_pool: Option<DecodeQueryPool>,
     pub(crate) level_idc: u8,
     pub(crate) max_num_reorder_frames: u64,
+    pub(crate) decode_buffer: DecodeInputBuffer,
 }
 
 fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, VulkanDecoderError> {
@@ -114,6 +116,8 @@ impl VideoSessionResources<'_> {
             None
         };
 
+        let decode_buffer = DecodeInputBuffer::new(vulkan_ctx.allocator.clone(), &profile_info)?;
+
         Ok(VideoSessionResources {
             profile_info,
             video_session,
@@ -124,6 +128,7 @@ impl VideoSessionResources<'_> {
             decode_query_pool,
             level_idc,
             max_num_reorder_frames,
+            decode_buffer,
         })
     }
 

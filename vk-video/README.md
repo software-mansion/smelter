@@ -5,14 +5,11 @@ A library for hardware video coding using Vulkan Video, with [wgpu] integration.
 [![Crates.io][crates-badge]][crates-url]
 [![docs.rs][docs-badge]][docs-url]
 [![MIT licensed][mit-badge]][mit-url]
-[![Build Status][actions-badge]][actions-url]
 
 [crates-badge]: https://img.shields.io/crates/v/vk-video
 [crates-url]: https://crates.io/crates/vk-video
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [mit-url]: https://github.com/software-mansion/smelter/blob/master/vk-video/LICENSE
-[actions-badge]: https://github.com/software-mansion/smelter/actions/workflows/test.yml/badge.svg
-[actions-url]: https://github.com/software-mansion/smelter/actions/workflows/test.yml?query=branch%3Amaster
 [docs-badge]: https://img.shields.io/docsrs/vk-video
 [docs-url]: https://docs.rs/vk-video/latest/vk-video/
 
@@ -22,6 +19,8 @@ The goal of this library is to provide easy access to hardware video coding. You
 
 An advantage of using this library with wgpu is that decoded video frames never leave the GPU memory. There's no copying the frames to RAM and back to the GPU, so it should be quite fast if you want to use them for rendering.
 
+This library was developed as a part of [smelter, a tool for video composition](https://smelter.dev/).
+
 ## Usage
 
 ```rs
@@ -30,12 +29,12 @@ fn decode_video(
     mut encoded_video_reader: impl std::io::Read,
 ) {
     let instance = vk_video::VulkanInstance::new().unwrap();
-    let mut surface = instance.wgpu_instance.create_surface(window).unwrap();
+    let surface = instance.wgpu_instance.create_surface(window).unwrap();
     let device = instance
         .create_device(
             wgpu::Features::empty(),
             wgpu::Limits::default(),
-            &mut Some(&mut surface),
+            Some(&surface),
         )
         .unwrap();
 
@@ -51,8 +50,8 @@ fn decode_video(
 
         for frame in decoded_frames {
             // Each frame contains a wgpu::Texture you can sample for drawing.
-            // device.wgpu_device is a wgpu::Device and device.wgpu_queue
-            // is a wgpu::Queue. You can use these for interacting with the frames.
+            // device.wgpu_device() will give you a wgpu::Device and device.wgpu_queue()
+            // a wgpu::Queue. You can use these for interacting with the frames.
         }
     }
 }
@@ -73,7 +72,7 @@ cargo run --example player -- output.h264 FRAMERATE
 
 ## Compatibility
 
-On Linux, the library should work on NVIDIA GPUs out of the box. For AMD GPUs with recent Mesa drivers, you need to set the `RADV_PERFTEST=video_decode` environment variable for now:
+On Linux, the library should work on NVIDIA and AMD GPUs out of the box with recent Mesa drivers. For AMD GPUs with a bit older Mesa drivers, you may need to set the `RADV_PERFTEST=video_decode` environment variable:
 
 ```sh
 RADV_PERFTEST=video_decode cargo run

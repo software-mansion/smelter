@@ -7,7 +7,7 @@ use ash::{vk, Entry};
 use tracing::{debug, error, warn};
 use wgpu::hal::Adapter;
 
-use crate::{parser::Parser, BytesDecoder, DecoderError, WgpuTexturesDecoder};
+use crate::{parser::Parser, BytesDecoder, DecoderError, RawFrameData, WgpuTexturesDecoder};
 
 use super::{
     Allocator, CommandBuffer, CommandPool, DebugMessenger, Device, FrameSorter, Instance,
@@ -47,8 +47,9 @@ pub enum VulkanCtxError {
     StringConversionError(#[from] std::ffi::FromBytesUntilNulError),
 }
 
+/// Context for all encoders, decoders. Also contains a [`wgpu::Instance`].
 pub struct VulkanInstance {
-    pub wgpu_instance: Arc<wgpu::Instance>,
+    wgpu_instance: wgpu::Instance,
     _entry: Arc<Entry>,
     instance: Arc<Instance>,
     _debug_messenger: Option<DebugMessenger>,
@@ -60,8 +61,14 @@ impl VulkanInstance {
         Self::new_from_entry(entry)
     }
 
-    pub fn new_from(path: impl AsRef<std::ffi::OsStr>) -> Result<Arc<Self>, VulkanCtxError> {
-        let entry = Arc::new(unsafe { Entry::load_from(path)? });
+    pub fn wgpu_instance(&self) -> wgpu::Instance {
+        self.wgpu_instance.clone()
+    }
+
+    pub fn new_from(
+        vulkan_library_path: impl AsRef<std::ffi::OsStr>,
+    ) -> Result<Arc<Self>, VulkanCtxError> {
+        let entry = Arc::new(unsafe { Entry::load_from(vulkan_library_path)? });
         Self::new_from_entry(entry)
     }
 
@@ -160,19 +167,16 @@ impl VulkanInstance {
             _entry: entry,
             instance,
             _debug_messenger: debug_messenger,
-            wgpu_instance: wgpu_instance.into(),
+            wgpu_instance,
         }
         .into())
     }
 
-    /// The `compatible surface` being a `&mut Option<&mut wgpu::Surface<'_>>` is a result of
-    /// weirdness in wgpu API, which we fixed upstream. When wgpu releases, this will be converted to
-    /// `Option<&wgpu::Surface<'_>>`
     pub fn create_device(
         &self,
         wgpu_features: wgpu::Features,
         wgpu_limits: wgpu::Limits,
-        compatible_surface: &mut Option<&mut wgpu::Surface<'_>>,
+        compatible_surface: Option<&wgpu::Surface<'_>>,
     ) -> Result<Arc<VulkanDevice>, VulkanCtxError> {
         let physical_devices = unsafe { self.instance.enumerate_physical_devices()? };
 
@@ -324,9 +328,9 @@ impl VulkanInstance {
             h264_dpb_format_properties,
             h264_dst_format_properties,
             h264_caps,
-            wgpu_device: wgpu_device.into(),
-            wgpu_queue: wgpu_queue.into(),
-            wgpu_adapter: wgpu_adapter.into(),
+            wgpu_device,
+            wgpu_queue,
+            wgpu_adapter,
         }
         .into())
     }
@@ -338,10 +342,12 @@ impl std::fmt::Debug for VulkanInstance {
     }
 }
 
+/// Open connection to a coding-capable device. Also contains a [`wgpu::Device`], a [`wgpu::Queue`] and
+/// a [`wgpu::Adapter`].
 pub struct VulkanDevice {
-    pub wgpu_device: Arc<wgpu::Device>,
-    pub wgpu_queue: Arc<wgpu::Queue>,
-    pub wgpu_adapter: Arc<wgpu::Adapter>,
+    pub(crate) wgpu_device: wgpu::Device,
+    pub(crate) wgpu_queue: wgpu::Queue,
+    pub(crate) wgpu_adapter: wgpu::Adapter,
     _physical_device: vk::PhysicalDevice,
     pub(crate) device: Arc<Device>,
     pub(crate) allocator: Arc<Allocator>,
@@ -370,13 +376,25 @@ impl VulkanDevice {
     pub fn create_bytes_decoder(self: &Arc<Self>) -> Result<BytesDecoder, DecoderError> {
         let parser = Parser::default();
         let vulkan_decoder = VulkanDecoder::new(self.clone())?;
-        let frame_sorter = FrameSorter::<Vec<u8>>::new();
+        let frame_sorter = FrameSorter::<RawFrameData>::new();
 
         Ok(BytesDecoder {
             parser,
             vulkan_decoder,
             frame_sorter,
         })
+    }
+
+    pub fn wgpu_device(&self) -> wgpu::Device {
+        self.wgpu_device.clone()
+    }
+
+    pub fn wgpu_queue(&self) -> wgpu::Queue {
+        self.wgpu_queue.clone()
+    }
+
+    pub fn wgpu_adapter(&self) -> wgpu::Adapter {
+        self.wgpu_adapter.clone()
     }
 }
 
@@ -401,7 +419,7 @@ fn find_device<'a>(
     instance: &Instance,
     wgpu_instance: &wgpu::Instance,
     required_extension_names: &[&CStr],
-    compatible_surface: &mut Option<&mut wgpu::Surface<'_>>,
+    compatible_surface: Option<&wgpu::Surface<'_>>,
 ) -> Result<ChosenDevice<'a>, VulkanCtxError> {
     for &device in devices {
         let properties = unsafe { instance.get_physical_device_properties(device) };
