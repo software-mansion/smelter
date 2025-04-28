@@ -84,7 +84,7 @@ pub struct OutputWhipVideoOptions {
     /// Video encoder options.
     pub encoder: Option<VideoEncoderOptions>,
     /// Codec preferences list.
-    pub codec_preferences: Option<Vec<VideoEncoderOptions>>,
+    pub codec_preferences: Option<Vec<WhipVideoEncoderOptions>>,
     /// Root of a component tree/scene that should be rendered for the output.
     pub initial: Video,
 }
@@ -167,6 +167,26 @@ pub enum VideoEncoderOptions {
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<String, String>>,
     },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WhipVideoEncoderOptions {
+    #[serde(rename = "ffmpeg_h264")]
+    FfmpegH264 {
+        /// (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+        preset: Option<H264EncoderPreset>,
+
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<String, String>>,
+    },
+    #[serde(rename = "ffmpeg_vp8")]
+    FfmpegVp8 {
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<String, String>>,
+    },
+    #[serde(rename = "any")]
+    Any,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
