@@ -20,6 +20,7 @@ jobs:
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
+                  toolchain: 1.85.0
                   components: rustfmt, clippy
 
             - name: 📥 Checkout repo
