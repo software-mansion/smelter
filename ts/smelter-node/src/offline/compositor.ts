@@ -29,8 +29,20 @@ export default class OfflineSmelter {
     await this.coreSmelter.render(root, request, durationMs);
   }
 
-  public async registerInput(inputId: string, request: CoreInput.RegisterInput) {
-    await this.coreSmelter.registerInput(inputId, request);
+  public async registerInput(inputId: string, request: CoreInput.RegisterInput): Promise<object> {
+    let result = await this.coreSmelter.registerInput(inputId, request);
+    const mappedResult: any = {};
+
+    if ('bearer_token' in result) {
+      mappedResult.bearerToken = result['bearer_token'];
+    }
+    if ('video_duration_ms' in result) {
+      mappedResult.videoDurationMs = result['video_duration_ms'];
+    }
+    if ('audio_duration_ms' in result) {
+      mappedResult.audioDurationMs = result['audio_duration_ms'];
+    }
+    return mappedResult;
   }
 
   public async registerImage(imageId: string, request: Renderers.RegisterImage): Promise<void> {
