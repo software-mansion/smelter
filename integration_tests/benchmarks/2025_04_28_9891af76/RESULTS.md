@@ -233,3 +233,9 @@ It can only handle one input and one output with ultrafast preset
 | 4:1                | veryfast       | **16**     | **4**       |
 | 4:1                | fast           | **4**      | **1**       |
 
+> Fast preset for `2:1` ratio can handle 3 outputs (and 6 inputs), while for `1:1` it is only 2 outputs (and 2 inputs).
+> A possible explanation for that case is that when rendering 2 inputs on an output 50% of output is uniform color, which
+> might be easier to encode. Additionally, inputs are hardware decoded, so the difference between 6 vs 2 inputs might not be significant.
+>
+> The same effect is visible in few other cases.
+
