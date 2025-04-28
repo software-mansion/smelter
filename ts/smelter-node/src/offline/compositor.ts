@@ -29,6 +29,7 @@ export default class OfflineSmelter {
     await this.coreSmelter.render(root, request, durationMs);
   }
 
+  // TODO: Temporary fix to get bearer_token for WHIP input
   public async registerInput(inputId: string, request: CoreInput.RegisterInput): Promise<object> {
     let result = await this.coreSmelter.registerInput(inputId, request);
     const mappedResult: any = {};

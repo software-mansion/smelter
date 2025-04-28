@@ -37,6 +37,7 @@ export default class Smelter {
     await this.coreSmelter.unregisterOutput(outputId);
   }
 
+  // TODO: Temporary fix to get bearer_token for WHIP input
   public async registerInput(inputId: string, request: CoreInput.RegisterInput): Promise<object> {
     let result = await this.coreSmelter.registerInput(inputId, request);
     const mappedResult: any = {};
