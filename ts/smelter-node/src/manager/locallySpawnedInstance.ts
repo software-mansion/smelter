@@ -18,7 +18,7 @@ import { killProcess, spawn } from '../spawn';
 import { WebSocketConnection } from '../ws';
 import { smelterInstanceLoggerOptions } from '../logger';
 
-const VERSION = `v0.4.1`;
+const VERSION = `v0.4.2`;
 
 type ManagedInstanceOptions = {
   port: number;
