@@ -65,7 +65,7 @@ async function run() {
   );
   await smelter.registerImage('image_1', {
     assetType: 'svg',
-    url: 'https://smelter.dev/img/logo.svg',
+    url: 'https://smelter.dev/images/smelter-logo.svg',
     resolution: { width: 300, height: 300 },
   });
 
