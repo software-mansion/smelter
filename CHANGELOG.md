@@ -18,6 +18,13 @@
 - Deprecate `vulkan_video` option in favor of `vulkan_h264`. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
 - Deprecate `video_decoder` option in MP4 input. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
 
+## [v0.4.2](https://github.com/software-mansion/live-compositor/releases/tag/v0.4.2)
+
+### 🐛 Bug fixes (backported)
+
+- Fix web renderer crashing when multiple Smelter instances are run. ([#1016](https://github.com/software-mansion/smelter/pull/1016) by [@noituri](https://github.com/noituri))
+- Fix web renderer's `chromium_embedding`. ([#1033](https://github.com/software-mansion/smelter/pull/1033) by [@noituri](https://github.com/noituri))
+
 ## [v0.4.1](https://github.com/software-mansion/live-compositor/releases/tag/v0.4.1)
 
 ### 🐛 Bug fixes
