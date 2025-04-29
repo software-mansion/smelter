@@ -29,16 +29,29 @@ export default class Smelter {
     outputId: string,
     root: ReactElement,
     request: CoreOutput.RegisterOutput
-  ): Promise<void> {
-    await this.coreSmelter.registerOutput(outputId, root, request);
+  ): Promise<object> {
+    return await this.coreSmelter.registerOutput(outputId, root, request);
   }
 
   public async unregisterOutput(outputId: string): Promise<void> {
     await this.coreSmelter.unregisterOutput(outputId);
   }
 
-  public async registerInput(inputId: string, request: CoreInput.RegisterInput): Promise<void> {
-    await this.coreSmelter.registerInput(inputId, request);
+  // TODO: Temporary fix to get bearer_token for WHIP input
+  public async registerInput(inputId: string, request: CoreInput.RegisterInput): Promise<object> {
+    let result = await this.coreSmelter.registerInput(inputId, request);
+    const mappedResult: any = {};
+
+    if ('bearer_token' in result) {
+      mappedResult.bearerToken = result['bearer_token'];
+    }
+    if ('video_duration_ms' in result) {
+      mappedResult.videoDurationMs = result['video_duration_ms'];
+    }
+    if ('audio_duration_ms' in result) {
+      mappedResult.audioDurationMs = result['audio_duration_ms'];
+    }
+    return mappedResult;
   }
 
   public async unregisterInput(inputId: string): Promise<void> {

@@ -27,6 +27,8 @@ jobs:
 
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: 1.85.0
 
             - name: 🔬 Install nextest
               uses: taiki-e/install-action@v2
