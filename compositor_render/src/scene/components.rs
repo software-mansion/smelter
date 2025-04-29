@@ -190,6 +190,13 @@ pub struct Padding {
 }
 
 impl Padding {
+    pub const ZERO: Padding = Padding {
+        top: 0.0,
+        right: 0.0,
+        bottom: 0.0,
+        left: 0.0,
+    };
+
     pub fn horizontal(&self) -> f32 {
         self.left + self.right
     }
@@ -240,4 +247,65 @@ pub struct TilesComponent {
     pub vertical_align: VerticalAlign,
 
     pub transition: Option<Transition>,
+}
+
+impl Default for ViewComponent {
+    fn default() -> Self {
+        Self {
+            id: None,
+            children: vec![],
+            direction: ViewChildrenDirection::Row,
+            position: Position::Static {
+                width: None,
+                height: None,
+            },
+            transition: None,
+            overflow: Overflow::Hidden,
+            background_color: RGBAColor(0, 0, 0, 0),
+            border_radius: BorderRadius::ZERO,
+            border_width: 0.0,
+            border_color: RGBAColor(0, 0, 0, 0),
+            box_shadow: vec![],
+            padding: Padding::ZERO,
+        }
+    }
+}
+
+impl Default for RescalerComponent {
+    fn default() -> Self {
+        Self {
+            id: None,
+            child: Component::View(ViewComponent::default()).into(),
+            position: Position::Static {
+                width: None,
+                height: None,
+            },
+            transition: None,
+            mode: RescaleMode::Fit,
+            horizontal_align: HorizontalAlign::Center,
+            vertical_align: VerticalAlign::Center,
+            border_radius: BorderRadius::ZERO,
+            border_width: 0.0,
+            border_color: RGBAColor(0, 0, 0, 0),
+            box_shadow: vec![],
+        }
+    }
+}
+
+impl Default for TilesComponent {
+    fn default() -> Self {
+        Self {
+            id: None,
+            width: None,
+            height: None,
+            margin: 0.0,
+            padding: 0.0,
+            children: vec![],
+            transition: None,
+            vertical_align: VerticalAlign::Center,
+            horizontal_align: HorizontalAlign::Center,
+            background_color: RGBAColor(0, 0, 0, 0),
+            tile_aspect_ratio: (16, 9),
+        }
+    }
 }

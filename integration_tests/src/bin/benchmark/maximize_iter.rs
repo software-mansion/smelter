@@ -1,19 +1,5 @@
-use std::iter;
-
-use tracing::warn;
-
-use crate::args::{Resolution, ResolutionPreset};
-
 pub trait MaximizeIter<T> {
     fn next(&mut self, prev_success: bool) -> Option<T>;
-}
-
-pub struct Const<T: Clone + Copy>(pub T);
-
-impl<T: Clone + Copy> MaximizeIter<T> for Const<T> {
-    fn next(&mut self, _prev_success: bool) -> Option<T> {
-        Some(self.0)
-    }
 }
 
 pub struct MaximizeU64 {
@@ -80,40 +66,5 @@ impl MaximizeIter<u64> for MaximizeU64 {
             }
         };
         Some(self.last_value)
-    }
-}
-
-pub struct MaximizeResolution {
-    last_index: usize,
-    resolutions: Vec<Resolution>,
-}
-
-impl MaximizeResolution {
-    pub fn new() -> Self {
-        let preset_iter = ResolutionPreset::iter().map(Resolution::from);
-        let first = iter::once(Resolution {
-            width: 1,
-            height: 1,
-        });
-        Self {
-            last_index: 0,
-            resolutions: first.chain(preset_iter).collect(),
-        }
-    }
-}
-
-impl MaximizeIter<Resolution> for MaximizeResolution {
-    fn next(&mut self, prev_success: bool) -> Option<Resolution> {
-        match prev_success {
-            true => {
-                if self.resolutions.len() <= self.last_index + 1 {
-                    warn!("Reached max value when searching max value");
-                    return None;
-                };
-                self.last_index += 1;
-                Some(self.resolutions[self.last_index])
-            }
-            false => None,
-        }
     }
 }
