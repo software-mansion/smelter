@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 export function useSmelter(): Smelter | undefined {
   const [smelter, setSmelter] = useState<Smelter>();
   useEffect(() => {
-    const smelter = new Smelter();
+    const smelter = new Smelter({
+      audioSampleRate: 44_100,
+    });
 
     let cancel = false;
     const promise = (async () => {

@@ -29,10 +29,17 @@ export type InstanceContext = {
   framerate: Framerate;
 };
 
+export type WasmInstanceOptions = {
+  framerate: Framerate;
+  wasmBundleUrl: string;
+  logger: Logger;
+  audioSampleRate: number;
+};
+
 class WasmInstance implements SmelterManager {
   private instance?: InnerInstance;
 
-  public constructor(options: { framerate: Framerate; wasmBundleUrl: string; logger: Logger }) {
+  public constructor(options: WasmInstanceOptions) {
     this.instance = new InnerInstance(options);
   }
 
@@ -125,11 +132,11 @@ class InnerInstance {
   private inputs: Record<string, Input> = {};
   private audioMixer: AudioMixer;
 
-  public constructor(options: { framerate: Framerate; wasmBundleUrl: string; logger: Logger }) {
+  public constructor(options: WasmInstanceOptions) {
     this.logger = options.logger;
     this.framerate = options.framerate;
     this.wasmBundleUrl = options.wasmBundleUrl;
-    this.audioMixer = new AudioMixer(this.logger);
+    this.audioMixer = new AudioMixer(this.logger, options.audioSampleRate);
 
     const worker = new Worker(new URL('../esm/runWorker.mjs', import.meta.url), {
       type: 'module',

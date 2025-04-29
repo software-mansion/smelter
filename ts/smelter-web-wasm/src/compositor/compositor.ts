@@ -16,6 +16,13 @@ import type { RegisterOutputResponse } from '../mainContext/output';
 export type SmelterOptions = {
   framerate?: Framerate | number;
   streamFallbackTimeoutMs?: number;
+
+  /** Default to 48000. Defines sample rate of AudioContext that will be used for mixing audio
+   *
+   *  In Google Chrome and Safari inputs with different sample rate will be re-sampled.
+   *  In Firefox all inputs need to match the sample rate.
+   */
+  audioSampleRate?: number;
 };
 
 export type Framerate = {
@@ -62,6 +69,7 @@ export default class Smelter {
       framerate: resolveFramerate(this.options.framerate),
       wasmBundleUrl,
       logger: this.logger.child({ element: 'wasmInstance' }),
+      audioSampleRate: this.options.audioSampleRate ?? 48_000,
     });
     this.coreSmelter = new CoreSmelter(this.instance, this.logger);
 
