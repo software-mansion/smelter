@@ -36,6 +36,7 @@ export default class OfflineSmelter {
 
     if ('bearer_token' in result) {
       mappedResult.bearerToken = result['bearer_token'];
+      mappedResult.endpointRoute = `/whip/${encodeURIComponent(`global:${inputId}`)}`;
     }
     if ('video_duration_ms' in result) {
       mappedResult.videoDurationMs = result['video_duration_ms'];
