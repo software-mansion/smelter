@@ -6,19 +6,20 @@ import type {
   MultipartRequest,
 } from '@swmansion/smelter-core';
 import type { Framerate } from '../compositor/compositor';
-import type { WorkerEvent, WorkerMessage, WorkerResponse } from '../workerApi';
+import type { WorkerEvent, WorkerHandle } from '../workerApi';
 import { EventSender } from '../eventSender';
 import { Path } from 'path-parser';
 import { assert } from '../utils';
 import type { ImageSpec, ShaderSpec } from '@swmansion/smelter-browser-render';
 import type { Api } from '@swmansion/smelter';
 import type { Logger } from 'pino';
-import { AsyncWorker } from '../workerContext/bridge';
 import type { RegisterOutputResponse, Output } from './output';
 import { handleRegisterOutputRequest } from './output';
 import type { Input } from './input';
 import { handleRegisterInputRequest } from './input';
 import { AudioMixer } from './AudioMixer';
+import { DedicatedWorker } from '../workerContext/bridge/dedicatedWorker';
+import { PassThroughWorker } from '../workerContext/bridge/passThrough';
 
 const apiPath = new Path('/api/:type/:id/:operation');
 const apiStartPath = new Path('/api/start');
@@ -124,7 +125,7 @@ class WasmInstance implements SmelterManager {
 
 class InnerInstance {
   private eventSender: EventSender = new EventSender();
-  private worker: AsyncWorker<WorkerMessage, WorkerResponse, WorkerEvent>;
+  private worker: WorkerHandle;
   private logger: Logger;
   private framerate: Framerate;
   private wasmBundleUrl: string;
@@ -138,9 +139,7 @@ class InnerInstance {
     this.wasmBundleUrl = options.wasmBundleUrl;
     this.audioMixer = new AudioMixer(this.logger, options.audioSampleRate);
 
-    const worker = new Worker(new URL('../esm/runWorker.mjs', import.meta.url), {
-      type: 'module',
-    });
+    const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
     const onEvent = (event: WorkerEvent) => {
       if (EventSender.isExternalEvent(event)) {
         this.eventSender.sendEvent(event);
@@ -148,7 +147,16 @@ class InnerInstance {
       }
       throw new Error(`Unknown event received. ${JSON.stringify(event)}`);
     };
-    this.worker = new AsyncWorker(worker, onEvent, this.logger);
+
+    if (isFirefox) {
+      this.worker = new PassThroughWorker(onEvent, this.logger);
+    } else {
+      const worker = new Worker(new URL('../esm/runWorker.mjs', import.meta.url), {
+        type: 'module',
+      });
+
+      this.worker = new DedicatedWorker(worker, onEvent, this.logger);
+    }
   }
 
   private get ctx(): InstanceContext {

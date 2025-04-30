@@ -3,12 +3,13 @@ import type { Input, InputStartResult } from './input';
 import { InputVideoFrame, InputVideoFrameRef } from './frame';
 import type { Interval } from '../../utils';
 import { SmelterEventType } from '../../eventSender';
-import { workerPostEvent } from '../bridge';
+import type { MainThreadHandle } from '../../workerApi';
 
 export type InputState = 'started' | 'playing' | 'finished';
 
 export class MediaStreamInput implements Input {
   private inputId: InputId;
+  private mainThreadHandle: MainThreadHandle;
 
   private frame?: InputVideoFrameRef;
   private reader: ReadableStreamDefaultReader<VideoFrame>;
@@ -18,9 +19,10 @@ export class MediaStreamInput implements Input {
   private sentEos: boolean = false;
   private sentFirstFrame: boolean = false;
 
-  public constructor(inputId: InputId, source: ReadableStream) {
+  public constructor(inputId: InputId, source: ReadableStream, mainThreadHandle: MainThreadHandle) {
     this.reader = source.getReader();
     this.inputId = inputId;
+    this.mainThreadHandle = mainThreadHandle;
   }
 
   public start(): InputStartResult {
@@ -44,7 +46,7 @@ export class MediaStreamInput implements Input {
       }
       readPromise = undefined;
     }, 30);
-    workerPostEvent({
+    this.mainThreadHandle.postEvent({
       type: SmelterEventType.VIDEO_INPUT_DELIVERED,
       inputId: this.inputId,
     });
@@ -67,7 +69,7 @@ export class MediaStreamInput implements Input {
     if (this.receivedEos) {
       if (!this.sentEos) {
         this.sentEos = true;
-        workerPostEvent({
+        this.mainThreadHandle.postEvent({
           type: SmelterEventType.VIDEO_INPUT_EOS,
           inputId: this.inputId,
         });
@@ -79,7 +81,7 @@ export class MediaStreamInput implements Input {
     if (frame) {
       if (!this.sentFirstFrame) {
         this.sentFirstFrame = true;
-        workerPostEvent({
+        this.mainThreadHandle.postEvent({
           type: SmelterEventType.VIDEO_INPUT_PLAYING,
           inputId: this.inputId,
         });

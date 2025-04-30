@@ -2,7 +2,7 @@ import Mp4Source from './source/Mp4Source';
 import { QueuedInput } from './QueuedInput';
 import type { InputAudioData, InputVideoFrame, InternalVideoFrame } from './frame';
 import { MediaStreamInput } from './MediaStreamInput';
-import type { RegisterInput } from '../../workerApi';
+import type { MainThreadHandle, RegisterInput } from '../../workerApi';
 import type { Logger } from 'pino';
 import { assert } from '../../utils';
 import type { AsyncMessagePort } from '../../audioWorkletContext/bridge';
@@ -77,7 +77,8 @@ export async function createInput(
   inputId: string,
   request: RegisterInput,
   logger: Logger,
-  workloadBalancer: WorkloadBalancer
+  workloadBalancer: WorkloadBalancer,
+  mainThreadHandle: MainThreadHandle
 ): Promise<Input> {
   const inputLogger = logger.child({ inputId });
   if (request.type === 'mp4') {
@@ -88,10 +89,10 @@ export async function createInput(
       request.audioWorkletMessagePort
     );
     await source.init();
-    return new QueuedInput(inputId, source, inputLogger);
+    return new QueuedInput(inputId, source, inputLogger, mainThreadHandle);
   } else if (request.type === 'stream') {
     assert(request.videoStream);
-    return new MediaStreamInput(inputId, request.videoStream);
+    return new MediaStreamInput(inputId, request.videoStream, mainThreadHandle);
   }
   throw new Error(`Unknown input type ${(request as any).type}`);
 }

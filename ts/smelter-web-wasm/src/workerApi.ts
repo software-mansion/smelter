@@ -102,3 +102,12 @@ export type WorkerEvent =
       type: _smelterInternals.SmelterEventType.OUTPUT_DONE;
       outputId: string;
     };
+
+export interface WorkerHandle {
+  postMessage(request: WorkerMessage, transferable?: Transferable[]): Promise<WorkerResponse>;
+  terminate(): void;
+}
+
+export interface MainThreadHandle {
+  postEvent(event: WorkerEvent): void;
+}
