@@ -9,7 +9,12 @@ use compositor_pipeline::pipeline::{
         opus::OpusEncoderOptions,
         AudioEncoderOptions,
     },
-    output::{self, mp4::Mp4OutputOptions, rtmp::RtmpSenderOptions},
+    output::{
+        self,
+        mp4::Mp4OutputOptions,
+        rtmp::RtmpSenderOptions,
+        whip::{AudioWhipOptions, VideoWhipOptions},
+    },
 };
 use tracing::warn;
 
@@ -207,14 +212,42 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             ));
         }
 
+        if let Some(OutputWhipVideoOptions {
+            encoder: Some(_encoder),
+            ..
+        }) = &video
+        {
+            warn!("Field 'encoder' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.")
+        }
+
+        if let Some(OutputWhipAudioOptions {
+            encoder: Some(_encoder),
+            ..
+        }) = &audio
+        {
+            warn!("Field 'encoder' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.")
+        }
+
         if let Some(token) = &bearer_token {
             if HeaderValue::from_str(format!("Bearer {token}").as_str()).is_err() {
                 return Err(TypeError::new("Bearer token string is not valid. It must contain only 32-127 ASCII characters"));
             };
         }
 
-        let (video_encoder_options, output_video_options) = maybe_video_options(video)?;
-        let (audio_encoder_options, output_audio_options) = match audio {
+        let (output_video_options, video_whip_options) = if let Some(options) = video {
+            let output_options = pipeline::OutputVideoOptions {
+                initial: options.initial.try_into()?,
+                end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
+            };
+            let video_whip_options = VideoWhipOptions {
+                resolution: options.resolution.into(),
+            };
+            (Some(output_options), Some(video_whip_options))
+        } else {
+            (None, None)
+        };
+
+        let (output_audio_options, audio_whip_options) = match audio {
             Some(OutputWhipAudioOptions {
                 mixing_strategy,
                 send_eos_when,
@@ -222,27 +255,19 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 channels,
                 initial,
             }) => {
-                let (audio_encoder_options, resolved_channels) = match encoder {
-                    WhipAudioEncoderOptions::Opus {
-                        preset,
-                        sample_rate,
+                let resolved_channels = match encoder {
+                    Some(WhipAudioEncoderOptions::Opus {
                         channels: channels_deprecated,
-                    } => {
+                        ..
+                    }) => {
                         if channels_deprecated.is_some() {
                             warn!("The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.");
                         }
-                        let resolved_channels = channels
+                        channels
                             .or(channels_deprecated)
-                            .unwrap_or(audio::AudioChannels::Stereo);
-                        (
-                            AudioEncoderOptions::Opus(OpusEncoderOptions {
-                                channels: resolved_channels.clone().into(),
-                                preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
-                                sample_rate: sample_rate.unwrap_or(48000),
-                            }),
-                            resolved_channels,
-                        )
+                            .unwrap_or(audio::AudioChannels::Stereo)
                     }
+                    None => channels.unwrap_or(audio::AudioChannels::Stereo),
                 };
                 let output_audio_options = pipeline::OutputAudioOptions {
                     initial: initial.try_into()?,
@@ -250,8 +275,8 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                     mixing_strategy: mixing_strategy.unwrap_or(MixingStrategy::SumClip).into(),
                     channels: resolved_channels.into(),
                 };
-
-                (Some(audio_encoder_options), Some(output_audio_options))
+                let audio_whip_options = AudioWhipOptions {}; //TODO when adding preferences
+                (Some(output_audio_options), Some(audio_whip_options))
             }
             None => (None, None),
         };
@@ -259,8 +284,8 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
         let output_options = output::OutputOptions::Whip(output::whip::WhipSenderOptions {
             endpoint_url,
             bearer_token,
-            video: video_encoder_options,
-            audio: audio_encoder_options,
+            video: video_whip_options,
+            audio: audio_whip_options,
         });
 
         Ok(Self {

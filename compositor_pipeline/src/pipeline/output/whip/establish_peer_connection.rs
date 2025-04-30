@@ -16,7 +16,6 @@ use webrtc::{
         ice_connection_state::RTCIceConnectionState,
     },
     peer_connection::{sdp::session_description::RTCSessionDescription, RTCPeerConnection},
-    rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication,
 };
 
 pub async fn connect(
@@ -39,32 +38,6 @@ pub async fn connect(
             Box::pin(async {})
         },
     ));
-
-    if let Some(keyframe_sender) = whip_ctx.request_keyframe_sender {
-        let senders = peer_connection.get_senders().await;
-        for sender in senders {
-            let keyframe_sender_clone = keyframe_sender.clone();
-            whip_ctx.pipeline_ctx.tokio_rt.spawn(async move {
-                loop {
-                    if let Ok((packets, _)) = &sender.read_rtcp().await {
-                        for packet in packets {
-                            if packet
-                                .as_any()
-                                .downcast_ref::<PictureLossIndication>()
-                                .is_some()
-                            {
-                                if let Err(err) = keyframe_sender_clone.send(()) {
-                                    debug!(%err, "Failed to send keyframe request to the encoder.");
-                                };
-                            }
-                        }
-                    } else {
-                        debug!("Failed to read RTCP packets from the sender.");
-                    }
-                }
-            });
-        }
-    }
 
     let offer = peer_connection
         .create_offer(None)
@@ -136,7 +109,7 @@ pub async fn connect(
     let answer = response
         .text()
         .await
-        .map_err(|e| WhipError::BodyParsingError("sdp offer", e))?;
+        .map_err(|e| WhipError::BodyParsingError("sdp answer", e))?;
 
     let rtc_answer =
         RTCSessionDescription::answer(answer).map_err(WhipError::RTCSessionDescriptionError)?;

@@ -154,22 +154,8 @@ impl OutputOptionsExt<Option<Port>> for OutputOptions {
                 Ok((Output::Mp4 { writer, encoder }, None))
             }
             OutputOptions::Whip(whip_options) => {
-                let encoder_opts = EncoderOptions {
-                    video: whip_options.video.clone(),
-                    audio: whip_options.audio.clone(),
-                };
-
-                let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
-                    .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
-
-                let sender = whip::WhipSender::new(
-                    output_id,
-                    whip_options.clone(),
-                    packets,
-                    encoder.keyframe_request_sender(),
-                    ctx,
-                )
-                .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
+                let (sender, encoder) = whip::WhipSender::new(output_id, whip_options.clone(), ctx)
+                    .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
 
                 Ok((Output::Whip { sender, encoder }, None))
             }

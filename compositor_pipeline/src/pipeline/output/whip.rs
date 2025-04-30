@@ -1,10 +1,14 @@
-use compositor_render::OutputId;
-use crossbeam_channel::{Receiver, Sender};
+use compositor_render::{OutputId, Resolution};
+use crossbeam_channel::Sender;
 use establish_peer_connection::connect;
+
 use init_peer_connection::init_peer_connection;
 use packet_stream::PacketStream;
-use payloader::{Payload, Payloader, PayloadingError};
+use payloader::{
+    AudioPayloaderOptions, Payload, Payloader, PayloadingError, VideoPayloaderOptions,
+};
 use reqwest::{Method, StatusCode};
+use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use std::{
     sync::{atomic::AtomicBool, Arc},
     thread,
@@ -13,14 +17,26 @@ use std::{
 use tokio::sync::oneshot;
 use tracing::{debug, error, span, Instrument, Level};
 use url::{ParseError, Url};
-use webrtc::track::track_local::TrackLocalWriter;
+use webrtc::{
+    api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8},
+    rtp_transceiver::{
+        rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender, PayloadType, RTCRtpTransceiver,
+    },
+    track::track_local::{track_local_static_rtp::TrackLocalStaticRTP, TrackLocalWriter},
+};
 
 use crate::{
+    audio_mixer::AudioChannels,
     error::OutputInitError,
     event::Event,
     pipeline::{
-        encoder::{AudioEncoderOptions, VideoEncoderOptions},
-        EncoderOutputEvent, PipelineCtx,
+        encoder::{
+            ffmpeg_h264::{self, EncoderPreset},
+            ffmpeg_vp8,
+            opus::OpusEncoderOptions,
+            AudioEncoderOptions, AudioEncoderPreset, Encoder, EncoderOptions, VideoEncoderOptions,
+        },
+        PipelineCtx,
     },
 };
 
@@ -36,18 +52,25 @@ pub struct WhipSender {
 }
 
 #[derive(Debug, Clone)]
+pub struct VideoWhipOptions {
+    pub resolution: Resolution,
+}
+
+#[derive(Debug, Clone)]
+pub struct AudioWhipOptions {}
+
+#[derive(Debug, Clone)]
 pub struct WhipSenderOptions {
     pub endpoint_url: String,
     pub bearer_token: Option<Arc<str>>,
-    pub video: Option<VideoEncoderOptions>,
-    pub audio: Option<AudioEncoderOptions>,
+    pub video: Option<VideoWhipOptions>,
+    pub audio: Option<AudioWhipOptions>,
 }
 
 #[derive(Debug, Clone)]
 pub struct WhipCtx {
     output_id: OutputId,
     options: WhipSenderOptions,
-    request_keyframe_sender: Option<Sender<()>>,
     should_close: Arc<AtomicBool>,
     pipeline_ctx: Arc<PipelineCtx>,
 }
@@ -104,6 +127,9 @@ pub enum WhipError {
     #[error("Entity Tag non-matching")]
     EntityTagNonMatching,
 
+    #[error("Cannot initialize encoder after WHIP negotiation")]
+    CannotInitEncoder,
+
     #[error("Codec not supported: {0}")]
     UnsupportedCodec(&'static str),
 }
@@ -114,45 +140,42 @@ impl WhipSender {
     pub fn new(
         output_id: &OutputId,
         options: WhipSenderOptions,
-        packets_receiver: Receiver<EncoderOutputEvent>,
-        request_keyframe_sender: Option<Sender<()>>,
         pipeline_ctx: Arc<PipelineCtx>,
-    ) -> Result<Self, OutputInitError> {
-        let payloader = Payloader::new(options.video.clone(), options.audio.clone());
-        let packet_stream = PacketStream::new(packets_receiver, payloader, 1400);
+    ) -> Result<(Self, Encoder), OutputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
         let (init_confirmation_sender, mut init_confirmation_receiver) =
-            oneshot::channel::<Result<(), WhipError>>();
+            oneshot::channel::<Result<Encoder, WhipError>>();
 
         let whip_ctx = WhipCtx {
             output_id: output_id.clone(),
             options: options.clone(),
-            request_keyframe_sender,
             should_close: should_close.clone(),
             pipeline_ctx: pipeline_ctx.clone(),
         };
 
         pipeline_ctx.tokio_rt.spawn(
-            run_whip_sender_task(whip_ctx, packet_stream, init_confirmation_sender).instrument(
-                span!(
-                    Level::INFO,
-                    "WHIP sender",
-                    output_id = output_id.to_string()
-                ),
-            ),
+            run_whip_sender_task(whip_ctx, init_confirmation_sender).instrument(span!(
+                Level::INFO,
+                "WHIP sender",
+                output_id = output_id.to_string()
+            )),
         );
 
         let start_time = Instant::now();
-        loop {
+        while start_time.elapsed() < WHIP_INIT_TIMEOUT {
             thread::sleep(Duration::from_millis(500));
-            let elapsed_time = Instant::now().duration_since(start_time);
-            if elapsed_time > WHIP_INIT_TIMEOUT {
-                init_confirmation_receiver.close();
-                return Err(OutputInitError::WhipInitTimeout);
-            }
+
             match init_confirmation_receiver.try_recv() {
                 Ok(result) => match result {
-                    Ok(_) => break,
+                    Ok(encoder) => {
+                        return Ok((
+                            Self {
+                                connection_options: options,
+                                should_close,
+                            },
+                            encoder,
+                        ))
+                    }
                     Err(err) => return Err(OutputInitError::WhipInitError(err.into())),
                 },
                 Err(err) => match err {
@@ -163,11 +186,8 @@ impl WhipSender {
                 },
             };
         }
-
-        Ok(Self {
-            connection_options: options,
-            should_close,
-        })
+        init_confirmation_receiver.close();
+        Err(OutputInitError::WhipInitTimeout)
     }
 }
 
@@ -180,11 +200,14 @@ impl Drop for WhipSender {
 
 async fn run_whip_sender_task(
     whip_ctx: WhipCtx,
-    packet_stream: PacketStream,
-    init_confirmation_sender: oneshot::Sender<Result<(), WhipError>>,
+    init_confirmation_sender: oneshot::Sender<Result<Encoder, WhipError>>,
 ) {
     let client = Arc::new(reqwest::Client::new());
-    let (peer_connection, video_track, audio_track) = match init_peer_connection(&whip_ctx).await {
+    let (peer_connection, video_transceiver, audio_transceiver) = match init_peer_connection(
+        &whip_ctx,
+    )
+    .await
+    {
         Ok(pc) => pc,
         Err(err) => {
             if let Err(Err(err)) = init_confirmation_sender.send(Err(err)) {
@@ -195,7 +218,8 @@ async fn run_whip_sender_task(
             return;
         }
     };
-    let whip_session_url = match connect(peer_connection, client.clone(), &whip_ctx).await {
+
+    let whip_session_url = match connect(peer_connection.clone(), client.clone(), &whip_ctx).await {
         Ok(val) => val,
         Err(err) => {
             if let Err(Err(err)) = init_confirmation_sender.send(Err(err)) {
@@ -206,7 +230,37 @@ async fn run_whip_sender_task(
             return;
         }
     };
-    if let Err(Ok(_)) = init_confirmation_sender.send(Ok(())) {
+    let (video_track, video_codec, video_payload_type) =
+        setup_track(video_transceiver.clone(), "video".to_string()).await;
+    let (audio_track, audio_codec, audio_payload_type) =
+        setup_track(audio_transceiver.clone(), "audio".to_string()).await;
+
+    let (encoder, packet_stream) = match create_encoder_and_packet_stream(
+        whip_ctx.clone(),
+        video_codec,
+        video_payload_type,
+        audio_codec,
+        audio_payload_type,
+    ) {
+        Ok((encoder, packet_stream)) => (encoder, packet_stream),
+        Err(err) => {
+            error!("Error message: {:?}", err);
+            return;
+        }
+    };
+
+    if let Some(keyframe_sender) = encoder.keyframe_request_sender() {
+        if let Some(video_transceiver) = video_transceiver {
+            let video_sender = video_transceiver.sender().await;
+            handle_keyframe_requests(whip_ctx.clone(), video_sender, keyframe_sender.clone()).await;
+        }
+        if let Some(audio_transceiver) = audio_transceiver {
+            let audio_sender = audio_transceiver.sender().await;
+            handle_keyframe_requests(whip_ctx.clone(), audio_sender, keyframe_sender.clone()).await;
+        }
+    }
+
+    if let Err(Ok(_)) = init_confirmation_sender.send(Ok(encoder)) {
         error!("Whip sender thread initialized successfully, coulnd't send confirmation message.");
         return;
     }
@@ -275,4 +329,137 @@ async fn run_whip_sender_task(
         .event_emitter
         .emit(Event::OutputDone(whip_ctx.output_id));
     debug!("Closing WHIP sender thread.")
+}
+
+fn create_encoder_and_packet_stream(
+    whip_ctx: WhipCtx,
+    video_codec: Option<RTCRtpCodecCapability>,
+    video_payload_type: Option<PayloadType>,
+    audio_codec: Option<RTCRtpCodecCapability>,
+    audio_payload_type: Option<PayloadType>,
+) -> Result<(Encoder, PacketStream), WhipError> {
+    let video_encoder_options = if let Some(video_config) = whip_ctx.options.video {
+        let resolution = video_config.resolution;
+        match video_codec.as_ref().map(|vc| vc.mime_type.as_str()) {
+            Some(MIME_TYPE_H264) => Some(VideoEncoderOptions::H264(ffmpeg_h264::Options {
+                preset: EncoderPreset::Fast,
+                resolution,
+                raw_options: vec![],
+            })),
+            Some(MIME_TYPE_VP8) => Some(VideoEncoderOptions::VP8(ffmpeg_vp8::Options {
+                resolution,
+                raw_options: vec![],
+            })),
+            Some(_) | None => None,
+        }
+    } else {
+        None
+    };
+
+    let audio_encoder_options = if let Some(_audio_config) = whip_ctx.options.audio {
+        //TODO get audio codec preferences from audio_config
+        match audio_codec.as_ref().map(|ac| ac.mime_type.as_str()) {
+            Some(MIME_TYPE_OPUS) => Some(AudioEncoderOptions::Opus(OpusEncoderOptions {
+                channels: AudioChannels::Stereo,
+                preset: AudioEncoderPreset::Quality,
+                sample_rate: 48000,
+            })),
+            Some(_) | None => None,
+        }
+    } else {
+        None
+    };
+
+    let Ok((encoder, packets_receiver)) = Encoder::new(
+        &whip_ctx.output_id,
+        EncoderOptions {
+            video: video_encoder_options.clone(),
+            audio: audio_encoder_options.clone(),
+        },
+        &whip_ctx.pipeline_ctx,
+    ) else {
+        return Err(WhipError::CannotInitEncoder);
+    };
+
+    let video_payloader_options = match (video_encoder_options, video_payload_type) {
+        (Some(encoder), Some(payload_type)) => Some(VideoPayloaderOptions {
+            encoder_options: encoder,
+            payload_type,
+        }),
+        (_, _) => None,
+    };
+
+    let audio_payloader_options = match (audio_encoder_options, audio_payload_type) {
+        (Some(encoder), Some(payload_type)) => Some(AudioPayloaderOptions {
+            encoder_options: encoder,
+            payload_type,
+        }),
+        (_, _) => None,
+    };
+
+    let payloader = Payloader::new(video_payloader_options, audio_payloader_options);
+    let packet_stream = PacketStream::new(packets_receiver, payloader, 1400);
+
+    Ok((encoder, packet_stream))
+}
+
+async fn setup_track(
+    transceiver: Option<Arc<RTCRtpTransceiver>>,
+    track_kind: String,
+) -> (
+    Option<Arc<TrackLocalStaticRTP>>,
+    Option<RTCRtpCodecCapability>,
+    Option<PayloadType>,
+) {
+    if let Some(transceiver) = transceiver {
+        let sender = transceiver.sender().await;
+        let (track, codec, payload_type) =
+            match sender.get_parameters().await.rtp_parameters.codecs.first() {
+                Some(codec_parameters) => {
+                    let track = Arc::new(TrackLocalStaticRTP::new(
+                        codec_parameters.capability.clone(),
+                        track_kind.clone(),
+                        "webrtc-rs".to_string(),
+                    ));
+                    if let Err(e) = sender.replace_track(Some(track.clone())).await {
+                        error!("Failed to replace {} track: {}", track_kind, e);
+                    }
+                    (
+                        Some(track),
+                        Some(codec_parameters.capability.clone()),
+                        Some(codec_parameters.payload_type),
+                    )
+                }
+                None => (None, None, None),
+            };
+        (track, codec, payload_type)
+    } else {
+        (None, None, None)
+    }
+}
+
+async fn handle_keyframe_requests(
+    whip_ctx: WhipCtx,
+    sender: Arc<RTCRtpSender>,
+    keyframe_sender: Sender<()>,
+) {
+    whip_ctx.pipeline_ctx.tokio_rt.spawn(async move {
+        loop {
+            if let Ok((packets, _)) = sender.read_rtcp().await {
+                for packet in packets {
+                    if packet
+                        .as_any()
+                        .downcast_ref::<PictureLossIndication>()
+                        .is_some()
+                    {
+                        if let Err(err) = keyframe_sender.send(()) {
+                            debug!(%err, "Failed to send keyframe request to the encoder.");
+                        };
+                    }
+                }
+            } else {
+                debug!("Failed to read RTCP packets from the sender.");
+            }
+        }
+    });
 }

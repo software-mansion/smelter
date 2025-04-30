@@ -56,7 +56,7 @@ pub struct WhipOutput {
     // Bearer token
     pub bearer_token: Option<Arc<str>>,
     /// Video track configuration.
-    pub video: Option<OutputVideoOptions>,
+    pub video: Option<OutputWhipVideoOptions>,
     /// Audio track configuration.
     pub audio: Option<OutputWhipAudioOptions>,
 }
@@ -71,6 +71,19 @@ pub struct OutputVideoOptions {
     /// Video encoder options.
     pub encoder: VideoEncoderOptions,
     /// Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+    pub initial: Video,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OutputWhipVideoOptions {
+    /// Output resolution in pixels.
+    pub resolution: Resolution,
+    /// Defines when output stream should end if some of the input streams are finished. If output includes both audio and video streams, then EOS needs to be sent on both.
+    pub send_eos_when: Option<OutputEndCondition>,
+    /// Video encoder options.
+    pub encoder: Option<VideoEncoderOptions>,
+    /// Root of a component tree/scene that should be rendered for the output.
     pub initial: Video,
 }
 
@@ -112,7 +125,7 @@ pub struct OutputWhipAudioOptions {
     /// Condition for termination of output stream based on the input streams states.
     pub send_eos_when: Option<OutputEndCondition>,
     /// Audio encoder options.
-    pub encoder: WhipAudioEncoderOptions,
+    pub encoder: Option<WhipAudioEncoderOptions>,
     /// Specifies channels configuration.
     pub channels: Option<AudioChannels>,
     /// Initial audio mixer configuration for output.
