@@ -1,6 +1,7 @@
 import type { InputId } from '@swmansion/smelter-browser-render';
 import type { Input, InputStartResult } from './input';
-import { InputVideoFrame, InputVideoFrameRef } from './frame';
+import type { InputVideoFrame } from './frame';
+import { InputFrameFromVideoFrame, InputVideoFrameRef } from './frame';
 import type { Interval } from '../../utils';
 import { SmelterEventType } from '../../eventSender';
 import type { MainThreadHandle } from '../../workerApi';
@@ -87,7 +88,7 @@ export class MediaStreamInput implements Input {
         });
       }
       // using Ref just to cache downloading frames if the same frame is used more than once
-      return new InputVideoFrame(frame, currentQueuePts);
+      return new InputFrameFromVideoFrame(frame, currentQueuePts);
     }
 
     return;

@@ -11,6 +11,11 @@ export type RegisterInput =
   | {
       type: 'stream';
       videoStream?: ReadableStream;
+    }
+  | {
+      // should only be used with pass-through worker
+      type: 'domVideoElement';
+      videoElement: HTMLVideoElement;
     };
 
 export type RegisterOutput = {

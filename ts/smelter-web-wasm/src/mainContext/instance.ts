@@ -123,6 +123,8 @@ class WasmInstance implements SmelterManager {
   }
 }
 
+export const IS_FIREFOX = navigator.userAgent.toLowerCase().includes('firefox');
+
 class InnerInstance {
   private eventSender: EventSender = new EventSender();
   private worker: WorkerHandle;
@@ -139,7 +141,6 @@ class InnerInstance {
     this.wasmBundleUrl = options.wasmBundleUrl;
     this.audioMixer = new AudioMixer(this.logger, options.audioSampleRate);
 
-    const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
     const onEvent = (event: WorkerEvent) => {
       if (EventSender.isExternalEvent(event)) {
         this.eventSender.sendEvent(event);
@@ -148,7 +149,7 @@ class InnerInstance {
       throw new Error(`Unknown event received. ${JSON.stringify(event)}`);
     };
 
-    if (isFirefox) {
+    if (IS_FIREFOX) {
       this.worker = new PassThroughWorker(onEvent, this.logger);
     } else {
       const worker = new Worker(new URL('../esm/runWorker.mjs', import.meta.url), {
