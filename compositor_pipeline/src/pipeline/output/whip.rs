@@ -18,7 +18,6 @@ use tokio::sync::oneshot;
 use tracing::{debug, error, span, Instrument, Level};
 use url::{ParseError, Url};
 use webrtc::{
-    api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8},
     rtp_transceiver::{
         rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender, PayloadType, RTCRtpTransceiver,
     },
@@ -30,12 +29,7 @@ use crate::{
     error::OutputInitError,
     event::Event,
     pipeline::{
-        encoder::{
-            ffmpeg_h264::{self, EncoderPreset},
-            ffmpeg_vp8,
-            opus::OpusEncoderOptions,
-            AudioEncoderOptions, AudioEncoderPreset, Encoder, EncoderOptions, VideoEncoderOptions,
-        },
+        encoder::{AudioEncoderOptions, Encoder, EncoderOptions, VideoEncoderOptions},
         PipelineCtx,
     },
 };
@@ -223,21 +217,45 @@ async fn run_whip_sender_task(
         }
     };
 
-    let video_codec_preferences = whip_ctx.clone().options.video.unwrap().codec_preferences;
-    let audio_codec_preferences = whip_ctx.clone().options.audio.unwrap().codec_preferences;
+    let video_codec_preferences = whip_ctx
+        .options
+        .video
+        .as_ref()
+        .map(|v| v.codec_preferences.clone());
+    let audio_codec_preferences = whip_ctx
+        .options
+        .audio
+        .as_ref()
+        .map(|a| a.codec_preferences.clone());
 
-    // let (video_track, video_codec, video_payload_type) = setup_track(
-    //     video_transceiver.clone(),
-    //     video_codec_preferences,
-    //     "video".to_string(),
-    // )
-    // .await;
-    // let (audio_track, audio_codec, audio_payload_type) = setup_track(
-    //     audio_transceiver.clone(),
-    //     audio_codec_preferences,
-    //     "audio".to_string(),
-    // )
-    // .await;
+    let setup_track_before_negotiation = video_codec_preferences
+        .as_ref()
+        .filter(|preferences| preferences.len() == 1)
+        .and_then(|preferences| {
+            preferences
+                .first()
+                .map(|preference| matches!(preference, VideoEncoderOptions::H264(_)))
+        })
+        .unwrap_or(false);
+
+    let (video_track, video_payload_type, video_encoder_options) = if setup_track_before_negotiation
+    {
+        setup_track(
+            video_transceiver.clone(),
+            video_codec_preferences.clone(),
+            "video".to_string(),
+        )
+        .await
+    } else {
+        (None, None, None)
+    };
+
+    let (audio_track, audio_payload_type, audio_encoder_options) = setup_track(
+        audio_transceiver.clone(),
+        audio_codec_preferences,
+        "audio".to_string(),
+    )
+    .await;
 
     let whip_session_url = match connect(peer_connection.clone(), client.clone(), &whip_ctx).await {
         Ok(val) => val,
@@ -250,24 +268,16 @@ async fn run_whip_sender_task(
             return;
         }
     };
-
-    let (video_track, video_payload_type, video_encoder_options) = setup_track(
-        video_transceiver.clone(),
-        video_codec_preferences,
-        "video".to_string(),
-    )
-    .await;
-    let (audio_track, audio_payload_type, audio_encoder_options) = setup_track(
-        audio_transceiver.clone(),
-        audio_codec_preferences,
-        "audio".to_string(),
-    )
-    .await;
-
-    println!(
-        "Payload types: {:?}, {:?}",
-        video_payload_type, audio_payload_type
-    );
+    let (video_track, video_payload_type, video_encoder_options) = if video_track.is_none() {
+        setup_track(
+            video_transceiver.clone(),
+            video_codec_preferences,
+            "video".to_string(),
+        )
+        .await
+    } else {
+        (video_track, video_payload_type, video_encoder_options)
+    };
 
     let (encoder, packet_stream) = match create_encoder_and_packet_stream(
         whip_ctx.clone(),
@@ -383,14 +393,21 @@ fn create_encoder_and_packet_stream(
         return Err(WhipError::CannotInitEncoder);
     };
 
-    let video_payloader_options = Some(VideoPayloaderOptions {
-        encoder_options: video_encoder_options.unwrap(),
-        payload_type: video_payload_type.unwrap(),
-    });
-    let audio_payloader_options = Some(AudioPayloaderOptions {
-        encoder_options: audio_encoder_options.unwrap(),
-        payload_type: audio_payload_type.unwrap(),
-    });
+    let video_payloader_options = match (video_encoder_options, video_payload_type) {
+        (Some(encoder), Some(payload_type)) => Some(VideoPayloaderOptions {
+            encoder_options: encoder,
+            payload_type,
+        }),
+        (_, _) => None,
+    };
+
+    let audio_payloader_options = match (audio_encoder_options, audio_payload_type) {
+        (Some(encoder), Some(payload_type)) => Some(AudioPayloaderOptions {
+            encoder_options: encoder,
+            payload_type,
+        }),
+        (_, _) => None,
+    };
 
     let payloader = Payloader::new(video_payloader_options, audio_payloader_options);
     let packet_stream = PacketStream::new(packets_receiver, payloader, 1400);
@@ -398,11 +415,11 @@ fn create_encoder_and_packet_stream(
     Ok((encoder, packet_stream))
 }
 
-trait EncOptions {
+trait MatchCodecCapability {
     fn matches(&self, capability: &RTCRtpCodecCapability) -> bool;
 }
 
-impl EncOptions for VideoEncoderOptions {
+impl MatchCodecCapability for VideoEncoderOptions {
     fn matches(&self, capability: &RTCRtpCodecCapability) -> bool {
         match self {
             VideoEncoderOptions::H264(_) => capability.mime_type == "video/H264",
@@ -411,7 +428,7 @@ impl EncOptions for VideoEncoderOptions {
     }
 }
 
-impl EncOptions for AudioEncoderOptions {
+impl MatchCodecCapability for AudioEncoderOptions {
     fn matches(&self, capability: &RTCRtpCodecCapability) -> bool {
         match self {
             AudioEncoderOptions::Opus(_) => capability.mime_type == "audio/opus",
@@ -420,49 +437,48 @@ impl EncOptions for AudioEncoderOptions {
     }
 }
 
-async fn setup_track<T: EncOptions + Clone>(
+async fn setup_track<T: MatchCodecCapability + Clone>(
     transceiver: Option<Arc<RTCRtpTransceiver>>,
-    codec_preferences: Vec<T>,
+    codec_preferences: Option<Vec<T>>,
     track_kind: String,
 ) -> (
     Option<Arc<TrackLocalStaticRTP>>,
     Option<PayloadType>,
     Option<T>,
 ) {
-    if let Some(transceiver) = transceiver {
-        let sender = transceiver.sender().await;
-        let params = sender.get_parameters().await;
-        let supported_codecs = params.rtp_parameters.codecs;
-        let preferred_codec = codec_preferences.iter().find_map(|pref_codec| {
-            supported_codecs.iter().find_map(|codec_params| {
-                if pref_codec.matches(&codec_params.capability) {
-                    Some((codec_params, pref_codec))
-                } else {
-                    None
-                }
-            })
-        });
+    let (Some(transceiver), Some(codec_preferences)) = (transceiver, codec_preferences) else {
+        return (None, None, None);
+    };
 
-        if let Some((codec_parameters, encoder_options)) = preferred_codec {
+    let sender = transceiver.sender().await;
+    let params = sender.get_parameters().await;
+    let supported_codecs = &params.rtp_parameters.codecs;
+
+    for encoder_options in &codec_preferences {
+        if let Some(codec_parameters) = supported_codecs
+            .iter()
+            .find(|codec_params| encoder_options.matches(&codec_params.capability))
+        {
             let track = Arc::new(TrackLocalStaticRTP::new(
                 codec_parameters.capability.clone(),
                 track_kind.clone(),
                 "webrtc-rs".to_string(),
             ));
-            if let Err(e) = sender.replace_track(Some(track.clone())).await {
-                eprintln!("Failed to replace {} track: {}", track_kind, e);
+
+            if sender.replace_track(Some(track.clone())).await.is_err() {
+                error!("Failed to replace {} track", track_kind);
+                return (None, None, None);
             }
-            (
+
+            return (
                 Some(track),
                 Some(codec_parameters.payload_type),
                 Some(encoder_options.clone()),
-            )
-        } else {
-            (None, None, None)
+            );
         }
-    } else {
-        (None, None, None)
     }
+
+    (None, None, None)
 }
 
 async fn handle_keyframe_requests(

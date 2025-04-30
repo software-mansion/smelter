@@ -42,19 +42,12 @@ fn client_code() -> Result<()> {
                     "width": VIDEO_RESOLUTION.width,
                     "height": VIDEO_RESOLUTION.height,
                 },
-                // "codec_preferences": [
-                //     {
-                //         "type": "ffmpeg_vp8",
-                //     },
-                //     {
-                //         "type": "ffmpeg_h264",
-                //         "preset": "fast",
-
-                //     },
-                //     {
-                //         "type": "any",
-                //     }
-                // ],
+                "codec_preferences": [
+                    {
+                        "type": "ffmpeg_h264",
+                        "preset": "fast",
+                    },
+                ],
                 "initial": {
                     "root": {
                         "id": "input_1",
@@ -65,7 +58,7 @@ fn client_code() -> Result<()> {
             },
             "audio": {
                 "channels": "stereo",
-                "encoder_preferences": [
+                "codec_preferences": [
                     {
                         "type": "opus",
                     },

@@ -130,8 +130,8 @@ pub struct OutputWhipAudioOptions {
     pub encoder: Option<WhipAudioEncoderOptions>,
     /// Specifies channels configuration.
     pub channels: Option<AudioChannels>,
-    /// Audio encoder preferences list.
-    pub encoder_preferences: Option<Vec<WhipAudioEncoderOptions>>,
+    /// Codec preferences list.
+    pub codec_preferences: Option<Vec<WhipAudioEncoderOptions>>,
     /// Initial audio mixer configuration for output.
     pub initial: Audio,
 }
@@ -237,6 +237,7 @@ pub enum WhipAudioEncoderOptions {
         /// (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
         sample_rate: Option<u32>,
     },
+    Any,
 }
 
 /// This type defines when end of an input stream should trigger end of the output stream. Only one of those fields can be set at the time.
