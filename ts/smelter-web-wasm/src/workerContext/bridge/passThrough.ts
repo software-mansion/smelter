@@ -30,7 +30,6 @@ export class PassThroughWorker implements WorkerHandle {
     const renderer = await Renderer.create({
       streamFallbackTimeoutMs: 500,
       loggerLevel,
-      uploadFramesWithCopyExternal: self.navigator.userAgent.includes('Macintosh'),
     });
     this.instance = new Pipeline({
       renderer,
@@ -51,7 +50,10 @@ export class PassThroughWorker implements WorkerHandle {
     return await this.instance.handleRequest(request);
   }
 
-  public terminate() {}
+  public async terminate(): Promise<void> {
+    await this.instance?.terminate();
+    this.instance = undefined;
+  }
 }
 
 class Handle implements MainThreadHandle {

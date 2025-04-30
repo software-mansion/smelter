@@ -13,6 +13,8 @@ import {
 import WasmInstance from '../mainContext/instance';
 import type { RegisterOutputResponse } from '../mainContext/output';
 
+export const IS_FIREFOX = navigator.userAgent.toLowerCase().includes('firefox');
+
 export type SmelterOptions = {
   framerate?: Framerate | number;
   streamFallbackTimeoutMs?: number;
@@ -23,6 +25,11 @@ export type SmelterOptions = {
    *  In Firefox all inputs need to match the sample rate.
    */
   audioSampleRate?: number;
+  /**
+   * Enable processing media in a separate Web Worker. Required to avoid throttling when browser
+   * tab is in the background.
+   */
+  enableWebWorker?: boolean;
 };
 
 export type Framerate = {
@@ -45,7 +52,7 @@ export default class Smelter {
   private instance?: WasmInstance;
   private options: SmelterOptions;
   private logger: Logger = pino({
-    level: 'warn',
+    level: 'info',
     browser: {
       asObject: true,
       write: {
@@ -70,6 +77,7 @@ export default class Smelter {
       wasmBundleUrl,
       logger: this.logger.child({ element: 'wasmInstance' }),
       audioSampleRate: this.options.audioSampleRate ?? 48_000,
+      enableWebWorker: this.options.enableWebWorker ?? !IS_FIREFOX,
     });
     this.coreSmelter = new CoreSmelter(this.instance, this.logger);
 

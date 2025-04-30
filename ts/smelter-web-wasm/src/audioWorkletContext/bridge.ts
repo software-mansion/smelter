@@ -1,67 +1,75 @@
 import type { Logger } from 'pino';
+import type { AudioWorkletMessage } from './workletApi';
 
-type RequestMessage<Request> = {
+type RequestMessage = {
   id: string;
-  request: Request;
+  request: AudioWorkletMessage;
 };
 
-type ResponseMessage<Response> = {
+type ResponseMessage = {
   type: 'workerResponse';
   id: string;
-  response?: Response;
+  response?: boolean;
   error?: Error;
 };
 
-type PendingMessage<Response> = {
-  res: (response: Response) => void;
+type PendingMessage = {
+  res: (response: boolean) => void;
   rej: (err: Error) => void;
 };
 
 let requestCounter = 1;
 
-export function listenForMessages<Request, Response>(
+export function listenForMessages(
   port: MessagePort,
-  onMessage: (request: Request) => Promise<Response>
+  onMessage: (request: AudioWorkletMessage) => Promise<boolean>
 ) {
-  port.onmessage = async (event: MessageEvent<RequestMessage<Request>>) => {
+  port.onmessage = async (event: MessageEvent<RequestMessage>) => {
     try {
       const response = await onMessage(event.data.request);
       port.postMessage({
         type: 'workerResponse',
         id: event.data.id,
         response,
-      } as ResponseMessage<Response>);
+      } as ResponseMessage);
     } catch (error: any) {
       port.postMessage({
         type: 'workerResponse',
         id: event.data.id,
         error,
-      } as ResponseMessage<Response>);
+      } as ResponseMessage);
     }
   };
 }
 
-export class AsyncMessagePort<Request, Response> {
+export class AudioWorkletMessagePort {
   private port: MessagePort;
-  private pendingMessages: Record<string, PendingMessage<Response>> = {};
+  private pendingMessages: Record<string, PendingMessage> = {};
   private logger: Logger;
+  private closed: boolean = false;
 
   constructor(port: MessagePort, logger: Logger) {
     this.logger = logger;
     this.port = port;
-    this.port.onmessage = (event: MessageEvent<ResponseMessage<Response>>) => {
+    this.port.onmessage = (event: MessageEvent<ResponseMessage>) => {
       if (event.data.type === 'workerResponse') {
         this.handleResponse(event.data);
       }
     };
   }
 
-  public async postMessage(request: Request, transferable?: Transferable[]): Promise<Response> {
+  public async postMessage(
+    request: AudioWorkletMessage,
+    transferable?: Transferable[]
+  ): Promise<boolean> {
+    if (this.closed) {
+      return false;
+    }
     const requestId = String(requestCounter);
     requestCounter += 1;
 
-    const pendingMessage: PendingMessage<Response> = {} as any;
-    const responsePromise = new Promise<Response>((res, rej) => {
+    const pendingMessage: PendingMessage = {} as any;
+    const responsePromise = new Promise<boolean>((res, rej) => {
       pendingMessage.res = res;
       pendingMessage.rej = rej;
     });
@@ -72,14 +80,19 @@ export class AsyncMessagePort<Request, Response> {
     } else {
       this.port.postMessage({ id: requestId, request });
     }
-    return responsePromise;
+    return await responsePromise;
   }
 
   public terminate() {
     this.port.close();
+    this.closed = true;
+    for (const pending of Object.values(this.pendingMessages)) {
+      pending.res(false);
+    }
+    this.pendingMessages = {};
   }
 
-  private handleResponse(msg: ResponseMessage<Response>) {
+  private handleResponse(msg: ResponseMessage) {
     const pendingMessage = this.pendingMessages[msg.id];
     if (!pendingMessage) {
       this.logger.error(`Unknown response from Web Worker received. ${JSON.stringify(msg)}`);

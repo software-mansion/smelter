@@ -4,8 +4,8 @@ import { Queue } from '@datastructures-js/queue';
 import { SmelterEventType } from '../../eventSender';
 import { assert, sleep } from '../../utils';
 import type { Input, InputStartResult, QueuedInputSource } from './input';
-import type { InputAudioData, InternalVideoFrame } from './frame';
-import { InputVideoFrame, InputVideoFrameRef } from './frame';
+import type { InputAudioData, InternalVideoFrame, InputVideoFrame } from './frame';
+import { InputFrameFromVideoFrame, InputVideoFrameRef } from './frame';
 import type { AudioWorkletMessage } from '../../audioWorkletContext/workletApi';
 import type { MainThreadHandle } from '../../workerApi';
 
@@ -74,6 +74,7 @@ export class QueuedInput implements Input {
 
   public close() {
     this.shouldClose = true;
+    this.source.close();
   }
 
   public updateQueueStartTime(queueStartTimeMs: number) {
@@ -159,7 +160,7 @@ export class QueuedInput implements Input {
         });
       }
 
-      return new InputVideoFrame(frame.ref, frame.ptsMs);
+      return new InputFrameFromVideoFrame(frame.ref, frame.ptsMs);
     }
     return;
   }

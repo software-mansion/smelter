@@ -28,6 +28,7 @@ export type InstanceContext = {
   logger: Logger;
   audioMixer: AudioMixer;
   framerate: Framerate;
+  enableWebWorker: boolean;
 };
 
 export type WasmInstanceOptions = {
@@ -35,6 +36,7 @@ export type WasmInstanceOptions = {
   wasmBundleUrl: string;
   logger: Logger;
   audioSampleRate: number;
+  enableWebWorker: boolean;
 };
 
 class WasmInstance implements SmelterManager {
@@ -132,14 +134,15 @@ class InnerInstance {
   private outputs: Record<string, Output> = {};
   private inputs: Record<string, Input> = {};
   private audioMixer: AudioMixer;
+  private enableWebWorker: boolean;
 
   public constructor(options: WasmInstanceOptions) {
     this.logger = options.logger;
     this.framerate = options.framerate;
     this.wasmBundleUrl = options.wasmBundleUrl;
+    this.enableWebWorker = options.enableWebWorker;
     this.audioMixer = new AudioMixer(this.logger, options.audioSampleRate);
 
-    const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
     const onEvent = (event: WorkerEvent) => {
       if (EventSender.isExternalEvent(event)) {
         this.eventSender.sendEvent(event);
@@ -148,7 +151,7 @@ class InnerInstance {
       throw new Error(`Unknown event received. ${JSON.stringify(event)}`);
     };
 
-    if (isFirefox) {
+    if (!this.enableWebWorker) {
       this.worker = new PassThroughWorker(onEvent, this.logger);
     } else {
       const worker = new Worker(new URL('../esm/runWorker.mjs', import.meta.url), {
@@ -164,6 +167,7 @@ class InnerInstance {
       logger: this.logger,
       framerate: this.framerate,
       audioMixer: this.audioMixer,
+      enableWebWorker: this.enableWebWorker,
     };
   }
 
@@ -192,7 +196,7 @@ class InnerInstance {
     await Promise.all(Object.values(this.inputs).map(input => input.terminate()));
     await this.worker.postMessage({ type: 'terminate' });
     await this.audioMixer.close();
-    this.worker.terminate();
+    await this.worker.terminate();
   }
 
   public async handleStart() {

@@ -9,6 +9,10 @@ import { registerWorkerEntrypoint } from './bridge/dedicatedWorker';
 let instance: Pipeline | undefined;
 
 async function initInstance(handle: MainThreadHandle, options: InitOptions) {
+  assert(
+    options.wasmBundleUrl,
+    'Location of WASM bundle is not defined, call setWasmBundleUrl() first.'
+  );
   await loadWasmModule(options.wasmBundleUrl);
   const loggerLevel = (
     Object.values(LoggerLevel).includes(options.loggerLevel as any) ? options.loggerLevel : 'warn'

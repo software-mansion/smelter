@@ -6,6 +6,7 @@ export function useSmelter(): Smelter | undefined {
   useEffect(() => {
     const smelter = new Smelter({
       audioSampleRate: 44_100,
+      enableWebWorker: false,
     });
 
     let cancel = false;

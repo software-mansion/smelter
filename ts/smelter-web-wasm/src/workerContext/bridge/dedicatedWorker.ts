@@ -94,7 +94,7 @@ export class DedicatedWorker implements WorkerHandle {
     return responsePromise;
   }
 
-  public terminate() {
+  public async terminate() {
     this.worker.terminate();
   }
 

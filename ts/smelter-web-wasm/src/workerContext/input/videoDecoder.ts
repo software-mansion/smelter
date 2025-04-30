@@ -69,6 +69,10 @@ export class InputVideoDecoder implements InputVideoFrameSource {
     this.decoder.close();
     this.source.close();
     this.workloadBalancerNode.close();
+    for (const frame of this.frames.toArray()) {
+      frame.frame.close();
+    }
+    this.frames.clear();
   }
 
   private onFrameDecoded(videoFrame: VideoFrame) {

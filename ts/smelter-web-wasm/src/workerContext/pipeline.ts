@@ -79,6 +79,7 @@ export class Pipeline {
 
   public async terminate(): Promise<void> {
     this.queue.stop();
+    this.workloadBalancer.stop();
   }
 
   public async registerInput(inputId: string, request: RegisterInput): Promise<WorkerResponse> {

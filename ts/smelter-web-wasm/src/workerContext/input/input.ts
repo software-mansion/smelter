@@ -5,9 +5,9 @@ import { MediaStreamInput } from './MediaStreamInput';
 import type { MainThreadHandle, RegisterInput } from '../../workerApi';
 import type { Logger } from 'pino';
 import { assert } from '../../utils';
-import type { AsyncMessagePort } from '../../audioWorkletContext/bridge';
-import type { AudioWorkletMessage } from '../../audioWorkletContext/workletApi';
+import type { AudioWorkletMessagePort } from '../../audioWorkletContext/bridge';
 import type { WorkloadBalancer } from '../queue';
+import { HTMLVideoElementInput } from './HTMLVideoElementInput';
 
 export type InputStartResult = {
   videoDurationMs?: number;
@@ -55,7 +55,7 @@ export interface InputAudioSamplesSource {
 
 export interface QueuedInputSource extends InputVideoFrameSource, InputAudioSamplesSource {
   getMetadata(): InputStartResult;
-  audioWorkletMessagePort(): AsyncMessagePort<AudioWorkletMessage, boolean> | undefined;
+  audioWorkletMessagePort(): AudioWorkletMessagePort | undefined;
 }
 
 export type EncodedVideoPayload = { type: 'chunk'; chunk: EncodedVideoChunk } | { type: 'eos' };
@@ -93,6 +93,8 @@ export async function createInput(
   } else if (request.type === 'stream') {
     assert(request.videoStream);
     return new MediaStreamInput(inputId, request.videoStream, mainThreadHandle);
+  } else if (request.type === 'domVideoElement') {
+    return new HTMLVideoElementInput(inputId, request.videoElement, mainThreadHandle);
   }
   throw new Error(`Unknown input type ${(request as any).type}`);
 }

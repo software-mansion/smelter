@@ -13,7 +13,7 @@ export type InputAudioData = {
   ptsMs: number;
 };
 
-export class InputVideoFrame {
+export class InputFrameFromVideoFrame {
   private readonly ref: InputVideoFrameRef;
   public readonly ptsMs: number;
 
@@ -22,13 +22,35 @@ export class InputVideoFrame {
     this.ptsMs = ptsMs;
   }
 
-  get frame(): VideoFrame {
+  get frame(): VideoFrame | HTMLVideoElement {
     return this.ref.getFrame();
   }
 
   close(): void {
     this.ref.decrementRefCount();
   }
+}
+
+export class InputFrameFromVideoElement {
+  private element: HTMLVideoElement;
+  public readonly ptsMs: number;
+
+  constructor(element: HTMLVideoElement, ptsMs: number) {
+    this.element = element;
+    this.ptsMs = ptsMs;
+  }
+
+  get frame(): VideoFrame | HTMLVideoElement {
+    return this.element;
+  }
+
+  close(): void {}
+}
+
+export interface InputVideoFrame {
+  readonly ptsMs: number;
+  readonly frame: VideoFrame | HTMLVideoElement;
+  close(): void;
 }
 
 /**

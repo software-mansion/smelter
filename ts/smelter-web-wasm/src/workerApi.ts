@@ -11,6 +11,11 @@ export type RegisterInput =
   | {
       type: 'stream';
       videoStream?: ReadableStream;
+    }
+  | {
+      // should only be used with pass-through worker
+      type: 'domVideoElement';
+      videoElement: HTMLVideoElement;
     };
 
 export type RegisterOutput = {
@@ -105,7 +110,7 @@ export type WorkerEvent =
 
 export interface WorkerHandle {
   postMessage(request: WorkerMessage, transferable?: Transferable[]): Promise<WorkerResponse>;
-  terminate(): void;
+  terminate(): Promise<void>;
 }
 
 export interface MainThreadHandle {
