@@ -381,14 +381,21 @@ fn create_encoder_and_packet_stream(
         return Err(WhipError::CannotInitEncoder);
     };
 
-    let video_payloader_options = Some(VideoPayloaderOptions {
-        encoder_options: video_encoder_options.unwrap(),
-        payload_type: video_payload_type.unwrap(),
-    });
-    let audio_payloader_options = Some(AudioPayloaderOptions {
-        encoder_options: audio_encoder_options.unwrap(),
-        payload_type: audio_payload_type.unwrap(),
-    });
+    let video_payloader_options = match (video_encoder_options, video_payload_type) {
+        (Some(encoder), Some(payload_type)) => Some(VideoPayloaderOptions {
+            encoder_options: encoder,
+            payload_type,
+        }),
+        (_, _) => None,
+    };
+
+    let audio_payloader_options = match (audio_encoder_options, audio_payload_type) {
+        (Some(encoder), Some(payload_type)) => Some(AudioPayloaderOptions {
+            encoder_options: encoder,
+            payload_type,
+        }),
+        (_, _) => None,
+    };
 
     let payloader = Payloader::new(video_payloader_options, audio_payloader_options);
     let packet_stream = PacketStream::new(packets_receiver, payloader, 1400);
