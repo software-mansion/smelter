@@ -1,10 +1,9 @@
-use std::{path::PathBuf, str::FromStr, time::Duration};
+use std::{path::PathBuf, str::FromStr};
 
 use compositor_pipeline::pipeline::{self, encoder::ffmpeg_h264};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericArgument {
-    IterateExp,
     Maximize,
     Constant(u64),
 }
@@ -14,7 +13,6 @@ impl std::str::FromStr for NumericArgument {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "iterate" => Ok(NumericArgument::IterateExp),
             "maximize" => Ok(NumericArgument::Maximize),
             _ => s
                 .parse::<u64>()
@@ -28,6 +26,7 @@ impl std::str::FromStr for NumericArgument {
 pub enum BenchmarkSuite {
     Full,
     Minimal,
+    CpuOptimized,
     None,
 }
 
@@ -38,45 +37,10 @@ impl std::str::FromStr for BenchmarkSuite {
         match s {
             "full" => Ok(BenchmarkSuite::Full),
             "minimal" => Ok(BenchmarkSuite::Minimal),
+            "cpu" => Ok(BenchmarkSuite::CpuOptimized),
             "none" => Ok(BenchmarkSuite::None),
             _ => Err("invalid suite name".to_string()),
         }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ExpIterator(u64);
-
-impl Iterator for ExpIterator {
-    type Item = u64;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let tmp = self.0;
-        match tmp {
-            0 => None,
-            _ => {
-                self.0 *= 2;
-                Some(tmp)
-            }
-        }
-    }
-}
-
-impl Default for ExpIterator {
-    fn default() -> Self {
-        ExpIterator(1)
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct DurationWrapper(pub Duration);
-
-impl std::str::FromStr for DurationWrapper {
-    type Err = std::num::ParseFloatError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<f64>()
-            .map(|f| DurationWrapper(Duration::from_secs_f64(f)))
     }
 }
 
@@ -161,24 +125,6 @@ impl std::str::FromStr for ResolutionPreset {
                 "invalid resolution preset, available options: 144p, 240p, 360p, 480p, 720p, 1080p, 1440p, 2160p, 4320p".to_string(),
             ),
         }
-    }
-}
-
-impl ResolutionPreset {
-    const ORDER: &[ResolutionPreset] = &[
-        ResolutionPreset::Res144p,
-        ResolutionPreset::Res240p,
-        ResolutionPreset::Res360p,
-        ResolutionPreset::Res480p,
-        ResolutionPreset::Res720p,
-        ResolutionPreset::Res1080p,
-        ResolutionPreset::Res1440p,
-        ResolutionPreset::Res2160p,
-        ResolutionPreset::Res4320p,
-    ];
-
-    pub fn iter() -> impl Iterator<Item = ResolutionPreset> {
-        ResolutionPreset::ORDER.iter().copied()
     }
 }
 
@@ -326,24 +272,12 @@ pub struct Args {
     #[arg(long, default_value("ultrafast"))]
     pub encoder_preset: EncoderPreset,
 
-    /// warm-up time in seconds
-    #[arg(long, default_value("10"))]
-    pub warm_up_time: DurationWrapper,
-
-    /// measuring time in seconds
-    #[arg(long, default_value("20"))]
-    pub measure_time: DurationWrapper,
-
     /// disable decoder, use raw input
     #[arg(long, default_value("false"))]
     pub disable_decoder: bool,
 
     #[arg(long, default_value("ffmpeg_h264"))]
     pub video_decoder: VideoDecoder,
-
-    /// in the end of the benchmark the framerate achieved by the compositor is multiplied by this number, before comparing to the target framerate
-    #[arg(long, default_value("1.10"))]
-    pub error_tolerance: f64,
 
     /// print results as json
     #[arg(long, default_value("false"))]

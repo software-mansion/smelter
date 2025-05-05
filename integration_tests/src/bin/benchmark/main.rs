@@ -1,16 +1,17 @@
-use std::fs;
+use std::{fs, sync::Arc, time::Duration};
 
 use benchmark::{Benchmark, EncoderOptions};
-use benchmark_pass::InputFile;
+use benchmark_pass::{InputFile, SingleBenchmarkPass};
 use clap::Parser;
 use compositor_pipeline::pipeline::{GraphicsContext, GraphicsContextOptions};
 
+use compositor_render::RenderingMode;
 use scenes::simple_tiles_with_all_inputs;
 use smelter::{
     config::{read_config, LoggerConfig},
     logger,
 };
-use suite::{full_benchmark_suite, minimal_benchmark_suite};
+use suite::{cpu_optimized_benchmark_suite, full_benchmark_suite, minimal_benchmark_suite};
 use tracing::{info, warn};
 
 mod args;
@@ -21,7 +22,7 @@ mod scenes;
 mod suite;
 mod utils;
 
-use args::{Args, BenchmarkSuite};
+use args::{Args, BenchmarkSuite, NumericArgument, Resolution, ResolutionArgument};
 use utils::{ensure_default_mp4, generate_yuv_from_mp4};
 
 fn main() {
@@ -46,9 +47,10 @@ fn main() {
     }
 
     let benchmarks = match args.suite {
-        BenchmarkSuite::Full => full_benchmark_suite(),
-        BenchmarkSuite::Minimal => minimal_benchmark_suite(),
-        BenchmarkSuite::None => benchmark_from_args(&args),
+        BenchmarkSuite::Full => full_benchmark_suite(&ctx),
+        BenchmarkSuite::CpuOptimized => cpu_optimized_benchmark_suite(&ctx),
+        BenchmarkSuite::Minimal => minimal_benchmark_suite(&ctx),
+        BenchmarkSuite::None => benchmark_from_args(args.clone()),
     };
 
     let results: Vec<_> = benchmarks
@@ -74,34 +76,78 @@ fn main() {
     };
 }
 
-fn benchmark_from_args(args: &Args) -> Vec<Benchmark> {
+fn benchmark_from_args(args: Args) -> Vec<Benchmark> {
     let input_path = args
         .input_path
         .clone()
         .unwrap_or_else(|| ensure_default_mp4().unwrap());
     [Benchmark {
         id: "from_args",
+        bench_pass_builder: Arc::new(Box::new(move |value: u64| {
+            let (input_count, output_count, framerate, output_resolution) = match (
+                args.input_count,
+                args.output_count,
+                args.framerate,
+                args.output_resolution,
+            ) {
+                (
+                    NumericArgument::Maximize,
+                    NumericArgument::Constant(output_count),
+                    NumericArgument::Constant(framerate),
+                    ResolutionArgument::Constant(output_resolution),
+                ) => (value, output_count, framerate, output_resolution),
+                (
+                    NumericArgument::Constant(input_count),
+                    NumericArgument::Maximize,
+                    NumericArgument::Constant(framerate),
+                    ResolutionArgument::Constant(output_resolution),
+                ) => (input_count, value, framerate, output_resolution),
+                (
+                    NumericArgument::Constant(input_count),
+                    NumericArgument::Constant(output_count),
+                    NumericArgument::Maximize,
+                    ResolutionArgument::Constant(output_resolution),
+                ) => (input_count, output_count, value, output_resolution),
+                (
+                    NumericArgument::Constant(input_count),
+                    NumericArgument::Constant(output_count),
+                    NumericArgument::Constant(framerate),
+                    ResolutionArgument::Maximize,
+                ) => (
+                    input_count,
+                    output_count,
+                    framerate,
+                    Resolution {
+                        width: 256 * value as usize,
+                        height: 144 * value as usize,
+                    },
+                ),
+                (_, _, _, _) => panic!("Exactly one maximize is required"),
+            };
 
-        scene_builder: simple_tiles_with_all_inputs,
+            SingleBenchmarkPass {
+                scene_builder: simple_tiles_with_all_inputs,
+                resources: vec![],
 
-        input_count: args.input_count.into(),
-        output_count: args.output_count.into(),
-        framerate: args.framerate.into(),
-        output_resolution: args.output_resolution.into(),
+                input_count,
+                output_count,
+                framerate,
+                output_resolution,
 
-        input_file: match args.disable_decoder {
-            true => InputFile::Raw(generate_yuv_from_mp4(&input_path).unwrap()),
-            false => InputFile::Mp4(input_path.clone()),
-        },
-        encoder: match args.disable_encoder {
-            true => EncoderOptions::Disabled,
-            false => EncoderOptions::Enabled(args.encoder_preset.into()),
-        },
-        decoder: args.video_decoder.into(),
+                input_file: match args.disable_decoder {
+                    true => InputFile::Raw(generate_yuv_from_mp4(&input_path).unwrap()),
+                    false => InputFile::Mp4(input_path.clone()),
+                },
+                encoder: match args.disable_encoder {
+                    true => EncoderOptions::Disabled,
+                    false => EncoderOptions::Enabled(args.encoder_preset.into()),
+                },
+                decoder: args.video_decoder.into(),
 
-        warm_up_time: args.warm_up_time.0,
-        measure_time: args.measure_time.0,
-        error_tolerance_multiplier: args.error_tolerance,
+                warm_up_time: Duration::from_secs(2),
+                rendering_mode: RenderingMode::GpuOptimized,
+            }
+        })),
     }]
     .into()
 }

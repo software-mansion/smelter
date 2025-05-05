@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use std::{
+    fmt,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     thread,
@@ -25,12 +26,16 @@ use compositor_pipeline::{
     queue::{PipelineEvent, QueueInputOptions},
     Pipeline,
 };
-use compositor_render::{scene::Component, Frame, InputId, OutputId, YuvPlanes};
+use compositor_render::{
+    scene::Component, Frame, InputId, OutputId, RendererId, RendererSpec, RenderingMode, YuvPlanes,
+};
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use tracing::debug;
 
 use crate::{
-    args::Resolution, benchmark::EncoderOptions, scenes::SceneContext,
+    args::Resolution,
+    benchmark::EncoderOptions,
+    scenes::{SceneBuilderFn, SceneContext},
     utils::benchmark_pipeline_options,
 };
 
@@ -40,11 +45,17 @@ pub enum InputFile {
     Raw(RawInputFile),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RawInputFile {
     pub frames: Arc<Vec<YuvPlanes>>,
     pub resolution: Resolution,
     pub framerate: f64,
+}
+
+impl fmt::Debug for RawInputFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RawInputFile").finish()
+    }
 }
 
 trait DurationReceiver {
@@ -81,7 +92,8 @@ impl DurationReceiver for Receiver<EncoderOutputEvent> {
 
 #[derive(Debug, Clone)]
 pub struct SingleBenchmarkPass {
-    pub scene_builder: fn(ctx: &SceneContext, output_id: &OutputId) -> Component,
+    pub scene_builder: SceneBuilderFn,
+    pub resources: Vec<(RendererId, RendererSpec)>,
     pub input_count: u64,
     pub output_count: u64,
     pub framerate: u64,
@@ -89,15 +101,15 @@ pub struct SingleBenchmarkPass {
     pub output_resolution: Resolution,
     pub encoder: EncoderOptions,
     pub warm_up_time: Duration,
-    pub measure_time: Duration,
     pub decoder: pipeline::VideoDecoder,
-    pub error_tolerance_multiplier: f64,
+    pub rendering_mode: RenderingMode,
 }
 
 impl SingleBenchmarkPass {
     pub fn run(&self, ctx: GraphicsContext) -> Result<bool> {
         let (pipeline, _event_loop) = Pipeline::new(pipeline::Options {
             wgpu_ctx: Some(ctx),
+            rendering_mode: self.rendering_mode,
             ..benchmark_pipeline_options(self.framerate)
         })?;
 
@@ -133,6 +145,9 @@ impl SingleBenchmarkPass {
             inputs: inputs.clone(),
             outputs: outputs.clone(),
         };
+        for (id, spec) in self.resources.clone() {
+            Pipeline::register_renderer(&pipeline, id, spec)?;
+        }
         let receivers = outputs
             .iter()
             .map(|output_id| {
@@ -153,53 +168,17 @@ impl SingleBenchmarkPass {
         let start_time = Instant::now();
         let output_threads: Vec<_> = receivers
             .into_iter()
-            .enumerate()
-            .map(|(index, receiver)| {
-                let warm_up_time = self.warm_up_time;
-                let measure_time = self.measure_time;
-                let error_tolerance_multiplier = self.error_tolerance_multiplier;
-                debug!("start listening for output frames");
-                thread::spawn(move || {
-                    debug!(?index, "start drain in warm up mode");
-                    while start_time.elapsed() < warm_up_time {
-                        if let Err(TryRecvError::Empty) = receiver.try_receive() {
-                            thread::sleep(Duration::from_millis(1));
-                        }
-                    }
-
-                    debug!(?index, "start drain in measure mode");
-                    let mut max_pts: Duration = Duration::ZERO;
-                    let mut min_pts: Duration = Duration::MAX;
-                    while start_time.elapsed() < measure_time + warm_up_time {
-                        match receiver.try_receive() {
-                            Err(TryRecvError::Empty) => {
-                                thread::sleep(Duration::from_millis(1));
-                            }
-                            Err(TryRecvError::Disconnected) => panic!(),
-                            Ok(pts) => {
-                                max_pts = max_pts.max(pts);
-                                min_pts = min_pts.min(pts);
-                            }
-                        }
-                    }
-
-                    let expected_duration_sec =
-                        measure_time.as_secs_f64() / error_tolerance_multiplier;
-
-                    // true - processing on time
-                    // false - processing falling behind
-                    (max_pts - min_pts).as_secs_f64() > expected_duration_sec
-                })
-            })
+            .map(|receiver| self.listen_on_output(start_time, receiver))
             .collect();
 
         debug!("waiting for results");
+        let mut result = true;
         for output_thread in output_threads {
             if !output_thread.join().map_err(|_| anyhow!("thread panic"))? {
-                return Ok(false);
+                result = false;
             }
         }
-        Ok(true)
+        Ok(result)
     }
 
     fn register_pipeline_encoded_output(
@@ -226,7 +205,7 @@ impl SingleBenchmarkPass {
                             width: self.output_resolution.width,
                             height: self.output_resolution.height,
                         },
-                        raw_options: Vec::new(),
+                        raw_options: vec![("threads".to_string(), "0".to_string())],
                     })),
                 },
             },
@@ -307,6 +286,86 @@ impl SingleBenchmarkPass {
         )?;
 
         Ok(input.video.unwrap())
+    }
+
+    fn listen_on_output(
+        &self,
+        start_time: Instant,
+        receiver: Box<dyn DurationReceiver + Send>,
+    ) -> thread::JoinHandle<bool> {
+        let warm_up_time = self.warm_up_time;
+        debug!("start listening for output frames");
+        thread::spawn(move || {
+            debug!("start drain in warm up mode");
+            while start_time.elapsed() < warm_up_time {
+                if let Err(TryRecvError::Empty) = receiver.try_receive() {
+                    thread::sleep(Duration::from_millis(10));
+                }
+            }
+
+            const FIRST_CHECK: Duration = Duration::from_secs(6);
+            const SECOND_CHECK: Duration = Duration::from_secs(12);
+            const LAST_CHECK: Duration = Duration::from_secs(30);
+
+            debug!("start drain in measure mode");
+            let mut max_pts: Duration = Duration::ZERO;
+            let mut min_pts: Duration = Duration::MAX;
+            let receive_fn = move |min_pts: &mut Duration, max_pts: &mut Duration| match receiver
+                .try_receive()
+            {
+                Err(TryRecvError::Empty) => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(TryRecvError::Disconnected) => panic!(),
+                Ok(pts) => {
+                    *max_pts = (*max_pts).max(pts);
+                    *min_pts = (*min_pts).min(pts);
+                }
+            };
+
+            // First check after 6 second
+            while start_time.elapsed() < warm_up_time + FIRST_CHECK {
+                receive_fn(&mut min_pts, &mut max_pts)
+            }
+            let measured_time = max_pts.saturating_sub(min_pts);
+            if measured_time < FIRST_CHECK - Duration::from_millis(1200) {
+                debug!("FAIL first check - {:?}", measured_time);
+                return false;
+            } else if measured_time > FIRST_CHECK - Duration::from_millis(50) {
+                debug!("PASS first check - {:?}", measured_time);
+                return true;
+            } else {
+                debug!("continue check - {:?}", measured_time);
+            }
+
+            // Second check after 12 second
+            while start_time.elapsed() < warm_up_time + SECOND_CHECK {
+                receive_fn(&mut min_pts, &mut max_pts)
+            }
+            let measured_time = max_pts.saturating_sub(min_pts);
+            if measured_time < SECOND_CHECK - Duration::from_millis(800) {
+                debug!("FAIL second check - {:?}", measured_time);
+                return false;
+            } else if measured_time > SECOND_CHECK - Duration::from_millis(100) {
+                debug!("PASS second check - {:?}", measured_time);
+                return true;
+            } else {
+                debug!("continue check - {:?}", measured_time);
+            }
+
+            // Last check
+            while start_time.elapsed() < warm_up_time + LAST_CHECK {
+                receive_fn(&mut min_pts, &mut max_pts)
+            }
+            let measured_time = max_pts.saturating_sub(min_pts);
+            if measured_time > LAST_CHECK - Duration::from_millis(800) {
+                debug!("PASS last check - {:?}", measured_time);
+                true
+            } else {
+                debug!("FAIL last check - {:?}", measured_time);
+                false
+            }
+        })
     }
 }
 
