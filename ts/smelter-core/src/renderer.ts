@@ -32,7 +32,7 @@ type Props = {
   props: object;
   sceneBuilder: SceneBuilder<object>;
 };
-type Container = Renderer;
+type RootContainer = Renderer;
 type HostContext = object;
 type Instance = HostComponent;
 type TextInstance = string;
@@ -42,7 +42,7 @@ type Timeout = ReturnType<typeof setTimeout>;
 const HostConfig: Reconciler.HostConfig<
   Type,
   Props,
-  Container,
+  RootContainer,
   Instance,
   TextInstance,
   void, // SuspenseInstance
@@ -58,30 +58,30 @@ const HostConfig: Reconciler.HostConfig<
     return instance as Instance;
   },
 
-  getRootHostContext(_rootContainer: Container) {
+  getRootHostContext(_rootContainer: RootContainer) {
     return null;
   },
 
   getChildHostContext(
     parentHostContext: HostContext,
     _type: Type,
-    _rootContainer: Container
+    _rootContainer: RootContainer
   ): HostContext {
     return parentHostContext;
   },
 
-  prepareForCommit(_containerInfo: Container): Record<string, any> | null {
+  prepareForCommit(_containerInfo: RootContainer): Record<string, any> | null {
     return null;
   },
 
-  resetAfterCommit(container: Container): void {
-    container.onUpdate();
+  resetAfterCommit(rootContainer: RootContainer): void {
+    rootContainer['onUpdate']();
   },
 
   createInstance(
     type: Type,
     props: Props,
-    _rootContainer: Container,
+    _rootContainer: RootContainer,
     _hostContext: HostContext,
     _internalHandle: any
   ): HostComponent {
@@ -92,6 +92,12 @@ const HostConfig: Reconciler.HostConfig<
     }
   },
 
+  /*
+   * This function will be called after `createInstance` or `cloneInstance` (with keepChildren == false)
+   *
+   * It adds components children. Tree in persistent mode is immutable, so this function can only be called
+   * after component creation, but before component is part of the tree.
+   */
   appendInitialChild(parentInstance: Instance, child: Instance | TextInstance): void {
     parentInstance.children.push(child);
   },
@@ -100,7 +106,7 @@ const HostConfig: Reconciler.HostConfig<
     _instance: Instance,
     _type: Type,
     _props: Props,
-    _rootContainer: Container,
+    _rootContainer: RootContainer,
     _hostContext: HostContext
   ): boolean {
     // if true commitMount will be called
@@ -112,7 +118,7 @@ const HostConfig: Reconciler.HostConfig<
     _type: Type,
     _oldProps: Props,
     newProps: Props,
-    _rootContainer: Container,
+    _rootContainer: RootContainer,
     _hostContext: HostContext
   ): object | null {
     // TODO: optimize, it always triggers update
@@ -124,7 +130,7 @@ const HostConfig: Reconciler.HostConfig<
   },
   createTextInstance(
     text: string,
-    _rootContainer: Container,
+    _rootContainer: RootContainer,
     _hostContext: HostContext,
     _internalHandle: any
   ) {
@@ -147,7 +153,7 @@ const HostConfig: Reconciler.HostConfig<
   beforeActiveInstanceBlur() {},
   afterActiveInstanceBlur() {},
 
-  preparePortalMount(_container: Container) {
+  preparePortalMount(_rootContainer: RootContainer) {
     throw new Error(`preparePortalMount not implemented`);
   },
 
@@ -169,6 +175,12 @@ const HostConfig: Reconciler.HostConfig<
   // Persistence methods
   //
 
+  /**
+   * In this mode tree should be immutable so this is a primary method of updating elements.
+   *
+   * - cloneInstance is creating a new object based on previous instance
+   * - if keepChildren is false new children will be added via appendInitialChild before tree is replaced
+   */
   cloneInstance(
     instance: Instance,
     _updatePayload: object | null,
@@ -188,15 +200,6 @@ const HostConfig: Reconciler.HostConfig<
     }
   },
 
-  createContainerChildSet(_container: Container): ChildSet {
-    return [];
-  },
-  appendChildToContainerChildSet(childSet: ChildSet, child: Instance | TextInstance) {
-    childSet.push(child);
-  },
-  finalizeContainerChildren(_container: Container, _newChildren: (Instance | TextInstance)[]) {},
-  replaceContainerChildren(_container: Container, _newChildren: (Instance | TextInstance)[]) {},
-
   cloneHiddenInstance(
     _instance: Instance,
     _type: Type,
@@ -213,6 +216,46 @@ const HostConfig: Reconciler.HostConfig<
   ): TextInstance {
     return text;
   },
+
+  /*
+   * Interaction with root container
+   *
+   * Container children represent root of the entire rendering tree.
+   * For our use case there will always be only one root component
+   *
+   * - createContainerChildSet returns an empty structure that can hold root components
+   * - appendChildToContainerChildSet adds new element to list of root components. In our case
+   *   it will be called only once per ChildSet
+   * - replaceContainerChildren should replace old tree with the new one. This function is
+   *   called after finalizeContainerChildren. In this implementation we just take first element
+   *   from the list and use it as a final render scene.
+   */
+
+  createContainerChildSet(_rootContainer: RootContainer): ChildSet {
+    return [];
+  },
+  appendChildToContainerChildSet(childSet: ChildSet, child: Instance | TextInstance) {
+    childSet.push(child);
+  },
+  finalizeContainerChildren(
+    _rootContainer: RootContainer,
+    _newChildren: (Instance | TextInstance)[]
+  ) {},
+
+  /*
+   * Replace entire tree in the RootContainer
+   */
+  replaceContainerChildren(rootContainer: RootContainer, newChildren: ChildSet) {
+    const newChild = newChildren[0];
+    if (!newChild) {
+      return;
+    }
+    if (newChild instanceof HostComponent) {
+      rootContainer['rootComponent'] = newChild;
+    } else {
+      rootContainer.logger.warn('Expected HostComponent as root (text component received)');
+    }
+  },
 };
 
 const CompositorRenderer = Reconciler(HostConfig);
@@ -224,7 +267,7 @@ type RendererOptions = {
   logger: Logger;
 };
 
-// docs
+// TODO: docs
 interface FiberRootNode {
   tag: number; // 0
   containerInfo: Renderer;
@@ -233,16 +276,19 @@ interface FiberRootNode {
 }
 
 class Renderer {
-  public readonly root: FiberRootNode;
-  public readonly onUpdate: () => void;
-  private logger: Logger;
-  private lastScene?: Api.Component;
+  public readonly logger: Logger;
+  private rootNode: FiberRootNode;
+
+  // private, but accessible in HostConfig callbacks via renderer['onUpdate']
+  private onUpdate: () => void;
+  // private, but accessible in HostConfig callbacks via renderer['rootComponent']
+  private rootComponent?: HostComponent;
 
   constructor({ rootElement, onUpdate, idPrefix, logger }: RendererOptions) {
     this.logger = logger;
     this.onUpdate = onUpdate;
 
-    this.root = CompositorRenderer.createContainer(
+    this.rootNode = CompositorRenderer.createContainer(
       this, // container tag
       LegacyRoot,
       null, // hydrationCallbacks
@@ -253,40 +299,16 @@ class Renderer {
       null // transitionCallbacks
     );
 
-    CompositorRenderer.updateContainer(rootElement, this.root, null, () => {});
+    CompositorRenderer.updateContainer(rootElement, this.rootNode, null, () => {});
   }
 
   public scene(): Api.Component {
-    if (this.lastScene) {
-      // Renderer was already stopped just return old scene
-      return this.lastScene;
-    }
-
-    // When resetAfterCommit is called `this.root.current` is not updated yet, so we need to rely
-    // on `pendingChildren`. I'm not sure it is always populated, so there is a fallback to
-    // `root.current`.
-
-    const rootComponent =
-      this.root.pendingChildren[0] ?? rootHostComponent(this.root.current, this.logger);
-    return rootComponent.scene();
+    return this.rootComponent ? this.rootComponent.scene() : { type: 'view' };
   }
 
   public stop() {
-    this.lastScene = this.scene();
-    CompositorRenderer.updateContainer(null, this.root, null, () => {});
+    CompositorRenderer.updateContainer(null, this.rootNode, null, () => {});
   }
-}
-
-function rootHostComponent(root: any, logger: Logger): HostComponent {
-  logger.error('No pendingChildren found, this might be an error.');
-  let current = root;
-  while (current) {
-    if (current?.stateNode instanceof HostComponent) {
-      return current?.stateNode;
-    }
-    current = current.child;
-  }
-  throw new Error('No smelter host component found in the tree.');
 }
 
 function groupTextComponents(components: SceneComponent[]): SceneComponent[] {
