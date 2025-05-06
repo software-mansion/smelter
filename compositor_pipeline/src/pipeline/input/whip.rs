@@ -10,7 +10,7 @@ use crate::{
         decoder,
         types::EncodedChunk,
         whip_whep::{bearer_token::generate_token, WhipInputConnectionState, WhipInputState},
-        PipelineCtx,
+        PipelineCtx, VideoDecoder,
     },
     queue::PipelineEvent,
 };
@@ -27,6 +27,11 @@ pub mod start_decoders;
 pub enum WhipReceiverError {
     #[error("WHIP WHEP server is not running, cannot start WHIP input")]
     WhipWhepServerNotRunning,
+}
+
+#[derive(Debug, Clone)]
+pub struct WhipOptions {
+    pub video_decoder_preferences: Vec<VideoDecoder>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,6 +64,7 @@ pub struct DecodedDataSender {
 impl WhipInput {
     pub(super) fn start_new_input(
         input_id: &InputId,
+        options: WhipOptions,
         pipeline_ctx: &PipelineCtx,
         frame_sender: Sender<PipelineEvent<Frame>>,
         input_samples_sender: Sender<PipelineEvent<InputSamples>>,
@@ -80,6 +86,7 @@ impl WhipInput {
                 peer_connection: None,
                 start_time_video: None,
                 start_time_audio: None,
+                video_decoder_preferences: options.video_decoder_preferences,
                 decoded_data_sender,
             },
         );

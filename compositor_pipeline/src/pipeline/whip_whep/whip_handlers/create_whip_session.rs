@@ -47,8 +47,11 @@ pub async fn handle_create_whip_session(
         }
     }
 
-    let (peer_connection, video_transceiver, audio_transceiver) =
-        init_peer_connection(state.pipeline_ctx.stun_servers.to_vec()).await?;
+    let (peer_connection, video_transceiver, audio_transceiver) = init_peer_connection(
+        state.pipeline_ctx.stun_servers.to_vec(),
+        input_state.video_decoder_preferences.clone(),
+    )
+    .await?;
 
     state
         .inputs
@@ -69,6 +72,7 @@ pub async fn handle_create_whip_session(
         input_id.clone(),
         video_transceiver,
         audio_transceiver,
+        input_state.video_decoder_preferences,
     )
     .await?;
 

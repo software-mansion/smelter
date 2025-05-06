@@ -8,7 +8,7 @@ use crate::{
 use compositor_render::{Frame, InputId};
 use crossbeam_channel::{bounded, Receiver};
 use rtp::{RtpReceiver, RtpReceiverOptions};
-use whip::WhipInput;
+use whip::{WhipInput, WhipOptions};
 
 use self::mp4::{Mp4, Mp4Options};
 
@@ -40,7 +40,7 @@ pub enum Input {
 pub enum InputOptions {
     Rtp(RtpReceiverOptions),
     Mp4(Mp4Options),
-    Whip,
+    Whip(WhipOptions),
     #[cfg(feature = "decklink")]
     DeckLink(decklink::DeckLinkOptions),
 }
@@ -178,11 +178,16 @@ fn start_input_threads(
                 setup_and_start_decoders_threads(pipeline_ctx, input_id, video, audio)?;
             Ok((input, decoder_data_receiver, init_info))
         }
-        InputOptions::Whip => {
+        InputOptions::Whip(opts) => {
             let (video_sender, video_receiver) = bounded(10);
             let (audio_sender, audio_receiver) = bounded(10);
-            let (input, init_info) =
-                WhipInput::start_new_input(input_id, pipeline_ctx, video_sender, audio_sender)?;
+            let (input, init_info) = WhipInput::start_new_input(
+                input_id,
+                opts,
+                pipeline_ctx,
+                video_sender,
+                audio_sender,
+            )?;
             Ok((
                 input,
                 DecodedDataReceiver {

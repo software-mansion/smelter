@@ -4,7 +4,7 @@ use bytes::Bytes;
 use compositor_pipeline::{
     pipeline::{
         self, decoder,
-        input::{self, rtp, whip},
+        input::{self, rtp},
     },
     queue,
 };
@@ -169,25 +169,6 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
     }
 }
 
-impl TryFrom<InputWhipAudioOptions> for whip::InputAudioStream {
-    type Error = TypeError;
-
-    fn try_from(audio: InputWhipAudioOptions) -> Result<Self, Self::Error> {
-        match audio {
-            InputWhipAudioOptions::Opus {
-                forward_error_correction,
-            } => {
-                let forward_error_correction = forward_error_correction.unwrap_or(false);
-                Ok(input::whip::InputAudioStream {
-                    options: decoder::OpusDecoderOptions {
-                        forward_error_correction,
-                    },
-                })
-            }
-        }
-    }
-}
-
 impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
     type Error = TypeError;
 
@@ -199,15 +180,74 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
             offset_ms,
         } = value;
 
-        if video.is_some() {
-            warn!("Field 'video' is deprecated. The codec will now be set automatically based on WHIP negotiation, manual specification is no longer needed.")
+        if video.clone().and_then(|v| v.decoder.clone()).is_some() {
+            warn!("Field 'decoder' in video options is deprecated. The codec will now be set automatically based on WHIP negotiation, manual specification is no longer needed.")
         }
 
         if audio.is_some() {
             warn!("Field 'audio' is deprecated. The codec will now be set automatically based on WHIP negotiation, manual specification is no longer needed.")
         }
 
-        let input_options = input::InputOptions::Whip;
+        let whip_options = match video {
+            Some(options) => {
+                let video_decoder_preferences = options
+                    .decoder_preferences
+                    .filter(|v| !v.is_empty())
+                    .unwrap_or_else(|| vec![WhipVideoDecoder::Any])
+                    .into_iter()
+                    .flat_map(|codec| match codec {
+                        WhipVideoDecoder::FfmpegH264 => {
+                            vec![pipeline::VideoDecoder::FFmpegH264]
+                        }
+                        #[cfg(feature = "vk-video")]
+                        WhipVideoDecoder::VulkanH264 => {
+                            vec![pipeline::VideoDecoder::VulkanVideoH264]
+                        }
+                        #[cfg(feature = "vk-video")]
+                        VideoDecoder::VulkanVideo => {
+                            warn!("vulkan_video option is deprecated, use vulkan_h264 instead.");
+                            vec![pipeline::VideoDecoder::VulkanVideoH264]
+                        }
+                        WhipVideoDecoder::FfmpegVp8 => {
+                            vec![pipeline::VideoDecoder::FFmpegVp8]
+                        }
+                        WhipVideoDecoder::FfmpegVp9 => {
+                            vec![pipeline::VideoDecoder::FFmpegVp9]
+                        }
+                        #[cfg(not(feature = "vk-video"))]
+                        WhipVideoDecoder::Any => {
+                            vec![
+                                pipeline::VideoDecoder::FFmpegVp9,
+                                pipeline::VideoDecoder::FFmpegVp8,
+                                pipeline::VideoDecoder::FFmpegH264,
+                            ]
+                        }
+                        #[cfg(feature = "vk-video")]
+                        VideoDecoder::Any => {
+                            vec![
+                                pipeline::VideoDecoder::FFmpegVp9,
+                                pipeline::VideoDecoder::FFmpegVp8,
+                                pipeline::VideoDecoder::VulkanVideoH264,
+                            ]
+                        }
+                        #[cfg(not(feature = "vk-video"))]
+                        WhipVideoDecoder::VulkanH264 | WhipVideoDecoder::VulkanVideo => vec![],
+                    })
+                    .collect();
+                input::whip::WhipOptions {
+                    video_decoder_preferences,
+                }
+            }
+            None => input::whip::WhipOptions {
+                video_decoder_preferences: vec![
+                    pipeline::VideoDecoder::FFmpegVp9,
+                    pipeline::VideoDecoder::FFmpegVp8,
+                    pipeline::VideoDecoder::FFmpegH264,
+                ],
+            },
+        };
+
+        let input_options = input::InputOptions::Whip(whip_options);
 
         let queue_options = queue::QueueInputOptions {
             required: required.unwrap_or(false),
