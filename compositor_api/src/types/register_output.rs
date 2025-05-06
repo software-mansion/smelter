@@ -84,7 +84,7 @@ pub struct OutputWhipVideoOptions {
     /// Video encoder options.
     pub encoder: Option<VideoEncoderOptions>,
     /// Codec preferences list.
-    pub codec_preferences: Option<Vec<WhipVideoEncoderOptions>>,
+    pub encoder_preferences: Option<Vec<WhipVideoEncoderOptions>>,
     /// Root of a component tree/scene that should be rendered for the output.
     pub initial: Video,
 }
@@ -131,7 +131,7 @@ pub struct OutputWhipAudioOptions {
     /// Specifies channels configuration.
     pub channels: Option<AudioChannels>,
     /// Codec preferences list.
-    pub codec_preferences: Option<Vec<WhipAudioEncoderOptions>>,
+    pub encoder_preferences: Option<Vec<WhipAudioEncoderOptions>>,
     /// Initial audio mixer configuration for output.
     pub initial: Audio,
 }

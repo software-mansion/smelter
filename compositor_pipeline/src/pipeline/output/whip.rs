@@ -42,12 +42,12 @@ pub struct WhipSender {
 
 #[derive(Debug, Clone)]
 pub struct VideoWhipOptions {
-    pub codec_preferences: Vec<VideoEncoderOptions>,
+    pub encoder_preferences: Vec<VideoEncoderOptions>,
 }
 
 #[derive(Debug, Clone)]
 pub struct AudioWhipOptions {
-    pub codec_preferences: Vec<AudioEncoderOptions>,
+    pub encoder_preferences: Vec<AudioEncoderOptions>,
 }
 
 #[derive(Debug, Clone)]
@@ -216,18 +216,18 @@ async fn run_whip_sender_task(
         }
     };
 
-    let video_codec_preferences = whip_ctx
+    let video_encoder_preferences = whip_ctx
         .options
         .video
         .as_ref()
-        .map(|v| v.codec_preferences.clone());
-    let audio_codec_preferences = whip_ctx
+        .map(|v| v.encoder_preferences.clone());
+    let audio_encoder_preferences = whip_ctx
         .options
         .audio
         .as_ref()
-        .map(|a| a.codec_preferences.clone());
+        .map(|a| a.encoder_preferences.clone());
 
-    let setup_track_before_negotiation = video_codec_preferences
+    let setup_track_before_negotiation = video_encoder_preferences
         .as_ref()
         .filter(|preferences| preferences.len() == 1)
         .and_then(|preferences| {
@@ -241,7 +241,7 @@ async fn run_whip_sender_task(
     {
         setup_track(
             video_transceiver.clone(),
-            video_codec_preferences.clone(),
+            video_encoder_preferences.clone(),
             "video".to_string(),
         )
         .await
@@ -251,7 +251,7 @@ async fn run_whip_sender_task(
 
     let (audio_track, audio_payload_type, audio_encoder_options) = setup_track(
         audio_transceiver.clone(),
-        audio_codec_preferences,
+        audio_encoder_preferences,
         "audio".to_string(),
     )
     .await;
@@ -270,7 +270,7 @@ async fn run_whip_sender_task(
     let (video_track, video_payload_type, video_encoder_options) = if video_track.is_none() {
         setup_track(
             video_transceiver.clone(),
-            video_codec_preferences,
+            video_encoder_preferences,
             "video".to_string(),
         )
         .await

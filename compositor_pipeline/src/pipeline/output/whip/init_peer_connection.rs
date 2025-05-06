@@ -91,18 +91,18 @@ fn register_codecs(
     media_engine: &mut MediaEngine,
     whip_ctx: &WhipCtx,
 ) -> webrtc::error::Result<()> {
-    let video_codec_preferences = whip_ctx
+    let video_encoder_preferences = whip_ctx
         .options
         .video
         .as_ref()
-        .map(|v| v.codec_preferences.clone());
-    let audio_codec_preferences = whip_ctx
+        .map(|v| v.encoder_preferences.clone());
+    let audio_encoder_preferences = whip_ctx
         .options
         .audio
         .as_ref()
-        .map(|a| a.codec_preferences.clone());
+        .map(|a| a.encoder_preferences.clone());
 
-    for encoder_options in &audio_codec_preferences.unwrap_or_default() {
+    for encoder_options in &audio_encoder_preferences.unwrap_or_default() {
         if let AudioEncoderOptions::Opus(opts) = encoder_options {
             let channels = match opts.channels {
                 AudioChannels::Mono => 1,
@@ -144,7 +144,7 @@ fn register_codecs(
         },
     ];
 
-    for encoder_options in &video_codec_preferences.unwrap_or_default() {
+    for encoder_options in &video_encoder_preferences.unwrap_or_default() {
         match encoder_options {
             VideoEncoderOptions::H264(_) => {
                 let h264_codec_parameters = vec![

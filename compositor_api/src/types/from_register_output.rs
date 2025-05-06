@@ -243,8 +243,8 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
             };
 
-            let codec_preferences: Vec<pipeline::encoder::VideoEncoderOptions> = options
-                .codec_preferences
+            let encoder_preferences: Vec<pipeline::encoder::VideoEncoderOptions> = options
+                .encoder_preferences
                 .filter(|v| !v.is_empty())
                 .unwrap_or_else(|| vec![WhipVideoEncoderOptions::Any])
                 .into_iter()
@@ -291,7 +291,9 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 })
                 .collect();
 
-            let video_whip_options = VideoWhipOptions { codec_preferences };
+            let video_whip_options = VideoWhipOptions {
+                encoder_preferences,
+            };
             (Some(output_options), Some(video_whip_options))
         } else {
             (None, None)
@@ -303,7 +305,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 send_eos_when,
                 encoder,
                 channels,
-                codec_preferences,
+                encoder_preferences,
                 initial,
             }) => {
                 let resolved_channels = match encoder {
@@ -327,8 +329,8 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                     channels: resolved_channels.clone().into(),
                 };
 
-                let codec_preferences: Vec<pipeline::encoder::AudioEncoderOptions> =
-                    codec_preferences
+                let encoder_preferences: Vec<pipeline::encoder::AudioEncoderOptions> =
+                    encoder_preferences
                         .filter(|a| !a.is_empty())
                         .unwrap_or_else(|| vec![WhipAudioEncoderOptions::Any])
                         .into_iter()
@@ -356,13 +358,15 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                         })
                         .collect();
 
-                let audio_whip_options = AudioWhipOptions { codec_preferences };
+                let audio_whip_options = AudioWhipOptions {
+                    encoder_preferences,
+                };
                 (Some(output_audio_options), Some(audio_whip_options))
             }
             None => {
                 // even if audio field is unregistered add opus codec in order to make Twitch work
                 let audio_whip_options = AudioWhipOptions {
-                    codec_preferences: vec![pipeline::encoder::AudioEncoderOptions::Opus(
+                    encoder_preferences: vec![pipeline::encoder::AudioEncoderOptions::Opus(
                         OpusEncoderOptions {
                             channels: AudioChannels::Stereo,
                             preset: OpusEncoderPreset::Voip.into(),

@@ -42,7 +42,7 @@ fn client_code() -> Result<()> {
                     "width": VIDEO_RESOLUTION.width,
                     "height": VIDEO_RESOLUTION.height,
                 },
-                "codec_preferences": [
+                "encoder_preferences": [
                     {
                         "type": "ffmpeg_h264",
                         "preset": "fast",

@@ -31,14 +31,14 @@ impl MatchCodecCapability for AudioEncoderOptions {
 
 pub async fn setup_track<T: MatchCodecCapability + Clone>(
     transceiver: Option<Arc<RTCRtpTransceiver>>,
-    codec_preferences: Option<Vec<T>>,
+    encoder_preferences: Option<Vec<T>>,
     track_kind: String,
 ) -> (
     Option<Arc<TrackLocalStaticRTP>>,
     Option<PayloadType>,
     Option<T>,
 ) {
-    let (Some(transceiver), Some(codec_preferences)) = (transceiver, codec_preferences) else {
+    let (Some(transceiver), Some(encoder_preferences)) = (transceiver, encoder_preferences) else {
         return (None, None, None);
     };
 
@@ -46,7 +46,7 @@ pub async fn setup_track<T: MatchCodecCapability + Clone>(
     let params = sender.get_parameters().await;
     let supported_codecs = &params.rtp_parameters.codecs;
 
-    for encoder_options in &codec_preferences {
+    for encoder_options in &encoder_preferences {
         if let Some(codec_parameters) = supported_codecs
             .iter()
             .find(|codec_params| encoder_options.matches(&codec_params.capability))
