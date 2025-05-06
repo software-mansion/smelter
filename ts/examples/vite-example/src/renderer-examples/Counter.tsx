@@ -11,7 +11,7 @@ function Counter() {
       return;
     }
 
-    renderer.updateScene(
+    void renderer.updateScene(
       'output',
       { width: 300, height: 300 },
       {
@@ -48,10 +48,16 @@ function Counter() {
       };
       const outputs = await renderer.render(input);
       const frame = outputs.frames['output'];
-      const resolution = frame.resolution;
-      const canvas = canvasRef.current;
-      const context = canvas!.getContext('2d');
-      context?.putImageData(new ImageData(frame!.data, resolution.width, resolution.height), 0, 0);
+      if (frame) {
+        const resolution = frame.resolution;
+        const canvas = canvasRef.current;
+        const context = canvas!.getContext('2d');
+        context?.putImageData(
+          new ImageData(frame!.data, resolution.width, resolution.height),
+          0,
+          0
+        );
+      }
 
       pts += 30;
     }, 30);

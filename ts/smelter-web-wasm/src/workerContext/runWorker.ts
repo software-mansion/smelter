@@ -33,7 +33,7 @@ registerWorkerEntrypoint<WorkerMessage, WorkerResponse>(
     if (request.type === 'registerInput') {
       return await instance.registerInput(request.inputId, request.input);
     } else if (request.type === 'registerOutput') {
-      return instance.registerOutput(request.outputId, request.output);
+      return await instance.registerOutput(request.outputId, request.output);
     } else if (request.type === 'registerImage') {
       return await instance.registerImage(request.imageId, request.image);
     } else if (request.type === 'registerShader') {
@@ -43,13 +43,13 @@ registerWorkerEntrypoint<WorkerMessage, WorkerResponse>(
     } else if (request.type === 'unregisterOutput') {
       return await instance.unregisterOutput(request.outputId);
     } else if (request.type === 'unregisterImage') {
-      return instance.unregisterImage(request.imageId);
+      return await instance.unregisterImage(request.imageId);
     } else if (request.type === 'unregisterShader') {
-      return instance.unregisterShader(request.shaderId);
+      return await instance.unregisterShader(request.shaderId);
     } else if (request.type === 'updateScene') {
-      return instance.updateScene(request.outputId, request.output);
+      return await instance.updateScene(request.outputId, request.output);
     } else if (request.type === 'registerFont') {
-      return instance.registerFont(request.url);
+      return await instance.registerFont(request.url);
     } else if (request.type === 'start') {
       return instance.start();
     } else if (request.type === 'terminate') {

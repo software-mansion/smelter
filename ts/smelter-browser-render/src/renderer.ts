@@ -64,12 +64,16 @@ export class Renderer {
     };
   }
 
-  public updateScene(outputId: Api.OutputId, resolution: Api.Resolution, scene: Api.Component) {
-    this.renderer.update_scene(outputId, resolution, scene);
+  public async updateScene(
+    outputId: Api.OutputId,
+    resolution: Api.Resolution,
+    scene: Api.Component
+  ) {
+    await this.renderer.update_scene(outputId, resolution, scene);
   }
 
-  public registerInput(inputId: Api.InputId) {
-    this.renderer.register_input(inputId);
+  public async registerInput(inputId: Api.InputId) {
+    await this.renderer.register_input(inputId);
   }
 
   public async registerImage(rendererId: Api.RendererId, imageSpec: Api.ImageSpec) {
@@ -84,19 +88,19 @@ export class Renderer {
     await this.renderer.register_font(fontUrl);
   }
 
-  public unregisterInput(inputId: Api.InputId) {
-    this.renderer.unregister_input(inputId);
+  public async unregisterInput(inputId: Api.InputId) {
+    await this.renderer.unregister_input(inputId);
   }
 
-  public unregisterImage(rendererId: Api.RendererId) {
-    this.renderer.unregister_image(rendererId);
+  public async unregisterImage(rendererId: Api.RendererId) {
+    await this.renderer.unregister_image(rendererId);
   }
 
-  public unregisterShader(rendererId: Api.RendererId) {
-    this.renderer.unregister_shader(rendererId);
+  public async unregisterShader(rendererId: Api.RendererId) {
+    await this.renderer.unregister_shader(rendererId);
   }
 
-  public unregisterOutput(outputId: Api.OutputId) {
-    this.renderer.unregister_output(outputId);
+  public async unregisterOutput(outputId: Api.OutputId) {
+    await this.renderer.unregister_output(outputId);
   }
 }
