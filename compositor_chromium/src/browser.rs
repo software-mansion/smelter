@@ -1,26 +1,27 @@
 use std::os::raw::c_int;
 
 use crate::{
+    cef_ref::{CefRc, CefRefCountable},
     cef_string::CefString,
     frame::Frame,
-    validated::{Validatable, Validated, ValidatedError},
+    validated::{Validatable, ValidatedError},
 };
 
 /// Wrapper over raw [`chromium_sys::cef_browser_t`].
 /// Used for interacting with a browser
 pub struct Browser {
-    inner: Validated<chromium_sys::cef_browser_t>,
+    inner: CefRc<chromium_sys::cef_browser_t>,
 }
 
 impl Browser {
     pub(crate) fn new(browser: *mut chromium_sys::cef_browser_t) -> Self {
-        let inner = Validated::new(browser);
+        let inner = CefRc::new(browser);
         Self { inner }
     }
 
     pub fn is_loading(&self) -> Result<bool, BrowserError> {
         unsafe {
-            let browser = self.inner.get()?;
+            let browser = self.inner.get_weak_with_validation()?;
             let is_loading = (*browser).is_loading.unwrap();
             Ok(is_loading(browser) == 1)
         }
@@ -28,7 +29,7 @@ impl Browser {
 
     pub fn main_frame(&self) -> Result<Frame, BrowserError> {
         unsafe {
-            let browser = self.inner.get()?;
+            let browser = self.inner.get_weak_with_validation()?;
             let get_main_frame = (*browser).get_main_frame.unwrap();
             Ok(Frame::new(get_main_frame(browser)))
         }
@@ -36,7 +37,7 @@ impl Browser {
 
     pub fn close(&mut self) -> Result<(), BrowserError> {
         unsafe {
-            let browser = self.inner.get()?;
+            let browser = self.inner.get_weak_with_validation()?;
             let get_host = (*browser).get_host.unwrap();
             let host = get_host(browser);
             let close_browser = (*host).close_browser.unwrap();
@@ -56,8 +57,16 @@ pub enum BrowserError {
 
 impl Validatable for chromium_sys::cef_browser_t {
     fn is_valid(&mut self) -> bool {
-        let is_valid = self.is_valid.unwrap();
-        unsafe { is_valid(self) == 1 }
+        match self.is_valid {
+            Some(is_valid) => unsafe { is_valid(self) == 1 },
+            None => false,
+        }
+    }
+}
+
+impl CefRefCountable for chromium_sys::cef_browser_t {
+    fn base_mut(&mut self) -> *mut chromium_sys::cef_base_ref_counted_t {
+        &mut self.base
     }
 }
 

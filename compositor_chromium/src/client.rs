@@ -3,7 +3,7 @@ use std::os::raw::c_int;
 use crate::{
     browser::Browser,
     cef::{Frame, ProcessId, ProcessMessage},
-    cef_ref::{CefRefData, CefStruct},
+    cef_ref::{CefRc, CefRefData, CefStruct},
     render_handler::{RenderHandler, RenderHandlerWrapper},
 };
 
@@ -36,7 +36,7 @@ pub(crate) struct ClientWrapper<C: Client>(pub C);
 impl<C: Client> CefStruct for ClientWrapper<C> {
     type CefType = chromium_sys::cef_client_t;
 
-    fn cef_data(&self) -> Self::CefType {
+    fn new_cef_data() -> Self::CefType {
         chromium_sys::cef_client_t {
             base: unsafe { std::mem::zeroed() },
             get_audio_handler: None,
@@ -61,7 +61,9 @@ impl<C: Client> CefStruct for ClientWrapper<C> {
         }
     }
 
-    fn base_mut(cef_data: &mut Self::CefType) -> &mut chromium_sys::cef_base_ref_counted_t {
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut chromium_sys::cef_base_ref_counted_t {
         &mut cef_data.base
     }
 }
@@ -89,7 +91,9 @@ impl<C: Client> ClientWrapper<C> {
         let self_ref = unsafe { CefRefData::<Self>::from_cef(self_) };
         let browser = Browser::new(browser);
         let frame = Frame::new(frame);
-        let message = ProcessMessage { inner: message };
+        let message = ProcessMessage {
+            inner: CefRc::new(message),
+        };
 
         let is_handled = self_ref.0.on_process_message_received(
             &browser,

@@ -1,7 +1,4 @@
-use crate::{
-    cef_string::CefString,
-    validated::{Validated, ValidatedError},
-};
+use crate::{cef_ref::CefRc, cef_string::CefString, validated::ValidatedError};
 use log::error;
 
 use super::{
@@ -14,30 +11,29 @@ mod dom_rect;
 mod element;
 mod global;
 
-use crate::cef_ref::increment_ref_count;
 pub use document::*;
 pub use dom_rect::*;
 pub use element::*;
 pub use global::*;
 
-pub struct V8Object(pub(super) Validated<chromium_sys::cef_v8value_t>);
+pub struct V8Object(pub(super) CefRc<chromium_sys::cef_v8value_t>);
 
 impl V8Object {
     pub fn has(&self, key: &str) -> Result<bool, V8ObjectError> {
-        let inner = self.0.get()?;
-        let key = CefString::new_raw(key);
+        let inner = self.0.get_weak_with_validation()?;
+        let key = CefString::new(key);
         unsafe {
             let has_value = (*inner).has_value_bykey.unwrap();
-            Ok(has_value(inner, &key) == 1)
+            Ok(has_value(inner, key.raw()) == 1)
         }
     }
 
     pub fn get(&self, key: &str) -> Result<V8Value, V8ObjectError> {
-        let inner = self.0.get()?;
-        let cef_key = CefString::new_raw(key);
+        let inner = self.0.get_weak_with_validation()?;
+        let cef_key = CefString::new(key);
         unsafe {
             let get_value = (*inner).get_value_bykey.unwrap();
-            let value = get_value(inner, &cef_key);
+            let value = get_value(inner, cef_key.raw());
             if value.is_null() {
                 return Err(V8ObjectError::FieldNotFound(key.to_string()));
             }
@@ -53,13 +49,12 @@ impl V8Object {
         attribute: V8PropertyAttribute,
         _context_entered: &V8ContextEntered,
     ) -> Result<(), V8ObjectError> {
-        let inner = self.0.get()?;
-        let cef_key = CefString::new_raw(key);
+        let inner = self.0.get_weak_with_validation()?;
+        let cef_key = CefString::new(key);
         unsafe {
             let set_value = (*inner).set_value_bykey.unwrap();
             let value = value.get_raw()?;
-            increment_ref_count(&mut (*value).base);
-            if set_value(inner, &cef_key, value, attribute as u32) != 1 {
+            if set_value(inner, cef_key.raw(), value, attribute as u32) != 1 {
                 return Err(V8ObjectError::SetFailed(key.to_string()));
             }
             Ok(())
@@ -71,11 +66,11 @@ impl V8Object {
         key: &str,
         _context_entered: &V8ContextEntered,
     ) -> Result<(), V8ObjectError> {
-        let inner = self.0.get()?;
-        let cef_key = CefString::new_raw(key);
+        let inner = self.0.get_weak_with_validation()?;
+        let cef_key = CefString::new(key);
         unsafe {
             let delete_value = (*inner).delete_value_bykey.unwrap();
-            if delete_value(inner, &cef_key) != 1 {
+            if delete_value(inner, cef_key.raw()) != 1 {
                 return Err(V8ObjectError::DeleteFailed(key.to_string()));
             }
 

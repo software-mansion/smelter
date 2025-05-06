@@ -4,17 +4,24 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+use crate::validated::{Validatable, ValidatedError};
+
 pub(crate) trait CefStruct {
     // Represents CEF struct which has ref counting capability
     type CefType;
 
-    fn cef_data(&self) -> Self::CefType;
+    fn new_cef_data() -> Self::CefType;
 
-    fn base_mut(cef_data: &mut Self::CefType) -> &mut chromium_sys::cef_base_ref_counted_t;
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut chromium_sys::cef_base_ref_counted_t;
 }
 
-/// Each CEF struct with ref counting capability has a base struct as a first field
-/// This lets us simulate inheritance-like behavior
+/// Each CEF struct with ref counting capability has a base struct as a first field,
+/// this lets us simulate inheritance-like behavior.
+///
+/// Do not change order of the fields in this struct.
+///
 /// https://bitbucket.org/chromiumembedded/cef/wiki/UsingTheCAPI.md
 /// http://www.deleveld.dds.nl/inherit.htm
 #[repr(C)]
@@ -43,12 +50,12 @@ impl<T: CefStruct> CefRefData<T> {
     const MAX_REFCOUNT: usize = (isize::MAX) as usize;
 
     pub fn new_ptr(data: T) -> *mut T::CefType {
-        let mut cef_data = data.cef_data();
+        let mut cef_data = T::new_cef_data();
 
         // Init ref counting for T::CefType
-        let base = T::base_mut(&mut cef_data);
+        let base = T::base_from_cef_data(&mut cef_data);
         *base = chromium_sys::cef_base_ref_counted_t {
-            size: std::mem::size_of::<Self>(),
+            size: std::mem::size_of::<T::CefType>(),
             add_ref: Some(Self::add_ref),
             release: Some(Self::release),
             has_one_ref: Some(Self::has_one_ref),
@@ -128,6 +135,75 @@ impl<T: CefStruct> CefRefData<T> {
     }
 }
 
+pub trait CefRefCountable {
+    fn base_mut(&mut self) -> *mut chromium_sys::cef_base_ref_counted_t;
+}
+
+pub struct CefRc<T: CefRefCountable>(*mut T);
+
+impl<T: CefRefCountable> Drop for CefRc<T> {
+    fn drop(&mut self) {
+        let base = unsafe { (*self.0).base_mut() };
+        unsafe {
+            decrement_ref_count(base);
+        }
+    }
+}
+
+impl<T: CefRefCountable> CefRc<T> {
+    pub fn new(data: *mut T) -> Self {
+        Self(data)
+    }
+
+    /// Increments the reference count of the object and returns a raw pointer to it.
+    pub fn get(&self) -> *mut T {
+        let base = unsafe { (*self.0).base_mut() };
+        unsafe {
+            increment_ref_count(base);
+        }
+        self.0
+    }
+
+    /// Returns a raw pointer to the object without incrementing the reference count.
+    pub fn get_weak(&self) -> *mut T {
+        self.0
+    }
+}
+
+impl<T: CefRefCountable + Validatable> CefRc<T> {
+    /// Increments the reference count of the object and returns a raw pointer to it.
+    /// The pointer is validated before returning.
+    pub fn get_with_validation(&self) -> Result<*mut T, ValidatedError> {
+        if self.0.is_null() {
+            return Err(ValidatedError::NotValid);
+        }
+
+        unsafe {
+            if !(*self.0).is_valid() {
+                return Err(ValidatedError::NotValid);
+            }
+        }
+
+        Ok(self.get())
+    }
+
+    /// Returns a raw pointer to the object without incrementing the reference count.
+    /// The pointer is validated before returning.
+    pub fn get_weak_with_validation(&self) -> Result<*mut T, ValidatedError> {
+        if self.0.is_null() {
+            return Err(ValidatedError::NotValid);
+        }
+
+        unsafe {
+            if !(*self.0).is_valid() {
+                return Err(ValidatedError::NotValid);
+            }
+        }
+
+        Ok(self.get_weak())
+    }
+}
+
 /// # Safety
 ///
 /// Make sure the pointer points to valid information
@@ -135,5 +211,15 @@ pub(crate) unsafe fn increment_ref_count(base: *mut chromium_sys::cef_base_ref_c
     unsafe {
         let add_ref = (*base).add_ref.unwrap();
         add_ref(base);
+    }
+}
+
+/// # Safety
+///
+/// Make sure the pointer points to valid information
+pub(crate) unsafe fn decrement_ref_count(base: *mut chromium_sys::cef_base_ref_counted_t) {
+    unsafe {
+        let release = (*base).release.unwrap();
+        release(base);
     }
 }

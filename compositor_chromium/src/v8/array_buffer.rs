@@ -1,13 +1,13 @@
 use std::{ops::Deref, os::raw::c_void};
 
 use crate::{
-    cef_ref::{CefRefData, CefStruct},
-    validated::{Validated, ValidatedError},
+    cef_ref::{CefRc, CefRefData, CefStruct},
+    validated::ValidatedError,
 };
 
 use super::{context::V8ContextEntered, value::V8Value};
 
-pub struct V8ArrayBuffer(pub(super) Validated<chromium_sys::cef_v8value_t>);
+pub struct V8ArrayBuffer(pub(super) CefRc<chromium_sys::cef_v8value_t>);
 
 impl V8ArrayBuffer {
     /// Creates a new array buffer from raw pointer. It can be only created while in context.
@@ -32,7 +32,7 @@ impl V8ArrayBuffer {
             )
         };
 
-        Self(Validated::new(inner))
+        Self(CefRc::new(inner))
     }
 
     /// Creates a new array buffer from raw pointer. The data is copied to the array buffer.
@@ -49,7 +49,7 @@ impl V8ArrayBuffer {
             chromium_sys::cef_v8value_create_array_buffer_with_copy(ptr as *mut c_void, ptr_len)
         };
 
-        Self(Validated::new(inner))
+        Self(CefRc::new(inner))
     }
 
     /// # Safety
@@ -61,7 +61,7 @@ impl V8ArrayBuffer {
         _context_entered: &V8ContextEntered,
     ) -> Result<(), V8ArrayBufferError> {
         unsafe {
-            let array_buffer = self.0.get()?;
+            let array_buffer = self.0.get_weak_with_validation()?;
             let get_array_buffer_len = (*array_buffer).get_array_buffer_byte_length.unwrap();
             let get_data = (*array_buffer).get_array_buffer_data.unwrap();
 
@@ -95,14 +95,16 @@ enum V8ArrayBufferReleaseCallback {
 impl CefStruct for V8ArrayBufferReleaseCallback {
     type CefType = chromium_sys::cef_v8array_buffer_release_callback_t;
 
-    fn cef_data(&self) -> Self::CefType {
+    fn new_cef_data() -> Self::CefType {
         chromium_sys::cef_v8array_buffer_release_callback_t {
             base: unsafe { std::mem::zeroed() },
             release_buffer: Some(Self::release_buffer),
         }
     }
 
-    fn base_mut(cef_data: &mut Self::CefType) -> &mut chromium_sys::cef_base_ref_counted_t {
+    fn base_from_cef_data(
+        cef_data: &mut Self::CefType,
+    ) -> &mut chromium_sys::cef_base_ref_counted_t {
         &mut cef_data.base
     }
 }

@@ -1,19 +1,20 @@
-use crate::{cef_string::CefString, validated::Validated};
+use crate::{cef_ref::CefRc, cef_string::CefString};
 
 use super::value::{V8Value, V8ValueError};
 
-pub struct V8String(pub(super) Validated<chromium_sys::cef_v8value_t>);
+pub struct V8String(pub(super) CefRc<chromium_sys::cef_v8value_t>);
 
 impl V8String {
     pub fn new(value: &str) -> Self {
-        let value = CefString::new_raw(value);
-        let inner = unsafe { chromium_sys::cef_v8value_create_string(&value) };
+        let value = CefString::new(value);
+        // `cef_v8value_create_string` copies the string so it's safe to drop `CefString`
+        let value = unsafe { chromium_sys::cef_v8value_create_string(value.raw()) };
 
-        Self(Validated::new(inner))
+        Self(CefRc::new(value))
     }
 
     pub fn get(&self) -> Result<String, V8ValueError> {
-        let inner = self.0.get()?;
+        let inner = self.0.get_weak_with_validation()?;
         unsafe {
             let get_value = (*inner).get_string_value.unwrap();
             let value = get_value(inner);

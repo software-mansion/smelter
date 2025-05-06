@@ -40,7 +40,7 @@ impl Context {
 
         let mut main_args = MainArgs::from_program_args();
         let settings = settings.into_raw();
-        let app = CefRefData::new_ptr(AppWrapper(app));
+        let app = CefRefData::new_ptr(AppWrapper::new(app));
 
         let init_result = unsafe {
             chromium_sys::cef_initialize(main_args.raw_mut(), &settings, app, std::ptr::null_mut())
@@ -87,7 +87,7 @@ impl Context {
     /// Launches subprocess
     pub fn execute_process<A: App>(&self, app: A) -> i32 {
         let mut main_args = MainArgs::from_program_args();
-        let app = CefRefData::new_ptr(AppWrapper(app));
+        let app = CefRefData::new_ptr(AppWrapper::new(app));
         unsafe { chromium_sys::cef_execute_process(main_args.raw_mut(), app, std::ptr::null_mut()) }
     }
 
