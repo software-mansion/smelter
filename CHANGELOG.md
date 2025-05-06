@@ -12,6 +12,7 @@
 
 - Fix web renderer crashing when multiple Smelter instances are run. ([#1016](https://github.com/software-mansion/smelter/pull/1016) by [@noituri](https://github.com/noituri))
 - Fix web renderer's `chromium_embedding`. ([#1033](https://github.com/software-mansion/smelter/pull/1033) by [@noituri](https://github.com/noituri))
+- Fix memory leaks in web renderer. ([#1068](https://github.com/software-mansion/smelter/pull/1068) by [@noituri](https://github.com/noituri))
 
 ### 🔧 Others
 
