@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use bytes::Bytes;
 use compositor_api::types::{Component, ImageSpec, Resolution, ShaderSpec};
@@ -7,6 +7,7 @@ use compositor_render::{
     RegistryType, RendererSpec,
 };
 use glyphon::fontdb::Source;
+use tokio::sync::Mutex;
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 use tracing_wasm::WASMLayer;
 use wasm_bindgen::prelude::*;
@@ -52,11 +53,11 @@ pub struct SmelterRenderer(Mutex<renderer::Renderer>);
 #[wasm_bindgen]
 impl SmelterRenderer {
     pub async fn render(&self, input: types::FrameSet) -> Result<types::FrameSet, JsValue> {
-        let mut renderer = self.0.lock().unwrap();
+        let mut renderer = self.0.lock().await;
         renderer.render(input).await
     }
 
-    pub fn update_scene(
+    pub async fn update_scene(
         &self,
         output_id: String,
         resolution: JsValue,
@@ -65,12 +66,12 @@ impl SmelterRenderer {
         let resolution = types::from_js_value::<Resolution>(resolution)?;
         let scene = types::from_js_value::<Component>(scene)?;
 
-        let mut renderer = self.0.lock().unwrap();
+        let mut renderer = self.0.lock().await;
         renderer.update_scene(output_id, resolution, scene)
     }
 
-    pub fn register_input(&self, input_id: String) {
-        let mut renderer = self.0.lock().unwrap();
+    pub async fn register_input(&self, input_id: String) {
+        let mut renderer = self.0.lock().await;
         renderer.register_input(input_id)
     }
 
@@ -103,7 +104,7 @@ impl SmelterRenderer {
             image_type,
         };
 
-        let mut renderer = self.0.lock().unwrap();
+        let mut renderer = self.0.lock().await;
         renderer
             .register_renderer(renderer_id, RendererSpec::Image(image_spec))
             .await
@@ -115,7 +116,7 @@ impl SmelterRenderer {
         shader_spec: JsValue,
     ) -> Result<(), JsValue> {
         let shader_spec = types::from_js_value::<ShaderSpec>(shader_spec)?;
-        let mut renderer = self.0.lock().unwrap();
+        let mut renderer = self.0.lock().await;
         renderer
             .register_renderer(
                 shader_id,
@@ -126,7 +127,7 @@ impl SmelterRenderer {
 
     pub async fn register_font(&self, font_url: String) -> Result<(), JsValue> {
         let bytes = download(&font_url).await?;
-        let mut renderer = self.0.lock().unwrap();
+        let mut renderer = self.0.lock().await;
         renderer
             .register_font(Source::Binary(Arc::new(bytes)))
             .await;
@@ -134,23 +135,23 @@ impl SmelterRenderer {
         Ok(())
     }
 
-    pub fn unregister_input(&self, input_id: String) {
-        let mut renderer = self.0.lock().unwrap();
+    pub async fn unregister_input(&self, input_id: String) {
+        let mut renderer = self.0.lock().await;
         renderer.unregister_input(input_id)
     }
 
-    pub fn unregister_output(&self, output_id: String) {
-        let mut renderer = self.0.lock().unwrap();
+    pub async fn unregister_output(&self, output_id: String) {
+        let mut renderer = self.0.lock().await;
         renderer.unregister_output(output_id)
     }
 
-    pub fn unregister_image(&self, renderer_id: String) -> Result<(), JsValue> {
-        let mut renderer = self.0.lock().unwrap();
+    pub async fn unregister_image(&self, renderer_id: String) -> Result<(), JsValue> {
+        let mut renderer = self.0.lock().await;
         renderer.unregister_renderer(renderer_id, RegistryType::Image)
     }
 
-    pub fn unregister_shader(&self, renderer_id: String) -> Result<(), JsValue> {
-        let mut renderer = self.0.lock().unwrap();
+    pub async fn unregister_shader(&self, renderer_id: String) -> Result<(), JsValue> {
+        let mut renderer = self.0.lock().await;
         renderer.unregister_renderer(renderer_id, RegistryType::Shader)
     }
 }

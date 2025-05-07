@@ -937,6 +937,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde-wasm-bindgen",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "tracing-wasm",

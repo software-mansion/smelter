@@ -45,7 +45,7 @@ export class Pipeline {
     const input = await createInput(inputId, request, this.logger, this.workloadBalancer);
     // `addInput` will throw an exception if input already exists
     this.queue.addInput(inputId, input);
-    this.renderer.registerInput(inputId);
+    await this.renderer.registerInput(inputId);
     const result = input.start();
     return {
       type: 'registerInput',
@@ -58,24 +58,24 @@ export class Pipeline {
 
   public async unregisterInput(inputId: string): Promise<void> {
     this.queue.removeInput(inputId);
-    this.renderer.unregisterInput(inputId);
+    await this.renderer.unregisterInput(inputId);
   }
 
-  public registerOutput(outputId: string, request: RegisterOutput) {
+  public async registerOutput(outputId: string, request: RegisterOutput) {
     if (request.video) {
       const output = new Output(request);
       this.queue.addOutput(outputId, output);
       try {
         // `updateScene` implicitly registers the output.
         // In case of an error, the output has to be manually cleaned up from the renderer.
-        this.renderer.updateScene(
+        await this.renderer.updateScene(
           outputId,
           request.video.resolution,
           request.video.initial.root as Component
         );
       } catch (e) {
         this.queue.removeOutput(outputId);
-        this.renderer.unregisterOutput(outputId);
+        await this.renderer.unregisterOutput(outputId);
         throw e;
       }
     }
@@ -83,7 +83,7 @@ export class Pipeline {
 
   public async unregisterOutput(outputId: string): Promise<void> {
     this.queue.removeOutput(outputId);
-    this.renderer.unregisterOutput(outputId);
+    await this.renderer.unregisterOutput(outputId);
     // If we add outputs that can end early or require flushing
     // then this needs to be change
     workerPostEvent({
@@ -92,7 +92,7 @@ export class Pipeline {
     });
   }
 
-  public updateScene(outputId: string, request: Api.UpdateOutputRequest) {
+  public async updateScene(outputId: string, request: Api.UpdateOutputRequest) {
     if (!request.video) {
       return;
     }
@@ -100,23 +100,23 @@ export class Pipeline {
     if (!output) {
       throw new Error(`Unknown output "${outputId}"`);
     }
-    this.renderer.updateScene(outputId, output.resolution, request.video.root as Component);
+    await this.renderer.updateScene(outputId, output.resolution, request.video.root as Component);
   }
 
   public async registerImage(imageId: string, request: ImageSpec) {
     await this.renderer.registerImage(imageId, request);
   }
 
-  public unregisterImage(imageId: string) {
-    this.renderer.unregisterImage(imageId);
+  public async unregisterImage(imageId: string) {
+    await this.renderer.unregisterImage(imageId);
   }
 
   public async registerShader(shaderId: string, request: ShaderSpec) {
     await this.renderer.registerShader(shaderId, request);
   }
 
-  public unregisterShader(shaderId: string) {
-    this.renderer.unregisterShader(shaderId);
+  public async unregisterShader(shaderId: string) {
+    await this.renderer.unregisterShader(shaderId);
   }
 
   public async registerFont(url: string): Promise<void> {
