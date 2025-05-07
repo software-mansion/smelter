@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
 use bytes::Bytes;
 use compositor_pipeline::{
@@ -190,7 +190,8 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
 
         let whip_options = match video {
             Some(options) => {
-                let video_decoder_preferences = options
+                let mut seen = HashSet::new(); // TODO temporary
+                let mut video_decoder_preferences: Vec<pipeline::VideoDecoder> = options
                     .decoder_preferences
                     .filter(|v| !v.is_empty())
                     .unwrap_or_else(|| vec![WhipVideoDecoder::Any])
@@ -204,7 +205,7 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                             vec![pipeline::VideoDecoder::VulkanVideoH264]
                         }
                         #[cfg(feature = "vk-video")]
-                        VideoDecoder::VulkanVideo => {
+                        WhipVideoDecoder::VulkanVideo => {
                             warn!("vulkan_video option is deprecated, use vulkan_h264 instead.");
                             vec![pipeline::VideoDecoder::VulkanVideoH264]
                         }
@@ -223,7 +224,7 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                             ]
                         }
                         #[cfg(feature = "vk-video")]
-                        VideoDecoder::Any => {
+                        WhipVideoDecoder::Any => {
                             vec![
                                 pipeline::VideoDecoder::FFmpegVp9,
                                 pipeline::VideoDecoder::FFmpegVp8,
@@ -233,7 +234,9 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                         #[cfg(not(feature = "vk-video"))]
                         WhipVideoDecoder::VulkanH264 | WhipVideoDecoder::VulkanVideo => vec![],
                     })
+                    .filter(|video_decoder| seen.insert(*video_decoder))
                     .collect();
+                video_decoder_preferences.dedup();
                 input::whip::WhipOptions {
                     video_decoder_preferences,
                 }

@@ -66,7 +66,7 @@ impl WhipDecodersBuilder {
         self.decoders
     }
 
-    fn add_h264(&mut self, payload_types: Vec<PayloadType>) -> Result<(), WhipServerError> {
+    fn add_h264(&mut self, payload_types: &Vec<PayloadType>) -> Result<(), WhipServerError> {
         let (whip_client_to_bridge_sender, bridge_to_decoder_receiver) =
             start_forwarding_thread(self.input_id.clone());
 
@@ -94,7 +94,7 @@ impl WhipDecodersBuilder {
         }));
         for payload_type in payload_types {
             self.decoders.insert(
-                payload_type,
+                *payload_type,
                 (whip_client_to_bridge_sender.clone(), depayloader.clone()),
             );
         }
@@ -102,7 +102,7 @@ impl WhipDecodersBuilder {
     }
 
     #[cfg(feature = "vk-video")]
-    fn add_h264_vulcan(&mut self, payload_types: Vec<PayloadType>) -> Result<(), WhipServerError> {
+    fn add_h264_vulcan(&mut self, payload_types: &Vec<PayloadType>) -> Result<(), WhipServerError> {
         let (whip_client_to_bridge_sender, bridge_to_decoder_receiver) =
             start_forwarding_thread(self.input_id.clone());
 
@@ -125,7 +125,7 @@ impl WhipDecodersBuilder {
         }));
         for payload_type in payload_types {
             self.decoders.insert(
-                payload_type,
+                *payload_type,
                 (whip_client_to_bridge_sender.clone(), depayloader.clone()),
             );
         }
@@ -240,14 +240,15 @@ pub async fn start_decoders_threads(
     if !negotiated_codecs.h264.is_empty()
         && video_decoder_preferences.contains(&VideoDecoder::FFmpegH264)
     {
-        whip_decoders_setup.add_h264(negotiated_codecs.h264)?;
+        whip_decoders_setup.add_h264(&negotiated_codecs.h264)?;
     }
 
     #[cfg(feature = "vk-video")]
-    if !negotiated_codecs.h264.is_empty()
+    if state.pipeline_ctx.vulkan_ctx.is_some()
+        && !negotiated_codecs.h264.is_empty()
         && video_decoder_preferences.contains(&VideoDecoder::VulkanVideoH264)
     {
-        whip_decoders_setup.add_h264_vulcan(negotiated_codecs.h264)?;
+        whip_decoders_setup.add_h264_vulcan(&negotiated_codecs.h264)?;
     }
 
     if !negotiated_codecs.vp8.is_empty()

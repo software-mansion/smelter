@@ -67,7 +67,7 @@ pub struct RawDataSender {
     pub audio: Option<Sender<PipelineEvent<InputSamples>>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VideoDecoder {
     FFmpegH264,
     FFmpegVp8,

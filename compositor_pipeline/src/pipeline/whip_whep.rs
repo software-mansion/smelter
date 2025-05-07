@@ -30,6 +30,7 @@ use whip_handlers::{
 pub mod bearer_token;
 pub mod error;
 mod init_peer_connection;
+pub mod supported_video_codec_parameters;
 mod whip_handlers;
 
 use super::{input::whip::DecodedDataSender, PipelineCtx, VideoDecoder};

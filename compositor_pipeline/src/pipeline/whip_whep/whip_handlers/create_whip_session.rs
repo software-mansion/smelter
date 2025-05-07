@@ -1,8 +1,15 @@
 use crate::pipeline::{
     input::whip::{process_track_stream, start_decoders::start_decoders_threads},
     whip_whep::{
-        bearer_token::validate_token, error::WhipServerError, init_peer_connection, WhipWhepState,
+        bearer_token::validate_token,
+        error::WhipServerError,
+        init_peer_connection,
+        supported_video_codec_parameters::{
+            get_video_h264_codecs, get_video_vp8_codecs, get_video_vp9_codecs,
+        },
+        WhipWhepState,
     },
+    VideoDecoder,
 };
 use axum::{
     body::Body,
@@ -13,11 +20,12 @@ use compositor_render::InputId;
 use init_peer_connection::init_peer_connection;
 use std::{sync::Arc, time::Duration};
 use tokio::{sync::watch, time::timeout};
-use tracing::{debug, info, trace};
+use tracing::{debug, info, trace, warn};
 use urlencoding::encode;
 use webrtc::{
     ice_transport::ice_gatherer_state::RTCIceGathererState,
     peer_connection::{sdp::session_description::RTCSessionDescription, RTCPeerConnection},
+    rtp_transceiver::rtp_codec::RTCRtpCodecParameters,
 };
 
 pub async fn handle_create_whip_session(
@@ -53,6 +61,15 @@ pub async fn handle_create_whip_session(
     )
     .await?;
 
+    if let Err(err) = video_transceiver
+        .set_codec_preferences(map_video_decoder_to_rtp_codec_parameters(
+            input_state.video_decoder_preferences.clone(),
+        ))
+        .await
+    {
+        warn!("Cannot set codec preferences for sdp answer: {err:?}");
+    }
+
     state
         .inputs
         .update_peer_connection(input_id.clone(), peer_connection.clone())
@@ -70,14 +87,16 @@ pub async fn handle_create_whip_session(
     let payload_type_map = start_decoders_threads(
         &state,
         input_id.clone(),
-        video_transceiver,
+        video_transceiver.clone(),
         audio_transceiver,
-        input_state.video_decoder_preferences,
+        input_state.video_decoder_preferences.clone(),
     )
     .await?;
 
     let answer = peer_connection.create_answer(None).await?;
-    peer_connection.set_local_description(answer).await?;
+    peer_connection
+        .set_local_description(answer.clone())
+        .await?;
     gather_ice_candidates_for_one_second(peer_connection.clone()).await;
 
     let Some(sdp) = peer_connection.local_description().await else {
@@ -144,4 +163,34 @@ pub async fn gather_ice_candidates_for_one_second(peer_connection: Arc<RTCPeerCo
     if let Err(err) = timeout(Duration::from_secs(1), gather_candidates).await {
         debug!("Maximum time for gathering candidate has elapsed: {err:?}");
     }
+}
+
+fn map_video_decoder_to_rtp_codec_parameters(
+    video_decoder_preferences: Vec<VideoDecoder>,
+) -> Vec<RTCRtpCodecParameters> {
+    let video_vp8_codec = get_video_vp8_codecs();
+    let video_vp9_codec = get_video_vp9_codecs();
+    let video_h264_codecs = get_video_h264_codecs();
+
+    let mut codec_list = Vec::new();
+
+    for decoder in video_decoder_preferences {
+        match decoder {
+            VideoDecoder::FFmpegH264 => {
+                codec_list.extend(video_h264_codecs.clone());
+            }
+            #[cfg(feature = "vk-video")]
+            VideoDecoder::VulkanVideoH264 => {
+                codec_list.extend(video_h264_codecs.clone());
+            }
+            VideoDecoder::FFmpegVp8 => {
+                codec_list.extend(video_vp8_codec.clone());
+            }
+            VideoDecoder::FFmpegVp9 => {
+                codec_list.extend(video_vp9_codec.clone());
+            }
+        }
+    }
+
+    codec_list
 }
