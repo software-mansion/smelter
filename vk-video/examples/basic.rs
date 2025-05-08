@@ -23,6 +23,7 @@ fn main() {
         .create_device(
             wgpu::Features::empty(),
             wgpu::Limits {
+                max_binding_array_elements_per_shader_stage: 128,
                 max_push_constant_size: 128,
                 ..Default::default()
             },

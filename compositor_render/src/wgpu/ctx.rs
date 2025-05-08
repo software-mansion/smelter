@@ -125,6 +125,9 @@ pub fn required_wgpu_features() -> wgpu::Features {
 
 pub fn set_required_wgpu_limits(limits: wgpu::Limits) -> wgpu::Limits {
     wgpu::Limits {
+        max_binding_array_elements_per_shader_stage: limits
+            .max_binding_array_elements_per_shader_stage
+            .max(128),
         max_push_constant_size: limits.max_push_constant_size.max(128),
         ..limits
     }
@@ -156,8 +159,7 @@ pub fn create_wgpu_ctx(
         power_preference: wgpu::PowerPreference::HighPerformance,
         force_fallback_adapter: false,
         compatible_surface,
-    }))
-    .ok_or(CreateWgpuCtxError::NoAdapter)?;
+    }))?;
 
     let adapter_info = adapter.get_info();
     info!(
@@ -177,15 +179,13 @@ pub fn create_wgpu_ctx(
         return Err(CreateWgpuCtxError::NoAdapter);
     }
 
-    let (device, queue) = pollster::block_on(adapter.request_device(
-        &wgpu::DeviceDescriptor {
-            label: None,
-            required_limits: set_required_wgpu_limits(limits),
-            required_features,
-            memory_hints: wgpu::MemoryHints::default(),
-        },
-        None,
-    ))?;
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        label: None,
+        required_limits: set_required_wgpu_limits(limits),
+        required_features,
+        memory_hints: wgpu::MemoryHints::default(),
+        trace: wgpu::Trace::Off,
+    }))?;
     Ok(WgpuComponents {
         instance: instance.into(),
         adapter: adapter.into(),
