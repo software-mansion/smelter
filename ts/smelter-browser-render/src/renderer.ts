@@ -8,35 +8,27 @@ export type RendererOptions = {
   streamFallbackTimeoutMs: number;
 
   loggerLevel?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
-
-  /**
-   * Input frame upload strategy.
-   * On most platforms it's more performant to copy input VideoFrame data to CPU and then upload it to texture.
-   * But on macOS using dedicated wgpu copy_external_image_to_texture function results in better performance.
-   */
-  uploadFramesWithCopyExternal?: boolean;
 };
 
-export type FrameSet<T> = {
+export type InputFrameSet = {
   ptsMs: number;
-  frames: { [id: string]: T };
+  frames: Record<string, InputFrame>;
+};
+
+export type OutputFrameSet = {
+  ptsMs: number;
+  frames: Record<string, OutputFrame>;
 };
 
 export type InputFrame = {
-  readonly frame: VideoFrame;
+  readonly frame: VideoFrame | HTMLVideoElement;
   readonly ptsMs: number;
 };
 
 export type OutputFrame = {
   resolution: Api.Resolution;
-  format: FrameFormat;
   data: Uint8ClampedArray;
 };
-
-export enum FrameFormat {
-  RGBA_BYTES = 'RGBA_BYTES',
-  YUV_BYTES = 'YUV_BYTES',
-}
 
 export class Renderer {
   private renderer: wasm.SmelterRenderer;
@@ -49,18 +41,22 @@ export class Renderer {
     const renderer = await wasm.create_renderer({
       stream_fallback_timeout_ms: options.streamFallbackTimeoutMs,
       logger_level: options.loggerLevel ?? 'warn',
-      upload_frames_with_copy_external: options.uploadFramesWithCopyExternal ?? false,
+      upload_frames_with_copy_external: self.navigator.userAgent.includes('Macintosh'),
     });
     return new Renderer(renderer);
   }
 
-  public async render(input: FrameSet<InputFrame>): Promise<FrameSet<OutputFrame>> {
-    const frames = new Map(Object.entries(input.frames));
-    const inputFrameSet = new wasm.FrameSet(input.ptsMs, frames);
-    const output = await this.renderer.render(inputFrameSet);
+  public async render(input: InputFrameSet): Promise<OutputFrameSet> {
+    const frames = Object.entries(input.frames).map(([inputId, value]) => {
+      return { inputId, frame: value.frame, ptsMs: value.ptsMs };
+    });
+    const output = await this.renderer.render({
+      ptsMs: input.ptsMs,
+      frames,
+    });
     return {
-      ptsMs: output.pts_ms,
-      frames: Object.fromEntries(output.frames),
+      ptsMs: output.ptsMs,
+      frames: Object.fromEntries(output.frames.map(({ outputId, ...value }) => [outputId, value])),
     };
   }
 

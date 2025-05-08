@@ -1,7 +1,6 @@
 import type {
-  FrameSet,
   InputId,
-  OutputFrame,
+  OutputFrameSet,
   OutputId,
   Renderer,
 } from '@swmansion/smelter-browser-render';
@@ -112,7 +111,7 @@ export class Queue {
     return Object.fromEntries(validFrames);
   }
 
-  private sendOutputs(outputs: FrameSet<OutputFrame>) {
+  private sendOutputs(outputs: OutputFrameSet) {
     for (const [outputId, frame] of Object.entries(outputs.frames)) {
       const output = this.outputs[outputId];
       if (!output) {

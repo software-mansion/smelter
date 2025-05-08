@@ -13,11 +13,13 @@ use tracing_wasm::WASMLayer;
 use wasm_bindgen::prelude::*;
 use wgpu::create_wgpu_context;
 
-mod input_uploader;
-mod output_downloader;
+mod input;
+mod output;
 mod renderer;
 mod types;
 mod wgpu;
+
+pub use types::{InputFrame, InputFrameKind, InputFrameSet, OutputFrame, OutputFrameSet};
 
 // Executed during WASM module init
 #[wasm_bindgen(start)]
@@ -52,9 +54,15 @@ pub struct SmelterRenderer(Mutex<renderer::Renderer>);
 
 #[wasm_bindgen]
 impl SmelterRenderer {
-    pub async fn render(&self, input: types::FrameSet) -> Result<types::FrameSet, JsValue> {
+    #[wasm_bindgen]
+    pub async fn render(
+        &self,
+        input: crate::types::InputFrameSet,
+    ) -> Result<crate::types::OutputFrameSet, JsValue> {
         let mut renderer = self.0.lock().await;
-        renderer.render(input).await
+        let input = input.try_into()?;
+        let output = renderer.render(input).await?;
+        Ok(output.into())
     }
 
     pub async fn update_scene(
