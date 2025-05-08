@@ -5,7 +5,7 @@ use crate::pipeline::{
         error::WhipServerError,
         init_peer_connection,
         supported_video_codec_parameters::{
-            get_video_h264_codecs, get_video_vp8_codecs, get_video_vp9_codecs,
+            get_video_h264_codecs_for_codec_preferences, get_video_vp8_codecs, get_video_vp9_codecs,
         },
         WhipWhepState,
     },
@@ -80,7 +80,7 @@ pub async fn handle_create_whip_session(
         Box::pin(async {})
     }));
 
-    let description = RTCSessionDescription::offer(offer.clone())?;
+    let description = RTCSessionDescription::offer(offer)?;
 
     peer_connection.set_remote_description(description).await?;
 
@@ -94,9 +94,7 @@ pub async fn handle_create_whip_session(
     .await?;
 
     let answer = peer_connection.create_answer(None).await?;
-    peer_connection
-        .set_local_description(answer.clone())
-        .await?;
+    peer_connection.set_local_description(answer).await?;
     gather_ice_candidates_for_one_second(peer_connection.clone()).await;
 
     let Some(sdp) = peer_connection.local_description().await else {
@@ -170,7 +168,7 @@ fn map_video_decoder_to_rtp_codec_parameters(
 ) -> Vec<RTCRtpCodecParameters> {
     let video_vp8_codec = get_video_vp8_codecs();
     let video_vp9_codec = get_video_vp9_codecs();
-    let video_h264_codecs = get_video_h264_codecs();
+    let video_h264_codecs = get_video_h264_codecs_for_codec_preferences();
 
     let mut codec_list = Vec::new();
 

@@ -21,7 +21,7 @@ use crate::pipeline::VideoDecoder;
 use super::{
     error::WhipServerError,
     supported_video_codec_parameters::{
-        get_video_h264_codecs, get_video_vp8_codecs, get_video_vp9_codecs,
+        get_video_h264_codecs_for_media_engine, get_video_vp8_codecs, get_video_vp9_codecs,
     },
 };
 
@@ -119,13 +119,13 @@ fn register_codecs(
     for video_decoder in video_decoder_preferences {
         match video_decoder {
             VideoDecoder::FFmpegH264 => {
-                for codec in get_video_h264_codecs() {
+                for codec in get_video_h264_codecs_for_media_engine() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
             #[cfg(feature = "vk-video")]
             VideoDecoder::VulkanVideoH264 => {
-                for codec in get_video_h264_codecs() {
+                for codec in get_video_h264_codecs_for_media_engine() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }

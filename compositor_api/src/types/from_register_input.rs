@@ -1,4 +1,4 @@
-use std::{collections::HashSet, time::Duration};
+use std::time::Duration;
 
 use bytes::Bytes;
 use compositor_pipeline::{
@@ -8,6 +8,7 @@ use compositor_pipeline::{
     },
     queue,
 };
+use itertools::Itertools;
 use tracing::warn;
 
 use super::register_input::*;
@@ -190,53 +191,55 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
 
         let whip_options = match video {
             Some(options) => {
-                let mut seen = HashSet::new(); // TODO temporary
-                let mut video_decoder_preferences: Vec<pipeline::VideoDecoder> = options
-                    .decoder_preferences
-                    .filter(|v| !v.is_empty())
-                    .unwrap_or_else(|| vec![WhipVideoDecoder::Any])
-                    .into_iter()
-                    .flat_map(|codec| match codec {
-                        WhipVideoDecoder::FfmpegH264 => {
-                            vec![pipeline::VideoDecoder::FFmpegH264]
-                        }
-                        #[cfg(feature = "vk-video")]
-                        WhipVideoDecoder::VulkanH264 => {
-                            vec![pipeline::VideoDecoder::VulkanVideoH264]
-                        }
-                        #[cfg(feature = "vk-video")]
-                        WhipVideoDecoder::VulkanVideo => {
-                            warn!("vulkan_video option is deprecated, use vulkan_h264 instead.");
-                            vec![pipeline::VideoDecoder::VulkanVideoH264]
-                        }
-                        WhipVideoDecoder::FfmpegVp8 => {
-                            vec![pipeline::VideoDecoder::FFmpegVp8]
-                        }
-                        WhipVideoDecoder::FfmpegVp9 => {
-                            vec![pipeline::VideoDecoder::FFmpegVp9]
-                        }
-                        #[cfg(not(feature = "vk-video"))]
-                        WhipVideoDecoder::Any => {
-                            vec![
-                                pipeline::VideoDecoder::FFmpegVp9,
-                                pipeline::VideoDecoder::FFmpegVp8,
-                                pipeline::VideoDecoder::FFmpegH264,
-                            ]
-                        }
-                        #[cfg(feature = "vk-video")]
-                        WhipVideoDecoder::Any => {
-                            vec![
-                                pipeline::VideoDecoder::FFmpegVp9,
-                                pipeline::VideoDecoder::FFmpegVp8,
-                                pipeline::VideoDecoder::VulkanVideoH264,
-                            ]
-                        }
-                        #[cfg(not(feature = "vk-video"))]
-                        WhipVideoDecoder::VulkanH264 | WhipVideoDecoder::VulkanVideo => vec![],
-                    })
-                    .filter(|video_decoder| seen.insert(*video_decoder))
-                    .collect();
-                video_decoder_preferences.dedup();
+                let video_decoder_preferences = match options.decoder_preferences.as_deref() {
+                    Some([]) | None => vec![WhipVideoDecoder::Any],
+                    Some(v) => v.to_vec(),
+                };
+                let video_decoder_preferences: Vec<pipeline::VideoDecoder> =
+                    video_decoder_preferences
+                        .into_iter()
+                        .flat_map(|codec| match codec {
+                            WhipVideoDecoder::FfmpegH264 => {
+                                vec![pipeline::VideoDecoder::FFmpegH264]
+                            }
+                            #[cfg(feature = "vk-video")]
+                            WhipVideoDecoder::VulkanH264 => {
+                                vec![pipeline::VideoDecoder::VulkanVideoH264]
+                            }
+                            #[cfg(feature = "vk-video")]
+                            WhipVideoDecoder::VulkanVideo => {
+                                warn!(
+                                    "vulkan_video option is deprecated, use vulkan_h264 instead."
+                                );
+                                vec![pipeline::VideoDecoder::VulkanVideoH264]
+                            }
+                            WhipVideoDecoder::FfmpegVp8 => {
+                                vec![pipeline::VideoDecoder::FFmpegVp8]
+                            }
+                            WhipVideoDecoder::FfmpegVp9 => {
+                                vec![pipeline::VideoDecoder::FFmpegVp9]
+                            }
+                            #[cfg(not(feature = "vk-video"))]
+                            WhipVideoDecoder::Any => {
+                                vec![
+                                    pipeline::VideoDecoder::FFmpegVp9,
+                                    pipeline::VideoDecoder::FFmpegVp8,
+                                    pipeline::VideoDecoder::FFmpegH264,
+                                ]
+                            }
+                            #[cfg(feature = "vk-video")]
+                            WhipVideoDecoder::Any => {
+                                vec![
+                                    pipeline::VideoDecoder::FFmpegVp9,
+                                    pipeline::VideoDecoder::FFmpegVp8,
+                                    pipeline::VideoDecoder::VulkanVideoH264,
+                                ]
+                            }
+                            #[cfg(not(feature = "vk-video"))]
+                            WhipVideoDecoder::VulkanH264 | WhipVideoDecoder::VulkanVideo => vec![],
+                        })
+                        .unique()
+                        .collect();
                 input::whip::WhipOptions {
                     video_decoder_preferences,
                 }

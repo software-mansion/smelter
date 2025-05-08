@@ -53,7 +53,7 @@ pub fn get_video_vp9_codecs() -> Vec<RTCRtpCodecParameters> {
     }]
 }
 
-pub fn get_video_h264_codecs() -> Vec<RTCRtpCodecParameters> {
+pub fn get_video_h264_codecs_for_media_engine() -> Vec<RTCRtpCodecParameters> {
     let codec_configs = [
         (
             "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
@@ -88,6 +88,31 @@ pub fn get_video_h264_codecs() -> Vec<RTCRtpCodecParameters> {
                 rtcp_feedback: get_video_rtcp_feedback(),
             },
             payload_type: *payload_type,
+            ..Default::default()
+        })
+        .collect()
+}
+
+// When setting codec preferences, payload types should be compatible with those in the offer. Simplest way to achieve that is by setting defaults.
+pub fn get_video_h264_codecs_for_codec_preferences() -> Vec<RTCRtpCodecParameters> {
+    let codec_configs = [
+        "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
+        "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f",
+        "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
+        "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f",
+        "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032",
+    ];
+
+    codec_configs
+        .iter()
+        .map(|fmtp| RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_H264.to_owned(),
+                clock_rate: 90000,
+                channels: 0,
+                sdp_fmtp_line: fmtp.to_string(),
+                rtcp_feedback: get_video_rtcp_feedback(),
+            },
             ..Default::default()
         })
         .collect()
