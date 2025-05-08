@@ -35,8 +35,8 @@ pub fn benchmark_pipeline_options(framerate: u64) -> pipeline::Options {
         wgpu_ctx: None,
         force_gpu: false,
         download_root: std::env::temp_dir(),
-        wgpu_features: wgpu::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        wgpu_features:
+            wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
         load_system_fonts: Some(false),
         mixing_sample_rate: 48_000,
         stream_fallback_timeout: Duration::from_millis(500),
