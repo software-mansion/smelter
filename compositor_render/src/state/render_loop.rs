@@ -124,7 +124,9 @@ pub(super) fn read_outputs(
         };
     }
 
-    ctx.wgpu_ctx.device.poll(wgpu::MaintainBase::Wait);
+    if let Err(e) = ctx.wgpu_ctx.device.poll(wgpu::MaintainBase::Wait) {
+        error!("Poll error while reading rendered outputs: {e}");
+    }
 
     let mut result = HashMap::new();
     for partial in partial_textures {

@@ -49,6 +49,9 @@ pub enum CreateWgpuCtxError {
     #[error("Failed to get a wgpu adapter.")]
     NoAdapter,
 
+    #[error("Error when requesting a wgpu adampter.")]
+    AdapterError(#[from] wgpu::RequestAdapterError),
+
     #[error("Failed to get a wgpu device.")]
     NoDevice(#[from] wgpu::RequestDeviceError),
 

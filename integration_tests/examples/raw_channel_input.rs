@@ -42,8 +42,7 @@ fn main() {
     let config = read_config();
     logger::init_logger(config.logger.clone());
     let ctx = GraphicsContext::new(GraphicsContextOptions {
-        features: wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-            | wgpu::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        features: wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
         ..Default::default()
     })
     .unwrap();
