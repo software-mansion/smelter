@@ -83,6 +83,8 @@ pub struct OutputWhipVideoOptions {
     pub send_eos_when: Option<OutputEndCondition>,
     /// Video encoder options.
     pub encoder: Option<VideoEncoderOptions>,
+    /// Codec preferences list.
+    pub encoder_preferences: Option<Vec<WhipVideoEncoderOptions>>,
     /// Root of a component tree/scene that should be rendered for the output.
     pub initial: Video,
 }
@@ -128,6 +130,8 @@ pub struct OutputWhipAudioOptions {
     pub encoder: Option<WhipAudioEncoderOptions>,
     /// Specifies channels configuration.
     pub channels: Option<AudioChannels>,
+    /// Codec preferences list.
+    pub encoder_preferences: Option<Vec<WhipAudioEncoderOptions>>,
     /// Initial audio mixer configuration for output.
     pub initial: Audio,
 }
@@ -163,6 +167,26 @@ pub enum VideoEncoderOptions {
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<String, String>>,
     },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WhipVideoEncoderOptions {
+    #[serde(rename = "ffmpeg_h264")]
+    FfmpegH264 {
+        /// (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+        preset: Option<H264EncoderPreset>,
+
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<String, String>>,
+    },
+    #[serde(rename = "ffmpeg_vp8")]
+    FfmpegVp8 {
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<String, String>>,
+    },
+    #[serde(rename = "any")]
+    Any,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -213,6 +237,7 @@ pub enum WhipAudioEncoderOptions {
         /// (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
         sample_rate: Option<u32>,
     },
+    Any,
 }
 
 /// This type defines when end of an input stream should trigger end of the output stream. Only one of those fields can be set at the time.

@@ -1,21 +1,25 @@
 use axum::http::HeaderValue;
-use compositor_pipeline::pipeline::{
-    self,
-    encoder::{
+use compositor_pipeline::{
+    audio_mixer::AudioChannels,
+    pipeline::{
         self,
-        fdk_aac::AacEncoderOptions,
-        ffmpeg_h264::{self},
-        ffmpeg_vp8,
-        opus::OpusEncoderOptions,
-        AudioEncoderOptions,
-    },
-    output::{
-        self,
-        mp4::Mp4OutputOptions,
-        rtmp::RtmpSenderOptions,
-        whip::{AudioWhipOptions, VideoWhipOptions},
+        encoder::{
+            self,
+            fdk_aac::AacEncoderOptions,
+            ffmpeg_h264::{self},
+            ffmpeg_vp8,
+            opus::OpusEncoderOptions,
+            AudioEncoderOptions,
+        },
+        output::{
+            self,
+            mp4::Mp4OutputOptions,
+            rtmp::RtmpSenderOptions,
+            whip::{AudioWhipOptions, VideoWhipOptions},
+        },
     },
 };
+use itertools::Itertools;
 use tracing::warn;
 
 use super::register_output::*;
@@ -239,8 +243,62 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 initial: options.initial.try_into()?,
                 end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
             };
+            let encoder_preferences = match options.encoder_preferences.as_deref() {
+                Some([]) | None => vec![WhipVideoEncoderOptions::Any],
+                Some(v) => v.to_vec(),
+            };
+
+            let encoder_preferences: Vec<pipeline::encoder::VideoEncoderOptions> =
+                encoder_preferences
+                    .into_iter()
+                    .flat_map(|codec| match codec {
+                        WhipVideoEncoderOptions::FfmpegH264 {
+                            preset,
+                            ffmpeg_options,
+                        } => {
+                            vec![pipeline::encoder::VideoEncoderOptions::H264(
+                                ffmpeg_h264::Options {
+                                    preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
+                                    resolution: options.resolution.clone().into(),
+                                    raw_options: ffmpeg_options
+                                        .unwrap_or_default()
+                                        .into_iter()
+                                        .collect(),
+                                },
+                            )]
+                        }
+                        WhipVideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
+                            vec![pipeline::encoder::VideoEncoderOptions::VP8(
+                                ffmpeg_vp8::Options {
+                                    resolution: options.resolution.clone().into(),
+                                    raw_options: ffmpeg_options
+                                        .unwrap_or_default()
+                                        .into_iter()
+                                        .collect(),
+                                },
+                            )]
+                        }
+                        WhipVideoEncoderOptions::Any => {
+                            vec![
+                                pipeline::encoder::VideoEncoderOptions::VP8(ffmpeg_vp8::Options {
+                                    resolution: options.resolution.clone().into(),
+                                    raw_options: Vec::new(),
+                                }),
+                                pipeline::encoder::VideoEncoderOptions::H264(
+                                    ffmpeg_h264::Options {
+                                        preset: H264EncoderPreset::Fast.into(),
+                                        resolution: options.resolution.clone().into(),
+                                        raw_options: Vec::new(),
+                                    },
+                                ),
+                            ]
+                        }
+                    })
+                    .unique()
+                    .collect();
+
             let video_whip_options = VideoWhipOptions {
-                resolution: options.resolution.into(),
+                encoder_preferences,
             };
             (Some(output_options), Some(video_whip_options))
         } else {
@@ -253,6 +311,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 send_eos_when,
                 encoder,
                 channels,
+                encoder_preferences,
                 initial,
             }) => {
                 let resolved_channels = match encoder {
@@ -267,18 +326,66 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                             .or(channels_deprecated)
                             .unwrap_or(audio::AudioChannels::Stereo)
                     }
-                    None => channels.unwrap_or(audio::AudioChannels::Stereo),
+                    _ => channels.unwrap_or(audio::AudioChannels::Stereo),
                 };
                 let output_audio_options = pipeline::OutputAudioOptions {
                     initial: initial.try_into()?,
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,
                     mixing_strategy: mixing_strategy.unwrap_or(MixingStrategy::SumClip).into(),
-                    channels: resolved_channels.into(),
+                    channels: resolved_channels.clone().into(),
                 };
-                let audio_whip_options = AudioWhipOptions {}; //TODO when adding preferences
+
+                let encoder_preferences = match encoder_preferences.as_deref() {
+                    Some([]) | None => vec![WhipAudioEncoderOptions::Any],
+                    Some(v) => v.to_vec(),
+                };
+
+                let encoder_preferences: Vec<pipeline::encoder::AudioEncoderOptions> =
+                    encoder_preferences
+                        .into_iter()
+                        .flat_map(|codec| match codec {
+                            WhipAudioEncoderOptions::Opus {
+                                preset,
+                                sample_rate,
+                                ..
+                            } => vec![pipeline::encoder::AudioEncoderOptions::Opus(
+                                OpusEncoderOptions {
+                                    channels: resolved_channels.clone().into(),
+                                    preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
+                                    sample_rate: sample_rate.unwrap_or(48000),
+                                },
+                            )],
+                            WhipAudioEncoderOptions::Any => {
+                                vec![pipeline::encoder::AudioEncoderOptions::Opus(
+                                    OpusEncoderOptions {
+                                        channels: resolved_channels.clone().into(),
+                                        preset: OpusEncoderPreset::Voip.into(),
+                                        sample_rate: 48000,
+                                    },
+                                )]
+                            }
+                        })
+                        .unique()
+                        .collect();
+
+                let audio_whip_options = AudioWhipOptions {
+                    encoder_preferences,
+                };
                 (Some(output_audio_options), Some(audio_whip_options))
             }
-            None => (None, None),
+            None => {
+                // even if audio field is unregistered add opus codec in order to make Twitch work
+                let audio_whip_options = AudioWhipOptions {
+                    encoder_preferences: vec![pipeline::encoder::AudioEncoderOptions::Opus(
+                        OpusEncoderOptions {
+                            channels: AudioChannels::Stereo,
+                            preset: OpusEncoderPreset::Voip.into(),
+                            sample_rate: 48000,
+                        },
+                    )],
+                };
+                (None, Some(audio_whip_options))
+            }
         };
 
         let output_options = output::OutputOptions::Whip(output::whip::WhipSenderOptions {
