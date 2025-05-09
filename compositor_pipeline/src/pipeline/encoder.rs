@@ -30,14 +30,14 @@ pub struct EncoderOptions {
     pub audio: Option<AudioEncoderOptions>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum VideoEncoderOptions {
     H264(ffmpeg_h264::Options),
     VP8(ffmpeg_vp8::Options),
     VP9(ffmpeg_vp9::Options),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum AudioEncoderOptions {
     Opus(opus::OpusEncoderOptions),
     Aac(fdk_aac::AacEncoderOptions),
@@ -61,7 +61,7 @@ pub enum AudioEncoderContext {
     Aac(bytes::Bytes),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum AudioEncoderPreset {
     Quality,
     Voip,
