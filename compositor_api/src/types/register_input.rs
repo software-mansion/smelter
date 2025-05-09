@@ -161,7 +161,8 @@ pub struct InputRtpVideoOptions {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct InputWhipVideoOptions {
-    pub decoder: VideoDecoder,
+    pub decoder: Option<VideoDecoder>,
+    pub decoder_preferences: Option<Vec<WhipVideoDecoder>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -188,4 +189,29 @@ pub enum VideoDecoder {
 
     /// Deprected
     VulkanVideo,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum WhipVideoDecoder {
+    /// Use the software h264 decoder based on ffmpeg.
+    FfmpegH264,
+
+    /// Use the software vp8 decoder based on ffmpeg.
+    FfmpegVp8,
+
+    /// Use the software vp9 decoder based on ffmpeg.
+    FfmpegVp9,
+
+    /// Use hardware decoder based on Vulkan Video.
+    ///
+    /// This should be faster and more scalable than teh ffmpeg decoder, if the hardware and OS
+    /// support it.
+    ///
+    /// This requires hardware that supports Vulkan Video. Another requirement is this program has
+    /// to be compiled with the `vk-video` feature enabled (enabled by default on platforms which
+    /// support Vulkan, i.e. non-Apple operating systems and not the web).
+    VulkanH264,
+
+    Any,
 }

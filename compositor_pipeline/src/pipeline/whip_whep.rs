@@ -30,9 +30,10 @@ use whip_handlers::{
 pub mod bearer_token;
 pub mod error;
 mod init_peer_connection;
+pub mod supported_video_codec_parameters;
 mod whip_handlers;
 
-use super::{input::whip::DecodedDataSender, PipelineCtx};
+use super::{input::whip::DecodedDataSender, PipelineCtx, VideoDecoder};
 
 pub async fn run_whip_whep_server(
     pipeline_ctx: Arc<PipelineCtx>,
@@ -87,6 +88,7 @@ pub struct WhipInputConnectionState {
     pub peer_connection: Option<Arc<RTCPeerConnection>>,
     pub start_time_video: Option<Instant>,
     pub start_time_audio: Option<Instant>,
+    pub video_decoder_preferences: Vec<VideoDecoder>,
     pub decoded_data_sender: DecodedDataSender,
 }
 
