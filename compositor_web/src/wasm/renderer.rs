@@ -7,12 +7,17 @@ use compositor_render::{
 use glyphon::fontdb::Source;
 use wasm_bindgen::JsValue;
 
-use super::{input_uploader::InputUploader, output_downloader::OutputDownloader, types};
+use super::{
+    input::RendererInputs,
+    output::RendererOutputs,
+    types::{self, OutputFrameSet, WgpuCtx},
+    InputFrameSet,
+};
 
 pub(super) struct Renderer {
     renderer: compositor_render::Renderer,
-    input_uploader: InputUploader,
-    output_downloader: OutputDownloader,
+    inputs: RendererInputs,
+    outputs: RendererOutputs,
 }
 
 impl Renderer {
@@ -27,26 +32,30 @@ impl Renderer {
             ..options
         })
         .map_err(types::to_js_error)?;
-        let input_uploader = InputUploader::new(upload_frames_with_copy_external);
-        let output_downloader = OutputDownloader::default();
+        let inputs = RendererInputs::new(upload_frames_with_copy_external);
+        let outputs = RendererOutputs::default();
 
         Ok(Self {
             renderer,
-            input_uploader,
-            output_downloader,
+            inputs,
+            outputs,
         })
     }
 
-    pub async fn render(&mut self, input: types::FrameSet) -> Result<types::FrameSet, JsValue> {
-        let (device, queue) = self.renderer.wgpu_ctx();
-        let frame_set = self.input_uploader.upload(&device, &queue, input).await?;
+    pub async fn render(&mut self, inputs: InputFrameSet) -> Result<OutputFrameSet, JsValue> {
+        let ctx = self.wgpu_ctx();
+        let pts = inputs.pts;
+        let frame_set = self.inputs.create_input_frames(&ctx, inputs).await?;
 
         let outputs = self
             .renderer
             .render(frame_set)
             .map_err(types::to_js_error)?;
-        self.output_downloader
-            .download_outputs(&device, &queue, outputs)
+        let output_frames = self.outputs.process_output_frames(&ctx, outputs)?;
+        Ok(OutputFrameSet {
+            pts,
+            frames: output_frames,
+        })
     }
 
     pub fn update_scene(
@@ -86,13 +95,13 @@ impl Renderer {
     pub fn unregister_input(&mut self, input_id: String) {
         let input_id = InputId(input_id.into());
         self.renderer.unregister_input(&input_id);
-        self.input_uploader.remove_input(&input_id);
+        self.inputs.remove_input(&input_id);
     }
 
     pub fn unregister_output(&mut self, output_id: String) {
         let output_id = OutputId(output_id.into());
         self.renderer.unregister_output(&output_id);
-        self.output_downloader.remove_output(&output_id);
+        self.outputs.remove_output(&output_id);
     }
 
     pub fn unregister_renderer(
@@ -103,5 +112,13 @@ impl Renderer {
         self.renderer
             .unregister_renderer(&RendererId(renderer_id.into()), registry)
             .map_err(types::to_js_error)
+    }
+
+    fn wgpu_ctx(&self) -> WgpuCtx {
+        let (device, queue) = self.renderer.wgpu_ctx();
+        WgpuCtx {
+            device: device.as_ref().clone(),
+            queue: queue.as_ref().clone(),
+        }
     }
 }
