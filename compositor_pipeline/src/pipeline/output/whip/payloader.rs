@@ -219,6 +219,7 @@ impl VideoPayloader {
                 context: RtpStreamContext::new(),
                 payload_type: codec.payload_type,
             },
+            VideoEncoderOptions::VP9(_) => todo!(),
         }
     }
 

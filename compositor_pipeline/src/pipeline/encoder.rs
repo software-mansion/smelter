@@ -4,6 +4,7 @@ use compositor_render::{Frame, OutputId, Resolution};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use fdk_aac::AacEncoder;
 use ffmpeg_vp8::LibvpxVP8Encoder;
+use ffmpeg_vp9::LibvpxVP9Encoder;
 use log::error;
 use resampler::OutputResampler;
 
@@ -20,6 +21,7 @@ use super::{types::EncoderOutputEvent, PipelineCtx};
 pub mod fdk_aac;
 pub mod ffmpeg_h264;
 pub mod ffmpeg_vp8;
+pub mod ffmpeg_vp9;
 pub mod opus;
 mod resampler;
 
@@ -32,6 +34,7 @@ pub struct EncoderOptions {
 pub enum VideoEncoderOptions {
     H264(ffmpeg_h264::Options),
     VP8(ffmpeg_vp8::Options),
+    VP9(ffmpeg_vp9::Options),
 }
 
 #[derive(Debug, Clone)]
@@ -49,6 +52,7 @@ pub struct EncoderContext {
 pub enum VideoEncoderContext {
     H264(Option<bytes::Bytes>),
     VP8,
+    VP9,
 }
 
 #[derive(Debug, Clone)]
@@ -72,6 +76,7 @@ pub struct Encoder {
 pub enum VideoEncoder {
     H264(LibavH264Encoder),
     VP8(LibvpxVP8Encoder),
+    VP9(LibvpxVP9Encoder),
 }
 
 pub enum AudioEncoder {
@@ -120,6 +125,7 @@ impl Encoder {
         match &self.video {
             Some(VideoEncoder::H264(encoder)) => Some(encoder.frame_sender()),
             Some(VideoEncoder::VP8(encoder)) => Some(encoder.frame_sender()),
+            Some(VideoEncoder::VP9(encoder)) => Some(encoder.frame_sender()),
             None => {
                 error!("Non video encoder received frame to send.");
                 None
@@ -131,6 +137,7 @@ impl Encoder {
         match self.video.as_ref() {
             Some(VideoEncoder::H264(encoder)) => Some(encoder.keyframe_request_sender().clone()),
             Some(VideoEncoder::VP8(encoder)) => Some(encoder.keyframe_request_sender().clone()),
+            Some(VideoEncoder::VP9(encoder)) => Some(encoder.keyframe_request_sender().clone()),
             None => {
                 error!("Non video encoder received keyframe request.");
                 None
@@ -153,6 +160,7 @@ impl Encoder {
             video: match &self.video {
                 Some(VideoEncoder::H264(e)) => Some(VideoEncoderContext::H264(e.context())),
                 Some(VideoEncoder::VP8(_)) => Some(VideoEncoderContext::VP8),
+                Some(VideoEncoder::VP9(_)) => Some(VideoEncoderContext::VP9),
                 None => None,
             },
             audio: match &self.audio {
@@ -169,6 +177,7 @@ impl VideoEncoderOptions {
         match self {
             VideoEncoderOptions::H264(opt) => opt.resolution,
             VideoEncoderOptions::VP8(opt) => opt.resolution,
+            VideoEncoderOptions::VP9(opt) => opt.resolution,
         }
     }
 }
@@ -193,6 +202,12 @@ impl VideoEncoder {
                 ctx.output_framerate,
                 sender,
             )?)),
+            VideoEncoderOptions::VP9(options) => Ok(Self::VP9(LibvpxVP9Encoder::new(
+                output_id,
+                options,
+                ctx.output_framerate,
+                sender,
+            )?)),
         }
     }
 
@@ -200,6 +215,7 @@ impl VideoEncoder {
         match self {
             Self::H264(encoder) => encoder.resolution(),
             Self::VP8(encoder) => encoder.resolution(),
+            Self::VP9(encoder) => encoder.resolution(),
         }
     }
 
@@ -207,6 +223,7 @@ impl VideoEncoder {
         match self {
             Self::H264(encoder) => encoder.keyframe_request_sender(),
             Self::VP8(encoder) => encoder.keyframe_request_sender(),
+            Self::VP9(encoder) => encoder.keyframe_request_sender(),
         }
     }
 }

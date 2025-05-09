@@ -4,7 +4,7 @@ use tracing::error;
 use webrtc_util::Marshal;
 
 use rand::Rng;
-use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader};
+use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader, vp9::Vp9Payloader};
 
 use crate::pipeline::{
     encoder::{AudioEncoderOptions, VideoEncoderOptions},
@@ -15,6 +15,7 @@ use crate::pipeline::{
 
 const H264_CLOCK_RATE: u32 = 90000;
 const VP8_CLOCK_RATE: u32 = 90000;
+const VP9_CLOCK_RATE: u32 = 90000;
 const OPUS_CLOCK_RATE: u32 = 48000;
 
 struct RtpStreamContext {
@@ -90,6 +91,10 @@ enum VideoPayloader {
     },
     VP8 {
         payloader: Vp8Payloader,
+        context: RtpStreamContext,
+    },
+    VP9 {
+        payloader: Vp9Payloader,
         context: RtpStreamContext,
     },
 }
@@ -196,6 +201,10 @@ impl VideoPayloader {
                 payloader: Vp8Payloader::default(),
                 context: RtpStreamContext::new(),
             },
+            VideoEncoderOptions::VP9(_) => Self::VP9 {
+                payloader: Vp9Payloader::default(),
+                context: RtpStreamContext::new(),
+            },
         }
     }
 
@@ -203,6 +212,7 @@ impl VideoPayloader {
         match self {
             VideoPayloader::H264 { .. } => VideoCodec::H264,
             VideoPayloader::VP8 { .. } => VideoCodec::VP8,
+            VideoPayloader::VP9 { .. } => VideoCodec::VP9,
         }
     }
 
@@ -234,6 +244,17 @@ impl VideoPayloader {
                 VIDEO_PAYLOAD_TYPE,
                 VP8_CLOCK_RATE,
             ),
+            VideoPayloader::VP9 {
+                ref mut payloader,
+                ref mut context,
+            } => payload(
+                payloader,
+                context,
+                chunk,
+                mtu,
+                VIDEO_PAYLOAD_TYPE,
+                VP9_CLOCK_RATE,
+            ),
         }
     }
 
@@ -241,6 +262,7 @@ impl VideoPayloader {
         match self {
             VideoPayloader::H264 { context, .. } => context,
             VideoPayloader::VP8 { context, .. } => context,
+            VideoPayloader::VP9 { context, .. } => context,
         }
     }
 }
