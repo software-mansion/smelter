@@ -5,7 +5,7 @@ use webrtc::rtp_transceiver::PayloadType;
 use webrtc_util::Marshal;
 
 use rand::Rng;
-use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader};
+use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader, vp9::Vp9Payloader};
 
 use crate::pipeline::{
     encoder::{AudioEncoderOptions, VideoEncoderOptions},
@@ -15,6 +15,7 @@ use crate::pipeline::{
 
 const H264_CLOCK_RATE: u32 = 90000;
 const VP8_CLOCK_RATE: u32 = 90000;
+const VP9_CLOCK_RATE: u32 = 90000;
 const OPUS_CLOCK_RATE: u32 = 48000;
 
 struct RtpStreamContext {
@@ -94,6 +95,11 @@ enum VideoPayloader {
     },
     VP8 {
         payloader: Vp8Payloader,
+        context: RtpStreamContext,
+        payload_type: PayloadType,
+    },
+    VP9 {
+        payloader: Vp9Payloader,
         context: RtpStreamContext,
         payload_type: PayloadType,
     },
@@ -219,7 +225,11 @@ impl VideoPayloader {
                 context: RtpStreamContext::new(),
                 payload_type: codec.payload_type,
             },
-            VideoEncoderOptions::VP9(_) => todo!(),
+            VideoEncoderOptions::VP9(_) => Self::VP9 {
+                payloader: Vp9Payloader::default(),
+                context: RtpStreamContext::new(),
+                payload_type: codec.payload_type,
+            },
         }
     }
 
@@ -227,6 +237,7 @@ impl VideoPayloader {
         match self {
             VideoPayloader::H264 { .. } => VideoCodec::H264,
             VideoPayloader::VP8 { .. } => VideoCodec::VP8,
+            VideoPayloader::VP9 { .. } => VideoCodec::VP9,
         }
     }
 
@@ -251,6 +262,11 @@ impl VideoPayloader {
                 context,
                 payload_type,
             } => (payloader, context, *payload_type, VP8_CLOCK_RATE),
+            VideoPayloader::VP9 {
+                payloader,
+                context,
+                payload_type,
+            } => (payloader, context, *payload_type, VP9_CLOCK_RATE),
         };
 
         let payloads = payloader.payload(mtu, &chunk.data)?;
@@ -284,6 +300,7 @@ impl VideoPayloader {
         match self {
             VideoPayloader::H264 { context, .. } => context,
             VideoPayloader::VP8 { context, .. } => context,
+            VideoPayloader::VP9 { context, .. } => context,
         }
     }
 }
