@@ -7,7 +7,7 @@ use compositor_pipeline::{
             self,
             fdk_aac::AacEncoderOptions,
             ffmpeg_h264::{self},
-            ffmpeg_vp8,
+            ffmpeg_vp8, ffmpeg_vp9,
             opus::OpusEncoderOptions,
             AudioEncoderOptions,
         },
@@ -278,8 +278,23 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                                 },
                             )]
                         }
+                        WhipVideoEncoderOptions::FfmpegVp9 { ffmpeg_options } => {
+                            vec![pipeline::encoder::VideoEncoderOptions::VP9(
+                                ffmpeg_vp9::Options {
+                                    resolution: options.resolution.clone().into(),
+                                    raw_options: ffmpeg_options
+                                        .unwrap_or_default()
+                                        .into_iter()
+                                        .collect(),
+                                },
+                            )]
+                        }
                         WhipVideoEncoderOptions::Any => {
                             vec![
+                                pipeline::encoder::VideoEncoderOptions::VP9(ffmpeg_vp9::Options {
+                                    resolution: options.resolution.clone().into(),
+                                    raw_options: Vec::new(),
+                                }),
                                 pipeline::encoder::VideoEncoderOptions::VP8(ffmpeg_vp8::Options {
                                     resolution: options.resolution.clone().into(),
                                     raw_options: Vec::new(),

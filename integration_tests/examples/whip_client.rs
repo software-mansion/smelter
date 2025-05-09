@@ -44,6 +44,9 @@ fn client_code() -> Result<()> {
                 },
                 "encoder_preferences": [
                     {
+                        "type": "ffmpeg_vp9",
+                    },
+                    {
                         "type": "ffmpeg_h264",
                         "preset": "fast",
                     },
