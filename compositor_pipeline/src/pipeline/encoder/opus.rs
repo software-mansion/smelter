@@ -14,7 +14,7 @@ use crate::{
 
 use super::{resampler::OutputResampler, AudioEncoderPreset};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct OpusEncoderOptions {
     pub channels: AudioChannels,
     pub preset: AudioEncoderPreset,

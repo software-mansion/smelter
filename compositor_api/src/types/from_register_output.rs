@@ -19,6 +19,7 @@ use compositor_pipeline::{
         },
     },
 };
+use itertools::Itertools;
 use tracing::warn;
 
 use super::register_output::*;
@@ -242,54 +243,59 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 initial: options.initial.try_into()?,
                 end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
             };
+            let encoder_preferences = match options.encoder_preferences.as_deref() {
+                Some([]) | None => vec![WhipVideoEncoderOptions::Any],
+                Some(v) => v.to_vec(),
+            };
 
-            let encoder_preferences: Vec<pipeline::encoder::VideoEncoderOptions> = options
-                .encoder_preferences
-                .filter(|v| !v.is_empty())
-                .unwrap_or_else(|| vec![WhipVideoEncoderOptions::Any])
-                .into_iter()
-                .flat_map(|codec| match codec {
-                    WhipVideoEncoderOptions::FfmpegH264 {
-                        preset,
-                        ffmpeg_options,
-                    } => {
-                        vec![pipeline::encoder::VideoEncoderOptions::H264(
-                            ffmpeg_h264::Options {
-                                preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
-                                resolution: options.resolution.clone().into(),
-                                raw_options: ffmpeg_options
-                                    .unwrap_or_default()
-                                    .into_iter()
-                                    .collect(),
-                            },
-                        )]
-                    }
-                    WhipVideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
-                        vec![pipeline::encoder::VideoEncoderOptions::VP8(
-                            ffmpeg_vp8::Options {
-                                resolution: options.resolution.clone().into(),
-                                raw_options: ffmpeg_options
-                                    .unwrap_or_default()
-                                    .into_iter()
-                                    .collect(),
-                            },
-                        )]
-                    }
-                    WhipVideoEncoderOptions::Any => {
-                        vec![
-                            pipeline::encoder::VideoEncoderOptions::VP8(ffmpeg_vp8::Options {
-                                resolution: options.resolution.clone().into(),
-                                raw_options: Vec::new(),
-                            }),
-                            pipeline::encoder::VideoEncoderOptions::H264(ffmpeg_h264::Options {
-                                preset: H264EncoderPreset::Fast.into(),
-                                resolution: options.resolution.clone().into(),
-                                raw_options: Vec::new(),
-                            }),
-                        ]
-                    }
-                })
-                .collect();
+            let encoder_preferences: Vec<pipeline::encoder::VideoEncoderOptions> =
+                encoder_preferences
+                    .into_iter()
+                    .flat_map(|codec| match codec {
+                        WhipVideoEncoderOptions::FfmpegH264 {
+                            preset,
+                            ffmpeg_options,
+                        } => {
+                            vec![pipeline::encoder::VideoEncoderOptions::H264(
+                                ffmpeg_h264::Options {
+                                    preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
+                                    resolution: options.resolution.clone().into(),
+                                    raw_options: ffmpeg_options
+                                        .unwrap_or_default()
+                                        .into_iter()
+                                        .collect(),
+                                },
+                            )]
+                        }
+                        WhipVideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
+                            vec![pipeline::encoder::VideoEncoderOptions::VP8(
+                                ffmpeg_vp8::Options {
+                                    resolution: options.resolution.clone().into(),
+                                    raw_options: ffmpeg_options
+                                        .unwrap_or_default()
+                                        .into_iter()
+                                        .collect(),
+                                },
+                            )]
+                        }
+                        WhipVideoEncoderOptions::Any => {
+                            vec![
+                                pipeline::encoder::VideoEncoderOptions::VP8(ffmpeg_vp8::Options {
+                                    resolution: options.resolution.clone().into(),
+                                    raw_options: Vec::new(),
+                                }),
+                                pipeline::encoder::VideoEncoderOptions::H264(
+                                    ffmpeg_h264::Options {
+                                        preset: H264EncoderPreset::Fast.into(),
+                                        resolution: options.resolution.clone().into(),
+                                        raw_options: Vec::new(),
+                                    },
+                                ),
+                            ]
+                        }
+                    })
+                    .unique()
+                    .collect();
 
             let video_whip_options = VideoWhipOptions {
                 encoder_preferences,
@@ -329,10 +335,13 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                     channels: resolved_channels.clone().into(),
                 };
 
+                let encoder_preferences = match encoder_preferences.as_deref() {
+                    Some([]) | None => vec![WhipAudioEncoderOptions::Any],
+                    Some(v) => v.to_vec(),
+                };
+
                 let encoder_preferences: Vec<pipeline::encoder::AudioEncoderOptions> =
                     encoder_preferences
-                        .filter(|a| !a.is_empty())
-                        .unwrap_or_else(|| vec![WhipAudioEncoderOptions::Any])
                         .into_iter()
                         .flat_map(|codec| match codec {
                             WhipAudioEncoderOptions::Opus {
@@ -356,6 +365,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                                 )]
                             }
                         })
+                        .unique()
                         .collect();
 
                 let audio_whip_options = AudioWhipOptions {
