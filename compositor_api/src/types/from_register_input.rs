@@ -206,13 +206,6 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                             WhipVideoDecoder::VulkanH264 => {
                                 vec![pipeline::VideoDecoder::VulkanVideoH264]
                             }
-                            #[cfg(feature = "vk-video")]
-                            WhipVideoDecoder::VulkanVideo => {
-                                warn!(
-                                    "vulkan_video option is deprecated, use vulkan_h264 instead."
-                                );
-                                vec![pipeline::VideoDecoder::VulkanVideoH264]
-                            }
                             WhipVideoDecoder::FfmpegVp8 => {
                                 vec![pipeline::VideoDecoder::FFmpegVp8]
                             }
@@ -236,7 +229,7 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                                 ]
                             }
                             #[cfg(not(feature = "vk-video"))]
-                            WhipVideoDecoder::VulkanH264 | WhipVideoDecoder::VulkanVideo => vec![],
+                            WhipVideoDecoder::VulkanH264 => vec![],
                         })
                         .unique()
                         .collect();

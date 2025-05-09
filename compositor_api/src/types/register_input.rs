@@ -213,8 +213,5 @@ pub enum WhipVideoDecoder {
     /// support Vulkan, i.e. non-Apple operating systems and not the web).
     VulkanH264,
 
-    /// Deprected
-    VulkanVideo,
-
     Any,
 }
