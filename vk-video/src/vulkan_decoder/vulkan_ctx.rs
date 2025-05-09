@@ -310,8 +310,8 @@ impl VulkanInstance {
                     memory_hints: wgpu::MemoryHints::default(),
                     required_limits: wgpu_limits,
                     required_features: wgpu_features,
+                    trace: wgpu::Trace::Off,
                 },
-                None,
             )?
         };
 

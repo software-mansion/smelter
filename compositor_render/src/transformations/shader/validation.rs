@@ -140,8 +140,8 @@ fn validate_type_equivalent(
         | naga::TypeInner::Atomic { .. }
         | naga::TypeInner::Image { .. }
         | naga::TypeInner::Sampler { .. }
-        | naga::TypeInner::AccelerationStructure
-        | naga::TypeInner::RayQuery
+        | naga::TypeInner::AccelerationStructure { .. }
+        | naga::TypeInner::RayQuery { .. }
         | naga::TypeInner::ValuePointer { .. } => {
             if expected_inner != provided_inner {
                 return Err(TypeEquivalenceError::TypeStructureMismatch {
@@ -349,8 +349,8 @@ pub(super) fn validate_params(
         | naga::TypeInner::Atomic { .. }
         | naga::TypeInner::Image { .. }
         | naga::TypeInner::Sampler { .. }
-        | naga::TypeInner::AccelerationStructure
-        | naga::TypeInner::RayQuery
+        | naga::TypeInner::AccelerationStructure { .. }
+        | naga::TypeInner::RayQuery { .. }
         | naga::TypeInner::BindingArray { .. } => Err(ParametersValidationError::ForbiddenType(
             ty.inner.type_name(),
         )),
@@ -586,8 +586,8 @@ impl TypeInnerExt for naga::TypeInner {
             naga::TypeInner::Struct { .. } => "struct",
             naga::TypeInner::Image { .. } => "texture",
             naga::TypeInner::Sampler { .. } => "sampler",
-            naga::TypeInner::AccelerationStructure => "acceleration structure",
-            naga::TypeInner::RayQuery => "ray query",
+            naga::TypeInner::AccelerationStructure { .. } => "acceleration structure",
+            naga::TypeInner::RayQuery { .. } => "ray query",
             naga::TypeInner::BindingArray { .. } => "binding array",
         }
     }
@@ -632,8 +632,8 @@ impl TypeInnerExt for naga::TypeInner {
                 format!("{texture_kind}<{scalar}>")
             }
             naga::TypeInner::Sampler { .. } => "sampler".to_string(),
-            naga::TypeInner::AccelerationStructure => "acceleration structure".to_string(),
-            naga::TypeInner::RayQuery => "ray query".to_string(),
+            naga::TypeInner::AccelerationStructure { .. } => "acceleration structure".to_string(),
+            naga::TypeInner::RayQuery { .. } => "ray query".to_string(),
             naga::TypeInner::BindingArray { base, size } => {
                 let size: Option<u32> = match size {
                     ArraySize::Constant(size) => Some(size.get()),
