@@ -45,12 +45,15 @@ impl<T> FrameSorter<T> {
                 let frame = self.frames.pop().unwrap();
 
                 result.push(Frame {
-                    frame: frame.frame,
+                    data: frame.frame,
                     pts: frame.pts,
                 });
             }
 
-            self.frames.push(frame);
+            result.push(Frame {
+                data: frame.frame,
+                pts: frame.pts,
+            });
         } else {
             self.frames.push(frame);
 
@@ -58,10 +61,24 @@ impl<T> FrameSorter<T> {
                 let frame = self.frames.pop().unwrap();
 
                 result.push(Frame {
-                    frame: frame.frame,
+                    data: frame.frame,
                     pts: frame.pts,
                 });
             }
+        }
+
+        result
+    }
+
+    pub(crate) fn flush(&mut self) -> Vec<Frame<T>> {
+        let mut result = Vec::with_capacity(self.frames.len());
+
+        while !self.frames.is_empty() {
+            let frame = self.frames.pop().unwrap();
+            result.push(Frame {
+                data: frame.frame,
+                pts: frame.pts,
+            });
         }
 
         result

@@ -40,8 +40,8 @@ pub fn run() {
 
     let vulkan_instance = VulkanInstance::new().unwrap();
 
-    let mut surface = vulkan_instance
-        .wgpu_instance
+    let surface = vulkan_instance
+        .wgpu_instance()
         .create_surface(&window)
         .unwrap();
 
@@ -49,7 +49,7 @@ pub fn run() {
         .create_device(
             wgpu::Features::empty(),
             wgpu::Limits::default(),
-            &mut Some(&mut surface),
+            Some(&surface),
         )
         .unwrap();
 
