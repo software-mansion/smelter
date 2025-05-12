@@ -144,34 +144,7 @@ impl TryFrom<Mp4Output> for pipeline::RegisterOutputOptions<output::OutputOption
             ));
         }
 
-        let (video_encoder_options, output_video_options) = match video {
-            Some(options) => match options.encoder {
-                VideoEncoderOptions::FfmpegH264 {
-                    preset,
-                    ffmpeg_options,
-                } => (
-                    Some(pipeline::encoder::VideoEncoderOptions::H264(
-                        ffmpeg_h264::Options {
-                            preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
-                            resolution: options.resolution.into(),
-                            raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
-                        },
-                    )),
-                    Some(pipeline::OutputVideoOptions {
-                        initial: options.initial.try_into()?,
-                        end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
-                    }),
-                ),
-                VideoEncoderOptions::FfmpegVp8 { .. } => {
-                    return Err(TypeError::new("MP4 VP8 output not supported"));
-                }
-                VideoEncoderOptions::FfmpegVp9 { .. } => {
-                    return Err(TypeError::new("MP4 VP9 output not supported"));
-                }
-            },
-            None => (None, None),
-        };
-
+        let (video_encoder_options, output_video_options) = maybe_video_options_h264_only(video)?;
         let (audio_encoder_options, output_audio_options) = match audio {
             Some(OutputMp4AudioOptions {
                 mixing_strategy,
@@ -457,7 +430,7 @@ impl TryFrom<RtmpClient> for pipeline::RegisterOutputOptions<output::OutputOptio
             ));
         }
 
-        let (video_encoder_options, output_video_options) = maybe_video_options(video)?;
+        let (video_encoder_options, output_video_options) = maybe_video_options_h264_only(video)?;
         let (audio_encoder_options, output_audio_options) = match audio {
             Some(OutputRtmpClientAudioOptions {
                 mixing_strategy,
@@ -545,6 +518,48 @@ fn maybe_video_options(
                 resolution: options.resolution.into(),
                 raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
             })
+        }
+    };
+
+    let output_options = pipeline::OutputVideoOptions {
+        initial: options.initial.try_into()?,
+        end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
+    };
+
+    Ok((Some(encoder_options), Some(output_options)))
+}
+
+fn maybe_video_options_h264_only(
+    options: Option<OutputVideoOptions>,
+) -> Result<
+    (
+        Option<pipeline::encoder::VideoEncoderOptions>,
+        Option<pipeline::OutputVideoOptions>,
+    ),
+    TypeError,
+> {
+    let Some(options) = options else {
+        return Ok((None, None));
+    };
+
+    let encoder_options = match options.encoder {
+        VideoEncoderOptions::FfmpegH264 {
+            preset,
+            ffmpeg_options,
+        } => pipeline::encoder::VideoEncoderOptions::H264(ffmpeg_h264::Options {
+            preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
+            resolution: options.resolution.into(),
+            raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+        }),
+        VideoEncoderOptions::FfmpegVp8 { .. } => {
+            return Err(TypeError::new(
+                "VP8 output not supported for given protocol",
+            ));
+        }
+        VideoEncoderOptions::FfmpegVp9 { .. } => {
+            return Err(TypeError::new(
+                "VP9 output not supported for given protocol",
+            ));
         }
     };
 
