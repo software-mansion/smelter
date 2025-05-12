@@ -513,6 +513,12 @@ fn maybe_video_options(
                 raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
             })
         }
+        VideoEncoderOptions::FfmpegVp9 { ffmpeg_options } => {
+            pipeline::encoder::VideoEncoderOptions::VP9(ffmpeg_vp9::Options {
+                resolution: options.resolution.into(),
+                raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+            })
+        }
     };
 
     let output_options = pipeline::OutputVideoOptions {

@@ -115,16 +115,31 @@ fn run_encoder_thread(
     encoder.set_height(options.resolution.height as u32);
     encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
 
+    // configuration based on https://developers.google.com/media/vp9/live-encoding
     let defaults = [
         // Quality/Speed ratio modifier
-        ("cpu-used", "0"),
+        ("speed", "5"),
         // Time to spend encoding.
-        ("deadline", "realtime"),
-        // Near-lossless if bitrate allows
-        ("crf", "4"),
-        // Enable use of alternate reference frames (2-pass only)
-        ("auto-alt-ref", "1"),
-        // Zero-latency. Disables frame reordering.
+        ("quality", "realtime"),
+        // Tiling splits the video into rectangular regions, which allows multi-threading for encoding and decoding.
+        ("title-columns", "2"),
+        // Enable parallel decodability features.
+        ("frame-parallel", "1"),
+        // Maximum number of threads to use.
+        ("threads", "8"),
+        // Minimum value for the quantizer.
+        ("qmin", "4"),
+        // Mazimum value for the quantizer.
+        ("qmax", "48"),
+        // Enable row-multithreading. Allows use of up to 2x thread as tile columns. 0 = off, 1 = on.
+        ("row-mt", "1"),
+        // Enable error resiliency features.
+        ("error-resilient", "1"),
+        // Maximum i-Frame bitrate (pct)
+        ("max-intra-rate", "300"),
+        // Motion detection threshold.
+        ("static-thresh", "0"),
+        // Maximum number of frames to lag
         ("lag-in-frames", "0"),
     ];
 

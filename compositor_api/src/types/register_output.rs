@@ -167,6 +167,11 @@ pub enum VideoEncoderOptions {
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<String, String>>,
     },
+    #[serde(rename = "ffmpeg_vp9")]
+    FfmpegVp9 {
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<String, String>>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]

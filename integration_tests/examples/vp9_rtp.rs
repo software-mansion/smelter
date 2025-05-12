@@ -6,7 +6,7 @@ use std::{thread::sleep, time::Duration};
 use integration_tests::{
     examples::{self, run_example},
     ffmpeg::start_ffmpeg_send,
-    gstreamer::start_gst_receive_tcp_h264,
+    gstreamer::start_gst_receive_tcp_vp9,
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -46,8 +46,7 @@ fn client_code() -> Result<()> {
                     "height": VIDEO_RESOLUTION.height,
                 },
                 "encoder": {
-                    "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
+                    "type": "ffmpeg_vp9"
                 },
                 "initial": {
                     "root": {
@@ -72,7 +71,7 @@ fn client_code() -> Result<()> {
     )?;
 
     std::thread::sleep(Duration::from_millis(500));
-    start_gst_receive_tcp_h264(IP, OUTPUT_PORT, false)?;
+    start_gst_receive_tcp_vp9(IP, OUTPUT_PORT, false)?;
     examples::post("start", &json!({}))?;
 
     start_ffmpeg_send(
