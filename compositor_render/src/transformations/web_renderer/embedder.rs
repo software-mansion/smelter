@@ -71,7 +71,7 @@ impl EmbeddingHelper {
             pending_downloads.push(self.copy_buffer_to_shmem(source_idx, size, buffer.clone()));
         }
 
-        self.wgpu_ctx.device.poll(wgpu::Maintain::Wait);
+        self.wgpu_ctx.device.poll(wgpu::PollType::Wait)?;
 
         for pending in pending_downloads {
             pending()?;
@@ -171,4 +171,7 @@ pub enum EmbedError {
 
     #[error(transparent)]
     ChromiumSenderError(#[from] ChromiumSenderError),
+
+    #[error("Failed to poll the GPU")]
+    PollError(#[from] wgpu::PollError),
 }
