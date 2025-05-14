@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 
 use crate::state::{ApiState, Response};
 
-use compositor_api::error::ApiError;
+use compositor_api::ApiError;
 
 use self::{
     update_output::handle_keyframe_request, update_output::handle_output_update,
@@ -25,10 +25,9 @@ mod unregister_request;
 mod update_output;
 mod ws;
 
-#[allow(unused_imports)]
 pub use register_request::{RegisterInput, RegisterOutput};
-#[allow(unused_imports)]
 pub use unregister_request::{UnregisterInput, UnregisterOutput};
+pub use update_output::UpdateOutputRequest;
 
 pub fn routes(state: ApiState) -> Router {
     let inputs = Router::new()

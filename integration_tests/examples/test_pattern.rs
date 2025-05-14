@@ -1,5 +1,5 @@
 use anyhow::Result;
-use compositor_api::types::Resolution;
+use compositor_api::Resolution;
 use serde::Deserialize;
 use serde_json::json;
 
