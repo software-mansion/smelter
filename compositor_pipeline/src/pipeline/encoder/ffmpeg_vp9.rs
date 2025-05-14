@@ -25,13 +25,13 @@ pub struct Options {
     pub raw_options: Vec<(String, String)>,
 }
 
-pub struct LibavVP8Encoder {
+pub struct LibavVP9Encoder {
     resolution: Resolution,
     frame_sender: Sender<PipelineEvent<Frame>>,
     keyframe_req_sender: Sender<()>,
 }
 
-impl LibavVP8Encoder {
+impl LibavVP9Encoder {
     pub fn new(
         output_id: &OutputId,
         options: Options,
@@ -50,7 +50,7 @@ impl LibavVP8Encoder {
             .spawn(move || {
                 let _span = span!(
                     Level::INFO,
-                    "vp8 ffmpeg encoder",
+                    "vp9 ffmpeg encoder",
                     output_id = output_id.to_string()
                 )
                 .entered();
@@ -103,7 +103,7 @@ fn run_encoder_thread(
     packet_sender: Sender<EncoderOutputEvent>,
     result_sender: &Sender<Result<(), EncoderInitError>>,
 ) -> Result<(), EncoderInitError> {
-    let codec = ffmpeg_next::codec::encoder::find(Id::VP8).ok_or(EncoderInitError::NoCodec)?;
+    let codec = ffmpeg_next::codec::encoder::find(Id::VP9).ok_or(EncoderInitError::NoCodec)?;
 
     let mut encoder = Context::new().encoder().video()?;
 
@@ -115,18 +115,27 @@ fn run_encoder_thread(
     encoder.set_height(options.resolution.height as u32);
     encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
 
+    // configuration based on https://developers.google.com/media/vp9/live-encoding
     let defaults = [
         // Quality/Speed ratio modifier
-        ("cpu-used", "0"),
+        ("speed", "5"),
         // Time to spend encoding.
-        ("deadline", "realtime"),
-        // Near-lossless if bitrate allows
-        ("crf", "4"),
-        // Bitrate target
-        ("b:v", "2M"),
-        // Enable use of alternate reference frames (2-pass only)
-        ("auto-alt-ref", "1"),
-        // Zero-latency. Disables frame reordering.
+        ("quality", "realtime"),
+        // Tiling splits the video into rectangular regions, which allows multi-threading for encoding and decoding.
+        ("title-columns", "2"),
+        // Enable parallel decodability features.
+        ("frame-parallel", "1"),
+        // Auto number of threads to use.
+        ("threads", "0"),
+        // Minimum value for the quantizer.
+        ("qmin", "4"),
+        // Mazimum value for the quantizer.
+        ("qmax", "48"),
+        // Enable row-multithreading. Allows use of up to 2x thread as tile columns. 0 = off, 1 = on.
+        ("row-mt", "1"),
+        // Enable error resiliency features.
+        ("error-resilient", "1"),
+        // Maximum number of frames to lag
         ("lag-in-frames", "0"),
     ];
 
@@ -169,7 +178,7 @@ fn run_encoder_thread(
 
         while let Some(chunk) = receive_chunk(&mut encoder, &mut packet) {
             if packet_sender.send(EncoderOutputEvent::Data(chunk)).is_err() {
-                warn!("Failed to send encoded video from VP8 encoder. Channel closed.");
+                warn!("Failed to send encoded video from VP9 encoder. Channel closed.");
                 return Ok(());
             }
         }
@@ -181,13 +190,13 @@ fn run_encoder_thread(
     }
     while let Some(chunk) = receive_chunk(&mut encoder, &mut packet) {
         if packet_sender.send(EncoderOutputEvent::Data(chunk)).is_err() {
-            warn!("Failed to send encoded video from VP8 encoder. Channel closed.");
+            warn!("Failed to send encoded video from VP9 encoder. Channel closed.");
             return Ok(());
         }
     }
 
     if let Err(_err) = packet_sender.send(EncoderOutputEvent::VideoEOS) {
-        warn!("Failed to send EOS from VP8 encoder. Channel closed.")
+        warn!("Failed to send EOS from VP9 encoder. Channel closed.")
     }
     Ok(())
 }
@@ -197,11 +206,11 @@ fn receive_chunk(encoder: &mut Video, packet: &mut Packet) -> Option<EncodedChun
         Ok(_) => {
             match encoded_chunk_from_av_packet(
                 packet,
-                EncodedChunkKind::Video(VideoCodec::VP8),
+                EncodedChunkKind::Video(VideoCodec::VP9),
                 1_000_000,
             ) {
                 Ok(chunk) => {
-                    trace!(pts=?packet.pts(), "VP8 encoder produced an encoded packet.");
+                    trace!(pts=?packet.pts(), "VP9 encoder produced an encoded packet.");
                     Some(chunk)
                 }
                 Err(e) => {

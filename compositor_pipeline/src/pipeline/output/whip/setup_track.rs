@@ -16,6 +16,7 @@ impl MatchCodecCapability for VideoEncoderOptions {
         match self {
             VideoEncoderOptions::H264(_) => capability.mime_type == "video/H264",
             VideoEncoderOptions::VP8(_) => capability.mime_type == "video/VP8",
+            VideoEncoderOptions::VP9(_) => capability.mime_type == "video/VP9",
         }
     }
 }
