@@ -54,11 +54,21 @@
 //!
 //! It should work on Windows with recent drivers out of the box. Be sure to submit an issue if it doesn't.
 //!
-//! # vk-video is created by Software Mansion
+//! # Smelter toolkit
 //!
-//! [![swm](https://logo.swmansion.com/logo?color=white&variant=desktop&width=150&tag=smelter-vk-video 'Software Mansion')](https://swmansion.com)
+//! <a href="https://swmansion.com" style="margin: 20px">
+//!   <img height="60" alt="Smelter" src="https://logo.swmansion.com/logo?color=white&variant=desktop&width=150&tag=smelter-vk-video">
+//! </a>
+//! <a href="https://smelter.dev" style="margin: 20px">
+//!   <picture>
+//!     <source media="(prefers-color-scheme: dark)" srcset="https:///github.com/software-mansion/smelter/raw/master/assets/smelter-logo-transparent.svg">
+//!     <source media="(prefers-color-scheme: light)" srcset="https:///github.com/software-mansion/smelter/raw/master/assets/smelter-logo-background.svg">
+//!     <img height="60" alt="Smelter" src="https:///github.com/software-mansion/smelter/raw/master/assets/smelter-logo-background.svg">
+//!   </picture>
+//! </a>
 //!
-//! Since 2012 [Software Mansion](https://swmansion.com) is a software agency with experience in building web and mobile apps as well as complex multimedia solutions. We are Core React Native Contributors and experts in live streaming and broadcasting technologies. We can help you build your next dream product – [Hire us](https://swmansion.com/contact/projects?utm_source=smelter-vk-video&utm_medium=readme).
+//! `vk_video` is part of the [Smelter toolkit](https://smelter.dev) created by [Software Mansion](https://swmansion.com).
+//!
 
 #![cfg(not(target_os = "macos"))]
 mod parser;
