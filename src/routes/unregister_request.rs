@@ -7,10 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::state::{ApiState, Response};
 
-use compositor_api::{
-    error::ApiError,
-    types::{InputId, OutputId, RendererId},
-};
+use compositor_api::{ApiError, InputId, OutputId, RendererId};
 
 use super::Json;
 

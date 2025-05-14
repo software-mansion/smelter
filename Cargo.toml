@@ -1,10 +1,8 @@
 [package]
 name = "smelter"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 license-file = "./LICENSE"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
 members = [
@@ -71,7 +69,6 @@ wgpu = { version = "24.0.1", default-features = false, features = [
 compositor_api = { workspace = true }
 compositor_render = { workspace = true }
 compositor_pipeline = { workspace = true }
-compositor_chromium = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
@@ -102,10 +99,12 @@ http-body-util = "0.1.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 shared_memory = { workspace = true }
+compositor_chromium = { workspace = true, optional = true }
 
 # platforms that support vulkan are: windows and all non-apple unixes. emscripten is a web-based platform, where vulkan is not available either
 [target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies]
 compositor_api = { workspace = true, features = ["vk-video"] }
+compositor_pipeline = { workspace = true, features = ["vk-video"] }
 
 [[bin]]
 name = "process_helper"

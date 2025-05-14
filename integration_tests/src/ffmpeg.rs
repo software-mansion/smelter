@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use compositor_api::types::Resolution;
+use compositor_api::Resolution;
 use log::info;
 
 use super::examples::{get_asset_path, TestSample};

@@ -5,7 +5,7 @@ use compositor_pipeline::error::{ErrorType, PipelineErrorInfo};
 use compositor_render::error::ErrorStack;
 use serde::Serialize;
 
-use crate::types::TypeError;
+use crate::*;
 
 pub struct ApiError {
     pub error_code: &'static str,
