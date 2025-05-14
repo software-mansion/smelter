@@ -46,6 +46,7 @@ pub use register_output::Mp4Output;
 pub use register_output::RtmpClient;
 pub use register_output::RtpOutput;
 pub use register_output::WhipOutput;
+pub use register_output::HlsOutput;
 
 pub use renderer::ImageSpec;
 pub use renderer::ShaderSpec;

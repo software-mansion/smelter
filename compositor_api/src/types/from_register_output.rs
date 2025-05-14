@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use axum::http::HeaderValue;
 use compositor_pipeline::{
     audio_mixer::AudioChannels,
@@ -5,18 +7,13 @@ use compositor_pipeline::{
         self,
         encoder::{
             self,
-            fdk_aac::AacEncoderOptions,
+            fdk_aac::{self, AacEncoderOptions},
             ffmpeg_h264::{self},
             ffmpeg_vp8,
             opus::OpusEncoderOptions,
             AudioEncoderOptions,
         },
-        output::{
-            self,
-            mp4::Mp4OutputOptions,
-            rtmp::RtmpSenderOptions,
-            whip::{AudioWhipOptions, VideoWhipOptions},
-        },
+        output::{self, mp4, rtmp, whip},
     },
 };
 use itertools::Itertools;
@@ -185,7 +182,7 @@ impl TryFrom<Mp4Output> for pipeline::RegisterOutputOptions<output::OutputOption
             None => (None, None),
         };
 
-        let output_options = output::OutputOptions::Mp4(Mp4OutputOptions {
+        let output_options = output::OutputOptions::Mp4(mp4::Mp4OutputOptions {
             output_path: path.into(),
             video: video_encoder_options,
             audio: audio_encoder_options,
@@ -297,7 +294,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                     .unique()
                     .collect();
 
-            let video_whip_options = VideoWhipOptions {
+            let video_whip_options = whip::VideoWhipOptions {
                 encoder_preferences,
             };
             (Some(output_options), Some(video_whip_options))
@@ -368,14 +365,14 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                         .unique()
                         .collect();
 
-                let audio_whip_options = AudioWhipOptions {
+                let audio_whip_options = whip::AudioWhipOptions {
                     encoder_preferences,
                 };
                 (Some(output_audio_options), Some(audio_whip_options))
             }
             None => {
                 // even if audio field is unregistered add opus codec in order to make Twitch work
-                let audio_whip_options = AudioWhipOptions {
+                let audio_whip_options = whip::AudioWhipOptions {
                     encoder_preferences: vec![pipeline::encoder::AudioEncoderOptions::Opus(
                         OpusEncoderOptions {
                             channels: AudioChannels::Stereo,
@@ -456,7 +453,7 @@ impl TryFrom<RtmpClient> for pipeline::RegisterOutputOptions<output::OutputOptio
             None => (None, None),
         };
 
-        let output_options = output::OutputOptions::Rtmp(RtmpSenderOptions {
+        let output_options = output::OutputOptions::Rtmp(rtmp::RtmpSenderOptions {
             url,
             video: video_encoder_options,
             audio: audio_encoder_options,
@@ -466,6 +463,53 @@ impl TryFrom<RtmpClient> for pipeline::RegisterOutputOptions<output::OutputOptio
             output_options,
             video: output_video_options,
             audio: output_audio_options,
+        })
+    }
+}
+impl TryFrom<HlsOutput> for pipeline::RegisterOutputOptions<output::OutputOptions> {
+    type Error = TypeError;
+
+    fn try_from(value: HlsOutput) -> Result<Self, Self::Error> {
+        Ok(Self {
+            output_options: output::OutputOptions::Hls(output::hls::HlsSenderOptions {
+                path: Arc::from(PathBuf::from("./index.m3u8")),
+                video: Some(pipeline::encoder::VideoEncoderOptions::H264(
+                    ffmpeg_h264::Options {
+                        preset: pipeline::encoder::ffmpeg_h264::EncoderPreset::Ultrafast,
+                        resolution: compositor_render::Resolution {
+                            width: 1920,
+                            height: 1080,
+                        },
+                        raw_options: vec![],
+                    },
+                )),
+                audio: Some(pipeline::encoder::AudioEncoderOptions::Aac(
+                    fdk_aac::AacEncoderOptions {
+                        channels: AudioChannels::Stereo,
+                        sample_rate: 44_100,
+                    },
+                )),
+            }),
+            video: Some(pipeline::OutputVideoOptions {
+                initial: compositor_render::scene::Component::InputStream(
+                    compositor_render::scene::InputStreamComponent {
+                        input_id: compositor_render::InputId(Arc::from("example_input")),
+                        id: None,
+                    },
+                ),
+                end_condition: pipeline::PipelineOutputEndCondition::Never,
+            }),
+            audio: Some(pipeline::OutputAudioOptions {
+                initial: compositor_pipeline::audio_mixer::AudioMixingParams {
+                    inputs: vec![compositor_pipeline::audio_mixer::InputParams {
+                        input_id: compositor_render::InputId(Arc::from("example_input")),
+                        volume: 1.0,
+                    }],
+                },
+                mixing_strategy: compositor_pipeline::audio_mixer::MixingStrategy::SumScale,
+                channels: AudioChannels::Stereo,
+                end_condition: pipeline::PipelineOutputEndCondition::Never,
+            }),
         })
     }
 }
@@ -554,7 +598,7 @@ impl TryFrom<OutputEndCondition> for pipeline::PipelineOutputEndCondition {
     }
 }
 
-impl From<H264EncoderPreset> for encoder::ffmpeg_h264::EncoderPreset {
+impl From<H264EncoderPreset> for ffmpeg_h264::EncoderPreset {
     fn from(value: H264EncoderPreset) -> Self {
         match value {
             H264EncoderPreset::Ultrafast => ffmpeg_h264::EncoderPreset::Ultrafast,

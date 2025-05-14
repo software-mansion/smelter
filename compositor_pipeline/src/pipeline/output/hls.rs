@@ -1,4 +1,4 @@
-use std::ptr;
+use std::{path::Path, ptr, sync::Arc};
 
 use compositor_render::{event_handler::emit_event, OutputId};
 use crossbeam_channel::Receiver;
@@ -20,8 +20,8 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct RtmpSenderOptions {
-    pub url: String,
+pub struct HlsSenderOptions {
+    pub path: Arc<Path>,
     pub video: Option<VideoEncoderOptions>,
     pub audio: Option<AudioEncoderOptions>,
 }
@@ -32,12 +32,12 @@ struct Stream {
     time_base: Rational,
 }
 
-pub struct RtmpSender;
+pub struct HlsSender;
 
-impl RtmpSender {
+impl HlsSender {
     pub fn new(
         output_id: &OutputId,
-        options: RtmpSenderOptions,
+        options: HlsSenderOptions,
         packets_receiver: Receiver<EncoderOutputEvent>,
         encoder_ctx: EncoderContext,
     ) -> Result<Self, OutputInitError> {
@@ -45,15 +45,15 @@ impl RtmpSender {
 
         let output_id = output_id.clone();
         std::thread::Builder::new()
-            .name(format!("RTMP sender thread for output {}", output_id))
+            .name(format!("HLS sender thread for output {}", output_id))
             .spawn(move || {
                 let _span =
-                    tracing::info_span!("RTMP sender  writer", output_id = output_id.to_string())
+                    tracing::info_span!("HLS sender  writer", output_id = output_id.to_string())
                         .entered();
 
                 run_ffmpeg_output_thread(output_ctx, video_stream, audio_stream, packets_receiver);
                 emit_event(Event::OutputDone(output_id));
-                debug!("Closing RTMP sender thread.");
+                debug!("Closing HLS sender thread.");
             })
             .unwrap();
         Ok(Self)
@@ -61,7 +61,7 @@ impl RtmpSender {
 }
 
 fn init_ffmpeg_output(
-    options: RtmpSenderOptions,
+    options: HlsSenderOptions,
     encoder_ctx: EncoderContext,
 ) -> Result<
     (
@@ -72,7 +72,7 @@ fn init_ffmpeg_output(
     OutputInitError,
 > {
     let mut output_ctx =
-        ffmpeg::format::output_as(&options.url, "flv").map_err(OutputInitError::FfmpegError)?;
+        ffmpeg::format::output_as(&options.path, "hls").map_err(OutputInitError::FfmpegError)?;
 
     let video = if let (Some(opts), Some(encoder_ctx)) = (&options.video, encoder_ctx.video) {
         let mut stream = output_ctx
@@ -190,7 +190,7 @@ fn run_ffmpeg_output_thread(
 
         if received_video_eos.unwrap_or(true) && received_audio_eos.unwrap_or(true) {
             if let Err(err) = output_ctx.write_trailer() {
-                error!("Failed to write trailer to RTMP stream: {}.", err);
+                error!("Failed to write trailer to HLS stream: {}.", err);
             };
             break;
         }
@@ -248,6 +248,6 @@ fn write_chunk(
     }
 
     if let Err(err) = packet.write_interleaved(output_ctx) {
-        error!("Failed to write packet to RTMP stream: {}.", err);
+        error!("Failed to write packet to HLS stream: {}.", err);
     }
 }

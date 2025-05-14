@@ -13,8 +13,7 @@ use crate::{
 use compositor_api::{
     error::ApiError,
     types::{
-        DeckLink, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId, RtmpClient,
-        RtpInput, RtpOutput, ShaderSpec, WebRendererSpec, WhipInput, WhipOutput,
+        DeckLink, HlsOutput, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId, RtmpClient, RtpInput, RtpOutput, ShaderSpec, WebRendererSpec, WhipInput, WhipOutput
     },
 };
 
@@ -37,6 +36,7 @@ pub enum RegisterOutput {
     RtmpClient(RtmpClient),
     Mp4(Mp4Output),
     Whip(WhipOutput),
+    Hls(HlsOutput),
 }
 
 pub(super) async fn handle_input(
@@ -99,6 +99,9 @@ pub(super) async fn handle_output(
             }
             RegisterOutput::RtmpClient(rtmp) => {
                 Pipeline::register_output(&api.pipeline, output_id.into(), rtmp.try_into()?)?
+            }
+            RegisterOutput::Hls(hls) => {
+                Pipeline::register_output(&api.pipeline, output_id.into(), hls.try_into()?)?
             }
         };
         match response {

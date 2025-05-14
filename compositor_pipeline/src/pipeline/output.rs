@@ -4,6 +4,7 @@ use compositor_render::{
     error::RequestKeyframeError, Frame, OutputFrameFormat, OutputId, Resolution,
 };
 use crossbeam_channel::{bounded, Receiver, Sender};
+use hls::{HlsSender, HlsSenderOptions};
 use mp4::{Mp4FileWriter, Mp4OutputOptions};
 use rtmp::RtmpSenderOptions;
 use tracing::debug;
@@ -19,6 +20,7 @@ use super::{
 };
 use whip::{WhipSender, WhipSenderOptions};
 
+pub mod hls;
 pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
@@ -30,6 +32,7 @@ pub enum OutputOptions {
     Rtmp(RtmpSenderOptions),
     Mp4(Mp4OutputOptions),
     Whip(WhipSenderOptions),
+    Hls(HlsSenderOptions),
 }
 
 /// Options to configure output that sends h264 and opus audio via channel
@@ -66,7 +69,7 @@ pub enum Output {
         encoder: Encoder,
     },
     Rtmp {
-        sender: rtmp::RmtpSender,
+        sender: rtmp::RtmpSender,
         encoder: Encoder,
     },
     Mp4 {
@@ -75,6 +78,10 @@ pub enum Output {
     },
     Whip {
         sender: WhipSender,
+        encoder: Encoder,
+    },
+    Hls {
+        sender: HlsSender,
         encoder: Encoder,
     },
     EncodedData {
@@ -124,7 +131,7 @@ impl OutputOptionsExt<Option<Port>> for OutputOptions {
 
                 let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
                     .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
-                let sender = rtmp::RmtpSender::new(
+                let sender = rtmp::RtmpSender::new(
                     output_id,
                     rtmp_options.clone(),
                     packets,
@@ -133,6 +140,20 @@ impl OutputOptionsExt<Option<Port>> for OutputOptions {
                 .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
 
                 Ok((Output::Rtmp { sender, encoder }, None))
+            }
+            OutputOptions::Hls(hls_options) => {
+                let encoder_opts = EncoderOptions {
+                    video: hls_options.video.clone(),
+                    audio: hls_options.audio.clone(),
+                };
+
+                let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
+                    .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
+                let sender =
+                    HlsSender::new(output_id, hls_options.clone(), packets, encoder.context())
+                        .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
+
+                Ok((Output::Hls { sender, encoder }, None))
             }
             OutputOptions::Mp4(mp4_opt) => {
                 let encoder_opts = EncoderOptions {
@@ -222,6 +243,7 @@ impl Output {
             Output::Rtmp { encoder, .. } => encoder.frame_sender(),
             Output::Mp4 { encoder, .. } => encoder.frame_sender(),
             Output::Whip { encoder, .. } => encoder.frame_sender(),
+            Output::Hls { encoder, .. } => encoder.frame_sender(),
             Output::EncodedData { encoder } => encoder.frame_sender(),
             Output::RawData { video, .. } => video.as_ref(),
         }
@@ -233,6 +255,7 @@ impl Output {
             Output::Rtmp { encoder, .. } => encoder.samples_batch_sender(),
             Output::Mp4 { encoder, .. } => encoder.samples_batch_sender(),
             Output::Whip { encoder, .. } => encoder.samples_batch_sender(),
+            Output::Hls { encoder, .. } => encoder.samples_batch_sender(),
             Output::EncodedData { encoder } => encoder.samples_batch_sender(),
             Output::RawData { audio, .. } => audio.as_ref(),
         }
@@ -244,6 +267,7 @@ impl Output {
             Output::Rtmp { encoder, .. } => encoder.video.as_ref().map(|v| v.resolution()),
             Output::Mp4 { encoder, .. } => encoder.video.as_ref().map(|v| v.resolution()),
             Output::Whip { encoder, .. } => encoder.video.as_ref().map(|v| v.resolution()),
+            Output::Hls { encoder, .. } => encoder.video.as_ref().map(|v| v.resolution()),
             Output::EncodedData { encoder } => encoder.video.as_ref().map(|v| v.resolution()),
             Output::RawData { resolution, .. } => *resolution,
         }
@@ -255,6 +279,7 @@ impl Output {
             Output::Rtmp { encoder, .. } => encoder,
             Output::Mp4 { encoder, .. } => encoder,
             Output::Whip { encoder, .. } => encoder,
+            Output::Hls { encoder, .. } => encoder,
             Output::EncodedData { encoder } => encoder,
             Output::RawData { .. } => return Err(RequestKeyframeError::RawOutput(output_id)),
         };
@@ -295,6 +320,10 @@ impl Output {
                 .as_ref()
                 .map(|_| OutputFrameFormat::PlanarYuv420Bytes),
             Output::Whip { encoder, .. } => encoder
+                .video
+                .as_ref()
+                .map(|_| OutputFrameFormat::PlanarYuv420Bytes),
+            Output::Hls { encoder, .. } => encoder
                 .video
                 .as_ref()
                 .map(|_| OutputFrameFormat::PlanarYuv420Bytes),

@@ -25,7 +25,7 @@ fn client_code() -> Result<()> {
     start_ffmpeg_receive_h264(Some(OUTPUT_PORT), None)?;
 
     examples::post(
-        "input/input_1/register",
+        "input/example_input/register",
         &json!({
             "type": "rtp_stream",
             "port": INPUT_PORT,
@@ -46,34 +46,7 @@ fn client_code() -> Result<()> {
     examples::post(
         "output/output_1/register",
         &json!({
-            "type": "rtp_stream",
-            "port": OUTPUT_PORT,
-            "ip": IP,
-            "video": {
-                "resolution": {
-                    "width": VIDEO_RESOLUTION.width,
-                    "height": VIDEO_RESOLUTION.height,
-                },
-                "encoder": {
-                    "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
-                },
-                "initial": {
-                    "root": {
-                        "type": "shader",
-                        "id": "shader_node_1",
-                        "shader_id": "shader_example_1",
-                        "children": [
-                            {
-                                "id": "input_1",
-                                "type": "input_stream",
-                                "input_id": "input_1",
-                            }
-                        ],
-                        "resolution": { "width": VIDEO_RESOLUTION.width, "height": VIDEO_RESOLUTION.height },
-                    }
-                }
-            }
+            "type": "hls",
         }),
     )?;
 
