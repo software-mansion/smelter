@@ -25,13 +25,13 @@ pub struct Options {
     pub raw_options: Vec<(String, String)>,
 }
 
-pub struct LibvpxVP9Encoder {
+pub struct LibavVP9Encoder {
     resolution: Resolution,
     frame_sender: Sender<PipelineEvent<Frame>>,
     keyframe_req_sender: Sender<()>,
 }
 
-impl LibvpxVP9Encoder {
+impl LibavVP9Encoder {
     pub fn new(
         output_id: &OutputId,
         options: Options,
@@ -125,8 +125,8 @@ fn run_encoder_thread(
         ("title-columns", "2"),
         // Enable parallel decodability features.
         ("frame-parallel", "1"),
-        // Maximum number of threads to use.
-        ("threads", "8"),
+        // Auto number of threads to use.
+        ("threads", "0"),
         // Minimum value for the quantizer.
         ("qmin", "4"),
         // Mazimum value for the quantizer.
@@ -135,10 +135,6 @@ fn run_encoder_thread(
         ("row-mt", "1"),
         // Enable error resiliency features.
         ("error-resilient", "1"),
-        // Maximum i-Frame bitrate (pct)
-        ("max-intra-rate", "300"),
-        // Motion detection threshold.
-        ("static-thresh", "0"),
         // Maximum number of frames to lag
         ("lag-in-frames", "0"),
     ];

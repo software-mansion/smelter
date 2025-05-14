@@ -25,13 +25,13 @@ pub struct Options {
     pub raw_options: Vec<(String, String)>,
 }
 
-pub struct LibvpxVP8Encoder {
+pub struct LibavVP8Encoder {
     resolution: Resolution,
     frame_sender: Sender<PipelineEvent<Frame>>,
     keyframe_req_sender: Sender<()>,
 }
 
-impl LibvpxVP8Encoder {
+impl LibavVP8Encoder {
     pub fn new(
         output_id: &OutputId,
         options: Options,

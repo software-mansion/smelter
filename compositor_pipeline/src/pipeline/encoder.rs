@@ -3,8 +3,8 @@ use std::sync::Arc;
 use compositor_render::{Frame, OutputId, Resolution};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use fdk_aac::AacEncoder;
-use ffmpeg_vp8::LibvpxVP8Encoder;
-use ffmpeg_vp9::LibvpxVP9Encoder;
+use ffmpeg_vp8::LibavVP8Encoder;
+use ffmpeg_vp9::LibavVP9Encoder;
 use log::error;
 use resampler::OutputResampler;
 
@@ -75,8 +75,8 @@ pub struct Encoder {
 
 pub enum VideoEncoder {
     H264(LibavH264Encoder),
-    VP8(LibvpxVP8Encoder),
-    VP9(LibvpxVP9Encoder),
+    VP8(LibavVP8Encoder),
+    VP9(LibavVP9Encoder),
 }
 
 pub enum AudioEncoder {
@@ -196,13 +196,13 @@ impl VideoEncoder {
                 ctx.output_framerate,
                 sender,
             )?)),
-            VideoEncoderOptions::VP8(options) => Ok(Self::VP8(LibvpxVP8Encoder::new(
+            VideoEncoderOptions::VP8(options) => Ok(Self::VP8(LibavVP8Encoder::new(
                 output_id,
                 options,
                 ctx.output_framerate,
                 sender,
             )?)),
-            VideoEncoderOptions::VP9(options) => Ok(Self::VP9(LibvpxVP9Encoder::new(
+            VideoEncoderOptions::VP9(options) => Ok(Self::VP9(LibavVP9Encoder::new(
                 output_id,
                 options,
                 ctx.output_framerate,

@@ -10,12 +10,13 @@ use integration_tests::{
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
-    width: 1280,
-    height: 720,
+    width: 1920,
+    height: 1080,
 };
 
 const IP: &str = "127.0.0.1";
-const INPUT_PORT: u16 = 8002;
+const INPUT_1_PORT: u16 = 8002;
+const INPUT_2_PORT: u16 = 8003;
 const OUTPUT_PORT: u16 = 8004;
 
 fn main() {
@@ -27,10 +28,21 @@ fn client_code() -> Result<()> {
         "input/input_1/register",
         &json!({
             "type": "rtp_stream",
-            "port": INPUT_PORT,
+            "port": INPUT_1_PORT,
             "video": {
                 "decoder": "ffmpeg_vp9"
             }
+        }),
+    )?;
+
+    examples::post(
+        "input/input_2/register",
+        &json!({
+            "type": "rtp_stream",
+            "port": INPUT_2_PORT,
+            "audio": {
+                "decoder": "opus"
+            },
         }),
     )?;
 
@@ -67,17 +79,28 @@ fn client_code() -> Result<()> {
                 },
 
             },
+            "audio": {
+                "initial": {
+                    "inputs": [
+                        {"input_id": "input_2"},
+                    ]
+                },
+                "channels": "stereo",
+                "encoder": {
+                   "type": "opus",
+                }
+            },
         }),
     )?;
 
     std::thread::sleep(Duration::from_millis(500));
-    start_gst_receive_tcp_vp9(IP, OUTPUT_PORT, false)?;
+    start_gst_receive_tcp_vp9(IP, OUTPUT_PORT, true)?;
     examples::post("start", &json!({}))?;
 
     start_ffmpeg_send(
         IP,
-        Some(INPUT_PORT),
-        None,
+        Some(INPUT_1_PORT),
+        Some(INPUT_2_PORT),
         examples::TestSample::BigBuckBunnyVP9Opus,
     )?;
 
