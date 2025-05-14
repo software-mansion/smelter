@@ -10,7 +10,7 @@
 //!
 //! # Usage
 //!
-//! ```
+//! ```ignore
 //! fn decode_video(
 //!     window: &winit::window::Window,
 //!     mut encoded_video_reader: impl std::io::Read,

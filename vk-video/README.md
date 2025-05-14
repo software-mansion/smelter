@@ -1,6 +1,6 @@
 # vk-video
 
-A library for hardware video coding using Vulkan Video, with [wgpu] integration.
+A library for hardware video decoding (and soon encoding) using Vulkan Video, with [wgpu] integration.
 
 [![Crates.io][crates-badge]][crates-url]
 [![docs.rs][docs-badge]][docs-url]
