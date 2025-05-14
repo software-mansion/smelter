@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use compositor_api::types::Resolution;
+use compositor_api::Resolution;
 use log::{error, info, warn};
 use serde_json::json;
 use signal_hook::{consts, iterator::Signals};

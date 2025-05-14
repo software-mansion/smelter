@@ -6,7 +6,9 @@ license-file = "../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
+default = []
 decklink = ["dep:decklink"]
+web_renderer = ["compositor_render/web_renderer"]
 vk-video = ["dep:vk-video"]
 
 [dependencies]
