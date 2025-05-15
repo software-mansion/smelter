@@ -4,7 +4,7 @@ import { intoOutputEosCondition, intoOutputVideoOptions } from './common';
 
 export function intoRegisterRtpOutput(
   output: Outputs.RegisterRtpOutput,
-  initial: { video?: Api.Video; audio?: Api.Audio }
+  initial: { video?: Api.VideoScene; audio?: Api.AudioScene }
 ): RegisterOutputRequest {
   return {
     type: 'rtp_stream',
@@ -18,7 +18,7 @@ export function intoRegisterRtpOutput(
 
 function intoOutputRtpAudioOptions(
   audio: Outputs.RtpAudioOptions,
-  initial: Api.Audio
+  initial: Api.AudioScene
 ): Api.OutputRtpAudioOptions {
   return {
     send_eos_when: audio.sendEosWhen && intoOutputEosCondition(audio.sendEosWhen),

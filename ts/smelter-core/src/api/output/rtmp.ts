@@ -4,7 +4,7 @@ import { intoOutputEosCondition, intoOutputVideoOptions } from './common';
 
 export function intoRegisterRtmpClientOutput(
   output: Outputs.RegisterRtmpClientOutput,
-  initial: { video?: Api.Video; audio?: Api.Audio }
+  initial: { video?: Api.VideoScene; audio?: Api.AudioScene }
 ): RegisterOutputRequest {
   return {
     type: 'rtmp_client',
@@ -20,7 +20,7 @@ export function intoRegisterRtmpClientOutput(
 
 function intoOutputRtmpClientAudioOptions(
   audio: Outputs.RtmpClientAudioOptions,
-  initial: Api.Audio
+  initial: Api.AudioScene
 ): Api.OutputRtmpClientAudioOptions {
   return {
     send_eos_when: audio.sendEosWhen && intoOutputEosCondition(audio.sendEosWhen),

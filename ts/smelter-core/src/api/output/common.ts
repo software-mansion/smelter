@@ -2,7 +2,7 @@ import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 
 export function intoOutputVideoOptions(
   video: Outputs.RtpVideoOptions | Outputs.Mp4VideoOptions | Outputs.WhipVideoOptions,
-  initial: Api.Video
+  initial: Api.VideoScene
 ): Api.OutputVideoOptions {
   return {
     resolution: video.resolution,
