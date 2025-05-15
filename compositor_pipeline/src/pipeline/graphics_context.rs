@@ -25,7 +25,7 @@ pub struct GraphicsContextOptions<'a> {
     pub force_gpu: bool,
     pub features: wgpu::Features,
     pub limits: wgpu::Limits,
-    pub compatible_surface: Option<&'a mut wgpu::Surface<'a>>,
+    pub compatible_surface: Option<&'a wgpu::Surface<'a>>,
     pub libvulkan_path: Option<&'a std::ffi::OsStr>,
 }
 
@@ -40,7 +40,7 @@ impl GraphicsContext {
             force_gpu,
             features,
             limits,
-            mut compatible_surface,
+            compatible_surface,
             libvulkan_path,
         } = opts;
 
@@ -49,22 +49,22 @@ impl GraphicsContext {
 
         let limits = set_required_wgpu_limits(limits);
 
-        let mut new_instance = || -> Result<_, VulkanCtxError> {
+        let new_instance = || -> Result<_, VulkanCtxError> {
             let instance = match libvulkan_path {
                 Some(path) => vk_video::VulkanInstance::new_from(path),
                 None => vk_video::VulkanInstance::new(),
             }?;
             let device =
-                instance.create_device(vulkan_features, limits.clone(), &mut compatible_surface)?;
+                instance.create_device(vulkan_features, limits.clone(), compatible_surface)?;
             Ok((instance, device))
         };
 
         match new_instance() {
             Ok((instance, device)) => Ok(GraphicsContext {
-                device: device.wgpu_device.clone(),
-                queue: device.wgpu_queue.clone(),
-                adapter: device.wgpu_adapter.clone(),
-                instance: instance.wgpu_instance.clone(),
+                device: device.wgpu_device().into(),
+                queue: device.wgpu_queue().into(),
+                adapter: device.wgpu_adapter().into(),
+                instance: instance.wgpu_instance().into(),
                 vulkan_ctx: Some(VulkanCtx { instance, device }),
             }),
 
@@ -76,7 +76,7 @@ impl GraphicsContext {
                     adapter,
                     device,
                     queue,
-                } = create_wgpu_ctx(force_gpu, features, limits, compatible_surface.as_deref())
+                } = create_wgpu_ctx(force_gpu, features, limits, compatible_surface)
                     .map_err(InitRendererEngineError::FailedToInitWgpuCtx)?;
 
                 Ok(GraphicsContext {
@@ -104,7 +104,7 @@ impl GraphicsContext {
             adapter,
             device,
             queue,
-        } = create_wgpu_ctx(force_gpu, features, limits, compatible_surface.as_deref())
+        } = create_wgpu_ctx(force_gpu, features, limits, compatible_surface)
             .map_err(InitRendererEngineError::FailedToInitWgpuCtx)?;
 
         Ok(GraphicsContext {

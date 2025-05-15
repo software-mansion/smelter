@@ -79,6 +79,52 @@ impl Drop for MemoryAllocation {
     }
 }
 
+pub(crate) struct DecodeInputBuffer {
+    pub(crate) buffer: Buffer,
+    capacity: u64,
+    allocator: Arc<Allocator>,
+}
+
+impl DecodeInputBuffer {
+    pub(crate) fn new(
+        allocator: Arc<Allocator>,
+        profile: &H264ProfileInfo,
+    ) -> Result<Self, VulkanDecoderError> {
+        const INITIAL_SIZE: u64 = 1024 * 1024; // 1MiB
+        let buffer = Buffer::new_decode(allocator.clone(), INITIAL_SIZE, profile)?;
+
+        Ok(Self {
+            buffer,
+            capacity: INITIAL_SIZE,
+            allocator,
+        })
+    }
+
+    /// size must be passed in here for alignment reasons
+    pub(crate) fn upload_data(
+        &mut self,
+        data: &[u8],
+        size: u64,
+        profile: &H264ProfileInfo,
+    ) -> Result<(), VulkanDecoderError> {
+        debug_assert!(data.len() as u64 <= size);
+
+        if self.capacity < size {
+            let new_capacity = size.max(2 * self.capacity);
+            self.buffer = Buffer::new_decode(self.allocator.clone(), new_capacity, profile)?;
+        }
+
+        unsafe {
+            let mem = self.allocator.map_memory(&mut self.buffer.allocation)?;
+            let slice = std::slice::from_raw_parts_mut(mem.cast(), data.len());
+            slice.copy_from_slice(data);
+            self.allocator.unmap_memory(&mut self.buffer.allocation);
+        }
+
+        Ok(())
+    }
+}
+
 pub(crate) struct Buffer {
     pub(crate) buffer: vk::Buffer,
     pub(crate) allocation: vk_mem::Allocation,
@@ -164,33 +210,15 @@ impl Buffer {
         &mut self,
         size: usize,
     ) -> Result<Vec<u8>, VulkanDecoderError> {
-        let mut output = Vec::new();
+        let output;
         unsafe {
             let memory = self.allocator.map_memory(&mut self.allocation)?;
             let memory_slice = std::slice::from_raw_parts_mut(memory, size);
-            output.extend_from_slice(memory_slice);
+            output = memory_slice.to_vec();
             self.allocator.unmap_memory(&mut self.allocation);
         }
 
         Ok(output)
-    }
-
-    pub(crate) fn new_with_decode_data(
-        allocator: Arc<Allocator>,
-        data: &[u8],
-        buffer_size: u64,
-        profile_info: &H264ProfileInfo,
-    ) -> Result<Buffer, VulkanDecoderError> {
-        let mut decode_buffer = Buffer::new_decode(allocator.clone(), buffer_size, profile_info)?;
-
-        unsafe {
-            let mem = allocator.map_memory(&mut decode_buffer.allocation)?;
-            let slice = std::slice::from_raw_parts_mut(mem.cast(), data.len());
-            slice.copy_from_slice(data);
-            allocator.unmap_memory(&mut decode_buffer.allocation);
-        }
-
-        Ok(decode_buffer)
     }
 }
 

@@ -2,7 +2,7 @@
 fn main() {
     use std::io::Write;
 
-    use vk_video::{Frame, VulkanInstance};
+    use vk_video::{EncodedChunk, Frame, VulkanInstance};
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::INFO)
@@ -25,7 +25,7 @@ fn main() {
                 max_push_constant_size: 128,
                 ..Default::default()
             },
-            &mut None,
+            None,
         )
         .unwrap();
 
@@ -33,15 +33,27 @@ fn main() {
 
     let mut output_file = std::fs::File::create("output.nv12").unwrap();
 
-    for chunk in h264_bytestream.chunks(256) {
-        let frames = decoder.decode(chunk, None).unwrap();
+    let device = vulkan_device.wgpu_device();
+    let queue = &vulkan_device.wgpu_queue();
 
-        let device = &vulkan_device.wgpu_device;
-        let queue = &vulkan_device.wgpu_queue;
-        for Frame { frame, .. } in frames {
-            let decoded_frame = download_wgpu_texture(device, queue, frame);
+    for chunk in h264_bytestream.chunks(256) {
+        let chunk = EncodedChunk {
+            data: chunk,
+            pts: None,
+        };
+
+        let frames = decoder.decode(chunk).unwrap();
+
+        for Frame { data, .. } in frames {
+            let decoded_frame = download_wgpu_texture(&device, queue, data);
             output_file.write_all(&decoded_frame).unwrap();
         }
+    }
+
+    let remaining_frames = decoder.flush();
+    for Frame { data, .. } in remaining_frames {
+        let decoded_frame = download_wgpu_texture(&device, queue, data);
+        output_file.write_all(&decoded_frame).unwrap();
     }
 }
 

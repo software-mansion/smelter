@@ -7,6 +7,7 @@ use memchr::memmem::Finder;
 pub(crate) struct NALUSplitter {
     buffer: BytesMut,
     pts: Option<u64>,
+    previous_search_end: usize,
 }
 
 fn find_start_of_next_nalu(buf: &[u8]) -> Option<usize> {
@@ -45,11 +46,16 @@ impl NALUSplitter {
         self.buffer.put(bytestream);
         let mut result = Vec::new();
 
-        while let Some(i) = find_start_of_next_nalu(&self.buffer) {
-            let nalu = self.buffer.split_to(i);
+        while let Some(i) = find_start_of_next_nalu(&self.buffer[self.previous_search_end..]) {
+            let nalu = self.buffer.split_to(self.previous_search_end + i);
+            self.previous_search_end = 0;
             result.push((nalu.to_vec(), output_pts));
             output_pts = pts;
         }
+
+        // This will cause the whole start code to be reprocessed when the beginning of the next start code
+        // is at the end of current buffer.
+        self.previous_search_end = self.buffer.len().saturating_sub(3);
 
         self.pts = pts;
 

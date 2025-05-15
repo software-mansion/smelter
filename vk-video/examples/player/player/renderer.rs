@@ -1,4 +1,4 @@
-use std::sync::{mpsc::Receiver, Arc};
+use std::sync::mpsc::Receiver;
 
 use vk_video::VulkanDevice;
 use wgpu::util::DeviceExt;
@@ -117,8 +117,8 @@ const INDICES: &[u16] = &[0, 1, 3, 1, 2, 3];
 
 struct Renderer<'a> {
     surface: wgpu::Surface<'a>,
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
     surface_configuration: wgpu::SurfaceConfiguration,
     sampler: wgpu::Sampler,
     vertex_buffer: wgpu::Buffer,
@@ -128,10 +128,10 @@ struct Renderer<'a> {
 
 impl<'a> Renderer<'a> {
     fn new(surface: wgpu::Surface<'a>, vulkan_device: &VulkanDevice, window: &Window) -> Self {
-        let device = vulkan_device.wgpu_device.clone();
-        let queue = vulkan_device.wgpu_queue.clone();
+        let device = vulkan_device.wgpu_device();
+        let queue = vulkan_device.wgpu_queue();
         let size = window.inner_size();
-        let surface_capabilities = surface.get_capabilities(&vulkan_device.wgpu_adapter);
+        let surface_capabilities = surface.get_capabilities(&vulkan_device.wgpu_adapter());
         let surface_texture_format = surface_capabilities
             .formats
             .iter()

@@ -82,7 +82,12 @@ fn run_decoder_thread(
             continue;
         }
 
-        let result = match decoder.decode(&chunk.data, Some(chunk.pts.as_micros() as u64)) {
+        let chunk = vk_video::EncodedChunk {
+            data: chunk.data.as_ref(),
+            pts: Some(chunk.pts.as_micros() as u64),
+        };
+
+        let result = match decoder.decode(chunk) {
             Ok(res) => res,
             Err(err) => {
                 warn!("Failed to decode frame: {err}");
@@ -90,14 +95,14 @@ fn run_decoder_thread(
             }
         };
 
-        for vk_video::Frame { frame, pts } in result {
+        for vk_video::Frame { data, pts } in result {
             let resolution = Resolution {
-                width: frame.width() as usize,
-                height: frame.height() as usize,
+                width: data.width() as usize,
+                height: data.height() as usize,
             };
 
             let frame = Frame {
-                data: FrameData::Nv12WgpuTexture(frame.into()),
+                data: FrameData::Nv12WgpuTexture(data.into()),
                 pts: Duration::from_micros(pts.unwrap()),
                 resolution,
             };

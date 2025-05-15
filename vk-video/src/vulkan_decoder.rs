@@ -7,7 +7,10 @@ use session_resources::VideoSessionResources;
 use tracing::error;
 use wrappers::*;
 
-use crate::parser::{DecodeInformation, DecoderInstruction, ReferenceId};
+use crate::{
+    parser::{DecodeInformation, DecoderInstruction, ReferenceId},
+    RawFrameData,
+};
 
 mod frame_sorter;
 mod session_resources;
@@ -38,7 +41,7 @@ struct CommandBuffers {
     vulkan_to_wgpu_transfer_buffer: CommandBuffer,
 }
 
-/// this cannot outlive the image and semaphore it borrows, but it seems impossible to encode that
+/// this cannot outlive the image and semaphore it borrows, but it seems very hard to encode that
 /// in the lifetimes
 struct DecodeSubmission {
     image: vk::Image,
@@ -46,7 +49,6 @@ struct DecodeSubmission {
     current_layout: vk::ImageLayout,
     layer: u32,
     wait_semaphore: vk::Semaphore,
-    _input_buffer: Buffer,
     picture_order_cnt: i32,
     max_num_reorder_frames: u64,
     is_idr: bool,
@@ -142,7 +144,7 @@ impl VulkanDecoder<'_> {
     pub fn decode_to_bytes(
         &mut self,
         decoder_instructions: &[DecoderInstruction],
-    ) -> Result<Vec<DecodeResult<Vec<u8>>>, VulkanDecoderError> {
+    ) -> Result<Vec<DecodeResult<RawFrameData>>, VulkanDecoderError> {
         let mut result = Vec::new();
         for instruction in decoder_instructions {
             if let Some(output) = self.decode(instruction)? {
@@ -151,7 +153,11 @@ impl VulkanDecoder<'_> {
                     is_idr: output.is_idr,
                     max_num_reorder_frames: output.max_num_reorder_frames,
                     pic_order_cnt: output.picture_order_cnt,
-                    frame: self.download_output(output)?,
+                    frame: RawFrameData {
+                        width: output.dimensions.width,
+                        height: output.dimensions.height,
+                        frame: self.download_output(output)?,
+                    },
                 })
             }
         }
@@ -189,7 +195,7 @@ impl VulkanDecoder<'_> {
                 reference_id,
             } => {
                 return self
-                    .process_reference_p_or_b_frame(decode_info, *reference_id)
+                    .process_reference_frame(decode_info, *reference_id)
                     .map(Option::Some)
             }
 
@@ -268,7 +274,7 @@ impl VulkanDecoder<'_> {
         self.do_decode(decode_information, reference_id, true, true)
     }
 
-    fn process_reference_p_or_b_frame(
+    fn process_reference_frame(
         &mut self,
         decode_information: &DecodeInformation,
         reference_id: ReferenceId,
@@ -283,6 +289,11 @@ impl VulkanDecoder<'_> {
         is_idr: bool,
         is_reference: bool,
     ) -> Result<DecodeSubmission, VulkanDecoderError> {
+        let video_session_resources = self
+            .video_session_resources
+            .as_mut()
+            .ok_or(VulkanDecoderError::NoSession)?;
+
         // upload data to a buffer
         let size = Self::pad_size_to_alignment(
             decode_information.rbsp_bytes.len() as u64,
@@ -291,19 +302,13 @@ impl VulkanDecoder<'_> {
                 .min_bitstream_buffer_offset_alignment,
         );
 
-        // decode
-        let video_session_resources = self
-            .video_session_resources
-            .as_mut()
-            .ok_or(VulkanDecoderError::NoSession)?;
-
-        let decode_buffer = Buffer::new_with_decode_data(
-            self.vulkan_device.allocator.clone(),
+        video_session_resources.decode_buffer.upload_data(
             &decode_information.rbsp_bytes,
             size,
             &video_session_resources.profile_info,
         )?;
 
+        // decode
         // IDR - remove all reference picures
         if is_idr {
             video_session_resources
@@ -456,7 +461,7 @@ impl VulkanDecoder<'_> {
 
         // fill out the final struct and issue the command
         let decode_info = vk::VideoDecodeInfoKHR::default()
-            .src_buffer(*decode_buffer)
+            .src_buffer(*video_session_resources.decode_buffer.buffer)
             .src_buffer_offset(0)
             .src_buffer_range(size)
             .dst_picture_resource(*dst_picture_resource_info)
@@ -518,7 +523,6 @@ impl VulkanDecoder<'_> {
             layer: target_layer as u32,
             current_layout: target_image_layout,
             dimensions,
-            _input_buffer: decode_buffer,
             picture_order_cnt: decode_information.picture_info.PicOrderCnt_for_decoding[0],
             max_num_reorder_frames: video_session_resources.max_num_reorder_frames,
             is_idr,
