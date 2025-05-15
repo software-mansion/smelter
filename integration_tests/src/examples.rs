@@ -253,9 +253,14 @@ fn convert_to_webm(input_path: &Path, codec: &str) -> Result<()> {
         _ => return Err(anyhow!("Unsupported codec: {}", codec)),
     };
     let output_path = input_path.with_extension(extension);
-    if output_path.exists() {
+    let done_marker = input_path.with_extension(format!("{}.done", extension));
+
+    if output_path.exists() && done_marker.exists() {
         return Ok(());
     }
+
+    let _ = fs::remove_file(&output_path);
+    let _ = fs::remove_file(&done_marker);
 
     let codec_args = match codec {
         "vp8" => vec![
@@ -280,6 +285,10 @@ fn convert_to_webm(input_path: &Path, codec: &str) -> Result<()> {
                 .to_str()
                 .ok_or_else(|| anyhow!("Invalid input path"))?,
         )
+        .arg("-t")
+        .arg("60")
+        .arg("-threads")
+        .arg("0")
         .args(codec_args)
         .arg(
             output_path
@@ -289,10 +298,13 @@ fn convert_to_webm(input_path: &Path, codec: &str) -> Result<()> {
         .status()?;
 
     if !status.success() {
+        let _ = fs::remove_file(&output_path);
+        let _ = fs::remove_file(&done_marker);
         return Err(anyhow::Error::msg(format!(
             "ffmpeg failed to convert mp4 {input_path:?} to webm",
         )));
     }
+    fs::write(&done_marker, "done")?;
 
     Ok(())
 }
