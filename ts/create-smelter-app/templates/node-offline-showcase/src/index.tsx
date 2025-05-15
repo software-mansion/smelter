@@ -144,7 +144,8 @@ async function run() {
       },
     },
     audio: {
-      encoder: { type: 'aac', channels: 'stereo' },
+      channels: 'stereo',
+      encoder: { type: 'aac' },
     },
   });
 

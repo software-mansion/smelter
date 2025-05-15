@@ -16,19 +16,35 @@ export type RtpVideoOptions = {
   encoder: RtpVideoEncoderOptions;
 };
 
-export type RtpVideoEncoderOptions = {
-  type: 'ffmpeg_h264';
-  /**
-   * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
-   */
-  preset: Api.H264EncoderPreset;
-  /**
-   * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-   */
-  ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
-};
+export type RtpVideoEncoderOptions =
+  | {
+      type: 'ffmpeg_h264';
+      /**
+       * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset: Api.H264EncoderPreset;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
+    }
+  | {
+      type: 'ffmpeg_vp8';
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
+    }
+  | {
+      type: 'ffmpeg_vp9';
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
+    };
 
 export type RtpAudioOptions = {
+  channels: Api.AudioChannels;
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
@@ -45,7 +61,6 @@ export type RtpAudioOptions = {
 
 export type RtpAudioEncoderOptions = {
   type: 'opus';
-  channels: Api.AudioChannels;
   /**
    * (**default="voip"**) Specifies preset for audio output encoder.
    */

@@ -11,24 +11,43 @@ export type WhipVideoOptions = {
    */
   sendEosWhen?: OutputEndCondition | null;
   /**
-   * Video encoder options.
+   * Video encoder preferences list.
    */
-  encoder: WhipVideoEncoderOptions;
+  encoderPreferences?: WhipVideoEncoderOptions[] | null;
 };
 
-export type WhipVideoEncoderOptions = {
-  type: 'ffmpeg_h264';
-  /**
-   * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
-   */
-  preset: Api.H264EncoderPreset;
-  /**
-   * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-   */
-  ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
-};
+export type WhipVideoEncoderOptions =
+  | {
+      type: 'ffmpeg_h264';
+      /**
+       * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset: Api.H264EncoderPreset;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
+    }
+  | {
+      type: 'ffmpeg_vp8';
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
+    }
+  | {
+      type: 'ffmpeg_vp9';
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
+    }
+  | {
+      type: 'any';
+    };
 
 export type WhipAudioOptions = {
+  channels?: Api.AudioChannels | null;
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
@@ -38,20 +57,23 @@ export type WhipAudioOptions = {
    */
   sendEosWhen?: OutputEndCondition | null;
   /**
-   * Audio encoder options.
+   * Audio encoder preferences list.
    */
-  encoder: WhipAudioEncoderOptions;
+  encoderPreferences?: WhipAudioEncoderOptions[] | null;
 };
 
-export type WhipAudioEncoderOptions = {
-  type: 'opus';
-  channels: Api.AudioChannels;
-  /**
-   * (**default="voip"**) Specifies preset for audio output encoder.
-   */
-  preset?: Api.OpusEncoderPreset;
-  /**
-   * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
-   */
-  sampleRate?: number;
-};
+export type WhipAudioEncoderOptions =
+  | {
+      type: 'opus';
+      /**
+       * (**default="voip"**) Specifies preset for audio output encoder.
+       */
+      preset?: Api.OpusEncoderPreset;
+      /**
+       * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+       */
+      sampleRate?: number;
+    }
+  | {
+      type: 'any';
+    };

@@ -29,6 +29,7 @@ export type Mp4VideoEncoderOptions = {
 };
 
 export type Mp4AudioOptions = {
+  channels: Api.AudioChannels;
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
@@ -45,7 +46,6 @@ export type Mp4AudioOptions = {
 
 export type Mp4AudioEncoderOptions = {
   type: 'aac';
-  channels: Api.AudioChannels;
   /**
    * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
    */
