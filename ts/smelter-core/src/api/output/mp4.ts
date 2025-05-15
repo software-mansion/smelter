@@ -4,7 +4,7 @@ import { intoOutputEosCondition } from './common';
 
 export function intoRegisterMp4Output(
   output: Outputs.RegisterMp4Output,
-  initial: { video?: Api.Video; audio?: Api.Audio }
+  initial: { video?: Api.VideoScene; audio?: Api.AudioScene }
 ): RegisterOutputRequest {
   return {
     type: 'mp4',
@@ -16,7 +16,7 @@ export function intoRegisterMp4Output(
 
 export function intoOutputMp4VideoOptions(
   video: Outputs.Mp4VideoOptions,
-  initial: Api.Video
+  initial: Api.VideoScene
 ): Api.OutputVideoOptions {
   return {
     resolution: video.resolution,
@@ -38,7 +38,7 @@ function intoMp4VideoEncoderOptions(
 
 function intoOutputMp4AudioOptions(
   audio: Outputs.Mp4AudioOptions,
-  initial: Api.Audio
+  initial: Api.AudioScene
 ): Api.OutputMp4AudioOptions {
   return {
     send_eos_when: audio.sendEosWhen && intoOutputEosCondition(audio.sendEosWhen),

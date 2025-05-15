@@ -33,7 +33,7 @@ export type Mp4AudioOptions = {
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
-  mixingStrategy?: Api.MixingStrategy | null;
+  mixingStrategy?: Api.AudioMixingStrategy | null;
   /**
    * Condition for termination of output stream based on the input streams states.
    */

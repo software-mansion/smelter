@@ -19,7 +19,7 @@ import { intoRegisterRtmpClientOutput } from './output/rtmp';
 export type RegisterOutputRequest = Api.RegisterOutput | RegisterWasmSpecificOutputRequest;
 
 export type RegisterWasmSpecificOutputRequest = RegisterWasmSpecificOutput & {
-  initial: { video?: Api.Video; audio?: Api.Audio };
+  initial: { video?: Api.VideoScene; audio?: Api.AudioScene };
 };
 
 export type RegisterWasmWhipOutput = {
@@ -69,7 +69,7 @@ export type RegisterOutput =
 
 export function intoRegisterOutput(
   output: RegisterOutput,
-  initial: { video?: Api.Video; audio?: Api.Audio }
+  initial: { video?: Api.VideoScene; audio?: Api.AudioScene }
 ): RegisterOutputRequest {
   if (!output['video'] && !(output as any)['audio']) {
     throw new Error('Either audio or video field needs to be specified.');
@@ -90,7 +90,9 @@ export function intoRegisterOutput(
   }
 }
 
-export function intoAudioInputsConfiguration(inputs: _smelterInternals.AudioConfig): Api.Audio {
+export function intoAudioInputsConfiguration(
+  inputs: _smelterInternals.AudioConfig
+): Api.AudioScene {
   return {
     inputs: inputs.map(input => ({
       input_id: inputRefIntoRawId(input.inputRef),

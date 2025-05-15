@@ -8,7 +8,6 @@ use compositor_pipeline::{
     },
     queue,
 };
-use tracing::warn;
 
 use crate::*;
 
@@ -57,7 +56,7 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
 
                             #[cfg(feature = "vk-video")]
                             VideoDecoder::VulkanVideo => {
-                                warn!(
+                                tracing::warn!(
                                     "vulkan_video option is deprecated, use vulkan_h264 instead."
                                 );
                                 decoder::VideoDecoderOptions {
