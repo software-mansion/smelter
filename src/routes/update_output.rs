@@ -6,9 +6,12 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
-use crate::state::{ApiState, Response};
+use crate::{
+    error::ApiError,
+    state::{ApiState, Response},
+};
 
-use compositor_api::{ApiError, AudioScene, OutputId, VideoScene};
+use compositor_api::{AudioScene, OutputId, VideoScene};
 
 use super::Json;
 

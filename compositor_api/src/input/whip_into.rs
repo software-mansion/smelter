@@ -18,17 +18,13 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
     fn try_from(value: WhipInput) -> Result<Self, Self::Error> {
         let WhipInput {
             video,
-            audio,
+            audio: _,
             required,
             offset_ms,
         } = value;
 
         if video.clone().and_then(|v| v.decoder.clone()).is_some() {
             warn!("Field 'decoder' in video options is deprecated. The codec will now be set automatically based on WHIP negotiation, manual specification is no longer needed.")
-        }
-
-        if audio.is_some() {
-            warn!("Field 'audio' is deprecated. The codec will now be set automatically based on WHIP negotiation, manual specification is no longer needed.")
         }
 
         let whip_options = match video {

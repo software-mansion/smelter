@@ -1,4 +1,3 @@
-use axum::http::HeaderValue;
 use compositor_pipeline::{
     audio_mixer,
     pipeline::{
@@ -11,6 +10,10 @@ use itertools::Itertools;
 use tracing::warn;
 
 use crate::*;
+
+const ENCODER_DEPRECATION_MSG: &str = "Field 'encoder' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.";
+
+const CHANNEL_DEPRECATION_MSG: &str = "The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.";
 
 impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptions> {
     type Error = TypeError;
@@ -34,7 +37,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             ..
         }) = &video
         {
-            warn!("Field 'encoder' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.")
+            warn!(ENCODER_DEPRECATION_MSG)
         }
 
         if let Some(OutputWhipAudioOptions {
@@ -42,13 +45,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
             ..
         }) = &audio
         {
-            warn!("Field 'encoder' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.")
-        }
-
-        if let Some(token) = &bearer_token {
-            if HeaderValue::from_str(format!("Bearer {token}").as_str()).is_err() {
-                return Err(TypeError::new("Bearer token string is not valid. It must contain only 32-127 ASCII characters"));
-            };
+            warn!(ENCODER_DEPRECATION_MSG)
         }
 
         let (output_video_options, video_whip_options) = if let Some(options) = video {
@@ -148,7 +145,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                         ..
                     }) => {
                         if channels_deprecated.is_some() {
-                            warn!("The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.");
+                            warn!(CHANNEL_DEPRECATION_MSG);
                         }
                         channels
                             .or(channels_deprecated)

@@ -5,9 +5,12 @@ use compositor_render::{error::ErrorStack, RegistryType};
 use log::error;
 use serde::{Deserialize, Serialize};
 
-use crate::state::{ApiState, Response};
+use crate::{
+    error::ApiError,
+    state::{ApiState, Response},
+};
 
-use compositor_api::{ApiError, InputId, OutputId, RendererId};
+use compositor_api::{InputId, OutputId, RendererId};
 
 use super::Json;
 
