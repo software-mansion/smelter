@@ -5,8 +5,9 @@ edition = "2021"
 license-file = "../LICENSE"
 
 [features]
+default = []
 decklink = ["compositor_pipeline/decklink"]
-web_renderer = ["compositor_render/web_renderer"]
+web_renderer = ["compositor_pipeline/web_renderer"]
 vk-video = ["compositor_pipeline/vk-video"]
 
 [dependencies]
@@ -19,5 +20,4 @@ itertools = "0.14.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 compositor_pipeline = { workspace = true }
-axum = { version = "0.7.4", features = ["ws"] }
 

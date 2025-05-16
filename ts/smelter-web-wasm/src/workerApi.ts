@@ -18,7 +18,7 @@ export type RegisterOutput = {
   video?: {
     canvas: OffscreenCanvas;
     resolution: Resolution;
-    initial: Api.Video;
+    initial: Api.VideoScene;
   };
 };
 

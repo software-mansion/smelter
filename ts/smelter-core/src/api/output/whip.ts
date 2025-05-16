@@ -4,7 +4,7 @@ import { intoOutputEosCondition, intoOutputVideoOptions } from './common';
 
 export function intoRegisterWhipOutput(
   output: Outputs.RegisterWhipOutput,
-  initial: { video?: Api.Video; audio?: Api.Audio }
+  initial: { video?: Api.VideoScene; audio?: Api.AudioScene }
 ): RegisterOutputRequest {
   return {
     type: 'whip',
@@ -18,7 +18,7 @@ export function intoRegisterWhipOutput(
 
 function intoOutputWhipAudioOptions(
   audio: Outputs.WhipAudioOptions,
-  initial: Api.Audio
+  initial: Api.AudioScene
 ): Api.OutputWhipAudioOptions {
   return {
     send_eos_when: audio.sendEosWhen && intoOutputEosCondition(audio.sendEosWhen),

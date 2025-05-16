@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use compositor_api::types as api;
+use compositor_api as api;
 use compositor_render::{
     InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RendererOptions, RendererSpec,
 };

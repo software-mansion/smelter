@@ -1,11 +1,12 @@
 use log::info;
 
-mod config;
-mod logger;
-mod middleware;
-mod routes;
-mod server;
-mod state;
+pub mod config;
+pub mod error;
+pub mod logger;
+pub mod middleware;
+pub mod routes;
+pub mod server;
+pub mod state;
 
 fn main() {
     #[cfg(feature = "web_renderer")]
