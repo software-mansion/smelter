@@ -11,18 +11,19 @@ export function intoRegisterWhipOutput(
     endpoint_url: output.endpointUrl,
     bearer_token: output.bearerToken,
 
-    video: output.video && initial.video && intoOutputWhipVideoOptions(output.video, initial.video),
-    audio:
-      output.audio === true
-        ? initial.audio && { initial: initial.audio }
-        : output.audio && initial.audio && intoOutputWhipAudioOptions(output.audio, initial.audio),
+    video: intoOutputWhipVideoOptions(output.video, initial.video),
+    audio: intoOutputWhipAudioOptions(output.audio, initial.audio),
   };
 }
 
 export function intoOutputWhipVideoOptions(
-  video: Outputs.WhipVideoOptions,
-  initial: Api.Video
-): Api.OutputWhipVideoOptions {
+  video: Outputs.WhipVideoOptions | null | undefined,
+  initial: Api.Video | undefined
+): Api.OutputWhipVideoOptions | undefined {
+  if (!video || !initial) {
+    return undefined;
+  }
+
   return {
     resolution: video.resolution,
     send_eos_when: video.sendEosWhen && intoOutputEosCondition(video.sendEosWhen),
@@ -62,9 +63,17 @@ function intoWhipVideoEncoderPreferences(
 }
 
 function intoOutputWhipAudioOptions(
-  audio: Outputs.WhipAudioOptions,
-  initial: Api.Audio
-): Api.OutputWhipAudioOptions {
+  audio: true | Outputs.WhipAudioOptions | null | undefined,
+  initial: Api.Audio | undefined
+): Api.OutputWhipAudioOptions | undefined {
+  if (!audio || !initial) {
+    return undefined;
+  }
+
+  if (audio === true) {
+    return { initial };
+  }
+
   return {
     send_eos_when: audio.sendEosWhen && intoOutputEosCondition(audio.sendEosWhen),
     channels: audio.channels,
@@ -73,6 +82,7 @@ function intoOutputWhipAudioOptions(
     initial,
   };
 }
+
 function intoWhipAudioEncoderPreferences(
   encoder_preferences: Outputs.WhipAudioEncoderOptions[]
 ): Api.WhipAudioEncoderOptions[] {
