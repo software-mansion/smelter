@@ -1,6 +1,6 @@
 import type * as Api from '../api.js';
 
-export type VideoDecoder = 'ffmpeg_h264' | 'ffmpeg_vp8' | 'vulkan_h264';
+export type RtpVideoDecoder = 'ffmpeg_h264' | 'ffmpeg_vp8' | 'ffmpeg_vp9' | 'vulkan_h264';
 
 export type RegisterRtpInput = {
   /**
@@ -32,6 +32,8 @@ export type RegisterRtpInput = {
   offsetMs?: number | null;
 };
 
+export type Mp4VideoDecoder = 'ffmpeg_h264' | 'vulkan_h264';
+
 export type RegisterMp4Input = {
   /**
    * URL of the MP4 file.
@@ -62,9 +64,10 @@ export type RegisterMp4Input = {
   /**
    * (**default=`ffmpeg_h264`**) The decoder to use for decoding video.
    */
-  videoDecoder?: VideoDecoder | null;
+  videoDecoder?: Mp4VideoDecoder | null;
 };
 
+export type WhipVideoDecoder = 'ffmpeg_h264' | 'ffmpeg_vp8' | 'ffmpeg_vp9' | 'vulkan_h264' | 'any';
 export type RegisterWhipInput = {
   /**
    * Parameters of a video source included in the RTP stream.
@@ -88,7 +91,7 @@ export type RegisterWhipInput = {
 };
 
 export type InputRtpVideoOptions = {
-  decoder: VideoDecoder;
+  decoder: RtpVideoDecoder;
 };
 
 export type InputRtpAudioOptions =
@@ -130,7 +133,7 @@ export type InputRtpAudioAacOptions = {
 };
 
 export type InputWhipVideoOptions = {
-  decoder: VideoDecoder;
+  decoderPreferences?: WhipVideoDecoder[] | null;
 };
 
 export type InputWhipAudioOptions = {

@@ -87,10 +87,18 @@ function intoRtpRegisterInput(input: Inputs.RegisterRtpInput): RegisterInputRequ
 function intoWhipRegisterInput(input: Inputs.RegisterWhipInput): RegisterInputRequest {
   return {
     type: 'whip',
-    video: input.video,
+    video: input.video && intoInputWhipVideoOptions(input.video),
     audio: input.audio && intoInputWhipAudioOptions(input.audio),
     required: input.required,
     offset_ms: input.offsetMs,
+  };
+}
+
+export function intoInputWhipVideoOptions(
+  video: Inputs.InputWhipVideoOptions
+): Api.InputWhipVideoOptions {
+  return {
+    decoder_preferences: video.decoderPreferences,
   };
 }
 
