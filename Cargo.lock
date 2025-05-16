@@ -839,7 +839,6 @@ dependencies = [
 name = "compositor_api"
 version = "0.1.0"
 dependencies = [
- "axum",
  "bytes",
  "compositor_pipeline",
  "compositor_render",
