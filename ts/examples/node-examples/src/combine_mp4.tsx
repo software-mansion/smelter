@@ -92,9 +92,9 @@ async function run() {
         },
       },
       audio: {
+        channels: 'stereo',
         encoder: {
           type: 'aac',
-          channels: 'stereo',
         },
       },
     },

@@ -56,9 +56,9 @@ async function run() {
       resolution: RESOLUTION,
     },
     audio: {
+      channels: 'stereo',
       encoder: {
         type: 'aac',
-        channels: 'stereo',
       },
     },
   });
@@ -71,9 +71,9 @@ async function run() {
       resolution: RESOLUTION,
     },
     audio: {
+      channels: 'stereo',
       encoder: {
         type: 'aac',
-        channels: 'stereo',
       },
     },
   });
@@ -102,9 +102,9 @@ async function run() {
       resolution: RESOLUTION,
     },
     audio: {
+      channels: 'stereo',
       encoder: {
         type: 'aac',
-        channels: 'stereo',
       },
     },
   });

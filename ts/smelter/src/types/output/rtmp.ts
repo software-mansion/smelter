@@ -21,7 +21,7 @@ export type RtmpClientVideoEncoderOptions = {
   /**
    * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
    */
-  preset: Api.H264EncoderPreset;
+  preset?: Api.H264EncoderPreset;
   /**
    * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
    */
@@ -29,6 +29,7 @@ export type RtmpClientVideoEncoderOptions = {
 };
 
 export type RtmpClientAudioOptions = {
+  channels: Api.AudioChannels;
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
@@ -45,7 +46,6 @@ export type RtmpClientAudioOptions = {
 
 export type RtmpClientAudioEncoderOptions = {
   type: 'aac';
-  channels: Api.AudioChannels;
   /**
    * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
    */

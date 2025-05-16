@@ -1,6 +1,6 @@
 import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputRequest } from '../output';
-import { intoOutputEosCondition, intoOutputVideoOptions } from './common';
+import { intoOutputEosCondition } from './common';
 
 export function intoRegisterWhipOutput(
   output: Outputs.RegisterWhipOutput,
@@ -11,29 +11,93 @@ export function intoRegisterWhipOutput(
     endpoint_url: output.endpointUrl,
     bearer_token: output.bearerToken,
 
-    video: output.video && initial.video && intoOutputVideoOptions(output.video, initial.video),
-    audio: output.audio && initial.audio && intoOutputWhipAudioOptions(output.audio, initial.audio),
+    video: intoOutputWhipVideoOptions(output.video, initial.video),
+    audio: intoOutputWhipAudioOptions(output.audio, initial.audio),
   };
 }
 
-function intoOutputWhipAudioOptions(
-  audio: Outputs.WhipAudioOptions,
-  initial: Api.Audio
-): Api.OutputWhipAudioOptions {
+export function intoOutputWhipVideoOptions(
+  video: Outputs.WhipVideoOptions | null | undefined,
+  initial: Api.Video | undefined
+): Api.OutputWhipVideoOptions | undefined {
+  if (!video || !initial) {
+    return undefined;
+  }
+
   return {
-    send_eos_when: audio.sendEosWhen && intoOutputEosCondition(audio.sendEosWhen),
-    encoder: intoWhipAudioEncoderOptions(audio.encoder),
+    resolution: video.resolution,
+    send_eos_when: video.sendEosWhen && intoOutputEosCondition(video.sendEosWhen),
+    encoder_preferences:
+      video.encoderPreferences && intoWhipVideoEncoderPreferences(video.encoderPreferences),
     initial,
   };
 }
 
-function intoWhipAudioEncoderOptions(
-  encoder: Outputs.WhipAudioEncoderOptions
-): Api.WhipAudioEncoderOptions {
+function intoWhipVideoEncoderPreferences(
+  encoder_preferences: Outputs.WhipVideoEncoderOptions[]
+): Api.WhipVideoEncoderOptions[] {
+  return encoder_preferences.map(encoder => {
+    switch (encoder.type) {
+      case 'ffmpeg_vp9':
+        return {
+          type: 'ffmpeg_vp9',
+          ffmpeg_options: encoder.ffmpegOptions,
+        };
+      case 'ffmpeg_vp8':
+        return {
+          type: 'ffmpeg_vp8',
+          ffmpeg_options: encoder.ffmpegOptions,
+        };
+      case 'ffmpeg_h264':
+        return {
+          type: 'ffmpeg_h264',
+          preset: encoder.preset,
+          ffmpeg_options: encoder.ffmpegOptions,
+        };
+      case 'any':
+        return {
+          type: 'any',
+        };
+    }
+  });
+}
+
+function intoOutputWhipAudioOptions(
+  audio: true | Outputs.WhipAudioOptions | null | undefined,
+  initial: Api.Audio | undefined
+): Api.OutputWhipAudioOptions | undefined {
+  if (!audio || !initial) {
+    return undefined;
+  }
+
+  if (audio === true) {
+    return { initial };
+  }
+
   return {
-    type: 'opus',
-    channels: encoder.channels,
-    preset: encoder.preset,
-    sample_rate: encoder.sampleRate,
+    send_eos_when: audio.sendEosWhen && intoOutputEosCondition(audio.sendEosWhen),
+    channels: audio.channels,
+    encoder_preferences:
+      audio.encoderPreferences && intoWhipAudioEncoderPreferences(audio.encoderPreferences),
+    initial,
   };
+}
+
+function intoWhipAudioEncoderPreferences(
+  encoder_preferences: Outputs.WhipAudioEncoderOptions[]
+): Api.WhipAudioEncoderOptions[] {
+  return encoder_preferences.map(encoder => {
+    switch (encoder.type) {
+      case 'opus':
+        return {
+          type: 'opus',
+          preset: encoder.preset,
+          sample_rate: encoder.sampleRate,
+        };
+      case 'any':
+        return {
+          type: 'any',
+        };
+    }
+  });
 }

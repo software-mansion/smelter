@@ -114,7 +114,7 @@ export type RegisterInput =
     };
 export type PortOrPortRange = string | number;
 export type TransportProtocol = "udp" | "tcp_server";
-export type VideoDecoder = "ffmpeg_h264" | "ffmpeg_vp8" | "vulkan_h264" | "vulkan_video";
+export type VideoDecoder = "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264" | "vulkan_video";
 export type InputRtpAudioOptions =
   | {
       decoder: "opus";
@@ -141,6 +141,7 @@ export type InputRtpAudioOptions =
       rtp_mode?: AacRtpMode | null;
     };
 export type AacRtpMode = "low_bitrate" | "high_bitrate";
+export type WhipVideoDecoder = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type InputWhipAudioOptions = {
   decoder: "opus";
   /**
@@ -209,7 +210,7 @@ export type RegisterOutput =
       /**
        * Video track configuration.
        */
-      video?: OutputVideoOptions | null;
+      video?: OutputWhipVideoOptions | null;
       /**
        * Audio track configuration.
        */
@@ -232,6 +233,15 @@ export type VideoEncoderOptions =
     }
   | {
       type: "ffmpeg_vp8";
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "ffmpeg_vp9";
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
@@ -695,7 +705,7 @@ export type RtpAudioEncoderOptions = {
   /**
    * Specifies channels configuration.
    */
-  channels: AudioChannels;
+  channels?: AudioChannels | null;
   /**
    * (**default="voip"**) Specifies preset for audio output encoder.
    */
@@ -709,7 +719,7 @@ export type AudioChannels = "mono" | "stereo";
 export type OpusEncoderPreset = "quality" | "voip" | "lowest_latency";
 export type RtmpClientAudioEncoderOptions = {
   type: "aac";
-  channels: AudioChannels;
+  channels?: AudioChannels | null;
   /**
    * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
    */
@@ -717,27 +727,66 @@ export type RtmpClientAudioEncoderOptions = {
 };
 export type Mp4AudioEncoderOptions = {
   type: "aac";
-  channels: AudioChannels;
+  channels?: AudioChannels | null;
   /**
    * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
    */
   sample_rate?: number | null;
 };
-export type WhipAudioEncoderOptions = {
-  type: "opus";
-  /**
-   * Specifies channels configuration.
-   */
-  channels: AudioChannels;
-  /**
-   * (**default="voip"**) Specifies preset for audio output encoder.
-   */
-  preset?: OpusEncoderPreset | null;
-  /**
-   * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
-   */
-  sample_rate?: number | null;
-};
+export type WhipVideoEncoderOptions =
+  | {
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "ffmpeg_vp8";
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "ffmpeg_vp9";
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "any";
+    };
+export type WhipAudioEncoderOptions =
+  | {
+      type: "opus";
+      /**
+       * Specifies channels configuration.
+       */
+      channels?: AudioChannels | null;
+      /**
+       * (**default="voip"**) Specifies preset for audio output encoder.
+       */
+      preset?: OpusEncoderPreset | null;
+      /**
+       * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+       */
+      sample_rate?: number | null;
+    }
+  | {
+      type: "any";
+    };
 export type ImageSpec =
   | {
       asset_type: "png";
@@ -769,7 +818,8 @@ export interface InputRtpVideoOptions {
   decoder: VideoDecoder;
 }
 export interface InputWhipVideoOptions {
-  decoder: VideoDecoder;
+  decoder?: VideoDecoder | null;
+  decoder_preferences?: WhipVideoDecoder[] | null;
 }
 export interface OutputVideoOptions {
   /**
@@ -857,6 +907,10 @@ export interface OutputRtpAudioOptions {
    */
   encoder: RtpAudioEncoderOptions;
   /**
+   * Specifies channels configuration.
+   */
+  channels?: AudioChannels | null;
+  /**
    * Initial audio mixer configuration for output.
    */
   initial: Audio;
@@ -885,6 +939,10 @@ export interface OutputRtmpClientAudioOptions {
    */
   encoder: RtmpClientAudioEncoderOptions;
   /**
+   * Specifies channels configuration.
+   */
+  channels?: AudioChannels | null;
+  /**
    * Initial audio mixer configuration for output.
    */
   initial: Audio;
@@ -903,9 +961,35 @@ export interface OutputMp4AudioOptions {
    */
   encoder: Mp4AudioEncoderOptions;
   /**
+   * Specifies channels configuration.
+   */
+  channels?: AudioChannels | null;
+  /**
    * Initial audio mixer configuration for output.
    */
   initial: Audio;
+}
+export interface OutputWhipVideoOptions {
+  /**
+   * Output resolution in pixels.
+   */
+  resolution: Resolution;
+  /**
+   * Defines when output stream should end if some of the input streams are finished. If output includes both audio and video streams, then EOS needs to be sent on both.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Video encoder options.
+   */
+  encoder?: VideoEncoderOptions | null;
+  /**
+   * Codec preferences list.
+   */
+  encoder_preferences?: WhipVideoEncoderOptions[] | null;
+  /**
+   * Root of a component tree/scene that should be rendered for the output.
+   */
+  initial: Video;
 }
 export interface OutputWhipAudioOptions {
   /**
@@ -919,7 +1003,15 @@ export interface OutputWhipAudioOptions {
   /**
    * Audio encoder options.
    */
-  encoder: WhipAudioEncoderOptions;
+  encoder?: WhipAudioEncoderOptions | null;
+  /**
+   * Specifies channels configuration.
+   */
+  channels?: AudioChannels | null;
+  /**
+   * Codec preferences list.
+   */
+  encoder_preferences?: WhipAudioEncoderOptions[] | null;
   /**
    * Initial audio mixer configuration for output.
    */

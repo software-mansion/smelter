@@ -60,7 +60,7 @@ export type RegisterWhipOutput = {
   /**
    * Audio track configuration.
    */
-  audio?: WhipAudioOptions | null;
+  audio?: true | WhipAudioOptions | null;
 };
 
 export type RegisterRtmpClientOutput = {

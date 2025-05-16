@@ -1,6 +1,6 @@
 import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputRequest } from '../output';
-import { intoOutputEosCondition, intoOutputVideoOptions } from './common';
+import { intoOutputEosCondition } from './common';
 
 export function intoRegisterRtpOutput(
   output: Outputs.RegisterRtpOutput,
@@ -11,9 +11,44 @@ export function intoRegisterRtpOutput(
     port: output.port,
     ip: output.ip,
     transport_protocol: output.transportProtocol,
-    video: output.video && initial.video && intoOutputVideoOptions(output.video, initial.video),
+    video: output.video && initial.video && intoOutputRtpVideoOptions(output.video, initial.video),
     audio: output.audio && initial.audio && intoOutputRtpAudioOptions(output.audio, initial.audio),
   };
+}
+
+export function intoOutputRtpVideoOptions(
+  video: Outputs.RtpVideoOptions,
+  initial: Api.Video
+): Api.OutputVideoOptions {
+  return {
+    resolution: video.resolution,
+    send_eos_when: video.sendEosWhen && intoOutputEosCondition(video.sendEosWhen),
+    encoder: video.encoder && intoRtpVideoEncoderOptions(video.encoder),
+    initial,
+  };
+}
+
+export function intoRtpVideoEncoderOptions(
+  encoder: Outputs.RtpVideoEncoderOptions
+): Api.VideoEncoderOptions {
+  switch (encoder.type) {
+    case 'ffmpeg_vp9':
+      return {
+        type: 'ffmpeg_vp9',
+        ffmpeg_options: encoder.ffmpegOptions,
+      };
+    case 'ffmpeg_vp8':
+      return {
+        type: 'ffmpeg_vp8',
+        ffmpeg_options: encoder.ffmpegOptions,
+      };
+    case 'ffmpeg_h264':
+      return {
+        type: 'ffmpeg_h264',
+        preset: encoder.preset,
+        ffmpeg_options: encoder.ffmpegOptions,
+      };
+  }
 }
 
 function intoOutputRtpAudioOptions(
@@ -23,6 +58,7 @@ function intoOutputRtpAudioOptions(
   return {
     send_eos_when: audio.sendEosWhen && intoOutputEosCondition(audio.sendEosWhen),
     encoder: intoRtpAudioEncoderOptions(audio.encoder),
+    channels: audio.channels,
     initial,
   };
 }
@@ -33,7 +69,6 @@ function intoRtpAudioEncoderOptions(
   return {
     type: 'opus',
     preset: encoder.preset,
-    channels: encoder.channels,
     sample_rate: encoder.sampleRate,
   };
 }
