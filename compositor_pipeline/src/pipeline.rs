@@ -1,66 +1,57 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::Weak;
+use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::Duration;
 
-use compositor_render::error::{
-    ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
+use compositor_render::{
+    error::{
+        ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
+        UpdateSceneError,
+    },
+    scene::Component,
+    web_renderer::WebRendererInitOptions,
+    EventLoop, FrameSet, Framerate, InputId, OutputId, RegistryType, Renderer, RendererId,
+    RendererOptions, RendererSpec, RenderingMode, WgpuFeatures,
 };
-use compositor_render::scene::Component;
-use compositor_render::web_renderer::WebRendererInitOptions;
-use compositor_render::FrameSet;
-use compositor_render::Framerate;
-use compositor_render::RegistryType;
-use compositor_render::RendererOptions;
-use compositor_render::RenderingMode;
-use compositor_render::WgpuFeatures;
-use compositor_render::{error::UpdateSceneError, Renderer};
-use compositor_render::{EventLoop, InputId, OutputId, RendererId, RendererSpec};
+
 use crossbeam_channel::{bounded, Receiver};
 use glyphon::fontdb;
-use input::InputInitInfo;
-use input::RawDataInputOptions;
-use output::EncodedDataOutputOptions;
-use output::OutputOptions;
-use output::RawDataOutputOptions;
-use pipeline_output::register_pipeline_output;
-use tokio::runtime::Runtime;
-use tokio::sync::oneshot;
+use tokio::{runtime::Runtime, sync::oneshot};
 use tracing::{error, info, trace, warn};
-use types::RawDataSender;
-use whip_whep::run_whip_whep_server;
-use whip_whep::WhipInputState;
 
-use crate::audio_mixer::AudioMixer;
-use crate::audio_mixer::MixingStrategy;
-use crate::audio_mixer::{AudioChannels, AudioMixingParams};
-use crate::error::InitPipelineError;
+use input::{InputInitInfo, RawDataInputOptions};
+use output::{EncodedDataOutputOptions, OutputOptions, RawDataOutputOptions};
+use pipeline_output::register_pipeline_output;
+use types::RawDataSender;
+use whip_whep::{run_whip_whep_server, WhipInputState};
+
+use crate::audio_mixer::{AudioChannels, AudioMixer, AudioMixingParams, MixingStrategy};
 use crate::error::{
-    RegisterInputError, RegisterOutputError, UnregisterInputError, UnregisterOutputError,
+    InitPipelineError, RegisterInputError, RegisterOutputError, UnregisterInputError,
+    UnregisterOutputError,
 };
 
-use crate::event::Event;
-use crate::event::EventEmitter;
+use crate::event::{Event, EventEmitter};
+use crate::graphics_context;
 use crate::pipeline::pipeline_output::OutputSender;
-use crate::queue::PipelineEvent;
-use crate::queue::QueueAudioOutput;
-use crate::queue::QueueInputOptions;
-use crate::queue::{self, Queue, QueueOptions, QueueVideoOutput};
+use crate::queue::{
+    self, PipelineEvent, Queue, QueueAudioOutput, QueueInputOptions, QueueOptions, QueueVideoOutput,
+};
+
+pub use crate::graphics_context::{GraphicsContext, GraphicsContextOptions};
 
 use self::input::InputOptions;
 
-pub mod decoder;
-pub mod encoder;
-mod graphics_context;
-pub mod input;
-pub mod output;
 mod pipeline_input;
 mod pipeline_output;
-pub mod rtp;
 mod types;
+
+pub mod decoder;
+pub mod encoder;
+pub mod input;
+pub mod output;
+pub mod rtp;
 pub mod whip_whep;
 
 use self::pipeline_input::register_pipeline_input;
@@ -73,7 +64,6 @@ pub use self::types::{
 };
 pub use pipeline_output::PipelineOutputEndCondition;
 
-pub use graphics_context::{GraphicsContext, GraphicsContextOptions};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Port(pub u16);

@@ -38,13 +38,11 @@ pub(super) fn register_pipeline_output<NewOutputResult>(
     pipeline: &Arc<Mutex<Pipeline>>,
     output_id: OutputId,
     output_options: &dyn OutputOptionsExt<NewOutputResult>,
-    video: Option<OutputVideoOptions>,
-    audio: Option<OutputAudioOptions>,
 ) -> Result<NewOutputResult, RegisterOutputError> {
-    let (has_video, has_audio) = (video.is_some(), audio.is_some());
-    if !has_video && !has_audio {
-        return Err(RegisterOutputError::NoVideoAndAudio(output_id));
-    }
+    //let (has_video, has_audio) = (video.is_some(), audio.is_some());
+    //if !has_video && !has_audio {
+    //    return Err(RegisterOutputError::NoVideoAndAudio(output_id));
+    //}
 
     if pipeline.lock().unwrap().outputs.contains_key(&output_id) {
         return Err(RegisterOutputError::AlreadyRegistered(output_id));
