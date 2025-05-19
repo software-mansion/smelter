@@ -120,12 +120,8 @@ fn run_encoder_thread(
         ("cpu-used", "0"),
         // Time to spend encoding.
         ("deadline", "realtime"),
-        // Near-lossless if bitrate allows
-        ("crf", "4"),
-        // Bitrate target
-        ("b:v", "2M"),
-        // Enable use of alternate reference frames (2-pass only)
-        ("auto-alt-ref", "1"),
+        // Auto threads number used.
+        ("threads", "0"),
         // Zero-latency. Disables frame reordering.
         ("lag-in-frames", "0"),
     ];
