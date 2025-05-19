@@ -1,24 +1,36 @@
 use std::{fmt, sync::Arc, time::Duration};
 
-use bytes::Bytes;
-use compositor_render::Frame;
-use crossbeam_channel::{Receiver, Sender};
-
-use crate::{
-    audio_mixer::{InputSamples, OutputSamples},
-    queue::PipelineEvent,
-};
+#[derive(Debug, thiserror::Error)]
+pub enum ChunkFromFfmpegError {
+    #[error("No data")]
+    NoData,
+    #[error("No pts")]
+    NoPts,
+}
 
 /// A struct representing a chunk of encoded data.
 ///
 /// Many codecs specify that encoded data is split into chunks.
 /// For example, H264 splits the data into NAL units and AV1 splits the data into OBU frames.
 pub struct EncodedChunk {
-    pub data: Bytes,
+    pub data: bytes::Bytes,
     pub pts: Duration,
     pub dts: Option<Duration>,
     pub is_keyframe: IsKeyframe,
     pub kind: EncodedChunkKind,
+}
+
+impl fmt::Debug for EncodedChunk {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let len = self.data.len();
+        let first_bytes = &self.data[0..usize::min(10, len)];
+        f.debug_struct("EncodedChunk")
+            .field("data", &format!("len={}, {:?}", len, first_bytes))
+            .field("pts", &self.pts)
+            .field("dts", &self.dts)
+            .field("kind", &self.kind)
+            .finish()
+    }
 }
 
 pub enum IsKeyframe {
@@ -43,37 +55,6 @@ pub enum EncoderOutputEvent {
 pub enum EncodedChunkKind {
     Video(VideoCodec),
     Audio(AudioCodec),
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ChunkFromFfmpegError {
-    #[error("No data")]
-    NoData,
-    #[error("No pts")]
-    NoPts,
-}
-
-/// Receiver sides of video/audio channels for data produced by
-/// audio mixer and renderer
-#[derive(Debug, Clone)]
-pub struct RawDataReceiver {
-    pub video: Option<Receiver<PipelineEvent<Frame>>>,
-    pub audio: Option<Receiver<PipelineEvent<OutputSamples>>>,
-}
-
-#[derive(Debug)]
-pub struct RawDataSender {
-    pub video: Option<Sender<PipelineEvent<Frame>>>,
-    pub audio: Option<Sender<PipelineEvent<InputSamples>>>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum VideoDecoder {
-    FFmpegH264,
-    FFmpegVp8,
-    FFmpegVp9,
-    #[cfg(feature = "vk-video")]
-    VulkanVideoH264,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,19 +116,6 @@ impl fmt::Debug for Samples {
         };
         f.debug_struct(&format!("Samples::{}", name))
             .field("len", &length)
-            .finish()
-    }
-}
-
-impl fmt::Debug for EncodedChunk {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let len = self.data.len();
-        let first_bytes = &self.data[0..usize::min(10, len)];
-        f.debug_struct("EncodedChunk")
-            .field("data", &format!("len={}, {:?}", len, first_bytes))
-            .field("pts", &self.pts)
-            .field("dts", &self.dts)
-            .field("kind", &self.kind)
             .finish()
     }
 }

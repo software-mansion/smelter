@@ -3,7 +3,7 @@ use log::error;
 use tracing::{span, trace, warn, Level};
 
 use crate::{
-    audio_mixer::{AudioChannels, AudioSamples, OutputSamples},
+    audio_mixer::{AudioSamples, OutputSamples},
     error::EncoderInitError,
     pipeline::{
         types::{EncodedChunk, EncodedChunkKind, EncoderOutputEvent, IsKeyframe},
@@ -13,13 +13,6 @@ use crate::{
 };
 
 use super::{resampler::OutputResampler, AudioEncoderPreset};
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct OpusEncoderOptions {
-    pub channels: AudioChannels,
-    pub preset: AudioEncoderPreset,
-    pub sample_rate: u32,
-}
 
 #[derive(Debug)]
 pub struct OpusEncoder {

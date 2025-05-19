@@ -26,18 +26,6 @@ use super::{AudioInputReceiver, Input, InputInitInfo, InputInitResult, VideoInpu
 
 pub mod reader;
 
-#[derive(Debug, Clone)]
-pub struct Mp4Options {
-    pub source: Source,
-    pub should_loop: bool,
-    pub video_decoder: VideoDecoder,
-}
-
-#[derive(Debug, Clone)]
-pub enum Source {
-    Url(String),
-    File(PathBuf),
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Mp4Error {

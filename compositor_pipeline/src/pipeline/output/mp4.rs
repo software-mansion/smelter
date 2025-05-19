@@ -7,7 +7,6 @@ use log::error;
 use tracing::{debug, warn};
 
 use crate::{
-    audio_mixer::AudioChannels,
     error::OutputInitError,
     event::Event,
     pipeline::{
@@ -18,14 +17,8 @@ use crate::{
         types::IsKeyframe,
         EncodedChunk, EncodedChunkKind, EncoderOutputEvent, PipelineCtx,
     },
+    Mp4OutputOptions,
 };
-
-#[derive(Debug, Clone)]
-pub struct Mp4OutputOptions {
-    pub output_path: PathBuf,
-    pub video: Option<VideoEncoderOptions>,
-    pub audio: Option<AudioEncoderOptions>,
-}
 
 pub enum Mp4OutputVideoTrack {
     H264 { width: u32, height: u32 },

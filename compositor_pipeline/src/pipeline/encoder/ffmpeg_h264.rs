@@ -13,80 +13,13 @@ use tracing::{debug, error, span, trace, warn, Level};
 
 use crate::{
     error::EncoderInitError,
+    ffmpeg_h264::EncoderPreset,
     pipeline::types::{
         ChunkFromFfmpegError, EncodedChunk, EncodedChunkKind, EncoderOutputEvent, IsKeyframe,
         VideoCodec,
     },
     queue::PipelineEvent,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum EncoderPreset {
-    Ultrafast,
-    Superfast,
-    Veryfast,
-    Faster,
-    Fast,
-    Medium,
-    Slow,
-    Slower,
-    Veryslow,
-    Placebo,
-}
-
-impl EncoderPreset {
-    fn to_str(self) -> &'static str {
-        match self {
-            EncoderPreset::Ultrafast => "ultrafast",
-            EncoderPreset::Superfast => "superfast",
-            EncoderPreset::Veryfast => "veryfast",
-            EncoderPreset::Faster => "faster",
-            EncoderPreset::Fast => "fast",
-            EncoderPreset::Medium => "medium",
-            EncoderPreset::Slow => "slow",
-            EncoderPreset::Slower => "slower",
-            EncoderPreset::Veryslow => "veryslow",
-            EncoderPreset::Placebo => "placebo",
-        }
-    }
-
-    fn default_partitions(&self) -> &'static str {
-        match self {
-            EncoderPreset::Ultrafast => "none",
-            EncoderPreset::Superfast => "i8x8,i4x4",
-            EncoderPreset::Veryfast => "p8x8,b8x8,i8x8,i4x4",
-            EncoderPreset::Faster => "p8x8,b8x8,i8x8,i4x4",
-            EncoderPreset::Fast => "p8x8,b8x8,i8x8,i4x4",
-            EncoderPreset::Medium => "p8x8,b8x8,i8x8,i4x4",
-            EncoderPreset::Slow => "all",
-            EncoderPreset::Slower => "all",
-            EncoderPreset::Veryslow => "all",
-            EncoderPreset::Placebo => "all",
-        }
-    }
-
-    fn default_subq_mode(&self) -> &'static str {
-        match self {
-            EncoderPreset::Ultrafast => "0",
-            EncoderPreset::Superfast => "1",
-            EncoderPreset::Veryfast => "2",
-            EncoderPreset::Faster => "4",
-            EncoderPreset::Fast => "6",
-            EncoderPreset::Medium => "7",
-            EncoderPreset::Slow => "8",
-            EncoderPreset::Slower => "9",
-            EncoderPreset::Veryslow => "10",
-            EncoderPreset::Placebo => "11",
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Options {
-    pub preset: EncoderPreset,
-    pub resolution: Resolution,
-    pub raw_options: Vec<(String, String)>,
-}
 
 pub struct LibavH264Encoder {
     resolution: Resolution,
@@ -419,4 +352,51 @@ fn encoded_chunk_from_av_packet(
         },
         kind,
     })
+}
+
+impl EncoderPreset {
+    fn to_str(self) -> &'static str {
+        match self {
+            EncoderPreset::Ultrafast => "ultrafast",
+            EncoderPreset::Superfast => "superfast",
+            EncoderPreset::Veryfast => "veryfast",
+            EncoderPreset::Faster => "faster",
+            EncoderPreset::Fast => "fast",
+            EncoderPreset::Medium => "medium",
+            EncoderPreset::Slow => "slow",
+            EncoderPreset::Slower => "slower",
+            EncoderPreset::Veryslow => "veryslow",
+            EncoderPreset::Placebo => "placebo",
+        }
+    }
+
+    fn default_partitions(&self) -> &'static str {
+        match self {
+            EncoderPreset::Ultrafast => "none",
+            EncoderPreset::Superfast => "i8x8,i4x4",
+            EncoderPreset::Veryfast => "p8x8,b8x8,i8x8,i4x4",
+            EncoderPreset::Faster => "p8x8,b8x8,i8x8,i4x4",
+            EncoderPreset::Fast => "p8x8,b8x8,i8x8,i4x4",
+            EncoderPreset::Medium => "p8x8,b8x8,i8x8,i4x4",
+            EncoderPreset::Slow => "all",
+            EncoderPreset::Slower => "all",
+            EncoderPreset::Veryslow => "all",
+            EncoderPreset::Placebo => "all",
+        }
+    }
+
+    fn default_subq_mode(&self) -> &'static str {
+        match self {
+            EncoderPreset::Ultrafast => "0",
+            EncoderPreset::Superfast => "1",
+            EncoderPreset::Veryfast => "2",
+            EncoderPreset::Faster => "4",
+            EncoderPreset::Fast => "6",
+            EncoderPreset::Medium => "7",
+            EncoderPreset::Slow => "8",
+            EncoderPreset::Slower => "9",
+            EncoderPreset::Veryslow => "10",
+            EncoderPreset::Placebo => "11",
+        }
+    }
 }

@@ -2,29 +2,6 @@ use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 
 use compositor_render::{InputId, OutputId};
 
-#[derive(Debug, Clone)]
-pub struct AudioMixingParams {
-    pub inputs: Vec<InputParams>,
-}
-
-#[derive(Debug, Clone)]
-pub enum MixingStrategy {
-    SumClip,
-    SumScale,
-}
-
-#[derive(Debug, Clone)]
-pub struct InputParams {
-    pub input_id: InputId,
-    // [0, 1] range of input volume
-    pub volume: f32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum AudioChannels {
-    Mono,
-    Stereo,
-}
 
 #[derive(Debug, Clone)]
 pub struct InputSamplesSet {

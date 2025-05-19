@@ -21,10 +21,8 @@ use webrtc::{rtp_transceiver::rtp_sender::RTCRtpSender, track::track_local::Trac
 use crate::{
     error::OutputInitError,
     event::Event,
-    pipeline::{
-        encoder::{AudioEncoderOptions, Encoder, VideoEncoderOptions},
-        PipelineCtx,
-    },
+    pipeline::{encoder::Encoder, PipelineCtx},
+    WhipOutputOptions,
 };
 
 mod establish_peer_connection;
@@ -36,32 +34,14 @@ mod setup_track;
 
 #[derive(Debug)]
 pub struct WhipSender {
-    pub connection_options: WhipSenderOptions,
+    pub connection_options: WhipOutputOptions,
     should_close: Arc<AtomicBool>,
-}
-
-#[derive(Debug, Clone)]
-pub struct VideoWhipOptions {
-    pub encoder_preferences: Vec<VideoEncoderOptions>,
-}
-
-#[derive(Debug, Clone)]
-pub struct AudioWhipOptions {
-    pub encoder_preferences: Vec<AudioEncoderOptions>,
-}
-
-#[derive(Debug, Clone)]
-pub struct WhipSenderOptions {
-    pub endpoint_url: String,
-    pub bearer_token: Option<Arc<str>>,
-    pub video: Option<VideoWhipOptions>,
-    pub audio: Option<AudioWhipOptions>,
 }
 
 #[derive(Debug, Clone)]
 pub struct WhipCtx {
     output_id: OutputId,
-    options: WhipSenderOptions,
+    options: WhipOutputOptions,
     should_close: Arc<AtomicBool>,
     pipeline_ctx: Arc<PipelineCtx>,
 }

@@ -11,19 +11,11 @@ use ffmpeg_next::{
 use tracing::{debug, error, span, trace, warn, Level};
 
 use crate::{
-    error::EncoderInitError,
-    pipeline::types::{
+    error::EncoderInitError, ffmpeg_vp9, pipeline::types::{
         ChunkFromFfmpegError, EncodedChunk, EncodedChunkKind, EncoderOutputEvent, IsKeyframe,
         VideoCodec,
-    },
-    queue::PipelineEvent,
+    }, queue::PipelineEvent
 };
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Options {
-    pub resolution: Resolution,
-    pub raw_options: Vec<(String, String)>,
-}
 
 pub struct LibavVP9Encoder {
     resolution: Resolution,
@@ -34,7 +26,7 @@ pub struct LibavVP9Encoder {
 impl LibavVP9Encoder {
     pub fn new(
         output_id: &OutputId,
-        options: Options,
+        options: ffmpeg_vp9::EncoderOptions,
         framerate: Framerate,
         chunks_sender: Sender<EncoderOutputEvent>,
     ) -> Result<Self, EncoderInitError> {

@@ -17,32 +17,39 @@ use compositor_render::{
 
 use crossbeam_channel::{bounded, Receiver};
 use glyphon::fontdb;
+use output_options::{new_encoded_data_output, new_output, new_raw_data_output};
 use tokio::{runtime::Runtime, sync::oneshot};
 use tracing::{error, info, trace, warn};
 
 use input::{InputInitInfo, RawDataInputOptions};
-use output::{EncodedDataOutputOptions, OutputOptions, RawDataOutputOptions};
+use output::Output;
 use pipeline_output::register_pipeline_output;
 use types::RawDataSender;
 use whip_whep::{run_whip_whep_server, WhipInputState};
 
-use crate::audio_mixer::{AudioChannels, AudioMixer, AudioMixingParams, MixingStrategy};
+use crate::audio_mixer::AudioMixer;
 use crate::error::{
     InitPipelineError, RegisterInputError, RegisterOutputError, UnregisterInputError,
     UnregisterOutputError,
 };
 
 use crate::event::{Event, EventEmitter};
-use crate::graphics_context;
 use crate::pipeline::pipeline_output::OutputSender;
 use crate::queue::{
     self, PipelineEvent, Queue, QueueAudioOutput, QueueInputOptions, QueueOptions, QueueVideoOutput,
 };
-
-pub use crate::graphics_context::{GraphicsContext, GraphicsContextOptions};
+use crate::{
+    graphics_context::{GraphicsContext, GraphicsContextOptions},
+    AudioScene, VideoScene,
+};
+use crate::{
+    EncoderOutputEvent, Port, RawDataReceiver, RegisterEncodedDataOutputOptions,
+    RegisterOutputOptions, RegisterRawDataOutputOptions,
+};
 
 use self::input::InputOptions;
 
+mod output_options;
 mod pipeline_input;
 mod pipeline_output;
 mod types;
@@ -51,47 +58,16 @@ pub mod decoder;
 pub mod encoder;
 pub mod input;
 pub mod output;
-pub mod rtp;
 pub mod whip_whep;
 
 use self::pipeline_input::register_pipeline_input;
 use self::pipeline_input::PipelineInput;
-use self::pipeline_output::PipelineOutput;
 
-pub use self::types::{
-    AudioCodec, EncodedChunk, EncodedChunkKind, EncoderOutputEvent, RawDataReceiver, VideoCodec,
-    VideoDecoder,
-};
-pub use pipeline_output::PipelineOutputEndCondition;
-
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Port(pub u16);
+pub use self::types::{AudioCodec, VideoCodec, VideoDecoder};
 
 pub struct RegisterInputOptions {
     pub input_options: InputOptions,
     pub queue_options: queue::QueueInputOptions,
-}
-
-#[derive(Debug, Clone)]
-pub struct RegisterOutputOptions<T> {
-    pub output_options: T,
-    pub video: Option<OutputVideoOptions>,
-    pub audio: Option<OutputAudioOptions>,
-}
-
-#[derive(Debug, Clone)]
-pub struct OutputVideoOptions {
-    pub initial: Component,
-    pub end_condition: PipelineOutputEndCondition,
-}
-
-#[derive(Debug, Clone)]
-pub struct OutputAudioOptions {
-    pub initial: AudioMixingParams,
-    pub mixing_strategy: MixingStrategy,
-    pub channels: AudioChannels,
-    pub end_condition: PipelineOutputEndCondition,
 }
 
 #[derive(Debug, Clone)]
@@ -103,7 +79,7 @@ pub struct OutputScene {
 pub struct Pipeline {
     ctx: Arc<PipelineCtx>,
     inputs: HashMap<InputId, PipelineInput>,
-    outputs: HashMap<OutputId, PipelineOutput>,
+    outputs: HashMap<OutputId, Box<dyn Output>>,
     queue: Arc<Queue>,
     renderer: Renderer,
     audio_mixer: AudioMixer,
@@ -140,7 +116,7 @@ pub struct PipelineCtx {
     pub whip_whep_server_port: u16,
     pub tokio_rt: Arc<Runtime>,
     #[cfg(feature = "vk-video")]
-    pub vulkan_ctx: Option<graphics_context::VulkanCtx>,
+    pub vulkan_ctx: Option<crate::graphics_context::VulkanCtx>,
 }
 
 impl std::fmt::Debug for PipelineCtx {
@@ -292,43 +268,25 @@ impl Pipeline {
     pub fn register_output(
         pipeline: &Arc<Mutex<Self>>,
         output_id: OutputId,
-        register_options: RegisterOutputOptions<OutputOptions>,
+        options: RegisterOutputOptions,
     ) -> Result<Option<Port>, RegisterOutputError> {
-        register_pipeline_output(
-            pipeline,
-            output_id,
-            &register_options.output_options,
-            register_options.video,
-            register_options.audio,
-        )
+        register_pipeline_output(pipeline, output_id, options, new_output)
     }
 
     pub fn register_encoded_data_output(
         pipeline: &Arc<Mutex<Self>>,
         output_id: OutputId,
-        register_options: RegisterOutputOptions<EncodedDataOutputOptions>,
+        options: RegisterEncodedDataOutputOptions,
     ) -> Result<Receiver<EncoderOutputEvent>, RegisterOutputError> {
-        register_pipeline_output(
-            pipeline,
-            output_id,
-            &register_options.output_options,
-            register_options.video,
-            register_options.audio,
-        )
+        register_pipeline_output(pipeline, output_id, options, new_encoded_data_output)
     }
 
     pub fn register_raw_data_output(
         pipeline: &Arc<Mutex<Self>>,
         output_id: OutputId,
-        register_options: RegisterOutputOptions<RawDataOutputOptions>,
+        options: RegisterRawDataOutputOptions,
     ) -> Result<RawDataReceiver, RegisterOutputError> {
-        register_pipeline_output(
-            pipeline,
-            output_id,
-            &register_options.output_options,
-            register_options.video,
-            register_options.audio,
-        )
+        register_pipeline_output(pipeline, output_id, options, new_raw_data_output)
     }
 
     pub fn unregister_output(&mut self, output_id: &OutputId) -> Result<(), UnregisterOutputError> {
@@ -364,8 +322,8 @@ impl Pipeline {
     pub fn update_output(
         &mut self,
         output_id: OutputId,
-        video: Option<Component>,
-        audio: Option<AudioMixingParams>,
+        video: Option<VideoScene>,
+        audio: Option<AudioScene>,
     ) -> Result<(), UpdateSceneError> {
         self.check_output_spec(&output_id, &video, &audio)?;
         if let Some(video) = video {
@@ -394,8 +352,8 @@ impl Pipeline {
     fn check_output_spec(
         &self,
         output_id: &OutputId,
-        video: &Option<Component>,
-        audio: &Option<AudioMixingParams>,
+        video: &Option<VideoScene>,
+        audio: &Option<AudioScene>,
     ) -> Result<(), UpdateSceneError> {
         let Some(output) = self.outputs.get(output_id) else {
             return Err(UpdateSceneError::OutputNotRegistered(output_id.clone()));
@@ -414,7 +372,7 @@ impl Pipeline {
     fn update_scene_root(
         &mut self,
         output_id: OutputId,
-        scene_root: Component,
+        video: VideoScene,
     ) -> Result<(), UpdateSceneError> {
         let output = self
             .outputs
@@ -429,31 +387,32 @@ impl Pipeline {
             }
         }
 
-        let (Some(resolution), Some(frame_format)) = (
-            output.output.resolution(),
-            output.output.output_frame_format(),
-        ) else {
+        let Some(video_output) = output.video() else {
             return Err(UpdateSceneError::AudioVideoNotMatching(output_id));
         };
 
-        info!(?output_id, "Update scene {:#?}", scene_root);
+        info!(?output_id, "Update scene {:#?}", video.root);
 
-        self.renderer
-            .update_scene(output_id, resolution, frame_format, scene_root)
+        self.renderer.update_scene(
+            output_id,
+            video_output.resolution,
+            video_output.frame_format,
+            video.root,
+        )
     }
 
     fn update_audio(
         &mut self,
         output_id: &OutputId,
-        audio: AudioMixingParams,
+        audio: AudioScene,
     ) -> Result<(), UpdateSceneError> {
         let output = self
             .outputs
             .get(output_id)
             .ok_or_else(|| UpdateSceneError::OutputNotRegistered(output_id.clone()))?;
 
-        if let Some(cond) = &output.audio_end_condition {
-            if cond.did_output_end() {
+        if let Some(audio) = &output.audio() {
+            if audio.end_condition.did_output_end() {
                 // Ignore updates after EOS
                 warn!("Received output update on a finished output");
                 return Ok(());
@@ -480,14 +439,6 @@ impl Pipeline {
 
         let weak_pipeline = Arc::downgrade(pipeline);
         thread::spawn(move || run_audio_mixer_thread(weak_pipeline, audio_receiver));
-    }
-
-    pub fn inputs(&self) -> impl Iterator<Item = (&InputId, &PipelineInput)> {
-        self.inputs.iter()
-    }
-
-    pub fn outputs(&self) -> impl Iterator<Item = (&OutputId, &PipelineOutput)> {
-        self.outputs.iter()
     }
 }
 

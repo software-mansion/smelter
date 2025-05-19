@@ -62,11 +62,6 @@ pub struct InputAudioStream {
     pub options: decoder::AudioDecoderOptions,
 }
 
-pub struct OutputAudioStream {
-    pub options: encoder::EncoderOptions,
-    pub payload_type: u8,
-}
-
 #[derive(Debug, Clone)]
 pub struct RtpStream {
     pub video: Option<InputVideoStream>,

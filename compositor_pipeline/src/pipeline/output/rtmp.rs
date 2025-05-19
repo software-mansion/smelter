@@ -17,14 +17,8 @@ use crate::{
         types::IsKeyframe,
         EncodedChunk, EncodedChunkKind, EncoderOutputEvent,
     },
+    PipelineCtx, RtmpOutputOptions,
 };
-
-#[derive(Debug, Clone)]
-pub struct RtmpSenderOptions {
-    pub url: String,
-    pub video: Option<VideoEncoderOptions>,
-    pub audio: Option<AudioEncoderOptions>,
-}
 
 #[derive(Debug, Clone)]
 struct Stream {
@@ -37,9 +31,10 @@ pub struct RmtpSender;
 impl RmtpSender {
     pub fn new(
         output_id: &OutputId,
-        options: RtmpSenderOptions,
+        options: RtmpOutputOptions,
         packets_receiver: Receiver<EncoderOutputEvent>,
         encoder_ctx: EncoderContext,
+        pipeline_ctx: PipelineCtx,
     ) -> Result<Self, OutputInitError> {
         let (output_ctx, video_stream, audio_stream) = init_ffmpeg_output(options, encoder_ctx)?;
 
@@ -52,7 +47,9 @@ impl RmtpSender {
                         .entered();
 
                 run_ffmpeg_output_thread(output_ctx, video_stream, audio_stream, packets_receiver);
-                emit_event(Event::OutputDone(output_id));
+                pipeline_ctx
+                    .event_emitter
+                    .emit(Event::OutputDone(output_id));
                 debug!("Closing RTMP sender thread.");
             })
             .unwrap();

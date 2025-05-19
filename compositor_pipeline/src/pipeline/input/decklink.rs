@@ -3,6 +3,8 @@ use std::sync::Arc;
 use compositor_render::InputId;
 use tracing::{error, span, Level};
 
+use crate::DeckLinkInputOptions;
+
 use self::{capture::ChannelCallbackAdapter, find_device::find_decklink};
 
 use super::{AudioInputReceiver, Input, InputInitInfo, InputInitResult, VideoInputReceiver};
@@ -33,19 +35,6 @@ pub struct DeckLinkInfo {
     pub subdevice_index: Option<u32>,
 }
 
-#[derive(Debug, Clone)]
-pub struct DeckLinkOptions {
-    pub subdevice_index: Option<u32>,
-    pub display_name: Option<String>,
-    /// Persistent id of a device (different value for each sub-device).
-    pub persistent_id: Option<u32>,
-
-    pub enable_audio: bool,
-    /// Force specified pixel format, value resolved in input format
-    /// autodetection will be ignored.
-    pub pixel_format: Option<PixelFormat>,
-}
-
 pub struct DeckLink {
     input: Arc<decklink::Input>,
 }
@@ -53,7 +42,7 @@ pub struct DeckLink {
 impl DeckLink {
     pub(super) fn start_new_input(
         input_id: &InputId,
-        opts: DeckLinkOptions,
+        opts: DeckLinkInputOptions,
     ) -> Result<InputInitResult, DeckLinkError> {
         let span = span!(
             Level::INFO,

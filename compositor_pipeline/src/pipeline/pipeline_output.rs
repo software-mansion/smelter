@@ -10,39 +10,27 @@ use tracing::{info, warn};
 use crate::{audio_mixer::OutputSamples, error::RegisterOutputError, queue::PipelineEvent};
 
 use super::{
-    output::{self, OutputOptionsExt},
-    OutputAudioOptions, OutputVideoOptions, Pipeline, PipelineInput,
+    output::{self, Output},
+    output_options::{BuildOutputFn, OutputOptionsExt},
+    Pipeline, PipelineInput,
 };
-
-#[derive(Debug, Clone)]
-pub enum PipelineOutputEndCondition {
-    AnyOf(Vec<InputId>),
-    AllOf(Vec<InputId>),
-    AnyInput,
-    AllInputs,
-    Never,
-}
-
-pub struct PipelineOutput {
-    pub output: output::Output,
-    pub video_end_condition: Option<PipelineOutputEndConditionState>,
-    pub audio_end_condition: Option<PipelineOutputEndConditionState>,
-}
 
 pub(super) enum OutputSender<T> {
     ActiveSender(T),
     FinishedSender,
 }
 
-pub(super) fn register_pipeline_output<NewOutputResult>(
+pub(super) fn register_pipeline_output<Options: OutputOptionsExt, OutputResult>(
     pipeline: &Arc<Mutex<Pipeline>>,
     output_id: OutputId,
-    output_options: &dyn OutputOptionsExt<NewOutputResult>,
-) -> Result<NewOutputResult, RegisterOutputError> {
-    //let (has_video, has_audio) = (video.is_some(), audio.is_some());
-    //if !has_video && !has_audio {
-    //    return Err(RegisterOutputError::NoVideoAndAudio(output_id));
-    //}
+    options: Options,
+    build_output: BuildOutputFn<Options, OutputResult>,
+) -> Result<OutputResult, RegisterOutputError> {
+    let initial_video = options.initial_video();
+    let initial_audio = options.initial_audio();
+    if initial_video.is_none() && initial_audio.is_none() {
+        return Err(RegisterOutputError::NoVideoAndAudio(output_id));
+    }
 
     if pipeline.lock().unwrap().outputs.contains_key(&output_id) {
         return Err(RegisterOutputError::AlreadyRegistered(output_id));
@@ -50,7 +38,7 @@ pub(super) fn register_pipeline_output<NewOutputResult>(
 
     let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
 
-    let (output, output_result) = output_options.new_output(&output_id, pipeline_ctx)?;
+    let (output, output_result) = build_output(pipeline_ctx, &output_id, &options)?;
 
     let mut guard = pipeline.lock().unwrap();
 
@@ -58,25 +46,24 @@ pub(super) fn register_pipeline_output<NewOutputResult>(
         return Err(RegisterOutputError::AlreadyRegistered(output_id));
     }
 
-    let output = PipelineOutput {
-        output,
-        audio_end_condition: audio.as_ref().map(|audio| {
-            PipelineOutputEndConditionState::new_audio(audio.end_condition.clone(), &guard.inputs)
-        }),
-        video_end_condition: video.as_ref().map(|video| {
-            PipelineOutputEndConditionState::new_video(video.end_condition.clone(), &guard.inputs)
-        }),
-    };
+    // TODO:
+    // let output = PipelineOutput {
+    //     output,
+    //     audio_end_condition: audio.as_ref().map(|audio| {
+    //         PipelineOutputEndConditionState::new_audio(audio.end_condition.clone(), &guard.inputs)
+    //     }),
+    //     video_end_condition: video.as_ref().map(|video| {
+    //         PipelineOutputEndConditionState::new_video(video.end_condition.clone(), &guard.inputs)
+    //     }),
+    // };
 
-    if let (Some(video_opts), Some(resolution), Some(format)) = (
-        video.clone(),
-        output.output.resolution(),
-        output.output.output_frame_format(),
-    ) {
-        let result =
-            guard
-                .renderer
-                .update_scene(output_id.clone(), resolution, format, video_opts.initial);
+    if let (Some(initial_video), Some(output_video)) = (initial_video, output.video()) {
+        let result = guard.renderer.update_scene(
+            output_id.clone(),
+            output_video.resolution,
+            output_video.frame_format,
+            initial_video,
+        );
 
         if let Err(err) = result {
             guard.renderer.unregister_output(&output_id);
@@ -84,12 +71,12 @@ pub(super) fn register_pipeline_output<NewOutputResult>(
         }
     };
 
-    if let Some(audio_opts) = audio.clone() {
+    if let (Some(initial_audio), Some(output_audio)) = (initial_audio, output.audio()) {
         guard.audio_mixer.register_output(
             output_id.clone(),
-            audio_opts.initial,
-            audio_opts.mixing_strategy,
-            audio_opts.channels,
+            initial_audio,
+            output_audio.mixing_strategy,
+            output_audio.channels,
         );
     }
 
@@ -184,9 +171,9 @@ enum EosStatus {
 }
 
 impl PipelineOutputEndConditionState {
-    fn new_video(
+    pub(super) fn new_video(
         condition: PipelineOutputEndCondition,
-        inputs: &HashMap<InputId, PipelineInput>,
+        //inputs: &HashMap<InputId, PipelineInput>,
     ) -> Self {
         Self {
             condition,
@@ -202,9 +189,9 @@ impl PipelineOutputEndConditionState {
         }
     }
 
-    fn new_audio(
+    pub(super) fn new_audio(
         condition: PipelineOutputEndCondition,
-        inputs: &HashMap<InputId, PipelineInput>,
+        //inputs: &HashMap<InputId, PipelineInput>,
     ) -> Self {
         Self {
             condition,

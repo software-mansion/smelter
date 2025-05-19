@@ -3,36 +3,18 @@ use std::time::Duration;
 use crate::*;
 
 #[derive(Debug, Clone)]
-pub enum RegisterInputOptions {
-    Rtp(RtpInputOptions),
-    Mp4(Mp4Options),
-    Whip(WhipOptions),
-    #[cfg(feature = "decklink")]
-    DeckLink(decklink::DeckLinkOptions),
-}
+pub struct RegisterInputOptions {
+    protocol: ProtocolInputOptions,
+    queue: QueueInputOptions,
+} 
 
 #[derive(Debug, Clone)]
-pub struct RtpInputOptions {
-    pub port: RequestedPort,
-    pub transport_protocol: TransportProtocol,
-    pub video: Option<RtpInputVideoOptions>,
-    pub audio: Option<RtpInputAudioOptions>,
-    pub queue: queue::QueueInputOptions,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RtpInputVideoOptions {
-    pub options: decoder::VideoDecoderOptions,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RtpInputAudioOptions {
-    pub options: decoder::AudioDecoderOptions,
-}
-
-pub struct OutputAudioStream {
-    pub options: encoder::EncoderOptions,
-    pub payload_type: u8,
+pub enum ProtocolInputOptions {
+    Rtp(RtpInputOptions),
+    Mp4(Mp4InputOptions),
+    Whip(WhipInputOptions),
+    #[cfg(feature = "decklink")]
+    DeckLink(DeckLinkInputOptions),
 }
 
 #[derive(Debug, Clone, Copy)]

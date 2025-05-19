@@ -1,12 +1,6 @@
 use std::sync::Arc;
 
-use crate::{
-    error::InputInitError,
-    pipeline::{
-        decoder::OpusDecoderOptions,
-        types::{EncodedChunk, Samples},
-    },
-};
+use crate::{error::InputInitError, pipeline::types::Samples};
 
 use super::{AudioDecoderExt, DecodedSamples, DecodingError};
 

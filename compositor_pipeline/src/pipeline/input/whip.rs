@@ -29,10 +29,6 @@ pub enum WhipReceiverError {
     WhipWhepServerNotRunning,
 }
 
-#[derive(Debug, Clone)]
-pub struct WhipOptions {
-    pub video_decoder_preferences: Vec<VideoDecoder>,
-}
 
 #[derive(Debug, Clone)]
 pub struct WhipReceiverOptions {

@@ -1,108 +1,111 @@
-use compositor_render::OutputId;
-use crossbeam_channel::Receiver;
-use std::sync::{atomic::AtomicBool, Arc};
-use tracing::{debug, span, Level};
+use compositor_render::{OutputFrameFormat, OutputId};
+use crossbeam_channel::bounded;
+use rtp_sender::RtpSender;
+use std::sync::Arc;
 
 use crate::{
+    encoder::{AudioEncoder, VideoEncoder},
     error::OutputInitError,
-    event::Event,
-    pipeline::{
-        encoder::{AudioEncoderOptions, VideoEncoderOptions},
-        rtp::RequestedPort,
-        types::EncoderOutputEvent,
-        PipelineCtx, Port,
-    },
+    pipeline::{pipeline_output::PipelineOutputEndConditionState, PipelineCtx, Port},
+    MixingStrategy, PipelineEvent, RtpOutputOptions,
 };
 
-use self::{packet_stream::PacketStream, payloader::Payloader};
+use super::{Output, OutputAudio, OutputVideo};
 
 mod packet_stream;
 mod payloader;
+mod rtp_sender;
 mod tcp_server;
 mod udp;
 
-#[derive(Debug)]
-pub struct RtpSender {
-    pub connection_options: RtpConnectionOptions,
-
-    /// should_close will be set after output is unregistered,
-    /// but the primary way of controlling the shutdown is a channel
-    /// receiver.
-    ///
-    /// RtpSender should be explicitly closed based on this value
-    /// only if TCP connection is disconnected or writes hang for a
-    /// long time.
-    should_close: Arc<AtomicBool>,
+struct RtpOutput {
+    rtp_sender: RtpSender,
+    video: Option<RtpVideoTrack>,
+    audio: Option<RtpAudioTrack>,
 }
 
-#[derive(Debug, Clone)]
-pub struct RtpSenderOptions {
-    pub connection_options: RtpConnectionOptions,
-    pub video: Option<VideoEncoderOptions>,
-    pub audio: Option<AudioEncoderOptions>,
+struct RtpVideoTrack {
+    encoder: VideoEncoder,
+    end_condition: PipelineOutputEndConditionState,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RtpConnectionOptions {
-    Udp { port: Port, ip: Arc<str> },
-    TcpServer { port: RequestedPort },
+struct RtpAudioTrack {
+    mixing_strategy: MixingStrategy,
+    encoder: AudioEncoder,
+    end_condition: PipelineOutputEndConditionState,
 }
 
-impl RtpSender {
+impl RtpOutput {
     pub fn new(
         output_id: &OutputId,
-        options: RtpSenderOptions,
-        packets_receiver: Receiver<EncoderOutputEvent>,
-        pipeline_ctx: Arc<PipelineCtx>,
+        options: RtpOutputOptions,
+        ctx: &Arc<PipelineCtx>,
     ) -> Result<(Self, Port), OutputInitError> {
-        let payloader = Payloader::new(options.video, options.audio);
-        let mtu = match options.connection_options {
-            RtpConnectionOptions::Udp { .. } => 1400,
-            RtpConnectionOptions::TcpServer { .. } => 64000,
-        };
-        let packet_stream = PacketStream::new(packets_receiver, payloader, mtu);
+        let (encoded_sender, encoded_receiver) = bounded(1);
 
-        let (socket, port) = match &options.connection_options {
-            RtpConnectionOptions::Udp { port, ip } => udp::udp_socket(ip, *port)?,
-            RtpConnectionOptions::TcpServer { port } => tcp_server::tcp_socket(*port)?,
+        let video = match options.video {
+            Some(video) => Some(RtpVideoTrack {
+                encoder: VideoEncoder::new(
+                    output_id,
+                    video.encoder.into(),
+                    ctx,
+                    encoded_sender.clone(),
+                )?,
+                end_condition: PipelineOutputEndConditionState::new_video(video.end_condition),
+            }),
+            None => None,
         };
 
-        let should_close = Arc::new(AtomicBool::new(false));
-        let connection_options = options.connection_options.clone();
-        let output_id = output_id.clone();
-        let should_close2 = should_close.clone();
-        let event_emitter = pipeline_ctx.event_emitter.clone();
-        std::thread::Builder::new()
-            .name(format!("RTP sender for output {}", output_id))
-            .spawn(move || {
-                let _span =
-                    span!(Level::INFO, "RTP sender", output_id = output_id.to_string()).entered();
-                match connection_options {
-                    RtpConnectionOptions::Udp { .. } => {
-                        udp::run_udp_sender_thread(socket, packet_stream)
-                    }
-                    RtpConnectionOptions::TcpServer { .. } => {
-                        tcp_server::run_tcp_sender_thread(socket, should_close2, packet_stream)
-                    }
-                }
-                event_emitter.emit(Event::OutputDone(output_id));
-                debug!("Closing RTP sender thread.")
-            })
-            .unwrap();
+        let audio = match options.audio {
+            Some(audio) => Some(RtpAudioTrack {
+                mixing_strategy: audio.mixing_strategy,
+                encoder: AudioEncoder::new(
+                    output_id,
+                    audio.encoder.into(),
+                    ctx,
+                    encoded_sender.clone(),
+                )?,
+                end_condition: PipelineOutputEndConditionState::new_audio(audio.end_condition),
+            }),
+            None => None,
+        };
+
+        let rtp_sender = RtpSender::new(output_id, options, encoded_receiver, ctx)?;
 
         Ok((
             Self {
-                connection_options: options.connection_options,
-                should_close,
+                rtp_sender,
+                video,
+                audio,
             },
             port,
         ))
     }
 }
 
-impl Drop for RtpSender {
-    fn drop(&mut self) {
-        self.should_close
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+impl Output for RtpOutput {
+    fn video(&self) -> Option<OutputVideo> {
+        self.video.map(|video| OutputVideo {
+            resolution: video.encoder.resolution(),
+            frame_format: OutputFrameFormat::PlanarYuv420Bytes,
+            frame_sender: video.encoder.frame_sender(),
+            end_condition: &video.end_condition,
+        })
+    }
+
+    fn audio(&self) -> Option<OutputAudio> {
+        self.audio().map(|audio| OutputAudio {
+            mixing_strategy: audio.mixing_strategy,
+            channels: audio.encoder.channels,
+            samples_batch_sender: audio.en,
+            end_condition: todo!(),
+        })
+    }
+
+    fn request_keyframe(
+        &self,
+        output_id: OutputId,
+    ) -> Result<(), compositor_render::error::RequestKeyframeError> {
+        todo!()
     }
 }

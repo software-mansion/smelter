@@ -12,18 +12,13 @@ use tracing::{debug, error, span, trace, warn, Level};
 
 use crate::{
     error::EncoderInitError,
+    ffmpeg_vp8,
     pipeline::types::{
         ChunkFromFfmpegError, EncodedChunk, EncodedChunkKind, EncoderOutputEvent, IsKeyframe,
         VideoCodec,
     },
     queue::PipelineEvent,
 };
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Options {
-    pub resolution: Resolution,
-    pub raw_options: Vec<(String, String)>,
-}
 
 pub struct LibavVP8Encoder {
     resolution: Resolution,
@@ -34,7 +29,7 @@ pub struct LibavVP8Encoder {
 impl LibavVP8Encoder {
     pub fn new(
         output_id: &OutputId,
-        options: Options,
+        options: ffmpeg_vp8::EncoderOptions,
         framerate: Framerate,
         chunks_sender: Sender<EncoderOutputEvent>,
     ) -> Result<Self, EncoderInitError> {
