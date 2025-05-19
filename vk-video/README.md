@@ -11,7 +11,7 @@ A library for hardware video decoding (and soon encoding) using Vulkan Video, wi
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [mit-url]: https://github.com/software-mansion/smelter/blob/master/vk-video/LICENSE
 [docs-badge]: https://img.shields.io/docsrs/vk-video
-[docs-url]: https://docs.rs/vk-video/latest/vk-video/
+[docs-url]: https://docs.rs/vk-video/latest/vk_video/
 
 ## Overview
 
