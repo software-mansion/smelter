@@ -7,7 +7,7 @@
 ### ✨ New features
 
 - Add RTMP output. ([#1051](https://github.com/software-mansion/live-compositor/pull/1051) by [@WojciechBarczynski](https://github.com/WojciechBarczynski), [@wkozyra95](https://github.com/wkozyra95))
-- Add VP8, VP9 codecs for input/output ([#988](https://github.com/software-mansion/smelter/pull/988), [#1040](https://github.com/software-mansion/smelter/pull/1040), [#1043](https://github.com/software-mansion/smelter/pull/1043), [#1093](https://github.com/software-mansion/smelter/pull/1093) by [@wkazmierczak](https://github.com/wkazmierczak))
+- Add support for VP8 and VP9 codecs. ([#988](https://github.com/software-mansion/smelter/pull/988), [#1040](https://github.com/software-mansion/smelter/pull/1040), [#1043](https://github.com/software-mansion/smelter/pull/1043), [#1093](https://github.com/software-mansion/smelter/pull/1093) by [@wkazmierczak](https://github.com/wkazmierczak))
 - Add decoder/encoder preferences on WHIP input/output ([#997](https://github.com/software-mansion/smelter/pull/997), [#1061](https://github.com/software-mansion/smelter/pull/1061), [#1070](https://github.com/software-mansion/smelter/pull/1070), [#1084](https://github.com/software-mansion/smelter/pull/1084) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ### 🐛 Bug fixes
