@@ -7,6 +7,8 @@
 ### ✨ New features
 
 - Add RTMP output. ([#1051](https://github.com/software-mansion/live-compositor/pull/1051) by [@WojciechBarczynski](https://github.com/WojciechBarczynski), [@wkozyra95](https://github.com/wkozyra95))
+- Add VP8, VP9 codecs for input/output ([#988](https://github.com/software-mansion/smelter/pull/988), [#1040](https://github.com/software-mansion/smelter/pull/1040), [#1043](https://github.com/software-mansion/smelter/pull/1043), [#1093](https://github.com/software-mansion/smelter/pull/1093) by [@wkazmierczak](https://github.com/wkazmierczak))
+- Add decoder/encoder preferences on WHIP input/output ([#997](https://github.com/software-mansion/smelter/pull/997), [#1061](https://github.com/software-mansion/smelter/pull/1061), [#1070](https://github.com/software-mansion/smelter/pull/1070), [#1084](https://github.com/software-mansion/smelter/pull/1084) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ### 🐛 Bug fixes
 
@@ -18,6 +20,7 @@
 
 - Deprecate `vulkan_video` option in favor of `vulkan_h264`. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
 - Deprecate `video_decoder` option in MP4 input. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
+- Deprecate several WHIP input/output options: `decoder` in video input, `audio` in input, `encoder` in both video and audio output. ([#997](https://github.com/software-mansion/smelter/pull/997), [#1061](https://github.com/software-mansion/smelter/pull/1061), [#1084](https://github.com/software-mansion/smelter/pull/1084) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ## [v0.4.2](https://github.com/software-mansion/live-compositor/releases/tag/v0.4.2)
 
