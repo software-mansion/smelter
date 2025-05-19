@@ -20,7 +20,7 @@
 
 - Deprecate `vulkan_video` option in favor of `vulkan_h264`. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
 - Deprecate `video_decoder` option in MP4 input. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
-- Deprecate several WHIP input/output options: `decoder` in video input, `audio` in input, `encoder` in both video and audio output. ([#997](https://github.com/software-mansion/smelter/pull/997), [#1061](https://github.com/software-mansion/smelter/pull/1061), [#1084](https://github.com/software-mansion/smelter/pull/1084) by [@wkazmierczak](https://github.com/wkazmierczak))
+- Deprecate `decoder` and `audio` options in WHIP input and `encoder` in WHIP output. ([#997](https://github.com/software-mansion/smelter/pull/997), [#1061](https://github.com/software-mansion/smelter/pull/1061), [#1084](https://github.com/software-mansion/smelter/pull/1084) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ## [v0.4.2](https://github.com/software-mansion/live-compositor/releases/tag/v0.4.2)
 
