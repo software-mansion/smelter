@@ -197,6 +197,8 @@ fn run_encoder_thread(
         //  Maximum motion vector search range - libx264 defaults to 16 (in case of placebo
         //  or veryslow preset to 24)
         ("me_range", "16"),
+        // Auto number of threads
+        ("threads", "0"),
         // Max QP step - libx264 defaults to 4
         ("qdiff", "4"),
         // Min QP - libx264 defaults to 0

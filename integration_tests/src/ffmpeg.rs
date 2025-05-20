@@ -124,28 +124,67 @@ pub fn start_ffmpeg_send(
     test_sample: TestSample,
 ) -> Result<()> {
     match test_sample {
-        TestSample::BigBuckBunnyH264Opus
-        | TestSample::BigBuckBunnyVP8Opus
-        | TestSample::BigBuckBunnyVP9Opus
-        | TestSample::ElephantsDreamH264Opus
-        | TestSample::ElephantsDreamVP8Opus
-        | TestSample::ElephantsDreamVP9Opus => {
-            start_ffmpeg_send_from_file(ip, video_port, audio_port, get_asset_path(test_sample)?)
+        TestSample::BigBuckBunnyH264Opus | TestSample::ElephantsDreamH264Opus => {
+            start_ffmpeg_send_from_file(
+                ip,
+                video_port,
+                audio_port,
+                get_asset_path(test_sample)?,
+                Video::H264,
+            )
+        }
+        TestSample::BigBuckBunnyVP8Opus | TestSample::ElephantsDreamVP8Opus => {
+            start_ffmpeg_send_from_file(
+                ip,
+                video_port,
+                audio_port,
+                get_asset_path(test_sample)?,
+                Video::VP8,
+            )
+        }
+        TestSample::BigBuckBunnyVP9Opus | TestSample::ElephantsDreamVP9Opus => {
+            start_ffmpeg_send_from_file(
+                ip,
+                video_port,
+                audio_port,
+                get_asset_path(test_sample)?,
+                Video::VP9,
+            )
         }
         TestSample::BigBuckBunnyH264AAC => start_ffmpeg_send_from_file_aac(
             ip,
             video_port,
             audio_port,
             get_asset_path(test_sample)?,
+            Video::H264,
         ),
-        TestSample::SampleH264 | TestSample::SampleVP8 | TestSample::SampleVP9 => {
-            match video_port {
-                Some(port) => {
-                    start_ffmpeg_send_video_from_file(ip, port, get_asset_path(test_sample)?)
-                }
-                None => Err(anyhow!("video port required for test sample")),
-            }
-        }
+        TestSample::SampleH264 => match video_port {
+            Some(port) => start_ffmpeg_send_video_from_file(
+                ip,
+                port,
+                get_asset_path(test_sample)?,
+                Video::H264,
+            ),
+            None => Err(anyhow!("video port required for test sample")),
+        },
+        TestSample::SampleVP8 => match video_port {
+            Some(port) => start_ffmpeg_send_video_from_file(
+                ip,
+                port,
+                get_asset_path(test_sample)?,
+                Video::VP8,
+            ),
+            None => Err(anyhow!("video port required for test sample")),
+        },
+        TestSample::SampleVP9 => match video_port {
+            Some(port) => start_ffmpeg_send_video_from_file(
+                ip,
+                port,
+                get_asset_path(test_sample)?,
+                Video::VP9,
+            ),
+            None => Err(anyhow!("video port required for test sample")),
+        },
         TestSample::SampleLoopH264 => match video_port {
             Some(port) => {
                 start_ffmpeg_send_video_from_file_loop(ip, port, get_asset_path(test_sample)?)
@@ -196,6 +235,7 @@ fn start_ffmpeg_send_from_file(
     video_port: Option<u16>,
     audio_port: Option<u16>,
     path: PathBuf,
+    video_codec: Video,
 ) -> Result<()> {
     if video_port.is_none() && audio_port.is_none() {
         return Err(anyhow!(
@@ -204,7 +244,7 @@ fn start_ffmpeg_send_from_file(
     }
 
     if let Some(port) = video_port {
-        start_ffmpeg_send_video_from_file(ip, port, path.clone())?;
+        start_ffmpeg_send_video_from_file(ip, port, path.clone(), video_codec)?;
     }
     if let Some(port) = audio_port {
         start_ffmpeg_send_audio_from_file(ip, port, path, "libopus")?
@@ -218,6 +258,7 @@ fn start_ffmpeg_send_from_file_aac(
     video_port: Option<u16>,
     audio_port: Option<u16>,
     path: PathBuf,
+    video_codec: Video,
 ) -> Result<()> {
     if video_port.is_none() && audio_port.is_none() {
         return Err(anyhow!(
@@ -226,7 +267,7 @@ fn start_ffmpeg_send_from_file_aac(
     }
 
     if let Some(port) = video_port {
-        start_ffmpeg_send_video_from_file(ip, port, path.clone())?;
+        start_ffmpeg_send_video_from_file(ip, port, path.clone(), video_codec)?;
     }
     if let Some(port) = audio_port {
         start_ffmpeg_send_audio_from_file(ip, port, path, "aac")?
@@ -235,22 +276,26 @@ fn start_ffmpeg_send_from_file_aac(
     Ok(())
 }
 
-fn start_ffmpeg_send_video_from_file(ip: &str, port: u16, path: PathBuf) -> Result<()> {
+fn start_ffmpeg_send_video_from_file(
+    ip: &str,
+    port: u16,
+    path: PathBuf,
+    video_codec: Video,
+) -> Result<()> {
     info!("[example] Start sending video to input port {port}.");
+
+    let codec_specific_options = match video_codec {
+        Video::H264 => vec!["-bsf:v", "h264_mp4toannexb"],
+        Video::VP8 => vec![],
+        Video::VP9 => vec!["-strict", "experimental"],
+    };
 
     Command::new("ffmpeg")
         .args(["-re", "-i"])
         .arg(path)
-        .args([
-            "-an",
-            "-c:v",
-            "copy",
-            "-f",
-            "rtp",
-            "-strict",
-            "experimental",
-            &format!("rtp://{ip}:{port}?rtcpport={port}"),
-        ])
+        .args(["-an", "-c:v", "copy", "-f", "rtp"])
+        .args(codec_specific_options)
+        .arg(format!("rtp://{ip}:{port}?rtcpport={port}"))
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
