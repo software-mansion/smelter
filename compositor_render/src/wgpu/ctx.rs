@@ -18,7 +18,7 @@ pub struct WgpuCtx {
     pub queue: Arc<wgpu::Queue>,
     pub mode: RenderingMode,
 
-    pub shader_header: naga::Module,
+    pub shader_header: wgpu::naga::Module,
 
     pub format: TextureFormat,
     pub utils: TextureUtils,

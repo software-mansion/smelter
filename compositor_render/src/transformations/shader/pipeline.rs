@@ -1,6 +1,6 @@
 use std::{borrow::Cow, num::NonZeroU32, sync::Arc, time::Duration};
 
-use wgpu::ShaderStages;
+use wgpu::{naga, ShaderStages};
 
 use crate::{
     scene::ShaderParam,

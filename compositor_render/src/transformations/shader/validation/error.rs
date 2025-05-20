@@ -1,5 +1,7 @@
 use std::{fmt::Display, sync::Arc};
 
+use wgpu::naga;
+
 use crate::{
     transformations::shader::pipeline::{USER_DEFINED_BUFFER_BINDING, USER_DEFINED_BUFFER_GROUP},
     wgpu::common_pipeline::VERTEX_ENTRYPOINT_NAME,
