@@ -1,4 +1,4 @@
-use naga::{ArraySize, Handle, Module, ScalarKind, ShaderStage, Type, VectorSize};
+use wgpu::naga::{self, ArraySize, Handle, Module, ScalarKind, ShaderStage, Type, VectorSize};
 
 use crate::scene::ShaderParam;
 
