@@ -136,8 +136,9 @@ export type InputWhipVideoOptions = {
   decoderPreferences?: WhipVideoDecoder[] | null;
 };
 
+// deprecated
 export type InputWhipAudioOptions = {
-  decoder: 'opus';
+  decoder?: 'opus';
   /**
    * (**default=`false`**) Specifies whether the stream uses forward error correction.
    * It's specific for Opus codec.
