@@ -118,7 +118,7 @@ impl Payloader {
         &mut self,
         mtu: usize,
         data: EncodedChunk,
-    ) -> Result<VecDeque<Bytes>, PayloadingError> {
+    ) -> Result<VecDeque<rtp::packet::Packet>, PayloadingError> {
         match data.kind {
             EncodedChunkKind::Video(chunk_codec) => {
                 let Some(ref mut video_payloader) = self.video else {
@@ -278,17 +278,11 @@ impl AudioPayloader {
         }
     }
 
-    fn codec(&self) -> AudioCodec {
-        match self {
-            AudioPayloader::Opus { .. } => AudioCodec::Opus,
-        }
-    }
-
     fn payload(
         &mut self,
         mtu: usize,
         chunk: EncodedChunk,
-    ) -> Result<VecDeque<Bytes>, PayloadingError> {
+    ) -> Result<VecDeque<rtp::packet::Packet>, PayloadingError> {
         match self {
             AudioPayloader::Opus {
                 ref mut payloader,
