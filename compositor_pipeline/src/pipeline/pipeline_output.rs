@@ -7,12 +7,13 @@ use compositor_render::{Frame, InputId, OutputId};
 use crossbeam_channel::Sender;
 use tracing::{info, warn};
 
-use crate::{audio_mixer::OutputSamples, error::RegisterOutputError, queue::PipelineEvent};
-
-use super::{
-    output::{self, OutputOptionsExt},
-    OutputAudioOptions, OutputVideoOptions, Pipeline, PipelineInput,
+use crate::{
+    audio_mixer::OutputSamples,
+    error::{OutputInitError, RegisterOutputError},
+    queue::PipelineEvent,
 };
+
+use super::{output, OutputAudioOptions, OutputVideoOptions, Pipeline, PipelineCtx, PipelineInput};
 
 #[derive(Debug, Clone)]
 pub enum PipelineOutputEndCondition {
@@ -24,7 +25,7 @@ pub enum PipelineOutputEndCondition {
 }
 
 pub struct PipelineOutput {
-    pub output: output::Output,
+    pub(crate) output: Box<dyn output::Output>,
     pub video_end_condition: Option<PipelineOutputEndConditionState>,
     pub audio_end_condition: Option<PipelineOutputEndConditionState>,
 }
@@ -34,13 +35,19 @@ pub(super) enum OutputSender<T> {
     FinishedSender,
 }
 
-pub(super) fn register_pipeline_output<NewOutputResult>(
+pub(super) fn register_pipeline_output<BuildFn, NewOutputResult>(
     pipeline: &Arc<Mutex<Pipeline>>,
     output_id: OutputId,
-    output_options: &dyn OutputOptionsExt<NewOutputResult>,
     video: Option<OutputVideoOptions>,
     audio: Option<OutputAudioOptions>,
-) -> Result<NewOutputResult, RegisterOutputError> {
+    build_output: BuildFn,
+) -> Result<NewOutputResult, RegisterOutputError>
+where
+    BuildFn: FnOnce(
+        Arc<PipelineCtx>,
+        OutputId,
+    ) -> Result<(Box<dyn output::Output>, NewOutputResult), OutputInitError>,
+{
     let (has_video, has_audio) = (video.is_some(), audio.is_some());
     if !has_video && !has_audio {
         return Err(RegisterOutputError::NoVideoAndAudio(output_id));
@@ -52,7 +59,8 @@ pub(super) fn register_pipeline_output<NewOutputResult>(
 
     let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
 
-    let (output, output_result) = output_options.new_output(&output_id, pipeline_ctx)?;
+    let (output, output_result) = build_output(pipeline_ctx, output_id.clone())
+        .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
 
     let mut guard = pipeline.lock().unwrap();
 
@@ -70,15 +78,13 @@ pub(super) fn register_pipeline_output<NewOutputResult>(
         }),
     };
 
-    if let (Some(video_opts), Some(resolution), Some(format)) = (
-        video.clone(),
-        output.output.resolution(),
-        output.output.output_frame_format(),
-    ) {
-        let result =
-            guard
-                .renderer
-                .update_scene(output_id.clone(), resolution, format, video_opts.initial);
+    if let (Some(video_opts), Some(video_output)) = (video.clone(), output.output.video()) {
+        let result = guard.renderer.update_scene(
+            output_id.clone(),
+            video_output.resolution,
+            video_output.frame_format,
+            video_opts.initial,
+        );
 
         if let Err(err) = result {
             guard.renderer.unregister_output(&output_id);
@@ -111,7 +117,7 @@ impl Pipeline {
             .iter_mut()
             .filter_map(|(output_id, output)| {
                 let eos_status = output.video_end_condition.as_mut()?.eos_status();
-                let sender = output.output.frame_sender()?.clone();
+                let sender = output.output.video()?.frame_sender.clone();
                 Some((output_id.clone(), (sender, eos_status)))
             })
             .collect();
@@ -144,7 +150,7 @@ impl Pipeline {
             .iter_mut()
             .filter_map(|(output_id, output)| {
                 let eos_status = output.audio_end_condition.as_mut()?.eos_status();
-                let sender = output.output.samples_batch_sender()?.clone();
+                let sender = output.output.audio()?.samples_batch_sender.clone();
                 Some((output_id.clone(), (sender, eos_status)))
             })
             .collect();

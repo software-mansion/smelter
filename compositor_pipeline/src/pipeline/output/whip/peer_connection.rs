@@ -1,96 +1,120 @@
-use crate::{
-    audio_mixer::AudioChannels,
-    pipeline::encoder::{AudioEncoderOptions, VideoEncoderOptions},
-};
+use std::sync::Arc;
 
 use super::{WhipCtx, WhipError};
-use std::sync::Arc;
+use tracing::debug;
 use webrtc::{
     api::{
         interceptor_registry::register_default_interceptors,
         media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
         APIBuilder,
     },
-    ice_transport::ice_server::RTCIceServer,
+    ice_transport::{ice_connection_state::RTCIceConnectionState, ice_server::RTCIceServer},
     interceptor::registry::Registry,
     peer_connection::{configuration::RTCConfiguration, RTCPeerConnection},
     rtp_transceiver::{
         rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
-        rtp_transceiver_direction::RTCRtpTransceiverDirection,
-        RTCPFeedback, RTCRtpTransceiver, RTCRtpTransceiverInit,
+        rtp_sender::RTCRtpSender,
+        RTCPFeedback,
     },
+    track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
-pub async fn init_peer_connection(
-    whip_ctx: &WhipCtx,
-) -> Result<
-    (
-        Arc<RTCPeerConnection>,
-        Option<Arc<RTCRtpTransceiver>>,
-        Option<Arc<RTCRtpTransceiver>>,
-    ),
-    WhipError,
-> {
-    let mut media_engine = MediaEngine::default();
+use crate::{
+    audio_mixer::AudioChannels,
+    pipeline::encoder::{AudioEncoderOptions, VideoEncoderOptions},
+};
 
-    register_codecs(&mut media_engine, whip_ctx)?;
-
-    let mut registry = Registry::new();
-    registry = register_default_interceptors(registry, &mut media_engine)?;
-    let api = APIBuilder::new()
-        .with_media_engine(media_engine)
-        .with_interceptor_registry(registry)
-        .build();
-
-    let config = RTCConfiguration {
-        ice_servers: vec![RTCIceServer {
-            urls: whip_ctx.pipeline_ctx.stun_servers.to_vec(),
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
-    let peer_connection = Arc::new(api.new_peer_connection(config).await?);
-
-    let video_transceiver = if whip_ctx.options.video.is_some() {
-        Some(
-            peer_connection
-                .add_transceiver_from_kind(
-                    RTPCodecType::Video,
-                    Some(RTCRtpTransceiverInit {
-                        direction: RTCRtpTransceiverDirection::Sendonly,
-                        send_encodings: vec![],
-                    }),
-                )
-                .await
-                .map_err(WhipError::PeerConnectionInitError)?,
-        )
-    } else {
-        None
-    };
-    let audio_transceiver = if whip_ctx.options.audio.is_some() {
-        Some(
-            peer_connection
-                .add_transceiver_from_kind(
-                    RTPCodecType::Audio,
-                    Some(RTCRtpTransceiverInit {
-                        direction: RTCRtpTransceiverDirection::Sendonly,
-                        send_encodings: vec![],
-                    }),
-                )
-                .await
-                .map_err(WhipError::PeerConnectionInitError)?,
-        )
-    } else {
-        None
-    };
-
-    Ok((peer_connection, video_transceiver, audio_transceiver))
+#[derive(Debug, Clone)]
+pub(super) struct PeerConnection {
+    pub pc: Arc<RTCPeerConnection>,
 }
 
-fn register_codecs(
-    media_engine: &mut MediaEngine,
-    whip_ctx: &WhipCtx,
-) -> webrtc::error::Result<()> {
+impl PeerConnection {
+    pub async fn new(whip_ctx: &Arc<WhipCtx>) -> Result<Self, WhipError> {
+        let mut media_engine = media_engine_with_codecs(whip_ctx)?;
+        let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
+
+        let api = APIBuilder::new()
+            .with_media_engine(media_engine)
+            .with_interceptor_registry(registry)
+            .build();
+
+        let config = RTCConfiguration {
+            ice_servers: vec![RTCIceServer {
+                urls: whip_ctx.pipeline_ctx.stun_servers.to_vec(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let peer_connection = Arc::new(api.new_peer_connection(config).await?);
+
+        {
+            let whip_ctx = whip_ctx.clone();
+            peer_connection.on_ice_connection_state_change(Box::new(
+                move |connection_state: RTCIceConnectionState| {
+                    debug!("Connection State has changed {connection_state}.");
+                    if connection_state == RTCIceConnectionState::Connected {
+                        debug!("Ice connected.");
+                    } else if connection_state == RTCIceConnectionState::Failed {
+                        debug!("Ice connection failed.");
+                        whip_ctx
+                            .should_close
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    Box::pin(async {})
+                },
+            ));
+        }
+
+        Ok(Self {
+            pc: peer_connection,
+        })
+    }
+
+    pub async fn new_video_track(&self) -> Result<Arc<RTCRtpSender>, WhipError> {
+        let track = Arc::new(TrackLocalStaticRTP::new(
+            RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_VP8.to_owned(),
+                clock_rate: 90000,
+                channels: 0,
+                sdp_fmtp_line: "".to_owned(),
+                rtcp_feedback: vec![],
+            },
+            "video".to_string(),
+            "webrtc".to_string(),
+        ));
+        let sender = self
+            .pc
+            .add_track(track)
+            .await
+            .map_err(WhipError::PeerConnectionInitError)?;
+        Ok(sender)
+    }
+
+    pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpSender>, WhipError> {
+        let track = Arc::new(TrackLocalStaticRTP::new(
+            RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_OPUS.to_owned(),
+                clock_rate: 48000,
+                channels: 0,
+                sdp_fmtp_line: "".to_owned(),
+                rtcp_feedback: vec![],
+            },
+            "audio".to_string(),
+            "webrtc".to_string(),
+        ));
+        let sender = self
+            .pc
+            .add_track(track)
+            .await
+            .map_err(WhipError::PeerConnectionInitError)?;
+        Ok(sender)
+    }
+}
+
+fn media_engine_with_codecs(whip_ctx: &WhipCtx) -> webrtc::error::Result<MediaEngine> {
+    let mut media_engine = MediaEngine::default();
+
     let video_encoder_preferences = whip_ctx
         .options
         .video
@@ -253,5 +277,5 @@ fn register_codecs(
         }
     }
 
-    Ok(())
+    Ok(media_engine)
 }

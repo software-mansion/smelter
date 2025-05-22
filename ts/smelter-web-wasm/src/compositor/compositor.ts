@@ -32,6 +32,10 @@ export function setWasmBundleUrl(url: string) {
   wasmBundleUrl = url;
 }
 
+export type LockState =
+  | { type: 'unique'; promise: Promise<void> }
+  | { type: 'multi'; promises: Set<Promise<void>> };
+
 export default class Smelter {
   private coreSmelter?: CoreSmelter;
   private instance?: WasmInstance;

@@ -1,23 +1,22 @@
-use std::time::Duration;
+use std::{iter, sync::Arc, time::Duration};
 
-use compositor_render::{Frame, FrameData, Framerate, OutputId, Resolution};
-use crossbeam_channel::{Receiver, Sender};
+use compositor_render::{Frame, FrameData, OutputFrameFormat, Resolution};
 use ffmpeg_next::{
     codec::{Context, Id},
-    encoder::Video,
     format::Pixel,
     frame, Dictionary, Packet, Rational,
 };
-use tracing::{debug, error, span, trace, warn, Level};
+use tracing::{error, info, trace, warn};
 
 use crate::{
     error::EncoderInitError,
-    pipeline::types::{
-        ChunkFromFfmpegError, EncodedChunk, EncodedChunkKind, EncoderOutputEvent, IsKeyframe,
-        VideoCodec,
+    pipeline::{
+        types::{ChunkFromFfmpegError, EncodedChunk, EncodedChunkKind, IsKeyframe, VideoCodec},
+        PipelineCtx,
     },
-    queue::PipelineEvent,
 };
+
+use super::{VideoEncoder, VideoEncoderConfig};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Options {
@@ -25,125 +24,68 @@ pub struct Options {
     pub raw_options: Vec<(String, String)>,
 }
 
-pub struct LibavVP8Encoder {
+pub struct FfmpegVp8Encoder {
+    encoder: ffmpeg_next::encoder::Video,
+    packet: Packet,
     resolution: Resolution,
-    frame_sender: Sender<PipelineEvent<Frame>>,
-    keyframe_req_sender: Sender<()>,
 }
 
-impl LibavVP8Encoder {
-    pub fn new(
-        output_id: &OutputId,
-        options: Options,
-        framerate: Framerate,
-        chunks_sender: Sender<EncoderOutputEvent>,
-    ) -> Result<Self, EncoderInitError> {
-        let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
-        let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
-        let (keyframe_req_sender, keyframe_req_receiver) = crossbeam_channel::unbounded();
+impl VideoEncoder for FfmpegVp8Encoder {
+    const LABEL: &'static str = "FFmpeg VP8 encoder";
 
-        let options_clone = options.clone();
-        let output_id = output_id.clone();
+    type Options = Options;
 
-        std::thread::Builder::new()
-            .name(format!("Encoder thread for output {}", output_id))
-            .spawn(move || {
-                let _span = span!(
-                    Level::INFO,
-                    "vp8 ffmpeg encoder",
-                    output_id = output_id.to_string()
-                )
-                .entered();
-                let encoder_result = run_encoder_thread(
-                    options_clone,
-                    framerate,
-                    frame_receiver,
-                    keyframe_req_receiver,
-                    chunks_sender,
-                    &result_sender,
-                );
+    fn new(
+        ctx: &Arc<PipelineCtx>,
+        options: Self::Options,
+    ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
+        info!("Initializing FFmpeg vp8 encoder {options:?}");
+        let codec = ffmpeg_next::codec::encoder::find(Id::VP8).ok_or(EncoderInitError::NoCodec)?;
 
-                if let Err(err) = encoder_result {
-                    warn!(%err, "Encoder thread finished with an error.");
-                    if let Err(err) = result_sender.send(Err(err)) {
-                        warn!(%err, "Failed to send error info. Result channel already closed.");
-                    }
-                }
-                debug!("Encoder thread finished.");
-            })
-            .unwrap();
+        let mut encoder = Context::new().encoder().video()?;
 
-        result_receiver.recv().unwrap()?;
+        // We set this to 1 / 1_000_000, bc we use `as_micros` to convert frames to AV packets.
+        let pts_unit_secs = Rational::new(1, 1_000_000);
+        let framerate = ctx.output_framerate;
+        encoder.set_time_base(pts_unit_secs);
+        encoder.set_format(Pixel::YUV420P);
+        encoder.set_width(options.resolution.width as u32);
+        encoder.set_height(options.resolution.height as u32);
+        encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
 
-        Ok(Self {
-            frame_sender,
-            resolution: options.resolution,
-            keyframe_req_sender,
-        })
+        let defaults = [
+            // Quality/Speed ratio modifier
+            ("cpu-used", "0"),
+            // Time to spend encoding.
+            ("deadline", "realtime"),
+            // Auto threads number used.
+            ("threads", "0"),
+            // Zero-latency. Disables frame reordering.
+            ("lag-in-frames", "0"),
+        ];
+
+        let encoder_opts_iter = merge_options_with_defaults(&defaults, &options.raw_options);
+        let encoder = encoder.open_as_with(codec, Dictionary::from_iter(encoder_opts_iter))?;
+
+        Ok((
+            Self {
+                encoder,
+                packet: Packet::empty(),
+                resolution: options.resolution,
+            },
+            VideoEncoderConfig {
+                resolution: options.resolution,
+                output_format: OutputFrameFormat::PlanarYuv420Bytes,
+                extradata: None,
+            },
+        ))
     }
 
-    pub fn frame_sender(&self) -> &Sender<PipelineEvent<Frame>> {
-        &self.frame_sender
-    }
-
-    pub fn resolution(&self) -> Resolution {
-        self.resolution
-    }
-
-    pub fn keyframe_request_sender(&self) -> Sender<()> {
-        self.keyframe_req_sender.clone()
-    }
-}
-
-fn run_encoder_thread(
-    options: Options,
-    framerate: Framerate,
-    frame_receiver: Receiver<PipelineEvent<Frame>>,
-    keyframe_req_receiver: Receiver<()>,
-    packet_sender: Sender<EncoderOutputEvent>,
-    result_sender: &Sender<Result<(), EncoderInitError>>,
-) -> Result<(), EncoderInitError> {
-    let codec = ffmpeg_next::codec::encoder::find(Id::VP8).ok_or(EncoderInitError::NoCodec)?;
-
-    let mut encoder = Context::new().encoder().video()?;
-
-    // We set this to 1 / 1_000_000, bc we use `as_micros` to convert frames to AV packets.
-    let pts_unit_secs = Rational::new(1, 1_000_000);
-    encoder.set_time_base(pts_unit_secs);
-    encoder.set_format(Pixel::YUV420P);
-    encoder.set_width(options.resolution.width as u32);
-    encoder.set_height(options.resolution.height as u32);
-    encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
-
-    let defaults = [
-        // Quality/Speed ratio modifier
-        ("cpu-used", "0"),
-        // Time to spend encoding.
-        ("deadline", "realtime"),
-        // Auto threads number used.
-        ("threads", "0"),
-        // Zero-latency. Disables frame reordering.
-        ("lag-in-frames", "0"),
-    ];
-
-    let encoder_opts_iter = merge_options_with_defaults(&defaults, &options.raw_options);
-    let mut encoder = encoder.open_as_with(codec, Dictionary::from_iter(encoder_opts_iter))?;
-
-    result_sender.send(Ok(())).unwrap();
-
-    let mut packet = Packet::empty();
-
-    loop {
-        let frame = match frame_receiver.recv() {
-            Ok(PipelineEvent::Data(f)) => f,
-            Ok(PipelineEvent::EOS) => break,
-            Err(_) => break,
-        };
-
+    fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedChunk> {
         let mut av_frame = frame::Video::new(
             Pixel::YUV420P,
-            options.resolution.width as u32,
-            options.resolution.height as u32,
+            self.resolution.width as u32,
+            self.resolution.height as u32,
         );
 
         if let Err(e) = frame_into_av(frame, &mut av_frame) {
@@ -151,72 +93,60 @@ fn run_encoder_thread(
                 "Failed to convert a frame to an ffmpeg frame: {}. Dropping",
                 e.0
             );
-            continue;
         }
 
-        if keyframe_req_receiver.try_recv().is_ok() {
+        if force_keyframe {
             av_frame.set_kind(ffmpeg_next::picture::Type::I);
         }
 
-        if let Err(e) = encoder.send_frame(&av_frame) {
+        if let Err(e) = self.encoder.send_frame(&av_frame) {
             error!("Encoder error: {e}.");
-            continue;
+            return vec![];
         }
-
-        while let Some(chunk) = receive_chunk(&mut encoder, &mut packet) {
-            if packet_sender.send(EncoderOutputEvent::Data(chunk)).is_err() {
-                warn!("Failed to send encoded video from VP8 encoder. Channel closed.");
-                return Ok(());
-            }
-        }
+        self.read_all_chunks()
     }
 
-    // Flush the encoder
-    if let Err(e) = encoder.send_eof() {
-        error!("Failed to enter draining mode on encoder: {e}.");
-    }
-    while let Some(chunk) = receive_chunk(&mut encoder, &mut packet) {
-        if packet_sender.send(EncoderOutputEvent::Data(chunk)).is_err() {
-            warn!("Failed to send encoded video from VP8 encoder. Channel closed.");
-            return Ok(());
+    fn flush(&mut self) -> Vec<EncodedChunk> {
+        if let Err(e) = self.encoder.send_eof() {
+            error!("Failed to enter draining mode on encoder: {e}.");
         }
+        self.read_all_chunks()
     }
-
-    if let Err(_err) = packet_sender.send(EncoderOutputEvent::VideoEOS) {
-        warn!("Failed to send EOS from VP8 encoder. Channel closed.")
-    }
-    Ok(())
 }
 
-fn receive_chunk(encoder: &mut Video, packet: &mut Packet) -> Option<EncodedChunk> {
-    match encoder.receive_packet(packet) {
-        Ok(_) => {
-            match encoded_chunk_from_av_packet(
-                packet,
-                EncodedChunkKind::Video(VideoCodec::VP8),
-                1_000_000,
-            ) {
-                Ok(chunk) => {
-                    trace!(pts=?packet.pts(), "VP8 encoder produced an encoded packet.");
-                    Some(chunk)
+impl FfmpegVp8Encoder {
+    fn read_all_chunks(&mut self) -> Vec<EncodedChunk> {
+        iter::from_fn(|| {
+            match self.encoder.receive_packet(&mut self.packet) {
+                Ok(_) => {
+                    match encoded_chunk_from_av_packet(
+                        &self.packet,
+                        EncodedChunkKind::Video(VideoCodec::VP9),
+                        1_000_000,
+                    ) {
+                        Ok(chunk) => {
+                            trace!(pts=?self.packet.pts(), ?chunk, "VP8 encoder produced an encoded packet.");
+                            Some(chunk)
+                        }
+                        Err(e) => {
+                            warn!("failed to parse an ffmpeg packet received from encoder: {e}",);
+                            None
+                        }
+                    }
                 }
+
+                Err(ffmpeg_next::Error::Eof) => None,
+
+                Err(ffmpeg_next::Error::Other {
+                    errno: ffmpeg_next::error::EAGAIN,
+                }) => None, // encoder needs more frames to produce a packet
+
                 Err(e) => {
-                    warn!("failed to parse an ffmpeg packet received from encoder: {e}",);
+                    error!("Encoder error: {e}.");
                     None
                 }
             }
-        }
-
-        Err(ffmpeg_next::Error::Eof) => None,
-
-        Err(ffmpeg_next::Error::Other {
-            errno: ffmpeg_next::error::EAGAIN,
-        }) => None, // encoder needs more frames to produce a packet
-
-        Err(e) => {
-            error!("Encoder error: {e}.");
-            None
-        }
+        }).collect()
     }
 }
 

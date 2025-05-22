@@ -1,7 +1,7 @@
-use std::ptr;
+use std::{ptr, sync::Arc};
 
-use compositor_render::{event_handler::emit_event, OutputId};
-use crossbeam_channel::Receiver;
+use compositor_render::OutputId;
+use crossbeam_channel::{bounded, Receiver, Sender};
 use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
 use tracing::{debug, error};
 
@@ -11,13 +11,18 @@ use crate::{
     event::Event,
     pipeline::{
         encoder::{
-            AudioEncoderContext, AudioEncoderOptions, EncoderContext, VideoEncoderContext,
-            VideoEncoderOptions,
+            encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
+            encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
+            fdk_aac::FdkAacEncoder,
+            ffmpeg_h264::FfmpegH264Encoder,
+            AudioEncoderOptions, VideoEncoderOptions,
         },
         types::IsKeyframe,
-        EncodedChunk, EncodedChunkKind, EncoderOutputEvent,
+        AudioCodec, EncodedChunk, EncodedChunkKind, EncoderOutputEvent, PipelineCtx, VideoCodec,
     },
 };
+
+use super::{Output, OutputAudio, OutputVideo};
 
 #[derive(Debug, Clone)]
 pub struct RtmpSenderOptions {
@@ -32,18 +37,72 @@ struct Stream {
     time_base: Rational,
 }
 
-pub struct RmtpSender;
+pub struct RtmpClientOutput {
+    video: Option<VideoEncoderThreadHandle>,
+    audio: Option<AudioEncoderThreadHandle>,
+}
 
-impl RmtpSender {
+impl RtmpClientOutput {
     pub fn new(
-        output_id: &OutputId,
+        ctx: Arc<PipelineCtx>,
+        output_id: OutputId,
         options: RtmpSenderOptions,
-        packets_receiver: Receiver<EncoderOutputEvent>,
-        encoder_ctx: EncoderContext,
     ) -> Result<Self, OutputInitError> {
-        let (output_ctx, video_stream, audio_stream) = init_ffmpeg_output(options, encoder_ctx)?;
+        let mut output_ctx =
+            ffmpeg::format::output_as(&options.url, "flv").map_err(OutputInitError::FfmpegError)?;
+
+        let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
+
+        let video = match options.video {
+            Some(video) => Some(Self::init_video_track(
+                &ctx,
+                &output_id,
+                video,
+                &mut output_ctx,
+                encoded_chunks_sender.clone(),
+            )?),
+            None => None,
+        };
+        let audio = match options.audio {
+            Some(audio) => Some(Self::init_audio_track(
+                &ctx,
+                &output_id,
+                audio,
+                &mut output_ctx,
+                encoded_chunks_sender.clone(),
+            )?),
+            None => None,
+        };
+
+        // write header initializes time_base
+        output_ctx
+            .write_header()
+            .map_err(OutputInitError::FfmpegError)?;
+
+        let (video_encoder, video_stream) = match video {
+            Some((encoder, index)) => (
+                Some(encoder),
+                Some(Stream {
+                    index,
+                    time_base: output_ctx.stream(index).unwrap().time_base(),
+                }),
+            ),
+            None => (None, None),
+        };
+
+        let (audio_encoder, audio_stream) = match audio {
+            Some((encoder, index)) => (
+                Some(encoder),
+                Some(Stream {
+                    index,
+                    time_base: output_ctx.stream(index).unwrap().time_base(),
+                }),
+            ),
+            None => (None, None),
+        };
 
         let output_id = output_id.clone();
+        let ctx = ctx.clone();
         std::thread::Builder::new()
             .name(format!("RTMP sender thread for output {}", output_id))
             .spawn(move || {
@@ -51,60 +110,95 @@ impl RmtpSender {
                     tracing::info_span!("RTMP sender  writer", output_id = output_id.to_string())
                         .entered();
 
-                run_ffmpeg_output_thread(output_ctx, video_stream, audio_stream, packets_receiver);
-                emit_event(Event::OutputDone(output_id));
+                run_ffmpeg_output_thread(
+                    output_ctx,
+                    video_stream,
+                    audio_stream,
+                    encoded_chunks_receiver,
+                );
+                ctx.event_emitter.emit(Event::OutputDone(output_id));
                 debug!("Closing RTMP sender thread.");
             })
             .unwrap();
-        Ok(Self)
+
+        Ok(Self {
+            video: video_encoder,
+            audio: audio_encoder,
+        })
     }
-}
 
-fn init_ffmpeg_output(
-    options: RtmpSenderOptions,
-    encoder_ctx: EncoderContext,
-) -> Result<
-    (
-        ffmpeg::format::context::Output,
-        Option<Stream>,
-        Option<Stream>,
-    ),
-    OutputInitError,
-> {
-    let mut output_ctx =
-        ffmpeg::format::output_as(&options.url, "flv").map_err(OutputInitError::FfmpegError)?;
+    fn init_video_track(
+        ctx: &Arc<PipelineCtx>,
+        output_id: &OutputId,
+        options: VideoEncoderOptions,
+        output_ctx: &mut ffmpeg::format::context::Output,
+        encoded_chunks_sender: Sender<EncoderOutputEvent>,
+    ) -> Result<(VideoEncoderThreadHandle, usize), OutputInitError> {
+        let resolution = options.resolution();
 
-    let video = if let (Some(opts), Some(encoder_ctx)) = (&options.video, encoder_ctx.video) {
+        let encoder = match &options {
+            VideoEncoderOptions::H264(options) => spawn_video_encoder_thread::<FfmpegH264Encoder>(
+                ctx.clone(),
+                output_id.clone(),
+                options.clone(),
+                encoded_chunks_sender,
+            )?,
+            VideoEncoderOptions::VP8(_) => {
+                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::VP8))
+            }
+            VideoEncoderOptions::VP9(_) => {
+                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::VP9))
+            }
+        };
+
         let mut stream = output_ctx
             .add_stream(ffmpeg::codec::Id::H264)
             .map_err(OutputInitError::FfmpegError)?;
 
         let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
 
-        if let VideoEncoderContext::H264(Some(ctx)) = encoder_ctx {
+        if let Some(extradata) = encoder.encoder_context() {
             unsafe {
                 // The allocated size of extradata must be at least extradata_size + AV_INPUT_BUFFER_PADDING_SIZE, with the padding bytes zeroed.
                 codecpar.extradata = ffmpeg_next::ffi::av_mallocz(
-                    ctx.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
+                    extradata.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
                 ) as *mut u8;
-                std::ptr::copy(ctx.as_ptr(), codecpar.extradata, ctx.len());
-                codecpar.extradata_size = ctx.len() as i32;
+                std::ptr::copy(extradata.as_ptr(), codecpar.extradata, extradata.len());
+                codecpar.extradata_size = extradata.len() as i32;
             };
         }
 
         codecpar.codec_id = ffmpeg::codec::Id::H264.into();
         codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
-        codecpar.width = opts.resolution().width as i32;
-        codecpar.height = opts.resolution().height as i32;
-        Some(stream.index())
-    } else {
-        None
-    };
+        codecpar.width = resolution.width as i32;
+        codecpar.height = resolution.height as i32;
 
-    let audio = if let (Some(opts), Some(encoder_ctx)) = (&options.audio, encoder_ctx.audio) {
-        let channels = match opts.channels() {
+        Ok((encoder, stream.index()))
+    }
+
+    fn init_audio_track(
+        ctx: &Arc<PipelineCtx>,
+        output_id: &OutputId,
+        options: AudioEncoderOptions,
+        output_ctx: &mut ffmpeg::format::context::Output,
+        encoded_chunks_sender: Sender<EncoderOutputEvent>,
+    ) -> Result<(AudioEncoderThreadHandle, usize), OutputInitError> {
+        let channel_count = match options.channels() {
             AudioChannels::Mono => 1,
             AudioChannels::Stereo => 2,
+        };
+        let sample_rate = options.sample_rate();
+
+        let encoder = match options {
+            AudioEncoderOptions::Aac(options) => spawn_audio_encoder_thread::<FdkAacEncoder>(
+                ctx.clone(),
+                output_id.clone(),
+                options,
+                encoded_chunks_sender,
+            )?,
+            AudioEncoderOptions::Opus(_) => {
+                return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus))
+            }
         };
 
         let mut stream = output_ctx
@@ -112,46 +206,47 @@ fn init_ffmpeg_output(
             .map_err(OutputInitError::FfmpegError)?;
 
         let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
-        if let AudioEncoderContext::Aac(ctx) = encoder_ctx {
+        if let Some(extradata) = encoder.encoder_context() {
             unsafe {
                 // The allocated size of extradata must be at least extradata_size + AV_INPUT_BUFFER_PADDING_SIZE, with the padding bytes zeroed.
                 codecpar.extradata = ffmpeg_next::ffi::av_mallocz(
-                    ctx.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
+                    extradata.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
                 ) as *mut u8;
-                std::ptr::copy(ctx.as_ptr(), codecpar.extradata, ctx.len());
-                codecpar.extradata_size = ctx.len() as i32;
+                std::ptr::copy(extradata.as_ptr(), codecpar.extradata, extradata.len());
+                codecpar.extradata_size = extradata.len() as i32;
             };
         }
         codecpar.codec_id = ffmpeg::codec::Id::AAC.into();
         codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_AUDIO;
-        codecpar.sample_rate = opts.sample_rate() as i32;
+        codecpar.sample_rate = sample_rate as i32;
         codecpar.ch_layout = ffmpeg::ffi::AVChannelLayout {
-            nb_channels: channels,
+            nb_channels: channel_count,
             order: ffmpeg::ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC,
             // This value is ignored when order is AV_CHANNEL_ORDER_UNSPEC
             u: ffmpeg::ffi::AVChannelLayout__bindgen_ty_1 { mask: 0 },
             // Field doc: "For some private data of the user."
             opaque: ptr::null_mut(),
         };
-        Some(stream.index())
-    } else {
-        None
-    };
 
-    output_ctx
-        .write_header()
-        .map_err(OutputInitError::FfmpegError)?;
+        Ok((encoder, stream.index()))
+    }
+}
 
-    let video = video.map(|index| Stream {
-        index,
-        time_base: output_ctx.stream(index).unwrap().time_base(),
-    });
-    let audio = audio.map(|index| Stream {
-        index,
-        time_base: output_ctx.stream(index).unwrap().time_base(),
-    });
+impl Output for RtmpClientOutput {
+    fn audio(&self) -> Option<OutputAudio> {
+        self.audio.as_ref().map(|audio| OutputAudio {
+            samples_batch_sender: &audio.sample_batch_sender,
+        })
+    }
 
-    Ok((output_ctx, video, audio))
+    fn video(&self) -> Option<OutputVideo> {
+        self.video.as_ref().map(|video| OutputVideo {
+            resolution: video.config.resolution,
+            frame_format: video.config.output_format,
+            frame_sender: &video.frame_sender,
+            keyframe_request_sender: &video.keyframe_request_sender,
+        })
+    }
 }
 
 fn run_ffmpeg_output_thread(

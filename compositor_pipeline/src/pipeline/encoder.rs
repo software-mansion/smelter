@@ -1,12 +1,8 @@
-use std::sync::Arc;
+use std::{iter, sync::Arc};
 
-use compositor_render::{Frame, OutputFrameFormat, OutputId, Resolution};
-use crossbeam_channel::{bounded, Receiver, Sender};
-use fdk_aac::AacEncoder;
+use compositor_render::{Frame, OutputFrameFormat, Resolution};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use ffmpeg_next::format::Pixel;
-use ffmpeg_vp8::LibavVP8Encoder;
-use ffmpeg_vp9::LibavVP9Encoder;
-use log::error;
 use resampler::OutputResampler;
 
 use crate::{
@@ -15,9 +11,10 @@ use crate::{
     queue::PipelineEvent,
 };
 
-use self::{ffmpeg_h264::LibavH264Encoder, opus::OpusEncoder};
+use super::{EncodedChunk, PipelineCtx};
 
-use super::{types::EncoderOutputEvent, PipelineCtx};
+pub(crate) mod encoder_thread_audio;
+pub(crate) mod encoder_thread_video;
 
 pub mod fdk_aac;
 pub mod ffmpeg_h264;
@@ -96,204 +93,12 @@ impl From<OutputPixelFormat> for OutputFrameFormat {
     }
 }
 
-pub struct Encoder {
-    pub video: Option<VideoEncoder>,
-    pub audio: Option<AudioEncoder>,
-}
-
-pub enum VideoEncoder {
-    H264(LibavH264Encoder),
-    VP8(LibavVP8Encoder),
-    VP9(LibavVP9Encoder),
-}
-
-pub enum AudioEncoder {
-    Opus(OpusEncoder),
-    Aac(AacEncoder),
-}
-
-impl Encoder {
-    pub fn new(
-        output_id: &OutputId,
-        options: EncoderOptions,
-        ctx: &Arc<PipelineCtx>,
-    ) -> Result<(Self, Receiver<EncoderOutputEvent>), EncoderInitError> {
-        let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
-
-        let video_encoder = match options.video {
-            Some(video_encoder_options) => Some(VideoEncoder::new(
-                output_id,
-                video_encoder_options,
-                ctx,
-                encoded_chunks_sender.clone(),
-            )?),
-            None => None,
-        };
-
-        let audio_encoder = match options.audio {
-            Some(audio_encoder_options) => Some(AudioEncoder::new(
-                output_id,
-                audio_encoder_options,
-                ctx,
-                encoded_chunks_sender,
-            )?),
-            None => None,
-        };
-
-        Ok((
-            Self {
-                video: video_encoder,
-                audio: audio_encoder,
-            },
-            encoded_chunks_receiver,
-        ))
-    }
-
-    pub fn frame_sender(&self) -> Option<&Sender<PipelineEvent<Frame>>> {
-        match &self.video {
-            Some(VideoEncoder::H264(encoder)) => Some(encoder.frame_sender()),
-            Some(VideoEncoder::VP8(encoder)) => Some(encoder.frame_sender()),
-            Some(VideoEncoder::VP9(encoder)) => Some(encoder.frame_sender()),
-            None => {
-                error!("Non video encoder received frame to send.");
-                None
-            }
-        }
-    }
-
-    pub fn keyframe_request_sender(&self) -> Option<Sender<()>> {
-        match self.video.as_ref() {
-            Some(VideoEncoder::H264(encoder)) => Some(encoder.keyframe_request_sender().clone()),
-            Some(VideoEncoder::VP8(encoder)) => Some(encoder.keyframe_request_sender().clone()),
-            Some(VideoEncoder::VP9(encoder)) => Some(encoder.keyframe_request_sender().clone()),
-            None => {
-                error!("Non video encoder received keyframe request.");
-                None
-            }
-        }
-    }
-
-    pub fn samples_batch_sender(&self) -> Option<&Sender<PipelineEvent<OutputSamples>>> {
-        match &self.audio {
-            Some(encoder) => Some(encoder.samples_batch_sender()),
-            None => {
-                error!("Non audio encoder received samples to send.");
-                None
-            }
-        }
-    }
-
-    pub fn context(&self) -> EncoderContext {
-        EncoderContext {
-            video: match &self.video {
-                Some(VideoEncoder::H264(e)) => Some(VideoEncoderContext::H264(e.context())),
-                Some(VideoEncoder::VP8(_)) => Some(VideoEncoderContext::VP8),
-                Some(VideoEncoder::VP9(_)) => Some(VideoEncoderContext::VP9),
-                None => None,
-            },
-            audio: match &self.audio {
-                Some(AudioEncoder::Aac(e)) => Some(AudioEncoderContext::Aac(e.config.clone())),
-                Some(AudioEncoder::Opus(_)) => Some(AudioEncoderContext::Opus),
-                None => None,
-            },
-        }
-    }
-}
-
 impl VideoEncoderOptions {
     pub fn resolution(&self) -> Resolution {
         match self {
             VideoEncoderOptions::H264(opt) => opt.resolution,
             VideoEncoderOptions::VP8(opt) => opt.resolution,
             VideoEncoderOptions::VP9(opt) => opt.resolution,
-        }
-    }
-}
-
-impl VideoEncoder {
-    pub fn new(
-        output_id: &OutputId,
-        options: VideoEncoderOptions,
-        ctx: &Arc<PipelineCtx>,
-        sender: Sender<EncoderOutputEvent>,
-    ) -> Result<Self, EncoderInitError> {
-        match options {
-            VideoEncoderOptions::H264(options) => Ok(Self::H264(LibavH264Encoder::new(
-                output_id,
-                options,
-                ctx.output_framerate,
-                sender,
-            )?)),
-            VideoEncoderOptions::VP8(options) => Ok(Self::VP8(LibavVP8Encoder::new(
-                output_id,
-                options,
-                ctx.output_framerate,
-                sender,
-            )?)),
-            VideoEncoderOptions::VP9(options) => Ok(Self::VP9(LibavVP9Encoder::new(
-                output_id,
-                options,
-                ctx.output_framerate,
-                sender,
-            )?)),
-        }
-    }
-
-    pub fn resolution(&self) -> Resolution {
-        match self {
-            Self::H264(encoder) => encoder.resolution(),
-            Self::VP8(encoder) => encoder.resolution(),
-            Self::VP9(encoder) => encoder.resolution(),
-        }
-    }
-
-    pub fn pixel_format(&self) -> OutputFrameFormat {
-        match self {
-            Self::H264(encoder) => encoder.pixel_format(),
-            Self::VP8(_) => OutputFrameFormat::PlanarYuv420Bytes,
-            Self::VP9(encoder) => encoder.pixel_format(),
-        }
-    }
-
-    pub fn keyframe_request_sender(&self) -> Sender<()> {
-        match self {
-            Self::H264(encoder) => encoder.keyframe_request_sender(),
-            Self::VP8(encoder) => encoder.keyframe_request_sender(),
-            Self::VP9(encoder) => encoder.keyframe_request_sender(),
-        }
-    }
-}
-
-impl AudioEncoder {
-    fn new(
-        output_id: &OutputId,
-        options: AudioEncoderOptions,
-        ctx: &Arc<PipelineCtx>,
-        sender: Sender<EncoderOutputEvent>,
-    ) -> Result<Self, EncoderInitError> {
-        let resampler = if options.sample_rate() != ctx.mixing_sample_rate {
-            Some(OutputResampler::new(
-                ctx.mixing_sample_rate,
-                options.sample_rate(),
-            )?)
-        } else {
-            None
-        };
-
-        match options {
-            AudioEncoderOptions::Opus(options) => {
-                OpusEncoder::new(options, sender, resampler).map(AudioEncoder::Opus)
-            }
-            AudioEncoderOptions::Aac(options) => {
-                AacEncoder::new(output_id, options, sender, resampler).map(AudioEncoder::Aac)
-            }
-        }
-    }
-
-    fn samples_batch_sender(&self) -> &Sender<PipelineEvent<OutputSamples>> {
-        match self {
-            Self::Opus(encoder) => encoder.samples_batch_sender(),
-            Self::Aac(encoder) => encoder.samples_batch_sender(),
         }
     }
 }
@@ -310,6 +115,233 @@ impl AudioEncoderOptions {
         match self {
             AudioEncoderOptions::Opus(options) => options.sample_rate,
             AudioEncoderOptions::Aac(options) => options.sample_rate,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct VideoEncoderConfig {
+    pub resolution: Resolution,
+    pub output_format: OutputFrameFormat,
+    pub extradata: Option<bytes::Bytes>,
+}
+
+pub(crate) trait VideoEncoder: Sized {
+    const LABEL: &'static str;
+    type Options: Send + 'static;
+
+    fn new(
+        ctx: &Arc<PipelineCtx>,
+        options: Self::Options,
+    ) -> Result<(Self, VideoEncoderConfig), EncoderInitError>;
+    fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedChunk>;
+    fn flush(&mut self) -> Vec<EncodedChunk>;
+}
+
+#[derive(Debug)]
+pub(crate) struct AudioEncoderConfig {
+    //pub channels: AudioChannels,
+    //pub sample_rate: u32,
+    pub extradata: Option<bytes::Bytes>,
+}
+
+pub(crate) trait AudioEncoderOptionsExt {
+    fn sample_rate(&self) -> u32;
+}
+
+pub(crate) trait AudioEncoder: Sized {
+    const LABEL: &'static str;
+
+    type Options: AudioEncoderOptionsExt + Send + 'static;
+
+    fn new(
+        ctx: &Arc<PipelineCtx>,
+        options: Self::Options,
+    ) -> Result<(Self, AudioEncoderConfig), EncoderInitError>;
+    fn encode(&mut self, samples: OutputSamples) -> Vec<EncodedChunk>;
+    fn flush(&mut self) -> Vec<EncodedChunk>;
+}
+
+pub(super) struct VideoEncoderStreamContext {
+    pub keyframe_request_sender: Sender<()>,
+    pub config: VideoEncoderConfig,
+}
+
+pub(super) struct VideoEncoderStream<Encoder, Source>
+where
+    Encoder: VideoEncoder,
+    Source: Iterator<Item = PipelineEvent<Frame>>,
+{
+    encoder: Encoder,
+    source: Source,
+    keyframe_request_receiver: Receiver<()>,
+    eos_sent: bool,
+}
+
+impl<Encoder, Source> VideoEncoderStream<Encoder, Source>
+where
+    Encoder: VideoEncoder,
+    Source: Iterator<Item = PipelineEvent<Frame>>,
+{
+    pub fn new(
+        ctx: Arc<PipelineCtx>,
+        options: Encoder::Options,
+        source: Source,
+    ) -> Result<(Self, VideoEncoderStreamContext), EncoderInitError> {
+        let (keyframe_request_sender, keyframe_request_receiver) = unbounded();
+        let (encoder, config) = Encoder::new(&ctx, options)?;
+        Ok((
+            Self {
+                encoder,
+                source,
+                eos_sent: false,
+                keyframe_request_receiver,
+            },
+            VideoEncoderStreamContext {
+                keyframe_request_sender,
+                config,
+            },
+        ))
+    }
+
+    fn has_keyframe_request(&self) -> bool {
+        let mut has_keyframe_request = false;
+        while self.keyframe_request_receiver.try_recv().is_ok() {
+            has_keyframe_request = true;
+        }
+        has_keyframe_request
+    }
+}
+
+impl<Encoder, Source> Iterator for VideoEncoderStream<Encoder, Source>
+where
+    Encoder: VideoEncoder,
+    Source: Iterator<Item = PipelineEvent<Frame>>,
+{
+    type Item = Vec<PipelineEvent<EncodedChunk>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.source.next() {
+            Some(PipelineEvent::Data(frame)) => {
+                let chunks = self.encoder.encode(frame, self.has_keyframe_request());
+                Some(chunks.into_iter().map(PipelineEvent::Data).collect())
+            }
+            Some(PipelineEvent::EOS) | None => match self.eos_sent {
+                true => None,
+                false => {
+                    let chunks = self.encoder.flush();
+                    let events = chunks.into_iter().map(PipelineEvent::Data);
+                    let eos = iter::once(PipelineEvent::EOS);
+                    self.eos_sent = true;
+                    Some(events.chain(eos).collect())
+                }
+            },
+        }
+    }
+}
+
+pub(super) struct AudioEncoderStream<Encoder, Source>
+where
+    Encoder: AudioEncoder,
+    Source: Iterator<Item = PipelineEvent<OutputSamples>>,
+{
+    encoder: Encoder,
+    source: Source,
+    eos_sent: bool,
+}
+
+impl<Encoder, Source> AudioEncoderStream<Encoder, Source>
+where
+    Encoder: AudioEncoder,
+    Source: Iterator<Item = PipelineEvent<OutputSamples>>,
+{
+    pub fn new(
+        ctx: Arc<PipelineCtx>,
+        options: Encoder::Options,
+        source: Source,
+    ) -> Result<(Self, AudioEncoderConfig), EncoderInitError> {
+        let (encoder, config) = Encoder::new(&ctx, options)?;
+        Ok((
+            Self {
+                encoder,
+                source,
+                eos_sent: false,
+            },
+            config,
+        ))
+    }
+}
+
+impl<Encoder, Source> Iterator for AudioEncoderStream<Encoder, Source>
+where
+    Encoder: AudioEncoder,
+    Source: Iterator<Item = PipelineEvent<OutputSamples>>,
+{
+    type Item = Vec<PipelineEvent<EncodedChunk>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.source.next() {
+            Some(PipelineEvent::Data(samples)) => {
+                let chunks = self.encoder.encode(samples);
+                Some(chunks.into_iter().map(PipelineEvent::Data).collect())
+            }
+            Some(PipelineEvent::EOS) | None => match self.eos_sent {
+                true => None,
+                false => {
+                    let chunks = self.encoder.flush();
+                    let events = chunks.into_iter().map(PipelineEvent::Data);
+                    let eos = iter::once(PipelineEvent::EOS);
+                    self.eos_sent = true;
+                    Some(events.chain(eos).collect())
+                }
+            },
+        }
+    }
+}
+
+pub(super) struct ResampledStream<Source: Iterator<Item = PipelineEvent<OutputSamples>>> {
+    resampler: Option<OutputResampler>,
+    source: Source,
+    eos_sent: bool,
+}
+
+impl<Source: Iterator<Item = PipelineEvent<OutputSamples>>> ResampledStream<Source> {
+    pub fn new(
+        source: Source,
+        input_sample_rate: u32,
+        output_sample_rate: u32,
+    ) -> Result<Self, EncoderInitError> {
+        let resampler = match input_sample_rate != output_sample_rate {
+            true => Some(OutputResampler::new(input_sample_rate, output_sample_rate)?),
+            false => None,
+        };
+        Ok(Self {
+            resampler,
+            source,
+            eos_sent: false,
+        })
+    }
+}
+
+impl<Source: Iterator<Item = PipelineEvent<OutputSamples>>> Iterator for ResampledStream<Source> {
+    type Item = Vec<PipelineEvent<OutputSamples>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Some(resampler) = &mut self.resampler else {
+            return self.source.next().map(|event| vec![event]);
+        };
+        match self.source.next() {
+            Some(PipelineEvent::Data(samples)) => {
+                let resampled = resampler.resample(samples);
+                Some(resampled.into_iter().map(PipelineEvent::Data).collect())
+            }
+            Some(PipelineEvent::EOS) | None => match self.eos_sent {
+                true => None,
+                false => {
+                    self.eos_sent = true;
+                    Some(vec![PipelineEvent::EOS])
+                }
+            },
         }
     }
 }

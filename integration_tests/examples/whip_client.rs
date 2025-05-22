@@ -29,7 +29,7 @@ fn client_code() -> Result<()> {
     )?;
 
     let endpoint_url = env::var("OUTPUT_URL").map_err(|err| anyhow!("Couldn't read OUTPUT_URL environmental variable. You must provide it in order to run `whip_client` example. Read env error: {}", err))?;
-    let token = env::var("EXAMPLE_TOKEN").map_err(|err| anyhow!("Couldn't read EXAMPLE_TOKEN environmental variable. You must provide it in order to run `whip_client` example. Read env error: {}", err))?;
+    let token = env::var("WHIP_TOKEN").map_err(|err| anyhow!("Couldn't read WHIP_TOKEN environmental variable. You must provide it in order to run `whip_client` example. Read env error: {}", err))?;
 
     examples::post(
         "output/output_1/register",
@@ -45,8 +45,13 @@ fn client_code() -> Result<()> {
                 "encoder_preferences": [
                     {
                         "type": "ffmpeg_h264",
-                        "preset": "fast",
+                        "preset": "ultrafast",
+                        "ffmpeg_options": {
+                            "g": "120", // keyframe every 120 frames
+                            "b": "6M"   // bitrate 6000 kb/s
+                        }
                     },
+                    { "type": "any" }
                 ],
                 "initial": {
                     "root": {
@@ -58,6 +63,9 @@ fn client_code() -> Result<()> {
             },
             "audio": {
                 "channels": "stereo",
+                "encoder_preferences": [
+                    { "type": "opus", "preset": "quality" }
+                ],
                 "initial": {
                     "inputs": [
                         {"input_id": "input_1"}

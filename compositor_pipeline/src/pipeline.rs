@@ -23,6 +23,9 @@ use crossbeam_channel::{bounded, Receiver};
 use glyphon::fontdb;
 use input::InputInitInfo;
 use input::RawDataInputOptions;
+use output::encoded_data::EncodedDataOutput;
+use output::new_external_output;
+use output::raw_data::RawDataOutput;
 use output::EncodedDataOutputOptions;
 use output::OutputOptions;
 use output::RawDataOutputOptions;
@@ -307,9 +310,9 @@ impl Pipeline {
         register_pipeline_output(
             pipeline,
             output_id,
-            &register_options.output_options,
             register_options.video,
             register_options.audio,
+            |ctx, output_id| new_external_output(ctx, output_id, register_options.output_options),
         )
     }
 
@@ -321,9 +324,13 @@ impl Pipeline {
         register_pipeline_output(
             pipeline,
             output_id,
-            &register_options.output_options,
             register_options.video,
             register_options.audio,
+            |ctx, output_id| {
+                let (output, result) =
+                    EncodedDataOutput::new(output_id, ctx, register_options.output_options)?;
+                Ok((Box::new(output), result))
+            },
         )
     }
 
@@ -335,9 +342,12 @@ impl Pipeline {
         register_pipeline_output(
             pipeline,
             output_id,
-            &register_options.output_options,
             register_options.video,
             register_options.audio,
+            |_ctx, _output_id| {
+                let (output, result) = RawDataOutput::new(register_options.output_options)?;
+                Ok((Box::new(output), result))
+            },
         )
     }
 
@@ -394,7 +404,13 @@ impl Pipeline {
             return Err(RequestKeyframeError::OutputNotRegistered(output_id.clone()));
         };
 
-        output.output.request_keyframe(output_id)
+        match output.output.video() {
+            Some(video) => video
+                .keyframe_request_sender
+                .send(())
+                .map_err(|_| RequestKeyframeError::KeyframesUnsupported(output_id.clone())),
+            None => Err(RequestKeyframeError::NoVideoOutput(output_id.clone())),
+        }
     }
 
     pub fn register_font(&self, font_source: fontdb::Source) {
@@ -439,17 +455,18 @@ impl Pipeline {
             }
         }
 
-        let (Some(resolution), Some(frame_format)) = (
-            output.output.resolution(),
-            output.output.output_frame_format(),
-        ) else {
+        let Some(video_output) = output.output.video() else {
             return Err(UpdateSceneError::AudioVideoNotMatching(output_id));
         };
 
         info!(?output_id, "Update scene {:#?}", scene_root);
 
-        self.renderer
-            .update_scene(output_id, resolution, frame_format, scene_root)
+        self.renderer.update_scene(
+            output_id,
+            video_output.resolution,
+            video_output.frame_format,
+            scene_root,
+        )
     }
 
     fn update_audio(
