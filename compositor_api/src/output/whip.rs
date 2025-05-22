@@ -9,7 +9,7 @@ use crate::*;
 #[serde(deny_unknown_fields)]
 pub struct WhipOutput {
     /// WHIP server endpoint
-    pub endpoint_url: String,
+    pub endpoint_url: Arc<str>,
     // Bearer token
     pub bearer_token: Option<Arc<str>>,
     /// Video track configuration.

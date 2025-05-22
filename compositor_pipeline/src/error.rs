@@ -6,7 +6,7 @@ use compositor_render::{
     InputId, OutputId,
 };
 
-use crate::pipeline::{decoder::AacDecoderError, output::whip, VideoCodec};
+use crate::pipeline::{decoder::AacDecoderError, output::whip, AudioCodec, VideoCodec};
 use fdk_aac_sys as fdk;
 
 #[derive(Debug, thiserror::Error)]
@@ -41,9 +41,6 @@ pub enum RegisterInputError {
 pub enum RegisterOutputError {
     #[error("Failed to register output stream. Stream \"{0}\" is already registered.")]
     AlreadyRegistered(OutputId),
-
-    #[error("Encoder error while registering output stream for stream \"{0}\".")]
-    EncoderError(OutputId, #[source] EncoderInitError),
 
     #[error("Output initialization error while registering output for stream \"{0}\".")]
     OutputError(OutputId, #[source] OutputInitError),
@@ -85,8 +82,14 @@ pub enum UnregisterOutputError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum OutputInitError {
-    #[error("An unsupported codec was requested: {0:?}.")]
+    #[error("Failed to initialize encoder.")]
+    EncoderError(#[from] EncoderInitError),
+
+    #[error("An unsupported video codec was requested: {0:?}.")]
     UnsupportedVideoCodec(VideoCodec),
+
+    #[error("An unsupported audio codec was requested: {0:?}.")]
+    UnsupportedAudioCodec(AudioCodec),
 
     #[error(transparent)]
     SocketError(#[from] std::io::Error),
@@ -204,7 +207,6 @@ impl From<&RegisterInputError> for PipelineErrorInfo {
 }
 
 const OUTPUT_STREAM_ALREADY_REGISTERED: &str = "OUTPUT_STREAM_ALREADY_REGISTERED";
-const ENCODER_ERROR: &str = "OUTPUT_STREAM_ENCODER_ERROR";
 const OUTPUT_ERROR: &str = "OUTPUT_STREAM_OUTPUT_ERROR";
 const UNSUPPORTED_RESOLUTION: &str = "UNSUPPORTED_RESOLUTION";
 const NO_VIDEO_OR_AUDIO_FOR_OUTPUT: &str = "NO_VIDEO_OR_AUDIO_FOR_OUTPUT";
@@ -216,15 +218,9 @@ impl From<&RegisterOutputError> for PipelineErrorInfo {
             RegisterOutputError::AlreadyRegistered(_) => {
                 PipelineErrorInfo::new(OUTPUT_STREAM_ALREADY_REGISTERED, ErrorType::UserError)
             }
-
-            RegisterOutputError::EncoderError(_, _) => {
-                PipelineErrorInfo::new(ENCODER_ERROR, ErrorType::ServerError)
-            }
-
             RegisterOutputError::OutputError(_, _) => {
                 PipelineErrorInfo::new(OUTPUT_ERROR, ErrorType::ServerError)
             }
-
             RegisterOutputError::UnsupportedResolution(_) => {
                 PipelineErrorInfo::new(UNSUPPORTED_RESOLUTION, ErrorType::UserError)
             }

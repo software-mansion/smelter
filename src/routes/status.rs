@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use axum::{extract::State, response::IntoResponse};
-use compositor_pipeline::pipeline::{input::Input, output::Output};
+use compositor_pipeline::pipeline::{input::Input, output::OutputKind};
 use compositor_render::RenderingMode;
 use serde::Serialize;
 use serde_json::json;
@@ -70,13 +70,13 @@ pub(super) async fn status_handler(
     let outputs: Vec<OutputInfo> = pipeline
         .outputs()
         .map(|(id, output)| {
-            let output_type = match &output.output {
-                Output::Rtp { .. } => "rtp",
-                Output::Rtmp { .. } => "rtmp",
-                Output::Mp4 { .. } => "mp4",
-                Output::Whip { .. } => "whip",
-                Output::EncodedData { .. } => "encoded data",
-                Output::RawData { .. } => "raw data",
+            let output_type = match &output.kind {
+                OutputKind::Rtp => "rtp",
+                OutputKind::Rtmp => "rtmp",
+                OutputKind::Mp4 => "mp4",
+                OutputKind::Whip => "whip",
+                OutputKind::EncodedDataChannel => "encoded data",
+                OutputKind::RawDataChannel => "raw data",
             };
             OutputInfo {
                 output_id: id.to_string(),

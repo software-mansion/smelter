@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use rubato::{FftFixedOut, Resampler};
-use tracing::{debug, error, trace};
+use tracing::{debug, error, info, trace};
 
 use crate::{
     audio_mixer::{AudioSamples, OutputSamples},
@@ -40,6 +40,10 @@ impl OutputResampler {
         input_sample_rate: u32,
         output_sample_rate: u32,
     ) -> Result<OutputResampler, EncoderInitError> {
+        info!(
+            "Initializing output stream audio resampler  input:{} output:{}",
+            input_sample_rate, output_sample_rate
+        );
         /// This part of pipeline use stereo
         const CHANNELS: usize = 2;
         /// Not sure what should be here, but rubato example used 2

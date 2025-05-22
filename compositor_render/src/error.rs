@@ -76,10 +76,8 @@ pub enum UpdateSceneError {
 pub enum RequestKeyframeError {
     #[error("Output \"{0}\" does not exist, register it first before requesting keyframe.")]
     OutputNotRegistered(OutputId),
-    #[error(
-        "Output \"{0}\" is a raw output. Keyframe request is only available for encoded outputs."
-    )]
-    RawOutput(OutputId),
+    #[error("Output \"{0}\" does not support keyframe requests.")]
+    KeyframesUnsupported(OutputId),
     #[error("Output \"{0}\" is not a video output. Can't request a keyframe on non video output.")]
     NoVideoOutput(OutputId),
 }
