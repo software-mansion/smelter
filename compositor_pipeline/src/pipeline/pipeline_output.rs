@@ -52,7 +52,9 @@ pub(super) fn register_pipeline_output<NewOutputResult>(
 
     let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
 
-    let (output, output_result) = output_options.new_output(&output_id, pipeline_ctx)?;
+    let (output, output_result) = output_options
+        .new_output(&output_id, pipeline_ctx)
+        .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
 
     let mut guard = pipeline.lock().unwrap();
 
