@@ -1,6 +1,22 @@
+use std::sync::Arc;
+
+use compositor_render::{Frame, OutputId, Resolution};
+use crossbeam_channel::{Receiver, Sender};
+use tokio::sync::{mpsc, oneshot};
+use tracing::{debug, span, warn, Level};
 use webrtc::rtp_transceiver::PayloadType;
 
-use crate::pipeline::encoder::{AudioEncoderOptions, Encoder, EncoderOptions, VideoEncoderOptions};
+use crate::{
+    error::EncoderInitError,
+    pipeline::{
+        encoder::{
+            AudioEncoderOptions, EncoderOptions, VideoEncoder, VideoEncoderConfig,
+            VideoEncoderOptions,
+        },
+        EncodedChunk, PipelineCtx,
+    },
+    queue::PipelineEvent,
+};
 
 use super::{
     packet_stream::PacketStream,
@@ -47,3 +63,4 @@ pub fn create_encoder_and_packet_stream(
 
     Ok((encoder, packet_stream))
 }
+

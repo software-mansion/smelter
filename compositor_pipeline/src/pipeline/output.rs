@@ -4,20 +4,29 @@ use compositor_render::{
     error::RequestKeyframeError, Frame, OutputFrameFormat, OutputId, Resolution,
 };
 use crossbeam_channel::{bounded, Receiver, Sender};
-use mp4::{Mp4FileWriter, Mp4OutputOptions};
-use rtmp::RtmpSenderOptions;
+use mp4::{Mp4Output, Mp4OutputOptions};
+use rtmp::{RtmpClientOutput, RtmpSenderOptions};
 use tracing::debug;
 
-use crate::{audio_mixer::OutputSamples, error::RegisterOutputError, queue::PipelineEvent};
+use crate::{audio_mixer::OutputSamples, error::OutputInitError, queue::PipelineEvent};
 
-use self::rtp::{RtpSender, RtpSenderOptions};
+use self::rtp::{RtpOutput, RtpSenderOptions};
 
 use super::{
-    encoder::{AudioEncoderOptions, Encoder, EncoderOptions, VideoEncoderOptions},
+    encoder::{
+        encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
+        encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
+        fdk_aac::FdkAacEncoder,
+        ffmpeg_h264::FfmpegH264Encoder,
+        ffmpeg_vp8::FfmpegVp8Encoder,
+        ffmpeg_vp9::FfmpegVp9Encoder,
+        opus::OpusEncoder,
+        AudioEncoderOptions, VideoEncoderOptions,
+    },
     types::EncoderOutputEvent,
     PipelineCtx, Port, RawDataReceiver,
 };
-use whip::{WhipSender, WhipSenderOptions};
+use whip::{WhipClientOutput, WhipSenderOptions};
 
 pub mod mp4;
 pub mod rtmp;
@@ -61,24 +70,13 @@ pub struct RawVideoOptions {
 pub struct RawAudioOptions;
 
 pub enum Output {
-    Rtp {
-        sender: RtpSender,
-        encoder: Encoder,
-    },
-    Rtmp {
-        sender: rtmp::RmtpSender,
-        encoder: Encoder,
-    },
-    Mp4 {
-        writer: Mp4FileWriter,
-        encoder: Encoder,
-    },
-    Whip {
-        sender: WhipSender,
-        encoder: Encoder,
-    },
+    Rtp(RtpOutput),
+    Rtmp(RtmpClientOutput),
+    Mp4(Mp4Output),
+    Whip(WhipClientOutput),
     EncodedData {
-        encoder: Encoder,
+        audio: Option<AudioEncoderThreadHandle>,
+        video: Option<VideoEncoderThreadHandle>,
     },
     RawData {
         resolution: Option<Resolution>,
@@ -90,74 +88,35 @@ pub enum Output {
 pub(super) trait OutputOptionsExt<NewOutputResult> {
     fn new_output(
         &self,
-        output_id: &OutputId,
+        output_id: OutputId,
         ctx: Arc<PipelineCtx>,
-    ) -> Result<(Output, NewOutputResult), RegisterOutputError>;
+    ) -> Result<(Output, NewOutputResult), OutputInitError>;
 }
 
 impl OutputOptionsExt<Option<Port>> for OutputOptions {
     fn new_output(
         &self,
-        output_id: &OutputId,
+        output_id: OutputId,
         ctx: Arc<PipelineCtx>,
-    ) -> Result<(Output, Option<Port>), RegisterOutputError> {
+    ) -> Result<(Output, Option<Port>), OutputInitError> {
         match &self {
-            OutputOptions::Rtp(rtp_options) => {
-                let encoder_opts = EncoderOptions {
-                    video: rtp_options.video.clone(),
-                    audio: rtp_options.audio.clone(),
-                };
-
-                let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
-                    .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
-                let (sender, port) =
-                    rtp::RtpSender::new(output_id, rtp_options.clone(), packets, ctx)
-                        .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
-
-                Ok((Output::Rtp { sender, encoder }, Some(port)))
+            OutputOptions::Rtp(opt) => {
+                let (output, port) = RtpOutput::new(ctx, output_id, opt.clone())?;
+                Ok((Output::Rtp(output), Some(port)))
             }
-            OutputOptions::Rtmp(rtmp_options) => {
-                let encoder_opts = EncoderOptions {
-                    video: rtmp_options.video.clone(),
-                    audio: rtmp_options.audio.clone(),
-                };
-
-                let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
-                    .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
-                let sender = rtmp::RmtpSender::new(
-                    output_id,
-                    rtmp_options.clone(),
-                    packets,
-                    encoder.context(),
-                )
-                .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
-
-                Ok((Output::Rtmp { sender, encoder }, None))
+            OutputOptions::Rtmp(opt) => {
+                let output = RtmpClientOutput::new(ctx, output_id, opt.clone())?;
+                Ok((Output::Rtmp(output), None))
             }
-            OutputOptions::Mp4(mp4_opt) => {
-                let encoder_opts = EncoderOptions {
-                    video: mp4_opt.video.clone(),
-                    audio: mp4_opt.audio.clone(),
-                };
+            OutputOptions::Mp4(opt) => {
+                let output = Mp4Output::new(ctx, output_id, opt.clone())?;
 
-                let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
-                    .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
-                let writer = Mp4FileWriter::new(
-                    output_id.clone(),
-                    mp4_opt.clone(),
-                    encoder.context(),
-                    packets,
-                    ctx,
-                )
-                .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
-
-                Ok((Output::Mp4 { writer, encoder }, None))
+                Ok((Output::Mp4(output), None))
             }
-            OutputOptions::Whip(whip_options) => {
-                let (sender, encoder) = whip::WhipSender::new(output_id, whip_options.clone(), ctx)
-                    .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
+            OutputOptions::Whip(opt) => {
+                let output = whip::WhipClientOutput::new(ctx, output_id, opt.clone())?;
 
-                Ok((Output::Whip { sender, encoder }, None))
+                Ok((Output::Whip(output), None))
             }
         }
     }
@@ -166,27 +125,75 @@ impl OutputOptionsExt<Option<Port>> for OutputOptions {
 impl OutputOptionsExt<Receiver<EncoderOutputEvent>> for EncodedDataOutputOptions {
     fn new_output(
         &self,
-        output_id: &OutputId,
+        output_id: OutputId,
         ctx: Arc<PipelineCtx>,
-    ) -> Result<(Output, Receiver<EncoderOutputEvent>), RegisterOutputError> {
-        let encoder_opts = EncoderOptions {
-            video: self.video.clone(),
-            audio: self.audio.clone(),
+    ) -> Result<(Output, Receiver<EncoderOutputEvent>), OutputInitError> {
+        let (sender, encoded_chunks_receiver) = bounded(1);
+        let video = match &self.video {
+            Some(video) => match video {
+                VideoEncoderOptions::H264(options) => {
+                    Some(spawn_video_encoder_thread::<FfmpegH264Encoder>(
+                        ctx.clone(),
+                        output_id.clone(),
+                        options.clone(),
+                        sender.clone(),
+                    )?)
+                }
+                VideoEncoderOptions::VP8(options) => {
+                    Some(spawn_video_encoder_thread::<FfmpegVp8Encoder>(
+                        ctx.clone(),
+                        output_id.clone(),
+                        options.clone(),
+                        sender.clone(),
+                    )?)
+                }
+                VideoEncoderOptions::VP9(options) => {
+                    Some(spawn_video_encoder_thread::<FfmpegVp9Encoder>(
+                        ctx.clone(),
+                        output_id.clone(),
+                        options.clone(),
+                        sender.clone(),
+                    )?)
+                }
+            },
+            None => None,
         };
 
-        let (encoder, packets) = Encoder::new(output_id, encoder_opts, &ctx)
-            .map_err(|e| RegisterOutputError::EncoderError(output_id.clone(), e))?;
+        let audio = match &self.audio {
+            Some(audio) => match audio {
+                AudioEncoderOptions::Opus(options) => {
+                    Some(spawn_audio_encoder_thread::<OpusEncoder>(
+                        ctx.clone(),
+                        output_id.clone(),
+                        options.clone(),
+                        sender.clone(),
+                    )?)
+                }
+                AudioEncoderOptions::Aac(options) => {
+                    Some(spawn_audio_encoder_thread::<FdkAacEncoder>(
+                        ctx.clone(),
+                        output_id.clone(),
+                        options.clone(),
+                        sender.clone(),
+                    )?)
+                }
+            },
+            None => None,
+        };
 
-        Ok((Output::EncodedData { encoder }, packets))
+        Ok((
+            Output::EncodedData { video, audio },
+            encoded_chunks_receiver,
+        ))
     }
 }
 
 impl OutputOptionsExt<RawDataReceiver> for RawDataOutputOptions {
     fn new_output(
         &self,
-        _output_id: &OutputId,
+        _output_id: OutputId,
         _ctx: Arc<PipelineCtx>,
-    ) -> Result<(Output, RawDataReceiver), RegisterOutputError> {
+    ) -> Result<(Output, RawDataReceiver), OutputInitError> {
         let (video_sender, video_receiver, resolution) = match &self.video {
             Some(opts) => {
                 let (sender, receiver) = bounded(100);
@@ -218,52 +225,51 @@ impl OutputOptionsExt<RawDataReceiver> for RawDataOutputOptions {
 impl Output {
     pub fn frame_sender(&self) -> Option<&Sender<PipelineEvent<Frame>>> {
         match &self {
-            Output::Rtp { encoder, .. } => encoder.frame_sender(),
-            Output::Rtmp { encoder, .. } => encoder.frame_sender(),
-            Output::Mp4 { encoder, .. } => encoder.frame_sender(),
-            Output::Whip { encoder, .. } => encoder.frame_sender(),
-            Output::EncodedData { encoder } => encoder.frame_sender(),
+            Output::Rtp(output) => output.video.as_ref().map(|v| v.frame_sender()),
+            Output::Rtmp(output) => output.video.as_ref().map(|v| v.frame_sender()),
+            Output::Mp4(output) => output.video.as_ref().map(|v| v.frame_sender()),
+            Output::Whip(output) => output.video.as_ref().map(|v| v.frame_sender()),
+            Output::EncodedData { video, .. } => video.as_ref().map(|v| v.frame_sender()),
             Output::RawData { video, .. } => video.as_ref(),
         }
     }
 
     pub fn samples_batch_sender(&self) -> Option<&Sender<PipelineEvent<OutputSamples>>> {
         match &self {
-            Output::Rtp { encoder, .. } => encoder.samples_batch_sender(),
-            Output::Rtmp { encoder, .. } => encoder.samples_batch_sender(),
-            Output::Mp4 { encoder, .. } => encoder.samples_batch_sender(),
-            Output::Whip { encoder, .. } => encoder.samples_batch_sender(),
-            Output::EncodedData { encoder } => encoder.samples_batch_sender(),
+            Output::Rtp(output) => output.audio.as_ref().map(|a| a.sample_batch_sender()),
+            Output::Rtmp(output) => output.audio.as_ref().map(|a| a.sample_batch_sender()),
+            Output::Mp4(output) => output.audio.as_ref().map(|a| a.sample_batch_sender()),
+            Output::Whip(output) => output.audio.as_ref().map(|a| a.sample_batch_sender()),
+            Output::EncodedData { audio, .. } => audio.as_ref().map(|a| a.sample_batch_sender()),
             Output::RawData { audio, .. } => audio.as_ref(),
         }
     }
 
     pub fn resolution(&self) -> Option<Resolution> {
         match &self {
-            Output::Rtp { encoder, .. } => encoder.video.as_ref().map(|v| v.resolution()),
-            Output::Rtmp { encoder, .. } => encoder.video.as_ref().map(|v| v.resolution()),
-            Output::Mp4 { encoder, .. } => encoder.video.as_ref().map(|v| v.resolution()),
-            Output::Whip { encoder, .. } => encoder.video.as_ref().map(|v| v.resolution()),
-            Output::EncodedData { encoder } => encoder.video.as_ref().map(|v| v.resolution()),
+            Output::Rtp(output) => output.video.as_ref().map(|v| v.resolution()),
+            Output::Rtmp(output) => output.video.as_ref().map(|v| v.resolution()),
+            Output::Mp4(output) => output.video.as_ref().map(|v| v.resolution()),
+            Output::Whip(output) => output.video.as_ref().map(|v| v.resolution()),
+            Output::EncodedData { video, .. } => video.as_ref().map(|v| v.resolution()),
             Output::RawData { resolution, .. } => *resolution,
         }
     }
 
     pub fn request_keyframe(&self, output_id: OutputId) -> Result<(), RequestKeyframeError> {
-        let encoder = match &self {
-            Output::Rtp { encoder, .. } => encoder,
-            Output::Rtmp { encoder, .. } => encoder,
-            Output::Mp4 { encoder, .. } => encoder,
-            Output::Whip { encoder, .. } => encoder,
-            Output::EncodedData { encoder } => encoder,
-            Output::RawData { .. } => return Err(RequestKeyframeError::RawOutput(output_id)),
+        let sender = match &self {
+            Output::Rtp(output) => output.video.as_ref().map(|v| v.keyframe_request_sender()),
+            Output::Rtmp(output) => output.video.as_ref().map(|v| v.keyframe_request_sender()),
+            Output::Mp4(output) => output.video.as_ref().map(|v| v.keyframe_request_sender()),
+            Output::Whip(output) => output.video.as_ref().map(|v| v.keyframe_request_sender()),
+            Output::EncodedData { video, .. } => {
+                video.as_ref().map(|v| v.keyframe_request_sender())
+            }
+            Output::RawData { .. } => return Ok(()),
         };
 
-        if encoder
-            .video
-            .as_ref()
+        if sender
             .ok_or(RequestKeyframeError::NoVideoOutput(output_id))?
-            .keyframe_request_sender()
             .send(())
             .is_err()
         {
@@ -275,14 +281,14 @@ impl Output {
 
     pub(super) fn output_frame_format(&self) -> Option<OutputFrameFormat> {
         match &self {
-            Output::Rtp { encoder, .. } => encoder.video.as_ref().map(|v| v.pixel_format()),
-            Output::Rtmp { encoder, .. } => encoder.video.as_ref().map(|v| v.pixel_format()),
-            Output::EncodedData { encoder } => encoder.video.as_ref().map(|v| v.pixel_format()),
+            Output::Rtp(output) => output.video.as_ref().map(|v| v.output_frame_format()),
+            Output::Rtmp(output) => output.video.as_ref().map(|v| v.output_frame_format()),
+            Output::Mp4(output) => output.video.as_ref().map(|v| v.output_frame_format()),
+            Output::Whip(output) => output.video.as_ref().map(|v| v.output_frame_format()),
+            Output::EncodedData { video, .. } => video.as_ref().map(|v| v.output_frame_format()),
             Output::RawData { video, .. } => {
                 video.as_ref().map(|_| OutputFrameFormat::RgbaWgpuTexture)
             }
-            Output::Mp4 { encoder, .. } => encoder.video.as_ref().map(|v| v.pixel_format()),
-            Output::Whip { encoder, .. } => encoder.video.as_ref().map(|v| v.pixel_format()),
         }
     }
 }

@@ -6,7 +6,7 @@ use compositor_render::{
     InputId, OutputId,
 };
 
-use crate::pipeline::{decoder::AacDecoderError, output::whip, VideoCodec};
+use crate::pipeline::{decoder::AacDecoderError, output::whip, AudioCodec, VideoCodec};
 use fdk_aac_sys as fdk;
 
 #[derive(Debug, thiserror::Error)]
@@ -41,9 +41,6 @@ pub enum RegisterInputError {
 pub enum RegisterOutputError {
     #[error("Failed to register output stream. Stream \"{0}\" is already registered.")]
     AlreadyRegistered(OutputId),
-
-    #[error("Encoder error while registering output stream for stream \"{0}\".")]
-    EncoderError(OutputId, #[source] EncoderInitError),
 
     #[error("Output initialization error while registering output for stream \"{0}\".")]
     OutputError(OutputId, #[source] OutputInitError),
@@ -85,8 +82,14 @@ pub enum UnregisterOutputError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum OutputInitError {
-    #[error("An unsupported codec was requested: {0:?}.")]
+    #[error("Failed to initialize encoder.")]
+    EncoderError(#[from] EncoderInitError),
+
+    #[error("An unsupported video codec was requested: {0:?}.")]
     UnsupportedVideoCodec(VideoCodec),
+
+    #[error("An unsupported audio codec was requested: {0:?}.")]
+    UnsupportedAudioCodec(AudioCodec),
 
     #[error(transparent)]
     SocketError(#[from] std::io::Error),
