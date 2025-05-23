@@ -88,7 +88,6 @@ function intoWhipRegisterInput(input: Inputs.RegisterWhipInput): RegisterInputRe
   return {
     type: 'whip',
     video: input.video && intoInputWhipVideoOptions(input.video),
-    audio: input.audio && intoInputWhipAudioOptions(input.audio),
     required: input.required,
     offset_ms: input.offsetMs,
   };
@@ -99,13 +98,6 @@ export function intoInputWhipVideoOptions(
 ): Api.InputWhipVideoOptions {
   return {
     decoder_preferences: video.decoderPreferences,
-  };
-}
-
-function intoInputWhipAudioOptions(input: Inputs.InputWhipAudioOptions): Api.InputWhipAudioOptions {
-  return {
-    decoder: 'opus',
-    forward_error_correction: input.forwardErrorCorrection,
   };
 }
 

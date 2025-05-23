@@ -74,10 +74,6 @@ export type RegisterWhipInput = {
    */
   video?: InputWhipVideoOptions | null;
   /**
-   * Parameters of an audio source included in the RTP stream.
-   */
-  audio?: InputWhipAudioOptions | null;
-  /**
    * (**default=`false`**) If input is required and the stream is not delivered
    * on time, then Smelter will delay producing output frames.
    */
@@ -134,15 +130,4 @@ export type InputRtpAudioAacOptions = {
 
 export type InputWhipVideoOptions = {
   decoderPreferences?: WhipVideoDecoder[] | null;
-};
-
-// deprecated
-export type InputWhipAudioOptions = {
-  decoder?: 'opus';
-  /**
-   * (**default=`false`**) Specifies whether the stream uses forward error correction.
-   * It's specific for Opus codec.
-   * For more information, check out [RFC](https://datatracker.ietf.org/doc/html/rfc6716#section-2.1.7).
-   */
-  forwardErrorCorrection?: boolean | null;
 };
