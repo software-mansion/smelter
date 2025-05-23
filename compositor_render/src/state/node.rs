@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::vec;
 
-use crate::scene::{self, ComponentId, ShaderComponentParams};
+use crate::scene::{self, ComponentId, ImageComponent, ShaderComponentParams};
 use crate::transformations::image::Image;
 use crate::transformations::layout::LayoutNode;
 use crate::transformations::shader::node::ShaderNode;
@@ -56,6 +56,7 @@ impl InnerRenderNode {
 }
 
 pub(super) struct RenderNode {
+    pub(super) id: Option<ComponentId>,
     pub(super) output: NodeTexture,
     pub(super) renderer: InnerRenderNode,
     pub(super) children: Vec<RenderNode>,
@@ -63,26 +64,30 @@ pub(super) struct RenderNode {
 
 impl RenderNode {
     pub(super) fn new(
-        ctx: &RenderCtx,
+        ctx: &NewRenderNodeCtx,
+        node_id: Option<ComponentId>,
         params: scene::NodeParams,
         children: Vec<RenderNode>,
     ) -> Self {
         match params {
-            scene::NodeParams::InputStream(id) => Self {
+            scene::NodeParams::InputStream(input_id) => Self {
+                id: node_id,
                 output: NodeTexture::new(),
-                renderer: InnerRenderNode::InputStreamRef(id),
+                renderer: InnerRenderNode::InputStreamRef(input_id),
                 children,
             },
             scene::NodeParams::Shader(shader_params, shader) => {
-                Self::new_shader_node(ctx, children, shader_params, shader)
+                Self::new_shader_node(ctx, node_id, children, shader_params, shader)
             }
             scene::NodeParams::Web(children_ids, web_renderer) => {
-                Self::new_web_renderer_node(ctx, children, children_ids, web_renderer)
+                Self::new_web_renderer_node(ctx, node_id, children, children_ids, web_renderer)
             }
-            scene::NodeParams::Image(image) => Self::new_image_node(ctx, image),
-            scene::NodeParams::Text(text_params) => Self::new_text_node(ctx, text_params),
+            scene::NodeParams::Image(image_params, image) => {
+                Self::new_image_node(ctx, node_id, image_params, image)
+            }
+            scene::NodeParams::Text(text_params) => Self::new_text_node(ctx, node_id, text_params),
             scene::NodeParams::Layout(layout_provider) => {
-                Self::new_layout_node(ctx, children, layout_provider)
+                Self::new_layout_node(ctx, node_id, children, layout_provider)
             }
         }
     }
@@ -104,21 +109,23 @@ impl RenderNode {
     }
 
     fn new_shader_node(
-        ctx: &RenderCtx,
+        ctx: &NewRenderNodeCtx,
+        id: Option<ComponentId>,
         children: Vec<RenderNode>,
         shader_params: ShaderComponentParams,
         shader: Arc<Shader>,
     ) -> Self {
         let node = InnerRenderNode::Shader(ShaderNode::new(
-            ctx,
+            ctx.render_ctx,
             shader,
             &shader_params.shader_param,
             &shader_params.size.into(),
         ));
         let mut output = NodeTexture::new();
-        output.ensure_size(ctx.wgpu_ctx, shader_params.size.into());
+        output.ensure_size(ctx.render_ctx.wgpu_ctx, shader_params.size.into());
 
         Self {
+            id,
             renderer: node,
             output,
             children,
@@ -126,7 +133,8 @@ impl RenderNode {
     }
 
     pub(super) fn new_web_renderer_node(
-        ctx: &RenderCtx,
+        ctx: &NewRenderNodeCtx,
+        id: Option<ComponentId>,
         children: Vec<RenderNode>,
         children_ids: Vec<ComponentId>,
         web_renderer: Arc<WebRenderer>,
@@ -134,31 +142,56 @@ impl RenderNode {
         let resolution = web_renderer.resolution();
         let node = InnerRenderNode::Web(WebRendererNode::new(children_ids, web_renderer));
         let mut output = NodeTexture::new();
-        output.ensure_size(ctx.wgpu_ctx, resolution);
+        output.ensure_size(ctx.render_ctx.wgpu_ctx, resolution);
 
         Self {
+            id,
             renderer: node,
             output,
             children,
         }
     }
 
-    pub(super) fn new_image_node(ctx: &RenderCtx, image: Image) -> Self {
-        let node = InnerRenderNode::Image(ImageNode::new(ctx.wgpu_ctx, image));
+    pub(super) fn new_image_node(
+        ctx: &NewRenderNodeCtx,
+        id: Option<ComponentId>,
+        image_params: ImageComponent,
+        image: Image,
+    ) -> Self {
+        let prev_node = id
+            .as_ref()
+            .and_then(|id| ctx.previous_nodes.get(id))
+            .and_then(|node| match node.renderer {
+                InnerRenderNode::Image(ref node) => Some(node),
+                _ => None,
+            });
+
+        let node = InnerRenderNode::Image(ImageNode::new(
+            ctx.render_ctx.wgpu_ctx,
+            image_params,
+            image,
+            prev_node,
+        ));
         let output = NodeTexture::new();
 
         Self {
+            id,
             renderer: node,
             output,
             children: vec![],
         }
     }
 
-    pub(super) fn new_text_node(ctx: &RenderCtx, params: TextRenderParams) -> Self {
-        let node = InnerRenderNode::Text(TextRendererNode::new(ctx, params));
+    pub(super) fn new_text_node(
+        ctx: &NewRenderNodeCtx,
+        id: Option<ComponentId>,
+        params: TextRenderParams,
+    ) -> Self {
+        let node = InnerRenderNode::Text(TextRendererNode::new(ctx.render_ctx, params));
         let output = NodeTexture::new();
 
         Self {
+            id,
             renderer: node,
             output,
             children: vec![],
@@ -166,17 +199,24 @@ impl RenderNode {
     }
 
     pub(super) fn new_layout_node(
-        ctx: &RenderCtx,
+        ctx: &NewRenderNodeCtx,
+        id: Option<ComponentId>,
         children: Vec<RenderNode>,
         provider: scene::LayoutNode,
     ) -> Self {
-        let node = InnerRenderNode::Layout(LayoutNode::new(ctx, Box::new(provider)));
+        let node = InnerRenderNode::Layout(LayoutNode::new(ctx.render_ctx, Box::new(provider)));
         let output = NodeTexture::new();
 
         Self {
+            id,
             renderer: node,
             output,
             children,
         }
     }
+}
+
+pub(super) struct NewRenderNodeCtx<'a> {
+    pub render_ctx: &'a RenderCtx<'a>,
+    pub previous_nodes: &'a HashMap<ComponentId, &'a RenderNode>,
 }
