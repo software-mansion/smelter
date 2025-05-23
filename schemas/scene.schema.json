@@ -6,7 +6,7 @@
     "video": {
       "anyOf": [
         {
-          "$ref": "#/definitions/Video"
+          "$ref": "#/definitions/VideoScene"
         },
         {
           "type": "null"
@@ -16,7 +16,7 @@
     "audio": {
       "anyOf": [
         {
-          "$ref": "#/definitions/Audio"
+          "$ref": "#/definitions/AudioScene"
         },
         {
           "type": "null"
@@ -33,7 +33,7 @@
   },
   "additionalProperties": false,
   "definitions": {
-    "Video": {
+    "VideoScene": {
       "type": "object",
       "required": [
         "root"
@@ -1487,7 +1487,7 @@
         }
       ]
     },
-    "Audio": {
+    "AudioScene": {
       "type": "object",
       "required": [
         "inputs"
@@ -1496,13 +1496,13 @@
         "inputs": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/InputAudio"
+            "$ref": "#/definitions/AudioSceneInput"
           }
         }
       },
       "additionalProperties": false
     },
-    "InputAudio": {
+    "AudioSceneInput": {
       "type": "object",
       "required": [
         "input_id"

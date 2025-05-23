@@ -1,6 +1,5 @@
 use std::{fs, io, path::PathBuf};
 
-use compositor_api::types;
 use schemars::{
     schema::{RootSchema, Schema, SchemaObject},
     schema_for, JsonSchema,
@@ -18,10 +17,10 @@ const ROOT_DIR: &str = env!("CARGO_MANIFEST_DIR");
 enum ApiTypes {
     RegisterInput(routes::RegisterInput),
     RegisterOutput(routes::RegisterOutput),
-    RegisterImage(types::ImageSpec),
-    RegisterWebRenderer(types::WebRendererSpec),
-    RegisterShader(types::ShaderSpec),
-    UpdateOutput(types::UpdateOutputRequest),
+    RegisterImage(compositor_api::ImageSpec),
+    RegisterWebRenderer(compositor_api::WebRendererSpec),
+    RegisterShader(compositor_api::ShaderSpec),
+    UpdateOutput(routes::UpdateOutputRequest),
 }
 
 pub fn generate_json_schema(check_flag: bool) {
@@ -30,7 +29,7 @@ pub fn generate_json_schema(check_flag: bool) {
         false => (SchemaAction::Update, SchemaAction::Update),
     };
     generate_schema(
-        schema_for!(types::UpdateOutputRequest),
+        schema_for!(routes::UpdateOutputRequest),
         "../schemas/scene.schema.json",
         scene_schema_action,
     );

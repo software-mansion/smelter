@@ -4,7 +4,7 @@ import { intoOutputEosCondition } from './common';
 
 export function intoRegisterWhipOutput(
   output: Outputs.RegisterWhipOutput,
-  initial: { video?: Api.Video; audio?: Api.Audio }
+  initial: { video?: Api.VideoScene; audio?: Api.AudioScene }
 ): RegisterOutputRequest {
   return {
     type: 'whip',
@@ -18,7 +18,7 @@ export function intoRegisterWhipOutput(
 
 export function intoOutputWhipVideoOptions(
   video: Outputs.WhipVideoOptions | null | undefined,
-  initial: Api.Video | undefined
+  initial: Api.VideoScene | undefined
 ): Api.OutputWhipVideoOptions | undefined {
   if (!video || !initial) {
     return undefined;
@@ -64,7 +64,7 @@ function intoWhipVideoEncoderPreferences(
 
 function intoOutputWhipAudioOptions(
   audio: true | Outputs.WhipAudioOptions | null | undefined,
-  initial: Api.Audio | undefined
+  initial: Api.AudioScene | undefined
 ): Api.OutputWhipAudioOptions | undefined {
   if (!audio || !initial) {
     return undefined;

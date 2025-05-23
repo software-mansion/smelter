@@ -80,7 +80,7 @@ class OfflineOutput {
     });
   }
 
-  public scene(): { video?: Api.Video; audio?: Api.Audio; schedule_time_ms: number } {
+  public scene(): { video?: Api.VideoScene; audio?: Api.AudioScene; schedule_time_ms: number } {
     const audio = this.supportsAudio
       ? intoAudioInputsConfiguration(this.audioContext.getAudioConfig())
       : undefined;

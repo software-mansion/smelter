@@ -80,7 +80,7 @@ class Output {
     });
   }
 
-  public scene(): { video?: Api.Video; audio?: Api.Audio } {
+  public scene(): { video?: Api.VideoScene; audio?: Api.AudioScene } {
     const audio = this.supportsAudio
       ? intoAudioInputsConfiguration(this.audioContext.getAudioConfig())
       : undefined;

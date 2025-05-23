@@ -699,7 +699,7 @@ export type TextWeight =
 export type AspectRatio = string;
 export type VerticalAlign = "top" | "center" | "bottom" | "justified";
 export type RescaleMode = "fit" | "fill";
-export type MixingStrategy = "sum_clip" | "sum_scale";
+export type AudioMixingStrategy = "sum_clip" | "sum_scale";
 export type RtpAudioEncoderOptions = {
   type: "opus";
   /**
@@ -837,7 +837,7 @@ export interface OutputVideoOptions {
   /**
    * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
    */
-  initial: Video;
+  initial: VideoScene;
 }
 export interface Resolution {
   /**
@@ -870,7 +870,7 @@ export interface OutputEndCondition {
    */
   all_inputs?: boolean | null;
 }
-export interface Video {
+export interface VideoScene {
   root: Component;
 }
 export interface Transition {
@@ -897,7 +897,7 @@ export interface OutputRtpAudioOptions {
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
-  mixing_strategy?: MixingStrategy | null;
+  mixing_strategy?: AudioMixingStrategy | null;
   /**
    * Condition for termination of output stream based on the input streams states.
    */
@@ -913,12 +913,12 @@ export interface OutputRtpAudioOptions {
   /**
    * Initial audio mixer configuration for output.
    */
-  initial: Audio;
+  initial: AudioScene;
 }
-export interface Audio {
-  inputs: InputAudio[];
+export interface AudioScene {
+  inputs: AudioSceneInput[];
 }
-export interface InputAudio {
+export interface AudioSceneInput {
   input_id: InputId;
   /**
    * (**default=`1.0`**) float in `[0, 1]` range representing input volume
@@ -929,7 +929,7 @@ export interface OutputRtmpClientAudioOptions {
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
-  mixing_strategy?: MixingStrategy | null;
+  mixing_strategy?: AudioMixingStrategy | null;
   /**
    * Condition for termination of output stream based on the input streams states.
    */
@@ -945,13 +945,13 @@ export interface OutputRtmpClientAudioOptions {
   /**
    * Initial audio mixer configuration for output.
    */
-  initial: Audio;
+  initial: AudioScene;
 }
 export interface OutputMp4AudioOptions {
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
-  mixing_strategy?: MixingStrategy | null;
+  mixing_strategy?: AudioMixingStrategy | null;
   /**
    * Condition for termination of output stream based on the input streams states.
    */
@@ -967,7 +967,7 @@ export interface OutputMp4AudioOptions {
   /**
    * Initial audio mixer configuration for output.
    */
-  initial: Audio;
+  initial: AudioScene;
 }
 export interface OutputWhipVideoOptions {
   /**
@@ -989,13 +989,13 @@ export interface OutputWhipVideoOptions {
   /**
    * Root of a component tree/scene that should be rendered for the output.
    */
-  initial: Video;
+  initial: VideoScene;
 }
 export interface OutputWhipAudioOptions {
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
-  mixing_strategy?: MixingStrategy | null;
+  mixing_strategy?: AudioMixingStrategy | null;
   /**
    * Condition for termination of output stream based on the input streams states.
    */
@@ -1015,7 +1015,7 @@ export interface OutputWhipAudioOptions {
   /**
    * Initial audio mixer configuration for output.
    */
-  initial: Audio;
+  initial: AudioScene;
 }
 export interface WebRendererSpec {
   /**
@@ -1038,7 +1038,7 @@ export interface ShaderSpec {
   source: string;
 }
 export interface UpdateOutputRequest {
-  video?: Video | null;
-  audio?: Audio | null;
+  video?: VideoScene | null;
+  audio?: AudioScene | null;
   schedule_time_ms?: number | null;
 }
