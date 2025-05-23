@@ -87,7 +87,6 @@ fn image_tests() {
 
     runner.add(TestCase {
         name: "image/svg_as_root",
-        only: true,
         steps: test_steps_from_scene(include_str!(
             "../../snapshot_tests/image/svg_as_root.scene.json"
         )),
@@ -100,7 +99,7 @@ fn image_tests() {
         steps: test_steps_from_scene(include_str!(
             "../../snapshot_tests/image/svg_in_view.scene.json"
         )),
-        renderers: vec![jpeg.clone()],
+        renderers: vec![svg.clone()],
         inputs: vec![],
         ..Default::default()
     });
