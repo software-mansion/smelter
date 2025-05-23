@@ -47,6 +47,9 @@ export type WhipVideoEncoderOptions =
     };
 
 export type WhipAudioOptions = {
+  /**
+   * (**default="stereo"**) Specifies channels configuration.
+   */
   channels?: Api.AudioChannels | null;
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.

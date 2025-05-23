@@ -29,7 +29,10 @@ export type Mp4VideoEncoderOptions = {
 };
 
 export type Mp4AudioOptions = {
-  channels: Api.AudioChannels;
+  /**
+   * (**default="stereo"**) Specifies channels configuration.
+   */
+  channels?: Api.AudioChannels | null;
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */

@@ -29,7 +29,10 @@ export type RtmpClientVideoEncoderOptions = {
 };
 
 export type RtmpClientAudioOptions = {
-  channels: Api.AudioChannels;
+  /**
+   * (**default="stereo"**) Specifies channels configuration.
+   */
+  channels?: Api.AudioChannels | null;
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */

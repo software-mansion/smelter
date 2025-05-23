@@ -44,7 +44,10 @@ export type RtpVideoEncoderOptions =
     };
 
 export type RtpAudioOptions = {
-  channels: Api.AudioChannels;
+  /**
+   * (**default="stereo"**) Specifies channels configuration.
+   */
+  channels?: Api.AudioChannels | null;
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
