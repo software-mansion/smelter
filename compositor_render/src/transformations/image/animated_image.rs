@@ -13,6 +13,7 @@ use crate::{
 
 use super::AnimatedError;
 
+#[derive(Clone)]
 pub struct AnimatedNodeState {
     first_pts: Option<Duration>,
 }

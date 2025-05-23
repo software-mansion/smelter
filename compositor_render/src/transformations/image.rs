@@ -8,6 +8,7 @@ use image::ImageFormat;
 use resvg::usvg;
 
 use crate::{
+    scene::ImageComponent,
     state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
     wgpu::WgpuCtx,
     Resolution,
@@ -108,7 +109,65 @@ impl Image {
     }
 }
 
-pub enum ImageNode {
+pub struct ImageNode {
+    params: ImageComponent,
+    node: InnerImageNode,
+}
+
+impl ImageNode {
+    pub fn new(
+        ctx: &WgpuCtx,
+        params: ImageComponent,
+        image: Image,
+        prev_node: Option<&Self>,
+    ) -> Self {
+        let node = match image {
+            Image::Bitmap(asset) => InnerImageNode::Bitmap {
+                asset,
+                state: BitmapNodeState::new(),
+            },
+            Image::Animated(asset) => {
+                let prev_node = prev_node.and_then(|img| match &img.node {
+                    InnerImageNode::Animated { state, .. } => Some((&img.params, state)),
+                    _ => None,
+                });
+                let state = match prev_node {
+                    Some((prev_params, state)) if *prev_params == params => state.clone(),
+                    _ => AnimatedNodeState::new(),
+                };
+
+                InnerImageNode::Animated { asset, state }
+            }
+            Image::Svg(asset) => InnerImageNode::Svg {
+                asset,
+                state: SvgNodeState::new(ctx),
+            },
+        };
+
+        Self { params, node }
+    }
+
+    pub fn render(&mut self, ctx: &mut RenderCtx, target: &mut NodeTexture, pts: Duration) {
+        let target = target.ensure_size(ctx.wgpu_ctx, self.resolution());
+        match &mut self.node {
+            InnerImageNode::Bitmap { asset, state } => asset.render(ctx.wgpu_ctx, target, state),
+            InnerImageNode::Animated { asset, state } => {
+                asset.render(ctx.wgpu_ctx, target, state, pts)
+            }
+            InnerImageNode::Svg { asset, state } => asset.render(ctx.wgpu_ctx, target, state),
+        }
+    }
+
+    fn resolution(&self) -> Resolution {
+        match &self.node {
+            InnerImageNode::Bitmap { asset, .. } => asset.resolution(),
+            InnerImageNode::Animated { asset, .. } => asset.resolution(),
+            InnerImageNode::Svg { asset, .. } => asset.resolution(),
+        }
+    }
+}
+
+pub enum InnerImageNode {
     Bitmap {
         asset: Arc<BitmapAsset>,
         state: BitmapNodeState,
@@ -121,42 +180,6 @@ pub enum ImageNode {
         asset: Arc<SvgAsset>,
         state: SvgNodeState,
     },
-}
-
-impl ImageNode {
-    pub fn new(ctx: &WgpuCtx, image: Image) -> Self {
-        match image {
-            Image::Bitmap(asset) => Self::Bitmap {
-                asset,
-                state: BitmapNodeState::new(),
-            },
-            Image::Animated(asset) => Self::Animated {
-                asset,
-                state: AnimatedNodeState::new(),
-            },
-            Image::Svg(asset) => Self::Svg {
-                asset,
-                state: SvgNodeState::new(ctx),
-            },
-        }
-    }
-
-    pub fn render(&mut self, ctx: &mut RenderCtx, target: &mut NodeTexture, pts: Duration) {
-        let target = target.ensure_size(ctx.wgpu_ctx, self.resolution());
-        match self {
-            ImageNode::Bitmap { asset, state } => asset.render(ctx.wgpu_ctx, target, state),
-            ImageNode::Animated { asset, state } => asset.render(ctx.wgpu_ctx, target, state, pts),
-            ImageNode::Svg { asset, state } => asset.render(ctx.wgpu_ctx, target, state),
-        }
-    }
-
-    fn resolution(&self) -> Resolution {
-        match self {
-            ImageNode::Bitmap { asset, .. } => asset.resolution(),
-            ImageNode::Animated { asset, .. } => asset.resolution(),
-            ImageNode::Svg { asset, .. } => asset.resolution(),
-        }
-    }
 }
 
 #[derive(Debug, thiserror::Error)]

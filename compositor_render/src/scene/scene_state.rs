@@ -158,10 +158,12 @@ impl IntermediateNode {
         };
         match self {
             IntermediateNode::InputStream(input) => Ok(Node {
+                id: input.component.id,
                 params: NodeParams::InputStream(input.component.input_id), // TODO: enforce resolution
                 children: vec![],
             }),
             IntermediateNode::Shader { shader, children } => Ok(Node {
+                id: shader.component_id().cloned(),
                 params: NodeParams::Shader(shader.component, shader.shader), // TODO: enforce resolution
                 children: children
                     .into_iter()
@@ -169,6 +171,7 @@ impl IntermediateNode {
                     .collect::<Result<_, _>>()?,
             }),
             IntermediateNode::WebView { web, children } => Ok(Node {
+                id: web.id,
                 params: NodeParams::Web(web.children_ids, web.instance), // TODO: enforce resolution
                 children: children
                     .into_iter()
@@ -176,6 +179,7 @@ impl IntermediateNode {
                     .collect::<Result<_, _>>()?,
             }),
             IntermediateNode::Layout { root, children } => Ok(Node {
+                id: root.component_id().cloned(),
                 params: NodeParams::Layout(LayoutNode {
                     root: SizedLayoutComponent::new(root, size),
                 }),
@@ -185,10 +189,12 @@ impl IntermediateNode {
                     .collect::<Result<_, _>>()?,
             }),
             IntermediateNode::Image(image) => Ok(Node {
-                params: NodeParams::Image(image.image),
+                id: image.component_id().cloned(),
+                params: NodeParams::Image(image.component, image.image),
                 children: vec![],
             }),
             IntermediateNode::Text(text) => Ok(Node {
+                id: text.component_id().cloned(),
                 params: NodeParams::Text(text.params),
                 children: vec![],
             }),

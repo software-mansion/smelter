@@ -82,6 +82,7 @@ enum StatefulComponent {
 /// in the `RenderGraph`
 #[derive(Debug)]
 pub(crate) struct Node {
+    pub(crate) id: Option<ComponentId>,
     pub(crate) params: NodeParams,
     pub(crate) children: Vec<Node>,
 }
@@ -92,7 +93,7 @@ pub(crate) enum NodeParams {
     InputStream(InputId),
     Shader(ShaderComponentParams, Arc<Shader>),
     Web(Vec<ComponentId>, Arc<WebRenderer>),
-    Image(Image),
+    Image(ImageComponent, Image),
     Text(TextRenderParams),
     Layout(LayoutNode),
 }
