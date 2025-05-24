@@ -98,7 +98,7 @@ impl Context {
         settings: BrowserSettings,
         url: &str,
     ) -> Result<Browser, ContextError> {
-        let client = CefRefData::new_ptr(ClientWrapper(client));
+        let client = CefRefData::new_ptr(ClientWrapper::new(client));
         let window_info = window_info.into_raw();
         let settings = settings.into_raw();
         let url = CefString::new_raw(url);
