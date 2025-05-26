@@ -27,6 +27,8 @@ pub struct Frame {
 #[derive(Debug, Clone)]
 pub enum FrameData {
     PlanarYuv420(YuvPlanes),
+    PlanarYuv422(YuvPlanes),
+    PlanarYuv444(YuvPlanes),
     PlanarYuvJ420(YuvPlanes),
     InterleavedYuv422(bytes::Bytes),
     Rgba8UnormWgpuTexture(Arc<wgpu::Texture>),

@@ -287,7 +287,7 @@ fn start_ffmpeg_send_video_from_file(
     let codec_specific_options = match video_codec {
         Video::H264 => vec!["-bsf:v", "h264_mp4toannexb"],
         Video::VP8 => vec![],
-        Video::VP9 => vec!["-strict", "experimental"],
+        Video::VP9 => vec!["-strict", "experimental", "-pix_fmt", "yuv444p"],
     };
 
     Command::new("ffmpeg")
@@ -382,6 +382,8 @@ fn start_ffmpeg_send_testsrc(
             "realtime",
             "-error-resilient",
             "1",
+            "-pix_fmt",
+            "yuv422p",
             "-b:v",
             "1M",
             "-strict",

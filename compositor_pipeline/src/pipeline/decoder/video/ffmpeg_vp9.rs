@@ -185,9 +185,18 @@ fn frame_from_av(
     }
     let pts = Duration::from_micros(i64::max(pts, 0) as u64);
 
-    // TODO add yuv422 and yuv444
     let data = match decoded.format() {
         Pixel::YUV420P => FrameData::PlanarYuv420(YuvPlanes {
+            y_plane: copy_plane_from_av(decoded, 0),
+            u_plane: copy_plane_from_av(decoded, 1),
+            v_plane: copy_plane_from_av(decoded, 2),
+        }),
+        Pixel::YUV422P => FrameData::PlanarYuv422(YuvPlanes {
+            y_plane: copy_plane_from_av(decoded, 0),
+            u_plane: copy_plane_from_av(decoded, 1),
+            v_plane: copy_plane_from_av(decoded, 2),
+        }),
+        Pixel::YUV444P => FrameData::PlanarYuv444(YuvPlanes {
             y_plane: copy_plane_from_av(decoded, 0),
             u_plane: copy_plane_from_av(decoded, 1),
             v_plane: copy_plane_from_av(decoded, 2),

@@ -25,8 +25,8 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 @group(1) @binding(0) var sampler_: sampler;
 
 struct PushConstantParams {
-    // 0 - YUV420P
-    // 1 - YUVJ420P
+    // 0 - pixel format without J (limited colorspace range)
+    // 1 - pixel format with J (full colorspace)
     pixel_format: u32,
 }
 
