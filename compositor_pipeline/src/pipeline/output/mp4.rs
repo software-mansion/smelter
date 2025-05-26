@@ -82,7 +82,8 @@ impl Mp4Output {
             };
         }
 
-        let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
+        let (encoded_audio_sender, encoded_audio_receiver) = bounded(1);
+        let (encoded_video_sender, encoded_video_receiver) = bounded(1);
         let mut output_ctx = ffmpeg::format::output_as(&options.output_path, "mp4")
             .map_err(OutputInitError::FfmpegError)?;
 

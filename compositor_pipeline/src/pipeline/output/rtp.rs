@@ -8,7 +8,9 @@ use crate::{
     event::Event,
     pipeline::{
         encoder::{
-            audio_encoder_thread::AudioEncoderThreadHandle, ffmpeg_vp9::FfmpegVp9Encoder, video_encoder_thread::VideoEncoderThreadHandle, AudioEncoderOptions, VideoEncoderOptions
+            audio_encoder_thread::AudioEncoderThreadHandle, ffmpeg_vp9::FfmpegVp9Encoder,
+            video_encoder_thread::VideoEncoderThreadHandle, AudioEncoderOptions,
+            VideoEncoderOptions,
         },
         rtp::RequestedPort,
         types::EncoderOutputEvent,
@@ -52,6 +54,15 @@ pub enum RtpConnectionOptions {
     TcpServer { port: RequestedPort },
 }
 
+impl RtpConnectionOptions {
+    fn mtu(&self) -> usize {
+        match self {
+            RtpConnectionOptions::Udp { .. } => 1400,
+            RtpConnectionOptions::TcpServer { .. } => 64000,
+        }
+    }
+}
+
 impl RtpOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
@@ -59,12 +70,9 @@ impl RtpOutput {
         options: RtpSenderOptions,
     ) -> Result<(Self, Port), OutputInitError> {
         let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
-        let payloader = Payloader::new(options.video, options.audio);
-        let mtu = match options.connection_options {
-            RtpConnectionOptions::Udp { .. } => 1400,
-            RtpConnectionOptions::TcpServer { .. } => 64000,
-        };
-        let packet_stream = PacketStream::new(packets_receiver, payloader, mtu);
+       // let payloader = Payloader::new(options.video, options.audio);
+        let mtu = options.connection_options.mtu();
+       // let packet_stream = PacketStream::new(packets_receiver, payloader, mtu);
 
         let (socket, port) = match &options.connection_options {
             RtpConnectionOptions::Udp { port, ip } => udp::udp_socket(ip, *port)?,
@@ -72,9 +80,7 @@ impl RtpOutput {
         };
 
         let video = match &options.video {
-            Some(video) => {
-                Self::init_video_track(&ctx, output_id, options, encoded_chunks_sender)
-            }
+            Some(video) => Self::init_video_track(&ctx, output_id, options, encoded_chunks_sender),
             None => None,
         };
 

@@ -30,6 +30,7 @@ pub(super) fn tcp_socket(port: RequestedPort) -> Result<(socket2::Socket, Port),
     socket.listen(1).map_err(OutputInitError::SocketError)?;
     Ok((socket, port))
 }
+
 pub(super) fn run_tcp_sender_thread(
     socket: socket2::Socket,
     should_close: Arc<AtomicBool>,
