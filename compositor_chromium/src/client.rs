@@ -31,7 +31,10 @@ pub trait Client {
     }
 }
 
-pub(crate) struct ClientWrapper<C: Client>(pub C);
+pub(crate) struct ClientWrapper<C: Client> {
+    client: C,
+    render_handler: Option<CefRc<chromium_sys::cef_render_handler_t>>,
+}
 
 impl<C: Client> CefStruct for ClientWrapper<C> {
     type CefType = chromium_sys::cef_client_t;
@@ -69,13 +72,25 @@ impl<C: Client> CefStruct for ClientWrapper<C> {
 }
 
 impl<C: Client> ClientWrapper<C> {
+    pub fn new(client: C) -> Self {
+        let render_handler = client
+            .render_handler()
+            .map(RenderHandlerWrapper)
+            .map(CefRefData::new_ptr)
+            .map(CefRc::new);
+        Self {
+            client,
+            render_handler,
+        }
+    }
+
     extern "C" fn render_handler(
         self_: *mut chromium_sys::cef_client_t,
     ) -> *mut chromium_sys::cef_render_handler_t {
         unsafe {
             let self_ref = CefRefData::<Self>::from_cef(self_);
-            match self_ref.0.render_handler() {
-                Some(handler) => CefRefData::new_ptr(RenderHandlerWrapper(handler)),
+            match &self_ref.render_handler {
+                Some(handler) => handler.get(),
                 None => std::ptr::null_mut(),
             }
         }
@@ -95,7 +110,7 @@ impl<C: Client> ClientWrapper<C> {
             inner: CefRc::new(message),
         };
 
-        let is_handled = self_ref.0.on_process_message_received(
+        let is_handled = self_ref.client.on_process_message_received(
             &browser,
             &frame,
             source_process.into(),
