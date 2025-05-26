@@ -162,7 +162,7 @@ export class AudioMixer {
     }
   }
 
-  public update(outputId: string, inputConfig: Api.InputAudio[]) {
+  public update(outputId: string, inputConfig: Api.AudioSceneInput[]) {
     this.outputs[outputId]?.update(inputConfig);
   }
 
@@ -181,7 +181,7 @@ export class AudioMixerOutput<OutputNode extends AudioNode = AudioNode> {
   private ctx: AudioContext;
   private inputs: Record<string, AudioInput> = {};
   private outputNode: OutputNode;
-  private lastUpdate: Api.InputAudio[] = [];
+  private lastUpdate: Api.AudioSceneInput[] = [];
 
   constructor(ctx: AudioContext, outputNode: OutputNode) {
     this.ctx = ctx;
@@ -240,7 +240,7 @@ export class AudioMixerOutput<OutputNode extends AudioNode = AudioNode> {
     }
   }
 
-  public update(inputConfig: Api.InputAudio[]) {
+  public update(inputConfig: Api.AudioSceneInput[]) {
     this.lastUpdate = inputConfig;
     for (const [inputId, input] of Object.entries(this.inputs)) {
       const config = inputConfig.find(input => input.input_id === inputId);

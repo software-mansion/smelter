@@ -5,8 +5,7 @@ use compositor_render::scene::BorderRadius;
 use compositor_render::scene::Position;
 use compositor_render::MAX_NODE_RESOLUTION;
 
-use super::component::*;
-use super::util::*;
+use crate::*;
 
 impl TryFrom<Component> for scene::Component {
     type Error = TypeError;

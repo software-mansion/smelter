@@ -1,47 +1,30 @@
 use compositor_render::image;
-use compositor_render::shader;
-use compositor_render::web_renderer;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
-use super::renderer::*;
-use super::util::*;
+use crate::*;
 
-impl TryFrom<ShaderSpec> for compositor_render::RendererSpec {
-    type Error = TypeError;
-
-    fn try_from(spec: ShaderSpec) -> Result<Self, Self::Error> {
-        let spec = shader::ShaderSpec {
-            source: spec.source.into(),
-        };
-        Ok(Self::Shader(spec))
-    }
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(tag = "asset_type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ImageSpec {
+    Png {
+        url: Option<String>,
+        path: Option<String>,
+    },
+    Jpeg {
+        url: Option<String>,
+        path: Option<String>,
+    },
+    Svg {
+        url: Option<String>,
+        path: Option<String>,
+        resolution: Option<Resolution>,
+    },
+    Gif {
+        url: Option<String>,
+        path: Option<String>,
+    },
 }
-
-impl TryFrom<WebRendererSpec> for compositor_render::RendererSpec {
-    type Error = TypeError;
-
-    fn try_from(spec: WebRendererSpec) -> Result<Self, Self::Error> {
-        let embedding_method = match spec.embedding_method {
-            Some(WebEmbeddingMethod::ChromiumEmbedding) => {
-                web_renderer::WebEmbeddingMethod::ChromiumEmbedding
-            }
-            Some(WebEmbeddingMethod::NativeEmbeddingOverContent) => {
-                web_renderer::WebEmbeddingMethod::NativeEmbeddingOverContent
-            }
-            Some(WebEmbeddingMethod::NativeEmbeddingUnderContent) => {
-                web_renderer::WebEmbeddingMethod::NativeEmbeddingUnderContent
-            }
-            None => web_renderer::WebEmbeddingMethod::NativeEmbeddingOverContent,
-        };
-
-        let spec = web_renderer::WebRendererSpec {
-            url: spec.url,
-            resolution: spec.resolution.into(),
-            embedding_method,
-        };
-        Ok(Self::WebRenderer(spec))
-    }
-}
-
 impl TryFrom<ImageSpec> for compositor_render::RendererSpec {
     type Error = TypeError;
 
