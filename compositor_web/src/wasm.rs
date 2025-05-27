@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use compositor_api::types::{Component, ImageSpec, Resolution, ShaderSpec};
+use compositor_api::{Component, ImageSpec, Resolution, ShaderSpec};
 use compositor_render::{
     image::{ImageSource, ImageType},
     RegistryType, RendererSpec,

@@ -7,15 +7,13 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    error::ApiError,
     routes::{Json, Multipart},
     state::{Pipeline, Response},
 };
 use compositor_api::{
-    error::ApiError,
-    types::{
-        DeckLink, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId, RtmpClient,
-        RtpInput, RtpOutput, ShaderSpec, WebRendererSpec, WhipInput, WhipOutput,
-    },
+    DeckLink, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId, RtmpClient, RtpInput,
+    RtpOutput, ShaderSpec, WebRendererSpec, WhipInput, WhipOutput,
 };
 
 use super::ApiState;

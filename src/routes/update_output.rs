@@ -2,16 +2,26 @@ use std::time::Duration;
 
 use axum::extract::{Path, State};
 use compositor_render::error::ErrorStack;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use tracing::error;
 
-use crate::state::{ApiState, Response};
-
-use compositor_api::{
+use crate::{
     error::ApiError,
-    types::{OutputId, UpdateOutputRequest},
+    state::{ApiState, Response},
 };
 
+use compositor_api::{AudioScene, OutputId, VideoScene};
+
 use super::Json;
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateOutputRequest {
+    pub video: Option<VideoScene>,
+    pub audio: Option<AudioScene>,
+    pub schedule_time_ms: Option<f64>,
+}
 
 pub(super) async fn handle_output_update(
     State(api): State<ApiState>,

@@ -1,14 +1,8 @@
+use compositor_render::web_renderer;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::util::*;
-
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ShaderSpec {
-    /// Shader source code. [Learn more.](../../concept/shaders)
-    pub source: String,
-}
+use crate::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -37,24 +31,28 @@ pub enum WebEmbeddingMethod {
     NativeEmbeddingUnderContent,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-#[serde(tag = "asset_type", rename_all = "snake_case", deny_unknown_fields)]
-pub enum ImageSpec {
-    Png {
-        url: Option<String>,
-        path: Option<String>,
-    },
-    Jpeg {
-        url: Option<String>,
-        path: Option<String>,
-    },
-    Svg {
-        url: Option<String>,
-        path: Option<String>,
-        resolution: Option<Resolution>,
-    },
-    Gif {
-        url: Option<String>,
-        path: Option<String>,
-    },
+impl TryFrom<WebRendererSpec> for compositor_render::RendererSpec {
+    type Error = TypeError;
+
+    fn try_from(spec: WebRendererSpec) -> Result<Self, Self::Error> {
+        let embedding_method = match spec.embedding_method {
+            Some(WebEmbeddingMethod::ChromiumEmbedding) => {
+                web_renderer::WebEmbeddingMethod::ChromiumEmbedding
+            }
+            Some(WebEmbeddingMethod::NativeEmbeddingOverContent) => {
+                web_renderer::WebEmbeddingMethod::NativeEmbeddingOverContent
+            }
+            Some(WebEmbeddingMethod::NativeEmbeddingUnderContent) => {
+                web_renderer::WebEmbeddingMethod::NativeEmbeddingUnderContent
+            }
+            None => web_renderer::WebEmbeddingMethod::NativeEmbeddingOverContent,
+        };
+
+        let spec = web_renderer::WebRendererSpec {
+            url: spec.url,
+            resolution: spec.resolution.into(),
+            embedding_method,
+        };
+        Ok(Self::WebRenderer(spec))
+    }
 }

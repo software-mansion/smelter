@@ -11,7 +11,7 @@ export interface Output {
 }
 
 type InitialScene = {
-  initial: { video?: Api.Video; audio?: Api.Audio };
+  initial: { video?: Api.VideoScene; audio?: Api.AudioScene };
 };
 
 export type RegisterOutputResponse =

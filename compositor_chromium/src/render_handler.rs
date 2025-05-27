@@ -2,7 +2,7 @@ use std::os::raw::{c_int, c_void};
 
 use crate::{
     browser::Browser,
-    cef_ref::{CefRefData, CefStruct},
+    cef_ref::{CefRefCountable, CefRefData, CefStruct},
 };
 
 pub struct Resolution {
@@ -51,6 +51,12 @@ impl<R: RenderHandler> CefStruct for RenderHandlerWrapper<R> {
         cef_data: &mut Self::CefType,
     ) -> &mut chromium_sys::cef_base_ref_counted_t {
         &mut cef_data.base
+    }
+}
+
+impl CefRefCountable for chromium_sys::cef_render_handler_t {
+    fn base_mut(&mut self) -> *mut chromium_sys::cef_base_ref_counted_t {
+        &mut self.base
     }
 }
 
