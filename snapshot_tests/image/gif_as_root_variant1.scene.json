@@ -1,0 +1,9 @@
+{
+    "video": {
+        "root": {
+            "type": "image",
+            "id": "gif",
+            "image_id": "image_gif1"
+        }
+    }
+}
