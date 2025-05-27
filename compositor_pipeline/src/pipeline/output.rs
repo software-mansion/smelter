@@ -275,29 +275,14 @@ impl Output {
 
     pub(super) fn output_frame_format(&self) -> Option<OutputFrameFormat> {
         match &self {
-            Output::Rtp { encoder, .. } => encoder
-                .video
-                .as_ref()
-                .map(|_| OutputFrameFormat::PlanarYuv420Bytes),
-            Output::Rtmp { encoder, .. } => encoder
-                .video
-                .as_ref()
-                .map(|_| OutputFrameFormat::PlanarYuv420Bytes),
-            Output::EncodedData { encoder } => encoder
-                .video
-                .as_ref()
-                .map(|_| OutputFrameFormat::PlanarYuv420Bytes),
+            Output::Rtp { encoder, .. } => encoder.video.as_ref().map(|v| v.pixel_format()),
+            Output::Rtmp { encoder, .. } => encoder.video.as_ref().map(|v| v.pixel_format()),
+            Output::EncodedData { encoder } => encoder.video.as_ref().map(|v| v.pixel_format()),
             Output::RawData { video, .. } => {
                 video.as_ref().map(|_| OutputFrameFormat::RgbaWgpuTexture)
             }
-            Output::Mp4 { encoder, .. } => encoder
-                .video
-                .as_ref()
-                .map(|_| OutputFrameFormat::PlanarYuv420Bytes),
-            Output::Whip { encoder, .. } => encoder
-                .video
-                .as_ref()
-                .map(|_| OutputFrameFormat::PlanarYuv420Bytes),
+            Output::Mp4 { encoder, .. } => encoder.video.as_ref().map(|v| v.pixel_format()),
+            Output::Whip { encoder, .. } => encoder.video.as_ref().map(|v| v.pixel_format()),
         }
     }
 }

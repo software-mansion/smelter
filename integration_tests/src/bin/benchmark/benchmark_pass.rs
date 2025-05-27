@@ -205,6 +205,7 @@ impl SingleBenchmarkPass {
                             width: self.output_resolution.width,
                             height: self.output_resolution.height,
                         },
+                        pixel_format: pipeline::encoder::OutPixelFormat::YUV420P,
                         raw_options: vec![("threads".to_string(), "0".to_string())],
                     })),
                 },

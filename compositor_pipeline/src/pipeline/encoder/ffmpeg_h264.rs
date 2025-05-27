@@ -1,7 +1,7 @@
 use core::slice;
 use std::time::Duration;
 
-use compositor_render::{Frame, FrameData, Framerate, OutputId, Resolution};
+use compositor_render::{Frame, FrameData, Framerate, OutputFrameFormat, OutputId, Resolution};
 use crossbeam_channel::{Receiver, Sender};
 use ffmpeg_next::{
     codec::{Context, Id},
@@ -19,6 +19,8 @@ use crate::{
     },
     queue::PipelineEvent,
 };
+
+use super::OutPixelFormat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EncoderPreset {
@@ -85,11 +87,13 @@ impl EncoderPreset {
 pub struct Options {
     pub preset: EncoderPreset,
     pub resolution: Resolution,
+    pub pixel_format: OutPixelFormat,
     pub raw_options: Vec<(String, String)>,
 }
 
 pub struct LibavH264Encoder {
     resolution: Resolution,
+    pixel_format: OutputFrameFormat,
     frame_sender: Sender<PipelineEvent<Frame>>,
     keyframe_req_sender: Sender<()>,
     extradata: Option<bytes::Bytes>,
@@ -142,6 +146,7 @@ impl LibavH264Encoder {
         Ok(Self {
             frame_sender,
             resolution: options.resolution,
+            pixel_format: options.pixel_format.into(),
             keyframe_req_sender,
             extradata: encoder_config,
         })
@@ -153,6 +158,10 @@ impl LibavH264Encoder {
 
     pub fn resolution(&self) -> Resolution {
         self.resolution
+    }
+
+    pub fn pixel_format(&self) -> OutputFrameFormat {
+        self.pixel_format
     }
 
     pub fn keyframe_request_sender(&self) -> Sender<()> {

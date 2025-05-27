@@ -23,6 +23,7 @@ pub struct WhipOutput {
 pub struct OutputWhipVideoOptions {
     /// Output resolution in pixels.
     pub resolution: Resolution,
+    pub pixel_format: Option<PixelFormat>,
     /// Defines when output stream should end if some of the input streams are finished. If output includes both audio and video streams, then EOS needs to be sent on both.
     pub send_eos_when: Option<OutputEndCondition>,
     /// Video encoder options.

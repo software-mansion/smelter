@@ -57,6 +57,7 @@ fn client_code() -> Result<()> {
                     "width": VIDEO_RESOLUTION.width,
                     "height": VIDEO_RESOLUTION.height,
                 },
+                "pixel_format": "yuv422p",
                 "encoder": {
                     "type": "ffmpeg_vp9"
                 },

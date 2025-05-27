@@ -77,3 +77,13 @@ impl From<OpusEncoderPreset> for encoder::AudioEncoderPreset {
         }
     }
 }
+
+impl From<PixelFormat> for encoder::OutPixelFormat {
+    fn from(value: PixelFormat) -> Self {
+        match value {
+            PixelFormat::Yuv420p => encoder::OutPixelFormat::YUV420P,
+            PixelFormat::Yuv422p => encoder::OutPixelFormat::YUV422P,
+            PixelFormat::Yuv444p => encoder::OutPixelFormat::YUV444P,
+        }
+    }
+}

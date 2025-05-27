@@ -10,12 +10,21 @@ use crate::*;
 pub struct OutputVideoOptions {
     /// Output resolution in pixels.
     pub resolution: Resolution,
+    pub pixel_format: Option<PixelFormat>,
     /// Defines when output stream should end if some of the input streams are finished. If output includes both audio and video streams, then EOS needs to be sent on both.
     pub send_eos_when: Option<OutputEndCondition>,
     /// Video encoder options.
     pub encoder: VideoEncoderOptions,
     /// Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
     pub initial: VideoScene,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PixelFormat {
+    Yuv420p,
+    Yuv422p,
+    Yuv444p,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]

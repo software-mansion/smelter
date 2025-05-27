@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use compositor_render::{Frame, FrameData, Framerate, OutputId, Resolution};
+use compositor_render::{Frame, FrameData, Framerate, OutputFrameFormat, OutputId, Resolution};
 use crossbeam_channel::{Receiver, Sender};
 use ffmpeg_next::{
     codec::{Context, Id},
@@ -19,14 +19,18 @@ use crate::{
     queue::PipelineEvent,
 };
 
+use super::OutPixelFormat;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Options {
     pub resolution: Resolution,
+    pub pixel_format: OutPixelFormat,
     pub raw_options: Vec<(String, String)>,
 }
 
 pub struct LibavVP8Encoder {
     resolution: Resolution,
+    pixel_format: OutputFrameFormat,
     frame_sender: Sender<PipelineEvent<Frame>>,
     keyframe_req_sender: Sender<()>,
 }
@@ -78,6 +82,7 @@ impl LibavVP8Encoder {
         Ok(Self {
             frame_sender,
             resolution: options.resolution,
+            pixel_format: options.pixel_format.into(),
             keyframe_req_sender,
         })
     }
@@ -88,6 +93,10 @@ impl LibavVP8Encoder {
 
     pub fn resolution(&self) -> Resolution {
         self.resolution
+    }
+
+    pub fn pixel_format(&self) -> OutputFrameFormat {
+        self.pixel_format
     }
 
     pub fn keyframe_request_sender(&self) -> Sender<()> {

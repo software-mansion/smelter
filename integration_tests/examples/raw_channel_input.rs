@@ -76,6 +76,7 @@ fn main() {
                     width: 1280,
                     height: 720,
                 },
+                pixel_format: compositor_pipeline::pipeline::encoder::OutPixelFormat::YUV420P,
                 raw_options: vec![],
             })),
             audio: None,
