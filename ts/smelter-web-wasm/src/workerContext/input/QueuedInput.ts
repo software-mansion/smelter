@@ -1,13 +1,13 @@
 import type { InputId } from '@swmansion/smelter-browser-render';
 import type { Logger } from 'pino';
 import { Queue } from '@datastructures-js/queue';
-import { workerPostEvent } from '../pipeline';
 import { SmelterEventType } from '../../eventSender';
 import { assert, sleep } from '../../utils';
 import type { Input, InputStartResult, QueuedInputSource } from './input';
-import type { InputAudioData, InternalVideoFrame } from './frame';
-import { InputVideoFrame, InputVideoFrameRef } from './frame';
+import type { InputAudioData, InternalVideoFrame, InputVideoFrame } from './frame';
+import { InputFrameFromVideoFrame, InputVideoFrameRef } from './frame';
 import type { AudioWorkletMessage } from '../../audioWorkletContext/workletApi';
+import type { MainThreadHandle } from '../../workerApi';
 
 export type InputState = 'started' | 'playing' | 'finished';
 
@@ -23,6 +23,7 @@ export class QueuedInput implements Input {
   private inputId: InputId;
   private source: QueuedInputSource;
   private logger: Logger;
+  private mainThreadHandle: MainThreadHandle;
   /**
    * frames PTS start from 0, where 0 represents first frame
    */
@@ -47,18 +48,24 @@ export class QueuedInput implements Input {
   private receivedEos: boolean = false;
   private sentFirstFrame: boolean = false;
 
-  public constructor(inputId: InputId, source: QueuedInputSource, logger: Logger) {
+  public constructor(
+    inputId: InputId,
+    source: QueuedInputSource,
+    logger: Logger,
+    mainThreadHandle: MainThreadHandle
+  ) {
     this.inputId = inputId;
     this.source = source;
     this.logger = logger;
     this.frames = new Queue();
+    this.mainThreadHandle = mainThreadHandle;
   }
 
   public start(): InputStartResult {
     void this.startAudioProcessor();
     void this.startVideoProcessor();
 
-    workerPostEvent({
+    this.mainThreadHandle.postEvent({
       type: SmelterEventType.VIDEO_INPUT_DELIVERED,
       inputId: this.inputId,
     });
@@ -67,6 +74,7 @@ export class QueuedInput implements Input {
 
   public close() {
     this.shouldClose = true;
+    this.source.close();
   }
 
   public updateQueueStartTime(queueStartTimeMs: number) {
@@ -137,7 +145,7 @@ export class QueuedInput implements Input {
       if (!this.sentFirstFrame) {
         this.sentFirstFrame = true;
         this.logger.debug('Input started');
-        workerPostEvent({
+        this.mainThreadHandle.postEvent({
           type: SmelterEventType.VIDEO_INPUT_PLAYING,
           inputId: this.inputId,
         });
@@ -146,13 +154,13 @@ export class QueuedInput implements Input {
       if (this.frames.size() === 1 && this.receivedEos) {
         this.frames.pop().ref.decrementRefCount();
         this.logger.debug('Input finished');
-        workerPostEvent({
+        this.mainThreadHandle.postEvent({
           type: SmelterEventType.VIDEO_INPUT_EOS,
           inputId: this.inputId,
         });
       }
 
-      return new InputVideoFrame(frame.ref, frame.ptsMs);
+      return new InputFrameFromVideoFrame(frame.ref, frame.ptsMs);
     }
     return;
   }

@@ -1,66 +1,68 @@
 import type { Logger } from 'pino';
+import type {
+  MainThreadHandle,
+  WorkerEvent,
+  WorkerHandle,
+  WorkerMessage,
+  WorkerResponse,
+} from '../../workerApi';
 
-type RequestMessage<Request> = {
+type RequestMessage = {
   id: string;
-  request: Request;
+  request: WorkerMessage;
 };
 
-type ResponseMessage<Response> = {
+type ResponseMessage = {
   type: 'workerResponse';
   id: string;
-  response?: Response;
+  response?: WorkerResponse;
   error?: Error;
 };
 
-type EventMessage<Event> = {
+type EventMessage = {
   type: 'workerEvent';
-  event: Event;
+  event: WorkerEvent;
 };
 
-type PendingMessage<Response> = {
-  res: (response: Response) => void;
+type PendingMessage = {
+  res: (response: WorkerResponse) => void;
   rej: (err: Error) => void;
 };
 
 let requestCounter = 1;
 
-export function registerWorkerEntrypoint<Request, Response>(
-  onMessage: (request: Request) => Promise<Response>
+export function registerWorkerEntrypoint(
+  onMessage: (handle: MainThreadHandle, request: WorkerMessage) => Promise<WorkerResponse>
 ) {
-  self.onmessage = async (event: MessageEvent<RequestMessage<Request>>) => {
+  const handle = new Handle();
+  self.onmessage = async (event: MessageEvent<RequestMessage>) => {
     try {
-      const response = await onMessage(event.data.request);
+      const response = await onMessage(handle, event.data.request);
       self.postMessage({
         type: 'workerResponse',
         id: event.data.id,
         response,
-      } as ResponseMessage<Response>);
+      } as ResponseMessage);
     } catch (error: any) {
       self.postMessage({
         type: 'workerResponse',
         id: event.data.id,
         error,
-      } as ResponseMessage<Response>);
+      } as ResponseMessage);
     }
   };
 }
 
-export function workerPostEvent<Event>(event: Event) {
-  self.postMessage({ type: 'workerEvent', event });
-}
-
-export class AsyncWorker<Request, Response, Event> {
+export class DedicatedWorker implements WorkerHandle {
   private worker: Worker;
-  private pendingMessages: Record<string, PendingMessage<Response>> = {};
-  private onEvent: (event: Event) => void;
+  private pendingMessages: Record<string, PendingMessage> = {};
+  private onEvent: (event: WorkerEvent) => void;
   private logger: Logger;
 
-  constructor(worker: Worker, onEvent: (event: Event) => void, logger: Logger) {
+  constructor(worker: Worker, onEvent: (event: WorkerEvent) => void, logger: Logger) {
     this.logger = logger;
     this.worker = worker;
-    this.worker.onmessage = (
-      event: MessageEvent<ResponseMessage<Response> | EventMessage<Event>>
-    ) => {
+    this.worker.onmessage = (event: MessageEvent<ResponseMessage | EventMessage>) => {
       if (event.data.type === 'workerEvent') {
         this.handleEvent(event.data.event);
       } else if (event.data.type === 'workerResponse') {
@@ -70,12 +72,15 @@ export class AsyncWorker<Request, Response, Event> {
     this.onEvent = onEvent;
   }
 
-  public async postMessage(request: Request, transferable?: Transferable[]): Promise<Response> {
+  public async postMessage(
+    request: WorkerMessage,
+    transferable?: Transferable[]
+  ): Promise<WorkerResponse> {
     const requestId = String(requestCounter);
     requestCounter += 1;
 
-    const pendingMessage: PendingMessage<Response> = {} as any;
-    const responsePromise = new Promise<Response>((res, rej) => {
+    const pendingMessage: PendingMessage = {} as any;
+    const responsePromise = new Promise<WorkerResponse>((res, rej) => {
       pendingMessage.res = res;
       pendingMessage.rej = rej;
     });
@@ -89,15 +94,15 @@ export class AsyncWorker<Request, Response, Event> {
     return responsePromise;
   }
 
-  public terminate() {
+  public async terminate() {
     this.worker.terminate();
   }
 
-  private handleEvent(event: Event) {
+  private handleEvent(event: WorkerEvent) {
     this.onEvent(event);
   }
 
-  private handleResponse(msg: ResponseMessage<Response>) {
+  private handleResponse(msg: ResponseMessage) {
     const pendingMessage = this.pendingMessages[msg.id];
     if (!pendingMessage) {
       this.logger.error(`Unknown response from Web Worker received. ${JSON.stringify(msg)}`);
@@ -111,5 +116,11 @@ export class AsyncWorker<Request, Response, Event> {
       // still should mean that it is resolved
       pendingMessage.res(msg.response!);
     }
+  }
+}
+
+class Handle implements MainThreadHandle {
+  public async postEvent(event: WorkerEvent) {
+    self.postMessage({ type: 'workerEvent', event });
   }
 }

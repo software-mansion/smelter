@@ -10,12 +10,8 @@ import type { Logger } from 'pino';
 import { InputVideoDecoder } from '../videoDecoder';
 import { InputAudioDecoder } from '../audioDecoder';
 import { assert } from '../../../utils';
-import type {
-  AudioWorkletMessage,
-  AudioWorkletMessagePort,
-} from '../../../audioWorkletContext/workletApi';
 import type { WorkloadBalancer } from '../../queue';
-import { AsyncMessagePort } from '../../../audioWorkletContext/bridge';
+import { AudioWorkletMessagePort } from '../../../audioWorkletContext/bridge';
 
 export default class Mp4Source implements QueuedInputSource {
   private data: ArrayBuffer;
@@ -36,7 +32,7 @@ export default class Mp4Source implements QueuedInputSource {
     this.logger = logger;
     this.workloadBalancer = workloadBalancer;
     if (messagePort) {
-      this.messagePort = new AsyncMessagePort<AudioWorkletMessage, boolean>(messagePort, logger);
+      this.messagePort = new AudioWorkletMessagePort(messagePort, logger);
     }
   }
 
@@ -74,7 +70,8 @@ export default class Mp4Source implements QueuedInputSource {
   }
 
   public close(): void {
-    assert(this.videoDecoder, 'Decoder was not initialized, call init() first.');
-    this.videoDecoder.close();
+    this.videoDecoder?.close();
+    this.audioDecoder?.close();
+    this.messagePort?.terminate();
   }
 }

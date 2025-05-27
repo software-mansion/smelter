@@ -7,6 +7,7 @@ import type {
 import type { Framerate } from '../compositor/compositor';
 import type { Input } from './input/input';
 import type { Output } from './output/output';
+import type { Interval } from '../utils';
 import { sleep } from '../utils';
 import type { Logger } from 'pino';
 import type { InputVideoFrame } from './input/frame';
@@ -61,6 +62,7 @@ export class Queue {
   }
 
   public removeInput(inputId: InputId) {
+    this.inputs[inputId].close();
     delete this.inputs[inputId];
   }
 
@@ -208,9 +210,10 @@ class FrameTicker {
 export class WorkloadBalancer {
   private highPriorityNodes: Set<WorkloadBalancerNode> = new Set();
   private lowPriorityNodes: Set<WorkloadBalancerNode> = new Set();
+  private interval: Interval;
 
   constructor() {
-    setInterval(() => {
+    this.interval = setInterval(() => {
       this.recalculateThrottling();
     }, 100);
   }
@@ -243,6 +246,10 @@ export class WorkloadBalancer {
   public remove(node: WorkloadBalancerNode) {
     this.highPriorityNodes.delete(node);
     this.lowPriorityNodes.delete(node);
+  }
+
+  public stop() {
+    clearInterval(this.interval);
   }
 }
 

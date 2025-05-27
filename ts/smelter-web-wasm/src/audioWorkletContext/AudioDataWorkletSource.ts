@@ -24,7 +24,7 @@ export class AudioDataWorkletSource extends AudioWorkletProcessor {
     super(...args);
 
     // @ts-ignore
-    listenForMessages<AudioWorkletMessage, boolean>(this.port, async msg => {
+    listenForMessages(this.port, async msg => {
       await this.messageBuffer.onMessage(msg);
       return true;
     });

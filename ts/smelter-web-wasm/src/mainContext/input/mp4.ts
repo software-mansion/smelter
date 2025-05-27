@@ -2,7 +2,6 @@ import MP4Box from 'mp4box';
 
 import type { Input, RegisterInputResult } from '../input';
 import type { InstanceContext } from '../instance';
-import { MAIN_SAMPLE_RATE } from '../AudioMixer';
 import type { Input as CoreInput } from '@swmansion/smelter-core';
 
 export class Mp4Input implements Input {
@@ -37,7 +36,7 @@ export async function handleRegisterMp4Input(
   const metadata = await parseMp4(arrayBuffer);
 
   let messagePort;
-  if (metadata?.sampleRate === MAIN_SAMPLE_RATE) {
+  if (metadata?.sampleRate === ctx.audioMixer.mainSampleRate) {
     messagePort = ctx.audioMixer.addWorkletInput(inputId);
   } else if (metadata?.sampleRate) {
     messagePort = await ctx.audioMixer.addWorkletInputWithResample(inputId, metadata.sampleRate);
