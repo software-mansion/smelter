@@ -201,6 +201,11 @@ fn frame_from_av(
             u_plane: copy_plane_from_av(decoded, 1),
             v_plane: copy_plane_from_av(decoded, 2),
         }),
+        Pixel::YUVJ420P => FrameData::PlanarYuvJ420(YuvPlanes {
+            y_plane: copy_plane_from_av(decoded, 0),
+            u_plane: copy_plane_from_av(decoded, 1),
+            v_plane: copy_plane_from_av(decoded, 2),
+        }),
         fmt => return Err(DecoderFrameConversionError::UnsupportedPixelFormat(fmt)),
     };
     Ok(Frame {
