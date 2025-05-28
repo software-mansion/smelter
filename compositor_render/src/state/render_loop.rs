@@ -5,7 +5,9 @@ use tracing::error;
 use crate::{
     scene::RGBColor,
     state::{node::RenderNode, render_graph::RenderGraph, RenderCtx},
-    wgpu::texture::{PlanarYuvPendingDownload, RgbaLinearTexture, RgbaSrgbTexture, TextureExt},
+    wgpu::texture::{
+        PlanarYuvPendingDownload, PlanarYuvVariant, RgbaLinearTexture, RgbaSrgbTexture, TextureExt,
+    },
     Frame, FrameData, FrameSet, InputId, OutputId, RenderingMode, Resolution,
 };
 
@@ -62,7 +64,7 @@ pub(super) fn read_outputs(
     for (output_id, output) in &scene.outputs {
         match output.root.output_texture(&scene.inputs).state() {
             Some(node) => match &output.output_texture {
-                OutputTexture::PlanarYuv420Textures(yuv_output) => {
+                OutputTexture::PlanarYuvTextures(yuv_output) => {
                     ctx.wgpu_ctx.format.rgba_to_yuv.convert(
                         ctx.wgpu_ctx,
                         node.output_texture_bind_group(),
@@ -90,7 +92,7 @@ pub(super) fn read_outputs(
             },
             // fallback if root node in render graph is empty
             None => match &output.output_texture {
-                OutputTexture::PlanarYuv420Textures(yuv_output) => {
+                OutputTexture::PlanarYuvTextures(yuv_output) => {
                     yuv_output
                         .yuv_textures()
                         .fill_with_color(ctx.wgpu_ctx, RGBColor::BLACK);
@@ -134,12 +136,28 @@ pub(super) fn read_outputs(
                 pending_download,
                 resolution,
             } => {
-                let data = match pending_download.wait() {
+                let yuv_planes = match pending_download.wait() {
                     Ok(data) => data,
                     Err(err) => {
                         error!("Failed to download frame: {}", err);
                         continue;
                     }
+                };
+
+                let Some(output) = &scene.outputs.get(&output_id) else {
+                    error!("Output_id {} not found", output_id);
+                    continue;
+                };
+                let data = match &output.output_texture {
+                    OutputTexture::PlanarYuvTextures(planar_yuv_output) => {
+                        match planar_yuv_output.yuv_textures().variant() {
+                            PlanarYuvVariant::YUV420 => FrameData::PlanarYuv420(yuv_planes),
+                            PlanarYuvVariant::YUV422 => FrameData::PlanarYuv422(yuv_planes),
+                            PlanarYuvVariant::YUV444 => FrameData::PlanarYuv444(yuv_planes),
+                            PlanarYuvVariant::YUVJ420 => FrameData::PlanarYuvJ420(yuv_planes),
+                        }
+                    }
+                    _ => FrameData::PlanarYuv420(yuv_planes),
                 };
                 let frame = Frame {
                     data,

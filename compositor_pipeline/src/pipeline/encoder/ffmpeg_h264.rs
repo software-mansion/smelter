@@ -1,7 +1,7 @@
 use core::slice;
 use std::time::Duration;
 
-use compositor_render::{Frame, FrameData, Framerate, OutputId, Resolution};
+use compositor_render::{Frame, FrameData, Framerate, OutputFrameFormat, OutputId, Resolution};
 use crossbeam_channel::{Receiver, Sender};
 use ffmpeg_next::{
     codec::{Context, Id},
@@ -19,6 +19,8 @@ use crate::{
     },
     queue::PipelineEvent,
 };
+
+use super::OutputPixelFormat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EncoderPreset {
@@ -85,11 +87,13 @@ impl EncoderPreset {
 pub struct Options {
     pub preset: EncoderPreset,
     pub resolution: Resolution,
+    pub pixel_format: OutputPixelFormat,
     pub raw_options: Vec<(String, String)>,
 }
 
 pub struct LibavH264Encoder {
     resolution: Resolution,
+    pixel_format: OutputFrameFormat,
     frame_sender: Sender<PipelineEvent<Frame>>,
     keyframe_req_sender: Sender<()>,
     extradata: Option<bytes::Bytes>,
@@ -142,6 +146,7 @@ impl LibavH264Encoder {
         Ok(Self {
             frame_sender,
             resolution: options.resolution,
+            pixel_format: options.pixel_format.into(),
             keyframe_req_sender,
             extradata: encoder_config,
         })
@@ -153,6 +158,10 @@ impl LibavH264Encoder {
 
     pub fn resolution(&self) -> Resolution {
         self.resolution
+    }
+
+    pub fn pixel_format(&self) -> OutputFrameFormat {
+        self.pixel_format
     }
 
     pub fn keyframe_request_sender(&self) -> Sender<()> {
@@ -179,7 +188,7 @@ fn run_encoder_thread(
     // We set this to 1 / 1_000_000, bc we use `as_micros` to convert frames to AV packets.
     let pts_unit_secs = Rational::new(1, 1_000_000);
     encoder.set_time_base(pts_unit_secs);
-    encoder.set_format(Pixel::YUV420P);
+    encoder.set_format(options.pixel_format.into());
     encoder.set_width(options.resolution.width as u32);
     encoder.set_height(options.resolution.height as u32);
     encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
@@ -243,7 +252,7 @@ fn run_encoder_thread(
         };
 
         let mut av_frame = frame::Video::new(
-            Pixel::YUV420P,
+            options.pixel_format.into(),
             options.resolution.width as u32,
             options.resolution.height as u32,
         );
@@ -326,12 +335,26 @@ fn receive_chunk(encoder: &mut Video, packet: &mut Packet) -> Option<EncodedChun
 struct FrameConversionError(String);
 
 fn frame_into_av(frame: Frame, av_frame: &mut frame::Video) -> Result<(), FrameConversionError> {
-    let FrameData::PlanarYuv420(data) = frame.data else {
-        return Err(FrameConversionError(format!(
-            "Unsupported pixel format {:?}",
-            frame.data
-        )));
+    let (data, expected_pixel_format) = match frame.data {
+        FrameData::PlanarYuv420(data) => (data, Pixel::YUV420P),
+        FrameData::PlanarYuv422(data) => (data, Pixel::YUV422P),
+        FrameData::PlanarYuv444(data) => (data, Pixel::YUV444P),
+        _ => {
+            return Err(FrameConversionError(format!(
+                "Unsupported pixel format {:?}",
+                frame.data
+            )))
+        }
     };
+
+    if av_frame.format() != expected_pixel_format {
+        return Err(FrameConversionError(format!(
+            "Frame format mismatch: expected {:?}, got {:?}",
+            expected_pixel_format,
+            av_frame.format()
+        )));
+    }
+
     let expected_y_plane_size = (av_frame.plane_width(0) * av_frame.plane_height(0)) as usize;
     let expected_u_plane_size = (av_frame.plane_width(1) * av_frame.plane_height(1)) as usize;
     let expected_v_plane_size = (av_frame.plane_width(2) * av_frame.plane_height(2)) as usize;

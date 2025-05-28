@@ -168,5 +168,7 @@ impl From<wgpu::Extent3d> for Resolution {
 #[derive(Debug, Clone, Copy)]
 pub enum OutputFrameFormat {
     PlanarYuv420Bytes,
+    PlanarYuv422Bytes,
+    PlanarYuv444Bytes,
     RgbaWgpuTexture,
 }
