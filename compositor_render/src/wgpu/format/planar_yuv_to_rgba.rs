@@ -123,6 +123,8 @@ impl YUVToRGBAPushConstants {
     fn new(variant: PlanarYuvVariant) -> Self {
         match variant {
             PlanarYuvVariant::YUV420 => Self { pixel_format: 0 },
+            PlanarYuvVariant::YUV422 => Self { pixel_format: 0 },
+            PlanarYuvVariant::YUV444 => Self { pixel_format: 0 },
             PlanarYuvVariant::YUVJ420 => Self { pixel_format: 1 },
         }
     }

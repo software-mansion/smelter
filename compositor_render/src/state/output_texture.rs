@@ -7,7 +7,9 @@ use wgpu::{Buffer, BufferAsyncError};
 
 use crate::{
     wgpu::{
-        texture::{utils::pad_to_256, PlanarYuvPendingDownload, PlanarYuvTextures},
+        texture::{
+            utils::pad_to_256, PlanarYuvPendingDownload, PlanarYuvTextures, PlanarYuvVariant,
+        },
         WgpuCtx,
     },
     OutputFrameFormat, Resolution,
@@ -37,7 +39,7 @@ pub struct PlanarYuvOutput {
 
 impl PlanarYuvOutput {
     pub fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
-        let textures = PlanarYuvTextures::new(ctx, resolution);
+        let textures = PlanarYuvTextures::new(ctx, resolution, PlanarYuvVariant::YUV420);
         let buffers = textures.new_download_buffers(ctx);
 
         Self {

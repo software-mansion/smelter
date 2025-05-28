@@ -237,11 +237,16 @@ fn receive_chunk(encoder: &mut Video, packet: &mut Packet) -> Option<EncodedChun
 struct FrameConversionError(String);
 
 fn frame_into_av(frame: Frame, av_frame: &mut frame::Video) -> Result<(), FrameConversionError> {
-    let FrameData::PlanarYuv420(data) = frame.data else {
-        return Err(FrameConversionError(format!(
-            "Unsupported pixel format {:?}",
-            frame.data
-        )));
+    let data = match frame.data {
+        FrameData::PlanarYuv420(data)
+        | FrameData::PlanarYuv422(data)
+        | FrameData::PlanarYuv444(data) => data,
+        _ => {
+            return Err(FrameConversionError(format!(
+                "Unsupported pixel format {:?}",
+                frame.data
+            )))
+        }
     };
     let expected_y_plane_size = (av_frame.plane_width(0) * av_frame.plane_height(0)) as usize;
     let expected_u_plane_size = (av_frame.plane_width(1) * av_frame.plane_height(1)) as usize;
