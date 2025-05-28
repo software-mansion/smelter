@@ -70,28 +70,28 @@ pub enum AudioEncoderPreset {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum OutPixelFormat {
+pub enum OutputPixelFormat {
     YUV420P,
     YUV422P,
     YUV444P,
 }
 
-impl From<OutPixelFormat> for Pixel {
-    fn from(format: OutPixelFormat) -> Self {
+impl From<OutputPixelFormat> for Pixel {
+    fn from(format: OutputPixelFormat) -> Self {
         match format {
-            OutPixelFormat::YUV420P => Pixel::YUV420P,
-            OutPixelFormat::YUV422P => Pixel::YUV422P,
-            OutPixelFormat::YUV444P => Pixel::YUV444P,
+            OutputPixelFormat::YUV420P => Pixel::YUV420P,
+            OutputPixelFormat::YUV422P => Pixel::YUV422P,
+            OutputPixelFormat::YUV444P => Pixel::YUV444P,
         }
     }
 }
 
-impl From<OutPixelFormat> for OutputFrameFormat {
-    fn from(format: OutPixelFormat) -> Self {
+impl From<OutputPixelFormat> for OutputFrameFormat {
+    fn from(format: OutputPixelFormat) -> Self {
         match format {
-            OutPixelFormat::YUV420P => OutputFrameFormat::PlanarYuv420Bytes,
-            OutPixelFormat::YUV422P => OutputFrameFormat::PlanarYuv422Bytes,
-            OutPixelFormat::YUV444P => OutputFrameFormat::PlanarYuv444Bytes,
+            OutputPixelFormat::YUV420P => OutputFrameFormat::PlanarYuv420Bytes,
+            OutputPixelFormat::YUV422P => OutputFrameFormat::PlanarYuv422Bytes,
+            OutputPixelFormat::YUV444P => OutputFrameFormat::PlanarYuv444Bytes,
         }
     }
 }
@@ -250,7 +250,7 @@ impl VideoEncoder {
     pub fn pixel_format(&self) -> OutputFrameFormat {
         match self {
             Self::H264(encoder) => encoder.pixel_format(),
-            Self::VP8(encoder) => encoder.pixel_format(),
+            Self::VP8(_) => OutputFrameFormat::PlanarYuv420Bytes,
             Self::VP9(encoder) => encoder.pixel_format(),
         }
     }

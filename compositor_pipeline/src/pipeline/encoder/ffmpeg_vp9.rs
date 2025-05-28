@@ -19,12 +19,12 @@ use crate::{
     queue::PipelineEvent,
 };
 
-use super::OutPixelFormat;
+use super::OutputPixelFormat;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Options {
     pub resolution: Resolution,
-    pub pixel_format: OutPixelFormat,
+    pub pixel_format: OutputPixelFormat,
     pub raw_options: Vec<(String, String)>,
 }
 
@@ -119,7 +119,6 @@ fn run_encoder_thread(
     // We set this to 1 / 1_000_000, bc we use `as_micros` to convert frames to AV packets.
     let pts_unit_secs = Rational::new(1, 1_000_000);
     encoder.set_time_base(pts_unit_secs);
-    // encoder.set_format(Pixel::YUV420P);
     encoder.set_format(options.pixel_format.into());
     encoder.set_width(options.resolution.width as u32);
     encoder.set_height(options.resolution.height as u32);

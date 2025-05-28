@@ -1,6 +1,6 @@
 use compositor_pipeline::pipeline::{
     self,
-    encoder::{fdk_aac::AacEncoderOptions, ffmpeg_h264, AudioEncoderOptions, OutPixelFormat},
+    encoder::{fdk_aac::AacEncoderOptions, ffmpeg_h264, AudioEncoderOptions},
     output::{self, rtmp::RtmpSenderOptions},
 };
 use tracing::warn;
@@ -88,16 +88,16 @@ fn maybe_video_options_h264_only(
     let Some(options) = options else {
         return Ok((None, None));
     };
-    let pixel_format: OutPixelFormat = options.pixel_format.unwrap_or(PixelFormat::Yuv420p).into();
 
     let encoder_options = match options.encoder {
         VideoEncoderOptions::FfmpegH264 {
             preset,
+            pixel_format,
             ffmpeg_options,
         } => pipeline::encoder::VideoEncoderOptions::H264(ffmpeg_h264::Options {
             preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
             resolution: options.resolution.into(),
-            pixel_format,
+            pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         }),
         VideoEncoderOptions::FfmpegVp8 { .. } => {

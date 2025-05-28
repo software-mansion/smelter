@@ -1,6 +1,6 @@
 use compositor_pipeline::pipeline::{
     self,
-    encoder::{self, fdk_aac, ffmpeg_h264, OutPixelFormat},
+    encoder::{self, fdk_aac, ffmpeg_h264},
     output::{self, mp4},
 };
 use tracing::warn;
@@ -89,16 +89,15 @@ fn maybe_video_options_h264_only(
         return Ok((None, None));
     };
 
-    let pixel_format: OutPixelFormat = options.pixel_format.unwrap_or(PixelFormat::Yuv420p).into();
-
     let encoder_options = match options.encoder {
         VideoEncoderOptions::FfmpegH264 {
             preset,
+            pixel_format,
             ffmpeg_options,
         } => pipeline::encoder::VideoEncoderOptions::H264(ffmpeg_h264::Options {
             preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
             resolution: options.resolution.into(),
-            pixel_format,
+            pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         }),
         VideoEncoderOptions::FfmpegVp8 { .. } => {

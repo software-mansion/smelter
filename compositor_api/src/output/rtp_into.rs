@@ -1,6 +1,6 @@
 use compositor_pipeline::pipeline::{
     self,
-    encoder::{self, ffmpeg_h264, ffmpeg_vp8, ffmpeg_vp9, opus, OutPixelFormat},
+    encoder::{self, ffmpeg_h264, ffmpeg_vp8, ffmpeg_vp9, opus},
     output,
 };
 use tracing::warn;
@@ -128,31 +128,31 @@ fn maybe_video_options(
         return Ok((None, None));
     };
 
-    let pixel_format: OutPixelFormat = options.pixel_format.unwrap_or(PixelFormat::Yuv420p).into();
     let encoder_options = match options.encoder {
         VideoEncoderOptions::FfmpegH264 {
             preset,
+            pixel_format,
             ffmpeg_options,
         } => pipeline::encoder::VideoEncoderOptions::H264(ffmpeg_h264::Options {
             preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
             resolution: options.resolution.into(),
-            pixel_format,
+            pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         }),
         VideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
             pipeline::encoder::VideoEncoderOptions::VP8(ffmpeg_vp8::Options {
                 resolution: options.resolution.into(),
-                pixel_format,
                 raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
             })
         }
-        VideoEncoderOptions::FfmpegVp9 { ffmpeg_options } => {
-            pipeline::encoder::VideoEncoderOptions::VP9(ffmpeg_vp9::Options {
-                resolution: options.resolution.into(),
-                pixel_format,
-                raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
-            })
-        }
+        VideoEncoderOptions::FfmpegVp9 {
+            pixel_format,
+            ffmpeg_options,
+        } => pipeline::encoder::VideoEncoderOptions::VP9(ffmpeg_vp9::Options {
+            resolution: options.resolution.into(),
+            pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
+            raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+        }),
     };
 
     let output_options = pipeline::OutputVideoOptions {

@@ -58,25 +58,22 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                 Some(v) => v.to_vec(),
             };
 
-            let pixel_format: encoder::OutPixelFormat = options
-                .pixel_format
-                .clone()
-                .unwrap_or(PixelFormat::Yuv420p)
-                .into();
-
             let encoder_preferences: Vec<pipeline::encoder::VideoEncoderOptions> =
                 encoder_preferences
                     .into_iter()
                     .flat_map(|codec| match codec {
                         WhipVideoEncoderOptions::FfmpegH264 {
                             preset,
+                            pixel_format,
                             ffmpeg_options,
                         } => {
                             vec![pipeline::encoder::VideoEncoderOptions::H264(
                                 ffmpeg_h264::Options {
                                     preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                                     resolution: options.resolution.clone().into(),
-                                    pixel_format,
+                                    pixel_format: pixel_format
+                                        .unwrap_or(PixelFormat::Yuv420p)
+                                        .into(),
                                     raw_options: ffmpeg_options
                                         .unwrap_or_default()
                                         .into_iter()
@@ -88,7 +85,6 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                             vec![pipeline::encoder::VideoEncoderOptions::VP8(
                                 ffmpeg_vp8::Options {
                                     resolution: options.resolution.clone().into(),
-                                    pixel_format,
                                     raw_options: ffmpeg_options
                                         .unwrap_or_default()
                                         .into_iter()
@@ -96,11 +92,16 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                                 },
                             )]
                         }
-                        WhipVideoEncoderOptions::FfmpegVp9 { ffmpeg_options } => {
+                        WhipVideoEncoderOptions::FfmpegVp9 {
+                            pixel_format,
+                            ffmpeg_options,
+                        } => {
                             vec![pipeline::encoder::VideoEncoderOptions::VP9(
                                 ffmpeg_vp9::Options {
                                     resolution: options.resolution.clone().into(),
-                                    pixel_format,
+                                    pixel_format: pixel_format
+                                        .unwrap_or(PixelFormat::Yuv420p)
+                                        .into(),
                                     raw_options: ffmpeg_options
                                         .unwrap_or_default()
                                         .into_iter()
@@ -112,19 +113,18 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                             vec![
                                 pipeline::encoder::VideoEncoderOptions::VP9(ffmpeg_vp9::Options {
                                     resolution: options.resolution.clone().into(),
-                                    pixel_format,
+                                    pixel_format: encoder::OutputPixelFormat::YUV420P,
                                     raw_options: Vec::new(),
                                 }),
                                 pipeline::encoder::VideoEncoderOptions::VP8(ffmpeg_vp8::Options {
                                     resolution: options.resolution.clone().into(),
-                                    pixel_format,
                                     raw_options: Vec::new(),
                                 }),
                                 pipeline::encoder::VideoEncoderOptions::H264(
                                     ffmpeg_h264::Options {
                                         preset: H264EncoderPreset::Fast.into(),
                                         resolution: options.resolution.clone().into(),
-                                        pixel_format,
+                                        pixel_format: encoder::OutputPixelFormat::YUV420P,
                                         raw_options: Vec::new(),
                                     },
                                 ),

@@ -13,7 +13,7 @@ use compositor_pipeline::{
         self,
         encoder::{
             ffmpeg_h264::{self, EncoderPreset},
-            VideoEncoderOptions,
+            OutputPixelFormat, VideoEncoderOptions,
         },
         input::{
             mp4::{Mp4Options, Source},
@@ -205,7 +205,7 @@ impl SingleBenchmarkPass {
                             width: self.output_resolution.width,
                             height: self.output_resolution.height,
                         },
-                        pixel_format: pipeline::encoder::OutPixelFormat::YUV420P,
+                        pixel_format: OutputPixelFormat::YUV420P,
                         raw_options: vec![("threads".to_string(), "0".to_string())],
                     })),
                 },

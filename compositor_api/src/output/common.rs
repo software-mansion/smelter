@@ -10,7 +10,6 @@ use crate::*;
 pub struct OutputVideoOptions {
     /// Output resolution in pixels.
     pub resolution: Resolution,
-    pub pixel_format: Option<PixelFormat>,
     /// Defines when output stream should end if some of the input streams are finished. If output includes both audio and video streams, then EOS needs to be sent on both.
     pub send_eos_when: Option<OutputEndCondition>,
     /// Video encoder options.
@@ -35,6 +34,9 @@ pub enum VideoEncoderOptions {
         /// (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
         preset: Option<H264EncoderPreset>,
 
+        /// (**default=`"yuv420p"`**) Encoder pixel format
+        pixel_format: Option<PixelFormat>,
+
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<String, String>>,
     },
@@ -45,6 +47,8 @@ pub enum VideoEncoderOptions {
     },
     #[serde(rename = "ffmpeg_vp9")]
     FfmpegVp9 {
+        /// (**default=`"yuv420p"`**) Encoder pixel format
+        pixel_format: Option<PixelFormat>,
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<String, String>>,
     },
