@@ -1,10 +1,8 @@
 import type Smelter from '@swmansion/smelter-web-wasm';
 import type { OutputsState } from './PlaygroundPage';
 import Scene from './Scene';
-import SmelterCanvasOutput from '../../components/SmelterCanvasOutput';
-import SmelterVideoOutput from '../../components/SmelterVideoOutput';
 import { useCanvasOutputStore, useStreamOutputStore, useWhipOutputStore } from './state';
-import SmelterWhipOutput from '../../components/SmelterWhipOutput';
+import { SmelterCanvasOutput, SmelterVideoOutput, SmelterWhipOutput } from '@swmansion/smelter-web-wasm';
 
 type Props = {
   smelter: Smelter;

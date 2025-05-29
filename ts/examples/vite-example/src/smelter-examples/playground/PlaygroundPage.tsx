@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Controls from './Controls';
 import OutputsSection from './OutputsSection';
-import { useSmelter } from '../../hooks/useSmelter';
+import { useSmelter } from '@swmansion/smelter-web-wasm';
 
 export type InputsState = {
   mp4WithAudio?: boolean;

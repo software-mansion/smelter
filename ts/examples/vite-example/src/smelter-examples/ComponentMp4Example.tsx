@@ -1,6 +1,5 @@
 import { Mp4, Rescaler, Slide, SlideShow, Text, View } from '@swmansion/smelter';
-import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
-import { useSmelter } from '../hooks/useSmelter';
+import { SmelterCanvasOutput, useSmelter } from '@swmansion/smelter-web-wasm';
 
 const FIRST_MP4_URL =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';

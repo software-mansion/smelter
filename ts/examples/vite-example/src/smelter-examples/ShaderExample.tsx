@@ -1,7 +1,6 @@
 import { Mp4, Shader } from '@swmansion/smelter';
-import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
+import { SmelterCanvasOutput, useSmelter } from '@swmansion/smelter-web-wasm';
 import { useEffect } from 'react';
-import { useSmelter } from '../hooks/useSmelter';
 
 const EXAMPLE_SHADER = `
 struct VertexInput {

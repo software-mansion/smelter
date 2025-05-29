@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
 import { InputStream, Rescaler, Text, View } from '@swmansion/smelter';
-import CompositorCanvas from '../components/SmelterCanvasOutput';
 import NotoSansFont from '../../assets/NotoSans.ttf';
-import { useSmelter } from '../hooks/useSmelter';
+import { SmelterCanvasOutput, useSmelter } from '@swmansion/smelter-web-wasm';
 
 function ScreenCapture() {
   const smelter = useSmelter();
@@ -24,9 +23,9 @@ function ScreenCapture() {
   return (
     <div className="card">
       {smelter && (
-        <CompositorCanvas audio smelter={smelter} width={1280} height={720}>
+        <SmelterCanvasOutput audio smelter={smelter} width={1280} height={720}>
           <Scene />
-        </CompositorCanvas>
+        </SmelterCanvasOutput>
       )}
     </div>
   );

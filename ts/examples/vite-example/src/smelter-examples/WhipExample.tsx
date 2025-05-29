@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Mp4, Rescaler, Text, View } from '@swmansion/smelter';
-import { useSmelter } from '../hooks/useSmelter';
-import SmelterWhipOutput from '../components/SmelterWhipOutput';
+import { SmelterWhipOutput, useSmelter } from '@swmansion/smelter-web-wasm';
 
 function WhipExample() {
   const smelter = useSmelter();
