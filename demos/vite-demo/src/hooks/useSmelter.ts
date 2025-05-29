@@ -1,4 +1,3 @@
-import Smelter from '@swmansion/smelter-web-wasm';
 import { useEffect, useState } from 'react';
 
 export function useSmelter(): Smelter | undefined {

@@ -5,6 +5,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "target": "ESNext",
+    "jsx": "react",
     "declaration": false
   },
   "include": ["./src/**/*"]

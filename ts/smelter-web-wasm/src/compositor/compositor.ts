@@ -12,6 +12,7 @@ import {
 } from './api';
 import WasmInstance from '../mainContext/instance';
 import type { RegisterOutputResponse } from '../mainContext/output';
+import { InputId, OutputId, RendererId } from '@swmansion/smelter-browser-render';
 
 export type SmelterOptions = {
   framerate?: Framerate | number;
@@ -33,6 +34,14 @@ export function setWasmBundleUrl(url: string) {
   wasmBundleUrl = url;
 }
 
+type Resources = {
+  inputs: Record<InputId, RegisterInput>;
+  outputs: Record<OutputId, [RegisterOutput, ReactElement]>;
+  images: Record<RendererId, RegisterImage>;
+  shaders: Record<RendererId, RegisterShader>;
+  fontUrls: string[];
+};
+
 export default class Smelter {
   private coreSmelter?: CoreSmelter;
   private instance?: WasmInstance;
@@ -47,9 +56,17 @@ export default class Smelter {
       },
     },
   });
+  private resources: Resources;
 
   public constructor(options?: SmelterOptions) {
     this.options = options ?? {};
+    this.resources = {
+      inputs: {},
+      outputs: {},
+      images: {},
+      shaders: {},
+      fontUrls: [],
+    };
   }
 
   /*
@@ -79,6 +96,8 @@ export default class Smelter {
       root,
       intoRegisterOutputRequest(request)
     )) as RegisterOutputResponse | undefined;
+    this.resources.outputs[outputId] = [request, root];
+
     if (response?.type === 'web-wasm-stream' || response?.type === 'web-wasm-whip') {
       return { stream: response.stream };
     } else {
@@ -89,36 +108,43 @@ export default class Smelter {
   public async unregisterOutput(outputId: string): Promise<void> {
     assert(this.coreSmelter);
     await this.coreSmelter.unregisterOutput(outputId);
+    delete this.resources.outputs[outputId];
   }
 
   public async registerInput(inputId: string, request: RegisterInput): Promise<void> {
     assert(this.coreSmelter);
     await this.coreSmelter.registerInput(inputId, request);
+    this.resources.inputs[inputId] = request;
   }
 
   public async unregisterInput(inputId: string): Promise<void> {
     assert(this.coreSmelter);
     await this.coreSmelter.unregisterInput(inputId);
+    delete this.resources.inputs[inputId];
   }
 
   public async registerImage(imageId: string, request: RegisterImage): Promise<void> {
     assert(this.coreSmelter);
     await this.coreSmelter.registerImage(imageId, request);
+    this.resources.images[imageId] = request;
   }
 
   public async registerShader(shaderId: string, shaderSpec: RegisterShader): Promise<void> {
     assert(this.coreSmelter);
     await this.coreSmelter.registerShader(shaderId, shaderSpec);
+    this.resources.shaders[shaderId] = shaderSpec;
   }
 
   public async unregisterImage(imageId: string): Promise<void> {
     assert(this.coreSmelter);
     await this.coreSmelter.unregisterImage(imageId);
+    delete this.resources.images[imageId];
   }
 
   public async registerFont(fontUrl: string): Promise<void> {
     assert(this.instance);
     await this.instance.registerFont(new URL(fontUrl, import.meta.url).toString());
+    this.resources.fontUrls.push(fontUrl);
   }
 
   /**
@@ -133,6 +159,10 @@ export default class Smelter {
    */
   public async terminate(): Promise<void> {
     await this.coreSmelter?.terminate();
+  }
+
+  public getResources(): Readonly<Resources> {
+    return this.resources;
   }
 }
 
