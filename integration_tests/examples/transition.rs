@@ -46,7 +46,6 @@ fn client_code() -> Result<()> {
     examples::post(
         "image/example_image/register",
         &json!({
-            "asset_type": "gif",
             "url": "https://gifdb.com/images/high/rust-logo-on-fire-o41c0v9om8drr8dv.gif",
         }),
     )?;

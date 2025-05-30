@@ -6,18 +6,9 @@ export function intoRegisterImage(image: Renderers.RegisterImage): Api.ImageSpec
     url: image.url,
     path: image.serverPath,
   };
-  if (image.assetType === 'svg') {
-    return {
-      asset_type: 'svg',
-      resolution: image.resolution,
-      ...source,
-    };
-  } else {
-    return {
-      asset_type: image.assetType,
-      ...source,
-    };
-  }
+  return {
+    ...source,
+  };
 }
 
 export function intoRegisterWebRenderer(

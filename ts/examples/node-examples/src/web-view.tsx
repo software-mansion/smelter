@@ -34,7 +34,6 @@ async function run() {
   await ffplayStartRtmpServerAsync(9002);
 
   await smelter.registerImage('logo', {
-    assetType: 'svg',
     url: 'https://smelter.dev/images/smelter-logo.svg',
     resolution: { width: 800, height: 200 },
   });

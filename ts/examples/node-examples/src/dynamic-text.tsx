@@ -64,7 +64,6 @@ async function run() {
     'https://fonts.gstatic.com/s/notosans/v36/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A-9a6Vc.ttf'
   );
   await smelter.registerImage('image_1', {
-    assetType: 'svg',
     url: 'https://smelter.dev/images/smelter-logo.svg',
     resolution: { width: 300, height: 300 },
   });
