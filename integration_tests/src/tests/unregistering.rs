@@ -25,7 +25,6 @@ pub fn unregistering_flaky() -> Result<()> {
     instance.send_request(
         "image/image_1/register",
         json!({
-            "asset_type": "svg",
             "path": format!("{}/assets/image.svg", env!("CARGO_MANIFEST_DIR"))
         }),
     )?;

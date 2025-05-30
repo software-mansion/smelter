@@ -25,7 +25,7 @@ impl TryFrom<ImageSpec> for compositor_render::RendererSpec {
                 Some("png") => image::ImageType::Png,
                 Some("jpg") | Some("jpeg") => image::ImageType::Jpeg,
                 Some("gif") => image::ImageType::Gif,
-                Some("svg") | Some("svgz") => image::ImageType::Svg {
+                Some("svg") => image::ImageType::Svg {
                     resolution: resolution.clone().map(Into::into),
                 },
                 Some(ext) => {

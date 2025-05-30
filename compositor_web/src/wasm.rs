@@ -89,21 +89,29 @@ impl SmelterRenderer {
         image_spec: JsValue,
     ) -> Result<(), JsValue> {
         let image_spec = types::from_js_value::<ImageSpec>(image_spec)?;
-        let (url, image_type) = match image_spec {
-            ImageSpec::Png { url, .. } => (url, ImageType::Png),
-            ImageSpec::Jpeg { url, .. } => (url, ImageType::Jpeg),
-            ImageSpec::Svg {
-                url, resolution, ..
-            } => (
-                url,
-                ImageType::Svg {
-                    resolution: resolution.map(Into::into),
-                },
-            ),
-            ImageSpec::Gif { url, .. } => (url, ImageType::Gif),
-        };
-        let Some(url) = url else {
+
+        let Some(url) = image_spec.url else {
             return Err(JsValue::from_str("Expected `url` field in image spec"));
+        };
+
+        let image_type = match url
+            .split('?')
+            .next()
+            .and_then(|path| path.rsplit('.').next())
+            .map(str::to_lowercase)
+            .as_deref()
+        {
+            Some("png") => ImageType::Png,
+            Some("jpg") | Some("jpeg") => ImageType::Jpeg,
+            Some("svg") => ImageType::Svg {
+                resolution: image_spec.resolution.map(Into::into),
+            },
+            Some("gif") => ImageType::Gif,
+            _ => {
+                return Err(JsValue::from_str(
+                    "Unsupported or missing file extension in image URL",
+                ));
+            }
         };
 
         let bytes = download(&url).await?;
