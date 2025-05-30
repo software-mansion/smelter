@@ -1,0 +1,35 @@
+This Agreement governs the use of Software Mansion S.A. software suite which encompasses two distinct processing capabilities:
+
+1. Offline Processing: This includes any non-real-time data processing, batch processing, or processing of pre-recorded content. This use case is governed by the license terms detailed below, analogous to the permissive MIT license.
+
+2. Real-time Processing (Smelter): This includes any live streaming, real-time content processing, or interactive media handling. This use case is subject to specific usage limitations and commercial terms outlined in this Agreement.
+
+Software Mansion S.A. ("Licensor") provides this software and associated documentation files (the "Software") to the organization licensing the Software ("Organization"), including all its affiliates and subsidiaries. Any unique end user receiving content processed by the Software is considered a "Viewer" under this Agreement.
+
+LICENSE TERMS
+
+A. Offline Processing Terms
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of the Software, to deal in the Software without restriction apart from live streaming as defined above which is prohibited, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the inclusion of this license notice in all copies or substantial portions of the Software.
+
+B. Real-time Processing Terms
+
+1. Standard License Limitations. Organization may use the Software for real-time processing only if it meets ALL of the following criteria: a) Organization employs fifty (50) or fewer individuals globally across all affiliates and/or subsidiaries; b) Organization maintains fewer than ten thousand (10,000) peak concurrent viewers in any rolling 30-day period; c) Organization deploys the Software on no more than fifty (50) physical or virtual machines simultaneously
+
+2. Trial Period License. New Organizations may utilize the Software for commercial purposes for a 90-day trial period, regardless of organization size or usage volume. To continue using the Software, at the end of the Trial Period Organizations must either: a) Comply with Standard License Limitations, or b) Obtain a Commercial License. New Organization shall mean an Organization that has not used the Software at any time in the past. Standard License Limitations shall not apply to the Trial Period.
+
+3. Prohibited Uses. The following uses are expressly prohibited without a Commercial License: a) Offering or operating any Software-as-a-Service (SaaS) solution that provides programmatic video control capabilities utilizing the Software; b) Incorporating, embedding, integrating, or bundling the Software into any software application or hardware product intended for distribution or sale
+
+4. Commercial License. Organizations exceeding any limitations in Standard License Limitations or requiring prohibited uses must obtain a Commercial License. Commercial licensing starts at $1,000 per month. Contact [contact@smelter.dev](mailto:contact@smelter.dev) for terms.
+
+GENERAL TERMS
+
+1. Marketing Rights. Organization agrees that Licensor may reference Organization as a user of the Software in Licensor's marketing materials, including the use of Organization's name and logo in customer listings, websites, and promotional content. Any detailed case studies or specific implementation details regarding Organization's use of the Software shall require Organization's approval.
+
+2. Intellectual Property. The Software, including all copyrights, patents, trademarks, trade secrets and other intellectual property rights, is and shall remain the exclusive property of Licensor. Organization shall not acquire any ownership rights in the Software.
+
+3. Warranty Disclaimer and Limitation of Liability. Unless explicitly stated in a separate written agreement between Licensor and Organization, the following terms apply: THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND. LICENSOR DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING WITHOUT LIMITATION ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY SPECIAL, INCIDENTAL, INDIRECT, OR CONSEQUENTIAL DAMAGES WHATSOEVER ARISING OUT OF OR RELATED TO ORGANIZATION'S USE OF OR INABILITY TO USE THE SOFTWARE. IN ANY CASE, LICENSOR'S AND ITS AFFILIATES'S, AND ITS AND THEIR LICENSORS, SUPPLIERS AND DEALERS, COLLECTIVE AGGREGATE LIABILITY UNDER OR IN CONNECTION WITH THE SOFTWARE, THIS LICENSE AND THE SUBJECT MATTER HEREOF, FOR ALL CLAIMS RELATING THERETO OF ANY KIND AND UNDER ANY LEGAL OR EQUITABLE THEORY, INCLUDING BREACH OF CONTRACT, TORT (INCLUDING NEGLIGENCE), MISREPRESENTATION (OTHER THAN STRICT FRAUD), STRICT LIABILITY, BREACH OF STATUTORY DUTY OR OTHERWISE, SHALL BE LIMITED OR EXCLUDED TO THE MAXIMUM EXTENT ALLOWED BY LAW IN THOSE JURISDICTIONS.
+
+4. Governing Law. This Agreement is governed by the laws of the Republic of Poland. This Agreement constitutes the entire agreement between the parties regarding the Software.
+
+For licensing inquiries or to obtain a Commercial License, contact: [contact@smelter.dev](mailto:contact@smelter.dev)

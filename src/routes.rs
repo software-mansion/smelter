@@ -9,6 +9,7 @@ use axum::{
 };
 use compositor_pipeline::Pipeline;
 use serde_json::{json, Value};
+use tower_http::cors::CorsLayer;
 
 use crate::state::{ApiState, Response};
 
@@ -80,6 +81,7 @@ pub fn routes(state: ApiState) -> Router {
                 "instance_id": state.config.instance_id
             }))),
         )
+        .layer(CorsLayer::permissive())
         .layer(middleware::from_fn(body_logger_middleware))
         .with_state(state)
 }
