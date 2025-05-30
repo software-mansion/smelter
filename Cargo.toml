@@ -66,6 +66,7 @@ wgpu = { version = "24.0.1", default-features = false, features = [
     "webgl",
     "fragile-send-sync-non-atomic-wasm",
 ] }
+tower-http = { version = "0.6.1", features = ["cors"] }
 
 [dependencies]
 compositor_api = { workspace = true }
@@ -99,6 +100,7 @@ futures-util = { workspace = true }
 wgpu = { workspace = true }
 glyphon = { workspace = true }
 http-body-util = "0.1.2"
+tower-http = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 shared_memory = { workspace = true }
