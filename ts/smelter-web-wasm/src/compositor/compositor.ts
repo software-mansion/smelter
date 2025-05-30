@@ -159,8 +159,10 @@ export default class Smelter {
    */
   public async terminate(): Promise<void> {
     await this.coreSmelter?.terminate();
+    console.log("smelter terminated very much");
   }
 
+  // TODO(noituri): Rename to Registry or smth
   public getResources(): Readonly<Resources> {
     return this.resources;
   }

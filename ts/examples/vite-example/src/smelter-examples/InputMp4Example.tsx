@@ -1,13 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { InputStream, Text, useInputStreams, View } from '@swmansion/smelter';
 import NotoSansFont from '../../assets/NotoSans.ttf';
-import { SmelterCanvasOutput, useSmelter } from '@swmansion/smelter-web-wasm';
+import { SmelterCanvasOutput, useSmelter, SmelterOptions } from '@swmansion/smelter-web-wasm';
 
 const MP4_URL =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
 
 function InputMp4Example() {
-  const smelter = useSmelter();
+  const [opts, setOpts] = useState<SmelterOptions>({
+    framerate: 30,
+  })
+  const smelter = useSmelter(opts);
   useEffect(() => {
     if (!smelter) {
       return;
@@ -17,6 +20,14 @@ function InputMp4Example() {
       await smelter.registerInput('video', { type: 'mp4', url: MP4_URL });
     })();
   }, [smelter]);
+
+  useEffect(() => {
+    setTimeout(() => {
+      setOpts({
+        framerate: 60,
+      })
+    }, 5000);
+  }, []);
 
   return (
     <div className="card">

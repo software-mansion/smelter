@@ -47,6 +47,7 @@ export default function SmelterCanvasOutput(props: SmelterCanvasProps) {
   );
 
   useEffect(() => {
+    console.log("New key", key.current+1);
     // force new canvas
     key.current += 1;
 
@@ -62,6 +63,7 @@ export default function SmelterCanvasOutput(props: SmelterCanvasProps) {
     if (!registerOptions) {
       return;
     }
+    console.log("registerOutput");
     const { audio, outputId, width, height, canvas } = registerOptions;
     const promise = smelter.registerOutput(outputId, children, {
       type: 'canvas',
