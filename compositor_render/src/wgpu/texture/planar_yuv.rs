@@ -46,7 +46,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum YuvVariant {
     YUV420,
     YUV422,
