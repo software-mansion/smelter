@@ -12,6 +12,7 @@ export function useRenderer(): Renderer | null {
       });
 
       await renderer.registerImage('img', {
+        asset_type: 'gif',
         url: 'https://media.tenor.com/eFPFHSN4rJ8AAAAM/example.gif',
       });
       await renderer.registerFont(NotoSansFont);

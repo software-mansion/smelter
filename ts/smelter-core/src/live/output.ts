@@ -184,6 +184,7 @@ class OutputContext implements SmelterOutputContext {
 
     await this.output.api.registerImage(imageRef, {
       url: imageSpec.url,
+      asset_type: imageSpec.assetType,
     });
   }
   public async unregisterImage(imageId: number) {

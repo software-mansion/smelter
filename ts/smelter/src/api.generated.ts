@@ -787,6 +787,34 @@ export type WhipAudioEncoderOptions =
   | {
       type: "any";
     };
+export type ImageSpec =
+  | {
+      asset_type: "png";
+      url?: string | null;
+      path?: string | null;
+    }
+  | {
+      asset_type: "jpeg";
+      url?: string | null;
+      path?: string | null;
+    }
+  | {
+      asset_type: "svg";
+      url?: string | null;
+      path?: string | null;
+      resolution?: Resolution | null;
+    }
+  | {
+      asset_type: "gif";
+      url?: string | null;
+      path?: string | null;
+    }
+  | {
+      asset_type: "auto";
+      url?: string | null;
+      path?: string | null;
+      resolution?: Resolution | null;
+    };
 export type WebEmbeddingMethod =
   | "chromium_embedding"
   | "native_embedding_over_content"
@@ -994,11 +1022,6 @@ export interface OutputWhipAudioOptions {
    * Initial audio mixer configuration for output.
    */
   initial: AudioScene;
-}
-export interface ImageSpec {
-  url?: string | null;
-  path?: string | null;
-  resolution?: Resolution | null;
 }
 export interface WebRendererSpec {
   /**

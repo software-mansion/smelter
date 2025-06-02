@@ -25,18 +25,21 @@ fn client_code() -> Result<()> {
     examples::post(
         "image/example_gif/register",
         &json!({
+            "asset_type": "gif",
             "url": "https://gifdb.com/images/high/rust-logo-on-fire-o41c0v9om8drr8dv.gif",
         }),
     )?;
     examples::post(
         "image/example_jpeg/register",
         &json!({
+            "asset_type": "jpeg",
             "url": "https://www.rust-lang.org/static/images/rust-social.jpg",
         }),
     )?;
     examples::post(
         "image/example_svg/register",
         &json!({
+            "asset_type": "svg",
             "path": PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/assets/rust.svg"),
             "resolution": { "width": VIDEO_RESOLUTION.width, "height": VIDEO_RESOLUTION.width},
         }),
@@ -44,6 +47,7 @@ fn client_code() -> Result<()> {
     examples::post(
         "image/example_png/register",
         &json!({
+            "asset_type": "png",
             "url": "https://rust-lang.org/logos/rust-logo-512x512.png",
         }),
     )?;
