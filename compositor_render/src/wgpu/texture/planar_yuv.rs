@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use bytes::Bytes;
 use wgpu::Buffer;
 
-use crate::{scene::RGBColor, wgpu::WgpuCtx, FrameData, Resolution, YuvPlanes};
+use crate::{scene::RGBColor, wgpu::WgpuCtx, Resolution, YuvPlanes};
 
 use super::{
     base::{new_texture, DEFAULT_BINDING_TYPE},
@@ -35,14 +35,13 @@ where
 
     /// `device.poll(wgpu::MaintainBase::Wait)` needs to be called after download
     /// is started, but before this method is called.
-    pub fn wait(self) -> Result<FrameData, E> {
+    pub fn wait(self) -> Result<YuvPlanes, E> {
         let YuvPendingDownload { y, u, v, _phantom } = self;
-        // output pixel format will always be YUV420P
-        Ok(FrameData::PlanarYuv420(YuvPlanes {
+        Ok(YuvPlanes {
             y_plane: y()?,
             u_plane: u()?,
             v_plane: v()?,
-        }))
+        })
     }
 }
 

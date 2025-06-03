@@ -9,7 +9,7 @@ use compositor_pipeline::{
     pipeline::{
         encoder::{
             ffmpeg_h264::{self, EncoderPreset},
-            VideoEncoderOptions,
+            OutputPixelFormat, VideoEncoderOptions,
         },
         input::RawDataInputOptions,
         output::{
@@ -76,6 +76,7 @@ fn main() {
                     width: 1280,
                     height: 720,
                 },
+                pixel_format: OutputPixelFormat::YUV420P,
                 raw_options: vec![],
             })),
             audio: None,

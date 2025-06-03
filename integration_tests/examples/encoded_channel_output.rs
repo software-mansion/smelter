@@ -60,6 +60,7 @@ fn main() {
                     width: 1280,
                     height: 720,
                 },
+                pixel_format: encoder::OutputPixelFormat::YUV420P,
                 raw_options: vec![],
             })),
             audio: Some(AudioEncoderOptions::Opus(

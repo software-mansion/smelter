@@ -131,10 +131,12 @@ fn maybe_video_options(
     let encoder_options = match options.encoder {
         VideoEncoderOptions::FfmpegH264 {
             preset,
+            pixel_format,
             ffmpeg_options,
         } => pipeline::encoder::VideoEncoderOptions::H264(ffmpeg_h264::Options {
             preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
             resolution: options.resolution.into(),
+            pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         }),
         VideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
@@ -143,12 +145,14 @@ fn maybe_video_options(
                 raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
             })
         }
-        VideoEncoderOptions::FfmpegVp9 { ffmpeg_options } => {
-            pipeline::encoder::VideoEncoderOptions::VP9(ffmpeg_vp9::Options {
-                resolution: options.resolution.into(),
-                raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
-            })
-        }
+        VideoEncoderOptions::FfmpegVp9 {
+            pixel_format,
+            ffmpeg_options,
+        } => pipeline::encoder::VideoEncoderOptions::VP9(ffmpeg_vp9::Options {
+            resolution: options.resolution.into(),
+            pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
+            raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+        }),
     };
 
     let output_options = pipeline::OutputVideoOptions {

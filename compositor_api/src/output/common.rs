@@ -19,12 +19,23 @@ pub struct OutputVideoOptions {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PixelFormat {
+    Yuv420p,
+    Yuv422p,
+    Yuv444p,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum VideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
     FfmpegH264 {
         /// (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
         preset: Option<H264EncoderPreset>,
+
+        /// (**default=`"yuv420p"`**) Encoder pixel format
+        pixel_format: Option<PixelFormat>,
 
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<String, String>>,
@@ -36,6 +47,8 @@ pub enum VideoEncoderOptions {
     },
     #[serde(rename = "ffmpeg_vp9")]
     FfmpegVp9 {
+        /// (**default=`"yuv420p"`**) Encoder pixel format
+        pixel_format: Option<PixelFormat>,
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<String, String>>,
     },
