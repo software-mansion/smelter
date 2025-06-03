@@ -28,7 +28,6 @@ export type RegisterImage =
       assetType: 'auto';
       url?: string;
       serverPath?: string;
-      resolution?: Api.Resolution;
     };
 
 export type ImageAssetType = RegisterImage['assetType'];

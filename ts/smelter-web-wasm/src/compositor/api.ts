@@ -22,7 +22,6 @@ export type RegisterImage =
   | {
       assetType: 'auto';
       url: string;
-      resolution?: Api.Resolution;
     };
 
 export type RegisterShader = Renderers.RegisterShader;

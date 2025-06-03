@@ -813,7 +813,6 @@ export type ImageSpec =
       asset_type: "auto";
       url?: string | null;
       path?: string | null;
-      resolution?: Resolution | null;
     };
 export type WebEmbeddingMethod =
   | "chromium_embedding"

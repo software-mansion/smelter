@@ -102,14 +102,7 @@ impl SmelterRenderer {
                 },
             ),
             ImageSpec::Gif { url, .. } => (url, ImageType::Gif),
-            ImageSpec::Auto {
-                url, resolution, ..
-            } => (
-                url,
-                ImageType::Auto {
-                    resolution: resolution.map(Into::into),
-                },
-            ),
+            ImageSpec::Auto { url, .. } => (url, ImageType::Auto),
         };
 
         let Some(url) = url else {

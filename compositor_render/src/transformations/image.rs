@@ -6,6 +6,7 @@ use bytes::Bytes;
 
 use image::ImageFormat;
 use resvg::usvg;
+use tracing::debug;
 
 use crate::{
     state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
@@ -38,7 +39,7 @@ pub enum ImageType {
     Jpeg,
     Svg { resolution: Option<Resolution> },
     Gif,
-    Auto { resolution: Option<Resolution> },
+    Auto,
 }
 
 #[derive(Debug, Clone)]
@@ -75,25 +76,19 @@ impl Image {
                     Err(err) => return Err(ImageError::from(err)),
                 }
             }
-            ImageType::Auto { resolution } => {
+            ImageType::Auto => {
                 let format = match image::guess_format(&file) {
                     Ok(format) => format,
                     Err(_) => {
-                        let asset = SvgAsset::new(&ctx.wgpu_ctx, file, resolution)
-                            .map_err(|_| ImageError::UnsupportedFormat)?;
+                        let asset = SvgAsset::new(&ctx.wgpu_ctx, file, None).map_err(|err| {
+                            debug!("{:?}", err);
+                            ImageError::UnsupportedFormat
+                        })?;
                         return Ok(Image::Svg(Arc::new(asset)));
                     }
                 };
 
                 match format {
-                    ImageFormat::Png => {
-                        let asset = BitmapAsset::new(&ctx.wgpu_ctx, file, ImageFormat::Png)?;
-                        Image::Bitmap(Arc::new(asset))
-                    }
-                    ImageFormat::Jpeg => {
-                        let asset = BitmapAsset::new(&ctx.wgpu_ctx, file, ImageFormat::Jpeg)?;
-                        Image::Bitmap(Arc::new(asset))
-                    }
                     ImageFormat::Gif => {
                         let asset =
                             AnimatedAsset::new(&ctx.wgpu_ctx, file.clone(), ImageFormat::Gif);
@@ -107,7 +102,10 @@ impl Image {
                             Err(err) => return Err(ImageError::from(err)),
                         }
                     }
-                    _ => return Err(ImageError::UnsupportedFormat),
+                    other_format => {
+                        let asset = BitmapAsset::new(&ctx.wgpu_ctx, file, other_format)?;
+                        Image::Bitmap(Arc::new(asset))
+                    }
                 }
             }
         };
