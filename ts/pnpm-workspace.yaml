@@ -4,6 +4,7 @@ packages:
   - 'smelter-node'
   - 'smelter-browser-render'
   - 'smelter-web-wasm'
+  - 'smelter-web-client'
   - 'examples/node-examples'
   - 'examples/vite-example'
   - 'create-smelter-app'
