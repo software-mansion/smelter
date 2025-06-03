@@ -12,6 +12,12 @@ export function intoRegisterImage(image: Renderers.RegisterImage): Api.ImageSpec
       resolution: image.resolution,
       ...source,
     };
+  } else if (image.assetType === 'auto') {
+    return {
+      asset_type: 'auto',
+      resolution: image.resolution,
+      ...source,
+    };
   } else {
     return {
       asset_type: image.assetType,

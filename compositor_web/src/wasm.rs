@@ -104,31 +104,12 @@ impl SmelterRenderer {
             ImageSpec::Gif { url, .. } => (url, ImageType::Gif),
             ImageSpec::Auto {
                 url, resolution, ..
-            } => {
-                let Some(url) = url else {
-                    return Err(JsValue::from_str("Expected `url` field in image spec"));
-                };
-                let image_type = match url
-                    .split('?')
-                    .next()
-                    .and_then(|path| path.rsplit('.').next())
-                    .map(str::to_lowercase)
-                    .as_deref()
-                {
-                    Some("png") => ImageType::Png,
-                    Some("jpg") | Some("jpeg") => ImageType::Jpeg,
-                    Some("svg") => ImageType::Svg {
-                        resolution: resolution.map(Into::into),
-                    },
-                    Some("gif") => ImageType::Gif,
-                    _ => {
-                        return Err(JsValue::from_str(
-                            "Unsupported or missing file extension in image URL",
-                        ));
-                    }
-                };
-                (Some(url), image_type)
-            }
+            } => (
+                url,
+                ImageType::Auto {
+                    resolution: resolution.map(Into::into),
+                },
+            ),
         };
 
         let Some(url) = url else {
