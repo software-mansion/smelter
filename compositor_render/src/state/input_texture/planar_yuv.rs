@@ -81,7 +81,9 @@ impl PlanarYuvInput {
     }
 
     fn maybe_recreate(&mut self, ctx: &WgpuCtx, resolution: Resolution, variant: PlanarYuvVariant) {
-        if resolution == self.upload_textures.resolution {
+        if resolution == self.upload_textures.resolution
+            && variant == self.upload_textures.variant()
+        {
             return;
         }
 
