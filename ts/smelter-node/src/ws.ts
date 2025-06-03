@@ -2,12 +2,12 @@ import { type Logger } from 'pino';
 import WebSocket from 'ws';
 
 export class WebSocketConnection {
-  private url: string;
+  private url: string | URL;
   private listeners: Set<(event: object) => void>;
   private ws: WebSocket | null = null;
   private donePromise?: Promise<void>;
 
-  constructor(url: string) {
+  constructor(url: string | URL) {
     this.url = url;
     this.listeners = new Set();
   }
