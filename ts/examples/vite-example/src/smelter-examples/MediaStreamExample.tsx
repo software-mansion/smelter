@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { InputStream, Rescaler, Text, View } from '@swmansion/smelter';
 import NotoSansFont from '../../assets/NotoSans.ttf';
 import SmelterVideoOutput from '../components/SmelterVideoOutput';
-import { useSmelter } from '../hooks/useSmelter';
+import { useSmelter } from '@swmansion/smelter-web-wasm';
 
 function MediaStream() {
   const smelter = useSmelter();

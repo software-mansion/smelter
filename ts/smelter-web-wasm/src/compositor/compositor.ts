@@ -15,7 +15,6 @@ import type { RegisterOutputResponse } from '../mainContext/output';
 
 export type SmelterOptions = {
   framerate?: Framerate | number;
-  streamFallbackTimeoutMs?: number;
 };
 
 export type Framerate = {
