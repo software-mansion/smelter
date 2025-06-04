@@ -32,10 +32,6 @@ pub enum ImageSpec {
         path: Option<String>,
         resolution: Option<Resolution>,
     },
-    Auto {
-        url: Option<String>,
-        path: Option<String>,
-    },
 }
 
 impl TryFrom<ImageSpec> for compositor_render::RendererSpec {
@@ -103,10 +99,6 @@ impl TryFrom<ImageSpec> for compositor_render::RendererSpec {
                 src: from_url_or_path(url, path)?,
                 image_type: image::ImageType::Auto,
                 resolution: resolution.map(Into::into),
-            },
-            ImageSpec::Auto { url, path } => image::ImageSpec {
-                src: from_url_or_path(url, path)?,
-                image_type: image::ImageType::Auto,
             },
         };
         Ok(Self::Image(image))
