@@ -12,7 +12,7 @@ const pipeline = promisify(Stream.pipeline);
 const httpAgent = new http.Agent({ keepAlive: true });
 const httpsAgent = new https.Agent({ keepAlive: true });
 
-export async function sendRequest(baseUrl: string, request: ApiRequest): Promise<object> {
+export async function sendRequest(baseUrl: string | URL, request: ApiRequest): Promise<object> {
   const response = await fetch(new URL(request.route, baseUrl), {
     method: request.method,
     body: request.body && JSON.stringify(request.body),
@@ -35,7 +35,7 @@ export async function sendRequest(baseUrl: string, request: ApiRequest): Promise
 }
 
 export async function sendMultipartRequest(
-  baseUrl: string,
+  baseUrl: string | URL,
   request: MultipartRequest
 ): Promise<object> {
   const response = await fetch(new URL(request.route, baseUrl), {

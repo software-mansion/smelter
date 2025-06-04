@@ -1,6 +1,6 @@
 import type { ApiRequest, MultipartRequest } from '@swmansion/smelter-core';
 
-export async function sendRequest(baseUrl: string, request: ApiRequest): Promise<object> {
+export async function sendRequest(baseUrl: URL, request: ApiRequest): Promise<object> {
   const response = await fetch(new URL(request.route, baseUrl), {
     method: request.method,
     body: request.body && JSON.stringify(request.body),
@@ -22,7 +22,7 @@ export async function sendRequest(baseUrl: string, request: ApiRequest): Promise
 }
 
 export async function sendMultipartRequest(
-  baseUrl: string,
+  baseUrl: URL,
   request: MultipartRequest
 ): Promise<object> {
   const response = await fetch(new URL(request.route, baseUrl), {
