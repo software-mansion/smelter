@@ -71,7 +71,7 @@ fn download_buffer(
             }
         });
 
-    device.poll(wgpu::MaintainBase::Wait);
+    device.poll(wgpu::MaintainBase::Wait).unwrap();
 
     r.recv().unwrap().unwrap();
     let mut buffer = buffer.writer();
