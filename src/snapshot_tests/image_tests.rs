@@ -19,6 +19,7 @@ fn image_tests() {
                 url: "https://www.rust-lang.org/static/images/rust-social.jpg".to_string(),
             },
             image_type: ImageType::Jpeg,
+            resolution: None,
         }),
     );
 
@@ -31,7 +32,8 @@ fn image_tests() {
                     env!("CARGO_MANIFEST_DIR")
                 ),
             },
-            image_type: ImageType::Svg { resolution: None },
+            image_type: ImageType::Svg,
+            resolution: None,
         }),
     );
 

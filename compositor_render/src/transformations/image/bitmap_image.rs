@@ -30,26 +30,54 @@ impl BitmapAsset {
         ctx: &WgpuCtx,
         data: bytes::Bytes,
         format: ImageFormat,
+        maybe_resolution: Option<Resolution>,
     ) -> Result<Self, image::ImageError> {
         let img = image::load_from_memory_with_format(&data, format)?;
-        let resolution = Resolution {
+        let original_resolution = Resolution {
             width: img.width() as usize,
             height: img.height() as usize,
         };
+        let resolution = maybe_resolution.unwrap_or(original_resolution);
+
         match ctx.mode {
             RenderingMode::GpuOptimized | RenderingMode::WebGl => {
-                let texture = RgbaSrgbTexture::new(ctx, resolution);
-                texture.upload(ctx, &img.to_rgba8());
+                let src_texture = RgbaSrgbTexture::new(ctx, original_resolution);
+                src_texture.upload(ctx, &img.to_rgba8());
                 ctx.queue.submit([]);
 
+                let mut dst_texture = RgbaSrgbTexture::new(ctx, resolution);
+
+                if original_resolution != resolution {
+                    let src_bind_group = src_texture.new_bind_group(ctx);
+                    ctx.utils.srgb_rgba_add_premult_alpha.render(
+                        ctx,
+                        &src_bind_group,
+                        dst_texture.view(),
+                    );
+                } else {
+                    dst_texture = src_texture;
+                }
+
                 Ok(Self::Srgb {
-                    bg: texture.new_bind_group(ctx),
-                    texture,
+                    bg: dst_texture.new_bind_group(ctx),
+                    texture: dst_texture,
                 })
             }
             RenderingMode::CpuOptimized => {
+                let image_buffer = if original_resolution != resolution {
+                    let resized_img = image::imageops::resize(
+                        &img,
+                        resolution.width as u32,
+                        resolution.height as u32,
+                        image::imageops::FilterType::Lanczos3,
+                    );
+                    image::DynamicImage::from(resized_img).to_rgba8().into_raw()
+                } else {
+                    img.to_rgba8().into_raw()
+                };
+
                 let texture = RgbaLinearTexture::new(ctx, resolution);
-                texture.upload(ctx, &img.to_rgba8());
+                texture.upload(ctx, &image_buffer);
                 ctx.queue.submit([]);
 
                 Ok(Self::Linear {

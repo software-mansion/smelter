@@ -28,6 +28,7 @@ pub fn example_image() -> (RendererId, RendererSpec) {
                 path: example_image_path().to_string_lossy().to_string(),
             },
             image_type: ImageType::Png,
+            resolution: None,
         }),
     )
 }

@@ -42,6 +42,7 @@ impl AnimatedAsset {
         ctx: &WgpuCtx,
         data: bytes::Bytes,
         format: ImageFormat,
+        maybe_resolution: Option<Resolution>,
     ) -> Result<Self, AnimatedError> {
         let decoded_frames = match format {
             ImageFormat::Gif => GifDecoder::new(&data[..])?.into_frames(),
@@ -53,24 +54,51 @@ impl AnimatedAsset {
         for frame in decoded_frames {
             let frame = &frame?;
             let buffer = frame.buffer();
-            let resolution = Resolution {
+
+            let original_resolution = Resolution {
                 width: buffer.width() as usize,
                 height: buffer.height() as usize,
             };
+            let resolution = maybe_resolution.unwrap_or(original_resolution);
 
             match ctx.mode {
                 RenderingMode::GpuOptimized | RenderingMode::WebGl => {
-                    let texture = RgbaSrgbTexture::new(ctx, resolution);
-                    texture.upload(ctx, buffer);
+                    let src_texture = RgbaSrgbTexture::new(ctx, original_resolution);
+                    src_texture.upload(ctx, buffer);
+                    let mut dst_texture = RgbaSrgbTexture::new(ctx, resolution);
+
+                    if original_resolution != resolution {
+                        let src_bind_group = src_texture.new_bind_group(ctx);
+                        ctx.utils.srgb_rgba_add_premult_alpha.render(
+                            ctx,
+                            &src_bind_group,
+                            dst_texture.view(),
+                        );
+                    } else {
+                        dst_texture = src_texture;
+                    }
+
                     frames.push(AnimationFrame::Srgb {
-                        bg: texture.new_bind_group(ctx),
-                        texture,
+                        bg: dst_texture.new_bind_group(ctx),
+                        texture: dst_texture,
                         pts: animation_duration,
                     });
                 }
                 RenderingMode::CpuOptimized => {
+                    let resized_buffer = if original_resolution != resolution {
+                        let resized_img = image::imageops::resize(
+                            buffer,
+                            resolution.width as u32,
+                            resolution.height as u32,
+                            image::imageops::FilterType::Lanczos3,
+                        );
+                        resized_img.into_raw()
+                    } else {
+                        buffer.clone().into_raw()
+                    };
+
                     let texture = RgbaLinearTexture::new(ctx, resolution);
-                    texture.upload(ctx, buffer);
+                    texture.upload(ctx, &resized_buffer);
                     frames.push(AnimationFrame::Linear {
                         bg: texture.new_bind_group(ctx),
                         texture,
