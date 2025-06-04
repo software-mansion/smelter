@@ -89,6 +89,7 @@ impl SmelterRenderer {
         image_spec: JsValue,
     ) -> Result<(), JsValue> {
         let image_spec = types::from_js_value::<ImageSpec>(image_spec)?;
+
         let (url, image_type) = match image_spec {
             ImageSpec::Png { url, .. } => (url, ImageType::Png),
             ImageSpec::Jpeg { url, .. } => (url, ImageType::Jpeg),
@@ -101,7 +102,9 @@ impl SmelterRenderer {
                 },
             ),
             ImageSpec::Gif { url, .. } => (url, ImageType::Gif),
+            ImageSpec::Auto { url, .. } => (url, ImageType::Auto),
         };
+
         let Some(url) = url else {
             return Err(JsValue::from_str("Expected `url` field in image spec"));
         };

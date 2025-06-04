@@ -6,6 +6,7 @@ use bytes::Bytes;
 
 use image::ImageFormat;
 use resvg::usvg;
+use tracing::debug;
 
 use crate::{
     state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
@@ -38,6 +39,7 @@ pub enum ImageType {
     Jpeg,
     Svg { resolution: Option<Resolution> },
     Gif,
+    Auto,
 }
 
 #[derive(Debug, Clone)]
@@ -72,6 +74,38 @@ impl Image {
                         Image::Bitmap(Arc::new(asset))
                     }
                     Err(err) => return Err(ImageError::from(err)),
+                }
+            }
+            ImageType::Auto => {
+                let format = match image::guess_format(&file) {
+                    Ok(format) => format,
+                    Err(_) => {
+                        let asset = SvgAsset::new(&ctx.wgpu_ctx, file, None).map_err(|err| {
+                            debug!("{:?}", err);
+                            ImageError::UnsupportedFormat
+                        })?;
+                        return Ok(Image::Svg(Arc::new(asset)));
+                    }
+                };
+
+                match format {
+                    ImageFormat::Gif => {
+                        let asset =
+                            AnimatedAsset::new(&ctx.wgpu_ctx, file.clone(), ImageFormat::Gif);
+                        match asset {
+                            Ok(asset) => Image::Animated(Arc::new(asset)),
+                            Err(AnimatedError::SingleFrame) => {
+                                let asset =
+                                    BitmapAsset::new(&ctx.wgpu_ctx, file, ImageFormat::Gif)?;
+                                Image::Bitmap(Arc::new(asset))
+                            }
+                            Err(err) => return Err(ImageError::from(err)),
+                        }
+                    }
+                    other_format => {
+                        let asset = BitmapAsset::new(&ctx.wgpu_ctx, file, other_format)?;
+                        Image::Bitmap(Arc::new(asset))
+                    }
                 }
             }
         };
@@ -178,6 +212,9 @@ pub enum ImageError {
 
     #[error("Providing URL as image source is not supported on wasm platform")]
     ImageSourceUrlNotSupported,
+
+    #[error("Unsupported file format")]
+    UnsupportedFormat,
 }
 
 #[derive(Debug, thiserror::Error)]

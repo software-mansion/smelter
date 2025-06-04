@@ -18,6 +18,10 @@ export type RegisterImage =
   | {
       assetType: 'gif';
       url: string;
+    }
+  | {
+      assetType: 'auto';
+      url: string;
     };
 
 export type RegisterShader = Renderers.RegisterShader;

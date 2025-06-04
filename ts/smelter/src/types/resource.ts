@@ -23,12 +23,16 @@ export type RegisterImage =
       assetType: 'gif';
       url?: string;
       serverPath?: string;
+    }
+  | {
+      assetType: 'auto';
+      url?: string;
+      serverPath?: string;
     };
 
 export type ImageAssetType = RegisterImage['assetType'];
 
-export const imageAssetTypes: ImageAssetType[] = ['png', 'jpeg', 'svg', 'gif'];
-
+export const imageAssetTypes: ImageAssetType[] = ['png', 'jpeg', 'svg', 'gif', 'auto'];
 export type RegisterWebRenderer = {
   url: string;
   resolution: Api.Resolution;

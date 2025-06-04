@@ -39,15 +39,14 @@ fn client_code() -> Result<()> {
     examples::post(
         "image/example_svg/register",
         &json!({
-            "asset_type": "svg",
+            "asset_type": "auto",
             "path": PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/assets/rust.svg"),
-            "resolution": { "width": VIDEO_RESOLUTION.width, "height": VIDEO_RESOLUTION.width},
         }),
     )?;
     examples::post(
         "image/example_png/register",
         &json!({
-            "asset_type": "png",
+            "asset_type": "auto",
             "url": "https://rust-lang.org/logos/rust-logo-512x512.png",
         }),
     )?;

@@ -24,7 +24,12 @@ pub enum ImageSpec {
         url: Option<String>,
         path: Option<String>,
     },
+    Auto {
+        url: Option<String>,
+        path: Option<String>,
+    },
 }
+
 impl TryFrom<ImageSpec> for compositor_render::RendererSpec {
     type Error = TypeError;
 
@@ -44,6 +49,7 @@ impl TryFrom<ImageSpec> for compositor_render::RendererSpec {
                 )),
             }
         }
+
         let image = match spec {
             ImageSpec::Png { url, path } => image::ImageSpec {
                 src: from_url_or_path(url, path)?,
@@ -66,6 +72,10 @@ impl TryFrom<ImageSpec> for compositor_render::RendererSpec {
             ImageSpec::Gif { url, path } => image::ImageSpec {
                 src: from_url_or_path(url, path)?,
                 image_type: image::ImageType::Gif,
+            },
+            ImageSpec::Auto { url, path } => image::ImageSpec {
+                src: from_url_or_path(url, path)?,
+                image_type: image::ImageType::Auto,
             },
         };
         Ok(Self::Image(image))

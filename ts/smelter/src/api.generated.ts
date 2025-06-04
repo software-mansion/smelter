@@ -808,6 +808,11 @@ export type ImageSpec =
       asset_type: "gif";
       url?: string | null;
       path?: string | null;
+    }
+  | {
+      asset_type: "auto";
+      url?: string | null;
+      path?: string | null;
     };
 export type WebEmbeddingMethod =
   | "chromium_embedding"
