@@ -11,15 +11,16 @@ use crate::{
 
 use super::convert_linear_to_srgb::RgbToSrgbConverter;
 
-pub(super) struct PlanarYuv420Input {
+pub(super) struct PlanarYuvInput {
     upload_textures: PlanarYuvTextures,
     yuv_bind_group: wgpu::BindGroup,
     color_space_converter: Option<RgbToSrgbConverter>,
 }
 
-impl PlanarYuv420Input {
-    pub fn new(ctx: &WgpuCtx) -> Self {
-        let upload_textures = PlanarYuvTextures::new(ctx, Resolution::MIN_2X2);
+impl PlanarYuvInput {
+    pub fn new(ctx: &WgpuCtx, variant: PlanarYuvVariant) -> Self {
+        let upload_textures = PlanarYuvTextures::new(ctx, Resolution::MIN_2X2, variant);
+
         let yuv_bind_group = upload_textures.new_bind_group(ctx);
 
         Self {
@@ -40,8 +41,8 @@ impl PlanarYuv420Input {
         variant: PlanarYuvVariant,
         resolution: Resolution,
     ) {
-        self.maybe_recreate(ctx, resolution);
-        self.upload_textures.upload(ctx, &planes, variant);
+        self.maybe_recreate(ctx, resolution, variant);
+        self.upload_textures.upload(ctx, &planes);
     }
 
     pub fn convert(&mut self, ctx: &WgpuCtx, dest: &NodeTextureState) {
@@ -79,11 +80,14 @@ impl PlanarYuv420Input {
         }
     }
 
-    fn maybe_recreate(&mut self, ctx: &WgpuCtx, resolution: Resolution) {
-        if resolution == self.upload_textures.resolution {
+    fn maybe_recreate(&mut self, ctx: &WgpuCtx, resolution: Resolution, variant: PlanarYuvVariant) {
+        if resolution == self.upload_textures.resolution
+            && variant == self.upload_textures.variant()
+        {
             return;
         }
-        self.upload_textures = PlanarYuvTextures::new(ctx, resolution);
+
+        self.upload_textures = PlanarYuvTextures::new(ctx, resolution, variant);
         self.yuv_bind_group = self.upload_textures.new_bind_group(ctx);
         if ctx.mode == RenderingMode::WebGl {
             self.color_space_converter = Some(RgbToSrgbConverter::new(ctx, resolution))

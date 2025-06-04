@@ -1,0 +1,52 @@
+{
+  "name": "@swmansion/smelter-web-client",
+  "version": "0.2.1",
+  "author": "Software Mansion <contact@swmansion.com>",
+  "license": "MIT",
+  "description": "Connect to Smelter instance from browser",
+  "bugs": {
+    "url": "https://github.com/software-mansion/smelter/issues"
+  },
+  "homepage": "https://smelter.dev",
+  "files": [
+    "/dist",
+    "/LICENSE"
+  ],
+  "type": "commonjs",
+  "main": "./dist/cjs/index.cjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/esm/index.mjs"
+      },
+      "default": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/cjs/index.cjs"
+      }
+    }
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "watch": "rollup -w --no-watch.clearScreen -c",
+    "build": "rollup -c",
+    "clean": "rimraf dist",
+    "prepublishOnly": "pnpm run clean && pnpm run build"
+  },
+  "dependencies": {
+    "@swmansion/smelter-core": "workspace:0.2.1",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.2",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@types/react": "^18.3.3",
+    "rollup": "^4.21.2",
+    "rollup-plugin-dts": "^6.1.1"
+  },
+  "peerDependencies": {
+    "@swmansion/smelter": "workspace:^0.2.1"
+  }
+}

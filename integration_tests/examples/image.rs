@@ -43,7 +43,6 @@ fn client_code() -> Result<()> {
         &json!({
             "asset_type": "auto",
             "path": PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/assets/rust.svg"),
-            "resolution": { "width": 500, "height": 50}
         }),
     )?;
     examples::post(

@@ -14,6 +14,8 @@ pub const SNAPSHOTS_DIR_NAME: &str = "snapshot_tests/snapshots/render_snapshots"
 pub(super) fn frame_to_rgba(frame: &Frame) -> Vec<u8> {
     match &frame.data {
         FrameData::PlanarYuv420(planes) => yuv_frame_to_rgba(frame, planes),
+        FrameData::PlanarYuv422(planes) => yuv_frame_to_rgba(frame, planes),
+        FrameData::PlanarYuv444(planes) => yuv_frame_to_rgba(frame, planes),
         FrameData::PlanarYuvJ420(_) => panic!("unsupported"),
         FrameData::InterleavedYuv422(_) => panic!("unsupported"),
         FrameData::Rgba8UnormWgpuTexture(texture) => read_rgba_texture(texture).to_vec(),

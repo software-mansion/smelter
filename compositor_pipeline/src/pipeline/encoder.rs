@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use compositor_render::{Frame, OutputId, Resolution};
+use compositor_render::{Frame, OutputFrameFormat, OutputId, Resolution};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use fdk_aac::AacEncoder;
+use ffmpeg_next::format::Pixel;
 use ffmpeg_vp8::LibavVP8Encoder;
 use ffmpeg_vp9::LibavVP9Encoder;
 use log::error;
@@ -66,6 +67,33 @@ pub enum AudioEncoderPreset {
     Quality,
     Voip,
     LowestLatency,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OutputPixelFormat {
+    YUV420P,
+    YUV422P,
+    YUV444P,
+}
+
+impl From<OutputPixelFormat> for Pixel {
+    fn from(format: OutputPixelFormat) -> Self {
+        match format {
+            OutputPixelFormat::YUV420P => Pixel::YUV420P,
+            OutputPixelFormat::YUV422P => Pixel::YUV422P,
+            OutputPixelFormat::YUV444P => Pixel::YUV444P,
+        }
+    }
+}
+
+impl From<OutputPixelFormat> for OutputFrameFormat {
+    fn from(format: OutputPixelFormat) -> Self {
+        match format {
+            OutputPixelFormat::YUV420P => OutputFrameFormat::PlanarYuv420Bytes,
+            OutputPixelFormat::YUV422P => OutputFrameFormat::PlanarYuv422Bytes,
+            OutputPixelFormat::YUV444P => OutputFrameFormat::PlanarYuv444Bytes,
+        }
+    }
 }
 
 pub struct Encoder {
@@ -216,6 +244,14 @@ impl VideoEncoder {
             Self::H264(encoder) => encoder.resolution(),
             Self::VP8(encoder) => encoder.resolution(),
             Self::VP9(encoder) => encoder.resolution(),
+        }
+    }
+
+    pub fn pixel_format(&self) -> OutputFrameFormat {
+        match self {
+            Self::H264(encoder) => encoder.pixel_format(),
+            Self::VP8(_) => OutputFrameFormat::PlanarYuv420Bytes,
+            Self::VP9(encoder) => encoder.pixel_format(),
         }
     }
 

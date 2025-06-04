@@ -38,7 +38,7 @@ tokio = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
 axum = { version = "0.7.7", features = ["macros"] }
-tower-http = { version = "0.6.1", features = ["cors"] }
+tower-http = { workspace = true }
 url = "2.5.2"
 urlencoding = "2.1.3"
 

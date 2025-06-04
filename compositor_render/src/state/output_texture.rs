@@ -7,23 +7,37 @@ use wgpu::{Buffer, BufferAsyncError};
 
 use crate::{
     wgpu::{
-        texture::{utils::pad_to_256, PlanarYuvPendingDownload, PlanarYuvTextures},
+        texture::{
+            utils::pad_to_256, PlanarYuvPendingDownload, PlanarYuvTextures, PlanarYuvVariant,
+        },
         WgpuCtx,
     },
     OutputFrameFormat, Resolution,
 };
 
 pub enum OutputTexture {
-    PlanarYuv420Textures(PlanarYuvOutput),
+    PlanarYuvTextures(PlanarYuvOutput),
     Rgba8UnormWgpuTexture { resolution: Resolution },
 }
 
 impl OutputTexture {
     pub fn new(ctx: &WgpuCtx, resolution: Resolution, format: OutputFrameFormat) -> Self {
         match format {
-            OutputFrameFormat::PlanarYuv420Bytes => {
-                Self::PlanarYuv420Textures(PlanarYuvOutput::new(ctx, resolution))
-            }
+            OutputFrameFormat::PlanarYuv420Bytes => Self::PlanarYuvTextures(PlanarYuvOutput::new(
+                ctx,
+                resolution,
+                PlanarYuvVariant::YUV420,
+            )),
+            OutputFrameFormat::PlanarYuv422Bytes => Self::PlanarYuvTextures(PlanarYuvOutput::new(
+                ctx,
+                resolution,
+                PlanarYuvVariant::YUV422,
+            )),
+            OutputFrameFormat::PlanarYuv444Bytes => Self::PlanarYuvTextures(PlanarYuvOutput::new(
+                ctx,
+                resolution,
+                PlanarYuvVariant::YUV444,
+            )),
             OutputFrameFormat::RgbaWgpuTexture => Self::Rgba8UnormWgpuTexture { resolution },
         }
     }
@@ -36,8 +50,8 @@ pub struct PlanarYuvOutput {
 }
 
 impl PlanarYuvOutput {
-    pub fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
-        let textures = PlanarYuvTextures::new(ctx, resolution);
+    pub fn new(ctx: &WgpuCtx, resolution: Resolution, pixel_format: PlanarYuvVariant) -> Self {
+        let textures = PlanarYuvTextures::new(ctx, resolution, pixel_format);
         let buffers = textures.new_download_buffers(ctx);
 
         Self {

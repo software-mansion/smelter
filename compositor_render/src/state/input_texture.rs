@@ -1,6 +1,6 @@
 use interleaved_yuv422::InterleavedYuv422Input;
 use nv12_texture::NV12TextureInput;
-use planar_yuv420::PlanarYuv420Input;
+use planar_yuv::PlanarYuvInput;
 use rgba_texture::RgbaTextureInput;
 
 use crate::{
@@ -16,13 +16,13 @@ use super::node_texture::NodeTexture;
 
 mod interleaved_yuv422;
 mod nv12_texture;
-mod planar_yuv420;
+mod planar_yuv;
 mod rgba_texture;
 
 mod convert_linear_to_srgb;
 
 enum InputTextureState {
-    PlanarYuvTextures(PlanarYuv420Input),
+    PlanarYuvTextures(PlanarYuvInput),
     InterleavedYuv422Texture(InterleavedYuv422Input),
     Nv12WgpuTexture(NV12TextureInput),
     /// Depending on rendering mode
@@ -62,8 +62,32 @@ impl InputTexture {
                         input.upload(ctx, planes, PlanarYuvVariant::YUV420, frame.resolution);
                     }
                     state => {
-                        let mut input = PlanarYuv420Input::new(ctx);
+                        let mut input = PlanarYuvInput::new(ctx, PlanarYuvVariant::YUV420);
                         input.upload(ctx, planes, PlanarYuvVariant::YUV420, frame.resolution);
+                        *state = Some(InputTextureState::PlanarYuvTextures(input));
+                    }
+                };
+            }
+            FrameData::PlanarYuv422(planes) => {
+                match &mut self.0 {
+                    Some(InputTextureState::PlanarYuvTextures(input)) => {
+                        input.upload(ctx, planes, PlanarYuvVariant::YUV422, frame.resolution);
+                    }
+                    state => {
+                        let mut input = PlanarYuvInput::new(ctx, PlanarYuvVariant::YUV422);
+                        input.upload(ctx, planes, PlanarYuvVariant::YUV422, frame.resolution);
+                        *state = Some(InputTextureState::PlanarYuvTextures(input));
+                    }
+                };
+            }
+            FrameData::PlanarYuv444(planes) => {
+                match &mut self.0 {
+                    Some(InputTextureState::PlanarYuvTextures(input)) => {
+                        input.upload(ctx, planes, PlanarYuvVariant::YUV444, frame.resolution);
+                    }
+                    state => {
+                        let mut input = PlanarYuvInput::new(ctx, PlanarYuvVariant::YUV444);
+                        input.upload(ctx, planes, PlanarYuvVariant::YUV444, frame.resolution);
                         *state = Some(InputTextureState::PlanarYuvTextures(input));
                     }
                 };
@@ -74,7 +98,7 @@ impl InputTexture {
                         input.upload(ctx, planes, PlanarYuvVariant::YUVJ420, frame.resolution);
                     }
                     state => {
-                        let mut input = PlanarYuv420Input::new(ctx);
+                        let mut input = PlanarYuvInput::new(ctx, PlanarYuvVariant::YUVJ420);
                         input.upload(ctx, planes, PlanarYuvVariant::YUVJ420, frame.resolution);
                         *state = Some(InputTextureState::PlanarYuvTextures(input));
                     }
