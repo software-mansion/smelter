@@ -158,7 +158,7 @@ pub enum ImageNode {
 }
 
 impl ImageNode {
-    pub fn new(ctx: &WgpuCtx, image: Image) -> Self {
+    pub fn new(ctx: &WgpuCtx, image: Image, start_pts: Duration) -> Self {
         match image {
             Image::Bitmap(asset) => Self::Bitmap {
                 asset,
@@ -166,7 +166,7 @@ impl ImageNode {
             },
             Image::Animated(asset) => Self::Animated {
                 asset,
-                state: AnimatedNodeState::new(),
+                state: AnimatedNodeState::new(start_pts),
             },
             Image::Svg(asset) => Self::Svg {
                 asset,
@@ -231,7 +231,7 @@ pub enum AnimatedError {
     #[error(
         "Detected over 1000 frames inside the animated image. This case is not currently supported."
     )]
-    TooMuchFrames,
+    TooManyFrames,
 
     /// If there is only one frame we return error so the code can fallback to the more efficient
     /// implementation.
