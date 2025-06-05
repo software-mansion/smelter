@@ -11,6 +11,11 @@ export type RegisterInput =
   | {
       type: 'stream';
       videoStream?: ReadableStream;
+    }
+  | {
+      // should only be used with pass-through worker
+      type: 'domVideoElement';
+      videoElement: HTMLVideoElement;
     };
 
 export type RegisterOutput = {
@@ -102,3 +107,12 @@ export type WorkerEvent =
       type: _smelterInternals.SmelterEventType.OUTPUT_DONE;
       outputId: string;
     };
+
+export interface WorkerHandle {
+  postMessage(request: WorkerMessage, transferable?: Transferable[]): Promise<WorkerResponse>;
+  terminate(): Promise<void>;
+}
+
+export interface MainThreadHandle {
+  postEvent(event: WorkerEvent): void;
+}

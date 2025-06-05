@@ -1,8 +1,6 @@
 import type { Api } from '@swmansion/smelter';
 import type { Logger } from 'pino';
 
-export const MAIN_SAMPLE_RATE = 48_000;
-
 type AudioInput =
   | {
       type: 'stream';
@@ -44,9 +42,13 @@ export class AudioMixer {
   private outputs: Record<string, AudioMixerOutput> = {};
   private inputs: Record<string, AudioMixerInput> = {};
 
-  constructor(logger: Logger) {
-    this.ctx = new AudioContext({ sampleRate: MAIN_SAMPLE_RATE });
+  constructor(logger: Logger, sampleRate: number) {
+    this.ctx = new AudioContext({ sampleRate });
     this.logger = logger;
+  }
+
+  public get mainSampleRate(): number {
+    return this.ctx.sampleRate;
   }
 
   public async init(): Promise<void> {
