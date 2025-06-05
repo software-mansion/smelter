@@ -164,37 +164,31 @@ pub enum ImageNode {
     Bitmap {
         asset: Arc<BitmapAsset>,
         state: BitmapNodeState,
-        resolution: Option<Resolution>
     },
     Animated {
         asset: Arc<AnimatedAsset>,
         state: AnimatedNodeState,
-        resolution: Option<Resolution>
     },
     Svg {
         asset: Arc<SvgAsset>,
         state: SvgNodeState,
-        resolution: Option<Resolution>
     },
 }
 
 impl ImageNode {
-    pub fn new(ctx: &WgpuCtx, image: Image, resolution: Option<Resolution>) -> Self {
+    pub fn new(ctx: &WgpuCtx, image: Image, start_pts: Duration) -> Self {
         match image {
             Image::Bitmap(asset) => Self::Bitmap {
                 asset,
                 state: BitmapNodeState::new(),
-                resolution
             },
             Image::Animated(asset) => Self::Animated {
                 asset,
-                state: AnimatedNodeState::new(),
-                resolution,
+                state: AnimatedNodeState::new(start_pts),
             },
             Image::Svg(asset) => Self::Svg {
                 asset,
                 state: SvgNodeState::new(ctx),
-                resolution
             },
         }
     }
@@ -210,9 +204,9 @@ impl ImageNode {
 
     fn resolution(&self) -> Resolution {
         match self {
-            ImageNode::Bitmap { resolution, .. } => resolution.unwrap_or(Resolution { width: 10, height:  10 }),
-            ImageNode::Animated { resolution, .. } => resolution.unwrap_or(Resolution { width: 100, height:  100 }),
-            ImageNode::Svg { resolution, .. } => resolution.unwrap_or(Resolution { width: 100, height:  100 })
+            ImageNode::Bitmap { asset, .. } => asset.resolution(),
+            ImageNode::Animated { asset, .. } => asset.resolution(),
+            ImageNode::Svg { asset, .. } => asset.resolution()
         }
     }
 }
@@ -255,7 +249,7 @@ pub enum AnimatedError {
     #[error(
         "Detected over 1000 frames inside the animated image. This case is not currently supported."
     )]
-    TooMuchFrames,
+    TooManyFrames,
 
     /// If there is only one frame we return error so the code can fallback to the more efficient
     /// implementation.

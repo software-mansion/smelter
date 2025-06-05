@@ -14,7 +14,7 @@ use crate::{
 use super::AnimatedError;
 
 pub struct AnimatedNodeState {
-    first_pts: Option<Duration>,
+    start_pts: Duration,
 }
 
 #[derive(Debug)]
@@ -86,7 +86,7 @@ impl AnimatedAsset {
             animation_duration += delay;
 
             if frames.len() > 1000 {
-                return Err(AnimatedError::TooMuchFrames);
+                return Err(AnimatedError::TooManyFrames);
             }
         }
 
@@ -124,16 +124,9 @@ impl AnimatedAsset {
         state: &mut AnimatedNodeState,
         pts: Duration,
     ) {
-        let first_pts = match state.first_pts {
-            Some(first_pts) => first_pts,
-            None => {
-                state.first_pts = Some(pts);
-                pts
-            }
-        };
-
         let animation_pts = Duration::from_nanos(
-            ((pts.as_nanos() - first_pts.as_nanos()) % self.animation_duration.as_nanos()) as u64,
+            ((pts.as_nanos() - state.start_pts.as_nanos()) % self.animation_duration.as_nanos())
+                as u64,
         );
 
         let closest_frame = self
@@ -161,8 +154,8 @@ impl AnimatedAsset {
 }
 
 impl AnimatedNodeState {
-    pub fn new() -> Self {
-        Self { first_pts: None }
+    pub fn new(start_pts: Duration) -> Self {
+        Self { start_pts }
     }
 }
 

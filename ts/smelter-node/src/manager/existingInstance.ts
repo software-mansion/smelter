@@ -10,26 +10,33 @@ import { retry, sleep } from '../utils';
 import { WebSocketConnection } from '../ws';
 
 type CreateInstanceOptions = {
-  port: number;
-  ip: string;
-  protocol: 'http' | 'https';
+  url: string | URL;
 };
 
 /**
  * SmelterManager that will connect to existing instance
  */
 class ExistingInstanceManager implements SmelterManager {
-  private ip: string;
-  private port: number;
-  private protocol: 'http' | 'https';
+  private url: URL;
   private wsConnection: WebSocketConnection;
 
   constructor(opts: CreateInstanceOptions) {
-    this.port = opts.port;
-    this.ip = opts.ip;
-    this.protocol = opts.protocol ?? 'http';
-    const wsProtocol = this.protocol === 'https' ? 'wss' : 'ws';
-    this.wsConnection = new WebSocketConnection(`${wsProtocol}://${this.ip}:${this.port}/ws`);
+    let url: URL;
+    if (opts.url instanceof URL) {
+      url = opts.url;
+    } else {
+      url = new URL(opts.url);
+    }
+
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error('Expected url to use either http or https protocol');
+    }
+
+    this.url = url;
+
+    const wsUrl = new URL('ws', url);
+    wsUrl.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    this.wsConnection = new WebSocketConnection(wsUrl);
   }
 
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
@@ -46,11 +53,11 @@ class ExistingInstanceManager implements SmelterManager {
   }
 
   public async sendRequest(request: ApiRequest): Promise<object> {
-    return await sendRequest(`${this.protocol}://${this.ip}:${this.port}`, request);
+    return await sendRequest(this.url, request);
   }
 
   async sendMultipartRequest(request: MultipartRequest): Promise<object> {
-    return await sendMultipartRequest(`${this.protocol}://${this.ip}:${this.port}`, request);
+    return await sendMultipartRequest(this.url, request);
   }
 
   public registerEventListener(cb: (event: object) => void): void {
