@@ -1,6 +1,6 @@
 use std::{fmt::Display, sync::Arc, time::Duration};
 
-use crate::{InputId, RendererId};
+use crate::{InputId, RendererId, Resolution};
 
 use super::{
     AbsolutePosition, BorderRadius, BoxShadow, Component, HorizontalAlign, InterpolationKind,
@@ -63,6 +63,7 @@ pub struct WebViewComponent {
 pub struct ImageComponent {
     pub id: Option<ComponentId>,
     pub image_id: RendererId,
+    pub resolution: Option<Resolution>
 }
 
 #[derive(Debug, Clone)]

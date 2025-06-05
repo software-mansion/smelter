@@ -6,18 +6,18 @@ export function intoRegisterImage(image: Renderers.RegisterImage): Api.ImageSpec
     url: image.url,
     path: image.serverPath,
   };
-  if (image.assetType === 'svg') {
-    return {
-      asset_type: 'svg',
-      resolution: image.resolution,
-      ...source,
-    };
-  } else {
-    return {
-      asset_type: image.assetType,
-      ...source,
-    };
-  }
+  // if (image.assetType === 'svg') {
+  return {
+    asset_type: image.assetType,
+    resolution: image.resolution,
+    ...source,
+  };
+  // } else {
+  //   return {
+  //     asset_type: image.assetType,
+  //     ...source,
+  //   };
+  //d }
 }
 
 export function intoRegisterWebRenderer(

@@ -185,7 +185,7 @@ impl IntermediateNode {
                     .collect::<Result<_, _>>()?,
             }),
             IntermediateNode::Image(image) => Ok(Node {
-                params: NodeParams::Image(image.image),
+                params: NodeParams::Image(image.image, None),
                 children: vec![],
             }),
             IntermediateNode::Text(text) => Ok(Node {

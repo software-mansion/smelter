@@ -27,7 +27,6 @@ fn client_code() -> Result<()> {
         &json!({
             "asset_type": "gif",
             "url": "https://gifdb.com/images/high/rust-logo-on-fire-o41c0v9om8drr8dv.gif",
-            "resolution": { "width": 500, "height": 500}
         }),
     )?;
     examples::post(
@@ -35,7 +34,6 @@ fn client_code() -> Result<()> {
         &json!({
             "asset_type": "jpeg",
             "url": "https://www.rust-lang.org/static/images/rust-social.jpg",
-            "resolution": { "width": 750, "height": 500}
         }),
     )?;
     examples::post(
@@ -50,7 +48,6 @@ fn client_code() -> Result<()> {
         &json!({
             "asset_type": "auto",
             "url": "https://rust-lang.org/logos/rust-logo-512x512.png",
-            "resolution": { "width": 500, "height": 500}
         }),
     )?;
 
@@ -65,6 +62,7 @@ fn client_code() -> Result<()> {
                     "child": {
                         "type": "image",
                         "image_id": image_id,
+                        "resolution": {"width": 100, "height":50}
                     }
                 },
                 {

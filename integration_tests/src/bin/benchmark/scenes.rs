@@ -28,7 +28,6 @@ pub fn example_image() -> (RendererId, RendererSpec) {
                 path: example_image_path().to_string_lossy().to_string(),
             },
             image_type: ImageType::Png,
-            resolution: None,
         }),
     )
 }
@@ -73,6 +72,7 @@ pub fn static_image(_ctx: &SceneContext, _output_id: &OutputId) -> Component {
         child: Component::Image(ImageComponent {
             id: None,
             image_id: renderer_id.clone(),
+            resolution: None,
         })
         .into(),
         ..Default::default()
@@ -84,6 +84,7 @@ pub fn image_with_shader(_ctx: &SceneContext, _output_id: &OutputId) -> Componen
         children: vec![Component::Image(ImageComponent {
             id: None,
             image_id: example_image().0,
+            resolution: None,
         })],
         id: None,
         shader_id: example_shader().0,

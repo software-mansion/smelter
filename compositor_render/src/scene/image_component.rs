@@ -1,4 +1,4 @@
-use crate::transformations::image::Image;
+use crate::{transformations::image::Image, Resolution};
 
 use super::{
     scene_state::BuildStateTreeCtx, ComponentId, ImageComponent, IntermediateNode, SceneError,
@@ -9,6 +9,7 @@ use super::{
 pub(super) struct StatefulImageComponent {
     pub(super) component: ImageComponent,
     pub(super) image: Image,
+    // pub(super) resolution: Option<Resolution>
 }
 
 impl StatefulImageComponent {
@@ -17,7 +18,7 @@ impl StatefulImageComponent {
     }
 
     pub(super) fn size(&self) -> Size {
-        self.image.resolution().into()
+        self.component.resolution.unwrap_or(self.image.resolution()).into()
     }
 
     pub(super) fn intermediate_node(&self) -> IntermediateNode {
@@ -38,6 +39,7 @@ impl ImageComponent {
         Ok(StatefulComponent::Image(StatefulImageComponent {
             component: self,
             image,
+            // resolution: self.resolution
         }))
     }
 }

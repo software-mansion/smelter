@@ -10,12 +10,10 @@ pub enum ImageSpec {
     Png {
         url: Option<String>,
         path: Option<String>,
-        resolution: Option<Resolution>,
     },
     Jpeg {
         url: Option<String>,
         path: Option<String>,
-        resolution: Option<Resolution>,
     },
     Svg {
         url: Option<String>,
@@ -25,12 +23,10 @@ pub enum ImageSpec {
     Gif {
         url: Option<String>,
         path: Option<String>,
-        resolution: Option<Resolution>,
     },
     Auto {
         url: Option<String>,
         path: Option<String>,
-        resolution: Option<Resolution>,
     },
 }
 
@@ -58,47 +54,38 @@ impl TryFrom<ImageSpec> for compositor_render::RendererSpec {
             ImageSpec::Png {
                 url,
                 path,
-                resolution,
             } => image::ImageSpec {
                 src: from_url_or_path(url, path)?,
                 image_type: image::ImageType::Png,
-                resolution: resolution.map(Into::into),
             },
             ImageSpec::Jpeg {
                 url,
                 path,
-                resolution,
             } => image::ImageSpec {
                 src: from_url_or_path(url, path)?,
                 image_type: image::ImageType::Jpeg,
-                resolution: resolution.map(Into::into),
             },
             ImageSpec::Svg {
                 url,
                 path,
-                resolution,
+                resolution: _resolution
             } => image::ImageSpec {
                 src: from_url_or_path(url, path)?,
                 image_type: image::ImageType::Svg,
-                resolution: resolution.map(Into::into),
             },
             ImageSpec::Gif {
                 url,
                 path,
-                resolution,
             } => image::ImageSpec {
                 src: from_url_or_path(url, path)?,
                 image_type: image::ImageType::Gif,
-                resolution: resolution.map(Into::into),
             },
             ImageSpec::Auto {
                 url,
                 path,
-                resolution,
             } => image::ImageSpec {
                 src: from_url_or_path(url, path)?,
                 image_type: image::ImageType::Auto,
-                resolution: resolution.map(Into::into),
             },
         };
         Ok(Self::Image(image))

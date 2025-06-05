@@ -92,7 +92,7 @@ pub(crate) enum NodeParams {
     InputStream(InputId),
     Shader(ShaderComponentParams, Arc<Shader>),
     Web(Vec<ComponentId>, Arc<WebRenderer>),
-    Image(Image),
+    Image(Image, Option<Resolution>),
     Text(TextRenderParams),
     Layout(LayoutNode),
 }
