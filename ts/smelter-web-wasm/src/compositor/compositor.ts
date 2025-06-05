@@ -106,14 +106,19 @@ export default class Smelter {
     await this.coreSmelter.registerImage(imageId, request);
   }
 
+  public async unregisterImage(imageId: string): Promise<void> {
+    assert(this.coreSmelter);
+    await this.coreSmelter.unregisterImage(imageId);
+  }
+
   public async registerShader(shaderId: string, shaderSpec: RegisterShader): Promise<void> {
     assert(this.coreSmelter);
     await this.coreSmelter.registerShader(shaderId, shaderSpec);
   }
 
-  public async unregisterImage(imageId: string): Promise<void> {
+  public async unregisterShader(shaderId: string): Promise<void> {
     assert(this.coreSmelter);
-    await this.coreSmelter.unregisterImage(imageId);
+    await this.coreSmelter.unregisterShader(shaderId);
   }
 
   public async registerFont(fontUrl: string): Promise<void> {
