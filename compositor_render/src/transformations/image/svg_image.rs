@@ -23,11 +23,12 @@ use super::SvgError;
 pub struct SvgNodeState {
     was_rendered: bool,
     renderer: SvgRenderer,
+    resolution: Resolution,
 }
 
 pub struct SvgAsset {
     tree: UnsafeInternalRc<resvg::Tree>,
-    maybe_resolution: Option<Resolution>,
+    // maybe_resolution: Option<Resolution>,
 }
 
 impl fmt::Debug for SvgAsset {
@@ -49,7 +50,7 @@ impl SvgAsset {
     pub fn new(
         _ctx: &WgpuCtx,
         data: bytes::Bytes,
-        maybe_resolution: Option<Resolution>,
+        // maybe_resolution: Option<Resolution>,
     ) -> Result<Self, SvgError> {
         let text_svg = str::from_utf8(&data)?;
         let tree = usvg::Tree::from_str(text_svg, &Default::default())?;
@@ -57,7 +58,7 @@ impl SvgAsset {
 
         Ok(Self {
             tree: UnsafeInternalRc(tree.into()),
-            maybe_resolution,
+            // maybe_resolution,
         })
     }
 
@@ -92,15 +93,16 @@ impl SvgAsset {
     }
 
     pub fn resolution(&self) -> Resolution {
-        self.maybe_resolution.unwrap_or_else(|| Resolution {
+        //self.maybe_resolution.unwrap_or_else(|| 
+        Resolution {
             width: self.tree.0.size.width() as usize,
             height: self.tree.0.size.height() as usize,
-        })
+        }//)
     }
 }
 
 impl SvgNodeState {
-    pub fn new(ctx: &WgpuCtx) -> Self {
+    pub fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
         Self {
             was_rendered: false,
             renderer: match ctx.mode {
@@ -108,7 +110,11 @@ impl SvgNodeState {
                 RenderingMode::CpuOptimized => SvgRenderer::CpuOptimized,
                 RenderingMode::WebGl => SvgRenderer::WebGl(WebGlSvgRenderer::new(ctx)),
             },
+            resolution,
         }
+    }
+    pub fn resolution(&self) -> Resolution {
+        self.resolution
     }
 }
 

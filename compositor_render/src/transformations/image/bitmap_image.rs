@@ -11,6 +11,7 @@ use crate::{
 
 pub struct BitmapNodeState {
     was_rendered: bool,
+    resolution: Resolution,
 }
 
 #[derive(Debug)]
@@ -36,6 +37,8 @@ impl BitmapAsset {
             width: img.width() as usize,
             height: img.height() as usize,
         };
+
+
         match ctx.mode {
             RenderingMode::GpuOptimized | RenderingMode::WebGl => {
                 let texture = RgbaSrgbTexture::new(ctx, resolution);
@@ -44,12 +47,12 @@ impl BitmapAsset {
 
                 Ok(Self::Srgb {
                     bg: texture.new_bind_group(ctx),
-                    texture,
+                    texture: texture,
                 })
             }
             RenderingMode::CpuOptimized => {
                 let texture = RgbaLinearTexture::new(ctx, resolution);
-                texture.upload(ctx, &img.to_rgba8());
+                texture.upload(ctx, &img.to_rgb8());
                 ctx.queue.submit([]);
 
                 Ok(Self::Linear {
@@ -98,9 +101,13 @@ impl BitmapAsset {
 }
 
 impl BitmapNodeState {
-    pub fn new() -> Self {
+    pub fn new(resolution: Resolution) -> Self {
         Self {
             was_rendered: false,
+            resolution
         }
+    }
+    pub fn resolution(&self) -> Resolution {
+        self.resolution
     }
 }
