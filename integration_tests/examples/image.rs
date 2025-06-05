@@ -62,7 +62,8 @@ fn client_code() -> Result<()> {
                     "child": {
                         "type": "image",
                         "image_id": image_id,
-                        "resolution": {"width": 100, "height":50}
+                        "width": 10,
+                        "height":50
                     }
                 },
                 {

@@ -23,6 +23,7 @@ use super::SvgError;
 pub struct SvgNodeState {
     was_rendered: bool,
     renderer: SvgRenderer,
+    resolution: Resolution,
 }
 
 pub struct SvgAsset {
@@ -101,7 +102,7 @@ impl SvgAsset {
 }
 
 impl SvgNodeState {
-    pub fn new(ctx: &WgpuCtx) -> Self {
+    pub fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
         Self {
             was_rendered: false,
             renderer: match ctx.mode {
@@ -109,7 +110,11 @@ impl SvgNodeState {
                 RenderingMode::CpuOptimized => SvgRenderer::CpuOptimized,
                 RenderingMode::WebGl => SvgRenderer::WebGl(WebGlSvgRenderer::new(ctx)),
             },
+            resolution,
         }
+    }
+    pub fn resolution(&self) -> Resolution {
+        self.resolution
     }
 }
 

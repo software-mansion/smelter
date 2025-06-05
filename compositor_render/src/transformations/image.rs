@@ -176,19 +176,19 @@ pub enum ImageNode {
 }
 
 impl ImageNode {
-    pub fn new(ctx: &WgpuCtx, image: Image, start_pts: Duration) -> Self {
+    pub fn new(ctx: &WgpuCtx, image: Image, start_pts: Duration, resolution: Resolution) -> Self {
         match image {
             Image::Bitmap(asset) => Self::Bitmap {
                 asset,
-                state: BitmapNodeState::new(),
+                state: BitmapNodeState::new(resolution),
             },
             Image::Animated(asset) => Self::Animated {
                 asset,
-                state: AnimatedNodeState::new(start_pts),
+                state: AnimatedNodeState::new(start_pts, resolution),
             },
             Image::Svg(asset) => Self::Svg {
                 asset,
-                state: SvgNodeState::new(ctx),
+                state: SvgNodeState::new(ctx, resolution),
             },
         }
     }
@@ -204,9 +204,9 @@ impl ImageNode {
 
     fn resolution(&self) -> Resolution {
         match self {
-            ImageNode::Bitmap { asset, .. } => asset.resolution(),
-            ImageNode::Animated { asset, .. } => asset.resolution(),
-            ImageNode::Svg { asset, .. } => asset.resolution()
+            ImageNode::Bitmap { state, .. } => state.resolution(),
+            ImageNode::Animated { state, .. } => state.resolution(),
+            ImageNode::Svg { state, .. } => state.resolution()
         }
     }
 }

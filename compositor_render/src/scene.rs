@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::scene::image_component::ImageRenderParams;
 use crate::transformations::image::Image;
 use crate::transformations::shader::validation::error::ParametersValidationError;
 use crate::transformations::shader::Shader;
@@ -92,7 +93,7 @@ pub(crate) enum NodeParams {
     InputStream(InputId),
     Shader(ShaderComponentParams, Arc<Shader>),
     Web(Vec<ComponentId>, Arc<WebRenderer>),
-    Image { image: Image, start_pts: Duration },
+    Image(ImageRenderParams),
     Text(TextRenderParams),
     Layout(LayoutNode),
 }
@@ -103,7 +104,7 @@ impl StatefulComponent {
             StatefulComponent::InputStream(input) => Some(input.size.width),
             StatefulComponent::Shader(shader) => Some(shader.component.size.width),
             StatefulComponent::WebView(web) => Some(web.size().width),
-            StatefulComponent::Image(image) => Some(image.size().width),
+            StatefulComponent::Image(image) => Some(image.width()),
             StatefulComponent::Text(text) => Some(text.width()),
             StatefulComponent::Layout(layout) => match layout.position(pts) {
                 Position::Static { width, .. } => width,
@@ -117,7 +118,7 @@ impl StatefulComponent {
             StatefulComponent::InputStream(input) => Some(input.size.height),
             StatefulComponent::Shader(shader) => Some(shader.component.size.height),
             StatefulComponent::WebView(web) => Some(web.size().height),
-            StatefulComponent::Image(image) => Some(image.size().height),
+            StatefulComponent::Image(image) => Some(image.height()),
             StatefulComponent::Text(text) => Some(text.height()),
             StatefulComponent::Layout(layout) => match layout.position(pts) {
                 Position::Static { height, .. } => height,

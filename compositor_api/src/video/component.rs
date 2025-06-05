@@ -254,7 +254,8 @@ pub struct Image {
     /// Id of an image. It identifies an image registered using a [`register image`](../routes.md#register-image) request.
     pub image_id: RendererId,
 
-    pub resolution: Option<Resolution>
+    pub width: Option<usize>,
+    pub height: Option<usize>
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]

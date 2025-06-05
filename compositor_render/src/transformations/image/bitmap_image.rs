@@ -11,6 +11,7 @@ use crate::{
 
 pub struct BitmapNodeState {
     was_rendered: bool,
+    resolution: Resolution,
 }
 
 #[derive(Debug)]
@@ -100,9 +101,13 @@ impl BitmapAsset {
 }
 
 impl BitmapNodeState {
-    pub fn new() -> Self {
+    pub fn new(resolution: Resolution) -> Self {
         Self {
             was_rendered: false,
+            resolution
         }
+    }
+    pub fn resolution(&self) -> Resolution {
+        self.resolution
     }
 }

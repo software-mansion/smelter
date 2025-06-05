@@ -1,17 +1,26 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::transformations::image::Image;
+use crate::{scene::Size, transformations::image::Image};
 
 use super::{
-    scene_state::BuildStateTreeCtx, ComponentId, ImageComponent, IntermediateNode, SceneError,
-    Size, StatefulComponent,
+    scene_state::BuildStateTreeCtx, ComponentId, ImageComponent, IntermediateNode, SceneError, StatefulComponent,
 };
+
+#[derive(Debug)]
+pub(crate) struct ImageRenderParams {
+     pub(crate) image: Image,
+     pub(crate) start_pts: Duration,
+     pub(crate) width: Option<f32>,
+     pub(crate) height: Option<f32>
+}
 
 #[derive(Debug, Clone)]
 pub(super) struct StatefulImageComponent {
     pub(super) component: ImageComponent,
     pub(super) image: Image,
     pub(super) start_pts: Duration,
+    // pub(crate) width: Option<usize>,
+    // pub(crate) height: Option<usize>
 }
 
 impl StatefulImageComponent {
@@ -19,8 +28,14 @@ impl StatefulImageComponent {
         self.component.id.as_ref()
     }
 
+    pub(super) fn width(&self) -> f32 {
+        self.component.width.unwrap() as f32 // TODO
+    }
+    pub(super) fn height(&self) -> f32 {
+        self.component.height.unwrap() as f32 // TODO
+    }
     pub(super) fn size(&self) -> Size {
-        self.component.resolution.unwrap_or(self.image.resolution()).into()
+        Size {width: self.width(),  height: self.height()} // TODO
     }
 
     pub(super) fn intermediate_node(&self) -> IntermediateNode {

@@ -15,6 +15,7 @@ use super::AnimatedError;
 
 pub struct AnimatedNodeState {
     start_pts: Duration,
+    resolution: Resolution,
 }
 
 #[derive(Debug)]
@@ -29,6 +30,7 @@ enum AnimationFrame {
         texture: RgbaSrgbTexture,
         bg: wgpu::BindGroup,
         pts: Duration,
+        
     },
     Linear {
         texture: RgbaLinearTexture,
@@ -154,8 +156,11 @@ impl AnimatedAsset {
 }
 
 impl AnimatedNodeState {
-    pub fn new(start_pts: Duration) -> Self {
-        Self { start_pts }
+    pub fn new(start_pts: Duration, resolution: Resolution) -> Self {
+        Self { start_pts, resolution }
+    }
+    pub fn resolution(&self) -> Resolution {
+        self.resolution
     }
 }
 
