@@ -24,6 +24,10 @@ export type WhipVideoEncoderOptions =
        */
       preset?: Api.H264EncoderPreset;
       /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixelFormat?: Api.PixelFormat;
+      /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
       ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
@@ -37,6 +41,10 @@ export type WhipVideoEncoderOptions =
     }
   | {
       type: 'ffmpeg_vp9';
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixelFormat?: Api.PixelFormat;
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */

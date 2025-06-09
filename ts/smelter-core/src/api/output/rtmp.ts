@@ -39,6 +39,7 @@ function intoRtmpClientVideoEncoderOptions(
   return {
     type: 'ffmpeg_h264',
     preset: encoder.preset,
+    pixel_format: encoder.pixelFormat,
     ffmpeg_options: encoder.ffmpegOptions,
   };
 }

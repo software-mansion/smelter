@@ -225,6 +225,10 @@ export type VideoEncoderOptions =
        */
       preset?: H264EncoderPreset | null;
       /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
+      /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
       ffmpeg_options?: {
@@ -243,6 +247,10 @@ export type VideoEncoderOptions =
   | {
       type: "ffmpeg_vp9";
       /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
+      /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
       ffmpeg_options?: {
@@ -260,6 +268,7 @@ export type H264EncoderPreset =
   | "slower"
   | "veryslow"
   | "placebo";
+export type PixelFormat = "yuv420p" | "yuv422p" | "yuv444p";
 export type Component =
   | {
       type: "input_stream";
@@ -741,6 +750,10 @@ export type WhipVideoEncoderOptions =
        */
       preset?: H264EncoderPreset | null;
       /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
+      /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
       ffmpeg_options?: {
@@ -758,6 +771,10 @@ export type WhipVideoEncoderOptions =
     }
   | {
       type: "ffmpeg_vp9";
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
