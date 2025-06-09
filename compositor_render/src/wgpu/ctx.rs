@@ -117,16 +117,13 @@ impl WgpuCtx {
 }
 
 pub fn required_wgpu_features() -> wgpu::Features {
-    match cfg!(target_arch = "wasm32") {
-        false => wgpu::Features::TEXTURE_BINDING_ARRAY | wgpu::Features::PUSH_CONSTANTS,
-        true => wgpu::Features::PUSH_CONSTANTS,
-    }
+    wgpu::Features::PUSH_CONSTANTS
 }
 
 pub fn set_required_wgpu_limits(limits: wgpu::Limits) -> wgpu::Limits {
     wgpu::Limits {
         max_push_constant_size: limits.max_push_constant_size.max(128),
-        ..limits
+        ..wgpu::Limits::downlevel_defaults()
     }
 }
 
@@ -145,7 +142,7 @@ pub fn create_wgpu_ctx(
     compatible_surface: Option<&wgpu::Surface<'_>>,
 ) -> Result<WgpuComponents, CreateWgpuCtxError> {
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::all(),
+        backends: wgpu::Backends::VULKAN,
         ..Default::default()
     });
 
