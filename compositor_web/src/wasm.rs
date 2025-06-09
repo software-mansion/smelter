@@ -90,22 +90,12 @@ impl SmelterRenderer {
     ) -> Result<(), JsValue> {
         let image_spec = types::from_js_value::<ImageSpec>(image_spec)?;
 
-        let (url, image_type, resolution) = match image_spec {
-            ImageSpec::Png {
-                url, resolution, ..
-            } => (url, ImageType::Png, resolution.map(Into::into)),
-            ImageSpec::Jpeg {
-                url, resolution, ..
-            } => (url, ImageType::Jpeg, resolution.map(Into::into)),
-            ImageSpec::Svg {
-                url, resolution, ..
-            } => (url, ImageType::Svg, resolution.map(Into::into)),
-            ImageSpec::Gif {
-                url, resolution, ..
-            } => (url, ImageType::Gif, resolution.map(Into::into)),
-            ImageSpec::Auto {
-                url, resolution, ..
-            } => (url, ImageType::Auto, resolution.map(Into::into)),
+        let (url, image_type) = match image_spec {
+            ImageSpec::Png { url, .. } => (url, ImageType::Png),
+            ImageSpec::Jpeg { url, .. } => (url, ImageType::Jpeg),
+            ImageSpec::Svg { url, .. } => (url, ImageType::Svg),
+            ImageSpec::Gif { url, .. } => (url, ImageType::Gif),
+            ImageSpec::Auto { url, .. } => (url, ImageType::Auto),
         };
 
         let Some(url) = url else {
@@ -116,7 +106,6 @@ impl SmelterRenderer {
         let image_spec = compositor_render::image::ImageSpec {
             src: ImageSource::Bytes { bytes },
             image_type,
-            resolution,
         };
 
         let mut renderer = self.0.lock().await;

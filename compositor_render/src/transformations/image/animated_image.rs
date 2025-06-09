@@ -59,7 +59,6 @@ impl AnimatedAsset {
                 width: buffer.width() as usize,
                 height: buffer.height() as usize,
             };
-            // let resolution = maybe_resolution.unwrap_or(original_resolution);
 
             match ctx.mode {
                 RenderingMode::GpuOptimized | RenderingMode::WebGl => {

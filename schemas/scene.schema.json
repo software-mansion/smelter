@@ -453,6 +453,22 @@
                   "$ref": "#/definitions/RendererId"
                 }
               ]
+            },
+            "width": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint",
+              "minimum": 0.0
+            },
+            "height": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint",
+              "minimum": 0.0
             }
           },
           "additionalProperties": false
