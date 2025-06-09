@@ -41,6 +41,7 @@ function intoWhipVideoEncoderPreferences(
       case 'ffmpeg_vp9':
         return {
           type: 'ffmpeg_vp9',
+          pixel_format: encoder.pixelFormat,
           ffmpeg_options: encoder.ffmpegOptions,
         };
       case 'ffmpeg_vp8':
@@ -52,6 +53,7 @@ function intoWhipVideoEncoderPreferences(
         return {
           type: 'ffmpeg_h264',
           preset: encoder.preset,
+          pixel_format: encoder.pixelFormat,
           ffmpeg_options: encoder.ffmpegOptions,
         };
       case 'any':

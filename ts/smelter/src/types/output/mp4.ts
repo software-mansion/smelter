@@ -23,6 +23,10 @@ export type Mp4VideoEncoderOptions = {
    */
   preset?: Api.H264EncoderPreset;
   /**
+   * (**default=`"yuv420p"`**) Encoder pixel format
+   */
+  pixelFormat?: Api.PixelFormat;
+  /**
    * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
    */
   ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
