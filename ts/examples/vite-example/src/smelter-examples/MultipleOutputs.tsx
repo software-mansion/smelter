@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { InputStream, Rescaler, Text, Tiles, useInputStreams, View } from '@swmansion/smelter';
 import NotoSansFont from '../../assets/NotoSans.ttf';
 import SmelterCanvasOutput from '../components/SmelterCanvasOutput';
-import { useSmelter } from '../hooks/useSmelter';
 import SmelterVideoOutput from '../components/SmelterVideoOutput';
+import { useSmelter } from '@swmansion/smelter-web-wasm';
 
 const FIRST_MP4_URL =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';

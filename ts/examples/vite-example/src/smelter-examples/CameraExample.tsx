@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { InputStream, Rescaler, Text, View } from '@swmansion/smelter';
 import CompositorCanvas from '../components/SmelterCanvasOutput';
 import NotoSansFont from '../../assets/NotoSans.ttf';
-import { useSmelter } from '../hooks/useSmelter';
+import { useSmelter } from '@swmansion/smelter-web-wasm';
 
 function ScreenCapture() {
   const smelter = useSmelter();
