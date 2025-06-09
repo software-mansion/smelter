@@ -809,13 +809,11 @@ export type ImageSpec =
       asset_type: "png";
       url?: string | null;
       path?: string | null;
-      resolution?: Resolution | null;
     }
   | {
       asset_type: "jpeg";
       url?: string | null;
       path?: string | null;
-      resolution?: Resolution | null;
     }
   | {
       asset_type: "svg";
@@ -827,13 +825,11 @@ export type ImageSpec =
       asset_type: "gif";
       url?: string | null;
       path?: string | null;
-      resolution?: Resolution | null;
     }
   | {
       asset_type: "auto";
       url?: string | null;
       path?: string | null;
-      resolution?: Resolution | null;
     };
 export type WebEmbeddingMethod =
   | "chromium_embedding"

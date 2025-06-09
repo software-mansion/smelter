@@ -56,17 +56,16 @@ impl ImageComponent {
             .get(&self.image_id)
             .ok_or_else(|| SceneError::ImageNotFound(self.image_id.clone()))?;
 
-        let original_aspect_ratio =
-            image.resolution().width as f32 / image.resolution().height as f32;
+        let original_aspect_ratio = image.resolution().width / image.resolution().height;
 
         let resolution = match (self.width, self.height) {
             (Some(width), Some(height)) => Resolution { width, height },
             (Some(width), None) => {
-                let height = (width as f32 / original_aspect_ratio).round() as usize;
+                let height = width / original_aspect_ratio;
                 Resolution { width, height }
             }
             (None, Some(height)) => {
-                let width = (height as f32 * original_aspect_ratio).round() as usize;
+                let width = height * original_aspect_ratio;
                 Resolution { width, height }
             }
             (None, None) => image.resolution(),

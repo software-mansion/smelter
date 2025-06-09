@@ -455,6 +455,7 @@
               ]
             },
             "width": {
+              "description": "Width of the texture onto which the image will be rendered. If neither width nor height is specified, the texture will default to the size of the image. The aspect ratio of the image will be maintained if only one dimension (width or height) is provided. If both dimensions are specified, the aspect ratio will be as provided.",
               "type": [
                 "integer",
                 "null"
@@ -463,6 +464,7 @@
               "minimum": 0.0
             },
             "height": {
+              "description": "Height of the texture onto which the image will be rendered. If neither width nor height is specified, the texture will default to the size of the image. The aspect ratio of the image will be maintained if only one dimension (width or height) is provided. If both dimensions are specified, the aspect ratio will be as provided.",
               "type": [
                 "integer",
                 "null"

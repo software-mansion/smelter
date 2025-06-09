@@ -7,13 +7,11 @@ export type RegisterImage =
       assetType: 'png';
       url?: string;
       serverPath?: string;
-      resolution?: Api.Resolution;
     }
   | {
       assetType: 'jpeg';
       url?: string;
       serverPath?: string;
-      resolution?: Api.Resolution;
     }
   | {
       assetType: 'svg';
@@ -25,13 +23,11 @@ export type RegisterImage =
       assetType: 'gif';
       url?: string;
       serverPath?: string;
-      resolution?: Api.Resolution;
     }
   | {
       assetType: 'auto';
       url?: string;
       serverPath?: string;
-      resolution?: Api.Resolution;
     };
 
 export type ImageAssetType = RegisterImage['assetType'];
