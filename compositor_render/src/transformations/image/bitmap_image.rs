@@ -38,7 +38,6 @@ impl BitmapAsset {
             height: img.height() as usize,
         };
 
-
         match ctx.mode {
             RenderingMode::GpuOptimized | RenderingMode::WebGl => {
                 let texture = RgbaSrgbTexture::new(ctx, resolution);
@@ -47,7 +46,7 @@ impl BitmapAsset {
 
                 Ok(Self::Srgb {
                     bg: texture.new_bind_group(ctx),
-                    texture: texture,
+                    texture,
                 })
             }
             RenderingMode::CpuOptimized => {
@@ -104,7 +103,7 @@ impl BitmapNodeState {
     pub fn new(resolution: Resolution) -> Self {
         Self {
             was_rendered: false,
-            resolution
+            resolution,
         }
     }
     pub fn resolution(&self) -> Resolution {

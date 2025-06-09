@@ -64,7 +64,7 @@ pub struct ImageComponent {
     pub id: Option<ComponentId>,
     pub image_id: RendererId,
     pub width: Option<usize>,
-    pub height: Option<usize>
+    pub height: Option<usize>,
 }
 
 #[derive(Debug, Clone)]

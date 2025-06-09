@@ -30,7 +30,6 @@ enum AnimationFrame {
         texture: RgbaSrgbTexture,
         bg: wgpu::BindGroup,
         pts: Duration,
-        
     },
     Linear {
         texture: RgbaLinearTexture,
@@ -157,7 +156,10 @@ impl AnimatedAsset {
 
 impl AnimatedNodeState {
     pub fn new(start_pts: Duration, resolution: Resolution) -> Self {
-        Self { start_pts, resolution }
+        Self {
+            start_pts,
+            resolution,
+        }
     }
     pub fn resolution(&self) -> Resolution {
         self.resolution

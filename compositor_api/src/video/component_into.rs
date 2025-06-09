@@ -277,7 +277,7 @@ impl From<Image> for scene::ImageComponent {
             id: image.id.map(Into::into),
             image_id: image.image_id.into(),
             width: image.width,
-            height: image.height
+            height: image.height,
         }
     }
 }

@@ -28,7 +28,6 @@ pub struct SvgNodeState {
 
 pub struct SvgAsset {
     tree: UnsafeInternalRc<resvg::Tree>,
-    // maybe_resolution: Option<Resolution>,
 }
 
 impl fmt::Debug for SvgAsset {
@@ -47,18 +46,13 @@ unsafe impl<T> Send for UnsafeInternalRc<T> {}
 unsafe impl<T> Sync for UnsafeInternalRc<T> {}
 
 impl SvgAsset {
-    pub fn new(
-        _ctx: &WgpuCtx,
-        data: bytes::Bytes,
-        // maybe_resolution: Option<Resolution>,
-    ) -> Result<Self, SvgError> {
+    pub fn new(_ctx: &WgpuCtx, data: bytes::Bytes) -> Result<Self, SvgError> {
         let text_svg = str::from_utf8(&data)?;
         let tree = usvg::Tree::from_str(text_svg, &Default::default())?;
         let tree = resvg::Tree::from_usvg(&tree);
 
         Ok(Self {
             tree: UnsafeInternalRc(tree.into()),
-            // maybe_resolution,
         })
     }
 
@@ -93,11 +87,10 @@ impl SvgAsset {
     }
 
     pub fn resolution(&self) -> Resolution {
-        //self.maybe_resolution.unwrap_or_else(|| 
         Resolution {
             width: self.tree.0.size.width() as usize,
             height: self.tree.0.size.height() as usize,
-        }//)
+        }
     }
 }
 

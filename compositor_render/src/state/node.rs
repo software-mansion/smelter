@@ -79,9 +79,12 @@ impl RenderNode {
             scene::NodeParams::Web(children_ids, web_renderer) => {
                 Self::new_web_renderer_node(ctx, children, children_ids, web_renderer)
             }
-            scene::NodeParams::Image(image_params) => {
-                Self::new_image_node(ctx, image_params.image, image_params.start_pts, image_params.width, image_params.height)
-            }
+            scene::NodeParams::Image(image_params) => Self::new_image_node(
+                ctx,
+                image_params.image,
+                image_params.start_pts,
+                image_params.resolution,
+            ),
             scene::NodeParams::Text(text_params) => Self::new_text_node(ctx, text_params),
             scene::NodeParams::Layout(layout_provider) => {
                 Self::new_layout_node(ctx, children, layout_provider)
@@ -145,10 +148,14 @@ impl RenderNode {
         }
     }
 
-    pub(super) fn new_image_node(ctx: &RenderCtx, image: Image, start_pts: Duration, width: Option<f32>, height: Option<f32>) -> Self {
-        // TODO proper count resolution based on width, height and aspect ratio
-        let resolution = Resolution {width: width.unwrap_or(10 as f32) as usize, height: height.unwrap_or(10 as f32) as usize};
-        let node = InnerRenderNode::Image(ImageNode::new(ctx.wgpu_ctx, image, start_pts, resolution));
+    pub(super) fn new_image_node(
+        ctx: &RenderCtx,
+        image: Image,
+        start_pts: Duration,
+        resolution: Resolution,
+    ) -> Self {
+        let node =
+            InnerRenderNode::Image(ImageNode::new(ctx.wgpu_ctx, image, start_pts, resolution));
         let output = NodeTexture::new();
 
         Self {

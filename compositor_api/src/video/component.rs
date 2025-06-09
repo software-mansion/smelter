@@ -255,7 +255,8 @@ pub struct Image {
     pub image_id: RendererId,
 
     pub width: Option<usize>,
-    pub height: Option<usize>
+
+    pub height: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
