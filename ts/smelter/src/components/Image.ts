@@ -19,7 +19,10 @@ export type ImageProps = Omit<ComponentBaseProps, 'children'> &
         source: string;
         imageId?: never; // Ensuring 'imageId' cannot be used alongside 'source'
       }
-  );
+  ) & {
+    width?: number;
+    height?: number;
+  };
 
 type ImageSceneBuliderProps = Omit<ImageProps, 'imageId'> & { imageId: string };
 
@@ -105,6 +108,8 @@ function sceneBuilder(props: ImageSceneBuliderProps, _children: SceneComponent[]
     type: 'image',
     id: props.id,
     image_id: props.imageId,
+    width: props.width,
+    height: props.height,
   };
 }
 
