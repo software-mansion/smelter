@@ -51,7 +51,7 @@ impl BitmapAsset {
             }
             RenderingMode::CpuOptimized => {
                 let texture = RgbaLinearTexture::new(ctx, resolution);
-                texture.upload(ctx, &img.to_rgb8());
+                texture.upload(ctx, &img.to_rgba8());
                 ctx.queue.submit([]);
 
                 Ok(Self::Linear {

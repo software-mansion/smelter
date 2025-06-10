@@ -72,7 +72,7 @@ impl SvgAsset {
             }
             (SvgRenderer::CpuOptimized, NodeTextureState::CpuOptimized { texture, .. }) => {
                 // input is already in sRGB with pre-multiplied alpha
-                render_to_texture(ctx, &self.tree.0, texture.texture(), resolution);
+                render_to_texture(ctx, &self.tree.0, texture.texture(), state.resolution());
             }
             (SvgRenderer::WebGl(renderer), NodeTextureState::WebGl { texture, .. }) => {
                 renderer.render(ctx, &self.tree.0, texture, resolution)
@@ -278,11 +278,9 @@ fn render_to_texture(
     let should_resize = resolution.width != (tree.size.width() as usize)
         || resolution.height != (tree.size.height() as usize);
     let transform = if should_resize {
-        let scale_multiplier = f32::min(
-            resolution.width as f32 / tree.size.width(),
-            resolution.height as f32 / tree.size.height(),
-        );
-        tiny_skia::Transform::from_scale(scale_multiplier, scale_multiplier)
+        let scale_x = resolution.width as f32 / tree.size.width();
+        let scale_y = resolution.height as f32 / tree.size.height();
+        tiny_skia::Transform::from_scale(scale_x, scale_y)
     } else {
         tiny_skia::Transform::default()
     };
