@@ -726,9 +726,9 @@ impl VulkanDecoder<'_> {
                 **image,
                 &wgpu::hal::TextureDescriptor {
                     label: Some("vulkan video output texture"),
-                    usage: wgpu::hal::TextureUses::RESOURCE
-                        | wgpu::hal::TextureUses::COPY_DST
-                        | wgpu::hal::TextureUses::COPY_SRC,
+                    usage: wgpu::TextureUses::RESOURCE
+                        | wgpu::TextureUses::COPY_DST
+                        | wgpu::TextureUses::COPY_SRC,
                     memory_flags: wgpu::hal::MemoryFlags::empty(),
                     size: wgpu::Extent3d {
                         width: copy_extent.width,

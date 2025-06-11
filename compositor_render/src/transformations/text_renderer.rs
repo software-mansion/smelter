@@ -5,6 +5,7 @@ use std::{
 };
 
 use glyphon::{
+    cosmic_text::FontFeatures,
     fontdb::{Database, Source},
     AttrsOwned, Buffer, Cache, Color, FontSystem, Metrics, Shaping, SwashCache, TextArea,
     TextAtlas, TextBounds,
@@ -178,7 +179,7 @@ impl From<&TextComponent> for TextParams {
         let RGBAColor(r, g, b, a) = text.color;
         let color = glyphon::Color::rgba(r, g, b, a);
 
-        let family = glyphon::FamilyOwned::Name(text.font_family.to_string());
+        let family = glyphon::FamilyOwned::Name(text.font_family.clone().into());
 
         let style = match text.style {
             TextStyle::Normal => glyphon::Style::Normal,
@@ -218,6 +219,8 @@ impl From<&TextComponent> for TextParams {
                 metadata: Default::default(),
                 cache_key_flags: glyphon::cosmic_text::CacheKeyFlags::empty(),
                 metrics_opt: None,
+                font_features: FontFeatures::default(),
+                letter_spacing_opt: None,
             },
             content: text.text.clone(),
             font_size: text.font_size,
@@ -288,7 +291,7 @@ impl TextRendererCtx {
         buffer.set_text(
             font_system,
             &text_params.content,
-            text_params.attributes.as_attrs(),
+            &text_params.attributes.as_attrs(),
             Shaping::Advanced,
         );
         buffer.set_wrap(font_system, text_params.wrap);

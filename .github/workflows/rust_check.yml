@@ -19,6 +19,8 @@ jobs:
                   set -e
                   sudo apt-get update -y -qq
                   sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
+                  sudo apt-get clean
+                  sudo rm -rf /var/lib/apt/lists/*
 
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -41,9 +43,6 @@ jobs:
                         url = https://github.com/membraneframework-labs/video_compositor_snapshot_tests.git
                 EOF
                 git submodule update --init
-
-            - name: 📁 Rust cache
-              uses: Swatinem/rust-cache@v2
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package compositor_chromium
@@ -84,9 +83,6 @@ jobs:
             - name: 📥 Checkout repo
               uses: actions/checkout@v4
 
-            - name: 📁 Rust cache
-              uses: Swatinem/rust-cache@v2
-
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package compositor_chromium
 
@@ -103,6 +99,8 @@ jobs:
               run: |
                   sudo apt-get update -y -qq
                   sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
+                  sudo apt-get clean
+                  sudo rm -rf /var/lib/apt/lists/*
 
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -117,9 +115,6 @@ jobs:
 
             - name: 📥 Checkout repo
               uses: actions/checkout@v4
-
-            - name: 📁 Rust cache
-              uses: Swatinem/rust-cache@v2
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package compositor_chromium
