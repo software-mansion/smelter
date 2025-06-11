@@ -44,9 +44,6 @@ jobs:
                 EOF
                 git submodule update --init
 
-            - name: 📁 Rust cache
-              uses: Swatinem/rust-cache@v2
-
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package compositor_chromium
 
@@ -86,9 +83,6 @@ jobs:
             - name: 📥 Checkout repo
               uses: actions/checkout@v4
 
-            - name: 📁 Rust cache
-              uses: Swatinem/rust-cache@v2
-
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package compositor_chromium
 
@@ -121,9 +115,6 @@ jobs:
 
             - name: 📥 Checkout repo
               uses: actions/checkout@v4
-
-            - name: 📁 Rust cache
-              uses: Swatinem/rust-cache@v2
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package compositor_chromium
