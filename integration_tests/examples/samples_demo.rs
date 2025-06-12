@@ -193,7 +193,12 @@ fn start_example_client_code() -> Result<()> {
     )?;
     start_gst_send_udp(IP, Some(INPUT_5_PORT), None, TestSample::SampleVP8)?;
     start_ffmpeg_send(IP, Some(INPUT_6_PORT), None, TestSample::SampleLoopH264)?;
-    start_ffmpeg_send(IP, Some(INPUT_7_PORT), None, TestSample::TestPatternVP8)?;
+    start_ffmpeg_send(
+        IP,
+        Some(INPUT_7_PORT),
+        None,
+        TestSample::BigBuckBunnyVP8Opus,
+    )?;
 
     Ok(())
 }
