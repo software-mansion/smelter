@@ -142,8 +142,7 @@ fn graphics_context() -> GraphicsContext {
     static CTX: OnceLock<GraphicsContext> = OnceLock::new();
     CTX.get_or_init(|| {
         GraphicsContext::new(GraphicsContextOptions {
-            features: WgpuFeatures::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                | WgpuFeatures::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            features: WgpuFeatures::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             ..Default::default()
         })
         .unwrap()
