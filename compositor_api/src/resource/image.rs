@@ -59,11 +59,7 @@ impl TryFrom<ImageSpec> for compositor_render::RendererSpec {
                 src: from_url_or_path(url, path)?,
                 image_type: image::ImageType::Jpeg,
             },
-            ImageSpec::Svg {
-                url,
-                path,
-                resolution: _resolution,
-            } => image::ImageSpec {
+            ImageSpec::Svg { url, path, .. } => image::ImageSpec {
                 src: from_url_or_path(url, path)?,
                 image_type: image::ImageType::Svg,
             },
