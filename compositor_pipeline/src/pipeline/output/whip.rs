@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, span, Instrument, Level};
+use tracing::{debug, error, info, span, trace, Instrument, Level};
 use track_task_audio::WhipAudioTrackThreadHandle;
 use track_task_video::WhipVideoTrackThreadHandle;
 use url::{ParseError, Url};
@@ -249,62 +249,48 @@ impl WhipSenderTask {
     }
 
     async fn run(self) {
-        //let audio_handle = self.audio.map(|(mut audio_receiver, audio_track)| {
-        //    tokio::spawn(async move {
-        //        loop {
-        //            match audio_receiver.recv().await {
-        //                Some(PipelineEvent::Data(packet)) => {
-        //                    trace!("Send audio packet {:?}", packet.header);
-        //                    if let Err(err) = audio_track.write_rtp(&packet).await {
-        //                        return Err(err);
-        //                    }
-        //                }
-        //                Some(PipelineEvent::EOS) | None => return Ok(()),
-        //            }
-        //        }
-        //    })
-        //});
-        //let video_handle = self.video.map(|(mut video_receiver, video_track)| {
-        //    tokio::spawn(async move {
-        //        loop {
-        //            match video_receiver.recv().await {
-        //                Some(PipelineEvent::Data(packet)) => {
-        //                    trace!("Send video packet {:?}", packet.header);
-        //                    if let Err(err) = video_track.write_rtp(&packet).await {
-        //                        return Err(err);
-        //                    }
-        //                }
-        //                Some(PipelineEvent::EOS) | None => return Ok(()),
-        //            }
-        //        }
-        //    })
-        //});
-        let (mut audio_receiver, audio_track) = self.audio.unwrap();
-        let (mut video_receiver, video_track) = self.video.unwrap();
-        loop {
-            let (video, audio) = tokio::select! {
-                Some(PipelineEvent::Data(v)) = audio_receiver.recv() => (None, Some(v)),
-                Some(PipelineEvent::Data(v)) = video_receiver.recv() => (Some(v), None),
-                else => break,
-            };
-            match (video, audio) {
-                (None, Some(audio)) => audio_track.write_rtp(&audio).await.unwrap(),
-                (Some(video), None) => video_track.write_rtp(&video).await.unwrap(),
-                _ => panic!("sdlkfjsdklfj"),
-            };
+        let audio_handle = self.audio.map(|(mut audio_receiver, audio_track)| {
+            tokio::spawn(async move {
+                loop {
+                    match audio_receiver.recv().await {
+                        Some(PipelineEvent::Data(packet)) => {
+                            trace!("Send audio packet {:?}", packet.header);
+                            if let Err(err) = audio_track.write_rtp(&packet).await {
+                                return Err(err);
+                            }
+                        }
+                        Some(PipelineEvent::EOS) | None => return Ok(()),
+                    }
+                }
+            })
+        });
+        let video_handle = self.video.map(|(mut video_receiver, video_track)| {
+            tokio::spawn(async move {
+                loop {
+                    match video_receiver.recv().await {
+                        Some(PipelineEvent::Data(packet)) => {
+                            trace!("Send video packet {:?}", packet.header);
+                            if let Err(err) = video_track.write_rtp(&packet).await {
+                                return Err(err);
+                            }
+                        }
+                        Some(PipelineEvent::EOS) | None => return Ok(()),
+                    }
+                }
+            })
+        });
+
+        if let Some(video_handle) = video_handle {
+            if let Err(err) = video_handle.await {
+                error!("Error occurred while writing to video track, closing connection. {err}");
+            }
         }
 
-        // if let Some(video_handle) = video_handle {
-        //     if let Err(err) = video_handle.await {
-        //         error!("Error occurred while writing to video track, closing connection. {err}");
-        //     }
-        // }
-
-        // if let Some(audio_handle) = audio_handle {
-        //     if let Err(err) = audio_handle.await {
-        //         error!("Error occurred while writing to audio track, closing connection. {err}");
-        //     }
-        // }
+        if let Some(audio_handle) = audio_handle {
+            if let Err(err) = audio_handle.await {
+                error!("Error occurred while writing to audio track, closing connection. {err}");
+            }
+        }
 
         self.client.delete_session(self.session_url).await;
         self.ctx

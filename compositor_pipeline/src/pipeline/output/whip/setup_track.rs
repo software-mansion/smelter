@@ -1,6 +1,9 @@
 use core::panic;
 use crossbeam_channel::Sender;
-use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use rtcp::{
+    payload_feedbacks::picture_loss_indication::PictureLossIndication,
+    receiver_report::ReceiverReport,
+};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
@@ -69,7 +72,7 @@ pub async fn setup_video_track(
     WhipError,
 > {
     let rtc_sender_params = rtc_sender.get_parameters().await;
-    debug!("Params: {:#?}", rtc_sender_params);
+    debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
 
     let Some((options, codec_params)) = encoder_preferences.iter().find_map(|encoder_options| {
@@ -102,7 +105,7 @@ pub async fn setup_video_track(
             codec,
             payload_type,
             clock_rate: 90_000,
-            mtu: 1400,
+            mtu: 1200,
             ssrc,
         }
     }
@@ -158,9 +161,9 @@ pub async fn setup_audio_track(
     WhipError,
 > {
     let rtc_sender_params = rtc_sender.get_parameters().await;
-    debug!("Params: {:#?}", rtc_sender_params);
-    let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
+    debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
 
+    let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
     let Some((options, codec_params)) = encoder_preferences.iter().find_map(|encoder_options| {
         let supported = supported_codecs.iter().find_map(|codec_params| {
             match encoder_options.matches(&codec_params.capability) {
@@ -184,14 +187,14 @@ pub async fn setup_audio_track(
         panic!("err")
     }
 
-    debug!("{:?}", codec_params);
+    error!("{:?}", codec_params);
 
     fn payloader_options(codec: PayloadedCodec, payload_type: u8, ssrc: u32) -> PayloaderOptions {
         PayloaderOptions {
             codec,
             payload_type,
-            clock_rate: 90_000,
-            mtu: 1400,
+            clock_rate: 48_000,
+            mtu: 1200,
             ssrc,
         }
     }
@@ -209,6 +212,23 @@ pub async fn setup_audio_track(
         AudioEncoderOptions::Aac(_options) => return Err(WhipError::UnsupportedCodec("aac")),
     }
     .unwrap();
+
+    let sender = rtc_sender.clone();
+    whip_ctx.pipeline_ctx.tokio_rt.spawn(async move {
+        loop {
+            if let Ok((packets, _)) = sender.read_rtcp().await {
+                for packet in packets {
+                    if let Some(report) = packet.as_any().downcast_ref::<ReceiverReport>() {
+                        info!("Receiver report {report:?}");
+                    } else {
+                        info!("RTCP packet {:?}", packet.header());
+                    }
+                }
+            } else {
+                debug!("Failed to read RTCP packets from the sender.");
+            }
+        }
+    });
 
     Ok((handle, (receiver, track)))
 }

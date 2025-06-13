@@ -190,7 +190,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                             } => vec![pipeline::encoder::AudioEncoderOptions::Opus(
                                 opus::OpusEncoderOptions {
                                     channels: resolved_channels.clone().into(),
-                                    preset: preset.unwrap_or(OpusEncoderPreset::Quality).into(),
+                                    preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
                                     sample_rate: sample_rate.unwrap_or(48000),
                                 },
                             )],
@@ -198,7 +198,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                                 vec![pipeline::encoder::AudioEncoderOptions::Opus(
                                     opus::OpusEncoderOptions {
                                         channels: resolved_channels.clone().into(),
-                                        preset: OpusEncoderPreset::Quality.into(),
+                                        preset: OpusEncoderPreset::Voip.into(),
                                         sample_rate: 48000,
                                     },
                                 )]

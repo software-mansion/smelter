@@ -57,15 +57,12 @@ impl AudioEncoder for OpusEncoder {
                 output_buffer,
             },
             AudioEncoderConfig {
-                //channels: options.channels,
-                //sample_rate: options.sample_rate,
                 extradata: None,
             },
         ))
     }
 
     fn encode(&mut self, batch: OutputSamples) -> Vec<EncodedChunk> {
-        info!("OPUS batch {:?}", batch);
         let raw_samples = match batch.samples {
             AudioSamples::Mono(raw_samples) => raw_samples,
             AudioSamples::Stereo(stereo_samples) => {
