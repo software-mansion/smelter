@@ -61,3 +61,71 @@ export async function sleep(timeoutMs: number): Promise<void> {
     }, timeoutMs);
   });
 }
+
+export class PromiseScheduler {
+  private state:
+    | { type: 'blocked'; by: Promise<void> }
+    | { type: 'running'; promises: Set<Promise<void>> }
+    | { type: 'finished' };
+
+  public constructor() {
+    this.state = { type: 'finished' };
+  }
+
+  async runBlocking<T>(fn: () => Promise<T>): Promise<T> {
+    while (this.state.type !== 'finished') {
+      if (this.state.type === 'blocked') {
+        await this.state.by;
+      }
+      if (this.state.type === 'running') {
+        await Promise.allSettled(this.state.promises);
+      }
+    }
+
+    let resFn: (() => void) | undefined;
+    const promise = new Promise<void>(res => {
+      resFn = res;
+    });
+
+    try {
+      this.state = { type: 'blocked', by: promise };
+      return await fn();
+    } finally {
+      this.state = { type: 'finished' };
+      if (resFn) {
+        resFn();
+      }
+    }
+  }
+
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    while (this.state.type === 'blocked') {
+      await this.state.by;
+    }
+
+    let resFn: (() => void) | undefined;
+    const promise = new Promise<void>(res => {
+      resFn = res;
+    });
+
+    try {
+      if (this.state.type === 'running') {
+        this.state.promises.add(promise);
+      } else if (this.state.type === 'finished') {
+        this.state = { type: 'running', promises: new Set([promise]) };
+      }
+
+      return await fn();
+    } finally {
+      if (this.state.type === 'running') {
+        this.state.promises.delete(promise);
+        if (this.state.promises.size === 0) {
+          this.state = { type: 'finished' };
+        }
+      }
+      if (resFn) {
+        resFn();
+      }
+    }
+  }
+}
