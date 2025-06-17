@@ -35,8 +35,21 @@ export default class Smelter {
     await this.coreSmelter.unregisterOutput(outputId);
   }
 
-  public async registerInput(inputId: string, request: RegisterInput): Promise<void> {
-    await this.coreSmelter.registerInput(inputId, request);
+  public async registerInput(inputId: string, request: RegisterInput): Promise<any> {
+    let result = await this.coreSmelter.registerInput(inputId, request);
+    const mappedResult: any = {};
+
+    if ('bearer_token' in result) {
+      mappedResult.bearerToken = result['bearer_token'];
+      mappedResult.endpointRoute = `/whip/${encodeURIComponent(`global:${inputId}`)}`;
+    }
+    if ('video_duration_ms' in result) {
+      mappedResult.videoDurationMs = result['video_duration_ms'];
+    }
+    if ('audio_duration_ms' in result) {
+      mappedResult.audioDurationMs = result['audio_duration_ms'];
+    }
+    return mappedResult;
   }
 
   public async unregisterInput(inputId: string): Promise<void> {

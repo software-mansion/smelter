@@ -9,11 +9,14 @@ mod rtp;
 mod rtp_into;
 mod whip;
 mod whip_into;
+mod hls;
+mod hls_into;
 
 pub use decklink::*;
 pub use mp4::*;
 pub use rtp::*;
 pub use whip::*;
+pub use hls::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]

@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use log::{debug, error};
 use rubato::{FftFixedOut, Resampler as _};
-use tracing::trace;
+use tracing::{info, trace};
 
 use crate::{
     audio_mixer::InputSamples,
@@ -13,68 +13,69 @@ use crate::{
 
 const SAMPLE_BATCH_DURATION: Duration = Duration::from_millis(20);
 
-pub(super) enum Resampler {
-    Passthrough(PassthroughResampler),
-    Fft(Box<FftResampler>),
-}
-
-impl Resampler {
-    pub fn new(input_sample_rate: u32, output_sample_rate: u32) -> Result<Self, InputInitError> {
-        if input_sample_rate == output_sample_rate {
-            Ok(Self::Passthrough(PassthroughResampler::new(
-                input_sample_rate,
-                output_sample_rate,
-            )))
-        } else {
-            FftResampler::new(input_sample_rate, output_sample_rate)
-                .map(Box::new)
-                .map(Self::Fft)
-        }
-    }
-
-    pub fn resample(&mut self, decoded_samples: DecodedSamples) -> Vec<InputSamples> {
-        match self {
-            Resampler::Passthrough(resampler) => resampler.resample(decoded_samples),
-            Resampler::Fft(resampler) => resampler.resample(decoded_samples),
-        }
-    }
-}
-
-pub(super) struct PassthroughResampler {
-    input_sample_rate: u32,
+pub(super) struct Resampler {
+    instance: Option<Box<FftResampler>>,
+    first_batch_pts: Option<Duration>,
     output_sample_rate: u32,
 }
 
-impl PassthroughResampler {
-    fn new(input_sample_rate: u32, output_sample_rate: u32) -> Self {
-        if input_sample_rate != output_sample_rate {
-            error!("Passthrough resampler was used for resampling to different sample rate.")
-        }
+impl Resampler {
+    pub fn new(output_sample_rate: u32) -> Self {
         Self {
-            input_sample_rate,
+            instance: None,
+            first_batch_pts: None,
             output_sample_rate,
         }
     }
 
-    fn resample(&mut self, decoded_samples: DecodedSamples) -> Vec<InputSamples> {
-        if decoded_samples.sample_rate != self.input_sample_rate {
-            error!("Passthrough resampler received decoded samples in wrong sample rate. Expected {}, actual: {}", self.input_sample_rate, decoded_samples.sample_rate);
-            return Vec::new();
-        }
-        let samples = if let Samples::Stereo16Bit(samples) = decoded_samples.samples.as_ref() {
-            Arc::new(samples.clone())
+    pub fn resample(&mut self, decoded_samples: DecodedSamples) -> Vec<InputSamples> {
+        let first_batch_pts = *self
+            .first_batch_pts
+            .get_or_insert(decoded_samples.start_pts);
+
+        if decoded_samples.sample_rate == self.output_sample_rate {
+            let samples = match decoded_samples.samples.as_ref() {
+                Samples::Stereo16Bit(samples) => Arc::new(samples.clone()),
+                samples => {
+                    let samples = iter_as_f64_stereo(samples)
+                        .into_iter()
+                        .map(|(l, r)| (pcm_f64_to_i16(l), pcm_f64_to_i16(r)))
+                        .collect();
+                    Arc::new(samples)
+                }
+            };
+            Vec::from([InputSamples::new(
+                samples,
+                decoded_samples.start_pts,
+                self.output_sample_rate,
+            )])
         } else {
-            let samples = iter_as_f64_stereo(&decoded_samples.samples)
-                .into_iter()
-                .map(|(l, r)| (pcm_f64_to_i16(l), pcm_f64_to_i16(r)))
-                .collect();
-            Arc::new(samples)
-        };
-        Vec::from([InputSamples::new(
-            samples,
-            decoded_samples.start_pts,
-            self.output_sample_rate,
-        )])
+            match &mut self.instance {
+                Some(resampler) if resampler.input_sample_rate == self.output_sample_rate => (),
+                Some(_) | None => {
+                    info!(
+                        "Instantiate new resampler (input: {}, output: {})",
+                        decoded_samples.sample_rate, self.output_sample_rate
+                    );
+                    let instance = match FftResampler::new(
+                        decoded_samples.sample_rate,
+                        self.output_sample_rate,
+                        first_batch_pts,
+                    ) {
+                        Ok(instance) => instance,
+                        Err(err) => {
+                            error!("Failed to construct resampler {err}");
+                            return vec![];
+                        }
+                    };
+                    self.instance = Some(Box::new(instance))
+                }
+            };
+            let Some(resampler) = &mut self.instance else {
+                return vec![];
+            };
+            return resampler.resample(decoded_samples);
+        }
     }
 }
 
@@ -84,7 +85,7 @@ pub(super) struct FftResampler {
     input_buffer: [Vec<f64>; 2],
     output_buffer: [Vec<f64>; 2],
     resampler: FftFixedOut<f64>,
-    first_batch_pts: Option<Duration>,
+    first_batch_pts: Duration,
     resampler_input_samples: u64,
     resampler_output_samples: u64,
 }
@@ -93,6 +94,7 @@ impl FftResampler {
     fn new(
         input_sample_rate: u32,
         output_sample_rate: u32,
+        first_batch_pts: Duration,
     ) -> Result<FftResampler, InputInitError> {
         /// This part of pipeline use stereo
         const CHANNELS: usize = 2;
@@ -125,7 +127,7 @@ impl FftResampler {
             input_buffer,
             output_buffer,
             resampler,
-            first_batch_pts: None,
+            first_batch_pts,
             resampler_input_samples: 0,
             resampler_output_samples: 0,
         })
@@ -171,11 +173,9 @@ impl FftResampler {
     }
 
     fn append_to_input_buffer(&mut self, decoded_samples: DecodedSamples) {
-        let first_batch_pts = *self
-            .first_batch_pts
-            .get_or_insert(decoded_samples.start_pts);
-
-        let input_duration = decoded_samples.start_pts.saturating_sub(first_batch_pts);
+        let input_duration = decoded_samples
+            .start_pts
+            .saturating_sub(self.first_batch_pts);
         let expected_samples =
             (input_duration.as_secs_f64() * self.input_sample_rate as f64) as u64;
         let actual_samples = self.resampler_input_samples + self.input_buffer[0].len() as u64;
@@ -215,7 +215,7 @@ impl FftResampler {
         let send_audio_duration = Duration::from_secs_f64(
             self.resampler_output_samples as f64 / self.output_sample_rate as f64,
         );
-        self.first_batch_pts.unwrap() + send_audio_duration
+        self.first_batch_pts + send_audio_duration
     }
 }
 

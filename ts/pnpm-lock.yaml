@@ -225,6 +225,40 @@ importers:
         specifier: ^18.3.3
         version: 18.3.17
 
+  examples/smelter-app:
+    dependencies:
+      '@swmansion/smelter':
+        specifier: workspace:^0.2.1
+        version: link:../../smelter
+      '@swmansion/smelter-node':
+        specifier: workspace:^0.2.1
+        version: link:../../smelter-node
+      express:
+        specifier: ^4.21.0
+        version: 4.21.2
+      react:
+        specifier: 18.3.1
+        version: 18.3.1
+      zustand:
+        specifier: 4.5.5
+        version: 4.5.5(@types/react@18.3.17)(react@18.3.1)
+    devDependencies:
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.21
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.17.10
+      '@types/react':
+        specifier: ^18.3.3
+        version: 18.3.17
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@types/node@20.17.10)(typescript@5.7.2)
+      typescript:
+        specifier: ^5.5.3
+        version: 5.7.2
+
   examples/vite-example:
     dependencies:
       '@swmansion/smelter':

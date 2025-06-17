@@ -1,7 +1,7 @@
 use compositor_render::InputId;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use log::{debug, error};
-use tracing::{span, trace, Level};
+use tracing::{info, span, trace, Level};
 
 extern crate opus as lib_opus;
 use crate::{
@@ -31,18 +31,14 @@ pub enum DecodingError {
 trait AudioDecoderExt {
     fn decode(&mut self, encoded_chunk: EncodedChunk)
         -> Result<Vec<DecodedSamples>, DecodingError>;
-
-    fn decoded_sample_rate(&self) -> u32;
 }
 
 pub fn start_audio_resampler_only_thread(
-    input_sample_rate: u32,
     mixing_sample_rate: u32,
     raw_samples_receiver: Receiver<PipelineEvent<DecodedSamples>>,
     samples_sender: Sender<PipelineEvent<InputSamples>>,
     input_id: InputId,
-) -> Result<(), InputInitError> {
-    let (decoder_init_result_sender, decoder_init_result_receiver) = bounded(0);
+) {
     std::thread::Builder::new()
         .name(format!("Decoder thread for input {}", input_id.clone()))
         .spawn(move || {
@@ -53,44 +49,17 @@ pub fn start_audio_resampler_only_thread(
             )
             .entered();
 
-            run_resampler_only_thread(
-                input_sample_rate,
-                mixing_sample_rate,
-                raw_samples_receiver,
-                samples_sender,
-                decoder_init_result_sender,
-            );
+            run_resampler_only_thread(mixing_sample_rate, raw_samples_receiver, samples_sender);
         })
         .unwrap();
-
-    match decoder_init_result_receiver.recv() {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(init_err)) => Err(init_err),
-        Err(_recv_err) => Err(InputInitError::CannotReadInitResult),
-    }
 }
 
 fn run_resampler_only_thread(
-    input_sample_rate: u32,
     mixing_sample_rate: u32,
     raw_samples_receiver: Receiver<PipelineEvent<DecodedSamples>>,
     samples_sender: Sender<PipelineEvent<InputSamples>>,
-    init_result_sender: Sender<Result<(), InputInitError>>,
 ) {
-    let mut resampler = match Resampler::new(input_sample_rate, mixing_sample_rate) {
-        Ok(resampler) => {
-            if init_result_sender.send(Ok(())).is_err() {
-                error!("Failed to send rescaler init result.");
-            }
-            resampler
-        }
-        Err(err) => {
-            if init_result_sender.send(Err(err)).is_err() {
-                error!("Failed to send rescaler init result.");
-            }
-            return;
-        }
-    };
+    let mut resampler = Resampler::new(mixing_sample_rate);
 
     for event in raw_samples_receiver {
         let PipelineEvent::Data(raw_sample) = event else {
@@ -213,7 +182,10 @@ fn run_decoding<F>(
             // report a success or failure.
             send_result(Ok(()));
             let first_chunk = match chunks_receiver.recv() {
-                Ok(PipelineEvent::Data(first_chunk)) => first_chunk,
+                Ok(PipelineEvent::Data(first_chunk)) => {
+                    info!("first audio chunk");
+                    first_chunk
+                }
                 Ok(PipelineEvent::EOS) => {
                     return;
                 }
@@ -222,25 +194,22 @@ fn run_decoding<F>(
                     return;
                 }
             };
-            let init_res = AacDecoder::new(aac_decoder_opts, &first_chunk)
-                .map(|decoder| {
-                    let resampler =
-                        Resampler::new(decoder.decoded_sample_rate(), mixing_sample_rate)?;
-                    Ok((decoder, resampler))
-                })
-                .and_then(|res| res);
-
-            match init_res {
-                Ok((mut decoder, mut resampler)) => run_decoding_loop(
-                    chunks_receiver,
-                    &mut decoder,
-                    &mut resampler,
-                    samples_sender,
-                ),
+            let mut decoder = match AacDecoder::new(aac_decoder_opts, first_chunk) {
+                Ok(decoder) => decoder,
                 Err(err) => {
                     error!("Fatal AAC decoder initialization error. {}", err);
+                    return;
                 }
-            }
+            };
+
+            let mut resampler = Resampler::new(mixing_sample_rate);
+
+            run_decoding_loop(
+                chunks_receiver,
+                &mut decoder,
+                &mut resampler,
+                samples_sender,
+            )
         }
     }
 }
@@ -281,6 +250,6 @@ fn init_opus_decoder(
     mixing_sample_rate: u32,
 ) -> Result<(OpusDecoder, Resampler), InputInitError> {
     let decoder = OpusDecoder::new(opus_decoder_opts, mixing_sample_rate)?;
-    let resampler = Resampler::new(decoder.decoded_sample_rate(), mixing_sample_rate)?;
+    let resampler = Resampler::new(mixing_sample_rate);
     Ok((decoder, resampler))
 }
