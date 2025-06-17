@@ -1,73 +1,112 @@
+use std::time::Duration;
+
 use axum::{extract::State, response::IntoResponse};
-use serde_json::{json, Value};
+use compositor_pipeline::pipeline::{input::Input, output::Output};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use crate::error::ApiError;
 
 use super::ApiState;
+#[derive(Serialize, Deserialize)]
+struct InputInfo {
+    input_id: String,
+    input_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct OutputInfo {
+    output_id: String,
+    output_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct WebRendererConfig {
+    enable: bool,
+    enable_gpu: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct QueueOptions {
+    default_buffer_duration: Duration,
+    ahead_of_time_processing: bool,
+    output_framerate: Framerate,
+    run_late_scheduled_events: bool,
+    never_drop_output_frames: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Framerate {
+    num: u32,
+    den: u32,
+}
+
 pub(super) async fn status_handler(
     State(state): State<ApiState>,
 ) -> Result<impl IntoResponse, ApiError> {
     let pipeline = state.pipeline.lock().unwrap();
     let pipeline_ctx = pipeline.ctx();
 
-    let inputs: Vec<Value> = pipeline
+    let inputs: Vec<InputInfo> = pipeline
         .inputs()
         .map(|(id, input)| {
             let input_type = match &input.input {
-                compositor_pipeline::pipeline::input::Input::Rtp(_) => "rtp",
-                compositor_pipeline::pipeline::input::Input::Mp4(_) => "mp4",
-                compositor_pipeline::pipeline::input::Input::Whip(_) => "whip",
+                Input::Rtp(_) => "rtp",
+                Input::Mp4(_) => "mp4",
+                Input::Whip(_) => "whip",
                 #[cfg(feature = "decklink")]
-                compositor_pipeline::pipeline::input::Input::DeckLink(_) => "decklink",
-                compositor_pipeline::pipeline::input::Input::RawDataInput => "raw data",
+                Input::DeckLink(_) => "decklink",
+                Input::RawDataInput => "raw data",
             };
-            json!({
-                "input_id": id.to_string(),
-                "type": input_type
-            })
+            InputInfo {
+                input_id: id.to_string(),
+                input_type: input_type.to_string(),
+            }
         })
         .collect();
 
-    let outputs: Vec<Value> = pipeline
+    let outputs: Vec<OutputInfo> = pipeline
         .outputs()
         .map(|(id, output)| {
             let output_type = match &output.output {
-                compositor_pipeline::pipeline::output::Output::Rtp { .. } => "rtp",
-                compositor_pipeline::pipeline::output::Output::Rtmp { .. } => "rtmp",
-                compositor_pipeline::pipeline::output::Output::Mp4 { .. } => "mp4",
-                compositor_pipeline::pipeline::output::Output::Whip { .. } => "whip",
-                compositor_pipeline::pipeline::output::Output::EncodedData { .. } => "encoded data",
-                compositor_pipeline::pipeline::output::Output::RawData { .. } => "raw data",
+                Output::Rtp { .. } => "rtp",
+                Output::Rtmp { .. } => "rtmp",
+                Output::Mp4 { .. } => "mp4",
+                Output::Whip { .. } => "whip",
+                Output::EncodedData { .. } => "encoded data",
+                Output::RawData { .. } => "raw data",
             };
-            json!({
-                "output_id": id.to_string(),
-                "type": output_type
-            })
+            OutputInfo {
+                output_id: id.to_string(),
+                output_type: output_type.to_string(),
+            }
         })
         .collect();
 
-    let web_r = json!({
-        "enable": state.config.web_renderer.enable,
-        "enable_gpu": state.config.web_renderer.enable_gpu
-    });
-
-    let queue_options = json!({
-        "default_buffer_duration": state.config.queue_options.default_buffer_duration,
-        "ahead_of_time_processing": state.config.queue_options.ahead_of_time_processing,
-        "output_framerate": {
-            "num": state.config.queue_options.output_framerate.num,
-            "den": state.config.queue_options.output_framerate.den,
+    let state_queue_options = state.config.queue_options;
+    let queue_options = QueueOptions {
+        default_buffer_duration: state_queue_options.default_buffer_duration,
+        ahead_of_time_processing: state_queue_options.ahead_of_time_processing,
+        output_framerate: Framerate {
+            num: state_queue_options.output_framerate.num,
+            den: state_queue_options.output_framerate.den,
         },
-        "run_late_scheduled_events": state.config.queue_options.run_late_scheduled_events,
-        "never_drop_output_frames": state.config.queue_options.never_drop_output_frames
-    });
+        run_late_scheduled_events: state_queue_options.run_late_scheduled_events,
+        never_drop_output_frames: state_queue_options.never_drop_output_frames,
+    };
+
+    let state_web_renderer = state.config.web_renderer;
+    let web_renderer = WebRendererConfig {
+        enable: state_web_renderer.enable,
+        enable_gpu: state_web_renderer.enable_gpu,
+    };
 
     Ok(axum::Json(json!({
         "instance_id": state.config.instance_id,
         "api_port": state.config.api_port,
         "stream_fallback_timeout": state.config.stream_fallback_timeout,
         "download_root": state.config.download_root,
-        "web_renderer": web_r,
+        "web_renderer": web_renderer,
         "force_gpu": state.config.force_gpu,
         "queue_options": queue_options,
         "mixing_sample_rate": state.config.mixing_sample_rate,

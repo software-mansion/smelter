@@ -2076,6 +2076,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 dependencies = [
  "foldhash",
+ "serde",
 ]
 
 [[package]]
@@ -6031,7 +6032,6 @@ dependencies = [
  "portable-atomic",
  "profiling",
  "raw-window-handle",
- "serde",
  "smallvec",
  "static_assertions",
  "wasm-bindgen",
