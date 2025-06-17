@@ -13,6 +13,10 @@ type CreateInstanceOptions = {
   url: string | URL;
 };
 
+interface StatusResponse {
+  queue_options?: { ahead_of_time_processing: boolean };
+}
+
 /**
  * SmelterManager that will connect to existing instance
  */
@@ -40,14 +44,34 @@ class ExistingInstanceManager implements SmelterManager {
   }
 
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
-    // TODO: verify if options match
-    // https://github.com/software-mansion/smelter/issues/877
     await retry(async () => {
       await sleep(500);
-      return await this.sendRequest({
+      let status = (await this.sendRequest({
         method: 'GET',
         route: '/status',
-      });
+      })) as StatusResponse;
+
+      const expectedConfig = {
+        ahead_of_time_processing: opts.aheadOfTimeProcessing,
+      };
+
+      const actualConfig = {
+        ahead_of_time_processing: status.queue_options?.ahead_of_time_processing,
+      };
+
+      for (const [key, expected] of Object.entries(expectedConfig)) {
+        const actual = actualConfig[key as keyof typeof actualConfig];
+        if (actual !== expected) {
+          opts.logger.warn(
+            {
+              expected: expected === undefined ? 'undefined' : expected,
+              actual: actual === undefined ? 'undefined' : actual,
+            },
+            `Mismatch in ${key}`
+          );
+        }
+      }
+      return status;
     }, 10);
     await this.wsConnection.connect(opts.logger);
   }

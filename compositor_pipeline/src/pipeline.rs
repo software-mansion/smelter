@@ -254,6 +254,10 @@ impl Pipeline {
         &self.queue
     }
 
+    pub fn ctx(&self) -> &PipelineCtx {
+        &self.ctx
+    }
+
     pub fn subscribe_pipeline_events(&self) -> Receiver<Event> {
         self.ctx.event_emitter.subscribe()
     }

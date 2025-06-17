@@ -13,6 +13,10 @@ export type InstanceOptions = {
   url: string | URL;
 };
 
+interface StatusResponse {
+  queue_options?: { ahead_of_time_processing: boolean };
+}
+
 class RemoteInstanceManager implements SmelterManager {
   private url: URL;
   private wsConnection: WebSocketConnection;
@@ -39,10 +43,24 @@ class RemoteInstanceManager implements SmelterManager {
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
     await retry(async () => {
       await sleep(500);
-      return await this.sendRequest({
+      let status = (await this.sendRequest({
         method: 'GET',
         route: '/status',
-      });
+      })) as StatusResponse;
+
+      const expectedAheadOfTime = opts.aheadOfTimeProcessing;
+
+      console.log(expectedAheadOfTime);
+      if (status.queue_options?.ahead_of_time_processing !== expectedAheadOfTime) {
+        opts.logger.warn(
+          {
+            expected: expectedAheadOfTime,
+            actual: status.queue_options?.ahead_of_time_processing,
+          },
+          'Mismatch in queue_options.ahead_of_time_processing'
+        );
+      }
+      return status;
     }, 10);
     await this.wsConnection.connect(opts.logger);
   }
