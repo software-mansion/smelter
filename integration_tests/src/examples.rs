@@ -7,9 +7,8 @@ use std::{
     env,
     fs::{self, File},
     io,
-    path::{Path, PathBuf},
-    process::{self, Command},
-    thread,
+    path::PathBuf,
+    process, thread,
     time::{Duration, Instant},
 };
 use tokio_tungstenite::tungstenite;
@@ -220,91 +219,46 @@ struct AssetData {
 pub fn download_all_assets() -> Result<()> {
     let assets = [AssetData {
         url: String::from("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"),
-        path: examples_root_dir().join("examples/assets/BigBuckBunny.mp4"),
+        path: examples_root_dir().join("examples/assets/BigBuckBunny720p24fps597s.mp4"),
     },
     AssetData {
         url: String::from("http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"),
-        path: examples_root_dir().join("examples/assets/ElephantsDream.mp4"),
+        path: examples_root_dir().join("examples/assets/ElephantsDream720p24fps654s.mp4"),
     },
     AssetData {
         url: String::from("https://filesamples.com/samples/video/mp4/sample_1280x720.mp4"),
-        path: examples_root_dir().join("examples/assets/sample_1280_720.mp4"),
+        path: examples_root_dir().join("examples/assets/OceanSample720p24fps28s.mp4"),
+    },
+    AssetData {
+        url: String::from("https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/BigBuckBunny720p24fps60s.vp8.webm"),
+        path: examples_root_dir().join("examples/assets/BigBuckBunny720p24fps60s.vp8.webm"),
+    },
+        AssetData {
+        url: String::from("https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/BigBuckBunny720p24fps60s.vp9.webm"),
+        path: examples_root_dir().join("examples/assets/BigBuckBunny720p24fps60s.vp9.webm"),
+    },
+        AssetData {
+        url: String::from("https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/ElephantsDream720p24fps60s.vp8.webm"),
+        path: examples_root_dir().join("examples/assets/ElephantsDream720p24fps60s.vp8.webm"),
+    },
+        AssetData {
+        url: String::from("https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/ElephantsDream720p24fps60s.vp9.webm"),
+        path: examples_root_dir().join("examples/assets/ElephantsDream720p24fps60s.vp9.webm"),
+    },
+        AssetData {
+        url: String::from("https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/OceanSample720p24fps28s.vp8.webm"),
+        path: examples_root_dir().join("examples/assets/OceanSample720p24fps28s.vp8.webm"),
+    },
+        AssetData {
+        url: String::from("https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/OceanSample720p24fps28s.vp9.webm"),
+        path: examples_root_dir().join("examples/assets/OceanSample720p24fps28s.vp9.webm"),
     }];
 
     for asset in assets {
         if let Err(err) = download_asset(&asset) {
             warn!(?asset, "Error while downloading asset: {err}");
         }
-        if let Err(err) = convert_to_webm(&asset.path, "vp9") {
-            eprintln!("Error while converting video: {:?}", err);
-        }
-        if let Err(err) = convert_to_webm(&asset.path, "vp8") {
-            eprintln!("Error while converting video: {:?}", err);
-        }
     }
-
-    Ok(())
-}
-
-fn convert_to_webm(input_path: &Path, codec: &str) -> Result<()> {
-    let extension = match codec {
-        "vp8" => "vp8.webm",
-        "vp9" => "vp9.webm",
-        _ => return Err(anyhow!("Unsupported codec: {}", codec)),
-    };
-    let output_path = input_path.with_extension(extension);
-    let done_marker = input_path.with_extension(format!("{}.done", extension));
-
-    if output_path.exists() && done_marker.exists() {
-        return Ok(());
-    }
-
-    let _ = fs::remove_file(&output_path);
-    let _ = fs::remove_file(&done_marker);
-
-    let codec_args = match codec {
-        "vp8" => vec![
-            "-c:v", "libvpx", "-crf", "10", "-b:v", "2M", "-quality", "good",
-        ],
-        "vp9" => vec![
-            "-c:v",
-            "libvpx-vp9",
-            "-crf",
-            "10",
-            "-b:v",
-            "2M",
-            "-quality",
-            "good",
-        ],
-        _ => return Err(anyhow!("Unsupported codec: {}", codec)),
-    };
-    let status = Command::new("ffmpeg")
-        .arg("-i")
-        .arg(
-            input_path
-                .to_str()
-                .ok_or_else(|| anyhow!("Invalid input path"))?,
-        )
-        .arg("-t")
-        .arg("60")
-        .arg("-threads")
-        .arg("0")
-        .args(codec_args)
-        .arg(
-            output_path
-                .to_str()
-                .ok_or_else(|| anyhow!("Invalid output path"))?,
-        )
-        .status()?;
-
-    if !status.success() {
-        let _ = fs::remove_file(&output_path);
-        let _ = fs::remove_file(&done_marker);
-        return Err(anyhow::Error::msg(format!(
-            "ffmpeg failed to convert mp4 {input_path:?} to webm",
-        )));
-    }
-    fs::write(&done_marker, "done")?;
 
     Ok(())
 }
@@ -312,31 +266,31 @@ fn convert_to_webm(input_path: &Path, codec: &str) -> Result<()> {
 fn map_asset_to_path(asset: &TestSample) -> Option<PathBuf> {
     match asset {
         TestSample::BigBuckBunnyH264Opus | TestSample::BigBuckBunnyH264AAC => {
-            Some(examples_root_dir().join("examples/assets/BigBuckBunny.mp4"))
+            Some(examples_root_dir().join("examples/assets/BigBuckBunny720p24fps597s.mp4"))
         }
         TestSample::BigBuckBunnyVP8Opus => {
-            Some(examples_root_dir().join("examples/assets/BigBuckBunny.vp8.webm"))
+            Some(examples_root_dir().join("examples/assets/BigBuckBunny720p24fps60s.vp8.webm"))
         }
         TestSample::BigBuckBunnyVP9Opus => {
-            Some(examples_root_dir().join("examples/assets/BigBuckBunny.vp9.webm"))
+            Some(examples_root_dir().join("examples/assets/BigBuckBunny720p24fps60s.vp9.webm"))
         }
         TestSample::ElephantsDreamH264Opus => {
-            Some(examples_root_dir().join("examples/assets/ElephantsDream.mp4"))
+            Some(examples_root_dir().join("examples/assets/ElephantsDream720p24fps654s.mp4"))
         }
         TestSample::ElephantsDreamVP8Opus => {
-            Some(examples_root_dir().join("examples/assets/ElephantsDream.vp8.webm"))
+            Some(examples_root_dir().join("examples/assets/ElephantsDream720p24fps60s.vp8.webm"))
         }
         TestSample::ElephantsDreamVP9Opus => {
-            Some(examples_root_dir().join("examples/assets/ElephantsDream.vp9.webm"))
+            Some(examples_root_dir().join("examples/assets/ElephantsDream720p24fps60s.vp9.webm"))
         }
         TestSample::SampleH264 | TestSample::SampleLoopH264 => {
-            Some(examples_root_dir().join("examples/assets/sample_1280_720.mp4"))
+            Some(examples_root_dir().join("examples/assets/OceanSample720p24fps28s.mp4"))
         }
         TestSample::SampleVP8 => {
-            Some(examples_root_dir().join("examples/assets/sample_1280_720.vp8.webm"))
+            Some(examples_root_dir().join("examples/assets/OceanSample720p24fps28s.vp8.webm"))
         }
         TestSample::SampleVP9 => {
-            Some(examples_root_dir().join("examples/assets/sample_1280_720.vp9.webm"))
+            Some(examples_root_dir().join("examples/assets/OceanSample720p24fps28s.vp9.webm"))
         }
         TestSample::TestPatternH264 | TestSample::TestPatternVP8 | TestSample::TestPatternVP9 => {
             None

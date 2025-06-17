@@ -177,8 +177,7 @@ fn try_read_config() -> Result<Config, String> {
     };
 
     let default_wgpu_features: WgpuFeatures =
-        WgpuFeatures::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-            | WgpuFeatures::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
+        WgpuFeatures::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
     let required_wgpu_features = match env::var("SMELTER_REQUIRED_WGPU_FEATURES") {
         Ok(required_wgpu_features) => wgpu_features_from_str(&required_wgpu_features).unwrap(),
         Err(_) => default_wgpu_features,
@@ -327,8 +326,8 @@ fn wgpu_features_from_str(s: &str) -> Result<WgpuFeatures, String> {
             "SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING" => {
                 WgpuFeatures::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
             }
-            "UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING" => {
-                WgpuFeatures::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+            "STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING" => {
+                WgpuFeatures::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
             }
             "PARTIALLY_BOUND_BINDING_ARRAY" => WgpuFeatures::PARTIALLY_BOUND_BINDING_ARRAY,
             "MULTI_DRAW_INDIRECT" => WgpuFeatures::MULTI_DRAW_INDIRECT,

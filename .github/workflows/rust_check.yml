@@ -19,6 +19,8 @@ jobs:
                   set -e
                   sudo apt-get update -y -qq
                   sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
+                  sudo apt-get clean
+                  sudo rm -rf /var/lib/apt/lists/*
 
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -103,6 +105,8 @@ jobs:
               run: |
                   sudo apt-get update -y -qq
                   sudo apt-get install -y mesa-vulkan-drivers libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
+                  sudo apt-get clean
+                  sudo rm -rf /var/lib/apt/lists/*
 
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
