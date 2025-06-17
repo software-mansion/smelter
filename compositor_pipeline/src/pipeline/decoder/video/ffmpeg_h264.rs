@@ -135,7 +135,17 @@ fn run_decoder_thread(
             }
         }
 
-        while decoder.receive_frame(&mut decoded_frame).is_ok() {
+        loop {
+            if let Err(err) = decoder.receive_frame(&mut decoded_frame) {
+                if err
+                    != (ffmpeg_next::Error::Other {
+                        errno: ffmpeg_next::ffi::EAGAIN,
+                    })
+                {
+                    error!("receive frame err: {err}");
+                }
+                break;
+            }
             let frame = match frame_from_av(&mut decoded_frame, &mut pts_offset) {
                 Ok(frame) => frame,
                 Err(err) => {

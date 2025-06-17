@@ -70,8 +70,4 @@ impl AudioDecoderExt for OpusDecoder {
         };
         Ok(Vec::from([decoded_samples]))
     }
-
-    fn decoded_sample_rate(&self) -> u32 {
-        self.decoded_sample_rate
-    }
 }

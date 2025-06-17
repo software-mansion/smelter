@@ -95,6 +95,7 @@ pub enum DecoderError {
 /// one output frame.
 /// If `pts` is [`Option::None`], the chunk can contain bytestream from multiple consecutive
 /// frames.
+#[derive(Debug, Clone)]
 pub struct EncodedChunk<T> {
     pub data: T,
     pub pts: Option<u64>,

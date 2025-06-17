@@ -7,7 +7,9 @@ use crate::{
 
 use compositor_render::{Frame, InputId};
 use crossbeam_channel::{bounded, Receiver};
+use hls::{HlsInput, HlsInputOptions};
 use rtp::{RtpReceiver, RtpReceiverOptions};
+use tracing::info;
 use whip::{WhipInput, WhipOptions};
 
 use self::mp4::{Mp4, Mp4Options};
@@ -23,6 +25,7 @@ use super::{
 
 #[cfg(feature = "decklink")]
 pub mod decklink;
+pub mod hls;
 pub mod mp4;
 pub mod rtp;
 pub mod whip;
@@ -30,6 +33,7 @@ pub mod whip;
 pub enum Input {
     Rtp(RtpReceiver),
     Mp4(Mp4),
+    Hls(HlsInput),
     Whip(WhipInput),
     #[cfg(feature = "decklink")]
     DeckLink(decklink::DeckLink),
@@ -41,6 +45,7 @@ pub enum InputOptions {
     Rtp(RtpReceiverOptions),
     Mp4(Mp4Options),
     Whip(WhipOptions),
+    Hls(HlsInputOptions),
     #[cfg(feature = "decklink")]
     DeckLink(decklink::DeckLinkOptions),
 }
@@ -209,6 +214,17 @@ fn start_input_threads(
                 setup_and_start_decoders_threads(pipeline_ctx, input_id, video, audio)?;
             Ok((input, decoder_data_receiver, init_info))
         }
+        InputOptions::Hls(opts) => {
+            let InputInitResult {
+                input,
+                video,
+                audio,
+                init_info,
+            } = HlsInput::start_new_input(input_id, opts)?;
+            let decoder_data_receiver =
+                setup_and_start_decoders_threads(pipeline_ctx, input_id, video, audio)?;
+            Ok((input, decoder_data_receiver, init_info))
+        }
     }
 }
 
@@ -225,6 +241,7 @@ fn setup_and_start_decoders_threads(
                 chunk_receiver,
                 decoder_options,
             } => {
+                info!("start video");
                 let (sender, receiver) = bounded(10);
                 start_video_decoder_thread(
                     decoder_options,
@@ -245,16 +262,15 @@ fn setup_and_start_decoders_threads(
         match audio {
             AudioInputReceiver::Raw {
                 sample_receiver,
-                sample_rate,
+                sample_rate: _,
             } => {
                 let (sender, receiver) = bounded(10);
                 start_audio_resampler_only_thread(
-                    sample_rate,
                     pipeline_ctx.mixing_sample_rate,
                     sample_receiver,
                     sender,
                     input_id.clone(),
-                )?;
+                );
                 Some(receiver)
             }
             AudioInputReceiver::Encoded {
@@ -262,6 +278,7 @@ fn setup_and_start_decoders_threads(
                 decoder_options,
             } => {
                 let (sender, receiver) = bounded(10);
+                info!("start audio");
                 start_audio_decoder_thread(
                     decoder_options,
                     pipeline_ctx.mixing_sample_rate,
