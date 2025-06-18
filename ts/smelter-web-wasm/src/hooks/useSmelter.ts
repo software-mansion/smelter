@@ -4,11 +4,12 @@ import Smelter from '../compositor/compositor';
 
 export function useSmelter(options?: SmelterOptions): Smelter | undefined {
   const [smelter, setSmelter] = useState<Smelter>();
+
   useEffect(() => {
     const smelter = new Smelter(options);
 
     let cancel = false;
-    const promise = (async () => {
+    (async () => {
       await smelter.init();
       await smelter.start();
       if (!cancel) {
@@ -18,10 +19,7 @@ export function useSmelter(options?: SmelterOptions): Smelter | undefined {
 
     return () => {
       cancel = true;
-      void (async () => {
-        await promise.catch(() => {});
-        await smelter.terminate();
-      })();
+      void smelter.terminate();
     };
   }, [options?.framerate, (options?.framerate as any)?.num, (options?.framerate as any)?.den]);
   return smelter;
