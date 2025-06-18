@@ -17,16 +17,6 @@ pub enum RenderingMode {
     WebGl,
 }
 
-impl Display for RenderingMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::GpuOptimized => write!(f, "GPU optimized"),
-            Self::CpuOptimized => write!(f, "CPU optimized"),
-            Self::WebGl => write!(f, "WebGL"),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Frame {
     pub data: FrameData,

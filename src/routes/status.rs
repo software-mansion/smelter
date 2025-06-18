@@ -2,31 +2,33 @@ use std::time::Duration;
 
 use axum::{extract::State, response::IntoResponse};
 use compositor_pipeline::pipeline::{input::Input, output::Output};
-use serde::{Deserialize, Serialize};
+use compositor_render::RenderingMode;
+use serde::Serialize;
 use serde_json::json;
 
 use crate::error::ApiError;
 
 use super::ApiState;
-#[derive(Serialize, Deserialize)]
+
+#[derive(Serialize)]
 struct InputInfo {
     input_id: String,
     input_type: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct OutputInfo {
     output_id: String,
     output_type: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct WebRendererConfig {
     enable: bool,
     enable_gpu: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct QueueOptions {
     default_buffer_duration: Duration,
     ahead_of_time_processing: bool,
@@ -35,7 +37,7 @@ struct QueueOptions {
     never_drop_output_frames: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct Framerate {
     num: u32,
     den: u32,
@@ -101,6 +103,12 @@ pub(super) async fn status_handler(
         enable_gpu: state_web_renderer.enable_gpu,
     };
 
+    let rendering_mode = match state.config.rendering_mode {
+        RenderingMode::GpuOptimized => "GPU optimized",
+        RenderingMode::CpuOptimized => "CPU optimized",
+        RenderingMode::WebGl => "WebGL",
+    };
+
     Ok(axum::Json(json!({
         "instance_id": state.config.instance_id,
         "api_port": state.config.api_port,
@@ -114,7 +122,7 @@ pub(super) async fn status_handler(
         "load_system_fonts": state.config.load_system_fonts,
         "whip_whep_server_port": state.config.whip_whep_server_port,
         "start_whip_whep": state.config.start_whip_whep,
-        "rendering_mode": state.config.rendering_mode.to_string(),
+        "rendering_mode": rendering_mode,
         "stun_servers": pipeline_ctx.stun_servers,
         "inputs": inputs,
         "outputs": outputs

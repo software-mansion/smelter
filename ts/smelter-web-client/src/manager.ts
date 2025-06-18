@@ -50,7 +50,6 @@ class RemoteInstanceManager implements SmelterManager {
 
       const expectedAheadOfTime = opts.aheadOfTimeProcessing;
 
-      console.log(expectedAheadOfTime);
       if (status.queue_options?.ahead_of_time_processing !== expectedAheadOfTime) {
         opts.logger.warn(
           {
