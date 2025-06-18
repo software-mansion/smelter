@@ -27,6 +27,13 @@ type ManagedInstanceOptions = {
   enableWebRenderer?: boolean;
 };
 
+interface StatusResponse {
+  api_port: number;
+  download_root: string;
+  web_renderer?: { enable: boolean };
+  queue_options?: { ahead_of_time_processing: boolean };
+}
+
 /**
  * SmelterManager that will download and spawn it's own Smelter instance locally.
  */
@@ -59,8 +66,10 @@ class LocallySpawnedInstanceManager implements SmelterManager {
 
     const { level, format } = smelterInstanceLoggerOptions();
 
+    let download_dir = path.join(this.workingdir, 'download');
+
     const env = {
-      SMELTER_DOWNLOAD_DIR: path.join(this.workingdir, 'download'),
+      SMELTER_DOWNLOAD_DIR: download_dir,
       SMELTER_API_PORT: this.port.toString(),
       SMELTER_WEB_RENDERER_ENABLE: this.enableWebRenderer ? 'true' : 'false',
       SMELTER_AHEAD_OF_TIME_PROCESSING_ENABLE: opts.aheadOfTimeProcessing ? 'true' : 'false',
@@ -82,10 +91,39 @@ class LocallySpawnedInstanceManager implements SmelterManager {
 
     await retry(async () => {
       await sleep(500);
-      return await this.sendRequest({
+
+      let status = (await this.sendRequest({
         method: 'GET',
         route: '/status',
-      });
+      })) as StatusResponse;
+
+      const expectedConfig = {
+        api_port: this.port,
+        download_dir: download_dir,
+        web_renderer_enable: this.enableWebRenderer,
+        ahead_of_time_processing: opts.aheadOfTimeProcessing,
+      };
+
+      const actualConfig = {
+        api_port: status.api_port,
+        download_dir: status.download_root,
+        web_renderer_enable: status.web_renderer?.enable,
+        ahead_of_time_processing: status.queue_options?.ahead_of_time_processing,
+      };
+
+      for (const [key, expected] of Object.entries(expectedConfig)) {
+        const actual = actualConfig[key as keyof typeof actualConfig];
+        if (actual !== expected) {
+          opts.logger.warn(
+            {
+              expected: expected === undefined ? 'undefined' : expected,
+              actual: actual === undefined ? 'undefined' : actual,
+            },
+            `Mismatch in ${key}`
+          );
+        }
+      }
+      return status;
     }, 10);
 
     await this.wsConnection.connect(opts.logger);
