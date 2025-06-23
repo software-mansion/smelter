@@ -5,6 +5,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    thread,
     time::Duration,
 };
 
@@ -29,7 +30,7 @@ use ffmpeg_next::{
     util::interrupt,
     Dictionary, Packet,
 };
-use tracing::{debug, info, span, warn, Level};
+use tracing::{debug, span, warn, Level};
 
 use super::{AudioInputReceiver, Input, InputInitInfo, InputInitResult, VideoInputReceiver};
 
@@ -89,7 +90,7 @@ impl HlsInput {
         // I do not know why this happens
         let mut input_ctx = match input_with_dictionary_and_interrupt(
             &options.url,
-            Dictionary::from_iter([("protocol_whitelist", "tcp,hls,http,https,tls")]),
+            Dictionary::from_iter([("protocol_whitelist", "tcp,hls,http,https,file,tls")]),
             || should_close.load(Ordering::Relaxed),
         ) {
             Ok(i) => i,
@@ -117,7 +118,7 @@ impl HlsInput {
                         None
                     }
                 };
-                let (sender, receiver) = bounded(100);
+                let (sender, receiver) = bounded(1000);
                 (
                     Some((stream.index(), stream.time_base(), sender)),
                     Some((receiver, config)),
@@ -131,7 +132,7 @@ impl HlsInput {
                 //     "Video stream {:?}",
                 //     (stream.time_base(), stream.start_time(), stream.metadata())
                 // );
-                let (sender, receiver) = bounded(100);
+                let (sender, receiver) = bounded(1000);
                 (
                     Some((stream.index(), stream.time_base(), sender)),
                     Some(receiver),
@@ -140,23 +141,25 @@ impl HlsInput {
             None => (None, None),
         };
 
-        result_sender
-            .send(Ok((
-                video_receiver.map(|video| VideoInputReceiver::Encoded {
-                    chunk_receiver: video,
-                    decoder_options: VideoDecoderOptions {
-                        decoder: VideoDecoder::VulkanVideoH264,
-                    },
-                }),
-                audio_result.map(|(receiver, asc)| AudioInputReceiver::Encoded {
-                    chunk_receiver: receiver,
-                    decoder_options: AudioDecoderOptions::Aac(AacDecoderOptions {
-                        depayloader_mode: None,
-                        asc,
+        let mut send_init_result = Some(move || {
+            result_sender
+                .send(Ok((
+                    video_receiver.map(|video| VideoInputReceiver::Encoded {
+                        chunk_receiver: video,
+                        decoder_options: VideoDecoderOptions {
+                            decoder: VideoDecoder::VulkanVideoH264,
+                        },
                     }),
-                }),
-            )))
-            .unwrap();
+                    audio_result.map(|(receiver, asc)| AudioInputReceiver::Encoded {
+                        chunk_receiver: receiver,
+                        decoder_options: AudioDecoderOptions::Aac(AacDecoderOptions {
+                            depayloader_mode: None,
+                            asc,
+                        }),
+                    }),
+                )))
+                .unwrap()
+        });
 
         let mut packet = Packet::empty();
         loop {
@@ -169,23 +172,23 @@ impl HlsInput {
                 }
             }
 
-            info!("Packet {:?} {:?}", packet.stream(), packet.flags());
+            if packet.flags().contains(ffmpeg_next::packet::Flags::CORRUPT) {
+                debug!(
+                    "Corrupted packet {:?} {:?}",
+                    packet.stream(),
+                    packet.flags()
+                );
+                continue;
+            }
 
             if let Some((index, time_base, ref sender)) = video {
-                let stream = input_ctx.stream(index).unwrap();
+                if sender.len() > 600 {
+                    send_init_result.take().map(|fun| fun());
+                }
                 if packet.stream() == index {
-                    warn!(
+                    debug!(
                         "Video packet {:?}",
-                        (
-                            packet.time_base(),
-                            packet.size(),
-                            packet.duration(),
-                            packet.pts(),
-                            packet.dts(),
-                            stream.time_base(),
-                            stream.start_time(),
-                            sender.len(),
-                        )
+                        (packet.stream(), packet.pts(), sender.len(),)
                     );
 
                     let chunk = PipelineEvent::Data(EncodedChunk {
@@ -202,6 +205,9 @@ impl HlsInput {
                         is_keyframe: IsKeyframe::Unknown,
                         kind: EncodedChunkKind::Video(VideoCodec::H264),
                     });
+                    if sender.len() == 0 {
+                        warn!("HLS input video channel was drained")
+                    }
                     if sender.send(chunk).is_err() {
                         debug!("Channel closed")
                     }
@@ -209,7 +215,14 @@ impl HlsInput {
             }
 
             if let Some((index, time_base, ref sender)) = audio {
+                if sender.len() > 600 {
+                    send_init_result.take().map(|fun| fun());
+                }
                 if packet.stream() == index {
+                    debug!(
+                        "Audio packet {:?}",
+                        (packet.stream(), packet.pts(), sender.len(),)
+                    );
                     let chunk = PipelineEvent::Data(EncodedChunk {
                         data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
                         pts: Duration::from_secs_f64(
@@ -224,12 +237,18 @@ impl HlsInput {
                         is_keyframe: IsKeyframe::Unknown,
                         kind: EncodedChunkKind::Audio(AudioCodec::Aac),
                     });
+                    if sender.len() == 0 {
+                        warn!("HLS input audio channel was drained")
+                    }
                     if sender.send(chunk).is_err() {
                         debug!("Channel closed")
                     }
                 }
             }
         }
+
+        // just to make sure init is finished for short streams
+        send_init_result.take().map(|fun| fun());
 
         if let Some((_, _, sender)) = audio {
             if sender.send(PipelineEvent::EOS).is_err() {

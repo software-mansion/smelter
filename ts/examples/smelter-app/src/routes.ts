@@ -1,8 +1,10 @@
 import type { Express } from 'express';
 import express, { json } from 'express';
 import { LayoutValues, store } from './store';
-import { addTwitchStream } from './addTwitchStream';
+import { addTwitchStream, ffmpegPromises, SMELTER_WORKDIR } from './addTwitchStream';
 import { SmelterInstance } from './smelter';
+import * as fs from 'fs-extra';
+import path from 'path';
 
 export const app: Express = express();
 
@@ -23,9 +25,16 @@ app.post('/add-stream', (req, res, next) => {
 
 app.post('/remove-stream', (req, res, next) => {
   (async () => {
-    const streamId = req.body.streamId;
+    const streamId: string = req.body.streamId;
     store.getState().removeStream(streamId);
     await SmelterInstance.unregisterInput(streamId);
+    if (!streamId.includes('/')) {
+      await Promise.allSettled([fs.remove(path.join(SMELTER_WORKDIR, streamId))]);
+    }
+    const ffmpegPromise = ffmpegPromises[streamId];
+    if (ffmpegPromise) {
+      ffmpegPromise.child.kill();
+    }
   })()
     .then(() => res.send({}))
     .catch(err => next(err));

@@ -11,7 +11,9 @@
   "dependencies": {
     "@swmansion/smelter": "workspace:^0.2.1",
     "@swmansion/smelter-node": "workspace:^0.2.1",
+    "@types/fs-extra": "^11.0.4",
     "express": "^4.21.0",
+    "fs-extra": "^11.2.0",
     "react": "18.3.1",
     "zustand": "4.5.5"
   },

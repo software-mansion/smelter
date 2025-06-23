@@ -7,7 +7,7 @@ export const SmelterInstance = new Smelter();
 export async function initializeSmelterInstance() {
   await SmelterInstance.init();
 
-  if (process.env.ENVIRONMENT === 'production') {
+  if (process.env.ENVIRONMENT !== 'production') {
     void spawn(
       'bash',
       [
@@ -21,9 +21,15 @@ export async function initializeSmelterInstance() {
 
   await SmelterInstance.registerOutput('output_1', <App />, {
     type: 'whip',
-    endpointUrl: 'http://127.0.0.1:3002/api/whip',
+    endpointUrl: 'http://127.0.0.1:8080/api/whip',
     bearerToken: 'example',
     video: {
+      encoderPreferences: [
+        {
+          type: 'ffmpeg_h264',
+          preset: 'veryfast',
+        },
+      ],
       resolution: {
         width: 1920,
         height: 1080,
