@@ -1,6 +1,7 @@
 import Smelter from '@swmansion/smelter-node';
 import App from './App';
 import { sleep, spawn } from './utils';
+import fetch from 'node-fetch';
 
 export const SmelterInstance = new Smelter();
 
@@ -16,7 +17,19 @@ export async function initializeSmelterInstance() {
       ],
       {}
     );
-    await sleep(5000);
+  }
+
+  while (true) {
+    await sleep(500);
+    try {
+      const result = await fetch('http://127.0.0.1:8080/status');
+      console.log(`connecting (response: ${await result.text()})`);
+      if (result.status < 300) {
+        break;
+      }
+    } catch (err) {
+      console.log(`connecting err (response: ${err})`);
+    }
   }
 
   await SmelterInstance.registerOutput('output_1', <App />, {

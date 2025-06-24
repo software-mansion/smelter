@@ -51,3 +51,41 @@ export function sleep(timeoutMs: number): Promise<void> {
     setTimeout(() => res(), timeoutMs);
   });
 }
+
+export function isProcessRunning(pid: number): boolean {
+  try {
+    return process.kill(pid, 0);
+  } catch (e: any) {
+    return e.code === 'EPERM';
+  }
+}
+
+export async function ensureProcessKill(pid: number): Promise<void> {
+  if (isProcessRunning(pid)) {
+    return;
+  }
+  try {
+    process.kill(pid);
+  } catch (err: any) {
+    console.log(err);
+  }
+  let startMs = Date.now();
+  while (Date.now() - startMs < 3000) {
+    if (!isProcessRunning(pid)) {
+      return;
+    }
+    await sleep(200);
+  }
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch (err) {
+    console.log(err);
+  }
+  while (Date.now() - startMs < 5000) {
+    if (!isProcessRunning(pid)) {
+      return;
+    }
+    await sleep(200);
+  }
+  throw new Error('Unable to kill process');
+}

@@ -1,11 +1,10 @@
 import { initializeSmelterInstance } from './smelter';
 import { app } from './routes';
-import * as fs from 'fs-extra';
-import { SMELTER_WORKDIR } from './addTwitchStream';
+import { initialCleanup, monitorStreams } from './StreamManager';
 
 async function run() {
-  await Promise.allSettled([fs.remove(SMELTER_WORKDIR)]);
-  await fs.mkdirp(SMELTER_WORKDIR);
+  await initialCleanup();
+  await monitorStreams();
   await initializeSmelterInstance();
 
   app.listen(3001);

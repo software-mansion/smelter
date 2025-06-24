@@ -1,10 +1,20 @@
 import { View, useInputStreams, InputStream, Tiles, Rescaler } from '@swmansion/smelter';
 
+import type { StreamInfo } from './store';
 import { store } from './store';
 import { useStore } from 'zustand';
 
 export default function App() {
   return <OutputScene />;
+}
+
+function useVisibleStreams(): StreamInfo[] {
+  const state = useStore(store, state => state);
+
+  return state.connectedStreamIds
+    .map(streamId => state.availableStreams.find(info => info.id === streamId))
+    .filter(stream => stream?.live && stream.available)
+    .filter(stream => !!stream);
 }
 
 function OutputScene() {
@@ -42,20 +52,20 @@ function GridLayout() {
 }
 
 function PrimaryOnLeftLayout() {
-  const connectedStreamIds = useStore(store, state => state.connectedStreamIds);
-  const firstStreamId = connectedStreamIds[0];
-  if (!firstStreamId) {
+  const visibleStreams = useVisibleStreams();
+  const firstStream = visibleStreams[0];
+  if (!firstStream) {
     return <View />;
   }
   const inputs = useInputStreams();
   return (
     <View style={{ direction: 'row' }}>
       <Rescaler style={{ width: 1500 }}>
-        <Input inputId={firstStreamId} />
+        <Input inputId={firstStream.id} />
       </Rescaler>
       <Tiles transition={{ durationMs: 300 }}>
         {Object.values(inputs)
-          .filter(input => input.inputId != firstStreamId)
+          .filter(input => input.inputId != firstStream.id)
           .map(input => (
             <Input key={input.inputId} inputId={input.inputId} />
           ))}
@@ -65,20 +75,21 @@ function PrimaryOnLeftLayout() {
 }
 
 function PrimaryOnTopLayout() {
-  const connectedStreamIds = useStore(store, state => state.connectedStreamIds);
-  const firstStreamId = connectedStreamIds[0];
-  if (!firstStreamId) {
+  const visibleStreams = useVisibleStreams();
+  const firstStream = visibleStreams[0];
+  if (!firstStream) {
     return <View />;
   }
+
   const inputs = useInputStreams();
   return (
     <View style={{ direction: 'column' }}>
       <Rescaler style={{ height: 800 }}>
-        <InputStream inputId={firstStreamId} />
+        <Input inputId={firstStream.id} />
       </Rescaler>
       <Tiles transition={{ durationMs: 300 }}>
         {Object.values(inputs)
-          .filter(input => input.inputId != firstStreamId)
+          .filter(input => input.inputId != firstStream.id)
           .map(input => (
             <InputStream key={input.inputId} inputId={input.inputId} />
           ))}
@@ -88,20 +99,20 @@ function PrimaryOnTopLayout() {
 }
 
 function SecondaryInCornerLayout() {
-  const connectedStreamIds = useStore(store, state => state.connectedStreamIds);
-  const firstStreamId = connectedStreamIds[0];
-  const secondStreamId = connectedStreamIds[1];
-  if (!firstStreamId) {
+  const visibleStreams = useVisibleStreams();
+  const firstStream = visibleStreams[0];
+  const secondStream = visibleStreams[1];
+  if (!firstStream) {
     return <View />;
   }
   return (
     <View style={{ direction: 'column' }}>
       <Rescaler>
-        <Input inputId={firstStreamId} />
+        <Input inputId={firstStream.id} />
       </Rescaler>
-      {secondStreamId ? (
+      {secondStream.id ? (
         <Rescaler style={{ top: 80, right: 80, width: 640, height: 320 }}>
-          <Input inputId={secondStreamId} />
+          <Input inputId={secondStream.id} />
         </Rescaler>
       ) : null}
     </View>
