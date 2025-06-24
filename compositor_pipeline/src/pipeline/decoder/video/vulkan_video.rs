@@ -87,7 +87,6 @@ fn run_decoder_thread(
             pts: Some(chunk.pts.as_micros() as u64),
         };
 
-        info!("decoder");
         let result = match decode_chunk(&mut decoder, &vulkan_device, chunk) {
             Ok(res) => res,
             Err(err) => {
@@ -95,10 +94,9 @@ fn run_decoder_thread(
                 continue;
             }
         };
-        info!("decoded done");
 
         for vk_video::Frame { data, pts } in result {
-            info!("video pts {:?}", pts);
+            debug!("video pts {:?}", pts);
             let resolution = Resolution {
                 width: data.width() as usize,
                 height: data.height() as usize,

@@ -86,7 +86,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
         method: 'GET',
         route: '/status',
       });
-    }, 10);
+    }, 50);
 
     await this.wsConnection.connect(opts.logger);
   }

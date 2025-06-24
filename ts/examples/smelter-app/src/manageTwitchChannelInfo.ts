@@ -1,0 +1,75 @@
+import { store } from './store';
+import type { TwitchStreamInfo } from './TwitchApi';
+import { getStreamInfo, getTopStreamsFromCategory } from './TwitchApi';
+import { sleep } from './utils';
+
+export async function manageTwitchChannelInfo() {
+  void startCategoryRefreshIntervalLoop();
+  void startStreamInfoRefreshIntervalLoop();
+}
+
+async function startCategoryRefreshIntervalLoop() {
+  while (true) {
+    try {
+      await refreshCategoryInfo([CATEGORY_ID_EA_SPORTS_FC_25, CATEGORY_ID_ANIMALS]);
+      await sleep(60_000);
+    } catch (err) {
+      console.log('Failed to refresh Twitch channel information', err);
+    }
+  }
+}
+
+async function startStreamInfoRefreshIntervalLoop() {
+  while (true) {
+    try {
+      let streamIds = store.getState().availableStreams.map(stream => stream.id);
+      for (const streamId of streamIds) {
+        await refreshStreamInfo(streamId);
+      }
+      await sleep(60_000);
+    } catch (err) {
+      console.log('Failed to refresh Twitch channel information', err);
+    }
+  }
+}
+
+//const categoryIdMap = {
+//  Animals: '272263131',
+//  'NBA 2K25': '2068583461',
+//  'F1 25': '93798731',
+//  'EA Sports UFC 5': '1628434805',
+//  'TEKKEN 8': '538054672',
+//  Chess: '743',
+//  Sports: '518203',
+//} as const;
+
+const CATEGORY_ID_EA_SPORTS_FC_25 = '2011938005';
+const CATEGORY_ID_ANIMALS = '272263131';
+
+async function refreshCategoryInfo(categories: string[]): Promise<void> {
+  const streamsByCategory = await Promise.all(
+    categories.map(async categoryId => await getTopStreams(categoryId))
+  );
+  const streams = streamsByCategory.flat();
+  store.getState().refreshAvailableStream(streams);
+}
+
+async function getTopStreams(categoryId: string): Promise<TwitchStreamInfo[]> {
+  const streamIds = await getTopStreamsFromCategory(categoryId, 3);
+  return await Promise.all(
+    streamIds
+      .map(async streamId => {
+        return (await getStreamInfo(streamId))!;
+      })
+      .filter(stream => !!stream)
+  );
+}
+
+async function refreshStreamInfo(streamId: string): Promise<void> {
+  let result = await getStreamInfo(streamId);
+  if (result) {
+    store.getState().updateInfo(result);
+  } else {
+    store.getState().setNotLive(streamId);
+  }
+}

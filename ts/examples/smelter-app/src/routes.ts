@@ -1,8 +1,9 @@
 import type { Express } from 'express';
 import express, { json } from 'express';
 import { LayoutValues, store } from './store';
-import { addTwitchStream } from './addTwitchStream';
 import { SmelterInstance } from './smelter';
+import { SMELTER_WORKDIR, waitForStream } from './manageHlsToHlsStreams';
+import path from 'path';
 
 export const app: Express = express();
 
@@ -28,7 +29,7 @@ app.post('/remove-stream', (req, res, next) => {
     try {
       await SmelterInstance.unregisterInput(streamId);
     } catch (err) {
-      console.log('Unregister errr', err, (err as any)?.body);
+      console.log('Unregister err', err, (err as any)?.body);
     }
   })()
     .then(() => res.send({}))
@@ -60,7 +61,9 @@ app.get('/state', async (_req, res, next) => {
   (async () => {
     const state = store.getState();
     return {
-      availableStreams: state.availableStreams,
+      availableStreams: state.availableStreams.filter(
+        stream => stream.available || state.connectedStreamIds.includes(stream.id)
+      ),
       connectedStreamIds: state.connectedStreamIds,
       audioStreamId: state.audioStreamId,
       layout: state.layout,
@@ -69,3 +72,27 @@ app.get('/state', async (_req, res, next) => {
     .then(result => res.send(result))
     .catch(err => next(err));
 });
+
+async function addTwitchStream(streamId: string): Promise<void> {
+  let state = store.getState();
+  if (state.availableStreams.filter(stream => stream.id == streamId).length === 0) {
+    throw new Error(`Unknown streamId: ${streamId}`);
+  }
+
+  if (state.connectedStreamIds.filter(id => id === streamId).length > 0) {
+    throw new Error('Already connected stream.');
+  }
+
+  try {
+    await waitForStream(streamId);
+
+    await SmelterInstance.registerInput(streamId, {
+      type: 'hls',
+      url: path.join(SMELTER_WORKDIR, streamId, 'index.m3u8'),
+    });
+    state.addStream(streamId);
+  } catch (err: any) {
+    console.log(err.body, err);
+    throw err;
+  }
+}

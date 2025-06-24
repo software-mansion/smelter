@@ -117,7 +117,7 @@ impl HlsInput {
                         None
                     }
                 };
-                let (sender, receiver) = bounded(1000);
+                let (sender, receiver) = bounded(2000);
                 (
                     Some((stream.index(), stream.time_base(), sender)),
                     Some((receiver, config)),
@@ -131,7 +131,7 @@ impl HlsInput {
                 //     "Video stream {:?}",
                 //     (stream.time_base(), stream.start_time(), stream.metadata())
                 // );
-                let (sender, receiver) = bounded(1000);
+                let (sender, receiver) = bounded(2000);
                 (
                     Some((stream.index(), stream.time_base(), sender)),
                     Some(receiver),
@@ -160,8 +160,8 @@ impl HlsInput {
                 .unwrap()
         });
 
-        let mut packet = Packet::empty();
         loop {
+            let mut packet = Packet::empty();
             match packet.read(&mut input_ctx) {
                 Ok(_) => (),
                 Err(ffmpeg_next::Error::Eof | ffmpeg_next::Error::Exit) => break,
@@ -181,7 +181,7 @@ impl HlsInput {
             }
 
             if let Some((index, time_base, ref sender)) = video {
-                if sender.len() > 600 {
+                if sender.len() > 800 {
                     send_init_result.take().map(|fun| fun());
                 }
                 if packet.stream() == index {
@@ -214,7 +214,7 @@ impl HlsInput {
             }
 
             if let Some((index, time_base, ref sender)) = audio {
-                if sender.len() > 600 {
+                if sender.len() > 800 {
                     send_init_result.take().map(|fun| fun());
                 }
                 if packet.stream() == index {

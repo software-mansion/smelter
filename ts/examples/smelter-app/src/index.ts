@@ -1,10 +1,12 @@
 import { initializeSmelterInstance } from './smelter';
 import { app } from './routes';
-import { initialCleanup, monitorStreams } from './StreamManager';
+import { initialCleanup, manageHlsToHlsStreams } from './manageHlsToHlsStreams';
+import { manageTwitchChannelInfo } from './manageTwitchChannelInfo';
 
 async function run() {
+  await manageTwitchChannelInfo();
   await initialCleanup();
-  await monitorStreams();
+  await manageHlsToHlsStreams();
   await initializeSmelterInstance();
 
   app.listen(3001);

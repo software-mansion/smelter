@@ -1,7 +1,6 @@
 import Smelter from '@swmansion/smelter-node';
 import App from './App';
 import { sleep, spawn } from './utils';
-import fetch from 'node-fetch';
 
 export const SmelterInstance = new Smelter();
 
