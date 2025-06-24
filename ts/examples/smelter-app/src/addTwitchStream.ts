@@ -13,16 +13,10 @@ export async function addTwitchStream(streamId: string): Promise<void> {
   }
   state.addStream(streamId);
 
-  let isStreaming = await isStreamLive(streamId);
-  console.log(`Is \"${streamId}\" streaming: ${isStreaming}`);
-
-  let streams = await getTopStreamsFromCategory('FC 25');
-  let top1StreamId = streams[0];
-
   try {
     const streamlinkOutput = await spawn(
       'streamlink',
-      ['--stream-url', `https://www.twitch.tv/${top1StreamId}`, 'best'],
+      ['--stream-url', `https://www.twitch.tv/${streamId}`, 'best'],
       {
         stdio: 'pipe',
       }
@@ -40,7 +34,67 @@ export async function addTwitchStream(streamId: string): Promise<void> {
   }
 }
 
-async function getTopStreamsFromCategory(category: string): Promise<string[]> {
+// List of categories https://gist.github.com/basilbenny1002/7a0c2096b691048f5de8c100afcbe1a7
+const categoryIdMap = {
+  'EA Sports FC 25': '2011938005',
+  'NBA 2K25': '2068583461',
+  'F1 25': '93798731',
+  'EA Sports UFC 5': '1628434805',
+  'TEKKEN 8': '538054672',
+  Chess: '743',
+  Sports: '518203',
+};
+
+export async function addTwitchStreamByCategory(
+  categoryName: keyof typeof categoryIdMap
+): Promise<void> {
+  let state = store.getState();
+
+  const categoryId = categoryIdMap[categoryName];
+  if (!categoryId) {
+    throw new Error(`Invalid category name provided: ${categoryName}`);
+  }
+
+  let streams = await getTopStreamsFromCategory(categoryId);
+  if (streams.length === 0) {
+    throw new Error('No streams available in the specified category.');
+  }
+
+  const top1StreamId = streams[0];
+
+  if (state.connectedStreamIds.includes(top1StreamId)) {
+    throw new Error('Stream is already connected.');
+  }
+
+  state.addStream(top1StreamId);
+  console.log(`Stream \"${top1StreamId}\" successfully added`);
+
+  let streamData = await getStreamInfo(top1StreamId);
+  console.log(`Is \"${top1StreamId}\" streaming: ${streamData.isLive}`);
+  console.log(streamData);
+
+  try {
+    const streamlinkOutput = await spawn(
+      'streamlink',
+      ['--stream-url', `https://www.twitch.tv/${top1StreamId}`, 'best'],
+      {
+        stdio: 'pipe',
+      }
+    );
+    const hlsPlaylistUrl = streamlinkOutput.stdout.trim();
+
+    await SmelterInstance.registerInput(top1StreamId, {
+      type: 'hls',
+      url: hlsPlaylistUrl,
+    });
+  } catch (err: any) {
+    console.log(err.stdout, err.stderr, err);
+    state.removeStream(top1StreamId);
+    throw err;
+  }
+}
+
+async function getTopStreamsFromCategory(categoryId: string): Promise<string[]> {
   const CLIENT_ID = process.env.DEMO_CLIENT_ID;
   const CLIENT_SECRET = process.env.DEMO_CLIENT_SECRET;
 
@@ -49,22 +103,8 @@ async function getTopStreamsFromCategory(category: string): Promise<string[]> {
   }
   const token = await getTwitchAccessToken(CLIENT_ID, CLIENT_SECRET);
 
-  const categoryResponse = await fetch(
-    `https://api.twitch.tv/helix/search/categories?query=${encodeURIComponent(category)}`,
-    {
-      headers: {
-        'Client-ID': `${CLIENT_ID}`,
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
-
-  const categoryData = await categoryResponse.json();
-  const categoryId = categoryData.data?.[0]?.id;
-  if (!categoryId) throw new Error('Could not find provided category');
-
   const top5StreamsResponse = await fetch(
-    `https://api.twitch.tv/helix/streams?game_id=${encodeURIComponent(categoryId)}&first=5`,
+    `https://api.twitch.tv/helix/streams?game_id=${encodeURIComponent(categoryId)}&language=en&first=5`,
     {
       headers: {
         'Client-ID': `${CLIENT_ID}`,
@@ -97,26 +137,40 @@ async function getTwitchAccessToken(client_id: string, client_secret: string): P
   return data.access_token;
 }
 
-async function isStreamLive(username: string) {
+interface StreamInfo {
+  isLive: boolean;
+  user_name: string;
+  title?: string;
+  description?: string;
+  viewerCount?: number;
+}
+
+async function getStreamInfo(user_login: string): Promise<StreamInfo> {
   const CLIENT_ID = process.env.DEMO_CLIENT_ID;
   const CLIENT_SECRET = process.env.DEMO_CLIENT_SECRET;
   if (!CLIENT_ID || !CLIENT_SECRET) {
     throw new Error('Both DEMO_CLIENT_ID and DEMO_CLIENT_SECRET environment variables must be set');
   }
   const token = await getTwitchAccessToken(CLIENT_ID, CLIENT_SECRET);
-
   const response = await fetch(
-    `https://api.twitch.tv/helix/streams?user_login=${encodeURIComponent(username)}`,
+    `https://api.twitch.tv/helix/streams?user_login=${encodeURIComponent(user_login)}`,
     {
       headers: {
-        'Client-ID': CLIENT_ID,
+        'Client-ID': `${CLIENT_ID}`,
         Authorization: `Bearer ${token}`,
       },
     }
   );
   if (!response.ok) {
-    throw new Error(`Failed to get stream status for ${username}`);
+    throw new Error(`Failed to get stream status for ${user_login}: ${response.statusText}`);
   }
   const data = await response.json();
-  return data.data && data.data.length > 0;
+  const stream = data.data ? data.data[0] : null;
+
+  return {
+    isLive: !!stream,
+    user_name: stream?.user_name,
+    title: stream?.title,
+    viewerCount: stream?.viewer_count,
+  };
 }

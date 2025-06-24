@@ -1,7 +1,7 @@
 import type { Express } from 'express';
 import express, { json } from 'express';
 import { LayoutValues, store } from './store';
-import { addTwitchStream } from './addTwitchStream';
+import { addTwitchStream, addTwitchStreamByCategory } from './addTwitchStream';
 import { SmelterInstance } from './smelter';
 
 export const app: Express = express();
@@ -17,6 +17,12 @@ app.use((err: Error, _req: any, res: any, _next: any) => {
 
 app.post('/add-stream', (req, res, next) => {
   addTwitchStream(req.body.streamId)
+    .then(() => res.send({}))
+    .catch(err => next(err));
+});
+
+app.post('/add-stream-by-category', (req, res, next) => {
+  addTwitchStreamByCategory(req.body.categoryName)
     .then(() => res.send({}))
     .catch(err => next(err));
 });
