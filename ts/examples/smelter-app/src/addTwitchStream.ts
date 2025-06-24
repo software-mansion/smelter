@@ -41,8 +41,8 @@ const categoryIdMap = {
   'F1 25': '93798731',
   'EA Sports UFC 5': '1628434805',
   'TEKKEN 8': '538054672',
-  Chess: '743',
-  Sports: '518203',
+  'Chess': '743',
+  'Sports': '518203',
 };
 
 export async function addTwitchStreamByCategory(
