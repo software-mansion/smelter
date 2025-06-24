@@ -34,6 +34,8 @@ impl Resampler {
             .get_or_insert(decoded_samples.start_pts);
 
         if decoded_samples.sample_rate == self.output_sample_rate {
+            // Resetting state of the resampler
+            self.instance = None;
             let samples = match decoded_samples.samples.as_ref() {
                 Samples::Stereo16Bit(samples) => Arc::new(samples.clone()),
                 samples => {
@@ -44,6 +46,7 @@ impl Resampler {
                     Arc::new(samples)
                 }
             };
+
             Vec::from([InputSamples::new(
                 samples,
                 decoded_samples.start_pts,
@@ -51,7 +54,7 @@ impl Resampler {
             )])
         } else {
             match &mut self.instance {
-                Some(resampler) if resampler.input_sample_rate == self.output_sample_rate => (),
+                Some(resampler) if resampler.input_sample_rate == decoded_samples.sample_rate => (),
                 Some(_) | None => {
                     info!(
                         "Instantiate new resampler (input: {}, output: {})",
