@@ -127,6 +127,8 @@ async function startStream(streamId: string) {
         : ['-c:v', 'libx264', '-preset', 'ultrafast']),
       '-c:a',
       'aac',
+      '-hls_list_size',
+      '20',
       '-hls_delete_threshold',
       '10',
       '-hls_flags',

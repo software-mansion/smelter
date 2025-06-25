@@ -1,7 +1,7 @@
 import path from 'path';
 import { SmelterInstance } from './smelter';
 import { store } from './store';
-import { waitForStream } from './StreamManager';
+import { waitForStream } from './manageHlsToHlsStreams';
 
 export const SMELTER_WORKDIR = path.join(process.cwd(), 'workingdir');
 

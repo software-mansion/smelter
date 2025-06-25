@@ -21,7 +21,7 @@ export async function initializeSmelterInstance() {
   while (true) {
     await sleep(500);
     try {
-      const result = await fetch('http://127.0.0.1:8080/status');
+      const result = await fetch('http://127.0.0.1:8080/api/status');
       console.log(`connecting (response: ${await result.text()})`);
       if (result.status < 300) {
         break;
@@ -40,6 +40,9 @@ export async function initializeSmelterInstance() {
         {
           type: 'ffmpeg_h264',
           preset: 'veryfast',
+          ffmpegOptions: {
+            tune: 'zerolatency',
+          },
         },
       ],
       resolution: {
