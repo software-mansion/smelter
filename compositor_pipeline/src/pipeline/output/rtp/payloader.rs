@@ -69,7 +69,7 @@ impl Payloader {
                     marker: i == packets_amount - 1, // marker needs to be set on the last packet of each frame
                     payload_type: self.payload_type,
                     sequence_number: self.next_sequence_number,
-                    timestamp: (chunk.pts.as_secs_f64() * self.clock_rate as f64) as u32,
+                    timestamp: (chunk.pts.as_secs_f64() * self.clock_rate as f64).round() as u32,
                     ssrc: self.ssrc,
                     ..Default::default()
                 };
