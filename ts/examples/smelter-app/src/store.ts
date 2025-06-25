@@ -8,7 +8,7 @@ export type StreamInfo = {
   // stream is live
   live: boolean;
   // hls playlist is available locally
-  available: boolean;
+  localHlsReady: boolean;
   // It should be removed, but it is still connected
   pendingDelete?: boolean;
 };
@@ -31,10 +31,10 @@ export type State = {
   addStream: (streamId: string) => void;
   removeStream: (streamId: string) => void;
   selectAudioStream: (streamId: string) => void;
-  setAvailable: (streamId: string, available: boolean) => void;
-  setNotLive: (streamId: string) => void;
-  updateInfo: (stream: TwitchStreamInfo) => void;
-  refreshAvailableStream: (streams: TwitchStreamInfo[]) => void;
+  setLocalHlsStatus: (streamId: string, ready: boolean) => void;
+  markStreamOffline: (streamId: string) => void;
+  updateStreamInfo: (stream: TwitchStreamInfo) => void;
+  refreshAvailableStreams: (streams: TwitchStreamInfo[]) => void;
 };
 
 export const store = createStore<State>(set => ({
@@ -60,9 +60,10 @@ export const store = createStore<State>(set => ({
   removeStream: (streamId: string) => {
     set(state => {
       const stream = state.availableStreams.find(info => info.id === streamId);
-      const availableStreams = stream?.pendingDelete
-        ? state.availableStreams.filter(info => info.id !== streamId)
-        : state.availableStreams;
+      const availableStreams =
+        stream && (stream.pendingDelete || !stream.live)
+          ? state.availableStreams.filter(info => info.id !== streamId)
+          : state.availableStreams;
       return {
         ...state,
         connectedStreamIds: state.connectedStreamIds.filter(id => streamId !== id),
@@ -76,19 +77,19 @@ export const store = createStore<State>(set => ({
       audioStreamId: streamId,
     }));
   },
-  setAvailable: (streamId: string, available: boolean) => {
+  setLocalHlsStatus: (streamId: string, localHlsReady: boolean) => {
     set(state => ({
       ...state,
       availableStreams: state.availableStreams.map(stream => {
         if (streamId === stream.id) {
-          return { ...stream, available };
+          return { ...stream, localHlsReady };
         } else {
           return stream;
         }
       }),
     }));
   },
-  setNotLive: (streamId: string) => {
+  markStreamOffline: (streamId: string) => {
     set(state => {
       const stream = state.availableStreams.find(info => info.id === streamId);
       if (!stream) {
@@ -112,7 +113,7 @@ export const store = createStore<State>(set => ({
       }
     });
   },
-  updateInfo: (update: TwitchStreamInfo) => {
+  updateStreamInfo: (update: TwitchStreamInfo) => {
     set(state => ({
       ...state,
       availableStreams: state.availableStreams.map(stream => {
@@ -129,13 +130,13 @@ export const store = createStore<State>(set => ({
       }),
     }));
   },
-  refreshAvailableStream: (streams: TwitchStreamInfo[]) => {
+  refreshAvailableStreams: (streams: TwitchStreamInfo[]) => {
     set(state => {
       const newStreams = streams.filter(
         stream => !state.availableStreams.find(info => info.id === stream.streamId)
       );
-      const existingStreams = streams.filter(stream =>
-        state.availableStreams.find(info => info.id === stream.streamId)
+      const existingStreams = streams.filter(
+        stream => !!state.availableStreams.find(info => info.id === stream.streamId)
       );
 
       // existing streams that will not be removed
@@ -164,7 +165,7 @@ export const store = createStore<State>(set => ({
         label: `[Category: ${stream.category}] ${stream.displayName}`,
         description: stream.title,
         live: true,
-        available: false,
+        localHlsReady: false,
       }));
 
       const availableStreams = [...oldStreamState, ...newStreamState];

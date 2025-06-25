@@ -61,7 +61,7 @@ export function isProcessRunning(pid: number): boolean {
 }
 
 export async function ensureProcessKill(pid: number): Promise<void> {
-  if (isProcessRunning(pid)) {
+  if (!isProcessRunning(pid)) {
     return;
   }
   try {

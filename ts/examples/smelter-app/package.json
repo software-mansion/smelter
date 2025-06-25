@@ -6,6 +6,7 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc",
+    "lint": "eslint .",
     "start": "ts-node ./src/index.ts"
   },
   "dependencies": {

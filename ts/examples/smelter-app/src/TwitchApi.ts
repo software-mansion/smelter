@@ -16,7 +16,7 @@ export async function getTopStreamsFromCategory(
 ): Promise<string[]> {
   const { token, clientId } = await getTwitchAccessToken();
 
-  const top5StreamsResponse = await fetch(
+  const topStreamsResponse = await fetch(
     `https://api.twitch.tv/helix/streams?game_id=${encodeURIComponent(categoryId)}&language=en&first=${count}`,
     {
       headers: {
@@ -25,10 +25,10 @@ export async function getTopStreamsFromCategory(
       },
     }
   );
-  if (!top5StreamsResponse.ok) {
+  if (!topStreamsResponse.ok) {
     throw new Error('Failed to fetch streams from Twitch API');
   }
-  const top5Streams = await top5StreamsResponse.json();
+  const top5Streams = await topStreamsResponse.json();
   const top5UsersLogins = top5Streams.data.map((s: any) => s.user_login);
 
   return top5UsersLogins;

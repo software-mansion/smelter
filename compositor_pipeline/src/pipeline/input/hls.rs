@@ -140,25 +140,23 @@ impl HlsInput {
             None => (None, None),
         };
 
-        let mut send_init_result = Some(move || {
-            result_sender
-                .send(Ok((
-                    video_receiver.map(|video| VideoInputReceiver::Encoded {
-                        chunk_receiver: video,
-                        decoder_options: VideoDecoderOptions {
-                            decoder: VideoDecoder::VulkanVideoH264,
-                        },
+        result_sender
+            .send(Ok((
+                video_receiver.map(|video| VideoInputReceiver::Encoded {
+                    chunk_receiver: video,
+                    decoder_options: VideoDecoderOptions {
+                        decoder: VideoDecoder::FFmpegH264,
+                    },
+                }),
+                audio_result.map(|(receiver, asc)| AudioInputReceiver::Encoded {
+                    chunk_receiver: receiver,
+                    decoder_options: AudioDecoderOptions::Aac(AacDecoderOptions {
+                        depayloader_mode: None,
+                        asc,
                     }),
-                    audio_result.map(|(receiver, asc)| AudioInputReceiver::Encoded {
-                        chunk_receiver: receiver,
-                        decoder_options: AudioDecoderOptions::Aac(AacDecoderOptions {
-                            depayloader_mode: None,
-                            asc,
-                        }),
-                    }),
-                )))
-                .unwrap()
-        });
+                }),
+            )))
+            .unwrap();
 
         loop {
             let mut packet = Packet::empty();
@@ -181,9 +179,6 @@ impl HlsInput {
             }
 
             if let Some((index, time_base, ref sender)) = video {
-                if sender.len() > 800 {
-                    send_init_result.take().map(|fun| fun());
-                }
                 if packet.stream() == index {
                     debug!(
                         "Video packet {:?}",
@@ -214,9 +209,6 @@ impl HlsInput {
             }
 
             if let Some((index, time_base, ref sender)) = audio {
-                if sender.len() > 800 {
-                    send_init_result.take().map(|fun| fun());
-                }
                 if packet.stream() == index {
                     debug!(
                         "Audio packet {:?}",
@@ -245,9 +237,6 @@ impl HlsInput {
                 }
             }
         }
-
-        // just to make sure init is finished for short streams
-        send_init_result.take().map(|fun| fun());
 
         if let Some((_, _, sender)) = audio {
             if sender.send(PipelineEvent::EOS).is_err() {

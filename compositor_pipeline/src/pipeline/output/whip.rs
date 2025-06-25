@@ -270,6 +270,7 @@ impl WhipSenderTask {
                     match video_receiver.recv().await {
                         Some(PipelineEvent::Data(packet)) => {
                             trace!("Send video packet {:?}", packet.header);
+
                             if let Err(err) = video_track.write_rtp(&packet).await {
                                 return Err(err);
                             }

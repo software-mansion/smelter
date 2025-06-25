@@ -27,9 +27,11 @@ app.post('/remove-stream', (req, res, next) => {
     const streamId: string = req.body.streamId;
     store.getState().removeStream(streamId);
     try {
-      await SmelterInstance.unregisterInput(streamId);
-    } catch (err) {
-      console.log('Unregister err', err, (err as any)?.body);
+      //await SmelterInstance.unregisterInput(streamId);
+    } catch (err: any) {
+      if (err.body?.error_code !== 'INPUT_STREAM_NOT_FOUND') {
+        throw err;
+      }
     }
   })()
     .then(() => res.send({}))
@@ -62,7 +64,7 @@ app.get('/state', async (_req, res, next) => {
     const state = store.getState();
     return {
       availableStreams: state.availableStreams.filter(
-        stream => stream.available || state.connectedStreamIds.includes(stream.id)
+        stream => stream.localHlsReady || state.connectedStreamIds.includes(stream.id)
       ),
       connectedStreamIds: state.connectedStreamIds,
       audioStreamId: state.audioStreamId,
@@ -84,14 +86,15 @@ async function addTwitchStream(streamId: string): Promise<void> {
   }
 
   try {
-    await waitForStream(streamId);
-
     await SmelterInstance.registerInput(streamId, {
       type: 'hls',
       url: path.join(SMELTER_WORKDIR, streamId, 'index.m3u8'),
     });
     state.addStream(streamId);
   } catch (err: any) {
+    if (err.body?.error_code === 'INPUT_STREAM_ALREADY_REGISTERED') {
+      state.addStream(streamId);
+    }
     console.log(err.body, err);
     throw err;
   }

@@ -102,7 +102,7 @@ pub async fn setup_video_track(
     }
 
     let ssrc = rtc_sender_params.encodings.first().unwrap().ssrc;
-    let (sender, receiver) = mpsc::channel(1);
+    let (sender, receiver) = mpsc::channel(10);
     let handle = match options {
         VideoEncoderOptions::H264(options) => spawn_video_track_thread::<FfmpegH264Encoder>(
             whip_ctx.pipeline_ctx.clone(),
@@ -186,7 +186,7 @@ pub async fn setup_audio_track(
     }
 
     let ssrc = rtc_sender_params.encodings.first().unwrap().ssrc;
-    let (sender, receiver) = mpsc::channel(1);
+    let (sender, receiver) = mpsc::channel(10);
     let handle = match options {
         AudioEncoderOptions::Opus(options) => spawn_audio_track_thread::<OpusEncoder>(
             whip_ctx.pipeline_ctx.clone(),

@@ -21,13 +21,13 @@ export async function initializeSmelterInstance() {
   while (true) {
     await sleep(500);
     try {
-      const result = await fetch('http://127.0.0.1:8080/status');
-      console.log(`connecting (response: ${await result.text()})`);
-      if (result.status < 300) {
+      const result = await fetch('http://127.0.0.1:8080/api/status');
+      console.log(`connecting to broadcaster /api/status (response: ${await result.text()})`);
+      if (result.ok) {
         break;
       }
     } catch (err) {
-      console.log(`connecting err (response: ${err})`);
+      console.log(`connecting to broadcast /api/status err (response: ${err})`);
     }
   }
 
@@ -38,8 +38,7 @@ export async function initializeSmelterInstance() {
     video: {
       encoderPreferences: [
         {
-          type: 'ffmpeg_h264',
-          preset: 'veryfast',
+          type: 'ffmpeg_vp9',
         },
       ],
       resolution: {

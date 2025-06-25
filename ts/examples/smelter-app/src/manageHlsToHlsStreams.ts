@@ -49,18 +49,17 @@ export async function initialCleanup() {
     const lockFile = path.join(SMELTER_WORKDIR, subdir, 'pid.lock');
     try {
       if (await fs.pathExists(lockFile)) {
-        return;
-      }
-      const file = await fs.readFile(lockFile, 'utf-8');
-      const maybePid = Number(file.trim());
-      if (maybePid) {
-        await ensureProcessKill(maybePid);
+        const file = await fs.readFile(lockFile, 'utf-8');
+        const maybePid = Number(file.trim());
+        if (maybePid) {
+          await ensureProcessKill(maybePid);
+        }
       }
     } catch (err) {
       console.log(`Cleanup in ${subdir}`, err);
     }
   }
-  await Promise.allSettled([fs.remove(SMELTER_WORKDIR)]);
+  await fs.remove(SMELTER_WORKDIR);
   await fs.mkdirp(SMELTER_WORKDIR);
 }
 
@@ -85,7 +84,7 @@ async function monitorStreamsSinglePass(state: State) {
   );
 
   streamsToStop.forEach(([streamId, streamState]) => {
-    store.getState().setAvailable(streamId, false);
+    store.getState().setLocalHlsStatus(streamId, false);
     streamState.ffmpegPromise.child.kill();
   });
   await sleep(1000);
@@ -123,12 +122,16 @@ async function startStream(streamId: string) {
       '-i',
       hlsPlaylistUrl,
       ...(process.env.ENVIRONMENT === 'production'
-        ? ['-c:v', 'h264_nvenc']
-        : ['-c:v', 'libx264', '-preset', 'ultrafast']),
+        ? ['-c:v', 'h264_nvenc', '-g', '60']
+        : ['-c:v', 'libx264', '-preset', 'ultrafast', '-g', '60']),
       '-c:a',
       'aac',
+      '-hls_time',
+      '1',
+      '-hls_list_size',
+      '120',
       '-hls_delete_threshold',
-      '10',
+      '100',
       '-hls_flags',
       'delete_segments',
       transcodedPlaylist,
@@ -147,13 +150,13 @@ async function startStream(streamId: string) {
   streams[streamId] = {
     ffmpegPromise,
   };
-  store.getState().setAvailable(streamId, true);
+  store.getState().setLocalHlsStatus(streamId, true);
 }
 
 export async function waitForStream(streamId: string): Promise<void> {
   const playlistPath = path.join(SMELTER_WORKDIR, streamId, 'index.m3u8');
   while (!(await fs.pathExists(playlistPath))) {
-    console.log('waiting');
-    await sleep(2000);
+    console.log(`waiting for ${playlistPath}`);
+    await sleep(500);
   }
 }
