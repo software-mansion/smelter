@@ -159,7 +159,7 @@ function SecondaryInCornerLayout() {
       <Rescaler>
         <Input inputId={firstStream.id} />
       </Rescaler>
-      {secondStream.id ? (
+      {secondStream?.id ? (
         <Rescaler style={{ top: 80, right: 80, width: 640, height: 320 }}>
           <SmallInput inputId={secondStream.id} />
         </Rescaler>
