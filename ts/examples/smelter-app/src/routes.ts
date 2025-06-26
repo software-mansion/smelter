@@ -2,7 +2,7 @@ import type { Express } from 'express';
 import express, { json } from 'express';
 import { LayoutValues, store } from './store';
 import { SmelterInstance } from './smelter';
-import { SMELTER_WORKDIR, waitForStream } from './manageHlsToHlsStreams';
+import { SMELTER_WORKDIR } from './manageHlsToHlsStreams';
 import path from 'path';
 
 export const app: Express = express();
@@ -27,7 +27,7 @@ app.post('/remove-stream', (req, res, next) => {
     const streamId: string = req.body.streamId;
     store.getState().removeStream(streamId);
     try {
-      //await SmelterInstance.unregisterInput(streamId);
+      await SmelterInstance.unregisterInput(streamId);
     } catch (err: any) {
       if (err.body?.error_code !== 'INPUT_STREAM_NOT_FOUND') {
         throw err;

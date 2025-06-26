@@ -69,7 +69,7 @@ async function monitorStreamsSinglePass(state: State) {
     availableStream => availableStream.live && !streams[availableStream.id]
   );
   const streamsToStop = Object.entries(streams).filter(([streamId, _hlsState]) => {
-    !state.availableStreams.find(stream => stream.id === streamId);
+    return !state.availableStreams.find(stream => stream.id === streamId);
   });
 
   await Promise.allSettled(

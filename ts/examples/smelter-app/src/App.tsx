@@ -1,4 +1,4 @@
-import { View, useInputStreams, InputStream, Tiles, Rescaler } from '@swmansion/smelter';
+import { View, InputStream, Tiles, Rescaler, useInputStreams } from '@swmansion/smelter';
 
 import type { StreamInfo } from './store';
 import { store } from './store';
@@ -10,8 +10,10 @@ export default function App() {
 
 function useVisibleStreams(): StreamInfo[] {
   const state = useStore(store, state => state);
+  const inputs = useInputStreams();
 
   return state.connectedStreamIds
+    .filter(id => !!inputs[id])
     .map(streamId => state.availableStreams.find(info => info.id === streamId))
     .filter(stream => stream?.live && stream.localHlsReady)
     .filter(stream => !!stream);
@@ -41,11 +43,11 @@ function Input(props: { inputId: string }) {
 }
 
 function GridLayout() {
-  const inputs = useInputStreams();
+  const inputs = useVisibleStreams();
   return (
     <Tiles transition={{ durationMs: 300 }}>
       {Object.values(inputs).map(input => (
-        <Input key={input.inputId} inputId={input.inputId} />
+        <Input key={input.id} inputId={input.id} />
       ))}
     </Tiles>
   );
@@ -57,17 +59,16 @@ function PrimaryOnLeftLayout() {
   if (!firstStream) {
     return <View />;
   }
-  const inputs = useInputStreams();
   return (
     <View style={{ direction: 'row' }}>
       <Rescaler style={{ width: 1500 }}>
         <Input inputId={firstStream.id} />
       </Rescaler>
       <Tiles transition={{ durationMs: 300 }}>
-        {Object.values(inputs)
-          .filter(input => input.inputId != firstStream.id)
+        {Object.values(visibleStreams)
+          .filter(input => input.id != firstStream.id)
           .map(input => (
-            <Input key={input.inputId} inputId={input.inputId} />
+            <Input key={input.id} inputId={input.id} />
           ))}
       </Tiles>
     </View>
@@ -81,17 +82,16 @@ function PrimaryOnTopLayout() {
     return <View />;
   }
 
-  const inputs = useInputStreams();
   return (
     <View style={{ direction: 'column' }}>
       <Rescaler style={{ height: 800 }}>
         <Input inputId={firstStream.id} />
       </Rescaler>
       <Tiles transition={{ durationMs: 300 }}>
-        {Object.values(inputs)
-          .filter(input => input.inputId != firstStream.id)
+        {Object.values(visibleStreams)
+          .filter(input => input.id != firstStream.id)
           .map(input => (
-            <InputStream key={input.inputId} inputId={input.inputId} />
+            <InputStream key={input.id} inputId={input.id} />
           ))}
       </Tiles>
     </View>
