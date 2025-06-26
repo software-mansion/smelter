@@ -2,6 +2,7 @@ import { createStore } from 'zustand';
 import type { TwitchStreamInfo } from './TwitchApi';
 
 export type StreamInfo = {
+  type: 'static' | 'live';
   id: string;
   label: string;
   description: string;
@@ -37,8 +38,26 @@ export type State = {
   refreshAvailableStreams: (streams: TwitchStreamInfo[]) => void;
 };
 
+//fc_25_gameplay.mp4  nba_gameplay.mp4
 export const store = createStore<State>(set => ({
-  availableStreams: [],
+  availableStreams: [
+    {
+      type: 'static',
+      id: 'fc_25_gameplay',
+      label: '[MP4] FC 25 Gameplay',
+      description: '[Static source] EA Sports FC 25 Gameplay',
+      live: true,
+      localHlsReady: false,
+    },
+    {
+      type: 'static',
+      id: 'nba_gameplay',
+      label: '[MP4] NBA 2K25 Gameplay',
+      description: '[Static source] NBA 2K25 Gameplay',
+      live: true,
+      localHlsReady: false,
+    },
+  ],
   connectedStreamIds: [],
   layout: 'grid' as const,
   setLayout: (layout: Layout) => {
@@ -61,7 +80,7 @@ export const store = createStore<State>(set => ({
     set(state => {
       const stream = state.availableStreams.find(info => info.id === streamId);
       const availableStreams =
-        stream && (stream.pendingDelete || !stream.live)
+        stream && stream.type !== 'static' && (stream.pendingDelete || !stream.live)
           ? state.availableStreams.filter(info => info.id !== streamId)
           : state.availableStreams;
       return {
@@ -144,7 +163,8 @@ export const store = createStore<State>(set => ({
         .filter(stream => {
           return (
             existingStreams.find(existing => existing.streamId === stream.id) ||
-            state.connectedStreamIds.includes(stream.id)
+            state.connectedStreamIds.includes(stream.id) ||
+            stream.type === 'static'
           );
         })
         .map(stream => {
@@ -161,6 +181,7 @@ export const store = createStore<State>(set => ({
           }
         });
       const newStreamState = newStreams.map(stream => ({
+        type: 'live' as const,
         id: stream.streamId,
         label: `[Twitch/${stream.category}] ${stream.displayName}`,
         description: stream.title,

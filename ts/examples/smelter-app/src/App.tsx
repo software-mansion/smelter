@@ -15,7 +15,7 @@ function useVisibleStreams(): StreamInfo[] {
   return state.connectedStreamIds
     .filter(id => !!inputs[id])
     .map(streamId => state.availableStreams.find(info => info.id === streamId))
-    .filter(stream => stream?.live && stream.localHlsReady)
+    .filter(stream => stream?.type === 'static' || (stream?.live && stream.localHlsReady))
     .filter(stream => !!stream);
 }
 

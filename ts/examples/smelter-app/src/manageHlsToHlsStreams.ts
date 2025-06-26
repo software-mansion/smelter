@@ -66,7 +66,8 @@ export async function initialCleanup() {
 // This function assumes it has unique lock on streams object
 async function monitorStreamsSinglePass(state: State) {
   const streamsToStart = state.availableStreams.filter(
-    availableStream => availableStream.live && !streams[availableStream.id]
+    availableStream =>
+      availableStream.type !== 'static' && availableStream.live && !streams[availableStream.id]
   );
   const streamsToStop = Object.entries(streams).filter(([streamId, _hlsState]) => {
     return !state.availableStreams.find(stream => stream.id === streamId);

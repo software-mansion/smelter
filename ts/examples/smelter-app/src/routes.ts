@@ -17,7 +17,7 @@ app.use((err: Error, _req: any, res: any, _next: any) => {
 });
 
 app.post('/add-stream', (req, res, next) => {
-  addTwitchStream(req.body.streamId)
+  connectStream(req.body.streamId)
     .then(() => res.send({}))
     .catch(err => next(err));
 });
@@ -64,7 +64,10 @@ app.get('/state', async (_req, res, next) => {
     const state = store.getState();
     return {
       availableStreams: state.availableStreams.filter(
-        stream => stream.localHlsReady || state.connectedStreamIds.includes(stream.id)
+        stream =>
+          stream.localHlsReady ||
+          state.connectedStreamIds.includes(stream.id) ||
+          stream.type === 'static'
       ),
       connectedStreamIds: state.connectedStreamIds,
       audioStreamId: state.audioStreamId,
@@ -75,27 +78,42 @@ app.get('/state', async (_req, res, next) => {
     .catch(err => next(err));
 });
 
-async function addTwitchStream(streamId: string): Promise<void> {
+async function connectStream(streamId: string): Promise<void> {
   let state = store.getState();
-  if (state.availableStreams.filter(stream => stream.id == streamId).length === 0) {
+  let stream = state.availableStreams.find(stream => stream.id === streamId);
+  if (!stream) {
     throw new Error(`Unknown streamId: ${streamId}`);
   }
 
-  if (state.connectedStreamIds.filter(id => id === streamId).length > 0) {
-    throw new Error('Already connected stream.');
-  }
-
-  try {
-    await SmelterInstance.registerInput(streamId, {
-      type: 'hls',
-      url: path.join(SMELTER_WORKDIR, streamId, 'index.m3u8'),
-    });
-    state.addStream(streamId);
-  } catch (err: any) {
-    if (err.body?.error_code === 'INPUT_STREAM_ALREADY_REGISTERED') {
+  if (stream.type === 'static') {
+    try {
+      await SmelterInstance.registerInput(streamId, {
+        type: 'mp4',
+        serverPath: path.join(process.cwd(), `${streamId}.mp4`),
+        loop: true,
+        videoDecoder: 'vulkan_h264'
+      });
       state.addStream(streamId);
+    } catch (err: any) {
+      if (err.body?.error_code === 'INPUT_STREAM_ALREADY_REGISTERED') {
+        state.addStream(streamId);
+      }
+      console.log(err.body, err);
+      throw err;
     }
-    console.log(err.body, err);
-    throw err;
+  } else {
+    try {
+      await SmelterInstance.registerInput(streamId, {
+        type: 'hls',
+        url: path.join(SMELTER_WORKDIR, streamId, 'index.m3u8'),
+      });
+      state.addStream(streamId);
+    } catch (err: any) {
+      if (err.body?.error_code === 'INPUT_STREAM_ALREADY_REGISTERED') {
+        state.addStream(streamId);
+      }
+      console.log(err.body, err);
+      throw err;
+    }
   }
 }

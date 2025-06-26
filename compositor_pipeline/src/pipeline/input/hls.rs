@@ -145,7 +145,7 @@ impl HlsInput {
                 video_receiver.map(|video| VideoInputReceiver::Encoded {
                     chunk_receiver: video,
                     decoder_options: VideoDecoderOptions {
-                        decoder: VideoDecoder::FFmpegH264,
+                        decoder: VideoDecoder::VulkanVideoH264,
                     },
                 }),
                 audio_result.map(|(receiver, asc)| AudioInputReceiver::Encoded {

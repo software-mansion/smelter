@@ -7,7 +7,7 @@ const CATEGORY_ID_EA_SPORTS_FC_25 = '2011938005';
 // const CATEGORY_ID_ANIMALS = '272263131';
 
 const CATEGORIES = [CATEGORY_ID_EA_SPORTS_FC_25];
-const STREAMS_PER_CATEGORY = 3;
+const STREAMS_PER_CATEGORY = 2;
 
 export async function manageTwitchChannelInfo() {
   void startCategoryRefreshIntervalLoop();
@@ -28,7 +28,10 @@ async function startCategoryRefreshIntervalLoop() {
 async function startStreamInfoRefreshIntervalLoop() {
   while (true) {
     try {
-      let streamIds = store.getState().availableStreams.map(stream => stream.id);
+      let streamIds = store
+        .getState()
+        .availableStreams.filter(stream => stream.type !== 'static')
+        .map(stream => stream.id);
       for (const streamId of streamIds) {
         await refreshStreamInfo(streamId);
       }
