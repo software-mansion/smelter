@@ -107,7 +107,7 @@ async function monitorStreamsSinglePass(state: State) {
 async function startStream(streamId: string) {
   const streamlinkOutput = await spawn(
     'streamlink',
-    ['--stream-url', `https://www.twitch.tv/${streamId}`, 'best'],
+    ['--stream-url', `https://www.twitch.tv/${streamId}`, '720p,720p60,best'],
     {
       stdio: 'pipe',
     }

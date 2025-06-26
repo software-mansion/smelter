@@ -91,7 +91,7 @@ function PrimaryOnTopLayout() {
         {Object.values(visibleStreams)
           .filter(input => input.id != firstStream.id)
           .map(input => (
-            <InputStream key={input.id} inputId={input.id} />
+            <Input key={input.id} inputId={input.id} />
           ))}
       </Tiles>
     </View>
