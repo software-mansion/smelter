@@ -1,28 +1,10 @@
 import type { Output } from '@swmansion/smelter-core';
 import type { Api, Renderers } from '@swmansion/smelter';
 
-export type RegisterImage =
-  | {
-      assetType: 'png';
-      url: string;
-    }
-  | {
-      assetType: 'jpeg';
-      url: string;
-    }
-  | {
-      assetType: 'svg';
-      url: string;
-      resolution?: Api.Resolution;
-    }
-  | {
-      assetType: 'gif';
-      url: string;
-    }
-  | {
-      assetType: 'auto';
-      url: string;
-    };
+export type RegisterImage = {
+  assetType: 'png' | 'jpeg' | 'svg' | 'gif' | 'auto';
+  url: string;
+};
 
 export type RegisterShader = Renderers.RegisterShader;
 

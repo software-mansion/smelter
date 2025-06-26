@@ -36,7 +36,6 @@ async function run() {
   await smelter.registerImage('logo', {
     assetType: 'svg',
     url: 'https://smelter.dev/images/smelter-logo.svg',
-    resolution: { width: 800, height: 200 },
   });
   await smelter.registerWebRenderer(WEBSITE_INSTANCE, {
     url: `file://${path.join(__dirname, './web-view.html')}`,
