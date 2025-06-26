@@ -8,5 +8,5 @@
     "outDir": "dist",
     "jsx": "react-jsx"
   },
-  "exclude": ["workingdir"]
+  "exclude": ["workingdir", "dist"]
 }
