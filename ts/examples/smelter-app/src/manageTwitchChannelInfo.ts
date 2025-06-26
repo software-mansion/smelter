@@ -4,10 +4,10 @@ import { getStreamInfo, getTopStreamsFromCategory } from './TwitchApi';
 import { sleep } from './utils';
 
 const CATEGORY_ID_EA_SPORTS_FC_25 = '2011938005';
-const CATEGORY_ID_ANIMALS = '272263131';
+// const CATEGORY_ID_ANIMALS = '272263131';
 
-const CATEGORIES = [CATEGORY_ID_EA_SPORTS_FC_25, CATEGORY_ID_ANIMALS];
-const STREAMS_PER_CATEGORY = 2;
+const CATEGORIES = [CATEGORY_ID_EA_SPORTS_FC_25];
+const STREAMS_PER_CATEGORY = 3;
 
 export async function manageTwitchChannelInfo() {
   void startCategoryRefreshIntervalLoop();
