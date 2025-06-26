@@ -89,7 +89,9 @@ impl HlsInput {
         // I do not know why this happens
         let mut input_ctx = match input_with_dictionary_and_interrupt(
             &options.url,
-            Dictionary::from_iter([("protocol_whitelist", "tcp,hls,http,https,file,tls")]),
+            Dictionary::from_iter([
+                ("protocol_whitelist", "tcp,hls,http,https,file,tls"),
+            ]),
             || should_close.load(Ordering::Relaxed),
         ) {
             Ok(i) => i,
@@ -161,6 +163,7 @@ impl HlsInput {
         });
 
         let mut packet = Packet::empty();
+
         loop {
             match packet.read(&mut input_ctx) {
                 Ok(_) => (),
@@ -181,13 +184,10 @@ impl HlsInput {
             }
 
             if let Some((index, time_base, ref sender)) = video {
-                if sender.len() > 600 {
-                    send_init_result.take().map(|fun| fun());
-                }
                 if packet.stream() == index {
-                    debug!(
+                    warn!(
                         "Video packet {:?}",
-                        (packet.stream(), packet.pts(), sender.len(),)
+                        (packet.stream(), packet.pts(), packet.dts(), sender.len(), packet.duration())
                     );
 
                     let chunk = PipelineEvent::Data(EncodedChunk {
@@ -305,3 +305,4 @@ where
         }
     }
 }
+

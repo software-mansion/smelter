@@ -5,9 +5,6 @@ use std::time::Duration;
 
 use integration_tests::examples::{self, run_example};
 
-const BUNNY_URL: &str =
-    "https://raw.githubusercontent.com/membraneframework/membrane_http_adaptive_stream_plugin/master/test/membrane_http_adaptive_stream/integration_test/fixtures/audio_multiple_video_tracks/index.m3u8";
-
 const VIDEO_RESOLUTION: Resolution = Resolution {
     width: 1280,
     height: 720,
@@ -18,11 +15,18 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
+    let args = std::env::args().collect::<Vec<_>>();
+
+    if args.len() != 2 {
+        println!("usage: {} link", args[0]);
+        return Ok(());
+    }
+
     examples::post(
         "input/input_1/register",
         &json!({
             "type": "hls",
-            "url": BUNNY_URL,
+            "url": args[1],
         }),
     )?;
 
@@ -46,11 +50,8 @@ fn client_code() -> Result<()> {
                 },
                 "initial": {
                     "root": {
-                        "type": "rescaler",
-                        "child": {
-                            "type": "input_stream",
-                            "input_id": "input_1",
-                        }
+                        "type": "input_stream",
+                        "input_id": "input_1"
                     }
                 }
             },
