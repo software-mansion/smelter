@@ -123,7 +123,7 @@ async function startStream(streamId: string) {
       hlsPlaylistUrl,
       ...(process.env.ENVIRONMENT === 'production'
         ? ['-c:v', 'h264_nvenc', '-g', '60']
-        : ['-c:v', 'libx264', '-preset', 'ultrafast', '-g', '60']),
+        : ['-c:v', 'libx264', '-g', '60']),
       '-c:a',
       'aac',
       '-hls_time',

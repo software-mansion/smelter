@@ -120,7 +120,7 @@ export const store = createStore<State>(set => ({
         if (update.streamId === stream.id) {
           return {
             ...stream,
-            label: `[Category: ${update.category}] ${update.displayName}`,
+            label: `[Twitch/${update.category}] ${update.displayName}`,
             description: update.title,
             live: true,
           };
@@ -152,7 +152,7 @@ export const store = createStore<State>(set => ({
           if (update) {
             return {
               ...stream,
-              label: `[Category: ${update.category}] ${update.displayName}`,
+              label: `[Twitch/${update.category}] ${update.displayName}`,
               description: update.title,
               live: true,
             };
@@ -162,7 +162,7 @@ export const store = createStore<State>(set => ({
         });
       const newStreamState = newStreams.map(stream => ({
         id: stream.streamId,
-        label: `[Category: ${stream.category}] ${stream.displayName}`,
+        label: `[Twitch/${stream.category}] ${stream.displayName}`,
         description: stream.title,
         live: true,
         localHlsReady: false,

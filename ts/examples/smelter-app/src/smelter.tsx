@@ -39,6 +39,10 @@ export async function initializeSmelterInstance() {
       encoderPreferences: [
         {
           type: 'ffmpeg_vp9',
+          ffmpegOptions: {
+            quality: 'good',
+            speed: '2',
+          },
         },
       ],
       resolution: {

@@ -1,4 +1,4 @@
-import { View, InputStream, Tiles, Rescaler, useInputStreams } from '@swmansion/smelter';
+import { Text, View, InputStream, Tiles, Rescaler, useInputStreams } from '@swmansion/smelter';
 
 import type { StreamInfo } from './store';
 import { store } from './store';
@@ -39,13 +39,62 @@ function OutputScene() {
 
 function Input(props: { inputId: string }) {
   const audioStreamId = useStore(store, state => state.audioStreamId);
-  return <InputStream inputId={props.inputId} muted={audioStreamId !== props.inputId} />;
+  const stream = useStore(store, state =>
+    state.availableStreams.find(stream => stream.id === props.inputId)
+  );
+  return (
+    <Rescaler>
+      <View style={{ width: 1920, height: 1080, direction: 'column' }}>
+        <Rescaler style={{ rescaleMode: 'fill' }}>
+          <InputStream inputId={props.inputId} muted={audioStreamId !== props.inputId} />
+        </Rescaler>
+        <View
+          style={{
+            backgroundColor: '#493880',
+            height: 90,
+            padding: 20,
+            borderRadius: 10,
+            direction: 'column',
+          }}>
+          <Text style={{ fontSize: 40, color: 'white' }}>{stream?.label}</Text>
+          <View style={{ height: 10 }} />
+          <Text style={{ fontSize: 25, color: 'white' }}>{stream?.description}</Text>
+        </View>
+      </View>
+    </Rescaler>
+  );
+}
+
+function SmallInput(props: { inputId: string }) {
+  const audioStreamId = useStore(store, state => state.audioStreamId);
+  const stream = useStore(store, state =>
+    state.availableStreams.find(stream => stream.id === props.inputId)
+  );
+  return (
+    <Rescaler>
+      <View style={{ width: 640, height: 360, direction: 'column' }}>
+        <Rescaler style={{ rescaleMode: 'fill' }}>
+          <InputStream inputId={props.inputId} muted={audioStreamId !== props.inputId} />
+        </Rescaler>
+        <View
+          style={{
+            backgroundColor: '#493880',
+            height: 40,
+            padding: 20,
+            borderRadius: 10,
+            direction: 'column',
+          }}>
+          <Text style={{ fontSize: 30, color: 'white' }}>{stream?.id}</Text>
+        </View>
+      </View>
+    </Rescaler>
+  );
 }
 
 function GridLayout() {
   const inputs = useVisibleStreams();
   return (
-    <Tiles transition={{ durationMs: 300 }}>
+    <Tiles transition={{ durationMs: 300 }} style={{ padding: 20 }}>
       {Object.values(inputs).map(input => (
         <Input key={input.id} inputId={input.id} />
       ))}
@@ -64,11 +113,11 @@ function PrimaryOnLeftLayout() {
       <Rescaler style={{ width: 1500 }}>
         <Input inputId={firstStream.id} />
       </Rescaler>
-      <Tiles transition={{ durationMs: 300 }}>
+      <Tiles transition={{ durationMs: 300 }} style={{ padding: 10 }}>
         {Object.values(visibleStreams)
           .filter(input => input.id != firstStream.id)
           .map(input => (
-            <Input key={input.id} inputId={input.id} />
+            <SmallInput key={input.id} inputId={input.id} />
           ))}
       </Tiles>
     </View>
@@ -87,11 +136,11 @@ function PrimaryOnTopLayout() {
       <Rescaler style={{ height: 800 }}>
         <Input inputId={firstStream.id} />
       </Rescaler>
-      <Tiles transition={{ durationMs: 300 }}>
+      <Tiles transition={{ durationMs: 300 }} style={{ padding: 10 }}>
         {Object.values(visibleStreams)
           .filter(input => input.id != firstStream.id)
           .map(input => (
-            <Input key={input.id} inputId={input.id} />
+            <SmallInput key={input.id} inputId={input.id} />
           ))}
       </Tiles>
     </View>
@@ -112,7 +161,7 @@ function SecondaryInCornerLayout() {
       </Rescaler>
       {secondStream.id ? (
         <Rescaler style={{ top: 80, right: 80, width: 640, height: 320 }}>
-          <Input inputId={secondStream.id} />
+          <SmallInput inputId={secondStream.id} />
         </Rescaler>
       ) : null}
     </View>

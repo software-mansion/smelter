@@ -7,7 +7,7 @@ const CATEGORY_ID_EA_SPORTS_FC_25 = '2011938005';
 const CATEGORY_ID_ANIMALS = '272263131';
 
 const CATEGORIES = [CATEGORY_ID_EA_SPORTS_FC_25, CATEGORY_ID_ANIMALS];
-const STREAMS_PER_CATEGORY = 3;
+const STREAMS_PER_CATEGORY = 2;
 
 export async function manageTwitchChannelInfo() {
   void startCategoryRefreshIntervalLoop();
