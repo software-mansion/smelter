@@ -22,8 +22,8 @@ fn client_code() -> Result<()> {
         "input/input_1/register",
         &json!({
             "type": "mp4",
-            //"path": "/home/wojtek/playground/test.mp4" ,
-            "url": BUNNY_URL,
+            "path": "/home/wojtek/playground/test.mp4" ,
+            //"url": BUNNY_URL,
             "required": true,
             "offset_ms": 0,
         }),
@@ -44,14 +44,14 @@ fn client_code() -> Result<()> {
                     "height": VIDEO_RESOLUTION.height,
                 },
                 "encoder_preferences": [
-                    //{
-                    //    "type": "ffmpeg_h264",
-                    //    "preset": "ultrafast",
-                    //    "ffmpeg_options": {
-                    //        "g": "120", // keyframe every 120 frames
-                    //        "b": "6M"   // bitrate 6000 kb/s
-                    //    }
-                    //},
+                    {
+                        "type": "ffmpeg_h264",
+                        "preset": "veryfast",
+                        "ffmpeg_options": {
+                            "g": "120", // keyframe every 120 frames
+                            "b": "6M"   // bitrate 6000 kb/s
+                        }
+                    },
                     { "type": "any" }
                 ],
                 "initial": {

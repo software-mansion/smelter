@@ -26,7 +26,7 @@ pub fn spawn_audio_track_thread<Encoder: AudioEncoder>(
     output_id: OutputId,
     encoder_options: Encoder::Options,
     payloader_options: PayloaderOptions,
-    chunks_sender: mpsc::Sender<PipelineEvent<rtp::packet::Packet>>,
+    chunks_sender: mpsc::Sender<rtp::packet::Packet>,
 ) -> Result<WhipAudioTrackThreadHandle, EncoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
@@ -71,7 +71,7 @@ fn init_stream<Encoder: AudioEncoder>(
     payloader_options: PayloaderOptions,
 ) -> Result<
     (
-        impl Iterator<Item = PipelineEvent<rtp::packet::Packet>>,
+        impl Iterator<Item = rtp::packet::Packet>,
         WhipAudioTrackThreadHandle,
     ),
     EncoderInitError,
@@ -91,7 +91,8 @@ fn init_stream<Encoder: AudioEncoder>(
     let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
 
     let stream = payloaded_stream.flatten().filter_map(|event| match event {
-        Ok(event) => Some(event),
+        Ok(PipelineEvent::Data(data)) => Some(data),
+        Ok(PipelineEvent::EOS) => None,
         Err(err) => {
             warn!(
                 "Depayloading error: {}",

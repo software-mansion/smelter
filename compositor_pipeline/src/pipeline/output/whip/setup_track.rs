@@ -1,37 +1,29 @@
-use core::panic;
 use crossbeam_channel::Sender;
-use rtcp::{
-    payload_feedbacks::picture_loss_indication::PictureLossIndication,
-    receiver_report::ReceiverReport,
-};
+use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use webrtc::{
     api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
     rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender},
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
-use crate::{
-    pipeline::{
-        encoder::{
-            ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder,
-            ffmpeg_vp9::FfmpegVp9Encoder, opus::OpusEncoder, AudioEncoderOptions,
-            VideoEncoderOptions,
-        },
-        output::{
-            rtp::payloader::{PayloadedCodec, PayloaderOptions},
-            whip::track_task_audio::spawn_audio_track_thread,
-        },
+use crate::pipeline::{
+    encoder::{
+        ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder, ffmpeg_vp9::FfmpegVp9Encoder,
+        opus::OpusEncoder, AudioEncoderOptions, VideoEncoderOptions,
     },
-    queue::PipelineEvent,
+    output::{
+        rtp::payloader::{PayloadedCodec, PayloaderOptions},
+        whip::track_task_audio::spawn_audio_track_thread,
+    },
 };
 
 use super::{
     track_task_audio::WhipAudioTrackThreadHandle,
     track_task_video::{spawn_video_track_thread, WhipVideoTrackThreadHandle},
-    WhipCtx, WhipError,
+    WhipCtx, WhipError, WhipSenderTrack,
 };
 
 pub trait MatchCodecCapability {
@@ -61,16 +53,7 @@ pub async fn setup_video_track(
     whip_ctx: &Arc<WhipCtx>,
     rtc_sender: Arc<RTCRtpSender>,
     encoder_preferences: Vec<VideoEncoderOptions>,
-) -> Result<
-    (
-        WhipVideoTrackThreadHandle,
-        (
-            mpsc::Receiver<PipelineEvent<rtp::packet::Packet>>,
-            Arc<TrackLocalStaticRTP>,
-        ),
-    ),
-    WhipError,
-> {
+) -> Result<(WhipVideoTrackThreadHandle, WhipSenderTrack), WhipError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
@@ -84,7 +67,7 @@ pub async fn setup_video_track(
         })?;
         Some((encoder_options.clone(), supported.clone()))
     }) else {
-        panic!("no match")
+        return Err(WhipError::NoVideoCodecNegotiated);
     };
 
     let track = Arc::new(TrackLocalStaticRTP::new(
@@ -93,12 +76,7 @@ pub async fn setup_video_track(
         "webrtc-rs".to_string(),
     ));
 
-    if let Err(err) = rtc_sender.replace_track(Some(track.clone())).await {
-        error!("Failed to replace track {err}");
-        panic!("err")
-    }
-
-    debug!("{:?}", codec_params);
+    rtc_sender.replace_track(Some(track.clone())).await?;
 
     fn payloader_options(codec: PayloadedCodec, payload_type: u8, ssrc: u32) -> PayloaderOptions {
         PayloaderOptions {
@@ -111,7 +89,7 @@ pub async fn setup_video_track(
     }
 
     let ssrc = rtc_sender_params.encodings.first().unwrap().ssrc;
-    let (sender, receiver) = mpsc::channel(1);
+    let (sender, receiver) = mpsc::channel(10);
     let handle = match options {
         VideoEncoderOptions::H264(options) => spawn_video_track_thread::<FfmpegH264Encoder>(
             whip_ctx.pipeline_ctx.clone(),
@@ -143,23 +121,14 @@ pub async fn setup_video_track(
         handle.keyframe_request_sender.clone(),
     );
 
-    Ok((handle, (receiver, track)))
+    Ok((handle, WhipSenderTrack { receiver, track }))
 }
 
 pub async fn setup_audio_track(
     whip_ctx: &Arc<WhipCtx>,
     rtc_sender: Arc<RTCRtpSender>,
     encoder_preferences: Vec<AudioEncoderOptions>,
-) -> Result<
-    (
-        WhipAudioTrackThreadHandle,
-        (
-            mpsc::Receiver<PipelineEvent<rtp::packet::Packet>>,
-            Arc<TrackLocalStaticRTP>,
-        ),
-    ),
-    WhipError,
-> {
+) -> Result<(WhipAudioTrackThreadHandle, WhipSenderTrack), WhipError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
 
@@ -173,7 +142,7 @@ pub async fn setup_audio_track(
         })?;
         Some((encoder_options.clone(), supported.clone()))
     }) else {
-        panic!("no match")
+        return Err(WhipError::NoAudioCodecNegotiated);
     };
 
     let track = Arc::new(TrackLocalStaticRTP::new(
@@ -182,12 +151,7 @@ pub async fn setup_audio_track(
         "webrtc-rs".to_string(),
     ));
 
-    if let Err(err) = rtc_sender.replace_track(Some(track.clone())).await {
-        error!("Failed to replace track {err}");
-        panic!("err")
-    }
-
-    error!("{:?}", codec_params);
+    rtc_sender.replace_track(Some(track.clone())).await?;
 
     fn payloader_options(codec: PayloadedCodec, payload_type: u8, ssrc: u32) -> PayloaderOptions {
         PayloaderOptions {
@@ -200,7 +164,7 @@ pub async fn setup_audio_track(
     }
 
     let ssrc = rtc_sender_params.encodings.first().unwrap().ssrc;
-    let (sender, receiver) = mpsc::channel(1);
+    let (sender, receiver) = mpsc::channel(10);
     let handle = match options {
         AudioEncoderOptions::Opus(options) => spawn_audio_track_thread::<OpusEncoder>(
             whip_ctx.pipeline_ctx.clone(),
@@ -213,24 +177,7 @@ pub async fn setup_audio_track(
     }
     .unwrap();
 
-    let sender = rtc_sender.clone();
-    whip_ctx.pipeline_ctx.tokio_rt.spawn(async move {
-        loop {
-            if let Ok((packets, _)) = sender.read_rtcp().await {
-                for packet in packets {
-                    if let Some(report) = packet.as_any().downcast_ref::<ReceiverReport>() {
-                        info!("Receiver report {report:?}");
-                    } else {
-                        info!("RTCP packet {:?}", packet.header());
-                    }
-                }
-            } else {
-                debug!("Failed to read RTCP packets from the sender.");
-            }
-        }
-    });
-
-    Ok((handle, (receiver, track)))
+    Ok((handle, WhipSenderTrack { receiver, track }))
 }
 
 fn handle_keyframe_requests(

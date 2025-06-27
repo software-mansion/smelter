@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, info, span, trace, Instrument, Level};
+use tracing::{debug, error, span, trace, Instrument, Level};
 use track_task_audio::WhipAudioTrackThreadHandle;
 use track_task_video::WhipVideoTrackThreadHandle;
 use url::{ParseError, Url};
@@ -157,19 +157,18 @@ impl Drop for WhipClientOutput {
     }
 }
 
+struct WhipSenderTrack {
+    receiver: mpsc::Receiver<rtp::packet::Packet>,
+    track: Arc<TrackLocalStaticRTP>,
+}
+
 struct WhipSenderTask {
     session_url: Url,
     ctx: Arc<PipelineCtx>,
     client: Arc<WhipHttpClient>,
     output_id: OutputId,
-    video: Option<(
-        mpsc::Receiver<PipelineEvent<rtp::packet::Packet>>,
-        Arc<TrackLocalStaticRTP>,
-    )>,
-    audio: Option<(
-        mpsc::Receiver<PipelineEvent<rtp::packet::Packet>>,
-        Arc<TrackLocalStaticRTP>,
-    )>,
+    video: Option<WhipSenderTrack>,
+    audio: Option<WhipSenderTrack>,
 }
 
 #[derive(Debug)]
@@ -249,54 +248,115 @@ impl WhipSenderTask {
     }
 
     async fn run(self) {
-        let audio_handle = self.audio.map(|(mut audio_receiver, audio_track)| {
-            tokio::spawn(async move {
-                loop {
-                    match audio_receiver.recv().await {
-                        Some(PipelineEvent::Data(packet)) => {
-                            trace!("Send audio packet {:?}", packet.header);
-                            if let Err(err) = audio_track.write_rtp(&packet).await {
-                                return Err(err);
-                            }
-                        }
-                        Some(PipelineEvent::EOS) | None => return Ok(()),
-                    }
-                }
-            })
-        });
-        let video_handle = self.video.map(|(mut video_receiver, video_track)| {
-            tokio::spawn(async move {
-                loop {
-                    match video_receiver.recv().await {
-                        Some(PipelineEvent::Data(packet)) => {
-                            trace!("Send video packet {:?}", packet.header);
-                            if let Err(err) = video_track.write_rtp(&packet).await {
-                                return Err(err);
-                            }
-                        }
-                        Some(PipelineEvent::EOS) | None => return Ok(()),
-                    }
-                }
-            })
-        });
+        let (mut audio_receiver, audio_track) = match self.audio {
+            Some(WhipSenderTrack { receiver, track }) => (Some(receiver), Some(track)),
+            None => (None, None),
+        };
 
-        if let Some(video_handle) = video_handle {
-            if let Err(err) = video_handle.await {
-                error!("Error occurred while writing to video track, closing connection. {err}");
-            }
+        let (mut video_receiver, video_track) = match self.video {
+            Some(WhipSenderTrack { receiver, track }) => (Some(receiver), Some(track)),
+            None => (None, None),
+        };
+        let mut next_video_packet = None;
+        let mut next_audio_packet = None;
+
+        loop {
+            tokio::select! {
+                Some(v) = async { video_receiver.map(|rec| rec.recv())
+                } => {
+                    next_video_packet = Some(v)
+                },
+                Some(a) = audio_receiver..recv() => {
+                    next_audio_packet = Some(a)
+                },
+            };
         }
 
-        if let Some(audio_handle) = audio_handle {
-            if let Err(err) = audio_handle.await {
-                error!("Error occurred while writing to audio track, closing connection. {err}");
-            }
-        }
+        //let audio_handle = self.audio.map(|(mut audio_receiver, audio_track)| {
+        //    tokio::spawn(async move {
+        //        loop {
+        //            match audio_receiver.recv().await {
+        //                Some(PipelineEvent::Data(packet)) => {
+        //                    trace!("Send audio packet {:?}", packet.header);
+        //                    if let Err(err) = audio_track.write_rtp(&packet).await {
+        //                        return Err(err);
+        //                    }
+        //                }
+        //                Some(PipelineEvent::EOS) | None => return Ok(()),
+        //            }
+        //        }
+        //    })
+        //});
+        //let video_handle = self.video.map(|(mut video_receiver, video_track)| {
+        //    tokio::spawn(async move {
+        //        loop {
+        //            match video_receiver.recv().await {
+        //                Some(PipelineEvent::Data(packet)) => {
+        //                    trace!("Send video packet {:?}", packet.header);
+
+        //                    if let Err(err) = video_track.write_rtp(&packet).await {
+        //                        return Err(err);
+        //                    }
+        //                }
+        //                Some(PipelineEvent::EOS) | None => return Ok(()),
+        //            }
+        //        }
+        //    })
+        //});
+
+        //if let Some(video_handle) = video_handle {
+        //    if let Err(err) = video_handle.await {
+        //        error!("Error occurred while writing to video track, closing connection. {err}");
+        //    }
+        //}
+
+        //if let Some(audio_handle) = audio_handle {
+        //    if let Err(err) = audio_handle.await {
+        //        error!("Error occurred while writing to audio track, closing connection. {err}");
+        //    }
+        //}
 
         self.client.delete_session(self.session_url).await;
         self.ctx
             .event_emitter
             .emit(Event::OutputDone(self.output_id));
         debug!("Closing WHIP sender thread.")
+    }
+
+    async fn run_video_and_audio(&self) {}
+}
+struct WhipSenderTrackProcessor {
+    receiver: Option<mpsc::Receiver<rtp::packet::Packet>>,
+    track: Option<Arc<TrackLocalStaticRTP>>,
+    packet: Option<rtp::packet::Packet>,
+}
+
+struct WhipSenderTrackProcessorPacket<'a> {
+    processor: &'a mut WhipSenderTrackProcessor,
+    track: Arc<TrackLocalStaticRTP>
+    packet: &'a mut rtp::packet::Packet,
+}
+
+impl WhipSenderTrackProcessor {
+    fn try_packet<'a>(&'a mut self) -> Option<WhipSenderTrackProcessorPacket<'a>> {
+        if let (Some(packet), Some(track)) = (&mut self.packet, &mut self.track) {
+            return self.packet.map(|packet| WhipSenderTrackProcessorPacket {
+                processor: &mut self,
+                packet,
+            });
+        };
+        let Some(receiver) = self.receiver else {
+            return None; // None
+        };
+    }
+}
+
+impl<'a> WhipSenderTrackProcessorPacket<'a> {
+    async fn send(mut self) -> Result<(), webrtc::Error> {
+        if let Err(err) = self.processor.track.write_rtp().await {
+            return Err(err);
+        }
+        Ok(())
     }
 }
 
