@@ -128,7 +128,7 @@ async function startStream(streamId: string) {
       '-c:a',
       'aac',
       '-hls_time',
-      '1',
+      '2',
       '-hls_list_size',
       '120',
       '-hls_delete_threshold',
