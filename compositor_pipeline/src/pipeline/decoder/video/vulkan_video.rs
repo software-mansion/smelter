@@ -2,8 +2,8 @@ use std::{sync::Arc, time::Duration};
 
 use compositor_render::{Frame, FrameData, InputId, Resolution};
 use crossbeam_channel::{Receiver, Sender};
-use tracing::{debug, error, span, trace, warn, Level};
-use vk_video::VulkanDevice;
+use tracing::{debug, error, info, span, trace, warn, Level};
+use vk_video::{DecoderError, VulkanDecoderError, VulkanDevice, WgpuTexturesDecoder};
 
 use crate::{
     error::InputInitError,
@@ -87,15 +87,16 @@ fn run_decoder_thread(
             pts: Some(chunk.pts.as_micros() as u64),
         };
 
-        let result = match decoder.decode(chunk) {
+        let result = match decode_chunk(&mut decoder, &vulkan_device, chunk) {
             Ok(res) => res,
             Err(err) => {
-                warn!("Failed to decode frame: {err}");
+                warn!("Failed to parse frame: {err}");
                 continue;
             }
         };
 
         for vk_video::Frame { data, pts } in result {
+            debug!("video pts {:?}", pts);
             let resolution = Resolution {
                 width: data.width() as usize,
                 height: data.height() as usize,
@@ -117,4 +118,25 @@ fn run_decoder_thread(
     if send_eos && frame_sender.send(PipelineEvent::EOS).is_err() {
         debug!("Failed to send EOS from H264 decoder. Channel closed.")
     }
+}
+
+fn decode_chunk<'a>(
+    decoder: &mut WgpuTexturesDecoder<'a>,
+    vulkan_device: &'a Arc<VulkanDevice>,
+    chunk: vk_video::EncodedChunk<&'_ [u8]>,
+) -> Result<Vec<vk_video::Frame<wgpu::Texture>>, DecoderError> {
+    match decoder.decode(chunk.clone()) {
+        Ok(res) => return Ok(res),
+        Err(err) => match err {
+            DecoderError::VulkanDecoderError(VulkanDecoderError::ProfileChangeUnsupported) => {}
+            DecoderError::VulkanDecoderError(VulkanDecoderError::LevelChangeUnsupported) => {}
+            err => return Err(err),
+        },
+    };
+    decoder.flush();
+    info!("Recreate vulkan decoder");
+    let mut new_decoder = vulkan_device.create_wgpu_textures_decoder()?;
+    let frames = new_decoder.decode(chunk)?;
+    *decoder = new_decoder;
+    Ok(frames)
 }

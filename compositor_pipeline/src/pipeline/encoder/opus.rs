@@ -56,9 +56,7 @@ impl AudioEncoder for OpusEncoder {
                 encoder,
                 output_buffer,
             },
-            AudioEncoderConfig {
-                extradata: None,
-            },
+            AudioEncoderConfig { extradata: None },
         ))
     }
 

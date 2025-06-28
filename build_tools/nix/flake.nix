@@ -56,6 +56,7 @@
             gst_all_1.gst-plugins-bad
             gst_all_1.gst-plugins-ugly
             gst_all_1.gst-libav
+            gst_all_1.gst-plugins-rs
 
             # Node.js
             nodejs_20
@@ -68,6 +69,7 @@
             cargo-watch
             cargo-nextest
             rust-analyzer
+            streamlink
 
             clang-tools
             llvmPackages.bintools

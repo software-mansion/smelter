@@ -80,7 +80,7 @@ fn init_stream<Encoder: VideoEncoder>(
     let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
 
     let stream = payloaded_stream.flatten().map(|event| match event {
-        Ok(PipelineEvent::Data(packet)) => RtpEvent::Data(packet),
+        Ok(PipelineEvent::Data((packet, _))) => RtpEvent::Data(packet),
         Ok(PipelineEvent::EOS) => RtpEvent::VideoEos,
         Err(err) => RtpEvent::Err(err),
     });

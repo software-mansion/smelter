@@ -12,8 +12,8 @@ use crate::{
     state::{Pipeline, Response},
 };
 use compositor_api::{
-    DeckLink, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId, RtmpClient, RtpInput,
-    RtpOutput, ShaderSpec, WebRendererSpec, WhipInput, WhipOutput,
+    DeckLink, HlsInput, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId, RtmpClient,
+    RtpInput, RtpOutput, ShaderSpec, WebRendererSpec, WhipInput, WhipOutput,
 };
 
 use super::ApiState;
@@ -23,6 +23,7 @@ use super::ApiState;
 pub enum RegisterInput {
     RtpStream(RtpInput),
     Mp4(Mp4Input),
+    Hls(HlsInput),
     Whip(WhipInput),
     #[serde(rename = "decklink")]
     DeckLink(DeckLink),
@@ -50,6 +51,9 @@ pub(super) async fn handle_input(
             }
             RegisterInput::Mp4(mp4) => {
                 Pipeline::register_input(&api.pipeline, input_id.into(), mp4.try_into()?)?
+            }
+            RegisterInput::Hls(hls) => {
+                Pipeline::register_input(&api.pipeline, input_id.into(), hls.try_into()?)?
             }
             RegisterInput::DeckLink(decklink) => {
                 Pipeline::register_input(&api.pipeline, input_id.into(), decklink.try_into()?)?

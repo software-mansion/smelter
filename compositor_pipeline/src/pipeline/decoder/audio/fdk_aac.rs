@@ -7,6 +7,7 @@ use crate::{
     pipeline::{
         decoder::AacDecoderOptions,
         types::{EncodedChunk, EncodedChunkKind, Samples},
+        AudioCodec,
     },
 };
 
@@ -28,7 +29,8 @@ pub enum AacDecoderError {
 }
 
 pub(super) struct AacDecoder {
-    instance: *mut fdk::AAC_DECODER_INSTANCE,
+    decoder: Decoder,
+    #[allow(dead_code)]
     sample_rate: u32,
 }
 
@@ -36,7 +38,7 @@ impl AacDecoder {
     /// The encoded chunk used for initialization here still needs to be fed into `Decoder::decode_chunk` later
     pub fn new(
         options: AacDecoderOptions,
-        first_chunk: &EncodedChunk,
+        first_chunk: EncodedChunk,
     ) -> Result<Self, InputInitError> {
         let transport = if first_chunk.data[..4] == [b'A', b'D', b'I', b'F'] {
             fdk::TRANSPORT_TYPE_TT_MP4_ADIF
@@ -46,6 +48,43 @@ impl AacDecoder {
             fdk::TRANSPORT_TYPE_TT_MP4_RAW
         };
 
+        let mut decoder = Decoder::new(options, transport)?;
+        decoder.decode(first_chunk)?;
+
+        let info = unsafe { *fdk::aacDecoder_GetStreamInfo(decoder.instance) };
+
+        let sample_rate = match info.aacSampleRate > 0 {
+            true => info.aacSampleRate as u32,
+            false => {
+                return Err(AacDecoderError::UnsupportedSampleRate(info.aacSampleRate).into());
+            }
+        };
+        if info.channelConfig != 1 && info.channelConfig != 2 {
+            return Err(AacDecoderError::UnsupportedChannelConfig.into());
+        }
+
+        Ok(AacDecoder {
+            decoder,
+            sample_rate,
+        })
+    }
+}
+
+impl AudioDecoderExt for AacDecoder {
+    fn decode(&mut self, chunk: EncodedChunk) -> Result<Vec<DecodedSamples>, DecodingError> {
+        self.decoder.decode(chunk)?;
+        Ok(self.decoder.decoded_samples())
+    }
+}
+
+struct Decoder {
+    instance: *mut fdk::AAC_DECODER_INSTANCE,
+    decoded_samples_buffer: Vec<fdk::INT_PCM>,
+    decoded_samples: Vec<DecodedSamples>,
+}
+
+impl Decoder {
+    fn new(options: AacDecoderOptions, transport: i32) -> Result<Self, AacDecoderError> {
         let instance = unsafe { fdk::aacDecoder_Open(transport, 1) };
 
         if let Some(config) = options.asc {
@@ -62,42 +101,22 @@ impl AacDecoder {
             }
         }
 
-        let info = unsafe { *fdk::aacDecoder_GetStreamInfo(instance) };
-        let aac_sample_rate = info.aacSampleRate;
-        let sample_rate = if aac_sample_rate > 0 {
-            aac_sample_rate as u32
-        } else {
-            return Err(AacDecoderError::UnsupportedSampleRate(aac_sample_rate).into());
-        };
-        if info.channelConfig != 1 && info.channelConfig != 2 {
-            return Err(AacDecoderError::UnsupportedChannelConfig.into());
-        }
-
-        Ok(AacDecoder {
+        Ok(Self {
             instance,
-            sample_rate,
+            decoded_samples_buffer: vec![0; 100_000],
+            decoded_samples: Vec::new(),
         })
     }
-}
 
-impl Drop for AacDecoder {
-    fn drop(&mut self) {
-        unsafe {
-            fdk::aacDecoder_Close(self.instance);
-        }
-    }
-}
-
-impl AudioDecoderExt for AacDecoder {
-    fn decode(&mut self, chunk: EncodedChunk) -> Result<Vec<DecodedSamples>, DecodingError> {
-        if chunk.kind != EncodedChunkKind::Audio(crate::pipeline::AudioCodec::Aac) {
-            return Err(AacDecoderError::UnsupportedChunkKind(chunk.kind).into());
+    fn decode(&mut self, chunk: EncodedChunk) -> Result<(), AacDecoderError> {
+        if chunk.kind != EncodedChunkKind::Audio(AudioCodec::Aac) {
+            return Err(AacDecoderError::UnsupportedChunkKind(chunk.kind));
         }
 
         let buffer_size = chunk.data.len() as u32;
+        // bytes read from buffer
         let mut bytes_valid = buffer_size;
         let mut buffer = chunk.data.to_vec();
-        let mut output_buffer = Vec::new();
 
         while bytes_valid > 0 {
             // This fills the decoder with data.
@@ -116,64 +135,70 @@ impl AudioDecoderExt for AacDecoder {
                 return Err(AacDecoderError::FdkDecoderError(result).into());
             }
 
-            let info = unsafe { *fdk::aacDecoder_GetStreamInfo(self.instance) };
+            loop {
+                let result = unsafe {
+                    fdk::aacDecoder_DecodeFrame(
+                        self.instance,
+                        self.decoded_samples_buffer.as_mut_ptr(),
+                        self.decoded_samples_buffer.len() as i32,
+                        0,
+                    )
+                };
 
-            // The decoder should output `info.aacSamplesPerFrame` for each channel
-            let mut decoded_samples: Vec<fdk::INT_PCM> =
-                vec![0; (info.aacSamplesPerFrame * info.channelConfig) as usize];
+                if result == fdk::AAC_DECODER_ERROR_AAC_DEC_NOT_ENOUGH_BITS {
+                    // Need to put more data in
+                    break;
+                }
 
-            let result = unsafe {
-                fdk::aacDecoder_DecodeFrame(
-                    self.instance,
-                    decoded_samples.as_mut_ptr(),
-                    decoded_samples.len() as i32,
-                    0,
-                )
-            };
+                if result != fdk::AAC_DECODER_ERROR_AAC_DEC_OK {
+                    return Err(AacDecoderError::FdkDecoderError(result).into());
+                }
 
-            if result == fdk::AAC_DECODER_ERROR_AAC_DEC_NOT_ENOUGH_BITS {
-                // Need to put more data in
-                continue;
+                let info = unsafe { *fdk::aacDecoder_GetStreamInfo(self.instance) };
+                let raw_frame_size = (info.aacSamplesPerFrame * info.channelConfig) as usize;
+
+                let samples = match info.channelConfig {
+                    1 => Arc::new(Samples::Mono16Bit(
+                        self.decoded_samples_buffer[..raw_frame_size].to_vec(),
+                    )),
+                    2 => Arc::new(Samples::Stereo16Bit(
+                        self.decoded_samples_buffer[..raw_frame_size]
+                            .chunks_exact(2)
+                            .map(|c| (c[0], c[1]))
+                            .collect(),
+                    )),
+                    _ => return Err(AacDecoderError::UnsupportedChannelConfig.into()),
+                };
+
+                let sample_rate = if info.sampleRate > 0 {
+                    info.sampleRate as u32
+                } else {
+                    error!(
+                        "Unexpected sample rate of decoded AAC audio: {}",
+                        info.sampleRate
+                    );
+                    0
+                };
+
+                self.decoded_samples.push(DecodedSamples {
+                    samples,
+                    start_pts: chunk.pts,
+                    sample_rate,
+                })
             }
-
-            if result != fdk::AAC_DECODER_ERROR_AAC_DEC_OK {
-                return Err(AacDecoderError::FdkDecoderError(result).into());
-            }
-
-            let samples = match info.channelConfig {
-                1 => Arc::new(Samples::Mono16Bit(decoded_samples)),
-                2 => Arc::new(Samples::Stereo16Bit(
-                    decoded_samples
-                        .chunks_exact(2)
-                        .map(|c| (c[0], c[1]))
-                        .collect(),
-                )),
-                _ => return Err(AacDecoderError::UnsupportedChannelConfig.into()),
-            };
-
-            // Sample rate can change after decoding
-            let info = unsafe { *fdk::aacDecoder_GetStreamInfo(self.instance) };
-            let sample_rate = if info.sampleRate > 0 {
-                info.sampleRate as u32
-            } else {
-                error!(
-                    "Unexpected sample rate of decoded AAC audio: {}",
-                    info.sampleRate
-                );
-                0
-            };
-
-            output_buffer.push(DecodedSamples {
-                samples,
-                start_pts: chunk.pts,
-                sample_rate,
-            })
         }
-
-        Ok(output_buffer)
+        Ok(())
     }
 
-    fn decoded_sample_rate(&self) -> u32 {
-        self.sample_rate
+    fn decoded_samples(&mut self) -> Vec<DecodedSamples> {
+        std::mem::take(&mut self.decoded_samples)
+    }
+}
+
+impl Drop for Decoder {
+    fn drop(&mut self) {
+        unsafe {
+            fdk::aacDecoder_Close(self.instance);
+        }
     }
 }

@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, time::Duration};
 use tracing::error;
 
 use rand::Rng;
@@ -54,9 +54,11 @@ impl Payloader {
     pub fn payload(
         &mut self,
         chunk: EncodedChunk,
-    ) -> Result<Vec<rtp::packet::Packet>, PayloadingError> {
+    ) -> Result<Vec<(rtp::packet::Packet, Duration)>, PayloadingError> {
         let payloads = self.payloader.payload(self.mtu, &chunk.data)?;
         let packets_amount = payloads.len();
+        let timestamp = (chunk.pts.as_secs_f64() * self.clock_rate as f64).round() as u64;
+        let timestamp = timestamp % u32::MAX as u64;
 
         payloads
             .into_iter()
@@ -69,13 +71,13 @@ impl Payloader {
                     marker: i == packets_amount - 1, // marker needs to be set on the last packet of each frame
                     payload_type: self.payload_type,
                     sequence_number: self.next_sequence_number,
-                    timestamp: (chunk.pts.as_secs_f64() * self.clock_rate as f64) as u32,
+                    timestamp: timestamp as u32,
                     ssrc: self.ssrc,
                     ..Default::default()
                 };
                 self.next_sequence_number = self.next_sequence_number.wrapping_add(1);
 
-                Ok(rtp::packet::Packet { header, payload })
+                Ok((rtp::packet::Packet { header, payload }, chunk.pts))
             })
             .collect()
     }
@@ -107,7 +109,7 @@ impl<Source> Iterator for PayloaderStream<Source>
 where
     Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
 {
-    type Item = Vec<Result<PipelineEvent<rtp::packet::Packet>, PayloadingError>>;
+    type Item = Vec<Result<PipelineEvent<(rtp::packet::Packet, Duration)>, PayloadingError>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {

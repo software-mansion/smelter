@@ -4,6 +4,7 @@ import type {
   RegisterRtpInput,
   Inputs,
   RegisterWhipInput,
+  RegisterHlsInput,
 } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
 
@@ -15,6 +16,7 @@ export type RegisterInputRequest =
   | RegisterRtpStreamInputRequest
   | RegisterMp4InputRequest
   | RegisterWhipInputRequest
+  | RegisterHlsInputRequest
   | RegisterDecklinkInputRequest
   | { type: 'camera' }
   | { type: 'screen_capture' }
@@ -23,6 +25,7 @@ export type RegisterInputRequest =
 export type RegisterRtpStreamInputRequest = Extract<Api.RegisterInput, { type: 'rtp_stream' }>;
 export type RegisterMp4InputRequest = { blob?: any } & Extract<Api.RegisterInput, { type: 'mp4' }>;
 export type RegisterWhipInputRequest = Extract<Api.RegisterInput, { type: 'whip' }>;
+export type RegisterHlsInputRequest = Extract<Api.RegisterInput, { type: 'hls' }>;
 export type RegisterDecklinkInputRequest = Extract<Api.RegisterInput, { type: 'decklink' }>;
 
 export type InputRef = _smelterInternals.InputRef;
@@ -33,6 +36,7 @@ export type RegisterInput =
   | ({ type: 'rtp_stream' } & RegisterRtpInput)
   | ({ type: 'mp4' } & RegisterMp4Input)
   | ({ type: 'whip' } & RegisterWhipInput)
+  | ({ type: 'hls' } & RegisterHlsInput)
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any };
@@ -48,6 +52,8 @@ export function intoRegisterInput(input: RegisterInput): RegisterInputRequest {
     return intoRtpRegisterInput(input);
   } else if (input.type === 'whip') {
     return intoWhipRegisterInput(input);
+  } else if (input.type === 'hls') {
+    return intoHlsRegisterInput(input);
   } else if (input.type === 'camera') {
     return { type: 'camera' };
   } else if (input.type === 'screen_capture') {
@@ -88,6 +94,15 @@ function intoWhipRegisterInput(input: Inputs.RegisterWhipInput): RegisterInputRe
   return {
     type: 'whip',
     video: input.video && intoInputWhipVideoOptions(input.video),
+    required: input.required,
+    offset_ms: input.offsetMs,
+  };
+}
+
+function intoHlsRegisterInput(input: Inputs.RegisterHlsInput): RegisterInputRequest {
+  return {
+    type: 'hls',
+    url: input.url,
     required: input.required,
     offset_ms: input.offsetMs,
   };

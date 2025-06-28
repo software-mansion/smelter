@@ -6,6 +6,7 @@ import type {
   RegisterRtpOutput,
   RegisterWhipInput,
   RegisterWhipOutput,
+  RegisterHlsInput,
 } from '@swmansion/smelter';
 
 export type RegisterOutput =
@@ -17,4 +18,5 @@ export type RegisterOutput =
 export type RegisterInput =
   | ({ type: 'rtp_stream' } & RegisterRtpInput)
   | ({ type: 'mp4' } & RegisterMp4Input)
-  | ({ type: 'whip' } & RegisterWhipInput);
+  | ({ type: 'whip' } & RegisterWhipInput)
+  | ({ type: 'hls' } & RegisterHlsInput);

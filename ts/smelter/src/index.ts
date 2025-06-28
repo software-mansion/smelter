@@ -18,7 +18,12 @@ import Show, { ShowProps } from './components/Show.js';
 import { SlideShow, Slide, SlideProps, SlideShowProps } from './components/SlideShow.js';
 import Mp4, { Mp4Props } from './components/Mp4.js';
 
-export { RegisterRtpInput, RegisterMp4Input, RegisterWhipInput } from './types/input.js';
+export {
+  RegisterRtpInput,
+  RegisterMp4Input,
+  RegisterWhipInput,
+  RegisterHlsInput,
+} from './types/input.js';
 export {
   RegisterRtpOutput,
   RegisterMp4Output,

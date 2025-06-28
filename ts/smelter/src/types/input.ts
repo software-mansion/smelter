@@ -86,6 +86,24 @@ export type RegisterWhipInput = {
   offsetMs?: number | null;
 };
 
+export type RegisterHlsInput = {
+  /**
+   * Parameters of a video source included in the RTP stream.
+   */
+  url: string;
+  /**
+   * (**default=`false`**) If input is required and the stream is not delivered
+   * on time, then Smelter will delay producing output frames.
+   */
+  required?: boolean | null;
+  /**
+   * Offset in milliseconds relative to the pipeline start (start request). If the offset is
+   * not defined then the stream will be synchronized based on the delivery time of the initial
+   * frames.
+   */
+  offsetMs?: number | null;
+};
+
 export type InputRtpVideoOptions = {
   decoder: RtpVideoDecoder;
 };

@@ -24,10 +24,11 @@ export async function sendRequest(baseUrl: string | URL, request: ApiRequest): P
   if (response.status >= 400) {
     const err: any = new Error(`Request to Smelter server failed.`);
     err.response = response;
+    err.body = await response.text();
     try {
-      err.body = await response.json();
-    } catch {
-      err.body = await response.text();
+      err.body = JSON.parse(err.body);
+    } catch (err: any) {
+      console.log(err);
     }
     throw err;
   }

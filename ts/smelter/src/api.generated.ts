@@ -65,6 +65,21 @@ export type RegisterInput =
       video_decoder?: VideoDecoder | null;
     }
   | {
+      type: "hls";
+      /**
+       * URL of the MP4 file.
+       */
+      url: string;
+      /**
+       * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Offset in milliseconds relative to the pipeline start (start request). If offset is not defined then stream is synchronized based on the first frames delivery time.
+       */
+      offset_ms?: number | null;
+    }
+  | {
       type: "whip";
       /**
        * Parameters of a video source included in the RTP stream.
