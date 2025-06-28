@@ -57,6 +57,8 @@ impl Payloader {
     ) -> Result<Vec<rtp::packet::Packet>, PayloadingError> {
         let payloads = self.payloader.payload(self.mtu, &chunk.data)?;
         let packets_amount = payloads.len();
+        let timestamp = (chunk.pts.as_secs_f64() * self.clock_rate as f64).round() as u64;
+        let timestamp = timestamp % u32::MAX as u64;
 
         payloads
             .into_iter()
@@ -69,7 +71,7 @@ impl Payloader {
                     marker: i == packets_amount - 1, // marker needs to be set on the last packet of each frame
                     payload_type: self.payload_type,
                     sequence_number: self.next_sequence_number,
-                    timestamp: (chunk.pts.as_secs_f64() * self.clock_rate as f64).round() as u32,
+                    timestamp: timestamp as u32,
                     ssrc: self.ssrc,
                     ..Default::default()
                 };
