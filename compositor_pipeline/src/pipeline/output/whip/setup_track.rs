@@ -1,6 +1,6 @@
 use crossbeam_channel::Sender;
 use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 use webrtc::{
@@ -9,19 +9,15 @@ use webrtc::{
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
-use crate::{
-    pipeline::{
-        encoder::{
-            ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder,
-            ffmpeg_vp9::FfmpegVp9Encoder, opus::OpusEncoder, AudioEncoderOptions,
-            VideoEncoderOptions,
-        },
-        output::{
-            rtp::payloader::{PayloadedCodec, PayloaderOptions},
-            whip::track_task_audio::spawn_audio_track_thread,
-        },
+use crate::pipeline::{
+    encoder::{
+        ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder, ffmpeg_vp9::FfmpegVp9Encoder,
+        opus::OpusEncoder, AudioEncoderOptions, VideoEncoderOptions,
     },
-    queue::PipelineEvent,
+    output::{
+        rtp::payloader::{PayloadedCodec, PayloaderOptions},
+        whip::track_task_audio::spawn_audio_track_thread,
+    },
 };
 
 use super::{
@@ -61,7 +57,7 @@ pub async fn setup_video_track(
     (
         WhipVideoTrackThreadHandle,
         (
-            mpsc::Receiver<PipelineEvent<rtp::packet::Packet>>,
+            mpsc::Receiver<(rtp::packet::Packet, Duration)>,
             Arc<TrackLocalStaticRTP>,
         ),
     ),
@@ -145,7 +141,7 @@ pub async fn setup_audio_track(
     (
         WhipAudioTrackThreadHandle,
         (
-            mpsc::Receiver<PipelineEvent<rtp::packet::Packet>>,
+            mpsc::Receiver<(rtp::packet::Packet, Duration)>,
             Arc<TrackLocalStaticRTP>,
         ),
     ),

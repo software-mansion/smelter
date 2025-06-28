@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use compositor_render::{error::ErrorStack, Frame, OutputId};
 use crossbeam_channel::Sender;
@@ -27,7 +27,7 @@ pub fn spawn_video_track_thread<Encoder: VideoEncoder>(
     output_id: OutputId,
     encoder_options: Encoder::Options,
     payloader_options: PayloaderOptions,
-    chunks_sender: mpsc::Sender<PipelineEvent<rtp::packet::Packet>>,
+    chunks_sender: mpsc::Sender<(rtp::packet::Packet, Duration)>,
 ) -> Result<WhipVideoTrackThreadHandle, EncoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
@@ -72,7 +72,7 @@ fn init_stream<Encoder: VideoEncoder>(
     payloader_options: PayloaderOptions,
 ) -> Result<
     (
-        impl Iterator<Item = PipelineEvent<rtp::packet::Packet>>,
+        impl Iterator<Item = (rtp::packet::Packet, Duration)>,
         WhipVideoTrackThreadHandle,
     ),
     EncoderInitError,
@@ -84,7 +84,8 @@ fn init_stream<Encoder: VideoEncoder>(
     let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
 
     let stream = payloaded_stream.flatten().filter_map(|event| match event {
-        Ok(event) => Some(event),
+        Ok(PipelineEvent::Data(event)) => Some(event),
+        Ok(PipelineEvent::EOS) => None,
         Err(err) => {
             warn!(
                 "Depayloading error: {}",

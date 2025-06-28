@@ -24,7 +24,6 @@ use crate::{
         encoder::{AudioEncoderOptions, VideoEncoderOptions},
         PipelineCtx,
     },
-    queue::PipelineEvent,
 };
 
 use super::{rtp::payloader::PayloadingError, Output, OutputAudio, OutputVideo};
@@ -163,11 +162,11 @@ struct WhipSenderTask {
     client: Arc<WhipHttpClient>,
     output_id: OutputId,
     video: Option<(
-        mpsc::Receiver<PipelineEvent<rtp::packet::Packet>>,
+        mpsc::Receiver<(rtp::packet::Packet, Duration)>,
         Arc<TrackLocalStaticRTP>,
     )>,
     audio: Option<(
-        mpsc::Receiver<PipelineEvent<rtp::packet::Packet>>,
+        mpsc::Receiver<(rtp::packet::Packet, Duration)>,
         Arc<TrackLocalStaticRTP>,
     )>,
 }
@@ -249,47 +248,65 @@ impl WhipSenderTask {
     }
 
     async fn run(self) {
-        let audio_handle = self.audio.map(|(mut audio_receiver, audio_track)| {
-            tokio::spawn(async move {
-                loop {
-                    match audio_receiver.recv().await {
-                        Some(PipelineEvent::Data(packet)) => {
-                            trace!("Send audio packet {:?}", packet.header);
-                            if let Err(err) = audio_track.write_rtp(&packet).await {
-                                return Err(err);
-                            }
-                        }
-                        Some(PipelineEvent::EOS) | None => return Ok(()),
+        let (mut audio_receiver, audio_track) = self.audio.unwrap();
+        let (mut video_receiver, video_track) = self.video.unwrap();
+
+        let mut next_video_packet = None;
+        let mut next_audio_packet = None;
+        loop {
+            match (&next_audio_packet, &next_video_packet) {
+                (None, None) => {
+                    tokio::select! {
+                        Some(a) = audio_receiver.recv() => {
+                            next_audio_packet = Some(a)
+                        },
+                        Some(v) = video_receiver.recv() => {
+                            next_video_packet = Some(v)
+                        },
+                    };
+                }
+                (None, Some(_video)) => {
+                    next_audio_packet = audio_receiver.recv().await;
+                    if next_audio_packet.is_none() {
+                        break;
                     }
                 }
-            })
-        });
-        let video_handle = self.video.map(|(mut video_receiver, video_track)| {
-            tokio::spawn(async move {
-                loop {
-                    match video_receiver.recv().await {
-                        Some(PipelineEvent::Data(packet)) => {
-                            trace!("Send video packet {:?}", packet.header);
-
-                            if let Err(err) = video_track.write_rtp(&packet).await {
-                                return Err(err);
-                            }
-                        }
-                        Some(PipelineEvent::EOS) | None => return Ok(()),
+                (Some(_audio), None) => {
+                    next_video_packet = video_receiver.recv().await;
+                    if next_video_packet.is_none() {
+                        break;
                     }
                 }
-            })
-        });
-
-        if let Some(video_handle) = video_handle {
-            if let Err(err) = video_handle.await {
-                error!("Error occurred while writing to video track, closing connection. {err}");
+                (Some(_), Some(_)) => panic!("should not happen"),
             }
-        }
 
-        if let Some(audio_handle) = audio_handle {
-            if let Err(err) = audio_handle.await {
-                error!("Error occurred while writing to audio track, closing connection. {err}");
+            if let (Some(audio_packet), Some(video_packet)) =
+                (&mut next_audio_packet, &mut next_video_packet)
+            {
+                if audio_packet.1 > video_packet.1 {
+                    trace!(
+                        "Send video packet {:?} {:?}",
+                        video_packet.0.header.timestamp,
+                        video_packet.1
+                    );
+                    video_track
+                        .write_rtp(&next_video_packet.take().unwrap().0)
+                        .await
+                        .unwrap();
+                } else {
+                    trace!(
+                        "Send audio packet {:?} {:?}",
+                        audio_packet.0.header.timestamp,
+                        audio_packet.1
+                    );
+                    audio_track
+                        .write_rtp(&next_audio_packet.take().unwrap().0)
+                        .await
+                        .unwrap();
+                }
+            }
+            if next_audio_packet.is_none() && next_video_packet.is_none() {
+                break;
             }
         }
 
