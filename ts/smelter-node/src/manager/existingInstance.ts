@@ -52,11 +52,11 @@ class ExistingInstanceManager implements SmelterManager {
       })) as StatusResponse;
 
       const expectedConfig = {
-        ahead_of_time_processing: opts.aheadOfTimeProcessing,
+        aheadOfTimeProcessing: opts.aheadOfTimeProcessing,
       };
 
       const actualConfig = {
-        ahead_of_time_processing: status.queue_options?.ahead_of_time_processing,
+        aheadOfTimeProcessing: status.queue_options?.ahead_of_time_processing,
       };
 
       for (const [key, expected] of Object.entries(expectedConfig)) {
@@ -64,10 +64,11 @@ class ExistingInstanceManager implements SmelterManager {
         if (actual !== expected) {
           opts.logger.warn(
             {
+              key,
               expected: expected === undefined ? 'undefined' : expected,
               actual: actual === undefined ? 'undefined' : actual,
             },
-            `Mismatch in ${key}`
+            `Mismatch between instance config and SDK.`
           );
         }
       }

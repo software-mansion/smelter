@@ -27,12 +27,12 @@ type ManagedInstanceOptions = {
   enableWebRenderer?: boolean;
 };
 
-interface StatusResponse {
-  api_port: number;
-  download_root: string;
-  web_renderer?: { enable: boolean };
-  queue_options?: { ahead_of_time_processing: boolean };
-}
+type SmelterStatus = {
+  apiPort: number;
+  downloadDir: string;
+  webRenderer?: { enable: boolean };
+  aheadOfTimeProcessing?: boolean;
+};
 
 /**
  * SmelterManager that will download and spawn it's own Smelter instance locally.
@@ -59,6 +59,22 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       port,
       executablePath: process.env.SMELTER_PATH,
     });
+  }
+
+  async getSmelterStatus(): Promise<SmelterStatus> {
+    let status = (await this.sendRequest({
+      method: 'GET',
+      route: '/status',
+    })) as any;
+
+    return {
+      apiPort: status.api_port,
+      downloadDir: status.download_root,
+      webRenderer: {
+        enable: status.web_renderer?.enable,
+      },
+      aheadOfTimeProcessing: status.queue_options?.ahead_of_time_processing,
+    };
   }
 
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
@@ -92,38 +108,29 @@ class LocallySpawnedInstanceManager implements SmelterManager {
     await retry(async () => {
       await sleep(500);
 
-      let status = (await this.sendRequest({
-        method: 'GET',
-        route: '/status',
-      })) as StatusResponse;
+      let smelterStatus = await this.getSmelterStatus();
 
       const expectedConfig = {
-        api_port: this.port,
-        download_dir: download_dir,
-        web_renderer_enable: this.enableWebRenderer,
-        ahead_of_time_processing: opts.aheadOfTimeProcessing,
-      };
-
-      const actualConfig = {
-        api_port: status.api_port,
-        download_dir: status.download_root,
-        web_renderer_enable: status.web_renderer?.enable,
-        ahead_of_time_processing: status.queue_options?.ahead_of_time_processing,
+        apiPort: this.port,
+        downloadDir: download_dir,
+        webRendererEnable: this.enableWebRenderer,
+        aheadOfTimeProcessing: opts.aheadOfTimeProcessing,
       };
 
       for (const [key, expected] of Object.entries(expectedConfig)) {
-        const actual = actualConfig[key as keyof typeof actualConfig];
+        const actual = smelterStatus[key as keyof SmelterStatus];
         if (actual !== expected) {
           opts.logger.warn(
             {
+              key,
               expected: expected === undefined ? 'undefined' : expected,
               actual: actual === undefined ? 'undefined' : actual,
             },
-            `Mismatch in ${key}`
+            `Mismatch between instance config and SDK.`
           );
         }
       }
-      return status;
+      return smelterStatus;
     }, 10);
 
     await this.wsConnection.connect(opts.logger);
