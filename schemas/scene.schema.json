@@ -455,22 +455,20 @@
               ]
             },
             "width": {
-              "description": "Width of the texture onto which the image will be rendered. If neither width nor height is specified, the texture will default to the size of the image. The aspect ratio of the image will be maintained if only one dimension (width or height) is provided. If both dimensions are specified, the aspect ratio will be as provided.",
+              "description": "Width of the image in pixels. If `height` is not explicitly provided, the image will automatically adjust its height to maintain its original aspect ratio relative to the width.",
               "type": [
-                "integer",
+                "number",
                 "null"
               ],
-              "format": "uint",
-              "minimum": 0.0
+              "format": "float"
             },
             "height": {
-              "description": "Height of the texture onto which the image will be rendered. If neither width nor height is specified, the texture will default to the size of the image. The aspect ratio of the image will be maintained if only one dimension (width or height) is provided. If both dimensions are specified, the aspect ratio will be as provided.",
+              "description": "Height of the image in pixels. If `width` is not explicitly provided, the image will automatically adjust its width to maintain its original aspect ratio relative to the height.",
               "type": [
-                "integer",
+                "number",
                 "null"
               ],
-              "format": "uint",
-              "minimum": 0.0
+              "format": "float"
             }
           },
           "additionalProperties": false

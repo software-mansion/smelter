@@ -59,14 +59,23 @@ impl ImageComponent {
         let original_aspect_ratio = image.resolution().width / image.resolution().height;
 
         let resolution = match (self.width, self.height) {
-            (Some(width), Some(height)) => Resolution { width, height },
+            (Some(width), Some(height)) => Resolution {
+                width: width.round() as usize,
+                height: height.round() as usize,
+            },
             (Some(width), None) => {
-                let height = width / original_aspect_ratio;
-                Resolution { width, height }
+                let height = width / original_aspect_ratio as f32;
+                Resolution {
+                    width: width.round() as usize,
+                    height: height.round() as usize,
+                }
             }
             (None, Some(height)) => {
-                let width = height * original_aspect_ratio;
-                Resolution { width, height }
+                let width = height * original_aspect_ratio as f32;
+                Resolution {
+                    width: width.round() as usize,
+                    height: height.round() as usize,
+                }
             }
             (None, None) => image.resolution(),
         };
