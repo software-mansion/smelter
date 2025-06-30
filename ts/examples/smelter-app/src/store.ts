@@ -66,7 +66,7 @@ export const store = createStore<State>(set => ({
   addStream: (streamId: string) => {
     set(state => ({
       ...state,
-      connectedStreamIds: [...state.connectedStreamIds, streamId],
+      connectedStreamIds: [...state.connectedStreamIds.filter(id => id !== streamId), streamId],
       availableStreams: state.availableStreams.map(stream => {
         if (streamId === stream.id) {
           return { ...stream, connected: true };
