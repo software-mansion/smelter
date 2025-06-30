@@ -20,9 +20,22 @@ export type ImageProps = Omit<ComponentBaseProps, 'children'> &
         imageId?: never; // Ensuring 'imageId' cannot be used alongside 'source'
       }
   ) & {
-    width?: number;
-    height?: number;
+    /**
+     * Component styling properties.
+     */
+    style?: ImageStyleProps;
   };
+
+type ImageStyleProps = {
+  /**
+   * Width of the image in pixels. If `height` is not explicitly provided, the image will automatically adjust its height to maintain its original aspect ratio relative to the width.
+   */
+  width?: number;
+  /**
+   * Height of the image in pixels. If `width` is not explicitly provided, the image will automatically adjust its width to maintain its original aspect ratio relative to the height.
+   */
+  height?: number;
+};
 
 type ImageSceneBuliderProps = Omit<ImageProps, 'imageId'> & { imageId: string };
 
@@ -108,8 +121,8 @@ function sceneBuilder(props: ImageSceneBuliderProps, _children: SceneComponent[]
     type: 'image',
     id: props.id,
     image_id: props.imageId,
-    width: props.width,
-    height: props.height,
+    width: props.style?.width,
+    height: props.style?.height,
   };
 }
 
