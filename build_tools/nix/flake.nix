@@ -71,6 +71,9 @@
 
             clang-tools
             llvmPackages.bintools
+            wayland
+            libGL
+            vulkan-loader
           ];
         in
         {
@@ -83,7 +86,7 @@
               env.LIBGL_DRIVERS_PATH = "${pkgs.mesa}/lib/dri";
 
               env.LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-              env.LD_LIBRARY_PATH = lib.makeLibraryPath (libcefDependencies ++ [ pkgs.libGL pkgs.blackmagic-desktop-video ]);
+              env.LD_LIBRARY_PATH = lib.makeLibraryPath (libcefDependencies ++ [ pkgs.libGL pkgs.blackmagic-desktop-video pkgs.wayland pkgs.vulkan-loader ]);
 
               inputsFrom = [ packageWithoutChromium ];
             };
@@ -95,7 +98,7 @@
               packages = devDependencies ++ [ pkgs.mesa pkgs.blackmagic-desktop-video ];
 
               env.LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-              env.LD_LIBRARY_PATH = lib.makeLibraryPath (libcefDependencies ++ [ pkgs.libGL pkgs.blackmagic-desktop-video ]);
+              env.LD_LIBRARY_PATH = lib.makeLibraryPath (libcefDependencies ++ [ pkgs.libGL pkgs.blackmagic-desktop-video  pkgs.wayland pkgs.vulkan-loader ]);
 
               inputsFrom = [ packageWithoutChromium ];
             };

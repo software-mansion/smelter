@@ -26,24 +26,29 @@ var<push_constant> plane_selector: u32;
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) f32 {
     let color = textureSample(texture, sampler_, input.tex_coords);
-    var conversion_weights: vec3<f32>;
-    var conversion_bias: f32;
+    var component: f32;
 
+    // YUV conversion from: https://en.wikipedia.org/w/index.php?title=YCbCr&section=8#ITU-R_BT.709_conversion
+    // YUV values footroom needs to be added
+    // UV planes are returned in range (-0.5, 0.5) and need to be moved to (0, 1)
     if(plane_selector == 0u) {
-        // Y
-        conversion_weights = vec3<f32>(0.299, 0.587, 0.114);
-        conversion_bias = 0.0;
+        // Y plane
+        let y = color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722;
+        // (235 - 16) / (255 - 0) = (219 / 255) ~= .858
+        component = (y * 0.85882352941) + (16.0/255.0);
     } else if(plane_selector == 1u) {
-        // U
-        conversion_weights = vec3<f32>(-0.168736, -0.331264, 0.5);
-        conversion_bias = 128.0 / 255.0;
+        // U plane
+        let u = color.r * -0.1146 + color.g * -0.3854 + color.b * 0.5;
+        // (240 - 16) / (255 - 0) = (224 / 255) ~= .878
+        component = ((u + 0.5) * 0.87843137254) + (16.0/255.0);
     } else if(plane_selector == 2u) {
-        // V
-        conversion_weights = vec3<f32>(0.5, -0.418688, -0.081312);
-        conversion_bias = 128.0 / 255.0;
+        // V plane
+        let v = color.r * 0.5 + color.g * -0.4542 + color.b * -0.0458;
+        // (240 - 16) / (255 - 0) = (224 / 255) ~= .878
+        component = ((v + 0.5) * 0.87843137254) + (16.0/255.0);
     } else {
-        conversion_weights = vec3<f32>();
+        component = 0.0;
     }
 
-    return clamp(dot(color.rgb, conversion_weights) + conversion_bias, 0.0, 1.0);
+    return clamp(component, 0.0, 1.0);
 }

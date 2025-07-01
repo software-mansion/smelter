@@ -41,13 +41,17 @@ pub(super) fn yuv_frame_to_rgba(frame: &Frame, planes: &YuvPlanes) -> Vec<u8> {
         .take(corrected_height)
     {
         for (j, y) in y_plane.iter().enumerate().take(corrected_width) {
-            let y = (*y) as f32;
-            let u = u_plane[(i / 2) * (frame.resolution.width / 2) + (j / 2)] as f32;
-            let v = v_plane[(i / 2) * (frame.resolution.width / 2) + (j / 2)] as f32;
+            let mut y = (*y) as f32;
+            let mut u = u_plane[(i / 2) * (frame.resolution.width / 2) + (j / 2)] as f32;
+            let mut v = v_plane[(i / 2) * (frame.resolution.width / 2) + (j / 2)] as f32;
 
-            let r = (y + 1.40200 * (v - 128.0)).clamp(0.0, 255.0);
-            let g = (y - 0.34414 * (u - 128.0) - 0.71414 * (v - 128.0)).clamp(0.0, 255.0);
-            let b = (y + 1.77200 * (u - 128.0)).clamp(0.0, 255.0);
+            y = ((y - 16.0) / 0.858_823_54).clamp(0.0, 255.0);
+            u = ((u - 16.0) / 0.878_431_4).clamp(0.0, 255.0);
+            v = ((v - 16.0) / 0.878_431_4).clamp(0.0, 255.0);
+
+            let r = (y + 1.5748 * (v - 128.0)).clamp(0.0, 255.0);
+            let g = (y - 0.1873 * (u - 128.0) - 0.4681 * (v - 128.0)).clamp(0.0, 255.0);
+            let b = (y + 1.8556 * (u - 128.0)).clamp(0.0, 255.0);
             rgba_data.extend_from_slice(&[r as u8, g as u8, b as u8, 255]);
         }
     }

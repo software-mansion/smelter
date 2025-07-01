@@ -29,10 +29,19 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     var u = uv.x;
     var v = uv.y;
 
-    // https://en.wikipedia.org/wiki/YCbCr#ITU-R_BT.601_conversion
-    let r = 1.1643828125 * y + 1.59602734375 * v - 0.87078515625;
-    let g = 1.1643828125 * y - 0.39176171875 * u - 0.81296875000 * v + 0.52959375;
-    let b = 1.1643828125 * y + 2.01723437500 * u - 1.08139062500;
+    // YUV conversion from: https://en.wikipedia.org/w/index.php?title=YCbCr&section=8#ITU-R_BT.709_conversion
+    // YUV values footroom needs to be removed
+    // UV planes are in range (0, 1), but equation expects (-0.5, 0.5)
+
+    // (235 - 16) / (255 - 0) = (219 / 255) ~= .858
+    y = clamp((y - (16.0/255.0)) / 0.85882352941, 0.0, 1.0);
+    // (240 - 16) / (255 - 0) = (224 / 255) ~= .878
+    u = clamp((u - (16.0/255.0)) / 0.87843137254, 0.0, 1.0);
+    v = clamp((v - (16.0/255.0)) / 0.87843137254, 0.0, 1.0);
+
+    let r = y + 1.5748 * (v - 0.5);
+    let g = y - 0.1873 * (u - 0.5) - 0.4681 * (v - 0.5);
+    let b = y + 1.8556 * (u - 0.5);
 
     return vec4<f32>(clamp(r, 0.0, 1.0), clamp(g, 0.0, 1.0), clamp(b, 0.0, 1.0), 1.0);
 }
