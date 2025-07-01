@@ -30,7 +30,6 @@ pub enum AacDecoderError {
 
 pub(super) struct AacDecoder {
     decoder: Decoder,
-    sample_rate: u32,
 }
 
 impl AacDecoder {
@@ -52,20 +51,14 @@ impl AacDecoder {
 
         let info = unsafe { *fdk::aacDecoder_GetStreamInfo(decoder.instance) };
 
-        let sample_rate = match info.aacSampleRate > 0 {
-            true => info.aacSampleRate as u32,
-            false => {
-                return Err(AacDecoderError::UnsupportedSampleRate(info.aacSampleRate).into());
-            }
-        };
+        if info.aacSampleRate <= 0 {
+            return Err(AacDecoderError::UnsupportedSampleRate(info.aacSampleRate).into());
+        }
         if info.channelConfig != 1 && info.channelConfig != 2 {
             return Err(AacDecoderError::UnsupportedChannelConfig.into());
         }
 
-        Ok(AacDecoder {
-            decoder,
-            sample_rate,
-        })
+        Ok(AacDecoder { decoder })
     }
 }
 
@@ -73,10 +66,6 @@ impl AudioDecoderExt for AacDecoder {
     fn decode(&mut self, chunk: EncodedChunk) -> Result<Vec<DecodedSamples>, DecodingError> {
         self.decoder.decode(chunk)?;
         Ok(self.decoder.decoded_samples())
-    }
-
-    fn decoded_sample_rate(&self) -> u32 {
-        self.sample_rate
     }
 }
 
