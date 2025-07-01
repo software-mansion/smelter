@@ -17,6 +17,7 @@ import type { SpawnPromise } from '../spawn';
 import { killProcess, spawn } from '../spawn';
 import { WebSocketConnection } from '../ws';
 import { smelterInstanceLoggerOptions } from '../logger';
+import { getSmelterStatus } from '../getSmelterStatus';
 
 const VERSION = `v0.4.1`;
 
@@ -25,13 +26,6 @@ type ManagedInstanceOptions = {
   workingdir?: string;
   executablePath?: string;
   enableWebRenderer?: boolean;
-};
-
-type SmelterStatus = {
-  apiPort: number;
-  downloadDir: string;
-  webRenderer?: { enable: boolean };
-  aheadOfTimeProcessing?: boolean;
 };
 
 /**
@@ -61,31 +55,15 @@ class LocallySpawnedInstanceManager implements SmelterManager {
     });
   }
 
-  async getSmelterStatus(): Promise<SmelterStatus> {
-    let status = (await this.sendRequest({
-      method: 'GET',
-      route: '/status',
-    })) as any;
-
-    return {
-      apiPort: status.api_port,
-      downloadDir: status.download_root,
-      webRenderer: {
-        enable: status.web_renderer?.enable,
-      },
-      aheadOfTimeProcessing: status.queue_options?.ahead_of_time_processing,
-    };
-  }
-
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
     const executablePath = this.executablePath ?? (await prepareExecutable(this.enableWebRenderer));
 
     const { level, format } = smelterInstanceLoggerOptions();
 
-    let download_dir = path.join(this.workingdir, 'download');
+    let downloadDir = path.join(this.workingdir, 'download');
 
     const env = {
-      SMELTER_DOWNLOAD_DIR: download_dir,
+      SMELTER_DOWNLOAD_DIR: downloadDir,
       SMELTER_API_PORT: this.port.toString(),
       SMELTER_WEB_RENDERER_ENABLE: this.enableWebRenderer ? 'true' : 'false',
       SMELTER_AHEAD_OF_TIME_PROCESSING_ENABLE: opts.aheadOfTimeProcessing ? 'true' : 'false',
@@ -107,18 +85,24 @@ class LocallySpawnedInstanceManager implements SmelterManager {
 
     await retry(async () => {
       await sleep(500);
-
-      let smelterStatus = await this.getSmelterStatus();
+      let smelterStatus = await getSmelterStatus(this);
 
       const expectedConfig = {
         apiPort: this.port,
-        downloadDir: download_dir,
+        downloadDir,
         webRendererEnable: this.enableWebRenderer,
         aheadOfTimeProcessing: opts.aheadOfTimeProcessing,
       };
 
+      const actualConfig = {
+        apiPort: smelterStatus.apiPort,
+        downloadDir: smelterStatus.downloadRoot,
+        webRendererEnable: smelterStatus.webRenderer.enable,
+        aheadOfTimeProcessing: smelterStatus.queueOptions.aheadOfTimeProcessing,
+      };
+
       for (const [key, expected] of Object.entries(expectedConfig)) {
-        const actual = smelterStatus[key as keyof SmelterStatus];
+        const actual = actualConfig[key as keyof typeof actualConfig];
         if (actual !== expected) {
           opts.logger.warn(
             {

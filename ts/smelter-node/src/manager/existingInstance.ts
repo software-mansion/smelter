@@ -8,14 +8,11 @@ import type {
 import { sendRequest, sendMultipartRequest } from '../fetch';
 import { retry, sleep } from '../utils';
 import { WebSocketConnection } from '../ws';
+import { getSmelterStatus } from '../getSmelterStatus';
 
 type CreateInstanceOptions = {
   url: string | URL;
 };
-
-interface StatusResponse {
-  queue_options?: { ahead_of_time_processing: boolean };
-}
 
 /**
  * SmelterManager that will connect to existing instance
@@ -46,17 +43,14 @@ class ExistingInstanceManager implements SmelterManager {
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
     await retry(async () => {
       await sleep(500);
-      let status = (await this.sendRequest({
-        method: 'GET',
-        route: '/status',
-      })) as StatusResponse;
+      let smelterStatus = await getSmelterStatus(this);
 
       const expectedConfig = {
         aheadOfTimeProcessing: opts.aheadOfTimeProcessing,
       };
 
       const actualConfig = {
-        aheadOfTimeProcessing: status.queue_options?.ahead_of_time_processing,
+        aheadOfTimeProcessing: smelterStatus.queueOptions.aheadOfTimeProcessing,
       };
 
       for (const [key, expected] of Object.entries(expectedConfig)) {
@@ -72,7 +66,7 @@ class ExistingInstanceManager implements SmelterManager {
           );
         }
       }
-      return status;
+      return smelterStatus;
     }, 10);
     await this.wsConnection.connect(opts.logger);
   }

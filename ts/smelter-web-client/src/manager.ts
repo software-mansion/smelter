@@ -8,14 +8,11 @@ import type {
 import { sendRequest, sendMultipartRequest } from './fetch';
 import { retry, sleep } from './utils';
 import { WebSocketConnection } from './ws';
+import { getSmelterStatus } from './getSmelterStatus';
 
 export type InstanceOptions = {
   url: string | URL;
 };
-
-interface StatusResponse {
-  queue_options?: { ahead_of_time_processing: boolean };
-}
 
 class RemoteInstanceManager implements SmelterManager {
   private url: URL;
@@ -43,23 +40,21 @@ class RemoteInstanceManager implements SmelterManager {
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
     await retry(async () => {
       await sleep(500);
-      let status = (await this.sendRequest({
-        method: 'GET',
-        route: '/status',
-      })) as StatusResponse;
+      let smelterStatus = await getSmelterStatus(this);
 
-      const expectedAheadOfTime = opts.aheadOfTimeProcessing;
+      const expectedAheadOfTimeProcessing = opts.aheadOfTimeProcessing;
+      const actualAheadOfTimeProcessing = smelterStatus.queueOptions.aheadOfTimeProcessing;
 
-      if (status.queue_options?.ahead_of_time_processing !== expectedAheadOfTime) {
+      if (actualAheadOfTimeProcessing !== expectedAheadOfTimeProcessing) {
         opts.logger.warn(
           {
-            expected: expectedAheadOfTime,
-            actual: status.queue_options?.ahead_of_time_processing,
+            expected: expectedAheadOfTimeProcessing,
+            actual: actualAheadOfTimeProcessing,
           },
-          'Mismatch in queue_options.ahead_of_time_processing'
+          'Mismatch in aheadOfTimeProcessing'
         );
       }
-      return status;
+      return smelterStatus;
     }, 10);
     await this.wsConnection.connect(opts.logger);
   }
