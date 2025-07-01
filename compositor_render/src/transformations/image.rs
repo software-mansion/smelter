@@ -9,6 +9,7 @@ use resvg::usvg;
 use tracing::debug;
 
 use crate::{
+    scene::image_component::ImageRenderParams,
     state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
     wgpu::WgpuCtx,
     Resolution,
@@ -158,19 +159,19 @@ pub enum ImageNode {
 }
 
 impl ImageNode {
-    pub fn new(ctx: &WgpuCtx, image: Image, start_pts: Duration, resolution: Resolution) -> Self {
-        match image {
+    pub fn new(ctx: &WgpuCtx, image: ImageRenderParams) -> Self {
+        match image.image {
             Image::Bitmap(asset) => Self::Bitmap {
                 asset,
-                state: BitmapNodeState::new(resolution),
+                state: BitmapNodeState::new(image.resolution),
             },
             Image::Animated(asset) => Self::Animated {
                 asset,
-                state: AnimatedNodeState::new(start_pts, resolution),
+                state: AnimatedNodeState::new(image.start_pts, image.resolution),
             },
             Image::Svg(asset) => Self::Svg {
                 asset,
-                state: SvgNodeState::new(ctx, resolution),
+                state: SvgNodeState::new(ctx, image.resolution),
             },
         }
     }
