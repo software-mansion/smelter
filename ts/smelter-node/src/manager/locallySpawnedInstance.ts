@@ -17,6 +17,7 @@ import type { SpawnPromise } from '../spawn';
 import { killProcess, spawn } from '../spawn';
 import { WebSocketConnection } from '../ws';
 import { smelterInstanceLoggerOptions } from '../logger';
+import { getSmelterStatus } from '../getSmelterStatus';
 
 const VERSION = `v0.4.1`;
 
@@ -59,8 +60,10 @@ class LocallySpawnedInstanceManager implements SmelterManager {
 
     const { level, format } = smelterInstanceLoggerOptions();
 
+    let downloadDir = path.join(this.workingdir, 'download');
+
     const env = {
-      SMELTER_DOWNLOAD_DIR: path.join(this.workingdir, 'download'),
+      SMELTER_DOWNLOAD_DIR: downloadDir,
       SMELTER_API_PORT: this.port.toString(),
       SMELTER_WEB_RENDERER_ENABLE: this.enableWebRenderer ? 'true' : 'false',
       SMELTER_AHEAD_OF_TIME_PROCESSING_ENABLE: opts.aheadOfTimeProcessing ? 'true' : 'false',
@@ -82,10 +85,36 @@ class LocallySpawnedInstanceManager implements SmelterManager {
 
     await retry(async () => {
       await sleep(500);
-      return await this.sendRequest({
-        method: 'GET',
-        route: '/status',
-      });
+      let smelterStatus = await getSmelterStatus(this);
+
+      const expectedConfig = {
+        apiPort: this.port,
+        downloadDir,
+        webRendererEnable: this.enableWebRenderer,
+        aheadOfTimeProcessing: opts.aheadOfTimeProcessing,
+      };
+
+      const actualConfig = {
+        apiPort: smelterStatus.apiPort,
+        downloadDir: smelterStatus.downloadRoot,
+        webRendererEnable: smelterStatus.webRenderer.enable,
+        aheadOfTimeProcessing: smelterStatus.queueOptions.aheadOfTimeProcessing,
+      };
+
+      for (const [key, expected] of Object.entries(expectedConfig)) {
+        const actual = actualConfig[key as keyof typeof actualConfig];
+        if (actual !== expected) {
+          opts.logger.warn(
+            {
+              key,
+              expected: expected === undefined ? 'undefined' : expected,
+              actual: actual === undefined ? 'undefined' : actual,
+            },
+            `Mismatch between instance config and SDK.`
+          );
+        }
+      }
+      return smelterStatus;
     }, 10);
 
     await this.wsConnection.connect(opts.logger);

@@ -13,6 +13,7 @@ use tower_http::cors::CorsLayer;
 
 use crate::{
     error::ApiError,
+    routes::status::status_handler,
     state::{ApiState, Response},
 };
 
@@ -23,6 +24,7 @@ use self::{
 use crate::middleware::body_logger_middleware;
 
 mod register_request;
+mod status;
 mod unregister_request;
 mod update_output;
 mod ws;
@@ -75,12 +77,7 @@ pub fn routes(state: ApiState) -> Router {
         .route("/api/start", post(handle_start))
         // WebSocket - events
         .route("/ws", get(ws_handler))
-        .route(
-            "/status",
-            get(axum::Json(json!({
-                "instance_id": state.config.instance_id
-            }))),
-        )
+        .route("/status", get(status_handler))
         .layer(CorsLayer::permissive())
         .layer(middleware::from_fn(body_logger_middleware))
         .with_state(state)

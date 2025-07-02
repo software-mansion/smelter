@@ -8,6 +8,7 @@ import type {
 import { sendRequest, sendMultipartRequest } from '../fetch';
 import { retry, sleep } from '../utils';
 import { WebSocketConnection } from '../ws';
+import { getSmelterStatus } from '../getSmelterStatus';
 
 type CreateInstanceOptions = {
   url: string | URL;
@@ -40,14 +41,32 @@ class ExistingInstanceManager implements SmelterManager {
   }
 
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
-    // TODO: verify if options match
-    // https://github.com/software-mansion/smelter/issues/877
     await retry(async () => {
       await sleep(500);
-      return await this.sendRequest({
-        method: 'GET',
-        route: '/status',
-      });
+      let smelterStatus = await getSmelterStatus(this);
+
+      const expectedConfig = {
+        aheadOfTimeProcessing: opts.aheadOfTimeProcessing,
+      };
+
+      const actualConfig = {
+        aheadOfTimeProcessing: smelterStatus.queueOptions.aheadOfTimeProcessing,
+      };
+
+      for (const [key, expected] of Object.entries(expectedConfig)) {
+        const actual = actualConfig[key as keyof typeof actualConfig];
+        if (actual !== expected) {
+          opts.logger.warn(
+            {
+              key,
+              expected: expected === undefined ? 'undefined' : expected,
+              actual: actual === undefined ? 'undefined' : actual,
+            },
+            `Mismatch between instance config and SDK.`
+          );
+        }
+      }
+      return smelterStatus;
     }, 10);
     await this.wsConnection.connect(opts.logger);
   }

@@ -8,6 +8,7 @@ import type {
 import { sendRequest, sendMultipartRequest } from './fetch';
 import { retry, sleep } from './utils';
 import { WebSocketConnection } from './ws';
+import { getSmelterStatus } from './getSmelterStatus';
 
 export type InstanceOptions = {
   url: string | URL;
@@ -39,10 +40,21 @@ class RemoteInstanceManager implements SmelterManager {
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
     await retry(async () => {
       await sleep(500);
-      return await this.sendRequest({
-        method: 'GET',
-        route: '/status',
-      });
+      let smelterStatus = await getSmelterStatus(this);
+
+      const expectedAheadOfTimeProcessing = opts.aheadOfTimeProcessing;
+      const actualAheadOfTimeProcessing = smelterStatus.queueOptions.aheadOfTimeProcessing;
+
+      if (actualAheadOfTimeProcessing !== expectedAheadOfTimeProcessing) {
+        opts.logger.warn(
+          {
+            expected: expectedAheadOfTimeProcessing,
+            actual: actualAheadOfTimeProcessing,
+          },
+          'Mismatch in aheadOfTimeProcessing'
+        );
+      }
+      return smelterStatus;
     }, 10);
     await this.wsConnection.connect(opts.logger);
   }
