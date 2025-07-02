@@ -72,7 +72,7 @@ impl SvgAsset {
             }
             (SvgRenderer::CpuOptimized, NodeTextureState::CpuOptimized { texture, .. }) => {
                 // input is already in sRGB with pre-multiplied alpha
-                render_to_texture(ctx, &self.tree.0, texture.texture(), state.resolution());
+                render_to_texture(ctx, &self.tree.0, texture.texture(), resolution);
             }
             (SvgRenderer::WebGl(renderer), NodeTextureState::WebGl { texture, .. }) => {
                 renderer.render(ctx, &self.tree.0, texture, resolution)
