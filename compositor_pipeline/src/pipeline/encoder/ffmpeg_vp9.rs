@@ -123,6 +123,14 @@ fn run_encoder_thread(
     encoder.set_width(options.resolution.width as u32);
     encoder.set_height(options.resolution.height as u32);
     encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
+    encoder.set_colorspace(ffmpeg_next::color::Space::BT709);
+    encoder.set_color_range(ffmpeg_next::color::Range::MPEG);
+    unsafe {
+        let encoder = encoder.as_mut_ptr();
+        use ffmpeg_next::ffi;
+        (*encoder).color_primaries = ffi::AVColorPrimaries::AVCOL_PRI_BT709;
+        (*encoder).color_trc = ffi::AVColorTransferCharacteristic::AVCOL_TRC_BT709;
+    }
 
     // configuration based on https://developers.google.com/media/vp9/live-encoding
     let defaults = [
