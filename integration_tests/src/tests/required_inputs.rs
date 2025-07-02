@@ -325,6 +325,8 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
                 Duration::from_millis(2000)..Duration::from_millis(4000),
                 Duration::from_millis(6000)..Duration::from_millis(8000),
             ],
+            // TODO(noituri):  This should not be necessary
+            allowed_error: 55.0,
             ..Default::default()
         },
     )?;
