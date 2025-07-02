@@ -51,7 +51,7 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    let new_image = |image_id, label| {
+    let new_image = |image_id, label, width| {
         json!({
             "type": "view",
             "background_color": "#0000FFFF",
@@ -62,6 +62,7 @@ fn client_code() -> Result<()> {
                     "child": {
                         "type": "image",
                         "image_id": image_id,
+                        "width": width,
                     }
                 },
                 {
@@ -87,10 +88,10 @@ fn client_code() -> Result<()> {
         "type": "tiles",
         "margin" : 20,
         "children": [
-            new_image("example_png", "PNG example"),
-            new_image("example_jpeg", "JPEG example"),
-            new_image("example_svg", "SVG example"),
-            new_image("example_gif", "GIF example"),
+            new_image("example_png", "PNG example", 800),
+            new_image("example_jpeg", "JPEG example", 400),
+            new_image("example_svg", "SVG example", 300),
+            new_image("example_gif", "GIF example", 200),
         ]
     });
 

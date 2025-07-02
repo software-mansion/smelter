@@ -93,14 +93,7 @@ impl SmelterRenderer {
         let (url, image_type) = match image_spec {
             ImageSpec::Png { url, .. } => (url, ImageType::Png),
             ImageSpec::Jpeg { url, .. } => (url, ImageType::Jpeg),
-            ImageSpec::Svg {
-                url, resolution, ..
-            } => (
-                url,
-                ImageType::Svg {
-                    resolution: resolution.map(Into::into),
-                },
-            ),
+            ImageSpec::Svg { url, .. } => (url, ImageType::Svg),
             ImageSpec::Gif { url, .. } => (url, ImageType::Gif),
             ImageSpec::Auto { url, .. } => (url, ImageType::Auto),
         };

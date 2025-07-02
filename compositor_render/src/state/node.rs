@@ -3,8 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::vec;
 
-use crate::scene::{self, ComponentId, ShaderComponentParams};
-use crate::transformations::image::Image;
+use crate::scene::{self, image_component::ImageRenderParams, ComponentId, ShaderComponentParams};
 use crate::transformations::layout::LayoutNode;
 use crate::transformations::shader::node::ShaderNode;
 use crate::transformations::shader::Shader;
@@ -79,9 +78,7 @@ impl RenderNode {
             scene::NodeParams::Web(children_ids, web_renderer) => {
                 Self::new_web_renderer_node(ctx, children, children_ids, web_renderer)
             }
-            scene::NodeParams::Image { image, start_pts } => {
-                Self::new_image_node(ctx, image, start_pts)
-            }
+            scene::NodeParams::Image(image_params) => Self::new_image_node(ctx, image_params),
             scene::NodeParams::Text(text_params) => Self::new_text_node(ctx, text_params),
             scene::NodeParams::Layout(layout_provider) => {
                 Self::new_layout_node(ctx, children, layout_provider)
@@ -145,8 +142,8 @@ impl RenderNode {
         }
     }
 
-    pub(super) fn new_image_node(ctx: &RenderCtx, image: Image, start_pts: Duration) -> Self {
-        let node = InnerRenderNode::Image(ImageNode::new(ctx.wgpu_ctx, image, start_pts));
+    pub(super) fn new_image_node(ctx: &RenderCtx, image: ImageRenderParams) -> Self {
+        let node = InnerRenderNode::Image(ImageNode::new(ctx.wgpu_ctx, image));
         let output = NodeTexture::new();
 
         Self {

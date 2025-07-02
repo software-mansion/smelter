@@ -253,6 +253,14 @@ pub struct Image {
 
     /// Id of an image. It identifies an image registered using a [`register image`](../routes.md#register-image) request.
     pub image_id: RendererId,
+
+    /// Width of the image in pixels.
+    /// If `height` is not explicitly provided, the image will automatically adjust its height to maintain its original aspect ratio relative to the width.
+    pub width: Option<f32>,
+
+    /// Height of the image in pixels.
+    /// If `width` is not explicitly provided, the image will automatically adjust its width to maintain its original aspect ratio relative to the height.
+    pub height: Option<f32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]

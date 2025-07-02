@@ -23,11 +23,11 @@ use super::SvgError;
 pub struct SvgNodeState {
     was_rendered: bool,
     renderer: SvgRenderer,
+    resolution: Resolution,
 }
 
 pub struct SvgAsset {
     tree: UnsafeInternalRc<resvg::Tree>,
-    maybe_resolution: Option<Resolution>,
 }
 
 impl fmt::Debug for SvgAsset {
@@ -46,18 +46,13 @@ unsafe impl<T> Send for UnsafeInternalRc<T> {}
 unsafe impl<T> Sync for UnsafeInternalRc<T> {}
 
 impl SvgAsset {
-    pub fn new(
-        _ctx: &WgpuCtx,
-        data: bytes::Bytes,
-        maybe_resolution: Option<Resolution>,
-    ) -> Result<Self, SvgError> {
+    pub fn new(_ctx: &WgpuCtx, data: bytes::Bytes) -> Result<Self, SvgError> {
         let text_svg = str::from_utf8(&data)?;
         let tree = usvg::Tree::from_str(text_svg, &Default::default())?;
         let tree = resvg::Tree::from_usvg(&tree);
 
         Ok(Self {
             tree: UnsafeInternalRc(tree.into()),
-            maybe_resolution,
         })
     }
 
@@ -66,7 +61,7 @@ impl SvgAsset {
             return;
         }
 
-        let resolution = self.resolution();
+        let resolution = state.resolution();
 
         match (&mut state.renderer, target) {
             (
@@ -92,15 +87,15 @@ impl SvgAsset {
     }
 
     pub fn resolution(&self) -> Resolution {
-        self.maybe_resolution.unwrap_or_else(|| Resolution {
+        Resolution {
             width: self.tree.0.size.width() as usize,
             height: self.tree.0.size.height() as usize,
-        })
+        }
     }
 }
 
 impl SvgNodeState {
-    pub fn new(ctx: &WgpuCtx) -> Self {
+    pub fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
         Self {
             was_rendered: false,
             renderer: match ctx.mode {
@@ -108,7 +103,11 @@ impl SvgNodeState {
                 RenderingMode::CpuOptimized => SvgRenderer::CpuOptimized,
                 RenderingMode::WebGl => SvgRenderer::WebGl(WebGlSvgRenderer::new(ctx)),
             },
+            resolution,
         }
+    }
+    pub fn resolution(&self) -> Resolution {
+        self.resolution
     }
 }
 
@@ -279,11 +278,9 @@ fn render_to_texture(
     let should_resize = resolution.width != (tree.size.width() as usize)
         || resolution.height != (tree.size.height() as usize);
     let transform = if should_resize {
-        let scale_multiplier = f32::min(
-            resolution.width as f32 / tree.size.width(),
-            resolution.height as f32 / tree.size.height(),
-        );
-        tiny_skia::Transform::from_scale(scale_multiplier, scale_multiplier)
+        let scale_x = resolution.width as f32 / tree.size.width();
+        let scale_y = resolution.height as f32 / tree.size.height();
+        tiny_skia::Transform::from_scale(scale_x, scale_y)
     } else {
         tiny_skia::Transform::default()
     };

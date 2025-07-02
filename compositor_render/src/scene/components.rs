@@ -59,10 +59,12 @@ pub struct WebViewComponent {
     pub instance_id: RendererId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ImageComponent {
     pub id: Option<ComponentId>,
     pub image_id: RendererId,
+    pub width: Option<f32>,
+    pub height: Option<f32>,
 }
 
 #[derive(Debug, Clone)]

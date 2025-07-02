@@ -15,6 +15,7 @@ use super::AnimatedError;
 
 pub struct AnimatedNodeState {
     start_pts: Duration,
+    resolution: Resolution,
 }
 
 #[derive(Debug)]
@@ -53,6 +54,7 @@ impl AnimatedAsset {
         for frame in decoded_frames {
             let frame = &frame?;
             let buffer = frame.buffer();
+
             let resolution = Resolution {
                 width: buffer.width() as usize,
                 height: buffer.height() as usize,
@@ -62,6 +64,7 @@ impl AnimatedAsset {
                 RenderingMode::GpuOptimized | RenderingMode::WebGl => {
                     let texture = RgbaSrgbTexture::new(ctx, resolution);
                     texture.upload(ctx, buffer);
+
                     frames.push(AnimationFrame::Srgb {
                         bg: texture.new_bind_group(ctx),
                         texture,
@@ -151,8 +154,14 @@ impl AnimatedAsset {
 }
 
 impl AnimatedNodeState {
-    pub fn new(start_pts: Duration) -> Self {
-        Self { start_pts }
+    pub fn new(start_pts: Duration, resolution: Resolution) -> Self {
+        Self {
+            start_pts,
+            resolution,
+        }
+    }
+    pub fn resolution(&self) -> Resolution {
+        self.resolution
     }
 }
 
