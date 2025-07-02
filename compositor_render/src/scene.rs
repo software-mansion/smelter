@@ -24,7 +24,7 @@ pub use components::*;
 pub use types::*;
 
 mod components;
-mod image_component;
+pub(super) mod image_component;
 mod input_stream_component;
 mod layout;
 mod rescaler_component;

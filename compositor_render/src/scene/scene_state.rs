@@ -3,8 +3,8 @@ use std::{collections::HashMap, time::Duration};
 use log::error;
 
 use crate::{
-    scene::image_component::ImageRenderParams, state::renderers::Renderers,
-    transformations::text_renderer::TextRendererCtx, InputId, OutputId, Resolution,
+    state::renderers::Renderers, transformations::text_renderer::TextRendererCtx, InputId,
+    OutputId, Resolution,
 };
 
 use super::{
@@ -185,11 +185,7 @@ impl IntermediateNode {
                     .collect::<Result<_, _>>()?,
             }),
             IntermediateNode::Image(image) => Ok(Node {
-                params: NodeParams::Image(ImageRenderParams {
-                    image: image.image,
-                    start_pts: image.start_pts,
-                    resolution: image.resolution,
-                }),
+                params: NodeParams::Image(image.image_render_params()),
                 children: vec![],
             }),
             IntermediateNode::Text(text) => Ok(Node {

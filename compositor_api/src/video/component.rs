@@ -254,13 +254,13 @@ pub struct Image {
     /// Id of an image. It identifies an image registered using a [`register image`](../routes.md#register-image) request.
     pub image_id: RendererId,
 
-    /// Width of the texture onto which the image will be rendered. If neither width nor height is specified, the texture will default to the size of the image.
-    /// The aspect ratio of the image will be maintained if only one dimension (width or height) is provided. If both dimensions are specified, the aspect ratio will be as provided.
-    pub width: Option<usize>,
+    /// Width of the image in pixels.
+    /// If `height` is not explicitly provided, the image will automatically adjust its height to maintain its original aspect ratio relative to the width.
+    pub width: Option<f32>,
 
-    /// Height of the texture onto which the image will be rendered. If neither width nor height is specified, the texture will default to the size of the image.
-    /// The aspect ratio of the image will be maintained if only one dimension (width or height) is provided. If both dimensions are specified, the aspect ratio will be as provided.
-    pub height: Option<usize>,
+    /// Height of the image in pixels.
+    /// If `width` is not explicitly provided, the image will automatically adjust its width to maintain its original aspect ratio relative to the height.
+    pub height: Option<f32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]

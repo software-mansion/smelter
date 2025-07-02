@@ -61,7 +61,7 @@ impl SvgAsset {
             return;
         }
 
-        let resolution = self.resolution();
+        let resolution = state.resolution();
 
         match (&mut state.renderer, target) {
             (
