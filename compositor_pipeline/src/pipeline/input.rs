@@ -244,17 +244,15 @@ fn setup_and_start_decoders_threads(
     let audio = if let Some(audio) = audio {
         match audio {
             AudioInputReceiver::Raw {
-                sample_receiver,
-                sample_rate,
+                sample_receiver, ..
             } => {
                 let (sender, receiver) = bounded(10);
                 start_audio_resampler_only_thread(
-                    sample_rate,
                     pipeline_ctx.mixing_sample_rate,
                     sample_receiver,
                     sender,
                     input_id.clone(),
-                )?;
+                );
                 Some(receiver)
             }
             AudioInputReceiver::Encoded {
