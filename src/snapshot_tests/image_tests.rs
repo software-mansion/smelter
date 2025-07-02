@@ -32,7 +32,7 @@ fn image_tests() {
                     env!("CARGO_MANIFEST_DIR")
                 ),
             },
-            image_type: ImageType::Svg { resolution: None },
+            image_type: ImageType::Svg,
         }),
     );
     let gif1 = (

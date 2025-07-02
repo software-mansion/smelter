@@ -72,6 +72,8 @@ pub fn static_image(_ctx: &SceneContext, _output_id: &OutputId) -> Component {
         child: Component::Image(ImageComponent {
             id: None,
             image_id: renderer_id.clone(),
+            width: None,
+            height: None,
         })
         .into(),
         ..Default::default()
@@ -83,6 +85,8 @@ pub fn image_with_shader(_ctx: &SceneContext, _output_id: &OutputId) -> Componen
         children: vec![Component::Image(ImageComponent {
             id: None,
             image_id: example_image().0,
+            width: None,
+            height: None,
         })],
         id: None,
         shader_id: example_shader().0,

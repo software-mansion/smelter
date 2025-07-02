@@ -1,17 +1,25 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::transformations::image::Image;
+use crate::{scene::Size, transformations::image::Image, Resolution};
 
 use super::{
     scene_state::BuildStateTreeCtx, ComponentId, ImageComponent, IntermediateNode, SceneError,
-    Size, StatefulComponent,
+    StatefulComponent,
 };
+
+#[derive(Debug)]
+pub(crate) struct ImageRenderParams {
+    pub(crate) image: Image,
+    pub(crate) start_pts: Duration,
+    pub(crate) resolution: Resolution,
+}
 
 #[derive(Debug, Clone)]
 pub(super) struct StatefulImageComponent {
     pub(super) component: ImageComponent,
     pub(super) image: Image,
     pub(super) start_pts: Duration,
+    pub(super) resolution: Resolution,
 }
 
 impl StatefulImageComponent {
@@ -19,12 +27,29 @@ impl StatefulImageComponent {
         self.component.id.as_ref()
     }
 
+    pub(super) fn width(&self) -> f32 {
+        self.resolution.width as f32
+    }
+    pub(super) fn height(&self) -> f32 {
+        self.resolution.height as f32
+    }
     pub(super) fn size(&self) -> Size {
-        self.image.resolution().into()
+        Size {
+            width: self.width(),
+            height: self.height(),
+        }
     }
 
     pub(super) fn intermediate_node(&self) -> IntermediateNode {
         IntermediateNode::Image(self.clone())
+    }
+
+    pub(super) fn image_render_params(self) -> ImageRenderParams {
+        ImageRenderParams {
+            image: self.image,
+            start_pts: self.start_pts,
+            resolution: self.resolution,
+        }
     }
 }
 
@@ -38,6 +63,30 @@ impl ImageComponent {
             .images
             .get(&self.image_id)
             .ok_or_else(|| SceneError::ImageNotFound(self.image_id.clone()))?;
+
+        let original_aspect_ratio = image.resolution().width / image.resolution().height;
+
+        let resolution = match (self.width, self.height) {
+            (Some(width), Some(height)) => Resolution {
+                width: width.round() as usize,
+                height: height.round() as usize,
+            },
+            (Some(width), None) => {
+                let height = width / original_aspect_ratio as f32;
+                Resolution {
+                    width: width.round() as usize,
+                    height: height.round() as usize,
+                }
+            }
+            (None, Some(height)) => {
+                let width = height * original_aspect_ratio as f32;
+                Resolution {
+                    width: width.round() as usize,
+                    height: height.round() as usize,
+                }
+            }
+            (None, None) => image.resolution(),
+        };
 
         let prev_state = self
             .id
@@ -66,6 +115,7 @@ impl ImageComponent {
                 component: self,
                 image,
                 start_pts: ctx.last_render_pts,
+                resolution,
             },
         };
 

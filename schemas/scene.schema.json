@@ -453,6 +453,22 @@
                   "$ref": "#/definitions/RendererId"
                 }
               ]
+            },
+            "width": {
+              "description": "Width of the image in pixels. If `height` is not explicitly provided, the image will automatically adjust its height to maintain its original aspect ratio relative to the width.",
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "float"
+            },
+            "height": {
+              "description": "Height of the image in pixels. If `width` is not explicitly provided, the image will automatically adjust its width to maintain its original aspect ratio relative to the height.",
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "float"
             }
           },
           "additionalProperties": false

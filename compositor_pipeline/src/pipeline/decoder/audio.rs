@@ -222,7 +222,7 @@ fn run_decoding<F>(
                     return;
                 }
             };
-            let init_res = AacDecoder::new(aac_decoder_opts, &first_chunk)
+            let init_res = AacDecoder::new(aac_decoder_opts, first_chunk)
                 .map(|decoder| {
                     let resampler =
                         Resampler::new(decoder.decoded_sample_rate(), mixing_sample_rate)?;

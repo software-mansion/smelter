@@ -123,7 +123,7 @@ pub fn offline_processing() -> Result<()> {
     if !(1.9..=2.1).contains(&duration) {
         return Err(anyhow!("Invalid duration: {}", duration));
     }
-    if !(950_000..=1_050_000).contains(&bit_rate) {
+    if !(930_000..=1_000_000).contains(&bit_rate) {
         return Err(anyhow!("Invalid bit rate: {}", bit_rate));
     }
 
