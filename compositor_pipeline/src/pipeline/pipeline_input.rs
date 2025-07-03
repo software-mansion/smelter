@@ -66,6 +66,9 @@ pub(super) fn register_pipeline_input<NewInputResult>(
         }
     }
 
+    if let Some(queue_start_time) = guard.queue.start_time() {
+        pipeline_input.input.update_queue_start_time(queue_start_time);
+    }
     guard.inputs.insert(input_id.clone(), pipeline_input);
     guard.queue.add_input(&input_id, receiver, queue_options);
     guard.renderer.register_input(input_id);

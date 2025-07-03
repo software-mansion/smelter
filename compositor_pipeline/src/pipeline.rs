@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use std::sync::Weak;
 use std::thread;
 use std::time::Duration;
+use std::time::Instant;
 
 use compositor_render::error::{
     ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
@@ -487,7 +488,12 @@ impl Pipeline {
         info!("Starting pipeline.");
         let (video_sender, video_receiver) = bounded(1);
         let (audio_sender, audio_receiver) = bounded(100);
-        guard.queue.start(video_sender, audio_sender);
+        let start_time = Instant::now();
+
+        for (_, input) in guard.inputs() {
+            input.input.update_queue_start_time(start_time);
+        }
+        guard.queue.start(video_sender, audio_sender, start_time);
 
         let weak_pipeline = Arc::downgrade(pipeline);
         thread::spawn(move || run_renderer_thread(weak_pipeline, video_receiver));

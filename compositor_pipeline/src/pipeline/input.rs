@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::{
     error::{InputInitError, RegisterInputError},
@@ -37,6 +37,19 @@ pub enum Input {
     #[cfg(feature = "decklink")]
     DeckLink(decklink::DeckLink),
     RawDataInput,
+}
+
+impl Input {
+    pub(super) fn update_queue_start_time(&self, start_time: Instant) {
+        // TODO(noituri): Finish it
+        match &self {
+            Self::Rtp(_) => {}
+            Self::Mp4(_) => {}
+            Self::Whip(_) => {}
+            Self::Hls(input) => input.update_queue_start_time(start_time),
+            Self::RawDataInput => {}
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
