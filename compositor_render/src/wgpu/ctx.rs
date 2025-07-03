@@ -16,6 +16,7 @@ use super::{
 pub struct WgpuCtx {
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
+
     pub mode: RenderingMode,
 
     pub shader_header: wgpu::naga::Module,
@@ -31,22 +32,12 @@ pub struct WgpuCtx {
 
 impl WgpuCtx {
     pub fn new(
-        force_gpu: bool,
-        features: wgpu::Features,
-        override_wgpu_ctx: Option<(Arc<wgpu::Device>, Arc<wgpu::Queue>)>,
+        device: Arc<wgpu::Device>,
+        queue: Arc<wgpu::Queue>,
         mode: RenderingMode,
     ) -> Result<Arc<Self>, CreateWgpuCtxError> {
-        let ctx = match override_wgpu_ctx {
-            Some((device, queue)) => {
-                Self::check_wgpu_ctx(&device, features);
-                Self::new_from_device_queue(device, queue, mode)?
-            }
-            None => {
-                let WgpuComponents { device, queue, .. } =
-                    create_wgpu_ctx(force_gpu, features, Default::default(), None)?;
-                Self::new_from_device_queue(device, queue, mode)?
-            }
-        };
+        Self::check_wgpu_ctx(&device, required_wgpu_features());
+        let ctx = Self::new_from_device_queue(device, queue, mode)?;
         Ok(Arc::new(ctx))
     }
 

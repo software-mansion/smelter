@@ -18,7 +18,7 @@ pub fn start_vulkan_video_decoder_thread(
     input_id: InputId,
     send_eos: bool,
 ) -> Result<(), InputInitError> {
-    let Some(vulkan_ctx) = pipeline_ctx.vulkan_ctx.clone() else {
+    let Some(vulkan_ctx) = pipeline_ctx.graphics_context.vulkan_ctx.clone() else {
         return Err(InputInitError::VulkanContextRequiredForVulkanDecoder);
     };
 

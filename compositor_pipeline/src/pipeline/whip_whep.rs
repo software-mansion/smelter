@@ -1,4 +1,4 @@
-use crate::error::InitPipelineError;
+use crate::{error::InitPipelineError, pipeline::PipelineCtx};
 use axum::{
     routing::{delete, get, patch, post},
     Router,
@@ -33,25 +33,44 @@ mod init_peer_connection;
 pub mod supported_video_codec_parameters;
 mod whip_handlers;
 
-use super::{input::whip::DecodedDataSender, PipelineCtx, VideoDecoder};
+use super::{input::whip::DecodedDataSender, VideoDecoder};
 
-pub async fn run_whip_whep_server(
-    pipeline_ctx: Arc<PipelineCtx>,
-    whip_inputs_state: WhipInputState,
+pub fn spawn_whip_whep_server(
+    ctx: Arc<PipelineCtx>,
+    state: &WhipWhepPipelineState,
+    whip_whep_server_port: u16,
+) -> Result<WhipWhepServerHandle, InitPipelineError> {
+    let state = WhipWhepServerState {
+        ctx: ctx.clone(),
+        inputs: state.inputs.clone(),
+    };
+    let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (init_result_sender, init_result_receiver) = oneshot::channel();
+    ctx.tokio_rt.spawn(run_whip_whep_server(
+        whip_whep_server_port,
+        state,
+        shutdown_receiver,
+        init_result_sender,
+    ));
+    init_result_receiver.blocking_recv().unwrap()?;
+    Ok(WhipWhepServerHandle {
+        shutdown_sender: Some(shutdown_sender),
+    })
+}
+
+async fn run_whip_whep_server(
+    port: u16,
+    state: WhipWhepServerState,
     shutdown_signal_receiver: oneshot::Receiver<()>,
     init_result_sender: Sender<Result<(), InitPipelineError>>,
 ) {
-    let port = pipeline_ctx.whip_whep_server_port;
     let app = Router::new()
         .route("/status", get((StatusCode::OK, axum::Json(json!({})))))
         .route("/whip/:id", post(handle_create_whip_session))
         .route("/session/:id", patch(handle_new_whip_ice_candidates))
         .route("/session/:id", delete(handle_terminate_whip_session))
         .layer(CorsLayer::permissive())
-        .with_state(WhipWhepState {
-            pipeline_ctx,
-            inputs: whip_inputs_state,
-        });
+        .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = match tokio::net::TcpListener::bind(addr).await {
@@ -112,18 +131,37 @@ impl WhipInputConnectionState {
 }
 
 #[derive(Debug, Clone)]
-pub struct WhipWhepState {
-    pub pipeline_ctx: Arc<PipelineCtx>,
+struct WhipWhepServerState {
+    inputs: WhipInputState,
+    ctx: Arc<PipelineCtx>,
+}
+
+#[derive(Debug)]
+pub struct WhipWhepPipelineState {
     pub inputs: WhipInputState,
 }
 
-impl WhipWhepState {
-    pub fn new(pipeline_ctx: &Arc<PipelineCtx>) -> Arc<Self> {
-        Self {
-            pipeline_ctx: pipeline_ctx.clone(),
+impl WhipWhepPipelineState {
+    pub fn new() -> Arc<Self> {
+        WhipWhepPipelineState {
             inputs: WhipInputState::new(),
         }
         .into()
+    }
+}
+
+#[derive(Debug)]
+pub struct WhipWhepServerHandle {
+    shutdown_sender: Option<oneshot::Sender<()>>,
+}
+
+impl Drop for WhipWhepServerHandle {
+    fn drop(&mut self) {
+        if let Some(sender) = self.shutdown_sender.take() {
+            if sender.send(()).is_err() {
+                error!("Cannot send shutdown signal to WHIP WHEP server")
+            }
+        }
     }
 }
 
