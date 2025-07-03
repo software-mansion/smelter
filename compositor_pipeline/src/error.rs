@@ -150,23 +150,23 @@ pub enum InputInitError {
     FfmpegError(#[from] ffmpeg_next::Error),
 
     #[error(transparent)]
-    OpusError(#[from] opus::Error),
-
-    #[error(transparent)]
-    AacError(#[from] AacDecoderError),
-
-    #[error(transparent)]
     ResamplerError(#[from] rubato::ResamplerConstructionError),
+}
 
-    #[error("Couldn't read decoder init result.")]
-    CannotReadInitResult,
-
+#[derive(Debug, thiserror::Error)]
+pub enum DecoderInitError {
     #[cfg(feature = "vk-video")]
     #[error(transparent)]
     VulkanDecoderError(#[from] vk_video::DecoderError),
 
     #[error("Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video decoder")]
     VulkanContextRequiredForVulkanDecoder,
+
+    #[error(transparent)]
+    OpusError(#[from] opus::Error),
+
+    #[error(transparent)]
+    AacError(#[from] AacDecoderError),
 }
 
 pub enum ErrorType {

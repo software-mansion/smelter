@@ -1,51 +1,34 @@
-use std::time::Duration;
+use std::{time::Duration, u32};
 
 use rubato::{FftFixedOut, Resampler};
 use tracing::{debug, error, info, trace};
 
-use crate::{
-    audio_mixer::{AudioSamples, OutputSamples},
-    error::EncoderInitError,
-};
-
-const SAMPLE_BATCH_DURATION: Duration = Duration::from_millis(20);
-
-enum SamplesType {
-    Mono,
-    Stereo,
-}
-
-impl SamplesType {
-    fn new(output_samples: &OutputSamples) -> Self {
-        match &output_samples.samples {
-            AudioSamples::Mono(_) => Self::Mono,
-            AudioSamples::Stereo(_) => Self::Stereo,
-        }
-    }
-}
-
-pub struct OutputResampler {
+use crate::{audio_mixer::AudioSamples, error::EncoderInitError};
+pub(super) struct ChannelResampler<Sample: Into<f64> + From<f64> + MaxAsF64Ext> {
     input_sample_rate: u32,
     output_sample_rate: u32,
     input_buffer: [Vec<f64>; 2],
     output_buffer: [Vec<f64>; 2],
-    resampler: FftFixedOut<f64>,
+    resampler: FftFixedOut<Sample>,
     first_batch_pts: Option<Duration>,
     resampler_input_samples: u64,
     resampler_output_samples: u64,
 }
 
-impl OutputResampler {
-    pub fn new(
-        input_sample_rate: u32,
-        output_sample_rate: u32,
-    ) -> Result<OutputResampler, EncoderInitError> {
+trait MaxAsF64Ext {
+    const MAX_F64: f64;
+}
+
+impl MaxAsF64Ext for u32 {
+    const MAX_F64: f64 = u32::MAX as f64;
+}
+
+impl<Sample: Into<f64> + From<f64> + MaxAsF64Ext> ChannelResampler<Sample> {
+    pub fn new(input_sample_rate: u32, output_sample_rate: u32) -> Result<Self, EncoderInitError> {
         info!(
             "Initializing output stream audio resampler  input:{} output:{}",
             input_sample_rate, output_sample_rate
         );
-        /// This part of pipeline use stereo
-        const CHANNELS: usize = 2;
         /// Not sure what should be here, but rubato example used 2
         /// https://github.com/HEnquist/rubato/blob/master/examples/process_f64.rs#L174
         const SUB_CHUNKS: usize = 2;

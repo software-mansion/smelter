@@ -52,6 +52,7 @@ use self::input::InputOptions;
 
 pub mod decoder;
 pub mod encoder;
+pub mod resampler;
 pub mod input;
 pub mod output;
 pub mod rtp;
