@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::{
     scene::RGBColor,
@@ -126,8 +126,8 @@ pub(super) fn read_outputs(
         };
     }
 
-    if let Err(e) = ctx.wgpu_ctx.device.poll(wgpu::MaintainBase::Wait) {
-        error!("Poll error while reading rendered outputs: {e}");
+    while let Err(wgpu::PollError::Timeout) = ctx.wgpu_ctx.device.poll(wgpu::MaintainBase::Wait) {
+        warn!("Device poll failed.")
     }
 
     let mut result = HashMap::new();
