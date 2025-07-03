@@ -33,7 +33,6 @@ export type RegisterRtpInput = {
 };
 
 export type Mp4VideoDecoder = 'ffmpeg_h264' | 'vulkan_h264';
-
 export type RegisterMp4Input = {
   /**
    * URL of the MP4 file.
@@ -65,6 +64,23 @@ export type RegisterMp4Input = {
    * (**default=`ffmpeg_h264`**) The decoder to use for decoding video.
    */
   videoDecoder?: Mp4VideoDecoder | null;
+};
+
+export type RegisterHlsInput = {
+  /**
+   * URL of the HLS playlist.
+   */
+  url: string;
+  /**
+   * (**default=`false`**) If input is required and frames are not processed
+   * on time, then Smelter will delay producing output frames.
+   */
+  required?: boolean | null;
+  /**
+   * Offset in milliseconds relative to the pipeline start (start request). If offset is
+   * not defined then stream is synchronized based on the first frames delivery time.
+   */
+  offsetMs?: number | null;
 };
 
 export type WhipVideoDecoder = 'ffmpeg_h264' | 'ffmpeg_vp8' | 'ffmpeg_vp9' | 'vulkan_h264' | 'any';

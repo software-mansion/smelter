@@ -56,6 +56,7 @@ pub(super) async fn status_handler(
                 Input::Rtp(_) => "rtp",
                 Input::Mp4(_) => "mp4",
                 Input::Whip(_) => "whip",
+                Input::Hls(_) => "hls",
                 #[cfg(feature = "decklink")]
                 Input::DeckLink(_) => "decklink",
                 Input::RawDataInput => "raw data",

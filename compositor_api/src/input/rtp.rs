@@ -1,5 +1,3 @@
-use core::f64;
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

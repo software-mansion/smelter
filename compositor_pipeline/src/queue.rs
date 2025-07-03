@@ -62,6 +62,7 @@ pub struct Queue {
 
     default_buffer_duration: Duration,
 
+    start_time: Mutex<Option<Instant>>,
     start_sender: Mutex<Option<Sender<QueueStartEvent>>>,
     scheduled_event_sender: Sender<ScheduledEvent>,
 
@@ -181,6 +182,7 @@ impl Queue {
             audio_queue: Mutex::new(AudioQueue::new(event_emitter.clone())),
             audio_chunk_duration: DEFAULT_AUDIO_CHUNK_DURATION,
 
+            start_time: Mutex::new(None),
             scheduled_event_sender,
             start_sender: Mutex::new(Some(queue_start_sender)),
             ahead_of_time_processing: opts.ahead_of_time_processing,
@@ -247,14 +249,20 @@ impl Queue {
         audio_sender: Sender<QueueAudioOutput>,
     ) {
         if let Some(sender) = self.start_sender.lock().unwrap().take() {
+            let start_time = Instant::now();
+            *self.start_time.lock().unwrap() = Some(start_time);
             sender
                 .send(QueueStartEvent {
                     audio_sender,
                     video_sender,
-                    start_time: Instant::now(),
+                    start_time,
                 })
                 .unwrap()
         }
+    }
+
+    pub(super) fn start_time(self: &Arc<Self>) -> Option<Instant> {
+        *self.start_time.lock().unwrap()
     }
 
     pub fn schedule_event(&self, pts: Duration, callback: Box<dyn FnOnce() + Send>) {
