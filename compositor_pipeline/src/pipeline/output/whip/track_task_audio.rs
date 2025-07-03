@@ -9,11 +9,12 @@ use crate::{
     audio_mixer::OutputSamples,
     error::EncoderInitError,
     pipeline::{
-        encoder::{AudioEncoder, AudioEncoderOptionsExt, AudioEncoderStream, ResampledStream},
+        encoder::{AudioEncoder, AudioEncoderOptionsExt, AudioEncoderStream},
         output::rtp::{
             payloader::{PayloaderOptions, PayloaderStream},
             RtpPacket,
         },
+        resampler::encoder_resampler::ResampledForEncoderStream,
         PipelineCtx,
     },
     queue::PipelineEvent,
@@ -75,11 +76,11 @@ fn init_stream<Encoder: AudioEncoder>(
 ) -> Result<(impl Iterator<Item = RtpPacket>, WhipAudioTrackThreadHandle), EncoderInitError> {
     let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
 
-    let resampled_stream = ResampledStream::new(
+    let resampled_stream = ResampledForEncoderStream::new(
         sample_batch_receiver.into_iter(),
         ctx.mixing_sample_rate,
         encoder_options.sample_rate(),
-    )?
+    )
     .flatten();
 
     let (encoded_stream, _config) =

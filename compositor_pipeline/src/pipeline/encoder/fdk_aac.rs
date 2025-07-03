@@ -254,12 +254,16 @@ impl FdkAacEncoder {
 
         match samples.samples {
             AudioSamples::Mono(mono_samples) => {
-                self.input_buffer.extend(mono_samples.iter());
+                self.input_buffer.extend(
+                    mono_samples
+                        .iter()
+                        .map(|val| (*val * i16::MAX as f64) as i16),
+                );
             }
             AudioSamples::Stereo(stereo_samples) => {
                 for (l, r) in stereo_samples {
-                    self.input_buffer.push(l);
-                    self.input_buffer.push(r);
+                    self.input_buffer.push((l * i16::MAX as f64) as i16);
+                    self.input_buffer.push((r * i16::MAX as f64) as i16);
                 }
             }
         }

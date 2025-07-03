@@ -361,7 +361,7 @@ pub struct VulkanDevice {
 impl VulkanDevice {
     pub fn create_wgpu_textures_decoder(
         self: &Arc<Self>,
-    ) -> Result<WgpuTexturesDecoder, DecoderError> {
+    ) -> Result<WgpuTexturesDecoder<'static>, DecoderError> {
         let parser = Parser::default();
         let vulkan_decoder = VulkanDecoder::new(self.clone())?;
         let frame_sorter = FrameSorter::<wgpu::Texture>::new();

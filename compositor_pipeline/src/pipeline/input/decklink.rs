@@ -3,15 +3,21 @@ use std::sync::Arc;
 use compositor_render::InputId;
 use tracing::{error, span, Level};
 
+use crate::{
+    error::InputInitError,
+    pipeline::{decoder::DecodedDataReceiver, PipelineCtx},
+};
+
 use self::{capture::ChannelCallbackAdapter, find_device::find_decklink};
 
-use super::{AudioInputReceiver, Input, InputInitInfo, InputInitResult, VideoInputReceiver};
+use super::{Input, InputInitInfo};
 
 mod capture;
 mod find_device;
 
 pub use decklink::PixelFormat;
 
+// sample rate returned from DeckLink
 const AUDIO_SAMPLE_RATE: u32 = 48_000;
 
 #[derive(Debug, thiserror::Error)]
@@ -51,33 +57,43 @@ pub struct DeckLink {
 }
 
 impl DeckLink {
-    pub(super) fn start_new_input(
-        input_id: &InputId,
+    pub(super) fn new_input(
+        ctx: Arc<PipelineCtx>,
+        input_id: InputId,
         opts: DeckLinkOptions,
-    ) -> Result<InputInitResult, DeckLinkError> {
+    ) -> Result<(Input, InputInitInfo, DecodedDataReceiver), InputInitError> {
         let span = span!(
             Level::INFO,
             "DeckLink input",
             input_id = input_id.to_string()
         );
-        let input = Arc::new(find_decklink(&opts)?.input()?);
+        let input = Arc::new(
+            find_decklink(&opts)?
+                .input()
+                .map_err(DeckLinkError::DecklinkError)?,
+        );
 
         // Initial options, real config should be set based on detected format, thanks
         // to the `enable_format_detection` option. When enabled it will call
         // `video_input_format_changed` method with a detected format.
-        input.enable_video(
-            decklink::DisplayModeType::ModeHD720p50,
-            decklink::PixelFormat::Format8BitYUV,
-            decklink::VideoInputFlags {
-                enable_format_detection: true,
-                ..Default::default()
-            },
-        )?;
-        input.enable_audio(AUDIO_SAMPLE_RATE, decklink::AudioSampleType::Sample32bit, 2)?;
+        input
+            .enable_video(
+                decklink::DisplayModeType::ModeHD720p50,
+                decklink::PixelFormat::Format8BitYUV,
+                decklink::VideoInputFlags {
+                    enable_format_detection: true,
+                    ..Default::default()
+                },
+            )
+            .map_err(DeckLinkError::DecklinkError)?;
+        input
+            .enable_audio(AUDIO_SAMPLE_RATE, decklink::AudioSampleType::Sample32bit, 2)
+            .map_err(DeckLinkError::DecklinkError)?;
 
         let (callback, receivers) = ChannelCallbackAdapter::new(
             span,
             opts.enable_audio,
+            ctx.mixing_sample_rate,
             opts.pixel_format,
             Arc::<decklink::Input>::downgrade(&input),
             (
@@ -85,20 +101,21 @@ impl DeckLink {
                 decklink::PixelFormat::Format8BitYUV,
             ),
         );
-        input.set_callback(Box::new(callback))?;
-        input.start_streams()?;
+        input
+            .set_callback(Box::new(callback))
+            .map_err(DeckLinkError::DecklinkError)?;
+        input
+            .start_streams()
+            .map_err(DeckLinkError::DecklinkError)?;
 
-        Ok(InputInitResult {
-            input: Input::DeckLink(Self { input }),
-            video: receivers.video.map(|rec| VideoInputReceiver::Raw {
-                frame_receiver: rec,
-            }),
-            audio: receivers.audio.map(|rec| AudioInputReceiver::Raw {
-                sample_receiver: rec,
-                sample_rate: AUDIO_SAMPLE_RATE,
-            }),
-            init_info: InputInitInfo::Other,
-        })
+        Ok((
+            Input::DeckLink(Self { input }),
+            InputInitInfo::Other,
+            DecodedDataReceiver {
+                video: receivers.video,
+                audio: receivers.audio,
+            },
+        ))
     }
 }
 

@@ -23,7 +23,7 @@ pub enum Response {
         audio_duration_ms: Option<u64>,
     },
     BearerToken {
-        bearer_token: String,
+        bearer_token: Arc<str>,
     },
 }
 

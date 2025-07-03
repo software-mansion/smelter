@@ -6,7 +6,7 @@ use compositor_render::{
     InputId, OutputId,
 };
 
-use crate::pipeline::{decoder::AacDecoderError, output::whip, AudioCodec, VideoCodec};
+use crate::pipeline::{decoder::fdk_aac::FdkAacDecoderError, output::whip, AudioCodec, VideoCodec};
 use fdk_aac_sys as fdk;
 
 #[derive(Debug, thiserror::Error)]
@@ -134,13 +134,13 @@ pub enum EncoderInitError {
 #[derive(Debug, thiserror::Error)]
 pub enum InputInitError {
     #[error(transparent)]
-    Rtp(#[from] crate::pipeline::input::rtp::RtpReceiverError),
+    Rtp(#[from] crate::pipeline::input::rtp::RtpInputError),
 
     #[error(transparent)]
     Mp4(#[from] crate::pipeline::input::mp4::Mp4Error),
 
-    #[error(transparent)]
-    Whip(#[from] crate::pipeline::input::whip::WhipReceiverError),
+    #[error("WHIP WHEP server is not running, cannot start WHIP input")]
+    WhipWhepServerNotRunning,
 
     #[cfg(feature = "decklink")]
     #[error(transparent)]
@@ -150,23 +150,29 @@ pub enum InputInitError {
     FfmpegError(#[from] ffmpeg_next::Error),
 
     #[error(transparent)]
-    OpusError(#[from] opus::Error),
-
-    #[error(transparent)]
-    AacError(#[from] AacDecoderError),
-
-    #[error(transparent)]
     ResamplerError(#[from] rubato::ResamplerConstructionError),
 
-    #[error("Couldn't read decoder init result.")]
-    CannotReadInitResult,
+    #[error("Failed to initialize decoder.")]
+    DecoderError(#[from] DecoderInitError),
+}
 
+#[derive(Debug, thiserror::Error)]
+pub enum DecoderInitError {
     #[cfg(feature = "vk-video")]
     #[error(transparent)]
     VulkanDecoderError(#[from] vk_video::DecoderError),
 
     #[error("Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video decoder")]
     VulkanContextRequiredForVulkanDecoder,
+
+    #[error(transparent)]
+    OpusError(#[from] opus::Error),
+
+    #[error(transparent)]
+    AacError(#[from] FdkAacDecoderError),
+
+    #[error(transparent)]
+    FfmpegError(#[from] ffmpeg_next::Error),
 }
 
 pub enum ErrorType {

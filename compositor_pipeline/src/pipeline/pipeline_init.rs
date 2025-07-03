@@ -1,17 +1,17 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use compositor_render::{EventLoop, Renderer, RendererOptions};
 use tokio::runtime::Runtime;
 
 use crate::{
-    audio_mixer::AudioMixer, error::InitPipelineError, event::EventEmitter,
-    pipeline::whip_whep::WhipWhepPipelineState, queue::Queue,
+    audio_mixer::AudioMixer,
+    error::InitPipelineError,
+    event::EventEmitter,
+    pipeline::webrtc::{WhipWhepPipelineState, WhipWhepServer},
+    queue::Queue,
 };
 
-use super::{
-    whip_whep::spawn_whip_whep_server, GraphicsContext, GraphicsContextOptions, Options, Pipeline,
-    PipelineCtx,
-};
+use super::{GraphicsContext, GraphicsContextOptions, Options, Pipeline, PipelineCtx};
 
 pub(super) fn create_pipeline(
     opts: Options,
@@ -47,6 +47,7 @@ pub(super) fn create_pipeline(
     };
 
     let ctx = Arc::new(PipelineCtx {
+        queue_sync_time: Instant::now(),
         mixing_sample_rate: opts.mixing_sample_rate,
         output_framerate: opts.queue_options.output_framerate,
         stun_servers: opts.stun_servers.clone(),
@@ -55,13 +56,13 @@ pub(super) fn create_pipeline(
         tokio_rt: tokio_rt.clone(),
         graphics_context,
         whip_whep_state: match opts.start_whip_whep {
-            true => Some(WhipWhepPipelineState::new()),
+            true => Some(WhipWhepPipelineState::default().into()),
             false => None,
         },
     });
 
     let whip_whep_handle = match &ctx.whip_whep_state {
-        Some(state) => Some(spawn_whip_whep_server(
+        Some(state) => Some(WhipWhepServer::spawn(
             ctx.clone(),
             state,
             opts.whip_whep_server_port,

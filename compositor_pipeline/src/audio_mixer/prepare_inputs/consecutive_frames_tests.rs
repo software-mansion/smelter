@@ -15,9 +15,9 @@ fn test_continuity_between_frames() {
     let small_error = Duration::from_secs_f64(sample_duration.as_secs_f64() * 0.001);
     let half_sample = Duration::from_secs_f64(sample_duration.as_secs_f64() * 0.5);
 
-    let first_batch = Arc::new(vec![(1, 1), (2, 2), (3, 3), (4, 4)]);
-    let second_batch = Arc::new(vec![(5, 5), (6, 6), (7, 7), (8, 8)]);
-    let third_batch = Arc::new(vec![(9, 9), (10, 10), (11, 11), (12, 12)]);
+    let first_batch = Arc::new(vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)]);
+    let second_batch = Arc::new(vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)]);
+    let third_batch = Arc::new(vec![(9.0, 9.0), (10.0, 10.0), (11.0, 11.0), (12.0, 12.0)]);
 
     // shifted by half sample
     let first_batch_start = start - sample_duration - half_sample;
@@ -41,7 +41,14 @@ fn test_continuity_between_frames() {
             ],
             sample_rate
         ),
-        vec![(2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7)]
+        vec![
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0),
+            (7.0, 7.0)
+        ]
     );
     assert_eq!(
         frame_input_samples(
@@ -61,7 +68,14 @@ fn test_continuity_between_frames() {
             ],
             sample_rate
         ),
-        vec![(8, 8), (9, 9), (10, 10), (11, 11), (12, 12), (0, 0)]
+        vec![
+            (8.0, 8.0),
+            (9.0, 9.0),
+            (10.0, 10.0),
+            (11.0, 11.0),
+            (12.0, 12.0),
+            (0.0, 0.0)
+        ]
     );
 
     // shifted by small_error (subtract)
@@ -86,7 +100,14 @@ fn test_continuity_between_frames() {
             ],
             sample_rate
         ),
-        vec![(2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7)]
+        vec![
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0),
+            (7.0, 7.0)
+        ]
     );
     assert_eq!(
         frame_input_samples(
@@ -106,7 +127,14 @@ fn test_continuity_between_frames() {
             ],
             sample_rate
         ),
-        vec![(8, 8), (9, 9), (10, 10), (11, 11), (12, 12), (0, 0)]
+        vec![
+            (8.0, 8.0),
+            (9.0, 9.0),
+            (10.0, 10.0),
+            (11.0, 11.0),
+            (12.0, 12.0),
+            (0.0, 0.0)
+        ]
     );
 
     // shifted by small_error (add)
@@ -131,7 +159,14 @@ fn test_continuity_between_frames() {
             ],
             sample_rate
         ),
-        vec![(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]
+        vec![
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0)
+        ]
     );
     assert_eq!(
         frame_input_samples(
@@ -151,7 +186,14 @@ fn test_continuity_between_frames() {
             ],
             sample_rate
         ),
-        vec![(7, 7), (8, 8), (9, 9), (10, 10), (11, 11), (12, 12)]
+        vec![
+            (7.0, 7.0),
+            (8.0, 8.0),
+            (9.0, 9.0),
+            (10.0, 10.0),
+            (11.0, 11.0),
+            (12.0, 12.0)
+        ]
     );
 
     // shifted by small_error (subtract) + batches overlapping between frames
@@ -176,7 +218,14 @@ fn test_continuity_between_frames() {
             ],
             sample_rate
         ),
-        vec![(2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7)]
+        vec![
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0),
+            (7.0, 7.0)
+        ]
     );
     assert_eq!(
         frame_input_samples(
@@ -196,7 +245,14 @@ fn test_continuity_between_frames() {
             ],
             sample_rate
         ),
-        vec![(8, 8), (9, 9), (10, 10), (11, 11), (12, 12), (0, 0)]
+        vec![
+            (8.0, 8.0),
+            (9.0, 9.0),
+            (10.0, 10.0),
+            (11.0, 11.0),
+            (12.0, 12.0),
+            (0.0, 0.0)
+        ]
     );
 
     // shifted by small_error (add) + small gap between batches
@@ -221,7 +277,14 @@ fn test_continuity_between_frames() {
             ],
             sample_rate
         ),
-        vec![(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]
+        vec![
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0)
+        ]
     );
     assert_eq!(
         frame_input_samples(
@@ -241,6 +304,13 @@ fn test_continuity_between_frames() {
             ],
             sample_rate
         ),
-        vec![(7, 7), (8, 8), (9, 9), (10, 10), (11, 11), (12, 12)]
+        vec![
+            (7.0, 7.0),
+            (8.0, 8.0),
+            (9.0, 9.0),
+            (10.0, 10.0),
+            (11.0, 11.0),
+            (12.0, 12.0)
+        ]
     );
 }

@@ -44,6 +44,5 @@ pub enum VideoDecoder {
     VulkanVideo,
 }
 
-#[cfg(not(feature = "vk-video"))]
 const NO_VULKAN_VIDEO: &str =
     "Requested `vulkan_h264` decoder, but this binary was compiled without the `vk-video` feature.";

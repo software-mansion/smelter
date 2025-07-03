@@ -3,7 +3,6 @@ use std::{iter, sync::Arc};
 use compositor_render::{Frame, OutputFrameFormat, Resolution};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use ffmpeg_next::format::Pixel;
-use resampler::OutputResampler;
 
 use crate::{
     audio_mixer::{AudioChannels, OutputSamples},
@@ -21,7 +20,6 @@ pub mod ffmpeg_h264;
 pub mod ffmpeg_vp8;
 pub mod ffmpeg_vp9;
 pub mod opus;
-mod resampler;
 
 pub struct EncoderOptions {
     pub video: Option<VideoEncoderOptions>,
@@ -31,8 +29,8 @@ pub struct EncoderOptions {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum VideoEncoderOptions {
     H264(ffmpeg_h264::Options),
-    VP8(ffmpeg_vp8::Options),
-    VP9(ffmpeg_vp9::Options),
+    Vp8(ffmpeg_vp8::Options),
+    Vp9(ffmpeg_vp9::Options),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -97,8 +95,8 @@ impl VideoEncoderOptions {
     pub fn resolution(&self) -> Resolution {
         match self {
             VideoEncoderOptions::H264(opt) => opt.resolution,
-            VideoEncoderOptions::VP8(opt) => opt.resolution,
-            VideoEncoderOptions::VP9(opt) => opt.resolution,
+            VideoEncoderOptions::Vp8(opt) => opt.resolution,
+            VideoEncoderOptions::Vp9(opt) => opt.resolution,
         }
     }
 }
@@ -293,53 +291,6 @@ where
                     let eos = iter::once(PipelineEvent::EOS);
                     self.eos_sent = true;
                     Some(events.chain(eos).collect())
-                }
-            },
-        }
-    }
-}
-
-pub(super) struct ResampledStream<Source: Iterator<Item = PipelineEvent<OutputSamples>>> {
-    resampler: Option<OutputResampler>,
-    source: Source,
-    eos_sent: bool,
-}
-
-impl<Source: Iterator<Item = PipelineEvent<OutputSamples>>> ResampledStream<Source> {
-    pub fn new(
-        source: Source,
-        input_sample_rate: u32,
-        output_sample_rate: u32,
-    ) -> Result<Self, EncoderInitError> {
-        let resampler = match input_sample_rate != output_sample_rate {
-            true => Some(OutputResampler::new(input_sample_rate, output_sample_rate)?),
-            false => None,
-        };
-        Ok(Self {
-            resampler,
-            source,
-            eos_sent: false,
-        })
-    }
-}
-
-impl<Source: Iterator<Item = PipelineEvent<OutputSamples>>> Iterator for ResampledStream<Source> {
-    type Item = Vec<PipelineEvent<OutputSamples>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let Some(resampler) = &mut self.resampler else {
-            return self.source.next().map(|event| vec![event]);
-        };
-        match self.source.next() {
-            Some(PipelineEvent::Data(samples)) => {
-                let resampled = resampler.resample(samples);
-                Some(resampled.into_iter().map(PipelineEvent::Data).collect())
-            }
-            Some(PipelineEvent::EOS) | None => match self.eos_sent {
-                true => None,
-                false => {
-                    self.eos_sent = true;
-                    Some(vec![PipelineEvent::EOS])
                 }
             },
         }

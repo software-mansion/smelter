@@ -147,7 +147,7 @@ impl FfmpegVp9Encoder {
                 Ok(_) => {
                     match encoded_chunk_from_av_packet(
                         &self.packet,
-                        EncodedChunkKind::Video(VideoCodec::VP9),
+                        EncodedChunkKind::Video(VideoCodec::Vp9),
                         1_000_000,
                     ) {
                         Ok(chunk) => {
