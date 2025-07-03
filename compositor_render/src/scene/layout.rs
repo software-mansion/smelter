@@ -20,7 +20,7 @@ pub(super) enum StatefulLayoutComponent {
 
 #[derive(Debug)]
 pub(crate) struct SizedLayoutComponent {
-    component: StatefulLayoutComponent,
+    component: Box<StatefulLayoutComponent>,
     size: Size,
 }
 
@@ -238,7 +238,7 @@ impl StatefulLayoutComponent {
 }
 
 impl SizedLayoutComponent {
-    pub(super) fn new(component: StatefulLayoutComponent, size: Size) -> Self {
+    pub(super) fn new(component: Box<StatefulLayoutComponent>, size: Size) -> Self {
         Self { component, size }
     }
 

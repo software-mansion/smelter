@@ -171,11 +171,11 @@ fn sdp_from_candidate(candidate: RTCIceCandidateInit) -> String {
     let mut sdp = String::new();
     if let Some(mid) = candidate.sdp_mid {
         if !mid.is_empty() {
-            sdp.push_str(format!("a=mid:{}\n", mid).as_str());
+            sdp.push_str(format!("a=mid:{mid}\n").as_str());
         }
     }
     if let Some(ufrag) = candidate.username_fragment {
-        sdp.push_str(format!("a=ice-ufrag:{}\n", ufrag).as_str());
+        sdp.push_str(format!("a=ice-ufrag:{ufrag}\n").as_str());
     }
     sdp.push_str(format!("a=candidate:{}\n", candidate.candidate).as_str());
     sdp

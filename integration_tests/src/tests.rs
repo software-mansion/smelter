@@ -22,7 +22,7 @@ pub fn start_server_msg_listener(port: u16, event_sender: Sender<tungstenite::Me
 }
 
 async fn server_msg_listener(port: u16, event_sender: Sender<tungstenite::Message>) {
-    let url = format!("ws://127.0.0.1:{}/ws", port);
+    let url = format!("ws://127.0.0.1:{port}/ws");
 
     let (ws_stream, _) = tokio_tungstenite::connect_async(url)
         .await
@@ -40,7 +40,7 @@ async fn server_msg_listener(port: u16, event_sender: Sender<tungstenite::Messag
             match outgoing.send(msg).await {
                 Ok(()) => (),
                 Err(e) => {
-                    println!("Send Loop: {:?}", e);
+                    println!("Send Loop: {e:?}");
                     let _ = outgoing.send(tungstenite::Message::Close(None)).await;
                     return;
                 }

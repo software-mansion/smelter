@@ -154,7 +154,7 @@ pub enum ImageNode {
     },
     Svg {
         asset: Arc<SvgAsset>,
-        state: SvgNodeState,
+        state: Box<SvgNodeState>,
     },
 }
 
@@ -171,7 +171,7 @@ impl ImageNode {
             },
             Image::Svg(asset) => Self::Svg {
                 asset,
-                state: SvgNodeState::new(ctx, image.resolution),
+                state: SvgNodeState::new(ctx, image.resolution).into(),
             },
         }
     }

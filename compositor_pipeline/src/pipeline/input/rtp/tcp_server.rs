@@ -40,7 +40,7 @@ pub(super) fn start_tcp_server_thread(
     let socket = std::net::TcpListener::from(socket);
 
     thread::Builder::new()
-        .name(format!("RTP TCP server receiver {}", input_id))
+        .name(format!("RTP TCP server receiver {input_id}"))
         .spawn(move || {
             let _span = span!(
                 Level::INFO,

@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -68,7 +69,7 @@ enum StatefulComponent {
     WebView(StatefulWebViewComponent),
     Image(StatefulImageComponent),
     Text(StatefulTextComponent),
-    Layout(StatefulLayoutComponent),
+    Layout(Box<StatefulLayoutComponent>),
 }
 
 /// Defines a tree structure that is a base to construct a `RenderGraph`.
@@ -133,7 +134,7 @@ impl StatefulComponent {
             StatefulComponent::WebView(web) => web.intermediate_node(),
             StatefulComponent::Image(image) => image.intermediate_node(),
             StatefulComponent::Text(text) => text.intermediate_node(),
-            StatefulComponent::Layout(layout) => match layout {
+            StatefulComponent::Layout(layout) => match layout.deref() {
                 StatefulLayoutComponent::View(view) => view.intermediate_node(),
                 StatefulLayoutComponent::Tiles(tiles) => tiles.intermediate_node(),
                 StatefulLayoutComponent::Rescaler(rescaler) => rescaler.intermediate_node(),

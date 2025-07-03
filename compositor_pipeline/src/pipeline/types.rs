@@ -133,7 +133,7 @@ impl fmt::Debug for Samples {
             Samples::Stereo16Bit(s) => ("Stereo16Bit", s.len()),
             Samples::Stereo32Bit(s) => ("Stereo32Bit", s.len()),
         };
-        f.debug_struct(&format!("Samples::{}", name))
+        f.debug_struct(&format!("Samples::{name}"))
             .field("len", &length)
             .finish()
     }
@@ -144,7 +144,7 @@ impl fmt::Debug for EncodedChunk {
         let len = self.data.len();
         let first_bytes = &self.data[0..usize::min(10, len)];
         f.debug_struct("EncodedChunk")
-            .field("data", &format!("len={}, {:?}", len, first_bytes))
+            .field("data", &format!("len={len}, {first_bytes:?}"))
             .field("pts", &self.pts)
             .field("dts", &self.dts)
             .field("kind", &self.kind)

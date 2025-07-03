@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{ops::Deref, time::Duration};
 
 use crate::transformations::layout::NestedLayout;
 
@@ -95,7 +95,7 @@ impl StatefulTilesComponent {
             .collect();
 
         IntermediateNode::Layout {
-            root: StatefulLayoutComponent::Tiles(self.clone()),
+            root: StatefulLayoutComponent::Tiles(self.clone()).into(),
             children,
         }
     }
@@ -124,9 +124,10 @@ impl TilesComponent {
             .as_ref()
             .and_then(|id| ctx.prev_state.get(id))
             .and_then(|component| match component {
-                StatefulComponent::Layout(StatefulLayoutComponent::Tiles(tiles_state)) => {
-                    Some(tiles_state)
-                }
+                StatefulComponent::Layout(boxed_layout) => match boxed_layout.deref() {
+                    StatefulLayoutComponent::Tiles(tiles_state) => Some(tiles_state),
+                    _ => None,
+                },
                 _ => None,
             });
 
@@ -174,9 +175,9 @@ impl TilesComponent {
             children,
         };
 
-        Ok(StatefulComponent::Layout(StatefulLayoutComponent::Tiles(
-            tiles,
-        )))
+        Ok(StatefulComponent::Layout(
+            StatefulLayoutComponent::Tiles(tiles).into(),
+        ))
     }
 
     fn did_child_order_change(

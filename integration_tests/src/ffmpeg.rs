@@ -403,21 +403,20 @@ fn start_ffmpeg_send_testsrc(
 /// The SDP file will describe an RTP session on localhost with H264 encoding.
 fn write_video_example_sdp_file_h264(port: u16) -> Result<String> {
     let ip = "127.0.0.1";
-    let sdp_filepath = PathBuf::from(format!("/tmp/example_sdp_video_input_{}.sdp", port));
+    let sdp_filepath = PathBuf::from(format!("/tmp/example_sdp_video_input_{port}.sdp"));
     let mut file = File::create(&sdp_filepath)?;
     file.write_all(
         format!(
             "\
                     v=0\n\
-                    o=- 0 0 IN IP4 {}\n\
+                    o=- 0 0 IN IP4 {ip}\n\
                     s=No Name\n\
-                    c=IN IP4 {}\n\
-                    m=video {} RTP/AVP 96\n\
+                    c=IN IP4 {ip}\n\
+                    m=video {port} RTP/AVP 96\n\
                     a=rtpmap:96 H264/90000\n\
                     a=fmtp:96 packetization-mode=1\n\
                     a=rtcp-mux\n\
-                ",
-            ip, ip, port
+                "
         )
         .as_bytes(),
     )?;
@@ -430,20 +429,19 @@ fn write_video_example_sdp_file_h264(port: u16) -> Result<String> {
 
 fn write_video_example_sdp_file_vp8(port: u16) -> Result<String> {
     let ip = "127.0.0.1";
-    let sdp_filepath = PathBuf::from(format!("/tmp/example_sdp_video_input_{}.sdp", port));
+    let sdp_filepath = PathBuf::from(format!("/tmp/example_sdp_video_input_{port}.sdp"));
     let mut file = File::create(&sdp_filepath)?;
     file.write_all(
         format!(
             "\
                     v=0\n\
-                    o=- 0 0 IN IP4 {}\n\
+                    o=- 0 0 IN IP4 {ip}\n\
                     s=No Name\n\
-                    c=IN IP4 {}\n\
-                    m=video {} RTP/AVP 96\n\
+                    c=IN IP4 {ip}\n\
+                    m=video {port} RTP/AVP 96\n\
                     a=rtpmap:96 VP8/90000\n\
                     a=rtcp-mux\n\
-                ",
-            ip, ip, port
+                "
         )
         .as_bytes(),
     )?;
@@ -456,20 +454,19 @@ fn write_video_example_sdp_file_vp8(port: u16) -> Result<String> {
 
 fn write_video_example_sdp_file_vp9(port: u16) -> Result<String> {
     let ip = "127.0.0.1";
-    let sdp_filepath = PathBuf::from(format!("/tmp/example_sdp_video_input_{}.sdp", port));
+    let sdp_filepath = PathBuf::from(format!("/tmp/example_sdp_video_input_{port}.sdp"));
     let mut file = File::create(&sdp_filepath)?;
     file.write_all(
         format!(
             "\
                     v=0\n\
-                    o=- 0 0 IN IP4 {}\n\
+                    o=- 0 0 IN IP4 {ip}\n\
                     s=No Name\n\
-                    c=IN IP4 {}\n\
-                    m=video {} RTP/AVP 96\n\
+                    c=IN IP4 {ip}\n\
+                    m=video {port} RTP/AVP 96\n\
                     a=rtpmap:96 VP9/90000\n\
                     a=rtcp-mux\n\
-                ",
-            ip, ip, port
+                "
         )
         .as_bytes(),
     )?;
@@ -484,25 +481,23 @@ fn write_video_example_sdp_file_vp9(port: u16) -> Result<String> {
 fn write_video_audio_example_sdp_file_h264(video_port: u16, audio_port: u16) -> Result<String> {
     let ip = "127.0.0.1";
     let sdp_filepath = PathBuf::from(format!(
-        "/tmp/example_sdp_video_audio_input_{}.sdp",
-        video_port
+        "/tmp/example_sdp_video_audio_input_{video_port}.sdp"
     ));
     let mut file = File::create(&sdp_filepath)?;
     file.write_all(
         format!(
             "\
                     v=0\n\
-                    o=- 0 0 IN IP4 {}\n\
+                    o=- 0 0 IN IP4 {ip}\n\
                     s=No Name\n\
-                    c=IN IP4 {}\n\
-                    m=video {} RTP/AVP 96\n\
+                    c=IN IP4 {ip}\n\
+                    m=video {video_port} RTP/AVP 96\n\
                     a=rtpmap:96 H264/90000\n\
                     a=fmtp:96 packetization-mode=1\n\
                     a=rtcp-mux\n\
-                    m=audio {} RTP/AVP 97\n\
+                    m=audio {audio_port} RTP/AVP 97\n\
                     a=rtpmap:97 opus/48000/2\n\
-                ",
-            ip, ip, video_port, audio_port
+                "
         )
         .as_bytes(),
     )?;
@@ -516,24 +511,22 @@ fn write_video_audio_example_sdp_file_h264(video_port: u16, audio_port: u16) -> 
 fn write_video_audio_example_sdp_file_vp8(video_port: u16, audio_port: u16) -> Result<String> {
     let ip = "127.0.0.1";
     let sdp_filepath = PathBuf::from(format!(
-        "/tmp/example_sdp_video_audio_input_{}.sdp",
-        video_port
+        "/tmp/example_sdp_video_audio_input_{video_port}.sdp"
     ));
     let mut file = File::create(&sdp_filepath)?;
     file.write_all(
         format!(
             "\
                     v=0\n\
-                    o=- 0 0 IN IP4 {}\n\
+                    o=- 0 0 IN IP4 {ip}\n\
                     s=No Name\n\
-                    c=IN IP4 {}\n\
-                    m=video {} RTP/AVP 96\n\
+                    c=IN IP4 {ip}\n\
+                    m=video {video_port} RTP/AVP 96\n\
                     a=rtpmap:96 VP8/90000\n\
                     a=rtcp-mux\n\
-                    m=audio {} RTP/AVP 97\n\
+                    m=audio {audio_port} RTP/AVP 97\n\
                     a=rtpmap:97 opus/48000/2\n\
-                ",
-            ip, ip, video_port, audio_port
+                "
         )
         .as_bytes(),
     )?;
@@ -547,24 +540,22 @@ fn write_video_audio_example_sdp_file_vp8(video_port: u16, audio_port: u16) -> R
 fn write_video_audio_example_sdp_file_vp9(video_port: u16, audio_port: u16) -> Result<String> {
     let ip = "127.0.0.1";
     let sdp_filepath = PathBuf::from(format!(
-        "/tmp/example_sdp_video_audio_input_{}.sdp",
-        video_port
+        "/tmp/example_sdp_video_audio_input_{video_port}.sdp"
     ));
     let mut file = File::create(&sdp_filepath)?;
     file.write_all(
         format!(
             "\
                     v=0\n\
-                    o=- 0 0 IN IP4 {}\n\
+                    o=- 0 0 IN IP4 {ip}\n\
                     s=No Name\n\
-                    c=IN IP4 {}\n\
-                    m=video {} RTP/AVP 96\n\
+                    c=IN IP4 {ip}\n\
+                    m=video {video_port} RTP/AVP 96\n\
                     a=rtpmap:96 VP9/90000\n\
                     a=rtcp-mux\n\
-                    m=audio {} RTP/AVP 97\n\
+                    m=audio {audio_port} RTP/AVP 97\n\
                     a=rtpmap:97 opus/48000/2\n\
-                ",
-            ip, ip, video_port, audio_port
+                "
         )
         .as_bytes(),
     )?;
@@ -578,19 +569,18 @@ fn write_video_audio_example_sdp_file_vp9(video_port: u16, audio_port: u16) -> R
 /// The SDP file will describe an RTP session on localhost with Opus audio encoding.
 fn write_audio_example_sdp_file(port: u16) -> Result<String> {
     let ip = "127.0.0.1";
-    let sdp_filepath = PathBuf::from(format!("/tmp/example_sdp_audio_input_{}.sdp", port));
+    let sdp_filepath = PathBuf::from(format!("/tmp/example_sdp_audio_input_{port}.sdp"));
     let mut file = File::create(&sdp_filepath)?;
     file.write_all(
         format!(
             "\
                     v=0\n\
-                    o=- 0 0 IN IP4 {}\n\
+                    o=- 0 0 IN IP4 {ip}\n\
                     s=No Name\n\
-                    c=IN IP4 {}\n\
-                    m=audio {} RTP/AVP 97\n\
+                    c=IN IP4 {ip}\n\
+                    m=audio {port} RTP/AVP 97\n\
                     a=rtpmap:97 opus/48000/2\n\
-                ",
-            ip, ip, port
+                "
         )
         .as_bytes(),
     )?;

@@ -314,7 +314,7 @@ fn benchmark_set_ffmpeg_h264_encoder_preset(ctx: &'static BenchmarkSuiteContext)
     ]
     .into_iter()
     .map(|encoder_preset| Benchmark {
-        id: format!("ffmpeg_h264 - encoder_preset: {:?}", encoder_preset).leak(),
+        id: format!("ffmpeg_h264 - encoder_preset: {encoder_preset:?}").leak(),
         bench_pass_builder: Arc::new(Box::new(move |value: u64| SingleBenchmarkPass {
             input_count: 1,
             output_count: value,
@@ -337,7 +337,7 @@ fn benchmark_set_output_resolutions(ctx: &'static BenchmarkSuiteContext) -> Vec<
     ]
     .into_iter()
     .map(|resolution_preset| Benchmark {
-        id: format!("resolution: {:?}", resolution_preset).leak(),
+        id: format!("resolution: {resolution_preset:?}").leak(),
         bench_pass_builder: Arc::new(Box::new(move |value: u64| SingleBenchmarkPass {
             input_count: 1,
             output_count: value,
@@ -375,7 +375,7 @@ fn benchmark_set_renderer_only(ctx: &'static BenchmarkSuiteContext) -> Vec<Bench
     ]
     .into_iter()
     .map(|(func, func_name, resources)| Benchmark {
-        id: format!("rendering only - scene: {:?}", func_name).leak(),
+        id: format!("rendering only - scene: {func_name:?}").leak(),
         bench_pass_builder: Arc::new(Box::new(move |value: u64| SingleBenchmarkPass {
             input_count: 1,
             output_count: value,

@@ -140,7 +140,7 @@ pub(super) enum IntermediateNode {
     Image(StatefulImageComponent),
     Text(StatefulTextComponent),
     Layout {
-        root: StatefulLayoutComponent,
+        root: Box<StatefulLayoutComponent>,
         children: Vec<IntermediateNode>,
     },
 }

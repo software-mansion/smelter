@@ -46,7 +46,7 @@ pub(super) fn start_udp_reader_thread(
 
     let input_id = input_id.clone();
     thread::Builder::new()
-        .name(format!("RTP UDP receiver {}", input_id))
+        .name(format!("RTP UDP receiver {input_id}"))
         .spawn(move || {
             let _span = span!(
                 Level::INFO,

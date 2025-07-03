@@ -61,7 +61,7 @@ fn main() {
 fn generate_input_series(resolution: Resolution, name_suffix: &str) {
     // HSV 240°, 50%, 65% (dark blue)
     generate_png(
-        workingdir().join(format!("input_1_{}.png", name_suffix)),
+        workingdir().join(format!("input_1_{name_suffix}.png")),
         "Input 1",
         "#5353a6ff",
         resolution,
@@ -69,7 +69,7 @@ fn generate_input_series(resolution: Resolution, name_suffix: &str) {
     .unwrap();
     // HSV 120°, 50%, 65% (green)
     generate_png(
-        workingdir().join(format!("input_2_{}.png", name_suffix)),
+        workingdir().join(format!("input_2_{name_suffix}.png")),
         "Input 2",
         "#53a653ff",
         resolution,
@@ -77,7 +77,7 @@ fn generate_input_series(resolution: Resolution, name_suffix: &str) {
     .unwrap();
     // HSV 0°, 50%, 65% (red)
     generate_png(
-        workingdir().join(format!("input_3_{}.png", name_suffix)),
+        workingdir().join(format!("input_3_{name_suffix}.png")),
         "Input 3",
         "#a65353ff",
         resolution,
@@ -85,7 +85,7 @@ fn generate_input_series(resolution: Resolution, name_suffix: &str) {
     .unwrap();
     // HSV 60°, 50%, 65% (yellow)
     generate_png(
-        workingdir().join(format!("input_4_{}.png", name_suffix)),
+        workingdir().join(format!("input_4_{name_suffix}.png")),
         "Input 4",
         "#a6a653ff",
         resolution,
@@ -93,7 +93,7 @@ fn generate_input_series(resolution: Resolution, name_suffix: &str) {
     .unwrap();
     // HSV 180°, 50%, 65% (light blue)
     generate_png(
-        workingdir().join(format!("input_5_{}.png", name_suffix)),
+        workingdir().join(format!("input_5_{name_suffix}.png")),
         "Input 5",
         "#53a6a6ff",
         resolution,
@@ -101,7 +101,7 @@ fn generate_input_series(resolution: Resolution, name_suffix: &str) {
     .unwrap();
     // HSV 300°, 50%, 65% (purple)
     generate_png(
-        workingdir().join(format!("input_6_{}.png", name_suffix)),
+        workingdir().join(format!("input_6_{name_suffix}.png")),
         "Input 6",
         "#a653a6ff",
         resolution,

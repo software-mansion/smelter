@@ -179,8 +179,7 @@ fn write_frame(
     let frame_data = read_rgba_texture(device, queue, &texture);
 
     let filepath = root_dir().join(format!(
-        "examples/raw_channel_output_video_frame_{}.png",
-        index
+        "examples/raw_channel_output_video_frame_{index}.png"
     ));
     let file = File::create(filepath).unwrap();
     let encoder = PngEncoder::new(file);
