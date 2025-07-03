@@ -10,13 +10,13 @@ use tracing::{debug, span, warn, Level};
 
 use crate::pipeline::{rtp::bind_to_requested_port, Port};
 
-use super::{RtpReceiverError, RtpReceiverOptions};
+use super::{RtpInputError, RtpInputOptions};
 
 pub(super) fn start_udp_reader_thread(
     input_id: &InputId,
-    opts: &RtpReceiverOptions,
+    opts: &RtpInputOptions,
     should_close: Arc<AtomicBool>,
-) -> Result<(Port, Receiver<bytes::Bytes>), RtpReceiverError> {
+) -> Result<(Port, Receiver<bytes::Bytes>), RtpInputError> {
     let (packets_tx, packets_rx) = unbounded();
 
     let socket = socket2::Socket::new(
@@ -24,11 +24,11 @@ pub(super) fn start_udp_reader_thread(
         socket2::Type::DGRAM,
         Some(socket2::Protocol::UDP),
     )
-    .map_err(RtpReceiverError::SocketOptions)?;
+    .map_err(RtpInputError::SocketOptions)?;
 
     match socket
         .set_recv_buffer_size(16 * 1024 * 1024)
-        .map_err(RtpReceiverError::SocketOptions)
+        .map_err(RtpInputError::SocketOptions)
     {
         Ok(_) => {}
         Err(e) => {
@@ -40,7 +40,7 @@ pub(super) fn start_udp_reader_thread(
 
     socket
         .set_read_timeout(Some(std::time::Duration::from_millis(50)))
-        .map_err(RtpReceiverError::SocketOptions)?;
+        .map_err(RtpInputError::SocketOptions)?;
 
     let socket = std::net::UdpSocket::from(socket);
 

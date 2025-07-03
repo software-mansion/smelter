@@ -11,6 +11,7 @@ use std::{
 use compositor_pipeline::{
     audio_mixer::{AudioChannels, AudioMixingParams, AudioSamples, InputParams, MixingStrategy},
     pipeline::{
+        decoder::VideoDecoderOptions,
         input::{
             mp4::{Mp4Options, Source},
             InputOptions,
@@ -108,7 +109,7 @@ fn main() {
         input_options: InputOptions::Mp4(Mp4Options {
             source: Source::File(root_dir().join(BUNNY_FILE_PATH)),
             should_loop: false,
-            video_decoder: compositor_pipeline::pipeline::VideoDecoder::FFmpegH264,
+            video_decoder: VideoDecoderOptions::FfmpegH264,
         }),
         queue_options: QueueInputOptions {
             required: true,

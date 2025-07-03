@@ -11,13 +11,15 @@ use compositor_pipeline::{
     error::{RegisterInputError, RegisterOutputError},
     pipeline::{
         self,
+        decoder::VideoDecoderOptions,
         encoder::{
             ffmpeg_h264::{self, EncoderPreset},
             OutputPixelFormat, VideoEncoderOptions,
         },
         input::{
             mp4::{Mp4Options, Source},
-            InputInitInfo, InputOptions, RawDataInputOptions,
+            raw_data::RawDataInputOptions,
+            InputInitInfo, InputOptions,
         },
         output::{EncodedDataOutputOptions, RawDataOutputOptions, RawVideoOptions},
         EncodedChunkKind, EncoderOutputEvent, GraphicsContext, OutputVideoOptions,
@@ -101,7 +103,7 @@ pub struct SingleBenchmarkPass {
     pub output_resolution: Resolution,
     pub encoder: EncoderOptions,
     pub warm_up_time: Duration,
-    pub decoder: pipeline::VideoDecoder,
+    pub decoder: VideoDecoderOptions,
     pub rendering_mode: RenderingMode,
 }
 

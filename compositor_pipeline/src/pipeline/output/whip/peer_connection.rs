@@ -272,7 +272,7 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
-            VideoEncoderOptions::VP8(_) => {
+            VideoEncoderOptions::Vp8(_) => {
                 media_engine.register_codec(
                     RTCRtpCodecParameters {
                         capability: RTCRtpCodecCapability {
@@ -288,7 +288,7 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
                     RTPCodecType::Video,
                 )?;
             }
-            VideoEncoderOptions::VP9(_) => {
+            VideoEncoderOptions::Vp9(_) => {
                 media_engine.register_codec(
                     RTCRtpCodecParameters {
                         capability: RTCRtpCodecCapability {

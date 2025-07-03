@@ -1,3 +1,4 @@
+use compositor_render::error::ErrorStack;
 use std::time::Duration;
 use tracing::warn;
 
@@ -5,7 +6,10 @@ use bytes::Bytes;
 use compositor_pipeline::{
     pipeline::{
         self, decoder,
-        input::{self, rtp},
+        input::{
+            self,
+            rtp::{self, AudioSpecificConfig},
+        },
     },
     queue,
 };
@@ -32,53 +36,33 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
             return Err(TypeError::new(NO_VIDEO_AUDIO_SPEC));
         }
 
-        let rtp_stream = rtp::RtpStream {
+        let input_options = input::InputOptions::Rtp(input::rtp::RtpInputOptions {
+            port: port.try_into()?,
             video: video
                 .as_ref()
                 .map(|video| {
-                    Ok(rtp::InputVideoStream {
-                        options: match video.decoder {
-                            VideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions {
-                                decoder: pipeline::VideoDecoder::FFmpegH264,
-                            },
+                    let options = match video.decoder {
+                        VideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions::FfmpegH264,
+                        VideoDecoder::FfmpegVp8 => decoder::VideoDecoderOptions::FfmpegVp8,
+                        VideoDecoder::FfmpegVp9 => decoder::VideoDecoderOptions::FfmpegVp9,
 
-                            VideoDecoder::FfmpegVp8 => decoder::VideoDecoderOptions {
-                                decoder: pipeline::VideoDecoder::FFmpegVp8,
-                            },
-
-                            VideoDecoder::FfmpegVp9 => decoder::VideoDecoderOptions {
-                                decoder: pipeline::VideoDecoder::FFmpegVp9,
-                            },
-
-                            #[cfg(feature = "vk-video")]
-                            VideoDecoder::VulkanH264 => decoder::VideoDecoderOptions {
-                                decoder: pipeline::VideoDecoder::VulkanVideoH264,
-                            },
-
-                            #[cfg(feature = "vk-video")]
-                            VideoDecoder::VulkanVideo => {
-                                tracing::warn!(
-                                    "vulkan_video option is deprecated, use vulkan_h264 instead."
-                                );
-                                decoder::VideoDecoderOptions {
-                                    decoder: pipeline::VideoDecoder::VulkanVideoH264,
-                                }
-                            }
-
-                            #[cfg(not(feature = "vk-video"))]
-                            VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
-                                return Err(TypeError::new(super::NO_VULKAN_VIDEO))
-                            }
-                        },
-                    })
+                        VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo
+                            if !cfg!(feature = "vk-video") =>
+                        {
+                            return Err(TypeError::new(super::NO_VULKAN_VIDEO))
+                        }
+                        VideoDecoder::VulkanH264 => decoder::VideoDecoderOptions::VulkanH264,
+                        VideoDecoder::VulkanVideo => {
+                            tracing::warn!(
+                                "vulkan_video option is deprecated, use vulkan_h264 instead."
+                            );
+                            decoder::VideoDecoderOptions::VulkanH264
+                        }
+                    };
+                    Ok(options)
                 })
                 .transpose()?,
             audio: audio.map(TryFrom::try_from).transpose()?,
-        };
-
-        let input_options = input::InputOptions::Rtp(input::rtp::RtpReceiverOptions {
-            port: port.try_into()?,
-            stream: rtp_stream,
             transport_protocol: transport_protocol.unwrap_or(TransportProtocol::Udp).into(),
         });
 
@@ -95,7 +79,7 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
     }
 }
 
-impl TryFrom<InputRtpAudioOptions> for rtp::InputAudioStream {
+impl TryFrom<InputRtpAudioOptions> for rtp::RtpAudioOptions {
     type Error = TypeError;
 
     fn try_from(audio: InputRtpAudioOptions) -> Result<Self, Self::Error> {
@@ -106,33 +90,31 @@ impl TryFrom<InputRtpAudioOptions> for rtp::InputAudioStream {
                 if forward_error_correction.is_some() {
                     warn!("The 'forward_error_correction' field is deprecated!");
                 }
-                Ok(input::rtp::InputAudioStream {
-                    options: decoder::AudioDecoderOptions::Opus,
-                })
+                Ok(rtp::RtpAudioOptions::Opus)
             }
             InputRtpAudioOptions::Aac {
                 audio_specific_config,
                 rtp_mode,
             } => {
                 let depayloader_mode = match rtp_mode {
-                    Some(AacRtpMode::LowBitrate) => Some(decoder::AacDepayloaderMode::LowBitrate),
-                    Some(AacRtpMode::HighBitrate) | None => {
-                        Some(decoder::AacDepayloaderMode::HighBitrate)
-                    }
+                    Some(AacRtpMode::LowBitrate) => rtp::RtpAacDepayloaderMode::LowBitrate,
+                    Some(AacRtpMode::HighBitrate) | None => rtp::RtpAacDepayloaderMode::HighBitrate,
                 };
 
-                let asc = parse_hexadecimal_octet_string(&audio_specific_config)?;
+                let raw_asc = parse_hexadecimal_octet_string(&audio_specific_config)?;
 
                 const EMPTY_ASC: &str = "The AudioSpecificConfig field is empty.";
-                if asc.is_empty() {
+                if raw_asc.is_empty() {
                     return Err(TypeError::new(EMPTY_ASC));
                 }
 
-                Ok(input::rtp::InputAudioStream {
-                    options: decoder::AudioDecoderOptions::Aac(decoder::AacDecoderOptions {
-                        depayloader_mode,
-                        asc: Some(asc),
-                    }),
+                let asc = AudioSpecificConfig::parse_from(&raw_asc)
+                    .map_err(|err| TypeError::new(ErrorStack::new(&err).into_string()))?;
+
+                Ok(rtp::RtpAudioOptions::FdkAac {
+                    depayloader_mode,
+                    raw_asc,
+                    asc,
                 })
             }
         }

@@ -2,9 +2,6 @@ use std::net;
 
 use super::Port;
 
-pub(crate) const VIDEO_PAYLOAD_TYPE: u8 = 96;
-pub(crate) const AUDIO_PAYLOAD_TYPE: u8 = 97;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportProtocol {
     Udp,

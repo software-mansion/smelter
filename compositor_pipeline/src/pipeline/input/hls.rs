@@ -11,9 +11,13 @@ use std::{
 use crate::{
     error::InputInitError,
     pipeline::{
-        decoder::{self, AacDecoderOptions, AudioDecoderOptions},
+        decoder::{
+            self, decoder_thread_audio::spawn_audio_decoder_thread,
+            decoder_thread_video::spawn_video_decoder_thread, fdk_aac, ffmpeg_h264,
+            DecodedDataReceiver, DecoderThreadHandle,
+        },
         types::{EncodedChunk, IsKeyframe},
-        AudioCodec, EncodedChunkKind, VideoCodec,
+        AudioCodec, EncodedChunkKind, PipelineCtx, VideoCodec,
     },
     queue::PipelineEvent,
 };
@@ -32,7 +36,7 @@ use ffmpeg_next::{
 };
 use tracing::{debug, error, span, warn, Level};
 
-use super::{AudioInputReceiver, Input, InputInitInfo, InputInitResult, VideoInputReceiver};
+use super::{Input, InputInitInfo};
 
 #[derive(Debug, Clone)]
 pub struct HlsInputOptions {
@@ -48,33 +52,27 @@ impl HlsInput {
     const PREFERABLE_BUFFER_SIZE: usize = 30;
     const MIN_BUFFER_SIZE: usize = Self::PREFERABLE_BUFFER_SIZE / 2;
 
-    pub(super) fn start_new_input(
-        input_id: &InputId,
-        queue_start_time: Option<Instant>,
+    pub(super) fn new_input(
+        ctx: Arc<PipelineCtx>,
+        input_id: InputId,
         opts: HlsInputOptions,
-    ) -> Result<InputInitResult, InputInitError> {
+    ) -> Result<(Input, InputInitInfo, DecodedDataReceiver), InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
-        let (video, audio) = Self::spawn_thread(
-            input_id.clone(),
-            should_close.clone(),
-            queue_start_time,
-            opts,
-        )?;
+        let receivers = Self::spawn_thread(ctx, input_id, should_close.clone(), opts)?;
 
-        Ok(InputInitResult {
-            input: Input::Hls(Self { should_close }),
-            video,
-            audio,
-            init_info: InputInitInfo::Other,
-        })
+        Ok((
+            Input::Hls(Self { should_close }),
+            InputInitInfo::Other,
+            receivers,
+        ))
     }
 
     fn spawn_thread(
+        ctx: Arc<PipelineCtx>,
         input_id: InputId,
         should_close: Arc<AtomicBool>,
-        queue_start_time: Option<Instant>,
         options: HlsInputOptions,
-    ) -> Result<(Option<VideoInputReceiver>, Option<AudioInputReceiver>), InputInitError> {
+    ) -> Result<DecodedDataReceiver, InputInitError> {
         let (result_sender, result_receiver) = bounded(1);
         std::thread::Builder::new()
             .name(format!("HLS thread for input {}", input_id.clone()))
@@ -82,7 +80,7 @@ impl HlsInput {
                 let _span =
                     span!(Level::INFO, "HLS thread", input_id = input_id.to_string()).entered();
 
-                Self::run_thread(options, should_close, queue_start_time, result_sender);
+                Self::run_thread(ctx, input_id, options, should_close, result_sender);
             })
             .unwrap();
 
@@ -91,12 +89,11 @@ impl HlsInput {
 
     #[allow(clippy::type_complexity)]
     fn run_thread(
+        ctx: Arc<PipelineCtx>,
+        input_id: InputId,
         options: HlsInputOptions,
         should_close: Arc<AtomicBool>,
-        queue_start_time: Option<Instant>,
-        result_sender: Sender<
-            Result<(Option<VideoInputReceiver>, Option<AudioInputReceiver>), InputInitError>,
-        >,
+        result_sender: Sender<Result<DecodedDataReceiver, InputInitError>>,
     ) {
         // careful: moving the input context in any way will cause ffmpeg to segfault
         // I do not know why this happens
@@ -115,13 +112,12 @@ impl HlsInput {
         };
 
         let input_start_time = Instant::now();
-        let queue_start_time = queue_start_time.unwrap_or(Instant::now());
 
-        let (mut audio, mut audio_result) = match input_ctx.streams().best(Type::Audio) {
+        let (mut audio, mut samples_receiver) = match input_ctx.streams().best(Type::Audio) {
             Some(stream) => {
                 // not tested it was always null, but audio is in ADTS, so config is not
                 // necessary
-                let config = unsafe {
+                let asc = unsafe {
                     let codecpar = (*stream.as_ptr()).codecpar;
                     let size = (*codecpar).extradata_size;
                     if size > 0 {
@@ -133,22 +129,46 @@ impl HlsInput {
                         None
                     }
                 };
-                let (sender, receiver) = bounded(2000);
+                let (samples_sender, samples_receiver) = bounded(5);
                 let state =
-                    StreamState::new(input_start_time, queue_start_time, stream.time_base());
+                    StreamState::new(input_start_time, ctx.queue_sync_time, stream.time_base());
+                let decoder_result = spawn_audio_decoder_thread::<fdk_aac::FdkAacDecoder, 2000>(
+                    ctx.clone(),
+                    input_id.clone(),
+                    fdk_aac::Options { asc },
+                    samples_sender,
+                );
+                let handle = match decoder_result {
+                    Ok(handle) => handle,
+                    Err(err) => {
+                        result_sender.send(Err(err.into())).unwrap();
+                        return;
+                    }
+                };
                 (
-                    Some((stream.index(), sender, state)),
-                    Some((receiver, config)),
+                    Some((stream.index(), handle, state)),
+                    Some(samples_receiver),
                 )
             }
             None => (None, None),
         };
-        let (mut video, mut video_receiver) = match input_ctx.streams().best(Type::Video) {
+        let (mut video, mut frame_receiver) = match input_ctx.streams().best(Type::Video) {
             Some(stream) => {
-                let (sender, receiver) = bounded(2000);
+                let (frame_sender, frame_receiver) = bounded(5);
                 let state =
-                    StreamState::new(input_start_time, queue_start_time, stream.time_base());
-                (Some((stream.index(), sender, state)), Some(receiver))
+                    StreamState::new(input_start_time, ctx.queue_sync_time, stream.time_base());
+                let decoder_result = spawn_video_decoder_thread::<
+                    ffmpeg_h264::FfmpegH264Decoder,
+                    2000,
+                >(ctx.clone(), input_id.clone(), frame_sender);
+                let handle = match decoder_result {
+                    Ok(handle) => handle,
+                    Err(err) => {
+                        result_sender.send(Err(err.into())).unwrap();
+                        return;
+                    }
+                };
+                (Some((stream.index(), handle, state)), Some(frame_receiver))
             }
             None => (None, None),
         };
@@ -175,7 +195,7 @@ impl HlsInput {
                 continue;
             }
 
-            if let Some((index, ref sender, ref mut state)) = video {
+            if let Some((index, ref handle, ref mut state)) = video {
                 if packet.stream() == index {
                     let (pts, dts, is_discontinuity) = state.pts_dts_from_packet(&packet);
 
@@ -185,7 +205,8 @@ impl HlsInput {
                     // to avoid audio sync issues.
                     if is_discontinuity {
                         pts_offset = Duration::ZERO;
-                    } else if !is_buffering && sender.len() < HlsInput::MIN_BUFFER_SIZE {
+                    } else if !is_buffering && handle.chunk_sender.len() < HlsInput::MIN_BUFFER_SIZE
+                    {
                         pts_offset += Duration::from_secs_f64(0.1);
                     }
                     let pts = pts + pts_offset;
@@ -198,10 +219,14 @@ impl HlsInput {
                         kind: EncodedChunkKind::Video(VideoCodec::H264),
                     };
 
-                    if sender.is_empty() {
+                    if handle.chunk_sender.is_empty() {
                         debug!("HLS input video channel was drained");
                     }
-                    if sender.send(PipelineEvent::Data(chunk)).is_err() {
+                    if handle
+                        .chunk_sender
+                        .send(PipelineEvent::Data(chunk))
+                        .is_err()
+                    {
                         debug!("Channel closed")
                     }
                 }
@@ -220,10 +245,14 @@ impl HlsInput {
                         kind: EncodedChunkKind::Audio(AudioCodec::Aac),
                     };
 
-                    if sender.is_empty() {
+                    if sender.chunk_sender.is_empty() {
                         debug!("HLS input audio channel was drained");
                     }
-                    if sender.send(PipelineEvent::Data(chunk)).is_err() {
+                    if sender
+                        .chunk_sender
+                        .send(PipelineEvent::Data(chunk))
+                        .is_err()
+                    {
                         debug!("Channel closed")
                     }
                 }
@@ -231,49 +260,39 @@ impl HlsInput {
 
             if is_buffering && HlsInput::did_buffer_enough(video.as_ref(), audio.as_ref()) {
                 result_sender
-                    .send(Ok((
-                        video_receiver
-                            .take()
-                            .map(|video| VideoInputReceiver::Encoded {
-                                chunk_receiver: video,
-                                decoder_options: options.clone().video_decoder,
-                            }),
-                        audio_result
-                            .take()
-                            .map(|(receiver, asc)| AudioInputReceiver::Encoded {
-                                chunk_receiver: receiver,
-                                decoder_options: AudioDecoderOptions::Aac(AacDecoderOptions {
-                                    depayloader_mode: None,
-                                    asc,
-                                }),
-                            }),
-                    )))
+                    .send(Ok(DecodedDataReceiver {
+                        video: frame_receiver.take(),
+                        audio: samples_receiver.take(),
+                    }))
                     .unwrap();
 
                 is_buffering = false;
             }
         }
 
-        if let Some((_, sender, _)) = audio {
-            if sender.send(PipelineEvent::EOS).is_err() {
+        if let Some((_, handle, _)) = audio {
+            if handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
                 debug!("Failed to send EOS message.")
             }
         }
 
-        if let Some((_, sender, _)) = video {
-            if sender.send(PipelineEvent::EOS).is_err() {
+        if let Some((_, handle, _)) = video {
+            if handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
                 debug!("Failed to send EOS message.")
             }
         }
     }
 
-    fn did_buffer_enough(video: Option<&Stream>, audio: Option<&Stream>) -> bool {
+    fn did_buffer_enough(
+        video: Option<&(usize, DecoderThreadHandle, StreamState)>,
+        audio: Option<&(usize, DecoderThreadHandle, StreamState)>,
+    ) -> bool {
         let is_video_ready = video
             .as_ref()
-            .map(|(_, sender, _)| sender.len() >= HlsInput::PREFERABLE_BUFFER_SIZE);
+            .map(|(_, handle, _)| handle.chunk_sender.len() >= HlsInput::PREFERABLE_BUFFER_SIZE);
         let is_audio_ready = audio
             .as_ref()
-            .map(|(_, sender, _)| sender.len() >= HlsInput::PREFERABLE_BUFFER_SIZE);
+            .map(|(_, handle, _)| handle.chunk_sender.len() >= HlsInput::PREFERABLE_BUFFER_SIZE);
 
         matches!(
             (is_video_ready, is_audio_ready),
@@ -288,8 +307,6 @@ impl Drop for HlsInput {
             .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
-
-type Stream = (usize, Sender<PipelineEvent<EncodedChunk>>, StreamState);
 
 struct StreamState {
     input_start_time: Instant,

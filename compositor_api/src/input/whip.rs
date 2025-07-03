@@ -1,4 +1,5 @@
 use core::f64;
+use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -14,6 +15,9 @@ pub struct WhipInput {
     pub video: Option<InputWhipVideoOptions>,
     /// Parameters of an audio source included in the RTP stream.
     pub audio: Option<InputWhipAudioOptions>,
+    /// Token used for authentication in WHIP protocol. If not provided, the random value
+    /// will be generated and returned in the response.
+    pub bearer_token: Option<Arc<str>>,
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,

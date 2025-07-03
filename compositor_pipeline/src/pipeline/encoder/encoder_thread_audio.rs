@@ -7,13 +7,13 @@ use tracing::{debug, span, warn, Level};
 use crate::{
     audio_mixer::OutputSamples,
     error::EncoderInitError,
-    pipeline::{EncoderOutputEvent, PipelineCtx},
+    pipeline::{
+        resampler::encoder_resampler::ResampledForEncoderStream, EncoderOutputEvent, PipelineCtx,
+    },
     queue::PipelineEvent,
 };
 
-use super::{
-    AudioEncoder, AudioEncoderConfig, AudioEncoderOptionsExt, AudioEncoderStream, ResampledStream,
-};
+use super::{AudioEncoder, AudioEncoderConfig, AudioEncoderOptionsExt, AudioEncoderStream};
 
 pub(crate) struct AudioEncoderThreadHandle {
     pub sample_batch_sender: Sender<PipelineEvent<OutputSamples>>,
@@ -74,11 +74,11 @@ fn init_encoder_stream<Encoder: AudioEncoder>(
     EncoderInitError,
 > {
     let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
-    let resampled_stream = ResampledStream::new(
+    let resampled_stream = ResampledForEncoderStream::new(
         sample_batch_receiver.into_iter(),
         ctx.mixing_sample_rate,
         options.sample_rate(),
-    )?
+    )
     .flatten();
 
     let (encoded_stream, config) =

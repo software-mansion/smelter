@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use std::sync::Weak;
 use std::thread;
 use std::time::Duration;
+use std::time::Instant;
 
 use crossbeam_channel::{bounded, Receiver};
 use glyphon::fontdb;
@@ -27,25 +28,34 @@ use compositor_render::{
     RendererSpec, RenderingMode, WgpuFeatures,
 };
 
-use input::{InputInitInfo, RawDataInputOptions};
+use input::InputInitInfo;
 use output::{
     encoded_data::EncodedDataOutput, new_external_output, raw_data::RawDataOutput,
     EncodedDataOutputOptions, OutputOptions, RawDataOutputOptions,
 };
 use pipeline_output::{register_pipeline_output, OutputInfo};
 use types::RawDataSender;
-use whip_whep::WhipWhepPipelineState;
+use webrtc::WhipWhepPipelineState;
 
-use crate::audio_mixer::{AudioChannels, AudioMixer, AudioMixingParams, MixingStrategy};
-use crate::error::{
-    InitPipelineError, RegisterInputError, RegisterOutputError, UnregisterInputError,
-    UnregisterOutputError,
-};
-use crate::event::{Event, EventEmitter};
-use crate::pipeline::pipeline_output::OutputSender;
-use crate::pipeline::whip_whep::WhipWhepServerHandle;
-use crate::queue::{
-    self, PipelineEvent, Queue, QueueAudioOutput, QueueInputOptions, QueueOptions, QueueVideoOutput,
+use crate::{
+    audio_mixer::{AudioChannels, AudioMixer, AudioMixingParams, MixingStrategy},
+    error::{
+        InitPipelineError, RegisterInputError, RegisterOutputError, UnregisterInputError,
+        UnregisterOutputError,
+    },
+    event::{Event, EventEmitter},
+    pipeline::{
+        input::{
+            new_external_input,
+            raw_data::{RawDataInput, RawDataInputOptions},
+        },
+        pipeline_output::OutputSender,
+        webrtc::WhipWhepServerHandle,
+    },
+    queue::{
+        self, PipelineEvent, Queue, QueueAudioOutput, QueueInputOptions, QueueOptions,
+        QueueVideoOutput,
+    },
 };
 
 use self::input::InputOptions;
@@ -54,8 +64,9 @@ pub mod decoder;
 pub mod encoder;
 pub mod input;
 pub mod output;
+pub mod resampler;
 pub mod rtp;
-pub mod whip_whep;
+pub mod webrtc;
 
 mod graphics_context;
 mod pipeline_init;
@@ -65,7 +76,6 @@ mod types;
 
 pub use self::types::{
     AudioCodec, EncodedChunk, EncodedChunkKind, EncoderOutputEvent, RawDataReceiver, VideoCodec,
-    VideoDecoder,
 };
 pub use pipeline_output::PipelineOutputEndCondition;
 
@@ -140,6 +150,7 @@ pub struct Options {
 
 #[derive(Clone)]
 pub struct PipelineCtx {
+    pub queue_sync_time: Instant,
     pub mixing_sample_rate: u32,
     pub output_framerate: Framerate,
     pub stun_servers: Arc<Vec<String>>,
@@ -159,7 +170,7 @@ impl Pipeline {
         &self.queue
     }
 
-    pub fn ctx(&self) -> &PipelineCtx {
+    pub fn ctx(&self) -> &Arc<PipelineCtx> {
         &self.ctx
     }
 
@@ -170,13 +181,14 @@ impl Pipeline {
     pub fn register_input(
         pipeline: &Arc<Mutex<Self>>,
         input_id: InputId,
-        register_options: RegisterInputOptions,
+        options: RegisterInputOptions,
     ) -> Result<InputInitInfo, RegisterInputError> {
+        let input_options = options.input_options;
         register_pipeline_input(
             pipeline,
             input_id,
-            &register_options.input_options,
-            register_options.queue_options,
+            options.queue_options,
+            |ctx, input_id| new_external_input(ctx, input_id, input_options),
         )
     }
 
@@ -186,7 +198,9 @@ impl Pipeline {
         raw_input_options: RawDataInputOptions,
         queue_options: QueueInputOptions,
     ) -> Result<RawDataSender, RegisterInputError> {
-        register_pipeline_input(pipeline, input_id, &raw_input_options, queue_options)
+        register_pipeline_input(pipeline, input_id, queue_options, |ctx, input_id| {
+            RawDataInput::new_input(ctx, input_id, raw_input_options)
+        })
     }
 
     pub fn unregister_input(&mut self, input_id: &InputId) -> Result<(), UnregisterInputError> {
