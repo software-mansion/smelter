@@ -4,6 +4,7 @@ use bytes::{Buf, BytesMut};
 
 use crate::pipeline::{
     decoder::AacDepayloaderMode,
+    input::rtp::{depayloader::DepayloaderExt, DepayloadingError},
     types::{EncodedChunk, EncodedChunkKind, IsKeyframe},
     AudioCodec,
 };
@@ -198,24 +199,26 @@ impl AacDepayloader {
             rollover_state: RolloverState::default(),
         })
     }
+}
 
+impl DepayloaderExt for AacDepayloader {
     /// Related spec:
     ///  - [RFC 3640, section 3.2. RTP Payload Structure](https://datatracker.ietf.org/doc/html/rfc3640#section-3.2)
     ///  - [RFC 3640, section 3.3.5. Low Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.5)
     ///  - [RFC 3640, section 3.3.6. High Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.6)
-    pub(super) fn depayload(
+    fn depayload(
         &mut self,
         packet: rtp::packet::Packet,
-    ) -> Result<Vec<EncodedChunk>, AacDepayloadingError> {
+    ) -> Result<Vec<EncodedChunk>, DepayloadingError> {
         let mut reader = std::io::Cursor::new(packet.payload);
 
         if reader.remaining() < 2 {
-            return Err(AacDepayloadingError::PacketTooShort);
+            return Err(AacDepayloadingError::PacketTooShort.into());
         }
 
         let headers_len = reader.get_u16() / 8;
         if reader.remaining() < headers_len as usize {
-            return Err(AacDepayloadingError::PacketTooShort);
+            return Err(AacDepayloadingError::PacketTooShort.into());
         }
 
         let header_len = self.mode.header_len_in_bytes();
@@ -246,7 +249,7 @@ impl AacDepayloader {
             .collect::<Vec<_>>();
 
         if headers.iter().any(|h| h.index != 0) {
-            return Err(AacDepayloadingError::InterleavingNotSupported);
+            return Err(AacDepayloadingError::InterleavingNotSupported.into());
         }
 
         let packet_pts = self.rollover_state.timestamp(packet.header.timestamp);

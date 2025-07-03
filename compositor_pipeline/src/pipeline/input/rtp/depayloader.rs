@@ -8,279 +8,131 @@ use rtp::{
 };
 
 use crate::pipeline::{
-    decoder::{self, AacDecoderOptions},
-    rtp::{AUDIO_PAYLOAD_TYPE, VIDEO_PAYLOAD_TYPE},
+    decoder::AacDepayloaderMode,
+    output::rtp::RtpPacket,
     types::{AudioCodec, EncodedChunk, EncodedChunkKind, IsKeyframe, VideoCodec},
-    VideoDecoder,
 };
 
 use self::aac::AacDepayloaderNewError;
 
-use super::{DepayloadingError, RtpStream};
+use super::DepayloadingError;
 
 pub use aac::{AacDepayloader, AacDepayloadingError};
 
 mod aac;
 
-#[derive(Debug, thiserror::Error)]
-pub enum DepayloaderNewError {
-    #[error(transparent)]
-    Audio(#[from] AudioDepayloaderNewError),
+pub enum DepayloadedCodec {
+    H264,
+    Vp8,
+    Vp9,
+    Opus,
+    Aac(AacDepayloaderMode, Bytes),
+}
+
+pub struct DepayloaderOptions {
+    pub codec: DepayloadedCodec,
+    pub payload_type: u8,
+    pub clock_rate: u32,
+    pub mtu: usize,
+    pub ssrc: u32,
 }
 
 pub(crate) struct Depayloader {
-    /// (Depayloader, payload type)
-    pub video: Option<VideoDepayloader>,
-    pub audio: Option<AudioDepayloader>,
+    depayloader: Box<dyn DepayloaderExt>,
+    ssrc: u32,
+    payload_type: u8,
 }
 
 impl Depayloader {
-    pub fn new(stream: &RtpStream) -> Result<Self, DepayloaderNewError> {
-        let video = stream
-            .video
-            .as_ref()
-            .map(|video| VideoDepayloader::new(&video.options));
-
-        let audio = stream
-            .audio
-            .as_ref()
-            .map(|audio| AudioDepayloader::new(&audio.options))
-            .transpose()?;
-
-        Ok(Self { video, audio })
+    fn new(options: DepayloaderOptions) -> Result<Self, DepayloaderInitError> {
+        let depayloader = match options.codec {
+            DepayloadedCodec::H264 => {
+                BufferedDepayloader::new::<H264Packet>(EncodedChunkKind::Video(VideoCodec::H264))
+            }
+            DepayloadedCodec::Vp8 => {
+                BufferedDepayloader::new::<Vp8Packet>(EncodedChunkKind::Video(VideoCodec::VP8))
+            }
+            DepayloadedCodec::Vp9 => {
+                BufferedDepayloader::new::<Vp9Packet>(EncodedChunkKind::Video(VideoCodec::VP9))
+            }
+            DepayloadedCodec::Opus => {
+                BufferedDepayloader::new::<OpusPacket>(EncodedChunkKind::Audio(AudioCodec::Opus))
+            }
+            DepayloadedCodec::Aac(mode, asc) => Box::new(AacDepayloader::new(mode, &asc))?,
+        };
+        Ok(Self {
+            ssrc: options.ssrc,
+            depayloader,
+            payload_type: options.payload_type,
+            depayloader,
+        })
     }
 
-    pub fn depayload(
+    pub fn depayload(&mut self, packet: RtpPacket) -> Result<Vec<EncodedChunk>, DepayloadingError> {
+        self.depayload(packet)
+    }
+}
+
+trait DepayloaderExt {
+    fn depayload(
         &mut self,
         packet: rtp::packet::Packet,
-    ) -> Result<Vec<EncodedChunk>, DepayloadingError> {
-        match packet.header.payload_type {
-            VIDEO_PAYLOAD_TYPE => match self.video.as_mut() {
-                Some(video_depayloader) => video_depayloader.depayload(packet),
-                None => Err(DepayloadingError::BadPayloadType(
-                    packet.header.payload_type,
-                )),
-            },
-            AUDIO_PAYLOAD_TYPE => match self.audio.as_mut() {
-                Some(audio_depayloader) => audio_depayloader.depayload(packet),
-                None => Err(DepayloadingError::BadPayloadType(
-                    packet.header.payload_type,
-                )),
-            },
-            other => Err(DepayloadingError::BadPayloadType(other)),
-        }
+    ) -> Result<Vec<EncodedChunk>, DepayloadingError>;
+}
+
+struct BufferedDepayloader<T: rtp::packetizer::Depacketizer + Default> {
+    kind: EncodedChunkKind,
+    buffer: Vec<Bytes>,
+    rollover_state: RolloverState,
+    depacketizer: T,
+}
+
+impl<T: rtp::packetizer::Depacketizer + Default> BufferedDepayloader<T> {
+    fn new(kind: EncodedChunkKind) -> Box<dyn DepayloaderExt> {
+        Box::new(Self {
+            kind,
+            buffer: Vec::new(),
+            rollover_state: RolloverState::default(),
+            depacketizer: T::default(),
+        })
     }
 }
 
-pub enum VideoDepayloader {
-    H264 {
-        depayloader: H264Packet,
-        buffer: Vec<Bytes>,
-        rollover_state: RolloverState,
-    },
-    VP8 {
-        depayloader: Vp8Packet,
-        buffer: Vec<Bytes>,
-        rollover_state: RolloverState,
-    },
-    VP9 {
-        depayloader: Vp9Packet,
-        buffer: Vec<Bytes>,
-        rollover_state: RolloverState,
-    },
-}
-
-impl VideoDepayloader {
-    pub fn new(options: &decoder::VideoDecoderOptions) -> Self {
-        match options.decoder {
-            VideoDecoder::FFmpegH264 => VideoDepayloader::H264 {
-                depayloader: H264Packet::default(),
-                buffer: vec![],
-                rollover_state: RolloverState::default(),
-            },
-            VideoDecoder::FFmpegVp8 => VideoDepayloader::VP8 {
-                depayloader: Vp8Packet::default(),
-                buffer: vec![],
-                rollover_state: RolloverState::default(),
-            },
-            VideoDecoder::FFmpegVp9 => VideoDepayloader::VP9 {
-                depayloader: Vp9Packet::default(),
-                buffer: vec![],
-                rollover_state: RolloverState::default(),
-            },
-
-            #[cfg(feature = "vk-video")]
-            VideoDecoder::VulkanVideoH264 => VideoDepayloader::H264 {
-                depayloader: H264Packet::default(),
-                buffer: vec![],
-                rollover_state: RolloverState::default(),
-            },
-        }
-    }
-
+impl<T: rtp::packetizer::Depacketizer + Default> DepayloaderExt for BufferedDepayloader<T> {
     fn depayload(
         &mut self,
         packet: rtp::packet::Packet,
     ) -> Result<Vec<EncodedChunk>, DepayloadingError> {
-        match self {
-            VideoDepayloader::H264 {
-                depayloader,
-                buffer,
-                rollover_state,
-            } => {
-                let kind = EncodedChunkKind::Video(VideoCodec::H264);
-                let h264_chunk = depayloader.depacketize(&packet.payload)?;
+        let chunk = self.depayloader.depacketize(&packet.payload)?;
 
-                if h264_chunk.is_empty() {
-                    return Ok(Vec::new());
-                }
-
-                buffer.push(h264_chunk);
-                if !packet.header.marker {
-                    // the marker bit is set on the last packet of an access unit
-                    return Ok(Vec::new());
-                }
-
-                let timestamp = rollover_state.timestamp(packet.header.timestamp);
-                let new_chunk = EncodedChunk {
-                    data: mem::take(buffer).concat().into(),
-                    pts: Duration::from_secs_f64(timestamp as f64 / 90000.0),
-                    dts: None,
-                    is_keyframe: IsKeyframe::Unknown,
-                    kind,
-                };
-
-                Ok(vec![new_chunk])
-            }
-            VideoDepayloader::VP8 {
-                depayloader,
-                buffer,
-                rollover_state,
-            } => {
-                let kind = EncodedChunkKind::Video(VideoCodec::VP8);
-                let vp8_chunk = depayloader.depacketize(&packet.payload)?;
-
-                if vp8_chunk.is_empty() {
-                    return Ok(Vec::new());
-                }
-
-                buffer.push(vp8_chunk);
-                if !packet.header.marker {
-                    // the marker bit is set on the last packet of an access unit
-                    return Ok(Vec::new());
-                }
-
-                let timestamp = rollover_state.timestamp(packet.header.timestamp);
-                let new_chunk = EncodedChunk {
-                    data: mem::take(buffer).concat().into(),
-                    pts: Duration::from_secs_f64(timestamp as f64 / 90000.0),
-                    dts: None,
-                    is_keyframe: IsKeyframe::Unknown,
-                    kind,
-                };
-
-                Ok(vec![new_chunk])
-            }
-            VideoDepayloader::VP9 {
-                depayloader,
-                buffer,
-                rollover_state,
-            } => {
-                let kind = EncodedChunkKind::Video(VideoCodec::VP9);
-                let vp9_chunk = depayloader.depacketize(&packet.payload)?;
-
-                if vp9_chunk.is_empty() {
-                    return Ok(Vec::new());
-                }
-
-                buffer.push(vp9_chunk);
-                if !packet.header.marker {
-                    // the marker bit is set on the last packet of an access unit
-                    return Ok(Vec::new());
-                }
-
-                let timestamp = rollover_state.timestamp(packet.header.timestamp);
-                let new_chunk = EncodedChunk {
-                    data: mem::take(buffer).concat().into(),
-                    pts: Duration::from_secs_f64(timestamp as f64 / 90000.0),
-                    dts: None,
-                    is_keyframe: IsKeyframe::Unknown,
-                    kind,
-                };
-
-                Ok(vec![new_chunk])
-            }
+        if chunk.is_empty() {
+            return Ok(Vec::new());
         }
+
+        self.buffer.push(chunk);
+        if !packet.header.marker {
+            // the marker bit is set on the last packet of an access unit
+            return Ok(Vec::new());
+        }
+
+        let timestamp = self
+            .rollover_state
+            .timestamp(packet.packet.header.timestamp);
+        let new_chunk = EncodedChunk {
+            data: mem::take(&mut self.buffer).concat().into(),
+            pts: Duration::from_secs_f64(timestamp as f64 / 90000.0),
+            dts: None,
+            is_keyframe: IsKeyframe::Unknown,
+            kind: self.kind,
+        };
+        Ok(vec![new_chunk])
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum AudioDepayloaderNewError {
-    #[error("Unsupported depayloader for provided decoder settings: {0:?}")]
-    UnsupportedDepayloader(decoder::AudioDecoderOptions),
-
-    #[error("No required depayloader settings were provided")]
-    DepayloaderSettingsRequired,
-
+pub enum DepayloaderInitError {
     #[error(transparent)]
     AacDepayloaderNewError(#[from] AacDepayloaderNewError),
-}
-
-pub enum AudioDepayloader {
-    Opus {
-        depayloader: OpusPacket,
-        rollover_state: RolloverState,
-    },
-    Aac(AacDepayloader),
-}
-
-impl AudioDepayloader {
-    pub fn new(options: &decoder::AudioDecoderOptions) -> Result<Self, AudioDepayloaderNewError> {
-        match options {
-            decoder::AudioDecoderOptions::Opus(_) => Ok(AudioDepayloader::Opus {
-                depayloader: OpusPacket,
-                rollover_state: RolloverState::default(),
-            }),
-            decoder::AudioDecoderOptions::Aac(AacDecoderOptions {
-                depayloader_mode,
-                asc,
-            }) => Ok(AudioDepayloader::Aac(AacDepayloader::new(
-                depayloader_mode.ok_or(AudioDepayloaderNewError::DepayloaderSettingsRequired)?,
-                asc.as_ref()
-                    .ok_or(AudioDepayloaderNewError::DepayloaderSettingsRequired)?,
-            )?)),
-        }
-    }
-
-    fn depayload(
-        &mut self,
-        packet: rtp::packet::Packet,
-    ) -> Result<Vec<EncodedChunk>, DepayloadingError> {
-        match self {
-            AudioDepayloader::Opus {
-                depayloader,
-                rollover_state,
-            } => {
-                let kind = EncodedChunkKind::Audio(AudioCodec::Opus);
-                let opus_packet = depayloader.depacketize(&packet.payload)?;
-
-                if opus_packet.is_empty() {
-                    return Ok(Vec::new());
-                }
-
-                let timestamp = rollover_state.timestamp(packet.header.timestamp);
-                Ok(vec![EncodedChunk {
-                    data: opus_packet,
-                    pts: Duration::from_secs_f64(timestamp as f64 / 48000.0),
-                    dts: None,
-                    is_keyframe: IsKeyframe::NoKeyframes,
-                    kind,
-                }])
-            }
-
-            AudioDepayloader::Aac(aac) => Ok(aac.depayload(packet)?),
-        }
-    }
 }
 
 #[derive(Default)]

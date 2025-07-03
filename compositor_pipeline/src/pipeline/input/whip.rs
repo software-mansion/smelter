@@ -9,7 +9,7 @@ use crate::{
     pipeline::{
         decoder,
         types::EncodedChunk,
-        whip_whep::{bearer_token::generate_token, WhipInputConnectionState, WhipInputState},
+        webrtc::{bearer_token::generate_token, WhipInputConnectionState, WhipInputState},
         PipelineCtx, VideoDecoder,
     },
     queue::PipelineEvent,

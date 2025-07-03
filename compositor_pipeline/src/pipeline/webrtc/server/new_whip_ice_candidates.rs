@@ -1,4 +1,4 @@
-use crate::pipeline::whip_whep::{
+use crate::pipeline::webrtc::{
     bearer_token::validate_token, error::WhipServerError, WhipWhepServerState,
 };
 use axum::{
@@ -28,13 +28,9 @@ pub async fn handle_new_whip_ice_candidates(
     }
 
     let input_id = InputId(Arc::from(id));
-    let (bearer_token, peer_connection) = {
-        let connections = state.inputs.0.lock().unwrap();
-        connections
-            .get(&input_id)
-            .map(|conn| (conn.bearer_token.clone(), conn.peer_connection.clone()))
-            .ok_or_else(|| WhipServerError::NotFound(format!("{input_id:?} not found")))?
-    };
+    let input = state.inputs.get_input_connection_options(input_id)?;
+    let bearer_token = input.bearer_token;
+    let peer_connection = input.peer_connection;
 
     validate_token(bearer_token, headers.get("Authorization")).await?;
 

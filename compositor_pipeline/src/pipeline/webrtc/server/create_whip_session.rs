@@ -1,6 +1,6 @@
 use crate::pipeline::{
     input::whip::{process_track_stream, start_decoders::start_decoders_threads},
-    whip_whep::{
+    webrtc::{
         bearer_token::validate_token,
         error::WhipServerError,
         init_peer_connection,
@@ -24,7 +24,10 @@ use tracing::{debug, info, trace, warn};
 use urlencoding::encode;
 use webrtc::{
     ice_transport::ice_gatherer_state::RTCIceGathererState,
-    peer_connection::{sdp::session_description::RTCSessionDescription, RTCPeerConnection},
+    peer_connection::{
+        peer_connection_state::RTCPeerConnectionState,
+        sdp::session_description::RTCSessionDescription, RTCPeerConnection,
+    },
     rtp_transceiver::rtp_codec::RTCRtpCodecParameters,
 };
 
@@ -43,6 +46,15 @@ pub async fn handle_create_whip_session(
     let input_state = state
         .inputs
         .get_input_connection_options(input_id.clone())?;
+
+    if let Some(peer_connection) = &input_state.peer_connection {
+        if peer_connection.connection_state() == RTCPeerConnectionState::Connected {
+            return Err(WhipServerError::InternalError(format!(
+                "Another stream is currently connected to the given input_id: {input_id:?}. \
+                Disconnect the existing stream before starting a new one, or check if the input_id is correct."
+            )));
+        }
+    }
 
     validate_token(input_state.bearer_token, headers.get("Authorization")).await?;
 

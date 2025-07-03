@@ -34,7 +34,7 @@ use output::{
 };
 use pipeline_output::{register_pipeline_output, OutputInfo};
 use types::RawDataSender;
-use whip_whep::WhipWhepPipelineState;
+use webrtc::WhipWhepPipelineState;
 
 use crate::audio_mixer::{AudioChannels, AudioMixer, AudioMixingParams, MixingStrategy};
 use crate::error::{
@@ -43,7 +43,7 @@ use crate::error::{
 };
 use crate::event::{Event, EventEmitter};
 use crate::pipeline::pipeline_output::OutputSender;
-use crate::pipeline::whip_whep::WhipWhepServerHandle;
+use crate::pipeline::webrtc::WhipWhepServerHandle;
 use crate::queue::{
     self, PipelineEvent, Queue, QueueAudioOutput, QueueInputOptions, QueueOptions, QueueVideoOutput,
 };
@@ -52,10 +52,11 @@ use self::input::InputOptions;
 
 pub mod decoder;
 pub mod encoder;
+pub mod resampler;
 pub mod input;
 pub mod output;
 pub mod rtp;
-pub mod whip_whep;
+pub mod webrtc;
 
 mod graphics_context;
 mod pipeline_init;

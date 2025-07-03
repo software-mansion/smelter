@@ -5,7 +5,7 @@ use rand::{rngs::StdRng, thread_rng, Rng, RngCore, SeedableRng};
 use tokio::time::sleep;
 use tracing::error;
 
-use crate::pipeline::whip_whep::error::WhipServerError;
+use crate::pipeline::webrtc::error::WhipServerError;
 
 pub fn generate_token() -> String {
     let mut bytes = [0u8; 16];

@@ -1,15 +1,12 @@
 use crate::{
     pipeline::{
         self,
-        decoder::{
-            start_audio_decoder_thread, start_video_decoder_thread, AudioDecoderOptions,
-            OpusDecoderOptions, VideoDecoderOptions,
-        },
+        decoder::{start_audio_decoder_thread, start_video_decoder_thread},
         input::whip::{
             depayloader::{AudioDepayloader, RolloverState, VideoDepayloader},
             start_forwarding_thread,
         },
-        whip_whep::{error::WhipServerError, WhipInputState},
+        webrtc::error::WhipServerError,
         EncodedChunk, PipelineCtx, VideoDecoder,
     },
     queue::PipelineEvent,

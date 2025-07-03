@@ -3,12 +3,11 @@ use std::sync::Arc;
 use tracing::error;
 
 use crate::{
-    error::InputInitError,
-    pipeline::{
-        decoder::AacDecoderOptions,
+    audio_mixer::InputSamples, error::{DecoderInitError, InputInitError}, pipeline::{
+        decoder::{AacDecoderOptions, AudioDecoder},
         types::{EncodedChunk, EncodedChunkKind, Samples},
-        AudioCodec,
-    },
+        AudioCodec, PipelineCtx,
+    }
 };
 
 use super::{AudioDecoderExt, DecodedSamples, DecodingError};
@@ -32,12 +31,15 @@ pub(super) struct AacDecoder {
     decoder: Decoder,
 }
 
-impl AacDecoder {
-    /// The encoded chunk used for initialization here still needs to be fed into `Decoder::decode_chunk` later
-    pub fn new(
-        options: AacDecoderOptions,
-        first_chunk: EncodedChunk,
-    ) -> Result<Self, InputInitError> {
+impl AudioDecoder for AacDecoder {
+    const LABEL: &'static str = "FDK AAC decoder";
+
+    type Options = ();
+
+    fn new(
+        ctx: &Arc<PipelineCtx>,
+        options: Self::Options,
+    ) -> Result<Self, DecoderInitError> {
         let transport = if first_chunk.data[..4] == [b'A', b'D', b'I', b'F'] {
             fdk::TRANSPORT_TYPE_TT_MP4_ADIF
         } else if first_chunk.data[0] == 0xff && first_chunk.data[1] & 0xf0 == 0xf0 {
@@ -59,6 +61,24 @@ impl AacDecoder {
         }
 
         Ok(AacDecoder { decoder })
+    }
+
+    fn decode(&mut self, chunk: EncodedChunk) -> Vec<InputSamples> {
+        todo!()
+    }
+
+    fn flush(&mut self) -> Vec<InputSamples> {
+        todo!()
+    }
+}
+
+impl AacDecoder {
+    /// The encoded chunk used for initialization here still needs to be fed into `Decoder::decode_chunk` later
+    pub fn new(
+        options: AacDecoderOptions,
+        first_chunk: EncodedChunk,
+    ) -> Result<Self, InputInitError> {
+
     }
 }
 
