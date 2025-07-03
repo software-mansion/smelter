@@ -2,31 +2,21 @@ use std::{
     mem::{self, MaybeUninit},
     os::raw::{c_int, c_void},
     ptr,
+    sync::Arc,
     time::Duration,
 };
 
 use bytes::Bytes;
-use compositor_render::OutputId;
-use crossbeam_channel::{bounded, Receiver, Sender};
 use fdk_aac_sys as fdk;
-use tracing::{debug, error, span, Level};
+use tracing::error;
 
 use crate::{
     audio_mixer::{AudioChannels, AudioSamples, OutputSamples},
     error::EncoderInitError,
-    pipeline::{types::IsKeyframe, AudioCodec, EncodedChunk, EncodedChunkKind, EncoderOutputEvent},
-    queue::PipelineEvent,
+    pipeline::{types::IsKeyframe, AudioCodec, EncodedChunk, EncodedChunkKind, PipelineCtx},
 };
 
-use super::resampler::OutputResampler;
-
-/// FDK-AAC encoder.
-/// Implementation is based on the fdk-aac encoder documentation:
-/// https://github.com/mstorsjo/fdk-aac/blob/master/documentation/aacEncoder.pdf
-pub struct AacEncoder {
-    samples_batch_sender: Sender<PipelineEvent<OutputSamples>>,
-    pub config: Bytes,
-}
+use super::{AudioEncoder, AudioEncoderConfig, AudioEncoderOptionsExt};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct AacEncoderOptions {
@@ -34,51 +24,16 @@ pub struct AacEncoderOptions {
     pub sample_rate: u32,
 }
 
-impl AacEncoder {
-    pub fn new(
-        output_id: &OutputId,
-        options: AacEncoderOptions,
-        packets_sender: Sender<EncoderOutputEvent>,
-        resampler: Option<OutputResampler>,
-    ) -> Result<Self, EncoderInitError> {
-        let (samples_batch_sender, samples_batch_receiver) = bounded(5);
-        // Since AAC encoder holds ref to internal structure (handler), it's unsafe to send it between threads.
-        let (init_result_sender, init_result_receiver) = bounded(0);
-        let output_id = output_id.to_string();
-
-        std::thread::Builder::new()
-            .name("AAC encoder thread".to_string())
-            .spawn(move || {
-                let _span =
-                    span!(Level::INFO, "AAC encoder thread", output_id = output_id).entered();
-                run_encoder_thread(
-                    init_result_sender,
-                    options,
-                    samples_batch_receiver,
-                    packets_sender,
-                    resampler,
-                );
-                debug!("Closing AAC encoder thread.");
-            })
-            .unwrap();
-
-        let config = init_result_receiver
-            .recv()
-            .unwrap()
-            .map_err(EncoderInitError::AacError)?;
-
-        Ok(Self {
-            samples_batch_sender,
-            config,
-        })
-    }
-
-    pub fn samples_batch_sender(&self) -> &Sender<PipelineEvent<OutputSamples>> {
-        &self.samples_batch_sender
+impl AudioEncoderOptionsExt for AacEncoderOptions {
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
     }
 }
 
-struct AacEncoderInner {
+/// FDK-AAC encoder.
+/// Implementation is based on the fdk-aac encoder documentation:
+/// https://github.com/mstorsjo/fdk-aac/blob/master/documentation/aacEncoder.pdf
+pub struct FdkAacEncoder {
     encoder: *mut fdk::AACENCODER,
     input_buffer: Vec<i16>,
     output_buffer: Vec<u8>,
@@ -88,8 +43,15 @@ struct AacEncoderInner {
     samples_per_frame: u32,
 }
 
-impl AacEncoderInner {
-    fn new(options: AacEncoderOptions) -> Result<(Self, Bytes), fdk::AACENC_ERROR> {
+impl AudioEncoder for FdkAacEncoder {
+    const LABEL: &'static str = "FDK AAC encoder";
+
+    type Options = AacEncoderOptions;
+
+    fn new(
+        _ctx: &Arc<PipelineCtx>,
+        options: Self::Options,
+    ) -> Result<(Self, AudioEncoderConfig), EncoderInitError> {
         // Section 2.3 of the fdk-aac Encoder documentation - encoder initialization.
         let mut encoder = ptr::null_mut();
         // For mono and stereo audio, those values are the same, but it's not the case for other channel modes.
@@ -164,23 +126,34 @@ impl AacEncoderInner {
                 sent_samples: 0,
                 samples_per_frame: info.frameLength,
             },
-            Bytes::copy_from_slice(&info.confBuf[0..(info.confSize as usize)]),
+            AudioEncoderConfig {
+                //channels: options.channels,
+                //sample_rate: options.sample_rate,
+                extradata: Some(Bytes::copy_from_slice(
+                    &info.confBuf[0..(info.confSize as usize)],
+                )),
+            },
         ))
     }
 
-    fn encode(
-        &mut self,
-        output_samples: OutputSamples,
-    ) -> Result<Vec<EncodedChunk>, fdk::AACENC_ERROR> {
+    fn encode(&mut self, output_samples: OutputSamples) -> Vec<EncodedChunk> {
         self.enqueue_samples(output_samples);
-        self.call_fdk_encode(false)
+        self.call_fdk_encode(false).unwrap_or_else(|err| {
+            error!("Encoding error: {:?}", err);
+            vec![]
+        })
     }
 
-    fn flush(&mut self) -> Result<Vec<EncodedChunk>, fdk::AACENC_ERROR> {
-        self.call_fdk_encode(true)
+    fn flush(&mut self) -> Vec<EncodedChunk> {
+        self.call_fdk_encode(true).unwrap_or_else(|err| {
+            error!("Encoding error: {:?}", err);
+            vec![]
+        })
     }
+}
 
-    fn call_fdk_encode(&mut self, flush: bool) -> Result<Vec<EncodedChunk>, fdk::AACENC_ERROR> {
+impl FdkAacEncoder {
+    fn call_fdk_encode(&mut self, flush: bool) -> Result<Vec<EncodedChunk>, EncoderInitError> {
         let mut output = vec![];
 
         loop {
@@ -293,7 +266,7 @@ impl AacEncoderInner {
     }
 }
 
-impl Drop for AacEncoderInner {
+impl Drop for FdkAacEncoder {
     fn drop(&mut self) {
         unsafe {
             fdk::aacEncClose(&mut self.encoder as *mut _);
@@ -301,94 +274,10 @@ impl Drop for AacEncoderInner {
     }
 }
 
-fn run_encoder_thread(
-    init_result_sender: Sender<Result<Bytes, fdk::AACENC_ERROR>>,
-    options: AacEncoderOptions,
-    samples_batch_receiver: Receiver<PipelineEvent<OutputSamples>>,
-    packets_sender: Sender<EncoderOutputEvent>,
-    resampler: Option<OutputResampler>,
-) {
-    let mut encoder = match AacEncoderInner::new(options) {
-        Ok((encoder, config)) => {
-            init_result_sender.send(Ok(config)).unwrap();
-            encoder
-        }
-        Err(err) => {
-            init_result_sender.send(Err(err)).unwrap();
-            return;
-        }
-    };
-
-    run_encoder_loop(
-        &mut encoder,
-        resampler,
-        samples_batch_receiver,
-        &packets_sender,
-    );
-
-    // Flush encoder only if some samples were enqueued.
-    if encoder.start_pts.is_some() {
-        match encoder.flush() {
-            Ok(chunks) => {
-                for chunk in chunks {
-                    let send_result = packets_sender.send(EncoderOutputEvent::Data(chunk));
-                    if send_result.is_err() {
-                        debug!("Failed to send AAC encoded samples. Channel closed");
-                        break;
-                    };
-                }
-            }
-            Err(err) => {
-                error!("Error flushing audio samples: {:?}", err);
-            }
-        }
-    }
-
-    if packets_sender.send(EncoderOutputEvent::AudioEOS).is_err() {
-        debug!("Failed to send EOS event.");
-    };
-}
-
-fn run_encoder_loop(
-    encoder: &mut AacEncoderInner,
-    mut resampler: Option<OutputResampler>,
-    samples_batch_receiver: Receiver<PipelineEvent<OutputSamples>>,
-    packets_sender: &Sender<EncoderOutputEvent>,
-) {
-    for event in samples_batch_receiver {
-        let received_samples = match event {
-            PipelineEvent::Data(samples) => samples,
-            PipelineEvent::EOS => return,
-        };
-
-        let output_samples = match resampler.as_mut() {
-            Some(resampler) => resampler.resample(received_samples),
-            None => vec![received_samples],
-        };
-
-        for samples in output_samples {
-            match encoder.encode(samples) {
-                Ok(chunks) => {
-                    for chunk in chunks {
-                        let send_result = packets_sender.send(EncoderOutputEvent::Data(chunk));
-                        if send_result.is_err() {
-                            debug!("Failed to send AAC encoded samples. Channel closed");
-                            return;
-                        };
-                    }
-                }
-                Err(err) => {
-                    error!("Error encoding audio samples: {:?}", err);
-                }
-            }
-        }
-    }
-}
-
-fn check(result: fdk::AACENC_ERROR) -> Result<(), fdk::AACENC_ERROR> {
+fn check(result: fdk::AACENC_ERROR) -> Result<(), EncoderInitError> {
     if result == fdk::AACENC_ERROR_AACENC_OK {
         Ok(())
     } else {
-        Err(result)
+        Err(EncoderInitError::AacError(result))
     }
 }

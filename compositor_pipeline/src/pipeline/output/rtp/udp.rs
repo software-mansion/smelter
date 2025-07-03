@@ -1,8 +1,8 @@
-use tracing::{debug, error, trace};
+use tracing::{debug, trace};
 
 use crate::{error::OutputInitError, pipeline::Port};
 
-use super::packet_stream::PacketStream;
+use super::RtpBinaryPacketStream;
 
 pub(super) fn udp_socket(ip: &str, port: Port) -> Result<(socket2::Socket, Port), OutputInitError> {
     let socket = std::net::UdpSocket::bind(std::net::SocketAddrV4::new(
@@ -15,17 +15,10 @@ pub(super) fn udp_socket(ip: &str, port: Port) -> Result<(socket2::Socket, Port)
 }
 
 /// this assumes, that a "packet" contains data about a single frame (access unit)
-pub(super) fn run_udp_sender_thread(socket: socket2::Socket, packet_stream: PacketStream) {
-    for chunk in packet_stream {
-        let chunk = match chunk {
-            Ok(chunk) => chunk,
-            Err(err) => {
-                error!("Failed to payload a packet: {}", err);
-                continue;
-            }
-        };
-        trace!(size_bytes = chunk.len(), "Send RTP UDP packet.");
-        if let Err(err) = socket.send(&chunk) {
+pub(super) fn run_udp_sender_thread(socket: socket2::Socket, packet_stream: RtpBinaryPacketStream) {
+    for packet in packet_stream.flatten() {
+        trace!(size_bytes = packet.len(), "Send RTP UDP packet.");
+        if let Err(err) = socket.send(&packet) {
             debug!("Failed to send packet: {err}");
         };
     }

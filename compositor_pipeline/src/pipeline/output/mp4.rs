@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf, ptr, sync::Arc, time::Duration};
 
 use compositor_render::OutputId;
-use crossbeam_channel::Receiver;
+use crossbeam_channel::{bounded, Receiver, Sender};
 use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
 use log::error;
 use tracing::{debug, warn};
@@ -12,13 +12,18 @@ use crate::{
     event::Event,
     pipeline::{
         encoder::{
-            AudioEncoderContext, AudioEncoderOptions, EncoderContext, VideoEncoderContext,
-            VideoEncoderOptions,
+            encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
+            encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
+            fdk_aac::FdkAacEncoder,
+            ffmpeg_h264::FfmpegH264Encoder,
+            AudioEncoderOptions, VideoEncoderOptions,
         },
         types::IsKeyframe,
-        EncodedChunk, EncodedChunkKind, EncoderOutputEvent, PipelineCtx,
+        AudioCodec, EncodedChunk, EncodedChunkKind, EncoderOutputEvent, PipelineCtx, VideoCodec,
     },
 };
+
+use super::{Output, OutputAudio, OutputKind, OutputVideo};
 
 #[derive(Debug, Clone)]
 pub struct Mp4OutputOptions {
@@ -43,15 +48,16 @@ struct StreamState {
     timestamp_offset: Option<Duration>,
 }
 
-pub struct Mp4FileWriter;
+pub struct Mp4Output {
+    video: Option<VideoEncoderThreadHandle>,
+    audio: Option<AudioEncoderThreadHandle>,
+}
 
-impl Mp4FileWriter {
+impl Mp4Output {
     pub fn new(
+        ctx: Arc<PipelineCtx>,
         output_id: OutputId,
         options: Mp4OutputOptions,
-        encoder_ctx: EncoderContext,
-        packets_receiver: Receiver<EncoderOutputEvent>,
-        pipeline_ctx: Arc<PipelineCtx>,
     ) -> Result<Self, OutputInitError> {
         if options.output_path.exists() {
             let mut old_index = 0;
@@ -78,111 +84,181 @@ impl Mp4FileWriter {
             };
         }
 
-        let (output_ctx, video_stream, audio_stream) = init_ffmpeg_output(options, encoder_ctx)?;
+        let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
+        let mut output_ctx = ffmpeg::format::output_as(&options.output_path, "mp4")
+            .map_err(OutputInitError::FfmpegError)?;
 
-        let event_emitter = pipeline_ctx.event_emitter.clone();
+        let video = match options.video {
+            Some(video) => Some(Self::init_video_track(
+                &ctx,
+                &output_id,
+                video,
+                &mut output_ctx,
+                encoded_chunks_sender.clone(),
+            )?),
+            None => None,
+        };
+        let audio = match options.audio {
+            Some(audio) => Some(Self::init_audio_track(
+                &ctx,
+                &output_id,
+                audio,
+                &mut output_ctx,
+                encoded_chunks_sender.clone(),
+            )?),
+            None => None,
+        };
+
+        let ffmpeg_options = ffmpeg::Dictionary::from_iter(&[("movflags", "faststart")]);
+
+        output_ctx
+            .write_header_with(ffmpeg_options)
+            .map_err(OutputInitError::FfmpegError)?;
+
+        let (video_encoder, video_stream) = match video {
+            Some((encoder, index)) => (
+                Some(encoder),
+                Some(StreamState {
+                    index,
+                    timestamp_offset: None,
+                    time_base: output_ctx.stream(index).unwrap().time_base(),
+                }),
+            ),
+            None => (None, None),
+        };
+
+        let (audio_encoder, audio_stream) = match audio {
+            Some((encoder, index)) => (
+                Some(encoder),
+                Some(StreamState {
+                    index,
+                    timestamp_offset: None,
+                    time_base: output_ctx.stream(index).unwrap().time_base(),
+                }),
+            ),
+            None => (None, None),
+        };
+
         std::thread::Builder::new()
             .name(format!("MP4 writer thread for output {}", output_id))
             .spawn(move || {
                 let _span =
                     tracing::info_span!("MP4 writer", output_id = output_id.to_string()).entered();
 
-                run_ffmpeg_output_thread(output_ctx, video_stream, audio_stream, packets_receiver);
-                event_emitter.emit(Event::OutputDone(output_id));
+                run_ffmpeg_output_thread(
+                    output_ctx,
+                    video_stream,
+                    audio_stream,
+                    encoded_chunks_receiver,
+                );
+                ctx.event_emitter.emit(Event::OutputDone(output_id.clone()));
                 debug!("Closing MP4 writer thread.");
             })
             .unwrap();
 
-        Ok(Mp4FileWriter)
+        Ok(Mp4Output {
+            video: video_encoder,
+            audio: audio_encoder,
+        })
     }
-}
 
-const VIDEO_TIME_BASE: Rational = Rational(1, 90_000);
-const NS_TIME_BASE: Rational = Rational(1, 1_000_000_000);
+    fn init_video_track(
+        ctx: &Arc<PipelineCtx>,
+        output_id: &OutputId,
+        options: VideoEncoderOptions,
+        output_ctx: &mut ffmpeg::format::context::Output,
+        encoded_chunks_sender: Sender<EncoderOutputEvent>,
+    ) -> Result<(VideoEncoderThreadHandle, usize), OutputInitError> {
+        let resolution = options.resolution();
 
-fn init_ffmpeg_output(
-    options: Mp4OutputOptions,
-    encoder_ctx: EncoderContext,
-) -> Result<
-    (
-        ffmpeg::format::context::Output,
-        Option<StreamState>,
-        Option<StreamState>,
-    ),
-    OutputInitError,
-> {
-    let mut output_ctx = ffmpeg::format::output_as(&options.output_path, "mp4")
-        .map_err(OutputInitError::FfmpegError)?;
-
-    let video = if let (Some(opts), Some(encoder_ctx)) = (&options.video, encoder_ctx.video) {
-        let codec = match opts {
-            VideoEncoderOptions::H264(_) => ffmpeg::codec::Id::H264,
-            VideoEncoderOptions::VP8(_) => unreachable!(),
-            VideoEncoderOptions::VP9(_) => unreachable!(),
+        let encoder = match &options {
+            VideoEncoderOptions::H264(options) => spawn_video_encoder_thread::<FfmpegH264Encoder>(
+                ctx.clone(),
+                output_id.clone(),
+                options.clone(),
+                encoded_chunks_sender,
+            )?,
+            VideoEncoderOptions::VP8(_) => {
+                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::VP8))
+            }
+            VideoEncoderOptions::VP9(_) => {
+                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::VP9))
+            }
         };
 
         let mut stream = output_ctx
-            .add_stream(codec)
+            .add_stream(ffmpeg::codec::Id::H264)
             .map_err(OutputInitError::FfmpegError)?;
 
         stream.set_time_base(VIDEO_TIME_BASE);
 
         let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
 
-        if let VideoEncoderContext::H264(Some(ctx)) = encoder_ctx {
+        if let Some(extradata) = encoder.encoder_context() {
             unsafe {
                 // The allocated size of extradata must be at least extradata_size + AV_INPUT_BUFFER_PADDING_SIZE, with the padding bytes zeroed.
                 codecpar.extradata = ffmpeg_next::ffi::av_mallocz(
-                    ctx.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
+                    extradata.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
                 ) as *mut u8;
-                std::ptr::copy(ctx.as_ptr(), codecpar.extradata, ctx.len());
-                codecpar.extradata_size = ctx.len() as i32;
+                std::ptr::copy(extradata.as_ptr(), codecpar.extradata, extradata.len());
+                codecpar.extradata_size = extradata.len() as i32;
             };
         }
 
-        codecpar.codec_id = codec.into();
+        codecpar.codec_id = ffmpeg::codec::Id::H264.into();
         codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
-        codecpar.width = opts.resolution().width as i32;
-        codecpar.height = opts.resolution().height as i32;
+        codecpar.width = resolution.width as i32;
+        codecpar.height = resolution.height as i32;
 
-        Some(stream.index())
-    } else {
-        None
-    };
+        Ok((encoder, stream.index()))
+    }
 
-    let audio = if let (Some(opts), Some(encoder_ctx)) = (&options.audio, encoder_ctx.audio) {
-        let codec = ffmpeg::codec::Id::AAC;
-        let channels = match opts.channels() {
+    fn init_audio_track(
+        ctx: &Arc<PipelineCtx>,
+        output_id: &OutputId,
+        options: AudioEncoderOptions,
+        output_ctx: &mut ffmpeg::format::context::Output,
+        encoded_chunks_sender: Sender<EncoderOutputEvent>,
+    ) -> Result<(AudioEncoderThreadHandle, usize), OutputInitError> {
+        let channel_count = match options.channels() {
             AudioChannels::Mono => 1,
             AudioChannels::Stereo => 2,
         };
-        let sample_rate = opts.sample_rate() as i32;
+        let sample_rate = options.sample_rate();
+
+        let encoder = match options {
+            AudioEncoderOptions::Aac(options) => spawn_audio_encoder_thread::<FdkAacEncoder>(
+                ctx.clone(),
+                output_id.clone(),
+                options,
+                encoded_chunks_sender,
+            )?,
+            AudioEncoderOptions::Opus(_) => {
+                return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus))
+            }
+        };
 
         let mut stream = output_ctx
-            .add_stream(codec)
+            .add_stream(ffmpeg::codec::Id::AAC)
             .map_err(OutputInitError::FfmpegError)?;
 
-        // If audio time base doesn't match sample rate, ffmpeg muxer produces incorrect timestamps.
-        stream.set_time_base(ffmpeg::Rational::new(1, sample_rate));
-
         let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
-
-        if let AudioEncoderContext::Aac(ctx) = encoder_ctx {
+        if let Some(extradata) = encoder.encoder_context() {
             unsafe {
                 // The allocated size of extradata must be at least extradata_size + AV_INPUT_BUFFER_PADDING_SIZE, with the padding bytes zeroed.
                 codecpar.extradata = ffmpeg_next::ffi::av_mallocz(
-                    ctx.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
+                    extradata.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
                 ) as *mut u8;
-                std::ptr::copy(ctx.as_ptr(), codecpar.extradata, ctx.len());
-                codecpar.extradata_size = ctx.len() as i32;
-            }
+                std::ptr::copy(extradata.as_ptr(), codecpar.extradata, extradata.len());
+                codecpar.extradata_size = extradata.len() as i32;
+            };
         }
-        codecpar.codec_id = codec.into();
+        codecpar.codec_id = ffmpeg::codec::Id::AAC.into();
         codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_AUDIO;
-        codecpar.sample_rate = sample_rate;
+        codecpar.sample_rate = sample_rate as i32;
         codecpar.profile = ffmpeg::ffi::FF_PROFILE_AAC_LOW;
         codecpar.ch_layout = ffmpeg::ffi::AVChannelLayout {
-            nb_channels: channels,
+            nb_channels: channel_count,
             order: ffmpeg::ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC,
             // This value is ignored when order is AV_CHANNEL_ORDER_UNSPEC
             u: ffmpeg::ffi::AVChannelLayout__bindgen_ty_1 { mask: 0 },
@@ -190,30 +266,33 @@ fn init_ffmpeg_output(
             opaque: ptr::null_mut(),
         };
 
-        Some(stream.index())
-    } else {
-        None
-    };
-
-    let ffmpeg_options = ffmpeg::Dictionary::from_iter(&[("movflags", "faststart")]);
-
-    output_ctx
-        .write_header_with(ffmpeg_options)
-        .map_err(OutputInitError::FfmpegError)?;
-
-    let video = video.map(|index| StreamState {
-        index,
-        timestamp_offset: None,
-        time_base: output_ctx.stream(index).unwrap().time_base(),
-    });
-    let audio = audio.map(|index| StreamState {
-        index,
-        timestamp_offset: None,
-        time_base: output_ctx.stream(index).unwrap().time_base(),
-    });
-
-    Ok((output_ctx, video, audio))
+        Ok((encoder, stream.index()))
+    }
 }
+
+impl Output for Mp4Output {
+    fn audio(&self) -> Option<OutputAudio> {
+        self.audio.as_ref().map(|audio| OutputAudio {
+            samples_batch_sender: &audio.sample_batch_sender,
+        })
+    }
+
+    fn video(&self) -> Option<OutputVideo> {
+        self.video.as_ref().map(|video| OutputVideo {
+            resolution: video.config.resolution,
+            frame_format: video.config.output_format,
+            frame_sender: &video.frame_sender,
+            keyframe_request_sender: &video.keyframe_request_sender,
+        })
+    }
+
+    fn kind(&self) -> OutputKind {
+        OutputKind::Mp4
+    }
+}
+
+const VIDEO_TIME_BASE: Rational = Rational(1, 90_000);
+const NS_TIME_BASE: Rational = Rational(1, 1_000_000_000);
 
 fn run_ffmpeg_output_thread(
     mut output_ctx: ffmpeg::format::context::Output,

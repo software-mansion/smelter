@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, trace, warn};
 
 use crate::{
     error::OutputInitError,
@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-use super::packet_stream::PacketStream;
+use super::RtpBinaryPacketStream;
 
 pub(super) fn tcp_socket(port: RequestedPort) -> Result<(socket2::Socket, Port), OutputInitError> {
     let socket = socket2::Socket::new(
@@ -30,10 +30,11 @@ pub(super) fn tcp_socket(port: RequestedPort) -> Result<(socket2::Socket, Port),
     socket.listen(1).map_err(OutputInitError::SocketError)?;
     Ok((socket, port))
 }
+
 pub(super) fn run_tcp_sender_thread(
     socket: socket2::Socket,
     should_close: Arc<AtomicBool>,
-    mut packet_stream: PacketStream,
+    packet_stream: RtpBinaryPacketStream,
 ) {
     // make accept non blocking so we have a chance to handle should_close value
     socket
@@ -55,22 +56,9 @@ pub(super) fn run_tcp_sender_thread(
         None => return,
     };
 
-    loop {
-        let chunk = match packet_stream.next() {
-            Some(Ok(chunk)) => chunk,
-            Some(Err(err)) => {
-                error!("Failed to payload a packet: {}", err);
-                continue;
-            }
-            None => {
-                if let Err(err) = socket.socket.flush() {
-                    warn!(%err, "Failed to flush rest of the TCP buffer.");
-                }
-                return;
-            }
-        };
-        trace!(size_bytes = chunk.len(), "Send RTP TCP packet.");
-        if let Err(err) = socket.write_packet(chunk) {
+    for packet in packet_stream.flatten() {
+        trace!(size_bytes = packet.len(), "Send RTP TCP packet.");
+        if let Err(err) = socket.write_packet(packet) {
             if err.kind() == io::ErrorKind::WouldBlock {
                 // this means that should_close is true
                 return;
@@ -78,6 +66,9 @@ pub(super) fn run_tcp_sender_thread(
             debug!("Failed to send RTP packet: {err}");
             continue;
         }
+    }
+    if let Err(err) = socket.socket.flush() {
+        warn!(%err, "Failed to flush rest of the TCP buffer.");
     }
 }
 
