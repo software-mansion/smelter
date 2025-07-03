@@ -48,7 +48,7 @@ fn start_gst_receive_tcp(ip: &str, port: u16, video: Option<Video>, audio: bool)
     let mut gst_output_command = [
         "gst-launch-1.0 -v ",
         "rtpptdemux name=demux ",
-        &format!("tcpclientsrc host={} port={} ! \"application/x-rtp-stream\" ! rtpstreamdepay ! queue ! demux. ", ip, port)
+        &format!("tcpclientsrc host={ip} port={port} ! \"application/x-rtp-stream\" ! rtpstreamdepay ! queue ! demux. ")
         ].concat();
 
     match video {
@@ -99,10 +99,7 @@ fn start_gst_receive_udp(port: u16, video: Option<Video>, audio: bool) -> Result
     let mut gst_output_command = [
         "gst-launch-1.0 -v ",
         "rtpptdemux name=demux ",
-        &format!(
-            "udpsrc port={} ! \"application/x-rtp\" ! queue ! demux. ",
-            port
-        ),
+        &format!("udpsrc port={port} ! \"application/x-rtp\" ! queue ! demux. "),
     ]
     .concat();
 

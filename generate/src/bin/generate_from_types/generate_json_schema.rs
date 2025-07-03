@@ -16,11 +16,11 @@ const ROOT_DIR: &str = env!("CARGO_MANIFEST_DIR");
 #[allow(dead_code)]
 enum ApiTypes {
     RegisterInput(routes::RegisterInput),
-    RegisterOutput(routes::RegisterOutput),
+    RegisterOutput(Box<routes::RegisterOutput>),
     RegisterImage(compositor_api::ImageSpec),
     RegisterWebRenderer(compositor_api::WebRendererSpec),
     RegisterShader(compositor_api::ShaderSpec),
-    UpdateOutput(routes::UpdateOutputRequest),
+    UpdateOutput(Box<routes::UpdateOutputRequest>),
 }
 
 pub fn generate_json_schema(check_flag: bool) {

@@ -129,14 +129,14 @@ impl Renderer {
         match spec {
             RendererSpec::Shader(spec) => {
                 let shader = Shader::new(&ctx.wgpu_ctx, spec)
-                    .map_err(|err| RegisterRendererError::Shader(err, id.clone()))?;
+                    .map_err(|err| RegisterRendererError::Shader(err.into(), id.clone()))?;
 
                 let mut guard = self.0.lock().unwrap();
                 Ok(guard.renderers.shaders.register(id, Arc::new(shader))?)
             }
             RendererSpec::WebRenderer(params) => {
                 let web = WebRenderer::new(&ctx, &id, params)
-                    .map_err(|err| RegisterRendererError::Web(err, id.clone()))?;
+                    .map_err(|err| RegisterRendererError::Web(err.into(), id.clone()))?;
 
                 let mut guard = self.0.lock().unwrap();
                 Ok(guard.renderers.web_renderers.register(id, Arc::new(web))?)

@@ -140,7 +140,7 @@ impl Mp4Output {
         };
 
         std::thread::Builder::new()
-            .name(format!("MP4 writer thread for output {}", output_id))
+            .name(format!("MP4 writer thread for output {output_id}"))
             .spawn(move || {
                 let _span =
                     tracing::info_span!("MP4 writer", output_id = output_id.to_string()).entered();

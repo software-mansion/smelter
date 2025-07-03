@@ -16,27 +16,21 @@ use crate::{
 };
 
 pub enum OutputTexture {
-    PlanarYuvTextures(PlanarYuvOutput),
+    PlanarYuvTextures(Box<PlanarYuvOutput>),
     Rgba8UnormWgpuTexture { resolution: Resolution },
 }
 
 impl OutputTexture {
     pub fn new(ctx: &WgpuCtx, resolution: Resolution, format: OutputFrameFormat) -> Self {
         match format {
-            OutputFrameFormat::PlanarYuv420Bytes => Self::PlanarYuvTextures(PlanarYuvOutput::new(
-                ctx,
-                resolution,
-                PlanarYuvVariant::YUV420,
+            OutputFrameFormat::PlanarYuv420Bytes => Self::PlanarYuvTextures(Box::new(
+                PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV420),
             )),
-            OutputFrameFormat::PlanarYuv422Bytes => Self::PlanarYuvTextures(PlanarYuvOutput::new(
-                ctx,
-                resolution,
-                PlanarYuvVariant::YUV422,
+            OutputFrameFormat::PlanarYuv422Bytes => Self::PlanarYuvTextures(Box::new(
+                PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV422),
             )),
-            OutputFrameFormat::PlanarYuv444Bytes => Self::PlanarYuvTextures(PlanarYuvOutput::new(
-                ctx,
-                resolution,
-                PlanarYuvVariant::YUV444,
+            OutputFrameFormat::PlanarYuv444Bytes => Self::PlanarYuvTextures(Box::new(
+                PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV444),
             )),
             OutputFrameFormat::RgbaWgpuTexture => Self::Rgba8UnormWgpuTexture { resolution },
         }

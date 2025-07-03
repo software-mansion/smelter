@@ -29,13 +29,13 @@ pub enum RegisterRendererError {
     RendererRegistry(#[from] registry::RegisterError),
 
     #[error("Failed to register shader \"{1}\".")]
-    Shader(#[source] CreateShaderError, RendererId),
+    Shader(#[source] Box<CreateShaderError>, RendererId),
 
     #[error("Failed to register image \"{1}\".")]
     Image(#[source] ImageError, RendererId),
 
     #[error("Failed to register web renderer \"{1}\".")]
-    Web(#[source] CreateWebRendererError, RendererId),
+    Web(#[source] Box<CreateWebRendererError>, RendererId),
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -107,7 +107,7 @@ async fn server_msg_listener() {
             match outgoing.send(msg).await {
                 Ok(()) => (),
                 Err(e) => {
-                    println!("Send Loop: {:?}", e);
+                    println!("Send Loop: {e:?}");
                     let _ = outgoing.send(tungstenite::Message::Close(None)).await;
                     return;
                 }

@@ -104,7 +104,7 @@ impl RtmpClientOutput {
         let output_id = output_id.clone();
         let ctx = ctx.clone();
         std::thread::Builder::new()
-            .name(format!("RTMP sender thread for output {}", output_id))
+            .name(format!("RTMP sender thread for output {output_id}"))
             .spawn(move || {
                 let _span =
                     tracing::info_span!("RTMP sender  writer", output_id = output_id.to_string())

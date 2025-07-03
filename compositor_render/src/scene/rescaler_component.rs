@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{ops::Deref, time::Duration};
 
 use crate::transformations::layout::NestedLayout;
 
@@ -76,7 +76,7 @@ impl StatefulRescalerComponent {
         };
 
         IntermediateNode::Layout {
-            root: StatefulLayoutComponent::Rescaler(self.clone()),
+            root: StatefulLayoutComponent::Rescaler(self.clone()).into(),
             children,
         }
     }
@@ -97,9 +97,10 @@ impl RescalerComponent {
             .as_ref()
             .and_then(|id| ctx.prev_state.get(id))
             .and_then(|component| match component {
-                StatefulComponent::Layout(StatefulLayoutComponent::Rescaler(view_state)) => {
-                    Some(view_state)
-                }
+                StatefulComponent::Layout(boxed_layout) => match boxed_layout.deref() {
+                    StatefulLayoutComponent::Rescaler(view_state) => Some(view_state),
+                    _ => None,
+                },
                 _ => None,
             });
 
@@ -140,7 +141,7 @@ impl RescalerComponent {
             child: Box::new(Component::stateful_component(*self.child, ctx)?),
         };
         Ok(StatefulComponent::Layout(
-            StatefulLayoutComponent::Rescaler(rescaler),
+            StatefulLayoutComponent::Rescaler(rescaler).into(),
         ))
     }
 }

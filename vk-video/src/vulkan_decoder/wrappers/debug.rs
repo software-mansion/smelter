@@ -68,7 +68,7 @@ unsafe extern "system" fn debug_messenger_callback(
         .unwrap_or(c"")
         .to_str()
         .unwrap();
-    let t = format!("{:?}", message_types);
+    let t = format!("{message_types:?}");
     match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => {
             trace!("[{t}][{message_id}] {message}");

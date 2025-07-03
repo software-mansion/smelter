@@ -191,7 +191,7 @@ impl ShaderGlobalVariableExt for naga::GlobalVariable {
     fn to_string(&self) -> String {
         let group_and_binding = match self.binding {
             Some(naga::ResourceBinding { group, binding }) => {
-                format!("@group({}) @binding({}) ", group, binding)
+                format!("@group({group}) @binding({binding}) ")
             }
             None => "".to_string(),
         };
@@ -207,7 +207,7 @@ impl ShaderGlobalVariableExt for naga::GlobalVariable {
                     3 => "read_write",
                     _ => "",
                 };
-                format!("<storage, {}>", access)
+                format!("<storage, {access}>")
             }
             naga::AddressSpace::Handle => "".to_string(),
             naga::AddressSpace::PushConstant => "<push_constant>".to_string(),
@@ -224,12 +224,12 @@ pub(crate) trait BindingExt {
 impl BindingExt for naga::Binding {
     fn to_string(&self) -> String {
         match self {
-            naga::Binding::BuiltIn(builtin) => format!("{:?}", builtin),
+            naga::Binding::BuiltIn(builtin) => format!("{builtin:?}"),
             // default interpolation and sampling depends on type, so it's hard to detect if
             // provided value is a default or not. For now we are just printing location.
             // If we ever start using @interpolate in header this implementation needs to be
             // updated.
-            naga::Binding::Location { location, .. } => format!("@location({})", location),
+            naga::Binding::Location { location, .. } => format!("@location({location})"),
         }
     }
 }

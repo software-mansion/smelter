@@ -193,16 +193,16 @@ fn start_thread_with_loop(
         .name("mp4 reader".to_string())
         .spawn(move || {
             enum TrackProvider {
-                Value(Track<File>),
-                Handle(JoinHandle<Track<File>>),
+                Value(Box<Track<File>>),
+                Handle(JoinHandle<Box<Track<File>>>),
             }
             let _source_file = source_file;
             let mut offset = Duration::ZERO;
             let has_audio = audio_track.is_some();
             let last_audio_sample_pts = Arc::new(AtomicU64::new(0));
             let last_video_sample_pts = Arc::new(AtomicU64::new(0));
-            let mut video_track = video_track.map(TrackProvider::Value);
-            let mut audio_track = audio_track.map(TrackProvider::Value);
+            let mut video_track = video_track.map(|t| TrackProvider::Value(t.into()));
+            let mut audio_track = audio_track.map(|t| TrackProvider::Value(t.into()));
 
             loop {
                 let (finished_track_sender, finished_track_receiver) = bounded(1);

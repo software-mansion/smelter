@@ -608,7 +608,7 @@ impl TypeInnerExt for naga::TypeInner {
                 arrayed,
                 class,
             } => {
-                let fallback = format!("{:?}", self);
+                let fallback = format!("{self:?}");
                 let naga::ImageClass::Sampled { kind, .. } = class else {
                     return fallback;
                 };
@@ -684,7 +684,7 @@ impl ShaderParamExt for ShaderParam {
                     .map(|field| field.to_string())
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("[{}]", list)
+                format!("[{list}]")
             }
             ShaderParam::Struct(fields) => {
                 let fields = fields
@@ -692,7 +692,7 @@ impl ShaderParamExt for ShaderParam {
                     .map(|field| format!("{}: {}", field.field_name, field.value.to_string()))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("struct {{ {} }}", fields)
+                format!("struct {{ {fields} }}")
             }
         }
     }

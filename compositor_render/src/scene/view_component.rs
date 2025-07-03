@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{ops::Deref, time::Duration};
 
 use crate::{scene::ViewChildrenDirection, transformations::layout::NestedLayout};
 
@@ -84,7 +84,7 @@ impl StatefulViewComponent {
             .collect();
 
         IntermediateNode::Layout {
-            root: StatefulLayoutComponent::View(self.clone()),
+            root: StatefulLayoutComponent::View(self.clone()).into(),
             children,
         }
     }
@@ -105,9 +105,10 @@ impl ViewComponent {
             .as_ref()
             .and_then(|id| ctx.prev_state.get(id))
             .and_then(|component| match component {
-                StatefulComponent::Layout(StatefulLayoutComponent::View(view_state)) => {
-                    Some(view_state)
-                }
+                StatefulComponent::Layout(boxed_layout) => match boxed_layout.deref() {
+                    StatefulLayoutComponent::View(view_state) => Some(view_state),
+                    _ => None,
+                },
                 _ => None,
             });
 
@@ -152,8 +153,8 @@ impl ViewComponent {
                 .map(|c| Component::stateful_component(c, ctx))
                 .collect::<Result<_, _>>()?,
         };
-        Ok(StatefulComponent::Layout(StatefulLayoutComponent::View(
-            view,
-        )))
+        Ok(StatefulComponent::Layout(
+            StatefulLayoutComponent::View(view).into(),
+        ))
     }
 }
