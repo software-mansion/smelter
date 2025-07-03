@@ -49,7 +49,7 @@ function ExampleApp() {
       <PartialText text="Example partial text that transition in 1 second" transitionMs={1_000} />
       <PartialText text="Example partial text that transition in 2 second" transitionMs={2_000} />
       <PartialText text="Example partial text that transition in 5 second" transitionMs={5_000} />
-      <Image imageId="image_1" />
+      <Image imageId="image_1" style={{ width: 600 }} />
     </View>
   );
 }

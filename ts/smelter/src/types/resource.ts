@@ -2,33 +2,11 @@ import type * as Api from '../api.js';
 
 export type RegisterShader = Api.ShaderSpec;
 
-export type RegisterImage =
-  | {
-      assetType: 'png';
-      url?: string;
-      serverPath?: string;
-    }
-  | {
-      assetType: 'jpeg';
-      url?: string;
-      serverPath?: string;
-    }
-  | {
-      assetType: 'svg';
-      url?: string;
-      serverPath?: string;
-      resolution?: Api.Resolution;
-    }
-  | {
-      assetType: 'gif';
-      url?: string;
-      serverPath?: string;
-    }
-  | {
-      assetType: 'auto';
-      url?: string;
-      serverPath?: string;
-    };
+export type RegisterImage = {
+  assetType: 'png' | 'jpeg' | 'svg' | 'gif' | 'auto';
+  url?: string;
+  serverPath?: string;
+};
 
 export type ImageAssetType = RegisterImage['assetType'];
 

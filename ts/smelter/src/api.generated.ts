@@ -432,6 +432,14 @@ export type Component =
        * Id of an image. It identifies an image registered using a [`register image`](../routes.md#register-image) request.
        */
       image_id: RendererId;
+      /**
+       * Width of the image in pixels. If `height` is not explicitly provided, the image will automatically adjust its height to maintain its original aspect ratio relative to the width.
+       */
+      width?: number | null;
+      /**
+       * Height of the image in pixels. If `width` is not explicitly provided, the image will automatically adjust its width to maintain its original aspect ratio relative to the height.
+       */
+      height?: number | null;
     }
   | {
       type: "text";
