@@ -49,7 +49,6 @@ impl HlsInput {
         opts: HlsInputOptions,
     ) -> Result<InputInitResult, InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
-
         let (video, audio) = Self::spawn_thread(input_id.clone(), should_close.clone(), opts)?;
 
         Ok(InputInitResult {
@@ -79,6 +78,7 @@ impl HlsInput {
         result_receiver.recv().unwrap()
     }
 
+    #[allow(clippy::type_complexity)]
     fn run_thread(
         options: HlsInputOptions,
         should_close: Arc<AtomicBool>,
@@ -191,11 +191,6 @@ impl HlsInput {
                 let dts = discontinuity.recalculate_dts(packet.dts(), time_base);
 
                 if packet.stream() == index {
-                    debug!(
-                        "Video packet {:?}",
-                        (packet.stream(), packet.pts(), sender.len())
-                    );
-
                     let chunk = PipelineEvent::Data(EncodedChunk {
                         data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
                         pts,
@@ -203,7 +198,7 @@ impl HlsInput {
                         is_keyframe: IsKeyframe::Unknown,
                         kind: EncodedChunkKind::Video(VideoCodec::H264),
                     });
-                    if sender.len() == 0 {
+                    if sender.is_empty() {
                         warn!("HLS input video channel was drained")
                     }
                     if sender.send(chunk).is_err() {
@@ -225,7 +220,7 @@ impl HlsInput {
                         is_keyframe: IsKeyframe::Unknown,
                         kind: EncodedChunkKind::Audio(AudioCodec::Aac),
                     });
-                    if sender.len() == 0 {
+                    if sender.is_empty() {
                         warn!("HLS input audio channel was drained")
                     }
                     if sender.send(chunk).is_err() {
@@ -262,7 +257,7 @@ impl Drop for HlsInput {
 pub fn input_with_dictionary_and_interrupt<F>(
     path: &str,
     options: Dictionary,
-    closure: F,
+    on_interrupt: F,
 ) -> Result<context::Input, ffmpeg_next::Error>
 where
     F: FnMut() -> bool,
@@ -270,7 +265,7 @@ where
     unsafe {
         let mut ps = avformat_alloc_context();
 
-        (*ps).interrupt_callback = interrupt::new(Box::new(closure)).interrupt;
+        (*ps).interrupt_callback = interrupt::new(Box::new(on_interrupt)).interrupt;
 
         let path = CString::new(path).unwrap();
         let mut opts = options.disown();

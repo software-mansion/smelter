@@ -29,26 +29,18 @@ impl TryFrom<HlsInput> for pipeline::RegisterInputOptions {
 
         let input_options = hls::HlsInputOptions {
             url,
-            video_decoder: match video_decoder.unwrap_or(VideoDecoder::FfmpegH264) {
-                VideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions {
+            video_decoder: match video_decoder.unwrap_or(HlsVideoDecoder::FfmpegH264) {
+                HlsVideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions {
                     decoder: pipeline::VideoDecoder::FFmpegH264,
                 },
 
-                VideoDecoder::FfmpegVp8 => decoder::VideoDecoderOptions {
-                    decoder: pipeline::VideoDecoder::FFmpegVp8,
-                },
-
-                VideoDecoder::FfmpegVp9 => decoder::VideoDecoderOptions {
-                    decoder: pipeline::VideoDecoder::FFmpegVp9,
-                },
-
                 #[cfg(feature = "vk-video")]
-                VideoDecoder::VulkanH264 => decoder::VideoDecoderOptions {
+                HlsVideoDecoder::VulkanH264 => decoder::VideoDecoderOptions {
                     decoder: pipeline::VideoDecoder::VulkanVideoH264,
                 },
 
                 #[cfg(feature = "vk-video")]
-                VideoDecoder::VulkanVideo => {
+                HlsVideoDecoder::VulkanVideo => {
                     tracing::warn!("vulkan_video option is deprecated, use vulkan_h264 instead.");
                     decoder::VideoDecoderOptions {
                         decoder: pipeline::VideoDecoder::VulkanVideoH264,
@@ -56,7 +48,7 @@ impl TryFrom<HlsInput> for pipeline::RegisterInputOptions {
                 }
 
                 #[cfg(not(feature = "vk-video"))]
-                VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
+                HlsVideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
                     return Err(TypeError::new(super::NO_VULKAN_VIDEO))
                 }
             },
