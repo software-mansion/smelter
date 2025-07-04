@@ -146,6 +146,69 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
+    let scene1 = json!({
+        "type": "tiles",
+        "id": "layout",
+        "width": VIDEO_RESOLUTION.width,
+        "height": VIDEO_RESOLUTION.height,
+        "children": [
+            {
+                "type": "input_stream",
+                "input_id": "input_1_video"
+            },
+            {
+                "type": "input_stream",
+                "input_id": "input_2_video"
+            },
+            {
+                "type": "input_stream",
+                "input_id": "input_3_video",
+            },
+        ],
+    });
+
+    let scene2 = json!({
+        "type": "tiles",
+        "id": "layout",
+        "width": VIDEO_RESOLUTION.width,
+        "height": VIDEO_RESOLUTION.height,
+        "children": [
+            {
+                "type": "input_stream",
+                "input_id": "input_1_video"
+            },
+            {
+                "type": "input_stream",
+                "input_id": "input_2_video"
+            },
+            {
+                "type": "input_stream",
+                "input_id": "input_3_video",
+            },
+        ],
+    });
+
+    let scene3 = json!({
+        "type": "tiles",
+        "id": "layout",
+        "width": VIDEO_RESOLUTION.width,
+        "height": VIDEO_RESOLUTION.height,
+        "children": [
+            {
+                "type": "input_stream",
+                "input_id": "input_1_video"
+            },
+            {
+                "type": "input_stream",
+                "input_id": "input_2_video"
+            },
+            {
+                "type": "input_stream",
+                "input_id": "input_3_video",
+            },
+        ],
+    });
+
     examples::post(
         "output/output_video/register",
         &json!({
