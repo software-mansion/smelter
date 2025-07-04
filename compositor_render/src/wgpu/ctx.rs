@@ -157,7 +157,7 @@ pub fn create_wgpu_ctx(
         "Using {} adapter with {:?} backend",
         adapter_info.name, adapter_info.backend
     );
-    if force_gpu && adapter_info.device_type != wgpu::DeviceType::Cpu {
+    if force_gpu && adapter_info.device_type == wgpu::DeviceType::Cpu {
         error!("Selected adapter is CPU based. Aborting.");
         return Err(CreateWgpuCtxError::NoAdapter);
     }
