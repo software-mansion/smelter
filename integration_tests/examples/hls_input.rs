@@ -22,6 +22,7 @@ fn client_code() -> Result<()> {
         return Ok(());
     }
 
+    examples::post("start", &json!({}))?;
     examples::post(
         "input/input_1/register",
         &json!({
@@ -71,8 +72,6 @@ fn client_code() -> Result<()> {
     )?;
 
     std::thread::sleep(Duration::from_millis(500));
-
-    examples::post("start", &json!({}))?;
 
     Ok(())
 }

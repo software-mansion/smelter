@@ -111,6 +111,9 @@ impl HlsInput {
             }
         };
 
+        let input_start_time = Instant::now();
+        let queue_start_time = queue_start_time.unwrap_or(Instant::now());
+
         let (mut audio, audio_result) = match input_ctx.streams().best(Type::Audio) {
             Some(stream) => {
                 // not tested it was always null, but audio is in ADTS, so config is not
@@ -128,14 +131,10 @@ impl HlsInput {
                     }
                 };
                 let (sender, receiver) = bounded(2000);
-                let discontinuity_state = DiscontinuityState::new(stream.time_base());
+                let timestamp_state =
+                    TimestampState::new(input_start_time, queue_start_time, stream.time_base());
                 (
-                    Some((
-                        stream.index(),
-                        stream.time_base(),
-                        sender,
-                        discontinuity_state,
-                    )),
+                    Some((stream.index(), sender, timestamp_state)),
                     Some((receiver, config)),
                 )
             }
@@ -144,14 +143,10 @@ impl HlsInput {
         let (mut video, video_receiver) = match input_ctx.streams().best(Type::Video) {
             Some(stream) => {
                 let (sender, receiver) = bounded(2000);
-                let discontinuity_state = DiscontinuityState::new(stream.time_base());
+                let timestamp_state =
+                    TimestampState::new(input_start_time, queue_start_time, stream.time_base());
                 (
-                    Some((
-                        stream.index(),
-                        stream.time_base(),
-                        sender,
-                        discontinuity_state,
-                    )),
+                    Some((stream.index(), sender, timestamp_state)),
                     Some(receiver),
                 )
             }
@@ -174,8 +169,6 @@ impl HlsInput {
             )))
             .unwrap();
 
-        let input_start_time = Instant::now();
-        let queue_start_time = queue_start_time.unwrap_or(Instant::now());
         loop {
             let mut packet = Packet::empty();
             match packet.read(&mut input_ctx) {
@@ -196,14 +189,8 @@ impl HlsInput {
                 continue;
             }
 
-            let (mut video_start_pts, mut audio_start_pts) = (None, None);
-            if let Some((index, time_base, ref sender, ref mut discontinuity)) = video {
-                discontinuity.detect(&packet);
-                let pts = discontinuity.recalculate_pts(packet.pts());
-                let dts = discontinuity.recalculate_dts(packet.dts());
-                let video_start_pts = *video_start_pts.get_or_insert(pts);
-                tracing::error!("New pts: {:?}", (input_start_time + (pts - video_start_pts)).saturating_duration_since(queue_start_time));
-                // let pts = (pts - video_start_pts)
+            if let Some((index, ref sender, ref mut state)) = video {
+                let (pts, dts) = state.recalculate_pts_dts(&packet);
 
                 if packet.stream() == index {
                     let chunk = EncodedChunk {
@@ -223,11 +210,8 @@ impl HlsInput {
                 }
             }
 
-            if let Some((index, time_base, ref sender, ref mut discontinuity)) = audio {
-                discontinuity.detect(&packet);
-                let pts = discontinuity.recalculate_pts(packet.pts());
-                let dts = discontinuity.recalculate_dts(packet.dts());
-                let audio_start_pts = audio_start_pts.get_or_insert(pts);
+            if let Some((index, ref sender, ref mut state)) = audio {
+                let (pts, dts) = state.recalculate_pts_dts(&packet);
 
                 if packet.stream() == index {
                     let chunk = EncodedChunk {
@@ -248,13 +232,13 @@ impl HlsInput {
             }
         }
 
-        if let Some((_, _, sender, _)) = audio {
+        if let Some((_, sender, _)) = audio {
             if sender.send(PipelineEvent::EOS).is_err() {
                 debug!("Failed to send EOS message.")
             }
         }
 
-        if let Some((_, _, sender, _)) = video {
+        if let Some((_, sender, _)) = video {
             if sender.send(PipelineEvent::EOS).is_err() {
                 debug!("Failed to send EOS message.")
             }
@@ -305,55 +289,65 @@ where
     }
 }
 
-// TODO(noituri): Write tests
 // TODO(noituri): Test on long run
-struct DiscontinuityState {
+struct TimestampState {
+    input_start_time: Instant,
+    queue_start_time: Instant,
+
+    first_pts: Option<f64>,
     prev_dts: Option<f64>,
-    offset: f64,
+    discontinuity_offset: f64,
     // TODO(noituri): time base can change?
     time_base: ffmpeg_next::Rational,
 }
 
-impl DiscontinuityState {
+impl TimestampState {
     /// (10s) This value was picked by ffmpeg arbitrarily but it's quite conservative.
     const DISCONTINUITY_THRESHOLD: f64 = 10_000.0;
 
-    fn new(time_base: ffmpeg_next::Rational) -> Self {
+    fn new(
+        input_start_time: Instant,
+        queue_start_time: Instant,
+        time_base: ffmpeg_next::Rational,
+    ) -> Self {
         Self {
+            input_start_time,
+            queue_start_time,
+            first_pts: None,
             prev_dts: None,
-            offset: 0.0,
+            discontinuity_offset: 0.0,
             time_base,
         }
     }
 
-    fn detect(&mut self, packet: &Packet) {
+    fn recalculate_pts_dts(&mut self, packet: &Packet) -> (Duration, Option<Duration>) {
         let dts = packet.dts().unwrap_or(0) as f64;
         let prev_dts = self.prev_dts.unwrap_or(dts);
+
         let to_timestamp = self.time_base.numerator() as f64 / self.time_base.denominator() as f64;
-        if f64::abs((dts + self.offset) - prev_dts) * to_timestamp * 1000.0
+        if f64::abs((dts + self.discontinuity_offset) - prev_dts) * to_timestamp * 1000.0
             >= Self::DISCONTINUITY_THRESHOLD
         {
             // TODO(noituri): Use debug here
             tracing::error!("Discontinuity detected: {prev_dts} -> {dts} (dts)");
-            self.offset = (prev_dts - dts) + packet.duration() as f64;
+            self.discontinuity_offset = (prev_dts - dts) + packet.duration() as f64;
         }
 
-        self.prev_dts = Some(dts + self.offset);
+        self.prev_dts = Some(dts + self.discontinuity_offset);
+
+        let pts = self.calculate_timestamp(packet.pts().unwrap_or(0));
+        let dts = packet.dts().map(|dts| self.calculate_timestamp(dts));
+        let first_pts = *self.first_pts.get_or_insert(pts);
+
+        let pts = (self.input_start_time + Duration::from_secs_f64(pts - first_pts))
+            .duration_since(self.queue_start_time);
+        let dts = dts.map(Duration::from_secs_f64);
+
+        return (pts, dts);
     }
 
-    fn recalculate_dts(&self, dts: Option<i64>) -> Option<Duration> {
-        dts.map(|dts| {
-            Duration::from_secs_f64(
-                (dts as f64 + self.offset) * self.time_base.numerator() as f64
-                    / self.time_base.denominator() as f64,
-            )
-        })
-    }
-
-    fn recalculate_pts(&self, pts: Option<i64>) -> Duration {
-        Duration::from_secs_f64(
-            (pts.unwrap_or(0) as f64 + self.offset) * self.time_base.numerator() as f64
-                / self.time_base.denominator() as f64,
-        )
+    fn calculate_timestamp(&self, timestamp: i64) -> f64 {
+        (timestamp as f64 + self.discontinuity_offset) * self.time_base.numerator() as f64
+            / self.time_base.denominator() as f64
     }
 }
