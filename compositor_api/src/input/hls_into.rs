@@ -48,7 +48,7 @@ impl TryFrom<HlsInput> for pipeline::RegisterInputOptions {
                 }
 
                 #[cfg(not(feature = "vk-video"))]
-                HlsVideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
+                HlsVideoDecoder::VulkanH264 | HlsVideoDecoder::VulkanVideo => {
                     return Err(TypeError::new(super::NO_VULKAN_VIDEO))
                 }
             },

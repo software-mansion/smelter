@@ -1,5 +1,4 @@
 use std::{
-    collections::VecDeque,
     ffi::CString,
     ptr, slice,
     sync::{
@@ -20,7 +19,7 @@ use crate::{
 };
 use bytes::Bytes;
 use compositor_render::InputId;
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{bounded, Sender};
 use ffmpeg_next::{
     ffi::{
         avformat_alloc_context, avformat_close_input, avformat_find_stream_info,
@@ -43,103 +42,55 @@ pub struct HlsInputOptions {
 
 pub struct HlsInput {
     should_close: Arc<AtomicBool>,
-    queue_start_time_sender: Sender<Instant>,
 }
 
 impl HlsInput {
     pub(super) fn start_new_input(
         input_id: &InputId,
+        queue_start_time: Option<Instant>,
         opts: HlsInputOptions,
     ) -> Result<InputInitResult, InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
-        let (video, audio, queue_start_time_sender) =
-            HlsInputThread::new(input_id.clone(), should_close.clone(), opts).spawn()?;
+        let (video, audio) = Self::spawn_thread(
+            input_id.clone(),
+            should_close.clone(),
+            queue_start_time,
+            opts,
+        )?;
 
         Ok(InputInitResult {
-            input: Input::Hls(Self {
-                should_close,
-                queue_start_time_sender,
-            }),
+            input: Input::Hls(Self { should_close }),
             video,
             audio,
             init_info: InputInitInfo::Other,
         })
     }
 
-    pub fn update_queue_start_time(&self, queue_start_time: Instant) {
-        if self.queue_start_time_sender.send(queue_start_time).is_err() {
-            debug!("HLS input thread already stopped");
-        }
-    }
-}
-
-impl Drop for HlsInput {
-    fn drop(&mut self) {
-        self.should_close
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-    }
-}
-
-enum HlsInputState {
-    Buffering { chunks: VecDeque<EncodedChunk> },
-    Started { queue_start_time: Instant },
-}
-
-struct HlsInputThread {
-    input_id: InputId,
-    should_close: Arc<AtomicBool>,
-    options: HlsInputOptions,
-    state: HlsInputState,
-}
-
-impl HlsInputThread {
-    fn new(input_id: InputId, should_close: Arc<AtomicBool>, options: HlsInputOptions) -> Self {
-        Self {
-            input_id,
-            should_close,
-            options,
-            state: HlsInputState::Buffering {
-                chunks: VecDeque::new(),
-            },
-        }
-    }
-
-    fn spawn(
-        self,
-    ) -> Result<
-        (
-            Option<VideoInputReceiver>,
-            Option<AudioInputReceiver>,
-            Sender<Instant>,
-        ),
-        InputInitError,
-    > {
+    fn spawn_thread(
+        input_id: InputId,
+        should_close: Arc<AtomicBool>,
+        queue_start_time: Option<Instant>,
+        options: HlsInputOptions,
+    ) -> Result<(Option<VideoInputReceiver>, Option<AudioInputReceiver>), InputInitError> {
         let (result_sender, result_receiver) = bounded(1);
-        let (queue_start_time_sender, queue_start_time_receiver) = bounded(1);
         std::thread::Builder::new()
-            .name(format!("HLS thread for input {}", self.input_id.clone()))
+            .name(format!("HLS thread for input {}", input_id.clone()))
             .spawn(move || {
-                let _span = span!(
-                    Level::INFO,
-                    "HLS thread",
-                    input_id = self.input_id.to_string()
-                )
-                .entered();
+                let _span =
+                    span!(Level::INFO, "HLS thread", input_id = input_id.to_string()).entered();
 
-                self.run(queue_start_time_receiver, result_sender);
+                Self::run_thread(options, should_close, queue_start_time, result_sender);
             })
             .unwrap();
 
-        result_receiver
-            .recv()
-            .unwrap()
-            .map(|(video, audio)| (video, audio, queue_start_time_sender))
+        result_receiver.recv().unwrap()
     }
 
     #[allow(clippy::type_complexity)]
-    fn run(
-        mut self,
-        queue_start_time_receiver: Receiver<Instant>,
+    fn run_thread(
+        options: HlsInputOptions,
+        should_close: Arc<AtomicBool>,
+        queue_start_time: Option<Instant>,
         result_sender: Sender<
             Result<(Option<VideoInputReceiver>, Option<AudioInputReceiver>), InputInitError>,
         >,
@@ -147,9 +98,9 @@ impl HlsInputThread {
         // careful: moving the input context in any way will cause ffmpeg to segfault
         // I do not know why this happens
         let mut input_ctx = match input_with_dictionary_and_interrupt(
-            &self.options.url,
+            &options.url,
             Dictionary::from_iter([("protocol_whitelist", "tcp,hls,http,https,file,tls")]),
-            || self.should_close.load(Ordering::Relaxed),
+            || should_close.load(Ordering::Relaxed),
         ) {
             Ok(i) => i,
             Err(e) => {
@@ -176,7 +127,7 @@ impl HlsInputThread {
                         None
                     }
                 };
-                let (sender, receiver) = ChunkSender::new(2000);
+                let (sender, receiver) = bounded(2000);
                 let discontinuity_state = DiscontinuityState::new(stream.time_base());
                 (
                     Some((
@@ -192,7 +143,7 @@ impl HlsInputThread {
         };
         let (mut video, video_receiver) = match input_ctx.streams().best(Type::Video) {
             Some(stream) => {
-                let (sender, receiver) = ChunkSender::new(2000);
+                let (sender, receiver) = bounded(2000);
                 let discontinuity_state = DiscontinuityState::new(stream.time_base());
                 (
                     Some((
@@ -211,7 +162,7 @@ impl HlsInputThread {
             .send(Ok((
                 video_receiver.map(|video| VideoInputReceiver::Encoded {
                     chunk_receiver: video,
-                    decoder_options: self.options.video_decoder,
+                    decoder_options: options.video_decoder,
                 }),
                 audio_result.map(|(receiver, asc)| AudioInputReceiver::Encoded {
                     chunk_receiver: receiver,
@@ -223,40 +174,9 @@ impl HlsInputThread {
             )))
             .unwrap();
 
+        let input_start_time = Instant::now();
+        let queue_start_time = queue_start_time.unwrap_or(Instant::now());
         loop {
-            // TODO(noituri):  Move it outside
-            if let Ok(queue_start_time) = queue_start_time_receiver.try_recv() {
-                let prev_state =
-                    std::mem::replace(&mut self.state, HlsInputState::Started { queue_start_time });
-                match prev_state {
-                    HlsInputState::Buffering { chunks } => {
-                        tracing::error!("Received correct queue start time {queue_start_time:?}");
-                        // TODO(noituri):  Recalculate pts
-                        for chunk in chunks {
-                            match chunk.kind {
-                                EncodedChunkKind::Video(_) => {
-                                    if let Some((_, _, ref sender, _)) = video {
-                                        if sender.send(chunk, queue_start_time).is_err() {
-                                            debug!("Channel closed")
-                                        }
-                                    }
-                                }
-                                EncodedChunkKind::Audio(_) => {
-                                    if let Some((_, _, ref sender, _)) = audio {
-                                        if sender.send(chunk, queue_start_time).is_err() {
-                                            debug!("Channel closed")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    HlsInputState::Started { .. } => {
-                        warn!("Trying to start already started hls input");
-                    }
-                }
-            }
-
             let mut packet = Packet::empty();
             match packet.read(&mut input_ctx) {
                 Ok(_) => (),
@@ -276,10 +196,14 @@ impl HlsInputThread {
                 continue;
             }
 
+            let (mut video_start_pts, mut audio_start_pts) = (None, None);
             if let Some((index, time_base, ref sender, ref mut discontinuity)) = video {
-                discontinuity.update(&packet);
+                discontinuity.detect(&packet);
                 let pts = discontinuity.recalculate_pts(packet.pts());
                 let dts = discontinuity.recalculate_dts(packet.dts());
+                let video_start_pts = *video_start_pts.get_or_insert(pts);
+                tracing::error!("New pts: {:?}", (input_start_time + (pts - video_start_pts)).saturating_duration_since(queue_start_time));
+                // let pts = (pts - video_start_pts)
 
                 if packet.stream() == index {
                     let chunk = EncodedChunk {
@@ -290,24 +214,20 @@ impl HlsInputThread {
                         kind: EncodedChunkKind::Video(VideoCodec::H264),
                     };
 
-                    match &mut self.state {
-                        HlsInputState::Buffering { chunks } => chunks.push_back(chunk),
-                        HlsInputState::Started { queue_start_time } => {
-                            if sender.is_empty() {
-                                warn!("HLS input video channel was drained")
-                            }
-                            if sender.send(PipelineEvent::Data(chunk, queue_start_time)).is_err() {
-                                debug!("Channel closed")
-                            }
-                        }
+                    if sender.is_empty() {
+                        warn!("HLS input video channel was drained")
+                    }
+                    if sender.send(PipelineEvent::Data(chunk)).is_err() {
+                        debug!("Channel closed")
                     }
                 }
             }
 
             if let Some((index, time_base, ref sender, ref mut discontinuity)) = audio {
-                discontinuity.update(&packet);
+                discontinuity.detect(&packet);
                 let pts = discontinuity.recalculate_pts(packet.pts());
                 let dts = discontinuity.recalculate_dts(packet.dts());
+                let audio_start_pts = audio_start_pts.get_or_insert(pts);
 
                 if packet.stream() == index {
                     let chunk = EncodedChunk {
@@ -318,56 +238,34 @@ impl HlsInputThread {
                         kind: EncodedChunkKind::Audio(AudioCodec::Aac),
                     };
 
-                    match &mut self.state {
-                        HlsInputState::Buffering { chunks } => chunks.push_back(chunk),
-                        HlsInputState::Started { queue_start_time } => {
-                            if sender.is_empty() {
-                                warn!("HLS input video channel was drained")
-                            }
-                            if sender.send(PipelineEvent::Data(chunk), queue_start_time).is_err() {
-                                debug!("Channel closed")
-                            }
-                        }
+                    if sender.is_empty() {
+                        warn!("HLS input video channel was drained")
+                    }
+                    if sender.send(PipelineEvent::Data(chunk)).is_err() {
+                        debug!("Channel closed")
                     }
                 }
             }
         }
 
         if let Some((_, _, sender, _)) = audio {
-            sender.send_eos();
+            if sender.send(PipelineEvent::EOS).is_err() {
+                debug!("Failed to send EOS message.")
+            }
         }
 
         if let Some((_, _, sender, _)) = video {
-            sender.send_eos();
+            if sender.send(PipelineEvent::EOS).is_err() {
+                debug!("Failed to send EOS message.")
+            }
         }
     }
 }
 
-struct ChunkSender {
-    sender: Sender<PipelineEvent<EncodedChunk>>,
-}
-
-impl ChunkSender {
-    fn new(cap: usize) -> (Self, Receiver<PipelineEvent<EncodedChunk>>) {
-        let (sender, receiver) = bounded(cap);
-        let sender = Self { sender };
-
-        (sender, receiver)
-    }
-
-    fn send(&self, chunk: EncodedChunk, queue_start_time: Instant) {
-        if self.sender.is_empty() {
-            warn!("HLS input video channel was drained")
-        }
-        if self.sender.send(PipelineEvent::Data(chunk)).is_err() {
-            debug!("Channel closed")
-        }
-    }
-
-    fn send_eos(&self) {
-        if sender.send(PipelineEvent::EOS).is_err() {
-            debug!("Failed to send EOS message.")
-        }
+impl Drop for HlsInput {
+    fn drop(&mut self) {
+        self.should_close
+            .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -428,7 +326,7 @@ impl DiscontinuityState {
         }
     }
 
-    fn update(&mut self, packet: &Packet) {
+    fn detect(&mut self, packet: &Packet) {
         let dts = packet.dts().unwrap_or(0) as f64;
         let prev_dts = self.prev_dts.unwrap_or(dts);
         let to_timestamp = self.time_base.numerator() as f64 / self.time_base.denominator() as f64;

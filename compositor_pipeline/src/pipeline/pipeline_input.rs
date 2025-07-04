@@ -29,9 +29,13 @@ pub(super) fn register_pipeline_input<NewInputResult>(
         return Err(RegisterInputError::AlreadyRegistered(input_id));
     }
 
-    let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
+    let (pipeline_ctx, queue_start_time) = {
+        let guard = pipeline.lock().unwrap();
+        (guard.ctx.clone(), guard.queue.start_time())
+    };
 
-    let (input, receiver, input_result) = input_options.new_input(&input_id, &pipeline_ctx)?;
+    let (input, receiver, input_result) =
+        input_options.new_input(&input_id, queue_start_time, &pipeline_ctx)?;
 
     let (audio_eos_received, video_eos_received) = (
         receiver.audio.as_ref().map(|_| false),
@@ -66,9 +70,6 @@ pub(super) fn register_pipeline_input<NewInputResult>(
         }
     }
 
-    if let Some(queue_start_time) = guard.queue.start_time() {
-        pipeline_input.input.update_queue_start_time(queue_start_time);
-    }
     guard.inputs.insert(input_id.clone(), pipeline_input);
     guard.queue.add_input(&input_id, receiver, queue_options);
     guard.renderer.register_input(input_id);

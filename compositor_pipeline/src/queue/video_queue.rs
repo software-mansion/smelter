@@ -179,7 +179,14 @@ impl VideoQueueInput {
                 frame
             }),
             None => self.queue.front().cloned().map(|mut frame| {
+                let old_frame_pts = frame.pts;
                 frame.pts = (input_start_time + frame.pts).duration_since(queue_start);
+                // dbg!((
+                //     old_frame_pts,
+                //     frame.pts,
+                //     input_start_time.elapsed(),
+                //     queue_start.elapsed()
+                // ));
                 frame
             }),
         };

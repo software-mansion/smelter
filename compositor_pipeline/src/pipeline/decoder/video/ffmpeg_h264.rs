@@ -144,6 +144,8 @@ fn run_decoder_thread(
                 }
             };
 
+            // dbg!(frame.pts);
+
             trace!(pts=?frame.pts, "H264 decoder produced a frame.");
             if frame_sender.send(PipelineEvent::Data(frame)).is_err() {
                 debug!("Failed to send frame from H264 decoder. Channel closed.");

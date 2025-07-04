@@ -39,19 +39,6 @@ pub enum Input {
     RawDataInput,
 }
 
-impl Input {
-    pub(super) fn update_queue_start_time(&self, start_time: Instant) {
-        // TODO(noituri): Finish it
-        match &self {
-            Self::Rtp(_) => {}
-            Self::Mp4(_) => {}
-            Self::Whip(_) => {}
-            Self::Hls(input) => input.update_queue_start_time(start_time),
-            Self::RawDataInput => {}
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum InputOptions {
     Rtp(RtpReceiverOptions),
@@ -117,6 +104,7 @@ pub(super) trait InputOptionsExt<NewInputResult> {
     fn new_input(
         &self,
         input_id: &InputId,
+        queue_start_time: Option<Instant>,
         ctx: &PipelineCtx,
     ) -> Result<(Input, DecodedDataReceiver, NewInputResult), RegisterInputError>;
 }
@@ -125,9 +113,10 @@ impl InputOptionsExt<InputInitInfo> for InputOptions {
     fn new_input(
         &self,
         input_id: &InputId,
+        queue_start_time: Option<Instant>,
         ctx: &PipelineCtx,
     ) -> Result<(Input, DecodedDataReceiver, InputInitInfo), RegisterInputError> {
-        start_input_threads(input_id, self.clone(), ctx)
+        start_input_threads(input_id, self.clone(), queue_start_time, ctx)
             .map_err(|e| RegisterInputError::InputError(input_id.clone(), e))
     }
 }
@@ -136,6 +125,7 @@ impl InputOptionsExt<RawDataSender> for RawDataInputOptions {
     fn new_input(
         &self,
         _input_id: &InputId,
+        _queue_start_time: Option<Instant>,
         _ctx: &PipelineCtx,
     ) -> Result<(Input, DecodedDataReceiver, RawDataSender), RegisterInputError> {
         let (video_sender, video_receiver) = match self.video {
@@ -170,6 +160,7 @@ impl InputOptionsExt<RawDataSender> for RawDataInputOptions {
 fn start_input_threads(
     input_id: &InputId,
     options: InputOptions,
+    queue_start_time: Option<Instant>,
     pipeline_ctx: &PipelineCtx,
 ) -> Result<(Input, DecodedDataReceiver, InputInitInfo), InputInitError> {
     match options {
@@ -220,7 +211,7 @@ fn start_input_threads(
                 video,
                 audio,
                 init_info,
-            } = HlsInput::start_new_input(input_id, opts)?;
+            } = HlsInput::start_new_input(input_id, queue_start_time, opts)?;
             let decoder_data_receiver =
                 setup_and_start_decoders_threads(pipeline_ctx, input_id, video, audio)?;
             Ok((input, decoder_data_receiver, init_info))

@@ -247,9 +247,9 @@ impl Queue {
         self: &Arc<Self>,
         video_sender: Sender<QueueVideoOutput>,
         audio_sender: Sender<QueueAudioOutput>,
-        start_time: Instant,
     ) {
         if let Some(sender) = self.start_sender.lock().unwrap().take() {
+            let start_time = Instant::now();
             *self.start_time.lock().unwrap() = Some(start_time);
             sender
                 .send(QueueStartEvent {
