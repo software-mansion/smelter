@@ -7,7 +7,7 @@ use crate::pipeline::{
         supported_video_codec_parameters::{
             get_video_h264_codecs_for_codec_preferences, get_video_vp8_codecs, get_video_vp9_codecs,
         },
-        WhipWhepState,
+        WhipWhepServerState,
     },
     VideoDecoder,
 };
@@ -30,7 +30,7 @@ use webrtc::{
 
 pub async fn handle_create_whip_session(
     Path(id): Path<String>,
-    State(state): State<WhipWhepState>,
+    State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
     offer: String,
 ) -> Result<Response<Body>, WhipServerError> {
@@ -56,7 +56,7 @@ pub async fn handle_create_whip_session(
     }
 
     let (peer_connection, video_transceiver, audio_transceiver) = init_peer_connection(
-        state.pipeline_ctx.stun_servers.to_vec(),
+        state.ctx.stun_servers.to_vec(),
         input_state.video_decoder_preferences.clone(),
     )
     .await?;
@@ -85,7 +85,8 @@ pub async fn handle_create_whip_session(
     peer_connection.set_remote_description(description).await?;
 
     let payload_type_map = start_decoders_threads(
-        &state,
+        &state.ctx,
+        &state.inputs,
         input_id.clone(),
         video_transceiver.clone(),
         audio_transceiver,

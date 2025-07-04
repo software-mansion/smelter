@@ -1,5 +1,5 @@
 use crate::pipeline::whip_whep::{
-    bearer_token::validate_token, error::WhipServerError, WhipWhepState,
+    bearer_token::validate_token, error::WhipServerError, WhipWhepServerState,
 };
 use axum::{
     extract::{Path, State},
@@ -12,7 +12,7 @@ use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
 
 pub async fn handle_new_whip_ice_candidates(
     Path(id): Path<String>,
-    State(state): State<WhipWhepState>,
+    State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
     sdp_fragment_content: String,
 ) -> Result<StatusCode, WhipServerError> {

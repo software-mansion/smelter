@@ -9,7 +9,7 @@ use crate::{
             depayloader::{AudioDepayloader, RolloverState, VideoDepayloader},
             start_forwarding_thread,
         },
-        whip_whep::{error::WhipServerError, WhipWhepState},
+        whip_whep::{error::WhipServerError, WhipInputState},
         EncodedChunk, PipelineCtx, VideoDecoder,
     },
     queue::PipelineEvent,
@@ -39,24 +39,24 @@ pub type WhipInputDecoders =
 
 struct WhipDecodersBuilder {
     decoders: WhipInputDecoders,
-    pipeline_ctx: Arc<PipelineCtx>,
+    ctx: Arc<PipelineCtx>,
     input_id: InputId,
     decoded_data_sender: DecodedDataSender,
 }
 
 impl WhipDecodersBuilder {
     fn new(
-        state: &WhipWhepState,
+        ctx: &Arc<PipelineCtx>,
+        inputs: &WhipInputState,
         input_id: InputId,
     ) -> Result<WhipDecodersBuilder, WhipServerError> {
-        let decoded_data_sender = state
-            .inputs
+        let decoded_data_sender = inputs
             .get_input_connection_options(input_id.clone())?
             .decoded_data_sender;
 
         Ok(Self {
             decoders: HashMap::new(),
-            pipeline_ctx: state.pipeline_ctx.clone(),
+            ctx: ctx.clone(),
             input_id,
             decoded_data_sender,
         })
@@ -73,7 +73,7 @@ impl WhipDecodersBuilder {
         let decoder = pipeline::VideoDecoder::FFmpegH264;
         start_video_decoder_thread(
             VideoDecoderOptions { decoder },
-            &self.pipeline_ctx,
+            &self.ctx,
             bridge_to_decoder_receiver,
             self.decoded_data_sender.frame_sender.clone(),
             self.input_id.clone(),
@@ -104,7 +104,7 @@ impl WhipDecodersBuilder {
         let decoder = pipeline::VideoDecoder::VulkanVideoH264;
         start_video_decoder_thread(
             VideoDecoderOptions { decoder },
-            &self.pipeline_ctx,
+            &self.ctx,
             bridge_to_decoder_receiver,
             self.decoded_data_sender.frame_sender.clone(),
             self.input_id.clone(),
@@ -135,7 +135,7 @@ impl WhipDecodersBuilder {
             VideoDecoderOptions {
                 decoder: pipeline::VideoDecoder::FFmpegVp8,
             },
-            &self.pipeline_ctx,
+            &self.ctx,
             bridge_to_decoder_receiver,
             self.decoded_data_sender.frame_sender.clone(),
             self.input_id.clone(),
@@ -166,7 +166,7 @@ impl WhipDecodersBuilder {
             VideoDecoderOptions {
                 decoder: pipeline::VideoDecoder::FFmpegVp9,
             },
-            &self.pipeline_ctx,
+            &self.ctx,
             bridge_to_decoder_receiver,
             self.decoded_data_sender.frame_sender.clone(),
             self.input_id.clone(),
@@ -197,7 +197,7 @@ impl WhipDecodersBuilder {
             AudioDecoderOptions::Opus(OpusDecoderOptions {
                 forward_error_correction: false,
             }),
-            self.pipeline_ctx.mixing_sample_rate,
+            self.ctx.mixing_sample_rate,
             bridge_to_decoder_receiver,
             self.decoded_data_sender.input_samples_sender.clone(),
             self.input_id.clone(),
@@ -223,14 +223,15 @@ impl WhipDecodersBuilder {
 }
 
 pub async fn start_decoders_threads(
-    state: &WhipWhepState,
+    ctx: &Arc<PipelineCtx>,
+    inputs: &WhipInputState,
     input_id: InputId,
     video_transceiver: Arc<RTCRtpTransceiver>,
     audio_transceiver: Arc<RTCRtpTransceiver>,
     video_decoder_preferences: Vec<VideoDecoder>,
 ) -> Result<WhipInputDecoders, WhipServerError> {
     let negotiated_codecs = get_codec_map(video_transceiver, audio_transceiver).await;
-    let mut whip_decoders_setup = WhipDecodersBuilder::new(state, input_id)?;
+    let mut whip_decoders_setup = WhipDecodersBuilder::new(ctx, inputs, input_id)?;
 
     let mut h264_decoder_started = false;
     for video_decoder in video_decoder_preferences {
@@ -254,7 +255,7 @@ pub async fn start_decoders_threads(
             #[cfg(feature = "vk-video")]
             VideoDecoder::VulkanVideoH264 => {
                 if !h264_decoder_started
-                    && state.pipeline_ctx.vulkan_ctx.is_some()
+                    && ctx.graphics_context.vulkan_ctx.is_some()
                     && !negotiated_codecs.h264.is_empty()
                 {
                     whip_decoders_setup.add_h264_vulcan(&negotiated_codecs.h264)?;

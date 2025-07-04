@@ -21,6 +21,8 @@ mod wgpu;
 
 pub use types::{InputFrame, InputFrameKind, InputFrameSet, OutputFrame, OutputFrameSet};
 
+use crate::wasm::types::new_render_options;
+
 // Executed during WASM module init
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
@@ -41,10 +43,8 @@ pub async fn create_renderer(options: JsValue) -> Result<SmelterRenderer, JsValu
 
     let (device, queue) = create_wgpu_context().await?;
     let renderer = renderer::Renderer::new(
-        device,
-        queue,
         options.upload_frames_with_copy_external,
-        options.into(),
+        new_render_options(options, device, queue),
     )?;
     Ok(SmelterRenderer(Mutex::new(renderer)))
 }

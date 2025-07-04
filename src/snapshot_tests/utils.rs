@@ -4,7 +4,7 @@ use std::{io::Write, sync::OnceLock, time::Duration};
 use bytes::BufMut;
 use compositor_render::{
     create_wgpu_ctx, web_renderer, Frame, FrameData, Framerate, Renderer, RendererOptions,
-    RenderingMode, WgpuComponents, WgpuFeatures, YuvPlanes,
+    RenderingMode, WgpuComponents, YuvPlanes,
 };
 use crossbeam_channel::bounded;
 use tracing::error;
@@ -74,13 +74,12 @@ pub(super) fn create_renderer() -> Renderer {
             enable: false,
             enable_gpu: false,
         },
-        force_gpu: false,
         framerate: Framerate { num: 30, den: 1 },
         stream_fallback_timeout: Duration::from_secs(3),
-        wgpu_features: WgpuFeatures::default(),
-        wgpu_ctx: Some((wgpu_ctx.device.clone(), wgpu_ctx.queue.clone())),
         load_system_fonts: false,
         rendering_mode: RenderingMode::GpuOptimized,
+        device: wgpu_ctx.device,
+        queue: wgpu_ctx.queue,
     })
     .unwrap();
     renderer

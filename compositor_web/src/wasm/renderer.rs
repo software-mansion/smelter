@@ -22,16 +22,11 @@ pub(super) struct Renderer {
 
 impl Renderer {
     pub fn new(
-        device: Arc<wgpu::Device>,
-        queue: Arc<wgpu::Queue>,
         upload_frames_with_copy_external: bool,
         options: RendererOptions,
     ) -> Result<Self, JsValue> {
-        let (renderer, _) = compositor_render::Renderer::new(RendererOptions {
-            wgpu_ctx: Some((device, queue)),
-            ..options
-        })
-        .map_err(types::to_js_error)?;
+        let (renderer, _) =
+            compositor_render::Renderer::new(options).map_err(types::to_js_error)?;
         let inputs = RendererInputs::new(upload_frames_with_copy_external);
         let outputs = RendererOutputs::default();
 

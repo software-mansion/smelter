@@ -65,11 +65,11 @@ impl WhipInput {
     pub(super) fn start_new_input(
         input_id: &InputId,
         options: WhipOptions,
-        pipeline_ctx: &PipelineCtx,
+        ctx: &PipelineCtx,
         frame_sender: Sender<PipelineEvent<Frame>>,
         input_samples_sender: Sender<PipelineEvent<InputSamples>>,
     ) -> Result<(Input, InputInitInfo), WhipReceiverError> {
-        let Some(state) = &pipeline_ctx.whip_inputs_state else {
+        let Some(state) = &ctx.whip_whep_state else {
             return Err(WhipReceiverError::WhipWhepServerNotRunning);
         };
         let bearer_token = generate_token();
@@ -79,7 +79,7 @@ impl WhipInput {
             input_samples_sender,
         };
 
-        state.add_input(
+        state.inputs.add_input(
             input_id,
             WhipInputConnectionState {
                 bearer_token: Some(bearer_token.clone()),
@@ -93,7 +93,7 @@ impl WhipInput {
 
         Ok((
             Input::Whip(Self {
-                whip_inputs_state: state.clone(),
+                whip_inputs_state: state.inputs.clone(),
                 input_id: input_id.clone(),
             }),
             InputInitInfo::Whip { bearer_token },

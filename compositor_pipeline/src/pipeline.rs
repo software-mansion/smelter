@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -6,70 +7,61 @@ use std::sync::Weak;
 use std::thread;
 use std::time::Duration;
 
-use compositor_render::error::{
-    ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
-};
-use compositor_render::scene::Component;
-use compositor_render::web_renderer::WebRendererInitOptions;
-use compositor_render::FrameSet;
-use compositor_render::Framerate;
-use compositor_render::RegistryType;
-use compositor_render::RendererOptions;
-use compositor_render::RenderingMode;
-use compositor_render::WgpuFeatures;
-use compositor_render::{error::UpdateSceneError, Renderer};
-use compositor_render::{EventLoop, InputId, OutputId, RendererId, RendererSpec};
 use crossbeam_channel::{bounded, Receiver};
 use glyphon::fontdb;
-use input::InputInitInfo;
-use input::RawDataInputOptions;
-use output::encoded_data::EncodedDataOutput;
-use output::new_external_output;
-use output::raw_data::RawDataOutput;
-use output::EncodedDataOutputOptions;
-use output::OutputOptions;
-use output::RawDataOutputOptions;
-use pipeline_output::register_pipeline_output;
-use pipeline_output::OutputInfo;
+use pipeline_init::create_pipeline;
+use pipeline_input::register_pipeline_input;
+use pipeline_input::PipelineInput;
+use pipeline_output::PipelineOutput;
 use tokio::runtime::Runtime;
-use tokio::sync::oneshot;
 use tracing::{error, info, trace, warn};
-use types::RawDataSender;
-use whip_whep::run_whip_whep_server;
-use whip_whep::WhipInputState;
 
-use crate::audio_mixer::AudioMixer;
-use crate::audio_mixer::MixingStrategy;
-use crate::audio_mixer::{AudioChannels, AudioMixingParams};
-use crate::error::InitPipelineError;
-use crate::error::{
-    RegisterInputError, RegisterOutputError, UnregisterInputError, UnregisterOutputError,
+use compositor_render::{
+    error::{
+        ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
+        UpdateSceneError,
+    },
+    scene::Component,
+    web_renderer::WebRendererInitOptions,
+    EventLoop, FrameSet, Framerate, InputId, OutputId, RegistryType, Renderer, RendererId,
+    RendererSpec, RenderingMode, WgpuFeatures,
 };
 
-use crate::event::Event;
-use crate::event::EventEmitter;
+use input::{InputInitInfo, RawDataInputOptions};
+use output::{
+    encoded_data::EncodedDataOutput, new_external_output, raw_data::RawDataOutput,
+    EncodedDataOutputOptions, OutputOptions, RawDataOutputOptions,
+};
+use pipeline_output::{register_pipeline_output, OutputInfo};
+use types::RawDataSender;
+use whip_whep::WhipWhepPipelineState;
+
+use crate::audio_mixer::{AudioChannels, AudioMixer, AudioMixingParams, MixingStrategy};
+use crate::error::{
+    InitPipelineError, RegisterInputError, RegisterOutputError, UnregisterInputError,
+    UnregisterOutputError,
+};
+use crate::event::{Event, EventEmitter};
 use crate::pipeline::pipeline_output::OutputSender;
-use crate::queue::PipelineEvent;
-use crate::queue::QueueAudioOutput;
-use crate::queue::QueueInputOptions;
-use crate::queue::{self, Queue, QueueOptions, QueueVideoOutput};
+use crate::pipeline::whip_whep::WhipWhepServerHandle;
+use crate::queue::{
+    self, PipelineEvent, Queue, QueueAudioOutput, QueueInputOptions, QueueOptions, QueueVideoOutput,
+};
 
 use self::input::InputOptions;
 
 pub mod decoder;
 pub mod encoder;
-mod graphics_context;
 pub mod input;
 pub mod output;
-mod pipeline_input;
-mod pipeline_output;
 pub mod rtp;
-mod types;
 pub mod whip_whep;
 
-use self::pipeline_input::register_pipeline_input;
-use self::pipeline_input::PipelineInput;
-use self::pipeline_output::PipelineOutput;
+mod graphics_context;
+mod pipeline_init;
+mod pipeline_input;
+mod pipeline_output;
+mod types;
 
 pub use self::types::{
     AudioCodec, EncodedChunk, EncodedChunkKind, EncoderOutputEvent, RawDataReceiver, VideoCodec,
@@ -122,7 +114,10 @@ pub struct Pipeline {
     renderer: Renderer,
     audio_mixer: AudioMixer,
     is_started: bool,
-    shutdown_whip_whep_sender: Option<oneshot::Sender<()>>,
+
+    #[allow(dead_code)]
+    // triggers cleanup on drop
+    whip_whep_handle: Option<WhipWhepServerHandle>,
 }
 
 #[derive(Debug)]
@@ -148,110 +143,16 @@ pub struct PipelineCtx {
     pub mixing_sample_rate: u32,
     pub output_framerate: Framerate,
     pub stun_servers: Arc<Vec<String>>,
-    pub download_dir: Arc<PathBuf>,
+    pub download_dir: Arc<Path>,
     pub event_emitter: Arc<EventEmitter>,
-    pub whip_inputs_state: Option<WhipInputState>,
-    pub whip_whep_server_port: u16,
     pub tokio_rt: Arc<Runtime>,
-    #[cfg(feature = "vk-video")]
-    pub vulkan_ctx: Option<graphics_context::VulkanCtx>,
-}
-
-impl std::fmt::Debug for PipelineCtx {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PipelineCtx")
-            .field("mixing_sample_rate", &self.mixing_sample_rate)
-            .field("output_framerate", &self.output_framerate)
-            .field("download_dir", &self.download_dir)
-            .field("event_emitter", &self.event_emitter)
-            .finish()
-    }
+    pub graphics_context: GraphicsContext,
+    pub whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
 }
 
 impl Pipeline {
     pub fn new(opts: Options) -> Result<(Self, Arc<dyn EventLoop>), InitPipelineError> {
-        let preinitialized_ctx = match opts.wgpu_ctx {
-            Some(ctx) => Some(ctx),
-            #[cfg(feature = "vk-video")]
-            None => Some(GraphicsContext::new(GraphicsContextOptions {
-                force_gpu: opts.force_gpu,
-                features: opts.wgpu_features,
-                ..Default::default()
-            })?),
-            #[cfg(not(feature = "vk-video"))]
-            None => None,
-        };
-
-        let wgpu_ctx = preinitialized_ctx
-            .as_ref()
-            .map(|ctx| (ctx.device.clone(), ctx.queue.clone()));
-
-        let (renderer, event_loop) = Renderer::new(RendererOptions {
-            web_renderer: opts.web_renderer,
-            framerate: opts.queue_options.output_framerate,
-            stream_fallback_timeout: opts.stream_fallback_timeout,
-            force_gpu: opts.force_gpu,
-            wgpu_features: opts.wgpu_features,
-            load_system_fonts: opts.load_system_fonts.unwrap_or(true),
-            wgpu_ctx,
-            rendering_mode: opts.rendering_mode,
-        })?;
-
-        let download_dir = opts
-            .download_root
-            .join(format!("smelter-{}", rand::random::<u64>()));
-        std::fs::create_dir_all(&download_dir).map_err(InitPipelineError::CreateDownloadDir)?;
-
-        let tokio_rt = match opts.tokio_rt {
-            Some(tokio_rt) => tokio_rt,
-            None => Arc::new(Runtime::new().map_err(InitPipelineError::CreateTokioRuntime)?),
-        };
-        let stun_servers = opts.stun_servers;
-
-        let whip_inputs_state = match opts.start_whip_whep {
-            true => Some(WhipInputState::new()),
-            false => None,
-        };
-        let event_emitter = Arc::new(EventEmitter::new());
-        let ctx = Arc::new(PipelineCtx {
-            mixing_sample_rate: opts.mixing_sample_rate,
-            output_framerate: opts.queue_options.output_framerate,
-            stun_servers,
-            download_dir: download_dir.into(),
-            event_emitter: event_emitter.clone(),
-            tokio_rt: tokio_rt.clone(),
-            whip_inputs_state,
-            whip_whep_server_port: opts.whip_whep_server_port,
-            #[cfg(feature = "vk-video")]
-            vulkan_ctx: preinitialized_ctx.and_then(|ctx| ctx.vulkan_ctx),
-        });
-
-        let shutdown_whip_whep_sender = if let Some(state) = &ctx.whip_inputs_state {
-            let (shutdown_sender, shutdown_receiver) = oneshot::channel();
-            let (init_result_sender, init_result_receiver) = oneshot::channel();
-            tokio_rt.spawn(run_whip_whep_server(
-                ctx.clone(),
-                state.clone(),
-                shutdown_receiver,
-                init_result_sender,
-            ));
-            init_result_receiver.blocking_recv().unwrap()?;
-            Some(shutdown_sender)
-        } else {
-            None
-        };
-        let pipeline = Pipeline {
-            outputs: HashMap::new(),
-            inputs: HashMap::new(),
-            queue: Queue::new(opts.queue_options, &event_emitter),
-            renderer,
-            audio_mixer: AudioMixer::new(opts.mixing_sample_rate),
-            is_started: false,
-            shutdown_whip_whep_sender,
-            ctx,
-        };
-
-        Ok((pipeline, event_loop))
+        create_pipeline(opts)
     }
 
     pub fn queue(&self) -> &Queue {
@@ -532,11 +433,6 @@ impl Pipeline {
 
 impl Drop for Pipeline {
     fn drop(&mut self) {
-        if let Some(sender) = self.shutdown_whip_whep_sender.take() {
-            if sender.send(()).is_err() {
-                error!("Cannot send shutdown signal to WHIP WHEP server")
-            }
-        }
         self.queue.shutdown()
     }
 }
@@ -664,4 +560,15 @@ fn run_audio_mixer_thread(
         }
     }
     info!("Stopping audio mixer thread.")
+}
+
+impl std::fmt::Debug for PipelineCtx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PipelineCtx")
+            .field("mixing_sample_rate", &self.mixing_sample_rate)
+            .field("output_framerate", &self.output_framerate)
+            .field("download_dir", &self.download_dir)
+            .field("event_emitter", &self.event_emitter)
+            .finish()
+    }
 }

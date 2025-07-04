@@ -1,5 +1,5 @@
 use crate::pipeline::whip_whep::{
-    bearer_token::validate_token, error::WhipServerError, WhipWhepState,
+    bearer_token::validate_token, error::WhipServerError, WhipWhepServerState,
 };
 use axum::{
     extract::{Path, State},
@@ -11,7 +11,7 @@ use tracing::info;
 
 pub async fn handle_terminate_whip_session(
     Path(id): Path<String>,
-    State(state): State<WhipWhepState>,
+    State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
 ) -> Result<StatusCode, WhipServerError> {
     let input_id = InputId(Arc::from(id));
