@@ -81,7 +81,6 @@ fn run_resampler_only_thread(
 }
 
 pub fn start_audio_decoder_thread(
-    opts: AudioDecoderOptions,
     mixing_sample_rate: u32,
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
     samples_sender: Sender<PipelineEvent<InputSamples>>,

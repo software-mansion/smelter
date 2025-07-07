@@ -77,10 +77,13 @@ fn init_decoder_stream<Decoder: AudioDecoder>(
     let output_sample_rate = ctx.mixing_sample_rate;
 
     let decoded_stream =
-        AudioDecoderStream::<Decoder, _>::new(ctx, options, chunk_receiver.into_iter())?.flatten();
+        AudioDecoderStream::<Decoder, _>::new(ctx, options, chunk_receiver.into_iter())?;
 
     let resampled_stream =
-        ResampledDecoderStream::new(decoded_stream, output_sample_rate).flatten();
+        ResampledDecoderStream::new(output_sample_rate, decoded_stream.flatten());
 
-    Ok((resampled_stream, AudioDecoderThreadHandle { chunk_sender }))
+    Ok((
+        resampled_stream.flatten(),
+        AudioDecoderThreadHandle { chunk_sender },
+    ))
 }

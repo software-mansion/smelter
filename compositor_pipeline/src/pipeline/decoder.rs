@@ -2,6 +2,7 @@ use std::iter;
 use std::sync::Arc;
 
 use crate::error::DecoderInitError;
+use crate::pipeline::decoder::audio::DecodingError;
 use crate::pipeline::types::DecodedSamples;
 use crate::pipeline::{EncodedChunk, PipelineCtx};
 use crate::{audio_mixer::InputSamples, queue::PipelineEvent};
@@ -17,33 +18,36 @@ mod video;
 mod decoder_thread_audio;
 mod decoder_thread_video;
 
-mod ffmpeg_h264;
-mod ffmpeg_vp8;
-mod ffmpeg_vp9;
-mod vulkan_h264;
+pub mod ffmpeg_h264;
+pub mod ffmpeg_vp8;
+pub mod ffmpeg_vp9;
+pub mod vulkan_h264;
 
-mod fdk_aac;
-mod opus;
+pub mod fdk_aac;
+pub mod opus;
 
 pub(super) use audio::start_audio_decoder_thread;
 pub(super) use audio::start_audio_resampler_only_thread;
 pub(super) use video::start_video_decoder_thread;
 
-//#[derive(Debug, Clone, PartialEq, Eq)]
-//pub struct VideoDecoderOptions {
-//    pub decoder: VideoDecoder,
-//}
-//
-//#[derive(Debug, Clone, PartialEq, Eq)]
-//pub enum AudioDecoderOptions {
-//    Opus(OpusDecoderOptions),
-//    Aac(AacDecoderOptions),
-//}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VideoDecoderOptions {
+    FfmpegH264,
+    FfmpegVp8,
+    FfmpegVp9,
+    VulkanH264,
+}
 
-//#[derive(Debug, Clone, PartialEq, Eq)]
-//pub struct OpusDecoderOptions {
-//    pub forward_error_correction: bool,
-//}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AudioDecoderOptions {
+    Opus(opus::Options),
+    FdkAac(fdk_aac::Options),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpusDecoderOptions {
+    pub forward_error_correction: bool,
+}
 
 #[derive(Debug)]
 pub struct DecodedDataReceiver {
@@ -51,25 +55,10 @@ pub struct DecodedDataReceiver {
     pub audio: Option<Receiver<PipelineEvent<InputSamples>>>,
 }
 
-/// [RFC 3640, section 3.3.5. Low Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.5)
-/// [RFC 3640, section 3.3.6. High Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.6)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AacDepayloaderMode {
-    LowBitrate,
-    HighBitrate,
-}
-
-//#[derive(Debug, Clone, PartialEq, Eq)]
-//pub struct AacDecoderOptions {
-//    pub depayloader_mode: Option<AacDepayloaderMode>,
-//    pub asc: Option<Bytes>,
-//}
-
 pub(crate) trait VideoDecoder: Sized {
     const LABEL: &'static str;
-    type Options: Send + 'static;
 
-    fn new(ctx: &Arc<PipelineCtx>, options: Self::Options) -> Result<Self, DecoderInitError>;
+    fn new(ctx: &Arc<PipelineCtx>) -> Result<Self, DecoderInitError>;
     fn decode(&mut self, chunk: EncodedChunk) -> Vec<Frame>;
     fn flush(&mut self) -> Vec<Frame>;
 }
@@ -79,7 +68,7 @@ pub(crate) trait AudioDecoder: Sized {
     type Options: Send + 'static;
 
     fn new(ctx: &Arc<PipelineCtx>, options: Self::Options) -> Result<Self, DecoderInitError>;
-    fn decode(&mut self, chunk: EncodedChunk) -> Vec<InputSamples>;
+    fn decode(&mut self, chunk: EncodedChunk) -> Result<Vec<DecodedSamples>, DecodingError>;
     fn flush(&mut self) -> Vec<InputSamples>;
 }
 
@@ -98,12 +87,8 @@ where
     Decoder: VideoDecoder,
     Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
 {
-    pub fn new(
-        ctx: Arc<PipelineCtx>,
-        options: Decoder::Options,
-        source: Source,
-    ) -> Result<Self, DecoderInitError> {
-        let decoder = Decoder::new(&ctx, options)?;
+    pub fn new(ctx: Arc<PipelineCtx>, source: Source) -> Result<Self, DecoderInitError> {
+        let decoder = Decoder::new(&ctx)?;
         Ok(Self {
             decoder,
             source,

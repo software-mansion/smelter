@@ -16,17 +16,20 @@ pub async fn handle_terminate_whip_session(
 ) -> Result<StatusCode, WhipServerError> {
     let input_id = InputId(Arc::from(id));
 
-    let connection = state.inputs.get_input_connection_options(input_id)?;
-    validate_token(connection.bearer_token, headers.get("Authorization")).await?;
+    let bearer_token = state
+        .inputs
+        .get_with(&input_id, |input| Ok(input.bearer_token))?;
+    validate_token(&bearer_token, headers.get("Authorization")).await?;
 
     let peer_connection = state.inputs.take_peer_connection(&input_id)?;
 
-    if let Some(peer_connection) = peer_connection {
-        peer_connection.close().await?;
-    } else {
-        return Err(WhipServerError::InternalError(format!(
-            "None peer connection for {input_id:?}"
-        )));
+    match peer_connection {
+        Some(peer_connection) => peer_connection.close().await?,
+        None => {
+            return Err(WhipServerError::InternalError(format!(
+                "None peer connection for {input_id:?}"
+            )));
+        }
     }
 
     info!("WHIP session terminated for input: {:?}", input_id);

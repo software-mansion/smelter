@@ -1,76 +1,71 @@
-use std::sync::{atomic::AtomicBool, Arc};
-
-use crate::{
-    pipeline::{
-        decoder::{self},
-        encoder,
-        rtp::{BindToPortError, RequestedPort, TransportProtocol},
-        types::{EncodedChunk, EncodedChunkKind},
-    },
-    queue::PipelineEvent,
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    time::Instant,
 };
-use compositor_render::InputId;
-use crossbeam_channel::{bounded, Receiver, Sender};
+
+use compositor_render::{Frame, InputId};
+use crossbeam_channel::{bounded, Receiver};
 use rtcp::header::PacketType;
 use tracing::{debug, error, span, warn, Level};
 use webrtc_util::Unmarshal;
 
-use self::{
-    depayloader::{Depayloader, DepayloaderNewError},
-    tcp_server::start_tcp_server_thread,
-    udp::start_udp_reader_thread,
+use self::{tcp_server::start_tcp_server_thread, udp::start_udp_reader_thread};
+use super::{Input, InputInitInfo};
+use crate::{
+    error::DecoderInitError,
+    pipeline::{
+        decoder::{
+            ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder,
+            ffmpeg_vp9::FfmpegVp9Decoder, opus, vulkan_h264::VulkanH264, DecodedDataReceiver,
+            VideoDecoderOptions,
+        },
+        input::rtp::{
+            depayloader::{
+                AudioSpecificConfig, DepayloadedCodec, DepayloaderInitError, DepayloaderOptions,
+            },
+            rtp_audio_thread::{spawn_rtp_audio_thread, RtpAudioTrackThreadHandle},
+            rtp_video_thread::{spawn_rtp_video_thread, RtpVideoTrackThreadHandle},
+        },
+        output::rtp::RtpPacket,
+        rtp::{BindToPortError, RequestedPort, TransportProtocol},
+        types::EncodedChunk,
+        PipelineCtx,
+    },
+    queue::PipelineEvent,
 };
 
-use super::{AudioInputReceiver, Input, InputInitInfo, InputInitResult, VideoInputReceiver};
-
-mod depayloader;
+mod rtp_audio_thread;
+mod rtp_video_thread;
 mod tcp_server;
 mod udp;
 
-#[derive(Debug, thiserror::Error)]
-pub enum RtpReceiverError {
-    #[error("Error while setting socket options.")]
-    SocketOptions(#[source] std::io::Error),
+pub(crate) mod depayloader;
 
-    #[error("Error while binding the socket.")]
-    SocketBind(#[source] std::io::Error),
+/// [RFC 3640, section 3.3.5. Low Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.5)
+/// [RFC 3640, section 3.3.6. High Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.6)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RtpAacDepayloaderMode {
+    LowBitrate,
+    HighBitrate,
+}
 
-    #[error("Failed to register input. Port: {0} is already used or not available.")]
-    PortAlreadyInUse(u16),
-
-    #[error("Failed to register input. All ports in range {lower_bound} to {upper_bound} are already used or not available.")]
-    AllPortsAlreadyInUse { lower_bound: u16, upper_bound: u16 },
-
-    #[error(transparent)]
-    DepayloaderError(#[from] DepayloaderNewError),
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RtpAudioOptions {
+    Opus {
+        decoder_options: opus::Options,
+    },
+    FdkAac {
+        asc: AudioSpecificConfig,
+        depayloader_mode: RtpAacDepayloaderMode,
+    },
 }
 
 #[derive(Debug, Clone)]
-pub struct RtpReceiverOptions {
+pub struct RtpInputOptions {
     pub port: RequestedPort,
     pub transport_protocol: TransportProtocol,
-    pub stream: RtpStream,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InputVideoStream {
-    pub options: decoder::VideoDecoderOptions,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InputAudioStream {
-    pub options: decoder::AudioDecoderOptions,
-}
-
-pub struct OutputAudioStream {
-    pub options: encoder::EncoderOptions,
-    pub payload_type: u8,
-}
-
-#[derive(Debug, Clone)]
-pub struct RtpStream {
-    pub video: Option<InputVideoStream>,
-    pub audio: Option<InputAudioStream>,
+    pub video: Option<VideoDecoderOptions>,
+    pub audio: Option<RtpAudioOptions>,
 }
 
 struct DepayloaderThreadReceivers {
@@ -78,74 +73,92 @@ struct DepayloaderThreadReceivers {
     audio: Option<Receiver<PipelineEvent<EncodedChunk>>>,
 }
 
-pub struct RtpReceiver {
+pub struct RtpInput {
     should_close: Arc<AtomicBool>,
     pub port: u16,
 }
 
-impl RtpReceiver {
-    pub(super) fn start_new_input(
-        input_id: &InputId,
-        opts: RtpReceiverOptions,
-    ) -> Result<InputInitResult, RtpReceiverError> {
+impl RtpInput {
+    pub(super) fn new(
+        ctx: Arc<PipelineCtx>,
+        input_id: InputId,
+        opts: RtpInputOptions,
+    ) -> Result<(Input, InputInitInfo, DecodedDataReceiver), RtpInputError> {
         let should_close = Arc::new(AtomicBool::new(false));
 
-        let (port, packets_rx) = match opts.transport_protocol {
+        let (port, raw_packets_receiver) = match opts.transport_protocol {
             TransportProtocol::Udp => {
-                start_udp_reader_thread(input_id, &opts, should_close.clone())?
+                start_udp_reader_thread(&input_id, &opts, should_close.clone())?
             }
             TransportProtocol::TcpServer => {
-                start_tcp_server_thread(input_id, &opts, should_close.clone())?
+                start_tcp_server_thread(&input_id, &opts, should_close.clone())?
             }
         };
 
-        let depayloader = Depayloader::new(&opts.stream)?;
+        let (video_handle, video_frames_receiver) =
+            Self::start_video_thread(&ctx, &input_id, opts.video)?;
 
-        let depayloader_receivers =
-            Self::start_depayloader_thread(input_id, packets_rx, depayloader);
-
-        let video = match (depayloader_receivers.video, opts.stream.video) {
-            (Some(chunk_receiver), Some(stream)) => Some(VideoInputReceiver::Encoded {
-                chunk_receiver,
-                decoder_options: stream.options,
-            }),
-            _ => None,
+        let (audio_handle, audio_samples_receiver) = match opts.audio {
+            Some(options) => {
+                let (sender, receiver) = bounded(100);
+                let handle = match options {
+                    RtpAudioOptions::Opus { decoder_options } => spawn_rtp_audio_thread(
+                        ctx.clone(),
+                        input_id.clone(),
+                        48_000,
+                        DepayloadedCodec::Opus,
+                        DepayloaderOptions {
+                            codec: options.into(),
+                            clock_rate: 48_000,
+                        },
+                        sender,
+                    ),
+                    RtpAudioOptions::FdkAac {
+                        asc,
+                        depayloader_mode,
+                    } => spawn_rtp_audio_thread(
+                        ctx.clone(),
+                        input_id.clone(),
+                        asc.sample_rate,
+                        DepayloadedCodec::Aac(depayloader_mode, asc),
+                        DepayloaderOptions {
+                            codec: options.into(),
+                            clock_rate: asc.sample_rate,
+                        },
+                        sender,
+                    ),
+                };
+                (Some(handle), Some(receiver))
+            }
+            None => (None, None),
         };
-        let audio = match (depayloader_receivers.audio, opts.stream.audio) {
-            (Some(chunk_receiver), Some(stream)) => Some(AudioInputReceiver::Encoded {
-                chunk_receiver,
-                decoder_options: stream.options,
-            }),
-            _ => None,
-        };
 
-        Ok(InputInitResult {
-            input: Input::Rtp(Self {
+        let depayloader_receivers = Self::start_rtp_demuxer_thread(
+            &input_id,
+            raw_packets_receiver,
+            audio_handle,
+            video_handle,
+        );
+
+        Ok((
+            Input::Rtp(Self {
                 should_close,
                 port: port.0,
             }),
-            video,
-            audio,
-            init_info: InputInitInfo::Rtp { port: Some(port) },
-        })
+            InputInitInfo::Rtp { port: Some(port) },
+            DecodedDataReceiver {
+                video: video_frames_receiver,
+                audio: audio_samples_receiver,
+            },
+        ))
     }
 
-    fn start_depayloader_thread(
+    fn start_rtp_demuxer_thread(
         input_id: &InputId,
         receiver: Receiver<bytes::Bytes>,
-        depayloader: Depayloader,
+        audio: Option<RtpAudioTrackThreadHandle>,
+        video: Option<RtpVideoTrackThreadHandle>,
     ) -> DepayloaderThreadReceivers {
-        let (video_sender, video_receiver) = depayloader
-            .video
-            .as_ref()
-            .map(|_| bounded(5))
-            .map_or((None, None), |(tx, rx)| (Some(tx), Some(rx)));
-        let (audio_sender, audio_receiver) = depayloader
-            .audio
-            .as_ref()
-            .map(|_| bounded(5))
-            .map_or((None, None), |(tx, rx)| (Some(tx), Some(rx)));
-
         let input_id = input_id.clone();
         std::thread::Builder::new()
             .name(format!("Depayloading thread for input: {}", input_id.0))
@@ -156,47 +169,132 @@ impl RtpReceiver {
                     input_id = input_id.to_string()
                 )
                 .entered();
-                run_depayloader_thread(receiver, depayloader, video_sender, audio_sender)
+                run_rtp_demuxer_thread(receiver, audio, video)
             })
             .unwrap();
+    }
 
-        DepayloaderThreadReceivers {
-            video: video_receiver,
-            audio: audio_receiver,
-        }
+    fn start_video_thread(
+        ctx: &Arc<PipelineCtx>,
+        input_id: &InputId,
+        decoder_options: Option<VideoDecoderOptions>,
+    ) -> Result<
+        (
+            Option<RtpVideoTrackThreadHandle>,
+            Option<Receiver<PipelineEvent<Frame>>>,
+        ),
+        DecoderInitError,
+    > {
+        let Some(decoder_options) = decoder_options else {
+            return Ok((None, None));
+        };
+
+        let (sender, receiver) = bounded(100);
+        let handle = match decoder_options {
+            VideoDecoderOptions::FfmpegH264 => spawn_rtp_video_thread::<FfmpegH264Decoder>(
+                ctx.clone(),
+                input_id.clone(),
+                DepayloaderOptions::H264,
+                sender,
+            )?,
+            VideoDecoderOptions::FfmpegVp8 => spawn_rtp_video_thread::<FfmpegVp8Decoder>(
+                ctx.clone(),
+                input_id.clone(),
+                DepayloaderOptions::Vp8,
+                sender,
+            )?,
+            VideoDecoderOptions::FfmpegVp9 => spawn_rtp_video_thread::<FfmpegVp9Decoder>(
+                ctx.clone(),
+                input_id.clone(),
+                DepayloaderOptions::Vp9,
+                sender,
+            )?,
+            VideoDecoderOptions::VulkanH264 => spawn_rtp_video_thread::<VulkanH264>(
+                ctx.clone(),
+                input_id.clone(),
+                DepayloaderOptions::H264,
+                sender,
+            )?,
+        };
+        Ok((Some(handle), Some(receiver)))
+    }
+    fn start_audio_thread(
+        ctx: &Arc<PipelineCtx>,
+        input_id: &InputId,
+        options: Option<RtpAudioOptions>,
+    ) -> Result<
+        (
+            Option<RtpAudioTrackThreadHandle>,
+            Option<Receiver<PipelineEvent<Frame>>>,
+        ),
+        DecoderInitError,
+    > {
+        let Some(options) = options else {
+            return Ok((None, None));
+        };
+
+        let (sender, receiver) = bounded(100);
+        let handle = match options {
+            RtpAudioOptions::Opus { decoder_options } => spawn_rtp_audio_thread(
+                ctx.clone(),
+                input_id.clone(),
+                48_000,
+                DepayloadedCodec::Opus,
+                DepayloaderOptions {
+                    codec: options.into(),
+                    clock_rate: 48_000,
+                },
+                sender,
+            ),
+            RtpAudioOptions::FdkAac {
+                asc,
+                depayloader_mode,
+            } => spawn_rtp_audio_thread(
+                ctx.clone(),
+                input_id.clone(),
+                asc.sample_rate,
+                DepayloadedCodec::Aac(depayloader_mode, asc),
+                DepayloaderOptions {
+                    codec: options.into(),
+                    clock_rate: asc.sample_rate,
+                },
+                sender,
+            ),
+        };
+        (Some(handle), Some(receiver))
     }
 }
 
-impl Drop for RtpReceiver {
+impl Drop for RtpInput {
     fn drop(&mut self) {
         self.should_close
             .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
-fn run_depayloader_thread(
+fn run_rtp_demuxer_thread(
     receiver: Receiver<bytes::Bytes>,
-    mut depayloader: Depayloader,
-    video_sender: Option<Sender<PipelineEvent<EncodedChunk>>>,
-    audio_sender: Option<Sender<PipelineEvent<EncodedChunk>>>,
+    video_handle: Option<RtpVideoTrackThreadHandle>,
+    audio_handle: Option<RtpAudioTrackThreadHandle>,
 ) {
-    let mut audio_eos_received = audio_sender.as_ref().map(|_| false);
-    let mut video_eos_received = video_sender.as_ref().map(|_| false);
+    let start = Instant::now();
+    let mut audio_eos_received = audio_handle.as_ref().map(|_| false);
+    let mut video_eos_received = video_handle.as_ref().map(|_| false);
     let mut audio_ssrc = None;
     let mut video_ssrc = None;
 
     let mut maybe_send_video_eos = || {
-        if let (Some(sender), Some(false)) = (&video_sender, video_eos_received) {
+        if let (Some(handle), Some(false)) = (&video_handle, video_eos_received) {
             video_eos_received = Some(true);
-            if sender.send(PipelineEvent::EOS).is_err() {
+            if handle.rtp_packet_sender.send(PipelineEvent::EOS).is_err() {
                 debug!("Failed to send EOS from RTP video depayloader. Channel closed.");
             }
         }
     };
     let mut maybe_send_audio_eos = || {
-        if let (Some(sender), Some(false)) = (&audio_sender, audio_eos_received) {
+        if let (Some(handle), Some(false)) = (&audio_handle, audio_eos_received) {
             audio_eos_received = Some(true);
-            if sender.send(PipelineEvent::EOS).is_err() {
+            if handle.rtp_packet_sender.send(PipelineEvent::EOS).is_err() {
                 debug!("Failed to send EOS from RTP audio depayloader. Channel closed.");
             }
         }
@@ -215,35 +313,24 @@ fn run_depayloader_thread(
             // with the additional restriction that payload type values in the range
             // 64-95 MUST NOT be used.
             Ok(packet) if packet.header.payload_type < 64 || packet.header.payload_type > 95 => {
-                if packet.header.payload_type == 96 && video_ssrc.is_none() {
-                    video_ssrc = Some(packet.header.ssrc);
-                }
-                if packet.header.payload_type == 97 && audio_ssrc.is_none() {
-                    audio_ssrc = Some(packet.header.ssrc);
-                }
-
-                match depayloader.depayload(packet) {
-                    Ok(chunks) => {
-                        for chunk in chunks {
-                            match &chunk.kind {
-                                EncodedChunkKind::Video(_) => {
-                                    video_sender.as_ref().map(|video_sender| {
-                                        video_sender.send(PipelineEvent::Data(chunk))
-                                    })
-                                }
-                                EncodedChunkKind::Audio(_) => {
-                                    audio_sender.as_ref().map(|audio_sender| {
-                                        audio_sender.send(PipelineEvent::Data(chunk))
-                                    })
-                                }
-                            };
-                        }
+                if packet.header.payload_type == 96 {
+                    let video_ssrc = *video_ssrc.get_or_insert(packet.header.ssrc);
+                    if let Some(video) = video_handle {
+                        video.rtp_packet_sender.send(PipelineEvent::Data(RtpPacket {
+                            packet,
+                            timestamp: todo!(),
+                        }))
                     }
-                    Err(err) => {
-                        warn!("RTP depayloading error: {}", err);
-                        continue;
+                } else if packet.header.payload_type == 97 {
+                    let audio_ssrc = *audio_ssrc.get_or_insert(packet.header.ssrc);
+                    if let Some(audio) = audio_handle {
+                        audio.rtp_packet_sender.send(PipelineEvent::Data(RtpPacket {
+                            packet,
+                            timestamp: todo!(),
+                        }))
                     }
                 }
+                ()
             }
             Ok(_) | Err(_) => {
                 match rtcp::packet::unmarshal(&mut buffer) {
@@ -284,22 +371,80 @@ pub enum DepayloadingError {
     BadPayloadType(u8),
     #[error(transparent)]
     Rtp(#[from] rtp::Error),
-    #[error("AAC depayoading error")]
+    #[error("AAC depayloading error")]
     Aac(#[from] depayloader::AacDepayloadingError),
 }
 
-impl From<BindToPortError> for RtpReceiverError {
+impl From<BindToPortError> for RtpInputError {
     fn from(value: BindToPortError) -> Self {
         match value {
-            BindToPortError::SocketBind(err) => RtpReceiverError::SocketBind(err),
-            BindToPortError::PortAlreadyInUse(port) => RtpReceiverError::PortAlreadyInUse(port),
+            BindToPortError::SocketBind(err) => RtpInputError::SocketBind(err),
+            BindToPortError::PortAlreadyInUse(port) => RtpInputError::PortAlreadyInUse(port),
             BindToPortError::AllPortsAlreadyInUse {
                 lower_bound,
                 upper_bound,
-            } => RtpReceiverError::AllPortsAlreadyInUse {
+            } => RtpInputError::AllPortsAlreadyInUse {
                 lower_bound,
                 upper_bound,
             },
         }
     }
+}
+
+#[derive(Default)]
+pub struct RolloverState {
+    sync_point: Instant,
+    clock_rate: u32,
+    previous_timestamp: Option<u32>,
+    rollover_count: usize,
+}
+
+impl RolloverState {
+    fn new(sync_point: Instant, clock_rate: u32) -> Self {
+        Self {
+            sync_point,
+            clock_rate,
+            previous_timestamp: None,
+            rollover_count: 0,
+        }
+    }
+
+    fn timestamp(&mut self, current_timestamp: u32) -> u64 {
+        let Some(previous_timestamp) = self.previous_timestamp else {
+            self.previous_timestamp = Some(current_timestamp);
+            return current_timestamp as u64;
+        };
+
+        let timestamp_diff = u32::abs_diff(previous_timestamp, current_timestamp);
+        if timestamp_diff >= u32::MAX / 2 {
+            if previous_timestamp > current_timestamp {
+                self.rollover_count += 1;
+            } else {
+                // We received a packet from before the rollover, so we need to decrement the count
+                self.rollover_count = self.rollover_count.saturating_sub(1);
+            }
+        }
+
+        self.previous_timestamp = Some(current_timestamp);
+
+        (self.rollover_count as u64) * (u32::MAX as u64 + 1) + current_timestamp as u64
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RtpInputError {
+    #[error("Error while setting socket options.")]
+    SocketOptions(#[source] std::io::Error),
+
+    #[error("Error while binding the socket.")]
+    SocketBind(#[source] std::io::Error),
+
+    #[error("Failed to register input. Port: {0} is already used or not available.")]
+    PortAlreadyInUse(u16),
+
+    #[error("Failed to register input. All ports in range {lower_bound} to {upper_bound} are already used or not available.")]
+    AllPortsAlreadyInUse { lower_bound: u16, upper_bound: u16 },
+
+    #[error(transparent)]
+    DepayloaderError(#[from] DepayloaderInitError),
 }

@@ -11,7 +11,7 @@ pub(crate) struct ResampledDecoderStream<Source: Iterator<Item = PipelineEvent<D
 }
 
 impl<Source: Iterator<Item = PipelineEvent<DecodedSamples>>> ResampledDecoderStream<Source> {
-    pub fn new(source: Source, output_sample_rate: u32) -> Self {
+    pub fn new(output_sample_rate: u32, source: Source) -> Self {
         Self {
             resampler: DynamicStereoResampler::new(output_sample_rate),
             source,

@@ -2,9 +2,14 @@ use std::sync::{Arc, Mutex};
 
 use compositor_render::InputId;
 
-use crate::{error::RegisterInputError, queue::QueueInputOptions, Pipeline};
+use crate::{
+    error::{InputInitError, RegisterInputError},
+    pipeline::{decoder::DecodedDataReceiver, input::Input, PipelineCtx},
+    queue::QueueInputOptions,
+    Pipeline,
+};
 
-use super::input::{self, InputOptionsExt};
+use super::input;
 
 pub struct PipelineInput {
     pub input: input::Input,
@@ -19,19 +24,25 @@ pub struct PipelineInput {
 
 /// This method doesn't take pipeline lock for the whole scope,
 /// because input registration can potentially take a relatively long time.
-pub(super) fn register_pipeline_input<NewInputResult>(
+pub(super) fn register_pipeline_input<BuildFn, NewInputResult>(
     pipeline: &Arc<Mutex<Pipeline>>,
     input_id: InputId,
-    input_options: &dyn InputOptionsExt<NewInputResult>,
     queue_options: QueueInputOptions,
-) -> Result<NewInputResult, RegisterInputError> {
+    build_input: BuildFn,
+) -> Result<NewInputResult, RegisterInputError>
+where
+    BuildFn: FnOnce(
+        Arc<PipelineCtx>,
+        InputId,
+    ) -> Result<(Input, NewInputResult, DecodedDataReceiver), InputInitError>,
+{
     if pipeline.lock().unwrap().inputs.contains_key(&input_id) {
         return Err(RegisterInputError::AlreadyRegistered(input_id));
     }
 
     let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
 
-    let (input, receiver, input_result) = input_options.new_input(&input_id, &pipeline_ctx)?;
+    let (input, input_result, receiver) = build_input(&input_id, &pipeline_ctx)?;
 
     let (audio_eos_received, video_eos_received) = (
         receiver.audio.as_ref().map(|_| false),

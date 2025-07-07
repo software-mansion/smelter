@@ -16,7 +16,7 @@ use tracing::{debug, error, span, trace, Level, Span};
 
 use crate::{
     pipeline::{
-        decoder::{AacDecoderOptions, AudioDecoderOptions, VideoDecoderOptions},
+        decoder::{AudioDecoderOptions, VideoDecoderOptions},
         EncodedChunk, VideoDecoder,
     },
     queue::PipelineEvent,

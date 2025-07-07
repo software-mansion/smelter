@@ -19,9 +19,6 @@ use ffmpeg_next::{
 };
 use tracing::{error, trace, warn};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Options {}
-
 pub struct FfmpegVp8Decoder {
     decoder: ffmpeg_next::decoder::Opened,
     av_frame: ffmpeg_next::frame::Video,
@@ -30,9 +27,7 @@ pub struct FfmpegVp8Decoder {
 impl VideoDecoder for FfmpegVp8Decoder {
     const LABEL: &'static str = "FFmpeg VP8 decoder";
 
-    type Options = Options;
-
-    fn new(_ctx: &Arc<PipelineCtx>, _options: Self::Options) -> Result<Self, DecoderInitError> {
+    fn new(_ctx: &Arc<PipelineCtx>) -> Result<Self, DecoderInitError> {
         let mut parameters = ffmpeg_next::codec::Parameters::new();
         unsafe {
             let parameters = &mut *parameters.as_mut_ptr();

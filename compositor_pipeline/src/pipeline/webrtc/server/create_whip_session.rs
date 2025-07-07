@@ -1,4 +1,5 @@
 use crate::pipeline::{
+    decoder::VideoDecoderOptions,
     input::whip::{process_track_stream, start_decoders::start_decoders_threads},
     webrtc::{
         bearer_token::validate_token,
@@ -43,11 +44,11 @@ pub async fn handle_create_whip_session(
 
     trace!("SDP offer: {}", offer);
 
-    let input_state = state
+    let input = state
         .inputs
-        .get_input_connection_options(input_id.clone())?;
+        .get_with(&input_id, |input| Ok(input.clone()))?;
 
-    if let Some(peer_connection) = &input_state.peer_connection {
+    if let Some(peer_connection) = &input.peer_connection {
         if peer_connection.connection_state() == RTCPeerConnectionState::Connected {
             return Err(WhipServerError::InternalError(format!(
                 "Another stream is currently connected to the given input_id: {input_id:?}. \
@@ -56,10 +57,10 @@ pub async fn handle_create_whip_session(
         }
     }
 
-    validate_token(input_state.bearer_token, headers.get("Authorization")).await?;
+    validate_token(&input.bearer_token, headers.get("Authorization")).await?;
 
     //Deleting previous peer_connection on this input which was not in Connected state
-    if let Some(connection) = input_state.peer_connection {
+    if let Some(connection) = input.peer_connection {
         if let Err(err) = connection.close().await {
             return Err(WhipServerError::InternalError(format!(
                 "Cannot close previously existing peer connection {input_id:?}: {err:?}"
@@ -69,13 +70,13 @@ pub async fn handle_create_whip_session(
 
     let (peer_connection, video_transceiver, audio_transceiver) = init_peer_connection(
         state.ctx.stun_servers.to_vec(),
-        input_state.video_decoder_preferences.clone(),
+        input.video_preferences.clone(),
     )
     .await?;
 
     if let Err(err) = video_transceiver
         .set_codec_preferences(map_video_decoder_to_rtp_codec_parameters(
-            input_state.video_decoder_preferences.clone(),
+            input.video_preferences.clone(),
         ))
         .await
     {
@@ -102,7 +103,7 @@ pub async fn handle_create_whip_session(
         input_id.clone(),
         video_transceiver.clone(),
         audio_transceiver,
-        input_state.video_decoder_preferences.clone(),
+        input.video_preferences.clone(),
     )
     .await?;
 
@@ -177,7 +178,7 @@ pub async fn gather_ice_candidates_for_one_second(peer_connection: Arc<RTCPeerCo
 }
 
 fn map_video_decoder_to_rtp_codec_parameters(
-    video_decoder_preferences: Vec<VideoDecoder>,
+    video_preferences: Vec<VideoDecoderOptions>,
 ) -> Vec<RTCRtpCodecParameters> {
     let video_vp8_codec = get_video_vp8_codecs();
     let video_vp9_codec = get_video_vp9_codecs();
@@ -185,7 +186,7 @@ fn map_video_decoder_to_rtp_codec_parameters(
 
     let mut codec_list = Vec::new();
 
-    for decoder in video_decoder_preferences {
+    for decoder in video_preferences {
         match decoder {
             VideoDecoder::FFmpegH264 => {
                 codec_list.extend(video_h264_codecs.clone());

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     error::{InputInitError, RegisterInputError},
@@ -7,7 +7,7 @@ use crate::{
 
 use compositor_render::{Frame, InputId};
 use crossbeam_channel::{bounded, Receiver};
-use rtp::{RtpReceiver, RtpReceiverOptions};
+use rtp::{RtpInput, RtpInputOptions};
 use whip::{WhipInput, WhipOptions};
 
 use self::mp4::{Mp4, Mp4Options};
@@ -26,9 +26,10 @@ pub mod decklink;
 pub mod mp4;
 pub mod rtp;
 pub mod whip;
+pub mod raw_data;
 
 pub enum Input {
-    Rtp(RtpReceiver),
+    Rtp(RtpInput),
     Mp4(Mp4),
     Whip(WhipInput),
     #[cfg(feature = "decklink")]
@@ -38,18 +39,13 @@ pub enum Input {
 
 #[derive(Debug, Clone)]
 pub enum InputOptions {
-    Rtp(RtpReceiverOptions),
+    Rtp(RtpInputOptions),
     Mp4(Mp4Options),
     Whip(WhipOptions),
     #[cfg(feature = "decklink")]
     DeckLink(decklink::DeckLinkOptions),
 }
 
-#[derive(Debug, Clone)]
-pub struct RawDataInputOptions {
-    pub video: bool,
-    pub audio: bool,
-}
 
 pub enum InputInitInfo {
     Rtp {
@@ -96,6 +92,19 @@ pub(super) enum AudioInputReceiver {
     },
 }
 
+pub(super) fn new_external_input(
+    ctx: Arc<PipelineCtx>,
+    input_id: InputId,
+    options: InputOptions,
+) -> Result<(Input, Option<Port>, DecodedDataReceiver), InputInitError> {
+    match options {
+        InputOptions::Rtp(opts) => Input::Rtp(RtpInput::new(ctx, input_id, opts)?),
+        InputOptions::Mp4(opts) => todo!(),
+        InputOptions::Whip(opts) => todo!(),
+        InputOptions::DeckLink(opts) => todo!(),
+    }
+}
+
 pub(super) trait InputOptionsExt<NewInputResult> {
     fn new_input(
         &self,
@@ -115,40 +124,6 @@ impl InputOptionsExt<InputInitInfo> for InputOptions {
     }
 }
 
-impl InputOptionsExt<RawDataSender> for RawDataInputOptions {
-    fn new_input(
-        &self,
-        _input_id: &InputId,
-        _ctx: &PipelineCtx,
-    ) -> Result<(Input, DecodedDataReceiver, RawDataSender), RegisterInputError> {
-        let (video_sender, video_receiver) = match self.video {
-            true => {
-                let (sender, receiver) = bounded(1000);
-                (Some(sender), Some(receiver))
-            }
-            false => (None, None),
-        };
-        let (audio_sender, audio_receiver) = match self.audio {
-            true => {
-                let (sender, receiver) = bounded(1000);
-                (Some(sender), Some(receiver))
-            }
-            false => (None, None),
-        };
-        Ok((
-            Input::RawDataInput,
-            DecodedDataReceiver {
-                video: video_receiver,
-                audio: audio_receiver,
-            },
-            RawDataSender {
-                video: video_sender,
-                audio: audio_sender,
-            },
-        ))
-    }
-}
-
 /// Start entire processing pipeline for an input, including decoders and resamplers.
 fn start_input_threads(
     input_id: &InputId,
@@ -162,7 +137,7 @@ fn start_input_threads(
                 video,
                 audio,
                 init_info,
-            } = RtpReceiver::start_new_input(input_id, opts)?;
+            } = RtpInput::new(input_id, opts)?;
             let decoder_data_receiver =
                 setup_and_start_decoders_threads(pipeline_ctx, input_id, video, audio)?;
             Ok((input, decoder_data_receiver, init_info))

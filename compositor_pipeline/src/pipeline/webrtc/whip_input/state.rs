@@ -1,28 +1,44 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
 use compositor_render::InputId;
 use tracing::error;
-use webrtc::{peer_connection::RTCPeerConnection, rtp_transceiver::rtp_codec::RTPCodecType};
+use webrtc::peer_connection::RTCPeerConnection;
 
 use crate::pipeline::webrtc::{
-    error::WhipServerError, whip_input::connection::WhipInputConnectionState,
+    error::WhipServerError,
+    whip_input::connection_state::{WhipInputConnectionState, WhipInputConnectionStateOptions},
 };
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct WhipInputState(Arc<Mutex<HashMap<InputId, WhipInputConnectionState>>>);
 
 impl WhipInputState {
-    pub fn get_input_connection_options(
+    pub fn get_with<T, Func: FnOnce(&WhipInputConnectionState) -> Result<T, WhipServerError>>(
         &self,
-        input_id: InputId,
-    ) -> Result<WhipInputConnectionState, WhipServerError> {
-        let connections = self.0.lock().unwrap();
-        match connections.get(&input_id) {
-            Some(connection) => Ok(connection.clone()),
+        input_id: &InputId,
+        func: Func,
+    ) -> Result<T, WhipServerError> {
+        let guard = self.0.lock().unwrap();
+        match guard.get(input_id) {
+            Some(connection) => func(connection),
+            None => Err(WhipServerError::NotFound(format!("{input_id:?} not found"))),
+        }
+    }
+
+    pub fn get_mut_with<
+        T,
+        Func: FnOnce(&mut WhipInputConnectionState) -> Result<T, WhipServerError>,
+    >(
+        &self,
+        input_id: &InputId,
+        func: Func,
+    ) -> Result<T, WhipServerError> {
+        let guard = self.0.lock().unwrap();
+        match guard.get_mut(input_id) {
+            Some(connection) => func(connection),
             None => Err(WhipServerError::NotFound(format!("{input_id:?} not found"))),
         }
     }
@@ -44,24 +60,9 @@ impl WhipInputState {
         }
     }
 
-    pub fn get_time_elapsed_from_input_start(
-        &self,
-        input_id: InputId,
-        track_kind: RTPCodecType,
-    ) -> Option<Duration> {
-        let mut connections = self.0.lock().unwrap();
-        match connections.get_mut(&input_id) {
-            Some(connection) => connection.get_or_initialize_elapsed_start_time(track_kind),
-            None => {
-                error!("{input_id:?} not found");
-                None
-            }
-        }
-    }
-
-    pub fn add_input(&self, input_id: &InputId, input: WhipInputConnectionState) {
+    pub fn add_input(&self, input_id: &InputId, options: WhipInputConnectionStateOptions) {
         let mut guard = self.0.lock().unwrap();
-        guard.insert(input_id.clone(), input);
+        guard.insert(input_id.clone(), WhipInputConnectionState::new(options));
     }
 
     pub fn close_input(&self, input_id: &InputId) {
@@ -79,7 +80,10 @@ impl WhipInputState {
         guard.remove(input_id);
     }
 
-    pub fn take_peer_connection(&self, input_id: &InputId) -> Result<Option<Arc<RTCPeerConnection>>, WhipServerError> {
+    pub fn take_peer_connection(
+        &self,
+        input_id: &InputId,
+    ) -> Result<Option<Arc<RTCPeerConnection>>, WhipServerError> {
         let guard = self.0.lock().unwrap();
         match guard.get_mut(&input_id) {
             Some(connection) => Ok(connection.peer_connection.take()),

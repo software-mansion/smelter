@@ -3,7 +3,6 @@ use std::{iter, sync::Arc};
 use compositor_render::{Frame, OutputFrameFormat, Resolution};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use ffmpeg_next::format::Pixel;
-use resampler::OutputResampler;
 
 use crate::{
     audio_mixer::{AudioChannels, OutputSamples},
@@ -21,7 +20,6 @@ pub mod ffmpeg_h264;
 pub mod ffmpeg_vp8;
 pub mod ffmpeg_vp9;
 pub mod opus;
-mod resampler;
 
 pub struct EncoderOptions {
     pub video: Option<VideoEncoderOptions>,

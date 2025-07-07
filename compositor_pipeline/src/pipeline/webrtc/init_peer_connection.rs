@@ -16,7 +16,7 @@ use webrtc::{
     },
 };
 
-use crate::pipeline::VideoDecoder;
+use crate::pipeline::{decoder::VideoDecoderOptions, VideoDecoder};
 
 use super::{
     error::WhipServerError,
@@ -27,7 +27,7 @@ use super::{
 
 pub async fn init_peer_connection(
     stun_servers: Vec<String>,
-    video_decoder_preferences: Vec<VideoDecoder>,
+    video_preferences: Vec<VideoDecoderOptions>,
 ) -> Result<
     (
         Arc<RTCPeerConnection>,
@@ -38,7 +38,7 @@ pub async fn init_peer_connection(
 > {
     let mut media_engine = MediaEngine::default();
 
-    register_codecs(&mut media_engine, video_decoder_preferences)?;
+    register_codecs(&mut media_engine, video_preferences)?;
 
     let mut registry = Registry::new();
 
@@ -84,7 +84,7 @@ pub async fn init_peer_connection(
 
 fn register_codecs(
     media_engine: &mut MediaEngine,
-    video_decoder_preferences: Vec<VideoDecoder>,
+    video_preferences: Vec<VideoDecoderOptions>,
 ) -> webrtc::error::Result<()> {
     media_engine.register_codec(
         RTCRtpCodecParameters {
@@ -116,7 +116,7 @@ fn register_codecs(
         RTPCodecType::Audio,
     )?;
 
-    for video_decoder in video_decoder_preferences {
+    for video_decoder in video_preferences {
         match video_decoder {
             VideoDecoder::FFmpegH264 => {
                 for codec in get_video_h264_codecs_for_media_engine() {

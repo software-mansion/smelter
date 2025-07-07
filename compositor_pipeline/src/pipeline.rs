@@ -27,7 +27,7 @@ use compositor_render::{
     RendererSpec, RenderingMode, WgpuFeatures,
 };
 
-use input::{InputInitInfo, RawDataInputOptions};
+use input::InputInitInfo;
 use output::{
     encoded_data::EncodedDataOutput, new_external_output, raw_data::RawDataOutput,
     EncodedDataOutputOptions, OutputOptions, RawDataOutputOptions,
@@ -42,6 +42,9 @@ use crate::error::{
     UnregisterOutputError,
 };
 use crate::event::{Event, EventEmitter};
+use crate::pipeline::input::new_external_input;
+use crate::pipeline::input::raw_data::RawDataInput;
+use crate::pipeline::input::raw_data::RawDataInputOptions;
 use crate::pipeline::pipeline_output::OutputSender;
 use crate::pipeline::webrtc::WhipWhepServerHandle;
 use crate::queue::{
@@ -52,9 +55,9 @@ use self::input::InputOptions;
 
 pub mod decoder;
 pub mod encoder;
-pub mod resampler;
 pub mod input;
 pub mod output;
+pub mod resampler;
 pub mod rtp;
 pub mod webrtc;
 
@@ -171,13 +174,14 @@ impl Pipeline {
     pub fn register_input(
         pipeline: &Arc<Mutex<Self>>,
         input_id: InputId,
-        register_options: RegisterInputOptions,
+        options: RegisterInputOptions,
     ) -> Result<InputInitInfo, RegisterInputError> {
+        let input_options = options.input_options;
         register_pipeline_input(
             pipeline,
             input_id,
-            &register_options.input_options,
-            register_options.queue_options,
+            options.queue_options,
+            |ctx, input_id| new_external_input(ctx, input_id, input_options),
         )
     }
 
@@ -187,7 +191,9 @@ impl Pipeline {
         raw_input_options: RawDataInputOptions,
         queue_options: QueueInputOptions,
     ) -> Result<RawDataSender, RegisterInputError> {
-        register_pipeline_input(pipeline, input_id, &raw_input_options, queue_options)
+        register_pipeline_input(pipeline, input_id, queue_options, |ctx, input_id| {
+            RawDataInput::new(ctx, input_id, raw_input_options)
+        })
     }
 
     pub fn unregister_input(&mut self, input_id: &InputId) -> Result<(), UnregisterInputError> {

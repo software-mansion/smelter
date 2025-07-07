@@ -28,11 +28,11 @@ pub async fn handle_new_whip_ice_candidates(
     }
 
     let input_id = InputId(Arc::from(id));
-    let input = state.inputs.get_input_connection_options(input_id)?;
-    let bearer_token = input.bearer_token;
-    let peer_connection = input.peer_connection;
+    let (bearer_token, peer_connection) = state.inputs.get_with(&input_id, |input| {
+        Ok((input.bearer_token, input.peer_connection))
+    })?;
 
-    validate_token(bearer_token, headers.get("Authorization")).await?;
+    validate_token(&bearer_token, headers.get("Authorization")).await?;
 
     if let Some(peer_connection) = peer_connection {
         for candidate in ice_fragment_unmarshal(&sdp_fragment_content) {

@@ -75,7 +75,7 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
             audio: audio.map(TryFrom::try_from).transpose()?,
         };
 
-        let input_options = input::InputOptions::Rtp(input::rtp::RtpReceiverOptions {
+        let input_options = input::InputOptions::Rtp(input::rtp::RtpInputOptions {
             port: port.try_into()?,
             stream: rtp_stream,
             transport_protocol: transport_protocol.unwrap_or(TransportProtocol::Udp).into(),

@@ -1,12 +1,12 @@
 use crate::{
     pipeline::{
         self,
-        decoder::{start_audio_decoder_thread, start_video_decoder_thread},
+        decoder::{start_audio_decoder_thread, start_video_decoder_thread, VideoDecoderOptions},
         input::whip::{
             depayloader::{AudioDepayloader, RolloverState, VideoDepayloader},
             start_forwarding_thread,
         },
-        webrtc::error::WhipServerError,
+        webrtc::{error::WhipServerError, WhipInputState},
         EncodedChunk, PipelineCtx, VideoDecoder,
     },
     queue::PipelineEvent,
@@ -67,9 +67,8 @@ impl WhipDecodersBuilder {
         let (whip_client_to_bridge_sender, bridge_to_decoder_receiver) =
             start_forwarding_thread(self.input_id.clone());
 
-        let decoder = pipeline::VideoDecoder::FFmpegH264;
         start_video_decoder_thread(
-            VideoDecoderOptions { decoder },
+            VideoDecoderOptions::FfmpegH264,
             &self.ctx,
             bridge_to_decoder_receiver,
             self.decoded_data_sender.frame_sender.clone(),
@@ -100,7 +99,7 @@ impl WhipDecodersBuilder {
 
         let decoder = pipeline::VideoDecoder::VulkanVideoH264;
         start_video_decoder_thread(
-            VideoDecoderOptions { decoder },
+            VideoDecoderOptions::FfmpegH264,
             &self.ctx,
             bridge_to_decoder_receiver,
             self.decoded_data_sender.frame_sender.clone(),
@@ -129,9 +128,7 @@ impl WhipDecodersBuilder {
             start_forwarding_thread(self.input_id.clone());
 
         start_video_decoder_thread(
-            VideoDecoderOptions {
-                decoder: pipeline::VideoDecoder::FFmpegVp8,
-            },
+            VideoDecoderOptions::FfmpegVp8,
             &self.ctx,
             bridge_to_decoder_receiver,
             self.decoded_data_sender.frame_sender.clone(),
@@ -160,9 +157,7 @@ impl WhipDecodersBuilder {
             start_forwarding_thread(self.input_id.clone());
 
         start_video_decoder_thread(
-            VideoDecoderOptions {
-                decoder: pipeline::VideoDecoder::FFmpegVp9,
-            },
+            VideoDecoderOptions::FfmpegVp9,
             &self.ctx,
             bridge_to_decoder_receiver,
             self.decoded_data_sender.frame_sender.clone(),
@@ -191,9 +186,6 @@ impl WhipDecodersBuilder {
             start_forwarding_thread(self.input_id.clone());
 
         start_audio_decoder_thread(
-            AudioDecoderOptions::Opus(OpusDecoderOptions {
-                forward_error_correction: false,
-            }),
             self.ctx.mixing_sample_rate,
             bridge_to_decoder_receiver,
             self.decoded_data_sender.input_samples_sender.clone(),

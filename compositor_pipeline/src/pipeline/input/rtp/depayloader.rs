@@ -1,138 +1,96 @@
-use std::{mem, time::Duration};
+use std::mem;
 
 use bytes::Bytes;
-use log::error;
-use rtp::{
-    codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet, vp9::Vp9Packet},
-    packetizer::Depacketizer,
-};
+use compositor_render::error::ErrorStack;
+use rtp::codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet, vp9::Vp9Packet};
+use tracing::warn;
 
-use crate::pipeline::{
-    decoder::AacDepayloaderMode,
-    output::rtp::RtpPacket,
-    types::{AudioCodec, EncodedChunk, EncodedChunkKind, IsKeyframe, VideoCodec},
+use crate::{
+    pipeline::{
+        input::rtp::RtpAacDepayloaderMode,
+        output::rtp::RtpPacket,
+        types::{AudioCodec, EncodedChunk, EncodedChunkKind, IsKeyframe, VideoCodec},
+    },
+    queue::PipelineEvent,
 };
-
-use self::aac::AacDepayloaderNewError;
 
 use super::DepayloadingError;
 
-pub use aac::{AacDepayloader, AacDepayloadingError};
+pub use aac_asc::AudioSpecificConfig;
+pub use aac_depayloader::{AacDepayloader, AacDepayloadingError};
 
-mod aac;
+mod aac_asc;
+mod aac_depayloader;
 
-pub enum DepayloadedCodec {
+pub enum DepayloaderOptions {
     H264,
     Vp8,
     Vp9,
     Opus,
-    Aac(AacDepayloaderMode, Bytes),
+    Aac(RtpAacDepayloaderMode, AudioSpecificConfig),
 }
 
-pub struct DepayloaderOptions {
-    pub codec: DepayloadedCodec,
-    pub payload_type: u8,
-    pub clock_rate: u32,
-    pub mtu: usize,
-    pub ssrc: u32,
-}
-
-pub(crate) struct Depayloader {
-    depayloader: Box<dyn DepayloaderExt>,
-    ssrc: u32,
-    payload_type: u8,
-}
-
-impl Depayloader {
-    fn new(options: DepayloaderOptions) -> Result<Self, DepayloaderInitError> {
-        let depayloader = match options.codec {
-            DepayloadedCodec::H264 => {
-                BufferedDepayloader::new::<H264Packet>(EncodedChunkKind::Video(VideoCodec::H264))
-            }
-            DepayloadedCodec::Vp8 => {
-                BufferedDepayloader::new::<Vp8Packet>(EncodedChunkKind::Video(VideoCodec::VP8))
-            }
-            DepayloadedCodec::Vp9 => {
-                BufferedDepayloader::new::<Vp9Packet>(EncodedChunkKind::Video(VideoCodec::VP9))
-            }
-            DepayloadedCodec::Opus => {
-                BufferedDepayloader::new::<OpusPacket>(EncodedChunkKind::Audio(AudioCodec::Opus))
-            }
-            DepayloadedCodec::Aac(mode, asc) => Box::new(AacDepayloader::new(mode, &asc))?,
-        };
-        Ok(Self {
-            ssrc: options.ssrc,
-            depayloader,
-            payload_type: options.payload_type,
-            depayloader,
-        })
-    }
-
-    pub fn depayload(&mut self, packet: RtpPacket) -> Result<Vec<EncodedChunk>, DepayloadingError> {
-        self.depayload(packet)
+pub fn new_depayloader(options: DepayloaderOptions) -> Box<dyn Depayloader> {
+    match options {
+        DepayloaderOptions::H264 => {
+            BufferedDepayloader::<H264Packet>::new(EncodedChunkKind::Video(VideoCodec::H264))
+        }
+        DepayloaderOptions::Vp8 => {
+            BufferedDepayloader::<Vp8Packet>::new(EncodedChunkKind::Video(VideoCodec::VP8))
+        }
+        DepayloaderOptions::Vp9 => {
+            BufferedDepayloader::<Vp9Packet>::new(EncodedChunkKind::Video(VideoCodec::VP9))
+        }
+        DepayloaderOptions::Opus => {
+            BufferedDepayloader::<OpusPacket>::new(EncodedChunkKind::Audio(AudioCodec::Opus))
+        }
+        DepayloaderOptions::Aac(mode, asc) => Box::new(AacDepayloader::new(mode, asc)),
     }
 }
 
-trait DepayloaderExt {
-    fn depayload(
-        &mut self,
-        packet: rtp::packet::Packet,
-    ) -> Result<Vec<EncodedChunk>, DepayloadingError>;
+trait Depayloader {
+    fn depayload(&mut self, packet: RtpPacket) -> Result<Vec<EncodedChunk>, DepayloadingError>;
 }
 
-struct BufferedDepayloader<T: rtp::packetizer::Depacketizer + Default> {
+struct BufferedDepayloader<T: rtp::packetizer::Depacketizer + Default + 'static> {
     kind: EncodedChunkKind,
     buffer: Vec<Bytes>,
-    rollover_state: RolloverState,
-    depacketizer: T,
+    depayloader: T,
 }
 
-impl<T: rtp::packetizer::Depacketizer + Default> BufferedDepayloader<T> {
-    fn new(kind: EncodedChunkKind) -> Box<dyn DepayloaderExt> {
+impl<T: rtp::packetizer::Depacketizer + Default + 'static> BufferedDepayloader<T> {
+    fn new(kind: EncodedChunkKind) -> Box<dyn Depayloader> {
         Box::new(Self {
             kind,
             buffer: Vec::new(),
-            rollover_state: RolloverState::default(),
-            depacketizer: T::default(),
+            depayloader: T::default(),
         })
     }
 }
 
-impl<T: rtp::packetizer::Depacketizer + Default> DepayloaderExt for BufferedDepayloader<T> {
-    fn depayload(
-        &mut self,
-        packet: rtp::packet::Packet,
-    ) -> Result<Vec<EncodedChunk>, DepayloadingError> {
-        let chunk = self.depayloader.depacketize(&packet.payload)?;
+impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for BufferedDepayloader<T> {
+    fn depayload(&mut self, packet: RtpPacket) -> Result<Vec<EncodedChunk>, DepayloadingError> {
+        let chunk = self.depayloader.depacketize(&packet.packet.payload)?;
 
         if chunk.is_empty() {
             return Ok(Vec::new());
         }
 
         self.buffer.push(chunk);
-        if !packet.header.marker {
+        if !packet.packet.header.marker {
             // the marker bit is set on the last packet of an access unit
             return Ok(Vec::new());
         }
 
-        let timestamp = self
-            .rollover_state
-            .timestamp(packet.packet.header.timestamp);
         let new_chunk = EncodedChunk {
             data: mem::take(&mut self.buffer).concat().into(),
-            pts: Duration::from_secs_f64(timestamp as f64 / 90000.0),
+            pts: packet.timestamp,
             dts: None,
             is_keyframe: IsKeyframe::Unknown,
             kind: self.kind,
         };
         Ok(vec![new_chunk])
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum DepayloaderInitError {
-    #[error(transparent)]
-    AacDepayloaderNewError(#[from] AacDepayloaderNewError),
 }
 
 #[derive(Default)]
@@ -161,6 +119,54 @@ impl RolloverState {
         self.previous_timestamp = Some(current_timestamp);
 
         (self.rollover_count as u64) * (u32::MAX as u64 + 1) + current_timestamp as u64
+    }
+}
+
+pub(crate) struct DepayloaderStream<Source>
+where
+    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
+{
+    depayloader: Box<dyn Depayloader>,
+    source: Source,
+    eos_sent: bool,
+}
+
+impl<Source> DepayloaderStream<Source>
+where
+    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
+{
+    pub fn new(options: DepayloaderOptions, source: Source) -> Self {
+        Self {
+            depayloader: new_depayloader(options),
+            source,
+            eos_sent: false,
+        }
+    }
+}
+
+impl<Source> Iterator for DepayloaderStream<Source>
+where
+    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
+{
+    type Item = Vec<PipelineEvent<EncodedChunk>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.source.next() {
+            Some(PipelineEvent::Data(packet)) => match self.depayloader.depayload(packet) {
+                Ok(chunks) => Some(chunks.into_iter().map(|p| PipelineEvent::Data(p)).collect()),
+                Err(err) => {
+                    warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
+                    Some(vec![])
+                }
+            },
+            Some(PipelineEvent::EOS) | None => match self.eos_sent {
+                true => None,
+                false => {
+                    self.eos_sent = true;
+                    Some(vec![PipelineEvent::EOS])
+                }
+            },
+        }
     }
 }
 
