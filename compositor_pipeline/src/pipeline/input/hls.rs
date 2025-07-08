@@ -190,7 +190,7 @@ impl HlsInput {
             }
 
             if let Some((index, ref sender, ref mut state)) = video {
-                let (pts, dts) = state.recalculate_pts_dts(&packet);
+                let (pts, dts) = state.pts_dts_from_packet(&packet);
 
                 if packet.stream() == index {
                     let chunk = EncodedChunk {
@@ -211,7 +211,7 @@ impl HlsInput {
             }
 
             if let Some((index, ref sender, ref mut state)) = audio {
-                let (pts, dts) = state.recalculate_pts_dts(&packet);
+                let (pts, dts) = state.pts_dts_from_packet(&packet);
 
                 if packet.stream() == index {
                     let chunk = EncodedChunk {
@@ -320,34 +320,35 @@ impl TimestampState {
         }
     }
 
-    fn recalculate_pts_dts(&mut self, packet: &Packet) -> (Duration, Option<Duration>) {
+    fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>) {
         let dts = packet.dts().unwrap_or(0) as f64;
         let prev_dts = self.prev_dts.unwrap_or(dts);
 
-        let to_timestamp = self.time_base.numerator() as f64 / self.time_base.denominator() as f64;
-        if f64::abs((dts + self.discontinuity_offset) - prev_dts) * to_timestamp * 1000.0
-            >= Self::DISCONTINUITY_THRESHOLD
-        {
-            // TODO(noituri): Use debug here
+        // Detect discontinuity
+        let timestamp_delta = self.to_timestamp(f64::abs(dts + self.discontinuity_offset - prev_dts));
+        if timestamp_delta * 1000.0 >= Self::DISCONTINUITY_THRESHOLD {
             tracing::error!("Discontinuity detected: {prev_dts} -> {dts} (dts)");
             self.discontinuity_offset = (prev_dts - dts) + packet.duration() as f64;
         }
-
         self.prev_dts = Some(dts + self.discontinuity_offset);
 
-        let pts = self.calculate_timestamp(packet.pts().unwrap_or(0));
-        let dts = packet.dts().map(|dts| self.calculate_timestamp(dts));
-        let first_pts = *self.first_pts.get_or_insert(pts);
+        // Apply discontinuity offset
+        let pts = self.to_timestamp(packet.pts().unwrap_or(0) as f64 + self.discontinuity_offset);
+        let dts = packet.dts().map(|dts| self.to_timestamp(dts as f64 + self.discontinuity_offset));
 
-        let pts = (self.input_start_time + Duration::from_secs_f64(pts - first_pts))
-            .duration_since(self.queue_start_time);
+        // Recalculate pts in regards to queue start time
+        let first_pts = *self.first_pts.get_or_insert(pts);
+        let pts = self.to_queue_timestamp(Duration::from_secs_f64(pts - first_pts));
         let dts = dts.map(Duration::from_secs_f64);
 
         return (pts, dts);
     }
 
-    fn calculate_timestamp(&self, timestamp: i64) -> f64 {
-        (timestamp as f64 + self.discontinuity_offset) * self.time_base.numerator() as f64
-            / self.time_base.denominator() as f64
+    fn to_timestamp(&self, timestamp: f64) -> f64 {
+        timestamp * self.time_base.numerator() as f64 / self.time_base.denominator() as f64
+    }
+
+    fn to_queue_timestamp(&self, input_timestamp: Duration) -> Duration {
+        (self.input_start_time + input_timestamp).duration_since(self.queue_start_time)
     }
 }
