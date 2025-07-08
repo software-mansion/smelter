@@ -295,7 +295,7 @@ struct TimestampState {
     queue_start_time: Instant,
 
     first_pts: Option<f64>,
-    prev_dts: Option<f64>,
+    prev_pts: Option<f64>,
     discontinuity_offset: f64,
     // TODO(noituri): time base can change?
     time_base: ffmpeg_next::Rational,
@@ -314,26 +314,26 @@ impl TimestampState {
             input_start_time,
             queue_start_time,
             first_pts: None,
-            prev_dts: None,
+            prev_pts: None,
             discontinuity_offset: 0.0,
             time_base,
         }
     }
 
     fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>) {
-        let dts = packet.dts().unwrap_or(0) as f64;
-        let prev_dts = self.prev_dts.unwrap_or(dts);
+        let pts = packet.pts().unwrap_or(0) as f64;
+        let prev_pts = self.prev_pts.unwrap_or(pts);
 
         // Detect discontinuity
-        let timestamp_delta = self.to_timestamp(f64::abs(dts + self.discontinuity_offset - prev_dts));
+        let timestamp_delta = self.to_timestamp(f64::abs(pts + self.discontinuity_offset - prev_pts));
         if timestamp_delta * 1000.0 >= Self::DISCONTINUITY_THRESHOLD {
-            tracing::error!("Discontinuity detected: {prev_dts} -> {dts} (dts)");
-            self.discontinuity_offset = (prev_dts - dts) + packet.duration() as f64;
+            tracing::error!("Discontinuity detected: {prev_pts} -> {pts} (pts)");
+            self.discontinuity_offset = (prev_pts - pts) + packet.duration() as f64;
         }
-        self.prev_dts = Some(dts + self.discontinuity_offset);
+        self.prev_pts = Some(pts + self.discontinuity_offset);
 
         // Apply discontinuity offset
-        let pts = self.to_timestamp(packet.pts().unwrap_or(0) as f64 + self.discontinuity_offset);
+        let pts = self.to_timestamp(pts as f64 + self.discontinuity_offset);
         let dts = packet.dts().map(|dts| self.to_timestamp(dts as f64 + self.discontinuity_offset));
 
         // Recalculate pts in regards to queue start time
