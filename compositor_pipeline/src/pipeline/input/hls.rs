@@ -99,7 +99,10 @@ impl HlsInput {
         // I do not know why this happens
         let mut input_ctx = match input_with_dictionary_and_interrupt(
             &options.url,
-            Dictionary::from_iter([("protocol_whitelist", "tcp,hls,http,https,file,tls")]),
+            Dictionary::from_iter([
+                ("protocol_whitelist", "tcp,hls,http,https,file,tls"),
+                ("buffer_size", "1000000"),
+            ]),
             || should_close.load(Ordering::Relaxed),
         ) {
             Ok(i) => i,
@@ -293,8 +296,8 @@ where
 struct TimestampState {
     input_start_time: Instant,
     queue_start_time: Instant,
+    first_pts: Option<Duration>,
 
-    first_pts: Option<f64>,
     prev_pts: Option<f64>,
     discontinuity_offset: f64,
     // TODO(noituri): time base can change?
@@ -302,8 +305,8 @@ struct TimestampState {
 }
 
 impl TimestampState {
-    /// (10s) This value was picked by ffmpeg arbitrarily but it's quite conservative.
-    const DISCONTINUITY_THRESHOLD: f64 = 10_000.0;
+    /// (10s) This value was picked arbitrarily but it's quite conservative.
+    const DISCONTINUITY_THRESHOLD: f64 = 10.0;
 
     fn new(
         input_start_time: Instant,
@@ -325,8 +328,10 @@ impl TimestampState {
         let prev_pts = self.prev_pts.unwrap_or(pts);
 
         // Detect discontinuity
-        let timestamp_delta = self.to_timestamp(f64::abs(pts + self.discontinuity_offset - prev_pts));
-        if timestamp_delta * 1000.0 >= Self::DISCONTINUITY_THRESHOLD {
+        let timestamp_delta = self
+            .to_timestamp(f64::abs(pts + self.discontinuity_offset - prev_pts))
+            .as_secs_f64();
+        if timestamp_delta >= Self::DISCONTINUITY_THRESHOLD {
             tracing::error!("Discontinuity detected: {prev_pts} -> {pts} (pts)");
             self.discontinuity_offset = (prev_pts - pts) + packet.duration() as f64;
         }
@@ -334,18 +339,21 @@ impl TimestampState {
 
         // Apply discontinuity offset
         let pts = self.to_timestamp(pts as f64 + self.discontinuity_offset);
-        let dts = packet.dts().map(|dts| self.to_timestamp(dts as f64 + self.discontinuity_offset));
+        let dts = packet
+            .dts()
+            .map(|dts| self.to_timestamp(dts as f64 + self.discontinuity_offset));
 
         // Recalculate pts in regards to queue start time
         let first_pts = *self.first_pts.get_or_insert(pts);
-        let pts = self.to_queue_timestamp(Duration::from_secs_f64(pts - first_pts));
-        let dts = dts.map(Duration::from_secs_f64);
+        let pts = self.to_queue_timestamp(pts.saturating_sub(first_pts));
 
         return (pts, dts);
     }
 
-    fn to_timestamp(&self, timestamp: f64) -> f64 {
-        timestamp * self.time_base.numerator() as f64 / self.time_base.denominator() as f64
+    fn to_timestamp(&self, timestamp: f64) -> Duration {
+        Duration::from_secs_f64(
+            timestamp * self.time_base.numerator() as f64 / self.time_base.denominator() as f64,
+        )
     }
 
     fn to_queue_timestamp(&self, input_timestamp: Duration) -> Duration {
