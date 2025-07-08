@@ -101,7 +101,13 @@ impl HlsInput {
             &options.url,
             Dictionary::from_iter([
                 ("protocol_whitelist", "tcp,hls,http,https,file,tls"),
-                ("buffer_size", "1000000"),
+                // ("buffer_size", "500000000"), // 500mb
+                ("rtbufsize", "500000000"), // 500mb
+                ("dupa", "500000000"), // 500mb
+                // ("fflags", "nobuffer"),
+                ("flags", "low_delay"),
+                ("analyzeduration", "2000000"),
+                ("probesize", "2000000"),
             ]),
             || should_close.load(Ordering::Relaxed),
         ) {
@@ -145,6 +151,7 @@ impl HlsInput {
         };
         let (mut video, video_receiver) = match input_ctx.streams().best(Type::Video) {
             Some(stream) => {
+                // TODO(noituri): Decoder sometimes in rare cases might need extradata
                 let (sender, receiver) = bounded(2000);
                 let timestamp_state =
                     TimestampState::new(input_start_time, queue_start_time, stream.time_base());
