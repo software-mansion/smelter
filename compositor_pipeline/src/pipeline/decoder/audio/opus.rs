@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
+use tracing::{debug, trace};
 
 use crate::{
     error::InputInitError,
@@ -13,8 +14,8 @@ use super::{AudioDecoderExt, DecodedSamples, DecodingError};
 pub(super) struct OpusDecoder {
     decoder: opus::Decoder,
     decoded_samples_buffer: Vec<i16>,
-    forward_error_correction: bool,
     decoded_sample_rate: u32,
+    last_decoded_pts: Option<Duration>,
 }
 
 impl OpusDecoder {
@@ -34,8 +35,8 @@ impl OpusDecoder {
         Ok(Self {
             decoder,
             decoded_samples_buffer,
-            forward_error_correction: opts.forward_error_correction,
             decoded_sample_rate,
+            last_decoded_pts: None,
         })
     }
 
@@ -49,6 +50,41 @@ impl OpusDecoder {
         )
         .into()
     }
+
+    fn set_end_pts(&mut self, decoded_samples: &DecodedSamples) {
+        let samples_len = decoded_samples.samples.get_number_of_samples();
+        let sample_rate = decoded_samples.sample_rate;
+
+        let chunk_duration = Duration::from_secs_f64(samples_len as f64 / sample_rate as f64);
+        trace!(
+            "[opus decoder] Calclulated stream gap: {} s",
+            chunk_duration.as_secs_f64(),
+        );
+        self.last_decoded_pts = Some(decoded_samples.start_pts + chunk_duration);
+    }
+
+    fn should_use_fec(&mut self, current_start: Duration) -> bool {
+        let stream_gap = current_start - *self.last_decoded_pts.get_or_insert(current_start);
+
+        stream_gap > Duration::from_millis(1)
+    }
+
+    fn decode_chunk(
+        &mut self,
+        encoded_chunk: &EncodedChunk,
+        fec: bool,
+    ) -> Result<DecodedSamples, DecodingError> {
+        let decoded_samples_count =
+            self.decoder
+                .decode(&encoded_chunk.data, &mut self.decoded_samples_buffer, fec)?;
+
+        let samples = Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
+        Ok(DecodedSamples {
+            samples,
+            start_pts: encoded_chunk.pts,
+            sample_rate: self.decoded_sample_rate,
+        })
+    }
 }
 
 impl AudioDecoderExt for OpusDecoder {
@@ -56,18 +92,22 @@ impl AudioDecoderExt for OpusDecoder {
         &mut self,
         encoded_chunk: EncodedChunk,
     ) -> Result<Vec<DecodedSamples>, DecodingError> {
-        let decoded_samples_count = self.decoder.decode(
-            &encoded_chunk.data,
-            &mut self.decoded_samples_buffer,
-            self.forward_error_correction,
-        )?;
+        let use_fec = self.should_use_fec(encoded_chunk.pts);
 
-        let samples = Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
-        let decoded_samples = DecodedSamples {
-            samples,
-            start_pts: encoded_chunk.pts,
-            sample_rate: self.decoded_sample_rate,
+        let fec_samples = if use_fec {
+            debug!("[opus decoder] FEC used!");
+            Some(self.decode_chunk(&encoded_chunk, true)?)
+        } else {
+            None
         };
-        Ok(Vec::from([decoded_samples]))
+
+        let decoded_samples = self.decode_chunk(&encoded_chunk, false)?;
+
+        self.set_end_pts(&decoded_samples);
+
+        match fec_samples {
+            Some(samples) => Ok(vec![samples, decoded_samples]),
+            None => Ok(vec![decoded_samples]),
+        }
     }
 }
