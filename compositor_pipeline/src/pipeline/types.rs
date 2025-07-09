@@ -125,6 +125,17 @@ pub(super) enum Samples {
     Stereo32Bit(Vec<(i32, i32)>),
 }
 
+impl Samples {
+    pub fn get_number_of_samples(&self) -> usize {
+        match self {
+            Self::Mono16Bit(v) => v.len(),
+            Self::Mono32Bit(v) => v.len(),
+            Self::Stereo16Bit(v) => v.len(),
+            Self::Stereo32Bit(v) => v.len(),
+        }
+    }
+}
+
 impl fmt::Debug for Samples {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (name, length) = match self {
