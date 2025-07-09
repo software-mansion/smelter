@@ -199,8 +199,8 @@ impl HlsInput {
                 continue;
             }
 
-            if let Some((index, ref sender, ref mut state)) = video {
-                let (pts, dts) = state.pts_dts_from_packet(&packet);
+            if let Some((index, ref sender, ref mut timestamp_state)) = video {
+                let (pts, dts) = timestamp_state.pts_dts_from_packet(&packet);
 
                 if packet.stream() == index {
                     let chunk = EncodedChunk {
@@ -220,8 +220,8 @@ impl HlsInput {
                 }
             }
 
-            if let Some((index, ref sender, ref mut state)) = audio {
-                let (pts, dts) = state.pts_dts_from_packet(&packet);
+            if let Some((index, ref sender, ref mut timestamp_state)) = audio {
+                let (pts, dts) = timestamp_state.pts_dts_from_packet(&packet);
 
                 if packet.stream() == index {
                     let chunk = EncodedChunk {
