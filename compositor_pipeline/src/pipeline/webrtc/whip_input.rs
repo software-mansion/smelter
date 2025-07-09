@@ -10,15 +10,14 @@ use crate::{
     audio_mixer::InputSamples,
     pipeline::{
         decoder::VideoDecoderOptions,
-        input::{whip::start_decoders::WhipInputDecoders, Input, InputInitInfo},
-        webrtc::{
-            bearer_token::generate_token,
-            whip_input::connection_state::WhipInputConnectionStateOptions,
-        },
+        input::{Input, InputInitInfo},
+        webrtc::bearer_token::generate_token,
         EncodedChunk, PipelineCtx,
     },
     queue::PipelineEvent,
 };
+use connection_state::WhipInputConnectionStateOptions;
+use start_decoders::WhipInputDecoders;
 
 pub(super) mod connection_state;
 pub(super) mod state;
@@ -34,8 +33,8 @@ pub enum WhipReceiverError {
 }
 
 #[derive(Debug, Clone)]
-pub struct WhipOptions {
-    pub video_decoder_preferences: Vec<VideoDecoderOptions>,
+pub struct WhipInputOptions {
+    pub video_preferences: Vec<VideoDecoderOptions>,
 }
 
 pub struct WhipInput {
@@ -52,7 +51,7 @@ pub struct DecodedDataSender {
 impl WhipInput {
     pub(super) fn start_new_input(
         input_id: &InputId,
-        options: WhipOptions,
+        options: WhipInputOptions,
         ctx: &PipelineCtx,
         frame_sender: Sender<PipelineEvent<Frame>>,
         input_samples_sender: Sender<PipelineEvent<InputSamples>>,

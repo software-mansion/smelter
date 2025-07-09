@@ -4,7 +4,7 @@ use compositor_render::InputId;
 use crossbeam_channel::bounded;
 
 use crate::{
-    error::RegisterInputError,
+    error::InputInitError,
     pipeline::{decoder::DecodedDataReceiver, input::Input, types::RawDataSender, PipelineCtx},
 };
 
@@ -18,10 +18,10 @@ pub struct RawDataInput;
 
 impl RawDataInput {
     pub fn new(
-        ctx: Arc<PipelineCtx>,
-        input_id: InputId,
+        _ctx: Arc<PipelineCtx>,
+        _input_id: InputId,
         options: RawDataInputOptions,
-    ) -> Result<(Input, RawDataSender, DecodedDataReceiver), RegisterInputError> {
+    ) -> Result<(Input, RawDataSender, DecodedDataReceiver), InputInitError> {
         let (video_sender, video_receiver) = match options.video {
             true => {
                 let (sender, receiver) = bounded(1000);

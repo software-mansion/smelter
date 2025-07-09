@@ -43,7 +43,8 @@ pub fn spawn_rtp_audio_thread<Decoder: AudioDecoder>(
             )
             .entered();
 
-            let result = init_stream::<Decoder>(ctx, decoder_options, depayloader_options);
+            let result =
+                init_stream::<Decoder>(ctx, decoder_options, depayloader_options, sample_rate);
             let stream = match result {
                 Ok((stream, handle)) => {
                     result_sender.send(Ok(handle)).unwrap();
@@ -71,6 +72,7 @@ fn init_stream<Decoder: AudioDecoder>(
     ctx: Arc<PipelineCtx>,
     decoder_options: Decoder::Options,
     depayloader_options: DepayloaderOptions,
+    sample_rate: u32,
 ) -> Result<
     (
         impl Iterator<Item = PipelineEvent<InputSamples>>,
@@ -92,6 +94,9 @@ fn init_stream<Decoder: AudioDecoder>(
 
     Ok((
         resampled_stream.flatten(),
-        RtpAudioTrackThreadHandle { rtp_packet_sender },
+        RtpAudioTrackThreadHandle {
+            rtp_packet_sender,
+            sample_rate,
+        },
     ))
 }

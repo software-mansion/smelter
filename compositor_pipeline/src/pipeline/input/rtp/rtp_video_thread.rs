@@ -9,7 +9,7 @@ use crate::{
     pipeline::{
         decoder::{VideoDecoder, VideoDecoderStream},
         input::rtp::depayloader::{DepayloaderOptions, DepayloaderStream},
-        output::rtp::{RtpEvent, RtpPacket},
+        output::rtp::RtpPacket,
         PipelineCtx,
     },
     queue::PipelineEvent,
@@ -23,7 +23,7 @@ pub fn spawn_rtp_video_thread<Decoder: VideoDecoder>(
     ctx: Arc<PipelineCtx>,
     input_id: InputId,
     depayloader_options: DepayloaderOptions,
-    rtp_packet_sender: Sender<RtpEvent>,
+    rtp_packet_sender: Sender<PipelineEvent<Frame>>,
 ) -> Result<RtpVideoTrackThreadHandle, DecoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 

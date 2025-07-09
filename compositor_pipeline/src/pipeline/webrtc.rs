@@ -14,6 +14,7 @@ mod server;
 mod whip_input;
 
 pub(super) use server::WhipWhepServer;
+pub(super) use whip_input::{WhipInput, WhipInputOptions};
 
 use crate::pipeline::PipelineCtx;
 

@@ -55,7 +55,7 @@ pub(super) fn create_pipeline(
         tokio_rt: tokio_rt.clone(),
         graphics_context,
         whip_whep_state: match opts.start_whip_whep {
-            true => Some(WhipWhepPipelineState::default()),
+            true => Some(WhipWhepPipelineState::default().into()),
             false => None,
         },
     });

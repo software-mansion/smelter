@@ -34,7 +34,7 @@ pub struct Options {
     pub asc: Option<bytes::Bytes>,
 }
 
-pub(super) struct FdkAacDecoder {
+pub(crate) struct FdkAacDecoder {
     decoder: Option<Decoder>,
     asc: Option<bytes::Bytes>,
 }

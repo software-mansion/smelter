@@ -42,7 +42,8 @@ where
 
     let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
 
-    let (input, input_result, receiver) = build_input(&input_id, &pipeline_ctx)?;
+    let (input, input_result, receiver) = build_input(pipeline_ctx, input_id.clone())
+        .map_err(|err| RegisterInputError::InputError(input_id.clone(), err))?;
 
     let (audio_eos_received, video_eos_received) = (
         receiver.audio.as_ref().map(|_| false),

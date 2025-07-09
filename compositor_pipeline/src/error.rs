@@ -6,7 +6,7 @@ use compositor_render::{
     InputId, OutputId,
 };
 
-use crate::pipeline::{decoder::AacDecoderError, output::whip, AudioCodec, VideoCodec};
+use crate::pipeline::{decoder::fdk_aac::FdkAacDecoderError, output::whip, AudioCodec, VideoCodec};
 use fdk_aac_sys as fdk;
 
 #[derive(Debug, thiserror::Error)]
@@ -151,6 +151,9 @@ pub enum InputInitError {
 
     #[error(transparent)]
     ResamplerError(#[from] rubato::ResamplerConstructionError),
+
+    #[error("Failed to initialize decoder.")]
+    EncoderError(#[from] DecoderInitError),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -166,7 +169,7 @@ pub enum DecoderInitError {
     OpusError(#[from] opus::Error),
 
     #[error(transparent)]
-    AacError(#[from] AacDecoderError),
+    AacError(#[from] FdkAacDecoderError),
 
     #[error(transparent)]
     FfmpegError(#[from] ffmpeg_next::Error),

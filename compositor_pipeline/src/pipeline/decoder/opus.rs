@@ -10,12 +10,7 @@ use crate::{
 
 use super::DecodedSamples;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Options {
-    pub forward_error_correction: bool,
-}
-
-pub(super) struct OpusDecoder {
+pub(crate) struct OpusDecoder {
     decoder: opus::Decoder,
     decoded_samples_buffer: Vec<i16>,
     forward_error_correction: bool,
@@ -25,7 +20,7 @@ pub(super) struct OpusDecoder {
 impl AudioDecoder for OpusDecoder {
     const LABEL: &'static str = "OPUS decoder";
 
-    type Options = Options;
+    type Options = ();
 
     fn new(
         ctx: &Arc<crate::pipeline::PipelineCtx>,

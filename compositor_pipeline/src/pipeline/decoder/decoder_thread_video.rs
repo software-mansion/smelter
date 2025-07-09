@@ -6,7 +6,7 @@ use tracing::{debug, span, warn, Level};
 
 use crate::{
     error::DecoderInitError,
-    pipeline::{decoder::VideoDecoderStream, PipelineCtx},
+    pipeline::{decoder::VideoDecoderStream, EncodedChunk, PipelineCtx},
     queue::PipelineEvent,
 };
 
@@ -19,8 +19,7 @@ pub(crate) struct VideoDecoderThreadHandle {
 pub fn spawn_video_decoder_thread<Decoder: VideoDecoder>(
     ctx: Arc<PipelineCtx>,
     input_id: InputId,
-    options: Decoder::Options,
-    chunks_sender: Sender<PipelineEvent<Frame>>,
+    frame_sender: Sender<PipelineEvent<Frame>>,
 ) -> Result<VideoDecoderThreadHandle, DecoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
@@ -35,7 +34,7 @@ pub fn spawn_video_decoder_thread<Decoder: VideoDecoder>(
             )
             .entered();
 
-            let result = init_decoder_stream::<Decoder>(ctx, options);
+            let result = init_decoder_stream::<Decoder>(ctx);
             let stream = match result {
                 Ok((stream, handle)) => {
                     result_sender.send(Ok(handle)).unwrap();
@@ -47,7 +46,7 @@ pub fn spawn_video_decoder_thread<Decoder: VideoDecoder>(
                 }
             };
             for event in stream {
-                if chunks_sender.send(event).is_err() {
+                if frame_sender.send(event).is_err() {
                     warn!("Failed to send encoded video chunk from encoder. Channel closed.");
                     return;
                 }
@@ -61,7 +60,6 @@ pub fn spawn_video_decoder_thread<Decoder: VideoDecoder>(
 
 fn init_decoder_stream<Decoder: VideoDecoder>(
     ctx: Arc<PipelineCtx>,
-    options: Decoder::Options,
 ) -> Result<
     (
         impl Iterator<Item = PipelineEvent<Frame>>,
@@ -71,13 +69,7 @@ fn init_decoder_stream<Decoder: VideoDecoder>(
 > {
     let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(5);
     let decoded_stream =
-        VideoDecoderStream::<Decoder, _>::new(ctx, options, chunk_receiver.into_iter())?.flatten();
+        VideoDecoderStream::<Decoder, _>::new(ctx, chunk_receiver.into_iter())?.flatten();
 
     Ok((decoded_stream, VideoDecoderThreadHandle { chunk_sender }))
-}
-
-impl VideoDecoderThreadHandle {
-    pub fn encoder_context(&self) -> Option<bytes::Bytes> {
-        self.config.extradata.clone()
-    }
 }
