@@ -252,7 +252,7 @@ impl HlsInput {
                     };
 
                     if sender.is_empty() {
-                        warn!("HLS input video channel was drained")
+                        warn!("HLS input audio channel was drained")
                     }
                     if sender.send(PipelineEvent::Data(chunk)).is_err() {
                         debug!("Channel closed")
@@ -357,10 +357,10 @@ struct TimestampState {
 }
 
 impl TimestampState {
-    const BUFFER_SIZE: usize = 50;
-    const BUFFER_SIZE_DELTA_TRESHOLD: f64 = 20.0;
     /// (10s) This value was picked arbitrarily but it's quite conservative.
     const DISCONTINUITY_THRESHOLD: f64 = 10.0;
+    const BUFFER_SIZE_DELTA_TRESHOLD: f64 = 20.0;
+    const BUFFER_SIZE: usize = 50;
     const ADAPTIVE_TIMESTAMP_INCREMENT: f64 = 0.005;
 
     fn new(
