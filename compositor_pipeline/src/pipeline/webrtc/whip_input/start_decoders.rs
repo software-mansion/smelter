@@ -225,18 +225,18 @@ pub async fn start_decoders_threads(
     let mut h264_decoder_started = false;
     for video_decoder in video_decoder_preferences {
         match video_decoder {
-            VideoDecoder::FFmpegH264 => {
+            VideoDecoder::FfmpegH264 => {
                 if !h264_decoder_started && !negotiated_codecs.h264.is_empty() {
                     whip_decoders_setup.add_h264(&negotiated_codecs.h264)?;
                     h264_decoder_started = true;
                 }
             }
-            VideoDecoder::FFmpegVp8 => {
+            VideoDecoder::FfmpegVp8 => {
                 if !negotiated_codecs.vp8.is_empty() {
                     whip_decoders_setup.add_vp8(&negotiated_codecs.vp8)?;
                 }
             }
-            VideoDecoder::FFmpegVp9 => {
+            VideoDecoder::FfmpegVp9 => {
                 if !negotiated_codecs.vp9.is_empty() {
                     whip_decoders_setup.add_vp9(&negotiated_codecs.vp9)?;
                 }

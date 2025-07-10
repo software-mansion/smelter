@@ -55,7 +55,7 @@ pub enum VideoDecoder {
 impl From<VideoDecoder> for pipeline::VideoDecoder {
     fn from(value: VideoDecoder) -> Self {
         match value {
-            VideoDecoder::FfmpegH264 => pipeline::VideoDecoder::FFmpegH264,
+            VideoDecoder::FfmpegH264 => pipeline::VideoDecoder::FfmpegH264,
             #[cfg(not(target_os = "macos"))]
             VideoDecoder::VulkanVideoH264 => pipeline::VideoDecoder::VulkanVideoH264,
         }

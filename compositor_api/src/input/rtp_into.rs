@@ -38,15 +38,15 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
                     Ok(rtp::InputVideoStream {
                         options: match video.decoder {
                             VideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions {
-                                decoder: pipeline::VideoDecoder::FFmpegH264,
+                                decoder: pipeline::VideoDecoder::FfmpegH264,
                             },
 
                             VideoDecoder::FfmpegVp8 => decoder::VideoDecoderOptions {
-                                decoder: pipeline::VideoDecoder::FFmpegVp8,
+                                decoder: pipeline::VideoDecoder::FfmpegVp8,
                             },
 
                             VideoDecoder::FfmpegVp9 => decoder::VideoDecoderOptions {
-                                decoder: pipeline::VideoDecoder::FFmpegVp9,
+                                decoder: pipeline::VideoDecoder::FfmpegVp9,
                             },
 
                             #[cfg(feature = "vk-video")]

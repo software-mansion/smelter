@@ -83,7 +83,7 @@ impl BenchmarkSuiteContext {
             input_file: InputFile::Mp4(PathBuf::new()), // always override
 
             encoder: EncoderOptions::Enabled(EncoderPreset::Ultrafast),
-            decoder: VideoDecoder::FFmpegH264,
+            decoder: VideoDecoder::FfmpegH264,
 
             warm_up_time: Duration::from_secs(2),
             rendering_mode: self.default_rendering_mode,
@@ -440,8 +440,8 @@ fn benchmark_set_decoder_only(ctx: &'static BenchmarkSuiteContext) -> Vec<Benchm
 #[cfg(not(target_os = "macos"))]
 fn supported_decoders(ctx: &BenchmarkSuiteContext) -> Vec<VideoDecoder> {
     match ctx.wgpu_ctx.vulkan_ctx.is_some() {
-        true => vec![VideoDecoder::VulkanVideoH264, VideoDecoder::FFmpegH264],
-        false => vec![VideoDecoder::FFmpegH264],
+        true => vec![VideoDecoder::VulkanVideoH264, VideoDecoder::FfmpegH264],
+        false => vec![VideoDecoder::FfmpegH264],
     }
 }
 

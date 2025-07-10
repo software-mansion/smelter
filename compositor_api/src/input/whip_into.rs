@@ -38,17 +38,17 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                         .into_iter()
                         .flat_map(|codec| match codec {
                             WhipVideoDecoder::FfmpegH264 => {
-                                vec![pipeline::VideoDecoder::FFmpegH264]
+                                vec![pipeline::VideoDecoder::FfmpegH264]
                             }
                             #[cfg(feature = "vk-video")]
                             WhipVideoDecoder::VulkanH264 => {
                                 vec![pipeline::VideoDecoder::VulkanVideoH264]
                             }
                             WhipVideoDecoder::FfmpegVp8 => {
-                                vec![pipeline::VideoDecoder::FFmpegVp8]
+                                vec![pipeline::VideoDecoder::FfmpegVp8]
                             }
                             WhipVideoDecoder::FfmpegVp9 => {
-                                vec![pipeline::VideoDecoder::FFmpegVp9]
+                                vec![pipeline::VideoDecoder::FfmpegVp9]
                             }
                             #[cfg(not(feature = "vk-video"))]
                             WhipVideoDecoder::Any => {
@@ -61,8 +61,8 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                             #[cfg(feature = "vk-video")]
                             WhipVideoDecoder::Any => {
                                 vec![
-                                    pipeline::VideoDecoder::FFmpegVp9,
-                                    pipeline::VideoDecoder::FFmpegVp8,
+                                    pipeline::VideoDecoder::FfmpegVp9,
+                                    pipeline::VideoDecoder::FfmpegVp8,
                                     pipeline::VideoDecoder::VulkanVideoH264,
                                 ]
                             }
@@ -77,9 +77,9 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
             }
             None => whip::WhipOptions {
                 video_decoder_preferences: vec![
-                    pipeline::VideoDecoder::FFmpegVp9,
-                    pipeline::VideoDecoder::FFmpegVp8,
-                    pipeline::VideoDecoder::FFmpegH264,
+                    pipeline::VideoDecoder::FfmpegVp9,
+                    pipeline::VideoDecoder::FfmpegVp8,
+                    pipeline::VideoDecoder::FfmpegH264,
                 ],
             },
         };

@@ -118,7 +118,7 @@ fn register_codecs(
 
     for video_decoder in video_preferences {
         match video_decoder {
-            VideoDecoder::FFmpegH264 => {
+            VideoDecoder::FfmpegH264 => {
                 for codec in get_video_h264_codecs_for_media_engine() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
@@ -129,12 +129,12 @@ fn register_codecs(
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
-            VideoDecoder::FFmpegVp8 => {
+            VideoDecoder::FfmpegVp8 => {
                 for codec in get_video_vp8_codecs() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
-            VideoDecoder::FFmpegVp9 => {
+            VideoDecoder::FfmpegVp9 => {
                 for codec in get_video_vp9_codecs() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }

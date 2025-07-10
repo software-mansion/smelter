@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use compositor_render::{Frame, InputId, OutputId};
+use compositor_render::{Frame, InputId};
 use crossbeam_channel::Sender;
 use tracing::{debug, span, warn, Level};
 

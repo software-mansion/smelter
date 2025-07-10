@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use compositor_render::OutputId;
+use compositor_render::InputId;
 use crossbeam_channel::Sender;
 use tracing::{debug, span, warn, Level};
 
@@ -9,7 +9,7 @@ use crate::{
     error::DecoderInitError,
     pipeline::{
         decoder::AudioDecoderStream, resampler::decoder_resampler::ResampledDecoderStream,
-        types::DecodedSamples, EncodedChunk, PipelineCtx,
+        EncodedChunk, PipelineCtx,
     },
     queue::PipelineEvent,
 };
@@ -20,22 +20,22 @@ pub(crate) struct AudioDecoderThreadHandle {
     pub chunk_sender: Sender<PipelineEvent<EncodedChunk>>,
 }
 
-pub fn spawn_audio_encoder_thread<Decoder: AudioDecoder>(
+pub fn spawn_audio_decoder_thread<Decoder: AudioDecoder>(
     ctx: Arc<PipelineCtx>,
-    output_id: OutputId,
+    input_id: InputId,
     options: Decoder::Options,
-    chunks_sender: Sender<PipelineEvent<DecodedSamples>>,
+    chunks_sender: Sender<PipelineEvent<InputSamples>>,
 ) -> Result<AudioDecoderThreadHandle, DecoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
     std::thread::Builder::new()
-        .name(format!("Decoder thread for output {}", &output_id))
+        .name(format!("Decoder thread for input {}", &input_id))
         .spawn(move || {
             let _span = span!(
                 Level::INFO,
                 "Audio decoder thread",
-                output_id = output_id.to_string(),
-                encoder = Decoder::LABEL
+                input_id = input_id.to_string(),
+                decoder = Decoder::LABEL
             )
             .entered();
 
@@ -52,7 +52,7 @@ pub fn spawn_audio_encoder_thread<Decoder: AudioDecoder>(
             };
             for event in stream {
                 if chunks_sender.send(event).is_err() {
-                    warn!("Failed to send encoded audio chunk from encoder. Channel closed.");
+                    warn!("Failed to send encoded audio chunk from decoder. Channel closed.");
                     return;
                 }
             }
@@ -74,13 +74,13 @@ fn init_decoder_stream<Decoder: AudioDecoder>(
     DecoderInitError,
 > {
     let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(5);
-    let output_sample_rate = ctx.mixing_sample_rate;
+    let input_sample_rate = ctx.mixing_sample_rate;
 
     let decoded_stream =
         AudioDecoderStream::<Decoder, _>::new(ctx, options, chunk_receiver.into_iter())?;
 
     let resampled_stream =
-        ResampledDecoderStream::new(output_sample_rate, decoded_stream.flatten());
+        ResampledDecoderStream::new(input_sample_rate, decoded_stream.flatten());
 
     Ok((
         resampled_stream.flatten(),

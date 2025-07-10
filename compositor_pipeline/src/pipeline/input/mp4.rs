@@ -3,21 +3,24 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     thread::JoinHandle,
     time::Duration,
 };
 
-use compositor_render::InputId;
+use compositor_render::{Frame, InputId};
 use crossbeam_channel::{bounded, Sender};
 use reader::{DecoderOptions, Mp4FileReader, Track};
 use tracing::{debug, error, span, trace, Level, Span};
 
 use crate::{
+    audio_mixer::InputSamples,
+    error::DecoderInitError,
     pipeline::{
-        decoder::{AudioDecoderOptions, VideoDecoderOptions},
-        EncodedChunk, VideoDecoder,
+        decoder::{AudioDecoderOptions, DecodedDataReceiver, VideoDecoderOptions},
+        input::mp4::track_thread_audio::spawn_audio_track_thread,
+        EncodedChunk, PipelineCtx, VideoDecoder,
     },
     queue::PipelineEvent,
 };
@@ -25,6 +28,7 @@ use crate::{
 use super::{AudioInputReceiver, Input, InputInitInfo, InputInitResult, VideoInputReceiver};
 
 pub mod reader;
+pub mod track_thread_audio;
 
 #[derive(Debug, Clone)]
 pub struct Mp4Options {
@@ -71,7 +75,7 @@ impl Mp4 {
         input_id: &InputId,
         options: Mp4Options,
         download_dir: &Path,
-    ) -> Result<InputInitResult, Mp4Error> {
+    ) -> Result<(Input, InputInitInfo, DecodedDataReceiver), InputInitError> {
         let source = match options.source {
             Source::Url(ref url) => {
                 let file_response = reqwest::blocking::get(url)?;
@@ -166,15 +170,89 @@ impl Mp4 {
             );
         }
 
-        Ok(InputInitResult {
-            input: Input::Mp4(Self { should_close }),
-            video: video_receiver,
-            audio: audio_receiver,
-            init_info: InputInitInfo::Mp4 {
+        //   Ok(InputInitResult {
+        //       input: Input::Mp4(Self { should_close }),
+        //       video: video_receiver,
+        //       audio: audio_receiver,
+        //       init_info: InputInitInfo::Mp4 {
+        //           video_duration,
+        //           audio_duration,
+        //       },
+        //   })
+        Ok((
+            Input::Mp4(Self { should_close }),
+            InputInitInfo::Mp4 {
                 video_duration,
                 audio_duration,
             },
-        })
+            DecodedDataReceiver {},
+        ))
+    }
+}
+
+fn run_thread_with_loop(
+    ctx: Arc<PipelineCtx>,
+    input_id: InputId,
+    init_result: Sender<Result<(), DecoderInitError>>,
+    audio: Option<(Track<File>, Sender<PipelineEvent<InputSamples>>)>,
+    video: Option<(Track<File>, Sender<PipelineEvent<Frame>>)>,
+    should_close_input: Arc<AtomicBool>,
+) {
+    let mut start_offset = Duration::ZERO;
+    let mut first_run = true;
+    let init_result = Some(init_result);
+    let mut send_init_result = |msg: Result<(), DecoderInitError>| {
+        if let Some(init_result) = init_result.take() {
+            let _ = init_result.send(msg);
+            return true;
+        }
+        return false;
+    };
+
+    loop {
+        let (finished_track_sender, finished_track_receiver) = bounded(2);
+        let audio_handle = match audio {
+            Some((track, sender)) => {
+                match spawn_audio_track_thread(ctx, input_id, sender, finished_track_sender) {
+                    Ok(handle) => Some(handle),
+                    Err(err) => {
+                        if send_init_result(Err(err)) {
+                            return;
+                        };
+                        None
+                    }
+                }
+            }
+            None => None,
+        };
+
+        let video_handle = match video {
+            Some((track, sender)) => {
+                match spawn_video_track_thread(ctx, input_id, sender, finished_track_sender) {
+                    Ok(handle) => Some(handle),
+                    Err(err) => {
+                        if send_init_result(Err(err)) {
+                            return;
+                        };
+                        None
+                    }
+                }
+            }
+            None => None,
+        };
+
+        send_init_result(Ok(()));
+
+        if finished_track_receiver.recv().is_err() {
+            error!("Error listening for finished tracks")
+        }
+        if let Some(audio_handle) = &audio_handle {
+            audio_handle.join();
+        }
+
+        if let Some(audio_handle) = &audio_handle {
+            audio_handle.join();
+        }
     }
 }
 
@@ -391,6 +469,22 @@ impl Drop for SourceFile {
             if let Err(e) = std::fs::remove_file(&self.path) {
                 error!("Error while removing the downloaded mp4 file: {e}");
             }
+        }
+    }
+}
+
+struct TrackState {
+    last_pts: Duration,
+}
+
+impl TrackState {
+    fn new(init_pts: Duration) -> Self {
+        Self { last_pts: init_pts }
+    }
+
+    fn on_next_timestamp(&self, timestamp: Duration) {
+        if timestamp > self.last_pts {
+            self.last_pts = Some(timestamp);
         }
     }
 }

@@ -188,17 +188,17 @@ fn map_video_decoder_to_rtp_codec_parameters(
 
     for decoder in video_preferences {
         match decoder {
-            VideoDecoder::FFmpegH264 => {
+            VideoDecoder::FfmpegH264 => {
                 codec_list.extend(video_h264_codecs.clone());
             }
             #[cfg(feature = "vk-video")]
             VideoDecoder::VulkanVideoH264 => {
                 codec_list.extend(video_h264_codecs.clone());
             }
-            VideoDecoder::FFmpegVp8 => {
+            VideoDecoder::FfmpegVp8 => {
                 codec_list.extend(video_vp8_codec.clone());
             }
-            VideoDecoder::FFmpegVp9 => {
+            VideoDecoder::FfmpegVp9 => {
                 codec_list.extend(video_vp9_codec.clone());
             }
         }

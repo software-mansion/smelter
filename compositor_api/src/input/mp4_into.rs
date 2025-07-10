@@ -43,7 +43,7 @@ impl TryFrom<Mp4Input> for pipeline::RegisterInputOptions {
         }
 
         let video_decoder = match video_decoder.unwrap_or(VideoDecoder::FfmpegH264) {
-            VideoDecoder::FfmpegH264 => pipeline::VideoDecoder::FFmpegH264,
+            VideoDecoder::FfmpegH264 => pipeline::VideoDecoder::FfmpegH264,
             VideoDecoder::FfmpegVp8 => return Err(TypeError::new("MP4 VP8 input not supported")),
             VideoDecoder::FfmpegVp9 => return Err(TypeError::new("MP4 VP9 input not supported")),
 
