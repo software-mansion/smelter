@@ -361,11 +361,11 @@ impl TimestampState {
         let next_dts = self.next_predicted_dts.unwrap_or(dts);
 
         // Detect discontinuity
+        tracing::info!("Prediction diff: {}", next_dts - dts);
         let timestamp_delta = self.to_timestamp(f64::abs(next_dts - dts)).as_secs_f64();
-        // let current_dts = dts + (self.time_base.denominator() as f64 / 10.0);
-        // let current_dts = dts + self.discontinuity_offset + 000.0;
-        // let current_dts = dts + packet.duration() as f64 * 10.0;
-        if timestamp_delta >= Self::DISCONTINUITY_THRESHOLD || current_dts < prev_dts {
+        if timestamp_delta >= Self::DISCONTINUITY_THRESHOLD
+            || dts + (self.time_base.denominator() as f64 / 10.0) < prev_dts
+        {
             tracing::error!("Discontinuity detected: {prev_dts} -> {dts} (dts)");
             self.discontinuity_offset += next_dts - dts;
         }
