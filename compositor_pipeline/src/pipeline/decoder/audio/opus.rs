@@ -1,5 +1,5 @@
-use std::{ffi::c_int, sync::Arc, time::Duration};
-use tracing::{debug, error, trace};
+use std::{sync::Arc, time::Duration};
+use tracing::{debug, trace};
 
 use crate::{
     error::InputInitError,
@@ -19,7 +19,7 @@ pub(super) struct OpusDecoder {
 }
 
 impl OpusDecoder {
-    pub fn new(opts: OpusDecoderOptions, mixing_sample_rate: u32) -> Result<Self, InputInitError> {
+    pub fn new(_opts: OpusDecoderOptions, mixing_sample_rate: u32) -> Result<Self, InputInitError> {
         const OPUS_SAMPLE_RATES: [u32; 5] = [8_000, 12_000, 16_000, 24_000, 48_000];
         let decoded_sample_rate = if OPUS_SAMPLE_RATES.contains(&mixing_sample_rate) {
             mixing_sample_rate
@@ -30,7 +30,7 @@ impl OpusDecoder {
         // Max sample rate for opus is 48kHz.
         // Usually packets contain 20ms audio chunks, but for safety we use buffer
         // that can hold >1s of 48kHz stereo audio (96k samples)
-        let decoded_samples_buffer = vec![0; 96_000];
+        let decoded_samples_buffer = vec![0; 100_000];
 
         Ok(Self {
             decoder,
@@ -59,14 +59,17 @@ impl OpusDecoder {
         self.last_decoded_pts = Some(decoded_samples.start_pts + chunk_duration);
     }
 
-    fn should_use_fec(&mut self, current_start: Duration) -> bool {
+    fn should_use_fec(&self, stream_gap: Duration) -> bool {
+        stream_gap > Duration::from_millis(1)
+    }
+
+    fn calculate_stream_gap(&mut self, current_start: Duration) -> Duration {
         let stream_gap = current_start - *self.last_decoded_pts.get_or_insert(current_start);
         trace!(
             "[opus decoder] Calculated stream gap: {} s",
             stream_gap.as_secs_f64(),
         );
-
-        stream_gap > Duration::from_millis(1)
+        stream_gap
     }
 
     fn decode_chunk(
@@ -88,6 +91,7 @@ impl OpusDecoder {
     fn decode_chunk_fec(
         &mut self,
         encoded_chunk: &EncodedChunk,
+        stream_gap: Duration,
     ) -> Result<DecodedSamples, DecodingError> {
         debug!("[opus decoder] FEC used!");
 
@@ -100,6 +104,10 @@ impl OpusDecoder {
         let mut fec_buf: Vec<i16> = vec![0; fec_buf_size];
         debug!("[opus decoder] Expected FEC chunk size: {fec_buf_size}");
 
+        // Because of how opus-rs implements decode function, I have to create separate
+        // buffer for the code (and recreate it every time in case frames differ in size).
+        // That is necessary, because opus-rs takes buffer size as length of the buffer and NOT
+        // as separate argument
         let decoded_samples_count = self
             .decoder
             .decode(&encoded_chunk.data, &mut fec_buf, true)?;
@@ -108,7 +116,7 @@ impl OpusDecoder {
         let samples = Self::read_buffer(&fec_buf, decoded_samples_count);
         Ok(DecodedSamples {
             samples,
-            start_pts: encoded_chunk.pts,
+            start_pts: encoded_chunk.pts - stream_gap,
             sample_rate: self.decoded_sample_rate,
         })
     }
@@ -119,11 +127,11 @@ impl AudioDecoderExt for OpusDecoder {
         &mut self,
         encoded_chunk: EncodedChunk,
     ) -> Result<Vec<DecodedSamples>, DecodingError> {
-        let use_fec = self.should_use_fec(encoded_chunk.pts);
-        // let use_fec = false;
+        let stream_gap = self.calculate_stream_gap(encoded_chunk.pts);
+        let use_fec = self.should_use_fec(stream_gap);
 
         let fec_samples = if use_fec {
-            Some(self.decode_chunk_fec(&encoded_chunk)?)
+            Some(self.decode_chunk_fec(&encoded_chunk, stream_gap)?)
         } else {
             None
         };
