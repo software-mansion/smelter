@@ -278,6 +278,9 @@ impl VideoQueueInput {
                 .map(|(index, _frame)| index);
 
             if let Some(index) = closest_diff_frame_index {
+                if index > 4 {
+                    tracing::error!("Dropping {index} frames");
+                }
                 self.queue.drain(0..index);
             }
 

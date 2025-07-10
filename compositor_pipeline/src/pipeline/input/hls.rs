@@ -99,12 +99,7 @@ impl HlsInput {
         // I do not know why this happens
         let mut input_ctx = match input_with_dictionary_and_interrupt(
             &options.url,
-            Dictionary::from_iter([
-                ("protocol_whitelist", "tcp,hls,http,https,file,tls"),
-                // ("rtbufsize", "1000M"),
-                // ("fflags", "nobuffer"),
-                // ("flags", "low_delay"),
-            ]),
+            Dictionary::from_iter([("protocol_whitelist", "tcp,hls,http,https,file,tls")]),
             || should_close.load(Ordering::Relaxed),
         ) {
             Ok(i) => i,
@@ -159,7 +154,7 @@ impl HlsInput {
             None => (None, None),
         };
 
-        let mut send_result = Some(move || {
+        let mut send_result = Some(|| {
             result_sender
                 .send(Ok((
                     video_receiver.map(|video| VideoInputReceiver::Encoded {
@@ -177,7 +172,6 @@ impl HlsInput {
                 .unwrap();
         });
 
-        let mut drain_start = None;
         loop {
             let mut packet = Packet::empty();
             match packet.read(&mut input_ctx) {
@@ -189,7 +183,7 @@ impl HlsInput {
                 }
             }
 
-            if packet.flags().contains(ffmpeg_next::packet::Flags::CORRUPT) {
+            if packet.is_corrupt() {
                 debug!(
                     "Corrupted packet {:?} {:?}",
                     packet.stream(),
@@ -199,11 +193,7 @@ impl HlsInput {
             }
 
             if let Some((index, ref sender, ref mut timestamp_state)) = video {
-                let buffer_len = match &send_result {
-                    Some(_) => None,
-                    None => Some(sender.len()),
-                };
-                timestamp_state.update(&packet, buffer_len);
+                timestamp_state.update(&packet);
                 let (pts, dts) = timestamp_state.pts_dts_from_packet(&packet);
 
                 if packet.stream() == index {
@@ -216,17 +206,7 @@ impl HlsInput {
                     };
 
                     if sender.is_empty() {
-                        if drain_start.is_none() {
-                            drain_start = Some(Instant::now());
-                        }
-                        dbg!((
-                            sender.len(),
-                            timestamp_state.timestamp_offset,
-                            packet.duration()
-                        ));
                         warn!("HLS input video channel was drained")
-                    } else if let Some(drain_start) = drain_start.take() {
-                        tracing::error!("No packets for {:?}", drain_start.elapsed());
                     }
                     if sender.send(PipelineEvent::Data(chunk)).is_err() {
                         debug!("Channel closed")
@@ -235,11 +215,7 @@ impl HlsInput {
             }
 
             if let Some((index, ref sender, ref mut timestamp_state)) = audio {
-                let buffer_len = match &send_result {
-                    Some(_) => None,
-                    None => Some(sender.len()),
-                };
-                timestamp_state.update(&packet, buffer_len);
+                timestamp_state.update(&packet);
                 let (pts, dts) = timestamp_state.pts_dts_from_packet(&packet);
 
                 if packet.stream() == index {
@@ -260,30 +236,30 @@ impl HlsInput {
                 }
             }
 
-            if send_result.is_some() {
-                match (&video, &audio) {
-                    (Some((_, ref video, _)), Some((_, ref audio, _))) => {
-                        if video.len() > TimestampState::BUFFER_SIZE
-                            && audio.len() > TimestampState::BUFFER_SIZE
-                        {
-                            let send_result = send_result.take().unwrap();
+            const BUFFER_SIZE: usize = 10;
+            match (&video, &audio) {
+                (Some((_, video_sender, _)), Some((_, audio_sender, _))) => {
+                    if video_sender.len() > BUFFER_SIZE && audio_sender.len() > BUFFER_SIZE {
+                        if let Some(send_result) = send_result.take() {
                             send_result();
                         }
                     }
-                    (Some((_, ref video, _)), None) => {
-                        if video.len() > TimestampState::BUFFER_SIZE {
-                            let send_result = send_result.take().unwrap();
-                            send_result();
-                        }
-                    }
-                    (_, Some((_, ref audio, _))) => {
-                        if audio.len() > TimestampState::BUFFER_SIZE {
-                            let send_result = send_result.take().unwrap();
-                            send_result();
-                        }
-                    }
-                    _ => {}
                 }
+                (Some((_, sender, _)), None) => {
+                    if sender.len() > BUFFER_SIZE {
+                        if let Some(send_result) = send_result.take() {
+                            send_result();
+                        }
+                    }
+                }
+                (None, Some((_, sender, _))) => {
+                    if sender.len() > BUFFER_SIZE {
+                        if let Some(send_result) = send_result.take() {
+                            send_result();
+                        }
+                    }
+                }
+                (None, None) => {}
             }
         }
 
@@ -350,18 +326,17 @@ struct TimestampState {
     queue_start_time: Instant,
     first_pts: Option<Duration>,
 
-    prev_pts: Option<f64>,
-    timestamp_offset: f64,
+    prev_dts: Option<f64>,
+    next_predicted_dts: Option<f64>,
     discontinuity_offset: f64,
     time_base: ffmpeg_next::Rational,
+
+    prev: Option<i64>,
 }
 
 impl TimestampState {
     /// (10s) This value was picked arbitrarily but it's quite conservative.
     const DISCONTINUITY_THRESHOLD: f64 = 10.0;
-    const BUFFER_SIZE_DELTA_TRESHOLD: f64 = 20.0;
-    const BUFFER_SIZE: usize = 50;
-    const ADAPTIVE_TIMESTAMP_INCREMENT: f64 = 0.005;
 
     fn new(
         input_start_time: Instant,
@@ -372,49 +347,38 @@ impl TimestampState {
             input_start_time,
             queue_start_time,
             first_pts: None,
-            prev_pts: None,
+            prev_dts: None,
+            next_predicted_dts: None,
             discontinuity_offset: 0.0,
-            timestamp_offset: 0.0,
             time_base,
+            prev: None,
         }
     }
 
-    fn update(&mut self, packet: &Packet, buffer_len: Option<usize>) {
-        let pts = packet.pts().unwrap_or(0) as f64;
-        let prev_pts = self.prev_pts.unwrap_or(pts);
+    fn update(&mut self, packet: &Packet) {
+        let dts = packet.dts().unwrap_or(0) as f64;
+        let prev_dts = self.prev_dts.unwrap_or(dts);
+        let next_dts = self.next_predicted_dts.unwrap_or(dts);
 
         // Detect discontinuity
-        let timestamp_delta = self
-            .to_timestamp(f64::abs(
-                pts + self.timestamp_offset + self.discontinuity_offset - prev_pts,
-            ))
-            .as_secs_f64();
-        if timestamp_delta >= Self::DISCONTINUITY_THRESHOLD {
-            tracing::error!("Discontinuity detected: {prev_pts} -> {pts} (pts)");
-            self.discontinuity_offset = (prev_pts - pts) + packet.duration() as f64;
+        let timestamp_delta = self.to_timestamp(f64::abs(next_dts - dts)).as_secs_f64();
+        // let current_dts = dts + (self.time_base.denominator() as f64 / 10.0);
+        // let current_dts = dts + self.discontinuity_offset + 000.0;
+        // let current_dts = dts + packet.duration() as f64 * 10.0;
+        if timestamp_delta >= Self::DISCONTINUITY_THRESHOLD || current_dts < prev_dts {
+            tracing::error!("Discontinuity detected: {prev_dts} -> {dts} (dts)");
+            self.discontinuity_offset += next_dts - dts;
         }
 
-        self.prev_pts = Some(pts + self.timestamp_offset + self.discontinuity_offset);
-
-        if let Some(buffer_len) = buffer_len {
-            let buffer_delta = f64::max(0.0, Self::BUFFER_SIZE as f64 - buffer_len as f64);
-            if buffer_delta > Self::BUFFER_SIZE_DELTA_TRESHOLD {
-                self.timestamp_offset += Self::ADAPTIVE_TIMESTAMP_INCREMENT
-                    * self.time_base.denominator() as f64
-                    / self.time_base.numerator() as f64;
-            }
-        }
+        self.prev_dts = Some(dts);
+        self.next_predicted_dts = Some(dts + packet.duration() as f64);
     }
 
     fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>) {
-        let pts = self.to_timestamp(
-            packet.pts().unwrap_or(0) as f64 as f64
-                + self.timestamp_offset
-                + self.discontinuity_offset,
-        );
-        let dts = packet.dts().map(|dts| {
-            self.to_timestamp(dts as f64 + self.timestamp_offset + self.discontinuity_offset)
-        });
+        let pts = self.to_timestamp(packet.pts().unwrap_or(0) as f64 + self.discontinuity_offset);
+        let dts = packet
+            .dts()
+            .map(|dts| self.to_timestamp(dts as f64 + self.discontinuity_offset));
 
         // Recalculate pts in regards to queue start time
         let first_pts = *self.first_pts.get_or_insert(pts);
