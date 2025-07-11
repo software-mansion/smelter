@@ -15,6 +15,8 @@ pub(super) struct OpusDecoder {
     decoder: opus::Decoder,
     decoded_samples_buffer: Vec<i16>,
     decoded_sample_rate: u32,
+
+    /// PTS if the last successfully decoded sample
     last_decoded_pts: Option<Duration>,
 }
 
@@ -51,6 +53,7 @@ impl OpusDecoder {
         .into()
     }
 
+    /// Calculates PTS of the last sample in the chunk and sets `last_decoded_pts` field to it
     fn set_end_pts(&mut self, decoded_samples: &DecodedSamples) {
         let samples_len = decoded_samples.samples.get_number_of_samples();
         let sample_rate = decoded_samples.sample_rate;
@@ -70,6 +73,16 @@ impl OpusDecoder {
             stream_gap.as_secs_f64(),
         );
         stream_gap
+    }
+
+    fn calculate_fec_buf_size(&self, stream_gap: Duration) -> usize {
+        // 120 samples is 2.5 ms with 48kHz sample rate. For FEC it is mandatory that buffer size
+        // is a multiple of 2.5 ms and of the same size (or at least as close as possible) to the
+        // size of lost chunks.
+        let lost_samples = stream_gap.as_secs_f64() * self.decoded_sample_rate as f64;
+        let fec_buf_size = 120 * (lost_samples / 120.0f64).round() as usize;
+
+        2 * fec_buf_size // Multiplication by for stereo
     }
 
     fn decode_chunk(
@@ -95,25 +108,21 @@ impl OpusDecoder {
     ) -> Result<DecodedSamples, DecodingError> {
         debug!("[opus decoder] FEC used!");
 
-        let lost_samples = self.decoder.get_last_packet_duration()?;
-
-        // 120 samples is 2.5 ms with 48kHz sample rate. For FEC it is mandatory that buffer size
-        // is a multiple of 2.5 ms and of the same size (or at least as close as possible) to the
-        // size of lost chunk
-        let fec_buf_size = 120 * (lost_samples as usize / 120);
-        let mut fec_buf: Vec<i16> = vec![0; fec_buf_size];
+        let fec_buf_size = self.calculate_fec_buf_size(stream_gap);
         debug!("[opus decoder] Expected FEC chunk size: {fec_buf_size}");
 
         // Because of how opus-rs implements decode function, I have to create separate
         // buffer for the code (and recreate it every time in case frames differ in size).
         // That is necessary, because opus-rs takes buffer size as length of the buffer and NOT
         // as separate argument
-        let decoded_samples_count = self
-            .decoder
-            .decode(&encoded_chunk.data, &mut fec_buf, true)?;
+        let decoded_samples_count = self.decoder.decode(
+            &encoded_chunk.data,
+            &mut self.decoded_samples_buffer[..fec_buf_size],
+            true,
+        )?;
         debug!("[opus decoder] Decoded FEC samples: {decoded_samples_count}");
 
-        let samples = Self::read_buffer(&fec_buf, decoded_samples_count);
+        let samples = Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
         Ok(DecodedSamples {
             samples,
             start_pts: encoded_chunk.pts - stream_gap,
