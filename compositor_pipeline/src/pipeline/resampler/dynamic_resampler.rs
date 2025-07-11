@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tracing::info;
 
-use crate::pipeline::resampler::single_channel::ChannelResampler;
+use crate::pipeline::resampler::single_channel::{ChannelResampler, SingleChannelBatch};
 
 pub(super) struct StereoSampleBatch {
     pub samples: (Vec<f64>, Vec<f64>),
@@ -39,9 +39,9 @@ impl DynamicStereoResampler {
 
         if batch.sample_rate == self.output_sample_rate {
             self.state = None;
-            return Ok(batch);
+            return Ok(vec![batch]);
         } else {
-            match self.state {
+            match &self.state {
                 Some(state) if state.input_sample_rate == batch.sample_rate => (),
                 Some(_) | None => {
                     info!(
@@ -52,22 +52,34 @@ impl DynamicStereoResampler {
                         l: ChannelResampler::new(
                             batch.sample_rate,
                             self.output_sample_rate,
-                            self.first_batch_pts,
+                            first_batch_pts,
                         )?,
                         r: ChannelResampler::new(
                             batch.sample_rate,
                             self.output_sample_rate,
-                            self.first_batch_pts,
+                            first_batch_pts,
                         )?,
                         input_sample_rate: batch.sample_rate,
                     };
                     self.state = Some(state);
                 }
             };
-            match self.state {
+            match &mut self.state {
                 Some(state) => {
-                    let l = state.l.resample(batch.0).into_iter();
-                    let r = state.r.resample(batch.1).into_iter();
+                    let l = state
+                        .l
+                        .resample(SingleChannelBatch {
+                            start_pts: batch.start_pts,
+                            samples: batch.samples.0,
+                        })
+                        .into_iter();
+                    let r = state
+                        .r
+                        .resample(SingleChannelBatch {
+                            start_pts: batch.start_pts,
+                            samples: batch.samples.1,
+                        })
+                        .into_iter();
                     Ok(l.zip(r)
                         .map(|(l, r)| StereoSampleBatch {
                             samples: (l.samples, r.samples),

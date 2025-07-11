@@ -94,7 +94,7 @@ pub(super) fn new_external_input(
 ) -> Result<(Input, InputInitInfo, DecodedDataReceiver), InputInitError> {
     match options {
         InputOptions::Rtp(opts) => RtpInput::new(ctx, input_id, opts),
-        InputOptions::Mp4(opts) => todo!(),
+        InputOptions::Mp4(opts) => Mp4::new(ctx, &input_id, opts),
         InputOptions::Whip(opts) => todo!(),
         InputOptions::DeckLink(opts) => todo!(),
     }

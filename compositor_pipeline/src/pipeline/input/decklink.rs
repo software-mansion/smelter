@@ -3,9 +3,14 @@ use std::sync::Arc;
 use compositor_render::InputId;
 use tracing::{error, span, Level};
 
+use crate::{
+    error::InputInitError,
+    pipeline::{decoder::DecodedDataReceiver, PipelineCtx},
+};
+
 use self::{capture::ChannelCallbackAdapter, find_device::find_decklink};
 
-use super::{AudioInputReceiver, Input, InputInitInfo, InputInitResult, VideoInputReceiver};
+use super::{Input, InputInitInfo};
 
 mod capture;
 mod find_device;
@@ -52,9 +57,10 @@ pub struct DeckLink {
 
 impl DeckLink {
     pub(super) fn start_new_input(
-        input_id: &InputId,
+        ctx: Arc<PipelineCtx>,
+        input_id: InputId,
         opts: DeckLinkOptions,
-    ) -> Result<InputInitResult, DeckLinkError> {
+    ) -> Result<(Input, InputInitInfo, DecodedDataReceiver), InputInitError> {
         let span = span!(
             Level::INFO,
             "DeckLink input",
@@ -88,17 +94,14 @@ impl DeckLink {
         input.set_callback(Box::new(callback))?;
         input.start_streams()?;
 
-        Ok(InputInitResult {
-            input: Input::DeckLink(Self { input }),
-            video: receivers.video.map(|rec| VideoInputReceiver::Raw {
-                frame_receiver: rec,
-            }),
-            audio: receivers.audio.map(|rec| AudioInputReceiver::Raw {
-                sample_receiver: rec,
-                sample_rate: AUDIO_SAMPLE_RATE,
-            }),
-            init_info: InputInitInfo::Other,
-        })
+        Ok((
+            Input::DeckLink(Self { input }),
+            InputInitInfo::Other,
+            DecodedDataReceiver {
+                video: receivers.video,
+                audio: receivers.audio,
+            },
+        ))
     }
 }
 

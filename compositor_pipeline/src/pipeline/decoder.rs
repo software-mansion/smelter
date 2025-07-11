@@ -15,8 +15,8 @@ pub use audio::AacDecoderError;
 mod audio;
 mod video;
 
-mod decoder_thread_audio;
-mod decoder_thread_video;
+pub(super) mod decoder_thread_audio;
+pub(super) mod decoder_thread_video;
 
 pub mod ffmpeg_h264;
 pub mod ffmpeg_vp8;
