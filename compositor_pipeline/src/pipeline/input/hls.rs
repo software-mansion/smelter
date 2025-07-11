@@ -172,8 +172,6 @@ impl HlsInput {
                 .unwrap();
         });
 
-        let mut prev_video_time_base = None;
-        let mut prev_audio_time_base = None;
         loop {
             let mut packet = Packet::empty();
             match packet.read(&mut input_ctx) {
@@ -197,12 +195,6 @@ impl HlsInput {
             if let Some((index, ref sender, ref mut timestamp_state)) = video {
                 if packet.stream() == index {
                     let (pts, dts) = timestamp_state.pts_dts_from_packet(&packet);
-                    let time_base = input_ctx.stream(index).unwrap().time_base();
-                    let prev_tb = *prev_video_time_base.get_or_insert(time_base);
-                    if time_base != prev_tb {
-                        dbg!(time_base);
-                    }
-                    prev_video_time_base = Some(time_base);
                     let chunk = EncodedChunk {
                         data: Bytes::copy_from_slice(packet.data().unwrap()),
                         pts,
@@ -212,7 +204,8 @@ impl HlsInput {
                     };
 
                     if sender.is_empty() {
-                        warn!("HLS input video channel was drained")
+                        warn!("HLS input video channel was drained");
+                        timestamp_state.discontinuity_offset += timestamp_state.time_base.denominator() as f64;
                     }
                     if sender.send(PipelineEvent::Data(chunk)).is_err() {
                         debug!("Channel closed")
@@ -223,12 +216,6 @@ impl HlsInput {
             if let Some((index, ref sender, ref mut timestamp_state)) = audio {
                 if packet.stream() == index {
                     let (pts, dts) = timestamp_state.pts_dts_from_packet(&packet);
-                    let time_base = input_ctx.stream(index).unwrap().time_base();
-                    let prev_tb = *prev_audio_time_base.get_or_insert(time_base);
-                    if time_base != prev_tb {
-                        dbg!(time_base);
-                    }
-                    prev_audio_time_base = Some(time_base);
                     let chunk = EncodedChunk {
                         data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
                         pts,
@@ -238,7 +225,8 @@ impl HlsInput {
                     };
 
                     if sender.is_empty() {
-                        warn!("HLS input audio channel was drained")
+                        warn!("HLS input audio channel was drained");
+                        timestamp_state.discontinuity_offset += timestamp_state.time_base.denominator() as f64;
                     }
                     if sender.send(PipelineEvent::Data(chunk)).is_err() {
                         debug!("Channel closed")
@@ -344,7 +332,7 @@ struct TimestampState {
 
 impl TimestampState {
     /// (10s) This value was picked arbitrarily but it's quite conservative.
-    const DISCONTINUITY_THRESHOLD: f64 = 5.0;
+    const DISCONTINUITY_THRESHOLD: f64 = 10.0;
 
     fn new(
         input_start_time: Instant,
@@ -373,11 +361,10 @@ impl TimestampState {
         }
 
         // Detect discontinuity
-        // tracing::info!("Prediction diff: {}", next_dts - dts);
-        let timestamp_delta = self.to_timestamp(f64::abs(next_dts - dts)).as_secs_f64();
+        let timestamp_delta = self.to_timestamp(f64::abs(prev_dts - dts)).as_secs_f64();
         if timestamp_delta >= Self::DISCONTINUITY_THRESHOLD || prev_dts > dts {
             tracing::error!("Discontinuity detected: {prev_dts} -> {dts} (dts)");
-            self.discontinuity_offset += next_dts - dts;
+            self.discontinuity_offset += prev_dts - dts + packet.duration() as f64;
         }
 
         self.prev_dts = Some(dts);
@@ -401,7 +388,8 @@ impl TimestampState {
 
     fn to_timestamp(&self, timestamp: f64) -> Duration {
         Duration::from_secs_f64(
-            timestamp * self.time_base.numerator() as f64 / self.time_base.denominator() as f64,
+            timestamp.max(0.0) * self.time_base.numerator() as f64
+                / self.time_base.denominator() as f64,
         )
     }
 
