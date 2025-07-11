@@ -22,13 +22,8 @@ pub struct VideoDecoderOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AudioDecoderOptions {
-    Opus(OpusDecoderOptions),
+    Opus,
     Aac(AacDecoderOptions),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OpusDecoderOptions {
-    pub forward_error_correction: bool,
 }
 
 #[derive(Debug)]
