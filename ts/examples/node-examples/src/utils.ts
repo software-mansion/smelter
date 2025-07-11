@@ -68,6 +68,8 @@ export function ffmpegSendVideoFromMp4(port: number, mp4Path: string): SpawnProm
     'libx264',
     '-f',
     'rtp',
+    '-bsf:v',
+    'h264_mp4toannexb',
     `rtp://127.0.0.1:${port}?rtcpport=${port}`,
   ]);
 }
@@ -76,7 +78,7 @@ interface SpawnPromise extends Promise<void> {
   child: ChildProcess;
 }
 
-function spawn(command: string, args: string[]): SpawnPromise {
+export function spawn(command: string, args: string[]): SpawnPromise {
   console.log(`Spawning: ${command} ${args.join(' ')}`);
   const child = nodeSpawn(command, args, {
     stdio: process.env.DEBUG ? 'inherit' : 'ignore',

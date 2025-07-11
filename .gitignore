@@ -26,6 +26,7 @@ target/
 **/*.webm
 **/*.done
 **/*.yuv
+**/*.opus
 
 # Generated MP4s
 **/*.mp4\.old\.*
