@@ -52,7 +52,7 @@ impl OpusDecoder {
 
     /// Calculates PTS of the last sample in the chunk and sets `last_decoded_pts` field to it
     fn set_end_pts(&mut self, decoded_samples: &DecodedSamples) {
-        let samples_len = decoded_samples.samples.get_number_of_samples();
+        let samples_len = decoded_samples.samples.sample_count();
         let sample_rate = decoded_samples.sample_rate;
 
         let chunk_duration = Duration::from_secs_f64(samples_len as f64 / sample_rate as f64);
@@ -65,10 +65,7 @@ impl OpusDecoder {
 
     fn calculate_stream_gap(&mut self, current_start: Duration) -> Duration {
         let stream_gap = current_start - *self.last_decoded_pts.get_or_insert(current_start);
-        trace!(
-            "[opus decoder] Calculated stream gap: {} s",
-            stream_gap.as_secs_f64(),
-        );
+        trace!("Calculated stream gap {stream_gap:?}");
         stream_gap
     }
 
@@ -103,10 +100,10 @@ impl OpusDecoder {
         encoded_chunk: &EncodedChunk,
         stream_gap: Duration,
     ) -> Result<DecodedSamples, DecodingError> {
-        debug!("[opus decoder] FEC used!");
+        debug!("FEC used!");
 
         let fec_buf_size = self.calculate_fec_buf_size(stream_gap);
-        debug!("[opus decoder] Expected FEC chunk size: {fec_buf_size}");
+        debug!("Expected FEC chunk size: {fec_buf_size}");
 
         // Because of how opus-rs implements decode function, I have to create separate
         // buffer for the code (and recreate it every time in case frames differ in size).
@@ -117,7 +114,7 @@ impl OpusDecoder {
             &mut self.decoded_samples_buffer[..fec_buf_size],
             true,
         )?;
-        debug!("[opus decoder] Decoded FEC samples: {decoded_samples_count}");
+        debug!("Decoded FEC samples: {decoded_samples_count}");
 
         let samples = Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
         Ok(DecodedSamples {

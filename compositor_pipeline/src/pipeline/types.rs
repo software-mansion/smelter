@@ -126,7 +126,7 @@ pub(super) enum Samples {
 }
 
 impl Samples {
-    pub fn get_number_of_samples(&self) -> usize {
+    pub fn sample_count(&self) -> usize {
         match self {
             Self::Mono16Bit(v) => v.len(),
             Self::Mono32Bit(v) => v.len(),
