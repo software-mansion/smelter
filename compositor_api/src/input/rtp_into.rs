@@ -1,4 +1,5 @@
 use std::time::Duration;
+use tracing::warn;
 
 use bytes::Bytes;
 use compositor_pipeline::{
@@ -102,11 +103,11 @@ impl TryFrom<InputRtpAudioOptions> for rtp::InputAudioStream {
             InputRtpAudioOptions::Opus {
                 forward_error_correction,
             } => {
-                let forward_error_correction = forward_error_correction.unwrap_or(false);
+                if forward_error_correction.is_some() {
+                    warn!("The 'forward_error_correction' field is deprecated!");
+                }
                 Ok(input::rtp::InputAudioStream {
-                    options: decoder::AudioDecoderOptions::Opus(decoder::OpusDecoderOptions {
-                        forward_error_correction,
-                    }),
+                    options: decoder::AudioDecoderOptions::Opus,
                 })
             }
             InputRtpAudioOptions::Aac {

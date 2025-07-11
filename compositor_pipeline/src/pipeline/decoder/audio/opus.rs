@@ -3,10 +3,7 @@ use tracing::{debug, trace};
 
 use crate::{
     error::InputInitError,
-    pipeline::{
-        decoder::OpusDecoderOptions,
-        types::{EncodedChunk, Samples},
-    },
+    pipeline::types::{EncodedChunk, Samples},
 };
 
 use super::{AudioDecoderExt, DecodedSamples, DecodingError};
@@ -21,7 +18,7 @@ pub(super) struct OpusDecoder {
 }
 
 impl OpusDecoder {
-    pub fn new(_opts: OpusDecoderOptions, mixing_sample_rate: u32) -> Result<Self, InputInitError> {
+    pub fn new(mixing_sample_rate: u32) -> Result<Self, InputInitError> {
         const OPUS_SAMPLE_RATES: [u32; 5] = [8_000, 12_000, 16_000, 24_000, 48_000];
         let decoded_sample_rate = if OPUS_SAMPLE_RATES.contains(&mixing_sample_rate) {
             mixing_sample_rate
