@@ -30,7 +30,7 @@ use ffmpeg_next::{
     util::interrupt,
     Dictionary, Packet,
 };
-use tracing::{debug, span, warn, Level};
+use tracing::{debug, error, span, warn, Level};
 
 use super::{AudioInputReceiver, Input, InputInitInfo, InputInitResult, VideoInputReceiver};
 
@@ -172,6 +172,8 @@ impl HlsInput {
                 .unwrap();
         });
 
+        let mut prev_video_time_base = None;
+        let mut prev_audio_time_base = None;
         loop {
             let mut packet = Packet::empty();
             match packet.read(&mut input_ctx) {
@@ -184,7 +186,7 @@ impl HlsInput {
             }
 
             if packet.is_corrupt() {
-                debug!(
+                error!(
                     "Corrupted packet {:?} {:?}",
                     packet.stream(),
                     packet.flags()
@@ -193,10 +195,14 @@ impl HlsInput {
             }
 
             if let Some((index, ref sender, ref mut timestamp_state)) = video {
-                timestamp_state.update(&packet);
-                let (pts, dts) = timestamp_state.pts_dts_from_packet(&packet);
-
                 if packet.stream() == index {
+                    let (pts, dts) = timestamp_state.pts_dts_from_packet(&packet);
+                    let time_base = input_ctx.stream(index).unwrap().time_base();
+                    let prev_tb = *prev_video_time_base.get_or_insert(time_base);
+                    if time_base != prev_tb {
+                        dbg!(time_base);
+                    }
+                    prev_video_time_base = Some(time_base);
                     let chunk = EncodedChunk {
                         data: Bytes::copy_from_slice(packet.data().unwrap()),
                         pts,
@@ -215,10 +221,14 @@ impl HlsInput {
             }
 
             if let Some((index, ref sender, ref mut timestamp_state)) = audio {
-                timestamp_state.update(&packet);
-                let (pts, dts) = timestamp_state.pts_dts_from_packet(&packet);
-
                 if packet.stream() == index {
+                    let (pts, dts) = timestamp_state.pts_dts_from_packet(&packet);
+                    let time_base = input_ctx.stream(index).unwrap().time_base();
+                    let prev_tb = *prev_audio_time_base.get_or_insert(time_base);
+                    if time_base != prev_tb {
+                        dbg!(time_base);
+                    }
+                    prev_audio_time_base = Some(time_base);
                     let chunk = EncodedChunk {
                         data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
                         pts,
@@ -330,13 +340,11 @@ struct TimestampState {
     next_predicted_dts: Option<f64>,
     discontinuity_offset: f64,
     time_base: ffmpeg_next::Rational,
-
-    prev: Option<i64>,
 }
 
 impl TimestampState {
     /// (10s) This value was picked arbitrarily but it's quite conservative.
-    const DISCONTINUITY_THRESHOLD: f64 = 10.0;
+    const DISCONTINUITY_THRESHOLD: f64 = 5.0;
 
     fn new(
         input_start_time: Instant,
@@ -351,7 +359,6 @@ impl TimestampState {
             next_predicted_dts: None,
             discontinuity_offset: 0.0,
             time_base,
-            prev: None,
         }
     }
 
@@ -359,13 +366,16 @@ impl TimestampState {
         let dts = packet.dts().unwrap_or(0) as f64;
         let prev_dts = self.prev_dts.unwrap_or(dts);
         let next_dts = self.next_predicted_dts.unwrap_or(dts);
+        if prev_dts == dts {
+            self.prev_dts = Some(dts);
+            self.next_predicted_dts = Some(dts + packet.duration() as f64);
+            return;
+        }
 
         // Detect discontinuity
-        tracing::info!("Prediction diff: {}", next_dts - dts);
+        // tracing::info!("Prediction diff: {}", next_dts - dts);
         let timestamp_delta = self.to_timestamp(f64::abs(next_dts - dts)).as_secs_f64();
-        if timestamp_delta >= Self::DISCONTINUITY_THRESHOLD
-            || dts + (self.time_base.denominator() as f64 / 10.0) < prev_dts
-        {
+        if timestamp_delta >= Self::DISCONTINUITY_THRESHOLD || prev_dts > dts {
             tracing::error!("Discontinuity detected: {prev_dts} -> {dts} (dts)");
             self.discontinuity_offset += next_dts - dts;
         }
@@ -375,6 +385,8 @@ impl TimestampState {
     }
 
     fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>) {
+        self.update(packet);
+
         let pts = self.to_timestamp(packet.pts().unwrap_or(0) as f64 + self.discontinuity_offset);
         let dts = packet
             .dts()
