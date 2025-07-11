@@ -1,4 +1,8 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use rand::{thread_rng, RngCore};
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    u16,
+};
 
 use crate::{
     pipeline::{
@@ -201,11 +205,19 @@ fn run_depayloader_thread(
             }
         }
     };
+    let mut should_drop: u16 = 0;
     loop {
         let Ok(mut buffer) = receiver.recv() else {
             debug!("Closing RTP depayloader thread.");
             break;
         };
+
+        should_drop += 1;
+        if should_drop < 65 {
+            continue;
+        } else if should_drop == 400 {
+            should_drop = 0;
+        }
 
         match rtp::packet::Packet::unmarshal(&mut buffer.clone()) {
             // https://datatracker.ietf.org/doc/html/rfc5761#section-4
