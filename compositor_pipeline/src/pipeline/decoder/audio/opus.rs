@@ -63,8 +63,11 @@ impl OpusDecoder {
         stream_gap > Duration::from_millis(1)
     }
 
-    fn calculate_stream_gap(&mut self, current_start: Duration) -> Duration {
-        let stream_gap = current_start - *self.last_decoded_pts.get_or_insert(current_start);
+    fn calculate_stream_gap(&self, current_start: Duration) -> Duration {
+        let stream_gap = match self.last_decoded_pts {
+            Some(pts) => current_start.saturating_sub(pts),
+            None => Duration::ZERO,
+        };
         trace!("Calculated stream gap {stream_gap:?}");
         stream_gap
     }
