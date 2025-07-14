@@ -13,7 +13,7 @@ pub(super) struct OpusDecoder {
     decoded_samples_buffer: Vec<i16>,
     decoded_sample_rate: u32,
 
-    /// PTS if the last successfully decoded sample
+    /// PTS of the end of the last decoded batch
     last_decoded_pts: Option<Duration>,
 }
 
@@ -81,7 +81,7 @@ impl OpusDecoder {
         let lost_samples = stream_gap.as_secs_f64() * self.decoded_sample_rate as f64;
         let fec_buf_size = 120 * (lost_samples / 120.0f64).round() as usize;
 
-        2 * fec_buf_size // Multiplication by for stereo
+        2 * fec_buf_size // Multiplication by the number of channels
     }
 
     fn decode_chunk(
@@ -110,10 +110,6 @@ impl OpusDecoder {
         let fec_buf_size = self.calculate_fec_buf_size(stream_gap);
         debug!("Expected FEC chunk size: {fec_buf_size}");
 
-        // Because of how opus-rs implements decode function, I have to create separate
-        // buffer for the code (and recreate it every time in case frames differ in size).
-        // That is necessary, because opus-rs takes buffer size as length of the buffer and NOT
-        // as separate argument
         let decoded_samples_count = self.decoder.decode(
             &encoded_chunk.data,
             &mut self.decoded_samples_buffer[..fec_buf_size],
@@ -138,10 +134,9 @@ impl AudioDecoderExt for OpusDecoder {
         let stream_gap = self.calculate_stream_gap(encoded_chunk.pts);
         let use_fec = self.should_use_fec(stream_gap);
 
-        let fec_samples = if use_fec {
-            Some(self.decode_chunk_fec(&encoded_chunk, stream_gap)?)
-        } else {
-            None
+        let fec_samples = match use_fec {
+            true => Some(self.decode_chunk_fec(&encoded_chunk, stream_gap)?),
+            false => None,
         };
 
         let decoded_samples = self.decode_chunk(&encoded_chunk)?;
