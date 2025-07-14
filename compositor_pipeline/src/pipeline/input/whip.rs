@@ -46,9 +46,7 @@ pub struct InputVideoStream {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InputAudioStream {
-    pub options: decoder::OpusDecoderOptions,
-}
+pub struct InputAudioStream {}
 
 pub struct WhipInput {
     whip_inputs_state: WhipInputState,

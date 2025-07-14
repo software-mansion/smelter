@@ -237,7 +237,7 @@ pub enum AudioDepayloader {
 impl AudioDepayloader {
     pub fn new(options: &decoder::AudioDecoderOptions) -> Result<Self, AudioDepayloaderNewError> {
         match options {
-            decoder::AudioDecoderOptions::Opus(_) => Ok(AudioDepayloader::Opus {
+            decoder::AudioDecoderOptions::Opus => Ok(AudioDepayloader::Opus {
                 depayloader: OpusPacket,
                 rollover_state: RolloverState::default(),
             }),

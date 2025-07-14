@@ -3,7 +3,7 @@ use crate::{
         self,
         decoder::{
             start_audio_decoder_thread, start_video_decoder_thread, AudioDecoderOptions,
-            OpusDecoderOptions, VideoDecoderOptions,
+            VideoDecoderOptions,
         },
         input::whip::{
             depayloader::{AudioDepayloader, RolloverState, VideoDepayloader},
@@ -194,9 +194,7 @@ impl WhipDecodersBuilder {
             start_forwarding_thread(self.input_id.clone());
 
         start_audio_decoder_thread(
-            AudioDecoderOptions::Opus(OpusDecoderOptions {
-                forward_error_correction: false,
-            }),
+            AudioDecoderOptions::Opus,
             self.ctx.mixing_sample_rate,
             bridge_to_decoder_receiver,
             self.decoded_data_sender.input_samples_sender.clone(),
