@@ -13,7 +13,7 @@ use crate::{
 
 use self::{fdk_aac::AacDecoder, opus::OpusDecoder, resampler::Resampler};
 
-use super::{AudioDecoderOptions, OpusDecoderOptions};
+use super::AudioDecoderOptions;
 pub use fdk_aac::AacDecoderError;
 
 mod fdk_aac;
@@ -157,10 +157,10 @@ fn run_decoding<F>(
     };
 
     match opts {
-        AudioDecoderOptions::Opus(opus_decoder_opts) => {
+        AudioDecoderOptions::Opus => {
             // Opus decoder initialization doesn't require input stream data,
             // so this can wait and send init result
-            match init_opus_decoder(opus_decoder_opts, mixing_sample_rate) {
+            match init_opus_decoder(mixing_sample_rate) {
                 Ok((mut decoder, mut resampler)) => {
                     send_result(Ok(()));
                     run_decoding_loop(
@@ -243,11 +243,8 @@ fn run_decoding_loop<Decoder, F>(
     }
 }
 
-fn init_opus_decoder(
-    opus_decoder_opts: OpusDecoderOptions,
-    mixing_sample_rate: u32,
-) -> Result<(OpusDecoder, Resampler), InputInitError> {
-    let decoder = OpusDecoder::new(opus_decoder_opts, mixing_sample_rate)?;
+fn init_opus_decoder(mixing_sample_rate: u32) -> Result<(OpusDecoder, Resampler), InputInitError> {
+    let decoder = OpusDecoder::new(mixing_sample_rate)?;
     let resampler = Resampler::new(mixing_sample_rate);
     Ok((decoder, resampler))
 }
