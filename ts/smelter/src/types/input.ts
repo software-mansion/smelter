@@ -91,17 +91,8 @@ export type InputRtpVideoOptions = {
 };
 
 export type InputRtpAudioOptions =
-  | ({ decoder: 'opus' } & InputRtpAudioOpusOptions)
+  | { decoder: 'opus' }
   | ({ decoder: 'aac' } & InputRtpAudioAacOptions);
-
-export type InputRtpAudioOpusOptions = {
-  /**
-   * (**default=`false`**) Specifies whether the stream uses forward error correction.
-   * It's specific for Opus codec.
-   * For more information, check out [RFC](https://datatracker.ietf.org/doc/html/rfc6716#section-2.1.7).
-   */
-  forwardErrorCorrection?: boolean | null;
-};
 
 export type InputRtpAudioAacOptions = {
   /**
