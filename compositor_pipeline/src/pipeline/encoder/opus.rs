@@ -20,7 +20,7 @@ pub struct OpusEncoderOptions {
     pub preset: AudioEncoderPreset,
     pub sample_rate: u32,
     pub forward_error_correction: bool,
-    pub expected_packet_loss: i32,
+    pub packet_loss: i32,
 }
 
 impl AudioEncoderOptionsExt for OpusEncoderOptions {
@@ -50,10 +50,8 @@ impl AudioEncoder for OpusEncoder {
             options.channels.into(),
             options.preset.into(),
         )?;
-        if options.forward_error_correction {
-            encoder.set_inband_fec(true)?;
-            encoder.set_packet_loss_perc(options.expected_packet_loss)?;
-        }
+        encoder.set_inband_fec(options.forward_error_correction)?;
+        encoder.set_packet_loss_perc(options.packet_loss)?;
 
         let output_buffer = vec![0u8; 1024 * 1024];
 
