@@ -60,7 +60,9 @@ impl OpusDecoder {
     }
 
     fn should_use_fec(&self, stream_gap: Duration) -> bool {
-        stream_gap > Duration::from_millis(1)
+        // If stream gap is one second or larger there it doesn't matter if FEC is used,
+        // there will be a gap
+        (stream_gap > Duration::from_millis(1)) && (stream_gap < Duration::from_millis(1000))
     }
 
     fn calculate_stream_gap(&self, current_start: Duration) -> Duration {
@@ -107,13 +109,6 @@ impl OpusDecoder {
 
         let fec_buf_size = self.calculate_fec_buf_size(stream_gap);
         debug!("Expected FEC chunk size: {fec_buf_size}");
-
-        // In case missing data chunk is larger than initial buffer.
-        // Size stays increased afterwards, because if stream is bad enough for
-        // it to happen, it might as well happen again.
-        if fec_buf_size > self.decoded_samples_buffer.len() {
-            self.decoded_samples_buffer.resize(fec_buf_size, 0);
-        }
 
         // Because of how opus-rs implements decode function, I have to create separate
         // buffer for the code (and recreate it every time in case frames differ in size).
