@@ -105,7 +105,6 @@ function intoInputAudio(audio: Inputs.InputRtpAudioOptions): Api.InputRtpAudioOp
   if (audio.decoder === 'opus') {
     return {
       decoder: 'opus',
-      forward_error_correction: audio.forwardErrorCorrection,
     };
   } else if (audio.decoder === 'aac') {
     return {
