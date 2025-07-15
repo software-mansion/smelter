@@ -1,6 +1,7 @@
 import type { Api } from '../api';
 import type {
   RegisterMp4Input,
+  RegisterHlsInput,
   RegisterRtpInput,
   Inputs,
   RegisterWhipInput,
@@ -14,6 +15,7 @@ import { _smelterInternals } from '@swmansion/smelter';
 export type RegisterInputRequest =
   | RegisterRtpStreamInputRequest
   | RegisterMp4InputRequest
+  | RegisterHlsInputRequest
   | RegisterWhipInputRequest
   | RegisterDecklinkInputRequest
   | { type: 'camera' }
@@ -22,6 +24,7 @@ export type RegisterInputRequest =
 
 export type RegisterRtpStreamInputRequest = Extract<Api.RegisterInput, { type: 'rtp_stream' }>;
 export type RegisterMp4InputRequest = { blob?: any } & Extract<Api.RegisterInput, { type: 'mp4' }>;
+export type RegisterHlsInputRequest = Extract<Api.RegisterInput, { type: 'hls' }>;
 export type RegisterWhipInputRequest = Extract<Api.RegisterInput, { type: 'whip' }>;
 export type RegisterDecklinkInputRequest = Extract<Api.RegisterInput, { type: 'decklink' }>;
 
@@ -32,6 +35,7 @@ export const parseInputRef = _smelterInternals.parseInputRef;
 export type RegisterInput =
   | ({ type: 'rtp_stream' } & RegisterRtpInput)
   | ({ type: 'mp4' } & RegisterMp4Input)
+  | ({ type: 'hls' } & RegisterHlsInput)
   | ({ type: 'whip' } & RegisterWhipInput)
   | { type: 'camera' }
   | { type: 'screen_capture' }
@@ -44,6 +48,8 @@ export type RegisterInput =
 export function intoRegisterInput(input: RegisterInput): RegisterInputRequest {
   if (input.type === 'mp4') {
     return intoMp4RegisterInput(input);
+  } else if (input.type === 'hls') {
+    return intoHlsRegisterInput(input);
   } else if (input.type === 'rtp_stream') {
     return intoRtpRegisterInput(input);
   } else if (input.type === 'whip') {
@@ -69,6 +75,15 @@ function intoMp4RegisterInput(input: Inputs.RegisterMp4Input): RegisterInputRequ
     required: input.required,
     offset_ms: input.offsetMs,
     video_decoder: input.videoDecoder,
+  };
+}
+
+function intoHlsRegisterInput(input: Inputs.RegisterHlsInput): RegisterInputRequest {
+  return {
+    type: 'hls',
+    url: input.url,
+    required: input.required,
+    offset_ms: input.offsetMs,
   };
 }
 

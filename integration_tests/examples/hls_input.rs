@@ -1,0 +1,77 @@
+use anyhow::Result;
+use compositor_api::Resolution;
+use serde_json::json;
+use std::time::Duration;
+
+use integration_tests::examples::{self, run_example};
+
+const VIDEO_RESOLUTION: Resolution = Resolution {
+    width: 1280,
+    height: 720,
+};
+
+fn main() {
+    run_example(client_code);
+}
+
+fn client_code() -> Result<()> {
+    let args = std::env::args().collect::<Vec<_>>();
+
+    if args.len() != 2 {
+        println!("Usage: {} <HLS playlist url>", args[0]);
+        return Ok(());
+    }
+
+    examples::post("start", &json!({}))?;
+    examples::post(
+        "input/input_1/register",
+        &json!({
+            "type": "hls",
+            "url": args[1],
+        }),
+    )?;
+
+    examples::post(
+        "output/output_1/register",
+        &json!({
+            "url": "rtmp://0.0.0.0:9002",
+            "type": "rtmp_client",
+            "video": {
+                "resolution": {
+                    "width": VIDEO_RESOLUTION.width,
+                    "height": VIDEO_RESOLUTION.height,
+                },
+                "encoder": {
+                    "type": "ffmpeg_h264",
+                    "preset": "ultrafast",
+                    "ffmpeg_options": {
+                        "g": "120", // keyframe every 100 frames
+                        "b": "6M"   // bitrate 6000 kb/s
+                    }
+                },
+                "initial": {
+                    "root": {
+                        "type": "input_stream",
+                        "input_id": "input_1"
+                    }
+                }
+            },
+            "audio": {
+                "channels": "stereo",
+                "encoder": {
+                    "type": "aac",
+                    "sample_rate": 44100
+                },
+                "initial": {
+                    "inputs": [
+                        {"input_id": "input_1"}
+                    ]
+                }
+            }
+        }),
+    )?;
+
+    std::thread::sleep(Duration::from_millis(500));
+
+    Ok(())
+}

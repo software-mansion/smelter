@@ -84,6 +84,21 @@ export type RegisterInput =
       offset_ms?: number | null;
     }
   | {
+      type: "hls";
+      /**
+       * URL to HLS playlist
+       */
+      url: string;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
+       */
+      offset_ms?: number | null;
+    }
+  | {
       type: "decklink";
       /**
        * Single DeckLink device can consist of multiple sub-devices. This field defines index of sub-device that should be used.
