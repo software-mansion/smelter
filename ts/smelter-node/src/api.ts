@@ -1,6 +1,7 @@
 import type {
   RegisterMp4Input,
   RegisterMp4Output,
+  RegisterHlsInput,
   RegisterRtmpClientOutput,
   RegisterRtpInput,
   RegisterRtpOutput,
@@ -17,4 +18,5 @@ export type RegisterOutput =
 export type RegisterInput =
   | ({ type: 'rtp_stream' } & RegisterRtpInput)
   | ({ type: 'mp4' } & RegisterMp4Input)
+  | ({ type: 'hls' } & RegisterHlsInput)
   | ({ type: 'whip' } & RegisterWhipInput);
