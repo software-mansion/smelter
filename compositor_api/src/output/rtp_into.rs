@@ -48,6 +48,16 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions<output::OutputOption
                         let resolved_channels = channels
                             .or(channels_deprecated)
                             .unwrap_or(AudioChannels::Stereo);
+
+                        let (forward_error_correction, expected_packet_loss) =
+                            match &transport_protocol {
+                                Some(prot) => match prot {
+                                    TransportProtocol::TcpServer => (Some(false), Some(0)),
+                                    _ => (forward_error_correction, expected_packet_loss),
+                                },
+                                None => (forward_error_correction, expected_packet_loss),
+                            };
+
                         let packet_loss = match expected_packet_loss {
                             Some(x) if x > 100 => {
                                 return Err(TypeError::new(
