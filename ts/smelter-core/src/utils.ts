@@ -64,67 +64,63 @@ export async function sleep(timeoutMs: number): Promise<void> {
 
 export class StateGuard {
   private state:
-    | {
-        type: 'blocked';
-        blocking_promise: Promise<void>;
-        nonblocking_promises?: Set<Promise<void>>;
-      }
-    | { type: 'running'; promises: Set<Promise<void>> }
-    | { type: 'finished' };
+    | { type: 'unique'; promise: Promise<void> }
+    | { type: 'shared'; promises: Set<Promise<void>> }
+    | { type: 'open' };
 
   public constructor() {
-    this.state = { type: 'finished' };
+    this.state = { type: 'open' };
   }
 
   public async runBlocking<T>(fn: () => Promise<T>): Promise<T> {
-    const [blocking_promise, release] = this.createGuardPromise();
-    while (this.state.type !== 'finished') {
-      if (this.state.type === 'blocked') {
-        await Promise.allSettled(this.state?.nonblocking_promises ?? []);
-        await this.state.blocking_promise;
-      } else if (this.state.type === 'running') {
-        this.state = {
-          type: 'blocked',
-          blocking_promise,
-          nonblocking_promises: this.state.promises,
-        };
-        await Promise.allSettled(this.state?.nonblocking_promises ?? []);
+    const [promise, promiseResolveFn] = this.createGuardPromise();
+    while (this.state.type !== 'open') {
+      if (this.state.type === 'unique') {
+        if (this.state.promise === promise) {
+          break;
+        }
+        await this.state.promise;
+      } else if (this.state.type === 'shared') {
+        const unblockingPromises = this.state.promises;
+        this.state = { type: 'unique', promise };
+        await Promise.allSettled(unblockingPromises);
       }
     }
 
+    this.state = { type: 'unique', promise };
+
     try {
-      this.state = { type: 'blocked', blocking_promise };
       return await fn();
     } finally {
-      this.state = { type: 'finished' };
-      release();
+      this.state = { type: 'open' };
+      promiseResolveFn();
     }
   }
 
   public async run<T>(fn: () => Promise<T>): Promise<T> {
-    while (this.state.type === 'blocked') {
-      await this.state.blocking_promise;
+    while (this.state.type === 'unique') {
+      await this.state.promise;
     }
 
-    const [promise, release] = this.createGuardPromise();
+    const [promise, promiseResolveFn] = this.createGuardPromise();
+
+    if (this.state.type === 'shared') {
+      this.state.promises.add(promise);
+    } else if (this.state.type === 'open') {
+      this.state = { type: 'shared', promises: new Set([promise]) };
+    }
 
     try {
-      if (this.state.type === 'running') {
-        this.state.promises.add(promise);
-      } else if (this.state.type === 'finished') {
-        this.state = { type: 'running', promises: new Set([promise]) };
-      }
-
       return await fn();
     } finally {
-      if (this.state.type === 'running') {
+      if (this.state.type === 'shared') {
         this.state.promises.delete(promise);
         if (this.state.promises.size === 0) {
-          this.state = { type: 'finished' };
+          this.state = { type: 'open' };
         }
       }
 
-      release();
+      promiseResolveFn();
     }
   }
 
