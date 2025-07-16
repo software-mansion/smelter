@@ -39,6 +39,8 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions<output::OutputOption
                         preset,
                         sample_rate,
                         channels: channels_deprecated,
+                        forward_error_correction,
+                        expected_packet_loss,
                     } => {
                         if channels_deprecated.is_some() {
                             warn!("The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.");
@@ -47,11 +49,23 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions<output::OutputOption
                             .or(channels_deprecated)
                             .unwrap_or(AudioChannels::Stereo);
 
+                        let packet_loss = match expected_packet_loss {
+                            Some(x) if x > 100 => {
+                                return Err(TypeError::new(
+                                    "Expected packet loss value must be from [0, 100] range.",
+                                ))
+                            }
+                            Some(x) => x as i32,
+                            None => 0,
+                        };
+
                         (
                             encoder::AudioEncoderOptions::Opus(opus::OpusEncoderOptions {
                                 channels: resolved_channels.clone().into(),
                                 preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
                                 sample_rate: sample_rate.unwrap_or(48000),
+                                forward_error_correction: forward_error_correction.unwrap_or(false),
+                                packet_loss,
                             }),
                             resolved_channels,
                         )

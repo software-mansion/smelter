@@ -72,5 +72,7 @@ function intoRtpAudioEncoderOptions(
     type: 'opus',
     preset: encoder.preset,
     sample_rate: encoder.sampleRate,
+    forward_error_correction: encoder.forwardErrorCorrection,
+    expected_packet_loss: encoder.expectedPacketLoss,
   };
 }

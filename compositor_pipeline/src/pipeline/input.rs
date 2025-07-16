@@ -1,7 +1,8 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::{
     error::{InputInitError, RegisterInputError},
+    pipeline::input::hls::{HlsInput, HlsInputOptions},
     queue::PipelineEvent,
 };
 
@@ -23,6 +24,7 @@ use super::{
 
 #[cfg(feature = "decklink")]
 pub mod decklink;
+pub mod hls;
 pub mod mp4;
 pub mod rtp;
 pub mod whip;
@@ -31,6 +33,7 @@ pub enum Input {
     Rtp(RtpReceiver),
     Mp4(Mp4),
     Whip(WhipInput),
+    Hls(HlsInput),
     #[cfg(feature = "decklink")]
     DeckLink(decklink::DeckLink),
     RawDataInput,
@@ -41,6 +44,7 @@ pub enum InputOptions {
     Rtp(RtpReceiverOptions),
     Mp4(Mp4Options),
     Whip(WhipOptions),
+    Hls(HlsInputOptions),
     #[cfg(feature = "decklink")]
     DeckLink(decklink::DeckLinkOptions),
 }
@@ -100,6 +104,7 @@ pub(super) trait InputOptionsExt<NewInputResult> {
     fn new_input(
         &self,
         input_id: &InputId,
+        queue_start_time: Option<Instant>,
         ctx: &PipelineCtx,
     ) -> Result<(Input, DecodedDataReceiver, NewInputResult), RegisterInputError>;
 }
@@ -108,9 +113,10 @@ impl InputOptionsExt<InputInitInfo> for InputOptions {
     fn new_input(
         &self,
         input_id: &InputId,
+        queue_start_time: Option<Instant>,
         ctx: &PipelineCtx,
     ) -> Result<(Input, DecodedDataReceiver, InputInitInfo), RegisterInputError> {
-        start_input_threads(input_id, self.clone(), ctx)
+        start_input_threads(input_id, self.clone(), queue_start_time, ctx)
             .map_err(|e| RegisterInputError::InputError(input_id.clone(), e))
     }
 }
@@ -119,6 +125,7 @@ impl InputOptionsExt<RawDataSender> for RawDataInputOptions {
     fn new_input(
         &self,
         _input_id: &InputId,
+        _queue_start_time: Option<Instant>,
         _ctx: &PipelineCtx,
     ) -> Result<(Input, DecodedDataReceiver, RawDataSender), RegisterInputError> {
         let (video_sender, video_receiver) = match self.video {
@@ -153,6 +160,7 @@ impl InputOptionsExt<RawDataSender> for RawDataInputOptions {
 fn start_input_threads(
     input_id: &InputId,
     options: InputOptions,
+    queue_start_time: Option<Instant>,
     pipeline_ctx: &PipelineCtx,
 ) -> Result<(Input, DecodedDataReceiver, InputInitInfo), InputInitError> {
     match options {
@@ -196,6 +204,17 @@ fn start_input_threads(
                 },
                 init_info,
             ))
+        }
+        InputOptions::Hls(opts) => {
+            let InputInitResult {
+                input,
+                video,
+                audio,
+                init_info,
+            } = HlsInput::start_new_input(input_id, queue_start_time, opts)?;
+            let decoder_data_receiver =
+                setup_and_start_decoders_threads(pipeline_ctx, input_id, video, audio)?;
+            Ok((input, decoder_data_receiver, init_info))
         }
         #[cfg(feature = "decklink")]
         InputOptions::DeckLink(opts) => {
