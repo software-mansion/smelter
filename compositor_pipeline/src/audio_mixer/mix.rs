@@ -11,19 +11,20 @@ use super::{
 
 use tracing::trace;
 
-const SCALING_THRESHOLD: f64 = 0.95f64 * i64::MAX as f64;
-const SCALING_INCREMENT: f64 = 0.01f64;
-
 // I don't know if this is a good name, correct me if I'm wrong
 #[derive(Debug)]
 pub(super) struct SampleMixer {
     scaling_factor: f64,
+    scaling_threshold: f64,
+    scaling_increment: f64,
 }
 
 impl SampleMixer {
-    pub fn new() -> Self {
+    pub fn new(scaling_threshold: f64, scaling_increment: f64) -> Self {
         Self {
             scaling_factor: 1.0f64,
+            scaling_threshold,
+            scaling_increment,
         }
     }
 
@@ -78,8 +79,8 @@ impl SampleMixer {
             .expect("Assumes that summed samples is not empty");
         trace!("Max abs value: {max_sample}");
 
-        let new_scaling_factor = if max_sample > SCALING_THRESHOLD {
-            self.scaling_factor - SCALING_INCREMENT
+        let new_scaling_factor = if max_sample > self.scaling_threshold {
+            self.scaling_factor - self.scaling_increment
         } else {
             self.scaling_factor
         };

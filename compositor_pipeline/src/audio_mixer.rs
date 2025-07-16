@@ -67,6 +67,8 @@ impl AudioMixer {
         self.0.lock().unwrap().update_output(output_id, audio)
     }
 }
+const SCALING_THRESHOLD: f64 = 0.95f64 * i64::MAX as f64;
+const SCALING_INCREMENT: f64 = 0.01f64;
 
 #[derive(Debug)]
 pub(super) struct InternalAudioMixer {
@@ -80,7 +82,7 @@ impl InternalAudioMixer {
         Self {
             outputs: HashMap::new(),
             mixing_sample_rate,
-            sample_mixer: SampleMixer::new(),
+            sample_mixer: SampleMixer::new(SCALING_THRESHOLD, SCALING_INCREMENT),
         }
     }
 
