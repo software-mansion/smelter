@@ -12,10 +12,9 @@ mod types;
 
 pub use types::*;
 
-use self::{
-    mix::mix_samples,
-    prepare_inputs::{expected_samples_count, prepare_input_samples},
-};
+use crate::audio_mixer::mix::SampleMixer;
+
+use self::prepare_inputs::{expected_samples_count, prepare_input_samples};
 
 #[derive(Debug)]
 struct OutputInfo {
@@ -73,6 +72,7 @@ impl AudioMixer {
 pub(super) struct InternalAudioMixer {
     outputs: HashMap<OutputId, OutputInfo>,
     mixing_sample_rate: u32,
+    sample_mixer: SampleMixer,
 }
 
 impl InternalAudioMixer {
@@ -80,6 +80,7 @@ impl InternalAudioMixer {
         Self {
             outputs: HashMap::new(),
             mixing_sample_rate,
+            sample_mixer: SampleMixer::new(),
         }
     }
 
@@ -110,7 +111,9 @@ impl InternalAudioMixer {
             self.outputs
                 .iter()
                 .map(|(output_id, output_info)| {
-                    let samples = mix_samples(&input_samples, output_info, samples_count);
+                    let samples =
+                        self.sample_mixer
+                            .mix_samples(&input_samples, output_info, samples_count);
                     (output_id.clone(), OutputSamples { samples, start_pts })
                 })
                 .collect(),
