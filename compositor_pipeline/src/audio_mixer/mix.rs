@@ -35,32 +35,8 @@ impl SampleMixer {
         );
 
         let mixed: Vec<(i16, i16)> = match output_info.mixing_strategy {
-            MixingStrategy::SumClip => summed_samples
-                .into_iter()
-                .map(|(l, r)| (self.clip_to_i16(l), self.clip_to_i16(r)))
-                .collect(),
-            MixingStrategy::SumScale => {
-                let scaling_factor = {
-                    // abs panics in debug if val = i64::MIN, but it would require summing so many i16 samples, that it'll never happen.
-                    // Assumes that summed samples is not empty (therefore unwrap is safe)
-                    let max_abs = summed_samples
-                        .iter()
-                        .map(|(l, r)| i64::max(l.abs(), r.abs()))
-                        .max()
-                        .unwrap();
-                    f64::max(max_abs as f64 / i16::MAX as f64, 1.0)
-                };
-
-                summed_samples
-                    .into_iter()
-                    .map(|(l, r)| {
-                        (
-                            self.clip_to_i16((l as f64 * scaling_factor) as i64),
-                            self.clip_to_i16((r as f64 * scaling_factor) as i64),
-                        )
-                    })
-                    .collect()
-            }
+            MixingStrategy::SumClip => self.sum_clip(summed_samples),
+            MixingStrategy::SumScale => self.sum_scale(summed_samples),
         };
 
         match output_info.channels {
@@ -73,6 +49,36 @@ impl SampleMixer {
             ),
             AudioChannels::Stereo => AudioSamples::Stereo(mixed),
         }
+    }
+
+    fn sum_clip(&self, summed_samples: Vec<(i64, i64)>) -> Vec<(i16, i16)> {
+        summed_samples
+            .into_iter()
+            .map(|(l, r)| (self.clip_to_i16(l), self.clip_to_i16(r)))
+            .collect()
+    }
+
+    fn sum_scale(&self, summed_samples: Vec<(i64, i64)>) -> Vec<(i16, i16)> {
+        let scaling_factor = {
+            // abs panics in debug if val = i64::MIN, but it would require summing so many i16 samples, that it'll never happen.
+            // Assumes that summed samples is not empty (therefore unwrap is safe)
+            let max_abs = summed_samples
+                .iter()
+                .map(|(l, r)| i64::max(l.abs(), r.abs()))
+                .max()
+                .unwrap();
+            f64::max(max_abs as f64 / i16::MAX as f64, 1.0)
+        };
+
+        summed_samples
+            .into_iter()
+            .map(|(l, r)| {
+                (
+                    self.clip_to_i16((l as f64 * scaling_factor) as i64),
+                    self.clip_to_i16((r as f64 * scaling_factor) as i64),
+                )
+            })
+            .collect()
     }
 
     /// Clips sample to i16 PCM range
