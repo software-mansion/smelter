@@ -80,4 +80,13 @@ export type RtpAudioEncoderOptions = {
    * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
    */
   sampleRate?: number;
+  /**
+   * (**default=`false`**) Specifies if forward error correction (FEC) should be used.
+   */
+  forwardErrorCorrection?: boolean;
+  /**
+   * (**default=`0`**) Expected packet loss. When `forward_error_correction` is set to `true`,
+   * then this value should be greater than `0`. Allowed values: [0, 100];
+   */
+  expectedPacketLoss?: number;
 };

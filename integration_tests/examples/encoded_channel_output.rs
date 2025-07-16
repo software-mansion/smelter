@@ -68,6 +68,8 @@ fn main() {
                     channels: AudioChannels::Stereo,
                     preset: AudioEncoderPreset::Voip,
                     sample_rate: 48000,
+                    forward_error_correction: false,
+                    packet_loss: 0,
                 },
             )),
         },

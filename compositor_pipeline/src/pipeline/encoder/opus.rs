@@ -19,6 +19,8 @@ pub struct OpusEncoderOptions {
     pub channels: AudioChannels,
     pub preset: AudioEncoderPreset,
     pub sample_rate: u32,
+    pub forward_error_correction: bool,
+    pub packet_loss: i32,
 }
 
 impl AudioEncoderOptionsExt for OpusEncoderOptions {
@@ -43,11 +45,13 @@ impl AudioEncoder for OpusEncoder {
         options: Self::Options,
     ) -> Result<(Self, AudioEncoderConfig), EncoderInitError> {
         info!("Initializing libopus encoder {options:?}");
-        let encoder = opus::Encoder::new(
+        let mut encoder = opus::Encoder::new(
             options.sample_rate,
             options.channels.into(),
             options.preset.into(),
         )?;
+        encoder.set_inband_fec(options.forward_error_correction)?;
+        encoder.set_packet_loss_perc(options.packet_loss)?;
 
         let output_buffer = vec![0u8; 1024 * 1024];
 
