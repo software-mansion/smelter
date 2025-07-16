@@ -103,8 +103,7 @@ impl SampleMixer {
 
         self.scaling_factor = new_scaling_factor;
 
-        // Shuold be removed when applying refactoring changes
-        // for clarity only
+        // TODO: this conversion should be removed after refactor changes
         let f64_to_i16 = |x: f64| x.min(i16::MAX as f64).max(i16::MIN as f64).round() as i16;
 
         summed_samples
