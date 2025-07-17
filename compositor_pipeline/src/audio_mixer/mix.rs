@@ -81,6 +81,12 @@ impl SampleMixer {
 
         let new_scaling_factor = if max_sample * self.scaling_factor > self.scaling_threshold {
             self.scaling_factor - self.scaling_increment
+        } else if (self.scaling_factor < 1.0f64)
+            && (max_sample * self.scaling_factor < self.scaling_threshold)
+        {
+            // This min is to adjust potential numerical error, I really don't want the
+            // scaling factor to go over 1
+            f64::min(self.scaling_factor + self.scaling_increment, 1.0f64)
         } else {
             self.scaling_factor
         };
