@@ -9,7 +9,11 @@ use super::{
     OutputInfo,
 };
 
+<<<<<<< HEAD
 use tracing::{debug, trace};
+=======
+use tracing::debug;
+>>>>>>> @jbrs/imporved-sum-scale
 
 // I don't know if this is a good name, correct me if I'm wrong
 #[derive(Debug)]
@@ -81,10 +85,16 @@ impl SampleMixer {
 
         let new_scaling_factor = if max_sample * self.scaling_factor > self.scaling_threshold {
             self.scaling_factor - self.scaling_increment
+        } else if (self.scaling_factor < 1.0f64)
+            && (max_sample * self.scaling_factor < self.scaling_threshold)
+        {
+            // This min is to adjust potential numerical error, I really don't want the
+            // scaling factor to go over 1
+            f64::min(self.scaling_factor + self.scaling_increment, 1.0f64)
         } else {
             self.scaling_factor
         };
-        debug!("Old scaling factor: {}", self.scaling_factor as f64);
+        debug!("Old scaling factor: {}", self.scaling_factor);
         debug!("New scaling factor: {new_scaling_factor}");
 
         let interpolation_increment = self.scaling_increment / summed_samples.len() as f64;
