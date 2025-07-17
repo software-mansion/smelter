@@ -1,3 +1,4 @@
+import { sleep } from '../../utils';
 import type { Input, RegisterInputResult } from '../input';
 import type { InstanceContext } from '../instance';
 
@@ -141,12 +142,12 @@ export async function handleRegisterWhepInput(
 }
 
 async function waitForTracks(tracks: MediaStreamTrack[]): Promise<void> {
-  const maxWait = 1000;
-  const pollInterval = 100;
-  const start = Date.now();
+  const maxWaitMs = 1000;
+  const pollIntervalMs = 100;
+  const startTimestamp = Date.now();
 
-  while (tracks.length < 1 && Date.now() - start < maxWait) {
-    await new Promise(res => setTimeout(res, pollInterval));
+  while (tracks.length < 1 && Date.now() - startTimestamp < maxWaitMs) {
+    await sleep(pollIntervalMs);
   }
 
   if (tracks.length === 0) {
