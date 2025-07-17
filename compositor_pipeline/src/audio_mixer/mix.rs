@@ -9,7 +9,7 @@ use super::{
     OutputInfo,
 };
 
-use tracing::trace;
+use tracing::{debug, trace};
 
 // I don't know if this is a good name, correct me if I'm wrong
 #[derive(Debug)]
@@ -77,15 +77,15 @@ impl SampleMixer {
             .map(|(l, r)| f64::max(l.abs(), r.abs()))
             .reduce(f64::max)
             .expect("Assumes that summed samples is not empty");
-        trace!("Max abs value: {max_sample}");
+        debug!("Max abs value: {max_sample}");
 
-        let new_scaling_factor = if max_sample > self.scaling_threshold {
+        let new_scaling_factor = if max_sample * self.scaling_factor > self.scaling_threshold {
             self.scaling_factor - self.scaling_increment
         } else {
             self.scaling_factor
         };
-        trace!("Old scaling factor: {}", self.scaling_factor);
-        trace!("New scaling factor: {new_scaling_factor}");
+        debug!("Old scaling factor: {}", self.scaling_factor as f64);
+        debug!("New scaling factor: {new_scaling_factor}");
 
         let interpolation_increment = self.scaling_increment / summed_samples.len() as f64;
         let mut current_scaling_factor = self.scaling_factor;
@@ -134,6 +134,10 @@ impl SampleMixer {
                 sum.1 += (sample.1 as f64 * input_params.volume as f64) as i64;
             }
         }
+
+        summed_samples
+            .iter()
+            .for_each(|(l, r)| trace!("L: {l}, R: {r}"));
 
         summed_samples
     }
