@@ -11,11 +11,6 @@ use integration_tests::{
     ffmpeg::start_ffmpeg_receive_h264,
 };
 
-const VIDEO_RESOLUTION: Resolution = Resolution {
-    width: 1280,
-    height: 720,
-};
-
 const IP: &str = "127.0.0.1";
 const INPUT_PORT_1: u16 = 8002;
 const INPUT_PORT_2: u16 = 8004;
@@ -213,7 +208,7 @@ fn client_code() -> Result<()> {
 
     examples::post("start", &json!({}))?;
 
-    std::thread::sleep(Duration::from_secs(10));
+    std::thread::sleep(Duration::from_secs(5));
 
     loop {
         examples::post(
@@ -226,7 +221,7 @@ fn client_code() -> Result<()> {
         )?;
         info!("2 streams playing!");
 
-        std::thread::sleep(Duration::from_secs(10));
+        std::thread::sleep(Duration::from_secs(5));
 
         examples::post(
             "output/output_1/update",
@@ -238,7 +233,7 @@ fn client_code() -> Result<()> {
         )?;
         info!("3 streams playing!");
 
-        std::thread::sleep(Duration::from_secs(10));
+        std::thread::sleep(Duration::from_secs(5));
 
         examples::post(
             "output/output_1/update",
@@ -250,7 +245,7 @@ fn client_code() -> Result<()> {
         )?;
         info!("4 streams playing!");
 
-        std::thread::sleep(Duration::from_secs(10));
+        std::thread::sleep(Duration::from_secs(5));
 
         examples::post(
             "output/output_1/update",
@@ -262,7 +257,7 @@ fn client_code() -> Result<()> {
         )?;
         info!("5 streams playing!");
 
-        std::thread::sleep(Duration::from_secs(10));
+        std::thread::sleep(Duration::from_secs(5));
 
         examples::post(
             "output/output_1/update",
@@ -274,7 +269,7 @@ fn client_code() -> Result<()> {
         )?;
         info!("4 streams playing!");
 
-        std::thread::sleep(Duration::from_secs(10));
+        std::thread::sleep(Duration::from_secs(5));
 
         examples::post(
             "output/output_1/update",
@@ -286,7 +281,7 @@ fn client_code() -> Result<()> {
         )?;
         info!("3 streams playing!");
 
-        std::thread::sleep(Duration::from_secs(10));
+        std::thread::sleep(Duration::from_secs(5));
 
         examples::post(
             "output/output_1/update",
@@ -298,7 +293,7 @@ fn client_code() -> Result<()> {
         )?;
         info!("2 streams playing!");
 
-        std::thread::sleep(Duration::from_secs(10));
+        std::thread::sleep(Duration::from_secs(5));
 
         examples::post(
             "output/output_1/update",
@@ -310,7 +305,7 @@ fn client_code() -> Result<()> {
         )?;
         info!("1 stream playing!");
 
-        std::thread::sleep(Duration::from_secs(10));
+        std::thread::sleep(Duration::from_secs(5));
     }
 
     Ok(())

@@ -95,8 +95,7 @@ impl SampleMixer {
         debug!("New scaling factor: {new_scaling_factor}");
 
         let interpolation_increment =
-            (self.scaling_factor - new_scaling_factor) / summed_samples.len() as f64;
-        debug!("Interpolation increment: {interpolation_increment}");
+            (new_scaling_factor - self.scaling_factor) / summed_samples.len() as f64;
         let mut current_scaling_factor = self.scaling_factor;
 
         let summed_samples: Vec<(f64, f64)> = summed_samples
@@ -104,7 +103,7 @@ impl SampleMixer {
             .map(|(mut l, mut r)| {
                 l *= current_scaling_factor;
                 r *= current_scaling_factor;
-                current_scaling_factor -= interpolation_increment;
+                current_scaling_factor += interpolation_increment;
                 (l, r)
             })
             .collect();
