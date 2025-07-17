@@ -6,7 +6,7 @@ use super::examples::{get_asset_path, TestSample};
 use std::{
     fs::File,
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     thread,
     time::Duration,
@@ -109,6 +109,27 @@ pub fn start_ffmpeg_receive_vp9(video_port: Option<u16>, audio_port: Option<u16>
 
     Command::new("ffplay")
         .args(["-protocol_whitelist", "file,rtp,udp", &output_sdp_path])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    thread::sleep(Duration::from_secs(2));
+
+    Ok(())
+}
+
+pub fn start_ffmpeg_receive_hls(playlist_path: &Path) -> Result<()> {
+    for _ in 0..20 {
+        if playlist_path.exists() && !std::fs::read_to_string(playlist_path)?.trim().is_empty() {
+            break;
+        }
+        thread::sleep(Duration::from_secs(1));
+    }
+    if !playlist_path.exists() || std::fs::read_to_string(playlist_path)?.trim().is_empty() {
+        return Err(anyhow!("Playlist file does not exist: {playlist_path:?}"));
+    }
+
+    Command::new("ffplay")
+        .args(["-i", playlist_path.to_str().unwrap()])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;

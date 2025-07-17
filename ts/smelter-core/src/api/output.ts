@@ -2,6 +2,7 @@ import type {
   Api,
   RegisterRtpOutput,
   RegisterMp4Output,
+  RegisterHlsOutput,
   RegisterWhipOutput,
   _smelterInternals,
   RegisterRtmpClientOutput,
@@ -10,6 +11,7 @@ import { inputRefIntoRawId } from './input';
 import { intoRegisterWhipOutput } from './output/whip';
 import { intoRegisterRtpOutput } from './output/rtp';
 import { intoRegisterMp4Output } from './output/mp4';
+import { intoRegisterHlsOutput } from './output/hls';
 import { intoRegisterRtmpClientOutput } from './output/rtmp';
 
 /**
@@ -63,6 +65,7 @@ export type RegisterWasmSpecificOutput =
 export type RegisterOutput =
   | ({ type: 'rtp_stream' } & RegisterRtpOutput)
   | ({ type: 'mp4' } & RegisterMp4Output)
+  | ({ type: 'hls' } & RegisterHlsOutput)
   | ({ type: 'whip' } & RegisterWhipOutput)
   | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput)
   | RegisterWasmSpecificOutput;
@@ -78,6 +81,8 @@ export function intoRegisterOutput(
     return intoRegisterRtpOutput(output, initial);
   } else if (output.type === 'mp4') {
     return intoRegisterMp4Output(output, initial);
+  } else if (output.type === 'hls') {
+    return intoRegisterHlsOutput(output, initial);
   } else if (output.type === 'whip') {
     return intoRegisterWhipOutput(output, initial);
   } else if (output.type === 'rtmp_client') {
