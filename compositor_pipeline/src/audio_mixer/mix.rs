@@ -9,7 +9,7 @@ use super::{
     OutputInfo,
 };
 
-use tracing::trace;
+use tracing::debug;
 
 // I don't know if this is a good name, correct me if I'm wrong
 #[derive(Debug)]
@@ -79,7 +79,7 @@ impl SampleMixer {
             .expect("Assumes that summed samples is not empty");
         debug!("Max abs value: {max_sample}");
 
-        let new_scaling_factor = if max_sample > self.scaling_threshold {
+        let new_scaling_factor = if max_sample * self.scaling_factor > self.scaling_threshold {
             self.scaling_factor - self.scaling_increment
         } else {
             self.scaling_factor
