@@ -61,3 +61,75 @@ export async function sleep(timeoutMs: number): Promise<void> {
     }, timeoutMs);
   });
 }
+
+export class StateGuard {
+  private state:
+    | { type: 'unique'; promise: Promise<void> }
+    | { type: 'shared'; promises: Set<Promise<void>> }
+    | { type: 'open' };
+
+  public constructor() {
+    this.state = { type: 'open' };
+  }
+
+  public async runBlocking<T>(fn: () => Promise<T>): Promise<T> {
+    const [promise, promiseResolveFn] = this.createGuardPromise();
+    while (this.state.type !== 'open') {
+      if (this.state.type === 'unique') {
+        if (this.state.promise === promise) {
+          break;
+        }
+        await this.state.promise;
+      } else if (this.state.type === 'shared') {
+        const unblockingPromises = this.state.promises;
+        this.state = { type: 'unique', promise };
+        await Promise.allSettled(unblockingPromises);
+      }
+    }
+
+    this.state = { type: 'unique', promise };
+
+    try {
+      return await fn();
+    } finally {
+      this.state = { type: 'open' };
+      promiseResolveFn();
+    }
+  }
+
+  public async run<T>(fn: () => Promise<T>): Promise<T> {
+    while (this.state.type === 'unique') {
+      await this.state.promise;
+    }
+
+    const [promise, promiseResolveFn] = this.createGuardPromise();
+
+    if (this.state.type === 'shared') {
+      this.state.promises.add(promise);
+    } else if (this.state.type === 'open') {
+      this.state = { type: 'shared', promises: new Set([promise]) };
+    }
+
+    try {
+      return await fn();
+    } finally {
+      if (this.state.type === 'shared') {
+        this.state.promises.delete(promise);
+        if (this.state.promises.size === 0) {
+          this.state = { type: 'open' };
+        }
+      }
+
+      promiseResolveFn();
+    }
+  }
+
+  private createGuardPromise(): [Promise<void>, () => void] {
+    let release: (() => void) | undefined;
+    const promise = new Promise<void>(res => {
+      release = res;
+    });
+
+    return [promise, release as () => void];
+  }
+}
