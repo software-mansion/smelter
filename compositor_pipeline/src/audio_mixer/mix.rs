@@ -94,7 +94,9 @@ impl SampleMixer {
         debug!("Old scaling factor: {}", self.scaling_factor);
         debug!("New scaling factor: {new_scaling_factor}");
 
-        let interpolation_increment = self.scaling_increment / summed_samples.len() as f64;
+        let interpolation_increment =
+            (self.scaling_factor - new_scaling_factor) / summed_samples.len() as f64;
+        debug!("Interpolation increment: {interpolation_increment}");
         let mut current_scaling_factor = self.scaling_factor;
 
         let summed_samples: Vec<(f64, f64)> = summed_samples
