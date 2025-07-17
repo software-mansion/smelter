@@ -66,6 +66,7 @@ wgpu = { version = "25.0.2", default-features = false, features = [
     "serde"
 ] }
 tower-http = { version = "0.6.1", features = ["cors"] }
+tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"] }
 
 [dependencies]
 compositor_api = { workspace = true }
@@ -86,7 +87,7 @@ image = { workspace = true }
 thiserror = { workspace = true }
 rtp = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter"] }
+tracing-subscriber = { workspace = true }
 libc = "0.2.151"
 webrtc-util = { workspace = true }
 rand = { workspace = true }
