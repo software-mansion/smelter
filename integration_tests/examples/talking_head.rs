@@ -44,7 +44,7 @@ fn client_code() -> Result<()> {
         "input/input_2/register",
         &json!({
             "type": "mp4",
-            "path": path_quiet,
+            "path": path,
             "offset_ms": 5_000,
         }),
     )?;
@@ -62,7 +62,7 @@ fn client_code() -> Result<()> {
         "input/input_4/register",
         &json!({
             "type": "mp4",
-            "path": path_quiet,
+            "path": path,
             "offset_ms": 15_000,
         }),
     )?;
@@ -80,7 +80,7 @@ fn client_code() -> Result<()> {
         "input/input_6/register",
         &json!({
             "type": "mp4",
-            "path": path_quiet,
+            "path": path,
             "offset_ms": 25_000,
         }),
     )?;
@@ -98,7 +98,7 @@ fn client_code() -> Result<()> {
         "input/input_8/register",
         &json!({
             "type": "mp4",
-            "path": path_quiet,
+            "path": path,
             "offset_ms": 35_000,
         }),
     )?;
@@ -116,7 +116,7 @@ fn client_code() -> Result<()> {
         "input/input_10/register",
         &json!({
             "type": "mp4",
-            "path": path_quiet,
+            "path": path,
             "offset_ms": 45_000,
         }),
     )?;
