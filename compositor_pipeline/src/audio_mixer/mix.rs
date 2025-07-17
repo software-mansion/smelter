@@ -163,10 +163,6 @@ impl SampleMixer {
         }
 
         summed_samples
-            .iter()
-            .for_each(|(l, r)| trace!("L: {l}, R: {r}"));
-
-        summed_samples
     }
 }
 
