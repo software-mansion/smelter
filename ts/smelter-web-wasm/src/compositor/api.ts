@@ -60,4 +60,5 @@ export type RegisterInput =
   | { type: 'mp4'; url?: string; blob?: Blob }
   | { type: 'camera' }
   | { type: 'screen_capture' }
-  | { type: 'stream'; stream: MediaStream };
+  | { type: 'stream'; stream: MediaStream }
+  | { type: 'whep'; endpointUrl: string; bearerToken: string };
