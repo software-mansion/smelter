@@ -77,7 +77,6 @@ impl SampleMixer {
             .map(|(l, r)| f64::max(l.abs(), r.abs()))
             .reduce(f64::max)
             .expect("Assumes that summed samples is not empty");
-        debug!("Max abs value: {max_sample}");
 
         let new_scaling_factor = if max_sample * self.scaling_factor > self.scaling_threshold {
             self.scaling_factor - self.scaling_increment
@@ -90,6 +89,8 @@ impl SampleMixer {
         } else {
             self.scaling_factor
         };
+        debug!("Max abs value: {max_sample}");
+        debug!("Max abs value scaled: {}", max_sample * new_scaling_factor);
         debug!("Old scaling factor: {}", self.scaling_factor);
         debug!("New scaling factor: {new_scaling_factor}");
 
