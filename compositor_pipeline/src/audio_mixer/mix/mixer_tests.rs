@@ -1,14 +1,7 @@
 use crate::audio_mixer::mix::*;
-use tracing_subscriber::{self, EnvFilter};
 
 const SCALING_THRESHOLD: f64 = 25_000.0f64;
 const SCALING_INCREMENT: f64 = 0.01f64;
-
-fn set_testing_subscriber() {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
-}
 
 #[test]
 fn sum_scaler_no_scaling_test() {
@@ -67,8 +60,6 @@ fn sum_scaler_basic_scaling_test() {
 
 #[test]
 fn sum_scaler_decrease_and_increase_volume_test() {
-    set_testing_subscriber();
-
     let mut mixer = SampleMixer::new(SCALING_THRESHOLD, SCALING_INCREMENT);
 
     let input_chunk_1: Vec<(i64, i64)> = vec![
