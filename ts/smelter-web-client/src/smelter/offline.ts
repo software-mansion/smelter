@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { OfflineSmelter as CoreSmelter } from '@swmansion/smelter-core';
+import { OfflineSmelter as CoreSmelter, StateGuard } from '@swmansion/smelter-core';
 import type { Renderers } from '@swmansion/smelter';
 import { pino } from 'pino';
 import type { RegisterInput, RegisterOutput } from '../api';
@@ -8,6 +8,7 @@ import RemoteInstanceManager from '../manager';
 
 export default class OfflineSmelter {
   private coreSmelter: CoreSmelter;
+  private scheduler: StateGuard;
 
   public constructor(opts: InstanceOptions) {
     const logger = pino({
@@ -21,39 +22,50 @@ export default class OfflineSmelter {
       },
     });
     this.coreSmelter = new CoreSmelter(new RemoteInstanceManager(opts), logger);
+    this.scheduler = new StateGuard();
   }
 
   public async init(): Promise<void> {
-    await this.coreSmelter.init();
+    await this.scheduler.runBlocking(async () => {
+      await this.coreSmelter.init();
+    });
   }
 
   public async render(root: ReactElement, request: RegisterOutput, durationMs?: number) {
-    await this.coreSmelter.render(root, request, durationMs);
+    await this.scheduler.runBlocking(async () => {
+      await this.coreSmelter.render(root, request, durationMs);
+    });
   }
 
   public async registerInput(inputId: string, request: RegisterInput): Promise<object> {
-    let result = await this.coreSmelter.registerInput(inputId, request);
+    return await this.scheduler.run(async () => {
+      let result = await this.coreSmelter.registerInput(inputId, request);
 
-    const mappedResult: any = {};
-    if ('bearer_token' in result) {
-      mappedResult.bearerToken = result['bearer_token'];
-    }
-    if ('video_duration_ms' in result) {
-      mappedResult.videoDurationMs = result['video_duration_ms'];
-    }
-    if ('audio_duration_ms' in result) {
-      mappedResult.audioDurationMs = result['audio_duration_ms'];
-    }
+      const mappedResult: any = {};
+      if ('bearer_token' in result) {
+        mappedResult.bearerToken = result['bearer_token'];
+      }
+      if ('video_duration_ms' in result) {
+        mappedResult.videoDurationMs = result['video_duration_ms'];
+      }
+      if ('audio_duration_ms' in result) {
+        mappedResult.audioDurationMs = result['audio_duration_ms'];
+      }
 
-    return mappedResult;
+      return mappedResult;
+    });
   }
 
   public async registerImage(imageId: string, request: Renderers.RegisterImage): Promise<void> {
-    await this.coreSmelter.registerImage(imageId, request);
+    await this.scheduler.run(async () => {
+      await this.coreSmelter.registerImage(imageId, request);
+    });
   }
 
   public async registerShader(shaderId: string, request: Renderers.RegisterShader): Promise<void> {
-    await this.coreSmelter.registerShader(shaderId, request);
+    await this.scheduler.run(async () => {
+      await this.coreSmelter.registerShader(shaderId, request);
+    });
   }
 
   public async registerFont(fontSource: string | ArrayBuffer): Promise<object> {
@@ -72,10 +84,12 @@ export default class OfflineSmelter {
     const formData = new FormData();
     formData.append('fontFile', fontBlob);
 
-    return this.coreSmelter.manager.sendMultipartRequest({
-      method: 'POST',
-      route: `/api/font/register`,
-      body: formData,
+    return await this.scheduler.run(async () => {
+      return this.coreSmelter.manager.sendMultipartRequest({
+        method: 'POST',
+        route: `/api/font/register`,
+        body: formData,
+      });
     });
   }
 }
