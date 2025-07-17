@@ -77,15 +77,15 @@ impl SampleMixer {
             .map(|(l, r)| f64::max(l.abs(), r.abs()))
             .reduce(f64::max)
             .expect("Assumes that summed samples is not empty");
-        trace!("Max abs value: {max_sample}");
+        debug!("Max abs value: {max_sample}");
 
         let new_scaling_factor = if max_sample > self.scaling_threshold {
             self.scaling_factor - self.scaling_increment
         } else {
             self.scaling_factor
         };
-        trace!("Old scaling factor: {}", self.scaling_factor);
-        trace!("New scaling factor: {new_scaling_factor}");
+        debug!("Old scaling factor: {}", self.scaling_factor);
+        debug!("New scaling factor: {new_scaling_factor}");
 
         let interpolation_increment = self.scaling_increment / summed_samples.len() as f64;
         let mut current_scaling_factor = self.scaling_factor;
