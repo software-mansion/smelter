@@ -69,8 +69,8 @@ impl AudioMixer {
 }
 const VOL_DOWN_THRESHOLD: f64 = i16::MAX as f64;
 const VOL_UP_THRESHOLD: f64 = 0.7 * i16::MAX as f64;
-const VOL_DOWN_INCREMENT: f64 = 0.015;
-const VOL_UP_INCREMENT: f64 = 0.005;
+const VOL_DOWN_INCREMENT: f64 = 0.02;
+const VOL_UP_INCREMENT: f64 = 0.01;
 
 #[derive(Debug)]
 pub(super) struct InternalAudioMixer {
