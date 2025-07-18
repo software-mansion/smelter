@@ -11,10 +11,6 @@ use super::{
 
 use tracing::{error, trace};
 
-// This const should be between vol_down threshold and vol_up_threshold
-// It is returned whenever max value in chunk is not found (which probably never happens anyway)
-const STATIONARY_VALUE: f64 = 0.9 * i16::MAX as f64;
-
 #[derive(Debug)]
 pub(super) struct SampleMixer {
     /// Factor by which sample value is multiplied
@@ -41,7 +37,7 @@ impl SampleMixer {
         vol_up_increment: f64,
     ) -> Self {
         Self {
-            scaling_factor: 1.0f64,
+            scaling_factor: 1.0,
             vol_down_threshold,
             vol_up_threshold,
             vol_down_increment,
@@ -90,36 +86,33 @@ impl SampleMixer {
             .reduce(f64::max)
             .unwrap_or_else(|| {
                 error!("Mixer received an empty chunk! (This MUST NOT happen)");
-                STATIONARY_VALUE / self.scaling_factor
+                self.vol_up_threshold
             });
 
         let should_decrease_volume = max_sample * self.scaling_factor > self.vol_down_threshold;
         let should_increase_volume = max_sample * self.scaling_factor < self.vol_up_threshold;
 
-        let new_scaling_factor = if should_decrease_volume {
-            f64::max(self.scaling_factor - self.vol_down_increment, 0.0)
+        let old_scaling_factor = self.scaling_factor;
+        if should_decrease_volume {
+            self.scaling_factor = f64::max(self.scaling_factor - self.vol_down_increment, 0.0)
         } else if should_increase_volume {
-            f64::min(self.scaling_factor + self.vol_up_increment, 1.0)
-        } else {
-            self.scaling_factor
+            self.scaling_factor = f64::min(self.scaling_factor + self.vol_up_increment, 1.0)
         };
         trace!(
             max_sample,
-            old_scaling_factor = self.scaling_factor,
-            new_scaling_factor,
+            old_scaling_factor,
+            new_scaling_factor = self.scaling_factor,
             "Processing audio sample",
         );
 
-        let scaling_factor_diff = new_scaling_factor - self.scaling_factor;
+        let factor_diff = self.scaling_factor - old_scaling_factor;
         let sample_count = summed_samples.len();
-
-        self.scaling_factor = new_scaling_factor;
         summed_samples
             .into_iter()
             .enumerate()
             .map(|(index, (l, r))| {
-                let factor = scaling_factor_diff * index as f64 / sample_count as f64;
-                (l * factor, r * factor)
+                let factor = old_scaling_factor + factor_diff * index as f64 / sample_count as f64;
+                ((l * factor).clamp(-1.0, 1.0), (r * factor).clamp(-1.0, 1.0))
             })
             .collect()
     }
