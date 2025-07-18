@@ -23,25 +23,25 @@ pub(super) struct SampleMixer {
     vol_up_threshold: f64,
 
     /// Increment by which scaling factor is decreased each chunk while lowering volume
-    vol_down_interval: f64,
+    vol_down_increment: f64,
 
     /// Interval by wich svaling factor is inreased each chunk while rising volume
-    vol_up_interval: f64,
+    vol_up_increment: f64,
 }
 
 impl SampleMixer {
     pub fn new(
         vol_down_threshold: f64,
         vol_up_threshold: f64,
-        vol_down_interval: f64,
-        vol_up_interval: f64,
+        vol_down_increment: f64,
+        vol_up_increment: f64,
     ) -> Self {
         Self {
             scaling_factor: 1.0f64,
             vol_down_threshold,
             vol_up_threshold,
-            vol_down_interval,
-            vol_up_interval,
+            vol_down_increment,
+            vol_up_increment,
         }
     }
 
@@ -96,13 +96,13 @@ impl SampleMixer {
             .expect("Assumes that summed samples is not empty");
 
         let new_scaling_factor = if max_sample * self.scaling_factor > self.vol_down_threshold {
-            self.scaling_factor - self.vol_down_interval
+            self.scaling_factor - self.vol_down_increment
         } else if (self.scaling_factor < 1.0f64)
             && (max_sample * self.scaling_factor < self.vol_up_threshold)
         {
             // This min is to adjust potential numerical error, I really don't want the
             // scaling factor to go over 1
-            f64::min(self.scaling_factor + self.vol_up_interval, 1.0f64)
+            f64::min(self.scaling_factor + self.vol_up_increment, 1.0f64)
         } else {
             self.scaling_factor
         };

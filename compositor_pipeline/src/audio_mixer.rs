@@ -68,9 +68,9 @@ impl AudioMixer {
     }
 }
 const VOL_DOWN_THRESHOLD: f64 = i16::MAX as f64;
-const VOL_UP_THRESHOLD: f64 = 0.7f64 * i16::MAX as f64;
-const VOL_DOWN_INTERVAL: f64 = 0.015f64;
-const VOL_UP_INTERVAL: f64 = 0.005f64;
+const VOL_UP_THRESHOLD: f64 = 0.7 * i16::MAX as f64;
+const VOL_DOWN_INCREMENT: f64 = 0.015;
+const VOL_UP_INCREMENT: f64 = 0.005;
 
 #[derive(Debug)]
 pub(super) struct InternalAudioMixer {
@@ -87,8 +87,8 @@ impl InternalAudioMixer {
             sample_mixer: SampleMixer::new(
                 VOL_DOWN_THRESHOLD,
                 VOL_UP_THRESHOLD,
-                VOL_DOWN_INTERVAL,
-                VOL_UP_INTERVAL,
+                VOL_DOWN_INCREMENT,
+                VOL_UP_INCREMENT,
             ),
         }
     }
