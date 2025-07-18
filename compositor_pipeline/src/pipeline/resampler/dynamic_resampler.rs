@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use tracing::info;
+
 use crate::{
     audio_mixer::AudioSamples,
     pipeline::resampler::single_channel::{ChannelResampler, SingleChannelBatch},
@@ -52,6 +54,11 @@ impl DynamicResampler {
         match &self.state {
             Some(State::Mono(state)) if state.input_sample_rate == batch.sample_rate => (),
             _ => {
+                info!(
+                    input_sample_rate = batch.sample_rate,
+                    output_sample_rate = self.output_sample_rate,
+                    "Initializing mono audio resampler",
+                );
                 self.state = Some(State::Mono(MonoState {
                     input_sample_rate: batch.sample_rate,
                     resampler: ChannelResampler::new(
@@ -77,6 +84,11 @@ impl DynamicResampler {
         match &self.state {
             Some(State::Stereo(state)) if state.input_sample_rate == batch.sample_rate => (),
             _ => {
+                info!(
+                    input_sample_rate = batch.sample_rate,
+                    output_sample_rate = self.output_sample_rate,
+                    "Initializing stereo audio resampler",
+                );
                 self.state = Some(State::Stereo(StereoState {
                     input_sample_rate: batch.sample_rate,
                     left: ChannelResampler::new(

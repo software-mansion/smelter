@@ -44,7 +44,7 @@ impl AudioEncoder for OpusEncoder {
         _ctx: &Arc<PipelineCtx>,
         options: Self::Options,
     ) -> Result<(Self, AudioEncoderConfig), EncoderInitError> {
-        info!("Initializing libopus encoder {options:?}");
+        info!(?options, "Initializing libopus encoder");
         let mut encoder = opus::Encoder::new(
             options.sample_rate,
             options.channels.into(),

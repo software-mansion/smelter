@@ -42,8 +42,8 @@ impl VideoEncoder for FfmpegVp9Encoder {
     fn new(
         ctx: &Arc<PipelineCtx>,
         options: Self::Options,
-    ) -> Result<(Self, super::VideoEncoderConfig), EncoderInitError> {
-        info!("Initializing FFmpeg vp9 encoder {options:?}");
+    ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
+        info!(?options, "Initializing FFmpeg VP9 encoder");
         let codec = ffmpeg_next::codec::encoder::find(Id::VP9).ok_or(EncoderInitError::NoCodec)?;
 
         let mut encoder = Context::new().encoder().video()?;

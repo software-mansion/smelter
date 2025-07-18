@@ -1,7 +1,7 @@
 use std::{fmt, time::Duration};
 
 use rubato::{FftFixedOut, Resampler};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 use crate::pipeline::resampler::SAMPLE_BATCH_DURATION;
 
@@ -27,10 +27,6 @@ impl ChannelResampler {
         output_sample_rate: u32,
         first_batch_pts: Duration,
     ) -> Result<Box<Self>, rubato::ResamplerConstructionError> {
-        info!(
-            "Initializing output stream audio resampler  input:{} output:{}",
-            input_sample_rate, output_sample_rate
-        );
         /// Not sure what should be here, but rubato example used 2
         /// https://github.com/HEnquist/rubato/blob/master/examples/process_f64.rs#L174
         const SUB_CHUNKS: usize = 2;

@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use compositor_render::{Frame, FrameData, Resolution};
-use tracing::warn;
+use tracing::{info, warn};
 use vk_video::WgpuTexturesDecoder;
 
 use crate::{
@@ -22,6 +22,7 @@ impl VideoDecoder for VulkanH264Decoder {
     fn new(ctx: &Arc<PipelineCtx>) -> Result<Self, DecoderInitError> {
         match &ctx.graphics_context.vulkan_ctx {
             Some(vulkan_ctx) => {
+                info!("Initializing Vulkan H264 decoder");
                 let device = vulkan_ctx.device.clone();
                 let decoder = device.create_wgpu_textures_decoder()?;
                 Ok(Self { decoder })

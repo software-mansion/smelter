@@ -29,11 +29,11 @@ pub fn spawn_audio_encoder_thread<Encoder: AudioEncoder>(
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
     std::thread::Builder::new()
-        .name(format!("Encoder thread for output {}", &output_id))
+        .name(format!("Video encoder thread for output {}", &output_id))
         .spawn(move || {
             let _span = span!(
                 Level::INFO,
-                "Encoder thread",
+                "Video encoder thread",
                 output_id = output_id.to_string(),
                 encoder = Encoder::LABEL
             )

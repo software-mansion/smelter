@@ -17,7 +17,7 @@ use ffmpeg_next::{
     media::Type,
     Rational,
 };
-use tracing::{error, trace, warn};
+use tracing::{error, info, trace, warn};
 
 pub struct FfmpegVp8Decoder {
     decoder: ffmpeg_next::decoder::Opened,
@@ -28,6 +28,7 @@ impl VideoDecoder for FfmpegVp8Decoder {
     const LABEL: &'static str = "FFmpeg VP8 decoder";
 
     fn new(_ctx: &Arc<PipelineCtx>) -> Result<Self, DecoderInitError> {
+        info!("Initializing FFmpeg VP8 decoder");
         let mut parameters = ffmpeg_next::codec::Parameters::new();
         unsafe {
             let parameters = &mut *parameters.as_mut_ptr();

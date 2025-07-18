@@ -67,8 +67,8 @@ impl AudioMixer {
         self.0.lock().unwrap().update_output(output_id, audio)
     }
 }
-const VOL_DOWN_THRESHOLD: f64 = i16::MAX as f64;
-const VOL_UP_THRESHOLD: f64 = 0.7 * i16::MAX as f64;
+const VOL_DOWN_THRESHOLD: f64 = 1.0;
+const VOL_UP_THRESHOLD: f64 = 0.7;
 const VOL_DOWN_INCREMENT: f64 = 0.02;
 const VOL_UP_INCREMENT: f64 = 0.01;
 

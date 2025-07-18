@@ -1,5 +1,5 @@
 use std::{sync::Arc, time::Duration};
-use tracing::{debug, trace};
+use tracing::{debug, info, trace};
 
 use crate::{
     audio_mixer::AudioSamples,
@@ -30,6 +30,7 @@ impl AudioDecoder for OpusDecoder {
     type Options = ();
 
     fn new(ctx: &Arc<PipelineCtx>, _options: Self::Options) -> Result<Self, DecoderInitError> {
+        info!("Initializing libopus decoder");
         const OPUS_SAMPLE_RATES: [u32; 5] = [8_000, 12_000, 16_000, 24_000, 48_000];
 
         let decoded_sample_rate = match OPUS_SAMPLE_RATES.contains(&ctx.mixing_sample_rate) {

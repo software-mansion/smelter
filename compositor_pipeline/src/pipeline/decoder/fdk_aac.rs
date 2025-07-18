@@ -1,6 +1,6 @@
 use fdk_aac_sys as fdk;
 use std::sync::Arc;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{
     audio_mixer::AudioSamples,
@@ -30,6 +30,7 @@ impl AudioDecoder for FdkAacDecoder {
     type Options = Options;
 
     fn new(_ctx: &Arc<PipelineCtx>, options: Self::Options) -> Result<Self, DecoderInitError> {
+        info!("Initializing FDK AAC decoder");
         Ok(Self {
             decoder: None,
             asc: options.asc,
