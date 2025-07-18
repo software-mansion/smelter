@@ -13,6 +13,7 @@ import MultipleOutputs from './smelter-examples/MultipleOutputs';
 import MediaStreamInput from './smelter-examples/MediaStreamExample';
 import DynamicExample from './smelter-examples/playground/PlaygroundPage';
 import ShaderExample from './smelter-examples/ShaderExample';
+import WhepClientExample from './smelter-examples/WhepClientExample';
 
 setWasmBundleUrl('/assets/smelter.wasm');
 
@@ -22,6 +23,7 @@ function App() {
     inputMp4: <InputMp4Example />,
     componentMp4: <ComponentMp4Example />,
     whip: <WhipExample />,
+    whepClient: <WhepClientExample />,
     multipleCompositors: <MultipleInstances />,
     multipleOutputs: <MultipleOutputs />,
     camera: <Camera />,
@@ -45,6 +47,7 @@ function App() {
 
         <h3>Smelter examples</h3>
         <button onClick={() => setCurrentExample('whip')}>WHIP</button>
+        <button onClick={() => setCurrentExample('whepClient')}>WHEP Client</button>
         <button onClick={() => setCurrentExample('inputMp4')}>Input Stream MP4</button>
         <button onClick={() => setCurrentExample('componentMp4')}>Component MP4</button>
         <button onClick={() => setCurrentExample('multipleCompositors')}>

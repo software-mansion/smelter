@@ -28,6 +28,7 @@ rand = { workspace = true }
 mp4 = { git = "https://github.com/membraneframework-labs/mp4-rust.git", branch = "preserve-asc" }
 reqwest = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 fdk-aac-sys = "0.5.0"
 rubato = "0.15.0"
 wgpu = { workspace = true }
