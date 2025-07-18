@@ -19,6 +19,10 @@ use ffmpeg_next::{
 };
 use tracing::{error, trace, warn};
 
+pub struct Options {
+    pub sps_pps: Option<bytes::Bytes>,
+}
+
 pub struct FfmpegH264Decoder {
     decoder: ffmpeg_next::decoder::Opened,
     av_frame: ffmpeg_next::frame::Video,
@@ -27,11 +31,18 @@ pub struct FfmpegH264Decoder {
 impl VideoDecoder for FfmpegH264Decoder {
     const LABEL: &'static str = "FFmpeg H264 decoder";
 
-    fn new(_ctx: &Arc<PipelineCtx>) -> Result<Self, DecoderInitError> {
+    type Options = Options;
+
+    fn new(_ctx: &Arc<PipelineCtx>, options: Self::Options) -> Result<Self, DecoderInitError> {
         let mut parameters = ffmpeg_next::codec::Parameters::new();
+        let mut sps_pps = options.sps_pps.map(|config| config.to_vec());
         unsafe {
             let parameters = &mut *parameters.as_mut_ptr();
 
+            if let Some(sps_pps) = &mut sps_pps {
+                parameters.extradata = sps_pps.as_mut_ptr();
+                parameters.extradata_size = sps_pps.len() as i32;
+            }
             parameters.codec_type = Type::Video.into();
             parameters.codec_id = Id::H264.into();
         };

@@ -16,6 +16,7 @@ use crate::{
             decoder_thread_video::spawn_video_decoder_thread, fdk_aac, ffmpeg_h264,
             DecodedDataReceiver, DecoderThreadHandle,
         },
+        input::extra_data_from_stream,
         types::{EncodedChunk, IsKeyframe},
         AudioCodec, EncodedChunkKind, PipelineCtx, VideoCodec,
     },
@@ -117,18 +118,7 @@ impl HlsInput {
             Some(stream) => {
                 // not tested it was always null, but audio is in ADTS, so config is not
                 // necessary
-                let asc = unsafe {
-                    let codecpar = (*stream.as_ptr()).codecpar;
-                    let size = (*codecpar).extradata_size;
-                    if size > 0 {
-                        Some(bytes::Bytes::copy_from_slice(slice::from_raw_parts(
-                            (*codecpar).extradata,
-                            size as usize,
-                        )))
-                    } else {
-                        None
-                    }
-                };
+                let asc = extra_data_from_stream(&stream);
                 let (samples_sender, samples_receiver) = bounded(5);
                 let state =
                     StreamState::new(input_start_time, ctx.queue_sync_time, stream.time_base());
@@ -154,13 +144,17 @@ impl HlsInput {
         };
         let (mut video, mut frame_receiver) = match input_ctx.streams().best(Type::Video) {
             Some(stream) => {
+                let sps_pps = extra_data_from_stream(&stream);
                 let (frame_sender, frame_receiver) = bounded(5);
                 let state =
                     StreamState::new(input_start_time, ctx.queue_sync_time, stream.time_base());
-                let decoder_result = spawn_video_decoder_thread::<
-                    ffmpeg_h264::FfmpegH264Decoder,
-                    2000,
-                >(ctx.clone(), input_id.clone(), frame_sender);
+                let decoder_result =
+                    spawn_video_decoder_thread::<ffmpeg_h264::FfmpegH264Decoder, 2000>(
+                        ctx.clone(),
+                        input_id.clone(),
+                        ffmpeg_h264::Options { sps_pps },
+                        frame_sender,
+                    );
                 let handle = match decoder_result {
                     Ok(handle) => handle,
                     Err(err) => {

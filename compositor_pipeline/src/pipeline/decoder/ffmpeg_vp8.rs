@@ -27,7 +27,9 @@ pub struct FfmpegVp8Decoder {
 impl VideoDecoder for FfmpegVp8Decoder {
     const LABEL: &'static str = "FFmpeg VP8 decoder";
 
-    fn new(_ctx: &Arc<PipelineCtx>) -> Result<Self, DecoderInitError> {
+    type Options = ();
+
+    fn new(_ctx: &Arc<PipelineCtx>, _options: Self::Options) -> Result<Self, DecoderInitError> {
         let mut parameters = ffmpeg_next::codec::Parameters::new();
         unsafe {
             let parameters = &mut *parameters.as_mut_ptr();

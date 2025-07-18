@@ -12,9 +12,11 @@ use crate::{
     error::DecoderInitError,
     pipeline::{
         decoder::{
-            ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder,
-            ffmpeg_vp9::FfmpegVp9Decoder, vulkan_h264::VulkanH264Decoder, VideoDecoder,
-            VideoDecoderInstance, VideoDecoderOptions,
+            ffmpeg_h264::{self, FfmpegH264Decoder},
+            ffmpeg_vp8::FfmpegVp8Decoder,
+            ffmpeg_vp9::FfmpegVp9Decoder,
+            vulkan_h264::VulkanH264Decoder,
+            VideoDecoder, VideoDecoderInstance, VideoDecoderOptions,
         },
         input::rtp::{
             depayloader::{new_depayloader, Depayloader, DepayloaderOptions},
@@ -225,10 +227,13 @@ where
         decoder: VideoDecoderOptions,
     ) -> Result<Box<dyn VideoDecoderInstance>, DecoderInitError> {
         let decoder: Box<dyn VideoDecoderInstance> = match decoder {
-            VideoDecoderOptions::FfmpegH264 => Box::new(FfmpegH264Decoder::new(&self.ctx)?),
-            VideoDecoderOptions::FfmpegVp8 => Box::new(FfmpegVp8Decoder::new(&self.ctx)?),
-            VideoDecoderOptions::FfmpegVp9 => Box::new(FfmpegVp9Decoder::new(&self.ctx)?),
-            VideoDecoderOptions::VulkanH264 => Box::new(VulkanH264Decoder::new(&self.ctx)?),
+            VideoDecoderOptions::FfmpegH264 => Box::new(FfmpegH264Decoder::new(
+                &self.ctx,
+                ffmpeg_h264::Options { sps_pps: None },
+            )?),
+            VideoDecoderOptions::FfmpegVp8 => Box::new(FfmpegVp8Decoder::new(&self.ctx, ())?),
+            VideoDecoderOptions::FfmpegVp9 => Box::new(FfmpegVp9Decoder::new(&self.ctx, ())?),
+            VideoDecoderOptions::VulkanH264 => Box::new(VulkanH264Decoder::new(&self.ctx, ())?),
         };
         Ok(decoder)
     }

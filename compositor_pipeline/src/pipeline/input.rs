@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{slice, sync::Arc, time::Duration};
 
 use crate::{
     error::InputInitError,
@@ -8,7 +8,9 @@ use crate::{
     },
 };
 
+use bytes::Bytes;
 use compositor_render::InputId;
+use ffmpeg_next::{ffi::AVStream, Stream};
 use rtp::{RtpInput, RtpInputOptions};
 
 use self::mp4::{Mp4Input, Mp4Options};
@@ -68,5 +70,20 @@ pub(super) fn new_external_input(
         InputOptions::Whip(opts) => WhipInput::new_input(ctx, input_id, opts),
         #[cfg(feature = "decklink")]
         InputOptions::DeckLink(opts) => decklink::DeckLink::new_input(ctx, input_id, opts),
+    }
+}
+
+// TODO(noituri): Remove if I'll end up using it only in HLS
+pub(super) fn extra_data_from_stream(stream: &Stream<'_>) -> Option<Bytes> {
+    unsafe {
+        let codecpar = (*stream.as_ptr()).codecpar;
+        let size = (*codecpar).extradata_size;
+        match size > 0 {
+            true => Some(bytes::Bytes::copy_from_slice(slice::from_raw_parts(
+                (*codecpar).extradata,
+                size as usize,
+            ))),
+            false => None,
+        }
     }
 }

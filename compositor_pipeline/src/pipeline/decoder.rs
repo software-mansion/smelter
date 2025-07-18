@@ -63,8 +63,9 @@ pub(crate) struct DecoderThreadHandle {
 
 pub(crate) trait VideoDecoder: Sized + VideoDecoderInstance {
     const LABEL: &'static str;
+    type Options: Send + 'static;
 
-    fn new(ctx: &Arc<PipelineCtx>) -> Result<Self, DecoderInitError>;
+    fn new(ctx: &Arc<PipelineCtx>, options: Self::Options) -> Result<Self, DecoderInitError>;
 }
 
 pub(crate) trait VideoDecoderInstance {
@@ -96,8 +97,12 @@ where
     Decoder: VideoDecoder,
     Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
 {
-    pub fn new(ctx: Arc<PipelineCtx>, source: Source) -> Result<Self, DecoderInitError> {
-        let decoder = Decoder::new(&ctx)?;
+    pub fn new(
+        ctx: Arc<PipelineCtx>,
+        options: Decoder::Options,
+        source: Source,
+    ) -> Result<Self, DecoderInitError> {
+        let decoder = Decoder::new(&ctx, options)?;
         Ok(Self {
             decoder,
             source,

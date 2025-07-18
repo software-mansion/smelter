@@ -23,7 +23,7 @@ pub(super) struct Mp4FileReader<Reader: Read + Seek + Send + 'static> {
 
 #[derive(Debug, Clone)]
 pub(super) enum DecoderOptions {
-    H264,
+    H264(Option<Bytes>),
     Aac(Bytes),
 }
 
@@ -153,7 +153,8 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             timescale: track.timescale(),
             track_id,
             duration: track.duration(),
-            decoder_options: DecoderOptions::H264,
+            // TODO(noituri): Maybe we don't have to repack mp4?
+            decoder_options: DecoderOptions::H264(None),
             reader: self.reader,
         })
     }
