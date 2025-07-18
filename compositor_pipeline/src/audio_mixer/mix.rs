@@ -9,22 +9,39 @@ use super::{
     OutputInfo,
 };
 
-use tracing::debug;
+use tracing::trace;
 
-// I don't know if this is a good name, correct me if I'm wrong
 #[derive(Debug)]
 pub(super) struct SampleMixer {
+    /// Factor by which sample value is multiplied
     scaling_factor: f64,
-    scaling_threshold: f64,
-    scaling_increment: f64,
+
+    /// When max audio sample is above this value scaling factor is decreased
+    vol_down_threshold: f64,
+
+    /// When max audio sample is below this value scaling factor is increased
+    vol_up_threshold: f64,
+
+    /// Increment by which scaling factor is decreased each chunk while lowering volume
+    vol_down_interval: f64,
+
+    /// Interval by wich svaling factor is inreased each chunk while rising volume
+    vol_up_interval: f64,
 }
 
 impl SampleMixer {
-    pub fn new(scaling_threshold: f64, scaling_increment: f64) -> Self {
+    pub fn new(
+        vol_down_threshold: f64,
+        vol_up_threshold: f64,
+        vol_down_increment: f64,
+        vol_up_increment: f64,
+    ) -> Self {
         Self {
             scaling_factor: 1.0f64,
-            scaling_threshold,
-            scaling_increment,
+            vol_down_threshold,
+            vol_up_threshold,
+            vol_down_interval: vol_down_increment,
+            vol_up_interval: vol_up_increment,
         }
     }
 
@@ -42,8 +59,8 @@ impl SampleMixer {
         );
 
         let mixed: Vec<(i16, i16)> = match output_info.mixing_strategy {
-            MixingStrategy::SumClip => self.sum_clip(summed_samples),
-            MixingStrategy::SumScale => self.sum_scale(summed_samples),
+            MixingStrategy::SumClip => self.clip_samples(summed_samples),
+            MixingStrategy::SumScale => self.scale_samples(summed_samples),
         };
 
         match output_info.channels {
@@ -58,14 +75,14 @@ impl SampleMixer {
         }
     }
 
-    fn sum_clip(&self, summed_samples: Vec<(i64, i64)>) -> Vec<(i16, i16)> {
+    fn clip_samples(&self, summed_samples: Vec<(i64, i64)>) -> Vec<(i16, i16)> {
         summed_samples
             .into_iter()
             .map(|(l, r)| (self.clip_to_i16(l), self.clip_to_i16(r)))
             .collect()
     }
 
-    fn sum_scale(&mut self, summed_samples: Vec<(i64, i64)>) -> Vec<(i16, i16)> {
+    fn scale_samples(&mut self, summed_samples: Vec<(i64, i64)>) -> Vec<(i16, i16)> {
         let summed_samples: Vec<(f64, f64)> = summed_samples
             .into_iter()
             .map(|(l, r)| (l as f64, r as f64))
@@ -78,23 +95,25 @@ impl SampleMixer {
             .reduce(f64::max)
             .expect("Assumes that summed samples is not empty");
 
-        let new_scaling_factor = if max_sample * self.scaling_factor > self.scaling_threshold {
-            self.scaling_factor - self.scaling_increment
+        let new_scaling_factor = if max_sample * self.scaling_factor > self.vol_down_threshold {
+            self.scaling_factor - self.vol_down_interval
         } else if (self.scaling_factor < 1.0f64)
-            && (max_sample * self.scaling_factor < self.scaling_threshold)
+            && (max_sample * self.scaling_factor < self.vol_up_threshold)
         {
             // This min is to adjust potential numerical error, I really don't want the
             // scaling factor to go over 1
-            f64::min(self.scaling_factor + self.scaling_increment, 1.0f64)
+            f64::min(self.scaling_factor + self.vol_up_interval, 1.0f64)
         } else {
             self.scaling_factor
         };
-        debug!("Max abs value: {max_sample}");
-        debug!("Max abs value scaled: {}", max_sample * new_scaling_factor);
-        debug!("Old scaling factor: {}", self.scaling_factor);
-        debug!("New scaling factor: {new_scaling_factor}");
+        trace!(
+            max_sample,
+            old_scaling_factor = self.scaling_factor,
+            new_scaling_factor,
+            "Processing audio sample",
+        );
 
-        let interpolation_increment =
+        let interpolation_interval =
             (new_scaling_factor - self.scaling_factor) / summed_samples.len() as f64;
         let mut current_scaling_factor = self.scaling_factor;
 
@@ -103,7 +122,7 @@ impl SampleMixer {
             .map(|(mut l, mut r)| {
                 l *= current_scaling_factor;
                 r *= current_scaling_factor;
-                current_scaling_factor += interpolation_increment;
+                current_scaling_factor += interpolation_interval;
                 (l, r)
             })
             .collect();
