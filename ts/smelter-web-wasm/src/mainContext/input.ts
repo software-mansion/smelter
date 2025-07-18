@@ -4,6 +4,7 @@ import { handleRegisterCameraInput } from './input/camera';
 import { handleRegisterScreenCaptureInput } from './input/screenCapture';
 import { handleRegisterStreamInput } from './input/stream';
 import { handleRegisterMp4Input } from './input/mp4';
+import { handleRegisterWhepInput } from './input/whep';
 import type { InstanceContext } from './instance';
 
 export interface Input {
@@ -28,6 +29,8 @@ export async function handleRegisterInputRequest(
     return await handleRegisterScreenCaptureInput(ctx, inputId);
   } else if (body.type === 'stream') {
     return await handleRegisterStreamInput(ctx, inputId, body.stream);
+  } else if (body.type === 'whep') {
+    return await handleRegisterWhepInput(ctx, inputId, body.endpointUrl, body.bearerToken);
   } else {
     throw new Error(`Unknown input type ${body.type}`);
   }

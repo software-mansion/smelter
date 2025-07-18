@@ -20,7 +20,8 @@ export type RegisterInputRequest =
   | RegisterDecklinkInputRequest
   | { type: 'camera' }
   | { type: 'screen_capture' }
-  | { type: 'stream'; stream: any };
+  | { type: 'stream'; stream: any }
+  | { type: 'whep'; endpointUrl: string; bearerToken: string };
 
 export type RegisterRtpStreamInputRequest = Extract<Api.RegisterInput, { type: 'rtp_stream' }>;
 export type RegisterMp4InputRequest = { blob?: any } & Extract<Api.RegisterInput, { type: 'mp4' }>;
@@ -39,7 +40,8 @@ export type RegisterInput =
   | ({ type: 'whip' } & RegisterWhipInput)
   | { type: 'camera' }
   | { type: 'screen_capture' }
-  | { type: 'stream'; stream: any };
+  | { type: 'stream'; stream: any }
+  | { type: 'whep'; endpointUrl: string; bearerToken: string };
 
 /**
  * Converts object passed by user (or modified by platform specific interface) into
@@ -60,6 +62,8 @@ export function intoRegisterInput(input: RegisterInput): RegisterInputRequest {
     return { type: 'screen_capture' };
   } else if (input.type === 'stream') {
     return { type: 'stream', stream: input.stream };
+  } else if (input.type === 'whep') {
+    return { type: 'whep', endpointUrl: input.endpointUrl, bearerToken: input.bearerToken };
   } else {
     throw new Error(`Unknown input type ${(input as any).type}`);
   }

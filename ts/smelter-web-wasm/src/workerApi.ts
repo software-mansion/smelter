@@ -11,6 +11,11 @@ export type RegisterInput =
   | {
       type: 'stream';
       videoStream?: ReadableStream;
+    }
+  | {
+      type: 'whep';
+      endpointUrl: string;
+      bearerToken: string;
     };
 
 export type RegisterOutput = {
