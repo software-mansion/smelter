@@ -67,8 +67,7 @@ impl AudioMixer {
         self.0.lock().unwrap().update_output(output_id, audio)
     }
 }
-const VOL_DOWN_THRESHOLD: f64 = i16::MAX as f64;
-const VOL_UP_THRESHOLD: f64 = 0.7f64 * i16::MAX as f64;
+const SCALING_THRESHOLD: f64 = i16::MAX as f64;
 const VOL_DOWN_INTERVAL: f64 = 0.015f64;
 const VOL_UP_INTERVAL: f64 = 0.005f64;
 
@@ -84,12 +83,7 @@ impl InternalAudioMixer {
         Self {
             outputs: HashMap::new(),
             mixing_sample_rate,
-            sample_mixer: SampleMixer::new(
-                VOL_DOWN_THRESHOLD,
-                VOL_UP_THRESHOLD,
-                VOL_DOWN_INTERVAL,
-                VOL_UP_INTERVAL,
-            ),
+            sample_mixer: SampleMixer::new(SCALING_THRESHOLD, VOL_DOWN_INTERVAL, VOL_UP_INTERVAL),
         }
     }
 

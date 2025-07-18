@@ -17,10 +17,8 @@ pub(super) struct SampleMixer {
     scaling_factor: f64,
 
     /// When max audio sample is above this value scaling factor is decreased
-    vol_down_threshold: f64,
-
     /// When max audio sample is below this value scaling factor is increased
-    vol_up_threshold: f64,
+    scaling_threshold: f64,
 
     /// Increment by which scaling factor is decreased each chunk while lowering volume
     vol_down_interval: f64,
@@ -30,16 +28,10 @@ pub(super) struct SampleMixer {
 }
 
 impl SampleMixer {
-    pub fn new(
-        vol_down_threshold: f64,
-        vol_up_threshold: f64,
-        vol_down_interval: f64,
-        vol_up_interval: f64,
-    ) -> Self {
+    pub fn new(scaling_threshold: f64, vol_down_interval: f64, vol_up_interval: f64) -> Self {
         Self {
             scaling_factor: 1.0f64,
-            vol_down_threshold,
-            vol_up_threshold,
+            scaling_threshold,
             vol_down_interval,
             vol_up_interval,
         }
@@ -95,10 +87,10 @@ impl SampleMixer {
             .reduce(f64::max)
             .expect("Assumes that summed samples is not empty");
 
-        let new_scaling_factor = if max_sample * self.scaling_factor > self.vol_down_threshold {
+        let new_scaling_factor = if max_sample * self.scaling_factor > self.scaling_threshold {
             self.scaling_factor - self.vol_down_interval
         } else if (self.scaling_factor < 1.0f64)
-            && (max_sample * self.scaling_factor < self.vol_up_threshold)
+            && (max_sample * self.scaling_factor < self.scaling_threshold)
         {
             // This min is to adjust potential numerical error, I really don't want the
             // scaling factor to go over 1
