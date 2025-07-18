@@ -132,7 +132,7 @@ jobs:
             - name: 📁 Rust cache
               uses: Swatinem/rust-cache@v2
               with:
-                  shared-key: "linux-build"
+                  shared-key: "linux-lint"
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package compositor_chromium
