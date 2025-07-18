@@ -68,8 +68,8 @@ impl AudioMixer {
     }
 }
 const VOL_DOWN_THRESHOLD: f64 = i16::MAX as f64;
-const VOL_UP_THRESHOLD: f64 = 0.85f64 * i16::MAX as f64;
-const VOL_DOWN_INTERVAL: f64 = 0.02f64;
+const VOL_UP_THRESHOLD: f64 = 0.7f64 * i16::MAX as f64;
+const VOL_DOWN_INTERVAL: f64 = 0.015f64;
 const VOL_UP_INTERVAL: f64 = 0.005f64;
 
 #[derive(Debug)]
