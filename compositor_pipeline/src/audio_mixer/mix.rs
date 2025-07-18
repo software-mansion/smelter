@@ -9,7 +9,11 @@ use super::{
     OutputInfo,
 };
 
-use tracing::trace;
+use tracing::{error, trace};
+
+// This const should be between vol_down threshold and vol_up_threshold
+// It is returned whenever max value in chunk is not found (which probably never happens anyway)
+const STATIONARY_VALUE: f64 = 0.9 * i16::MAX as f64;
 
 #[derive(Debug)]
 pub(super) struct SampleMixer {
@@ -93,7 +97,10 @@ impl SampleMixer {
             .iter()
             .map(|(l, r)| f64::max(l.abs(), r.abs()))
             .reduce(f64::max)
-            .expect("Assumes that summed samples is not empty");
+            .unwrap_or_else(|| {
+                error!("Mixer received an empty chunk! (This MUST NOT happen)");
+                STATIONARY_VALUE / self.scaling_factor
+            });
 
         let new_scaling_factor = if max_sample * self.scaling_factor > self.vol_down_threshold {
             self.scaling_factor - self.vol_down_increment
