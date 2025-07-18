@@ -33,15 +33,15 @@ impl SampleMixer {
     pub fn new(
         vol_down_threshold: f64,
         vol_up_threshold: f64,
-        vol_down_increment: f64,
-        vol_up_increment: f64,
+        vol_down_interval: f64,
+        vol_up_interval: f64,
     ) -> Self {
         Self {
             scaling_factor: 1.0f64,
             vol_down_threshold,
             vol_up_threshold,
-            vol_down_interval: vol_down_increment,
-            vol_up_interval: vol_up_increment,
+            vol_down_interval,
+            vol_up_interval,
         }
     }
 
