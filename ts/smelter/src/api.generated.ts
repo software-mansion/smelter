@@ -230,6 +230,21 @@ export type RegisterOutput =
        * Audio track configuration.
        */
       audio?: OutputWhipAudioOptions | null;
+    }
+  | {
+      type: "hls";
+      /**
+       * Path to output HLS playlist.
+       */
+      path: string;
+      /**
+       * Video track configuration.
+       */
+      video?: OutputVideoOptions | null;
+      /**
+       * Audio track configuration.
+       */
+      audio?: OutputHlsAudioOptions | null;
     };
 export type InputId = string;
 export type VideoEncoderOptions =
@@ -835,6 +850,14 @@ export type WhipAudioEncoderOptions =
   | {
       type: "any";
     };
+export type HlsAudioEncoderOptions = {
+  type: "aac";
+  channels?: AudioChannels | null;
+  /**
+   * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
+   */
+  sample_rate?: number | null;
+};
 export type ImageSpec =
   | {
       asset_type: "png";
@@ -1065,6 +1088,28 @@ export interface OutputWhipAudioOptions {
    * Codec preferences list.
    */
   encoder_preferences?: WhipAudioEncoderOptions[] | null;
+  /**
+   * Initial audio mixer configuration for output.
+   */
+  initial: AudioScene;
+}
+export interface OutputHlsAudioOptions {
+  /**
+   * (**default="sum_clip"**) Specifies how audio should be mixed.
+   */
+  mixing_strategy?: AudioMixingStrategy | null;
+  /**
+   * Condition for termination of output stream based on the input streams states.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Audio encoder options.
+   */
+  encoder: HlsAudioEncoderOptions;
+  /**
+   * Specifies channels configuration.
+   */
+  channels?: AudioChannels | null;
   /**
    * Initial audio mixer configuration for output.
    */
