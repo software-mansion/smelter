@@ -1,11 +1,11 @@
-use std::{fmt, sync::Arc, time::Duration};
+use std::{fmt, time::Duration};
 
 use bytes::Bytes;
 use compositor_render::Frame;
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::{
-    audio_mixer::{InputSamples, OutputSamples},
+    audio_mixer::{AudioSamples, InputSamples, OutputSamples},
     queue::PipelineEvent,
 };
 
@@ -67,20 +67,11 @@ pub struct RawDataSender {
     pub audio: Option<Sender<PipelineEvent<InputSamples>>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum VideoDecoder {
-    FFmpegH264,
-    FFmpegVp8,
-    FFmpegVp9,
-    #[cfg(feature = "vk-video")]
-    VulkanVideoH264,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoCodec {
     H264,
-    VP8,
-    VP9,
+    Vp8,
+    Vp9,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,45 +100,10 @@ impl TryFrom<ffmpeg_next::Codec> for VideoCodec {
 /// Raw samples produced by a decoder or received from external source.
 /// They still need to be resampled before passing them to the queue.
 #[derive(Debug)]
-pub(super) struct DecodedSamples {
-    pub samples: Arc<Samples>,
+pub(crate) struct DecodedSamples {
+    pub samples: AudioSamples,
     pub start_pts: Duration,
     pub sample_rate: u32,
-}
-
-#[allow(clippy::enum_variant_names)]
-pub(super) enum Samples {
-    Mono16Bit(Vec<i16>),
-    #[allow(dead_code)]
-    Mono32Bit(Vec<i32>),
-    Stereo16Bit(Vec<(i16, i16)>),
-    #[allow(dead_code)]
-    Stereo32Bit(Vec<(i32, i32)>),
-}
-
-impl Samples {
-    pub fn sample_count(&self) -> usize {
-        match self {
-            Self::Mono16Bit(v) => v.len(),
-            Self::Mono32Bit(v) => v.len(),
-            Self::Stereo16Bit(v) => v.len(),
-            Self::Stereo32Bit(v) => v.len(),
-        }
-    }
-}
-
-impl fmt::Debug for Samples {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let (name, length) = match self {
-            Samples::Mono16Bit(s) => ("Mono16Bit", s.len()),
-            Samples::Mono32Bit(s) => ("Mono32Bit", s.len()),
-            Samples::Stereo16Bit(s) => ("Stereo16Bit", s.len()),
-            Samples::Stereo32Bit(s) => ("Stereo32Bit", s.len()),
-        };
-        f.debug_struct(&format!("Samples::{name}"))
-            .field("len", &length)
-            .finish()
-    }
 }
 
 impl fmt::Debug for EncodedChunk {

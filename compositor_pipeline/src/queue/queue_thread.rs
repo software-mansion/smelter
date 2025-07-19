@@ -234,7 +234,7 @@ impl VideoQueueProcessor {
 
     fn send_output_frames(&mut self, frames_batch: QueueVideoOutput, is_required: bool) {
         let pts = frames_batch.pts;
-        debug!(?pts, "Pushing video frames.");
+        debug!(?frames_batch, "Pushing video frames.");
         if is_required {
             if self.sender.send(frames_batch).is_err() {
                 warn!(?pts, "Dropping video frame on queue output.");
@@ -341,7 +341,7 @@ impl AudioQueueProcessor {
 
     fn send_output_batch(&mut self, samples: QueueAudioOutput, is_required: bool) {
         let pts_range = (samples.start_pts, samples.end_pts);
-        debug!(?pts_range, "Pushing audio samples.");
+        debug!(?samples, "Pushing audio samples.");
         if is_required {
             if self.sender.send(samples).is_err() {
                 warn!(?pts_range, "Dropping audio batch on queue output.");

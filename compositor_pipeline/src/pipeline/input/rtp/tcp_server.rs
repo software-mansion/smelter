@@ -15,13 +15,13 @@ use tracing::{debug, info, span, trace, Level};
 
 use crate::pipeline::{rtp::bind_to_requested_port, Port};
 
-use super::{RtpReceiverError, RtpReceiverOptions};
+use super::{RtpInputError, RtpInputOptions};
 
 pub(super) fn start_tcp_server_thread(
     input_id: &InputId,
-    opts: &RtpReceiverOptions,
+    opts: &RtpInputOptions,
     should_close: Arc<AtomicBool>,
-) -> Result<(Port, Receiver<bytes::Bytes>), RtpReceiverError> {
+) -> Result<(Port, Receiver<bytes::Bytes>), RtpInputError> {
     let (packets_tx, packets_rx) = bounded(1000);
     let input_id = input_id.clone();
     info!(?input_id, "Starting tcp socket");
@@ -31,11 +31,11 @@ pub(super) fn start_tcp_server_thread(
         socket2::Type::STREAM,
         Some(socket2::Protocol::TCP),
     )
-    .map_err(RtpReceiverError::SocketOptions)?;
+    .map_err(RtpInputError::SocketOptions)?;
 
     let port = bind_to_requested_port(opts.port, &socket)?;
 
-    socket.listen(1).map_err(RtpReceiverError::SocketBind)?;
+    socket.listen(1).map_err(RtpInputError::SocketBind)?;
 
     let socket = std::net::TcpListener::from(socket);
 

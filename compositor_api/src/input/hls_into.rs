@@ -28,9 +28,7 @@ impl TryFrom<HlsInput> for pipeline::RegisterInputOptions {
 
         let input_options = hls::HlsInputOptions {
             url,
-            video_decoder: decoder::VideoDecoderOptions {
-                decoder: pipeline::VideoDecoder::FFmpegH264,
-            },
+            video_decoder: decoder::VideoDecoderOptions::FfmpegH264,
         };
 
         Ok(pipeline::RegisterInputOptions {

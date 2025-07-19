@@ -1,5 +1,5 @@
 use std::{
-    sync::{Arc, Mutex, OnceLock, Weak},
+    sync::{Mutex, OnceLock, Weak},
     time::{Duration, Instant},
 };
 
@@ -13,7 +13,8 @@ use decklink::{
 use tracing::{debug, info, trace, warn, Span};
 
 use crate::{
-    pipeline::types::{DecodedSamples, Samples},
+    audio_mixer::{AudioSamples, InputSamples},
+    pipeline::resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch},
     queue::PipelineEvent,
 };
 
@@ -21,13 +22,19 @@ use super::AUDIO_SAMPLE_RATE;
 
 pub(super) struct DataReceivers {
     pub(super) video: Option<Receiver<PipelineEvent<Frame>>>,
-    pub(super) audio: Option<Receiver<PipelineEvent<DecodedSamples>>>,
+    pub(super) audio: Option<Receiver<PipelineEvent<InputSamples>>>,
 }
 
 pub(super) struct ChannelCallbackAdapter {
     video_sender: Option<Sender<PipelineEvent<Frame>>>,
-    audio_sender: Option<Sender<PipelineEvent<DecodedSamples>>>,
+    audio_sender: Option<Sender<PipelineEvent<InputSamples>>>,
     span: Span,
+
+    // TODO 1: I'm not sure if we can get mutable reference to this adapter, so
+    // wrapping it in mutex just in case
+    // TODO 2: It's possible that we can just configure output sample rate in DeckLink
+    // options instead of re-sampling ourselves.
+    audio_resampler: Mutex<DynamicResampler>,
 
     // I'm not sure, but I suspect that holding Arc here would create a circular
     // dependency
@@ -42,6 +49,7 @@ impl ChannelCallbackAdapter {
     pub(super) fn new(
         span: Span,
         enable_audio: bool,
+        output_sample_rate: u32,
         pixel_format: Option<PixelFormat>,
         input: Weak<decklink::Input>,
         initial_format: (DisplayModeType, PixelFormat),
@@ -59,6 +67,7 @@ impl ChannelCallbackAdapter {
                 video_sender: Some(video_sender),
                 audio_sender,
                 span,
+                audio_resampler: Mutex::new(DynamicResampler::new(output_sample_rate)),
                 input,
                 start_time: OnceLock::new(),
                 offset: Mutex::new(Duration::ZERO),
@@ -148,28 +157,42 @@ impl ChannelCallbackAdapter {
     fn handle_audio_packet(
         &self,
         audio_packet: &mut AudioInputPacket,
-        sender: &Sender<PipelineEvent<DecodedSamples>>,
+        sender: &Sender<PipelineEvent<InputSamples>>,
     ) -> Result<(), decklink::DeckLinkError> {
         let offset = *self.offset.lock().unwrap();
         let pts = audio_packet.packet_time()? + offset;
 
         let samples = audio_packet.as_32_bit_stereo()?;
-        let samples = DecodedSamples {
-            samples: Arc::new(Samples::Stereo32Bit(samples)),
+        let samples = DynamicResamplerBatch {
+            samples: AudioSamples::Stereo(
+                samples
+                    .into_iter()
+                    .map(|(l, r)| (l as f64 / i32::MAX as f64, r as f64 / i32::MAX as f64))
+                    .collect(),
+            ),
             start_pts: pts,
             sample_rate: AUDIO_SAMPLE_RATE,
         };
-
         trace!(?samples, "Received audio samples from decklink");
-        match sender.try_send(PipelineEvent::Data(samples)) {
-            Ok(_) => (),
-            Err(TrySendError::Full(_)) => {
-                warn!(
+        let resampled = self.audio_resampler.lock().unwrap().resample(samples);
+        let resampled = match resampled {
+            Ok(resampled) => resampled,
+            Err(err) => {
+                warn!("Resampler error: {}", ErrorStack::new(&err).into_string());
+                return Ok(());
+            }
+        };
+        for batch in resampled {
+            match sender.try_send(PipelineEvent::Data(batch.into())) {
+                Ok(_) => (),
+                Err(TrySendError::Full(_)) => {
+                    warn!(
                     "Failed to send samples from DeckLink. Channel is full, dropping samples pts={pts:?}."
                 )
-            }
-            Err(TrySendError::Disconnected(_)) => {
-                debug!("Failed to send samples from DeckLink. Channel closed.")
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    debug!("Failed to send samples from DeckLink. Channel closed.")
+                }
             }
         }
         Ok(())

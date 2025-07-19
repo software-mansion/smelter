@@ -183,14 +183,14 @@ impl RtpOutput {
                 payloader_options(PayloadedCodec::H264, mtu),
                 sender,
             )?,
-            VideoEncoderOptions::VP8(options) => spawn_rtp_video_thread::<FfmpegVp8Encoder>(
+            VideoEncoderOptions::Vp8(options) => spawn_rtp_video_thread::<FfmpegVp8Encoder>(
                 ctx.clone(),
                 output_id.clone(),
                 options.clone(),
                 payloader_options(PayloadedCodec::Vp8, mtu),
                 sender,
             )?,
-            VideoEncoderOptions::VP9(options) => spawn_rtp_video_thread::<FfmpegVp9Encoder>(
+            VideoEncoderOptions::Vp9(options) => spawn_rtp_video_thread::<FfmpegVp9Encoder>(
                 ctx.clone(),
                 output_id.clone(),
                 options.clone(),

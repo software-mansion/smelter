@@ -7,13 +7,13 @@ use tracing::{debug, span, warn, Level};
 use crate::{
     audio_mixer::OutputSamples,
     error::EncoderInitError,
-    pipeline::{EncoderOutputEvent, PipelineCtx},
+    pipeline::{
+        resampler::encoder_resampler::ResampledForEncoderStream, EncoderOutputEvent, PipelineCtx,
+    },
     queue::PipelineEvent,
 };
 
-use super::{
-    AudioEncoder, AudioEncoderConfig, AudioEncoderOptionsExt, AudioEncoderStream, ResampledStream,
-};
+use super::{AudioEncoder, AudioEncoderConfig, AudioEncoderOptionsExt, AudioEncoderStream};
 
 pub(crate) struct AudioEncoderThreadHandle {
     pub sample_batch_sender: Sender<PipelineEvent<OutputSamples>>,
@@ -29,11 +29,11 @@ pub fn spawn_audio_encoder_thread<Encoder: AudioEncoder>(
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
     std::thread::Builder::new()
-        .name(format!("Encoder thread for output {}", &output_id))
+        .name(format!("Video encoder thread for output {}", &output_id))
         .spawn(move || {
             let _span = span!(
                 Level::INFO,
-                "Encoder thread",
+                "Video encoder thread",
                 output_id = output_id.to_string(),
                 encoder = Encoder::LABEL
             )
@@ -74,11 +74,11 @@ fn init_encoder_stream<Encoder: AudioEncoder>(
     EncoderInitError,
 > {
     let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
-    let resampled_stream = ResampledStream::new(
+    let resampled_stream = ResampledForEncoderStream::new(
         sample_batch_receiver.into_iter(),
         ctx.mixing_sample_rate,
         options.sample_rate(),
-    )?
+    )
     .flatten();
 
     let (encoded_stream, config) =

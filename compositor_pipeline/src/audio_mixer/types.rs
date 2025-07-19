@@ -38,7 +38,7 @@ pub struct OutputSamplesSet(pub HashMap<OutputId, OutputSamples>);
 
 #[derive(Clone)]
 pub struct InputSamples {
-    pub samples: Arc<Vec<(i16, i16)>>,
+    pub samples: Arc<Vec<(f64, f64)>>,
     pub start_pts: Duration,
     pub end_pts: Duration,
 }
@@ -51,8 +51,17 @@ pub struct OutputSamples {
 
 #[derive(Clone)]
 pub enum AudioSamples {
-    Mono(Vec<i16>),
-    Stereo(Vec<(i16, i16)>),
+    Mono(Vec<f64>),
+    Stereo(Vec<(f64, f64)>),
+}
+
+impl AudioSamples {
+    pub fn sample_count(&self) -> usize {
+        match self {
+            AudioSamples::Mono(samples) => samples.len(),
+            AudioSamples::Stereo(items) => items.len(),
+        }
+    }
 }
 
 impl InputSamplesSet {
@@ -63,7 +72,7 @@ impl InputSamplesSet {
 
 impl InputSamples {
     pub fn new(
-        samples: Arc<Vec<(i16, i16)>>,
+        samples: Arc<Vec<(f64, f64)>>,
         start_pts: Duration,
         mixing_sample_rate: u32,
     ) -> Self {

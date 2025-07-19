@@ -152,11 +152,11 @@ impl HlsOutput {
                 options.clone(),
                 encoded_chunks_sender,
             )?,
-            VideoEncoderOptions::VP8(_) => {
-                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::VP8))
+            VideoEncoderOptions::Vp8(_) => {
+                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp8))
             }
-            VideoEncoderOptions::VP9(_) => {
-                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::VP9))
+            VideoEncoderOptions::Vp9(_) => {
+                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp9))
             }
         };
 
