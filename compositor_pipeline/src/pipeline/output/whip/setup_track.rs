@@ -1,10 +1,12 @@
 use compositor_render::OutputId;
 use crossbeam_channel::Sender;
 use rand::Rng;
-use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use rtcp::{
+    payload_feedbacks::picture_loss_indication::PictureLossIndication, sender_report::SenderReport,
+};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, span, trace, warn, Level};
 use webrtc::{
     api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
     rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender},
@@ -204,7 +206,32 @@ pub async fn setup_audio_track(
         AudioEncoderOptions::Aac(_options) => return Err(WhipError::UnsupportedCodec("aac")),
     }?;
 
+    handle_packet_loss_requests(ctx, rtc_sender.clone());
+
     Ok((handle, WhipSenderTrack { receiver, track }))
+}
+
+fn handle_packet_loss_requests(
+    ctx: &Arc<PipelineCtx>,
+    sender: Arc<RTCRtpSender>,
+    // packet_loss_sender: Sender<()>,
+) {
+    ctx.tokio_rt.spawn(async move {
+        let _span = span!(Level::DEBUG, "[Audio Sender Report]",);
+        loop {
+            if let Ok((packets, _)) = sender.read_rtcp().await {
+                for packet in packets {
+                    if let Some(report) = packet.as_any().downcast_ref::<SenderReport>() {
+                        trace!(
+                            ssrc = report.ssrc,
+                            packet_count = report.packet_count,
+                            "Sender report received!",
+                        );
+                    }
+                }
+            }
+        }
+    });
 }
 
 fn handle_keyframe_requests(
