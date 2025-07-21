@@ -1,7 +1,7 @@
 use compositor_pipeline::pipeline::{
     self,
     encoder::{self, ffmpeg_h264, ffmpeg_vp8, ffmpeg_vp9, opus},
-    output,
+    output, rtp,
 };
 use tracing::warn;
 
@@ -97,7 +97,7 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions<output::OutputOption
                         "\"ip\" field is required when registering output UDP stream (transport_protocol=\"udp\").",
                     ));
                 };
-                output::rtp::RtpConnectionOptions::Udp {
+                rtp::RtpConnectionOptions::Udp {
                     port: pipeline::Port(port),
                     ip,
                 }
@@ -109,13 +109,13 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions<output::OutputOption
                     ));
                 }
 
-                output::rtp::RtpConnectionOptions::TcpServer {
+                rtp::RtpConnectionOptions::TcpServer {
                     port: port.try_into()?,
                 }
             }
         };
 
-        let output_options = output::OutputOptions::Rtp(output::rtp::RtpSenderOptions {
+        let output_options = output::OutputOptions::Rtp(rtp::RtpOutputOptions {
             connection_options,
             video: video_encoder_options,
             audio: audio_encoder_options,

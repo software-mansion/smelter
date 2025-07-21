@@ -22,11 +22,12 @@ use crate::{
     event::Event,
     pipeline::{
         encoder::{AudioEncoderOptions, VideoEncoderOptions},
+        rtp::RtpPacket,
         PipelineCtx,
     },
 };
 
-use super::{rtp::RtpPacket, Output, OutputAudio, OutputKind, OutputVideo};
+use super::{Output, OutputAudio, OutputKind, OutputVideo};
 
 mod establish_peer_connection;
 mod setup_track;

@@ -134,7 +134,7 @@ pub enum EncoderInitError {
 #[derive(Debug, thiserror::Error)]
 pub enum InputInitError {
     #[error(transparent)]
-    Rtp(#[from] crate::pipeline::input::rtp::RtpInputError),
+    Rtp(#[from] crate::pipeline::rtp::RtpInputError),
 
     #[error(transparent)]
     Mp4(#[from] crate::pipeline::input::mp4::Mp4Error),
