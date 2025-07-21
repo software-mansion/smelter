@@ -75,6 +75,10 @@ export type RegisterInput =
        */
       audio?: InputWhipAudioOptions | null;
       /**
+       * Token used for authentication in WHIP protocol. If not provided, the random value will be generated and returned in the response.
+       */
+      bearer_token?: string | null;
+      /**
        * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
        */
       required?: boolean | null;
@@ -852,7 +856,6 @@ export type WhipAudioEncoderOptions =
     };
 export type HlsAudioEncoderOptions = {
   type: "aac";
-  channels?: AudioChannels | null;
   /**
    * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
    */
