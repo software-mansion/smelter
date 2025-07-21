@@ -4,11 +4,10 @@ use bytes::{Buf, BytesMut};
 use tracing::trace;
 
 use crate::pipeline::{
-    input::rtp::{
+    rtp::{
         depayloader::{AudioSpecificConfig, Depayloader, DepayloadingError},
-        RtpAacDepayloaderMode,
+        RtpAacDepayloaderMode, RtpPacket,
     },
-    output::rtp::RtpPacket,
     types::{EncodedChunk, EncodedChunkKind, IsKeyframe},
     AudioCodec,
 };

@@ -1,39 +1,36 @@
 use std::sync::Arc;
 
-use compositor_render::InputId;
+use compositor_render::{Frame, InputId};
 use crossbeam_channel::Sender;
 use tracing::{debug, span, warn, Level};
 
 use crate::{
-    audio_mixer::InputSamples,
     error::DecoderInitError,
     pipeline::{
-        decoder::{AudioDecoder, AudioDecoderStream},
-        input::rtp::depayloader::{DepayloaderOptions, DepayloaderStream},
-        output::rtp::RtpPacket,
-        resampler::decoder_resampler::ResampledDecoderStream,
+        decoder::{VideoDecoder, VideoDecoderStream},
+        rtp::{
+            depayloader::{DepayloaderOptions, DepayloaderStream},
+            RtpPacket,
+        },
         PipelineCtx,
     },
     queue::PipelineEvent,
 };
 
-pub(crate) struct RtpAudioTrackThreadHandle {
+pub(crate) struct RtpVideoTrackThreadHandle {
     pub rtp_packet_sender: Sender<PipelineEvent<RtpPacket>>,
-    pub sample_rate: u32,
 }
 
-pub fn spawn_rtp_audio_thread<Decoder: AudioDecoder>(
+pub fn spawn_rtp_video_thread<Decoder: VideoDecoder>(
     ctx: Arc<PipelineCtx>,
     input_id: InputId,
-    sample_rate: u32,
-    decoder_options: Decoder::Options,
     depayloader_options: DepayloaderOptions,
-    decoded_samples_sender: Sender<PipelineEvent<InputSamples>>,
-) -> Result<RtpAudioTrackThreadHandle, DecoderInitError> {
+    frame_sender: Sender<PipelineEvent<Frame>>,
+) -> Result<RtpVideoTrackThreadHandle, DecoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
     std::thread::Builder::new()
-        .name(format!("RTP audio track thread for input {}", &input_id))
+        .name(format!("RTP video track thread for input {}", &input_id))
         .spawn(move || {
             let _span = span!(
                 Level::INFO,
@@ -43,8 +40,7 @@ pub fn spawn_rtp_audio_thread<Decoder: AudioDecoder>(
             )
             .entered();
 
-            let result =
-                init_stream::<Decoder>(ctx, decoder_options, depayloader_options, sample_rate);
+            let result = init_stream::<Decoder>(ctx, depayloader_options);
             let stream = match result {
                 Ok((stream, handle)) => {
                     result_sender.send(Ok(handle)).unwrap();
@@ -56,8 +52,8 @@ pub fn spawn_rtp_audio_thread<Decoder: AudioDecoder>(
                 }
             };
             for event in stream {
-                if decoded_samples_sender.send(event).is_err() {
-                    warn!("Failed to send encoded audio chunk from decoder. Channel closed.");
+                if frame_sender.send(event).is_err() {
+                    warn!("Failed to send encoded video chunk from decoder. Channel closed.");
                     return;
                 }
             }
@@ -68,35 +64,25 @@ pub fn spawn_rtp_audio_thread<Decoder: AudioDecoder>(
     result_receiver.recv().unwrap()
 }
 
-fn init_stream<Decoder: AudioDecoder>(
+fn init_stream<Decoder: VideoDecoder>(
     ctx: Arc<PipelineCtx>,
-    decoder_options: Decoder::Options,
     depayloader_options: DepayloaderOptions,
-    sample_rate: u32,
 ) -> Result<
     (
-        impl Iterator<Item = PipelineEvent<InputSamples>>,
-        RtpAudioTrackThreadHandle,
+        impl Iterator<Item = PipelineEvent<Frame>>,
+        RtpVideoTrackThreadHandle,
     ),
     DecoderInitError,
 > {
-    let mixing_sample_rate = ctx.mixing_sample_rate;
     let (rtp_packet_sender, rtp_packet_receiver) = crossbeam_channel::bounded(5);
 
     let depayloader_stream =
         DepayloaderStream::new(depayloader_options, rtp_packet_receiver.into_iter());
 
-    let decoder_stream =
-        AudioDecoderStream::<Decoder, _>::new(ctx, decoder_options, depayloader_stream.flatten())?;
-
-    let resampled_stream =
-        ResampledDecoderStream::new(mixing_sample_rate, decoder_stream.flatten());
+    let decoder_stream = VideoDecoderStream::<Decoder, _>::new(ctx, depayloader_stream.flatten())?;
 
     Ok((
-        resampled_stream.flatten(),
-        RtpAudioTrackThreadHandle {
-            rtp_packet_sender,
-            sample_rate,
-        },
+        decoder_stream.flatten(),
+        RtpVideoTrackThreadHandle { rtp_packet_sender },
     ))
 }

@@ -10,15 +10,13 @@ use crate::{
     pipeline::{
         encoder::{AudioEncoder, AudioEncoderOptionsExt, AudioEncoderStream},
         resampler::encoder_resampler::ResampledForEncoderStream,
+        rtp::payloader::{PayloaderOptions, PayloaderStream},
         PipelineCtx,
     },
     queue::PipelineEvent,
 };
 
-use super::{
-    payloader::{PayloaderOptions, PayloaderStream},
-    RtpEvent,
-};
+use super::RtpEvent;
 
 pub(crate) struct RtpAudioTrackThreadHandle {
     pub sample_batch_sender: Sender<PipelineEvent<OutputSamples>>,

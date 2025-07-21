@@ -8,15 +8,13 @@ use crate::{
     error::EncoderInitError,
     pipeline::{
         encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
+        rtp::payloader::{PayloaderOptions, PayloaderStream},
         PipelineCtx,
     },
     queue::PipelineEvent,
 };
 
-use super::{
-    payloader::{PayloaderOptions, PayloaderStream},
-    RtpEvent,
-};
+use super::RtpEvent;
 
 pub(crate) struct RtpVideoTrackThreadHandle {
     pub frame_sender: Sender<PipelineEvent<Frame>>,

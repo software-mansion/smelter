@@ -8,11 +8,12 @@ use rtmp::{RtmpClientOutput, RtmpSenderOptions};
 use crate::{
     audio_mixer::OutputSamples,
     error::OutputInitError,
-    pipeline::output::hls::{HlsOutput, HlsOutputOptions},
+    pipeline::{
+        output::hls::{HlsOutput, HlsOutputOptions},
+        rtp::{RtpOutput, RtpOutputOptions},
+    },
     queue::PipelineEvent,
 };
-
-use self::rtp::{RtpOutput, RtpSenderOptions};
 
 use super::{
     encoder::{AudioEncoderOptions, VideoEncoderOptions},
@@ -25,12 +26,11 @@ pub mod hls;
 pub mod mp4;
 pub mod raw_data;
 pub mod rtmp;
-pub mod rtp;
 pub mod whip;
 
 #[derive(Debug, Clone)]
 pub enum OutputOptions {
-    Rtp(RtpSenderOptions),
+    Rtp(RtpOutputOptions),
     Rtmp(RtmpSenderOptions),
     Mp4(Mp4OutputOptions),
     Hls(HlsOutputOptions),
