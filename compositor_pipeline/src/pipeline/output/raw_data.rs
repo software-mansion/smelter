@@ -3,20 +3,18 @@ use std::sync::OnceLock;
 use compositor_render::{Frame, OutputFrameFormat, Resolution};
 use crossbeam_channel::{bounded, Sender};
 
-use crate::{
-    audio_mixer::OutputSamples, error::OutputInitError, pipeline::RawDataReceiver,
-    queue::PipelineEvent,
-};
-
-use super::{Output, OutputAudio, OutputKind, OutputVideo, RawDataOutputOptions};
+use crate::pipeline::output::{Output, OutputAudio, OutputVideo};
+use crate::prelude::*;
 
 pub(crate) struct RawDataOutput {
     video: Option<(Sender<PipelineEvent<Frame>>, Resolution)>,
-    audio: Option<Sender<PipelineEvent<OutputSamples>>>,
+    audio: Option<Sender<PipelineEvent<OutputAudioSamples>>>,
 }
 
 impl RawDataOutput {
-    pub fn new(options: RawDataOutputOptions) -> Result<(Self, RawDataReceiver), OutputInitError> {
+    pub fn new(
+        options: RawDataOutputOptions,
+    ) -> Result<(Self, RawDataOutputReceiver), OutputInitError> {
         let (video, video_receiver) = match &options.video {
             Some(opts) => {
                 let (sender, receiver) = bounded(100);
@@ -33,7 +31,7 @@ impl RawDataOutput {
         };
         Ok((
             Self { video, audio },
-            RawDataReceiver {
+            RawDataOutputReceiver {
                 video: video_receiver,
                 audio: audio_receiver,
             },
@@ -61,7 +59,7 @@ impl Output for RawDataOutput {
         })
     }
 
-    fn kind(&self) -> OutputKind {
-        OutputKind::RawDataChannel
+    fn kind(&self) -> OutputProtocolKind {
+        OutputProtocolKind::RawDataChannel
     }
 }

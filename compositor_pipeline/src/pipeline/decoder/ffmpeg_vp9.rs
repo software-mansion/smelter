@@ -1,23 +1,20 @@
-use std::{iter, sync::Arc, time::Duration};
+use std::{iter, sync::Arc};
 
-use crate::{
-    error::DecoderInitError,
-    pipeline::{
-        decoder::{VideoDecoder, VideoDecoderInstance},
-        types::{EncodedChunk, EncodedChunkKind, VideoCodec},
-        PipelineCtx,
-    },
+use crate::pipeline::decoder::{
+    ffmpeg_utils::{create_av_packet, from_av_frame},
+    VideoDecoder, VideoDecoderInstance,
 };
+use crate::prelude::*;
 
-use compositor_render::{Frame, FrameData, Resolution, YuvPlanes};
+use compositor_render::Frame;
 use ffmpeg_next::{
     codec::{Context, Id},
-    format::Pixel,
-    frame::Video,
     media::Type,
     Rational,
 };
 use tracing::{error, info, trace, warn};
+
+const TIME_BASE: i32 = 1_000_000;
 
 pub struct FfmpegVp9Decoder {
     decoder: ffmpeg_next::decoder::Opened,
@@ -39,9 +36,7 @@ impl VideoDecoder for FfmpegVp9Decoder {
 
         let mut decoder = Context::from_parameters(parameters)?;
         unsafe {
-            // This is because we use microseconds as pts and dts in the packets.
-            // See `chunk_to_av` and `frame_from_av`.
-            (*decoder.as_mut_ptr()).pkt_timebase = Rational::new(1, 1_000_000).into();
+            (*decoder.as_mut_ptr()).pkt_timebase = Rational::new(1, TIME_BASE).into();
         }
 
         let decoder = decoder.decoder();
@@ -54,13 +49,8 @@ impl VideoDecoder for FfmpegVp9Decoder {
 }
 
 impl VideoDecoderInstance for FfmpegVp9Decoder {
-    fn decode(&mut self, chunk: EncodedChunk) -> Vec<Frame> {
-        if chunk.kind != EncodedChunkKind::Video(VideoCodec::Vp9) {
-            error!("VP9 decoder received chunk of wrong kind: {:?}", chunk.kind);
-            return Vec::new();
-        }
-
-        let av_packet: ffmpeg_next::Packet = match chunk_to_av(chunk) {
+    fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame> {
+        let av_packet = match create_av_packet(chunk, VideoCodec::Vp9, TIME_BASE) {
             Ok(packet) => packet,
             Err(err) => {
                 warn!("Dropping frame: {}", err);
@@ -88,7 +78,7 @@ impl FfmpegVp9Decoder {
     fn read_all_frames(&mut self) -> Vec<Frame> {
         iter::from_fn(|| {
             match self.decoder.receive_frame(&mut self.av_frame) {
-                Ok(_) => match frame_from_av(&mut self.av_frame) {
+                Ok(_) => match from_av_frame(&mut self.av_frame, TIME_BASE) {
                     Ok(frame) => {
                         trace!(pts=?frame.pts, "VP9 decoder produced a frame.");
                         Some(frame)
@@ -110,92 +100,4 @@ impl FfmpegVp9Decoder {
         })
         .collect()
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-enum DecoderChunkConversionError {
-    #[error(
-        "Cannot send a chunk of kind {0:?} to the decoder. The decoder only handles VP9-encoded video."
-    )]
-    BadPayloadType(EncodedChunkKind),
-}
-
-fn chunk_to_av(chunk: EncodedChunk) -> Result<ffmpeg_next::Packet, DecoderChunkConversionError> {
-    if chunk.kind != EncodedChunkKind::Video(VideoCodec::Vp9) {
-        return Err(DecoderChunkConversionError::BadPayloadType(chunk.kind));
-    }
-
-    let mut packet = ffmpeg_next::Packet::new(chunk.data.len());
-
-    packet.data_mut().unwrap().copy_from_slice(&chunk.data);
-    packet.set_pts(Some(chunk.pts.as_micros() as i64));
-    packet.set_dts(chunk.dts.map(|dts| dts.as_micros() as i64));
-
-    Ok(packet)
-}
-
-#[derive(Debug, thiserror::Error)]
-enum DecoderFrameConversionError {
-    #[error("Error converting frame: {0}")]
-    FrameConversionError(String),
-    #[error("Unsupported pixel format: {0:?}")]
-    UnsupportedPixelFormat(ffmpeg_next::format::pixel::Pixel),
-}
-
-fn frame_from_av(decoded: &mut Video) -> Result<Frame, DecoderFrameConversionError> {
-    let Some(pts) = decoded.pts() else {
-        return Err(DecoderFrameConversionError::FrameConversionError(
-            "missing pts".to_owned(),
-        ));
-    };
-    if pts < 0 {
-        error!(pts, "Received negative PTS. PTS values of the decoder output are not monotonically increasing.")
-    }
-    let pts = Duration::from_micros(i64::max(pts, 0) as u64);
-
-    let data = match decoded.format() {
-        Pixel::YUV420P => FrameData::PlanarYuv420(YuvPlanes {
-            y_plane: copy_plane_from_av(decoded, 0),
-            u_plane: copy_plane_from_av(decoded, 1),
-            v_plane: copy_plane_from_av(decoded, 2),
-        }),
-        Pixel::YUV422P => FrameData::PlanarYuv422(YuvPlanes {
-            y_plane: copy_plane_from_av(decoded, 0),
-            u_plane: copy_plane_from_av(decoded, 1),
-            v_plane: copy_plane_from_av(decoded, 2),
-        }),
-        Pixel::YUV444P => FrameData::PlanarYuv444(YuvPlanes {
-            y_plane: copy_plane_from_av(decoded, 0),
-            u_plane: copy_plane_from_av(decoded, 1),
-            v_plane: copy_plane_from_av(decoded, 2),
-        }),
-        Pixel::YUVJ420P => FrameData::PlanarYuvJ420(YuvPlanes {
-            y_plane: copy_plane_from_av(decoded, 0),
-            u_plane: copy_plane_from_av(decoded, 1),
-            v_plane: copy_plane_from_av(decoded, 2),
-        }),
-        fmt => return Err(DecoderFrameConversionError::UnsupportedPixelFormat(fmt)),
-    };
-    Ok(Frame {
-        data,
-        resolution: Resolution {
-            width: decoded.width().try_into().unwrap(),
-            height: decoded.height().try_into().unwrap(),
-        },
-        pts,
-    })
-}
-
-fn copy_plane_from_av(decoded: &Video, plane: usize) -> bytes::Bytes {
-    let mut output_buffer = bytes::BytesMut::with_capacity(
-        decoded.plane_width(plane) as usize * decoded.plane_height(plane) as usize,
-    );
-
-    decoded
-        .data(plane)
-        .chunks(decoded.stride(plane))
-        .map(|chunk| &chunk[..decoded.plane_width(plane) as usize])
-        .for_each(|chunk| output_buffer.extend_from_slice(chunk));
-
-    output_buffer.freeze()
 }

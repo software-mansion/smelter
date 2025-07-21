@@ -1,36 +1,23 @@
-use std::{path::PathBuf, ptr, sync::Arc, time::Duration};
+use std::{ptr, sync::Arc, time::Duration};
 
 use compositor_render::OutputId;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use ffmpeg_next::{self as ffmpeg, Dictionary, Rational, Rescale};
 use log::error;
-use tracing::{debug, warn};
+use tracing::debug;
 
+use crate::prelude::*;
 use crate::{
-    audio_mixer::AudioChannels,
-    error::OutputInitError,
     event::Event,
-    pipeline::{
-        encoder::{
-            encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
-            encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
-            fdk_aac::FdkAacEncoder,
-            ffmpeg_h264::FfmpegH264Encoder,
-            AudioEncoderOptions, VideoEncoderOptions,
-        },
-        types::IsKeyframe,
-        AudioCodec, EncodedChunk, EncodedChunkKind, EncoderOutputEvent, PipelineCtx, VideoCodec,
+    pipeline::encoder::{
+        encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
+        encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
+        fdk_aac::FdkAacEncoder,
+        ffmpeg_h264::FfmpegH264Encoder,
     },
 };
 
-use super::{Output, OutputAudio, OutputKind, OutputVideo};
-
-#[derive(Debug, Clone)]
-pub struct HlsOutputOptions {
-    pub output_path: PathBuf,
-    pub video: Option<VideoEncoderOptions>,
-    pub audio: Option<AudioEncoderOptions>,
-}
+use super::{Output, OutputAudio, OutputProtocolKind, OutputVideo};
 
 #[derive(Debug, Clone)]
 struct StreamState {
@@ -141,21 +128,23 @@ impl HlsOutput {
         output_id: &OutputId,
         options: VideoEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
-        encoded_chunks_sender: Sender<EncoderOutputEvent>,
+        encoded_chunks_sender: Sender<EncodedOutputEvent>,
     ) -> Result<(VideoEncoderThreadHandle, usize), OutputInitError> {
         let resolution = options.resolution();
 
         let encoder = match &options {
-            VideoEncoderOptions::H264(options) => spawn_video_encoder_thread::<FfmpegH264Encoder>(
-                ctx.clone(),
-                output_id.clone(),
-                options.clone(),
-                encoded_chunks_sender,
-            )?,
-            VideoEncoderOptions::Vp8(_) => {
+            VideoEncoderOptions::FfmpegH264(options) => {
+                spawn_video_encoder_thread::<FfmpegH264Encoder>(
+                    ctx.clone(),
+                    output_id.clone(),
+                    options.clone(),
+                    encoded_chunks_sender,
+                )?
+            }
+            VideoEncoderOptions::FfmpegVp8(_) => {
                 return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp8))
             }
-            VideoEncoderOptions::Vp9(_) => {
+            VideoEncoderOptions::FfmpegVp9(_) => {
                 return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp9))
             }
         };
@@ -192,7 +181,7 @@ impl HlsOutput {
         output_id: &OutputId,
         options: AudioEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
-        encoded_chunks_sender: Sender<EncoderOutputEvent>,
+        encoded_chunks_sender: Sender<EncodedOutputEvent>,
     ) -> Result<(AudioEncoderThreadHandle, usize), OutputInitError> {
         let channel_count = match options.channels() {
             AudioChannels::Mono => 1,
@@ -201,7 +190,7 @@ impl HlsOutput {
         let sample_rate = options.sample_rate();
 
         let encoder = match options {
-            AudioEncoderOptions::Aac(options) => spawn_audio_encoder_thread::<FdkAacEncoder>(
+            AudioEncoderOptions::FdkAac(options) => spawn_audio_encoder_thread::<FdkAacEncoder>(
                 ctx.clone(),
                 output_id.clone(),
                 options,
@@ -260,8 +249,8 @@ impl Output for HlsOutput {
         })
     }
 
-    fn kind(&self) -> OutputKind {
-        OutputKind::Hls
+    fn kind(&self) -> OutputProtocolKind {
+        OutputProtocolKind::Hls
     }
 }
 
@@ -272,7 +261,7 @@ fn run_ffmpeg_output_thread(
     mut output_ctx: ffmpeg::format::context::Output,
     mut video_stream: Option<StreamState>,
     mut audio_stream: Option<StreamState>,
-    packets_receiver: Receiver<EncoderOutputEvent>,
+    packets_receiver: Receiver<EncodedOutputEvent>,
     frame_duration: u32,
 ) {
     let mut received_video_eos = video_stream.as_ref().map(|_| false);
@@ -280,7 +269,7 @@ fn run_ffmpeg_output_thread(
 
     for packet in packets_receiver {
         match packet {
-            EncoderOutputEvent::Data(chunk) => {
+            EncodedOutputEvent::Data(chunk) => {
                 write_chunk(
                     chunk,
                     &mut video_stream,
@@ -289,7 +278,7 @@ fn run_ffmpeg_output_thread(
                     frame_duration,
                 );
             }
-            EncoderOutputEvent::VideoEOS => match received_video_eos {
+            EncodedOutputEvent::VideoEOS => match received_video_eos {
                 Some(false) => received_video_eos = Some(true),
                 Some(true) => {
                     error!("Received multiple video EOS events.");
@@ -298,7 +287,7 @@ fn run_ffmpeg_output_thread(
                     error!("Received video EOS event on non video output.");
                 }
             },
-            EncoderOutputEvent::AudioEOS => match received_audio_eos {
+            EncodedOutputEvent::AudioEOS => match received_audio_eos {
                 Some(false) => received_audio_eos = Some(true),
                 Some(true) => {
                     error!("Received multiple audio EOS events.");
@@ -319,14 +308,14 @@ fn run_ffmpeg_output_thread(
 }
 
 fn write_chunk(
-    chunk: EncodedChunk,
+    chunk: EncodedOutputChunk,
     video_stream: &mut Option<StreamState>,
     audio_stream: &mut Option<StreamState>,
     output_ctx: &mut ffmpeg::format::context::Output,
     frame_duration: u32,
 ) {
     let stream = match chunk.kind {
-        EncodedChunkKind::Video(_) => {
+        MediaKind::Video(_) => {
             match video_stream {
                 Some(stream) => stream,
                 None => {
@@ -335,7 +324,7 @@ fn write_chunk(
                 }
             }
         }
-        EncodedChunkKind::Audio(_) => {
+        MediaKind::Audio(_) => {
             match audio_stream {
                 Some(stream) => stream,
                 None => {
@@ -370,10 +359,8 @@ fn write_chunk(
     packet.set_stream(stream.index);
     packet.set_duration(frame_duration as i64);
 
-    match chunk.is_keyframe {
-        IsKeyframe::Yes => packet.set_flags(ffmpeg::packet::Flags::KEY),
-        IsKeyframe::Unknown => warn!("The HLS output received an encoded chunk with is_keyframe set to Unknown. This output needs this information to produce correct stream."),
-        IsKeyframe::NoKeyframes | IsKeyframe::No => {},
+    if chunk.is_keyframe {
+        packet.set_flags(ffmpeg::packet::Flags::KEY)
     }
 
     if let Err(err) = packet.write(output_ctx) {

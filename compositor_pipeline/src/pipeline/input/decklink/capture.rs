@@ -12,22 +12,19 @@ use decklink::{
 };
 use tracing::{debug, info, trace, warn, Span};
 
-use crate::{
-    audio_mixer::{AudioSamples, InputSamples},
-    pipeline::resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch},
-    queue::PipelineEvent,
-};
+use crate::pipeline::resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch};
+use crate::prelude::*;
 
 use super::AUDIO_SAMPLE_RATE;
 
 pub(super) struct DataReceivers {
     pub(super) video: Option<Receiver<PipelineEvent<Frame>>>,
-    pub(super) audio: Option<Receiver<PipelineEvent<InputSamples>>>,
+    pub(super) audio: Option<Receiver<PipelineEvent<InputAudioSamples>>>,
 }
 
 pub(super) struct ChannelCallbackAdapter {
     video_sender: Option<Sender<PipelineEvent<Frame>>>,
-    audio_sender: Option<Sender<PipelineEvent<InputSamples>>>,
+    audio_sender: Option<Sender<PipelineEvent<InputAudioSamples>>>,
     span: Span,
 
     // TODO 1: I'm not sure if we can get mutable reference to this adapter, so
@@ -157,7 +154,7 @@ impl ChannelCallbackAdapter {
     fn handle_audio_packet(
         &self,
         audio_packet: &mut AudioInputPacket,
-        sender: &Sender<PipelineEvent<InputSamples>>,
+        sender: &Sender<PipelineEvent<InputAudioSamples>>,
     ) -> Result<(), decklink::DeckLinkError> {
         let offset = *self.offset.lock().unwrap();
         let pts = audio_packet.packet_time()? + offset;

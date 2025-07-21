@@ -4,24 +4,19 @@ use compositor_render::{error::ErrorStack, OutputId};
 use tokio::sync::{mpsc, watch};
 use tracing::{debug, span, warn, Level};
 
-use crate::{
-    audio_mixer::OutputSamples,
-    error::EncoderInitError,
-    pipeline::{
-        encoder::{AudioEncoder, AudioEncoderOptionsExt, AudioEncoderStream},
-        resampler::encoder_resampler::ResampledForEncoderStream,
-        rtp::{
-            payloader::{PayloaderOptions, PayloaderStream},
-            RtpPacket,
-        },
-        PipelineCtx,
+use crate::pipeline::{
+    encoder::{AudioEncoder, AudioEncoderStream},
+    resampler::encoder_resampler::ResampledForEncoderStream,
+    rtp::{
+        payloader::{PayloaderOptions, PayloaderStream},
+        RtpPacket,
     },
-    queue::PipelineEvent,
 };
+use crate::prelude::*;
 
 #[derive(Debug)]
 pub(crate) struct WhipAudioTrackThreadHandle {
-    pub sample_batch_sender: crossbeam_channel::Sender<PipelineEvent<OutputSamples>>,
+    pub sample_batch_sender: crossbeam_channel::Sender<PipelineEvent<OutputAudioSamples>>,
     pub packet_loss_sender: watch::Sender<i32>,
 }
 

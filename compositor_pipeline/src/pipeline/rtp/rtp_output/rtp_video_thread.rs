@@ -4,15 +4,11 @@ use compositor_render::{Frame, OutputId};
 use crossbeam_channel::Sender;
 use tracing::{debug, span, warn, Level};
 
-use crate::{
-    error::EncoderInitError,
-    pipeline::{
-        encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
-        rtp::payloader::{PayloaderOptions, PayloaderStream},
-        PipelineCtx,
-    },
-    queue::PipelineEvent,
+use crate::pipeline::{
+    encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
+    rtp::payloader::{PayloaderOptions, PayloaderStream},
 };
+use crate::prelude::*;
 
 use super::RtpEvent;
 

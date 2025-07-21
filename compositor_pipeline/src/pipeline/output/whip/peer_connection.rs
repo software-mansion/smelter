@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{WhipError, WhipSenderOptions};
+use super::{WhipInputError, WhipSenderOptions};
 use tracing::debug;
 use webrtc::{
     api::{
@@ -27,11 +27,9 @@ use webrtc::{
 };
 
 use crate::{
-    audio_mixer::AudioChannels,
-    pipeline::{
-        encoder::{AudioEncoderOptions, VideoEncoderOptions},
-        PipelineCtx,
-    },
+    codecs::{AudioEncoderOptions, VideoEncoderOptions},
+    pipeline::PipelineCtx,
+    AudioChannels,
 };
 
 #[derive(Debug, Clone)]
@@ -43,7 +41,7 @@ impl PeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
         options: &WhipSenderOptions,
-    ) -> Result<Self, WhipError> {
+    ) -> Result<Self, WhipInputError> {
         let mut media_engine = media_engine_with_codecs(options)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
@@ -73,7 +71,7 @@ impl PeerConnection {
         })
     }
 
-    pub async fn new_video_track(&self) -> Result<Arc<RTCRtpSender>, WhipError> {
+    pub async fn new_video_track(&self) -> Result<Arc<RTCRtpSender>, WhipInputError> {
         let track = Arc::new(TrackLocalStaticRTP::new(
             RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_VP8.to_owned(),
@@ -89,11 +87,11 @@ impl PeerConnection {
             .pc
             .add_track(track)
             .await
-            .map_err(WhipError::PeerConnectionInitError)?;
+            .map_err(WhipInputError::PeerConnectionInitError)?;
         Ok(sender)
     }
 
-    pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpSender>, WhipError> {
+    pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpSender>, WhipInputError> {
         let track = Arc::new(TrackLocalStaticRTP::new(
             RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_OPUS.to_owned(),
@@ -109,35 +107,35 @@ impl PeerConnection {
             .pc
             .add_track(track)
             .await
-            .map_err(WhipError::PeerConnectionInitError)?;
+            .map_err(WhipInputError::PeerConnectionInitError)?;
         Ok(sender)
     }
 
     pub async fn set_remote_description(
         &self,
         answer: RTCSessionDescription,
-    ) -> Result<(), WhipError> {
+    ) -> Result<(), WhipInputError> {
         self.pc
             .set_remote_description(answer)
             .await
-            .map_err(WhipError::RemoteDescriptionError)
+            .map_err(WhipInputError::RemoteDescriptionError)
     }
 
     pub async fn set_local_description(
         &self,
         offer: RTCSessionDescription,
-    ) -> Result<(), WhipError> {
+    ) -> Result<(), WhipInputError> {
         self.pc
             .set_local_description(offer)
             .await
-            .map_err(WhipError::LocalDescriptionError)
+            .map_err(WhipInputError::LocalDescriptionError)
     }
 
-    pub async fn create_offer(&self) -> Result<RTCSessionDescription, WhipError> {
+    pub async fn create_offer(&self) -> Result<RTCSessionDescription, WhipInputError> {
         self.pc
             .create_offer(None)
             .await
-            .map_err(WhipError::OfferCreationError)
+            .map_err(WhipInputError::OfferCreationError)
     }
 
     pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
@@ -209,7 +207,7 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
 
     for encoder_options in &video_encoder_preferences.unwrap_or_default() {
         match encoder_options {
-            VideoEncoderOptions::H264(_) => {
+            VideoEncoderOptions::FfmpegH264(_) => {
                 let h264_codec_parameters = vec![
                     RTCRtpCodecParameters {
                         capability: RTCRtpCodecCapability {
@@ -281,7 +279,7 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
-            VideoEncoderOptions::Vp8(_) => {
+            VideoEncoderOptions::FfmpegVp8(_) => {
                 media_engine.register_codec(
                     RTCRtpCodecParameters {
                         capability: RTCRtpCodecCapability {
@@ -297,7 +295,7 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
                     RTPCodecType::Video,
                 )?;
             }
-            VideoEncoderOptions::Vp9(_) => {
+            VideoEncoderOptions::FfmpegVp9(_) => {
                 media_engine.register_codec(
                     RTCRtpCodecParameters {
                         capability: RTCRtpCodecCapability {

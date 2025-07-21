@@ -1,17 +1,12 @@
 use axum::response::{IntoResponse, Response};
-use compositor_render::error::ErrorStack;
 use reqwest::StatusCode;
-
-use crate::error::DecoderInitError;
 
 #[derive(Debug)]
 pub enum WhipServerError {
     BadRequest(String),
     InternalError(String),
     Unauthorized(String),
-    CodecNegotiationError(String),
     NotFound(String),
-    DecoderInitError(DecoderInitError),
 }
 
 impl<T> From<T> for WhipServerError
@@ -29,11 +24,7 @@ impl std::fmt::Display for WhipServerError {
             WhipServerError::InternalError(message) => f.write_str(message),
             WhipServerError::BadRequest(message) => f.write_str(message),
             WhipServerError::Unauthorized(message) => f.write_str(message),
-            WhipServerError::CodecNegotiationError(message) => f.write_str(message),
             WhipServerError::NotFound(message) => f.write_str(message),
-            WhipServerError::DecoderInitError(err) => {
-                f.write_str(&ErrorStack::new(err).into_string())
-            }
         }
     }
 }
@@ -50,13 +41,7 @@ impl IntoResponse for WhipServerError {
             WhipServerError::Unauthorized(message) => {
                 (StatusCode::UNAUTHORIZED, message).into_response()
             }
-            WhipServerError::CodecNegotiationError(message) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, message).into_response()
-            }
             WhipServerError::NotFound(message) => (StatusCode::NOT_FOUND, message).into_response(),
-            WhipServerError::DecoderInitError(err) => {
-                (StatusCode::BAD_REQUEST, ErrorStack::new(&err).into_string()).into_response()
-            }
         }
     }
 }

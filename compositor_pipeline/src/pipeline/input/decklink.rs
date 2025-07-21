@@ -3,54 +3,16 @@ use std::sync::Arc;
 use compositor_render::InputId;
 use tracing::{error, span, Level};
 
-use crate::{
-    error::InputInitError,
-    pipeline::{decoder::DecodedDataReceiver, PipelineCtx},
-};
+use crate::prelude::*;
+use crate::{pipeline::input::Input, queue::QueueDataReceiver};
 
 use self::{capture::ChannelCallbackAdapter, find_device::find_decklink};
-
-use super::{Input, InputInitInfo};
 
 mod capture;
 mod find_device;
 
-pub use decklink::PixelFormat;
-
 // sample rate returned from DeckLink
 const AUDIO_SAMPLE_RATE: u32 = 48_000;
-
-#[derive(Debug, thiserror::Error)]
-pub enum DeckLinkError {
-    #[error("Unknown DeckLink error.")]
-    DecklinkError(#[from] decklink::DeckLinkError),
-    #[error("No DeckLink device matches specified options. Found devices: {0:?}")]
-    NoMatchingDeckLink(Vec<DeckLinkInfo>),
-    #[error("Selected device does not support capture.")]
-    NoCaptureSupport,
-    #[error("Selected device does not support input format detection.")]
-    NoInputFormatDetection,
-}
-
-#[derive(Debug)]
-pub struct DeckLinkInfo {
-    pub display_name: Option<String>,
-    pub persistent_id: Option<String>,
-    pub subdevice_index: Option<u32>,
-}
-
-#[derive(Debug, Clone)]
-pub struct DeckLinkOptions {
-    pub subdevice_index: Option<u32>,
-    pub display_name: Option<String>,
-    /// Persistent id of a device (different value for each sub-device).
-    pub persistent_id: Option<u32>,
-
-    pub enable_audio: bool,
-    /// Force specified pixel format, value resolved in input format
-    /// autodetection will be ignored.
-    pub pixel_format: Option<PixelFormat>,
-}
 
 pub struct DeckLink {
     input: Arc<decklink::Input>,
@@ -60,8 +22,8 @@ impl DeckLink {
     pub(super) fn new_input(
         ctx: Arc<PipelineCtx>,
         input_id: InputId,
-        opts: DeckLinkOptions,
-    ) -> Result<(Input, InputInitInfo, DecodedDataReceiver), InputInitError> {
+        opts: DeckLinkInputOptions,
+    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let span = span!(
             Level::INFO,
             "DeckLink input",
@@ -70,7 +32,7 @@ impl DeckLink {
         let input = Arc::new(
             find_decklink(&opts)?
                 .input()
-                .map_err(DeckLinkError::DecklinkError)?,
+                .map_err(DeckLinkInputError::DecklinkError)?,
         );
 
         // Initial options, real config should be set based on detected format, thanks
@@ -85,10 +47,10 @@ impl DeckLink {
                     ..Default::default()
                 },
             )
-            .map_err(DeckLinkError::DecklinkError)?;
+            .map_err(DeckLinkInputError::DecklinkError)?;
         input
             .enable_audio(AUDIO_SAMPLE_RATE, decklink::AudioSampleType::Sample32bit, 2)
-            .map_err(DeckLinkError::DecklinkError)?;
+            .map_err(DeckLinkInputError::DecklinkError)?;
 
         let (callback, receivers) = ChannelCallbackAdapter::new(
             span,
@@ -103,15 +65,15 @@ impl DeckLink {
         );
         input
             .set_callback(Box::new(callback))
-            .map_err(DeckLinkError::DecklinkError)?;
+            .map_err(DeckLinkInputError::DecklinkError)?;
         input
             .start_streams()
-            .map_err(DeckLinkError::DecklinkError)?;
+            .map_err(DeckLinkInputError::DecklinkError)?;
 
         Ok((
             Input::DeckLink(Self { input }),
             InputInitInfo::Other,
-            DecodedDataReceiver {
+            QueueDataReceiver {
                 video: receivers.video,
                 audio: receivers.audio,
             },

@@ -1,15 +1,15 @@
 use bytes::{Buf, Bytes, BytesMut};
 use std::io::Read;
 
-use crate::{pipeline::EncodedChunk, queue::PipelineEvent};
+use crate::prelude::*;
 
 struct AvccToAnnexBRepacker {
-    config: H264AVCDecoderConfig,
+    config: H264AvcDecoderConfig,
     sps_pps: Option<Bytes>,
 }
 
 impl AvccToAnnexBRepacker {
-    pub fn new(config: H264AVCDecoderConfig) -> Self {
+    pub fn new(config: H264AvcDecoderConfig) -> Self {
         let mut sps_pps = BytesMut::new();
         sps_pps.extend(
             config
@@ -63,14 +63,14 @@ impl AvccToAnnexBRepacker {
     }
 }
 
-pub struct AnnexBChunkStream<Source: Iterator<Item = PipelineEvent<EncodedChunk>>> {
+pub struct AnnexBChunkStream<Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>> {
     repacker: Option<AvccToAnnexBRepacker>,
     source: Source,
     eos_sent: bool,
 }
 
-impl<Source: Iterator<Item = PipelineEvent<EncodedChunk>>> AnnexBChunkStream<Source> {
-    pub fn new(config: Option<H264AVCDecoderConfig>, source: Source) -> Self {
+impl<Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>> AnnexBChunkStream<Source> {
+    pub fn new(config: Option<H264AvcDecoderConfig>, source: Source) -> Self {
         Self {
             repacker: config.map(AvccToAnnexBRepacker::new),
             source,
@@ -79,8 +79,10 @@ impl<Source: Iterator<Item = PipelineEvent<EncodedChunk>>> AnnexBChunkStream<Sou
     }
 }
 
-impl<Source: Iterator<Item = PipelineEvent<EncodedChunk>>> Iterator for AnnexBChunkStream<Source> {
-    type Item = PipelineEvent<EncodedChunk>;
+impl<Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>> Iterator
+    for AnnexBChunkStream<Source>
+{
+    type Item = PipelineEvent<EncodedInputChunk>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
@@ -102,17 +104,17 @@ impl<Source: Iterator<Item = PipelineEvent<EncodedChunk>>> Iterator for AnnexBCh
 }
 
 #[derive(Debug, Clone)]
-pub struct H264AVCDecoderConfig {
+pub struct H264AvcDecoderConfig {
     pub nalu_length_size: usize,
     pub spss: Vec<Bytes>,
     pub ppss: Vec<Bytes>,
 }
 
-impl H264AVCDecoderConfig {
-    pub fn parse(mut config_bytes: Bytes) -> Result<Self, H264AVCDecoderConfigError> {
+impl H264AvcDecoderConfig {
+    pub fn parse(mut config_bytes: Bytes) -> Result<Self, H264AvcDecoderConfigError> {
         let is_avcc = config_bytes.try_get_u8()? == 0x1;
         if !is_avcc {
-            return Err(H264AVCDecoderConfigError::NotAVCC);
+            return Err(H264AvcDecoderConfigError::NotAVCC);
         }
 
         // Skip not needed information
@@ -137,7 +139,7 @@ impl H264AVCDecoderConfig {
         })
     }
 
-    fn parse_nalu(data: &mut Bytes) -> Result<Bytes, H264AVCDecoderConfigError> {
+    fn parse_nalu(data: &mut Bytes) -> Result<Bytes, H264AvcDecoderConfigError> {
         let nalu_length = data.try_get_u16()? as usize;
         let contents = data.slice(0..nalu_length);
         *data = data.slice(nalu_length..);
@@ -146,7 +148,7 @@ impl H264AVCDecoderConfig {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum H264AVCDecoderConfigError {
+pub enum H264AvcDecoderConfigError {
     #[error("Incorrect AVCDecoderConfig. Expected more bytes.")]
     NotEnoughBytes(#[from] bytes::TryGetError),
 

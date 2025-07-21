@@ -5,27 +5,16 @@ use compositor_render::error::ErrorStack;
 use rtp::codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet, vp9::Vp9Packet};
 use tracing::{info, trace, warn};
 
+use crate::prelude::*;
 use crate::{
-    pipeline::{
-        rtp::RtpPacket,
-        types::{AudioCodec, EncodedChunk, EncodedChunkKind, IsKeyframe, VideoCodec},
-    },
-    queue::PipelineEvent,
+    codecs::{AacAudioSpecificConfig, AudioCodec, VideoCodec},
+    pipeline::rtp::RtpPacket,
+    protocols::{AacDepayloadingError, RtpAacDepayloaderMode},
 };
 
-pub use aac_asc::AudioSpecificConfig;
-pub use aac_depayloader::{AacDepayloader, AacDepayloadingError};
+pub use aac_depayloader::AacDepayloader;
 
-mod aac_asc;
 mod aac_depayloader;
-
-/// [RFC 3640, section 3.3.5. Low Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.5)
-/// [RFC 3640, section 3.3.6. High Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.6)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RtpAacDepayloaderMode {
-    LowBitrate,
-    HighBitrate,
-}
 
 #[derive(Debug)]
 pub enum DepayloaderOptions {
@@ -33,30 +22,31 @@ pub enum DepayloaderOptions {
     Vp8,
     Vp9,
     Opus,
-    Aac(RtpAacDepayloaderMode, AudioSpecificConfig),
+    Aac(RtpAacDepayloaderMode, AacAudioSpecificConfig),
 }
 
 pub fn new_depayloader(options: DepayloaderOptions) -> Box<dyn Depayloader> {
     info!(?options, "Initialize RTP depayloader");
     match options {
         DepayloaderOptions::H264 => {
-            BufferedDepayloader::<H264Packet>::new_boxed(EncodedChunkKind::Video(VideoCodec::H264))
+            BufferedDepayloader::<H264Packet>::new_boxed(MediaKind::Video(VideoCodec::H264))
         }
         DepayloaderOptions::Vp8 => {
-            BufferedDepayloader::<Vp8Packet>::new_boxed(EncodedChunkKind::Video(VideoCodec::Vp8))
+            BufferedDepayloader::<Vp8Packet>::new_boxed(MediaKind::Video(VideoCodec::Vp8))
         }
         DepayloaderOptions::Vp9 => {
-            BufferedDepayloader::<Vp9Packet>::new_boxed(EncodedChunkKind::Video(VideoCodec::Vp9))
+            BufferedDepayloader::<Vp9Packet>::new_boxed(MediaKind::Video(VideoCodec::Vp9))
         }
         DepayloaderOptions::Opus => {
-            SimpleDepayloader::<OpusPacket>::new_boxed(EncodedChunkKind::Audio(AudioCodec::Opus))
+            SimpleDepayloader::<OpusPacket>::new_boxed(MediaKind::Audio(AudioCodec::Opus))
         }
         DepayloaderOptions::Aac(mode, asc) => Box::new(AacDepayloader::new(mode, asc)),
     }
 }
 
 pub(crate) trait Depayloader {
-    fn depayload(&mut self, packet: RtpPacket) -> Result<Vec<EncodedChunk>, DepayloadingError>;
+    fn depayload(&mut self, packet: RtpPacket)
+        -> Result<Vec<EncodedInputChunk>, DepayloadingError>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -68,13 +58,13 @@ pub enum DepayloadingError {
 }
 
 struct BufferedDepayloader<T: rtp::packetizer::Depacketizer + Default + 'static> {
-    kind: EncodedChunkKind,
+    kind: MediaKind,
     buffer: Vec<Bytes>,
     depayloader: T,
 }
 
 impl<T: rtp::packetizer::Depacketizer + Default + 'static> BufferedDepayloader<T> {
-    fn new_boxed(kind: EncodedChunkKind) -> Box<dyn Depayloader> {
+    fn new_boxed(kind: MediaKind) -> Box<dyn Depayloader> {
         Box::new(Self {
             kind,
             buffer: Vec::new(),
@@ -84,7 +74,10 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> BufferedDepayloader<T
 }
 
 impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for BufferedDepayloader<T> {
-    fn depayload(&mut self, packet: RtpPacket) -> Result<Vec<EncodedChunk>, DepayloadingError> {
+    fn depayload(
+        &mut self,
+        packet: RtpPacket,
+    ) -> Result<Vec<EncodedInputChunk>, DepayloadingError> {
         let chunk = self.depayloader.depacketize(&packet.packet.payload)?;
         trace!(?chunk, header=?packet.packet.header, "RTP depayloader received new chunk");
 
@@ -98,11 +91,10 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for Buffe
             return Ok(Vec::new());
         }
 
-        let new_chunk = EncodedChunk {
+        let new_chunk = EncodedInputChunk {
             data: mem::take(&mut self.buffer).concat().into(),
             pts: packet.timestamp,
             dts: None,
-            is_keyframe: IsKeyframe::Unknown,
             kind: self.kind,
         };
 
@@ -112,12 +104,12 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for Buffe
 }
 
 struct SimpleDepayloader<T: rtp::packetizer::Depacketizer + Default + 'static> {
-    kind: EncodedChunkKind,
+    kind: MediaKind,
     depayloader: T,
 }
 
 impl<T: rtp::packetizer::Depacketizer + Default + 'static> SimpleDepayloader<T> {
-    fn new_boxed(kind: EncodedChunkKind) -> Box<dyn Depayloader> {
+    fn new_boxed(kind: MediaKind) -> Box<dyn Depayloader> {
         Box::new(Self {
             kind,
             depayloader: T::default(),
@@ -126,13 +118,15 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> SimpleDepayloader<T> 
 }
 
 impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for SimpleDepayloader<T> {
-    fn depayload(&mut self, packet: RtpPacket) -> Result<Vec<EncodedChunk>, DepayloadingError> {
+    fn depayload(
+        &mut self,
+        packet: RtpPacket,
+    ) -> Result<Vec<EncodedInputChunk>, DepayloadingError> {
         let data = self.depayloader.depacketize(&packet.packet.payload)?;
-        let chunk = EncodedChunk {
+        let chunk = EncodedInputChunk {
             data,
             pts: packet.timestamp,
             dts: None,
-            is_keyframe: IsKeyframe::Unknown,
             kind: self.kind,
         };
 
@@ -167,7 +161,7 @@ impl<Source> Iterator for DepayloaderStream<Source>
 where
     Source: Iterator<Item = PipelineEvent<RtpPacket>>,
 {
-    type Item = Vec<PipelineEvent<EncodedChunk>>;
+    type Item = Vec<PipelineEvent<EncodedInputChunk>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {

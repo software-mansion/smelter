@@ -1,4 +1,5 @@
 use anyhow::Result;
+use compositor_pipeline::{PipelineOptions, QueueOptions, DEFAULT_BUFFER_DURATION};
 use std::{
     fs::{self, File},
     io::{self, Read},
@@ -8,23 +9,19 @@ use std::{
 };
 use tracing::warn;
 
-use compositor_pipeline::{
-    pipeline,
-    queue::{self, QueueOptions},
-};
 use compositor_render::{web_renderer::WebRendererInitOptions, Framerate, YuvPlanes};
 
 use crate::{args::Resolution, benchmark_pass::RawInputFile};
 
-pub fn benchmark_pipeline_options(framerate: u64) -> pipeline::Options {
-    pipeline::Options {
+pub fn benchmark_pipeline_options(framerate: u64) -> PipelineOptions {
+    PipelineOptions {
         queue_options: QueueOptions {
             never_drop_output_frames: true,
             output_framerate: Framerate {
                 num: framerate as u32,
                 den: 1,
             },
-            default_buffer_duration: queue::DEFAULT_BUFFER_DURATION,
+            default_buffer_duration: DEFAULT_BUFFER_DURATION,
             ahead_of_time_processing: false,
             run_late_scheduled_events: true,
         },

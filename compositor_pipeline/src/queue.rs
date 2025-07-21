@@ -14,13 +14,10 @@ use std::{
 };
 
 use compositor_render::{Frame, FrameSet, Framerate, InputId};
-use crossbeam_channel::{bounded, Sender};
+use crossbeam_channel::{bounded, Receiver, Sender};
 
-use crate::{
-    audio_mixer::{InputSamples, InputSamplesSet},
-    event::EventEmitter,
-    pipeline::decoder::DecodedDataReceiver,
-};
+use crate::prelude::*;
+use crate::{audio_mixer::InputSamplesSet, event::EventEmitter};
 
 use self::{
     audio_queue::AudioQueue,
@@ -29,8 +26,13 @@ use self::{
     video_queue::VideoQueue,
 };
 
-pub const DEFAULT_BUFFER_DURATION: Duration = Duration::from_millis(16 * 5); // about 5 frames at 60 fps
 const DEFAULT_AUDIO_CHUNK_DURATION: Duration = Duration::from_millis(20); // typical audio packet size
+
+#[derive(Debug)]
+pub struct QueueDataReceiver {
+    pub video: Option<Receiver<PipelineEvent<Frame>>>,
+    pub audio: Option<Receiver<PipelineEvent<InputAudioSamples>>>,
+}
 
 /// Queue is responsible for consuming frames from different inputs and producing
 /// sets of frames from all inputs in a single batch.
@@ -95,7 +97,7 @@ impl From<QueueVideoOutput> for FrameSet<InputId> {
 
 #[derive(Debug)]
 pub(super) struct QueueAudioOutput {
-    pub samples: HashMap<InputId, PipelineEvent<Vec<InputSamples>>>,
+    pub samples: HashMap<InputId, PipelineEvent<Vec<InputAudioSamples>>>,
     pub start_pts: Duration,
     pub end_pts: Duration,
 }
@@ -118,48 +120,15 @@ impl From<QueueAudioOutput> for InputSamplesSet {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct QueueInputOptions {
-    pub required: bool,
-    /// Relative offset this input stream should have to the clock that
-    /// starts when pipeline is started.
-    pub offset: Option<Duration>,
-
-    /// Duration of stream that should be buffered before stream is started.
-    /// If you have both audio and video streams then make sure to use the same value
-    /// to avoid desync.
-    ///
-    /// This value defines minimal latency on the queue, but if you set it to low and fail
-    /// to deliver the input stream on time it can cause either black screen or flickering image.
-    ///
-    /// By default DEFAULT_BUFFER_DURATION will be used.
-    pub buffer_duration: Option<Duration>,
-}
-
-#[derive(Debug, Clone, Copy)]
 struct InputOptions {
     required: bool,
     offset: Option<Duration>,
     buffer_duration: Duration,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct QueueOptions {
-    pub default_buffer_duration: Duration,
-    pub ahead_of_time_processing: bool,
-    pub output_framerate: Framerate,
-    pub run_late_scheduled_events: bool,
-    pub never_drop_output_frames: bool,
-}
-
 pub struct ScheduledEvent {
     pts: Duration,
     callback: Box<dyn FnOnce() + Send>,
-}
-
-#[derive(Debug)]
-pub enum PipelineEvent<T> {
-    Data(T),
-    EOS,
 }
 
 impl<T: Clone> Clone for PipelineEvent<T> {
@@ -211,7 +180,7 @@ impl Queue {
     pub fn add_input(
         &self,
         input_id: &InputId,
-        receiver: DecodedDataReceiver,
+        receiver: QueueDataReceiver,
         opts: QueueInputOptions,
     ) {
         let input_options = InputOptions {

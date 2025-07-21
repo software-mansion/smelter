@@ -2,31 +2,9 @@ use std::sync::Arc;
 
 use tracing::{error, info};
 
-use crate::{
-    audio_mixer::{AudioChannels, AudioSamples, OutputSamples},
-    error::EncoderInitError,
-    pipeline::{
-        types::{EncodedChunk, EncodedChunkKind, IsKeyframe},
-        AudioCodec, PipelineCtx,
-    },
-};
+use crate::prelude::*;
 
-use super::{AudioEncoder, AudioEncoderConfig, AudioEncoderOptionsExt, AudioEncoderPreset};
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct OpusEncoderOptions {
-    pub channels: AudioChannels,
-    pub preset: AudioEncoderPreset,
-    pub sample_rate: u32,
-    pub forward_error_correction: bool,
-    pub packet_loss: i32,
-}
-
-impl AudioEncoderOptionsExt for OpusEncoderOptions {
-    fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
-}
+use super::{AudioEncoder, AudioEncoderConfig};
 
 #[derive(Debug)]
 pub struct OpusEncoder {
@@ -69,7 +47,7 @@ impl AudioEncoder for OpusEncoder {
         }
     }
 
-    fn encode(&mut self, batch: OutputSamples) -> Vec<EncodedChunk> {
+    fn encode(&mut self, batch: OutputAudioSamples) -> Vec<EncodedOutputChunk> {
         let raw_samples: Vec<_> = match batch.samples {
             AudioSamples::Mono(raw_samples) => raw_samples
                 .iter()
@@ -82,12 +60,12 @@ impl AudioEncoder for OpusEncoder {
         };
 
         match self.encoder.encode(&raw_samples, &mut self.output_buffer) {
-            Ok(len) => vec![EncodedChunk {
+            Ok(len) => vec![EncodedOutputChunk {
                 data: bytes::Bytes::copy_from_slice(&self.output_buffer[..len]),
                 pts: batch.start_pts,
                 dts: None,
-                is_keyframe: IsKeyframe::NoKeyframes,
-                kind: EncodedChunkKind::Audio(AudioCodec::Opus),
+                is_keyframe: false,
+                kind: MediaKind::Audio(AudioCodec::Opus),
             }],
             Err(err) => {
                 error!("Opus encoding error: {}", err);
@@ -96,17 +74,17 @@ impl AudioEncoder for OpusEncoder {
         }
     }
 
-    fn flush(&mut self) -> Vec<EncodedChunk> {
+    fn flush(&mut self) -> Vec<EncodedOutputChunk> {
         vec![]
     }
 }
 
-impl From<AudioEncoderPreset> for opus::Application {
-    fn from(value: AudioEncoderPreset) -> Self {
+impl From<OpusEncoderPreset> for opus::Application {
+    fn from(value: OpusEncoderPreset) -> Self {
         match value {
-            AudioEncoderPreset::Quality => opus::Application::Audio,
-            AudioEncoderPreset::Voip => opus::Application::Voip,
-            AudioEncoderPreset::LowestLatency => opus::Application::LowDelay,
+            OpusEncoderPreset::Quality => opus::Application::Audio,
+            OpusEncoderPreset::Voip => opus::Application::Voip,
+            OpusEncoderPreset::LowestLatency => opus::Application::LowDelay,
         }
     }
 }

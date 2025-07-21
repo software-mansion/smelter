@@ -10,25 +10,9 @@ use bytes::Bytes;
 use fdk_aac_sys as fdk;
 use tracing::{error, info};
 
-use crate::{
-    audio_mixer::{AudioChannels, AudioSamples, OutputSamples},
-    error::EncoderInitError,
-    pipeline::{types::IsKeyframe, AudioCodec, EncodedChunk, EncodedChunkKind, PipelineCtx},
-};
+use crate::prelude::*;
 
-use super::{AudioEncoder, AudioEncoderConfig, AudioEncoderOptionsExt};
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct AacEncoderOptions {
-    pub channels: AudioChannels,
-    pub sample_rate: u32,
-}
-
-impl AudioEncoderOptionsExt for AacEncoderOptions {
-    fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
-}
+use super::{AudioEncoder, AudioEncoderConfig};
 
 /// FDK-AAC encoder.
 /// Implementation is based on the fdk-aac encoder documentation:
@@ -46,7 +30,7 @@ pub struct FdkAacEncoder {
 impl AudioEncoder for FdkAacEncoder {
     const LABEL: &'static str = "FDK AAC encoder";
 
-    type Options = AacEncoderOptions;
+    type Options = FdkAacEncoderOptions;
 
     fn new(
         _ctx: &Arc<PipelineCtx>,
@@ -137,7 +121,7 @@ impl AudioEncoder for FdkAacEncoder {
         ))
     }
 
-    fn encode(&mut self, output_samples: OutputSamples) -> Vec<EncodedChunk> {
+    fn encode(&mut self, output_samples: OutputAudioSamples) -> Vec<EncodedOutputChunk> {
         self.enqueue_samples(output_samples);
         self.call_fdk_encode(false).unwrap_or_else(|err| {
             error!("Encoding error: {:?}", err);
@@ -145,7 +129,7 @@ impl AudioEncoder for FdkAacEncoder {
         })
     }
 
-    fn flush(&mut self) -> Vec<EncodedChunk> {
+    fn flush(&mut self) -> Vec<EncodedOutputChunk> {
         self.call_fdk_encode(true).unwrap_or_else(|err| {
             error!("Encoding error: {:?}", err);
             vec![]
@@ -156,7 +140,10 @@ impl AudioEncoder for FdkAacEncoder {
 }
 
 impl FdkAacEncoder {
-    fn call_fdk_encode(&mut self, flush: bool) -> Result<Vec<EncodedChunk>, EncoderInitError> {
+    fn call_fdk_encode(
+        &mut self,
+        flush: bool,
+    ) -> Result<Vec<EncodedOutputChunk>, EncoderInitError> {
         let mut output = vec![];
 
         loop {
@@ -234,14 +221,14 @@ impl FdkAacEncoder {
                 // assume that encoder is always producing batches representing full frame
                 self.sent_samples += self.samples_per_frame as u128;
 
-                output.push(EncodedChunk {
+                output.push(EncodedOutputChunk {
                     data: Bytes::copy_from_slice(
                         &self.output_buffer[..out_args.numOutBytes as usize],
                     ),
                     pts,
                     dts: None,
-                    is_keyframe: IsKeyframe::NoKeyframes,
-                    kind: EncodedChunkKind::Audio(AudioCodec::Aac),
+                    is_keyframe: false,
+                    kind: MediaKind::Audio(AudioCodec::Aac),
                 });
             } else {
                 break;
@@ -250,7 +237,7 @@ impl FdkAacEncoder {
         Ok(output)
     }
 
-    fn enqueue_samples(&mut self, samples: OutputSamples) {
+    fn enqueue_samples(&mut self, samples: OutputAudioSamples) {
         if self.start_pts.is_none() {
             self.start_pts = Some(samples.start_pts);
         };

@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::audio_mixer::InputSamples;
+use crate::audio_mixer::InputAudioSamples;
 
 use super::frame_input_samples;
 
@@ -28,12 +28,12 @@ fn test_continuity_between_frames() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: first_batch.clone(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: second_batch.clone(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -55,12 +55,12 @@ fn test_continuity_between_frames() {
             start + batch_duration,
             end + batch_duration,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: second_batch.clone(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: third_batch.clone(),
                     start_pts: third_batch_start,
                     end_pts: third_batch_start + (4 * sample_duration)
@@ -87,12 +87,12 @@ fn test_continuity_between_frames() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: first_batch.clone(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: second_batch.clone(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -114,12 +114,12 @@ fn test_continuity_between_frames() {
             start + batch_duration,
             end + batch_duration,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: second_batch.clone(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: third_batch.clone(),
                     start_pts: third_batch_start,
                     end_pts: third_batch_start + (4 * sample_duration)
@@ -146,12 +146,12 @@ fn test_continuity_between_frames() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: first_batch.clone(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: second_batch.clone(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -173,12 +173,12 @@ fn test_continuity_between_frames() {
             start + batch_duration,
             end + batch_duration,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: second_batch.clone(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: third_batch.clone(),
                     start_pts: third_batch_start,
                     end_pts: third_batch_start + (4 * sample_duration)
@@ -205,12 +205,12 @@ fn test_continuity_between_frames() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: first_batch.clone(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: second_batch.clone(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -232,12 +232,12 @@ fn test_continuity_between_frames() {
             start + batch_duration,
             end + batch_duration,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: second_batch.clone(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: third_batch.clone(),
                     start_pts: third_batch_start,
                     end_pts: third_batch_start + (4 * sample_duration)
@@ -264,12 +264,12 @@ fn test_continuity_between_frames() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: first_batch.clone(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: second_batch.clone(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -291,12 +291,12 @@ fn test_continuity_between_frames() {
             start + batch_duration,
             end + batch_duration,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: second_batch.clone(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: third_batch.clone(),
                     start_pts: third_batch_start,
                     end_pts: third_batch_start + (4 * sample_duration)

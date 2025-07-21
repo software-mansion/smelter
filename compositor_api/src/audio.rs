@@ -1,8 +1,7 @@
-use compositor_pipeline::audio_mixer;
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::common_pipeline::prelude as pipeline;
 use crate::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -38,7 +37,7 @@ pub enum AudioChannels {
     Stereo,
 }
 
-impl TryFrom<AudioScene> for compositor_pipeline::audio_mixer::AudioMixingParams {
+impl TryFrom<AudioScene> for pipeline::AudioMixerConfig {
     type Error = TypeError;
 
     fn try_from(value: AudioScene) -> Result<Self, Self::Error> {
@@ -51,7 +50,7 @@ impl TryFrom<AudioScene> for compositor_pipeline::audio_mixer::AudioMixingParams
     }
 }
 
-impl TryFrom<AudioSceneInput> for compositor_pipeline::audio_mixer::InputParams {
+impl TryFrom<AudioSceneInput> for pipeline::AudioMixerInputConfig {
     type Error = TypeError;
 
     fn try_from(value: AudioSceneInput) -> Result<Self, Self::Error> {
@@ -67,24 +66,20 @@ impl TryFrom<AudioSceneInput> for compositor_pipeline::audio_mixer::InputParams 
     }
 }
 
-impl From<AudioMixingStrategy> for compositor_pipeline::audio_mixer::MixingStrategy {
+impl From<AudioMixingStrategy> for pipeline::AudioMixingStrategy {
     fn from(value: AudioMixingStrategy) -> Self {
         match value {
-            AudioMixingStrategy::SumClip => {
-                compositor_pipeline::audio_mixer::MixingStrategy::SumClip
-            }
-            AudioMixingStrategy::SumScale => {
-                compositor_pipeline::audio_mixer::MixingStrategy::SumScale
-            }
+            AudioMixingStrategy::SumClip => pipeline::AudioMixingStrategy::SumClip,
+            AudioMixingStrategy::SumScale => pipeline::AudioMixingStrategy::SumScale,
         }
     }
 }
 
-impl From<AudioChannels> for audio_mixer::AudioChannels {
+impl From<AudioChannels> for compositor_pipeline::AudioChannels {
     fn from(value: AudioChannels) -> Self {
         match value {
-            AudioChannels::Mono => audio_mixer::AudioChannels::Mono,
-            AudioChannels::Stereo => audio_mixer::AudioChannels::Stereo,
+            AudioChannels::Mono => compositor_pipeline::AudioChannels::Mono,
+            AudioChannels::Stereo => compositor_pipeline::AudioChannels::Stereo,
         }
     }
 }
