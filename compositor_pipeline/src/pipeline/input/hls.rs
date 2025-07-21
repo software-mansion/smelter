@@ -16,6 +16,7 @@ use crate::{
             decoder_thread_video::spawn_video_decoder_thread, fdk_aac, ffmpeg_h264,
             DecodedDataReceiver, DecoderThreadHandle,
         },
+        input::hls::chunk_repacker::ChunkRepacker,
         types::{EncodedChunk, IsKeyframe},
         AudioCodec, EncodedChunkKind, PipelineCtx, VideoCodec,
     },
@@ -37,6 +38,8 @@ use ffmpeg_next::{
 use tracing::{debug, error, span, warn, Level};
 
 use super::{Input, InputInitInfo};
+
+mod chunk_repacker;
 
 #[derive(Debug, Clone)]
 pub struct HlsInputOptions {
@@ -168,7 +171,11 @@ impl HlsInput {
                         return;
                     }
                 };
-                (Some((stream.index(), handle, state)), Some(frame_receiver))
+                let repacker = ChunkRepacker::new(&stream);
+                (
+                    Some((stream.index(), handle, state, repacker)),
+                    Some(frame_receiver),
+                )
             }
             None => (None, None),
         };
@@ -195,11 +202,13 @@ impl HlsInput {
                 continue;
             }
 
-            if let Some((index, ref handle, ref mut state)) = video {
+            if let Some((index, ref handle, ref mut state, ref mut repacker)) = video {
                 if packet.stream() == index {
                     let (pts, dts, is_discontinuity) = state.pts_dts_from_packet(&packet);
 
-                    // Some streams give us packets "from the past", which get dropped by the queue
+                    let data = Bytes::copy_from_slice(packet.data().unwrap());
+                    let data = repacker.repack(data);
+
                     // resulting in no video or blinking. This heuritic moves the next packets forward in
                     // time. We only care about video buffer, audio uses the same offset as video
                     // to avoid audio sync issues.
@@ -212,7 +221,7 @@ impl HlsInput {
                     let pts = pts + pts_offset;
 
                     let chunk = EncodedChunk {
-                        data: Bytes::copy_from_slice(packet.data().unwrap()),
+                        data,
                         pts,
                         dts,
                         is_keyframe: IsKeyframe::Unknown,
@@ -276,7 +285,7 @@ impl HlsInput {
             }
         }
 
-        if let Some((_, handle, _)) = video {
+        if let Some((_, handle, _, _)) = video {
             if handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
                 debug!("Failed to send EOS message.")
             }
@@ -284,12 +293,12 @@ impl HlsInput {
     }
 
     fn did_buffer_enough(
-        video: Option<&(usize, DecoderThreadHandle, StreamState)>,
+        video: Option<&(usize, DecoderThreadHandle, StreamState, ChunkRepacker)>,
         audio: Option<&(usize, DecoderThreadHandle, StreamState)>,
     ) -> bool {
         let is_video_ready = video
             .as_ref()
-            .map(|(_, handle, _)| handle.chunk_sender.len() >= HlsInput::PREFERABLE_BUFFER_SIZE);
+            .map(|(_, handle, _, _)| handle.chunk_sender.len() >= HlsInput::PREFERABLE_BUFFER_SIZE);
         let is_audio_ready = audio
             .as_ref()
             .map(|(_, handle, _)| handle.chunk_sender.len() >= HlsInput::PREFERABLE_BUFFER_SIZE);
