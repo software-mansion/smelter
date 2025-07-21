@@ -18,13 +18,13 @@ pub async fn exchange_sdp_offers(
     client: &Arc<WhipHttpClient>,
 ) -> Result<(Url, RTCSessionDescription), WhipError> {
     let offer = pc.create_offer().await?;
-    debug!("SDP offer {}", offer.sdp);
+    debug!("SDP offer: {}", offer.sdp);
 
     let SdpAnswer {
         session_url: location,
         answer,
     } = client.send_offer(&offer).await?;
-    debug!("SDP answer {}", answer.sdp);
+    debug!("SDP answer: {}", answer.sdp);
 
     pc.set_local_description(offer).await?;
 

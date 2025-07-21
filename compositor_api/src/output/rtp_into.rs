@@ -154,7 +154,7 @@ fn maybe_video_options(
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         }),
         VideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
-            pipeline::encoder::VideoEncoderOptions::VP8(ffmpeg_vp8::Options {
+            pipeline::encoder::VideoEncoderOptions::Vp8(ffmpeg_vp8::Options {
                 resolution: options.resolution.into(),
                 raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
             })
@@ -162,7 +162,7 @@ fn maybe_video_options(
         VideoEncoderOptions::FfmpegVp9 {
             pixel_format,
             ffmpeg_options,
-        } => pipeline::encoder::VideoEncoderOptions::VP9(ffmpeg_vp9::Options {
+        } => pipeline::encoder::VideoEncoderOptions::Vp9(ffmpeg_vp9::Options {
             resolution: options.resolution.into(),
             pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),

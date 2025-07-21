@@ -11,7 +11,7 @@ use compositor_pipeline::{
             ffmpeg_h264::{self, EncoderPreset},
             OutputPixelFormat, VideoEncoderOptions,
         },
-        input::RawDataInputOptions,
+        input::raw_data::RawDataInputOptions,
         output::{
             rtp::{RtpConnectionOptions, RtpSenderOptions},
             OutputOptions,

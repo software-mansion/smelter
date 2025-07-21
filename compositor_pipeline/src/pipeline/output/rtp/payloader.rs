@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use tracing::error;
+use tracing::{error, info};
 
 use rand::Rng;
 use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader, vp9::Vp9Payloader};
@@ -11,6 +11,7 @@ use crate::{
 
 use super::RtpPacket;
 
+#[derive(Debug)]
 pub enum PayloadedCodec {
     H264,
     Vp8,
@@ -18,6 +19,7 @@ pub enum PayloadedCodec {
     Opus,
 }
 
+#[derive(Debug)]
 pub struct PayloaderOptions {
     pub codec: PayloadedCodec,
     pub payload_type: u8,
@@ -37,6 +39,7 @@ pub(crate) struct Payloader {
 
 impl Payloader {
     fn new(options: PayloaderOptions) -> Self {
+        info!(?options, "Initialize RTP payloader");
         let payloader: Box<dyn rtp::packetizer::Payloader> = match options.codec {
             PayloadedCodec::H264 => Box::new(H264Payloader::default()),
             PayloadedCodec::Vp8 => Box::new(Vp8Payloader::default()),

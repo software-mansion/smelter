@@ -1,6 +1,6 @@
 use std::{path::PathBuf, str::FromStr};
 
-use compositor_pipeline::pipeline::{self, encoder::ffmpeg_h264};
+use compositor_pipeline::pipeline::{decoder, encoder::ffmpeg_h264};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericArgument {
@@ -52,12 +52,12 @@ pub enum VideoDecoder {
     VulkanVideoH264,
 }
 
-impl From<VideoDecoder> for pipeline::VideoDecoder {
+impl From<VideoDecoder> for decoder::VideoDecoderOptions {
     fn from(value: VideoDecoder) -> Self {
         match value {
-            VideoDecoder::FfmpegH264 => pipeline::VideoDecoder::FFmpegH264,
+            VideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions::FfmpegH264,
             #[cfg(not(target_os = "macos"))]
-            VideoDecoder::VulkanVideoH264 => pipeline::VideoDecoder::VulkanVideoH264,
+            VideoDecoder::VulkanVideoH264 => decoder::VideoDecoderOptions::VulkanH264,
         }
     }
 }

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use compositor_pipeline::{
-    pipeline::{self, input},
+    pipeline::{self, decoder, input},
     queue,
 };
 use tracing::warn;
@@ -43,13 +43,13 @@ impl TryFrom<Mp4Input> for pipeline::RegisterInputOptions {
         }
 
         let video_decoder = match video_decoder.unwrap_or(VideoDecoder::FfmpegH264) {
-            VideoDecoder::FfmpegH264 => pipeline::VideoDecoder::FFmpegH264,
+            VideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions::FfmpegH264,
             VideoDecoder::FfmpegVp8 => return Err(TypeError::new("MP4 VP8 input not supported")),
             VideoDecoder::FfmpegVp9 => return Err(TypeError::new("MP4 VP9 input not supported")),
 
             #[cfg(feature = "vk-video")]
             VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
-                pipeline::VideoDecoder::VulkanVideoH264
+                decoder::VideoDecoderOptions::VulkanH264
             }
 
             #[cfg(not(feature = "vk-video"))]

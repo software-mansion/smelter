@@ -261,10 +261,6 @@ impl Queue {
         }
     }
 
-    pub(super) fn start_time(self: &Arc<Self>) -> Option<Instant> {
-        *self.start_time.lock().unwrap()
-    }
-
     pub fn schedule_event(&self, pts: Duration, callback: Box<dyn FnOnce() + Send>) {
         self.scheduled_event_sender
             .send(ScheduledEvent { pts, callback })

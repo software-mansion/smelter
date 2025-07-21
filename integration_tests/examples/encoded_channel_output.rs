@@ -4,6 +4,7 @@ use std::{fs::File, io::Write, path::PathBuf, sync::Arc, time::Duration};
 use compositor_pipeline::{
     audio_mixer::{AudioChannels, AudioMixingParams, InputParams, MixingStrategy},
     pipeline::{
+        decoder,
         encoder::{
             self, ffmpeg_h264, AudioEncoderOptions, AudioEncoderPreset, VideoEncoderOptions,
         },
@@ -97,7 +98,7 @@ fn main() {
         input_options: InputOptions::Mp4(Mp4Options {
             source: Source::File(root_dir.join(BUNNY_FILE_PATH)),
             should_loop: false,
-            video_decoder: compositor_pipeline::pipeline::VideoDecoder::FFmpegH264,
+            video_decoder: decoder::VideoDecoderOptions::FfmpegH264,
         }),
         queue_options: QueueInputOptions {
             required: true,
@@ -128,8 +129,8 @@ fn main() {
         };
         match chunk.kind {
             EncodedChunkKind::Video(VideoCodec::H264) => h264_dump.write_all(&chunk.data).unwrap(),
-            EncodedChunkKind::Video(VideoCodec::VP8) => unreachable!(),
-            EncodedChunkKind::Video(VideoCodec::VP9) => unreachable!(),
+            EncodedChunkKind::Video(VideoCodec::Vp8) => unreachable!(),
+            EncodedChunkKind::Video(VideoCodec::Vp9) => unreachable!(),
             EncodedChunkKind::Audio(AudioCodec::Opus) => opus_dump.write_all(&chunk.data).unwrap(),
             EncodedChunkKind::Audio(AudioCodec::Aac) => panic!("AAC is not supported on output"),
         }

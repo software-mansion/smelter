@@ -5,7 +5,12 @@ use crossbeam_channel::Sender;
 use mp4::{Mp4Output, Mp4OutputOptions};
 use rtmp::{RtmpClientOutput, RtmpSenderOptions};
 
-use crate::{audio_mixer::OutputSamples, error::OutputInitError, queue::PipelineEvent};
+use crate::{
+    audio_mixer::OutputSamples,
+    error::OutputInitError,
+    pipeline::output::hls::{HlsOutput, HlsOutputOptions},
+    queue::PipelineEvent,
+};
 
 use self::rtp::{RtpOutput, RtpSenderOptions};
 
@@ -16,6 +21,7 @@ use super::{
 use whip::WhipSenderOptions;
 
 pub mod encoded_data;
+pub mod hls;
 pub mod mp4;
 pub mod raw_data;
 pub mod rtmp;
@@ -27,6 +33,7 @@ pub enum OutputOptions {
     Rtp(RtpSenderOptions),
     Rtmp(RtmpSenderOptions),
     Mp4(Mp4OutputOptions),
+    Hls(HlsOutputOptions),
     Whip(WhipSenderOptions),
 }
 
@@ -77,6 +84,7 @@ pub enum OutputKind {
     Rtmp,
     Whip,
     Mp4,
+    Hls,
     EncodedDataChannel,
     RawDataChannel,
 }
@@ -103,6 +111,10 @@ pub(super) fn new_external_output(
         }
         OutputOptions::Mp4(opt) => {
             let output = Mp4Output::new(ctx, output_id, opt)?;
+            Ok((Box::new(output), None))
+        }
+        OutputOptions::Hls(opt) => {
+            let output = HlsOutput::new(ctx, output_id, opt)?;
             Ok((Box::new(output), None))
         }
         OutputOptions::Whip(opt) => {

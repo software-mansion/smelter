@@ -8,7 +8,7 @@ use std::{
 
 use bytes::Bytes;
 use fdk_aac_sys as fdk;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{
     audio_mixer::{AudioChannels, AudioSamples, OutputSamples},
@@ -52,6 +52,7 @@ impl AudioEncoder for FdkAacEncoder {
         _ctx: &Arc<PipelineCtx>,
         options: Self::Options,
     ) -> Result<(Self, AudioEncoderConfig), EncoderInitError> {
+        info!(?options, "Initializing FDK AAC encoder");
         // Section 2.3 of the fdk-aac Encoder documentation - encoder initialization.
         let mut encoder = ptr::null_mut();
         // For mono and stereo audio, those values are the same, but it's not the case for other channel modes.
@@ -254,12 +255,16 @@ impl FdkAacEncoder {
 
         match samples.samples {
             AudioSamples::Mono(mono_samples) => {
-                self.input_buffer.extend(mono_samples.iter());
+                self.input_buffer.extend(
+                    mono_samples
+                        .iter()
+                        .map(|val| (*val * i16::MAX as f64) as i16),
+                );
             }
             AudioSamples::Stereo(stereo_samples) => {
                 for (l, r) in stereo_samples {
-                    self.input_buffer.push(l);
-                    self.input_buffer.push(r);
+                    self.input_buffer.push((l * i16::MAX as f64) as i16);
+                    self.input_buffer.push((r * i16::MAX as f64) as i16);
                 }
             }
         }

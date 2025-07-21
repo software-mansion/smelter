@@ -39,10 +39,10 @@ impl MatchCodecCapability for VideoEncoderOptions {
             VideoEncoderOptions::H264(_) => {
                 capability.mime_type.to_lowercase() == MIME_TYPE_H264.to_lowercase()
             }
-            VideoEncoderOptions::VP8(_) => {
+            VideoEncoderOptions::Vp8(_) => {
                 capability.mime_type.to_lowercase() == MIME_TYPE_VP8.to_lowercase()
             }
-            VideoEncoderOptions::VP9(_) => {
+            VideoEncoderOptions::Vp9(_) => {
                 capability.mime_type.to_lowercase() == MIME_TYPE_VP9.to_lowercase()
             }
         }
@@ -118,14 +118,14 @@ pub async fn setup_video_track(
             payloader_options(PayloadedCodec::H264, codec_params.payload_type, ssrc),
             sender,
         ),
-        VideoEncoderOptions::VP8(options) => spawn_video_track_thread::<FfmpegVp8Encoder>(
+        VideoEncoderOptions::Vp8(options) => spawn_video_track_thread::<FfmpegVp8Encoder>(
             ctx.clone(),
             output_id.clone(),
             options,
             payloader_options(PayloadedCodec::Vp8, codec_params.payload_type, ssrc),
             sender,
         ),
-        VideoEncoderOptions::VP9(options) => spawn_video_track_thread::<FfmpegVp9Encoder>(
+        VideoEncoderOptions::Vp9(options) => spawn_video_track_thread::<FfmpegVp9Encoder>(
             ctx.clone(),
             output_id.clone(),
             options,

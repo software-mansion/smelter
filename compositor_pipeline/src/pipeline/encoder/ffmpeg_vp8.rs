@@ -39,7 +39,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
         ctx: &Arc<PipelineCtx>,
         options: Self::Options,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
-        info!("Initializing FFmpeg vp8 encoder {options:?}");
+        info!(?options, "Initializing FFmpeg VP8 encoder");
         let codec = ffmpeg_next::codec::encoder::find(Id::VP8).ok_or(EncoderInitError::NoCodec)?;
 
         let mut encoder = Context::new().encoder().video()?;
@@ -129,7 +129,7 @@ impl FfmpegVp8Encoder {
                 Ok(_) => {
                     match encoded_chunk_from_av_packet(
                         &self.packet,
-                        EncodedChunkKind::Video(VideoCodec::VP9),
+                        EncodedChunkKind::Video(VideoCodec::Vp9),
                         1_000_000,
                     ) {
                         Ok(chunk) => {

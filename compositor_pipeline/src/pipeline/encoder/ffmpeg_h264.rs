@@ -104,7 +104,7 @@ impl VideoEncoder for FfmpegH264Encoder {
         ctx: &Arc<PipelineCtx>,
         options: Options,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
-        info!("Initialize FFmpeg x264 encoder {options:?}");
+        info!(?options, "Initialize FFmpeg x264 encoder");
         let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
 
         let mut encoder = Context::new().encoder().video()?;

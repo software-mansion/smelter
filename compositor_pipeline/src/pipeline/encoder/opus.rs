@@ -44,7 +44,7 @@ impl AudioEncoder for OpusEncoder {
         _ctx: &Arc<PipelineCtx>,
         options: Self::Options,
     ) -> Result<(Self, AudioEncoderConfig), EncoderInitError> {
-        info!("Initializing libopus encoder {options:?}");
+        info!(?options, "Initializing libopus encoder");
         let mut encoder = opus::Encoder::new(
             options.sample_rate,
             options.channels.into(),
@@ -65,11 +65,15 @@ impl AudioEncoder for OpusEncoder {
     }
 
     fn encode(&mut self, batch: OutputSamples) -> Vec<EncodedChunk> {
-        let raw_samples = match batch.samples {
-            AudioSamples::Mono(raw_samples) => raw_samples,
-            AudioSamples::Stereo(stereo_samples) => {
-                stereo_samples.iter().flat_map(|(l, r)| [*l, *r]).collect()
-            }
+        let raw_samples: Vec<_> = match batch.samples {
+            AudioSamples::Mono(raw_samples) => raw_samples
+                .iter()
+                .map(|val| (*val * i16::MAX as f64) as i16)
+                .collect(),
+            AudioSamples::Stereo(stereo_samples) => stereo_samples
+                .iter()
+                .flat_map(|(l, r)| [(*l * i16::MAX as f64) as i16, (*r * i16::MAX as f64) as i16])
+                .collect(),
         };
 
         match self.encoder.encode(&raw_samples, &mut self.output_buffer) {

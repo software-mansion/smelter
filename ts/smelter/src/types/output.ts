@@ -1,10 +1,12 @@
 import type * as Api from '../api.js';
 import type { Mp4AudioOptions, Mp4VideoOptions } from './output/mp4.js';
+import type { HlsAudioOptions, HlsVideoOptions } from './output/hls.js';
 import type { RtmpClientAudioOptions, RtmpClientVideoOptions } from './output/rtmp.js';
 import type { RtpAudioOptions, RtpVideoOptions } from './output/rtp.js';
 import type { WhipAudioOptions, WhipVideoOptions } from './output/whip.js';
 
 export * from './output/mp4.js';
+export * from './output/hls.js';
 export * from './output/whip.js';
 export * from './output/rtp.js';
 export * from './output/common.js';
@@ -32,6 +34,21 @@ export type RegisterRtpOutput = {
 export type RegisterMp4Output = {
   /**
    * Path to output MP4 file (location on the server where Smelter server is deployed).
+   */
+  serverPath: string;
+  /**
+   * Video track configuration.
+   */
+  video?: HlsVideoOptions;
+  /**
+   * Audio track configuration.
+   */
+  audio?: HlsAudioOptions;
+};
+
+export type RegisterHlsOutput = {
+  /**
+   * Path to output HLS playlist (location on the server where Smelter server is deployed).
    */
   serverPath: string;
   /**

@@ -44,7 +44,7 @@ impl EncodedDataOutput {
                         sender.clone(),
                     )?)
                 }
-                VideoEncoderOptions::VP8(options) => {
+                VideoEncoderOptions::Vp8(options) => {
                     Some(spawn_video_encoder_thread::<FfmpegVp8Encoder>(
                         ctx.clone(),
                         output_id.clone(),
@@ -52,7 +52,7 @@ impl EncodedDataOutput {
                         sender.clone(),
                     )?)
                 }
-                VideoEncoderOptions::VP9(options) => {
+                VideoEncoderOptions::Vp9(options) => {
                     Some(spawn_video_encoder_thread::<FfmpegVp9Encoder>(
                         ctx.clone(),
                         output_id.clone(),

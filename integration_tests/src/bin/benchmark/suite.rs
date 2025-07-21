@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use compositor_pipeline::pipeline::{
-    encoder::ffmpeg_h264::EncoderPreset, GraphicsContext, VideoDecoder,
+    decoder::VideoDecoderOptions, encoder::ffmpeg_h264::EncoderPreset, GraphicsContext,
 };
 use compositor_render::RenderingMode;
 
@@ -83,7 +83,7 @@ impl BenchmarkSuiteContext {
             input_file: InputFile::Mp4(PathBuf::new()), // always override
 
             encoder: EncoderOptions::Enabled(EncoderPreset::Ultrafast),
-            decoder: VideoDecoder::FFmpegH264,
+            decoder: VideoDecoderOptions::FfmpegH264,
 
             warm_up_time: Duration::from_secs(2),
             rendering_mode: self.default_rendering_mode,
@@ -438,14 +438,17 @@ fn benchmark_set_decoder_only(ctx: &'static BenchmarkSuiteContext) -> Vec<Benchm
 }
 
 #[cfg(not(target_os = "macos"))]
-fn supported_decoders(ctx: &BenchmarkSuiteContext) -> Vec<VideoDecoder> {
+fn supported_decoders(ctx: &BenchmarkSuiteContext) -> Vec<VideoDecoderOptions> {
     match ctx.wgpu_ctx.vulkan_ctx.is_some() {
-        true => vec![VideoDecoder::VulkanVideoH264, VideoDecoder::FFmpegH264],
-        false => vec![VideoDecoder::FFmpegH264],
+        true => vec![
+            VideoDecoderOptions::VulkanH264,
+            VideoDecoderOptions::FfmpegH264,
+        ],
+        false => vec![VideoDecoderOptions::FfmpegH264],
     }
 }
 
 #[cfg(target_os = "macos")]
-fn supported_decoders(_ctx: &BenchmarkSuiteContext) -> Vec<VideoDecoder> {
-    vec![VideoDecoder::FFmpegH264]
+fn supported_decoders(_ctx: &BenchmarkSuiteContext) -> Vec<VideoDecoderOptions> {
+    vec![VideoDecoderOptions::FfmpegH264]
 }

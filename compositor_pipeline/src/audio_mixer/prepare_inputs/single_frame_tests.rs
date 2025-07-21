@@ -17,7 +17,14 @@ fn test_prepare_inputs() {
 
     assert_eq!(
         frame_input_samples(start, end, vec![], sample_rate),
-        vec![(0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0)]
+        vec![
+            (0.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 0.0)
+        ]
     );
 
     let first_batch_start = start - small_error;
@@ -28,19 +35,26 @@ fn test_prepare_inputs() {
             end,
             vec![
                 InputSamples {
-                    samples: vec![(1, 1), (2, 2), (3, 3), (4, 4)].into(),
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
                 InputSamples {
-                    samples: vec![(5, 5), (6, 6), (7, 7), (8, 8)].into(),
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
             ],
             sample_rate
         ),
-        vec![(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]
+        vec![
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0)
+        ]
     );
 
     let first_batch_start = start - half_sample;
@@ -51,19 +65,26 @@ fn test_prepare_inputs() {
             end,
             vec![
                 InputSamples {
-                    samples: vec![(1, 1), (2, 2), (3, 3), (4, 4)].into(),
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
                 InputSamples {
-                    samples: vec![(5, 5), (6, 6), (7, 7), (8, 8)].into(),
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
             ],
             sample_rate
         ),
-        vec![(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]
+        vec![
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0)
+        ]
     );
 
     let first_batch_start = start + small_error;
@@ -74,19 +95,26 @@ fn test_prepare_inputs() {
             end,
             vec![
                 InputSamples {
-                    samples: vec![(1, 1), (2, 2), (3, 3), (4, 4)].into(),
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
                 InputSamples {
-                    samples: vec![(5, 5), (6, 6), (7, 7), (8, 8)].into(),
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
             ],
             sample_rate
         ),
-        vec![(0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)]
+        vec![
+            (0.0, 0.0),
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0)
+        ]
     );
 
     let first_batch_start = start - sample_duration + small_error;
@@ -97,19 +125,26 @@ fn test_prepare_inputs() {
             end,
             vec![
                 InputSamples {
-                    samples: vec![(1, 1), (2, 2), (3, 3), (4, 4)].into(),
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
                 InputSamples {
-                    samples: vec![(5, 5), (6, 6), (7, 7), (8, 8)].into(),
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
             ],
             sample_rate
         ),
-        vec![(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]
+        vec![
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0)
+        ]
     );
 
     let first_batch_start = start - sample_duration - small_error;
@@ -120,19 +155,26 @@ fn test_prepare_inputs() {
             end,
             vec![
                 InputSamples {
-                    samples: vec![(1, 1), (2, 2), (3, 3), (4, 4)].into(),
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
                 InputSamples {
-                    samples: vec![(5, 5), (6, 6), (7, 7), (8, 8)].into(),
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
             ],
             sample_rate
         ),
-        vec![(2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7)]
+        vec![
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0),
+            (7.0, 7.0)
+        ]
     );
 
     //slightly overlapping batches
@@ -144,19 +186,26 @@ fn test_prepare_inputs() {
             end,
             vec![
                 InputSamples {
-                    samples: vec![(1, 1), (2, 2), (3, 3), (4, 4)].into(),
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
                 InputSamples {
-                    samples: vec![(5, 5), (6, 6), (7, 7), (8, 8)].into(),
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
             ],
             sample_rate
         ),
-        vec![(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]
+        vec![
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0)
+        ]
     );
 
     // batches with small gap (small error)
@@ -168,19 +217,26 @@ fn test_prepare_inputs() {
             end,
             vec![
                 InputSamples {
-                    samples: vec![(1, 1), (2, 2), (3, 3), (4, 4)].into(),
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
                 InputSamples {
-                    samples: vec![(5, 5), (6, 6), (7, 7), (8, 8)].into(),
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
             ],
             sample_rate
         ),
-        vec![(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]
+        vec![
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0)
+        ]
     );
 
     //slightly overlapping batches (more than half sample)
@@ -192,19 +248,26 @@ fn test_prepare_inputs() {
             end,
             vec![
                 InputSamples {
-                    samples: vec![(1, 1), (2, 2), (3, 3), (4, 4)].into(),
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
                 InputSamples {
-                    samples: vec![(5, 5), (6, 6), (7, 7), (8, 8)].into(),
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
             ],
             sample_rate
         ),
-        vec![(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]
+        vec![
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0)
+        ]
     );
 
     // batches with small gap (more than half sample)
@@ -216,19 +279,26 @@ fn test_prepare_inputs() {
             end,
             vec![
                 InputSamples {
-                    samples: vec![(1, 1), (2, 2), (3, 3), (4, 4)].into(),
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
                 InputSamples {
-                    samples: vec![(5, 5), (6, 6), (7, 7), (8, 8)].into(),
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
             ],
             sample_rate
         ),
-        vec![(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)]
+        vec![
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0)
+        ]
     );
 
     //slightly overlapping batches (more than a sample)
@@ -241,19 +311,26 @@ fn test_prepare_inputs() {
             end,
             vec![
                 InputSamples {
-                    samples: vec![(1, 1), (2, 2), (3, 3), (4, 4)].into(),
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
                 InputSamples {
-                    samples: vec![(5, 5), (6, 6), (7, 7), (8, 8)].into(),
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
             ],
             sample_rate
         ),
-        vec![(1, 1), (2, 2), (3, 3), (4, 4), (6, 6), (7, 7)]
+        vec![
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (6.0, 6.0),
+            (7.0, 7.0)
+        ]
     );
 
     // batches with small gap (more than half sample)
@@ -266,18 +343,25 @@ fn test_prepare_inputs() {
             end,
             vec![
                 InputSamples {
-                    samples: vec![(1, 1), (2, 2), (3, 3), (4, 4)].into(),
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
                 InputSamples {
-                    samples: vec![(5, 5), (6, 6), (7, 7), (8, 8)].into(),
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
                 },
             ],
             sample_rate
         ),
-        vec![(1, 1), (2, 2), (3, 3), (4, 4), (0, 0), (5, 5)]
+        vec![
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (0.0, 0.0),
+            (5.0, 5.0)
+        ]
     );
 }

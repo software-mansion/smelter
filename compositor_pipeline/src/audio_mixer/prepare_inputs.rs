@@ -16,7 +16,7 @@ pub(super) fn expected_samples_count(start: Duration, end: Duration, sample_rate
 pub(super) fn prepare_input_samples(
     input_samples_set: InputSamplesSet,
     mixing_sample_rate: u32,
-) -> HashMap<InputId, Vec<(i16, i16)>> {
+) -> HashMap<InputId, Vec<(f64, f64)>> {
     input_samples_set
         .samples
         .into_iter()
@@ -53,7 +53,7 @@ fn frame_input_samples(
     end_pts: Duration,
     samples: Vec<InputSamples>,
     sample_rate: u32,
-) -> Vec<(i16, i16)> {
+) -> Vec<(f64, f64)> {
     let mut samples_in_frame = Vec::new();
 
     // Real numerical errors are a lot smaller, but taking max error as 1% of a sample duration
@@ -108,7 +108,7 @@ fn frame_input_samples(
                     "Distance between samples is higher than expected."
                 )
             }
-            samples_in_frame.extend((0..missing_samples_count).map(|_| (0i16, 0i16)))
+            samples_in_frame.extend((0..missing_samples_count).map(|_| (0f64, 0f64)))
         }
 
         let sample_count = samples_in_frame.len();
@@ -160,7 +160,7 @@ fn check_frame_samples(
     start_pts: Duration,
     end_pts: Duration,
     sample_rate: u32,
-    samples: &[(i16, i16)],
+    samples: &[(f64, f64)],
 ) {
     let samples_count_times_1e9 =
         end_pts.saturating_sub(start_pts).as_nanos() * sample_rate as u128;
@@ -184,13 +184,13 @@ fn ensure_correct_amount_of_samples(
     start: Duration,
     end: Duration,
     sample_rate: u32,
-    samples_buffer: &mut Vec<(i16, i16)>,
+    samples_buffer: &mut Vec<(f64, f64)>,
 ) {
     // This is precise as long as (end - start) is divisible by `1/sample_rate`
     let expected_samples_count = expected_samples_count(start, end, sample_rate);
     if expected_samples_count > samples_buffer.len() {
         let missing_samples_count = expected_samples_count - samples_buffer.len();
-        let missing_samples = (0..missing_samples_count).map(|_| (0i16, 0i16));
+        let missing_samples = (0..missing_samples_count).map(|_| (0f64, 0f64));
         samples_buffer.extend(missing_samples);
     } else {
         samples_buffer.drain(expected_samples_count..samples_buffer.len());

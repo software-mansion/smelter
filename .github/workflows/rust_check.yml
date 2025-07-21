@@ -22,6 +22,10 @@ jobs:
                   sudo apt-get clean
                   sudo rm -rf /var/lib/apt/lists/*
 
+            - name: "Increase disk space"
+              run: |
+                  sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
               with:
@@ -37,28 +41,29 @@ jobs:
 
             - name: 🧩 Git submodules update
               run: |
-                cat > .gitmodules << EOF
-                [submodule "snapshot_tests/snapshots"]
-                        path = snapshot_tests/snapshots
-                        url = https://github.com/membraneframework-labs/video_compositor_snapshot_tests.git
-                EOF
-                git submodule update --init
+                  cat > .gitmodules << EOF
+                  [submodule "snapshot_tests/snapshots"]
+                          path = snapshot_tests/snapshots
+                          url = https://github.com/membraneframework-labs/video_compositor_snapshot_tests.git
+                  EOF
+                  git submodule update --init
 
             - name: 📁 Rust cache
               uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "linux-build"
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package compositor_chromium
 
             - name: 🛠 Cargo build
               run: |
-                cargo build --features decklink
-                cargo build --no-default-features
+                  cargo build --features decklink
+                  cargo build --no-default-features
 
             - name: 🧪 Run tests
               run: |
-                cargo clean
-                cargo nextest run --workspace --profile ci
+                  cargo nextest run --workspace --profile ci
 
             - name: 📦 Upload failed snapshot test artifacts
               if: failure()
@@ -88,6 +93,8 @@ jobs:
 
             - name: 📁 Rust cache
               uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "macos-build"
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package compositor_chromium
@@ -124,6 +131,8 @@ jobs:
 
             - name: 📁 Rust cache
               uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: "linux-lint"
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
               run: cargo build --package compositor_chromium
@@ -137,4 +146,4 @@ jobs:
             - name: 📄 Generate JSON schema
               working-directory: ./generate
               run: |
-                cargo run --bin generate_from_types -- --check
+                  cargo run --bin generate_from_types -- --check
