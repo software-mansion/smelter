@@ -2,10 +2,8 @@ use std::time::Duration;
 
 use tracing::info;
 
-use crate::{
-    audio_mixer::AudioSamples,
-    pipeline::resampler::single_channel::{ChannelResampler, SingleChannelBatch},
-};
+use crate::pipeline::resampler::single_channel::{ChannelResampler, SingleChannelBatch};
+use crate::prelude::*;
 
 #[derive(Debug)]
 pub(crate) struct DynamicResamplerBatch {

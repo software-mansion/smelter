@@ -5,24 +5,19 @@ use crossbeam_channel::Sender;
 use tokio::sync::mpsc;
 use tracing::{debug, span, warn, Level};
 
-use crate::{
-    audio_mixer::OutputSamples,
-    error::EncoderInitError,
-    pipeline::{
-        encoder::{AudioEncoder, AudioEncoderOptionsExt, AudioEncoderStream},
-        resampler::encoder_resampler::ResampledForEncoderStream,
-        rtp::{
-            payloader::{PayloaderOptions, PayloaderStream},
-            RtpPacket,
-        },
-        PipelineCtx,
+use crate::pipeline::{
+    encoder::{AudioEncoder, AudioEncoderStream},
+    resampler::encoder_resampler::ResampledForEncoderStream,
+    rtp::{
+        payloader::{PayloaderOptions, PayloaderStream},
+        RtpPacket,
     },
-    queue::PipelineEvent,
 };
+use crate::prelude::*;
 
 #[derive(Debug)]
 pub(crate) struct WhipAudioTrackThreadHandle {
-    pub sample_batch_sender: Sender<PipelineEvent<OutputSamples>>,
+    pub sample_batch_sender: Sender<PipelineEvent<OutputAudioSamples>>,
 }
 
 pub fn spawn_audio_track_thread<Encoder: AudioEncoder>(

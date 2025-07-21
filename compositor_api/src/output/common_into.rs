@@ -1,7 +1,4 @@
-use compositor_pipeline::pipeline::{
-    self,
-    encoder::{self, ffmpeg_h264},
-};
+use compositor_pipeline as pipeline;
 
 use crate::*;
 
@@ -51,39 +48,39 @@ impl TryFrom<OutputEndCondition> for pipeline::PipelineOutputEndCondition {
     }
 }
 
-impl From<H264EncoderPreset> for ffmpeg_h264::EncoderPreset {
+impl From<H264EncoderPreset> for pipeline::FfmpegH264EncoderPreset {
     fn from(value: H264EncoderPreset) -> Self {
         match value {
-            H264EncoderPreset::Ultrafast => ffmpeg_h264::EncoderPreset::Ultrafast,
-            H264EncoderPreset::Superfast => ffmpeg_h264::EncoderPreset::Superfast,
-            H264EncoderPreset::Veryfast => ffmpeg_h264::EncoderPreset::Veryfast,
-            H264EncoderPreset::Faster => ffmpeg_h264::EncoderPreset::Faster,
-            H264EncoderPreset::Fast => ffmpeg_h264::EncoderPreset::Fast,
-            H264EncoderPreset::Medium => ffmpeg_h264::EncoderPreset::Medium,
-            H264EncoderPreset::Slow => ffmpeg_h264::EncoderPreset::Slow,
-            H264EncoderPreset::Slower => ffmpeg_h264::EncoderPreset::Slower,
-            H264EncoderPreset::Veryslow => ffmpeg_h264::EncoderPreset::Veryslow,
-            H264EncoderPreset::Placebo => ffmpeg_h264::EncoderPreset::Placebo,
+            H264EncoderPreset::Ultrafast => pipeline::FfmpegH264EncoderPreset::Ultrafast,
+            H264EncoderPreset::Superfast => pipeline::FfmpegH264EncoderPreset::Superfast,
+            H264EncoderPreset::Veryfast => pipeline::FfmpegH264EncoderPreset::Veryfast,
+            H264EncoderPreset::Faster => pipeline::FfmpegH264EncoderPreset::Faster,
+            H264EncoderPreset::Fast => pipeline::FfmpegH264EncoderPreset::Fast,
+            H264EncoderPreset::Medium => pipeline::FfmpegH264EncoderPreset::Medium,
+            H264EncoderPreset::Slow => pipeline::FfmpegH264EncoderPreset::Slow,
+            H264EncoderPreset::Slower => pipeline::FfmpegH264EncoderPreset::Slower,
+            H264EncoderPreset::Veryslow => pipeline::FfmpegH264EncoderPreset::Veryslow,
+            H264EncoderPreset::Placebo => pipeline::FfmpegH264EncoderPreset::Placebo,
         }
     }
 }
 
-impl From<OpusEncoderPreset> for encoder::AudioEncoderPreset {
+impl From<OpusEncoderPreset> for pipeline::OpusEncoderPreset {
     fn from(value: OpusEncoderPreset) -> Self {
         match value {
-            OpusEncoderPreset::Quality => encoder::AudioEncoderPreset::Quality,
-            OpusEncoderPreset::Voip => encoder::AudioEncoderPreset::Voip,
-            OpusEncoderPreset::LowestLatency => encoder::AudioEncoderPreset::LowestLatency,
+            OpusEncoderPreset::Quality => pipeline::OpusEncoderPreset::Quality,
+            OpusEncoderPreset::Voip => pipeline::OpusEncoderPreset::Voip,
+            OpusEncoderPreset::LowestLatency => pipeline::OpusEncoderPreset::LowestLatency,
         }
     }
 }
 
-impl From<PixelFormat> for encoder::OutputPixelFormat {
+impl From<PixelFormat> for pipeline::OutputPixelFormat {
     fn from(value: PixelFormat) -> Self {
         match value {
-            PixelFormat::Yuv420p => encoder::OutputPixelFormat::YUV420P,
-            PixelFormat::Yuv422p => encoder::OutputPixelFormat::YUV422P,
-            PixelFormat::Yuv444p => encoder::OutputPixelFormat::YUV444P,
+            PixelFormat::Yuv420p => pipeline::OutputPixelFormat::YUV420P,
+            PixelFormat::Yuv422p => pipeline::OutputPixelFormat::YUV422P,
+            PixelFormat::Yuv444p => pipeline::OutputPixelFormat::YUV444P,
         }
     }
 }

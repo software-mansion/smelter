@@ -4,11 +4,7 @@ use compositor_render::{Frame, OutputId};
 use crossbeam_channel::Sender;
 use tracing::{debug, span, warn, Level};
 
-use crate::{
-    error::EncoderInitError,
-    pipeline::{EncoderOutputEvent, PipelineCtx},
-    queue::PipelineEvent,
-};
+use crate::prelude::*;
 
 use super::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream};
 
@@ -22,7 +18,7 @@ pub fn spawn_video_encoder_thread<Encoder: VideoEncoder>(
     ctx: Arc<PipelineCtx>,
     output_id: OutputId,
     options: Encoder::Options,
-    chunks_sender: Sender<EncoderOutputEvent>,
+    chunks_sender: Sender<EncodedOutputEvent>,
 ) -> Result<VideoEncoderThreadHandle, EncoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
@@ -66,7 +62,7 @@ fn init_encoder_stream<Encoder: VideoEncoder>(
     options: Encoder::Options,
 ) -> Result<
     (
-        impl Iterator<Item = EncoderOutputEvent>,
+        impl Iterator<Item = EncodedOutputEvent>,
         VideoEncoderThreadHandle,
     ),
     EncoderInitError,
@@ -76,8 +72,8 @@ fn init_encoder_stream<Encoder: VideoEncoder>(
         VideoEncoderStream::<Encoder, _>::new(ctx, options, frame_receiver.into_iter())?;
 
     let stream = encoded_stream.flatten().map(|event| match event {
-        PipelineEvent::Data(chunk) => EncoderOutputEvent::Data(chunk),
-        PipelineEvent::EOS => EncoderOutputEvent::VideoEOS,
+        PipelineEvent::Data(chunk) => EncodedOutputEvent::Data(chunk),
+        PipelineEvent::EOS => EncodedOutputEvent::VideoEOS,
     });
     Ok((
         stream,

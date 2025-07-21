@@ -1,12 +1,8 @@
-use compositor_pipeline::pipeline::{
-    self,
-    encoder::{self, fdk_aac, ffmpeg_h264},
-    output::{self, hls},
-};
+use compositor_pipeline as pipeline;
 
 use crate::*;
 
-impl TryFrom<HlsOutput> for pipeline::RegisterOutputOptions<output::OutputOptions> {
+impl TryFrom<HlsOutput> for pipeline::RegisterOutputOptions<pipeline::ProtocolOutputOptions> {
     type Error = TypeError;
 
     fn try_from(request: HlsOutput) -> Result<Self, Self::Error> {
@@ -20,7 +16,7 @@ impl TryFrom<HlsOutput> for pipeline::RegisterOutputOptions<output::OutputOption
 
         let (video_encoder_options, output_video_options) = maybe_video_options_h264_only(video)?;
         let (audio_encoder_options, output_audio_options) = maybe_audio_options(audio)?;
-        let output_options = output::OutputOptions::Hls(hls::HlsOutputOptions {
+        let output_options = pipeline::ProtocolOutputOptions::Hls(pipeline::HlsOutputOptions {
             output_path: path.into(),
             video: video_encoder_options,
             audio: audio_encoder_options,
@@ -38,8 +34,8 @@ fn maybe_audio_options(
     options: Option<OutputHlsAudioOptions>,
 ) -> Result<
     (
-        Option<encoder::AudioEncoderOptions>,
-        Option<pipeline::OutputAudioOptions>,
+        Option<pipeline::AudioEncoderOptions>,
+        Option<pipeline::RegisterOutputAudioOptions>,
     ),
     TypeError,
 > {
@@ -58,7 +54,7 @@ fn maybe_audio_options(
         HlsAudioEncoderOptions::Aac { sample_rate } => {
             let resolved_channels = channels.unwrap_or(AudioChannels::Stereo);
             (
-                encoder::AudioEncoderOptions::Aac(fdk_aac::AacEncoderOptions {
+                pipeline::AudioEncoderOptions::FdkAac(pipeline::FdkAacEncoderOptions {
                     channels: resolved_channels.clone().into(),
                     sample_rate: sample_rate.unwrap_or(44100),
                 }),
@@ -66,7 +62,7 @@ fn maybe_audio_options(
             )
         }
     };
-    let output_audio_options = pipeline::OutputAudioOptions {
+    let output_audio_options = pipeline::RegisterOutputAudioOptions {
         initial: initial.try_into()?,
         end_condition: send_eos_when.unwrap_or_default().try_into()?,
         mixing_strategy: mixing_strategy
@@ -82,8 +78,8 @@ fn maybe_video_options_h264_only(
     options: Option<OutputVideoOptions>,
 ) -> Result<
     (
-        Option<encoder::VideoEncoderOptions>,
-        Option<pipeline::OutputVideoOptions>,
+        Option<pipeline::VideoEncoderOptions>,
+        Option<pipeline::RegisterOutputVideoOptions>,
     ),
     TypeError,
 > {
@@ -96,7 +92,7 @@ fn maybe_video_options_h264_only(
             preset,
             pixel_format,
             ffmpeg_options,
-        } => pipeline::encoder::VideoEncoderOptions::H264(ffmpeg_h264::Options {
+        } => pipeline::VideoEncoderOptions::FfmpegH264(pipeline::FfmpegH264EncoderOptions {
             preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
             resolution: options.resolution.into(),
             pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
@@ -114,7 +110,7 @@ fn maybe_video_options_h264_only(
         }
     };
 
-    let output_options = pipeline::OutputVideoOptions {
+    let output_options = pipeline::RegisterOutputVideoOptions {
         initial: options.initial.try_into()?,
         end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
     };

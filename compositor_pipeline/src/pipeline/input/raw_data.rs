@@ -3,16 +3,8 @@ use std::sync::Arc;
 use compositor_render::InputId;
 use crossbeam_channel::bounded;
 
-use crate::{
-    error::InputInitError,
-    pipeline::{decoder::DecodedDataReceiver, input::Input, types::RawDataSender, PipelineCtx},
-};
-
-#[derive(Debug, Clone)]
-pub struct RawDataInputOptions {
-    pub video: bool,
-    pub audio: bool,
-}
+use crate::prelude::*;
+use crate::{pipeline::input::Input, queue::QueueDataReceiver};
 
 pub struct RawDataInput;
 
@@ -21,7 +13,7 @@ impl RawDataInput {
         _ctx: Arc<PipelineCtx>,
         _input_id: InputId,
         options: RawDataInputOptions,
-    ) -> Result<(Input, RawDataSender, DecodedDataReceiver), InputInitError> {
+    ) -> Result<(Input, RawDataInputSender, QueueDataReceiver), InputInitError> {
         let (video_sender, video_receiver) = match options.video {
             true => {
                 let (sender, receiver) = bounded(1000);
@@ -37,12 +29,12 @@ impl RawDataInput {
             false => (None, None),
         };
         Ok((
-            Input::RawDataInput,
-            RawDataSender {
+            Input::RawDataChannel,
+            RawDataInputSender {
                 video: video_sender,
                 audio: audio_sender,
             },
-            DecodedDataReceiver {
+            QueueDataReceiver {
                 video: video_receiver,
                 audio: audio_receiver,
             },

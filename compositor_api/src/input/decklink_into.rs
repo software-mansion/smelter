@@ -1,4 +1,4 @@
-use compositor_pipeline::pipeline;
+use compositor_pipeline as pipeline;
 
 use crate::*;
 
@@ -7,7 +7,6 @@ impl TryFrom<DeckLink> for pipeline::RegisterInputOptions {
 
     #[cfg(feature = "decklink")]
     fn try_from(value: DeckLink) -> Result<Self, Self::Error> {
-        use compositor_pipeline::pipeline::input::{self, decklink};
         use std::time::Duration;
 
         const ID_PARSE_ERROR_MESSAGE: &str =
@@ -24,14 +23,16 @@ impl TryFrom<DeckLink> for pipeline::RegisterInputOptions {
         };
 
         Ok(pipeline::RegisterInputOptions {
-            input_options: input::InputOptions::DeckLink(decklink::DeckLinkOptions {
-                subdevice_index: value.subdevice_index,
-                display_name: value.display_name,
-                persistent_id,
-                enable_audio: value.enable_audio.unwrap_or(true),
-                pixel_format: Some(decklink::PixelFormat::Format8BitYUV),
-            }),
-            queue_options: compositor_pipeline::queue::QueueInputOptions {
+            input_options: pipeline::ProtocolInputOptions::DeckLink(
+                pipeline::DeckLinkInputOptions {
+                    subdevice_index: value.subdevice_index,
+                    display_name: value.display_name,
+                    persistent_id,
+                    enable_audio: value.enable_audio.unwrap_or(true),
+                    pixel_format: Some(pipeline::DeckLinkPixelFormat::Format8BitYUV),
+                },
+            ),
+            queue_options: pipeline::QueueInputOptions {
                 required: value.required.unwrap_or(false),
                 offset: None,
                 buffer_duration: Some(Duration::from_millis(5)),

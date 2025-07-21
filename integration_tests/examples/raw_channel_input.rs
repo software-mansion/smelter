@@ -6,18 +6,11 @@ use std::{
 };
 
 use compositor_pipeline::{
-    pipeline::{
-        encoder::{
-            ffmpeg_h264::{self, EncoderPreset},
-            OutputPixelFormat, VideoEncoderOptions,
-        },
-        input::raw_data::RawDataInputOptions,
-        output::OutputOptions,
-        rtp::{RequestedPort, RtpConnectionOptions, RtpOutputOptions},
-        GraphicsContext, GraphicsContextOptions, Options, Pipeline, PipelineOutputEndCondition,
-        RegisterOutputOptions,
-    },
-    queue::{PipelineEvent, QueueInputOptions},
+    graphics_context::{GraphicsContext, GraphicsContextOptions},
+    FfmpegH264EncoderOptions, FfmpegH264EncoderPreset, OutputPixelFormat, Pipeline, PipelineEvent,
+    PipelineOptions, PipelineOutputEndCondition, PortOrRange, ProtocolOutputOptions,
+    QueueInputOptions, RawDataInputOptions, RegisterOutputOptions, RegisterOutputVideoOptions,
+    RtpOutputConnectionOptions, RtpOutputOptions, VideoEncoderOptions,
 };
 use compositor_render::{
     error::ErrorStack,
@@ -46,7 +39,7 @@ fn main() {
 
     let (wgpu_device, wgpu_queue) = (ctx.device.clone(), ctx.queue.clone());
     // no chromium support, so we can ignore _event_loop
-    let (pipeline, _event_loop) = Pipeline::new(Options {
+    let (pipeline, _event_loop) = Pipeline::new(PipelineOptions {
         wgpu_ctx: Some(ctx),
         tokio_rt: Some(Arc::new(Runtime::new().unwrap())),
         ..(&config).into()
@@ -62,12 +55,12 @@ fn main() {
     let input_id = InputId("input_id".into());
 
     let output_options = RegisterOutputOptions {
-        output_options: OutputOptions::Rtp(RtpOutputOptions {
-            connection_options: RtpConnectionOptions::TcpServer {
-                port: RequestedPort::Exact(VIDEO_OUTPUT_PORT),
+        output_options: ProtocolOutputOptions::Rtp(RtpOutputOptions {
+            connection_options: RtpOutputConnectionOptions::TcpServer {
+                port: PortOrRange::Exact(VIDEO_OUTPUT_PORT),
             },
-            video: Some(VideoEncoderOptions::H264(ffmpeg_h264::Options {
-                preset: EncoderPreset::Ultrafast,
+            video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
+                preset: FfmpegH264EncoderPreset::Ultrafast,
                 resolution: Resolution {
                     width: 1280,
                     height: 720,
@@ -77,7 +70,7 @@ fn main() {
             })),
             audio: None,
         }),
-        video: Some(compositor_pipeline::pipeline::OutputVideoOptions {
+        video: Some(RegisterOutputVideoOptions {
             initial: Component::InputStream(InputStreamComponent {
                 id: None,
                 input_id: input_id.clone(),

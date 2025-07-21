@@ -1,12 +1,5 @@
+use compositor_pipeline as pipeline;
 use std::time::Duration;
-
-use compositor_pipeline::{
-    pipeline::{
-        self, decoder,
-        input::{self, hls},
-    },
-    queue,
-};
 
 use crate::*;
 
@@ -20,19 +13,19 @@ impl TryFrom<HlsInput> for pipeline::RegisterInputOptions {
             offset_ms,
         } = value;
 
-        let queue_options = queue::QueueInputOptions {
+        let queue_options = compositor_pipeline::QueueInputOptions {
             required: required.unwrap_or(false),
             offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
             buffer_duration: None,
         };
 
-        let input_options = hls::HlsInputOptions {
+        let input_options = pipeline::HlsInputOptions {
             url,
-            video_decoder: decoder::VideoDecoderOptions::FfmpegH264,
+            video_decoder: pipeline::VideoDecoderOptions::FfmpegH264,
         };
 
         Ok(pipeline::RegisterInputOptions {
-            input_options: input::InputOptions::Hls(input_options),
+            input_options: pipeline::ProtocolInputOptions::Hls(input_options),
             queue_options,
         })
     }

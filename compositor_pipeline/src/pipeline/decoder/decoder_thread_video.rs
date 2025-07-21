@@ -10,7 +10,7 @@ use crate::{
         decoder::{DecoderThreadHandle, VideoDecoderStream},
         PipelineCtx,
     },
-    queue::PipelineEvent,
+    PipelineEvent,
 };
 
 use super::VideoDecoder;

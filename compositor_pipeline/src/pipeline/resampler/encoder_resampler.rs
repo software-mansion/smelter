@@ -1,20 +1,19 @@
 use compositor_render::error::ErrorStack;
 use tracing::warn;
 
-use crate::{
-    audio_mixer::OutputSamples,
-    pipeline::resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch},
-    queue::PipelineEvent,
-};
+use crate::pipeline::resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch};
+use crate::prelude::*;
 
-pub(crate) struct ResampledForEncoderStream<Source: Iterator<Item = PipelineEvent<OutputSamples>>> {
+pub(crate) struct ResampledForEncoderStream<
+    Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>,
+> {
     resampler: DynamicResampler,
     input_sample_rate: u32,
     source: Source,
     eos_sent: bool,
 }
 
-impl<Source: Iterator<Item = PipelineEvent<OutputSamples>>> ResampledForEncoderStream<Source> {
+impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>> ResampledForEncoderStream<Source> {
     pub fn new(source: Source, input_sample_rate: u32, output_sample_rate: u32) -> Self {
         Self {
             input_sample_rate,
@@ -25,10 +24,10 @@ impl<Source: Iterator<Item = PipelineEvent<OutputSamples>>> ResampledForEncoderS
     }
 }
 
-impl<Source: Iterator<Item = PipelineEvent<OutputSamples>>> Iterator
+impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>> Iterator
     for ResampledForEncoderStream<Source>
 {
-    type Item = Vec<PipelineEvent<OutputSamples>>;
+    type Item = Vec<PipelineEvent<OutputAudioSamples>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
@@ -61,7 +60,7 @@ impl<Source: Iterator<Item = PipelineEvent<OutputSamples>>> Iterator
     }
 }
 
-fn from_output_samples(value: OutputSamples, sample_rate: u32) -> DynamicResamplerBatch {
+fn from_output_samples(value: OutputAudioSamples, sample_rate: u32) -> DynamicResamplerBatch {
     DynamicResamplerBatch {
         samples: value.samples,
         start_pts: value.start_pts,
@@ -69,8 +68,8 @@ fn from_output_samples(value: OutputSamples, sample_rate: u32) -> DynamicResampl
     }
 }
 
-fn into_output_samples(value: DynamicResamplerBatch) -> OutputSamples {
-    OutputSamples {
+fn into_output_samples(value: DynamicResamplerBatch) -> OutputAudioSamples {
+    OutputAudioSamples {
         samples: value.samples,
         start_pts: value.start_pts,
     }

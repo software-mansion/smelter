@@ -8,25 +8,15 @@ use std::{
 };
 
 use compositor_pipeline::{
+    self,
     error::{RegisterInputError, RegisterOutputError},
-    pipeline::{
-        self,
-        decoder::VideoDecoderOptions,
-        encoder::{
-            ffmpeg_h264::{self, EncoderPreset},
-            OutputPixelFormat, VideoEncoderOptions,
-        },
-        input::{
-            mp4::{Mp4Options, Source},
-            raw_data::RawDataInputOptions,
-            InputInitInfo, InputOptions,
-        },
-        output::{EncodedDataOutputOptions, RawDataOutputOptions, RawVideoOptions},
-        EncodedChunkKind, EncoderOutputEvent, GraphicsContext, OutputVideoOptions,
-        PipelineOutputEndCondition, RegisterInputOptions, RegisterOutputOptions,
-    },
-    queue::{PipelineEvent, QueueInputOptions},
-    Pipeline,
+    graphics_context::GraphicsContext,
+    EncodedDataOutputOptions, EncodedOutputEvent, FfmpegH264EncoderOptions,
+    FfmpegH264EncoderPreset, InputInitInfo, MediaKind, Mp4InputOptions, Mp4InputSource,
+    OutputPixelFormat, Pipeline, PipelineEvent, PipelineOptions, PipelineOutputEndCondition,
+    ProtocolInputOptions, QueueInputOptions, RawDataInputOptions, RawDataOutputOptions,
+    RawDataOutputVideoOptions, RegisterInputOptions, RegisterOutputOptions,
+    RegisterOutputVideoOptions, VideoDecoderOptions, VideoEncoderOptions,
 };
 use compositor_render::{
     scene::Component, Frame, InputId, OutputId, RendererId, RendererSpec, RenderingMode, YuvPlanes,
@@ -76,15 +66,15 @@ impl DurationReceiver for Receiver<PipelineEvent<Frame>> {
     }
 }
 
-impl DurationReceiver for Receiver<EncoderOutputEvent> {
+impl DurationReceiver for Receiver<EncodedOutputEvent> {
     fn try_receive(&self) -> Result<Duration, TryRecvError> {
         loop {
             match self.try_recv() {
-                Ok(EncoderOutputEvent::AudioEOS) => (),
-                Ok(EncoderOutputEvent::VideoEOS) => (),
-                Ok(EncoderOutputEvent::Data(chunk)) => match chunk.kind {
-                    EncodedChunkKind::Video(_) => return Ok(chunk.pts),
-                    EncodedChunkKind::Audio(_) => (),
+                Ok(EncodedOutputEvent::AudioEOS) => (),
+                Ok(EncodedOutputEvent::VideoEOS) => (),
+                Ok(EncodedOutputEvent::Data(chunk)) => match chunk.kind {
+                    MediaKind::Video(_) => return Ok(chunk.pts),
+                    MediaKind::Audio(_) => (),
                 },
                 Err(err) => return Err(err),
             }
@@ -109,7 +99,7 @@ pub struct SingleBenchmarkPass {
 
 impl SingleBenchmarkPass {
     pub fn run(&self, ctx: GraphicsContext) -> Result<bool> {
-        let (pipeline, _event_loop) = Pipeline::new(pipeline::Options {
+        let (pipeline, _event_loop) = Pipeline::new(PipelineOptions {
             wgpu_ctx: Some(ctx),
             rendering_mode: self.rendering_mode,
             ..benchmark_pipeline_options(self.framerate)
@@ -188,20 +178,20 @@ impl SingleBenchmarkPass {
         pipeline: &Arc<Mutex<Pipeline>>,
         output_id: &OutputId,
         root: Component,
-        preset: EncoderPreset,
+        preset: FfmpegH264EncoderPreset,
     ) -> Result<Box<dyn DurationReceiver + Send>, RegisterOutputError> {
         let result = Pipeline::register_encoded_data_output(
             pipeline,
             output_id.clone(),
             RegisterOutputOptions {
-                video: Some(OutputVideoOptions {
+                video: Some(RegisterOutputVideoOptions {
                     initial: root,
                     end_condition: PipelineOutputEndCondition::Never,
                 }),
                 audio: None,
                 output_options: EncodedDataOutputOptions {
                     audio: None,
-                    video: Some(VideoEncoderOptions::H264(ffmpeg_h264::Options {
+                    video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                         preset,
                         resolution: compositor_render::Resolution {
                             width: self.output_resolution.width,
@@ -226,14 +216,14 @@ impl SingleBenchmarkPass {
             pipeline,
             output_id.clone(),
             RegisterOutputOptions {
-                video: Some(OutputVideoOptions {
+                video: Some(RegisterOutputVideoOptions {
                     initial: root,
                     end_condition: PipelineOutputEndCondition::Never,
                 }),
                 audio: None,
                 output_options: RawDataOutputOptions {
                     audio: None,
-                    video: Some(RawVideoOptions {
+                    video: Some(RawDataOutputVideoOptions {
                         resolution: compositor_render::Resolution {
                             width: self.output_resolution.width,
                             height: self.output_resolution.height,
@@ -255,10 +245,10 @@ impl SingleBenchmarkPass {
             pipeline,
             input_id.clone(),
             RegisterInputOptions {
-                input_options: InputOptions::Mp4(Mp4Options {
+                input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
                     should_loop: true,
                     video_decoder: self.decoder,
-                    source: Source::File(path.to_path_buf()),
+                    source: Mp4InputSource::File(path.to_path_buf()),
                 }),
                 queue_options: QueueInputOptions {
                     offset: None,

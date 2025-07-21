@@ -2,22 +2,10 @@ use fdk_aac_sys as fdk;
 use std::sync::Arc;
 use tracing::{error, info};
 
-use crate::{
-    audio_mixer::AudioSamples,
-    error::DecoderInitError,
-    pipeline::{
-        decoder::{AudioDecoder, DecodingError},
-        types::{EncodedChunk, EncodedChunkKind},
-        AudioCodec, PipelineCtx,
-    },
-};
+use crate::pipeline::decoder::AudioDecoder;
+use crate::prelude::*;
 
 use super::DecodedSamples;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Options {
-    pub asc: Option<bytes::Bytes>,
-}
 
 pub(crate) struct FdkAacDecoder {
     decoder: Option<Decoder>,
@@ -27,7 +15,7 @@ pub(crate) struct FdkAacDecoder {
 impl AudioDecoder for FdkAacDecoder {
     const LABEL: &'static str = "FDK AAC decoder";
 
-    type Options = Options;
+    type Options = FdkAacDecoderOptions;
 
     fn new(_ctx: &Arc<PipelineCtx>, options: Self::Options) -> Result<Self, DecoderInitError> {
         info!("Initializing FDK AAC decoder");
@@ -37,7 +25,7 @@ impl AudioDecoder for FdkAacDecoder {
         })
     }
 
-    fn decode(&mut self, chunk: EncodedChunk) -> Result<Vec<DecodedSamples>, DecodingError> {
+    fn decode(&mut self, chunk: EncodedInputChunk) -> Result<Vec<DecodedSamples>, DecodingError> {
         match &mut self.decoder {
             Some(decoder) => Ok(decoder.decode(chunk)?),
             None => {
@@ -62,7 +50,7 @@ struct Decoder {
 impl Decoder {
     fn new(
         asc: &Option<bytes::Bytes>,
-        first_chunk: &EncodedChunk,
+        first_chunk: &EncodedInputChunk,
     ) -> Result<Self, FdkAacDecoderError> {
         let transport = if first_chunk.data[..4] == [b'A', b'D', b'I', b'F'] {
             fdk::TRANSPORT_TYPE_TT_MP4_ADIF
@@ -94,8 +82,11 @@ impl Decoder {
         })
     }
 
-    fn decode(&mut self, chunk: EncodedChunk) -> Result<Vec<DecodedSamples>, FdkAacDecoderError> {
-        if chunk.kind != EncodedChunkKind::Audio(AudioCodec::Aac) {
+    fn decode(
+        &mut self,
+        chunk: EncodedInputChunk,
+    ) -> Result<Vec<DecodedSamples>, FdkAacDecoderError> {
+        if chunk.kind != MediaKind::Audio(AudioCodec::Aac) {
             return Err(FdkAacDecoderError::UnsupportedChunkKind(chunk.kind));
         }
 
@@ -188,19 +179,4 @@ impl Drop for Decoder {
             fdk::aacDecoder_Close(self.instance);
         }
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum FdkAacDecoderError {
-    #[error("The internal fdk decoder returned an error: {0:?}.")]
-    FdkDecoderError(fdk::AAC_DECODER_ERROR),
-
-    #[error("The channel config in the aac audio is unsupported.")]
-    UnsupportedChannelConfig,
-
-    #[error("The aac decoder cannot decode chunks with kind {0:?}.")]
-    UnsupportedChunkKind(EncodedChunkKind),
-
-    #[error("The aac decoder cannot decode chunks with sample rate {0}.")]
-    UnsupportedSampleRate(i32),
 }

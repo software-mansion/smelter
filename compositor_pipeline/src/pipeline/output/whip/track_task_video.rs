@@ -5,18 +5,14 @@ use crossbeam_channel::Sender;
 use tokio::sync::mpsc;
 use tracing::{debug, span, warn, Level};
 
-use crate::{
-    error::EncoderInitError,
-    pipeline::{
-        encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
-        rtp::{
-            payloader::{PayloaderOptions, PayloaderStream},
-            RtpPacket,
-        },
-        PipelineCtx,
+use crate::pipeline::{
+    encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
+    rtp::{
+        payloader::{PayloaderOptions, PayloaderStream},
+        RtpPacket,
     },
-    queue::PipelineEvent,
 };
+use crate::prelude::*;
 
 #[derive(Debug)]
 pub(crate) struct WhipVideoTrackThreadHandle {

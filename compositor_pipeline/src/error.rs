@@ -6,8 +6,7 @@ use compositor_render::{
     InputId, OutputId,
 };
 
-use crate::pipeline::{decoder::fdk_aac::FdkAacDecoderError, output::whip, AudioCodec, VideoCodec};
-use fdk_aac_sys as fdk;
+use crate::prelude::*;
 
 #[derive(Debug, thiserror::Error)]
 pub enum InitPipelineError {
@@ -110,7 +109,7 @@ pub enum OutputInitError {
     WhipInitTimeout,
 
     #[error("Failed to init whip output")]
-    WhipInitError(#[source] Box<whip::WhipError>),
+    WhipInitError(#[source] Box<WhipInputError>),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -125,7 +124,7 @@ pub enum EncoderInitError {
     OpusError(#[from] opus::Error),
 
     #[error("Internal FDK AAC encoder error: {0}")]
-    AacError(fdk::AACENC_ERROR),
+    AacError(fdk_aac_sys::AACENC_ERROR),
 
     #[error(transparent)]
     ResamplerError(#[from] rubato::ResamplerConstructionError),
@@ -134,17 +133,17 @@ pub enum EncoderInitError {
 #[derive(Debug, thiserror::Error)]
 pub enum InputInitError {
     #[error(transparent)]
-    Rtp(#[from] crate::pipeline::rtp::RtpInputError),
+    Rtp(#[from] RtpInputError),
 
     #[error(transparent)]
-    Mp4(#[from] crate::pipeline::input::mp4::Mp4Error),
+    Mp4(#[from] Mp4InputError),
 
     #[error("WHIP WHEP server is not running, cannot start WHIP input")]
     WhipWhepServerNotRunning,
 
     #[cfg(feature = "decklink")]
     #[error(transparent)]
-    DeckLink(#[from] crate::pipeline::input::decklink::DeckLinkError),
+    DeckLink(#[from] DeckLinkInputError),
 
     #[error(transparent)]
     FfmpegError(#[from] ffmpeg_next::Error),

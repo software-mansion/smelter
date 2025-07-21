@@ -1,6 +1,6 @@
 use crate::pipeline::output::whip::WhipHttpClient;
 
-use super::{whip_http_client::SdpAnswer, PeerConnection, WhipError};
+use super::{whip_http_client::SdpAnswer, PeerConnection, WhipInputError};
 use compositor_render::error::ErrorStack;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -16,7 +16,7 @@ use webrtc::{
 pub async fn exchange_sdp_offers(
     pc: &PeerConnection,
     client: &Arc<WhipHttpClient>,
-) -> Result<(Url, RTCSessionDescription), WhipError> {
+) -> Result<(Url, RTCSessionDescription), WhipInputError> {
     let offer = pc.create_offer().await?;
     debug!("SDP offer: {}", offer.sdp);
 
@@ -66,11 +66,11 @@ async fn handle_trickle_candidate(
     };
 
     match client.send_trickle_ice(&location, candidate).await {
-        Err(WhipError::TrickleIceNotSupported) => {
+        Err(WhipInputError::TrickleIceNotSupported) => {
             info!("Trickle ICE is not supported by WHIP server");
             should_stop_trickle.store(true, Ordering::Relaxed);
         }
-        Err(WhipError::EntityTagMissing) | Err(WhipError::EntityTagNonMatching) => {
+        Err(WhipInputError::EntityTagMissing) | Err(WhipInputError::EntityTagNonMatching) => {
             info!("Entity tags not supported by WHIP output");
             should_stop_trickle.store(true, Ordering::Relaxed);
         }

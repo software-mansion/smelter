@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use compositor_pipeline::queue::{self, QueueOptions};
+use compositor_pipeline::{QueueOptions, DEFAULT_BUFFER_DURATION};
 use compositor_render::{
     web_renderer::WebRendererInitOptions, Framerate, RenderingMode, WgpuFeatures,
 };
@@ -187,11 +187,11 @@ fn try_read_config() -> Result<Config, String> {
         Ok(duration) => match duration.parse::<f64>() {
             Ok(duration) => Duration::from_secs_f64(duration / 1000.0),
             Err(_) => {
-                println!("CONFIG ERROR: Invalid value provided for \"SMELTER_INPUT_BUFFER_DURATION_MS\". Falling back to default value {:?}.", queue::DEFAULT_BUFFER_DURATION);
-                queue::DEFAULT_BUFFER_DURATION
+                println!("CONFIG ERROR: Invalid value provided for \"SMELTER_INPUT_BUFFER_DURATION_MS\". Falling back to default value {DEFAULT_BUFFER_DURATION:?}.");
+                DEFAULT_BUFFER_DURATION
             }
         },
-        Err(_) => queue::DEFAULT_BUFFER_DURATION,
+        Err(_) => DEFAULT_BUFFER_DURATION,
     };
 
     let load_system_fonts = match env::var("SMELTER_LOAD_SYSTEM_FONTS") {

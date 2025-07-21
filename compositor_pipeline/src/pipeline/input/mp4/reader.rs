@@ -10,12 +10,7 @@ use bytes::{Buf, Bytes, BytesMut};
 use mp4::Mp4Sample;
 use tracing::warn;
 
-use crate::pipeline::{
-    types::{EncodedChunk, EncodedChunkKind, IsKeyframe},
-    AudioCodec, VideoCodec,
-};
-
-use super::Mp4Error;
+use crate::prelude::*;
 
 pub(super) struct Mp4FileReader<Reader: Read + Seek + Send + 'static> {
     reader: mp4::Mp4Reader<Reader>,
@@ -28,7 +23,7 @@ pub(super) enum DecoderOptions {
 }
 
 impl Mp4FileReader<File> {
-    pub fn from_path(path: &Path) -> Result<Self, Mp4Error> {
+    pub fn from_path(path: &Path) -> Result<Self, Mp4InputError> {
         let file = std::fs::File::open(path)?;
         let size = file.metadata()?.size();
         Self::new(file, size)
@@ -36,7 +31,7 @@ impl Mp4FileReader<File> {
 }
 
 impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
-    fn new(reader: Reader, size: u64) -> Result<Self, Mp4Error> {
+    fn new(reader: Reader, size: u64) -> Result<Self, Mp4InputError> {
         let reader = mp4::Mp4Reader::read_header(reader, size)?;
 
         Ok(Mp4FileReader { reader })
@@ -196,7 +191,7 @@ pub(crate) struct TrackChunks<'a, Reader: Read + Seek + Send + 'static> {
 }
 
 impl<Reader: Read + Seek + Send + 'static> Iterator for TrackChunks<'_, Reader> {
-    type Item = (EncodedChunk, Duration);
+    type Item = (EncodedInputChunk, Duration);
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.last_sample_index < self.track.sample_count {
@@ -218,7 +213,7 @@ impl<Reader: Read + Seek + Send + 'static> Iterator for TrackChunks<'_, Reader> 
 }
 
 impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
-    fn sample_into_chunk(&mut self, sample: Mp4Sample) -> (EncodedChunk, Duration) {
+    fn sample_into_chunk(&mut self, sample: Mp4Sample) -> (EncodedInputChunk, Duration) {
         let rendering_offset = sample.rendering_offset;
         let start_time = sample.start_time;
         let sample_duration =
@@ -231,17 +226,13 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
 
         let data = (self.track.sample_unpacker)(sample);
 
-        let chunk = EncodedChunk {
+        let chunk = EncodedInputChunk {
             data,
             pts,
             dts: Some(dts),
-            is_keyframe: match self.track.decoder_options {
-                DecoderOptions::H264 => IsKeyframe::Unknown,
-                DecoderOptions::Aac(_) => IsKeyframe::NoKeyframes,
-            },
             kind: match self.track.decoder_options {
-                DecoderOptions::H264 => EncodedChunkKind::Video(VideoCodec::H264),
-                DecoderOptions::Aac(_) => EncodedChunkKind::Audio(AudioCodec::Aac),
+                DecoderOptions::H264 => MediaKind::Video(VideoCodec::H264),
+                DecoderOptions::Aac(_) => MediaKind::Audio(AudioCodec::Aac),
             },
         };
         (chunk, sample_duration)

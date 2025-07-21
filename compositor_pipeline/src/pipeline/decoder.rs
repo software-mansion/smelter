@@ -3,13 +3,11 @@ use std::iter;
 use std::sync::Arc;
 use tracing::warn;
 
-use crate::error::DecoderInitError;
-use crate::pipeline::types::DecodedSamples;
-use crate::pipeline::{EncodedChunk, PipelineCtx};
-use crate::{audio_mixer::InputSamples, queue::PipelineEvent};
-
 use compositor_render::Frame;
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::Sender;
+
+use crate::pipeline::types::DecodedSamples;
+use crate::prelude::*;
 
 pub(super) mod decoder_thread_audio;
 pub(super) mod decoder_thread_video;
@@ -17,6 +15,8 @@ pub(super) mod decoder_thread_video;
 pub mod ffmpeg_h264;
 pub mod ffmpeg_vp8;
 pub mod ffmpeg_vp9;
+
+mod ffmpeg_utils;
 
 #[cfg(feature = "vk-video")]
 pub mod vulkan_h264;
@@ -28,37 +28,9 @@ pub mod vulkan_h264;
 pub mod fdk_aac;
 pub mod libopus;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum VideoDecoderOptions {
-    FfmpegH264,
-    FfmpegVp8,
-    FfmpegVp9,
-    VulkanH264,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AudioDecoderOptions {
-    Opus,
-    FdkAac(fdk_aac::Options),
-}
-
-#[derive(Debug)]
-pub struct DecodedDataReceiver {
-    pub video: Option<Receiver<PipelineEvent<Frame>>>,
-    pub audio: Option<Receiver<PipelineEvent<InputSamples>>>,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum DecodingError {
-    #[error(transparent)]
-    OpusError(#[from] libopus::LibOpusError),
-    #[error(transparent)]
-    AacDecoder(#[from] fdk_aac::FdkAacDecoderError),
-}
-
 #[derive(Debug)]
 pub(crate) struct DecoderThreadHandle {
-    pub chunk_sender: Sender<PipelineEvent<EncodedChunk>>,
+    pub chunk_sender: Sender<PipelineEvent<EncodedInputChunk>>,
 }
 
 pub(crate) trait VideoDecoder: Sized + VideoDecoderInstance {
@@ -68,7 +40,7 @@ pub(crate) trait VideoDecoder: Sized + VideoDecoderInstance {
 }
 
 pub(crate) trait VideoDecoderInstance {
-    fn decode(&mut self, chunk: EncodedChunk) -> Vec<Frame>;
+    fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame>;
     fn flush(&mut self) -> Vec<Frame>;
 }
 
@@ -77,14 +49,14 @@ pub(crate) trait AudioDecoder: Sized {
     type Options: Send + 'static;
 
     fn new(ctx: &Arc<PipelineCtx>, options: Self::Options) -> Result<Self, DecoderInitError>;
-    fn decode(&mut self, chunk: EncodedChunk) -> Result<Vec<DecodedSamples>, DecodingError>;
+    fn decode(&mut self, chunk: EncodedInputChunk) -> Result<Vec<DecodedSamples>, DecodingError>;
     fn flush(&mut self) -> Vec<DecodedSamples>;
 }
 
 pub(super) struct VideoDecoderStream<Decoder, Source>
 where
     Decoder: VideoDecoder,
-    Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
 {
     decoder: Decoder,
     source: Source,
@@ -94,7 +66,7 @@ where
 impl<Decoder, Source> VideoDecoderStream<Decoder, Source>
 where
     Decoder: VideoDecoder,
-    Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
 {
     pub fn new(ctx: Arc<PipelineCtx>, source: Source) -> Result<Self, DecoderInitError> {
         let decoder = Decoder::new(&ctx)?;
@@ -109,7 +81,7 @@ where
 impl<Decoder, Source> Iterator for VideoDecoderStream<Decoder, Source>
 where
     Decoder: VideoDecoder,
-    Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
 {
     type Item = Vec<PipelineEvent<Frame>>;
 
@@ -136,7 +108,7 @@ where
 pub(super) struct AudioDecoderStream<Decoder, Source>
 where
     Decoder: AudioDecoder,
-    Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
 {
     decoder: Decoder,
     source: Source,
@@ -146,7 +118,7 @@ where
 impl<Decoder, Source> AudioDecoderStream<Decoder, Source>
 where
     Decoder: AudioDecoder,
-    Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
 {
     pub fn new(
         ctx: Arc<PipelineCtx>,
@@ -165,7 +137,7 @@ where
 impl<Decoder, Source> Iterator for AudioDecoderStream<Decoder, Source>
 where
     Decoder: AudioDecoder,
-    Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
 {
     type Item = Vec<PipelineEvent<DecodedSamples>>;
 

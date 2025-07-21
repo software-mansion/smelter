@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Result};
 use compositor_pipeline::{
     event::Event,
-    pipeline::{self, GraphicsContext, GraphicsContextOptions},
-    Pipeline,
+    graphics_context::{GraphicsContext, GraphicsContextOptions},
+    Pipeline, PipelineOptions,
 };
 use compositor_render::WgpuFeatures;
 use crossbeam_channel::{Receiver, Sender};
@@ -37,7 +37,7 @@ impl CompositorInstance {
     pub fn start() -> Self {
         init_compositor_prerequisites();
         let mut config = read_config();
-        let mut options: pipeline::Options = (&config).into();
+        let mut options = PipelineOptions::from(&config);
         let api_port = get_free_port();
         config.api_port = api_port;
         options.queue_options.ahead_of_time_processing = true;

@@ -9,19 +9,12 @@ use std::{
 };
 
 use compositor_pipeline::{
-    audio_mixer::{AudioChannels, AudioMixingParams, AudioSamples, InputParams, MixingStrategy},
-    pipeline::{
-        decoder::VideoDecoderOptions,
-        input::{
-            mp4::{Mp4Options, Source},
-            InputOptions,
-        },
-        output::{RawAudioOptions, RawDataOutputOptions, RawVideoOptions},
-        GraphicsContext, Options, PipelineOutputEndCondition, RawDataReceiver,
-        RegisterInputOptions, RegisterOutputOptions,
-    },
-    queue::{PipelineEvent, QueueInputOptions},
-    Pipeline,
+    graphics_context::GraphicsContext, AudioChannels, AudioMixerConfig, AudioMixerInputConfig,
+    AudioMixingStrategy, AudioSamples, Mp4InputOptions, Mp4InputSource, Pipeline, PipelineEvent,
+    PipelineOptions, PipelineOutputEndCondition, ProtocolInputOptions, QueueInputOptions,
+    RawDataOutputAudioOptions, RawDataOutputOptions, RawDataOutputReceiver,
+    RawDataOutputVideoOptions, RegisterInputOptions, RegisterOutputAudioOptions,
+    RegisterOutputOptions, RegisterOutputVideoOptions, VideoDecoderOptions,
 };
 use compositor_render::{
     error::ErrorStack,
@@ -58,7 +51,7 @@ fn main() {
     let ctx = GraphicsContext::new(Default::default()).unwrap();
     let (wgpu_device, wgpu_queue) = (ctx.device.clone(), ctx.queue.clone());
     // no chromium support, so we can ignore _event_loop
-    let (pipeline, _event_loop) = Pipeline::new(Options {
+    let (pipeline, _event_loop) = Pipeline::new(PipelineOptions {
         wgpu_ctx: Some(ctx),
         tokio_rt: Some(Arc::new(Runtime::new().unwrap())),
         ..(&config).into()
@@ -77,37 +70,37 @@ fn main() {
 
     let output_options = RegisterOutputOptions {
         output_options: RawDataOutputOptions {
-            video: Some(RawVideoOptions {
+            video: Some(RawDataOutputVideoOptions {
                 resolution: Resolution {
                     width: 1280,
                     height: 720,
                 },
             }),
-            audio: Some(RawAudioOptions),
+            audio: Some(RawDataOutputAudioOptions),
         },
-        video: Some(compositor_pipeline::pipeline::OutputVideoOptions {
+        video: Some(RegisterOutputVideoOptions {
             initial: Component::InputStream(InputStreamComponent {
                 id: None,
                 input_id: input_id.clone(),
             }),
             end_condition: PipelineOutputEndCondition::Never,
         }),
-        audio: Some(compositor_pipeline::pipeline::OutputAudioOptions {
-            initial: AudioMixingParams {
-                inputs: vec![InputParams {
+        audio: Some(RegisterOutputAudioOptions {
+            initial: AudioMixerConfig {
+                inputs: vec![AudioMixerInputConfig {
                     input_id: input_id.clone(),
                     volume: 1.0,
                 }],
             },
-            mixing_strategy: MixingStrategy::SumClip,
+            mixing_strategy: AudioMixingStrategy::SumClip,
             channels: AudioChannels::Stereo,
             end_condition: PipelineOutputEndCondition::Never,
         }),
     };
 
     let input_options = RegisterInputOptions {
-        input_options: InputOptions::Mp4(Mp4Options {
-            source: Source::File(root_dir().join(BUNNY_FILE_PATH)),
+        input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
+            source: Mp4InputSource::File(root_dir().join(BUNNY_FILE_PATH)),
             should_loop: false,
             video_decoder: VideoDecoderOptions::FfmpegH264,
         }),
@@ -120,7 +113,7 @@ fn main() {
 
     Pipeline::register_input(&pipeline, input_id.clone(), input_options).unwrap();
 
-    let RawDataReceiver { video, audio } =
+    let RawDataOutputReceiver { video, audio } =
         Pipeline::register_raw_data_output(&pipeline, output_id.clone(), output_options).unwrap();
 
     Pipeline::start(&pipeline);

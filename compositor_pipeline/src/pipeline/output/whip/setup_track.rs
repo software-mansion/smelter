@@ -11,20 +11,24 @@ use webrtc::{
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
-use crate::pipeline::{
-    encoder::{
-        ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder, ffmpeg_vp9::FfmpegVp9Encoder,
-        opus::OpusEncoder, AudioEncoderOptions, VideoEncoderOptions,
+use crate::{
+    codecs::{AudioEncoderOptions, VideoEncoderOptions},
+    pipeline::{
+        encoder::{
+            ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder,
+            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder,
+        },
+        output::whip::track_task_audio::spawn_audio_track_thread,
+        rtp::payloader::{PayloadedCodec, PayloaderOptions},
+        PipelineCtx,
     },
-    output::whip::track_task_audio::spawn_audio_track_thread,
-    rtp::payloader::{PayloadedCodec, PayloaderOptions},
-    PipelineCtx,
+    protocols::{AudioWhipOptions, VideoWhipOptions},
 };
 
 use super::{
     track_task_audio::WhipAudioTrackThreadHandle,
     track_task_video::{spawn_video_track_thread, WhipVideoTrackThreadHandle},
-    AudioWhipOptions, VideoWhipOptions, WhipError, WhipSenderTrack,
+    WhipInputError, WhipSenderTrack,
 };
 
 pub trait MatchCodecCapability {
@@ -34,13 +38,13 @@ pub trait MatchCodecCapability {
 impl MatchCodecCapability for VideoEncoderOptions {
     fn matches(&self, capability: &RTCRtpCodecCapability) -> bool {
         match self {
-            VideoEncoderOptions::H264(_) => {
+            VideoEncoderOptions::FfmpegH264(_) => {
                 capability.mime_type.to_lowercase() == MIME_TYPE_H264.to_lowercase()
             }
-            VideoEncoderOptions::Vp8(_) => {
+            VideoEncoderOptions::FfmpegVp8(_) => {
                 capability.mime_type.to_lowercase() == MIME_TYPE_VP8.to_lowercase()
             }
-            VideoEncoderOptions::Vp9(_) => {
+            VideoEncoderOptions::FfmpegVp9(_) => {
                 capability.mime_type.to_lowercase() == MIME_TYPE_VP9.to_lowercase()
             }
         }
@@ -53,7 +57,7 @@ impl MatchCodecCapability for AudioEncoderOptions {
             AudioEncoderOptions::Opus(_) => {
                 capability.mime_type.to_lowercase() == MIME_TYPE_OPUS.to_lowercase()
             }
-            AudioEncoderOptions::Aac(_) => false,
+            AudioEncoderOptions::FdkAac(_) => false,
         }
     }
 }
@@ -63,7 +67,7 @@ pub async fn setup_video_track(
     output_id: &OutputId,
     rtc_sender: Arc<RTCRtpSender>,
     options: &VideoWhipOptions,
-) -> Result<(WhipVideoTrackThreadHandle, WhipSenderTrack), WhipError> {
+) -> Result<(WhipVideoTrackThreadHandle, WhipSenderTrack), WhipInputError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
@@ -82,7 +86,7 @@ pub async fn setup_video_track(
                 Some((encoder_options.clone(), supported.clone()))
             })
     else {
-        return Err(WhipError::NoVideoCodecNegotiated);
+        return Err(WhipInputError::NoVideoCodecNegotiated);
     };
 
     let track = Arc::new(TrackLocalStaticRTP::new(
@@ -109,21 +113,21 @@ pub async fn setup_video_track(
     };
     let (sender, receiver) = mpsc::channel(1000);
     let handle = match options {
-        VideoEncoderOptions::H264(options) => spawn_video_track_thread::<FfmpegH264Encoder>(
+        VideoEncoderOptions::FfmpegH264(options) => spawn_video_track_thread::<FfmpegH264Encoder>(
             ctx.clone(),
             output_id.clone(),
             options,
             payloader_options(PayloadedCodec::H264, codec_params.payload_type, ssrc),
             sender,
         ),
-        VideoEncoderOptions::Vp8(options) => spawn_video_track_thread::<FfmpegVp8Encoder>(
+        VideoEncoderOptions::FfmpegVp8(options) => spawn_video_track_thread::<FfmpegVp8Encoder>(
             ctx.clone(),
             output_id.clone(),
             options,
             payloader_options(PayloadedCodec::Vp8, codec_params.payload_type, ssrc),
             sender,
         ),
-        VideoEncoderOptions::Vp9(options) => spawn_video_track_thread::<FfmpegVp9Encoder>(
+        VideoEncoderOptions::FfmpegVp9(options) => spawn_video_track_thread::<FfmpegVp9Encoder>(
             ctx.clone(),
             output_id.clone(),
             options,
@@ -146,7 +150,7 @@ pub async fn setup_audio_track(
     output_id: &OutputId,
     rtc_sender: Arc<RTCRtpSender>,
     options: &AudioWhipOptions,
-) -> Result<(WhipAudioTrackThreadHandle, WhipSenderTrack), WhipError> {
+) -> Result<(WhipAudioTrackThreadHandle, WhipSenderTrack), WhipInputError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
 
@@ -165,7 +169,7 @@ pub async fn setup_audio_track(
                 Some((encoder_options.clone(), supported.clone()))
             })
     else {
-        return Err(WhipError::NoAudioCodecNegotiated);
+        return Err(WhipInputError::NoAudioCodecNegotiated);
     };
 
     let track = Arc::new(TrackLocalStaticRTP::new(
@@ -199,7 +203,9 @@ pub async fn setup_audio_track(
             payloader_options(PayloadedCodec::Opus, codec_params.payload_type, ssrc),
             sender,
         ),
-        AudioEncoderOptions::Aac(_options) => return Err(WhipError::UnsupportedCodec("aac")),
+        AudioEncoderOptions::FdkAac(_options) => {
+            return Err(WhipInputError::UnsupportedCodec("aac"))
+        }
     }?;
 
     Ok((handle, WhipSenderTrack { receiver, track }))

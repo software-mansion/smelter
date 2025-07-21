@@ -1,14 +1,6 @@
-use std::time::Duration;
-
-use compositor_pipeline::{
-    pipeline::{
-        self, decoder,
-        input::{self},
-        webrtc,
-    },
-    queue,
-};
+use compositor_pipeline as pipeline;
 use itertools::Itertools;
+use std::time::Duration;
 use tracing::warn;
 
 use crate::*;
@@ -37,36 +29,36 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                     Some([]) | None => vec![WhipVideoDecoder::Any],
                     Some(v) => v.to_vec(),
                 };
-                let video_preferences: Vec<decoder::VideoDecoderOptions> = video_preferences
+                let video_preferences: Vec<pipeline::VideoDecoderOptions> = video_preferences
                     .into_iter()
                     .flat_map(|codec| match codec {
                         WhipVideoDecoder::FfmpegH264 => {
-                            vec![decoder::VideoDecoderOptions::FfmpegH264]
+                            vec![pipeline::VideoDecoderOptions::FfmpegH264]
                         }
                         #[cfg(feature = "vk-video")]
                         WhipVideoDecoder::VulkanH264 => {
-                            vec![decoder::VideoDecoderOptions::VulkanH264]
+                            vec![pipeline::VideoDecoderOptions::VulkanH264]
                         }
                         WhipVideoDecoder::FfmpegVp8 => {
-                            vec![decoder::VideoDecoderOptions::FfmpegVp8]
+                            vec![pipeline::VideoDecoderOptions::FfmpegVp8]
                         }
                         WhipVideoDecoder::FfmpegVp9 => {
-                            vec![decoder::VideoDecoderOptions::FfmpegVp9]
+                            vec![pipeline::VideoDecoderOptions::FfmpegVp9]
                         }
                         #[cfg(not(feature = "vk-video"))]
                         WhipVideoDecoder::Any => {
                             vec![
-                                decoder::VideoDecoderOptions::FfmpegVp9,
-                                decoder::VideoDecoderOptions::FfmpegVp8,
-                                decoder::VideoDecoderOptions::FfmpegH264,
+                                pipeline::VideoDecoderOptions::FfmpegVp9,
+                                pipeline::VideoDecoderOptions::FfmpegVp8,
+                                pipeline::VideoDecoderOptions::FfmpegH264,
                             ]
                         }
                         #[cfg(feature = "vk-video")]
                         WhipVideoDecoder::Any => {
                             vec![
-                                decoder::VideoDecoderOptions::FfmpegVp9,
-                                decoder::VideoDecoderOptions::FfmpegVp8,
-                                decoder::VideoDecoderOptions::VulkanH264,
+                                pipeline::VideoDecoderOptions::FfmpegVp9,
+                                pipeline::VideoDecoderOptions::FfmpegVp8,
+                                pipeline::VideoDecoderOptions::VulkanH264,
                             ]
                         }
                         #[cfg(not(feature = "vk-video"))]
@@ -74,32 +66,32 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                     })
                     .unique()
                     .collect();
-                webrtc::WhipInputOptions {
+                pipeline::WhipInputOptions {
                     video_preferences,
                     bearer_token,
                 }
             }
-            None => webrtc::WhipInputOptions {
+            None => pipeline::WhipInputOptions {
                 #[cfg(not(feature = "vk-video"))]
                 video_preferences: vec![
-                    decoder::VideoDecoderOptions::FfmpegH264,
-                    decoder::VideoDecoderOptions::FfmpegVp8,
-                    decoder::VideoDecoderOptions::FfmpegVp9,
+                    pipeline::VideoDecoderOptions::FfmpegH264,
+                    pipeline::VideoDecoderOptions::FfmpegVp8,
+                    pipeline::VideoDecoderOptions::FfmpegVp9,
                 ],
                 #[cfg(feature = "vk-video")]
                 video_preferences: vec![
-                    decoder::VideoDecoderOptions::VulkanH264,
-                    decoder::VideoDecoderOptions::FfmpegH264,
-                    decoder::VideoDecoderOptions::FfmpegVp8,
-                    decoder::VideoDecoderOptions::FfmpegVp9,
+                    pipeline::VideoDecoderOptions::VulkanH264,
+                    pipeline::VideoDecoderOptions::FfmpegH264,
+                    pipeline::VideoDecoderOptions::FfmpegVp8,
+                    pipeline::VideoDecoderOptions::FfmpegVp9,
                 ],
                 bearer_token,
             },
         };
 
-        let input_options = input::InputOptions::Whip(whip_options);
+        let input_options = pipeline::ProtocolInputOptions::Whip(whip_options);
 
-        let queue_options = queue::QueueInputOptions {
+        let queue_options = compositor_pipeline::QueueInputOptions {
             required: required.unwrap_or(false),
             offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
             buffer_duration: None,

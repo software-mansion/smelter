@@ -1,23 +1,7 @@
 use core::panic;
 use std::{fs::File, io::Write, path::PathBuf, sync::Arc, time::Duration};
 
-use compositor_pipeline::{
-    audio_mixer::{AudioChannels, AudioMixingParams, InputParams, MixingStrategy},
-    pipeline::{
-        decoder,
-        encoder::{
-            self, ffmpeg_h264, AudioEncoderOptions, AudioEncoderPreset, VideoEncoderOptions,
-        },
-        input::{
-            mp4::{Mp4Options, Source},
-            InputOptions,
-        },
-        output::EncodedDataOutputOptions,
-        AudioCodec, EncodedChunkKind, EncoderOutputEvent, Pipeline, PipelineOutputEndCondition,
-        RegisterInputOptions, RegisterOutputOptions, VideoCodec,
-    },
-    queue::QueueInputOptions,
-};
+use compositor_pipeline::*;
 use compositor_render::{
     error::ErrorStack,
     scene::{Component, InputStreamComponent},
@@ -55,50 +39,48 @@ fn main() {
 
     let output_options = RegisterOutputOptions {
         output_options: EncodedDataOutputOptions {
-            video: Some(VideoEncoderOptions::H264(ffmpeg_h264::Options {
-                preset: ffmpeg_h264::EncoderPreset::Ultrafast,
+            video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
+                preset: FfmpegH264EncoderPreset::Ultrafast,
                 resolution: Resolution {
                     width: 1280,
                     height: 720,
                 },
-                pixel_format: encoder::OutputPixelFormat::YUV420P,
+                pixel_format: OutputPixelFormat::YUV420P,
                 raw_options: vec![],
             })),
-            audio: Some(AudioEncoderOptions::Opus(
-                encoder::opus::OpusEncoderOptions {
-                    channels: AudioChannels::Stereo,
-                    preset: AudioEncoderPreset::Voip,
-                    sample_rate: 48000,
-                    forward_error_correction: false,
-                    packet_loss: 0,
-                },
-            )),
+            audio: Some(AudioEncoderOptions::Opus(OpusEncoderOptions {
+                channels: AudioChannels::Stereo,
+                preset: OpusEncoderPreset::Voip,
+                sample_rate: 48000,
+                forward_error_correction: false,
+                packet_loss: 0,
+            })),
         },
-        video: Some(compositor_pipeline::pipeline::OutputVideoOptions {
+        video: Some(RegisterOutputVideoOptions {
             initial: Component::InputStream(InputStreamComponent {
                 id: None,
                 input_id: input_id.clone(),
             }),
             end_condition: PipelineOutputEndCondition::Never,
         }),
-        audio: Some(compositor_pipeline::pipeline::OutputAudioOptions {
-            initial: AudioMixingParams {
-                inputs: vec![InputParams {
+        audio: Some(RegisterOutputAudioOptions {
+            initial: AudioMixerConfig {
+                inputs: vec![AudioMixerInputConfig {
                     input_id: input_id.clone(),
                     volume: 1.0,
                 }],
             },
-            mixing_strategy: MixingStrategy::SumClip,
+            mixing_strategy: AudioMixingStrategy::SumClip,
             channels: AudioChannels::Stereo,
             end_condition: PipelineOutputEndCondition::Never,
         }),
     };
 
     let input_options = RegisterInputOptions {
-        input_options: InputOptions::Mp4(Mp4Options {
-            source: Source::File(root_dir.join(BUNNY_FILE_PATH)),
+        input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
+            source: Mp4InputSource::File(root_dir.join(BUNNY_FILE_PATH)),
             should_loop: false,
-            video_decoder: decoder::VideoDecoderOptions::FfmpegH264,
+            video_decoder: VideoDecoderOptions::FfmpegH264,
         }),
         queue_options: QueueInputOptions {
             required: true,
@@ -124,15 +106,15 @@ fn main() {
         if index > 3000 {
             return;
         }
-        let EncoderOutputEvent::Data(chunk) = chunk else {
+        let EncodedOutputEvent::Data(chunk) = chunk else {
             return;
         };
         match chunk.kind {
-            EncodedChunkKind::Video(VideoCodec::H264) => h264_dump.write_all(&chunk.data).unwrap(),
-            EncodedChunkKind::Video(VideoCodec::Vp8) => unreachable!(),
-            EncodedChunkKind::Video(VideoCodec::Vp9) => unreachable!(),
-            EncodedChunkKind::Audio(AudioCodec::Opus) => opus_dump.write_all(&chunk.data).unwrap(),
-            EncodedChunkKind::Audio(AudioCodec::Aac) => panic!("AAC is not supported on output"),
+            MediaKind::Video(VideoCodec::H264) => h264_dump.write_all(&chunk.data).unwrap(),
+            MediaKind::Video(VideoCodec::Vp8) => unreachable!(),
+            MediaKind::Video(VideoCodec::Vp9) => unreachable!(),
+            MediaKind::Audio(AudioCodec::Opus) => opus_dump.write_all(&chunk.data).unwrap(),
+            MediaKind::Audio(AudioCodec::Aac) => panic!("AAC is not supported on output"),
         }
     }
 }
