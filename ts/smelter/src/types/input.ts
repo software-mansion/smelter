@@ -90,6 +90,11 @@ export type RegisterWhipInput = {
    */
   video?: InputWhipVideoOptions | null;
   /**
+   * Bearer token used for authenticating WHIP connection. If not provided, a random token
+   * will be generated and returned from the register input call.
+   */
+  bearerToken?: string;
+  /**
    * (**default=`false`**) If input is required and the stream is not delivered
    * on time, then Smelter will delay producing output frames.
    */
