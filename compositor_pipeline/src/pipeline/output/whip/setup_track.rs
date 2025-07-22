@@ -2,11 +2,12 @@ use compositor_render::OutputId;
 use crossbeam_channel::Sender;
 use rand::Rng;
 use rtcp::{
-    payload_feedbacks::picture_loss_indication::PictureLossIndication, sender_report::SenderReport,
+    payload_feedbacks::picture_loss_indication::PictureLossIndication,
+    receiver_report::ReceiverReport,
 };
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{debug, info, span, trace, warn, Level};
+use tracing::{debug, info, span, trace, warn, Instrument, Level};
 use webrtc::{
     api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
     rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender},
@@ -216,22 +217,30 @@ fn handle_packet_loss_requests(
     sender: Arc<RTCRtpSender>,
     // packet_loss_sender: Sender<()>,
 ) {
-    ctx.tokio_rt.spawn(async move {
-        let _span = span!(Level::DEBUG, "[Audio Sender Report]",);
-        loop {
-            if let Ok((packets, _)) = sender.read_rtcp().await {
-                for packet in packets {
-                    if let Some(report) = packet.as_any().downcast_ref::<SenderReport>() {
-                        trace!(
-                            ssrc = report.ssrc,
-                            packet_count = report.packet_count,
-                            "Sender report received!",
-                        );
+    let span = span!(Level::DEBUG, " Packet loss indicator",);
+    ctx.tokio_rt.spawn(
+        async move {
+            loop {
+                if let Ok((packets, _)) = sender.read_rtcp().await {
+                    for packet in packets {
+                        trace!(packet_type = ?packet.header().packet_type);
+                        if let Some(report) = packet.as_any().downcast_ref::<ReceiverReport>() {
+                            trace!(ssrc = report.ssrc, "Sender report received!",);
+
+                            for reception_report in &report.reports {
+                                trace!(
+                                    reception_ssrc = reception_report.ssrc,
+                                    total_lost = reception_report.total_lost,
+                                    "Received reception report",
+                                );
+                            }
+                        }
                     }
                 }
             }
         }
-    });
+        .instrument(span),
+    );
 }
 
 fn handle_keyframe_requests(
