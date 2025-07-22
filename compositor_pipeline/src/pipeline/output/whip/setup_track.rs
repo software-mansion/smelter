@@ -2,7 +2,7 @@ use compositor_render::OutputId;
 use crossbeam_channel::Sender;
 use rand::Rng;
 use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, span, trace, warn, Instrument, Level};
 use webrtc::{
@@ -214,10 +214,14 @@ const RTC_OUTBOUND_RTP_AUDIO_STREAM: &str = "RTCOutboundRTPAudioStream_";
 const RTC_REMOTE_INBOUND_RTP_AUDIO_STREAM: &str = "RTCRemoteInboundRTPAudioStream_";
 
 fn handle_packet_loss_requests(ctx: &Arc<PipelineCtx>, pc: PeerConnection, ssrc: u32) {
+    let mut cumulative_packets_sent: u64 = 0;
+    let mut cumulative_packets_lost: u64 = 0;
+
     let span = span!(Level::DEBUG, "Packet loss handle");
     ctx.tokio_rt.spawn(
         async move {
             loop {
+                tokio::time::sleep(Duration::from_secs(10)).await;
                 let stats = pc.get_stats().await.reports;
                 let outbound_id = String::from(RTC_OUTBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
                 let remote_inbound_id =
@@ -251,15 +255,26 @@ fn handle_packet_loss_requests(ctx: &Arc<PipelineCtx>, pc: PeerConnection, ssrc:
                     }
                 };
 
-                let packets_sent = outbound_stats.packets_sent as f64;
+                let packets_sent: u64 = outbound_stats.packets_sent;
                 // This can be lower than 0 in case of duplicates
-                let packets_lost = if remote_inbound_stats.packets_lost < 0 {
-                    0.0
+                let packets_lost: u64 = if remote_inbound_stats.packets_lost < 0 {
+                    0u64
                 } else {
-                    remote_inbound_stats.packets_lost as f64
+                    remote_inbound_stats.packets_lost as u64
                 };
 
-                trace!(packets_sent, packets_lost,);
+                let packets_sent_since_last = cumulative_packets_sent - packets_sent;
+                let packets_lost_since_last = cumulative_packets_lost - packets_lost;
+
+                // I don't want the system to panic in case of some bug
+                let packet_loss_percentage: i32 = if packets_sent_since_last != 0 {
+                    f64::round(packets_lost_since_last as f64 / packets_sent_since_last as f64)
+                        as i32
+                } else {
+                    0
+                };
+
+                trace!(packets_sent, packets_lost, packet_loss_percentage);
             }
         }
         .instrument(span),
