@@ -6,10 +6,8 @@ use bytes::Bytes;
 use compositor_pipeline::{
     pipeline::{
         self, decoder,
-        input::{
-            self,
-            rtp::{self, AudioSpecificConfig},
-        },
+        input::{self},
+        rtp::{self, AudioSpecificConfig},
     },
     queue,
 };
@@ -36,7 +34,7 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
             return Err(TypeError::new(NO_VIDEO_AUDIO_SPEC));
         }
 
-        let input_options = input::InputOptions::Rtp(input::rtp::RtpInputOptions {
+        let input_options = input::InputOptions::Rtp(rtp::RtpInputOptions {
             port: port.try_into()?,
             video: video
                 .as_ref()

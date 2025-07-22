@@ -10,7 +10,6 @@ use tracing::{debug, error, span, trace, warn, Level};
 use webrtc_util::Unmarshal;
 
 use self::{tcp_server::start_tcp_server_thread, udp::start_udp_reader_thread};
-use super::{Input, InputInitInfo};
 use crate::{
     audio_mixer::InputSamples,
     error::{DecoderInitError, InputInitError},
@@ -24,13 +23,16 @@ use crate::{
             vulkan_h264::VulkanH264Decoder,
             DecodedDataReceiver, VideoDecoderOptions,
         },
-        input::rtp::{
-            depayloader::DepayloaderOptions,
-            rtp_audio_thread::{spawn_rtp_audio_thread, RtpAudioTrackThreadHandle},
-            rtp_video_thread::{spawn_rtp_video_thread, RtpVideoTrackThreadHandle},
+        input::{Input, InputInitInfo},
+        rtp::{
+            depayloader::{AudioSpecificConfig, DepayloaderOptions},
+            rtp_input::{
+                rtp_audio_thread::{spawn_rtp_audio_thread, RtpAudioTrackThreadHandle},
+                rtp_video_thread::{spawn_rtp_video_thread, RtpVideoTrackThreadHandle},
+            },
+            util::BindToPortError,
+            RequestedPort, RtpAacDepayloaderMode, RtpPacket, TransportProtocol,
         },
-        output::rtp::RtpPacket,
-        rtp::{BindToPortError, RequestedPort, TransportProtocol},
         PipelineCtx,
     },
     queue::PipelineEvent,
@@ -42,19 +44,7 @@ mod rtp_video_thread;
 mod tcp_server;
 mod udp;
 
-pub(crate) mod depayloader;
-
 pub(crate) use rollover_state::RolloverState;
-
-pub use depayloader::AudioSpecificConfig;
-
-/// [RFC 3640, section 3.3.5. Low Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.5)
-/// [RFC 3640, section 3.3.6. High Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.6)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RtpAacDepayloaderMode {
-    LowBitrate,
-    HighBitrate,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RtpAudioOptions {
@@ -80,7 +70,7 @@ pub struct RtpInput {
 }
 
 impl RtpInput {
-    pub(super) fn new_input(
+    pub fn new_input(
         ctx: Arc<PipelineCtx>,
         input_id: InputId,
         opts: RtpInputOptions,

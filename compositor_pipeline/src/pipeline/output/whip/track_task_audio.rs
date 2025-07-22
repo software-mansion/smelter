@@ -10,11 +10,11 @@ use crate::{
     error::EncoderInitError,
     pipeline::{
         encoder::{AudioEncoder, AudioEncoderOptionsExt, AudioEncoderStream},
-        output::rtp::{
+        resampler::encoder_resampler::ResampledForEncoderStream,
+        rtp::{
             payloader::{PayloaderOptions, PayloaderStream},
             RtpPacket,
         },
-        resampler::encoder_resampler::ResampledForEncoderStream,
         PipelineCtx,
     },
     queue::PipelineEvent,

@@ -7,8 +7,7 @@ use tracing::{info, trace, warn};
 
 use crate::{
     pipeline::{
-        input::rtp::RtpAacDepayloaderMode,
-        output::rtp::RtpPacket,
+        rtp::RtpPacket,
         types::{AudioCodec, EncodedChunk, EncodedChunkKind, IsKeyframe, VideoCodec},
     },
     queue::PipelineEvent,
@@ -19,6 +18,14 @@ pub use aac_depayloader::{AacDepayloader, AacDepayloadingError};
 
 mod aac_asc;
 mod aac_depayloader;
+
+/// [RFC 3640, section 3.3.5. Low Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.5)
+/// [RFC 3640, section 3.3.6. High Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.6)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RtpAacDepayloaderMode {
+    LowBitrate,
+    HighBitrate,
+}
 
 #[derive(Debug)]
 pub enum DepayloaderOptions {

@@ -4,12 +4,12 @@ use crate::{
     error::InputInitError,
     pipeline::{
         input::hls::{HlsInput, HlsInputOptions},
+        rtp::{RtpInput, RtpInputOptions},
         webrtc::{WhipInput, WhipInputOptions},
     },
 };
 
 use compositor_render::InputId;
-use rtp::{RtpInput, RtpInputOptions};
 
 use self::mp4::{Mp4Input, Mp4Options};
 
@@ -20,7 +20,6 @@ pub mod decklink;
 pub mod hls;
 pub mod mp4;
 pub mod raw_data;
-pub mod rtp;
 
 pub enum Input {
     Rtp(RtpInput),

@@ -19,10 +19,8 @@ use crate::pipeline::{
         ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder, ffmpeg_vp9::FfmpegVp9Encoder,
         opus::OpusEncoder, AudioEncoderOptions, VideoEncoderOptions,
     },
-    output::{
-        rtp::payloader::{PayloadedCodec, PayloaderOptions},
-        whip::track_task_audio::spawn_audio_track_thread,
-    },
+    output::whip::track_task_audio::spawn_audio_track_thread,
+    rtp::payloader::{PayloadedCodec, PayloaderOptions},
     PipelineCtx,
 };
 
