@@ -3,7 +3,10 @@ use compositor_api::Resolution;
 use serde_json::json;
 use std::time::Duration;
 
-use integration_tests::{examples::{self, run_example}, ffmpeg::start_ffmpeg_rtmp_receive};
+use integration_tests::{
+    examples::{self, run_example},
+    ffmpeg::start_ffmpeg_rtmp_receive,
+};
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
     width: 1280,
