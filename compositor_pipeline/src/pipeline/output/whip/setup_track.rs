@@ -1,7 +1,10 @@
 use compositor_render::OutputId;
 use crossbeam_channel::Sender;
 use rand::Rng;
-use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use rtcp::{
+    payload_feedbacks::picture_loss_indication::PictureLossIndication,
+    receiver_report::ReceiverReport,
+};
 use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, span, trace, warn, Instrument, Level};
@@ -204,7 +207,7 @@ pub async fn setup_audio_track(
         AudioEncoderOptions::Aac(_options) => return Err(WhipError::UnsupportedCodec("aac")),
     }?;
 
-    handle_packet_loss_requests(ctx, pc, ssrc);
+    handle_packet_loss_requests(ctx, pc, rtc_sender.clone(), ssrc);
 
     Ok((handle, WhipSenderTrack { receiver, track }))
 }
@@ -213,11 +216,28 @@ pub async fn setup_audio_track(
 const RTC_OUTBOUND_RTP_AUDIO_STREAM: &str = "RTCOutboundRTPAudioStream_";
 const RTC_REMOTE_INBOUND_RTP_AUDIO_STREAM: &str = "RTCRemoteInboundRTPAudioStream_";
 
-fn handle_packet_loss_requests(ctx: &Arc<PipelineCtx>, pc: PeerConnection, ssrc: u32) {
-    let mut cumulative_packets_sent: u64 = 0;
-    let mut cumulative_packets_lost: u64 = 0;
+fn handle_packet_loss_requests(
+    ctx: &Arc<PipelineCtx>,
+    pc: PeerConnection,
+    rtc_sender: Arc<RTCRtpSender>,
+    ssrc: u32,
+) {
+    let mut cumulative_packets_sent_report: u64 = 0;
+    let mut cumulative_packets_lost_report: u64 = 0;
 
     let span = span!(Level::DEBUG, "Packet loss handle");
+
+    ctx.tokio_rt.spawn(
+        async move {
+            loop {
+                if let Err(e) = rtc_sender.read_rtcp().await {
+                    debug!("Error whilre reading rtcp: {e}");
+                }
+            }
+        }
+        .instrument(span.clone()),
+    );
+
     ctx.tokio_rt.spawn(
         async move {
             loop {
@@ -263,18 +283,26 @@ fn handle_packet_loss_requests(ctx: &Arc<PipelineCtx>, pc: PeerConnection, ssrc:
                     remote_inbound_stats.packets_lost as u64
                 };
 
-                let packets_sent_since_last = cumulative_packets_sent - packets_sent;
-                let packets_lost_since_last = cumulative_packets_lost - packets_lost;
+                let packets_sent_since_last_report = packets_sent - cumulative_packets_sent_report;
+                let packets_lost_since_last_report = packets_lost - cumulative_packets_lost_report;
 
                 // I don't want the system to panic in case of some bug
-                let packet_loss_percentage: i32 = if packets_sent_since_last != 0 {
-                    f64::round(packets_lost_since_last as f64 / packets_sent_since_last as f64)
-                        as i32
+                let packet_loss_percentage: i32 = if packets_sent_since_last_report != 0 {
+                    f64::round(
+                        100.0 * packets_lost_since_last_report as f64
+                            / packets_sent_since_last_report as f64,
+                    ) as i32
                 } else {
                     0
                 };
 
-                trace!(packets_sent, packets_lost, packet_loss_percentage);
+                cumulative_packets_sent_report = packets_sent;
+                cumulative_packets_lost_report = packets_lost;
+
+                trace!(
+                    packets_sent_since_last_report,
+                    packets_lost_since_last_report,
+                );
             }
         }
         .instrument(span),
