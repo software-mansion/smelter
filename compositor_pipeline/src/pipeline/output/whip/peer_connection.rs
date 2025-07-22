@@ -22,6 +22,7 @@ use webrtc::{
         rtp_sender::RTCRtpSender,
         RTCPFeedback,
     },
+    stats::StatsReport,
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
@@ -141,6 +142,10 @@ impl PeerConnection {
 
     pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
         self.pc.on_ice_candidate(f);
+    }
+
+    pub async fn get_stats(&self) -> StatsReport {
+        self.pc.get_stats().await
     }
 }
 

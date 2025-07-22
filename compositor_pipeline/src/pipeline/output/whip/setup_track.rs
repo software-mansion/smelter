@@ -1,16 +1,14 @@
 use compositor_render::OutputId;
 use crossbeam_channel::Sender;
 use rand::Rng;
-use rtcp::{
-    payload_feedbacks::picture_loss_indication::PictureLossIndication,
-    receiver_report::ReceiverReport,
-};
+use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{debug, info, span, trace, warn, Instrument, Level};
+use tracing::{debug, error, info, span, trace, warn, Instrument, Level};
 use webrtc::{
     api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
     rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender},
+    stats::StatsReportType,
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
@@ -19,7 +17,7 @@ use crate::pipeline::{
         ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder, ffmpeg_vp9::FfmpegVp9Encoder,
         opus::OpusEncoder, AudioEncoderOptions, VideoEncoderOptions,
     },
-    output::whip::track_task_audio::spawn_audio_track_thread,
+    output::whip::{track_task_audio::spawn_audio_track_thread, PeerConnection},
     rtp::payloader::{PayloadedCodec, PayloaderOptions},
     PipelineCtx,
 };
@@ -148,6 +146,7 @@ pub async fn setup_audio_track(
     ctx: &Arc<PipelineCtx>,
     output_id: &OutputId,
     rtc_sender: Arc<RTCRtpSender>,
+    pc: PeerConnection,
     options: &AudioWhipOptions,
 ) -> Result<(WhipAudioTrackThreadHandle, WhipSenderTrack), WhipError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
@@ -205,36 +204,62 @@ pub async fn setup_audio_track(
         AudioEncoderOptions::Aac(_options) => return Err(WhipError::UnsupportedCodec("aac")),
     }?;
 
-    handle_packet_loss_requests(ctx, rtc_sender.clone());
+    handle_packet_loss_requests(ctx, pc, ssrc);
 
     Ok((handle, WhipSenderTrack { receiver, track }))
 }
 
-fn handle_packet_loss_requests(
-    ctx: &Arc<PipelineCtx>,
-    sender: Arc<RTCRtpSender>,
-    // packet_loss_sender: Sender<()>,
-) {
-    let span = span!(Level::DEBUG, " Packet loss indicator",);
+// Identifiers used in stats HashMap returnet by RTCPeerConnection::get_stats()
+const RTC_OUTBOUND_RTP_AUDIO_STREAM: &str = "RTCOutboundRTPAudioStream_";
+const RTC_REMOTE_INBOUND_RTP_AUDIO_STREAM: &str = "RTCRemoteInboundRTPAudioStream_";
+
+fn handle_packet_loss_requests(ctx: &Arc<PipelineCtx>, pc: PeerConnection, ssrc: u32) {
+    let span = span!(Level::DEBUG, "Packet loss handle");
     ctx.tokio_rt.spawn(
         async move {
             loop {
-                if let Ok((packets, _)) = sender.read_rtcp().await {
-                    for packet in packets {
-                        trace!(packet_type = ?packet.header().packet_type);
-                        if let Some(report) = packet.as_any().downcast_ref::<ReceiverReport>() {
-                            trace!(ssrc = report.ssrc, "Sender report received!",);
+                let stats = pc.get_stats().await.reports;
+                let outbound_id = String::from(RTC_OUTBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
+                let remote_inbound_id =
+                    String::from(RTC_REMOTE_INBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
 
-                            for reception_report in &report.reports {
-                                trace!(
-                                    reception_ssrc = reception_report.ssrc,
-                                    total_lost = reception_report.total_lost,
-                                    "Received reception report",
-                                );
-                            }
+                let outbound_stats = match stats.get(&outbound_id) {
+                    Some(report) => match report {
+                        StatsReportType::OutboundRTP(report) => report,
+                        _ => {
+                            error!("Invalid report type for given key! (This should not happen)");
+                            continue;
                         }
+                    },
+                    None => {
+                        debug!("OutboundRTP report is empty!");
+                        continue;
                     }
-                }
+                };
+
+                let remote_inbound_stats = match stats.get(&remote_inbound_id) {
+                    Some(report) => match report {
+                        StatsReportType::RemoteInboundRTP(report) => report,
+                        _ => {
+                            error!("Invalid report type for given key! (This should not happen)");
+                            continue;
+                        }
+                    },
+                    None => {
+                        debug!("OutboundRTP report is empty!");
+                        continue;
+                    }
+                };
+
+                let packets_sent = outbound_stats.packets_sent as f64;
+                // This can be lower than 0 in case of duplicates
+                let packets_lost = if remote_inbound_stats.packets_lost < 0 {
+                    0.0
+                } else {
+                    remote_inbound_stats.packets_lost as f64
+                };
+
+                trace!(packets_sent, packets_lost,);
             }
         }
         .instrument(span),
