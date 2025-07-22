@@ -3,12 +3,15 @@ use compositor_api::Resolution;
 use serde_json::json;
 use std::time::Duration;
 
-use integration_tests::examples::{self, run_example};
+use integration_tests::{examples::{self, run_example}, ffmpeg::start_ffmpeg_rtmp_receive};
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
     width: 1280,
     height: 720,
 };
+
+const IP: &str = "127.0.0.1";
+const OUTPUT_PORT: u16 = 9002;
 
 fn main() {
     run_example(client_code);
@@ -22,6 +25,8 @@ fn client_code() -> Result<()> {
         return Ok(());
     }
 
+    start_ffmpeg_rtmp_receive(OUTPUT_PORT)?;
+
     examples::post("start", &json!({}))?;
     examples::post(
         "input/input_1/register",
@@ -34,7 +39,7 @@ fn client_code() -> Result<()> {
     examples::post(
         "output/output_1/register",
         &json!({
-            "url": "rtmp://0.0.0.0:9002",
+            "url": format!("rtmp://{IP}:{OUTPUT_PORT}"),
             "type": "rtmp_client",
             "video": {
                 "resolution": {
