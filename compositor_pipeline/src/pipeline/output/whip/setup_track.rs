@@ -333,8 +333,8 @@ fn handle_packet_loss_requests(
                     packets_sent_since_last_report,
                     packets_lost_since_last_report,
                 );
-                if let Err(e) = packet_loss_sender.send(packet_loss_percentage) {
-                    warn!(%e, "Error while sending packet loss to decoder.");
+                if let Err(_) = packet_loss_sender.send(packet_loss_percentage) {
+                    debug!("Packet loss channel closed.");
                 }
             }
         }

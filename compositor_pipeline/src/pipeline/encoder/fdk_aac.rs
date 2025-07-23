@@ -151,6 +151,10 @@ impl AudioEncoder for FdkAacEncoder {
             vec![]
         })
     }
+
+    // For AAC it does completely nothing, however it is needed for trait
+    // implementation
+    fn set_packet_loss(&mut self, _packet_loss: i32) {}
 }
 
 impl FdkAacEncoder {

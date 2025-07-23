@@ -3,6 +3,7 @@ use std::{iter, sync::Arc};
 use compositor_render::{Frame, OutputFrameFormat, Resolution};
 use ffmpeg_next::format::Pixel;
 use tokio::sync::watch;
+use tracing::debug;
 
 use crate::{
     audio_mixer::{AudioChannels, OutputSamples},
@@ -158,6 +159,7 @@ pub(crate) trait AudioEncoder: Sized {
     ) -> Result<(Self, AudioEncoderConfig), EncoderInitError>;
     fn encode(&mut self, samples: OutputSamples) -> Vec<EncodedChunk>;
     fn flush(&mut self) -> Vec<EncodedChunk>;
+    fn set_packet_loss(&mut self, packet_loss: i32);
 }
 
 pub(super) struct VideoEncoderStreamContext {
@@ -280,6 +282,16 @@ where
             },
         ))
     }
+
+    fn read_packet_loss(&mut self) -> Option<i32> {
+        let packet_loss_changed = self.packet_loss_receiver.has_changed().unwrap_or(false);
+        if packet_loss_changed {
+            let packet_loss = self.packet_loss_receiver.borrow_and_update().to_owned();
+            Some(packet_loss)
+        } else {
+            None
+        }
+    }
 }
 
 impl<Encoder, Source> Iterator for AudioEncoderStream<Encoder, Source>
@@ -292,6 +304,9 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
             Some(PipelineEvent::Data(samples)) => {
+                if let Some(packet_loss) = self.read_packet_loss() {
+                    self.encoder.set_packet_loss(packet_loss);
+                }
                 let chunks = self.encoder.encode(samples);
                 Some(chunks.into_iter().map(PipelineEvent::Data).collect())
             }
