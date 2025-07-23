@@ -145,6 +145,33 @@ pub async fn setup_video_track(
     Ok((handle, WhipSenderTrack { receiver, track }))
 }
 
+fn handle_keyframe_requests(
+    ctx: &Arc<PipelineCtx>,
+    sender: Arc<RTCRtpSender>,
+    keyframe_sender: Sender<()>,
+) {
+    ctx.tokio_rt.spawn(async move {
+        loop {
+            if let Ok((packets, _)) = sender.read_rtcp().await {
+                for packet in packets {
+                    if packet
+                        .as_any()
+                        .downcast_ref::<PictureLossIndication>()
+                        .is_some()
+                    {
+                        info!("Request keyframe");
+                        if let Err(err) = keyframe_sender.send(()) {
+                            warn!(%err, "Failed to send keyframe request to the encoder.");
+                        };
+                    }
+                }
+            } else {
+                debug!("Failed to read RTCP packets from the sender.");
+            }
+        }
+    });
+}
+
 pub async fn setup_audio_track(
     ctx: &Arc<PipelineCtx>,
     output_id: &OutputId,
@@ -307,31 +334,4 @@ fn handle_packet_loss_requests(
         }
         .instrument(span),
     );
-}
-
-fn handle_keyframe_requests(
-    ctx: &Arc<PipelineCtx>,
-    sender: Arc<RTCRtpSender>,
-    keyframe_sender: Sender<()>,
-) {
-    ctx.tokio_rt.spawn(async move {
-        loop {
-            if let Ok((packets, _)) = sender.read_rtcp().await {
-                for packet in packets {
-                    if packet
-                        .as_any()
-                        .downcast_ref::<PictureLossIndication>()
-                        .is_some()
-                    {
-                        info!("Request keyframe");
-                        if let Err(err) = keyframe_sender.send(()) {
-                            warn!(%err, "Failed to send keyframe request to the encoder.");
-                        };
-                    }
-                }
-            } else {
-                debug!("Failed to read RTCP packets from the sender.");
-            }
-        }
-    });
 }
