@@ -318,10 +318,11 @@ fn handle_packet_loss_requests(
 
                 // I don't want the system to panic in case of some bug
                 let packet_loss_percentage: i32 = if packets_sent_since_last_report != 0 {
-                    f64::round(
+                    let loss = f64::round(
                         100.0 * packets_lost_since_last_report as f64
                             / packets_sent_since_last_report as f64,
-                    ) as i32
+                    ) as i32;
+                    i32::min(100, loss + 5)
                 } else {
                     0
                 };
