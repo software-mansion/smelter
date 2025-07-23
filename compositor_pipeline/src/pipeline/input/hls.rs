@@ -12,11 +12,13 @@ use crate::{
     error::InputInitError,
     pipeline::{
         decoder::{
-            self, decoder_thread_audio::spawn_audio_decoder_thread,
-            decoder_thread_video::spawn_video_decoder_thread, fdk_aac, ffmpeg_h264,
+            self,
+            decoder_thread_audio::spawn_audio_decoder_thread,
+            decoder_thread_video::spawn_video_decoder_thread,
+            fdk_aac, ffmpeg_h264,
+            h264_utils::{H264AVCDecoderConfig, H264AVCDecoderConfigError},
             DecodedDataReceiver, DecoderThreadHandle,
         },
-        input::hls::chunk_repacker::ChunkRepacker,
         types::{EncodedChunk, IsKeyframe},
         AudioCodec, EncodedChunkKind, PipelineCtx, VideoCodec,
     },
@@ -33,13 +35,11 @@ use ffmpeg_next::{
     format::context,
     media::Type,
     util::interrupt,
-    Dictionary, Packet,
+    Dictionary, Packet, Stream,
 };
 use tracing::{debug, error, span, warn, Level};
 
 use super::{Input, InputInitInfo};
-
-mod chunk_repacker;
 
 #[derive(Debug, Clone)]
 pub struct HlsInputOptions {
@@ -120,18 +120,7 @@ impl HlsInput {
             Some(stream) => {
                 // not tested it was always null, but audio is in ADTS, so config is not
                 // necessary
-                let asc = unsafe {
-                    let codecpar = (*stream.as_ptr()).codecpar;
-                    let size = (*codecpar).extradata_size;
-                    if size > 0 {
-                        Some(bytes::Bytes::copy_from_slice(slice::from_raw_parts(
-                            (*codecpar).extradata,
-                            size as usize,
-                        )))
-                    } else {
-                        None
-                    }
-                };
+                let asc = read_extra_data(&stream);
                 let (samples_sender, samples_receiver) = bounded(5);
                 let state =
                     StreamState::new(input_start_time, ctx.queue_sync_time, stream.time_base());
@@ -160,10 +149,25 @@ impl HlsInput {
                 let (frame_sender, frame_receiver) = bounded(5);
                 let state =
                     StreamState::new(input_start_time, ctx.queue_sync_time, stream.time_base());
+
+                let extra_data = read_extra_data(&stream);
+                let h264_config = extra_data
+                    .map(H264AVCDecoderConfig::parse)
+                    .transpose()
+                    .unwrap_or_else(|e| match e {
+                        H264AVCDecoderConfigError::NotAVCC => None,
+                        _ => {
+                            warn!("Could not parse extra data: {e}");
+                            None
+                        }
+                    });
+
                 let decoder_result = spawn_video_decoder_thread::<
                     ffmpeg_h264::FfmpegH264Decoder,
                     2000,
-                >(ctx.clone(), input_id.clone(), frame_sender);
+                >(
+                    ctx.clone(), input_id.clone(), h264_config, frame_sender
+                );
                 let handle = match decoder_result {
                     Ok(handle) => handle,
                     Err(err) => {
@@ -171,11 +175,8 @@ impl HlsInput {
                         return;
                     }
                 };
-                let repacker = ChunkRepacker::new(&stream);
-                (
-                    Some((stream.index(), handle, state, repacker)),
-                    Some(frame_receiver),
-                )
+
+                (Some((stream.index(), handle, state)), Some(frame_receiver))
             }
             None => (None, None),
         };
@@ -202,13 +203,11 @@ impl HlsInput {
                 continue;
             }
 
-            if let Some((index, ref handle, ref mut state, ref mut repacker)) = video {
+            if let Some((index, ref handle, ref mut state)) = video {
                 if packet.stream() == index {
                     let (pts, dts, is_discontinuity) = state.pts_dts_from_packet(&packet);
 
-                    let data = Bytes::copy_from_slice(packet.data().unwrap());
-                    let data = repacker.repack(data);
-
+                    // Some streams give us packets "from the past", which get dropped by the queue
                     // resulting in no video or blinking. This heuritic moves the next packets forward in
                     // time. We only care about video buffer, audio uses the same offset as video
                     // to avoid audio sync issues.
@@ -221,7 +220,7 @@ impl HlsInput {
                     let pts = pts + pts_offset;
 
                     let chunk = EncodedChunk {
-                        data,
+                        data: Bytes::copy_from_slice(packet.data().unwrap()),
                         pts,
                         dts,
                         is_keyframe: IsKeyframe::Unknown,
@@ -285,7 +284,7 @@ impl HlsInput {
             }
         }
 
-        if let Some((_, handle, _, _)) = video {
+        if let Some((_, handle, _)) = video {
             if handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
                 debug!("Failed to send EOS message.")
             }
@@ -293,12 +292,12 @@ impl HlsInput {
     }
 
     fn did_buffer_enough(
-        video: Option<&(usize, DecoderThreadHandle, StreamState, ChunkRepacker)>,
+        video: Option<&(usize, DecoderThreadHandle, StreamState)>,
         audio: Option<&(usize, DecoderThreadHandle, StreamState)>,
     ) -> bool {
         let is_video_ready = video
             .as_ref()
-            .map(|(_, handle, _, _)| handle.chunk_sender.len() >= HlsInput::PREFERABLE_BUFFER_SIZE);
+            .map(|(_, handle, _)| handle.chunk_sender.len() >= HlsInput::PREFERABLE_BUFFER_SIZE);
         let is_audio_ready = audio
             .as_ref()
             .map(|(_, handle, _)| handle.chunk_sender.len() >= HlsInput::PREFERABLE_BUFFER_SIZE);
@@ -428,6 +427,21 @@ where
             },
 
             e => Err(ffmpeg_next::Error::from(e)),
+        }
+    }
+}
+
+fn read_extra_data(stream: &Stream<'_>) -> Option<Bytes> {
+    unsafe {
+        let codecpar = (*stream.as_ptr()).codecpar;
+        let size = (*codecpar).extradata_size;
+        if size > 0 {
+            Some(Bytes::copy_from_slice(slice::from_raw_parts(
+                (*codecpar).extradata,
+                size as usize,
+            )))
+        } else {
+            None
         }
     }
 }
