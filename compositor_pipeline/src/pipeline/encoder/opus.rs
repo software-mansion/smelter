@@ -64,11 +64,8 @@ impl AudioEncoder for OpusEncoder {
     }
 
     fn set_packet_loss(&mut self, packet_loss: i32) {
-        match self.encoder.set_packet_loss_perc(packet_loss) {
-            Ok(_) => {}
-            Err(e) => {
-                error!(%e, "Error while setting opus encoder packet loss.");
-            }
+        if let Err(e) = self.encoder.set_packet_loss_perc(packet_loss) {
+            error!(%e, "Error while setting opus encoder packet loss.");
         }
     }
 
