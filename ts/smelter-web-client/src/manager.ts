@@ -10,7 +10,7 @@ import { retry, sleep } from './utils';
 import { WebSocketConnection } from './ws';
 import { getSmelterStatus } from './getSmelterStatus';
 
-export type InstanceOptions = {
+export type SmelterInstanceOptions = {
   url: string | URL;
 };
 
@@ -18,7 +18,7 @@ class RemoteInstanceManager implements SmelterManager {
   private url: URL;
   private wsConnection: WebSocketConnection;
 
-  constructor(opts: InstanceOptions) {
+  constructor(opts: SmelterInstanceOptions) {
     let url: URL;
     if (opts.url instanceof URL) {
       url = opts.url;
