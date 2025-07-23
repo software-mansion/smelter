@@ -1,12 +1,8 @@
 use compositor_render::OutputId;
-use crossbeam_channel::Sender;
 use rand::Rng;
-use rtcp::{
-    payload_feedbacks::picture_loss_indication::PictureLossIndication,
-    receiver_report::ReceiverReport,
-};
+use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use std::{sync::Arc, time::Duration};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tracing::{debug, error, info, span, trace, warn, Instrument, Level};
 use webrtc::{
     api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
@@ -148,7 +144,7 @@ pub async fn setup_video_track(
 fn handle_keyframe_requests(
     ctx: &Arc<PipelineCtx>,
     sender: Arc<RTCRtpSender>,
-    keyframe_sender: Sender<()>,
+    keyframe_sender: crossbeam_channel::Sender<()>,
 ) {
     ctx.tokio_rt.spawn(async move {
         loop {
@@ -234,7 +230,13 @@ pub async fn setup_audio_track(
         AudioEncoderOptions::Aac(_options) => return Err(WhipError::UnsupportedCodec("aac")),
     }?;
 
-    handle_packet_loss_requests(ctx, pc, rtc_sender.clone(), ssrc);
+    handle_packet_loss_requests(
+        ctx,
+        pc,
+        rtc_sender.clone(),
+        handle.packet_loss_sender.clone(),
+        ssrc,
+    );
 
     Ok((handle, WhipSenderTrack { receiver, track }))
 }
@@ -247,6 +249,7 @@ fn handle_packet_loss_requests(
     ctx: &Arc<PipelineCtx>,
     pc: PeerConnection,
     rtc_sender: Arc<RTCRtpSender>,
+    packet_loss_sender: watch::Sender<i32>,
     ssrc: u32,
 ) {
     let mut cumulative_packets_sent_report: u64 = 0;
@@ -258,7 +261,7 @@ fn handle_packet_loss_requests(
         async move {
             loop {
                 if let Err(e) = rtc_sender.read_rtcp().await {
-                    debug!("Error whilre reading rtcp: {e}");
+                    debug!(%e, "Error while reading rtcp.");
                 }
             }
         }
@@ -305,7 +308,7 @@ fn handle_packet_loss_requests(
                 let packets_sent: u64 = outbound_stats.packets_sent;
                 // This can be lower than 0 in case of duplicates
                 let packets_lost: u64 = if remote_inbound_stats.packets_lost < 0 {
-                    0u64
+                    0
                 } else {
                     remote_inbound_stats.packets_lost as u64
                 };
@@ -330,6 +333,9 @@ fn handle_packet_loss_requests(
                     packets_sent_since_last_report,
                     packets_lost_since_last_report,
                 );
+                if let Err(e) = packet_loss_sender.send(packet_loss_percentage) {
+                    warn!(%e, "Error while sending packet loss to decoder.");
+                }
             }
         }
         .instrument(span),

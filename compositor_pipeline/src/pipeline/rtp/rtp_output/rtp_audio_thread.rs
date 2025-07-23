@@ -81,7 +81,7 @@ fn init_stream<Encoder: AudioEncoder>(
     )
     .flatten();
 
-    let (encoded_stream, _config) =
+    let (encoded_stream, _encoder_ctx) =
         AudioEncoderStream::<Encoder, _>::new(ctx, encoder_options, resampled_stream)?;
 
     let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());

@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use compositor_render::{error::ErrorStack, OutputId};
-use crossbeam_channel::Sender;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tracing::{debug, span, warn, Level};
 
 use crate::{
@@ -22,7 +21,8 @@ use crate::{
 
 #[derive(Debug)]
 pub(crate) struct WhipAudioTrackThreadHandle {
-    pub sample_batch_sender: Sender<PipelineEvent<OutputSamples>>,
+    pub sample_batch_sender: crossbeam_channel::Sender<PipelineEvent<OutputSamples>>,
+    pub packet_loss_sender: watch::Sender<i32>,
 }
 
 pub fn spawn_audio_track_thread<Encoder: AudioEncoder>(
@@ -83,7 +83,7 @@ fn init_stream<Encoder: AudioEncoder>(
     )
     .flatten();
 
-    let (encoded_stream, _config) =
+    let (encoded_stream, encoder_ctx) =
         AudioEncoderStream::<Encoder, _>::new(ctx, encoder_options, resampled_stream)?;
 
     let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
@@ -104,6 +104,7 @@ fn init_stream<Encoder: AudioEncoder>(
         stream,
         WhipAudioTrackThreadHandle {
             sample_batch_sender,
+            packet_loss_sender: encoder_ctx.packet_loss_sender,
         },
     ))
 }
