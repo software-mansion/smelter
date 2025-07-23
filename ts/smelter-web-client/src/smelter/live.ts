@@ -3,14 +3,14 @@ import { pino } from 'pino';
 import type { Renderers } from '@swmansion/smelter';
 import { Smelter as CoreSmelter, StateGuard } from '@swmansion/smelter-core';
 import type { RegisterInput, RegisterOutput } from '../api';
-import type { InstanceOptions } from '../manager';
+import type { SmelterInstanceOptions } from '../manager';
 import RemoteInstanceManager from '../manager';
 
 export default class Smelter {
   private coreSmelter: CoreSmelter;
   private scheduler: StateGuard;
 
-  public constructor(opts: InstanceOptions) {
+  public constructor(opts: SmelterInstanceOptions) {
     const logger = pino({
       level: 'warn',
       browser: {
