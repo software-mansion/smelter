@@ -333,7 +333,7 @@ fn handle_packet_loss_requests(
                     packets_sent_since_last_report,
                     packets_lost_since_last_report,
                 );
-                if let Err(_) = packet_loss_sender.send(packet_loss_percentage) {
+                if packet_loss_sender.send(packet_loss_percentage).is_err() {
                     debug!("Packet loss channel closed.");
                 }
             }

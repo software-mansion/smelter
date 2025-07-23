@@ -3,7 +3,6 @@ use std::{iter, sync::Arc};
 use compositor_render::{Frame, OutputFrameFormat, Resolution};
 use ffmpeg_next::format::Pixel;
 use tokio::sync::watch;
-use tracing::debug;
 
 use crate::{
     audio_mixer::{AudioChannels, OutputSamples},
