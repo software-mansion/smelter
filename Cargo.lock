@@ -895,7 +895,7 @@ dependencies = [
  "reqwest",
  "rtcp",
  "rtp",
- "rubato",
+ "rubato 0.15.0",
  "serde",
  "serde_json",
  "socket2",
@@ -2491,6 +2491,7 @@ dependencies = [
  "reqwest",
  "rtcp",
  "rtp",
+ "rusty-chromaprint",
  "serde",
  "serde_json",
  "signal-hook",
@@ -3930,6 +3931,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rubato"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5258099699851cfd0082aeb645feb9c084d9a5e1f1b8d5372086b989fc5e56a1"
+dependencies = [
+ "num-complex",
+ "num-integer",
+ "num-traits",
+ "realfft",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4038,6 +4051,16 @@ name = "rustversion"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7c45b9784283f1b2e7fb61b42047c2fd678ef0960d4f6f1eba131594cc369d4"
+
+[[package]]
+name = "rusty-chromaprint"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59e4234523e38d9c12201955f8216e1a60313e64c5077f4e1cf49b0db77bd7e8"
+dependencies = [
+ "rubato 0.16.2",
+ "rustfft",
+]
 
 [[package]]
 name = "rustybuzz"
@@ -4469,7 +4492,7 @@ dependencies = [
  "rand",
  "reqwest",
  "rtp",
- "rubato",
+ "rubato 0.15.0",
  "schemars",
  "serde",
  "serde_json",
