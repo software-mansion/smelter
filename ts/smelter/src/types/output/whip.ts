@@ -87,7 +87,7 @@ export type WhipAudioEncoderOptions =
       /**
        * (**default=`false`**) Specifies if forward error correction (FEC) should be used.
        */
-      forwarErrorCorrection?: boolean;
+      forwardErrorCorrection?: boolean;
     }
   | {
       type: 'any';
