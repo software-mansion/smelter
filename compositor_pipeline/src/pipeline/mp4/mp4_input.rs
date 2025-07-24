@@ -11,7 +11,6 @@ use std::{
 
 use compositor_render::InputId;
 use crossbeam_channel::bounded;
-use reader::{DecoderOptions, Mp4FileReader, Track};
 use tracing::{debug, error, span, trace, Level, Span};
 
 use crate::{
@@ -22,12 +21,12 @@ use crate::{
             h264_utils::AvccToAnnexBRepacker, DecoderThreadHandle,
         },
         input::Input,
+        mp4::reader::{DecoderOptions, Mp4FileReader, Track},
     },
-    prelude::*,
     queue::QueueDataReceiver,
 };
 
-mod reader;
+use crate::prelude::*;
 
 pub struct Mp4Input {
     should_close: Arc<AtomicBool>,
@@ -39,7 +38,7 @@ enum TrackType {
 }
 
 impl Mp4Input {
-    pub(super) fn new_input(
+    pub fn new_input(
         ctx: Arc<PipelineCtx>,
         input_id: InputId,
         options: Mp4InputOptions,
