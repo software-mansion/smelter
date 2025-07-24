@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use crossbeam_channel::bounded;
 
-use crate::prelude::*;
 use crate::{
     pipeline::{
         input::Input,
@@ -13,6 +12,8 @@ use crate::{
     },
     queue::QueueDataReceiver,
 };
+
+use crate::prelude::*;
 
 pub(super) mod connection_state;
 pub(super) mod negotiated_codecs;

@@ -1,12 +1,12 @@
 use compositor_render::error::ErrorStack;
 use std::iter;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::warn;
 
 use compositor_render::Frame;
 use crossbeam_channel::Sender;
 
-use crate::pipeline::types::DecodedSamples;
 use crate::prelude::*;
 
 pub(super) mod decoder_thread_audio;
@@ -28,6 +28,15 @@ pub mod vulkan_h264;
 
 pub mod fdk_aac;
 pub mod libopus;
+
+/// Raw samples produced by a decoder or received from external source.
+/// They still need to be resampled before passing them to the queue.
+#[derive(Debug)]
+pub(super) struct DecodedSamples {
+    pub samples: AudioSamples,
+    pub start_pts: Duration,
+    pub sample_rate: u32,
+}
 
 #[derive(Debug)]
 pub(crate) struct DecoderThreadHandle {

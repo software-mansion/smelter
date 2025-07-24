@@ -10,27 +10,29 @@ use compositor_render::{
     web_renderer::WebRendererInitOptions, Framerate, RenderingMode, WgpuFeatures,
 };
 
-use crate::prelude::*;
 use crate::{
     event::EventEmitter, graphics_context::GraphicsContext, pipeline::webrtc::WhipWhepPipelineState,
 };
 
-mod input;
-mod output;
+use crate::prelude::*;
 
 mod decoder;
 mod encoder;
 mod resampler;
 
+#[cfg(feature = "decklink")]
+mod decklink;
+
+mod channel;
 mod hls;
 mod mp4;
+mod rtmp;
 mod rtp;
 mod webrtc;
 
+mod input;
 mod instance;
-mod pipeline_input;
-mod pipeline_output;
-mod types;
+mod output;
 
 pub use instance::Pipeline;
 

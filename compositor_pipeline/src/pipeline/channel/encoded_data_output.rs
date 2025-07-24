@@ -15,9 +15,10 @@ use crate::pipeline::{
     },
     output::{Output, OutputAudio, OutputVideo},
 };
+
 use crate::prelude::*;
 
-pub(crate) struct EncodedDataOutput {
+pub struct EncodedDataOutput {
     pub audio: Option<AudioEncoderThreadHandle>,
     pub video: Option<VideoEncoderThreadHandle>,
 }

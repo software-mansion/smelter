@@ -24,10 +24,9 @@ use crate::{
     audio_mixer::AudioMixer,
     event::{Event, EventEmitter},
     pipeline::{
-        input::{new_external_input, raw_data::RawDataInput},
-        output::{encoded_data::EncodedDataOutput, new_external_output, raw_data::RawDataOutput},
-        pipeline_input::{register_pipeline_input, PipelineInput},
-        pipeline_output::{register_pipeline_output, OutputSender, PipelineOutput},
+        channel::{EncodedDataOutput, RawDataInput, RawDataOutput},
+        input::{new_external_input, register_pipeline_input, PipelineInput},
+        output::{new_external_output, register_pipeline_output, OutputSender, PipelineOutput},
         webrtc::{WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle},
     },
     queue::{Queue, QueueAudioOutput, QueueVideoOutput},
