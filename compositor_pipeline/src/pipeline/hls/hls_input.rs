@@ -47,7 +47,7 @@ impl HlsInput {
     const PREFERABLE_BUFFER_SIZE: usize = 30;
     const MIN_BUFFER_SIZE: usize = Self::PREFERABLE_BUFFER_SIZE / 2;
 
-    pub(super) fn new_input(
+    pub fn new_input(
         ctx: Arc<PipelineCtx>,
         input_id: InputId,
         opts: HlsInputOptions,
