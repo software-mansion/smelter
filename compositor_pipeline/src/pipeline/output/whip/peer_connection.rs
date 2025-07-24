@@ -167,9 +167,9 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
                 AudioChannels::Mono => 1,
                 AudioChannels::Stereo => 2,
             };
-            let fec: u8 = match opts.forward_error_correction {
-                true => 1,
-                false => 0,
+            let (fec, payload_type): (u8, u8) = match opts.forward_error_correction {
+                true => (1, 111),
+                false => (0, 110),
             };
             media_engine.register_codec(
                 RTCRtpCodecParameters {
@@ -180,7 +180,7 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
                         sdp_fmtp_line: format!("minptime=10;useinbandfec={fec}").to_owned(),
                         rtcp_feedback: vec![],
                     },
-                    payload_type: 111,
+                    payload_type,
                     ..Default::default()
                 },
                 RTPCodecType::Audio,

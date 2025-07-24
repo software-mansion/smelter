@@ -202,17 +202,28 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                                 )]
                             }
                             WhipAudioEncoderOptions::Any => {
-                                vec![pipeline::encoder::AudioEncoderOptions::Opus(
-                                    opus::OpusEncoderOptions {
-                                        channels: resolved_channels.clone().into(),
-                                        preset: OpusEncoderPreset::Voip.into(),
-                                        sample_rate: 48000,
-                                        // TODO, options added for compatibility
-                                        forward_error_correction: false,
-                                        // Default
-                                        packet_loss: 0,
-                                    },
-                                )]
+                                vec![
+                                    pipeline::encoder::AudioEncoderOptions::Opus(
+                                        opus::OpusEncoderOptions {
+                                            channels: resolved_channels.clone().into(),
+                                            preset: OpusEncoderPreset::Voip.into(),
+                                            sample_rate: 48000,
+                                            forward_error_correction: true,
+                                            // Default
+                                            packet_loss: 0,
+                                        },
+                                    ),
+                                    pipeline::encoder::AudioEncoderOptions::Opus(
+                                        opus::OpusEncoderOptions {
+                                            channels: resolved_channels.clone().into(),
+                                            preset: OpusEncoderPreset::Voip.into(),
+                                            sample_rate: 48000,
+                                            forward_error_correction: false,
+                                            // Default
+                                            packet_loss: 0,
+                                        },
+                                    ),
+                                ]
                             }
                         })
                         .unique()
