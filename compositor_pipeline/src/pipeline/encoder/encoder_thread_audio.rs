@@ -81,7 +81,7 @@ fn init_encoder_stream<Encoder: AudioEncoder>(
     )
     .flatten();
 
-    let (encoded_stream, config) =
+    let (encoded_stream, encoder_ctx) =
         AudioEncoderStream::<Encoder, _>::new(ctx, options, resampled_stream)?;
 
     let stream = encoded_stream.flatten().map(|event| match event {
@@ -92,7 +92,7 @@ fn init_encoder_stream<Encoder: AudioEncoder>(
         stream,
         AudioEncoderThreadHandle {
             sample_batch_sender,
-            config,
+            config: encoder_ctx.config,
         },
     ))
 }

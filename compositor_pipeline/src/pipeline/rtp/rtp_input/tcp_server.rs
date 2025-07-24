@@ -13,7 +13,7 @@ use crossbeam_channel::{bounded, Receiver, Sender};
 use log::error;
 use tracing::{debug, info, span, trace, Level};
 
-use crate::pipeline::{rtp::bind_to_requested_port, Port};
+use crate::pipeline::{rtp::util::bind_to_requested_port, Port};
 
 use super::{RtpInputError, RtpInputOptions};
 

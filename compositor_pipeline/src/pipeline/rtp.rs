@@ -1,62 +1,22 @@
-use std::net;
+use std::time::Duration;
 
-use super::Port;
+pub(super) mod depayloader;
+pub(super) mod payloader;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TransportProtocol {
-    Udp,
-    TcpServer,
-}
+mod rtp_input;
+mod rtp_output;
+mod util;
 
-pub(super) enum BindToPortError {
-    SocketBind(std::io::Error),
-    PortAlreadyInUse(u16),
-    AllPortsAlreadyInUse { lower_bound: u16, upper_bound: u16 },
-}
+pub use depayloader::{AudioSpecificConfig, RtpAacDepayloaderMode};
+pub use rtp_input::{RtpAudioOptions, RtpInputError, RtpInputOptions};
+pub use rtp_output::{RtpConnectionOptions, RtpOutputOptions};
+pub use util::{RequestedPort, TransportProtocol};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RequestedPort {
-    Exact(u16),
-    Range((u16, u16)),
-}
+pub(crate) use rtp_input::{RtpInput, RtpTimestampSync};
+pub(crate) use rtp_output::RtpOutput;
 
-pub(super) fn bind_to_requested_port(
-    requested_port: RequestedPort,
-    socket: &socket2::Socket,
-) -> Result<Port, BindToPortError> {
-    let port = match requested_port {
-        RequestedPort::Exact(port) => {
-            socket
-                .bind(
-                    &net::SocketAddr::V4(net::SocketAddrV4::new(net::Ipv4Addr::UNSPECIFIED, port))
-                        .into(),
-                )
-                .map_err(|err| match err.kind() {
-                    std::io::ErrorKind::AddrInUse => BindToPortError::PortAlreadyInUse(port),
-                    _ => BindToPortError::SocketBind(err),
-                })?;
-            port
-        }
-        RequestedPort::Range((lower_bound, upper_bound)) => {
-            let port = (lower_bound..upper_bound).find(|port| {
-                let bind_res = socket.bind(
-                    &net::SocketAddr::V4(net::SocketAddrV4::new(net::Ipv4Addr::UNSPECIFIED, *port))
-                        .into(),
-                );
-
-                bind_res.is_ok()
-            });
-
-            match port {
-                Some(port) => port,
-                None => {
-                    return Err(BindToPortError::AllPortsAlreadyInUse {
-                        lower_bound,
-                        upper_bound,
-                    })
-                }
-            }
-        }
-    };
-    Ok(Port(port))
+#[derive(Debug)]
+pub struct RtpPacket {
+    pub packet: rtp::packet::Packet,
+    pub timestamp: Duration,
 }

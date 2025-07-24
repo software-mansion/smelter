@@ -95,6 +95,7 @@ function intoWhipAudioEncoderPreferences(
           type: 'opus',
           preset: encoder.preset,
           sample_rate: encoder.sampleRate,
+          forward_error_correction: encoder.forwardErrorCorrection,
         };
       case 'any':
         return {

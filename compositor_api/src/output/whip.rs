@@ -93,6 +93,9 @@ pub enum WhipAudioEncoderOptions {
 
         /// (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
         sample_rate: Option<u32>,
+
+        /// (**default=`false`**) Specifies if forward error correction (FEC) should be used.
+        forward_error_correction: Option<bool>,
     },
     Any,
 }

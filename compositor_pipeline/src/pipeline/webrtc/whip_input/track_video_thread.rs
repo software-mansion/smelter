@@ -16,11 +16,10 @@ use crate::{
             ffmpeg_vp9::FfmpegVp9Decoder, vulkan_h264::VulkanH264Decoder, VideoDecoder,
             VideoDecoderInstance, VideoDecoderOptions,
         },
-        input::rtp::{
+        rtp::{
             depayloader::{new_depayloader, Depayloader, DepayloaderOptions},
-            RtpTimestampSync,
+            RtpPacket, RtpTimestampSync,
         },
-        output::rtp::RtpPacket,
         webrtc::{
             error::WhipServerError,
             whip_input::{negotiated_codecs::NegotiatedVideoCodecsInfo, AsyncReceiverIter},

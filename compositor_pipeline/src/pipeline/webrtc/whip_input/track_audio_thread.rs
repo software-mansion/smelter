@@ -10,12 +10,11 @@ use crate::{
     error::DecoderInitError,
     pipeline::{
         decoder::{libopus::OpusDecoder, AudioDecoderStream},
-        input::rtp::{
-            depayloader::{DepayloaderOptions, DepayloaderStream},
-            RtpTimestampSync,
-        },
-        output::rtp::RtpPacket,
         resampler::decoder_resampler::ResampledDecoderStream,
+        rtp::{
+            depayloader::{DepayloaderOptions, DepayloaderStream},
+            RtpPacket, RtpTimestampSync,
+        },
         webrtc::{
             error::WhipServerError,
             whip_input::{negotiated_codecs::NegotiatedAudioCodecsInfo, AsyncReceiverIter},

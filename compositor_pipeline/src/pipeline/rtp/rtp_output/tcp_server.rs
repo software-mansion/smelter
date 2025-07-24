@@ -10,7 +10,10 @@ use tracing::{debug, trace, warn};
 use crate::{
     error::OutputInitError,
     pipeline::{
-        rtp::{bind_to_requested_port, BindToPortError, RequestedPort},
+        rtp::{
+            util::{bind_to_requested_port, BindToPortError},
+            RequestedPort,
+        },
         Port,
     },
 };

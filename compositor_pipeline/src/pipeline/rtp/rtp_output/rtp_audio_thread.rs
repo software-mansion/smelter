@@ -1,40 +1,38 @@
 use std::sync::Arc;
 
-use compositor_render::{Frame, OutputId};
+use compositor_render::OutputId;
 use crossbeam_channel::Sender;
 use tracing::{debug, span, warn, Level};
 
 use crate::{
+    audio_mixer::OutputSamples,
     error::EncoderInitError,
     pipeline::{
-        encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
+        encoder::{AudioEncoder, AudioEncoderOptionsExt, AudioEncoderStream},
+        resampler::encoder_resampler::ResampledForEncoderStream,
+        rtp::payloader::{PayloaderOptions, PayloaderStream},
         PipelineCtx,
     },
     queue::PipelineEvent,
 };
 
-use super::{
-    payloader::{PayloaderOptions, PayloaderStream},
-    RtpEvent,
-};
+use super::RtpEvent;
 
-pub(crate) struct RtpVideoTrackThreadHandle {
-    pub frame_sender: Sender<PipelineEvent<Frame>>,
-    pub keyframe_request_sender: Sender<()>,
-    pub config: VideoEncoderConfig,
+pub(crate) struct RtpAudioTrackThreadHandle {
+    pub sample_batch_sender: Sender<PipelineEvent<OutputSamples>>,
 }
 
-pub fn spawn_rtp_video_thread<Encoder: VideoEncoder>(
+pub fn spawn_rtp_audio_thread<Encoder: AudioEncoder>(
     ctx: Arc<PipelineCtx>,
     output_id: OutputId,
     encoder_options: Encoder::Options,
     payloader_options: PayloaderOptions,
     chunks_sender: Sender<RtpEvent>,
-) -> Result<RtpVideoTrackThreadHandle, EncoderInitError> {
+) -> Result<RtpAudioTrackThreadHandle, EncoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
     std::thread::Builder::new()
-        .name(format!("RTP video track thread for output {}", &output_id))
+        .name(format!("RTP audio track thread for output {}", &output_id))
         .spawn(move || {
             let _span = span!(
                 Level::INFO,
@@ -57,7 +55,7 @@ pub fn spawn_rtp_video_thread<Encoder: VideoEncoder>(
             };
             for event in stream {
                 if chunks_sender.send(event).is_err() {
-                    warn!("Failed to send encoded video chunk from encoder. Channel closed.");
+                    warn!("Failed to send encoded audio chunk from encoder. Channel closed.");
                     return;
                 }
             }
@@ -68,22 +66,29 @@ pub fn spawn_rtp_video_thread<Encoder: VideoEncoder>(
     result_receiver.recv().unwrap()
 }
 
-fn init_stream<Encoder: VideoEncoder>(
+fn init_stream<Encoder: AudioEncoder>(
     ctx: Arc<PipelineCtx>,
     encoder_options: Encoder::Options,
     payloader_options: PayloaderOptions,
-) -> Result<(impl Iterator<Item = RtpEvent>, RtpVideoTrackThreadHandle), EncoderInitError> {
+) -> Result<(impl Iterator<Item = RtpEvent>, RtpAudioTrackThreadHandle), EncoderInitError> {
     let ssrc = payloader_options.ssrc;
-    let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
+    let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
 
-    let (encoded_stream, encoder_ctx) =
-        VideoEncoderStream::<Encoder, _>::new(ctx, encoder_options, frame_receiver.into_iter())?;
+    let resampled_stream = ResampledForEncoderStream::new(
+        sample_batch_receiver.into_iter(),
+        ctx.mixing_sample_rate,
+        encoder_options.sample_rate(),
+    )
+    .flatten();
+
+    let (encoded_stream, _encoder_ctx) =
+        AudioEncoderStream::<Encoder, _>::new(ctx, encoder_options, resampled_stream)?;
 
     let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
 
     let stream = payloaded_stream.flatten().map(move |event| match event {
         Ok(PipelineEvent::Data(packet)) => RtpEvent::Data(packet),
-        Ok(PipelineEvent::EOS) => RtpEvent::VideoEos(rtcp::goodbye::Goodbye {
+        Ok(PipelineEvent::EOS) => RtpEvent::AudioEos(rtcp::goodbye::Goodbye {
             sources: vec![ssrc],
             reason: bytes::Bytes::from("Unregister output stream"),
         }),
@@ -92,10 +97,8 @@ fn init_stream<Encoder: VideoEncoder>(
 
     Ok((
         stream,
-        RtpVideoTrackThreadHandle {
-            frame_sender,
-            keyframe_request_sender: encoder_ctx.keyframe_request_sender,
-            config: encoder_ctx.config,
+        RtpAudioTrackThreadHandle {
+            sample_batch_sender,
         },
     ))
 }

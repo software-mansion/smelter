@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use log::error;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
     audio_mixer::{AudioChannels, AudioSamples, OutputSamples},
@@ -62,6 +61,12 @@ impl AudioEncoder for OpusEncoder {
             },
             AudioEncoderConfig { extradata: None },
         ))
+    }
+
+    fn set_packet_loss(&mut self, packet_loss: i32) {
+        if let Err(e) = self.encoder.set_packet_loss_perc(packet_loss) {
+            error!(%e, "Error while setting opus encoder packet loss.");
+        }
     }
 
     fn encode(&mut self, batch: OutputSamples) -> Vec<EncodedChunk> {

@@ -12,11 +12,8 @@ use compositor_pipeline::{
             OutputPixelFormat, VideoEncoderOptions,
         },
         input::raw_data::RawDataInputOptions,
-        output::{
-            rtp::{RtpConnectionOptions, RtpSenderOptions},
-            OutputOptions,
-        },
-        rtp::RequestedPort,
+        output::OutputOptions,
+        rtp::{RequestedPort, RtpConnectionOptions, RtpOutputOptions},
         GraphicsContext, GraphicsContextOptions, Options, Pipeline, PipelineOutputEndCondition,
         RegisterOutputOptions,
     },
@@ -65,7 +62,7 @@ fn main() {
     let input_id = InputId("input_id".into());
 
     let output_options = RegisterOutputOptions {
-        output_options: OutputOptions::Rtp(RtpSenderOptions {
+        output_options: OutputOptions::Rtp(RtpOutputOptions {
             connection_options: RtpConnectionOptions::TcpServer {
                 port: RequestedPort::Exact(VIDEO_OUTPUT_PORT),
             },

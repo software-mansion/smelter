@@ -4,10 +4,7 @@ use tracing::{error, info};
 use rand::Rng;
 use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader, vp9::Vp9Payloader};
 
-use crate::{
-    pipeline::{types::EncodedChunk, AudioCodec, VideoCodec},
-    queue::PipelineEvent,
-};
+use crate::{pipeline::types::EncodedChunk, queue::PipelineEvent};
 
 use super::RtpPacket;
 
@@ -140,41 +137,9 @@ where
 
 #[derive(Debug, thiserror::Error)]
 pub enum PayloadingError {
-    #[error("Tried to payload video with non video payloader.")]
-    NoVideoPayloader,
-
-    #[error("Tried to payload audio with non audio payloader.")]
-    NoAudioPayloader,
-
-    #[error(
-        "Tried to payload video with codec {:#?} with payloader for codec {:#?}",
-        chunk_codec,
-        payloader_codec
-    )]
-    NonMatchingVideoCodecs {
-        chunk_codec: VideoCodec,
-        payloader_codec: VideoCodec,
-    },
-
-    #[error(
-        "Tried to payload audio with codec {:#?} with payloader for codec {:#?}",
-        chunk_codec,
-        payloader_codec
-    )]
-    NonMatchingAudioCodecs {
-        chunk_codec: AudioCodec,
-        payloader_codec: AudioCodec,
-    },
-
     #[error(transparent)]
     RtpLibError(#[from] rtp::Error),
 
     #[error(transparent)]
     MarshalError(#[from] webrtc_util::Error),
-
-    #[error("Audio EOS already sent.")]
-    AudioEOSAlreadySent,
-
-    #[error("Video EOS already sent.")]
-    VideoEOSAlreadySent,
 }

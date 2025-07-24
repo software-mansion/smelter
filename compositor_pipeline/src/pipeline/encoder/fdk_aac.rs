@@ -151,6 +151,8 @@ impl AudioEncoder for FdkAacEncoder {
             vec![]
         })
     }
+
+    fn set_packet_loss(&mut self, _packet_loss: i32) {}
 }
 
 impl FdkAacEncoder {

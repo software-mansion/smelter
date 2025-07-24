@@ -1,14 +1,10 @@
 use compositor_render::OutputId;
 use crossbeam_channel::{bounded, Sender};
 use packet_stream::RtpBinaryPacketStream;
-use payloader::{PayloadedCodec, PayloaderOptions, PayloadingError};
 use rand::Rng;
 use rtp_audio_thread::{spawn_rtp_audio_thread, RtpAudioTrackThreadHandle};
 use rtp_video_thread::{spawn_rtp_video_thread, RtpVideoTrackThreadHandle};
-use std::{
-    sync::{atomic::AtomicBool, Arc},
-    time::Duration,
-};
+use std::sync::{atomic::AtomicBool, Arc};
 use tracing::{debug, span, Level};
 
 use crate::{
@@ -20,20 +16,20 @@ use crate::{
             ffmpeg_vp9::FfmpegVp9Encoder, opus::OpusEncoder, AudioEncoderOptions,
             VideoEncoderOptions,
         },
-        rtp::RequestedPort,
+        output::{Output, OutputAudio, OutputKind, OutputVideo},
+        rtp::{
+            payloader::{PayloadedCodec, PayloaderOptions, PayloadingError},
+            RequestedPort, RtpPacket,
+        },
         AudioCodec, PipelineCtx, Port,
     },
 };
-
-use super::{Output, OutputAudio, OutputKind, OutputVideo};
 
 mod packet_stream;
 mod rtp_audio_thread;
 mod rtp_video_thread;
 mod tcp_server;
 mod udp;
-
-pub(super) mod payloader;
 
 pub(crate) struct RtpOutput {
     /// should_close will be set after output is unregistered,
@@ -50,7 +46,7 @@ pub(crate) struct RtpOutput {
 }
 
 #[derive(Debug, Clone)]
-pub struct RtpSenderOptions {
+pub struct RtpOutputOptions {
     pub connection_options: RtpConnectionOptions,
     pub video: Option<VideoEncoderOptions>,
     pub audio: Option<AudioEncoderOptions>,
@@ -62,12 +58,6 @@ pub enum RtpEvent {
     AudioEos(rtcp::goodbye::Goodbye),
     VideoEos(rtcp::goodbye::Goodbye),
     Err(PayloadingError),
-}
-
-#[derive(Debug)]
-pub struct RtpPacket {
-    pub packet: rtp::packet::Packet,
-    pub timestamp: Duration,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,7 +79,7 @@ impl RtpOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
-        options: RtpSenderOptions,
+        options: RtpOutputOptions,
     ) -> Result<(Self, Port), OutputInitError> {
         let mtu = options.connection_options.mtu();
 

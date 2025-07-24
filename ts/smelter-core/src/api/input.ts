@@ -107,6 +107,7 @@ function intoWhipRegisterInput(input: Inputs.RegisterWhipInput): RegisterInputRe
   return {
     type: 'whip',
     video: input.video && intoInputWhipVideoOptions(input.video),
+    bearer_token: input.bearerToken,
     required: input.required,
     offset_ms: input.offsetMs,
   };

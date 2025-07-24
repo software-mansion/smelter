@@ -9,7 +9,7 @@ use crate::{
     error::EncoderInitError,
     pipeline::{
         encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
-        output::rtp::{
+        rtp::{
             payloader::{PayloaderOptions, PayloaderStream},
             RtpPacket,
         },

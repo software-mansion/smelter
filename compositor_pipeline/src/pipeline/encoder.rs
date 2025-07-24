@@ -1,8 +1,8 @@
 use std::{iter, sync::Arc};
 
 use compositor_render::{Frame, OutputFrameFormat, Resolution};
-use crossbeam_channel::{unbounded, Receiver, Sender};
 use ffmpeg_next::format::Pixel;
+use tokio::sync::watch;
 
 use crate::{
     audio_mixer::{AudioChannels, OutputSamples},
@@ -158,10 +158,11 @@ pub(crate) trait AudioEncoder: Sized {
     ) -> Result<(Self, AudioEncoderConfig), EncoderInitError>;
     fn encode(&mut self, samples: OutputSamples) -> Vec<EncodedChunk>;
     fn flush(&mut self) -> Vec<EncodedChunk>;
+    fn set_packet_loss(&mut self, packet_loss: i32);
 }
 
 pub(super) struct VideoEncoderStreamContext {
-    pub keyframe_request_sender: Sender<()>,
+    pub keyframe_request_sender: crossbeam_channel::Sender<()>,
     pub config: VideoEncoderConfig,
 }
 
@@ -172,7 +173,7 @@ where
 {
     encoder: Encoder,
     source: Source,
-    keyframe_request_receiver: Receiver<()>,
+    keyframe_request_receiver: crossbeam_channel::Receiver<()>,
     eos_sent: bool,
 }
 
@@ -186,7 +187,7 @@ where
         options: Encoder::Options,
         source: Source,
     ) -> Result<(Self, VideoEncoderStreamContext), EncoderInitError> {
-        let (keyframe_request_sender, keyframe_request_receiver) = unbounded();
+        let (keyframe_request_sender, keyframe_request_receiver) = crossbeam_channel::unbounded();
         let (encoder, config) = Encoder::new(&ctx, options)?;
         Ok((
             Self {
@@ -238,6 +239,11 @@ where
     }
 }
 
+pub(super) struct AudioEncoderStreamContext {
+    pub packet_loss_sender: watch::Sender<i32>,
+    pub config: AudioEncoderConfig,
+}
+
 pub(super) struct AudioEncoderStream<Encoder, Source>
 where
     Encoder: AudioEncoder,
@@ -245,6 +251,7 @@ where
 {
     encoder: Encoder,
     source: Source,
+    packet_loss_receiver: watch::Receiver<i32>,
     eos_sent: bool,
 }
 
@@ -257,16 +264,30 @@ where
         ctx: Arc<PipelineCtx>,
         options: Encoder::Options,
         source: Source,
-    ) -> Result<(Self, AudioEncoderConfig), EncoderInitError> {
+    ) -> Result<(Self, AudioEncoderStreamContext), EncoderInitError> {
+        let (packet_loss_sender, packet_loss_receiver) = watch::channel(0);
         let (encoder, config) = Encoder::new(&ctx, options)?;
+
         Ok((
             Self {
                 encoder,
                 source,
+                packet_loss_receiver,
                 eos_sent: false,
             },
-            config,
+            AudioEncoderStreamContext {
+                packet_loss_sender,
+                config,
+            },
         ))
+    }
+
+    fn updated_packet_loss(&mut self) -> Option<i32> {
+        let packet_loss_changed = self.packet_loss_receiver.has_changed().unwrap_or(false);
+        match packet_loss_changed {
+            true => Some(*self.packet_loss_receiver.borrow_and_update()),
+            false => None,
+        }
     }
 }
 
@@ -280,6 +301,9 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
             Some(PipelineEvent::Data(samples)) => {
+                if let Some(packet_loss) = self.updated_packet_loss() {
+                    self.encoder.set_packet_loss(packet_loss);
+                }
                 let chunks = self.encoder.encode(samples);
                 Some(chunks.into_iter().map(PipelineEvent::Data).collect())
             }
