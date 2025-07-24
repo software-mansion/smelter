@@ -5,14 +5,12 @@ use std::{
     vec,
 };
 
-use crate::{
-    audio_mixer::InputSamples,
-    event::{Event, EventEmitter},
-};
+use crate::event::{Event, EventEmitter};
+use crate::prelude::*;
 
 use super::{
     utils::{Clock, InputProcessor},
-    InputOptions, PipelineEvent, QueueAudioOutput,
+    InputOptions, QueueAudioOutput,
 };
 use compositor_render::InputId;
 use crossbeam_channel::{Receiver, TryRecvError};
@@ -34,7 +32,7 @@ impl AudioQueue {
     pub fn add_input(
         &mut self,
         input_id: &InputId,
-        receiver: Receiver<PipelineEvent<InputSamples>>,
+        receiver: Receiver<PipelineEvent<InputAudioSamples>>,
         opts: InputOptions,
         clock: Clock,
     ) {
@@ -134,13 +132,13 @@ impl AudioQueue {
 struct AudioQueueInput {
     input_id: InputId,
     /// Samples/batches are PTS ordered where PTS=0 represents beginning of the stream.
-    queue: VecDeque<InputSamples>,
+    queue: VecDeque<InputAudioSamples>,
     /// Samples from the channel might have any PTS, they need to be processed before
     /// adding them to the `queue`.
-    receiver: Receiver<PipelineEvent<InputSamples>>,
+    receiver: Receiver<PipelineEvent<InputAudioSamples>>,
     /// Initial buffering + resets PTS to values starting with 0. All
     /// frames from receiver should be processed by this element.
-    input_samples_processor: InputProcessor<InputSamples>,
+    input_samples_processor: InputProcessor<InputAudioSamples>,
     /// If stream is required the queue should wait for frames. For optional
     /// inputs a queue will wait only as long as a buffer allows.
     required: bool,
@@ -162,7 +160,7 @@ impl AudioQueueInput {
         &mut self,
         pts_range: (Duration, Duration),
         queue_start: Instant,
-    ) -> PipelineEvent<Vec<InputSamples>> {
+    ) -> PipelineEvent<Vec<InputAudioSamples>> {
         // ignore result, we only need to ensure samples are enqueued
         self.check_ready_for_pts(pts_range, queue_start);
 
@@ -210,7 +208,7 @@ impl AudioQueueInput {
                 }
                 batch
             })
-            .collect::<Vec<InputSamples>>();
+            .collect::<Vec<InputAudioSamples>>();
 
         // Drop all batches older than `end_pts`. Entire batch (all samples inside) has to be older.
         while self
@@ -271,7 +269,7 @@ impl AudioQueueInput {
         };
 
         fn has_all_samples_for_pts_range(
-            queue: &VecDeque<InputSamples>,
+            queue: &VecDeque<InputAudioSamples>,
             range_end_pts: Duration,
         ) -> bool {
             match queue.back() {

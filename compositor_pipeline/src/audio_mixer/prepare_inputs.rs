@@ -3,7 +3,8 @@ use std::{collections::HashMap, time::Duration};
 use compositor_render::InputId;
 use tracing::warn;
 
-use super::{InputSamples, InputSamplesSet};
+use super::InputSamplesSet;
+use crate::prelude::*;
 
 #[cfg(test)]
 mod consecutive_frames_tests;
@@ -51,7 +52,7 @@ pub(super) fn prepare_input_samples(
 fn frame_input_samples(
     start_pts: Duration,
     end_pts: Duration,
-    samples: Vec<InputSamples>,
+    samples: Vec<InputAudioSamples>,
     sample_rate: u32,
 ) -> Vec<(f64, f64)> {
     let mut samples_in_frame = Vec::new();

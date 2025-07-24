@@ -24,16 +24,18 @@ use webrtc::{
     },
 };
 
-use crate::pipeline::{
-    decoder::VideoDecoderOptions,
-    webrtc::{
-        error::WhipServerError,
-        supported_video_codec_parameters::{
-            get_video_h264_codecs_for_codec_preferences, get_video_h264_codecs_for_media_engine,
-            get_video_vp8_codecs, get_video_vp9_codecs,
+use crate::{
+    codecs::VideoDecoderOptions,
+    pipeline::{
+        webrtc::{
+            error::WhipServerError,
+            supported_video_codec_parameters::{
+                get_video_h264_codecs_for_codec_preferences,
+                get_video_h264_codecs_for_media_engine, get_video_vp8_codecs, get_video_vp9_codecs,
+            },
         },
+        PipelineCtx,
     },
-    PipelineCtx,
 };
 
 #[derive(Debug, Clone)]

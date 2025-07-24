@@ -2,16 +2,18 @@ use decklink::{
     get_decklinks, FlagAttributeId, IntegerAttributeId, StringAttributeId, VideoIOSupport,
 };
 
-use super::{DeckLinkError, DeckLinkInfo, DeckLinkOptions};
+use super::{DeckLinkDeviceInfo, DeckLinkInputError, DeckLinkInputOptions};
 
-pub(super) fn find_decklink(opts: &DeckLinkOptions) -> Result<decklink::DeckLink, DeckLinkError> {
+pub(super) fn find_decklink(
+    opts: &DeckLinkInputOptions,
+) -> Result<decklink::DeckLink, DeckLinkInputError> {
     let decklinks = get_decklinks()?;
 
     let decklinks_info = decklinks
         .iter()
         .map(|decklink| {
             let attr = decklink.profile_attributes()?;
-            Ok(DeckLinkInfo {
+            Ok(DeckLinkDeviceInfo {
                 display_name: attr.get_string(StringAttributeId::DisplayName)?,
                 persistent_id: attr
                     .get_integer(IntegerAttributeId::PersistentID)?
@@ -21,7 +23,7 @@ pub(super) fn find_decklink(opts: &DeckLinkOptions) -> Result<decklink::DeckLink
                     .map(|i| i as u32),
             })
         })
-        .collect::<Result<_, DeckLinkError>>()?;
+        .collect::<Result<_, DeckLinkInputError>>()?;
 
     for mut decklink in decklinks.into_iter() {
         if is_selected_decklink(opts, &mut decklink)? {
@@ -29,13 +31,13 @@ pub(super) fn find_decklink(opts: &DeckLinkOptions) -> Result<decklink::DeckLink
         }
     }
 
-    Err(DeckLinkError::NoMatchingDeckLink(decklinks_info))
+    Err(DeckLinkInputError::NoMatchingDeckLink(decklinks_info))
 }
 
 fn is_selected_decklink(
-    opts: &DeckLinkOptions,
+    opts: &DeckLinkInputOptions,
     decklink: &mut decklink::DeckLink,
-) -> Result<bool, DeckLinkError> {
+) -> Result<bool, DeckLinkInputError> {
     let attr = decklink.profile_attributes()?;
 
     if let Some(subdevice) = opts.subdevice_index {
@@ -58,14 +60,14 @@ fn is_selected_decklink(
 
     let video_io_support = VideoIOSupport::from(
         attr.get_integer(IntegerAttributeId::VideoIOSupport)?
-            .ok_or(DeckLinkError::NoCaptureSupport)?,
+            .ok_or(DeckLinkInputError::NoCaptureSupport)?,
     );
     if !video_io_support.capture {
-        return Err(DeckLinkError::NoCaptureSupport);
+        return Err(DeckLinkInputError::NoCaptureSupport);
     }
 
     if attr.get_flag(FlagAttributeId::SupportsInputFormatDetection)? != Some(true) {
-        return Err(DeckLinkError::NoInputFormatDetection);
+        return Err(DeckLinkInputError::NoInputFormatDetection);
     }
 
     Ok(true)

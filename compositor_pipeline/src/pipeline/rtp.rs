@@ -7,11 +7,6 @@ mod rtp_input;
 mod rtp_output;
 mod util;
 
-pub use depayloader::{AudioSpecificConfig, RtpAacDepayloaderMode};
-pub use rtp_input::{RtpAudioOptions, RtpInputError, RtpInputOptions};
-pub use rtp_output::{RtpConnectionOptions, RtpOutputOptions};
-pub use util::{RequestedPort, TransportProtocol};
-
 pub(crate) use rtp_input::{RtpInput, RtpTimestampSync};
 pub(crate) use rtp_output::RtpOutput;
 

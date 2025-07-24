@@ -1,19 +1,14 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
+use crate::prelude::*;
 use crate::{
-    error::InputInitError,
     pipeline::{
-        input::hls::{HlsInput, HlsInputOptions},
-        rtp::{RtpInput, RtpInputOptions},
-        webrtc::{WhipInput, WhipInputOptions},
+        input::{hls::HlsInput, mp4::Mp4Input},
+        rtp::RtpInput,
+        webrtc::WhipInput,
     },
+    queue::QueueDataReceiver,
 };
-
-use compositor_render::InputId;
-
-use self::mp4::{Mp4Input, Mp4Options};
-
-use super::{decoder::DecodedDataReceiver, PipelineCtx, Port};
 
 #[cfg(feature = "decklink")]
 pub mod decklink;
@@ -28,44 +23,34 @@ pub enum Input {
     Hls(HlsInput),
     #[cfg(feature = "decklink")]
     DeckLink(decklink::DeckLink),
-    RawDataInput,
+    RawDataChannel,
 }
 
-#[derive(Debug, Clone)]
-pub enum InputOptions {
-    Rtp(RtpInputOptions),
-    Mp4(Mp4Options),
-    Hls(HlsInputOptions),
-    Whip(WhipInputOptions),
-    #[cfg(feature = "decklink")]
-    DeckLink(decklink::DeckLinkOptions),
-}
-
-pub enum InputInitInfo {
-    Rtp {
-        port: Option<Port>,
-    },
-    Mp4 {
-        video_duration: Option<Duration>,
-        audio_duration: Option<Duration>,
-    },
-    Whip {
-        bearer_token: Arc<str>,
-    },
-    Other,
+impl Input {
+    pub fn kind(&self) -> InputProtocolKind {
+        match self {
+            Input::Rtp(_input) => InputProtocolKind::Rtp,
+            Input::Mp4(_input) => InputProtocolKind::Mp4,
+            Input::Whip(_input) => InputProtocolKind::Whip,
+            Input::Hls(_input) => InputProtocolKind::Hls,
+            #[cfg(feature = "decklink")]
+            Input::DeckLink(_input) => InputProtocolKind::DeckLink,
+            Input::RawDataChannel => InputProtocolKind::RawDataChannel,
+        }
+    }
 }
 
 pub(super) fn new_external_input(
     ctx: Arc<PipelineCtx>,
     input_id: InputId,
-    options: InputOptions,
-) -> Result<(Input, InputInitInfo, DecodedDataReceiver), InputInitError> {
+    options: ProtocolInputOptions,
+) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
     match options {
-        InputOptions::Rtp(opts) => RtpInput::new_input(ctx, input_id, opts),
-        InputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_id, opts),
-        InputOptions::Hls(opts) => HlsInput::new_input(ctx, input_id, opts),
-        InputOptions::Whip(opts) => WhipInput::new_input(ctx, input_id, opts),
+        ProtocolInputOptions::Rtp(opts) => RtpInput::new_input(ctx, input_id, opts),
+        ProtocolInputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_id, opts),
+        ProtocolInputOptions::Hls(opts) => HlsInput::new_input(ctx, input_id, opts),
+        ProtocolInputOptions::Whip(opts) => WhipInput::new_input(ctx, input_id, opts),
         #[cfg(feature = "decklink")]
-        InputOptions::DeckLink(opts) => decklink::DeckLink::new_input(ctx, input_id, opts),
+        ProtocolInputOptions::DeckLink(opts) => decklink::DeckLink::new_input(ctx, input_id, opts),
     }
 }

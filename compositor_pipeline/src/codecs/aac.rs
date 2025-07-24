@@ -2,8 +2,42 @@ use std::io::Read;
 
 use bytes::Buf;
 
+use crate::prelude::*;
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct FdkAacEncoderOptions {
+    pub channels: AudioChannels,
+    pub sample_rate: u32,
+}
+
+impl AudioEncoderOptionsExt for FdkAacEncoderOptions {
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FdkAacDecoderOptions {
+    pub asc: Option<bytes::Bytes>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum FdkAacDecoderError {
+    #[error("The internal fdk decoder returned an error: {0:?}.")]
+    FdkDecoderError(fdk_aac_sys::AAC_DECODER_ERROR),
+
+    #[error("The channel config in the aac audio is unsupported.")]
+    UnsupportedChannelConfig,
+
+    #[error("The aac decoder cannot decode chunks with kind {0:?}.")]
+    UnsupportedChunkKind(MediaKind),
+
+    #[error("The aac decoder cannot decode chunks with sample rate {0}.")]
+    UnsupportedSampleRate(i32),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AudioSpecificConfig {
+pub struct AacAudioSpecificConfig {
     pub profile: u8,
     pub sample_rate: u32,
     pub channel_count: u8,
@@ -11,7 +45,7 @@ pub struct AudioSpecificConfig {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum AudioSpecificConfigParseError {
+pub enum AacAscParseError {
     #[error("ASC is not long enough")]
     TooShort,
 
@@ -19,15 +53,15 @@ pub enum AudioSpecificConfigParseError {
     IllegalValue,
 }
 
-impl AudioSpecificConfig {
+impl AacAudioSpecificConfig {
     // MPEG-4 part 3, sections 1.6.2.1 & 4.4.1
-    pub fn parse_from(data: &[u8]) -> Result<AudioSpecificConfig, AudioSpecificConfigParseError> {
+    pub fn parse_from(data: &[u8]) -> Result<AacAudioSpecificConfig, AacAscParseError> {
         // TODO: this can probably be rewritten using [nom](https://lib.rs/crates/nom), which would
         // make it a lot more understandable
         let mut reader = std::io::Cursor::new(data);
 
         if reader.remaining() < 2 {
-            return Err(AudioSpecificConfigParseError::TooShort);
+            return Err(AacAscParseError::TooShort);
         }
 
         let first = reader.get_u8();
@@ -46,7 +80,7 @@ impl AudioSpecificConfig {
 
             if frequency_id == 15 {
                 if reader.remaining() < 4 {
-                    return Err(AudioSpecificConfigParseError::TooShort);
+                    return Err(AacAscParseError::TooShort);
                 }
 
                 let mut rest = [0; 4];
@@ -60,7 +94,7 @@ impl AudioSpecificConfig {
                 channel_and_frame_len_bytes = [rest[2], rest[3]];
             } else {
                 if reader.remaining() < 1 {
-                    return Err(AudioSpecificConfigParseError::TooShort);
+                    return Err(AacAscParseError::TooShort);
                 }
                 let last = reader.get_u8();
 
@@ -79,7 +113,7 @@ impl AudioSpecificConfig {
 
             if frequency_id == 15 {
                 if reader.remaining() < 3 {
-                    return Err(AudioSpecificConfigParseError::TooShort);
+                    return Err(AacAscParseError::TooShort);
                 }
 
                 let mut rest = [0; 3];
@@ -100,7 +134,7 @@ impl AudioSpecificConfig {
             frame_length = frame_length_flag_to_frame_length(frame_length_flag);
         }
 
-        Ok(AudioSpecificConfig {
+        Ok(AacAudioSpecificConfig {
             profile,
             sample_rate,
             channel_count,
@@ -110,7 +144,7 @@ impl AudioSpecificConfig {
 }
 
 /// MPEG-4 part 3, 1.6.3.4
-fn freq_id_to_sample_rate(id: u8) -> Result<u32, AudioSpecificConfigParseError> {
+fn freq_id_to_sample_rate(id: u8) -> Result<u32, AacAscParseError> {
     match id {
         0x0 => Ok(96000),
         0x1 => Ok(88200),
@@ -125,7 +159,7 @@ fn freq_id_to_sample_rate(id: u8) -> Result<u32, AudioSpecificConfigParseError> 
         0xa => Ok(11025),
         0xb => Ok(8000),
         0xc => Ok(7350),
-        _ => Err(AudioSpecificConfigParseError::IllegalValue),
+        _ => Err(AacAscParseError::IllegalValue),
     }
 }
 
@@ -144,7 +178,7 @@ mod tests {
     #[test]
     fn asc_simple() {
         let asc = [0b00010010, 0b00010000];
-        let parsed = AudioSpecificConfig::parse_from(&asc).unwrap();
+        let parsed = AacAudioSpecificConfig::parse_from(&asc).unwrap();
 
         assert_eq!(parsed.profile, 2);
         assert_eq!(parsed.sample_rate, 44_100);
@@ -155,7 +189,7 @@ mod tests {
     #[test]
     fn asc_complicated_frequency() {
         let asc = [0b00010111, 0b10000000, 0b00010000, 0b10011011, 0b10010100];
-        let parsed = AudioSpecificConfig::parse_from(&asc).unwrap();
+        let parsed = AacAudioSpecificConfig::parse_from(&asc).unwrap();
 
         assert_eq!(parsed.profile, 2);
         assert_eq!(parsed.sample_rate, 0x2137);
@@ -166,7 +200,7 @@ mod tests {
     #[test]
     fn asc_complicated_profile() {
         let asc = [0b11111001, 0b01000110, 0b00100000];
-        let parsed = AudioSpecificConfig::parse_from(&asc).unwrap();
+        let parsed = AacAudioSpecificConfig::parse_from(&asc).unwrap();
 
         assert_eq!(parsed.profile, 42);
         assert_eq!(parsed.sample_rate, 48_000);
@@ -179,7 +213,7 @@ mod tests {
         let asc = [
             0b11111001, 0b01011110, 0b00000000, 0b01000010, 0b01101110, 0b01000000,
         ];
-        let parsed = AudioSpecificConfig::parse_from(&asc).unwrap();
+        let parsed = AacAudioSpecificConfig::parse_from(&asc).unwrap();
 
         assert_eq!(parsed.profile, 42);
         assert_eq!(parsed.sample_rate, 0x2137);

@@ -8,13 +8,14 @@ use webrtc::{
     track::track_remote::TrackRemote,
 };
 
+use crate::prelude::*;
 use crate::{
-    error::DecoderInitError,
+    codecs::{VideoCodec, VideoDecoderOptions},
     pipeline::{
         decoder::{
             ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder,
             ffmpeg_vp9::FfmpegVp9Decoder, vulkan_h264::VulkanH264Decoder, VideoDecoder,
-            VideoDecoderInstance, VideoDecoderOptions,
+            VideoDecoderInstance,
         },
         rtp::{
             depayloader::{new_depayloader, Depayloader, DepayloaderOptions},
@@ -25,9 +26,7 @@ use crate::{
             whip_input::{negotiated_codecs::NegotiatedVideoCodecsInfo, AsyncReceiverIter},
             WhipWhepServerState,
         },
-        EncodedChunk, EncodedChunkKind, PipelineCtx, VideoCodec,
     },
-    queue::PipelineEvent,
 };
 
 pub async fn process_video_track(
@@ -151,11 +150,11 @@ fn init_stream(
 
 struct DynamicVideoDecoderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
 {
     ctx: Arc<PipelineCtx>,
     decoder: Option<Box<dyn VideoDecoderInstance>>,
-    last_chunk_kind: Option<EncodedChunkKind>,
+    last_chunk_kind: Option<MediaKind>,
     source: Source,
     eos_sent: bool,
     codec_info: NegotiatedVideoCodecsInfo,
@@ -163,7 +162,7 @@ where
 
 impl<Source> DynamicVideoDecoderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
 {
     fn new(ctx: Arc<PipelineCtx>, codec_info: NegotiatedVideoCodecsInfo, source: Source) -> Self {
         Self {
@@ -176,28 +175,28 @@ where
         }
     }
 
-    fn ensure_decoder(&mut self, chunk_kind: EncodedChunkKind) {
+    fn ensure_decoder(&mut self, chunk_kind: MediaKind) {
         if self.last_chunk_kind == Some(chunk_kind) {
             return;
         }
         self.last_chunk_kind = Some(chunk_kind);
         let preferred_decoder = match chunk_kind {
-            EncodedChunkKind::Video(VideoCodec::H264) => self
+            MediaKind::Video(VideoCodec::H264) => self
                 .codec_info
                 .h264
                 .as_ref()
                 .map(|info| info.preferred_decoder),
-            EncodedChunkKind::Video(VideoCodec::Vp8) => self
+            MediaKind::Video(VideoCodec::Vp8) => self
                 .codec_info
                 .vp8
                 .as_ref()
                 .map(|info| info.preferred_decoder),
-            EncodedChunkKind::Video(VideoCodec::Vp9) => self
+            MediaKind::Video(VideoCodec::Vp9) => self
                 .codec_info
                 .vp9
                 .as_ref()
                 .map(|info| info.preferred_decoder),
-            EncodedChunkKind::Audio(_) => {
+            MediaKind::Audio(_) => {
                 error!("Found audio packet in video stream.");
                 None
             }
@@ -235,7 +234,7 @@ where
 
 impl<Source> Iterator for DynamicVideoDecoderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
 {
     type Item = Vec<PipelineEvent<Frame>>;
 
@@ -312,7 +311,7 @@ impl<Source> Iterator for DynamicDepayloaderStream<Source>
 where
     Source: Iterator<Item = PipelineEvent<RtpPacket>>,
 {
-    type Item = Vec<PipelineEvent<EncodedChunk>>;
+    type Item = Vec<PipelineEvent<EncodedInputChunk>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {

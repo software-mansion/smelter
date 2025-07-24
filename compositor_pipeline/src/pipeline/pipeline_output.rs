@@ -7,35 +7,13 @@ use compositor_render::{Frame, InputId, OutputId};
 use crossbeam_channel::Sender;
 use tracing::{info, warn};
 
-use crate::{
-    audio_mixer::OutputSamples,
-    error::{OutputInitError, RegisterOutputError},
-    queue::PipelineEvent,
-};
-
-use super::{
-    output::{self, OutputKind},
-    OutputAudioOptions, OutputVideoOptions, Pipeline, PipelineCtx, PipelineInput,
-};
-
-#[derive(Debug, Clone)]
-pub enum PipelineOutputEndCondition {
-    AnyOf(Vec<InputId>),
-    AllOf(Vec<InputId>),
-    AnyInput,
-    AllInputs,
-    Never,
-}
+use crate::pipeline::{output::Output, pipeline_input::PipelineInput};
+use crate::prelude::*;
 
 pub struct PipelineOutput {
-    pub(crate) output: Box<dyn output::Output>,
+    pub(crate) output: Box<dyn Output>,
     pub video_end_condition: Option<PipelineOutputEndConditionState>,
     pub audio_end_condition: Option<PipelineOutputEndConditionState>,
-}
-
-#[derive(Debug)]
-pub struct OutputInfo {
-    pub kind: OutputKind,
 }
 
 pub(super) enum OutputSender<T> {
@@ -46,15 +24,15 @@ pub(super) enum OutputSender<T> {
 pub(super) fn register_pipeline_output<BuildFn, NewOutputResult>(
     pipeline: &Arc<Mutex<Pipeline>>,
     output_id: OutputId,
-    video: Option<OutputVideoOptions>,
-    audio: Option<OutputAudioOptions>,
+    video: Option<RegisterOutputVideoOptions>,
+    audio: Option<RegisterOutputAudioOptions>,
     build_output: BuildFn,
 ) -> Result<NewOutputResult, RegisterOutputError>
 where
     BuildFn: FnOnce(
         Arc<PipelineCtx>,
         OutputId,
-    ) -> Result<(Box<dyn output::Output>, NewOutputResult), OutputInitError>,
+    ) -> Result<(Box<dyn Output>, NewOutputResult), OutputInitError>,
 {
     let (has_video, has_audio) = (video.is_some(), audio.is_some());
     if !has_video && !has_audio {
@@ -150,7 +128,12 @@ impl Pipeline {
 
     pub(super) fn all_output_audio_senders_iter(
         pipeline: &Arc<Mutex<Pipeline>>,
-    ) -> impl Iterator<Item = (OutputId, OutputSender<Sender<PipelineEvent<OutputSamples>>>)> {
+    ) -> impl Iterator<
+        Item = (
+            OutputId,
+            OutputSender<Sender<PipelineEvent<OutputAudioSamples>>>,
+        ),
+    > {
         let outputs: HashMap<_, _> = pipeline
             .lock()
             .unwrap()

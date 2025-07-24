@@ -8,22 +8,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{
-    error::InputInitError,
-    pipeline::{
-        decoder::{
-            self,
-            decoder_thread_audio::spawn_audio_decoder_thread,
-            decoder_thread_video::spawn_video_decoder_thread,
-            fdk_aac, ffmpeg_h264,
-            h264_utils::{H264AVCDecoderConfig, H264AVCDecoderConfigError},
-            DecodedDataReceiver, DecoderThreadHandle,
-        },
-        types::{EncodedChunk, IsKeyframe},
-        AudioCodec, EncodedChunkKind, PipelineCtx, VideoCodec,
-    },
-    queue::PipelineEvent,
-};
 use bytes::Bytes;
 use compositor_render::InputId;
 use crossbeam_channel::{bounded, Sender};
@@ -39,13 +23,21 @@ use ffmpeg_next::{
 };
 use tracing::{debug, error, span, warn, Level};
 
-use super::{Input, InputInitInfo};
-
-#[derive(Debug, Clone)]
-pub struct HlsInputOptions {
-    pub url: Arc<str>,
-    pub video_decoder: decoder::VideoDecoderOptions,
-}
+use crate::{
+    pipeline::decoder::h264_utils::{H264AvcDecoderConfig, H264AvcDecoderConfigError},
+    prelude::*,
+};
+use crate::{
+    pipeline::{
+        decoder::{
+            decoder_thread_audio::spawn_audio_decoder_thread,
+            decoder_thread_video::spawn_video_decoder_thread, fdk_aac, ffmpeg_h264,
+            DecoderThreadHandle,
+        },
+        input::Input,
+    },
+    queue::QueueDataReceiver,
+};
 
 pub struct HlsInput {
     should_close: Arc<AtomicBool>,
@@ -59,7 +51,7 @@ impl HlsInput {
         ctx: Arc<PipelineCtx>,
         input_id: InputId,
         opts: HlsInputOptions,
-    ) -> Result<(Input, InputInitInfo, DecodedDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
         let receivers = Self::spawn_thread(ctx, input_id, should_close.clone(), opts)?;
 
@@ -75,7 +67,7 @@ impl HlsInput {
         input_id: InputId,
         should_close: Arc<AtomicBool>,
         options: HlsInputOptions,
-    ) -> Result<DecodedDataReceiver, InputInitError> {
+    ) -> Result<QueueDataReceiver, InputInitError> {
         let (result_sender, result_receiver) = bounded(1);
         std::thread::Builder::new()
             .name(format!("HLS thread for input {}", input_id.clone()))
@@ -96,7 +88,7 @@ impl HlsInput {
         input_id: InputId,
         options: HlsInputOptions,
         should_close: Arc<AtomicBool>,
-        result_sender: Sender<Result<DecodedDataReceiver, InputInitError>>,
+        result_sender: Sender<Result<QueueDataReceiver, InputInitError>>,
     ) {
         // careful: moving the input context in any way will cause ffmpeg to segfault
         // I do not know why this happens
@@ -127,7 +119,7 @@ impl HlsInput {
                 let decoder_result = spawn_audio_decoder_thread::<fdk_aac::FdkAacDecoder, 2000>(
                     ctx.clone(),
                     input_id.clone(),
-                    fdk_aac::Options { asc },
+                    FdkAacDecoderOptions { asc },
                     samples_sender,
                 );
                 let handle = match decoder_result {
@@ -152,10 +144,10 @@ impl HlsInput {
 
                 let extra_data = read_extra_data(&stream);
                 let h264_config = extra_data
-                    .map(H264AVCDecoderConfig::parse)
+                    .map(H264AvcDecoderConfig::parse)
                     .transpose()
                     .unwrap_or_else(|e| match e {
-                        H264AVCDecoderConfigError::NotAVCC => None,
+                        H264AvcDecoderConfigError::NotAVCC => None,
                         _ => {
                             warn!("Could not parse extra data: {e}");
                             None
@@ -219,12 +211,11 @@ impl HlsInput {
                     }
                     let pts = pts + pts_offset;
 
-                    let chunk = EncodedChunk {
+                    let chunk = EncodedInputChunk {
                         data: Bytes::copy_from_slice(packet.data().unwrap()),
                         pts,
                         dts,
-                        is_keyframe: IsKeyframe::Unknown,
-                        kind: EncodedChunkKind::Video(VideoCodec::H264),
+                        kind: MediaKind::Video(VideoCodec::H264),
                     };
 
                     if handle.chunk_sender.is_empty() {
@@ -245,12 +236,11 @@ impl HlsInput {
                     let (pts, dts, _) = state.pts_dts_from_packet(&packet);
                     let pts = pts + pts_offset;
 
-                    let chunk = EncodedChunk {
+                    let chunk = EncodedInputChunk {
                         data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
                         pts,
                         dts,
-                        is_keyframe: IsKeyframe::Unknown,
-                        kind: EncodedChunkKind::Audio(AudioCodec::Aac),
+                        kind: MediaKind::Audio(AudioCodec::Aac),
                     };
 
                     if sender.chunk_sender.is_empty() {
@@ -268,7 +258,7 @@ impl HlsInput {
 
             if is_buffering && HlsInput::did_buffer_enough(video.as_ref(), audio.as_ref()) {
                 result_sender
-                    .send(Ok(DecodedDataReceiver {
+                    .send(Ok(QueueDataReceiver {
                         video: frame_receiver.take(),
                         audio: samples_receiver.take(),
                     }))

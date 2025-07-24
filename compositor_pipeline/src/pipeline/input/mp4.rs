@@ -14,53 +14,20 @@ use crossbeam_channel::bounded;
 use reader::{DecoderOptions, Mp4FileReader, Track};
 use tracing::{debug, error, span, trace, Level, Span};
 
+use crate::prelude::*;
 use crate::{
-    error::InputInitError,
     pipeline::{
         decoder::{
             decoder_thread_audio::spawn_audio_decoder_thread,
             decoder_thread_video::spawn_video_decoder_thread, fdk_aac, ffmpeg_h264,
-            DecodedDataReceiver, DecoderThreadHandle, VideoDecoderOptions,
+            DecoderThreadHandle,
         },
-        PipelineCtx,
+        input::Input,
     },
-    queue::PipelineEvent,
+    queue::QueueDataReceiver,
 };
 
-use super::{Input, InputInitInfo};
-
-pub mod reader;
-
-#[derive(Debug, Clone)]
-pub struct Mp4Options {
-    pub source: Source,
-    pub should_loop: bool,
-    pub video_decoder: VideoDecoderOptions,
-}
-
-#[derive(Debug, Clone)]
-pub enum Source {
-    Url(String),
-    File(PathBuf),
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum Mp4Error {
-    #[error("Error while doing file operations.")]
-    IoError(#[from] std::io::Error),
-
-    #[error("Error while downloading the MP4 file.")]
-    HttpError(#[from] reqwest::Error),
-
-    #[error("Mp4 reader error.")]
-    Mp4ReaderError(#[from] mp4::Error),
-
-    #[error("No suitable track in the mp4 file")]
-    NoTrack,
-
-    #[error("Unknown error: {0}")]
-    Unknown(&'static str),
-}
+mod reader;
 
 pub struct Mp4Input {
     should_close: Arc<AtomicBool>,
@@ -75,11 +42,11 @@ impl Mp4Input {
     pub(super) fn new_input(
         ctx: Arc<PipelineCtx>,
         input_id: InputId,
-        options: Mp4Options,
-    ) -> Result<(Input, InputInitInfo, DecodedDataReceiver), InputInitError> {
+        options: Mp4InputOptions,
+    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let source = match &options.source {
-            Source::Url(url) => Self::download_remote_file(&ctx, url)?,
-            Source::File(path) => Arc::new(SourceFile {
+            Mp4InputSource::Url(url) => Self::download_remote_file(&ctx, url)?,
+            Mp4InputSource::File(path) => Arc::new(SourceFile {
                 path: path.clone(),
                 remove_on_drop: false,
             }),
@@ -91,7 +58,7 @@ impl Mp4Input {
         let audio_duration = audio.as_ref().and_then(|track| track.duration());
 
         if video.is_none() && audio.is_none() {
-            return Err(Mp4Error::NoTrack.into());
+            return Err(Mp4InputError::NoTrack.into());
         }
 
         let (video_handle, video_receiver, video_track) = match video {
@@ -106,7 +73,11 @@ impl Mp4Input {
                             sender,
                         )?
                     }
-                    _ => return Err(Mp4Error::Unknown("Non H264 decoder options returned.").into()),
+                    _ => {
+                        return Err(
+                            Mp4InputError::Unknown("Non H264 decoder options returned.").into()
+                        )
+                    }
                 };
                 (Some(handle), Some(receiver), Some(track))
             }
@@ -121,13 +92,17 @@ impl Mp4Input {
                         spawn_audio_decoder_thread::<fdk_aac::FdkAacDecoder, 5>(
                             ctx.clone(),
                             input_id.clone(),
-                            fdk_aac::Options {
+                            FdkAacDecoderOptions {
                                 asc: Some(data.clone()),
                             },
                             sender,
                         )?
                     }
-                    _ => return Err(Mp4Error::Unknown("Non AAC decoder options returned.").into()),
+                    _ => {
+                        return Err(
+                            Mp4InputError::Unknown("Non AAC decoder options returned.").into()
+                        )
+                    }
                 };
                 (Some(handle), Some(receiver), Some(track))
             }
@@ -167,7 +142,7 @@ impl Mp4Input {
                 video_duration,
                 audio_duration,
             },
-            DecodedDataReceiver {
+            QueueDataReceiver {
                 video: video_receiver,
                 audio: audio_receiver,
             },
@@ -177,7 +152,7 @@ impl Mp4Input {
     fn download_remote_file(
         ctx: &Arc<PipelineCtx>,
         url: &str,
-    ) -> Result<Arc<SourceFile>, Mp4Error> {
+    ) -> Result<Arc<SourceFile>, Mp4InputError> {
         let file_response = reqwest::blocking::get(url)?;
         let mut file_response = file_response.error_for_status()?;
 

@@ -4,18 +4,14 @@ use compositor_render::{Frame, InputId};
 use crossbeam_channel::Sender;
 use tracing::{debug, span, warn, Level};
 
-use crate::{
-    error::DecoderInitError,
-    pipeline::{
-        decoder::{VideoDecoder, VideoDecoderStream},
-        rtp::{
-            depayloader::{DepayloaderOptions, DepayloaderStream},
-            RtpPacket,
-        },
-        PipelineCtx,
+use crate::pipeline::{
+    decoder::{VideoDecoder, VideoDecoderStream},
+    rtp::{
+        depayloader::{DepayloaderOptions, DepayloaderStream},
+        RtpPacket,
     },
-    queue::PipelineEvent,
 };
+use crate::prelude::*;
 
 pub(crate) struct RtpVideoTrackThreadHandle {
     pub rtp_packet_sender: Sender<PipelineEvent<RtpPacket>>,

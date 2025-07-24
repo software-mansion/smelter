@@ -2,7 +2,6 @@ use compositor_render::OutputId;
 use establish_peer_connection::exchange_sdp_offers;
 
 use peer_connection::PeerConnection;
-use reqwest::{Method, StatusCode};
 use setup_track::{setup_audio_track, setup_video_track};
 use std::{
     sync::Arc,
@@ -10,24 +9,17 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, span, warn, Instrument, Level};
+use tracing::{debug, span, warn, Instrument, Level};
 use track_task_audio::WhipAudioTrackThreadHandle;
 use track_task_video::WhipVideoTrackThreadHandle;
-use url::{ParseError, Url};
+use url::Url;
 use webrtc::track::track_local::{track_local_static_rtp::TrackLocalStaticRTP, TrackLocalWriter};
 use whip_http_client::WhipHttpClient;
 
-use crate::{
-    error::{EncoderInitError, OutputInitError},
-    event::Event,
-    pipeline::{
-        encoder::{AudioEncoderOptions, VideoEncoderOptions},
-        rtp::RtpPacket,
-        PipelineCtx,
-    },
-};
+use crate::prelude::*;
+use crate::{event::Event, pipeline::rtp::RtpPacket};
 
-use super::{Output, OutputAudio, OutputKind, OutputVideo};
+use super::{Output, OutputAudio, OutputVideo};
 
 mod establish_peer_connection;
 mod setup_track;
@@ -41,24 +33,6 @@ mod whip_http_client;
 pub(crate) struct WhipClientOutput {
     pub video: Option<WhipVideoTrackThreadHandle>,
     pub audio: Option<WhipAudioTrackThreadHandle>,
-}
-
-#[derive(Debug, Clone)]
-pub struct VideoWhipOptions {
-    pub encoder_preferences: Vec<VideoEncoderOptions>,
-}
-
-#[derive(Debug, Clone)]
-pub struct AudioWhipOptions {
-    pub encoder_preferences: Vec<AudioEncoderOptions>,
-}
-
-#[derive(Debug, Clone)]
-pub struct WhipSenderOptions {
-    pub endpoint_url: Arc<str>,
-    pub bearer_token: Option<Arc<str>>,
-    pub video: Option<VideoWhipOptions>,
-    pub audio: Option<AudioWhipOptions>,
 }
 
 const WHIP_INIT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -114,7 +88,7 @@ impl WhipClientTask {
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
         options: WhipSenderOptions,
-    ) -> Result<(Self, WhipClientOutput), WhipError> {
+    ) -> Result<(Self, WhipClientOutput), WhipInputError> {
         let client = WhipHttpClient::new(&options)?;
         let pc = PeerConnection::new(&ctx, &options).await?;
 
@@ -296,13 +270,13 @@ impl Output for WhipClientOutput {
         })
     }
 
-    fn kind(&self) -> OutputKind {
-        OutputKind::Whip
+    fn kind(&self) -> OutputProtocolKind {
+        OutputProtocolKind::Whip
     }
 }
 
 fn wait_with_deadline<T>(
-    mut result_receiver: oneshot::Receiver<Result<T, WhipError>>,
+    mut result_receiver: oneshot::Receiver<Result<T, WhipInputError>>,
     timeout: Duration,
 ) -> Result<T, OutputInitError> {
     let start_time = Instant::now();
@@ -324,60 +298,4 @@ fn wait_with_deadline<T>(
     }
     result_receiver.close();
     Err(OutputInitError::WhipInitTimeout)
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum WhipError {
-    #[error("Bad status in WHIP response Status: {0} Body:\n{1}")]
-    BadStatus(StatusCode, String),
-
-    #[error("WHIP request failed! Method: {0} URL: {1}")]
-    RequestFailed(Method, Url),
-
-    #[error(
-        "Unable to get location endpoint, check correctness of WHIP endpoint and your Bearer token"
-    )]
-    MissingLocationHeader,
-
-    #[error("Invalid endpoint URL: {1}")]
-    InvalidEndpointUrl(#[source] ParseError, String),
-
-    #[error("Failed to create RTC session description: {0}")]
-    RTCSessionDescriptionError(webrtc::Error),
-
-    #[error("Failed to set local description: {0}")]
-    LocalDescriptionError(webrtc::Error),
-
-    #[error("Failed to set remote description: {0}")]
-    RemoteDescriptionError(webrtc::Error),
-
-    #[error("Failed to parse {0} response body: {1}")]
-    BodyParsingError(&'static str, reqwest::Error),
-
-    #[error("Failed to create offer: {0}")]
-    OfferCreationError(webrtc::Error),
-
-    #[error(transparent)]
-    PeerConnectionInitError(#[from] webrtc::Error),
-
-    #[error("Trickle ICE not supported")]
-    TrickleIceNotSupported,
-
-    #[error("Entity Tag missing")]
-    EntityTagMissing,
-
-    #[error("Entity Tag non-matching")]
-    EntityTagNonMatching,
-
-    #[error("No video codec was negotiated")]
-    NoVideoCodecNegotiated,
-
-    #[error("No audio codec was negotiated")]
-    NoAudioCodecNegotiated,
-
-    #[error("Codec not supported: {0}")]
-    UnsupportedCodec(&'static str),
-
-    #[error("Failed to initialize the encoder")]
-    EncoderInitError(#[from] EncoderInitError),
 }

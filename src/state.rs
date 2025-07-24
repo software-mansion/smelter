@@ -1,15 +1,13 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use axum::response::IntoResponse;
-use compositor_pipeline::{error::InitPipelineError, pipeline};
+use compositor_pipeline::{error::InitPipelineError, Pipeline, PipelineOptions};
 use compositor_render::EventLoop;
 
 use serde::Serialize;
 use tokio::runtime::Runtime;
 
 use crate::config::Config;
-
-pub type Pipeline = compositor_pipeline::Pipeline;
 
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
@@ -44,7 +42,7 @@ impl ApiState {
         config: Config,
         runtime: Arc<Runtime>,
     ) -> Result<(ApiState, Arc<dyn EventLoop>), InitPipelineError> {
-        let mut options: pipeline::Options = (&config).into();
+        let mut options = PipelineOptions::from(&config);
         options.tokio_rt = Some(runtime);
         let (pipeline, event_loop) = Pipeline::new(options)?;
         Ok((
@@ -61,9 +59,9 @@ impl ApiState {
     }
 }
 
-impl From<&Config> for pipeline::Options {
+impl From<&Config> for PipelineOptions {
     fn from(val: &Config) -> Self {
-        pipeline::Options {
+        PipelineOptions {
             queue_options: val.queue_options,
             stream_fallback_timeout: val.stream_fallback_timeout,
             web_renderer: val.web_renderer,

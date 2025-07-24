@@ -3,24 +3,19 @@ use std::sync::Arc;
 use compositor_render::OutputId;
 use crossbeam_channel::{bounded, Receiver};
 
-use crate::{
-    error::OutputInitError,
-    pipeline::{
-        encoder::{
-            encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
-            encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
-            fdk_aac::FdkAacEncoder,
-            ffmpeg_h264::FfmpegH264Encoder,
-            ffmpeg_vp8::FfmpegVp8Encoder,
-            ffmpeg_vp9::FfmpegVp9Encoder,
-            opus::OpusEncoder,
-            AudioEncoderOptions, VideoEncoderOptions,
-        },
-        EncoderOutputEvent, PipelineCtx,
+use crate::pipeline::{
+    encoder::{
+        encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
+        encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
+        fdk_aac::FdkAacEncoder,
+        ffmpeg_h264::FfmpegH264Encoder,
+        ffmpeg_vp8::FfmpegVp8Encoder,
+        ffmpeg_vp9::FfmpegVp9Encoder,
+        libopus::OpusEncoder,
     },
+    output::{Output, OutputAudio, OutputVideo},
 };
-
-use super::{EncodedDataOutputOptions, Output, OutputAudio, OutputKind, OutputVideo};
+use crate::prelude::*;
 
 pub(crate) struct EncodedDataOutput {
     pub audio: Option<AudioEncoderThreadHandle>,
@@ -32,11 +27,11 @@ impl EncodedDataOutput {
         output_id: OutputId,
         ctx: Arc<PipelineCtx>,
         options: EncodedDataOutputOptions,
-    ) -> Result<(Self, Receiver<EncoderOutputEvent>), OutputInitError> {
+    ) -> Result<(Self, Receiver<EncodedOutputEvent>), OutputInitError> {
         let (sender, encoded_chunks_receiver) = bounded(1);
         let video = match &options.video {
             Some(video) => match video {
-                VideoEncoderOptions::H264(options) => {
+                VideoEncoderOptions::FfmpegH264(options) => {
                     Some(spawn_video_encoder_thread::<FfmpegH264Encoder>(
                         ctx.clone(),
                         output_id.clone(),
@@ -44,7 +39,7 @@ impl EncodedDataOutput {
                         sender.clone(),
                     )?)
                 }
-                VideoEncoderOptions::Vp8(options) => {
+                VideoEncoderOptions::FfmpegVp8(options) => {
                     Some(spawn_video_encoder_thread::<FfmpegVp8Encoder>(
                         ctx.clone(),
                         output_id.clone(),
@@ -52,7 +47,7 @@ impl EncodedDataOutput {
                         sender.clone(),
                     )?)
                 }
-                VideoEncoderOptions::Vp9(options) => {
+                VideoEncoderOptions::FfmpegVp9(options) => {
                     Some(spawn_video_encoder_thread::<FfmpegVp9Encoder>(
                         ctx.clone(),
                         output_id.clone(),
@@ -74,7 +69,7 @@ impl EncodedDataOutput {
                         sender.clone(),
                     )?)
                 }
-                AudioEncoderOptions::Aac(options) => {
+                AudioEncoderOptions::FdkAac(options) => {
                     Some(spawn_audio_encoder_thread::<FdkAacEncoder>(
                         ctx.clone(),
                         output_id.clone(),
@@ -106,7 +101,7 @@ impl Output for EncodedDataOutput {
         })
     }
 
-    fn kind(&self) -> OutputKind {
-        OutputKind::EncodedDataChannel
+    fn kind(&self) -> OutputProtocolKind {
+        OutputProtocolKind::EncodedDataChannel
     }
 }

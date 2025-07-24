@@ -1,18 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use compositor_render::InputId;
-
-use crate::{
-    error::{InputInitError, RegisterInputError},
-    pipeline::{decoder::DecodedDataReceiver, input::Input, PipelineCtx},
-    queue::QueueInputOptions,
-    Pipeline,
-};
-
-use super::input;
+use crate::prelude::*;
+use crate::{pipeline::input::Input, queue::QueueDataReceiver};
 
 pub struct PipelineInput {
-    pub input: input::Input,
+    pub input: Input,
 
     /// Some(received) - Whether EOS was received from queue on audio stream for that input.
     /// None - No audio configured for that input.
@@ -34,7 +26,7 @@ where
     BuildFn: FnOnce(
         Arc<PipelineCtx>,
         InputId,
-    ) -> Result<(Input, NewInputResult, DecodedDataReceiver), InputInitError>,
+    ) -> Result<(Input, NewInputResult, QueueDataReceiver), InputInitError>,
 {
     if pipeline.lock().unwrap().inputs.contains_key(&input_id) {
         return Err(RegisterInputError::AlreadyRegistered(input_id));

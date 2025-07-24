@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use axum::{extract::State, response::IntoResponse};
-use compositor_pipeline::pipeline::{input::Input, output::OutputKind};
+use compositor_pipeline::{InputProtocolKind, OutputProtocolKind};
 use compositor_render::RenderingMode;
 use serde::Serialize;
 use serde_json::json;
@@ -52,14 +52,13 @@ pub(super) async fn status_handler(
     let inputs: Vec<InputInfo> = pipeline
         .inputs()
         .map(|(id, input)| {
-            let input_type = match &input.input {
-                Input::Rtp(_) => "rtp",
-                Input::Mp4(_) => "mp4",
-                Input::Whip(_) => "whip",
-                Input::Hls(_) => "hls",
-                #[cfg(feature = "decklink")]
-                Input::DeckLink(_) => "decklink",
-                Input::RawDataInput => "raw data",
+            let input_type = match &input.protocol {
+                InputProtocolKind::Rtp => "rtp",
+                InputProtocolKind::Mp4 => "mp4",
+                InputProtocolKind::Whip => "whip",
+                InputProtocolKind::Hls => "hls",
+                InputProtocolKind::DeckLink => "decklink",
+                InputProtocolKind::RawDataChannel => "raw data",
             };
             InputInfo {
                 input_id: id.to_string(),
@@ -71,14 +70,14 @@ pub(super) async fn status_handler(
     let outputs: Vec<OutputInfo> = pipeline
         .outputs()
         .map(|(id, output)| {
-            let output_type = match &output.kind {
-                OutputKind::Rtp => "rtp",
-                OutputKind::Rtmp => "rtmp",
-                OutputKind::Mp4 => "mp4",
-                OutputKind::Whip => "whip",
-                OutputKind::Hls => "hls",
-                OutputKind::EncodedDataChannel => "encoded data",
-                OutputKind::RawDataChannel => "raw data",
+            let output_type = match &output.protocol {
+                OutputProtocolKind::Rtp => "rtp",
+                OutputProtocolKind::Rtmp => "rtmp",
+                OutputProtocolKind::Mp4 => "mp4",
+                OutputProtocolKind::Whip => "whip",
+                OutputProtocolKind::Hls => "hls",
+                OutputProtocolKind::EncodedDataChannel => "encoded data",
+                OutputProtocolKind::RawDataChannel => "raw data",
             };
             OutputInfo {
                 output_id: id.to_string(),

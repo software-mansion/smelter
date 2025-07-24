@@ -9,13 +9,13 @@ use crate::{
     pipeline::{
         decoder::{
             ffmpeg_h264::FfmpegH264Decoder,
-            h264_utils::{AnnexBChunkStream, H264AVCDecoderConfig},
+            h264_utils::{AnnexBChunkStream, H264AvcDecoderConfig},
             vulkan_h264::VulkanH264Decoder,
             DecoderThreadHandle, VideoDecoderStream,
         },
         PipelineCtx,
     },
-    queue::PipelineEvent,
+    PipelineEvent,
 };
 
 use super::VideoDecoder;
@@ -23,7 +23,7 @@ use super::VideoDecoder;
 pub fn spawn_video_decoder_thread<Decoder: VideoDecoder, const BUFFER_SIZE: usize>(
     ctx: Arc<PipelineCtx>,
     input_id: InputId,
-    h264_config: Option<H264AVCDecoderConfig>,
+    h264_config: Option<H264AvcDecoderConfig>,
     frame_sender: Sender<PipelineEvent<Frame>>,
 ) -> Result<DecoderThreadHandle, DecoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
@@ -65,7 +65,7 @@ pub fn spawn_video_decoder_thread<Decoder: VideoDecoder, const BUFFER_SIZE: usiz
 
 fn init_decoder_stream<Decoder: VideoDecoder, const BUFFER_SIZE: usize>(
     ctx: Arc<PipelineCtx>,
-    h264_config: Option<H264AVCDecoderConfig>,
+    h264_config: Option<H264AvcDecoderConfig>,
 ) -> Result<
     (
         impl Iterator<Item = PipelineEvent<Frame>>,
