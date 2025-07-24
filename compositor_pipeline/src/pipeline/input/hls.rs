@@ -12,8 +12,11 @@ use crate::{
     error::InputInitError,
     pipeline::{
         decoder::{
-            self, decoder_thread_audio::spawn_audio_decoder_thread,
-            decoder_thread_video::spawn_video_decoder_thread, fdk_aac, ffmpeg_h264,
+            self,
+            decoder_thread_audio::spawn_audio_decoder_thread,
+            decoder_thread_video::spawn_video_decoder_thread,
+            fdk_aac, ffmpeg_h264,
+            h264_utils::{H264AVCDecoderConfig, H264AVCDecoderConfigError},
             DecodedDataReceiver, DecoderThreadHandle,
         },
         types::{EncodedChunk, IsKeyframe},
@@ -32,7 +35,7 @@ use ffmpeg_next::{
     format::context,
     media::Type,
     util::interrupt,
-    Dictionary, Packet,
+    Dictionary, Packet, Stream,
 };
 use tracing::{debug, error, span, warn, Level};
 
@@ -117,18 +120,7 @@ impl HlsInput {
             Some(stream) => {
                 // not tested it was always null, but audio is in ADTS, so config is not
                 // necessary
-                let asc = unsafe {
-                    let codecpar = (*stream.as_ptr()).codecpar;
-                    let size = (*codecpar).extradata_size;
-                    if size > 0 {
-                        Some(bytes::Bytes::copy_from_slice(slice::from_raw_parts(
-                            (*codecpar).extradata,
-                            size as usize,
-                        )))
-                    } else {
-                        None
-                    }
-                };
+                let asc = read_extra_data(&stream);
                 let (samples_sender, samples_receiver) = bounded(5);
                 let state =
                     StreamState::new(input_start_time, ctx.queue_sync_time, stream.time_base());
@@ -157,10 +149,25 @@ impl HlsInput {
                 let (frame_sender, frame_receiver) = bounded(5);
                 let state =
                     StreamState::new(input_start_time, ctx.queue_sync_time, stream.time_base());
+
+                let extra_data = read_extra_data(&stream);
+                let h264_config = extra_data
+                    .map(H264AVCDecoderConfig::parse)
+                    .transpose()
+                    .unwrap_or_else(|e| match e {
+                        H264AVCDecoderConfigError::NotAVCC => None,
+                        _ => {
+                            warn!("Could not parse extra data: {e}");
+                            None
+                        }
+                    });
+
                 let decoder_result = spawn_video_decoder_thread::<
                     ffmpeg_h264::FfmpegH264Decoder,
                     2000,
-                >(ctx.clone(), input_id.clone(), frame_sender);
+                >(
+                    ctx.clone(), input_id.clone(), h264_config, frame_sender
+                );
                 let handle = match decoder_result {
                     Ok(handle) => handle,
                     Err(err) => {
@@ -168,6 +175,7 @@ impl HlsInput {
                         return;
                     }
                 };
+
                 (Some((stream.index(), handle, state)), Some(frame_receiver))
             }
             None => (None, None),
@@ -419,6 +427,21 @@ where
             },
 
             e => Err(ffmpeg_next::Error::from(e)),
+        }
+    }
+}
+
+fn read_extra_data(stream: &Stream<'_>) -> Option<Bytes> {
+    unsafe {
+        let codecpar = (*stream.as_ptr()).codecpar;
+        let size = (*codecpar).extradata_size;
+        if size > 0 {
+            Some(Bytes::copy_from_slice(slice::from_raw_parts(
+                (*codecpar).extradata,
+                size as usize,
+            )))
+        } else {
+            None
         }
     }
 }

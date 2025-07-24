@@ -98,12 +98,14 @@ impl Mp4Input {
             Some(track) => {
                 let (sender, receiver) = crossbeam_channel::bounded(10);
                 let handle = match track.decoder_options() {
-                    DecoderOptions::H264 => spawn_video_decoder_thread::<
-                        ffmpeg_h264::FfmpegH264Decoder,
-                        5,
-                    >(
-                        ctx.clone(), input_id.clone(), sender
-                    )?,
+                    DecoderOptions::H264(extra_data) => {
+                        spawn_video_decoder_thread::<ffmpeg_h264::FfmpegH264Decoder, 5>(
+                            ctx.clone(),
+                            input_id.clone(),
+                            Some(extra_data.clone()),
+                            sender,
+                        )?
+                    }
                     _ => return Err(Mp4Error::Unknown("Non H264 decoder options returned.").into()),
                 };
                 (Some(handle), Some(receiver), Some(track))

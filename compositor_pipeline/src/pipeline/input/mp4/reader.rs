@@ -6,11 +6,12 @@ use std::{
     time::Duration,
 };
 
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::Bytes;
 use mp4::Mp4Sample;
 use tracing::warn;
 
 use crate::pipeline::{
+    decoder::h264_utils::H264AVCDecoderConfig,
     types::{EncodedChunk, EncodedChunkKind, IsKeyframe},
     AudioCodec, VideoCodec,
 };
@@ -23,7 +24,7 @@ pub(super) struct Mp4FileReader<Reader: Read + Seek + Send + 'static> {
 
 #[derive(Debug, Clone)]
 pub(super) enum DecoderOptions {
-    H264,
+    H264(H264AVCDecoderConfig),
     Aac(Bytes),
 }
 
@@ -72,7 +73,6 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             sample_count: track.sample_count(),
             timescale: track.timescale(),
             track_id,
-            sample_unpacker: Box::new(|sample| sample.bytes),
             duration: track.duration(),
             decoder_options: DecoderOptions::Aac(asc),
             reader: self.reader,
@@ -95,65 +95,28 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             avc.map(|avc| (id, track, avc))
         })?;
 
-        // sps and pps have to be extracted from the container, interleaved with [0, 0, 0, 1],
-        // concatenated and prepended to the first frame.
-        let sps = avc
-            .avcc
-            .sequence_parameter_sets
-            .iter()
-            .flat_map(|s| [0, 0, 0, 1].iter().chain(s.bytes.iter()));
-
-        let pps = avc
-            .avcc
-            .picture_parameter_sets
-            .iter()
-            .flat_map(|s| [0, 0, 0, 1].iter().chain(s.bytes.iter()));
-
-        let mut sps_and_pps_payload = Some(sps.chain(pps).copied().collect::<Bytes>());
-
-        let length_size = avc.avcc.length_size_minus_one + 1;
-
-        let sample_unpacker = move |sample: mp4::Mp4Sample| {
-            let mut sample_data = sample.bytes.reader();
-            let mut data: BytesMut = Default::default();
-
-            if let Some(first_nal) = sps_and_pps_payload.take() {
-                data.extend_from_slice(&first_nal);
-            }
-
-            // the mp4 sample contains one h264 access unit (possibly more than one NAL).
-            // the NALs are stored as: <length_size bytes long big endian encoded length><the NAL>.
-            // we need to convert this into Annex B, in which NALs are separated by
-            // [0, 0, 0, 1]. `length_size` is at most 4 bytes long.
-            loop {
-                let mut len = [0u8; 4];
-
-                if sample_data
-                    .read_exact(&mut len[4 - length_size as usize..])
-                    .is_err()
-                {
-                    break;
-                }
-
-                let len = u32::from_be_bytes(len);
-
-                let mut nalu = bytes::BytesMut::zeroed(len as usize);
-                sample_data.read_exact(&mut nalu).unwrap();
-
-                data.extend_from_slice(&[0, 0, 0, 1]);
-                data.extend_from_slice(&nalu);
-            }
-
-            data.freeze()
+        let h264_config = H264AVCDecoderConfig {
+            nalu_length_size: avc.avcc.length_size_minus_one as usize + 1,
+            spss: avc
+                .avcc
+                .sequence_parameter_sets
+                .iter()
+                .map(|nalu| Bytes::copy_from_slice(&nalu.bytes))
+                .collect(),
+            ppss: avc
+                .avcc
+                .picture_parameter_sets
+                .iter()
+                .map(|nalu| Bytes::copy_from_slice(&nalu.bytes))
+                .collect(),
         };
 
         Some(Track {
-            sample_unpacker: Box::new(sample_unpacker),
             sample_count: track.sample_count(),
             timescale: track.timescale(),
             track_id,
             duration: track.duration(),
-            decoder_options: DecoderOptions::H264,
+            decoder_options: DecoderOptions::H264(h264_config),
             reader: self.reader,
         })
     }
@@ -161,7 +124,6 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
 
 pub(crate) struct Track<Reader: Read + Seek + Send + 'static> {
     reader: mp4::Mp4Reader<Reader>,
-    sample_unpacker: Box<dyn FnMut(mp4::Mp4Sample) -> Bytes + Send>,
     sample_count: u32,
     timescale: u32,
     track_id: u32,
@@ -229,18 +191,16 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
             (start_time as f64 + rendering_offset as f64) / self.track.timescale as f64,
         );
 
-        let data = (self.track.sample_unpacker)(sample);
-
         let chunk = EncodedChunk {
-            data,
+            data: sample.bytes,
             pts,
             dts: Some(dts),
             is_keyframe: match self.track.decoder_options {
-                DecoderOptions::H264 => IsKeyframe::Unknown,
+                DecoderOptions::H264(_) => IsKeyframe::Unknown,
                 DecoderOptions::Aac(_) => IsKeyframe::NoKeyframes,
             },
             kind: match self.track.decoder_options {
-                DecoderOptions::H264 => EncodedChunkKind::Video(VideoCodec::H264),
+                DecoderOptions::H264(_) => EncodedChunkKind::Video(VideoCodec::H264),
                 DecoderOptions::Aac(_) => EncodedChunkKind::Audio(AudioCodec::Aac),
             },
         };

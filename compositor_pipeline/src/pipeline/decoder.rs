@@ -25,6 +25,8 @@ pub mod vulkan_h264;
 #[path = "./decoder/vulkan_h264_fallback.rs"]
 pub mod vulkan_h264;
 
+pub mod h264_utils;
+
 pub mod fdk_aac;
 pub mod libopus;
 
