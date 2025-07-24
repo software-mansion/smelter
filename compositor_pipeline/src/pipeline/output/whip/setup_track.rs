@@ -229,8 +229,9 @@ pub async fn setup_audio_track(
         AudioEncoderOptions::Opus(options) => spawn_audio_track_thread::<OpusEncoder>(
             ctx.clone(),
             output_id.clone(),
-            options,
+            options.clone(),
             payloader_options(PayloadedCodec::Opus, codec_params.payload_type, ssrc),
+            options.sample_rate,
             sender,
         ),
         AudioEncoderOptions::FdkAac(_options) => {

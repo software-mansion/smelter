@@ -19,6 +19,7 @@ pub fn spawn_audio_encoder_thread<Encoder: AudioEncoder>(
     ctx: Arc<PipelineCtx>,
     output_id: OutputId,
     options: Encoder::Options,
+    output_sample_rate: u32,
     chunks_sender: Sender<EncodedOutputEvent>,
 ) -> Result<AudioEncoderThreadHandle, EncoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
@@ -34,7 +35,7 @@ pub fn spawn_audio_encoder_thread<Encoder: AudioEncoder>(
             )
             .entered();
 
-            let result = init_encoder_stream::<Encoder>(ctx, options);
+            let result = init_encoder_stream::<Encoder>(ctx, options, output_sample_rate);
             let stream = match result {
                 Ok((stream, handle)) => {
                     result_sender.send(Ok(handle)).unwrap();
@@ -61,6 +62,7 @@ pub fn spawn_audio_encoder_thread<Encoder: AudioEncoder>(
 fn init_encoder_stream<Encoder: AudioEncoder>(
     ctx: Arc<PipelineCtx>,
     options: Encoder::Options,
+    output_sample_rate: u32,
 ) -> Result<
     (
         impl Iterator<Item = EncodedOutputEvent>,
@@ -72,7 +74,7 @@ fn init_encoder_stream<Encoder: AudioEncoder>(
     let resampled_stream = ResampledForEncoderStream::new(
         sample_batch_receiver.into_iter(),
         ctx.mixing_sample_rate,
-        options.sample_rate(),
+        output_sample_rate,
     )
     .flatten();
 

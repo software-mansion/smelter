@@ -66,6 +66,7 @@ impl EncodedDataOutput {
                         ctx.clone(),
                         output_id.clone(),
                         options.clone(),
+                        options.sample_rate,
                         sender.clone(),
                     )?)
                 }
@@ -74,6 +75,7 @@ impl EncodedDataOutput {
                         ctx.clone(),
                         output_id.clone(),
                         options.clone(),
+                        options.sample_rate,
                         sender.clone(),
                     )?)
                 }

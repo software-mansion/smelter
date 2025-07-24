@@ -43,7 +43,7 @@ pub(crate) struct AudioEncoderConfig {
 pub(crate) trait AudioEncoder: Sized {
     const LABEL: &'static str;
 
-    type Options: AudioEncoderOptionsExt + Send + 'static;
+    type Options: Send + 'static;
 
     fn new(
         ctx: &Arc<PipelineCtx>,

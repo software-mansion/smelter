@@ -10,12 +10,6 @@ pub struct FdkAacEncoderOptions {
     pub sample_rate: u32,
 }
 
-impl AudioEncoderOptionsExt for FdkAacEncoderOptions {
-    fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FdkAacDecoderOptions {
     pub asc: Option<bytes::Bytes>,

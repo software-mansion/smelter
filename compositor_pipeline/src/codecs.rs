@@ -61,10 +61,6 @@ pub enum OutputPixelFormat {
     YUV444P,
 }
 
-pub(crate) trait AudioEncoderOptionsExt {
-    fn sample_rate(&self) -> u32;
-}
-
 impl VideoEncoderOptions {
     pub fn resolution(&self) -> Resolution {
         match self {

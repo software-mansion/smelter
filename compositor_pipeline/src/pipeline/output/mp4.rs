@@ -211,6 +211,7 @@ impl Mp4Output {
                 ctx.clone(),
                 output_id.clone(),
                 options,
+                sample_rate,
                 encoded_chunks_sender,
             )?,
             AudioEncoderOptions::Opus(_) => {

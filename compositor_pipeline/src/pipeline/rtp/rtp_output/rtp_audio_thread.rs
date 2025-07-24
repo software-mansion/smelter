@@ -25,6 +25,7 @@ pub fn spawn_rtp_audio_thread<Encoder: AudioEncoder>(
     output_id: OutputId,
     encoder_options: Encoder::Options,
     payloader_options: PayloaderOptions,
+    output_sample_rate: u32,
     chunks_sender: Sender<RtpEvent>,
 ) -> Result<RtpAudioTrackThreadHandle, EncoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
@@ -40,7 +41,8 @@ pub fn spawn_rtp_audio_thread<Encoder: AudioEncoder>(
             )
             .entered();
 
-            let result = init_stream::<Encoder>(ctx, encoder_options, payloader_options);
+            let result =
+                init_stream::<Encoder>(ctx, encoder_options, payloader_options, output_sample_rate);
             let stream = match result {
                 Ok((stream, handle)) => {
                     result_sender.send(Ok(handle)).unwrap();
@@ -68,6 +70,7 @@ fn init_stream<Encoder: AudioEncoder>(
     ctx: Arc<PipelineCtx>,
     encoder_options: Encoder::Options,
     payloader_options: PayloaderOptions,
+    output_sample_rate: u32,
 ) -> Result<(impl Iterator<Item = RtpEvent>, RtpAudioTrackThreadHandle), EncoderInitError> {
     let ssrc = payloader_options.ssrc;
     let (sample_batch_sender, sample_batch_receiver) = crossbeam_channel::bounded(5);
@@ -75,7 +78,7 @@ fn init_stream<Encoder: AudioEncoder>(
     let resampled_stream = ResampledForEncoderStream::new(
         sample_batch_receiver.into_iter(),
         ctx.mixing_sample_rate,
-        encoder_options.sample_rate(),
+        output_sample_rate,
     )
     .flatten();
 

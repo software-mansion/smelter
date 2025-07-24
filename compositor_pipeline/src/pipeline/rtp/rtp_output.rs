@@ -196,6 +196,7 @@ impl RtpOutput {
                 output_id.clone(),
                 options.clone(),
                 payloader_options(PayloadedCodec::Opus, 48_000, mtu),
+                options.sample_rate,
                 sender,
             )?,
             AudioEncoderOptions::FdkAac(_options) => {

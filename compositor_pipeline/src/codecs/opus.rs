@@ -1,4 +1,4 @@
-use crate::{codecs::AudioEncoderOptionsExt, AudioChannels};
+use crate::AudioChannels;
 
 pub use opus::Error as LibOpusDecoderError;
 
@@ -16,10 +16,4 @@ pub enum OpusEncoderPreset {
     Quality,
     Voip,
     LowestLatency,
-}
-
-impl AudioEncoderOptionsExt for OpusEncoderOptions {
-    fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
 }
