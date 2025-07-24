@@ -310,11 +310,7 @@ fn handle_packet_loss_requests(
 
                 let packets_sent: u64 = outbound_stats.packets_sent;
                 // This can be lower than 0 in case of duplicates
-                let packets_lost: u64 = if remote_inbound_stats.packets_lost < 0 {
-                    0
-                } else {
-                    remote_inbound_stats.packets_lost as u64
-                };
+                let packets_lost: u64 = i64::max(remote_inbound_stats.packets_lost, 0) as u64;
 
                 let packet_loss_percentage = calculate_packet_loss_percentage(
                     packets_sent,
