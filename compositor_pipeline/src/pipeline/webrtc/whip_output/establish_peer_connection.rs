@@ -1,6 +1,3 @@
-use crate::pipeline::output::whip::WhipHttpClient;
-
-use super::{whip_http_client::SdpAnswer, PeerConnection, WhipInputError};
 use compositor_render::error::ErrorStack;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -12,6 +9,12 @@ use webrtc::{
     ice_transport::ice_candidate::RTCIceCandidate,
     peer_connection::sdp::session_description::RTCSessionDescription,
 };
+
+use crate::pipeline::webrtc::whip_output::{
+    whip_http_client::SdpAnswer, PeerConnection, WhipHttpClient,
+};
+
+use crate::prelude::*;
 
 pub async fn exchange_sdp_offers(
     pc: &PeerConnection,

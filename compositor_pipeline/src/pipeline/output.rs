@@ -4,6 +4,7 @@ use compositor_render::{Frame, OutputFrameFormat, OutputId, Resolution};
 use crossbeam_channel::Sender;
 use rtmp::RtmpClientOutput;
 
+use crate::pipeline::webrtc::WhipOutput;
 use crate::pipeline::{mp4::Mp4Output, output::hls::HlsOutput, rtp::RtpOutput};
 
 use crate::prelude::*;
@@ -12,7 +13,6 @@ pub mod encoded_data;
 pub mod hls;
 pub mod raw_data;
 pub mod rtmp;
-pub mod whip;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct OutputVideo<'a> {
@@ -56,7 +56,7 @@ pub(super) fn new_external_output(
             Ok((Box::new(output), None))
         }
         ProtocolOutputOptions::Whip(opt) => {
-            let output = whip::WhipClientOutput::new(ctx, output_id, opt)?;
+            let output = WhipOutput::new(ctx, output_id, opt)?;
             Ok((Box::new(output), None))
         }
     }

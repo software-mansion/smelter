@@ -15,9 +15,10 @@ use crate::pipeline::{
         ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder, ffmpeg_vp9::FfmpegVp9Encoder,
         libopus::OpusEncoder,
     },
-    output::whip::{track_task_audio::spawn_audio_track_thread, PeerConnection},
     rtp::payloader::{PayloadedCodec, PayloaderOptions},
+    webrtc::whip_output::{track_task_audio::spawn_audio_track_thread, PeerConnection},
 };
+
 use crate::prelude::*;
 
 use super::{
