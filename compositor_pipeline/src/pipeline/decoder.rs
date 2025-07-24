@@ -11,12 +11,13 @@ use crate::prelude::*;
 
 pub(super) mod decoder_thread_audio;
 pub(super) mod decoder_thread_video;
+pub(super) mod h264_utils;
+
+mod ffmpeg_utils;
 
 pub mod ffmpeg_h264;
 pub mod ffmpeg_vp8;
 pub mod ffmpeg_vp9;
-
-mod ffmpeg_utils;
 
 #[cfg(feature = "vk-video")]
 pub mod vulkan_h264;
@@ -24,8 +25,6 @@ pub mod vulkan_h264;
 #[cfg(not(feature = "vk-video"))]
 #[path = "./decoder/vulkan_h264_fallback.rs"]
 pub mod vulkan_h264;
-
-pub mod h264_utils;
 
 pub mod fdk_aac;
 pub mod libopus;
@@ -44,6 +43,10 @@ pub(crate) trait VideoDecoder: Sized + VideoDecoderInstance {
 pub(crate) trait VideoDecoderInstance {
     fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame>;
     fn flush(&mut self) -> Vec<Frame>;
+}
+
+pub(crate) trait BytestreamTransformer: Send + 'static {
+    fn transform(&mut self, data: bytes::Bytes) -> bytes::Bytes;
 }
 
 pub(crate) trait AudioDecoder: Sized {
@@ -167,6 +170,56 @@ where
                     let eos = iter::once(PipelineEvent::EOS);
                     self.eos_sent = true;
                     Some(events.chain(eos).collect())
+                }
+            },
+        }
+    }
+}
+
+pub struct BytestreamTransformStream<Source, Transformer>
+where
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Transformer: BytestreamTransformer,
+{
+    transformer: Option<Transformer>,
+    source: Source,
+    eos_sent: bool,
+}
+
+impl<Source, Transformer> BytestreamTransformStream<Source, Transformer>
+where
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Transformer: BytestreamTransformer,
+{
+    pub fn new(transformer: Option<Transformer>, source: Source) -> Self {
+        Self {
+            transformer,
+            source,
+            eos_sent: false,
+        }
+    }
+}
+
+impl<Source, Transformer> Iterator for BytestreamTransformStream<Source, Transformer>
+where
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Transformer: BytestreamTransformer,
+{
+    type Item = PipelineEvent<EncodedInputChunk>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.source.next() {
+            Some(PipelineEvent::Data(mut chunk)) => {
+                if let Some(ref mut transformer) = self.transformer {
+                    chunk.data = transformer.transform(chunk.data);
+                }
+                Some(PipelineEvent::Data(chunk))
+            }
+            Some(PipelineEvent::EOS) | None => match self.eos_sent {
+                true => None,
+                false => {
+                    self.eos_sent = true;
+                    Some(PipelineEvent::EOS)
                 }
             },
         }

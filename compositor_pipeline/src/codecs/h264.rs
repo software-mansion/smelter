@@ -23,3 +23,12 @@ pub struct FfmpegH264EncoderOptions {
     pub pixel_format: OutputPixelFormat,
     pub raw_options: Vec<(String, String)>,
 }
+
+#[derive(Debug, thiserror::Error)]
+pub enum H264AvcDecoderConfigError {
+    #[error("Incorrect AVCDecoderConfig. Expected more bytes.")]
+    NotEnoughBytes(#[from] bytes::TryGetError),
+
+    #[error("Not AVCC")]
+    NotAVCC,
+}
