@@ -141,7 +141,7 @@ impl WhipClientTask {
         let (audio_thread_handle, audio_track) = match &options.audio {
             Some(opts) => {
                 let (audio_thread_handle, audio) =
-                    setup_audio_track(&ctx, &output_id, audio_rtc_sender, opts).await?;
+                    setup_audio_track(&ctx, &output_id, audio_rtc_sender, pc.clone(), opts).await?;
                 (Some(audio_thread_handle), Some(audio))
             }
             None => (None, None),

@@ -22,6 +22,7 @@ use webrtc::{
         rtp_sender::RTCRtpSender,
         RTCPFeedback,
     },
+    stats::StatsReport,
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
@@ -142,6 +143,10 @@ impl PeerConnection {
     pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
         self.pc.on_ice_candidate(f);
     }
+
+    pub async fn get_stats(&self) -> StatsReport {
+        self.pc.get_stats().await
+    }
 }
 
 fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Result<MediaEngine> {
@@ -162,16 +167,20 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
                 AudioChannels::Mono => 1,
                 AudioChannels::Stereo => 2,
             };
+            let (fec, payload_type): (u8, u8) = match opts.forward_error_correction {
+                true => (1, 111),
+                false => (0, 110),
+            };
             media_engine.register_codec(
                 RTCRtpCodecParameters {
                     capability: RTCRtpCodecCapability {
                         mime_type: MIME_TYPE_OPUS.to_owned(),
                         clock_rate: opts.sample_rate,
                         channels,
-                        sdp_fmtp_line: "minptime=10;useinbandfec=1".to_owned(),
+                        sdp_fmtp_line: format!("minptime=10;useinbandfec={fec}").to_owned(),
                         rtcp_feedback: vec![],
                     },
-                    payload_type: 111,
+                    payload_type,
                     ..Default::default()
                 },
                 RTPCodecType::Audio,

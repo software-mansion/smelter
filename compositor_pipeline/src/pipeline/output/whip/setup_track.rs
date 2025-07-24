@@ -1,13 +1,13 @@
 use compositor_render::OutputId;
-use crossbeam_channel::Sender;
 use rand::Rng;
 use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use tracing::{debug, info, warn};
+use std::{sync::Arc, time::Duration};
+use tokio::sync::{mpsc, watch};
+use tracing::{debug, error, info, span, trace, warn, Instrument, Level};
 use webrtc::{
     api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
     rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender},
+    stats::StatsReportType,
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
@@ -16,7 +16,7 @@ use crate::pipeline::{
         ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder, ffmpeg_vp9::FfmpegVp9Encoder,
         opus::OpusEncoder, AudioEncoderOptions, VideoEncoderOptions,
     },
-    output::whip::track_task_audio::spawn_audio_track_thread,
+    output::whip::{track_task_audio::spawn_audio_track_thread, PeerConnection},
     rtp::payloader::{PayloadedCodec, PayloaderOptions},
     PipelineCtx,
 };
@@ -50,8 +50,15 @@ impl MatchCodecCapability for VideoEncoderOptions {
 impl MatchCodecCapability for AudioEncoderOptions {
     fn matches(&self, capability: &RTCRtpCodecCapability) -> bool {
         match self {
-            AudioEncoderOptions::Opus(_) => {
-                capability.mime_type.to_lowercase() == MIME_TYPE_OPUS.to_lowercase()
+            AudioEncoderOptions::Opus(opt) => {
+                let codec_match =
+                    capability.mime_type.to_lowercase() == MIME_TYPE_OPUS.to_lowercase();
+
+                let line = &capability.sdp_fmtp_line;
+                let fec_negotiated = line.contains("useinbandfec=1");
+                let fec_match = fec_negotiated == opt.forward_error_correction;
+
+                codec_match && fec_match
             }
             AudioEncoderOptions::Aac(_) => false,
         }
@@ -141,10 +148,38 @@ pub async fn setup_video_track(
     Ok((handle, WhipSenderTrack { receiver, track }))
 }
 
+fn handle_keyframe_requests(
+    ctx: &Arc<PipelineCtx>,
+    sender: Arc<RTCRtpSender>,
+    keyframe_sender: crossbeam_channel::Sender<()>,
+) {
+    ctx.tokio_rt.spawn(async move {
+        loop {
+            if let Ok((packets, _)) = sender.read_rtcp().await {
+                for packet in packets {
+                    if packet
+                        .as_any()
+                        .downcast_ref::<PictureLossIndication>()
+                        .is_some()
+                    {
+                        info!("Request keyframe");
+                        if let Err(err) = keyframe_sender.send(()) {
+                            warn!(%err, "Failed to send keyframe request to the encoder.");
+                        };
+                    }
+                }
+            } else {
+                debug!("Failed to read RTCP packets from the sender.");
+            }
+        }
+    });
+}
+
 pub async fn setup_audio_track(
     ctx: &Arc<PipelineCtx>,
     output_id: &OutputId,
     rtc_sender: Arc<RTCRtpSender>,
+    pc: PeerConnection,
     options: &AudioWhipOptions,
 ) -> Result<(WhipAudioTrackThreadHandle, WhipSenderTrack), WhipError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
@@ -202,32 +237,122 @@ pub async fn setup_audio_track(
         AudioEncoderOptions::Aac(_options) => return Err(WhipError::UnsupportedCodec("aac")),
     }?;
 
+    handle_packet_loss_requests(
+        ctx,
+        pc,
+        rtc_sender.clone(),
+        handle.packet_loss_sender.clone(),
+        ssrc,
+    );
+
     Ok((handle, WhipSenderTrack { receiver, track }))
 }
 
-fn handle_keyframe_requests(
+// Identifiers used in stats HashMap returnet by RTCPeerConnection::get_stats()
+const RTC_OUTBOUND_RTP_AUDIO_STREAM: &str = "RTCOutboundRTPAudioStream_";
+const RTC_REMOTE_INBOUND_RTP_AUDIO_STREAM: &str = "RTCRemoteInboundRTPAudioStream_";
+
+fn handle_packet_loss_requests(
     ctx: &Arc<PipelineCtx>,
-    sender: Arc<RTCRtpSender>,
-    keyframe_sender: Sender<()>,
+    pc: PeerConnection,
+    rtc_sender: Arc<RTCRtpSender>,
+    packet_loss_sender: watch::Sender<i32>,
+    ssrc: u32,
 ) {
-    ctx.tokio_rt.spawn(async move {
-        loop {
-            if let Ok((packets, _)) = sender.read_rtcp().await {
-                for packet in packets {
-                    if packet
-                        .as_any()
-                        .downcast_ref::<PictureLossIndication>()
-                        .is_some()
-                    {
-                        info!("Request keyframe");
-                        if let Err(err) = keyframe_sender.send(()) {
-                            warn!(%err, "Failed to send keyframe request to the encoder.");
-                        };
-                    }
+    let mut cumulative_packets_sent: u64 = 0;
+    let mut cumulative_packets_lost: u64 = 0;
+
+    let span = span!(Level::DEBUG, "Packet loss handle");
+
+    ctx.tokio_rt.spawn(
+        async move {
+            loop {
+                if let Err(e) = rtc_sender.read_rtcp().await {
+                    debug!(%e, "Error while reading rtcp.");
                 }
-            } else {
-                debug!("Failed to read RTCP packets from the sender.");
             }
         }
-    });
+        .instrument(span.clone()),
+    );
+
+    ctx.tokio_rt.spawn(
+        async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                let stats = pc.get_stats().await.reports;
+                let outbound_id = String::from(RTC_OUTBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
+                let remote_inbound_id =
+                    String::from(RTC_REMOTE_INBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
+
+                let outbound_stats = match stats.get(&outbound_id) {
+                    Some(StatsReportType::OutboundRTP(report)) => report,
+                    Some(_) => {
+                        error!("Invalid report type for given key! (This should not happen)");
+                        continue;
+                    }
+                    None => {
+                        debug!("OutboundRTP report is empty!");
+                        continue;
+                    }
+                };
+
+                let remote_inbound_stats = match stats.get(&remote_inbound_id) {
+                    Some(StatsReportType::RemoteInboundRTP(report)) => report,
+                    Some(_) => {
+                        error!("Invalid report type for given key! (This should not happen)");
+                        continue;
+                    }
+                    None => {
+                        debug!("RemoteInboundRTP report is empty!");
+                        continue;
+                    }
+                };
+
+                let packets_sent: u64 = outbound_stats.packets_sent;
+                // This can be lower than 0 in case of duplicates
+                let packets_lost: u64 = i64::max(remote_inbound_stats.packets_lost, 0) as u64;
+
+                let packet_loss_percentage = calculate_packet_loss_percentage(
+                    packets_sent,
+                    packets_lost,
+                    cumulative_packets_sent,
+                    cumulative_packets_lost,
+                );
+                if packet_loss_sender.send(packet_loss_percentage).is_err() {
+                    debug!("Packet loss channel closed.");
+                }
+                cumulative_packets_sent = packets_sent;
+                cumulative_packets_lost = packets_lost;
+            }
+        }
+        .instrument(span),
+    );
+}
+
+fn calculate_packet_loss_percentage(
+    packets_sent: u64,
+    packets_lost: u64,
+    cumulative_packets_sent: u64,
+    cumulative_packets_lost: u64,
+) -> i32 {
+    let packets_sent_since_last_report = packets_sent - cumulative_packets_sent;
+    let packets_lost_since_last_report = packets_lost - cumulative_packets_lost;
+
+    // I don't want the system to panic in case of some bug
+    let packet_loss_percentage: i32 = if packets_sent_since_last_report != 0 {
+        let mut loss =
+            100.0 * packets_lost_since_last_report as f64 / packets_sent_since_last_report as f64;
+        // loss is rounded up to the nearest multiple of 5
+        loss = f64::ceil(loss / 5.0) * 5.0;
+        loss as i32
+    } else {
+        0
+    };
+
+    trace!(
+        packets_sent_since_last_report,
+        packets_lost_since_last_report,
+        packet_loss_percentage,
+    );
+    packet_loss_percentage
 }

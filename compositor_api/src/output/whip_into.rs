@@ -186,6 +186,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                             WhipAudioEncoderOptions::Opus {
                                 preset,
                                 sample_rate,
+                                forward_error_correction,
                                 ..
                             } => {
                                 vec![pipeline::encoder::AudioEncoderOptions::Opus(
@@ -193,23 +194,33 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                                         channels: resolved_channels.clone().into(),
                                         preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
                                         sample_rate: sample_rate.unwrap_or(48000),
-                                        // TODO, options added for compatibility
-                                        forward_error_correction: false,
+                                        forward_error_correction: forward_error_correction
+                                            .unwrap_or(false),
                                         packet_loss: 0,
                                     },
                                 )]
                             }
                             WhipAudioEncoderOptions::Any => {
-                                vec![pipeline::encoder::AudioEncoderOptions::Opus(
-                                    opus::OpusEncoderOptions {
-                                        channels: resolved_channels.clone().into(),
-                                        preset: OpusEncoderPreset::Voip.into(),
-                                        sample_rate: 48000,
-                                        // TODO, options added for compatibility
-                                        forward_error_correction: false,
-                                        packet_loss: 0,
-                                    },
-                                )]
+                                vec![
+                                    pipeline::encoder::AudioEncoderOptions::Opus(
+                                        opus::OpusEncoderOptions {
+                                            channels: resolved_channels.clone().into(),
+                                            preset: OpusEncoderPreset::Voip.into(),
+                                            sample_rate: 48000,
+                                            forward_error_correction: true,
+                                            packet_loss: 0,
+                                        },
+                                    ),
+                                    pipeline::encoder::AudioEncoderOptions::Opus(
+                                        opus::OpusEncoderOptions {
+                                            channels: resolved_channels.clone().into(),
+                                            preset: OpusEncoderPreset::Voip.into(),
+                                            sample_rate: 48000,
+                                            forward_error_correction: false,
+                                            packet_loss: 0,
+                                        },
+                                    ),
+                                ]
                             }
                         })
                         .unique()
@@ -228,7 +239,6 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                             channels: audio_mixer::AudioChannels::Stereo,
                             preset: OpusEncoderPreset::Voip.into(),
                             sample_rate: 48000,
-                            // TODO, options added for compatibility
                             forward_error_correction: false,
                             packet_loss: 0,
                         },
