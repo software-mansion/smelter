@@ -2,14 +2,21 @@ use core::slice;
 use ffmpeg_next::{format::Pixel, frame};
 use std::time::Duration;
 
-use compositor_render::{Frame, FrameData};
+use compositor_render::FrameData;
 
-use crate::pipeline::types::ChunkFromFfmpegError;
 use crate::prelude::*;
 
 #[derive(Debug, thiserror::Error)]
 #[error("Failed to create libav frame: {0}")]
 pub(super) struct FrameConversionError(String);
+
+#[derive(Debug, thiserror::Error)]
+pub(super) enum ChunkFromFfmpegError {
+    #[error("No data")]
+    NoData,
+    #[error("No pts")]
+    NoPts,
+}
 
 pub(super) fn create_av_frame(
     frame: Frame,

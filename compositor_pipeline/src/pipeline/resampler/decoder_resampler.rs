@@ -4,9 +4,10 @@ use compositor_render::error::ErrorStack;
 use tracing::warn;
 
 use crate::pipeline::{
+    decoder::DecodedSamples,
     resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch},
-    types::DecodedSamples,
 };
+
 use crate::prelude::*;
 
 pub(crate) struct ResampledDecoderStream<Source: Iterator<Item = PipelineEvent<DecodedSamples>>> {

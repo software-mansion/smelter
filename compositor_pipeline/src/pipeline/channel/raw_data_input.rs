@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use compositor_render::InputId;
 use crossbeam_channel::bounded;
 
-use crate::prelude::*;
 use crate::{pipeline::input::Input, queue::QueueDataReceiver};
+
+use crate::prelude::*;
 
 pub struct RawDataInput;
 

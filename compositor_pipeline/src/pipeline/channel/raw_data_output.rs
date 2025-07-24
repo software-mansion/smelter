@@ -4,9 +4,10 @@ use compositor_render::{Frame, OutputFrameFormat, Resolution};
 use crossbeam_channel::{bounded, Sender};
 
 use crate::pipeline::output::{Output, OutputAudio, OutputVideo};
+
 use crate::prelude::*;
 
-pub(crate) struct RawDataOutput {
+pub struct RawDataOutput {
     video: Option<(Sender<PipelineEvent<Frame>>, Resolution)>,
     audio: Option<Sender<PipelineEvent<OutputAudioSamples>>>,
 }
