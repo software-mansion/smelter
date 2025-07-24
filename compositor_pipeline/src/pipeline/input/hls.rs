@@ -24,20 +24,20 @@ use ffmpeg_next::{
 use tracing::{debug, error, span, warn, Level};
 
 use crate::{
-    pipeline::decoder::h264_utils::{H264AvcDecoderConfig, H264AvcDecoderConfigError},
-    prelude::*,
-};
-use crate::{
     pipeline::{
         decoder::{
             decoder_thread_audio::spawn_audio_decoder_thread,
-            decoder_thread_video::spawn_video_decoder_thread, fdk_aac, ffmpeg_h264,
+            decoder_thread_video::spawn_video_decoder_thread,
+            fdk_aac, ffmpeg_h264,
+            h264_utils::{AvccToAnnexBRepacker, H264AvcDecoderConfig},
             DecoderThreadHandle,
         },
         input::Input,
     },
     queue::QueueDataReceiver,
 };
+
+use crate::prelude::*;
 
 pub struct HlsInput {
     should_close: Arc<AtomicBool>,
@@ -154,12 +154,13 @@ impl HlsInput {
                         }
                     });
 
-                let decoder_result = spawn_video_decoder_thread::<
-                    ffmpeg_h264::FfmpegH264Decoder,
-                    2000,
-                >(
-                    ctx.clone(), input_id.clone(), h264_config, frame_sender
-                );
+                let decoder_result =
+                    spawn_video_decoder_thread::<ffmpeg_h264::FfmpegH264Decoder, 2000, _>(
+                        ctx.clone(),
+                        input_id.clone(),
+                        h264_config.map(AvccToAnnexBRepacker::new),
+                        frame_sender,
+                    );
                 let handle = match decoder_result {
                     Ok(handle) => handle,
                     Err(err) => {

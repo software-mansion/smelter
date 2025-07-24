@@ -14,16 +14,16 @@ use crossbeam_channel::bounded;
 use reader::{DecoderOptions, Mp4FileReader, Track};
 use tracing::{debug, error, span, trace, Level, Span};
 
-use crate::prelude::*;
 use crate::{
     pipeline::{
         decoder::{
             decoder_thread_audio::spawn_audio_decoder_thread,
             decoder_thread_video::spawn_video_decoder_thread, fdk_aac, ffmpeg_h264,
-            DecoderThreadHandle,
+            h264_utils::AvccToAnnexBRepacker, DecoderThreadHandle,
         },
         input::Input,
     },
+    prelude::*,
     queue::QueueDataReceiver,
 };
 
@@ -66,10 +66,10 @@ impl Mp4Input {
                 let (sender, receiver) = crossbeam_channel::bounded(10);
                 let handle = match track.decoder_options() {
                     DecoderOptions::H264(extra_data) => {
-                        spawn_video_decoder_thread::<ffmpeg_h264::FfmpegH264Decoder, 5>(
+                        spawn_video_decoder_thread::<ffmpeg_h264::FfmpegH264Decoder, 5, _>(
                             ctx.clone(),
                             input_id.clone(),
-                            Some(extra_data.clone()),
+                            Some(AvccToAnnexBRepacker::new(extra_data.clone())),
                             sender,
                         )?
                     }
