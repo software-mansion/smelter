@@ -850,6 +850,10 @@ export type WhipAudioEncoderOptions =
        * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
        */
       sample_rate?: number | null;
+      /**
+       * (**default=`false`**) Specifies if forward error correction (FEC) should be used.
+       */
+      forward_error_correction?: boolean | null;
     }
   | {
       type: "any";
