@@ -196,7 +196,6 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                                         sample_rate: sample_rate.unwrap_or(48000),
                                         forward_error_correction: forward_error_correction
                                             .unwrap_or(false),
-                                        // Default
                                         packet_loss: 0,
                                     },
                                 )]
@@ -209,7 +208,6 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                                             preset: OpusEncoderPreset::Voip.into(),
                                             sample_rate: 48000,
                                             forward_error_correction: true,
-                                            // Default
                                             packet_loss: 0,
                                         },
                                     ),
@@ -219,7 +217,6 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<output::OutputOptio
                                             preset: OpusEncoderPreset::Voip.into(),
                                             sample_rate: 48000,
                                             forward_error_correction: false,
-                                            // Default
                                             packet_loss: 0,
                                         },
                                     ),

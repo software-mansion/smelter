@@ -282,13 +282,11 @@ where
         ))
     }
 
-    fn read_packet_loss(&mut self) -> Option<i32> {
+    fn updated_packet_loss(&mut self) -> Option<i32> {
         let packet_loss_changed = self.packet_loss_receiver.has_changed().unwrap_or(false);
-        if packet_loss_changed {
-            let packet_loss = self.packet_loss_receiver.borrow_and_update().to_owned();
-            Some(packet_loss)
-        } else {
-            None
+        match packet_loss_changed {
+            true => Some(*self.packet_loss_receiver.borrow_and_update()),
+            false => None,
         }
     }
 }
@@ -303,7 +301,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
             Some(PipelineEvent::Data(samples)) => {
-                if let Some(packet_loss) = self.read_packet_loss() {
+                if let Some(packet_loss) = self.updated_packet_loss() {
                     self.encoder.set_packet_loss(packet_loss);
                 }
                 let chunks = self.encoder.encode(samples);

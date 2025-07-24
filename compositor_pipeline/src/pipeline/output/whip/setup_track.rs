@@ -286,13 +286,11 @@ fn handle_packet_loss_requests(
                     String::from(RTC_REMOTE_INBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
 
                 let outbound_stats = match stats.get(&outbound_id) {
-                    Some(report) => match report {
-                        StatsReportType::OutboundRTP(report) => report,
-                        _ => {
-                            error!("Invalid report type for given key! (This should not happen)");
-                            continue;
-                        }
-                    },
+                    Some(StatsReportType::OutboundRTP(report)) => report,
+                    Some(_) => {
+                        error!("Invalid report type for given key! (This should not happen)");
+                        continue;
+                    }
                     None => {
                         debug!("OutboundRTP report is empty!");
                         continue;
@@ -300,15 +298,13 @@ fn handle_packet_loss_requests(
                 };
 
                 let remote_inbound_stats = match stats.get(&remote_inbound_id) {
-                    Some(report) => match report {
-                        StatsReportType::RemoteInboundRTP(report) => report,
-                        _ => {
-                            error!("Invalid report type for given key! (This should not happen)");
-                            continue;
-                        }
-                    },
+                    Some(StatsReportType::RemoteInboundRTP(report)) => report,
+                    Some(_) => {
+                        error!("Invalid report type for given key! (This should not happen)");
+                        continue;
+                    }
                     None => {
-                        debug!("OutboundRTP report is empty!");
+                        debug!("RemoteInboundRTP report is empty!");
                         continue;
                     }
                 };
