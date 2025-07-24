@@ -4,13 +4,11 @@ use compositor_render::{Frame, OutputFrameFormat, OutputId, Resolution};
 use crossbeam_channel::Sender;
 use rtmp::RtmpClientOutput;
 
-use crate::pipeline::webrtc::WhipOutput;
-use crate::pipeline::{mp4::Mp4Output, output::hls::HlsOutput, rtp::RtpOutput};
+use crate::pipeline::{hls::HlsOutput, mp4::Mp4Output, rtp::RtpOutput, webrtc::WhipOutput};
 
 use crate::prelude::*;
 
 pub mod encoded_data;
-pub mod hls;
 pub mod raw_data;
 pub mod rtmp;
 

@@ -22,6 +22,7 @@ mod decoder;
 mod encoder;
 mod resampler;
 
+mod hls;
 mod mp4;
 mod rtp;
 mod webrtc;

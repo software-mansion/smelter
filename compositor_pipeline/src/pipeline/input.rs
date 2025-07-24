@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    pipeline::{input::hls::HlsInput, mp4::Mp4Input, rtp::RtpInput, webrtc::WhipInput},
+    pipeline::{hls::HlsInput, mp4::Mp4Input, rtp::RtpInput, webrtc::WhipInput},
     queue::QueueDataReceiver,
 };
 
@@ -9,7 +9,6 @@ use crate::prelude::*;
 
 #[cfg(feature = "decklink")]
 pub mod decklink;
-pub mod hls;
 pub mod raw_data;
 
 pub enum Input {
