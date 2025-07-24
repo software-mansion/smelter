@@ -259,8 +259,8 @@ fn handle_packet_loss_requests(
     packet_loss_sender: watch::Sender<i32>,
     ssrc: u32,
 ) {
-    let mut cumulative_packets_sent_report: u64 = 0;
-    let mut cumulative_packets_lost_report: u64 = 0;
+    let mut cumulative_packets_sent: u64 = 0;
+    let mut cumulative_packets_lost: u64 = 0;
 
     let span = span!(Level::DEBUG, "Packet loss handle");
 
@@ -278,7 +278,6 @@ fn handle_packet_loss_requests(
     ctx.tokio_rt.spawn(
         async move {
             loop {
-                // TODO: change that to 30s before merging
                 tokio::time::sleep(Duration::from_secs(10)).await;
                 let stats = pc.get_stats().await.reports;
                 let outbound_id = String::from(RTC_OUTBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
@@ -317,33 +316,47 @@ fn handle_packet_loss_requests(
                     remote_inbound_stats.packets_lost as u64
                 };
 
-                let packets_sent_since_last_report = packets_sent - cumulative_packets_sent_report;
-                let packets_lost_since_last_report = packets_lost - cumulative_packets_lost_report;
-
-                // I don't want the system to panic in case of some bug
-                let packet_loss_percentage: i32 = if packets_sent_since_last_report != 0 {
-                    let mut loss = 100.0 * packets_lost_since_last_report as f64
-                        / packets_sent_since_last_report as f64;
-                    // loss is rounded up to the nearest multiple of 5
-                    loss = f64::ceil(loss / 5.0) * 5.0;
-                    loss as i32
-                } else {
-                    0
-                };
-
-                cumulative_packets_sent_report = packets_sent;
-                cumulative_packets_lost_report = packets_lost;
-
-                trace!(
-                    packets_sent_since_last_report,
-                    packets_lost_since_last_report,
-                    packet_loss_percentage,
+                let packet_loss_percentage = calculate_packet_loss_percentage(
+                    packets_sent,
+                    packets_lost,
+                    cumulative_packets_sent,
+                    cumulative_packets_lost,
                 );
                 if packet_loss_sender.send(packet_loss_percentage).is_err() {
                     debug!("Packet loss channel closed.");
                 }
+                cumulative_packets_sent = packets_sent;
+                cumulative_packets_lost = packets_lost;
             }
         }
         .instrument(span),
     );
+}
+
+fn calculate_packet_loss_percentage(
+    packets_sent: u64,
+    packets_lost: u64,
+    cumulative_packets_sent: u64,
+    cumulative_packets_lost: u64,
+) -> i32 {
+    let packets_sent_since_last_report = packets_sent - cumulative_packets_sent;
+    let packets_lost_since_last_report = packets_lost - cumulative_packets_lost;
+
+    // I don't want the system to panic in case of some bug
+    let packet_loss_percentage: i32 = if packets_sent_since_last_report != 0 {
+        let mut loss =
+            100.0 * packets_lost_since_last_report as f64 / packets_sent_since_last_report as f64;
+        // loss is rounded up to the nearest multiple of 5
+        loss = f64::ceil(loss / 5.0) * 5.0;
+        loss as i32
+    } else {
+        0
+    };
+
+    trace!(
+        packets_sent_since_last_report,
+        packets_lost_since_last_report,
+        packet_loss_percentage,
+    );
+    packet_loss_percentage
 }
