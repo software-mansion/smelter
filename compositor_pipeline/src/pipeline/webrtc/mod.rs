@@ -5,16 +5,17 @@ use tracing::error;
 
 use whip_input::WhipInputsState;
 
-pub mod bearer_token;
-pub mod error;
-pub mod supported_video_codec_parameters;
-
+mod bearer_token;
+mod error;
 mod peer_connection_recvonly;
 mod server;
+mod supported_video_codec_parameters;
 mod whip_input;
+mod whip_output;
 
 pub(super) use server::WhipWhepServer;
 pub(super) use whip_input::WhipInput;
+pub(super) use whip_output::WhipOutput;
 
 use crate::pipeline::PipelineCtx;
 
