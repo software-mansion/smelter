@@ -271,6 +271,7 @@ fn handle_packet_loss_requests(
     ctx.tokio_rt.spawn(
         async move {
             loop {
+                // TODO: change that to 30s before merging
                 tokio::time::sleep(Duration::from_secs(10)).await;
                 let stats = pc.get_stats().await.reports;
                 let outbound_id = String::from(RTC_OUTBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
@@ -318,11 +319,11 @@ fn handle_packet_loss_requests(
 
                 // I don't want the system to panic in case of some bug
                 let packet_loss_percentage: i32 = if packets_sent_since_last_report != 0 {
-                    let loss = f64::round(
-                        100.0 * packets_lost_since_last_report as f64
-                            / packets_sent_since_last_report as f64,
-                    ) as i32;
-                    i32::min(100, loss + 5)
+                    let mut loss = 100.0 * packets_lost_since_last_report as f64
+                        / packets_sent_since_last_report as f64;
+                    // loss is rounded up to the nearest multiple of 5
+                    loss = f64::ceil(loss / 5.0) * 5.0;
+                    loss as i32
                 } else {
                     0
                 };
@@ -333,6 +334,7 @@ fn handle_packet_loss_requests(
                 trace!(
                     packets_sent_since_last_report,
                     packets_lost_since_last_report,
+                    packet_loss_percentage,
                 );
                 if packet_loss_sender.send(packet_loss_percentage).is_err() {
                     debug!("Packet loss channel closed.");
