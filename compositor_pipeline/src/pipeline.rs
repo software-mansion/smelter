@@ -15,11 +15,14 @@ use crate::{
     event::EventEmitter, graphics_context::GraphicsContext, pipeline::webrtc::WhipWhepPipelineState,
 };
 
-mod decoder;
-mod encoder;
 mod input;
 mod output;
+
+mod decoder;
+mod encoder;
 mod resampler;
+
+mod mp4;
 mod rtp;
 mod webrtc;
 

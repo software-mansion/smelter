@@ -6,18 +6,20 @@ use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
 use log::error;
 use tracing::{debug, warn};
 
-use crate::prelude::*;
 use crate::{
     event::Event,
-    pipeline::encoder::{
-        encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
-        encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
-        fdk_aac::FdkAacEncoder,
-        ffmpeg_h264::FfmpegH264Encoder,
+    pipeline::{
+        encoder::{
+            encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
+            encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
+            fdk_aac::FdkAacEncoder,
+            ffmpeg_h264::FfmpegH264Encoder,
+        },
+        output::{Output, OutputAudio, OutputVideo},
     },
 };
 
-use super::{Output, OutputAudio, OutputProtocolKind, OutputVideo};
+use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 struct StreamState {

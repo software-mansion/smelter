@@ -2,15 +2,14 @@ use std::sync::Arc;
 
 use compositor_render::{Frame, OutputFrameFormat, OutputId, Resolution};
 use crossbeam_channel::Sender;
-use mp4::Mp4Output;
 use rtmp::RtmpClientOutput;
 
-use crate::pipeline::{output::hls::HlsOutput, rtp::RtpOutput};
+use crate::pipeline::{mp4::Mp4Output, output::hls::HlsOutput, rtp::RtpOutput};
+
 use crate::prelude::*;
 
 pub mod encoded_data;
 pub mod hls;
-pub mod mp4;
 pub mod raw_data;
 pub mod rtmp;
 pub mod whip;
