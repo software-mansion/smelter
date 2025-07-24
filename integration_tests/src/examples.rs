@@ -60,7 +60,7 @@ pub fn run_example(client_code: fn() -> Result<()>) {
     server::run();
 }
 
-fn wait_for_server_ready(timeout: Duration) -> Result<()> {
+pub fn wait_for_server_ready(timeout: Duration) -> Result<()> {
     let server_status_url = "http://127.0.0.1:8081/status";
     let wait_start_time = Instant::now();
     loop {
