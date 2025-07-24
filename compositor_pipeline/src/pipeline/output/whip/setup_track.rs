@@ -50,8 +50,15 @@ impl MatchCodecCapability for VideoEncoderOptions {
 impl MatchCodecCapability for AudioEncoderOptions {
     fn matches(&self, capability: &RTCRtpCodecCapability) -> bool {
         match self {
-            AudioEncoderOptions::Opus(_) => {
-                capability.mime_type.to_lowercase() == MIME_TYPE_OPUS.to_lowercase()
+            AudioEncoderOptions::Opus(opt) => {
+                let codec_match =
+                    capability.mime_type.to_lowercase() == MIME_TYPE_OPUS.to_lowercase();
+
+                let line = &capability.sdp_fmtp_line;
+                let fec_negotiated = line.contains("useinbandfec=1");
+                let fec_match = fec_negotiated == opt.forward_error_correction;
+
+                codec_match && fec_match
             }
             AudioEncoderOptions::Aac(_) => false,
         }
