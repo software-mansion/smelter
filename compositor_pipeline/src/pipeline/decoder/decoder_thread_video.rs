@@ -2,33 +2,49 @@ use std::sync::Arc;
 
 use compositor_render::{Frame, InputId};
 use crossbeam_channel::Sender;
+use ffmpeg_next::decoder::Decoder;
 use tracing::{debug, span, warn, Level, Span};
 
 use crate::{
     error::DecoderInitError,
-    pipeline::decoder::{DecoderThreadHandle, VideoDecoderStream},
+    pipeline::decoder::{ffmpeg_h264, DecoderThreadHandle, VideoDecoderStream},
     prelude::EncodedInputChunk,
     PipelineCtx, PipelineEvent,
 };
 
 use super::VideoDecoder;
 
-pub trait ThreadProcess {
+pub(super) trait ThreadProcess {
     type InitOptions: Send + 'static;
     type InitOutput: Send + 'static;
 
-    fn init(opts: Self::InitOptions) -> Self::InitOutput;
+    fn init_process(opts: Self::InitOptions) -> Self::InitOutput;
+    // TODO: I need to get `stream` from `init_process` and I need `frame_sender` from `opts`
+    // I can't always init pass results directly to run beacause they should also be returned by `spawn_thread`
+    // So I can't use them without cloning
     fn run();
-    fn thread_info(&self) -> (String, Span);
+    fn thread_info() -> (String, Span);
 }
 
-pub trait DecoderProcess: VideoDecoder + ThreadProcess {
-    fn init(opts: Self::InitOptions) -> Self::InitOutput {
-        VideoDecoderStream::<Decoder, _>::new(ctx, chunk_stream)
+// TODO: Is it needed? Maybe use Iterator
+pub(super) trait DecoderProcess: VideoDecoder {
+    fn init_stream<Source>(
+        ctx: Arc<PipelineCtx>,
+        chunk_stream: Source,
+    ) -> Result<VideoDecoderStream<Self, Source>, DecoderInitError>
+    where
+        Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    {
+        VideoDecoderStream::<Self, _>::new(ctx, chunk_stream)
     }
 }
 
-impl<Decoder: DecoderProcess + Send + 'static> ThreadProcess for Decoder {
+impl<Decoder> DecoderProcess for Decoder where Decoder: VideoDecoder {}
+
+impl<Decoder> ThreadProcess for Decoder
+where
+    Decoder: DecoderProcess + Send + 'static,
+{
     type InitOptions = (
         Arc<PipelineCtx>,
         crossbeam_channel::IntoIter<PipelineEvent<EncodedInputChunk>>,
@@ -38,20 +54,41 @@ impl<Decoder: DecoderProcess + Send + 'static> ThreadProcess for Decoder {
         DecoderInitError,
     >;
 
-    fn init(opts: Self::InitOptions) -> Self::InitOutput {
-        let (ctx, chunk_stream) = opts;
+    fn init_process(
+        (ctx, chunk_stream): (
+            Arc<PipelineCtx>,
+            crossbeam_channel::IntoIter<PipelineEvent<EncodedInputChunk>>,
+        ),
+    ) -> Result<
+        VideoDecoderStream<Decoder, crossbeam_channel::IntoIter<PipelineEvent<EncodedInputChunk>>>,
+        DecoderInitError,
+    > {
+        Self::init_stream(ctx, chunk_stream)
+    }
 
-        Ok(())
+    fn run() {
+        todo!()
+    }
+
+    fn thread_info() -> (String, Span) {
+        todo!()
     }
 }
 
-pub fn spawn_thread<Process: ThreadProcess>(
-    opts: Process::InitOptions,
-    process: Process,
-) -> Process::InitOutput {
+fn spawn_decoder_thread<Decoder: VideoDecoder + Send + 'static, const BUFFER_SIZE: usize>(
+    ctx: Arc<PipelineCtx>,
+    input_id: &InputId,
+    frame_sender: Sender<PipelineEvent<Frame>>,
+) -> Result<DecoderThreadHandle, DecoderInitError> {
+    let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(BUFFER_SIZE);
+    spawn_thread::<Decoder>((ctx, chunk_receiver.into_iter()))?;
+    Ok(DecoderThreadHandle { chunk_sender })
+}
+
+pub fn spawn_thread<Process: ThreadProcess>(opts: Process::InitOptions) -> Process::InitOutput {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
-    let (thread_name, thread_span) = process.thread_info();
+    let (thread_name, thread_span) = Process::thread_info();
     std::thread::Builder::new()
         .name(thread_name)
         .spawn(move || {
