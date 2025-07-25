@@ -64,6 +64,7 @@ pub struct Queue {
 
     default_buffer_duration: Duration,
 
+    sync_point: Instant,
     start_time: Mutex<Option<Instant>>,
     start_sender: Mutex<Option<Sender<QueueStartEvent>>>,
     scheduled_event_sender: Sender<ScheduledEvent>,
@@ -141,17 +142,19 @@ impl<T: Clone> Clone for PipelineEvent<T> {
 }
 
 impl Queue {
-    pub(crate) fn new(opts: QueueOptions, event_emitter: &Arc<EventEmitter>) -> Arc<Self> {
+    pub(crate) fn new(opts: QueueOptions, ctx: &Arc<PipelineCtx>) -> Arc<Self> {
         let (queue_start_sender, queue_start_receiver) = bounded(0);
         let (scheduled_event_sender, scheduled_event_receiver) = bounded(0);
         let queue = Arc::new(Queue {
-            video_queue: Mutex::new(VideoQueue::new(event_emitter.clone())),
+            video_queue: Mutex::new(VideoQueue::new(ctx.event_emitter.clone())),
             output_framerate: opts.output_framerate,
 
-            audio_queue: Mutex::new(AudioQueue::new(event_emitter.clone())),
+            audio_queue: Mutex::new(AudioQueue::new(ctx.event_emitter.clone())),
             audio_chunk_duration: DEFAULT_AUDIO_CHUNK_DURATION,
 
+            sync_point: ctx.queue_sync_point,
             start_time: Mutex::new(None),
+
             scheduled_event_sender,
             start_sender: Mutex::new(Some(queue_start_sender)),
             ahead_of_time_processing: opts.ahead_of_time_processing,

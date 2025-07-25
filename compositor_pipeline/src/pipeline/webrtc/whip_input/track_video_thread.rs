@@ -49,7 +49,7 @@ pub async fn process_video_track(
     let frame_sender = inputs.get_with(&input_id, |input| Ok(input.frame_sender.clone()))?;
     let handle = spawn_video_track_thread(ctx.clone(), input_id, negotiated_codecs, frame_sender)?;
 
-    let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_time, 90_000);
+    let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_point, 90_000);
 
     while let Ok((packet, _)) = track.read_rtp().await {
         let timestamp = timestamp_sync.timestamp(packet.header.timestamp);

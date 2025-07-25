@@ -498,7 +498,7 @@ fn create_pipeline(
     };
 
     let ctx = Arc::new(PipelineCtx {
-        queue_sync_time: Instant::now(),
+        queue_sync_point: Instant::now(),
         mixing_sample_rate: opts.mixing_sample_rate,
         output_framerate: opts.queue_options.output_framerate,
         stun_servers: opts.stun_servers.clone(),
@@ -524,7 +524,7 @@ fn create_pipeline(
     let pipeline = Pipeline {
         outputs: HashMap::new(),
         inputs: HashMap::new(),
-        queue: Queue::new(opts.queue_options, &ctx.event_emitter),
+        queue: Queue::new(opts.queue_options, &ctx),
         renderer,
         audio_mixer: AudioMixer::new(opts.mixing_sample_rate),
         is_started: false,

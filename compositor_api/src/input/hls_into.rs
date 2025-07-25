@@ -14,6 +14,7 @@ impl TryFrom<HlsInput> for pipeline::RegisterInputOptions {
         } = value;
 
         let queue_options = compositor_pipeline::QueueInputOptions {
+            keep_original_timestamps: false,
             required: required.unwrap_or(false),
             offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
             buffer_duration: None,

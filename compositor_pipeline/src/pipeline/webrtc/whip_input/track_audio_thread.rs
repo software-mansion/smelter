@@ -43,7 +43,7 @@ pub async fn process_audio_track(
     let handle =
         spawn_audio_track_thread(ctx.clone(), input_id, negotiated_codecs, samples_sender)?;
 
-    let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_time, 48_000);
+    let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_point, 48_000);
 
     while let Ok((packet, _)) = track.read_rtp().await {
         let timestamp = timestamp_sync.timestamp(packet.header.timestamp);

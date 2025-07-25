@@ -115,7 +115,7 @@ impl HlsInput {
                 let asc = read_extra_data(&stream);
                 let (samples_sender, samples_receiver) = bounded(5);
                 let state =
-                    StreamState::new(input_start_time, ctx.queue_sync_time, stream.time_base());
+                    StreamState::new(input_start_time, ctx.queue_sync_point, stream.time_base());
                 let decoder_result = spawn_audio_decoder_thread::<fdk_aac::FdkAacDecoder, 2000>(
                     ctx.clone(),
                     input_id.clone(),
@@ -140,7 +140,7 @@ impl HlsInput {
             Some(stream) => {
                 let (frame_sender, frame_receiver) = bounded(5);
                 let state =
-                    StreamState::new(input_start_time, ctx.queue_sync_time, stream.time_base());
+                    StreamState::new(input_start_time, ctx.queue_sync_point, stream.time_base());
 
                 let extra_data = read_extra_data(&stream);
                 let h264_config = extra_data
