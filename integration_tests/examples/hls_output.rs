@@ -48,6 +48,7 @@ fn client_code() -> Result<()> {
         &json!({
             "type": "hls",
             "path": output_playlist,
+            "max_playlist_size": 5,
             "video": {
                 "resolution": {
                     "width": VIDEO_RESOLUTION.width,

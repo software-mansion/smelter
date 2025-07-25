@@ -5,7 +5,12 @@ impl TryFrom<HlsOutput> for pipeline::RegisterOutputOptions<pipeline::ProtocolOu
     type Error = TypeError;
 
     fn try_from(request: HlsOutput) -> Result<Self, Self::Error> {
-        let HlsOutput { path, video, audio } = request;
+        let HlsOutput {
+            path,
+            max_playlist_size,
+            video,
+            audio,
+        } = request;
 
         if video.is_none() && audio.is_none() {
             return Err(TypeError::new(
@@ -17,6 +22,7 @@ impl TryFrom<HlsOutput> for pipeline::RegisterOutputOptions<pipeline::ProtocolOu
         let (audio_encoder_options, output_audio_options) = maybe_audio_options(audio)?;
         let output_options = pipeline::ProtocolOutputOptions::Hls(pipeline::HlsOutputOptions {
             output_path: path.into(),
+            max_playlist_size,
             video: video_encoder_options,
             audio: audio_encoder_options,
         });

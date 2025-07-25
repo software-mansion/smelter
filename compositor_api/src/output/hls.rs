@@ -8,6 +8,9 @@ use crate::*;
 pub struct HlsOutput {
     /// Path to output HLS playlist.
     pub path: String,
+    /// Number of segments kept in the playlist. When the limit is reached the oldest segment is removed.
+    /// If not specified, no segments will removed.
+    pub max_playlist_size: Option<usize>,
     /// Video track configuration.
     pub video: Option<OutputVideoOptions>,
     /// Audio track configuration.
