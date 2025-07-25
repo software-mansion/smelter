@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    path::PathBuf,
+    path::Path,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
@@ -46,10 +46,10 @@ impl Mp4Input {
         input_id: InputId,
         options: Mp4InputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
-        let source = match &options.source {
-            Mp4InputSource::Url(url) => Self::download_remote_file(&ctx, url)?,
+        let source = match options.source {
+            Mp4InputSource::Url(url) => Self::download_remote_file(&ctx, &url)?,
             Mp4InputSource::File(path) => Arc::new(SourceFile {
-                path: path.clone(),
+                path,
                 remove_on_drop: false,
             }),
         };
@@ -173,7 +173,7 @@ impl Mp4Input {
         std::io::copy(&mut file_response, &mut file)?;
 
         Ok(Arc::new(SourceFile {
-            path,
+            path: path.into(),
             remove_on_drop: true,
         }))
     }
@@ -392,7 +392,7 @@ impl Drop for Mp4Input {
 }
 
 struct SourceFile {
-    pub path: PathBuf,
+    path: Arc<Path>,
     remove_on_drop: bool,
 }
 

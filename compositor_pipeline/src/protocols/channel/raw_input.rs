@@ -15,6 +15,16 @@ pub struct RawDataInputSender {
 pub struct RawDataInputOptions {
     pub video: bool,
     pub audio: bool,
+
+    /// Duration of stream that should be buffered before stream is started.
+    /// If you have both audio and video streams then make sure to use the same value
+    /// to avoid desync.
+    ///
+    /// This value defines minimal latency on the queue, but if you set it to low and fail
+    /// to deliver the input stream on time it can cause either black screen or flickering image.
+    ///
+    /// By default DEFAULT_BUFFER_DURATION will be used.
+    pub buffer_duration: Option<Duration>,
 }
 
 #[derive(Clone)]

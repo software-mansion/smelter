@@ -85,11 +85,11 @@ fn main() {
         RawDataInputOptions {
             video: true,
             audio: false,
+            buffer_duration: None,
         },
         QueueInputOptions {
             required: true,
             offset: Some(Duration::ZERO),
-            buffer_duration: None,
         },
     )
     .unwrap();

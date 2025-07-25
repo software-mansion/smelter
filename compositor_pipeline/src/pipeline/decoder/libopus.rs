@@ -100,7 +100,9 @@ impl OpusDecoder {
             Some(pts) => current_start.saturating_sub(pts),
             None => Duration::ZERO,
         };
-        trace!("Calculated stream gap {stream_gap:?}");
+        if stream_gap != Duration::ZERO {
+            trace!("Calculated stream gap {stream_gap:?}");
+        }
         stream_gap
     }
 

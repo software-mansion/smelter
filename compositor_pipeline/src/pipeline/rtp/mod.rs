@@ -7,7 +7,7 @@ mod rtp_input;
 mod rtp_output;
 mod util;
 
-pub(crate) use rtp_input::{RtpInput, RtpTimestampSync};
+pub(crate) use rtp_input::{RtpInput, RtpTimestampSync, RtpNtpSyncPoint};
 pub(crate) use rtp_output::RtpOutput;
 
 #[derive(Debug)]

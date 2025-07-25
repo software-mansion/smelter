@@ -34,7 +34,7 @@ rubato = "0.15.0"
 wgpu = { workspace = true }
 vk-video = { path = "../vk-video/", optional = true }
 glyphon = { workspace = true }
-webrtc = "0.11.0"
+webrtc = "0.13.0"
 tokio = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }

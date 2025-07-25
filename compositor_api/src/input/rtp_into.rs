@@ -55,12 +55,12 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
                 .transpose()?,
             audio: audio.map(TryFrom::try_from).transpose()?,
             transport_protocol: transport_protocol.unwrap_or(TransportProtocol::Udp).into(),
+            buffer_duration: None,
         });
 
         let queue_options = compositor_pipeline::QueueInputOptions {
             required: required.unwrap_or(false),
             offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
-            buffer_duration: None,
         };
 
         Ok(pipeline::RegisterInputOptions {
