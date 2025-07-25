@@ -2,13 +2,12 @@ use std::{iter, sync::Arc};
 
 use compositor_render::{error::ErrorStack, Frame, InputId};
 use crossbeam_channel::Sender;
-use tracing::{debug, error, span, trace, warn, Level};
+use tracing::{debug, error, trace, warn};
 use webrtc::{
     rtp_transceiver::{PayloadType, RTCRtpTransceiver},
     track::track_remote::TrackRemote,
 };
 
-use crate::prelude::*;
 use crate::{
     codecs::{VideoCodec, VideoDecoderOptions},
     pipeline::{
@@ -27,7 +26,9 @@ use crate::{
             WhipWhepServerState,
         },
     },
+    thread_utils::spawn_thread,
 };
+use crate::{prelude::*, thread_utils::InitializableThread};
 
 pub async fn process_video_track(
     state: WhipWhepServerState,
@@ -47,7 +48,10 @@ pub async fn process_video_track(
 
     let WhipWhepServerState { inputs, ctx } = state;
     let frame_sender = inputs.get_with(&input_id, |input| Ok(input.frame_sender.clone()))?;
-    let handle = spawn_video_track_thread(ctx.clone(), input_id, negotiated_codecs, frame_sender)?;
+    let handle = spawn_thread::<VideoTrackThread>(
+        &input_id.0,
+        (ctx.clone(), negotiated_codecs, frame_sender),
+    )?;
 
     let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_point, 90_000);
 
@@ -69,83 +73,64 @@ pub(crate) struct VideoTrackThreadHandle {
     pub rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpPacket>>,
 }
 
-pub(super) fn spawn_video_track_thread(
-    ctx: Arc<PipelineCtx>,
-    input_id: InputId,
-    codec_info: NegotiatedVideoCodecsInfo,
-    frame_sender: Sender<PipelineEvent<Frame>>,
-) -> Result<VideoTrackThreadHandle, DecoderInitError> {
-    let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
+pub(super) struct VideoTrackThread;
 
-    std::thread::Builder::new()
-        .name(format!(
-            "WHIP input video track thread for input {}",
-            &input_id
-        ))
-        .spawn(move || {
-            let _span = span!(
-                Level::INFO,
-                "WHIP input video thread",
-                input_id = input_id.to_string(),
-            )
-            .entered();
+impl InitializableThread for VideoTrackThread {
+    type InitOptions = (
+        Arc<PipelineCtx>,
+        NegotiatedVideoCodecsInfo,
+        Sender<PipelineEvent<Frame>>,
+    );
 
-            let result = init_stream(ctx, codec_info);
-            let stream = match result {
-                Ok((stream, handle)) => {
-                    result_sender.send(Ok(handle)).unwrap();
-                    stream
-                }
-                Err(err) => {
-                    result_sender.send(Err(err)).unwrap();
-                    return;
-                }
-            };
-            for event in stream {
-                if frame_sender.send(event).is_err() {
-                    warn!("Failed to send encoded video chunk from decoder. Channel closed.");
-                    return;
-                }
+    type SpawnOutput = VideoTrackThreadHandle;
+    type SpawnError = DecoderInitError;
+
+    type ThreadState = (
+        Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
+        Sender<PipelineEvent<Frame>>,
+    );
+
+    const LABEL: &'static str = "Whip video decoder";
+
+    fn init(
+        options: Self::InitOptions,
+    ) -> Result<(Self::SpawnOutput, Self::ThreadState), Self::SpawnError> {
+        let (ctx, codec_info, frame_sender) = options;
+        let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5);
+
+        let packet_stream = AsyncReceiverIter {
+            receiver: rtp_packet_receiver,
+        };
+
+        let depayloader_stream =
+            DynamicDepayloaderStream::new(codec_info.clone(), packet_stream).flatten();
+
+        let decoder_stream =
+            DynamicVideoDecoderStream::new(ctx, codec_info, depayloader_stream).flatten();
+
+        let result_stream = decoder_stream
+            .filter_map(|event| match event {
+                PipelineEvent::Data(frame) => Some(PipelineEvent::Data(frame)),
+                // Do not send EOS to queue
+                // TODO: maybe queue should be able to handle packets after EOS
+                PipelineEvent::EOS => None,
+            })
+            .inspect(|frame| trace!(?frame, "WHIP input produced a frame"));
+
+        let output = VideoTrackThreadHandle { rtp_packet_sender };
+        let state = (Box::new(result_stream) as Box<_>, frame_sender);
+        Ok((output, state))
+    }
+
+    fn run(state: Self::ThreadState) {
+        let (stream, frame_sender) = state;
+        for event in stream {
+            if frame_sender.send(event).is_err() {
+                warn!("Failed to send encoded video chunk from encoder. Channel closed.");
+                return;
             }
-            debug!("Decoder thread finished.");
-        })
-        .unwrap();
-
-    result_receiver.recv().unwrap()
-}
-
-fn init_stream(
-    ctx: Arc<PipelineCtx>,
-    codec_info: NegotiatedVideoCodecsInfo,
-) -> Result<
-    (
-        impl Iterator<Item = PipelineEvent<Frame>>,
-        VideoTrackThreadHandle,
-    ),
-    DecoderInitError,
-> {
-    let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5);
-
-    let packet_stream = AsyncReceiverIter {
-        receiver: rtp_packet_receiver,
-    };
-
-    let depayloader_stream =
-        DynamicDepayloaderStream::new(codec_info.clone(), packet_stream).flatten();
-
-    let decoder_stream =
-        DynamicVideoDecoderStream::new(ctx, codec_info, depayloader_stream).flatten();
-
-    let result_stream = decoder_stream
-        .filter_map(|event| match event {
-            PipelineEvent::Data(frame) => Some(PipelineEvent::Data(frame)),
-            // Do not send EOS to queue
-            // TODO: maybe queue should be able to handle packets after EOS
-            PipelineEvent::EOS => None,
-        })
-        .inspect(|frame| trace!(?frame, "WHIP input produced a frame"));
-
-    Ok((result_stream, VideoTrackThreadHandle { rtp_packet_sender }))
+        }
+    }
 }
 
 struct DynamicVideoDecoderStream<Source>

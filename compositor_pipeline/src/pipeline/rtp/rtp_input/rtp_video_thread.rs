@@ -1,84 +1,67 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
-use compositor_render::{Frame, InputId};
+use compositor_render::Frame;
 use crossbeam_channel::Sender;
-use tracing::{debug, span, warn, Level};
+use tracing::warn;
 
-use crate::pipeline::{
-    decoder::{VideoDecoder, VideoDecoderStream},
-    rtp::{
-        depayloader::{DepayloaderOptions, DepayloaderStream},
-        RtpPacket,
-    },
-};
 use crate::prelude::*;
+use crate::{
+    pipeline::{
+        decoder::{VideoDecoder, VideoDecoderStream},
+        rtp::{
+            depayloader::{DepayloaderOptions, DepayloaderStream},
+            RtpPacket,
+        },
+    },
+    thread_utils::InitializableThread,
+};
 
 pub(crate) struct RtpVideoTrackThreadHandle {
     pub rtp_packet_sender: Sender<PipelineEvent<RtpPacket>>,
 }
 
-pub fn spawn_rtp_video_thread<Decoder: VideoDecoder>(
-    ctx: Arc<PipelineCtx>,
-    input_id: InputId,
-    depayloader_options: DepayloaderOptions,
-    frame_sender: Sender<PipelineEvent<Frame>>,
-) -> Result<RtpVideoTrackThreadHandle, DecoderInitError> {
-    let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
+pub(super) struct RtpVideoThread<Decoder: VideoDecoder + 'static>(PhantomData<Decoder>);
 
-    std::thread::Builder::new()
-        .name(format!("RTP video track thread for input {}", &input_id))
-        .spawn(move || {
-            let _span = span!(
-                Level::INFO,
-                "Decoder thread",
-                input_id = input_id.to_string(),
-                decoder = Decoder::LABEL
-            )
-            .entered();
+impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
+    type InitOptions = (
+        Arc<PipelineCtx>,
+        DepayloaderOptions,
+        Sender<PipelineEvent<Frame>>,
+    );
 
-            let result = init_stream::<Decoder>(ctx, depayloader_options);
-            let stream = match result {
-                Ok((stream, handle)) => {
-                    result_sender.send(Ok(handle)).unwrap();
-                    stream
-                }
-                Err(err) => {
-                    result_sender.send(Err(err)).unwrap();
-                    return;
-                }
-            };
-            for event in stream {
-                if frame_sender.send(event).is_err() {
-                    warn!("Failed to send encoded video chunk from decoder. Channel closed.");
-                    return;
-                }
+    type SpawnOutput = RtpVideoTrackThreadHandle;
+    type SpawnError = DecoderInitError;
+
+    type ThreadState = (
+        Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
+        Sender<PipelineEvent<Frame>>,
+    );
+
+    const LABEL: &'static str = Decoder::LABEL;
+
+    fn init(
+        options: Self::InitOptions,
+    ) -> Result<(Self::SpawnOutput, Self::ThreadState), Self::SpawnError> {
+        let (ctx, depayloader_options, frame_sender) = options;
+
+        let (rtp_packet_sender, rtp_packet_receiver) = crossbeam_channel::bounded(5);
+        let depayloader_stream =
+            DepayloaderStream::new(depayloader_options, rtp_packet_receiver.into_iter());
+        let decoder_stream =
+            VideoDecoderStream::<Decoder, _>::new(ctx, depayloader_stream.flatten())?;
+
+        let output = RtpVideoTrackThreadHandle { rtp_packet_sender };
+        let state = (Box::new(decoder_stream.flatten()) as Box<_>, frame_sender);
+        Ok((output, state))
+    }
+
+    fn run(state: Self::ThreadState) {
+        let (stream, frame_sender) = state;
+        for event in stream {
+            if frame_sender.send(event).is_err() {
+                warn!("Failed to send encoded video chunk from encoder. Channel closed.");
+                return;
             }
-            debug!("Decoder thread finished.");
-        })
-        .unwrap();
-
-    result_receiver.recv().unwrap()
-}
-
-fn init_stream<Decoder: VideoDecoder>(
-    ctx: Arc<PipelineCtx>,
-    depayloader_options: DepayloaderOptions,
-) -> Result<
-    (
-        impl Iterator<Item = PipelineEvent<Frame>>,
-        RtpVideoTrackThreadHandle,
-    ),
-    DecoderInitError,
-> {
-    let (rtp_packet_sender, rtp_packet_receiver) = crossbeam_channel::bounded(5);
-
-    let depayloader_stream =
-        DepayloaderStream::new(depayloader_options, rtp_packet_receiver.into_iter());
-
-    let decoder_stream = VideoDecoderStream::<Decoder, _>::new(ctx, depayloader_stream.flatten())?;
-
-    Ok((
-        decoder_stream.flatten(),
-        RtpVideoTrackThreadHandle { rtp_packet_sender },
-    ))
+        }
+    }
 }
