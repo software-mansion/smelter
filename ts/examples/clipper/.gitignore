@@ -1,0 +1,4 @@
+.clips
+.hls
+node_modules
+.env
