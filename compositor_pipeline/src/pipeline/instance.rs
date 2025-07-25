@@ -114,7 +114,7 @@ impl Pipeline {
     pub fn register_output(
         pipeline: &Arc<Mutex<Self>>,
         output_id: OutputId,
-        register_options: RegisterOutputOptions<ProtocolOutputOptions>,
+        register_options: RegisterOutputOptions,
     ) -> Result<Option<Port>, RegisterOutputError> {
         register_pipeline_output(
             pipeline,
@@ -128,7 +128,7 @@ impl Pipeline {
     pub fn register_encoded_data_output(
         pipeline: &Arc<Mutex<Self>>,
         output_id: OutputId,
-        register_options: RegisterOutputOptions<EncodedDataOutputOptions>,
+        register_options: RegisterEncodedDataOutputOptions,
     ) -> Result<Receiver<EncodedOutputEvent>, RegisterOutputError> {
         register_pipeline_output(
             pipeline,
@@ -146,7 +146,7 @@ impl Pipeline {
     pub fn register_raw_data_output(
         pipeline: &Arc<Mutex<Self>>,
         output_id: OutputId,
-        register_options: RegisterOutputOptions<RawDataOutputOptions>,
+        register_options: RegisterRawDataOutputOptions,
     ) -> Result<RawDataOutputReceiver, RegisterOutputError> {
         register_pipeline_output(
             pipeline,

@@ -8,7 +8,7 @@ const ENCODER_DEPRECATION_MSG: &str = "Field 'encoder' is deprecated. The codec 
 
 const CHANNEL_DEPRECATION_MSG: &str = "The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.";
 
-impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions<pipeline::ProtocolOutputOptions> {
+impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(request: WhipOutput) -> Result<Self, Self::Error> {

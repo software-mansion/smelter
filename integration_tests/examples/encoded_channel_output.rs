@@ -37,7 +37,7 @@ fn main() {
 
     download_file(BUNNY_FILE_URL, BUNNY_FILE_PATH).unwrap();
 
-    let output_options = RegisterOutputOptions {
+    let output_options = RegisterEncodedDataOutputOptions {
         output_options: EncodedDataOutputOptions {
             video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                 preset: FfmpegH264EncoderPreset::Ultrafast,

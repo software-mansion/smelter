@@ -61,7 +61,7 @@ fn main() {
 
     download_file(BUNNY_FILE_URL, BUNNY_FILE_PATH).unwrap();
 
-    let output_options = RegisterOutputOptions {
+    let output_options = RegisterRawDataOutputOptions {
         output_options: RawDataOutputOptions {
             video: Some(RawDataOutputVideoOptions {
                 resolution: Resolution {

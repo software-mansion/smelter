@@ -179,7 +179,7 @@ impl SingleBenchmarkPass {
         let result = Pipeline::register_encoded_data_output(
             pipeline,
             output_id.clone(),
-            RegisterOutputOptions {
+            RegisterEncodedDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
                     initial: root,
                     end_condition: PipelineOutputEndCondition::Never,
@@ -211,7 +211,7 @@ impl SingleBenchmarkPass {
         let result = Pipeline::register_raw_data_output(
             pipeline,
             output_id.clone(),
-            RegisterOutputOptions {
+            RegisterRawDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
                     initial: root,
                     end_condition: PipelineOutputEndCondition::Never,
