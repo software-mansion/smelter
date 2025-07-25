@@ -74,6 +74,8 @@
             wayland
             libGL
             vulkan-loader
+
+            streamlink
           ];
         in
         {

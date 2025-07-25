@@ -21,31 +21,15 @@ enum Video {
 
 pub fn start_ffmpeg_rtmp_receive(port: u16) -> Result<Child> {
     let output_address = format!("rtmp://0.0.0.0:{port}");
-    let rtmp_listener = Command::new("ffmpeg")
-        .args([
-            "-f",
-            "flv",
-            "-listen",
-            "1",
-            "-i",
-            &output_address,
-            "-vcodec",
-            "copy",
-            "-f",
-            "flv",
-            "-",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()?;
-    let player = Command::new("ffplay")
-        .args(["-f", "flv", "-i", "-"])
-        .stdin(Stdio::from(rtmp_listener.stdout.unwrap()))
+
+    let handle = Command::new("bash")
+        .arg("-c")
+        .arg(format!("ffmpeg -f flv -listen 1 -i {output_address} -vcodec copy -f flv - | ffplay -f flv -i -"))
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
 
-    Ok(player)
+    Ok(handle)
 }
 
 pub fn start_ffmpeg_receive_h264(

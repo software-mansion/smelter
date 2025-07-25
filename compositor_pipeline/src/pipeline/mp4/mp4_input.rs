@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    path::PathBuf,
+    path::Path,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
@@ -46,10 +46,10 @@ impl Mp4Input {
         input_id: InputId,
         options: Mp4InputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
-        let source = match &options.source {
-            Mp4InputSource::Url(url) => Self::download_remote_file(&ctx, url)?,
+        let source = match options.source {
+            Mp4InputSource::Url(url) => Self::download_remote_file(&ctx, &url)?,
             Mp4InputSource::File(path) => Arc::new(SourceFile {
-                path: path.clone(),
+                path,
                 remove_on_drop: false,
             }),
         };
@@ -133,6 +133,7 @@ impl Mp4Input {
         let should_close = Arc::new(AtomicBool::new(false));
         if options.should_loop {
             start_thread_with_loop(
+                ctx.clone(),
                 video_handle,
                 video_track,
                 video_span,
@@ -144,6 +145,7 @@ impl Mp4Input {
             );
         } else {
             start_thread_single_run(
+                ctx.clone(),
                 video_handle,
                 video_track,
                 video_span,
@@ -184,7 +186,7 @@ impl Mp4Input {
         std::io::copy(&mut file_response, &mut file)?;
 
         Ok(Arc::new(SourceFile {
-            path,
+            path: path.into(),
             remove_on_drop: true,
         }))
     }
@@ -192,6 +194,7 @@ impl Mp4Input {
 
 #[allow(clippy::too_many_arguments)]
 fn start_thread_with_loop(
+    ctx: Arc<PipelineCtx>,
     video_handle: Option<DecoderThreadHandle>,
     video_track: Option<Track<File>>,
     video_span: Span,
@@ -209,7 +212,7 @@ fn start_thread_with_loop(
                 Handle(JoinHandle<Box<Track<File>>>),
             }
             let _source_file = source_file;
-            let mut offset = Duration::ZERO;
+            let mut offset = ctx.queue_sync_point.elapsed() + ctx.default_buffer_duration;
             let has_audio = audio_track.is_some();
             let last_audio_sample_pts = Arc::new(AtomicU64::new(0));
             let last_video_sample_pts = Arc::new(AtomicU64::new(0));
@@ -336,6 +339,7 @@ fn start_thread_with_loop(
 
 #[allow(clippy::too_many_arguments)]
 fn start_thread_single_run(
+    ctx: Arc<PipelineCtx>,
     video_handle: Option<DecoderThreadHandle>,
     video_track: Option<Track<File>>,
     video_span: Span,
@@ -345,13 +349,17 @@ fn start_thread_single_run(
     should_close: Arc<AtomicBool>,
     _source_file: Arc<SourceFile>,
 ) {
+    let offset = ctx.queue_sync_point.elapsed() + ctx.default_buffer_duration;
     if let (Some(handle), Some(mut track)) = (video_handle, video_track) {
         let should_close = should_close.clone();
         std::thread::Builder::new()
             .name("mp4 reader - video".to_string())
             .spawn(move || {
                 let _span = video_span.enter();
-                for (chunk, _duration) in track.chunks() {
+                for (mut chunk, _duration) in track.chunks() {
+                    chunk.pts += offset;
+                    chunk.dts = chunk.dts.map(|dts| dts + offset);
+                    trace!(?chunk, "Sending video chunk");
                     if handle
                         .chunk_sender
                         .send(PipelineEvent::Data(chunk))
@@ -376,7 +384,10 @@ fn start_thread_single_run(
             .name("mp4 reader - audio".to_string())
             .spawn(move || {
                 let _span = audio_span.enter();
-                for (chunk, _duration) in track.chunks() {
+                for (mut chunk, _duration) in track.chunks() {
+                    chunk.pts += offset;
+                    chunk.dts = chunk.dts.map(|dts| dts + offset);
+                    trace!(?chunk, "Sending audio chunk");
                     if handle
                         .chunk_sender
                         .send(PipelineEvent::Data(chunk))
@@ -403,7 +414,7 @@ impl Drop for Mp4Input {
 }
 
 struct SourceFile {
-    pub path: PathBuf,
+    path: Arc<Path>,
     remove_on_drop: bool,
 }
 

@@ -16,7 +16,6 @@ impl TryFrom<HlsInput> for pipeline::RegisterInputOptions {
         let queue_options = compositor_pipeline::QueueInputOptions {
             required: required.unwrap_or(false),
             offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
-            buffer_duration: None,
         };
 
         let video_decoders = match decoder_map {
@@ -50,6 +49,7 @@ impl TryFrom<HlsInput> for pipeline::RegisterInputOptions {
         let input_options = pipeline::HlsInputOptions {
             url,
             video_decoders,
+            buffer_duration: None,
         };
 
         Ok(pipeline::RegisterInputOptions {

@@ -1,7 +1,6 @@
 use anyhow::Result;
 use compositor_api::Resolution;
 use serde_json::json;
-use std::time::Duration;
 
 use integration_tests::{
     examples::{self, run_example},
@@ -81,8 +80,6 @@ fn client_code() -> Result<()> {
             }
         }),
     )?;
-
-    std::thread::sleep(Duration::from_millis(500));
 
     Ok(())
 }
