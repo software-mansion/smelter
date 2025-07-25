@@ -1,15 +1,69 @@
+use std::sync::Arc;
+
 use compositor_render::{Frame, InputId};
 use crossbeam_channel::Sender;
-use tracing::{debug, span, warn, Level};
+use tracing::{debug, span, warn, Level, Span};
 
 use crate::{
     error::DecoderInitError,
     pipeline::decoder::{DecoderThreadHandle, VideoDecoderStream},
     prelude::EncodedInputChunk,
-    PipelineEvent,
+    PipelineCtx, PipelineEvent,
 };
 
 use super::VideoDecoder;
+
+pub trait ThreadProcess {
+    type InitOptions: Send + 'static;
+    type InitOutput: Send + 'static;
+
+    fn init(opts: Self::InitOptions) -> Self::InitOutput;
+    fn run();
+    fn thread_info(&self) -> (String, Span);
+}
+
+pub trait DecoderProcess: VideoDecoder + ThreadProcess {
+    fn init(opts: Self::InitOptions) -> Self::InitOutput {
+        VideoDecoderStream::<Decoder, _>::new(ctx, chunk_stream)
+    }
+}
+
+impl<Decoder: DecoderProcess + Send + 'static> ThreadProcess for Decoder {
+    type InitOptions = (
+        Arc<PipelineCtx>,
+        crossbeam_channel::IntoIter<PipelineEvent<EncodedInputChunk>>,
+    );
+    type InitOutput = Result<
+        VideoDecoderStream<Decoder, crossbeam_channel::IntoIter<PipelineEvent<EncodedInputChunk>>>,
+        DecoderInitError,
+    >;
+
+    fn init(opts: Self::InitOptions) -> Self::InitOutput {
+        let (ctx, chunk_stream) = opts;
+
+        Ok(())
+    }
+}
+
+pub fn spawn_thread<Process: ThreadProcess>(
+    opts: Process::InitOptions,
+    process: Process,
+) -> Process::InitOutput {
+    let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
+
+    let (thread_name, thread_span) = process.thread_info();
+    std::thread::Builder::new()
+        .name(thread_name)
+        .spawn(move || {
+            let _span = thread_span.entered();
+            let result = Process::init(opts);
+            result_sender.send(result).unwrap();
+            Process::run();
+        })
+        .unwrap();
+
+    result_receiver.recv().unwrap()
+}
 
 pub fn spawn_video_decoder_thread<Decoder, const BUFFER_SIZE: usize, Source, InitStreamFn>(
     input_id: InputId,
@@ -83,7 +137,7 @@ where
 //     let transformed_bytestream =
 //         BytestreamTransformStream::new(transformer, chunk_receiver.into_iter());
 
-//     let decoded_stream =
+//     let decoded_stream =V
 //         VideoDecoderStream::<Decoder, _>::new(ctx, transformed_bytestream)?.flatten();
 
 //     Ok((decoded_stream, DecoderThreadHandle { chunk_sender }))
