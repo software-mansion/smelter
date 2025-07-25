@@ -1,6 +1,5 @@
 mod audio_queue;
 mod queue_thread;
-mod utils;
 mod video_queue;
 
 use std::{
@@ -16,13 +15,12 @@ use std::{
 use compositor_render::{Frame, FrameSet, Framerate, InputId};
 use crossbeam_channel::{bounded, Receiver, Sender};
 
+use crate::audio_mixer::InputSamplesSet;
 use crate::prelude::*;
-use crate::{audio_mixer::InputSamplesSet, event::EventEmitter};
 
 use self::{
     audio_queue::AudioQueue,
     queue_thread::{QueueStartEvent, QueueThread},
-    utils::Clock,
     video_queue::VideoQueue,
 };
 
@@ -33,6 +31,18 @@ pub struct QueueDataReceiver {
     pub video: Option<Receiver<PipelineEvent<Frame>>>,
     pub audio: Option<Receiver<PipelineEvent<InputAudioSamples>>>,
 }
+
+/// New sync mechanism:
+/// - All PTS values represent duration from sync_point stored in pipeline.
+///   (That will mean that pts of queue start will not be zero)
+///   - If input has offset defined it is applied in queue, timestamps before represents
+///     packet as if there was no offset
+/// - Conversion from/to this time frame should happen
+///   - on input as early as possible
+///   - on output as late as possible
+/// - All public timestamp value should refer to time after start.
+///     `queue_start_pts = sync_point - queue_start_time`
+///     `public_pts = internal_pts - queue_start_pts`
 
 /// Queue is responsible for consuming frames from different inputs and producing
 /// sets of frames from all inputs in a single batch.
@@ -62,14 +72,12 @@ pub struct Queue {
     /// false - Event will be discarded.
     run_late_scheduled_events: bool,
 
-    default_buffer_duration: Duration,
-
     sync_point: Instant,
-    start_time: Mutex<Option<Instant>>,
+    /// Duration since sync point, represents time of
+    /// the queue start
+    start_time_pts: Mutex<Option<Duration>>,
     start_sender: Mutex<Option<Sender<QueueStartEvent>>>,
     scheduled_event_sender: Sender<ScheduledEvent>,
-
-    clock: Clock,
 
     should_close: AtomicBool,
 }
@@ -124,7 +132,6 @@ impl From<QueueAudioOutput> for InputSamplesSet {
 struct InputOptions {
     required: bool,
     offset: Option<Duration>,
-    buffer_duration: Duration,
 }
 
 pub struct ScheduledEvent {
@@ -145,24 +152,23 @@ impl Queue {
     pub(crate) fn new(opts: QueueOptions, ctx: &Arc<PipelineCtx>) -> Arc<Self> {
         let (queue_start_sender, queue_start_receiver) = bounded(0);
         let (scheduled_event_sender, scheduled_event_receiver) = bounded(0);
+        let sync_point = ctx.queue_sync_point;
         let queue = Arc::new(Queue {
-            video_queue: Mutex::new(VideoQueue::new(ctx.event_emitter.clone())),
+            video_queue: Mutex::new(VideoQueue::new(sync_point, ctx.event_emitter.clone())),
             output_framerate: opts.output_framerate,
 
-            audio_queue: Mutex::new(AudioQueue::new(ctx.event_emitter.clone())),
+            audio_queue: Mutex::new(AudioQueue::new(sync_point, ctx.event_emitter.clone())),
             audio_chunk_duration: DEFAULT_AUDIO_CHUNK_DURATION,
 
-            sync_point: ctx.queue_sync_point,
-            start_time: Mutex::new(None),
+            sync_point,
+            start_time_pts: Mutex::new(None),
 
             scheduled_event_sender,
             start_sender: Mutex::new(Some(queue_start_sender)),
             ahead_of_time_processing: opts.ahead_of_time_processing,
             never_drop_output_frames: opts.never_drop_output_frames,
             run_late_scheduled_events: opts.run_late_scheduled_events,
-            default_buffer_duration: opts.default_buffer_duration,
 
-            clock: Clock::new(),
             should_close: AtomicBool::new(false),
         });
 
@@ -189,24 +195,19 @@ impl Queue {
         let input_options = InputOptions {
             required: opts.required,
             offset: opts.offset,
-            buffer_duration: opts.buffer_duration.unwrap_or(self.default_buffer_duration),
         };
 
         if let Some(receiver) = receiver.video {
-            self.video_queue.lock().unwrap().add_input(
-                input_id,
-                receiver,
-                input_options,
-                self.clock.clone(),
-            );
+            self.video_queue
+                .lock()
+                .unwrap()
+                .add_input(input_id, receiver, input_options);
         };
         if let Some(receiver) = receiver.audio {
-            self.audio_queue.lock().unwrap().add_input(
-                input_id,
-                receiver,
-                input_options,
-                self.clock.clone(),
-            );
+            self.audio_queue
+                .lock()
+                .unwrap()
+                .add_input(input_id, receiver, input_options);
         }
     }
 
@@ -221,13 +222,13 @@ impl Queue {
         audio_sender: Sender<QueueAudioOutput>,
     ) {
         if let Some(sender) = self.start_sender.lock().unwrap().take() {
-            let start_time = Instant::now();
-            *self.start_time.lock().unwrap() = Some(start_time);
+            let start_time_pts = Instant::now().duration_since(self.sync_point);
+            *self.start_time_pts.lock().unwrap() = Some(start_time_pts);
             sender
                 .send(QueueStartEvent {
                     audio_sender,
                     video_sender,
-                    start_time,
+                    start_time_pts,
                 })
                 .unwrap()
         }

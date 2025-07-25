@@ -20,9 +20,6 @@ pub enum ProtocolInputOptions {
 
 #[derive(Debug, Clone, Copy)]
 pub struct QueueInputOptions {
-    /// Temporary option while we are moving synchronization logic to
-    /// inputs
-    pub keep_original_timestamps: bool,
     pub required: bool,
     /// Relative offset this input stream should have to the clock that
     /// starts when pipeline is started.
