@@ -70,6 +70,11 @@ impl HlsOutput {
             ("segment_list_type", "m3u8"),
             ("segment_list_flags", "cache+live"),
             ("hls_flags", "delete_segments"),
+            (
+                "hls_list_size",
+                // 0 means no list size limit
+                &options.max_playlist_size.unwrap_or(0).to_string(),
+            ),
         ]);
 
         output_ctx

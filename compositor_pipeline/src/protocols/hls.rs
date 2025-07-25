@@ -11,6 +11,7 @@ pub struct HlsInputOptions {
 #[derive(Debug, Clone)]
 pub struct HlsOutputOptions {
     pub output_path: PathBuf,
+    pub max_playlist_size: Option<usize>,
     pub video: Option<VideoEncoderOptions>,
     pub audio: Option<AudioEncoderOptions>,
 }
