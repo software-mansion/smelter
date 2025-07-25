@@ -1,0 +1,36 @@
+{
+  "name": "clipper",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "rimraf ./dist ./.hls && mkdir .hls && touch ./.hls/playlist.m3u8 && pnpm run build && node ./dist/server.js | pino-pretty"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.12.1",
+  "dependencies": {
+    "@swmansion/smelter": "workspace:^0.2.1",
+    "@swmansion/smelter-node": "workspace:^0.2.1",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "fs-extra": "^11.2.0",
+    "pino": "^9.5.0",
+    "pino-http": "^10.5.0",
+    "react": "^18.3.1",
+    "uuid": "^10.0.0",
+    "zod": "^4.0.10"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.17.10",
+    "@types/node-fetch": "^2.6.12",
+    "@types/react": "^18.3.17",
+    "@types/uuid": "^10.0.0",
+    "node-fetch": "^2.7.0"
+  }
+}
