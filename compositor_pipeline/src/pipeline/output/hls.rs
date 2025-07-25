@@ -80,7 +80,8 @@ impl HlsOutput {
             ("segment_format", "mpegts"),
             ("segment_list_type", "m3u8"),
             ("segment_list_flags", "cache+live"),
-            ("hls_flags", "delete_segments"),
+            ("hls_playlist_type", "event"),
+            // ("hls_flags", "delete_segments"),
         ]);
 
         output_ctx

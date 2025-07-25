@@ -1,38 +1,20 @@
 import 'dotenv/config';
-import express, { json } from 'express';
+import express, { json, type NextFunction, type Request, type Response } from 'express';
 import fs from 'node:fs';
 import https from 'node:https';
 import { pino } from 'pino';
 import { pinoHttp } from 'pino-http';
-import * as z from 'zod';
 import { ClipController, ClipService } from './clip';
 import { SmelterService } from './smelter';
+import { loadConfig } from './config';
 
-const configSchema = z.object({
-  port: z.coerce.number().default(3000),
-  host: z.string().default('localhost'),
-  httpsCertPath: z.string(),
-  httpsKeyPath: z.string(),
-  hlsPlaylistPath: z.string(),
-  clipsOutDir: z.string(),
-});
-
-function loadConfig() {
-  const result = configSchema.safeParse({
-    port: process.env.CLIPPER_PORT,
-    host: process.env.CLIPPER_HOST,
-    httpsCertPath: process.env.CLIPPER_HTTPS_CERT_PATH,
-    httpsKeyPath: process.env.CLIPPER_HTTPS_KEY_PATH,
-    hlsPlaylistPath: process.env.CLIPPER_HLS_PLAYLIST_FILE,
-    clipsOutDir: process.env.CLIPPER_CLIPS_OUT_DIR,
-  });
-
-  if (result.success) {
-    return result.data;
-  } else {
-    console.log(result.error);
-    throw new Error('failed to parse config');
+function errorHandler(err: Error, _req: Request, res: Response, next: NextFunction) {
+  if (res.headersSent) {
+    return next(err);
   }
+
+  res.status(500);
+  res.render('error', { error: err });
 }
 
 async function main() {
@@ -54,6 +36,7 @@ async function main() {
   app.use(json());
   app.use('/clip', clipController.router());
   app.get('/ping', (_, res) => void res.json({ message: 'pong' }));
+  app.use(errorHandler);
 
   const options: https.ServerOptions = {
     key: fs.readFileSync('./certs/localhost-key.pem'),

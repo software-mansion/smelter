@@ -7,6 +7,7 @@ packages:
   - 'smelter-web-client'
   - 'examples/node-examples'
   - 'examples/vite-example'
+  - 'examples/clipper'
   - 'create-smelter-app'
   - 'create-smelter-app/templates/node-minimal'
   - 'create-smelter-app/templates/node-express-zustand'
