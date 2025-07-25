@@ -6,8 +6,6 @@ impl TryFrom<DeckLink> for pipeline::RegisterInputOptions {
 
     #[cfg(feature = "decklink")]
     fn try_from(value: DeckLink) -> Result<Self, Self::Error> {
-        use std::time::Duration;
-
         const ID_PARSE_ERROR_MESSAGE: &str =
             "\"persistent_id\" has to be a valid 32-bit hexadecimal number";
 
@@ -34,7 +32,6 @@ impl TryFrom<DeckLink> for pipeline::RegisterInputOptions {
             queue_options: pipeline::QueueInputOptions {
                 required: value.required.unwrap_or(false),
                 offset: None,
-                buffer_duration: Some(Duration::from_millis(5)),
             },
         })
     }

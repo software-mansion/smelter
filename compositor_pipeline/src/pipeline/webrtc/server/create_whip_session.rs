@@ -1,10 +1,13 @@
-use crate::pipeline::webrtc::{
-    error::WhipServerError,
-    peer_connection_recvonly::RecvonlyPeerConnection,
-    whip_input::{
-        track_audio_thread::process_audio_track, track_video_thread::process_video_track,
+use crate::pipeline::{
+    rtp::RtpNtpSyncPoint,
+    webrtc::{
+        error::WhipServerError,
+        peer_connection_recvonly::RecvonlyPeerConnection,
+        whip_input::{
+            track_audio_thread::process_audio_track, track_video_thread::process_video_track,
+        },
+        WhipWhepServerState,
     },
-    WhipWhepServerState,
 };
 use axum::{
     body::Body,
@@ -14,7 +17,7 @@ use axum::{
 };
 use compositor_render::InputId;
 use std::{sync::Arc, time::Duration};
-use tracing::{debug, trace, warn};
+use tracing::{debug, span, trace, warn, Instrument, Level};
 use webrtc::{
     peer_connection::sdp::session_description::RTCSessionDescription,
     rtp_transceiver::rtp_codec::RTPCodecType,
@@ -57,30 +60,41 @@ pub async fn handle_create_whip_session(
 
     {
         let input_id = input_id.clone();
+        let sync_point = RtpNtpSyncPoint::new(state.ctx.queue_sync_point);
         peer_connection.on_track(Box::new(move |track, _, transceiver| {
             debug!(
-                kind = track.kind().to_string(),
+                kind =? track.kind(),
                 ?input_id,
                 "on_track called"
             );
 
+            let span = span!(Level::INFO, "WHIP input track", track_type =? track.kind());
+
             match track.kind() {
                 RTPCodecType::Audio => {
-                    tokio::spawn(process_audio_track(
-                        state.clone(),
-                        input_id.clone(),
-                        track,
-                        transceiver,
-                    ));
+                    tokio::spawn(
+                        process_audio_track(
+                            sync_point.clone(),
+                            state.clone(),
+                            input_id.clone(),
+                            track,
+                            transceiver,
+                        )
+                        .instrument(span),
+                    );
                 }
                 RTPCodecType::Video => {
-                    tokio::spawn(process_video_track(
-                        state.clone(),
-                        input_id.clone(),
-                        track,
-                        transceiver,
-                        video_preferences.clone(),
-                    ));
+                    tokio::spawn(
+                        process_video_track(
+                            sync_point.clone(),
+                            state.clone(),
+                            input_id.clone(),
+                            track,
+                            transceiver,
+                            video_preferences.clone(),
+                        )
+                        .instrument(span),
+                    );
                 }
                 RTPCodecType::Unspecified => {
                     warn!("Unknown track kind")

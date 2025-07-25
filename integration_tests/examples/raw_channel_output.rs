@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use compositor_pipeline::{codecs::*, graphics_context::GraphicsContext, protocols::*, *};
+use compositor_pipeline::{graphics_context::GraphicsContext, protocols::*, *};
 use compositor_render::{
     error::ErrorStack,
     scene::{Component, InputStreamComponent},
@@ -93,14 +93,12 @@ fn main() {
 
     let input_options = RegisterInputOptions {
         input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
-            source: Mp4InputSource::File(root_dir().join(BUNNY_FILE_PATH)),
+            source: Mp4InputSource::File(root_dir().join(BUNNY_FILE_PATH).into()),
             should_loop: false,
-            video_decoder: VideoDecoderOptions::FfmpegH264,
         }),
         queue_options: QueueInputOptions {
             required: true,
             offset: Some(Duration::ZERO),
-            buffer_duration: None,
         },
     };
 

@@ -31,13 +31,7 @@ fn client_code() -> Result<()> {
     start_ffmpeg_rtmp_receive(OUTPUT_PORT)?;
 
     examples::post("start", &json!({}))?;
-    examples::post(
-        "input/input_1/register",
-        &json!({
-            "type": "hls",
-            "url": args[1],
-        }),
-    )?;
+
 
     examples::post(
         "output/output_1/register",
@@ -79,7 +73,15 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    std::thread::sleep(Duration::from_millis(500));
+    std::thread::sleep(Duration::from_millis(20_000));
+
+    examples::post(
+        "input/input_1/register",
+        &json!({
+            "type": "hls",
+            "url": args[1],
+        }),
+    )?;
 
     Ok(())
 }
