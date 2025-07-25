@@ -1,33 +1,30 @@
-use std::sync::Arc;
-
 use compositor_render::{Frame, InputId};
 use crossbeam_channel::Sender;
 use tracing::{debug, span, warn, Level};
 
 use crate::{
     error::DecoderInitError,
-    pipeline::{
-        decoder::{
-            BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle,
-            VideoDecoderStream,
-        },
-        PipelineCtx,
-    },
+    pipeline::decoder::{DecoderThreadHandle, VideoDecoderStream},
+    prelude::EncodedInputChunk,
     PipelineEvent,
 };
 
 use super::VideoDecoder;
 
-pub fn spawn_video_decoder_thread<
-    Decoder: VideoDecoder,
-    const BUFFER_SIZE: usize,
-    Transformer: BytestreamTransformer,
->(
-    ctx: Arc<PipelineCtx>,
+pub fn spawn_video_decoder_thread<Decoder, const BUFFER_SIZE: usize, Source, InitStreamFn>(
     input_id: InputId,
-    transformer: Option<Transformer>,
     frame_sender: Sender<PipelineEvent<Frame>>,
-) -> Result<DecoderThreadHandle, DecoderInitError> {
+    init_stream: InitStreamFn,
+) -> Result<DecoderThreadHandle, DecoderInitError>
+where
+    Decoder: VideoDecoder,
+    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    InitStreamFn: FnOnce(
+            crossbeam_channel::IntoIter<PipelineEvent<EncodedInputChunk>>,
+        ) -> Result<VideoDecoderStream<Decoder, Source>, DecoderInitError>
+        + Send
+        + 'static,
+{
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
     std::thread::Builder::new()
@@ -41,10 +38,14 @@ pub fn spawn_video_decoder_thread<
             )
             .entered();
 
-            let result = init_decoder_stream::<Decoder, BUFFER_SIZE, _>(ctx, transformer);
+            let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(BUFFER_SIZE);
+
+            let result = init_stream(chunk_receiver.into_iter());
             let stream = match result {
-                Ok((stream, handle)) => {
-                    result_sender.send(Ok(handle)).unwrap();
+                Ok(stream) => {
+                    result_sender
+                        .send(Ok(DecoderThreadHandle { chunk_sender }))
+                        .unwrap();
                     stream
                 }
                 Err(err) => {
@@ -52,7 +53,7 @@ pub fn spawn_video_decoder_thread<
                     return;
                 }
             };
-            for event in stream {
+            for event in stream.flatten() {
                 if frame_sender.send(event).is_err() {
                     warn!("Failed to send encoded video chunk from encoder. Channel closed.");
                     return;
@@ -65,27 +66,25 @@ pub fn spawn_video_decoder_thread<
     result_receiver.recv().unwrap()
 }
 
-fn init_decoder_stream<
-    Decoder: VideoDecoder,
-    const BUFFER_SIZE: usize,
-    Transformer: BytestreamTransformer,
->(
-    ctx: Arc<PipelineCtx>,
-    transformer: Option<Transformer>,
-) -> Result<
-    (
-        impl Iterator<Item = PipelineEvent<Frame>>,
-        DecoderThreadHandle,
-    ),
-    DecoderInitError,
-> {
-    let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(BUFFER_SIZE);
+// fn init_decoder_stream<
+//     Decoder: VideoDecoder,
+//     const BUFFER_SIZE: usize,
+//     Transformer: BytestreamTransformer,
+// >(
+//     ctx: Arc<PipelineCtx>,
+//     transformer: Option<Transformer>,
+// ) -> Result<
+//     (
+//         impl Iterator<Item = PipelineEvent<Frame>>,
+//         DecoderThreadHandle,
+//     ),
+//     DecoderInitError,
+// > {
+//     let transformed_bytestream =
+//         BytestreamTransformStream::new(transformer, chunk_receiver.into_iter());
 
-    let transformed_bytestream =
-        BytestreamTransformStream::new(transformer, chunk_receiver.into_iter());
+//     let decoded_stream =
+//         VideoDecoderStream::<Decoder, _>::new(ctx, transformed_bytestream)?.flatten();
 
-    let decoded_stream =
-        VideoDecoderStream::<Decoder, _>::new(ctx, transformed_bytestream)?.flatten();
-
-    Ok((decoded_stream, DecoderThreadHandle { chunk_sender }))
-}
+//     Ok((decoded_stream, DecoderThreadHandle { chunk_sender }))
+// }

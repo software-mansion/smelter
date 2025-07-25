@@ -18,7 +18,8 @@ use crate::{
         decoder::{
             decoder_thread_audio::spawn_audio_decoder_thread,
             decoder_thread_video::spawn_video_decoder_thread, fdk_aac, ffmpeg_h264,
-            h264_utils::AvccToAnnexBRepacker, DecoderThreadHandle,
+            h264_utils::AvccToAnnexBRepacker, BytestreamTransformStream, DecoderThreadHandle,
+            VideoDecoderStream,
         },
         input::Input,
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
@@ -63,13 +64,19 @@ impl Mp4Input {
         let (video_handle, video_receiver, video_track) = match video {
             Some(track) => {
                 let (sender, receiver) = crossbeam_channel::bounded(10);
-                let handle = match track.decoder_options() {
-                    DecoderOptions::H264(extra_data) => {
-                        spawn_video_decoder_thread::<ffmpeg_h264::FfmpegH264Decoder, 5, _>(
-                            ctx.clone(),
+                let handle = match track.decoder_options().clone() {
+                    DecoderOptions::H264(h264_config) => {
+                        let ctx = ctx.clone();
+                        spawn_video_decoder_thread::<ffmpeg_h264::FfmpegH264Decoder, 5, _, _>(
                             input_id.clone(),
-                            Some(AvccToAnnexBRepacker::new(extra_data.clone())),
                             sender,
+                            move |chunk_stream| {
+                                let annex_b_chunk_stream = BytestreamTransformStream::new(
+                                    Some(AvccToAnnexBRepacker::new(h264_config)),
+                                    chunk_stream,
+                                );
+                                VideoDecoderStream::new(ctx, annex_b_chunk_stream)
+                            },
                         )?
                     }
                     _ => {

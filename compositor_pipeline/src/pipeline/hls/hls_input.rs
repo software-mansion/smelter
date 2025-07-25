@@ -30,7 +30,7 @@ use crate::{
             decoder_thread_video::spawn_video_decoder_thread,
             fdk_aac, ffmpeg_h264,
             h264_utils::{AvccToAnnexBRepacker, H264AvcDecoderConfig},
-            DecoderThreadHandle,
+            BytestreamTransformStream, DecoderThreadHandle, VideoDecoderStream,
         },
         input::Input,
     },
@@ -155,11 +155,16 @@ impl HlsInput {
                     });
 
                 let decoder_result =
-                    spawn_video_decoder_thread::<ffmpeg_h264::FfmpegH264Decoder, 2000, _>(
-                        ctx.clone(),
+                    spawn_video_decoder_thread::<ffmpeg_h264::FfmpegH264Decoder, 2000, _, _>(
                         input_id.clone(),
-                        h264_config.map(AvccToAnnexBRepacker::new),
                         frame_sender,
+                        move |chunk_stream| {
+                            let annex_b_chunk_stream = BytestreamTransformStream::new(
+                                h264_config.map(AvccToAnnexBRepacker::new),
+                                chunk_stream,
+                            );
+                            VideoDecoderStream::new(ctx, annex_b_chunk_stream)
+                        },
                     );
                 let handle = match decoder_result {
                     Ok(handle) => handle,
