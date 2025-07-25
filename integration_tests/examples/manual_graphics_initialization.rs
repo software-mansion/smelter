@@ -3,8 +3,8 @@
 
 #[cfg(target_os = "linux")]
 fn main() {
-    use compositor_pipeline::{graphics_context::GraphicsContext, Pipeline, PipelineOptions};
-    use smelter::config::read_config;
+    use compositor_pipeline::{graphics_context::GraphicsContext, Pipeline, PipelineWgpuOptions};
+    use smelter::{config::read_config, state::pipeline_options_from_config};
     use std::sync::Arc;
     use tokio::runtime::Runtime;
 
@@ -17,12 +17,9 @@ fn main() {
 
     let config = read_config();
 
-    let _pipeline = Pipeline::new(PipelineOptions {
-        wgpu_ctx: Some(graphics_context),
-        tokio_rt: Some(Arc::new(Runtime::new().unwrap())),
-        ..(&config).into()
-    })
-    .unwrap();
+    let mut options = pipeline_options_from_config(&config, Arc::new(Runtime::new().unwrap()));
+    options.wgpu_options = PipelineWgpuOptions::Context(graphics_context);
+    let _pipeline = Pipeline::new(options).unwrap();
 }
 
 #[cfg(target_os = "macos")]

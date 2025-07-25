@@ -1,5 +1,8 @@
 use anyhow::Result;
-use compositor_pipeline::{PipelineOptions, QueueOptions, DEFAULT_BUFFER_DURATION};
+use compositor_pipeline::{
+    graphics_context::GraphicsContext, PipelineOptions, PipelineWgpuOptions,
+    PipelineWhipWhepServerOptions, DEFAULT_BUFFER_DURATION,
+};
 use std::{
     fs::{self, File},
     io::{self, Read},
@@ -9,39 +12,36 @@ use std::{
 };
 use tracing::warn;
 
-use compositor_render::{web_renderer::WebRendererInitOptions, Framerate, YuvPlanes};
+use compositor_render::{
+    web_renderer::WebRendererInitOptions, Framerate, RenderingMode, YuvPlanes,
+};
 
 use crate::{args::Resolution, benchmark_pass::RawInputFile};
 
-pub fn benchmark_pipeline_options(framerate: u64) -> PipelineOptions {
+pub fn benchmark_pipeline_options(
+    framerate: u64,
+    graphics_context: GraphicsContext,
+    rendering_mode: RenderingMode,
+) -> PipelineOptions {
     PipelineOptions {
-        queue_options: QueueOptions {
-            never_drop_output_frames: true,
-            output_framerate: Framerate {
-                num: framerate as u32,
-                den: 1,
-            },
-            default_buffer_duration: DEFAULT_BUFFER_DURATION,
-            ahead_of_time_processing: false,
-            run_late_scheduled_events: true,
+        never_drop_output_frames: true,
+        output_framerate: Framerate {
+            num: framerate as u32,
+            den: 1,
         },
-        web_renderer: WebRendererInitOptions {
-            enable: false,
-            enable_gpu: false,
-        },
-        wgpu_ctx: None,
-        force_gpu: false,
-        download_root: std::env::temp_dir(),
-        wgpu_features:
-            wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        load_system_fonts: Some(false),
+        default_buffer_duration: DEFAULT_BUFFER_DURATION,
+        ahead_of_time_processing: false,
+        run_late_scheduled_events: true,
+        web_renderer: WebRendererInitOptions::Disable,
+        download_root: std::env::temp_dir().into(),
+        load_system_fonts: false,
         mixing_sample_rate: 48_000,
         stream_fallback_timeout: Duration::from_millis(500),
         tokio_rt: None,
-        stun_servers: Vec::new().into(),
-        whip_whep_server_port: 9000,
-        start_whip_whep: false,
-        rendering_mode: compositor_render::RenderingMode::GpuOptimized,
+        whip_whep_stun_servers: Vec::new().into(),
+        rendering_mode,
+        whip_whep_server: PipelineWhipWhepServerOptions::Disable,
+        wgpu_options: PipelineWgpuOptions::Context(graphics_context),
     }
 }
 

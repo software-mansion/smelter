@@ -25,9 +25,19 @@ struct WhipWhepServerState {
     ctx: Arc<PipelineCtx>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct WhipWhepPipelineState {
-    pub(crate) inputs: WhipInputsState,
+    pub port: u16,
+    pub inputs: WhipInputsState,
+}
+
+impl WhipWhepPipelineState {
+    pub fn new(port: u16) -> Arc<Self> {
+        Arc::new(Self {
+            port,
+            inputs: WhipInputsState::default(),
+        })
+    }
 }
 
 #[derive(Debug)]

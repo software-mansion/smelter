@@ -6,10 +6,8 @@ use std::{
     time::Duration,
 };
 
-use compositor_pipeline::{QueueOptions, DEFAULT_BUFFER_DURATION};
-use compositor_render::{
-    web_renderer::WebRendererInitOptions, Framerate, RenderingMode, WgpuFeatures,
-};
+use compositor_pipeline::DEFAULT_BUFFER_DURATION;
+use compositor_render::{Framerate, RenderingMode, WgpuFeatures};
 use rand::Rng;
 use tracing::error;
 
@@ -18,20 +16,31 @@ use crate::logger::FfmpegLogLevel;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub instance_id: String,
-    pub api_port: u16,
     pub logger: LoggerConfig,
+
+    pub api_port: u16,
+    pub download_root: Arc<Path>,
     pub stream_fallback_timeout: Duration,
-    pub web_renderer: WebRendererInitOptions,
-    pub force_gpu: bool,
-    pub download_root: PathBuf,
-    pub queue_options: QueueOptions,
-    pub mixing_sample_rate: u32,
-    pub stun_servers: Arc<Vec<String>>,
-    pub required_wgpu_features: WgpuFeatures,
+    pub default_buffer_duration: Duration,
+
+    pub ahead_of_time_processing: bool,
+    pub run_late_scheduled_events: bool,
+    pub never_drop_output_frames: bool,
     pub load_system_fonts: bool,
-    pub whip_whep_server_port: u16,
-    pub start_whip_whep: bool,
+
+    pub mixing_sample_rate: u32,
+    pub output_framerate: Framerate,
+
     pub rendering_mode: RenderingMode,
+    pub wgpu_force_gpu: bool,
+    pub wgpu_required_features: WgpuFeatures,
+
+    pub web_renderer_enable: bool,
+    pub web_renderer_gpu_enable: bool,
+
+    pub whip_whep_stun_servers: Arc<Vec<String>>,
+    pub whip_whep_server_port: u16,
+    pub whip_whep_enable: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -80,7 +89,7 @@ fn try_read_config() -> Result<Config, String> {
     };
 
     const DEFAULT_FRAMERATE: Framerate = Framerate { num: 30, den: 1 };
-    let framerate = match env::var("SMELTER_OUTPUT_FRAMERATE") {
+    let output_framerate = match env::var("SMELTER_OUTPUT_FRAMERATE") {
         Ok(framerate) => framerate_from_str(&framerate).unwrap_or(DEFAULT_FRAMERATE),
         Err(_) => DEFAULT_FRAMERATE,
     };
@@ -103,7 +112,7 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => DEFAULT_MIXING_SAMPLE_RATE,
     };
 
-    let force_gpu = match env::var("SMELTER_FORCE_GPU") {
+    let wgpu_force_gpu = match env::var("SMELTER_FORCE_GPU") {
         Ok(enable) => bool_env_from_str(&enable).unwrap_or(false),
         Err(_) => false,
     };
@@ -143,8 +152,8 @@ fn try_read_config() -> Result<Config, String> {
     };
 
     let download_root = env::var("SMELTER_DOWNLOAD_DIR")
-        .map(PathBuf::from)
-        .unwrap_or(env::temp_dir());
+        .map(|path| Arc::from(PathBuf::from(path)))
+        .unwrap_or_else(|_| Arc::from(env::temp_dir()));
 
     let web_renderer_enable = match env::var("SMELTER_WEB_RENDERER_ENABLE") {
         Ok(enable) => bool_env_from_str(&enable).unwrap_or(false),
@@ -178,7 +187,7 @@ fn try_read_config() -> Result<Config, String> {
 
     let default_wgpu_features: WgpuFeatures =
         WgpuFeatures::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
-    let required_wgpu_features = match env::var("SMELTER_REQUIRED_WGPU_FEATURES") {
+    let wgpu_required_features = match env::var("SMELTER_REQUIRED_WGPU_FEATURES") {
         Ok(required_wgpu_features) => wgpu_features_from_str(&required_wgpu_features).unwrap(),
         Err(_) => default_wgpu_features,
     };
@@ -206,7 +215,7 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => 9000,
     };
 
-    let start_whip_whep = match env::var("SMELTER_START_WHIP_WHEP_SERVER") {
+    let whip_whep_enable = match env::var("SMELTER_START_WHIP_WHEP_SERVER") {
         Ok(enable) => bool_env_from_str(&enable).unwrap_or(true),
         Err(_) => true,
     };
@@ -247,26 +256,22 @@ fn try_read_config() -> Result<Config, String> {
             level: logger_level,
             log_file,
         },
-        queue_options: QueueOptions {
-            default_buffer_duration,
-            ahead_of_time_processing,
-            output_framerate: framerate,
-            run_late_scheduled_events,
-            never_drop_output_frames,
-        },
+        default_buffer_duration,
+        ahead_of_time_processing,
+        output_framerate,
+        run_late_scheduled_events,
+        never_drop_output_frames,
         stream_fallback_timeout,
-        force_gpu,
-        web_renderer: WebRendererInitOptions {
-            enable: web_renderer_enable,
-            enable_gpu: web_renderer_gpu_enable,
-        },
+        web_renderer_enable,
+        web_renderer_gpu_enable,
         download_root,
         mixing_sample_rate,
-        stun_servers,
-        required_wgpu_features,
+        whip_whep_stun_servers: stun_servers,
+        wgpu_force_gpu,
+        wgpu_required_features,
         load_system_fonts,
         whip_whep_server_port,
-        start_whip_whep,
+        whip_whep_enable,
         rendering_mode,
     };
     Ok(config)

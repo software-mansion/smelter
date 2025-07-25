@@ -3,8 +3,22 @@ use compositor_render::scene::Component;
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct RegisterOutputOptions<T> {
-    pub output_options: T,
+pub struct RegisterOutputOptions {
+    pub output_options: ProtocolOutputOptions,
+    pub video: Option<RegisterOutputVideoOptions>,
+    pub audio: Option<RegisterOutputAudioOptions>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RegisterEncodedDataOutputOptions {
+    pub output_options: EncodedDataOutputOptions,
+    pub video: Option<RegisterOutputVideoOptions>,
+    pub audio: Option<RegisterOutputAudioOptions>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RegisterRawDataOutputOptions {
+    pub output_options: RawDataOutputOptions,
     pub video: Option<RegisterOutputVideoOptions>,
     pub audio: Option<RegisterOutputAudioOptions>,
 }

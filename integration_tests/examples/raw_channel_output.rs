@@ -20,6 +20,7 @@ use integration_tests::{examples::download_file, read_rgba_texture};
 use smelter::{
     config::read_config,
     logger::{self},
+    state::pipeline_options_from_config,
 };
 use tokio::runtime::Runtime;
 
@@ -40,14 +41,13 @@ fn main() {
     ffmpeg_next::format::network::init();
     logger::init_logger(read_config().logger);
     let mut config = read_config();
-    config.queue_options.ahead_of_time_processing = true;
+    config.ahead_of_time_processing = true;
     let ctx = GraphicsContext::new(Default::default()).unwrap();
     let (wgpu_device, wgpu_queue) = (ctx.device.clone(), ctx.queue.clone());
     // no chromium support, so we can ignore _event_loop
     let (pipeline, _event_loop) = Pipeline::new(PipelineOptions {
-        wgpu_ctx: Some(ctx),
-        tokio_rt: Some(Arc::new(Runtime::new().unwrap())),
-        ..(&config).into()
+        wgpu_options: PipelineWgpuOptions::Context(ctx),
+        ..pipeline_options_from_config(&config, Arc::new(Runtime::new().unwrap()))
     })
     .unwrap_or_else(|err| {
         panic!(
@@ -61,7 +61,7 @@ fn main() {
 
     download_file(BUNNY_FILE_URL, BUNNY_FILE_PATH).unwrap();
 
-    let output_options = RegisterOutputOptions {
+    let output_options = RegisterRawDataOutputOptions {
         output_options: RawDataOutputOptions {
             video: Some(RawDataOutputVideoOptions {
                 resolution: Resolution {

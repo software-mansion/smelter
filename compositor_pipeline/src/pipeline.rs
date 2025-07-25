@@ -1,5 +1,5 @@
 use std::{
-    path::{Path, PathBuf},
+    path::Path,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -38,42 +38,54 @@ pub use instance::Pipeline;
 
 #[derive(Debug)]
 pub struct PipelineOptions {
-    pub queue_options: QueueOptions,
     pub stream_fallback_timeout: Duration,
-    pub web_renderer: WebRendererInitOptions,
-    pub force_gpu: bool,
-    pub download_root: PathBuf,
+    pub default_buffer_duration: Duration,
+
+    pub load_system_fonts: bool,
+    pub run_late_scheduled_events: bool,
+    pub never_drop_output_frames: bool,
+    pub ahead_of_time_processing: bool,
+
+    pub output_framerate: Framerate,
     pub mixing_sample_rate: u32,
-    pub stun_servers: Arc<Vec<String>>,
-    pub wgpu_features: WgpuFeatures,
-    pub load_system_fonts: Option<bool>,
-    pub wgpu_ctx: Option<GraphicsContext>,
-    pub whip_whep_server_port: u16,
-    pub start_whip_whep: bool,
-    pub tokio_rt: Option<Arc<Runtime>>,
+
+    pub download_root: Arc<Path>,
+
     pub rendering_mode: RenderingMode,
+    pub wgpu_options: PipelineWgpuOptions,
+    pub tokio_rt: Option<Arc<Runtime>>,
+
+    pub web_renderer: WebRendererInitOptions,
+    pub whip_whep_server: PipelineWhipWhepServerOptions,
+    pub whip_whep_stun_servers: Arc<Vec<String>>,
+}
+
+#[derive(Debug)]
+pub enum PipelineWgpuOptions {
+    Context(GraphicsContext),
+    Options {
+        features: WgpuFeatures,
+        force_gpu: bool,
+    },
+}
+
+#[derive(Debug)]
+pub enum PipelineWhipWhepServerOptions {
+    Enable { port: u16 },
+    Disable,
 }
 
 pub const DEFAULT_BUFFER_DURATION: Duration = Duration::from_millis(16 * 5); // about 5 frames at 60 fps
 
-#[derive(Debug, Clone, Copy)]
-pub struct QueueOptions {
-    pub default_buffer_duration: Duration,
-    pub ahead_of_time_processing: bool,
-    pub output_framerate: Framerate,
-    pub run_late_scheduled_events: bool,
-    pub never_drop_output_frames: bool,
-}
-
 #[derive(Clone)]
 pub struct PipelineCtx {
-    pub queue_sync_time: Instant,
+    pub queue_sync_point: Instant,
     pub mixing_sample_rate: u32,
     pub output_framerate: Framerate,
     pub stun_servers: Arc<Vec<String>>,
     pub download_dir: Arc<Path>,
     pub graphics_context: GraphicsContext,
-    event_emitter: Arc<EventEmitter>,
+    pub event_emitter: Arc<EventEmitter>,
     tokio_rt: Arc<Runtime>,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
 }

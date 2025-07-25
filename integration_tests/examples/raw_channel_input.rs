@@ -20,6 +20,7 @@ use integration_tests::{gstreamer::start_gst_receive_tcp_h264, test_input::TestI
 use smelter::{
     config::read_config,
     logger::{self},
+    state::pipeline_options_from_config,
 };
 use tokio::runtime::Runtime;
 
@@ -39,9 +40,8 @@ fn main() {
     let (wgpu_device, wgpu_queue) = (ctx.device.clone(), ctx.queue.clone());
     // no chromium support, so we can ignore _event_loop
     let (pipeline, _event_loop) = Pipeline::new(PipelineOptions {
-        wgpu_ctx: Some(ctx),
-        tokio_rt: Some(Arc::new(Runtime::new().unwrap())),
-        ..(&config).into()
+        wgpu_options: PipelineWgpuOptions::Context(ctx),
+        ..pipeline_options_from_config(&config, Arc::new(Runtime::new().unwrap()))
     })
     .unwrap_or_else(|err| {
         panic!(

@@ -1,7 +1,7 @@
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
 
-impl TryFrom<HlsOutput> for pipeline::RegisterOutputOptions<pipeline::ProtocolOutputOptions> {
+impl TryFrom<HlsOutput> for pipeline::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(request: HlsOutput) -> Result<Self, Self::Error> {
