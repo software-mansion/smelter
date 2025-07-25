@@ -1,4 +1,5 @@
+node_modules
+
 .clips
 .hls
-node_modules
 .env
