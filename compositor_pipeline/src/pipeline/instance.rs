@@ -29,7 +29,7 @@ use crate::{
         output::{new_external_output, register_pipeline_output, OutputSender, PipelineOutput},
         webrtc::{WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle},
     },
-    queue::{Queue, QueueAudioOutput, QueueVideoOutput},
+    queue::{Queue, QueueAudioOutput, QueueOptions, QueueVideoOutput},
 };
 use crate::{
     graphics_context::{GraphicsContext, GraphicsContextOptions},
@@ -114,7 +114,7 @@ impl Pipeline {
     pub fn register_output(
         pipeline: &Arc<Mutex<Self>>,
         output_id: OutputId,
-        register_options: RegisterOutputOptions<ProtocolOutputOptions>,
+        register_options: RegisterOutputOptions,
     ) -> Result<Option<Port>, RegisterOutputError> {
         register_pipeline_output(
             pipeline,
@@ -128,7 +128,7 @@ impl Pipeline {
     pub fn register_encoded_data_output(
         pipeline: &Arc<Mutex<Self>>,
         output_id: OutputId,
-        register_options: RegisterOutputOptions<EncodedDataOutputOptions>,
+        register_options: RegisterEncodedDataOutputOptions,
     ) -> Result<Receiver<EncodedOutputEvent>, RegisterOutputError> {
         register_pipeline_output(
             pipeline,
@@ -146,7 +146,7 @@ impl Pipeline {
     pub fn register_raw_data_output(
         pipeline: &Arc<Mutex<Self>>,
         output_id: OutputId,
-        register_options: RegisterOutputOptions<RawDataOutputOptions>,
+        register_options: RegisterRawDataOutputOptions,
     ) -> Result<RawDataOutputReceiver, RegisterOutputError> {
         register_pipeline_output(
             pipeline,
@@ -467,20 +467,25 @@ fn run_audio_mixer_thread(
 fn create_pipeline(
     opts: PipelineOptions,
 ) -> Result<(Pipeline, Arc<dyn EventLoop>), InitPipelineError> {
-    let graphics_context = match opts.wgpu_ctx {
-        Some(ctx) => ctx,
-        None => GraphicsContext::new(GraphicsContextOptions {
-            force_gpu: opts.force_gpu,
-            features: opts.wgpu_features,
+    let queue_options = QueueOptions::from(&opts);
+
+    let graphics_context = match opts.wgpu_options {
+        PipelineWgpuOptions::Context(ctx) => ctx,
+        PipelineWgpuOptions::Options {
+            features,
+            force_gpu,
+        } => GraphicsContext::new(GraphicsContextOptions {
+            force_gpu,
+            features,
             ..Default::default()
         })?,
     };
 
     let (renderer, event_loop) = Renderer::new(RendererOptions {
         web_renderer: opts.web_renderer,
-        framerate: opts.queue_options.output_framerate,
+        framerate: opts.output_framerate,
         stream_fallback_timeout: opts.stream_fallback_timeout,
-        load_system_fonts: opts.load_system_fonts.unwrap_or(true),
+        load_system_fonts: opts.load_system_fonts,
         device: graphics_context.device.clone(),
         queue: graphics_context.queue.clone(),
         rendering_mode: opts.rendering_mode,
@@ -498,33 +503,31 @@ fn create_pipeline(
     };
 
     let ctx = Arc::new(PipelineCtx {
-        queue_sync_time: Instant::now(),
+        queue_sync_point: Instant::now(),
         mixing_sample_rate: opts.mixing_sample_rate,
-        output_framerate: opts.queue_options.output_framerate,
-        stun_servers: opts.stun_servers.clone(),
+        output_framerate: opts.output_framerate,
+        stun_servers: opts.whip_whep_stun_servers.clone(),
         download_dir,
         event_emitter: Arc::new(EventEmitter::new()),
         tokio_rt: tokio_rt.clone(),
         graphics_context,
-        whip_whep_state: match opts.start_whip_whep {
-            true => Some(WhipWhepPipelineState::default().into()),
-            false => None,
+        whip_whep_state: match opts.whip_whep_server {
+            PipelineWhipWhepServerOptions::Enable { port } => {
+                Some(WhipWhepPipelineState::new(port))
+            }
+            PipelineWhipWhepServerOptions::Disable => None,
         },
     });
 
     let whip_whep_handle = match &ctx.whip_whep_state {
-        Some(state) => Some(WhipWhepServer::spawn(
-            ctx.clone(),
-            state,
-            opts.whip_whep_server_port,
-        )?),
+        Some(state) => Some(WhipWhepServer::spawn(ctx.clone(), state)?),
         None => None,
     };
 
     let pipeline = Pipeline {
         outputs: HashMap::new(),
         inputs: HashMap::new(),
-        queue: Queue::new(opts.queue_options, &ctx.event_emitter),
+        queue: Queue::new(queue_options, &ctx),
         renderer,
         audio_mixer: AudioMixer::new(opts.mixing_sample_rate),
         is_started: false,

@@ -13,8 +13,8 @@ use crate::pipeline::{
 };
 use crate::prelude::*;
 
-pub struct PipelineOutput {
-    pub(crate) output: Box<dyn Output>,
+pub(crate) struct PipelineOutput {
+    pub output: Box<dyn Output>,
     pub video_end_condition: Option<PipelineOutputEndConditionState>,
     pub audio_end_condition: Option<PipelineOutputEndConditionState>,
 }

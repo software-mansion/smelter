@@ -16,8 +16,9 @@ use std::{
 use compositor_render::{Frame, FrameSet, Framerate, InputId};
 use crossbeam_channel::{bounded, Receiver, Sender};
 
+use crate::audio_mixer::InputSamplesSet;
+
 use crate::prelude::*;
-use crate::{audio_mixer::InputSamplesSet, event::EventEmitter};
 
 use self::{
     audio_queue::AudioQueue,
@@ -32,6 +33,29 @@ const DEFAULT_AUDIO_CHUNK_DURATION: Duration = Duration::from_millis(20); // typ
 pub struct QueueDataReceiver {
     pub video: Option<Receiver<PipelineEvent<Frame>>>,
     pub audio: Option<Receiver<PipelineEvent<InputAudioSamples>>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct QueueOptions {
+    pub default_buffer_duration: Duration,
+    pub output_framerate: Framerate,
+
+    pub ahead_of_time_processing: bool,
+    pub run_late_scheduled_events: bool,
+    pub never_drop_output_frames: bool,
+}
+
+impl From<&PipelineOptions> for QueueOptions {
+    fn from(opt: &PipelineOptions) -> Self {
+        Self {
+            default_buffer_duration: opt.default_buffer_duration,
+            output_framerate: opt.output_framerate,
+
+            ahead_of_time_processing: opt.ahead_of_time_processing,
+            run_late_scheduled_events: opt.run_late_scheduled_events,
+            never_drop_output_frames: opt.never_drop_output_frames,
+        }
+    }
 }
 
 /// Queue is responsible for consuming frames from different inputs and producing
@@ -141,17 +165,18 @@ impl<T: Clone> Clone for PipelineEvent<T> {
 }
 
 impl Queue {
-    pub(crate) fn new(opts: QueueOptions, event_emitter: &Arc<EventEmitter>) -> Arc<Self> {
+    pub(crate) fn new(opts: QueueOptions, ctx: &Arc<PipelineCtx>) -> Arc<Self> {
         let (queue_start_sender, queue_start_receiver) = bounded(0);
         let (scheduled_event_sender, scheduled_event_receiver) = bounded(0);
         let queue = Arc::new(Queue {
-            video_queue: Mutex::new(VideoQueue::new(event_emitter.clone())),
+            video_queue: Mutex::new(VideoQueue::new(ctx.event_emitter.clone())),
             output_framerate: opts.output_framerate,
 
-            audio_queue: Mutex::new(AudioQueue::new(event_emitter.clone())),
+            audio_queue: Mutex::new(AudioQueue::new(ctx.event_emitter.clone())),
             audio_chunk_duration: DEFAULT_AUDIO_CHUNK_DURATION,
 
             start_time: Mutex::new(None),
+
             scheduled_event_sender,
             start_sender: Mutex::new(Some(queue_start_sender)),
             ahead_of_time_processing: opts.ahead_of_time_processing,

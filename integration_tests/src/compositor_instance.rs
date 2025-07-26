@@ -38,7 +38,7 @@ impl CompositorInstance {
         let api_port = get_free_port();
         let mut config = config.unwrap_or(read_config());
         config.api_port = api_port;
-        config.start_whip_whep = false;
+        config.whip_whep_enable = false;
 
         info!("Starting Smelter Integration Test with config:\n{config:#?}",);
 

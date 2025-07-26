@@ -3,7 +3,7 @@ use tracing::warn;
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
 
-impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions<pipeline::ProtocolOutputOptions> {
+impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(request: RtpOutput) -> Result<Self, Self::Error> {

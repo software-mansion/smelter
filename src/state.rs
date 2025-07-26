@@ -1,8 +1,11 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use axum::response::IntoResponse;
-use compositor_pipeline::{error::InitPipelineError, Pipeline, PipelineOptions};
-use compositor_render::EventLoop;
+use compositor_pipeline::{
+    error::InitPipelineError, Pipeline, PipelineOptions, PipelineWgpuOptions,
+    PipelineWhipWhepServerOptions,
+};
+use compositor_render::{web_renderer::WebRendererInitOptions, EventLoop};
 
 use serde::Serialize;
 use tokio::runtime::Runtime;
@@ -42,8 +45,7 @@ impl ApiState {
         config: Config,
         runtime: Arc<Runtime>,
     ) -> Result<(ApiState, Arc<dyn EventLoop>), InitPipelineError> {
-        let mut options = PipelineOptions::from(&config);
-        options.tokio_rt = Some(runtime);
+        let options = pipeline_options_from_config(&config, runtime);
         let (pipeline, event_loop) = Pipeline::new(options)?;
         Ok((
             ApiState {
@@ -59,23 +61,40 @@ impl ApiState {
     }
 }
 
-impl From<&Config> for PipelineOptions {
-    fn from(val: &Config) -> Self {
-        PipelineOptions {
-            queue_options: val.queue_options,
-            stream_fallback_timeout: val.stream_fallback_timeout,
-            web_renderer: val.web_renderer,
-            force_gpu: val.force_gpu,
-            download_root: val.download_root.clone(),
-            mixing_sample_rate: val.mixing_sample_rate,
-            stun_servers: val.stun_servers.clone(),
-            wgpu_features: val.required_wgpu_features,
-            wgpu_ctx: None,
-            load_system_fonts: Some(val.load_system_fonts),
-            start_whip_whep: val.start_whip_whep,
-            whip_whep_server_port: val.whip_whep_server_port,
-            tokio_rt: None,
-            rendering_mode: val.rendering_mode,
-        }
+pub fn pipeline_options_from_config(opt: &Config, tokio_rt: Arc<Runtime>) -> PipelineOptions {
+    PipelineOptions {
+        stream_fallback_timeout: opt.stream_fallback_timeout,
+        download_root: opt.download_root.clone(),
+        default_buffer_duration: opt.default_buffer_duration,
+
+        load_system_fonts: opt.load_system_fonts,
+        ahead_of_time_processing: opt.ahead_of_time_processing,
+        run_late_scheduled_events: opt.run_late_scheduled_events,
+        never_drop_output_frames: opt.never_drop_output_frames,
+
+        mixing_sample_rate: opt.mixing_sample_rate,
+        output_framerate: opt.output_framerate,
+
+        rendering_mode: opt.rendering_mode,
+        tokio_rt: Some(tokio_rt),
+
+        web_renderer: match opt.web_renderer_enable {
+            true => WebRendererInitOptions::Enable {
+                enable_gpu: opt.web_renderer_gpu_enable,
+            },
+            false => WebRendererInitOptions::Disable,
+        },
+        wgpu_options: PipelineWgpuOptions::Options {
+            features: opt.wgpu_required_features,
+            force_gpu: opt.wgpu_force_gpu,
+        },
+
+        whip_whep_stun_servers: opt.whip_whep_stun_servers.clone(),
+        whip_whep_server: match opt.whip_whep_enable {
+            true => PipelineWhipWhepServerOptions::Enable {
+                port: opt.whip_whep_server_port,
+            },
+            false => PipelineWhipWhepServerOptions::Disable,
+        },
     }
 }

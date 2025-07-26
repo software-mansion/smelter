@@ -95,11 +95,11 @@ pub struct SingleBenchmarkPass {
 
 impl SingleBenchmarkPass {
     pub fn run(&self, ctx: GraphicsContext) -> Result<bool> {
-        let (pipeline, _event_loop) = Pipeline::new(PipelineOptions {
-            wgpu_ctx: Some(ctx),
-            rendering_mode: self.rendering_mode,
-            ..benchmark_pipeline_options(self.framerate)
-        })?;
+        let (pipeline, _event_loop) = Pipeline::new(benchmark_pipeline_options(
+            self.framerate,
+            ctx,
+            self.rendering_mode,
+        ))?;
 
         let pipeline = Arc::new(Mutex::new(pipeline));
 
@@ -179,7 +179,7 @@ impl SingleBenchmarkPass {
         let result = Pipeline::register_encoded_data_output(
             pipeline,
             output_id.clone(),
-            RegisterOutputOptions {
+            RegisterEncodedDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
                     initial: root,
                     end_condition: PipelineOutputEndCondition::Never,
@@ -211,7 +211,7 @@ impl SingleBenchmarkPass {
         let result = Pipeline::register_raw_data_output(
             pipeline,
             output_id.clone(),
-            RegisterOutputOptions {
+            RegisterRawDataOutputOptions {
                 video: Some(RegisterOutputVideoOptions {
                     initial: root,
                     end_condition: PipelineOutputEndCondition::Never,

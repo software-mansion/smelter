@@ -42,9 +42,9 @@ pub(super) type FrameData = Arc<Mutex<Bytes>>;
 pub(super) type SourceTransforms = Arc<Mutex<Vec<Mat4>>>;
 
 #[derive(Debug, Clone, Copy)]
-pub struct WebRendererInitOptions {
-    pub enable: bool,
-    pub enable_gpu: bool,
+pub enum WebRendererInitOptions {
+    Enable { enable_gpu: bool },
+    Disable,
 }
 
 #[derive(Debug, Clone)]

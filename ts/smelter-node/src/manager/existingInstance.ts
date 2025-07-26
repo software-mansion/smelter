@@ -50,7 +50,7 @@ class ExistingInstanceManager implements SmelterManager {
       };
 
       const actualConfig = {
-        aheadOfTimeProcessing: smelterStatus.queueOptions.aheadOfTimeProcessing,
+        aheadOfTimeProcessing: smelterStatus.configuration.aheadOfTimeProcessing,
       };
 
       for (const [key, expected] of Object.entries(expectedConfig)) {

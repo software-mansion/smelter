@@ -3,7 +3,7 @@ use tracing::warn;
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
 
-impl TryFrom<Mp4Output> for pipeline::RegisterOutputOptions<pipeline::ProtocolOutputOptions> {
+impl TryFrom<Mp4Output> for pipeline::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(request: Mp4Output) -> Result<Self, Self::Error> {

@@ -43,7 +43,7 @@ class RemoteInstanceManager implements SmelterManager {
       let smelterStatus = await getSmelterStatus(this);
 
       const expectedAheadOfTimeProcessing = opts.aheadOfTimeProcessing;
-      const actualAheadOfTimeProcessing = smelterStatus.queueOptions.aheadOfTimeProcessing;
+      const actualAheadOfTimeProcessing = smelterStatus.configuration.aheadOfTimeProcessing;
 
       if (actualAheadOfTimeProcessing !== expectedAheadOfTimeProcessing) {
         opts.logger.warn(

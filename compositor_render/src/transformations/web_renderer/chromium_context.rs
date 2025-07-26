@@ -28,7 +28,7 @@ impl ChromiumContext {
         let instance_id = random_string(30);
         #[cfg(not(feature = "web_renderer"))]
         {
-            if opts.enable {
+            if let WebRendererInitOptions::Enable { .. } = opts {
                 return Err(WebRendererContextError::WebRenderingNotAvailable);
             }
             return Ok(Self {
@@ -39,20 +39,23 @@ impl ChromiumContext {
 
         #[cfg(feature = "web_renderer")]
         {
-            if !opts.enable {
-                info!("Chromium context disabled");
-                return Ok(Self {
-                    instance_id,
-                    framerate,
-                    context: None,
-                });
-            }
+            let enable_gpu = match opts {
+                WebRendererInitOptions::Enable { enable_gpu } => enable_gpu,
+                WebRendererInitOptions::Disable => {
+                    info!("Chromium context disabled");
+                    return Ok(Self {
+                        instance_id,
+                        framerate,
+                        context: None,
+                    });
+                }
+            };
 
             info!("Init chromium context");
 
             let app = ChromiumApp {
                 show_fps: false,
-                enable_gpu: opts.enable_gpu,
+                enable_gpu,
             };
             let settings = cef::Settings {
                 root_cache_path: utils::get_smelter_instance_tmp_path(&instance_id)
