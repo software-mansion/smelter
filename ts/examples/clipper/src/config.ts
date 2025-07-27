@@ -1,3 +1,4 @@
+import type { Logger } from 'pino';
 import * as z from 'zod';
 
 export const configSchema = z.object({
@@ -5,23 +6,22 @@ export const configSchema = z.object({
   host: z.string().default('localhost'),
   httpsCertPath: z.string(),
   httpsKeyPath: z.string(),
-  hlsPlaylistPath: z.string(),
-  clipsOutDir: z.string(),
+  dbFileName: z.string(),
 });
 
-export function loadConfig() {
+export function loadConfig(logger: Logger) {
   const result = configSchema.safeParse({
-    port: process.env.CLIPPER_PORT,
-    host: process.env.CLIPPER_HOST,
+    port: process.env.CLIPPER_PORT ?? 3000,
+    host: process.env.CLIPPER_HOST ?? 'localhost',
     httpsCertPath: process.env.CLIPPER_HTTPS_CERT_PATH,
     httpsKeyPath: process.env.CLIPPER_HTTPS_KEY_PATH,
-    hlsPlaylistPath: process.env.CLIPPER_HLS_PLAYLIST_FILE,
-    clipsOutDir: process.env.CLIPPER_CLIPS_OUT_DIR,
+    dbFileName: process.env.CLIPPER_DB_FILE_NAME,
   });
 
   if (result.success) {
     return result.data;
   } else {
+    logger.error(result.error);
     throw new Error('failed to parse config');
   }
 }

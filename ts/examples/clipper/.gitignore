@@ -1,5 +1,6 @@
 node_modules
+dist
+.certs
 
-.clips
-.hls
 .env
+*.local

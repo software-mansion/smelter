@@ -1,6 +1,9 @@
 import Smelter from '@swmansion/smelter-node';
-import { ffplayStartRtmpServerAsync } from './utils';
+import fs from 'node:fs';
+import path from 'node:path';
+import { tmpdir } from 'os';
 import { Playback } from './scenes/playback';
+import { ffplayStartRtmpServerAsync } from './utils';
 
 const RESOLUTION = {
   width: 1920,
@@ -12,9 +15,24 @@ const VIDEO_ENCODER_OPTS = {
   preset: 'ultrafast',
 } as const;
 
-// TODO: Make this comfigurable.
-export class SmelterService {
+type SmelterInstanceConfig = {
+  playlistFileName: string;
+};
+
+export class SmelterInstance {
+  readonly playlistFilePath: string;
   egressStartDate?: Date;
+
+  constructor(config: SmelterInstanceConfig) {
+    // Make sure the directory structure is valid.
+    // TODO: This doesn't look like a place to do this.
+
+    const playlistFileDir = path.join(tmpdir(), '.clipper', 'hls');
+    fs.mkdirSync(playlistFileDir, { recursive: true });
+
+    this.playlistFilePath = path.join(playlistFileDir, config.playlistFileName);
+    fs.writeFileSync(this.playlistFilePath, '');
+  }
 
   async run(): Promise<void> {
     const smelter = new Smelter();
@@ -26,7 +44,7 @@ export class SmelterService {
 
     await smelter.registerOutput('output_hls', <Playback />, {
       type: 'hls',
-      serverPath: './.hls/playlist.m3u8',
+      serverPath: this.playlistFilePath,
       video: {
         resolution: RESOLUTION,
         encoder: {
@@ -35,6 +53,9 @@ export class SmelterService {
         },
       },
     });
+
+    // TODO: This is extremely hacky.
+    this.egressStartDate = new Date();
 
     await ffplayStartRtmpServerAsync(9002);
 
@@ -54,6 +75,5 @@ export class SmelterService {
     });
 
     await smelter.start();
-    this.egressStartDate = new Date();
   }
 }

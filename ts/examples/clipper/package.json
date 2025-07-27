@@ -6,20 +6,23 @@
   "main": "./dist/server.js",
   "scripts": {
     "build": "tsc",
-    "dev": "rimraf ./dist ./.hls && mkdir .hls && touch ./.hls/playlist.m3u8 && pnpm run build && node ./dist/server.js | pino-pretty"
+    "dev": "pnpm run build && node ./dist/server.js | pino-pretty"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.12.1",
   "dependencies": {
+    "@libsql/client": "^0.15.10",
     "@swmansion/smelter": "workspace:^0.2.1",
     "@swmansion/smelter-node": "workspace:^0.2.1",
     "dotenv": "^17.2.1",
+    "drizzle-orm": "^0.44.3",
     "express": "^5.1.0",
     "fs-extra": "^11.2.0",
     "pino": "^9.5.0",
     "pino-http": "^10.5.0",
+    "pino-pretty": "^13.0.0",
     "react": "^18.3.1",
     "uuid": "^10.0.0",
     "zod": "^4.0.10"
@@ -31,6 +34,7 @@
     "@types/node-fetch": "^2.6.12",
     "@types/react": "^18.3.17",
     "@types/uuid": "^10.0.0",
+    "drizzle-kit": "^0.31.4",
     "node-fetch": "^2.7.0"
   }
 }
