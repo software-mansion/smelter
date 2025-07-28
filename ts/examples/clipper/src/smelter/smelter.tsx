@@ -1,7 +1,7 @@
 import Smelter from '@swmansion/smelter-node';
 import fs from 'node:fs';
 import path from 'node:path';
-import { tmpdir } from 'os';
+import type { Logger } from 'pino';
 import { Playback } from './scenes/playback';
 import { ffplayStartRtmpServerAsync } from './utils';
 
@@ -16,22 +16,26 @@ const VIDEO_ENCODER_OPTS = {
 } as const;
 
 type SmelterInstanceConfig = {
-  playlistFileName: string;
+  /** Output directory for HLS stream. */
+  hlsOutDir: string;
 };
 
 export class SmelterInstance {
+  /** TODO: This is a hacky way to know when stream started. */
+  private _streamStartDate?: Date;
   readonly playlistFilePath: string;
-  egressStartDate?: Date;
 
   constructor(config: SmelterInstanceConfig) {
-    // Make sure the directory structure is valid.
-    // TODO: This doesn't look like a place to do this.
+    for (const file of fs.readdirSync(config.hlsOutDir)) {
+      fs.unlinkSync(path.join(config.hlsOutDir, file));
+    }
 
-    const playlistFileDir = path.join(tmpdir(), '.clipper', 'hls');
-    fs.mkdirSync(playlistFileDir, { recursive: true });
-
-    this.playlistFilePath = path.join(playlistFileDir, config.playlistFileName);
+    this.playlistFilePath = path.join(config.hlsOutDir, 'playlist.m3u8');
     fs.writeFileSync(this.playlistFilePath, '');
+  }
+
+  get streamStartDate() {
+    return this._streamStartDate;
   }
 
   async run(): Promise<void> {
@@ -55,7 +59,7 @@ export class SmelterInstance {
     });
 
     // TODO: This is extremely hacky.
-    this.egressStartDate = new Date();
+    this._streamStartDate = new Date();
 
     await ffplayStartRtmpServerAsync(9002);
 

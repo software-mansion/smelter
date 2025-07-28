@@ -2,6 +2,7 @@ export type JobStatus = 'pending' | 'done' | 'corrupted';
 
 export type ClipJob = {
   id: number;
+  name: string;
   status: JobStatus;
   /** Time at which clip was requested. */
   clipTimestamp: number;

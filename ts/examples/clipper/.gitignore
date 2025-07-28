@@ -1,6 +1,7 @@
 node_modules
 dist
 .certs
+.tmp
 
 .env
 *.local
