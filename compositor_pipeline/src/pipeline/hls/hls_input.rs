@@ -244,8 +244,8 @@ impl HlsInput {
                     } else if handle.chunk_sender.len() < HlsInput::MIN_BUFFER_SIZE
                         && start_time.elapsed() > Duration::from_secs(10)
                     {
-                        warn!("Increasing offset");
                         pts_offset += Duration::from_secs_f64(0.1);
+                        warn!(?pts_offset, "Increasing offset");
                     }
                     let pts = pts + pts_offset;
 
