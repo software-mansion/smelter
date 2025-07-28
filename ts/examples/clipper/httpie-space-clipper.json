@@ -1,0 +1,99 @@
+{
+  "meta": {
+    "format": "httpie",
+    "version": "1.0.0",
+    "contentType": "workspace",
+    "schema": "https://schema.httpie.io/1.0.0.json",
+    "docs": "https://httpie.io/r/help/export-from-httpie",
+    "source": "HTTPie Desktop 2025.2.0"
+  },
+  "entry": {
+    "name": "Clipper",
+    "icon": {
+      "name": "default",
+      "color": "orange"
+    },
+    "collections": [
+      {
+        "name": "Clips",
+        "icon": {
+          "name": "default",
+          "color": "pink"
+        },
+        "auth": {
+          "type": "none"
+        },
+        "requests": [
+          {
+            "name": "Get clip status",
+            "url": "https://localhost:3000/api/v1/clips/8",
+            "method": "GET",
+            "headers": [],
+            "queryParams": [],
+            "pathParams": [],
+            "auth": {
+              "type": "inherited"
+            },
+            "body": {
+              "type": "none",
+              "file": {
+                "name": ""
+              },
+              "text": {
+                "value": "",
+                "format": "application/json"
+              },
+              "form": {
+                "isMultipart": false,
+                "fields": []
+              },
+              "graphql": {
+                "query": "",
+                "variables": ""
+              }
+            }
+          },
+          {
+            "name": "Post new clip",
+            "url": "https://localhost:3000/api/v1/clips",
+            "method": "POST",
+            "headers": [],
+            "queryParams": [],
+            "pathParams": [],
+            "auth": {
+              "type": "inherited"
+            },
+            "body": {
+              "type": "text",
+              "file": {
+                "name": ""
+              },
+              "text": {
+                "value": "{\n  \"name\": \"What a clip!\",\n  \"duration\": 45\n}",
+                "format": "application/json"
+              },
+              "form": {
+                "isMultipart": false,
+                "fields": []
+              },
+              "graphql": {
+                "query": "",
+                "variables": ""
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "environments": [
+      {
+        "name": "Defaults",
+        "color": "gray",
+        "isDefault": true,
+        "isLocalOnly": false,
+        "variables": []
+      }
+    ],
+    "drafts": []
+  }
+}

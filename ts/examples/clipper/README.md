@@ -39,3 +39,7 @@ pnpm run dev
 ## Env variables
 
 See `.env.example` for descriptions of available settings.
+
+### HTTPie space
+
+You can test the API easily by importing clipper space to HTTPie from `httpie-space-clipper.json` file.
