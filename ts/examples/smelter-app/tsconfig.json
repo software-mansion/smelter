@@ -2,6 +2,7 @@
   "compilerOptions": {
     "moduleResolution": "NodeNext",
     "module": "NodeNext",
+    "target": "es2015",
     "strict": true,
     "esModuleInterop": true,
     "declaration": true,
