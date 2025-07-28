@@ -1,19 +1,13 @@
 use std::sync::Arc;
 
-use compositor_render::InputId;
 use crossbeam_channel::Sender;
 use tracing::{debug, span, warn, Level};
 
-use crate::{
-    audio_mixer::InputSamples,
-    error::DecoderInitError,
-    pipeline::{
-        decoder::{AudioDecoderStream, DecoderThreadHandle},
-        resampler::decoder_resampler::ResampledDecoderStream,
-        PipelineCtx,
-    },
-    queue::PipelineEvent,
+use crate::pipeline::{
+    decoder::{AudioDecoderStream, DecoderThreadHandle},
+    resampler::decoder_resampler::ResampledDecoderStream,
 };
+use crate::prelude::*;
 
 use super::AudioDecoder;
 
@@ -21,7 +15,7 @@ pub fn spawn_audio_decoder_thread<Decoder: AudioDecoder, const BUFFER_SIZE: usiz
     ctx: Arc<PipelineCtx>,
     input_id: InputId,
     options: Decoder::Options,
-    samples_sender: Sender<PipelineEvent<InputSamples>>,
+    samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
 ) -> Result<DecoderThreadHandle, DecoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
@@ -65,7 +59,7 @@ fn init_decoder_stream<Decoder: AudioDecoder, const BUFFER_SIZE: usize>(
     options: Decoder::Options,
 ) -> Result<
     (
-        impl Iterator<Item = PipelineEvent<InputSamples>>,
+        impl Iterator<Item = PipelineEvent<InputAudioSamples>>,
         DecoderThreadHandle,
     ),
     DecoderInitError,

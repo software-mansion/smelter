@@ -1,13 +1,18 @@
 use anyhow::{anyhow, Result};
 use compositor_pipeline::{
     event::Event,
-    pipeline::{self, GraphicsContext, GraphicsContextOptions},
-    Pipeline,
+    graphics_context::{GraphicsContext, GraphicsContextOptions},
+    Pipeline, PipelineWgpuOptions, PipelineWhipWhepServerOptions,
 };
 use compositor_render::WgpuFeatures;
 use crossbeam_channel::{Receiver, Sender};
 use reqwest::StatusCode;
-use smelter::{config::read_config, logger, server::run_api, state::ApiState};
+use smelter::{
+    config::read_config,
+    logger,
+    server::run_api,
+    state::{pipeline_options_from_config, ApiState},
+};
 use std::{
     env,
     sync::{
@@ -37,14 +42,13 @@ impl CompositorInstance {
     pub fn start() -> Self {
         init_compositor_prerequisites();
         let mut config = read_config();
-        let mut options: pipeline::Options = (&config).into();
+        let mut options = pipeline_options_from_config(&config, runtime());
         let api_port = get_free_port();
         config.api_port = api_port;
-        options.queue_options.ahead_of_time_processing = true;
-        options.queue_options.never_drop_output_frames = true;
-        options.start_whip_whep = false;
-        options.wgpu_ctx = Some(graphics_context());
-        options.tokio_rt = Some(runtime());
+        options.ahead_of_time_processing = true;
+        options.never_drop_output_frames = true;
+        options.whip_whep_server = PipelineWhipWhepServerOptions::Disable;
+        options.wgpu_options = PipelineWgpuOptions::Context(graphics_context());
 
         info!("Starting Smelter Integration Test with config:\n{config:#?}",);
 

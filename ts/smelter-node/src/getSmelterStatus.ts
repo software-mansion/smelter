@@ -1,26 +1,25 @@
 import type { SmelterManager } from '@swmansion/smelter-core';
 
-type Duration = {
-  secs: number;
-  nanos: number;
-};
+type InstanceConfiguration = {
+  apiPort: number;
 
-type Framerate = {
-  num: number;
-  den: number;
-};
+  outputFramerate: number;
+  mixingSampleRate: number;
 
-type WebRenderer = {
-  enable: boolean;
-  enableGpu: boolean;
-};
-
-type QueueOptions = {
-  defaultBufferDuration: Duration;
   aheadOfTimeProcessing: boolean;
-  outputFramerate: Framerate;
-  runLateScheduledEvents: boolean;
   neverDropOutputFrames: boolean;
+  runLateScheduledEvents: boolean;
+
+  downloadRoot: string;
+
+  whipWhepServerPort: number;
+  whipWhepStunServers: string[];
+  whipWhepEnable: boolean;
+
+  webRendererEnable: boolean;
+  webRendererEnableGpu: boolean;
+
+  renderingMode: 'gpu_optimized' | 'cpu_optimized' | 'webgl';
 };
 
 type Input = {
@@ -35,19 +34,7 @@ type Output = {
 
 export type SmelterStatus = {
   instanceId: string;
-  apiPort: number;
-  streamFallbackTimeout: Duration;
-  downloadRoot: string;
-  webRenderer: WebRenderer;
-  forceGpu: boolean;
-  queueOptions: QueueOptions;
-  mixingSampleRate: number;
-  requiredWgpuFeatures: string;
-  loadSystemFonts: boolean;
-  whipWhepServerPort: number;
-  startWhipWhep: boolean;
-  renderingMode: string;
-  stunServers: string[];
+  configuration: InstanceConfiguration;
   inputs: Input[];
   outputs: Output[];
 };
@@ -60,28 +47,27 @@ export async function getSmelterStatus(manager: SmelterManager): Promise<Smelter
 
   return {
     instanceId: status.instance_id,
-    apiPort: status.api_port,
-    streamFallbackTimeout: status.stream_fallback_timeout,
-    downloadRoot: status.download_root,
-    webRenderer: {
-      enable: status.web_renderer?.enable,
-      enableGpu: status.web_renderer?.enable_gpu,
+    configuration: {
+      apiPort: status.configuration.api_port,
+
+      outputFramerate: status.configuration.output_framerate,
+      mixingSampleRate: status.configuration.mixing_sample_rate,
+
+      aheadOfTimeProcessing: status.configuration.ahead_of_time_processing,
+      runLateScheduledEvents: status.configuration.run_late_scheduled_events,
+      neverDropOutputFrames: status.configuration.never_drop_output_frames,
+
+      downloadRoot: status.configuration.download_root,
+
+      webRendererEnable: status.configuration.web_renderer_enable,
+      webRendererEnableGpu: status.configuration.web_renderer_enable_gpu,
+
+      whipWhepServerPort: status.configuration.whip_whep_server_port,
+      whipWhepEnable: status.configuration.whip_whep_enable,
+      whipWhepStunServers: status.configuration.whip_whep_stun_servers,
+
+      renderingMode: status.configuration.rendering_mode,
     },
-    forceGpu: status.force_gpu,
-    queueOptions: {
-      defaultBufferDuration: status.queue_options.default_buffer_duration,
-      aheadOfTimeProcessing: status.queue_options.ahead_of_time_processing,
-      outputFramerate: status.queue_options.output_framerate,
-      runLateScheduledEvents: status.queue_options.run_late_scheduled_events,
-      neverDropOutputFrames: status.queue_options.never_drop_output_frames,
-    },
-    mixingSampleRate: status.mixing_sample_rate,
-    requiredWgpuFeatures: status.required_wgpu_features,
-    loadSystemFonts: status.load_system_fonts,
-    whipWhepServerPort: status.whip_whep_server_port,
-    startWhipWhep: status.start_whip_whep,
-    renderingMode: status.rendering_mode,
-    stunServers: status.stun_servers,
     inputs: status.inputs.map((i: any) => ({
       inputId: i.input_id,
       inputType: i.input_type,

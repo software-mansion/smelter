@@ -1,7 +1,7 @@
-use std::time::Duration;
+use std::{path::Path, sync::Arc};
 
 use axum::{extract::State, response::IntoResponse};
-use compositor_pipeline::pipeline::{input::Input, output::OutputKind};
+use compositor_pipeline::{InputProtocolKind, OutputProtocolKind};
 use compositor_render::RenderingMode;
 use serde::Serialize;
 use serde_json::json;
@@ -23,43 +23,43 @@ struct OutputInfo {
 }
 
 #[derive(Serialize)]
-struct WebRendererConfig {
-    enable: bool,
-    enable_gpu: bool,
-}
+struct InstanceConfiguration {
+    api_port: u16,
 
-#[derive(Serialize)]
-struct QueueOptions {
-    default_buffer_duration: Duration,
+    output_framerate: f64,
+    mixing_sample_rate: u32,
+
     ahead_of_time_processing: bool,
-    output_framerate: Framerate,
-    run_late_scheduled_events: bool,
     never_drop_output_frames: bool,
-}
+    run_late_scheduled_events: bool,
 
-#[derive(Serialize)]
-struct Framerate {
-    num: u32,
-    den: u32,
+    download_root: Arc<Path>,
+
+    web_renderer_enable: bool,
+    web_renderer_enable_gpu: bool,
+
+    whip_whep_server_port: u16,
+    whip_whep_enable: bool,
+    whip_whep_stun_servers: Arc<Vec<String>>,
+
+    rendering_mode: &'static str,
 }
 
 pub(super) async fn status_handler(
     State(state): State<ApiState>,
 ) -> Result<impl IntoResponse, ApiError> {
     let pipeline = state.pipeline.lock().unwrap();
-    let pipeline_ctx = pipeline.ctx();
 
     let inputs: Vec<InputInfo> = pipeline
         .inputs()
         .map(|(id, input)| {
-            let input_type = match &input.input {
-                Input::Rtp(_) => "rtp",
-                Input::Mp4(_) => "mp4",
-                Input::Whip(_) => "whip",
-                Input::Hls(_) => "hls",
-                #[cfg(feature = "decklink")]
-                Input::DeckLink(_) => "decklink",
-                Input::RawDataInput => "raw data",
+            let input_type = match &input.protocol {
+                InputProtocolKind::Rtp => "rtp",
+                InputProtocolKind::Mp4 => "mp4",
+                InputProtocolKind::Whip => "whip",
+                InputProtocolKind::Hls => "hls",
+                InputProtocolKind::DeckLink => "decklink",
+                InputProtocolKind::RawDataChannel => "raw_data",
             };
             InputInfo {
                 input_id: id.to_string(),
@@ -71,14 +71,14 @@ pub(super) async fn status_handler(
     let outputs: Vec<OutputInfo> = pipeline
         .outputs()
         .map(|(id, output)| {
-            let output_type = match &output.kind {
-                OutputKind::Rtp => "rtp",
-                OutputKind::Rtmp => "rtmp",
-                OutputKind::Mp4 => "mp4",
-                OutputKind::Whip => "whip",
-                OutputKind::Hls => "hls",
-                OutputKind::EncodedDataChannel => "encoded data",
-                OutputKind::RawDataChannel => "raw data",
+            let output_type = match &output.protocol {
+                OutputProtocolKind::Rtp => "rtp",
+                OutputProtocolKind::Rtmp => "rtmp",
+                OutputProtocolKind::Mp4 => "mp4",
+                OutputProtocolKind::Whip => "whip",
+                OutputProtocolKind::Hls => "hls",
+                OutputProtocolKind::EncodedDataChannel => "encoded_data",
+                OutputProtocolKind::RawDataChannel => "raw_data",
             };
             OutputInfo {
                 output_id: id.to_string(),
@@ -87,45 +87,30 @@ pub(super) async fn status_handler(
         })
         .collect();
 
-    let state_queue_options = state.config.queue_options;
-    let queue_options = QueueOptions {
-        default_buffer_duration: state_queue_options.default_buffer_duration,
-        ahead_of_time_processing: state_queue_options.ahead_of_time_processing,
-        output_framerate: Framerate {
-            num: state_queue_options.output_framerate.num,
-            den: state_queue_options.output_framerate.den,
+    let output_framerate = state.config.output_framerate;
+    let configuration = InstanceConfiguration {
+        api_port: state.config.api_port,
+        whip_whep_server_port: state.config.whip_whep_server_port,
+        output_framerate: output_framerate.num as f64 / output_framerate.den as f64,
+        mixing_sample_rate: state.config.mixing_sample_rate,
+        ahead_of_time_processing: state.config.ahead_of_time_processing,
+        never_drop_output_frames: state.config.never_drop_output_frames,
+        run_late_scheduled_events: state.config.run_late_scheduled_events,
+        download_root: state.config.download_root,
+        whip_whep_stun_servers: state.config.whip_whep_stun_servers,
+        web_renderer_enable: state.config.web_renderer_enable,
+        web_renderer_enable_gpu: state.config.web_renderer_gpu_enable,
+        whip_whep_enable: state.config.whip_whep_enable,
+        rendering_mode: match state.config.rendering_mode {
+            RenderingMode::GpuOptimized => "gpu_optimized",
+            RenderingMode::CpuOptimized => "cpu_optimized",
+            RenderingMode::WebGl => "webgl",
         },
-        run_late_scheduled_events: state_queue_options.run_late_scheduled_events,
-        never_drop_output_frames: state_queue_options.never_drop_output_frames,
-    };
-
-    let state_web_renderer = state.config.web_renderer;
-    let web_renderer = WebRendererConfig {
-        enable: state_web_renderer.enable,
-        enable_gpu: state_web_renderer.enable_gpu,
-    };
-
-    let rendering_mode = match state.config.rendering_mode {
-        RenderingMode::GpuOptimized => "GPU optimized",
-        RenderingMode::CpuOptimized => "CPU optimized",
-        RenderingMode::WebGl => "WebGL",
     };
 
     Ok(axum::Json(json!({
         "instance_id": state.config.instance_id,
-        "api_port": state.config.api_port,
-        "stream_fallback_timeout": state.config.stream_fallback_timeout,
-        "download_root": state.config.download_root,
-        "web_renderer": web_renderer,
-        "force_gpu": state.config.force_gpu,
-        "queue_options": queue_options,
-        "mixing_sample_rate": state.config.mixing_sample_rate,
-        "required_wgpu_features": state.config.required_wgpu_features,
-        "load_system_fonts": state.config.load_system_fonts,
-        "whip_whep_server_port": state.config.whip_whep_server_port,
-        "start_whip_whep": state.config.start_whip_whep,
-        "rendering_mode": rendering_mode,
-        "stun_servers": pipeline_ctx.stun_servers,
+        "configuration": configuration,
         "inputs": inputs,
         "outputs": outputs
     }))

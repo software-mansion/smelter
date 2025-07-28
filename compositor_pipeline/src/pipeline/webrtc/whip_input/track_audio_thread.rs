@@ -5,8 +5,8 @@ use crossbeam_channel::Sender;
 use tracing::{debug, span, trace, warn, Level};
 use webrtc::{rtp_transceiver::RTCRtpTransceiver, track::track_remote::TrackRemote};
 
+use crate::prelude::*;
 use crate::{
-    audio_mixer::InputSamples,
     error::DecoderInitError,
     pipeline::{
         decoder::{libopus::OpusDecoder, AudioDecoderStream},
@@ -22,7 +22,6 @@ use crate::{
         },
         PipelineCtx,
     },
-    queue::PipelineEvent,
 };
 
 pub async fn process_audio_track(
@@ -44,7 +43,7 @@ pub async fn process_audio_track(
     let handle =
         spawn_audio_track_thread(ctx.clone(), input_id, negotiated_codecs, samples_sender)?;
 
-    let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_time, 48_000);
+    let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_point, 48_000);
 
     while let Ok((packet, _)) = track.read_rtp().await {
         let timestamp = timestamp_sync.timestamp(packet.header.timestamp);
@@ -68,7 +67,7 @@ fn spawn_audio_track_thread(
     ctx: Arc<PipelineCtx>,
     input_id: InputId,
     codec_info: NegotiatedAudioCodecsInfo,
-    samples_sender: Sender<PipelineEvent<InputSamples>>,
+    samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
 ) -> Result<AudioTrackThreadHandle, DecoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
@@ -114,7 +113,7 @@ fn init_stream(
     _codec_info: NegotiatedAudioCodecsInfo,
 ) -> Result<
     (
-        impl Iterator<Item = PipelineEvent<InputSamples>>,
+        impl Iterator<Item = PipelineEvent<InputAudioSamples>>,
         AudioTrackThreadHandle,
     ),
     DecoderInitError,

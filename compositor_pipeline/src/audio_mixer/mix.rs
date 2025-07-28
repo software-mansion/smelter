@@ -2,12 +2,7 @@ use std::collections::HashMap;
 
 use compositor_render::InputId;
 
-use crate::audio_mixer::{InputParams, MixingStrategy};
-
-use super::{
-    types::{AudioChannels, AudioSamples},
-    OutputInfo,
-};
+use crate::{audio_mixer::AudioOutputInfo, prelude::*};
 
 use tracing::{error, trace};
 
@@ -49,7 +44,7 @@ impl SampleMixer {
     pub fn mix_samples(
         &mut self,
         input_samples: &HashMap<InputId, Vec<(f64, f64)>>,
-        output_info: &OutputInfo,
+        output_info: &AudioOutputInfo,
         samples_count: usize,
     ) -> AudioSamples {
         let summed_samples = self.sum_samples(
@@ -59,8 +54,8 @@ impl SampleMixer {
         );
 
         let mixed = match output_info.mixing_strategy {
-            MixingStrategy::SumClip => self.clip_samples(summed_samples),
-            MixingStrategy::SumScale => self.scale_samples(summed_samples),
+            AudioMixingStrategy::SumClip => self.clip_samples(summed_samples),
+            AudioMixingStrategy::SumScale => self.scale_samples(summed_samples),
         };
 
         match output_info.channels {
@@ -118,7 +113,7 @@ impl SampleMixer {
     }
 
     /// Sums samples from inputs
-    fn sum_samples<'a, I: Iterator<Item = &'a InputParams>>(
+    fn sum_samples<'a, I: Iterator<Item = &'a AudioMixerInputConfig>>(
         &self,
         input_samples: &HashMap<InputId, Vec<(f64, f64)>>,
         samples_count: usize,

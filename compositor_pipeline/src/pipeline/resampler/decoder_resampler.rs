@@ -3,14 +3,12 @@ use std::{sync::Arc, time::Duration};
 use compositor_render::error::ErrorStack;
 use tracing::warn;
 
-use crate::{
-    audio_mixer::{AudioSamples, InputSamples},
-    pipeline::{
-        resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch},
-        types::DecodedSamples,
-    },
-    queue::PipelineEvent,
+use crate::pipeline::{
+    decoder::DecodedSamples,
+    resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch},
 };
+
+use crate::prelude::*;
 
 pub(crate) struct ResampledDecoderStream<Source: Iterator<Item = PipelineEvent<DecodedSamples>>> {
     resampler: DynamicResampler,
@@ -31,7 +29,7 @@ impl<Source: Iterator<Item = PipelineEvent<DecodedSamples>>> ResampledDecoderStr
 impl<Source: Iterator<Item = PipelineEvent<DecodedSamples>>> Iterator
     for ResampledDecoderStream<Source>
 {
-    type Item = Vec<PipelineEvent<InputSamples>>;
+    type Item = Vec<PipelineEvent<InputAudioSamples>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
@@ -71,13 +69,13 @@ fn from_decoded_samples(value: DecodedSamples) -> DynamicResamplerBatch {
     }
 }
 
-impl From<DynamicResamplerBatch> for InputSamples {
+impl From<DynamicResamplerBatch> for InputAudioSamples {
     fn from(value: DynamicResamplerBatch) -> Self {
         let end_pts = value.start_pts
             + Duration::from_secs_f64(
                 value.samples.sample_count() as f64 / value.sample_rate as f64,
             );
-        InputSamples {
+        InputAudioSamples {
             samples: match value.samples {
                 AudioSamples::Mono(samples) => {
                     Arc::new(samples.into_iter().map(|v| (v, v)).collect())

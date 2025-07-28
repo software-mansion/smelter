@@ -4,19 +4,14 @@ use compositor_render::OutputId;
 use crossbeam_channel::Sender;
 use tracing::{debug, span, warn, Level};
 
-use crate::{
-    audio_mixer::OutputSamples,
-    error::EncoderInitError,
-    pipeline::{
-        resampler::encoder_resampler::ResampledForEncoderStream, EncoderOutputEvent, PipelineCtx,
-    },
-    queue::PipelineEvent,
+use crate::pipeline::{
+    encoder::{AudioEncoder, AudioEncoderConfig, AudioEncoderStream},
+    resampler::encoder_resampler::ResampledForEncoderStream,
 };
-
-use super::{AudioEncoder, AudioEncoderConfig, AudioEncoderOptionsExt, AudioEncoderStream};
+use crate::prelude::*;
 
 pub(crate) struct AudioEncoderThreadHandle {
-    pub sample_batch_sender: Sender<PipelineEvent<OutputSamples>>,
+    pub sample_batch_sender: Sender<PipelineEvent<OutputAudioSamples>>,
     pub config: AudioEncoderConfig,
 }
 
@@ -24,7 +19,7 @@ pub fn spawn_audio_encoder_thread<Encoder: AudioEncoder>(
     ctx: Arc<PipelineCtx>,
     output_id: OutputId,
     options: Encoder::Options,
-    chunks_sender: Sender<EncoderOutputEvent>,
+    chunks_sender: Sender<EncodedOutputEvent>,
 ) -> Result<AudioEncoderThreadHandle, EncoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
@@ -68,7 +63,7 @@ fn init_encoder_stream<Encoder: AudioEncoder>(
     options: Encoder::Options,
 ) -> Result<
     (
-        impl Iterator<Item = EncoderOutputEvent>,
+        impl Iterator<Item = EncodedOutputEvent>,
         AudioEncoderThreadHandle,
     ),
     EncoderInitError,
@@ -85,8 +80,8 @@ fn init_encoder_stream<Encoder: AudioEncoder>(
         AudioEncoderStream::<Encoder, _>::new(ctx, options, resampled_stream)?;
 
     let stream = encoded_stream.flatten().map(|event| match event {
-        PipelineEvent::Data(chunk) => EncoderOutputEvent::Data(chunk),
-        PipelineEvent::EOS => EncoderOutputEvent::AudioEOS,
+        PipelineEvent::Data(chunk) => EncodedOutputEvent::Data(chunk),
+        PipelineEvent::EOS => EncodedOutputEvent::AudioEOS,
     });
     Ok((
         stream,

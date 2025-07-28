@@ -1,19 +1,10 @@
 use std::{sync::Arc, time::Duration};
 use tracing::{debug, info, trace};
 
-use crate::{
-    audio_mixer::AudioSamples,
-    error::DecoderInitError,
-    pipeline::{
-        decoder::{AudioDecoder, DecodingError},
-        types::EncodedChunk,
-        PipelineCtx,
-    },
-};
+use crate::pipeline::decoder::AudioDecoder;
+use crate::prelude::*;
 
 use super::DecodedSamples;
-
-pub use opus::Error as LibOpusError;
 
 pub(crate) struct OpusDecoder {
     decoder: opus::Decoder,
@@ -53,7 +44,7 @@ impl AudioDecoder for OpusDecoder {
 
     fn decode(
         &mut self,
-        encoded_chunk: EncodedChunk,
+        encoded_chunk: EncodedInputChunk,
     ) -> Result<Vec<DecodedSamples>, DecodingError> {
         let stream_gap = self.calculate_stream_gap(encoded_chunk.pts);
         let use_fec = self.should_use_fec(stream_gap);
@@ -125,7 +116,7 @@ impl OpusDecoder {
 
     fn decode_chunk(
         &mut self,
-        encoded_chunk: &EncodedChunk,
+        encoded_chunk: &EncodedInputChunk,
     ) -> Result<DecodedSamples, DecodingError> {
         let decoded_samples_count =
             self.decoder
@@ -141,7 +132,7 @@ impl OpusDecoder {
 
     fn decode_chunk_fec(
         &mut self,
-        encoded_chunk: &EncodedChunk,
+        encoded_chunk: &EncodedInputChunk,
         stream_gap: Duration,
     ) -> Result<DecodedSamples, DecodingError> {
         debug!("FEC used!");

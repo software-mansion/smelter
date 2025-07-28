@@ -12,16 +12,10 @@ mod types;
 
 pub use types::*;
 
-use crate::audio_mixer::mix::SampleMixer;
+use crate::prelude::*;
+use crate::{audio_mixer::mix::SampleMixer, prelude::OutputAudioSamples};
 
 use self::prepare_inputs::{expected_samples_count, prepare_input_samples};
-
-#[derive(Debug)]
-struct OutputInfo {
-    audio: AudioMixingParams,
-    mixing_strategy: MixingStrategy,
-    channels: AudioChannels,
-}
 
 #[derive(Debug, Clone)]
 pub(super) struct AudioMixer(Arc<Mutex<InternalAudioMixer>>);
@@ -41,13 +35,13 @@ impl AudioMixer {
     pub fn register_output(
         &self,
         output_id: OutputId,
-        audio: AudioMixingParams,
-        mixing_strategy: MixingStrategy,
+        audio: AudioMixerConfig,
+        mixing_strategy: AudioMixingStrategy,
         channels: AudioChannels,
     ) {
         self.0.lock().unwrap().outputs.insert(
             output_id,
-            OutputInfo {
+            AudioOutputInfo {
                 audio,
                 channels,
                 mixing_strategy,
@@ -62,19 +56,27 @@ impl AudioMixer {
     pub fn update_output(
         &self,
         output_id: &OutputId,
-        audio: AudioMixingParams,
+        audio: AudioMixerConfig,
     ) -> Result<(), UpdateSceneError> {
         self.0.lock().unwrap().update_output(output_id, audio)
     }
 }
+
 const VOL_DOWN_THRESHOLD: f64 = 1.0;
 const VOL_UP_THRESHOLD: f64 = 0.7;
 const VOL_DOWN_INCREMENT: f64 = 0.02;
 const VOL_UP_INCREMENT: f64 = 0.01;
 
 #[derive(Debug)]
+struct AudioOutputInfo {
+    audio: AudioMixerConfig,
+    mixing_strategy: AudioMixingStrategy,
+    channels: AudioChannels,
+}
+
+#[derive(Debug)]
 pub(super) struct InternalAudioMixer {
-    outputs: HashMap<OutputId, OutputInfo>,
+    outputs: HashMap<OutputId, AudioOutputInfo>,
     mixing_sample_rate: u32,
     sample_mixer: SampleMixer,
 }
@@ -96,7 +98,7 @@ impl InternalAudioMixer {
     pub fn update_output(
         &mut self,
         output_id: &OutputId,
-        audio: AudioMixingParams,
+        audio: AudioMixerConfig,
     ) -> Result<(), UpdateSceneError> {
         match self.outputs.get_mut(output_id) {
             Some(output_info) => {
@@ -123,7 +125,7 @@ impl InternalAudioMixer {
                     let samples =
                         self.sample_mixer
                             .mix_samples(&input_samples, output_info, samples_count);
-                    (output_id.clone(), OutputSamples { samples, start_pts })
+                    (output_id.clone(), OutputAudioSamples { samples, start_pts })
                 })
                 .collect(),
         )
