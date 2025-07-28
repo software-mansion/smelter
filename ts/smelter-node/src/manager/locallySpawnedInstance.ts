@@ -85,7 +85,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       SMELTER_AHEAD_OF_TIME_PROCESSING_ENABLE: opts.aheadOfTimeProcessing ? 'true' : 'false',
       ...process.env,
       SMELTER_LOGGER_FORMAT: format,
-      SMELTER_LOGGER_LEVEL: level,
+      SMELTER_LOGGER_LEVEL: process.env.SMELTER_SERVER_LOGGER_LEVEL ?? level,
     };
 
     const executableError = (err: any, message: string) => {
