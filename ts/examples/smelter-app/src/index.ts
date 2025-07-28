@@ -1,19 +1,15 @@
-import { initializeSmelterInstance } from './smelter';
-import { app } from './routes';
-import { initialCleanup, manageHlsToHlsStreams } from './manageHlsToHlsStreams';
-import { manageTwitchChannelInfo } from './manageTwitchChannelInfo';
+import { SmelterInstance } from './smelter';
+import { routes } from './server/routes';
+import { TwitchChannelSuggestions } from './twitch/ChannelMonitor';
 
 async function run() {
-  console.log('Stop old FFmpeg processes and remove files.');
-  await initialCleanup();
   console.log('Start monitoring Twitch categories.');
-  await manageTwitchChannelInfo();
-  console.log('Run HLS-to-HLS pipeline for each available stream.');
-  await manageHlsToHlsStreams();
+  void TwitchChannelSuggestions.monitor();
   console.log('Start Smelter instance');
-  await initializeSmelterInstance();
+  await SmelterInstance.init();
 
-  app.listen(3001);
+  console.log('Start listening on port 3001');
+  await routes.listen({ port: 3001 });
 }
 
 void run();
