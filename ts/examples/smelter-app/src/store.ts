@@ -8,10 +8,6 @@ export type StreamInfo = {
   description: string;
   // stream is live
   live: boolean;
-  // hls playlist is available locally
-  localHlsReady: boolean;
-  // It should be removed, but it is still connected
-  pendingDelete?: boolean;
 };
 
 export const LayoutValues = [
@@ -32,7 +28,6 @@ export type State = {
   addStream: (streamId: string) => void;
   removeStream: (streamId: string) => void;
   selectAudioStream: (streamId: string) => void;
-  setLocalHlsStatus: (streamId: string, ready: boolean) => void;
   markStreamOffline: (streamId: string) => void;
   updateStreamInfo: (stream: TwitchStreamInfo) => void;
   refreshAvailableStreams: (streams: TwitchStreamInfo[]) => void;
@@ -47,7 +42,6 @@ export const store = createStore<State>(set => ({
       label: '[MP4] FC 25 Gameplay',
       description: '[Static source] EA Sports FC 25 Gameplay',
       live: true,
-      localHlsReady: false,
     },
     {
       type: 'static',
@@ -55,7 +49,6 @@ export const store = createStore<State>(set => ({
       label: '[MP4] NBA 2K25 Gameplay',
       description: '[Static source] NBA 2K25 Gameplay',
       live: true,
-      localHlsReady: false,
     },
   ],
   connectedStreamIds: [],
@@ -80,7 +73,7 @@ export const store = createStore<State>(set => ({
     set(state => {
       const stream = state.availableStreams.find(info => info.id === streamId);
       const availableStreams =
-        stream && stream.type !== 'static' && (stream.pendingDelete || !stream.live)
+        stream && stream.type !== 'static' && !stream.live
           ? state.availableStreams.filter(info => info.id !== streamId)
           : state.availableStreams;
       return {
@@ -94,18 +87,6 @@ export const store = createStore<State>(set => ({
     set(state => ({
       ...state,
       audioStreamId: streamId,
-    }));
-  },
-  setLocalHlsStatus: (streamId: string, localHlsReady: boolean) => {
-    set(state => ({
-      ...state,
-      availableStreams: state.availableStreams.map(stream => {
-        if (streamId === stream.id) {
-          return { ...stream, localHlsReady };
-        } else {
-          return stream;
-        }
-      }),
     }));
   },
   markStreamOffline: (streamId: string) => {
@@ -186,7 +167,6 @@ export const store = createStore<State>(set => ({
         label: `[Twitch/${stream.category}] ${stream.displayName}`,
         description: stream.title,
         live: true,
-        localHlsReady: false,
       }));
 
       const availableStreams = [...oldStreamState, ...newStreamState];

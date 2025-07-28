@@ -7,7 +7,7 @@ const CATEGORY_ID_EA_SPORTS_FC_25 = '2011938005';
 // const CATEGORY_ID_ANIMALS = '272263131';
 
 const CATEGORIES = [CATEGORY_ID_EA_SPORTS_FC_25];
-const STREAMS_PER_CATEGORY = 2;
+const STREAMS_PER_CATEGORY = 5;
 
 export async function manageTwitchChannelInfo() {
   void startCategoryRefreshIntervalLoop();
@@ -18,7 +18,7 @@ async function startCategoryRefreshIntervalLoop() {
   while (true) {
     try {
       await refreshCategoryInfo(CATEGORIES);
-      await sleep(60_000);
+      await sleep(60_00);
     } catch (err) {
       console.log('Failed to refresh Twitch channel information', err);
     }
