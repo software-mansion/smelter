@@ -24,8 +24,8 @@ pub fn offline_processing() -> Result<()> {
     };
 
     let mut config = read_config();
-    config.queue_options.ahead_of_time_processing = true;
-    config.queue_options.never_drop_output_frames = true;
+    config.ahead_of_time_processing = true;
+    config.never_drop_output_frames = true;
     let instance = CompositorInstance::start(Some(config));
     let (msg_sender, msg_receiver) = crossbeam_channel::unbounded();
     start_server_msg_listener(instance.api_port, msg_sender);

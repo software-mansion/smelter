@@ -7,21 +7,19 @@ use rtp_video_thread::{spawn_rtp_video_thread, RtpVideoTrackThreadHandle};
 use std::sync::{atomic::AtomicBool, Arc};
 use tracing::{debug, span, Level};
 
+use crate::prelude::*;
 use crate::{
-    error::OutputInitError,
     event::Event,
     pipeline::{
         encoder::{
             ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder,
-            ffmpeg_vp9::FfmpegVp9Encoder, opus::OpusEncoder, AudioEncoderOptions,
-            VideoEncoderOptions,
+            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder,
         },
-        output::{Output, OutputAudio, OutputKind, OutputVideo},
+        output::{Output, OutputAudio, OutputVideo},
         rtp::{
             payloader::{PayloadedCodec, PayloaderOptions, PayloadingError},
-            RequestedPort, RtpPacket,
+            RtpPacket,
         },
-        AudioCodec, PipelineCtx, Port,
     },
 };
 
@@ -45,34 +43,12 @@ pub(crate) struct RtpOutput {
     video: Option<RtpVideoTrackThreadHandle>,
 }
 
-#[derive(Debug, Clone)]
-pub struct RtpOutputOptions {
-    pub connection_options: RtpConnectionOptions,
-    pub video: Option<VideoEncoderOptions>,
-    pub audio: Option<AudioEncoderOptions>,
-}
-
 #[derive(Debug)]
 pub enum RtpEvent {
     Data(RtpPacket),
     AudioEos(rtcp::goodbye::Goodbye),
     VideoEos(rtcp::goodbye::Goodbye),
     Err(PayloadingError),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RtpConnectionOptions {
-    Udp { port: Port, ip: Arc<str> },
-    TcpServer { port: RequestedPort },
-}
-
-impl RtpConnectionOptions {
-    fn mtu(&self) -> usize {
-        match self {
-            RtpConnectionOptions::Udp { .. } => 1400,
-            RtpConnectionOptions::TcpServer { .. } => 64000,
-        }
-    }
 }
 
 impl RtpOutput {
@@ -84,8 +60,8 @@ impl RtpOutput {
         let mtu = options.connection_options.mtu();
 
         let (socket, port) = match &options.connection_options {
-            RtpConnectionOptions::Udp { port, ip } => udp::udp_socket(ip, *port)?,
-            RtpConnectionOptions::TcpServer { port } => tcp_server::tcp_socket(*port)?,
+            RtpOutputConnectionOptions::Udp { port, ip } => udp::udp_socket(ip, *port)?,
+            RtpOutputConnectionOptions::TcpServer { port } => tcp_server::tcp_socket(*port)?,
         };
 
         let (rtp_sender, rtp_receiver) = bounded(1);
@@ -126,10 +102,10 @@ impl RtpOutput {
                 let _span =
                     span!(Level::INFO, "RTP sender", output_id = output_id.to_string()).entered();
                 match connection_options {
-                    RtpConnectionOptions::Udp { .. } => {
+                    RtpOutputConnectionOptions::Udp { .. } => {
                         udp::run_udp_sender_thread(socket, rtp_stream)
                     }
-                    RtpConnectionOptions::TcpServer { .. } => {
+                    RtpOutputConnectionOptions::TcpServer { .. } => {
                         tcp_server::run_tcp_sender_thread(socket, should_close2, rtp_stream)
                     }
                 }
@@ -166,21 +142,23 @@ impl RtpOutput {
         }
 
         let thread_handle = match &options {
-            VideoEncoderOptions::H264(options) => spawn_rtp_video_thread::<FfmpegH264Encoder>(
-                ctx.clone(),
-                output_id.clone(),
-                options.clone(),
-                payloader_options(PayloadedCodec::H264, mtu),
-                sender,
-            )?,
-            VideoEncoderOptions::Vp8(options) => spawn_rtp_video_thread::<FfmpegVp8Encoder>(
+            VideoEncoderOptions::FfmpegH264(options) => {
+                spawn_rtp_video_thread::<FfmpegH264Encoder>(
+                    ctx.clone(),
+                    output_id.clone(),
+                    options.clone(),
+                    payloader_options(PayloadedCodec::H264, mtu),
+                    sender,
+                )?
+            }
+            VideoEncoderOptions::FfmpegVp8(options) => spawn_rtp_video_thread::<FfmpegVp8Encoder>(
                 ctx.clone(),
                 output_id.clone(),
                 options.clone(),
                 payloader_options(PayloadedCodec::Vp8, mtu),
                 sender,
             )?,
-            VideoEncoderOptions::Vp9(options) => spawn_rtp_video_thread::<FfmpegVp9Encoder>(
+            VideoEncoderOptions::FfmpegVp9(options) => spawn_rtp_video_thread::<FfmpegVp9Encoder>(
                 ctx.clone(),
                 output_id.clone(),
                 options.clone(),
@@ -220,7 +198,7 @@ impl RtpOutput {
                 payloader_options(PayloadedCodec::Opus, 48_000, mtu),
                 sender,
             )?,
-            AudioEncoderOptions::Aac(_options) => {
+            AudioEncoderOptions::FdkAac(_options) => {
                 return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Aac))
             }
         };
@@ -251,7 +229,7 @@ impl Output for RtpOutput {
         })
     }
 
-    fn kind(&self) -> OutputKind {
-        OutputKind::Rtp
+    fn kind(&self) -> OutputProtocolKind {
+        OutputProtocolKind::Rtp
     }
 }

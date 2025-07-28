@@ -1,6 +1,6 @@
 use std::{path::PathBuf, str::FromStr};
 
-use compositor_pipeline::pipeline::{decoder, encoder::ffmpeg_h264};
+use compositor_pipeline::codecs::{FfmpegH264EncoderPreset, VideoDecoderOptions};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericArgument {
@@ -52,12 +52,12 @@ pub enum VideoDecoder {
     VulkanVideoH264,
 }
 
-impl From<VideoDecoder> for decoder::VideoDecoderOptions {
+impl From<VideoDecoder> for VideoDecoderOptions {
     fn from(value: VideoDecoder) -> Self {
         match value {
-            VideoDecoder::FfmpegH264 => decoder::VideoDecoderOptions::FfmpegH264,
+            VideoDecoder::FfmpegH264 => VideoDecoderOptions::FfmpegH264,
             #[cfg(not(target_os = "macos"))]
-            VideoDecoder::VulkanVideoH264 => decoder::VideoDecoderOptions::VulkanH264,
+            VideoDecoder::VulkanVideoH264 => VideoDecoderOptions::VulkanH264,
         }
     }
 }
@@ -77,19 +77,19 @@ pub enum EncoderPreset {
     Placebo,
 }
 
-impl From<EncoderPreset> for ffmpeg_h264::EncoderPreset {
+impl From<EncoderPreset> for FfmpegH264EncoderPreset {
     fn from(value: EncoderPreset) -> Self {
         match value {
-            EncoderPreset::Ultrafast => ffmpeg_h264::EncoderPreset::Ultrafast,
-            EncoderPreset::Superfast => ffmpeg_h264::EncoderPreset::Superfast,
-            EncoderPreset::Veryfast => ffmpeg_h264::EncoderPreset::Veryfast,
-            EncoderPreset::Faster => ffmpeg_h264::EncoderPreset::Faster,
-            EncoderPreset::Fast => ffmpeg_h264::EncoderPreset::Fast,
-            EncoderPreset::Medium => ffmpeg_h264::EncoderPreset::Medium,
-            EncoderPreset::Slow => ffmpeg_h264::EncoderPreset::Slow,
-            EncoderPreset::Slower => ffmpeg_h264::EncoderPreset::Slower,
-            EncoderPreset::Veryslow => ffmpeg_h264::EncoderPreset::Veryslow,
-            EncoderPreset::Placebo => ffmpeg_h264::EncoderPreset::Placebo,
+            EncoderPreset::Ultrafast => FfmpegH264EncoderPreset::Ultrafast,
+            EncoderPreset::Superfast => FfmpegH264EncoderPreset::Superfast,
+            EncoderPreset::Veryfast => FfmpegH264EncoderPreset::Veryfast,
+            EncoderPreset::Faster => FfmpegH264EncoderPreset::Faster,
+            EncoderPreset::Fast => FfmpegH264EncoderPreset::Fast,
+            EncoderPreset::Medium => FfmpegH264EncoderPreset::Medium,
+            EncoderPreset::Slow => FfmpegH264EncoderPreset::Slow,
+            EncoderPreset::Slower => FfmpegH264EncoderPreset::Slower,
+            EncoderPreset::Veryslow => FfmpegH264EncoderPreset::Veryslow,
+            EncoderPreset::Placebo => FfmpegH264EncoderPreset::Placebo,
         }
     }
 }

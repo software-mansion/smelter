@@ -4,7 +4,7 @@ use webrtc::{
     rtp_transceiver::{rtp_codec::RTCRtpCodecParameters, PayloadType, RTCRtpTransceiver},
 };
 
-use crate::pipeline::decoder::VideoDecoderOptions;
+use crate::codecs::VideoDecoderOptions;
 
 #[derive(Debug, Clone)]
 pub(super) struct NegotiatedVideoCodecsInfo {

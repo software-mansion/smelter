@@ -1,12 +1,6 @@
 use std::net;
 
-use crate::pipeline::Port;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TransportProtocol {
-    Udp,
-    TcpServer,
-}
+use crate::protocols::{Port, PortOrRange};
 
 pub(super) enum BindToPortError {
     SocketBind(std::io::Error),
@@ -14,18 +8,12 @@ pub(super) enum BindToPortError {
     AllPortsAlreadyInUse { lower_bound: u16, upper_bound: u16 },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RequestedPort {
-    Exact(u16),
-    Range((u16, u16)),
-}
-
 pub(super) fn bind_to_requested_port(
-    requested_port: RequestedPort,
+    requested_port: PortOrRange,
     socket: &socket2::Socket,
 ) -> Result<Port, BindToPortError> {
     let port = match requested_port {
-        RequestedPort::Exact(port) => {
+        PortOrRange::Exact(port) => {
             socket
                 .bind(
                     &net::SocketAddr::V4(net::SocketAddrV4::new(net::Ipv4Addr::UNSPECIFIED, port))
@@ -37,7 +25,7 @@ pub(super) fn bind_to_requested_port(
                 })?;
             port
         }
-        RequestedPort::Range((lower_bound, upper_bound)) => {
+        PortOrRange::Range((lower_bound, upper_bound)) => {
             let port = (lower_bound..upper_bound).find(|port| {
                 let bind_res = socket.bind(
                     &net::SocketAddr::V4(net::SocketAddrV4::new(net::Ipv4Addr::UNSPECIFIED, *port))

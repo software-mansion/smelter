@@ -242,6 +242,10 @@ export type RegisterOutput =
        */
       path: string;
       /**
+       * Number of segments kept in the playlist. When the limit is reached the oldest segment is removed. If not specified, no segments will removed.
+       */
+      max_playlist_size?: number | null;
+      /**
        * Video track configuration.
        */
       video?: OutputVideoOptions | null;

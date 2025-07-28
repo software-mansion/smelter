@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::extract::{Path, State};
-use compositor_pipeline::pipeline::{input::InputInitInfo, Port};
+use compositor_pipeline::{protocols::Port, InputInitInfo, Pipeline};
 use glyphon::fontdb::Source;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::ApiError,
     routes::{Json, Multipart},
-    state::{Pipeline, Response},
+    state::Response,
 };
 use compositor_api::{
     DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId,

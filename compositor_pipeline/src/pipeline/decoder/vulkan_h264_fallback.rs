@@ -3,13 +3,8 @@ use std::sync::Arc;
 use compositor_render::Frame;
 use tracing::error;
 
-use crate::{
-    error::DecoderInitError,
-    pipeline::{
-        decoder::{VideoDecoder, VideoDecoderInstance},
-        EncodedChunk, PipelineCtx,
-    },
-};
+use crate::pipeline::decoder::{VideoDecoder, VideoDecoderInstance};
+use crate::prelude::*;
 
 pub struct VulkanH264Decoder;
 
@@ -22,7 +17,7 @@ impl VideoDecoder for VulkanH264Decoder {
 }
 
 impl VideoDecoderInstance for VulkanH264Decoder {
-    fn decode(&mut self, _chunk: EncodedChunk) -> Vec<Frame> {
+    fn decode(&mut self, _chunk: EncodedInputChunk) -> Vec<Frame> {
         error!("Vulkan decoder unavailable, this code should never be called");
         vec![]
     }

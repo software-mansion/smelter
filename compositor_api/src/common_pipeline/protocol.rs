@@ -1,6 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::common_pipeline::prelude as pipeline;
 use crate::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -12,13 +13,11 @@ pub enum TransportProtocol {
     TcpServer,
 }
 
-impl From<TransportProtocol> for compositor_pipeline::pipeline::rtp::TransportProtocol {
+impl From<TransportProtocol> for pipeline::RtpInputTransportProtocol {
     fn from(value: TransportProtocol) -> Self {
-        use compositor_pipeline::pipeline::rtp;
-
         match value {
-            TransportProtocol::Udp => rtp::TransportProtocol::Udp,
-            TransportProtocol::TcpServer => rtp::TransportProtocol::TcpServer,
+            TransportProtocol::Udp => pipeline::RtpInputTransportProtocol::Udp,
+            TransportProtocol::TcpServer => pipeline::RtpInputTransportProtocol::TcpServer,
         }
     }
 }
@@ -30,15 +29,14 @@ pub enum PortOrPortRange {
     U16(u16),
 }
 
-impl TryFrom<PortOrPortRange> for compositor_pipeline::pipeline::rtp::RequestedPort {
+impl TryFrom<PortOrPortRange> for pipeline::PortOrRange {
     type Error = TypeError;
 
     fn try_from(value: PortOrPortRange) -> Result<Self, Self::Error> {
-        use compositor_pipeline::pipeline::rtp;
         const PORT_CONVERSION_ERROR_MESSAGE: &str = "Port needs to be a number between 1 and 65535 or a string in the \"START:END\" format, where START and END represent a range of ports.";
         match value {
             PortOrPortRange::U16(0) => Err(TypeError::new(PORT_CONVERSION_ERROR_MESSAGE)),
-            PortOrPortRange::U16(v) => Ok(rtp::RequestedPort::Exact(v)),
+            PortOrPortRange::U16(v) => Ok(pipeline::PortOrRange::Exact(v)),
             PortOrPortRange::String(s) => {
                 let (start, end) = s
                     .split_once(':')
@@ -59,7 +57,7 @@ impl TryFrom<PortOrPortRange> for compositor_pipeline::pipeline::rtp::RequestedP
                     return Err(TypeError::new(PORT_CONVERSION_ERROR_MESSAGE));
                 }
 
-                Ok(rtp::RequestedPort::Range((start, end)))
+                Ok(pipeline::PortOrRange::Range((start, end)))
             }
         }
     }

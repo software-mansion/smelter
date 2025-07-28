@@ -4,22 +4,20 @@ use compositor_render::OutputId;
 use crossbeam_channel::Sender;
 use tracing::{debug, span, warn, Level};
 
+use crate::prelude::*;
 use crate::{
-    audio_mixer::OutputSamples,
     error::EncoderInitError,
     pipeline::{
-        encoder::{AudioEncoder, AudioEncoderOptionsExt, AudioEncoderStream},
+        encoder::{AudioEncoder, AudioEncoderStream},
         resampler::encoder_resampler::ResampledForEncoderStream,
         rtp::payloader::{PayloaderOptions, PayloaderStream},
-        PipelineCtx,
     },
-    queue::PipelineEvent,
 };
 
 use super::RtpEvent;
 
 pub(crate) struct RtpAudioTrackThreadHandle {
-    pub sample_batch_sender: Sender<PipelineEvent<OutputSamples>>,
+    pub sample_batch_sender: Sender<PipelineEvent<OutputAudioSamples>>,
 }
 
 pub fn spawn_rtp_audio_thread<Encoder: AudioEncoder>(

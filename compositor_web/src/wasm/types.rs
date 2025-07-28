@@ -92,10 +92,7 @@ pub fn new_render_options(
     queue: Arc<wgpu::Queue>,
 ) -> compositor_render::RendererOptions {
     compositor_render::RendererOptions {
-        web_renderer: WebRendererInitOptions {
-            enable: false,
-            enable_gpu: false,
-        },
+        web_renderer: WebRendererInitOptions::Disable,
         // Framerate is only required by web renderer which is not used
         framerate: compositor_render::Framerate { num: 30, den: 1 },
         stream_fallback_timeout: Duration::from_millis(value.stream_fallback_timeout_ms),

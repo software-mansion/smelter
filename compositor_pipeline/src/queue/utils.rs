@@ -11,10 +11,8 @@ use std::{
 use compositor_render::{Frame, InputId};
 use tracing::warn;
 
-use crate::event::Event;
-use crate::{audio_mixer::InputSamples, event::EventEmitter};
-
-use super::PipelineEvent;
+use crate::event::{Event, EventEmitter};
+use crate::prelude::*;
 
 /// InputProcessor handles initial processing for frames/samples that are being
 /// queued. For each received frame/sample batch, the `process_new_chunk`
@@ -206,7 +204,7 @@ impl InputProcessorMediaExt for Frame {
     }
 }
 
-impl InputProcessorMediaExt for InputSamples {
+impl InputProcessorMediaExt for InputAudioSamples {
     fn apply_offset(&mut self, offset: Duration) {
         self.start_pts = self.start_pts.saturating_sub(offset);
         self.end_pts = self.end_pts.saturating_sub(offset);

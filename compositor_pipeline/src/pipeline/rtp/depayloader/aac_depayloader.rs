@@ -3,54 +3,19 @@ use std::{io::Read, time::Duration};
 use bytes::{Buf, BytesMut};
 use tracing::trace;
 
-use crate::pipeline::{
-    rtp::{
-        depayloader::{AudioSpecificConfig, Depayloader, DepayloadingError},
-        RtpAacDepayloaderMode, RtpPacket,
-    },
-    types::{EncodedChunk, EncodedChunkKind, IsKeyframe},
-    AudioCodec,
+use crate::pipeline::rtp::{
+    depayloader::{AacAudioSpecificConfig, Depayloader, DepayloadingError},
+    RtpPacket,
 };
-
-#[derive(Debug, thiserror::Error)]
-pub enum AacDepayloadingError {
-    #[error("Packet too short")]
-    PacketTooShort,
-
-    #[error("Interleaving is not supported")]
-    InterleavingNotSupported,
-}
-
-impl RtpAacDepayloaderMode {
-    fn size_len_in_bits(&self) -> usize {
-        match self {
-            RtpAacDepayloaderMode::LowBitrate => 6,
-            RtpAacDepayloaderMode::HighBitrate => 13,
-        }
-    }
-
-    fn index_len_in_bits(&self) -> usize {
-        match self {
-            RtpAacDepayloaderMode::LowBitrate => 2,
-            RtpAacDepayloaderMode::HighBitrate => 3,
-        }
-    }
-
-    fn header_len_in_bytes(&self) -> usize {
-        match self {
-            RtpAacDepayloaderMode::LowBitrate => 1,
-            RtpAacDepayloaderMode::HighBitrate => 2,
-        }
-    }
-}
+use crate::prelude::*;
 
 pub struct AacDepayloader {
     mode: RtpAacDepayloaderMode,
-    asc: AudioSpecificConfig,
+    asc: AacAudioSpecificConfig,
 }
 
 impl AacDepayloader {
-    pub(super) fn new(mode: RtpAacDepayloaderMode, asc: AudioSpecificConfig) -> Self {
+    pub(super) fn new(mode: RtpAacDepayloaderMode, asc: AacAudioSpecificConfig) -> Self {
         Self { mode, asc }
     }
 }
@@ -60,7 +25,10 @@ impl Depayloader for AacDepayloader {
     ///  - [RFC 3640, section 3.2. RTP Payload Structure](https://datatracker.ietf.org/doc/html/rfc3640#section-3.2)
     ///  - [RFC 3640, section 3.3.5. Low Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.5)
     ///  - [RFC 3640, section 3.3.6. High Bit-rate AAC](https://datatracker.ietf.org/doc/html/rfc3640#section-3.3.6)
-    fn depayload(&mut self, packet: RtpPacket) -> Result<Vec<EncodedChunk>, DepayloadingError> {
+    fn depayload(
+        &mut self,
+        packet: RtpPacket,
+    ) -> Result<Vec<EncodedInputChunk>, DepayloadingError> {
         let mut reader = std::io::Cursor::new(packet.packet.payload);
 
         if reader.remaining() < 2 {
@@ -72,7 +40,7 @@ impl Depayloader for AacDepayloader {
             return Err(AacDepayloadingError::PacketTooShort.into());
         }
 
-        let header_len = self.mode.header_len_in_bytes();
+        let header_len = header_len_in_bytes(self.mode);
         let header_count = headers_len as usize / header_len;
         let mut headers = Vec::new();
 
@@ -94,8 +62,8 @@ impl Depayloader for AacDepayloader {
         let headers = headers
             .into_iter()
             .map(|h| Header {
-                size: h >> self.mode.index_len_in_bits(),
-                index: (h & (u16::MAX >> self.mode.size_len_in_bits())) as u8,
+                size: h >> index_len_in_bits(self.mode),
+                index: (h & (u16::MAX >> size_len_in_bits(self.mode))) as u8,
             })
             .collect::<Vec<_>>();
 
@@ -117,17 +85,37 @@ impl Depayloader for AacDepayloader {
 
             let pts = packet.timestamp + frame_duration * (i as u32);
 
-            let chunk = EncodedChunk {
+            let chunk = EncodedInputChunk {
                 pts,
                 data: payload,
                 dts: None,
-                is_keyframe: IsKeyframe::NoKeyframes,
-                kind: EncodedChunkKind::Audio(AudioCodec::Aac),
+                kind: MediaKind::Audio(AudioCodec::Aac),
             };
             trace!(?chunk, "RTP depayloader produced new chunk");
             chunks.push(chunk);
         }
 
         Ok(chunks)
+    }
+}
+
+fn size_len_in_bits(mode: RtpAacDepayloaderMode) -> usize {
+    match mode {
+        RtpAacDepayloaderMode::LowBitrate => 6,
+        RtpAacDepayloaderMode::HighBitrate => 13,
+    }
+}
+
+fn index_len_in_bits(mode: RtpAacDepayloaderMode) -> usize {
+    match mode {
+        RtpAacDepayloaderMode::LowBitrate => 2,
+        RtpAacDepayloaderMode::HighBitrate => 3,
+    }
+}
+
+fn header_len_in_bytes(mode: RtpAacDepayloaderMode) -> usize {
+    match mode {
+        RtpAacDepayloaderMode::LowBitrate => 1,
+        RtpAacDepayloaderMode::HighBitrate => 2,
     }
 }

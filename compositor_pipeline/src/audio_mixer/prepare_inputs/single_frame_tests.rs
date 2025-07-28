@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::audio_mixer::InputSamples;
+use crate::prelude::*;
 
 use super::frame_input_samples;
 
@@ -34,12 +34,12 @@ fn test_prepare_inputs() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -64,12 +64,12 @@ fn test_prepare_inputs() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -94,12 +94,12 @@ fn test_prepare_inputs() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -124,12 +124,12 @@ fn test_prepare_inputs() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -154,12 +154,12 @@ fn test_prepare_inputs() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -185,12 +185,12 @@ fn test_prepare_inputs() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -216,12 +216,12 @@ fn test_prepare_inputs() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -247,12 +247,12 @@ fn test_prepare_inputs() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -278,12 +278,12 @@ fn test_prepare_inputs() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -310,12 +310,12 @@ fn test_prepare_inputs() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)
@@ -342,12 +342,12 @@ fn test_prepare_inputs() {
             start,
             end,
             vec![
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
                     start_pts: first_batch_start,
                     end_pts: first_batch_start + (4 * sample_duration)
                 },
-                InputSamples {
+                InputAudioSamples {
                     samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
                     start_pts: second_batch_start,
                     end_pts: second_batch_start + (4 * sample_duration)

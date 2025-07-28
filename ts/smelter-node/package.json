@@ -32,7 +32,7 @@
     "@swmansion/smelter-core": "workspace:^0.2.1",
     "fs-extra": "^11.2.0",
     "node-fetch": "^2.6.7",
-    "form-data": "^4.0.1",
+    "form-data": "^4.0.4",
     "pino": "^9.5.0",
     "pino-pretty": "^13.0.0",
     "tar": "^7.4.3",

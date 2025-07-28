@@ -1,18 +1,19 @@
 use std::sync::Arc;
 
-use compositor_render::InputId;
 use crossbeam_channel::bounded;
 
 use crate::{
-    error::InputInitError,
     pipeline::{
-        decoder::{DecodedDataReceiver, VideoDecoderOptions},
-        input::{Input, InputInitInfo},
-        webrtc::bearer_token::generate_token,
-        PipelineCtx,
+        input::Input,
+        webrtc::{
+            bearer_token::generate_token,
+            whip_input::connection_state::WhipInputConnectionStateOptions,
+        },
     },
+    queue::QueueDataReceiver,
 };
-use connection_state::WhipInputConnectionStateOptions;
+
+use crate::prelude::*;
 
 pub(super) mod connection_state;
 pub(super) mod negotiated_codecs;
@@ -22,12 +23,6 @@ pub(super) mod track_audio_thread;
 pub(super) mod track_video_thread;
 
 pub(super) use state::WhipInputsState;
-
-#[derive(Debug, Clone)]
-pub struct WhipInputOptions {
-    pub video_preferences: Vec<VideoDecoderOptions>,
-    pub bearer_token: Option<Arc<str>>,
-}
 
 pub struct WhipInput {
     whip_inputs_state: WhipInputsState,
@@ -39,7 +34,7 @@ impl WhipInput {
         ctx: Arc<PipelineCtx>,
         input_id: InputId,
         options: WhipInputOptions,
-    ) -> Result<(Input, InputInitInfo, DecodedDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let Some(state) = &ctx.whip_whep_state else {
             return Err(InputInitError::WhipWhepServerNotRunning);
         };
@@ -64,7 +59,7 @@ impl WhipInput {
                 input_id: input_id.clone(),
             }),
             InputInitInfo::Whip { bearer_token },
-            DecodedDataReceiver {
+            QueueDataReceiver {
                 video: Some(frame_receiver),
                 audio: Some(input_samples_receiver),
             },

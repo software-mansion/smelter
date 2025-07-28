@@ -6,36 +6,30 @@ use std::{
 use compositor_render::{Frame, InputId};
 use crossbeam_channel::{bounded, Receiver};
 use rtcp::header::PacketType;
-use tracing::{debug, error, span, trace, warn, Level};
+use tracing::{debug, span, trace, warn, Level};
 use webrtc_util::Unmarshal;
 
 use self::{tcp_server::start_tcp_server_thread, udp::start_udp_reader_thread};
+
+use crate::prelude::*;
 use crate::{
-    audio_mixer::InputSamples,
-    error::{DecoderInitError, InputInitError},
     pipeline::{
         decoder::{
-            fdk_aac::{self, FdkAacDecoder},
-            ffmpeg_h264::FfmpegH264Decoder,
-            ffmpeg_vp8::FfmpegVp8Decoder,
-            ffmpeg_vp9::FfmpegVp9Decoder,
-            libopus::OpusDecoder,
-            vulkan_h264::VulkanH264Decoder,
-            DecodedDataReceiver, VideoDecoderOptions,
+            fdk_aac::FdkAacDecoder, ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder,
+            ffmpeg_vp9::FfmpegVp9Decoder, libopus::OpusDecoder, vulkan_h264::VulkanH264Decoder,
         },
-        input::{Input, InputInitInfo},
+        input::Input,
         rtp::{
-            depayloader::{AudioSpecificConfig, DepayloaderOptions},
+            depayloader::DepayloaderOptions,
             rtp_input::{
                 rtp_audio_thread::{spawn_rtp_audio_thread, RtpAudioTrackThreadHandle},
                 rtp_video_thread::{spawn_rtp_video_thread, RtpVideoTrackThreadHandle},
             },
             util::BindToPortError,
-            RequestedPort, RtpAacDepayloaderMode, RtpPacket, TransportProtocol,
+            RtpPacket,
         },
-        PipelineCtx,
     },
-    queue::PipelineEvent,
+    queue::QueueDataReceiver,
 };
 
 mod rollover_state;
@@ -46,27 +40,8 @@ mod udp;
 
 pub(crate) use rollover_state::RolloverState;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RtpAudioOptions {
-    Opus,
-    FdkAac {
-        asc: AudioSpecificConfig,
-        raw_asc: bytes::Bytes,
-        depayloader_mode: RtpAacDepayloaderMode,
-    },
-}
-
-#[derive(Debug, Clone)]
-pub struct RtpInputOptions {
-    pub port: RequestedPort,
-    pub transport_protocol: TransportProtocol,
-    pub video: Option<VideoDecoderOptions>,
-    pub audio: Option<RtpAudioOptions>,
-}
-
 pub struct RtpInput {
     should_close: Arc<AtomicBool>,
-    pub port: u16,
 }
 
 impl RtpInput {
@@ -74,14 +49,14 @@ impl RtpInput {
         ctx: Arc<PipelineCtx>,
         input_id: InputId,
         opts: RtpInputOptions,
-    ) -> Result<(Input, InputInitInfo, DecodedDataReceiver), InputInitError> {
+    ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
 
         let (port, raw_packets_receiver) = match opts.transport_protocol {
-            TransportProtocol::Udp => {
+            RtpInputTransportProtocol::Udp => {
                 start_udp_reader_thread(&input_id, &opts, should_close.clone())?
             }
-            TransportProtocol::TcpServer => {
+            RtpInputTransportProtocol::TcpServer => {
                 start_tcp_server_thread(&input_id, &opts, should_close.clone())?
             }
         };
@@ -96,12 +71,9 @@ impl RtpInput {
         Self::start_rtp_demuxer_thread(&input_id, raw_packets_receiver, audio_handle, video_handle);
 
         Ok((
-            Input::Rtp(Self {
-                should_close,
-                port: port.0,
-            }),
+            Input::Rtp(Self { should_close }),
             InputInitInfo::Rtp { port: Some(port) },
-            DecodedDataReceiver {
+            QueueDataReceiver {
                 video: video_frames_receiver,
                 audio: audio_samples_receiver,
             },
@@ -179,7 +151,7 @@ impl RtpInput {
     ) -> Result<
         (
             Option<RtpAudioTrackThreadHandle>,
-            Option<Receiver<PipelineEvent<InputSamples>>>,
+            Option<Receiver<PipelineEvent<InputAudioSamples>>>,
         ),
         DecoderInitError,
     > {
@@ -205,7 +177,7 @@ impl RtpInput {
                 ctx.clone(),
                 input_id.clone(),
                 asc.sample_rate,
-                fdk_aac::Options { asc: Some(raw_asc) },
+                FdkAacDecoderOptions { asc: Some(raw_asc) },
                 DepayloaderOptions::Aac(depayloader_mode, asc),
                 sender,
             )?,
@@ -396,19 +368,4 @@ impl RtpTimestampSync {
         let timestamp = rolled_timestamp - rtp_timestamp_offset;
         Duration::from_secs_f64(timestamp as f64 / self.clock_rate as f64) + sync_offset
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum RtpInputError {
-    #[error("Error while setting socket options.")]
-    SocketOptions(#[source] std::io::Error),
-
-    #[error("Error while binding the socket.")]
-    SocketBind(#[source] std::io::Error),
-
-    #[error("Failed to register input. Port: {0} is already used or not available.")]
-    PortAlreadyInUse(u16),
-
-    #[error("Failed to register input. All ports in range {lower_bound} to {upper_bound} are already used or not available.")]
-    AllPortsAlreadyInUse { lower_bound: u16, upper_bound: u16 },
 }

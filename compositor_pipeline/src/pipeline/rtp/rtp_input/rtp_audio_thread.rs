@@ -1,23 +1,17 @@
 use std::sync::Arc;
 
-use compositor_render::InputId;
 use crossbeam_channel::Sender;
 use tracing::{debug, span, warn, Level};
 
-use crate::{
-    audio_mixer::InputSamples,
-    error::DecoderInitError,
-    pipeline::{
-        decoder::{AudioDecoder, AudioDecoderStream},
-        resampler::decoder_resampler::ResampledDecoderStream,
-        rtp::{
-            depayloader::{DepayloaderOptions, DepayloaderStream},
-            RtpPacket,
-        },
-        PipelineCtx,
+use crate::pipeline::{
+    decoder::{AudioDecoder, AudioDecoderStream},
+    resampler::decoder_resampler::ResampledDecoderStream,
+    rtp::{
+        depayloader::{DepayloaderOptions, DepayloaderStream},
+        RtpPacket,
     },
-    queue::PipelineEvent,
 };
+use crate::prelude::*;
 
 pub(crate) struct RtpAudioTrackThreadHandle {
     pub rtp_packet_sender: Sender<PipelineEvent<RtpPacket>>,
@@ -30,7 +24,7 @@ pub fn spawn_rtp_audio_thread<Decoder: AudioDecoder>(
     sample_rate: u32,
     decoder_options: Decoder::Options,
     depayloader_options: DepayloaderOptions,
-    decoded_samples_sender: Sender<PipelineEvent<InputSamples>>,
+    decoded_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
 ) -> Result<RtpAudioTrackThreadHandle, DecoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
@@ -77,7 +71,7 @@ fn init_stream<Decoder: AudioDecoder>(
     sample_rate: u32,
 ) -> Result<
     (
-        impl Iterator<Item = PipelineEvent<InputSamples>>,
+        impl Iterator<Item = PipelineEvent<InputAudioSamples>>,
         RtpAudioTrackThreadHandle,
     ),
     DecoderInitError,

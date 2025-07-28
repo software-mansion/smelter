@@ -1,25 +1,22 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::{Arc, Mutex};
 
 use crate::{
-    error::InputInitError,
-    pipeline::{
-        input::hls::{HlsInput, HlsInputOptions},
-        rtp::{RtpInput, RtpInputOptions},
-        webrtc::{WhipInput, WhipInputOptions},
-    },
+    pipeline::{hls::HlsInput, mp4::Mp4Input, rtp::RtpInput, webrtc::WhipInput},
+    queue::QueueDataReceiver,
 };
 
-use compositor_render::InputId;
+use crate::prelude::*;
 
-use self::mp4::{Mp4Input, Mp4Options};
+pub struct PipelineInput {
+    pub input: Input,
 
-use super::{decoder::DecodedDataReceiver, PipelineCtx, Port};
-
-#[cfg(feature = "decklink")]
-pub mod decklink;
-pub mod hls;
-pub mod mp4;
-pub mod raw_data;
+    /// Some(received) - Whether EOS was received from queue on audio stream for that input.
+    /// None - No audio configured for that input.
+    pub(super) audio_eos_received: Option<bool>,
+    /// Some(received) - Whether EOS was received from queue on video stream for that input.
+    /// None - No video configured for that input.
+    pub(super) video_eos_received: Option<bool>,
+}
 
 pub enum Input {
     Rtp(RtpInput),
@@ -27,45 +24,109 @@ pub enum Input {
     Whip(WhipInput),
     Hls(HlsInput),
     #[cfg(feature = "decklink")]
-    DeckLink(decklink::DeckLink),
-    RawDataInput,
+    DeckLink(super::decklink::DeckLink),
+    RawDataChannel,
 }
 
-#[derive(Debug, Clone)]
-pub enum InputOptions {
-    Rtp(RtpInputOptions),
-    Mp4(Mp4Options),
-    Hls(HlsInputOptions),
-    Whip(WhipInputOptions),
-    #[cfg(feature = "decklink")]
-    DeckLink(decklink::DeckLinkOptions),
-}
-
-pub enum InputInitInfo {
-    Rtp {
-        port: Option<Port>,
-    },
-    Mp4 {
-        video_duration: Option<Duration>,
-        audio_duration: Option<Duration>,
-    },
-    Whip {
-        bearer_token: Arc<str>,
-    },
-    Other,
+impl Input {
+    pub fn kind(&self) -> InputProtocolKind {
+        match self {
+            Input::Rtp(_input) => InputProtocolKind::Rtp,
+            Input::Mp4(_input) => InputProtocolKind::Mp4,
+            Input::Whip(_input) => InputProtocolKind::Whip,
+            Input::Hls(_input) => InputProtocolKind::Hls,
+            #[cfg(feature = "decklink")]
+            Input::DeckLink(_input) => InputProtocolKind::DeckLink,
+            Input::RawDataChannel => InputProtocolKind::RawDataChannel,
+        }
+    }
 }
 
 pub(super) fn new_external_input(
     ctx: Arc<PipelineCtx>,
     input_id: InputId,
-    options: InputOptions,
-) -> Result<(Input, InputInitInfo, DecodedDataReceiver), InputInitError> {
+    options: ProtocolInputOptions,
+) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
     match options {
-        InputOptions::Rtp(opts) => RtpInput::new_input(ctx, input_id, opts),
-        InputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_id, opts),
-        InputOptions::Hls(opts) => HlsInput::new_input(ctx, input_id, opts),
-        InputOptions::Whip(opts) => WhipInput::new_input(ctx, input_id, opts),
+        ProtocolInputOptions::Rtp(opts) => RtpInput::new_input(ctx, input_id, opts),
+        ProtocolInputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_id, opts),
+        ProtocolInputOptions::Hls(opts) => HlsInput::new_input(ctx, input_id, opts),
+        ProtocolInputOptions::Whip(opts) => WhipInput::new_input(ctx, input_id, opts),
         #[cfg(feature = "decklink")]
-        InputOptions::DeckLink(opts) => decklink::DeckLink::new_input(ctx, input_id, opts),
+        ProtocolInputOptions::DeckLink(opts) => {
+            super::decklink::DeckLink::new_input(ctx, input_id, opts)
+        }
+    }
+}
+
+/// This method doesn't take pipeline lock for the whole scope,
+/// because input registration can potentially take a relatively long time.
+pub(super) fn register_pipeline_input<BuildFn, NewInputResult>(
+    pipeline: &Arc<Mutex<Pipeline>>,
+    input_id: InputId,
+    queue_options: QueueInputOptions,
+    build_input: BuildFn,
+) -> Result<NewInputResult, RegisterInputError>
+where
+    BuildFn: FnOnce(
+        Arc<PipelineCtx>,
+        InputId,
+    ) -> Result<(Input, NewInputResult, QueueDataReceiver), InputInitError>,
+{
+    if pipeline.lock().unwrap().inputs.contains_key(&input_id) {
+        return Err(RegisterInputError::AlreadyRegistered(input_id));
+    }
+
+    let pipeline_ctx = pipeline.lock().unwrap().ctx().clone();
+
+    let (input, input_result, receiver) = build_input(pipeline_ctx, input_id.clone())
+        .map_err(|err| RegisterInputError::InputError(input_id.clone(), err))?;
+
+    let (audio_eos_received, video_eos_received) = (
+        receiver.audio.as_ref().map(|_| false),
+        receiver.video.as_ref().map(|_| false),
+    );
+
+    let pipeline_input = PipelineInput {
+        input,
+        audio_eos_received,
+        video_eos_received,
+    };
+
+    let mut guard = pipeline.lock().unwrap();
+
+    if guard.inputs.contains_key(&input_id) {
+        return Err(RegisterInputError::AlreadyRegistered(input_id));
+    };
+
+    if pipeline_input.audio_eos_received.is_some() {
+        for (_, output) in guard.outputs.iter_mut() {
+            if let Some(ref mut cond) = output.audio_end_condition {
+                cond.on_input_registered(&input_id);
+            }
+        }
+    }
+
+    if pipeline_input.video_eos_received.is_some() {
+        for (_, output) in guard.outputs.iter_mut() {
+            if let Some(ref mut cond) = output.video_end_condition {
+                cond.on_input_registered(&input_id);
+            }
+        }
+    }
+
+    guard.inputs.insert(input_id.clone(), pipeline_input);
+    guard.queue.add_input(&input_id, receiver, queue_options);
+    guard.renderer.register_input(input_id);
+
+    Ok(input_result)
+}
+
+impl PipelineInput {
+    pub(super) fn on_audio_eos(&mut self) {
+        self.audio_eos_received = self.audio_eos_received.map(|_| true);
+    }
+    pub(super) fn on_video_eos(&mut self) {
+        self.audio_eos_received = self.audio_eos_received.map(|_| true);
     }
 }

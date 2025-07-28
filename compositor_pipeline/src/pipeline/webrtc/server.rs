@@ -38,8 +38,8 @@ impl WhipWhepServer {
     pub fn spawn(
         ctx: Arc<PipelineCtx>,
         state: &WhipWhepPipelineState,
-        whip_whep_server_port: u16,
     ) -> Result<WhipWhepServerHandle, InitPipelineError> {
+        let port = state.port;
         let state = WhipWhepServerState {
             ctx: ctx.clone(),
             inputs: state.inputs.clone(),
@@ -48,8 +48,8 @@ impl WhipWhepServer {
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
         let (init_result_sender, init_result_receiver) = oneshot::channel();
         ctx.tokio_rt.spawn(async move {
-            info!("Starting HTTP server for WHIP/WHEP on port {whip_whep_server_port}");
-            match WhipWhepServer::new(whip_whep_server_port).await {
+            info!("Starting HTTP server for WHIP/WHEP on port {port}");
+            match WhipWhepServer::new(port).await {
                 Ok(server) => {
                     init_result_sender.send(Ok(())).unwrap();
                     server.run(state, shutdown_receiver).await;

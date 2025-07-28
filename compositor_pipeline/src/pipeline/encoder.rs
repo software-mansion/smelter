@@ -1,16 +1,9 @@
 use std::{iter, sync::Arc};
 
 use compositor_render::{Frame, OutputFrameFormat, Resolution};
-use ffmpeg_next::format::Pixel;
 use tokio::sync::watch;
 
-use crate::{
-    audio_mixer::{AudioChannels, OutputSamples},
-    error::EncoderInitError,
-    queue::PipelineEvent,
-};
-
-use super::{EncodedChunk, PipelineCtx};
+use crate::prelude::*;
 
 pub(crate) mod encoder_thread_audio;
 pub(crate) mod encoder_thread_video;
@@ -19,103 +12,9 @@ pub mod fdk_aac;
 pub mod ffmpeg_h264;
 pub mod ffmpeg_vp8;
 pub mod ffmpeg_vp9;
-pub mod opus;
+pub mod libopus;
 
-pub struct EncoderOptions {
-    pub video: Option<VideoEncoderOptions>,
-    pub audio: Option<AudioEncoderOptions>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum VideoEncoderOptions {
-    H264(ffmpeg_h264::Options),
-    Vp8(ffmpeg_vp8::Options),
-    Vp9(ffmpeg_vp9::Options),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum AudioEncoderOptions {
-    Opus(opus::OpusEncoderOptions),
-    Aac(fdk_aac::AacEncoderOptions),
-}
-
-pub struct EncoderContext {
-    pub video: Option<VideoEncoderContext>,
-    pub audio: Option<AudioEncoderContext>,
-}
-
-#[derive(Debug, Clone)]
-pub enum VideoEncoderContext {
-    H264(Option<bytes::Bytes>),
-    VP8,
-    VP9,
-}
-
-#[derive(Debug, Clone)]
-pub enum AudioEncoderContext {
-    Opus,
-    Aac(bytes::Bytes),
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum AudioEncoderPreset {
-    Quality,
-    Voip,
-    LowestLatency,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum OutputPixelFormat {
-    YUV420P,
-    YUV422P,
-    YUV444P,
-}
-
-impl From<OutputPixelFormat> for Pixel {
-    fn from(format: OutputPixelFormat) -> Self {
-        match format {
-            OutputPixelFormat::YUV420P => Pixel::YUV420P,
-            OutputPixelFormat::YUV422P => Pixel::YUV422P,
-            OutputPixelFormat::YUV444P => Pixel::YUV444P,
-        }
-    }
-}
-
-impl From<OutputPixelFormat> for OutputFrameFormat {
-    fn from(format: OutputPixelFormat) -> Self {
-        match format {
-            OutputPixelFormat::YUV420P => OutputFrameFormat::PlanarYuv420Bytes,
-            OutputPixelFormat::YUV422P => OutputFrameFormat::PlanarYuv422Bytes,
-            OutputPixelFormat::YUV444P => OutputFrameFormat::PlanarYuv444Bytes,
-        }
-    }
-}
-
-impl VideoEncoderOptions {
-    pub fn resolution(&self) -> Resolution {
-        match self {
-            VideoEncoderOptions::H264(opt) => opt.resolution,
-            VideoEncoderOptions::Vp8(opt) => opt.resolution,
-            VideoEncoderOptions::Vp9(opt) => opt.resolution,
-        }
-    }
-}
-
-impl AudioEncoderOptions {
-    pub fn channels(&self) -> AudioChannels {
-        match self {
-            AudioEncoderOptions::Opus(options) => options.channels,
-            AudioEncoderOptions::Aac(options) => options.channels,
-        }
-    }
-
-    pub fn sample_rate(&self) -> u32 {
-        match self {
-            AudioEncoderOptions::Opus(options) => options.sample_rate,
-            AudioEncoderOptions::Aac(options) => options.sample_rate,
-        }
-    }
-}
+mod ffmpeg_utils;
 
 #[derive(Debug)]
 pub(crate) struct VideoEncoderConfig {
@@ -132,19 +31,13 @@ pub(crate) trait VideoEncoder: Sized {
         ctx: &Arc<PipelineCtx>,
         options: Self::Options,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError>;
-    fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedChunk>;
-    fn flush(&mut self) -> Vec<EncodedChunk>;
+    fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedOutputChunk>;
+    fn flush(&mut self) -> Vec<EncodedOutputChunk>;
 }
 
 #[derive(Debug)]
 pub(crate) struct AudioEncoderConfig {
-    //pub channels: AudioChannels,
-    //pub sample_rate: u32,
     pub extradata: Option<bytes::Bytes>,
-}
-
-pub(crate) trait AudioEncoderOptionsExt {
-    fn sample_rate(&self) -> u32;
 }
 
 pub(crate) trait AudioEncoder: Sized {
@@ -156,8 +49,8 @@ pub(crate) trait AudioEncoder: Sized {
         ctx: &Arc<PipelineCtx>,
         options: Self::Options,
     ) -> Result<(Self, AudioEncoderConfig), EncoderInitError>;
-    fn encode(&mut self, samples: OutputSamples) -> Vec<EncodedChunk>;
-    fn flush(&mut self) -> Vec<EncodedChunk>;
+    fn encode(&mut self, samples: OutputAudioSamples) -> Vec<EncodedOutputChunk>;
+    fn flush(&mut self) -> Vec<EncodedOutputChunk>;
     fn set_packet_loss(&mut self, packet_loss: i32);
 }
 
@@ -217,7 +110,7 @@ where
     Encoder: VideoEncoder,
     Source: Iterator<Item = PipelineEvent<Frame>>,
 {
-    type Item = Vec<PipelineEvent<EncodedChunk>>;
+    type Item = Vec<PipelineEvent<EncodedOutputChunk>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
@@ -247,7 +140,7 @@ pub(super) struct AudioEncoderStreamContext {
 pub(super) struct AudioEncoderStream<Encoder, Source>
 where
     Encoder: AudioEncoder,
-    Source: Iterator<Item = PipelineEvent<OutputSamples>>,
+    Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>,
 {
     encoder: Encoder,
     source: Source,
@@ -258,7 +151,7 @@ where
 impl<Encoder, Source> AudioEncoderStream<Encoder, Source>
 where
     Encoder: AudioEncoder,
-    Source: Iterator<Item = PipelineEvent<OutputSamples>>,
+    Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>,
 {
     pub fn new(
         ctx: Arc<PipelineCtx>,
@@ -294,9 +187,9 @@ where
 impl<Encoder, Source> Iterator for AudioEncoderStream<Encoder, Source>
 where
     Encoder: AudioEncoder,
-    Source: Iterator<Item = PipelineEvent<OutputSamples>>,
+    Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>,
 {
-    type Item = Vec<PipelineEvent<EncodedChunk>>;
+    type Item = Vec<PipelineEvent<EncodedOutputChunk>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {

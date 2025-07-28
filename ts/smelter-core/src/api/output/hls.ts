@@ -9,6 +9,7 @@ export function intoRegisterHlsOutput(
   return {
     type: 'hls',
     path: output.serverPath,
+    max_playlist_size: output.maxPlaylistSize,
     video: output.video && initial.video && intoOutputHlsVideoOptions(output.video, initial.video),
     audio: output.audio && initial.audio && intoOutputHlsAudioOptions(output.audio, initial.audio),
   };

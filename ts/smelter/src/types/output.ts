@@ -52,6 +52,11 @@ export type RegisterHlsOutput = {
    */
   serverPath: string;
   /**
+   * Number of segments kept in the playlist. When the limit is reached the oldest segment is removed.
+   * If not specified, no segments will removed.
+   */
+  maxPlaylistSize?: number | null;
+  /**
    * Video track configuration.
    */
   video?: Mp4VideoOptions;

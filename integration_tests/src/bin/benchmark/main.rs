@@ -3,7 +3,7 @@ use std::{fs, sync::Arc, time::Duration};
 use benchmark::{Benchmark, EncoderOptions};
 use benchmark_pass::{InputFile, SingleBenchmarkPass};
 use clap::Parser;
-use compositor_pipeline::pipeline::{GraphicsContext, GraphicsContextOptions};
+use compositor_pipeline::graphics_context::{GraphicsContext, GraphicsContextOptions};
 
 use compositor_render::RenderingMode;
 use scenes::simple_tiles_with_all_inputs;

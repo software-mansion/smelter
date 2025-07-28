@@ -10,17 +10,15 @@ use tracing::{debug, trace, warn};
 use crate::{
     error::OutputInitError,
     pipeline::{
-        rtp::{
-            util::{bind_to_requested_port, BindToPortError},
-            RequestedPort,
-        },
+        rtp::util::{bind_to_requested_port, BindToPortError},
         Port,
     },
+    protocols::PortOrRange,
 };
 
 use super::RtpBinaryPacketStream;
 
-pub(super) fn tcp_socket(port: RequestedPort) -> Result<(socket2::Socket, Port), OutputInitError> {
+pub(super) fn tcp_socket(port: PortOrRange) -> Result<(socket2::Socket, Port), OutputInitError> {
     let socket = socket2::Socket::new(
         socket2::Domain::IPV4,
         socket2::Type::STREAM,

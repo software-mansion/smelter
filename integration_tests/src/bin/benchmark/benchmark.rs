@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use compositor_pipeline::pipeline::{encoder::ffmpeg_h264, GraphicsContext};
+use compositor_pipeline::{codecs::FfmpegH264EncoderPreset, graphics_context::GraphicsContext};
 use serde_json::{json, Value as JsonValue};
 use tracing::{error, info};
 
@@ -11,7 +11,7 @@ use crate::{
 
 #[derive(Debug, Clone, Copy)]
 pub enum EncoderOptions {
-    Enabled(ffmpeg_h264::EncoderPreset),
+    Enabled(FfmpegH264EncoderPreset),
     Disabled,
 }
 

@@ -1,7 +1,8 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use compositor_pipeline::pipeline::{
-    decoder::VideoDecoderOptions, encoder::ffmpeg_h264::EncoderPreset, GraphicsContext,
+use compositor_pipeline::{
+    codecs::{FfmpegH264EncoderPreset, VideoDecoderOptions},
+    graphics_context::GraphicsContext,
 };
 use compositor_render::RenderingMode;
 
@@ -82,7 +83,7 @@ impl BenchmarkSuiteContext {
 
             input_file: InputFile::Mp4(PathBuf::new()), // always override
 
-            encoder: EncoderOptions::Enabled(EncoderPreset::Ultrafast),
+            encoder: EncoderOptions::Enabled(FfmpegH264EncoderPreset::Ultrafast),
             decoder: VideoDecoderOptions::FfmpegH264,
 
             warm_up_time: Duration::from_secs(2),
@@ -239,9 +240,9 @@ fn benchmark_set_constant_input_output_ratio(
         ("4 inputs per output", four_video_layout, 4),
     ];
     let const_input_output_ratio_encoder_presets = [
-        EncoderPreset::Ultrafast,
-        EncoderPreset::Veryfast,
-        EncoderPreset::Fast,
+        FfmpegH264EncoderPreset::Ultrafast,
+        FfmpegH264EncoderPreset::Veryfast,
+        FfmpegH264EncoderPreset::Fast,
     ];
 
     let const_input_output_ratio_input = [
@@ -304,13 +305,13 @@ fn benchmark_set_constant_input_output_ratio(
 
 fn benchmark_set_ffmpeg_h264_encoder_preset(ctx: &'static BenchmarkSuiteContext) -> Vec<Benchmark> {
     [
-        EncoderPreset::Fast,
-        EncoderPreset::Ultrafast,
-        EncoderPreset::Superfast,
-        EncoderPreset::Veryfast,
-        EncoderPreset::Faster,
-        EncoderPreset::Fast,
-        EncoderPreset::Medium,
+        FfmpegH264EncoderPreset::Fast,
+        FfmpegH264EncoderPreset::Ultrafast,
+        FfmpegH264EncoderPreset::Superfast,
+        FfmpegH264EncoderPreset::Veryfast,
+        FfmpegH264EncoderPreset::Faster,
+        FfmpegH264EncoderPreset::Fast,
+        FfmpegH264EncoderPreset::Medium,
     ]
     .into_iter()
     .map(|encoder_preset| Benchmark {
@@ -343,7 +344,7 @@ fn benchmark_set_output_resolutions(ctx: &'static BenchmarkSuiteContext) -> Vec<
             output_count: value,
             output_resolution: resolution_preset.into(),
             scene_builder: simple_tiles_with_all_inputs,
-            encoder: EncoderOptions::Enabled(EncoderPreset::Veryfast),
+            encoder: EncoderOptions::Enabled(FfmpegH264EncoderPreset::Veryfast),
             input_file: ctx.bbb_raw_720p_input.clone(), // no decoder
             ..ctx.default()
         })),

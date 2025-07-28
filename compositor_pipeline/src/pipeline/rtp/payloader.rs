@@ -4,7 +4,7 @@ use tracing::{error, info};
 use rand::Rng;
 use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader, vp9::Vp9Payloader};
 
-use crate::{pipeline::types::EncodedChunk, queue::PipelineEvent};
+use crate::prelude::*;
 
 use super::RtpPacket;
 
@@ -53,7 +53,10 @@ impl Payloader {
         }
     }
 
-    pub fn payload(&mut self, chunk: EncodedChunk) -> Result<Vec<RtpPacket>, PayloadingError> {
+    pub fn payload(
+        &mut self,
+        chunk: EncodedOutputChunk,
+    ) -> Result<Vec<RtpPacket>, PayloadingError> {
         let payloads = self.payloader.payload(self.mtu, &chunk.data)?;
         let packets_amount = payloads.len();
         let timestamp = (chunk.pts.as_secs_f64() * self.clock_rate as f64).round() as u64;
@@ -87,7 +90,7 @@ impl Payloader {
 
 pub(crate) struct PayloaderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedOutputChunk>>,
 {
     payloader: Payloader,
     source: Source,
@@ -96,7 +99,7 @@ where
 
 impl<Source> PayloaderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedOutputChunk>>,
 {
     pub fn new(options: PayloaderOptions, source: Source) -> Self {
         Self {
@@ -109,7 +112,7 @@ where
 
 impl<Source> Iterator for PayloaderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedOutputChunk>>,
 {
     type Item = Vec<Result<PipelineEvent<RtpPacket>, PayloadingError>>;
 

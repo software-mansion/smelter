@@ -1,22 +1,20 @@
-use compositor_render::Frame;
-use compositor_render::InputId;
-use crossbeam_channel::Receiver;
-use crossbeam_channel::TryRecvError;
+use crossbeam_channel::{Receiver, TryRecvError};
 
-use std::collections::HashMap;
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use crate::event::Event;
 use crate::event::EventEmitter;
 
-use super::utils::Clock;
-use super::utils::InputProcessor;
-use super::InputOptions;
-use super::PipelineEvent;
-use super::QueueVideoOutput;
+use super::{
+    utils::{Clock, InputProcessor},
+    InputOptions, PipelineEvent, QueueVideoOutput,
+};
+
+use crate::prelude::*;
 
 pub struct VideoQueue {
     inputs: HashMap<InputId, VideoQueueInput>,

@@ -1,116 +1,42 @@
-use core::slice;
-use std::{iter, sync::Arc, time::Duration};
+use std::{iter, sync::Arc};
 
-use compositor_render::{Frame, FrameData, Resolution};
+use compositor_render::{Frame, OutputFrameFormat};
 use ffmpeg_next::{
     codec::{Context, Id},
     format::Pixel,
-    frame, Dictionary, Packet, Rational,
+    Dictionary, Rational,
 };
 use tracing::{error, info, trace, warn};
 
-use crate::{
-    error::EncoderInitError,
-    pipeline::{
-        types::{ChunkFromFfmpegError, EncodedChunk, EncodedChunkKind, IsKeyframe, VideoCodec},
-        PipelineCtx,
-    },
+use crate::pipeline::encoder::ffmpeg_utils::{
+    create_av_frame, encoded_chunk_from_av_packet, merge_options_with_defaults, read_extradata,
 };
+use crate::prelude::*;
 
-use super::{OutputPixelFormat, VideoEncoder, VideoEncoderConfig};
+use super::{VideoEncoder, VideoEncoderConfig};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum EncoderPreset {
-    Ultrafast,
-    Superfast,
-    Veryfast,
-    Faster,
-    Fast,
-    Medium,
-    Slow,
-    Slower,
-    Veryslow,
-    Placebo,
-}
-
-impl EncoderPreset {
-    fn to_str(self) -> &'static str {
-        match self {
-            EncoderPreset::Ultrafast => "ultrafast",
-            EncoderPreset::Superfast => "superfast",
-            EncoderPreset::Veryfast => "veryfast",
-            EncoderPreset::Faster => "faster",
-            EncoderPreset::Fast => "fast",
-            EncoderPreset::Medium => "medium",
-            EncoderPreset::Slow => "slow",
-            EncoderPreset::Slower => "slower",
-            EncoderPreset::Veryslow => "veryslow",
-            EncoderPreset::Placebo => "placebo",
-        }
-    }
-
-    fn default_partitions(&self) -> &'static str {
-        match self {
-            EncoderPreset::Ultrafast => "none",
-            EncoderPreset::Superfast => "i8x8,i4x4",
-            EncoderPreset::Veryfast => "p8x8,b8x8,i8x8,i4x4",
-            EncoderPreset::Faster => "p8x8,b8x8,i8x8,i4x4",
-            EncoderPreset::Fast => "p8x8,b8x8,i8x8,i4x4",
-            EncoderPreset::Medium => "p8x8,b8x8,i8x8,i4x4",
-            EncoderPreset::Slow => "all",
-            EncoderPreset::Slower => "all",
-            EncoderPreset::Veryslow => "all",
-            EncoderPreset::Placebo => "all",
-        }
-    }
-
-    fn default_subq_mode(&self) -> &'static str {
-        match self {
-            EncoderPreset::Ultrafast => "0",
-            EncoderPreset::Superfast => "1",
-            EncoderPreset::Veryfast => "2",
-            EncoderPreset::Faster => "4",
-            EncoderPreset::Fast => "6",
-            EncoderPreset::Medium => "7",
-            EncoderPreset::Slow => "8",
-            EncoderPreset::Slower => "9",
-            EncoderPreset::Veryslow => "10",
-            EncoderPreset::Placebo => "11",
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Options {
-    pub preset: EncoderPreset,
-    pub resolution: Resolution,
-    pub pixel_format: OutputPixelFormat,
-    pub raw_options: Vec<(String, String)>,
-}
+const TIME_BASE: i32 = 1_000_000;
 
 pub struct FfmpegH264Encoder {
     encoder: ffmpeg_next::encoder::Video,
-    packet: Packet,
-    resolution: Resolution,
-    pixel_format: OutputPixelFormat,
+    packet: ffmpeg_next::Packet,
 }
 
 impl VideoEncoder for FfmpegH264Encoder {
     const LABEL: &'static str = "FFmpeg H264 encoder";
 
-    type Options = Options;
+    type Options = FfmpegH264EncoderOptions;
 
     fn new(
         ctx: &Arc<PipelineCtx>,
-        options: Options,
+        options: FfmpegH264EncoderOptions,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
         info!(?options, "Initialize FFmpeg x264 encoder");
         let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
 
         let mut encoder = Context::new().encoder().video()?;
 
-        // We set this to 1 / 1_000_000, bc we use `as_micros` to convert frames to AV packets.
-        let pts_unit_secs = Rational::new(1, 1_000_000);
+        let pts_unit_secs = Rational::new(1, TIME_BASE);
         let framerate = ctx.output_framerate;
         encoder.set_time_base(pts_unit_secs);
         encoder.set_format(Pixel::YUV420P);
@@ -130,7 +56,7 @@ impl VideoEncoder for FfmpegH264Encoder {
         // Those values are copied from somewhere, they have to be set because libx264
         // is throwing an error if it detects default ffmpeg settings.
         let defaults = [
-            ("preset", options.preset.to_str()),
+            ("preset", preset_to_str(options.preset)),
             // Quality-based VBR (0-51)
             ("crf", "23"),
             // Override ffmpeg defaults from https://github.com/mirror/x264/blob/eaa68fad9e5d201d42fde51665f2d137ae96baf0/encoder/encoder.c#L674
@@ -154,54 +80,40 @@ impl VideoEncoder for FfmpegH264Encoder {
             // QP factor between P and B frames - libx264 defaults to 1.4 (in case of tune=grain to 1.1)
             ("f_pb_factor", "1.3"),
             // A comma-separated list of partitions to consider. Possible values: p8x8, p4x4, b8x8, i8x8, i4x4, none, all
-            ("partitions", options.preset.default_partitions()),
+            ("partitions", default_partitions_for_preset(options.preset)),
             // Subpixel motion estimation and mode decision (decision quality: 1=fast, 11=best)
-            ("subq", options.preset.default_subq_mode()),
+            ("subq", default_subq_mode_for_preset(options.preset)),
         ];
 
         let encoder_opts_iter = merge_options_with_defaults(&defaults, &options.raw_options);
         let encoder = encoder.open_as_with(codec, Dictionary::from_iter(encoder_opts_iter))?;
-
-        let extradata = unsafe {
-            let encoder_ptr = encoder.0 .0 .0.as_ptr();
-            let size = (*encoder_ptr).extradata_size;
-            if size > 0 {
-                let extradata_slice =
-                    slice::from_raw_parts((*encoder_ptr).extradata, size as usize);
-                Some(bytes::Bytes::copy_from_slice(extradata_slice))
-            } else {
-                None
-            }
-        };
+        let extradata = read_extradata(&encoder);
 
         Ok((
             Self {
                 encoder,
-                packet: Packet::empty(),
-                pixel_format: options.pixel_format,
-                resolution: options.resolution,
+                packet: ffmpeg_next::Packet::empty(),
             },
             VideoEncoderConfig {
                 resolution: options.resolution,
-                output_format: options.pixel_format.into(),
+                output_format: match options.pixel_format {
+                    OutputPixelFormat::YUV420P => OutputFrameFormat::PlanarYuv420Bytes,
+                    OutputPixelFormat::YUV422P => OutputFrameFormat::PlanarYuv422Bytes,
+                    OutputPixelFormat::YUV444P => OutputFrameFormat::PlanarYuv444Bytes,
+                },
                 extradata,
             },
         ))
     }
 
-    fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedChunk> {
-        let mut av_frame = frame::Video::new(
-            self.pixel_format.into(),
-            self.resolution.width as u32,
-            self.resolution.height as u32,
-        );
-
-        if let Err(e) = frame_into_av(frame, &mut av_frame) {
-            error!(
-                "Failed to convert a frame to an ffmpeg frame: {}. Dropping",
-                e.0
-            );
-        }
+    fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedOutputChunk> {
+        let mut av_frame = match create_av_frame(frame, TIME_BASE) {
+            Ok(av_frame) => av_frame,
+            Err(e) => {
+                error!("{e}. Dropping frame.");
+                return Vec::new();
+            }
+        };
 
         if force_keyframe {
             av_frame.set_kind(ffmpeg_next::picture::Type::I);
@@ -214,7 +126,7 @@ impl VideoEncoder for FfmpegH264Encoder {
         self.read_all_chunks()
     }
 
-    fn flush(&mut self) -> Vec<EncodedChunk> {
+    fn flush(&mut self) -> Vec<EncodedOutputChunk> {
         if let Err(e) = self.encoder.send_eof() {
             error!("Failed to enter draining mode on encoder: {e}.");
         }
@@ -223,14 +135,14 @@ impl VideoEncoder for FfmpegH264Encoder {
 }
 
 impl FfmpegH264Encoder {
-    fn read_all_chunks(&mut self) -> Vec<EncodedChunk> {
+    fn read_all_chunks(&mut self) -> Vec<EncodedOutputChunk> {
         iter::from_fn(|| {
             match self.encoder.receive_packet(&mut self.packet) {
                 Ok(_) => {
                     match encoded_chunk_from_av_packet(
                         &self.packet,
-                        EncodedChunkKind::Video(VideoCodec::H264),
-                        1_000_000,
+                        MediaKind::Video(VideoCodec::H264),
+                        TIME_BASE,
                     ) {
                         Ok(chunk) => {
                             trace!(pts=?self.packet.pts(), ?chunk, "H264 encoder produced an encoded packet.");
@@ -258,117 +170,47 @@ impl FfmpegH264Encoder {
     }
 }
 
-#[derive(Debug)]
-struct FrameConversionError(String);
-
-fn frame_into_av(frame: Frame, av_frame: &mut frame::Video) -> Result<(), FrameConversionError> {
-    let (data, expected_pixel_format) = match frame.data {
-        FrameData::PlanarYuv420(data) => (data, Pixel::YUV420P),
-        FrameData::PlanarYuv422(data) => (data, Pixel::YUV422P),
-        FrameData::PlanarYuv444(data) => (data, Pixel::YUV444P),
-        _ => {
-            return Err(FrameConversionError(format!(
-                "Unsupported pixel format {:?}",
-                frame.data
-            )))
-        }
-    };
-
-    if av_frame.format() != expected_pixel_format {
-        return Err(FrameConversionError(format!(
-            "Frame format mismatch: expected {:?}, got {:?}",
-            expected_pixel_format,
-            av_frame.format()
-        )));
+fn preset_to_str(preset: FfmpegH264EncoderPreset) -> &'static str {
+    match preset {
+        FfmpegH264EncoderPreset::Ultrafast => "ultrafast",
+        FfmpegH264EncoderPreset::Superfast => "superfast",
+        FfmpegH264EncoderPreset::Veryfast => "veryfast",
+        FfmpegH264EncoderPreset::Faster => "faster",
+        FfmpegH264EncoderPreset::Fast => "fast",
+        FfmpegH264EncoderPreset::Medium => "medium",
+        FfmpegH264EncoderPreset::Slow => "slow",
+        FfmpegH264EncoderPreset::Slower => "slower",
+        FfmpegH264EncoderPreset::Veryslow => "veryslow",
+        FfmpegH264EncoderPreset::Placebo => "placebo",
     }
-
-    let expected_y_plane_size = (av_frame.plane_width(0) * av_frame.plane_height(0)) as usize;
-    let expected_u_plane_size = (av_frame.plane_width(1) * av_frame.plane_height(1)) as usize;
-    let expected_v_plane_size = (av_frame.plane_width(2) * av_frame.plane_height(2)) as usize;
-    if expected_y_plane_size != data.y_plane.len() {
-        return Err(FrameConversionError(format!(
-            "Y plane is a wrong size, expected: {} received: {}",
-            expected_y_plane_size,
-            data.y_plane.len()
-        )));
-    }
-    if expected_u_plane_size != data.u_plane.len() {
-        return Err(FrameConversionError(format!(
-            "U plane is a wrong size, expected: {} received: {}",
-            expected_u_plane_size,
-            data.u_plane.len()
-        )));
-    }
-    if expected_v_plane_size != data.v_plane.len() {
-        return Err(FrameConversionError(format!(
-            "V plane is a wrong size, expected: {} received: {}",
-            expected_v_plane_size,
-            data.v_plane.len()
-        )));
-    }
-
-    av_frame.set_pts(Some(frame.pts.as_micros() as i64));
-
-    write_plane_to_av(av_frame, 0, &data.y_plane);
-    write_plane_to_av(av_frame, 1, &data.u_plane);
-    write_plane_to_av(av_frame, 2, &data.v_plane);
-
-    Ok(())
 }
 
-fn write_plane_to_av(frame: &mut frame::Video, plane: usize, data: &[u8]) {
-    let stride = frame.stride(plane);
-    let width = frame.plane_width(plane) as usize;
-
-    data.chunks(width)
-        .zip(frame.data_mut(plane).chunks_mut(stride))
-        .for_each(|(data, target)| target[..width].copy_from_slice(data));
+fn default_partitions_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str {
+    match preset {
+        FfmpegH264EncoderPreset::Ultrafast => "none",
+        FfmpegH264EncoderPreset::Superfast => "i8x8,i4x4",
+        FfmpegH264EncoderPreset::Veryfast => "p8x8,b8x8,i8x8,i4x4",
+        FfmpegH264EncoderPreset::Faster => "p8x8,b8x8,i8x8,i4x4",
+        FfmpegH264EncoderPreset::Fast => "p8x8,b8x8,i8x8,i4x4",
+        FfmpegH264EncoderPreset::Medium => "p8x8,b8x8,i8x8,i4x4",
+        FfmpegH264EncoderPreset::Slow => "all",
+        FfmpegH264EncoderPreset::Slower => "all",
+        FfmpegH264EncoderPreset::Veryslow => "all",
+        FfmpegH264EncoderPreset::Placebo => "all",
+    }
 }
 
-fn merge_options_with_defaults<'a>(
-    defaults: &'a [(&str, &str)],
-    overrides: &'a [(String, String)],
-) -> impl Iterator<Item = (&'a str, &'a str)> {
-    defaults
-        .iter()
-        .copied()
-        .filter(|(key, _value)| {
-            // filter out any defaults that are in overrides
-            !overrides
-                .iter()
-                .any(|(override_key, _)| key == override_key)
-        })
-        .chain(
-            overrides
-                .iter()
-                .map(|(key, value)| (key.as_str(), value.as_str())),
-        )
-}
-
-fn encoded_chunk_from_av_packet(
-    value: &ffmpeg_next::Packet,
-    kind: EncodedChunkKind,
-    timescale: i64,
-) -> Result<EncodedChunk, ChunkFromFfmpegError> {
-    let data = match value.data() {
-        Some(data) => bytes::Bytes::copy_from_slice(data),
-        None => return Err(ChunkFromFfmpegError::NoData),
-    };
-
-    let rescale = |v: i64| Duration::from_secs_f64((v as f64) * (1.0 / timescale as f64));
-
-    Ok(EncodedChunk {
-        data,
-        pts: value
-            .pts()
-            .map(rescale)
-            .ok_or(ChunkFromFfmpegError::NoPts)?,
-        dts: value.dts().map(rescale),
-        is_keyframe: if value.flags().contains(ffmpeg_next::packet::Flags::KEY) {
-            IsKeyframe::Yes
-        } else {
-            IsKeyframe::No
-        },
-        kind,
-    })
+fn default_subq_mode_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str {
+    match preset {
+        FfmpegH264EncoderPreset::Ultrafast => "0",
+        FfmpegH264EncoderPreset::Superfast => "1",
+        FfmpegH264EncoderPreset::Veryfast => "2",
+        FfmpegH264EncoderPreset::Faster => "4",
+        FfmpegH264EncoderPreset::Fast => "6",
+        FfmpegH264EncoderPreset::Medium => "7",
+        FfmpegH264EncoderPreset::Slow => "8",
+        FfmpegH264EncoderPreset::Slower => "9",
+        FfmpegH264EncoderPreset::Veryslow => "10",
+        FfmpegH264EncoderPreset::Placebo => "11",
+    }
 }

@@ -1,39 +1,31 @@
-use std::{iter, sync::Arc, time::Duration};
+use std::{iter, sync::Arc};
 
-use compositor_render::{Frame, FrameData, OutputFrameFormat, Resolution};
+use compositor_render::{Frame, OutputFrameFormat};
 use ffmpeg_next::{
     codec::{Context, Id},
     format::Pixel,
-    frame, Dictionary, Packet, Rational,
+    Dictionary, Rational,
 };
 use tracing::{error, info, trace, warn};
 
-use crate::{
-    error::EncoderInitError,
-    pipeline::{
-        types::{ChunkFromFfmpegError, EncodedChunk, EncodedChunkKind, IsKeyframe, VideoCodec},
-        PipelineCtx,
-    },
+use crate::pipeline::encoder::ffmpeg_utils::{
+    create_av_frame, encoded_chunk_from_av_packet, merge_options_with_defaults,
 };
+use crate::prelude::*;
 
 use super::{VideoEncoder, VideoEncoderConfig};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Options {
-    pub resolution: Resolution,
-    pub raw_options: Vec<(String, String)>,
-}
+const TIME_BASE: i32 = 1_000_000;
 
 pub struct FfmpegVp8Encoder {
     encoder: ffmpeg_next::encoder::Video,
-    packet: Packet,
-    resolution: Resolution,
+    packet: ffmpeg_next::Packet,
 }
 
 impl VideoEncoder for FfmpegVp8Encoder {
     const LABEL: &'static str = "FFmpeg VP8 encoder";
 
-    type Options = Options;
+    type Options = FfmpegVp8EncoderOptions;
 
     fn new(
         ctx: &Arc<PipelineCtx>,
@@ -44,8 +36,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
 
         let mut encoder = Context::new().encoder().video()?;
 
-        // We set this to 1 / 1_000_000, bc we use `as_micros` to convert frames to AV packets.
-        let pts_unit_secs = Rational::new(1, 1_000_000);
+        let pts_unit_secs = Rational::new(1, TIME_BASE);
         let framerate = ctx.output_framerate;
         encoder.set_time_base(pts_unit_secs);
         encoder.set_format(Pixel::YUV420P);
@@ -78,8 +69,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
         Ok((
             Self {
                 encoder,
-                packet: Packet::empty(),
-                resolution: options.resolution,
+                packet: ffmpeg_next::Packet::empty(),
             },
             VideoEncoderConfig {
                 resolution: options.resolution,
@@ -89,19 +79,14 @@ impl VideoEncoder for FfmpegVp8Encoder {
         ))
     }
 
-    fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedChunk> {
-        let mut av_frame = frame::Video::new(
-            Pixel::YUV420P,
-            self.resolution.width as u32,
-            self.resolution.height as u32,
-        );
-
-        if let Err(e) = frame_into_av(frame, &mut av_frame) {
-            error!(
-                "Failed to convert a frame to an ffmpeg frame: {}. Dropping",
-                e.0
-            );
-        }
+    fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedOutputChunk> {
+        let mut av_frame = match create_av_frame(frame, TIME_BASE) {
+            Ok(av_frame) => av_frame,
+            Err(e) => {
+                error!("{e}. Dropping frame.");
+                return Vec::new();
+            }
+        };
 
         if force_keyframe {
             av_frame.set_kind(ffmpeg_next::picture::Type::I);
@@ -114,7 +99,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
         self.read_all_chunks()
     }
 
-    fn flush(&mut self) -> Vec<EncodedChunk> {
+    fn flush(&mut self) -> Vec<EncodedOutputChunk> {
         if let Err(e) = self.encoder.send_eof() {
             error!("Failed to enter draining mode on encoder: {e}.");
         }
@@ -123,14 +108,14 @@ impl VideoEncoder for FfmpegVp8Encoder {
 }
 
 impl FfmpegVp8Encoder {
-    fn read_all_chunks(&mut self) -> Vec<EncodedChunk> {
+    fn read_all_chunks(&mut self) -> Vec<EncodedOutputChunk> {
         iter::from_fn(|| {
             match self.encoder.receive_packet(&mut self.packet) {
                 Ok(_) => {
                     match encoded_chunk_from_av_packet(
                         &self.packet,
-                        EncodedChunkKind::Video(VideoCodec::Vp9),
-                        1_000_000,
+                        MediaKind::Video(VideoCodec::Vp9),
+                        TIME_BASE,
                     ) {
                         Ok(chunk) => {
                             trace!(pts=?self.packet.pts(), ?chunk, "VP8 encoder produced an encoded packet.");
@@ -156,105 +141,4 @@ impl FfmpegVp8Encoder {
             }
         }).collect()
     }
-}
-
-#[derive(Debug)]
-struct FrameConversionError(String);
-
-fn frame_into_av(frame: Frame, av_frame: &mut frame::Video) -> Result<(), FrameConversionError> {
-    let FrameData::PlanarYuv420(data) = frame.data else {
-        return Err(FrameConversionError(format!(
-            "Unsupported pixel format {:?}",
-            frame.data
-        )));
-    };
-    let expected_y_plane_size = (av_frame.plane_width(0) * av_frame.plane_height(0)) as usize;
-    let expected_u_plane_size = (av_frame.plane_width(1) * av_frame.plane_height(1)) as usize;
-    let expected_v_plane_size = (av_frame.plane_width(2) * av_frame.plane_height(2)) as usize;
-    if expected_y_plane_size != data.y_plane.len() {
-        return Err(FrameConversionError(format!(
-            "Y plane is a wrong size, expected: {} received: {}",
-            expected_y_plane_size,
-            data.y_plane.len()
-        )));
-    }
-    if expected_u_plane_size != data.u_plane.len() {
-        return Err(FrameConversionError(format!(
-            "U plane is a wrong size, expected: {} received: {}",
-            expected_u_plane_size,
-            data.u_plane.len()
-        )));
-    }
-    if expected_v_plane_size != data.v_plane.len() {
-        return Err(FrameConversionError(format!(
-            "V plane is a wrong size, expected: {} received: {}",
-            expected_v_plane_size,
-            data.v_plane.len()
-        )));
-    }
-
-    av_frame.set_pts(Some(frame.pts.as_micros() as i64));
-
-    write_plane_to_av(av_frame, 0, &data.y_plane);
-    write_plane_to_av(av_frame, 1, &data.u_plane);
-    write_plane_to_av(av_frame, 2, &data.v_plane);
-
-    Ok(())
-}
-
-fn write_plane_to_av(frame: &mut frame::Video, plane: usize, data: &[u8]) {
-    let stride = frame.stride(plane);
-    let width = frame.plane_width(plane) as usize;
-
-    data.chunks(width)
-        .zip(frame.data_mut(plane).chunks_mut(stride))
-        .for_each(|(data, target)| target[..width].copy_from_slice(data));
-}
-
-fn merge_options_with_defaults<'a>(
-    defaults: &'a [(&str, &str)],
-    overrides: &'a [(String, String)],
-) -> impl Iterator<Item = (&'a str, &'a str)> {
-    defaults
-        .iter()
-        .copied()
-        .filter(|(key, _value)| {
-            // filter out any defaults that are in overrides
-            !overrides
-                .iter()
-                .any(|(override_key, _)| key == override_key)
-        })
-        .chain(
-            overrides
-                .iter()
-                .map(|(key, value)| (key.as_str(), value.as_str())),
-        )
-}
-
-fn encoded_chunk_from_av_packet(
-    value: &ffmpeg_next::Packet,
-    kind: EncodedChunkKind,
-    timescale: i64,
-) -> Result<EncodedChunk, ChunkFromFfmpegError> {
-    let data = match value.data() {
-        Some(data) => bytes::Bytes::copy_from_slice(data),
-        None => return Err(ChunkFromFfmpegError::NoData),
-    };
-
-    let rescale = |v: i64| Duration::from_secs_f64((v as f64) * (1.0 / timescale as f64));
-
-    Ok(EncodedChunk {
-        data,
-        pts: value
-            .pts()
-            .map(rescale)
-            .ok_or(ChunkFromFfmpegError::NoPts)?,
-        dts: value.dts().map(rescale),
-        is_keyframe: if value.flags().contains(ffmpeg_next::packet::Flags::KEY) {
-            IsKeyframe::Yes
-        } else {
-            IsKeyframe::No
-        },
-        kind,
-    })
 }

@@ -5,13 +5,10 @@ use crossbeam_channel::Sender;
 use tracing::warn;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 
+use crate::prelude::*;
 use crate::{
-    audio_mixer::InputSamples,
-    pipeline::{
-        decoder::VideoDecoderOptions,
-        webrtc::{error::WhipServerError, peer_connection_recvonly::RecvonlyPeerConnection},
-    },
-    queue::PipelineEvent,
+    codecs::VideoDecoderOptions,
+    pipeline::webrtc::{error::WhipServerError, peer_connection_recvonly::RecvonlyPeerConnection},
 };
 
 #[derive(Debug, Clone)]
@@ -19,7 +16,7 @@ pub(crate) struct WhipInputConnectionStateOptions {
     pub bearer_token: Arc<str>,
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
-    pub input_samples_sender: Sender<PipelineEvent<InputSamples>>,
+    pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
 }
 
 #[derive(Debug, Clone)]
@@ -28,7 +25,7 @@ pub(crate) struct WhipInputConnectionState {
     pub peer_connection: Option<RecvonlyPeerConnection>,
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
-    pub input_samples_sender: Sender<PipelineEvent<InputSamples>>,
+    pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
 }
 
 impl WhipInputConnectionState {
