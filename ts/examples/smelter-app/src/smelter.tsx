@@ -1,53 +1,125 @@
+import type { StoreApi } from 'zustand';
 import Smelter from '@swmansion/smelter-node';
-import App from './App';
-import { sleep, spawn } from './utils';
 
-export const SmelterInstance = new Smelter();
+import App from './app/App';
+import type { RoomStore } from './app/store';
+import { createRoomStore } from './app/store';
+import { config } from './config';
 
-export async function initializeSmelterInstance() {
-  await SmelterInstance.init();
+export type SmelterOutput = {
+  id: string;
+  url: string;
+  store: StoreApi<RoomStore>;
+};
 
-  if (process.env.ENVIRONMENT !== 'production') {
-    void spawn(
-      'bash',
-      [
-        '-c',
-        'docker run -e UDP_MUX_PORT=8080  -e NETWORK_TEST_ON_START=false  -e NAT_1_TO_1_IP=127.0.0.1 -p 8080:8080 -p 8080:8080/udp  seaduboi/broadcast-box',
-      ],
-      {}
-    );
+export type RegisterSmelterInputOptions =
+  | {
+      type: 'mp4';
+      filePath: string;
+    }
+  | {
+      type: 'hls';
+      url: string;
+    };
+
+// TODO: optional based on env
+const DECODER_MAP = {
+  h264: config.h264Decoder,
+} as const;
+
+export class SmelterManager {
+  private instance: Smelter;
+
+  constructor() {
+    this.instance = new Smelter();
   }
 
-  while (true) {
-    await sleep(500);
+  public async init() {
+    await SmelterInstance['instance'].init();
+    await SmelterInstance['instance'].start();
+  }
+
+  public async registerOutput(roomId: string): Promise<SmelterOutput> {
+    let store = createRoomStore();
+    await this.instance.registerOutput(roomId, <App store={store} />, {
+      type: 'whep',
+      video: {
+        encoder: {
+          type: 'ffmpeg_h264',
+          preset: 'ultrafast',
+        },
+        resolution: {
+          width: 1920,
+          height: 1080,
+        },
+      },
+      audio: {
+        encoder: {
+          type: 'opus',
+        },
+      },
+    });
+
+    return { id: roomId, url: `${config.whepBaseUrl}/${encodeURIComponent(roomId)}`, store };
+  }
+
+  public async unregisterOutput(roomId: string): Promise<void> {
     try {
-      const result = await fetch('http://127.0.0.1:8080/api/status');
-      console.log(`connecting to broadcaster /api/status (response: ${await result.text()})`);
-      if (result.ok) {
-        break;
+      await this.instance.unregisterOutput(roomId);
+    } catch (err: any) {
+      if (err.body?.error_code === 'OUTPUT_STREAM_NOT_FOUND') {
+        console.log(roomId, 'Output already removed');
+        return;
       }
-    } catch (err) {
-      console.log(`connecting to broadcast /api/status err (response: ${err})`);
+      console.log(err.body, err);
+      throw err;
     }
   }
 
-  await SmelterInstance.registerOutput('output_1', <App />, {
-    type: 'whip',
-    endpointUrl: 'http://127.0.0.1:8080/api/whip',
-    bearerToken: 'example',
-    video: {
-      encoderPreferences: [
-        {
-          type: 'ffmpeg_vp9',
-        },
-      ],
-      resolution: {
-        width: 1920,
-        height: 1080,
-      },
-    },
-    audio: true,
-  });
+  public async registerInput(inputId: string, opts: RegisterSmelterInputOptions): Promise<void> {
+    try {
+      if (opts.type === 'mp4') {
+        await this.instance.registerInput(inputId, {
+          type: 'mp4',
+          serverPath: opts.filePath,
+          decoderMap: DECODER_MAP,
+        });
+      } else if (opts.type === 'hls') {
+        await this.instance.registerInput(inputId, {
+          type: 'hls',
+          url: opts.url,
+          decoderMap: DECODER_MAP,
+        });
+      }
+    } catch (err: any) {
+      if (err.body?.error_code === 'INPUT_STREAM_ALREADY_REGISTERED') {
+        throw new Error('already registered');
+      }
+      try {
+        // try to unregister in case it worked
+        await this.instance.unregisterInput(inputId);
+      } catch (err: any) {
+        if (err.body?.error_code === 'INPUT_STREAM_NOT_FOUND') {
+          return;
+        }
+      }
+      console.log(err.body, err);
+      throw err;
+    }
+  }
 
-  await SmelterInstance.start();
+  public async unregisterInput(inputId: string): Promise<void> {
+    try {
+      await this.instance.unregisterInput(inputId);
+    } catch (err: any) {
+      if (err.body?.error_code === 'INPUT_STREAM_NOT_FOUND') {
+        console.log(inputId, 'Input already removed');
+        return;
+      }
+      console.log(err.body, err);
+      throw err;
+    }
+  }
 }
+
+export const SmelterInstance = new SmelterManager();
