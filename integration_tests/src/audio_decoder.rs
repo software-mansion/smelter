@@ -10,6 +10,19 @@ pub struct AudioSampleBatch {
     pub pts: Duration,
 }
 
+pub struct FFTAudioSampleBatch {
+    pub samples: Vec<f32>,
+    pub pts: Duration,
+}
+
+impl From<AudioSampleBatch> for FFTAudioSampleBatch {
+    fn from(batch: AudioSampleBatch) -> Self {
+        let pts = batch.pts;
+        let samples = batch.samples.into_iter().map(|s| s as f32).collect();
+        Self { samples, pts }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum AudioChannels {
     Mono,

@@ -107,8 +107,45 @@ impl Default for VideoValidationConfig {
     }
 }
 
+pub struct SamplingInterval {
+    pub pts: Duration,
+    pub samples: usize,
+}
+
+impl SamplingInterval {
+    pub fn from_range(
+        time_range: Range<Duration>,
+        sample_rate: u32,
+        samples_per_batch: usize,
+    ) -> Vec<Self> {
+        let start_pts = time_range.start;
+        let end_pts = time_range.end;
+        if end_pts < start_pts {
+            return vec![];
+        }
+
+        let time_per_batch = Duration::from_secs_f64(samples_per_batch as f64 / sample_rate as f64);
+
+        let mut intervals = vec![];
+        let mut n: u32 = 0;
+        loop {
+            let next_pts = start_pts + n * time_per_batch;
+            if next_pts >= end_pts {
+                break;
+            }
+            let next_interval = SamplingInterval {
+                pts: next_pts,
+                samples: samples_per_batch,
+            };
+            intervals.push(next_interval);
+            n += 1;
+        }
+        intervals
+    }
+}
+
 pub struct AudioValidationConfig {
-    pub sampling_intervals: Vec<Range<Duration>>,
+    pub sampling_intervals: Vec<SamplingInterval>,
     pub allowed_error: f32,
     pub channels: AudioChannels,
     pub sample_rate: u32,
@@ -116,8 +153,12 @@ pub struct AudioValidationConfig {
 
 impl Default for AudioValidationConfig {
     fn default() -> Self {
+        let default_interval = SamplingInterval {
+            pts: Duration::from_millis(0),
+            samples: 4096,
+        };
         Self {
-            sampling_intervals: vec![Duration::from_secs(0)..Duration::from_secs(1)],
+            sampling_intervals: vec![default_interval],
             allowed_error: 4.0,
             channels: AudioChannels::Stereo,
             sample_rate: 48000,
