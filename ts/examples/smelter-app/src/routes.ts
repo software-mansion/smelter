@@ -1,81 +1,71 @@
-import type { Express } from 'express';
-import express, { json } from 'express';
 import { LayoutValues, store } from './store';
 import { SmelterInstance } from './smelter';
-import { SMELTER_WORKDIR } from './manageHlsToHlsStreams';
 import path from 'path';
+import Fastify from 'fastify';
+import type { Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
+import { spawn } from './utils';
 
-export const app: Express = express();
+export const RequestWithStreamId = Type.Object({
+  streamId: Type.String(),
+});
 
-app.use(json());
-app.use((err: Error, _req: any, res: any, _next: any) => {
-  console.error(err.stack);
-  if ((err as any).body) {
-    console.log((err as any).body);
+export const app = Fastify({
+  logger: true,
+});
+
+app.post<{ Body: Static<typeof RequestWithStreamId> }>(
+  '/add-stream',
+  { schema: { body: RequestWithStreamId } },
+  async (req, res) => {
+    await connectStream(req.body.streamId);
+    res.status(200).send({ status: 'ok' });
   }
-  res.status(500).send({ msg: err.message, stack: err.stack });
-});
+);
 
-app.post('/add-stream', (req, res, next) => {
-  connectStream(req.body.streamId)
-    .then(() => res.send({}))
-    .catch(err => next(err));
-});
-
-app.post('/remove-stream', (req, res, next) => {
-  (async () => {
-    const streamId: string = req.body.streamId;
-    store.getState().removeStream(streamId);
-    try {
-      await SmelterInstance.unregisterInput(streamId);
-    } catch (err: any) {
-      if (err.body?.error_code !== 'INPUT_STREAM_NOT_FOUND') {
-        throw err;
-      }
+app.post<{ Body: Static<typeof RequestWithStreamId> }>('/remove-stream', async (req, res) => {
+  const streamId: string = req.body.streamId;
+  store.getState().removeStream(streamId);
+  try {
+    await SmelterInstance.unregisterInput(streamId);
+  } catch (err: any) {
+    if (err.body?.error_code !== 'INPUT_STREAM_NOT_FOUND') {
+      throw err;
     }
-  })()
-    .then(() => res.send({}))
-    .catch(err => next(err));
+  }
+  res.status(200).send({ status: 'ok' });
 });
 
-app.post('/select-audio', (req, res, next) => {
-  (async () => {
-    const streamId = req.body.streamId;
-    store.getState().selectAudioStream(streamId);
-  })()
-    .then(() => res.send({}))
-    .catch(err => next(err));
+app.post<{ Body: Static<typeof RequestWithStreamId> }>('/select-audio', async (req, res) => {
+  const streamId = req.body.streamId;
+  store.getState().selectAudioStream(streamId);
+  res.status(200).send({ status: 'ok' });
 });
 
-app.post('/update-layout', (req, res, next) => {
-  (async () => {
-    const layout = req.body.layout;
-    if (!LayoutValues.includes(layout)) {
-      throw new Error(`Unknown layout ${layout}`);
-    }
-    store.getState().setLayout(layout);
-  })()
-    .then(() => res.send({}))
-    .catch(err => next(err));
+export const UpdateLayout = Type.Object({
+  layout: Type.Union([Type.Literal('grid'), Type.Literal('primary-on-left')]),
 });
 
-app.get('/state', async (_req, res, next) => {
-  (async () => {
-    const state = store.getState();
-    return {
-      availableStreams: state.availableStreams.filter(
-        stream =>
-          stream.localHlsReady ||
-          state.connectedStreamIds.includes(stream.id) ||
-          stream.type === 'static'
-      ),
-      connectedStreamIds: state.connectedStreamIds,
-      audioStreamId: state.audioStreamId,
-      layout: state.layout,
-    };
-  })()
-    .then(result => res.send(result))
-    .catch(err => next(err));
+app.post<{ Body: Static<typeof UpdateLayout> }>('/update-layout', async (req, res) => {
+  const layout = req.body.layout;
+  if (!LayoutValues.includes(layout)) {
+    throw new Error(`Unknown layout ${layout}`);
+  }
+  store.getState().setLayout(layout);
+  res.status(200).send({ status: 'ok' });
+});
+
+app.get('/state', async (_req, res) => {
+  const state = store.getState();
+  res.status(200).send({
+    availableStreams: state.availableStreams.filter(
+      stream =>
+        stream.live || state.connectedStreamIds.includes(stream.id) || stream.type === 'static'
+    ),
+    connectedStreamIds: state.connectedStreamIds,
+    audioStreamId: state.audioStreamId,
+    layout: state.layout,
+  });
 });
 
 async function connectStream(streamId: string): Promise<void> {
@@ -91,7 +81,7 @@ async function connectStream(streamId: string): Promise<void> {
         type: 'mp4',
         serverPath: path.join(process.cwd(), `${streamId}.mp4`),
         loop: true,
-        videoDecoder: 'vulkan_h264'
+        videoDecoder: 'vulkan_h264',
       });
       state.addStream(streamId);
     } catch (err: any) {
@@ -102,18 +92,19 @@ async function connectStream(streamId: string): Promise<void> {
       throw err;
     }
   } else {
-    try {
-      await SmelterInstance.registerInput(streamId, {
-        type: 'hls',
-        url: path.join(SMELTER_WORKDIR, streamId, 'index.m3u8'),
-      });
-      state.addStream(streamId);
-    } catch (err: any) {
-      if (err.body?.error_code === 'INPUT_STREAM_ALREADY_REGISTERED') {
-        state.addStream(streamId);
+    const streamlinkOutput = await spawn(
+      'streamlink',
+      ['--stream-url', `https://www.twitch.tv/${streamId}`, '720p,720p60,best'],
+      {
+        stdio: 'pipe',
       }
-      console.log(err.body, err);
-      throw err;
-    }
+    );
+    const hlsPlaylistUrl = streamlinkOutput.stdout.trim();
+    console.log({ hlsPlaylistUrl });
+    await SmelterInstance.registerInput(streamId, {
+      type: 'hls',
+      url: hlsPlaylistUrl,
+    });
+    state.addStream(streamId);
   }
 }
