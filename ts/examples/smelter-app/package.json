@@ -11,6 +11,7 @@
     "watch": "tsc --watch"
   },
   "dependencies": {
+    "@fastify/type-provider-typebox": "^5.2.0",
     "@sinclair/typebox": "^0.34.38",
     "@swmansion/smelter": "workspace:^0.2.1",
     "@swmansion/smelter-node": "workspace:^0.2.1",
@@ -18,11 +19,13 @@
     "fastify": "^5.4.0",
     "fs-extra": "^11.2.0",
     "react": "18.3.1",
+    "uuid": "^10.0.0",
     "zustand": "4.5.5"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
     "@types/react": "^18.3.3",
+    "@types/uuid": "^10.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.3"
   }

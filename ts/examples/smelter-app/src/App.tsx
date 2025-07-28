@@ -1,6 +1,6 @@
 import { Text, View, InputStream, Tiles, Rescaler, useInputStreams } from '@swmansion/smelter';
 
-import type { StreamInfo } from './store';
+import type { InputOptions } from './store';
 import { store } from './store';
 import { useStore } from 'zustand';
 
@@ -8,7 +8,7 @@ export default function App() {
   return <OutputScene />;
 }
 
-function useVisibleStreams(): StreamInfo[] {
+function useVisibleStreams(): InputOptions[] {
   const state = useStore(store, state => state);
   const inputs = useInputStreams();
 

@@ -73,7 +73,7 @@ async function getTopStreams(categoryId: string): Promise<TwitchStreamInfo[]> {
 async function refreshStreamInfo(streamId: string): Promise<void> {
   let result = await getStreamInfo(streamId);
   if (result) {
-    store.getState().updateStreamInfo(result);
+    store.getState().updateInput(result);
   } else {
     store.getState().markStreamOffline(streamId);
   }

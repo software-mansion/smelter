@@ -1,6 +1,8 @@
 import Smelter from '@swmansion/smelter-node';
 import App from './App';
 import { sleep, spawn } from './utils';
+import type { StoreApi } from 'zustand';
+import type { RoomStore } from './store';
 
 export const SmelterInstance = new Smelter();
 
@@ -50,4 +52,28 @@ export async function initializeSmelterInstance() {
   });
 
   await SmelterInstance.start();
+}
+
+export class SmelterManager {
+  private instance: Smelter;
+
+  constructor() {
+    this.instance = new Smelter();
+  }
+
+  public async startNewOutput(roomId: string, store: StoreApi<RoomStore>): Promise<SmelterOutput> {
+
+  }
+}
+
+export class SmelterOutput {
+  private instance: Smelter;
+  public readonly url: string;
+
+  constructor(instance: Smelter, url: string) {
+    this.instance = instance;
+    this.url = url;
+  }
+
+  public async registerInput();
 }

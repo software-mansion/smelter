@@ -34,10 +34,12 @@ export async function getTopStreamsFromCategory(
   return top5UsersLogins;
 }
 
-export async function getStreamInfo(streamId: string): Promise<TwitchStreamInfo | undefined> {
+export async function getStreamInfo(
+  twitchChannelId: string
+): Promise<TwitchStreamInfo | undefined> {
   const { token, clientId } = await getTwitchAccessToken();
   const response = await fetch(
-    `https://api.twitch.tv/helix/streams?user_login=${encodeURIComponent(streamId)}`,
+    `https://api.twitch.tv/helix/streams?user_login=${encodeURIComponent(twitchChannelId)}`,
     {
       headers: {
         'Client-ID': clientId,
@@ -46,14 +48,14 @@ export async function getStreamInfo(streamId: string): Promise<TwitchStreamInfo 
     }
   );
   if (!response.ok) {
-    throw new Error(`Failed to get stream status for ${streamId}: ${await response.text()}`);
+    throw new Error(`Failed to get stream status for ${twitchChannelId}: ${await response.text()}`);
   }
   const data = await response.json();
   const stream = data.data ? data.data[0] : null;
 
   return stream
     ? {
-        streamId,
+        streamId: twitchChannelId,
         displayName: stream.user_name ?? '',
         title: stream.title ?? stream?.user_name ?? '',
         category: stream.game_name ?? '',

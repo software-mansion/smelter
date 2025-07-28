@@ -10,63 +10,39 @@ export const RequestWithStreamId = Type.Object({
   streamId: Type.String(),
 });
 
+type RoomIdParams = { Params: { roomId: string } };
+type RoomAndInputIdParams = { Params: { roomId: string; inputId: string } };
+
 export const app = Fastify({
   logger: true,
+}).withTypeProvider<TypeBoxTypeProvider>();
+
+app.put('/room', async (_req, res) => {
+  const { roomId, room } = await state.createRoom();
+  res.status(200).send({ roomId, whepUrl: room.getWhepUrl() });
 });
 
-app.post<{ Body: Static<typeof RequestWithStreamId> }>(
+app.get<RoomIdParams>('/room/:roomId', async (req, res) => {
+  const { roomId } = req.params;
+  const room = state.getRoom(roomId);
+  res.status(200).send({ inputs: room.getState(), whepUrl: room.getWhepUrl() });
+});
+
+app.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/connect', async (req, res) => {
+  const room = state.getRoom(req.params.roomId);
+  room.connect();
+
+  await connectStream(req.body.streamId);
+});
+
+app.post<{ Body: Static<typeof StreamAndRoomId> }>(
   '/add-stream',
-  { schema: { body: RequestWithStreamId } },
+  { schema: { body: StreamAndRoomId } },
   async (req, res) => {
     await connectStream(req.body.streamId);
     res.status(200).send({ status: 'ok' });
   }
 );
-
-app.post<{ Body: Static<typeof RequestWithStreamId> }>('/remove-stream', async (req, res) => {
-  const streamId: string = req.body.streamId;
-  store.getState().removeStream(streamId);
-  try {
-    await SmelterInstance.unregisterInput(streamId);
-  } catch (err: any) {
-    if (err.body?.error_code !== 'INPUT_STREAM_NOT_FOUND') {
-      throw err;
-    }
-  }
-  res.status(200).send({ status: 'ok' });
-});
-
-app.post<{ Body: Static<typeof RequestWithStreamId> }>('/select-audio', async (req, res) => {
-  const streamId = req.body.streamId;
-  store.getState().selectAudioStream(streamId);
-  res.status(200).send({ status: 'ok' });
-});
-
-export const UpdateLayout = Type.Object({
-  layout: Type.Union([Type.Literal('grid'), Type.Literal('primary-on-left')]),
-});
-
-app.post<{ Body: Static<typeof UpdateLayout> }>('/update-layout', async (req, res) => {
-  const layout = req.body.layout;
-  if (!LayoutValues.includes(layout)) {
-    throw new Error(`Unknown layout ${layout}`);
-  }
-  store.getState().setLayout(layout);
-  res.status(200).send({ status: 'ok' });
-});
-
-app.get('/state', async (_req, res) => {
-  const state = store.getState();
-  res.status(200).send({
-    availableStreams: state.availableStreams.filter(
-      stream =>
-        stream.live || state.connectedStreamIds.includes(stream.id) || stream.type === 'static'
-    ),
-    connectedStreamIds: state.connectedStreamIds,
-    audioStreamId: state.audioStreamId,
-    layout: state.layout,
-  });
-});
 
 async function connectStream(streamId: string): Promise<void> {
   let state = store.getState();
@@ -81,7 +57,6 @@ async function connectStream(streamId: string): Promise<void> {
         type: 'mp4',
         serverPath: path.join(process.cwd(), `${streamId}.mp4`),
         loop: true,
-        videoDecoder: 'vulkan_h264',
       });
       state.addStream(streamId);
     } catch (err: any) {
