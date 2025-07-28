@@ -6,6 +6,11 @@ import type { Logger } from 'pino';
 import * as z from 'zod';
 import { clipJobsTable } from '../db/schema';
 
+const postClipJobPayloadSchema = z.object({
+  name: z.string().nonempty(),
+  duration: z.coerce.number().min(30).default(30),
+});
+
 export class ClipController {
   constructor(
     private readonly db: LibSQLDatabase,
@@ -48,20 +53,36 @@ export class ClipController {
       });
     }
 
-    const { status } = job;
+    const { name, status } = job;
 
     res.status(200).json({
-      id: id,
-      status: status,
+      id,
+      name,
+      status,
     });
   }
 
-  async postClipJob(_: Request, res: Response): Promise<void> {
+  async postClipJob(req: Request, res: Response): Promise<void> {
+    const {
+      success: isBodyValid,
+      data: body,
+      error,
+    } = await postClipJobPayloadSchema.safeParseAsync(req.body);
+
+    if (!isBodyValid) {
+      this.logger.debug(error, 'Invalid request body');
+      return void res.status(400).contentType('application/problem+json').json({
+        type: 'bad-request',
+        message: 'Invalid request body',
+      });
+    }
+
     const [insertedJob] = await this.db
       .insert(clipJobsTable)
       .values({
+        name: body.name,
         clipTimestamp: new Date().getTime(),
-        duration: 30 * 1000,
+        duration: body.duration * 1000,
       })
       .returning();
 
@@ -69,14 +90,15 @@ export class ClipController {
       this.logger.error('Inserted job not returned.');
       return void res.status(500).contentType('application/problem+json').json({
         type: 'internal',
-        message: 'Internal server error.',
+        message: 'Internal server error',
       });
     }
 
-    const { id, status } = insertedJob;
+    const { id, name, status } = insertedJob;
 
     res.status(201).json({
       id,
+      name,
       status,
     });
   }

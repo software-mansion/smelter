@@ -1,23 +1,37 @@
-### Start the server
+## Running in development
+
+### 1. Generating localhost certificates
+
+To run https locally you need to generate self-signed certificates. This can be done with [mkcert](https://github.com/FiloSottile/mkcert).
 
 ```
-pnpm run dev
+mkdir .certs && mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1
 ```
 
-### Update DB schema
+### 2. Pushing libSQL database schema
+
+Clipper stores processed clip requests in local libSQL database. To initialize the DB run
 
 ```
 pnpm drizzle-kit push
 ```
 
-### Generating localhost certificate
+You can manage your database schema with drizzle-kit studio.
 
 ```
-mkcert localhost
+pnpm drizzle-kit studio
 ```
 
-### Running Broadcast Box
+### 3. Prepare output directories
+
+Clipper needs to know where to store output HLS stream and created clips. For dev environment, you can create `.tmp` folder with `hls` and `clips` folders inside.
 
 ```
-docker run -e UDP_MUX_PORT=8080 -e NETWORK_TEST_ON_START=false -e NAT_1_TO_1_IP=127.0.0.1 -p 8080:8080 -p 8080:8080/udp -d seaduboi/broadcast-box
+mkdir -p .tmp/hls .tmp/clips
+```
+
+### 4. Start the server
+
+```
+pnpm run dev
 ```

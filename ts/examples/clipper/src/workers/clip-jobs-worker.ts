@@ -2,25 +2,26 @@ import { eq } from 'drizzle-orm';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import { spawn } from 'node:child_process';
 import { setTimeout } from 'node:timers/promises';
-import { tmpdir } from 'os';
 import path from 'path';
 import type { Logger } from 'pino';
 import { v4 as uuid } from 'uuid';
 import { clipJobsTable } from '../db/schema';
 import type { ClipJob } from '../entities/job';
 import type { SmelterInstance } from '../smelter/smelter';
+import slugify from 'slugify';
+
+type ClipJobsWorkerConfig = {
+  clipsOutDir: string;
+};
 
 /** Worker responsible for processing clip jobs. */
 export class ClipJobsWorker {
-  private readonly outDir: string;
-
   constructor(
     private readonly db: LibSQLDatabase,
     private readonly smelterInstance: SmelterInstance,
-    private readonly logger: Logger
-  ) {
-    this.outDir = path.join(tmpdir(), '.clipper', 'clips');
-  }
+    private readonly logger: Logger,
+    private readonly config: ClipJobsWorkerConfig
+  ) {}
 
   async run() {
     while (true) {
@@ -57,12 +58,12 @@ export class ClipJobsWorker {
 
   /** Processes the clip job and returns output .mp4 clip location. */
   private async process(job: ClipJob): Promise<string> {
-    const clipOutputFile = path.join(this.outDir, `${uuid()}.mp4`);
+    const clipOutputFile = path.join(this.config.clipsOutDir, `${slugify(job.name)}-${uuid()}.mp4`);
 
     const durationTimestamp = this.formatFFmpegTimestamp(job.duration);
     const positionTimestamp = this.formatFFmpegTimestamp(
       Math.max(
-        job.clipTimestamp - this.smelterInstance.egressStartDate!.getTime() - job.duration,
+        job.clipTimestamp - this.smelterInstance.streamStartDate!.getTime() - job.duration,
         0
       )
     );
@@ -84,8 +85,8 @@ export class ClipJobsWorker {
         }
       );
 
-      ffmpeg.stdout.on('data', data => this.logger.debug(`[ffmpeg stdout]\n${data}`));
-      ffmpeg.stderr.on('data', data => this.logger.debug(`[ffmpeg stderr]\n${data}`));
+      ffmpeg.stdout.on('data', data => this.logger.debug(`[ffmpeg stdout] ${data}`));
+      ffmpeg.stderr.on('data', data => this.logger.debug(`[ffmpeg stderr] ${data}`));
 
       ffmpeg.on('exit', code => {
         if (code != 0) {

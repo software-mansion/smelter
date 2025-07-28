@@ -9,6 +9,7 @@ import { loadConfig } from './config';
 import { ClipController } from './controllers/clip.controller';
 import { SmelterInstance } from './smelter/smelter';
 import { ClipJobsWorker } from './workers/clip-jobs-worker';
+import { Router } from 'express';
 
 async function main() {
   const logger = pino({
@@ -19,9 +20,11 @@ async function main() {
   const app = express();
   const db = drizzle(config.dbFileName);
 
-  const smelterInstance = new SmelterInstance({ playlistFileName: 'playlist.m3u8' });
+  const smelterInstance = new SmelterInstance({ hlsOutDir: config.hlsOutDir });
   const clipController = new ClipController(db, logger);
-  const clipJobsWorker = new ClipJobsWorker(db, smelterInstance, logger);
+  const clipJobsWorker = new ClipJobsWorker(db, smelterInstance, logger, {
+    clipsOutDir: config.clipsOutDir,
+  });
 
   await smelterInstance.run();
   void clipJobsWorker.run();
@@ -29,7 +32,10 @@ async function main() {
   app.use(pinoHttp());
   app.use(json());
 
-  app.use('/clip', clipController.router());
+  const api = Router();
+  api.use('/clips', clipController.router());
+
+  app.use('/api/v1', api);
   app.get('/ping', (_, res) => void res.json({ message: 'pong' }));
 
   app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
