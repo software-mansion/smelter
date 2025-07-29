@@ -1,0 +1,95 @@
+:root {
+  --black: #000;
+  --white: #fff;
+  --primary: oklch(62.3% 0.214 259.815);
+  --secondary: oklch(92.9% 0.013 255.508);
+  --text: oklch(20.8% 0.042 265.755);
+  --text-dimmed: oklch(55.4% 0.046 257.417);
+  --lift: oklch(96.8% 0.007 247.896);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-size: 16px;
+  font-family: 'Geist', sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+}
+
+html {
+  color: var(--text);
+}
+
+button {
+  border: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.video {
+  width: 100%;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  width: min(960px, 100vw);
+  margin: auto;
+  padding: 32px;
+}
+
+.header {
+  font-weight: 500;
+}
+
+.clips-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.clip-list-header {
+  color: var(--text-dimmed);
+}
+
+.clip-list-col {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+}
+
+.clip-list-col:nth-child(1) {
+  flex: 1;
+}
+
+.clip-list-col:nth-child(2) {
+  width: 200px;
+}
+
+.clip-list-row {
+  display: flex;
+  border-radius: 8px;
+}
+
+.clip-list-row:hover {
+  background: var(--lift);
+}
+
+.clip-item-action {
+  background: oklch(62.3% 0.214 259.815);
+  padding: 6px 16px;
+  text-decoration: none;
+  font-size: 12px;
+  border-radius: 6px;
+  color: oklch(100% 0 0);
+}
+
+.clip-item-action[disabled] {
+  color: var(--text-dimmed);
+  background: var(--secondary);
+}
