@@ -107,6 +107,7 @@ impl Default for VideoValidationConfig {
     }
 }
 
+#[derive(Debug)]
 pub struct SamplingInterval {
     pub pts: Duration,
     pub samples: usize,
@@ -141,6 +142,21 @@ impl SamplingInterval {
             n += 1;
         }
         intervals
+    }
+}
+
+// TODO: Remove this before PR
+#[cfg(test)]
+mod interval_calculation_test {
+    use std::time::Duration;
+
+    use crate::SamplingInterval;
+
+    #[test]
+    fn interval_calc_test() {
+        let range = Duration::from_millis(0)..Duration::from_millis(2000);
+        let intervals = SamplingInterval::from_range(range, 48000, 4096);
+        println!("{:#?}", intervals);
     }
 }
 
