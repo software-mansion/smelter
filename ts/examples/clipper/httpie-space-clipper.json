@@ -25,7 +25,36 @@
         },
         "requests": [
           {
-            "name": "Get clip status",
+            "name": "Get clips",
+            "url": "https://localhost:3000/api/v1/clips",
+            "method": "GET",
+            "headers": [],
+            "queryParams": [],
+            "pathParams": [],
+            "auth": {
+              "type": "inherited"
+            },
+            "body": {
+              "type": "none",
+              "file": {
+                "name": ""
+              },
+              "text": {
+                "value": "",
+                "format": "application/json"
+              },
+              "form": {
+                "isMultipart": false,
+                "fields": []
+              },
+              "graphql": {
+                "query": "",
+                "variables": ""
+              }
+            }
+          },
+          {
+            "name": "Get clip",
             "url": "https://localhost:3000/api/v1/clips/8",
             "method": "GET",
             "headers": [],
@@ -54,7 +83,7 @@
             }
           },
           {
-            "name": "Post new clip",
+            "name": "Post clip",
             "url": "https://localhost:3000/api/v1/clips",
             "method": "POST",
             "headers": [],
@@ -69,7 +98,7 @@
                 "name": ""
               },
               "text": {
-                "value": "{\n  \"name\": \"What a clip!\",\n  \"duration\": 45\n}",
+                "value": "{\n  \"name\": \"asldjsalkdjlasjdd\",\n  \"duration\": 30\n}",
                 "format": "application/json"
               },
               "form": {

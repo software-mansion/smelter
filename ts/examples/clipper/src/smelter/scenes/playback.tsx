@@ -1,4 +1,4 @@
-import { View, Text } from '@swmansion/smelter';
+import { View, Text, InputStream } from '@swmansion/smelter';
 import { useEffect, useState } from 'react';
 
 export function Playback() {
@@ -11,7 +11,10 @@ export function Playback() {
 
   return (
     <View>
-      <Text>{counter}</Text>
+      <View style={{ left: 25, top: 25 }}>
+        <Text>{counter}</Text>
+      </View>
+      <InputStream inputId="input" />
     </View>
   );
 }

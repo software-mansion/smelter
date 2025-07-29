@@ -4,48 +4,50 @@ import { spawn } from 'node:child_process';
 import { setTimeout } from 'node:timers/promises';
 import path from 'path';
 import type { Logger } from 'pino';
-import { v4 as uuid } from 'uuid';
-import { clipJobsTable } from '../db/schema';
-import type { ClipJob } from '../entities/job';
-import type { SmelterInstance } from '../smelter/smelter';
 import slugify from 'slugify';
+import { v4 as uuid } from 'uuid';
+import { clipsTable } from '../db/schema';
+import type { Clip } from '../entities/clip';
+import type { SmelterInstance } from '../smelter/smelter';
 
-type ClipJobsWorkerConfig = {
+type ClipsWorkerConfig = {
   clipsOutDir: string;
 };
 
 /** Worker responsible for processing clip jobs. */
-export class ClipJobsWorker {
+export class ClipsWorker {
   constructor(
     private readonly db: LibSQLDatabase,
     private readonly smelterInstance: SmelterInstance,
     private readonly logger: Logger,
-    private readonly config: ClipJobsWorkerConfig
+    private readonly config: ClipsWorkerConfig
   ) {}
 
   async run() {
     while (true) {
       try {
-        const jobs = await this.db
+        const pendingClips = await this.db
           .select()
-          .from(clipJobsTable)
-          .where(eq(clipJobsTable.status, 'pending'))
-          .orderBy(clipJobsTable.createdAt)
+          .from(clipsTable)
+          .where(eq(clipsTable.status, 'pending'))
+          .orderBy(clipsTable.createdAt)
           .limit(10);
 
-        for (const job of jobs) {
+        for (const job of pendingClips) {
           try {
-            await this.process(job);
+            const filename = await this.process(job);
+
             await this.db
-              .update(clipJobsTable)
-              .set({ status: 'done' })
-              .where(eq(clipJobsTable.id, job.id));
+              .update(clipsTable)
+              .set({ status: 'done', filename, updatedAt: '(current_timestamp)' })
+              .where(eq(clipsTable.id, job.id));
           } catch (err) {
-            this.logger.error(err, 'Clip job failed');
+            this.logger.error(err, 'Clip failed');
+
             await this.db
-              .update(clipJobsTable)
-              .set({ status: 'corrupted' })
-              .where(eq(clipJobsTable.id, job.id));
+              .update(clipsTable)
+              .set({ status: 'corrupted', updatedAt: '(current_timestamp)' })
+              .where(eq(clipsTable.id, job.id));
           }
         }
       } catch (err) {
@@ -57,22 +59,26 @@ export class ClipJobsWorker {
   }
 
   /** Processes the clip job and returns output .mp4 clip location. */
-  private async process(job: ClipJob): Promise<string> {
-    const clipOutputFile = path.join(this.config.clipsOutDir, `${slugify(job.name)}-${uuid()}.mp4`);
+  private async process(clip: Clip): Promise<string> {
+    const clipFilename = `${slugify(clip.name)}-${uuid()}.mp4`;
+    const clipOutputFile = path.join(this.config.clipsOutDir, clipFilename);
 
-    const durationTimestamp = this.formatFFmpegTimestamp(job.duration);
+    const durationTimestamp = this.formatFFmpegTimestamp(clip.duration);
     const positionTimestamp = this.formatFFmpegTimestamp(
       Math.max(
-        job.clipTimestamp - this.smelterInstance.streamStartDate!.getTime() - job.duration,
+        clip.clipTimestamp - this.smelterInstance.streamStartDate!.getTime() - clip.duration,
         0
       )
     );
+
+    this.logger.debug({ durationTimestamp, positionTimestamp }, 'Processing clip');
 
     await new Promise<void>((resolve, reject) => {
       // prettier-ignore
       const ffmpeg = spawn(
         'ffmpeg',
         [
+          '-live_start_index', '0',
           '-ss', positionTimestamp,
           '-i', this.smelterInstance.playlistFilePath,
           '-t', durationTimestamp,
@@ -81,7 +87,7 @@ export class ClipJobsWorker {
           clipOutputFile,
         ],
         {
-          timeout: job.duration + 5 * 1000,
+          timeout: clip.duration + 5 * 1000,
         }
       );
 
@@ -97,7 +103,7 @@ export class ClipJobsWorker {
       });
     });
 
-    return clipOutputFile;
+    return clipFilename;
   }
 
   private formatFFmpegTimestamp(timestamp: number): string {
