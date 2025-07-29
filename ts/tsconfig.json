@@ -1,4 +1,5 @@
 {
+  "exclude": ["eslint.config.js"],
   "compilerOptions": {
     "moduleResolution": "NodeNext",
     "module": "NodeNext",
