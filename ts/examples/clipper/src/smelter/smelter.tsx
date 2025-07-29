@@ -25,13 +25,16 @@ export class SmelterInstance {
   private _streamStartDate?: Date;
   readonly playlistFilePath: string;
 
-  constructor(config: SmelterInstanceConfig) {
+  constructor(
+    private readonly logger: Logger,
+    config: SmelterInstanceConfig
+  ) {
+    this.playlistFilePath = path.join(config.hlsOutDir, 'playlist.m3u8');
+
+    /** Remove any old stream files. */
     for (const file of fs.readdirSync(config.hlsOutDir)) {
       fs.unlinkSync(path.join(config.hlsOutDir, file));
     }
-
-    this.playlistFilePath = path.join(config.hlsOutDir, 'playlist.m3u8');
-    fs.writeFileSync(this.playlistFilePath, '');
   }
 
   get streamStartDate() {
@@ -42,8 +45,10 @@ export class SmelterInstance {
     const smelter = new Smelter();
     await smelter.init();
 
-    await smelter.registerInput('in', {
+    await smelter.registerInput('input', {
       type: 'whip',
+      bearerToken: 'test',
+      video: { decoderPreferences: ['ffmpeg_h264'] },
     });
 
     await smelter.registerOutput('output_hls', <Playback />, {
@@ -51,32 +56,32 @@ export class SmelterInstance {
       serverPath: this.playlistFilePath,
       video: {
         resolution: RESOLUTION,
-        encoder: {
-          type: 'ffmpeg_h264',
-          preset: 'ultrafast',
-        },
+        encoder: VIDEO_ENCODER_OPTS,
       },
     });
 
     // TODO: This is extremely hacky.
     this._streamStartDate = new Date();
 
-    await ffplayStartRtmpServerAsync(9002);
+    if (process.env.CLIPPER_FFPLAY === '1') {
+      this.logger.debug('Starting FFplay preview');
+      await ffplayStartRtmpServerAsync(9002);
 
-    await smelter.registerOutput('output_preview', <Playback />, {
-      type: 'rtmp_client',
-      url: 'rtmp://127.0.0.1:9002',
-      video: {
-        encoder: VIDEO_ENCODER_OPTS,
-        resolution: RESOLUTION,
-      },
-      audio: {
-        channels: 'stereo',
-        encoder: {
-          type: 'aac',
+      await smelter.registerOutput('output_preview', <Playback />, {
+        type: 'rtmp_client',
+        url: 'rtmp://127.0.0.1:9002',
+        video: {
+          encoder: VIDEO_ENCODER_OPTS,
+          resolution: RESOLUTION,
         },
-      },
-    });
+        audio: {
+          channels: 'stereo',
+          encoder: {
+            type: 'aac',
+          },
+        },
+      });
+    }
 
     await smelter.start();
   }

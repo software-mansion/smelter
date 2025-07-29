@@ -6,7 +6,7 @@
   "main": "./dist/server.js",
   "scripts": {
     "build": "tsc",
-    "dev": "pnpm run build && node ./dist/server.js | pino-pretty"
+    "dev": "pnpm run build && SMELTER_LOGGER_LEVEL=debug SMELTER_LOGGER_FORMAT=compact node ./dist/server.js | pino-pretty"
   },
   "keywords": [],
   "author": "",
