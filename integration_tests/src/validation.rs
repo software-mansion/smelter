@@ -1,5 +1,6 @@
 use anyhow::Result;
 use bytes::Bytes;
+use spectrum_analyzer::{Frequency, FrequencyValue};
 use std::{fmt, ops::Range, path::Path, time::Duration};
 use tracing::info;
 
@@ -60,6 +61,7 @@ pub fn compare_audio_dumps<P: AsRef<Path> + fmt::Debug>(
         allowed_error,
         channels,
         sample_rate,
+        samples_per_batch,
     } = config;
 
     if let Err(err) = audio::validate(
@@ -69,6 +71,7 @@ pub fn compare_audio_dumps<P: AsRef<Path> + fmt::Debug>(
         allowed_error,
         channels,
         sample_rate,
+        samples_per_batch,
     ) {
         save_failed_test_dumps(&expected, actual, &snapshot_filename);
         handle_error(err, snapshot_filename, actual)?;
@@ -107,15 +110,18 @@ impl Default for VideoValidationConfig {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct SamplingInterval {
-    pub pts: Duration,
+    pub first_sample: usize,
     pub samples: usize,
 }
 
 impl SamplingInterval {
+    // Intervals returned are this function are not exact
+    // They may be slightly longer as this function fills the time with batches of size
+    // specified as argument
     pub fn from_range(
-        time_range: Range<Duration>,
+        time_range: &Range<Duration>,
         sample_rate: u32,
         samples_per_batch: usize,
     ) -> Vec<Self> {
@@ -127,25 +133,34 @@ impl SamplingInterval {
 
         let time_per_batch = Duration::from_secs_f64(samples_per_batch as f64 / sample_rate as f64);
 
+        // It finds the sample that fits pts best
+        // If it is not a multiple of samples_per_batch find the highest
+        // multiple lower than current number to be the starting sample
+        let mut first_sample =
+            f64::floor(start_pts.as_secs_f64() * sample_rate as f64 / samples_per_batch as f64)
+                as usize
+                * samples_per_batch;
+
         let mut intervals = vec![];
-        let mut n: u32 = 0;
+        let mut n = 0;
         loop {
-            let next_pts = start_pts + n * time_per_batch;
-            if next_pts >= end_pts {
+            let pts = start_pts + n * time_per_batch;
+            if pts >= end_pts {
                 break;
             }
-            let next_interval = SamplingInterval {
-                pts: next_pts,
+
+            intervals.push(SamplingInterval {
+                first_sample,
                 samples: samples_per_batch,
-            };
-            intervals.push(next_interval);
+            });
+            first_sample += samples_per_batch;
             n += 1;
         }
         intervals
     }
 }
 
-// TODO: Remove this before PR
+// TODO: @jbrs: Remove this before PR
 #[cfg(test)]
 mod interval_calculation_test {
     use std::time::Duration;
@@ -155,29 +170,42 @@ mod interval_calculation_test {
     #[test]
     fn interval_calc_test() {
         let range = Duration::from_millis(0)..Duration::from_millis(2000);
-        let intervals = SamplingInterval::from_range(range, 48000, 4096);
+        let intervals = SamplingInterval::from_range(&range, 48000, 4096);
         println!("{:#?}", intervals);
     }
 }
 
+// It HAS TO be a power of 2 for FFT to work
+// As channels is always set to stereo this will result in 4096 samples
+// per channel
+pub const DEFAULT_SAMPLES_PER_BATCH: usize = 8192;
+pub const DEFAULT_SAMPLE_RATE: u32 = 48000;
+
+// struct FFTTolerance {
+//     average_magnitude: FrequencyValue,
+//     median_magnitude: FrequencyValue,
+//     magnitude_range: FrequencyValue,
+//     max_frequency: (Frequency, FrequencyValue),
+//     min_frequency: (Frequency, FrequencyValue),
+// }
+
 pub struct AudioValidationConfig {
-    pub sampling_intervals: Vec<SamplingInterval>,
+    pub sampling_intervals: Vec<Range<Duration>>,
     pub allowed_error: f32,
     pub channels: AudioChannels,
     pub sample_rate: u32,
+    pub samples_per_batch: usize,
+    // pub tolerance: FFTTolerance,
 }
 
 impl Default for AudioValidationConfig {
     fn default() -> Self {
-        let default_interval = SamplingInterval {
-            pts: Duration::from_millis(0),
-            samples: 4096,
-        };
         Self {
-            sampling_intervals: vec![default_interval],
+            sampling_intervals: vec![Duration::from_secs(0)..Duration::from_secs(1)],
             allowed_error: 4.0,
             channels: AudioChannels::Stereo,
-            sample_rate: 48000,
+            sample_rate: DEFAULT_SAMPLE_RATE,
+            samples_per_batch: DEFAULT_SAMPLES_PER_BATCH,
         }
     }
 }
