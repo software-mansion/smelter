@@ -25,7 +25,7 @@ impl FFTResult {
     fn compare(&self, other: &FFTResult) -> Result<()> {
         let values_match = self.average_magnitude == other.average_magnitude
             && self.median_magnitude == other.median_magnitude
-            && self.magnitude_range == self.magnitude_range
+            && self.magnitude_range == other.magnitude_range
             && self.max_frequency.0 == other.max_frequency.0
             && self.max_frequency.1 == other.max_frequency.1
             && self.min_frequency.0 == other.min_frequency.0

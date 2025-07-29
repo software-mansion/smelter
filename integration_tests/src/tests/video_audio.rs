@@ -4,8 +4,7 @@ use std::time::Duration;
 
 use crate::{
     compare_audio_dumps, compare_video_dumps, input_dump_from_disk, AudioValidationConfig,
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, SamplingInterval,
-    VideoValidationConfig, DEFAULT_SAMPELS_PER_BATCH, DEFAULT_SAMPLE_RATE,
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, VideoValidationConfig,
 };
 
 /// Input and output streams with muxed video and audio.
