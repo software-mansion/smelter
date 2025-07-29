@@ -6,7 +6,7 @@ import eslintConfigPrettier from 'eslint-config-prettier';
 import pluginImport from 'eslint-plugin-import';
 import pluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import { plugin as tsEslintPlugin } from 'typescript-eslint';
-import reactHooks from 'eslint-plugin-react-hooks';
+import { reactHooks } from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 
 import tsParser from '@typescript-eslint/parser';
@@ -52,11 +52,12 @@ export default [
     rules: {
       'prettier/prettier': ['error'],
       'import/no-unresolved': 'error',
+      'import/no-named-as-default-member': 'off',
       '@typescript-eslint/no-explicit-any': [0, {}],
       '@typescript-eslint/no-floating-promises': ['error'],
       'no-constant-condition': [0],
       'no-unused-vars': 'off',
-      'curly': 'error',
+      curly: 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
