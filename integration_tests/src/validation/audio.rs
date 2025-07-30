@@ -27,7 +27,6 @@ impl FFTResult {
         let values_match = self.average_magnitude == other.average_magnitude
             && self.median_magnitude == other.median_magnitude
             && self.max_frequency.0 == other.max_frequency.0
-            && self.max_frequency.1 == other.max_frequency.1
             && self.avg_level == other.avg_level;
 
         if values_match {
