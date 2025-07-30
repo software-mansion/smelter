@@ -94,9 +94,9 @@ pub fn audio_mixing_with_offset() -> Result<()> {
         &new_output_dump,
         AudioValidationConfig {
             sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(2000),
-                Duration::from_millis(2000)..Duration::from_millis(4000),
-                Duration::from_millis(8000)..Duration::from_millis(10000),
+                Duration::from_millis(0)..Duration::from_millis(10000),
+                // Duration::from_millis(2000)..Duration::from_millis(4000),
+                // Duration::from_millis(8000)..Duration::from_millis(10000),
             ],
             ..Default::default()
         },
@@ -196,9 +196,9 @@ pub fn audio_mixing_no_offset() -> Result<()> {
         &new_output_dump,
         AudioValidationConfig {
             sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(2000),
-                Duration::from_millis(2000)..Duration::from_millis(4000),
-                Duration::from_millis(8000)..Duration::from_millis(10000),
+                Duration::from_millis(0)..Duration::from_millis(10000),
+                // Duration::from_millis(2000)..Duration::from_millis(4000),
+                // Duration::from_millis(8000)..Duration::from_millis(10000),
             ],
             ..Default::default()
         },
@@ -278,9 +278,9 @@ pub fn single_input_opus() -> Result<()> {
         &new_output_dump,
         AudioValidationConfig {
             sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(2000),
-                Duration::from_millis(2000)..Duration::from_millis(4000),
-                Duration::from_millis(8000)..Duration::from_millis(10000),
+                Duration::from_millis(0)..Duration::from_millis(10000),
+                // Duration::from_millis(2000)..Duration::from_millis(4000),
+                // Duration::from_millis(8000)..Duration::from_millis(10000),
             ],
             ..Default::default()
         },
@@ -358,9 +358,9 @@ pub fn single_input_aac() -> Result<()> {
         &new_output_dump,
         AudioValidationConfig {
             sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(2000),
-                Duration::from_millis(2000)..Duration::from_millis(4000),
-                Duration::from_millis(8000)..Duration::from_millis(10000),
+                Duration::from_millis(0)..Duration::from_millis(10000),
+                // Duration::from_millis(2000)..Duration::from_millis(4000),
+                // Duration::from_millis(8000)..Duration::from_millis(10000),
             ],
             ..Default::default()
         },

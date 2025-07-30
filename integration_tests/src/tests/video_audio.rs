@@ -104,9 +104,9 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
         &new_output_dump,
         AudioValidationConfig {
             sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(2000),
-                Duration::from_millis(2000)..Duration::from_millis(4000),
-                Duration::from_millis(8000)..Duration::from_millis(10000),
+                Duration::from_millis(0)..Duration::from_millis(10000),
+                // Duration::from_millis(2000)..Duration::from_millis(4000),
+                // Duration::from_millis(8000)..Duration::from_millis(10000),
             ],
             ..Default::default()
         },

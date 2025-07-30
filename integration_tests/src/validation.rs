@@ -1,6 +1,5 @@
 use anyhow::Result;
 use bytes::Bytes;
-use spectrum_analyzer::{Frequency, FrequencyValue};
 use std::{fmt, ops::Range, path::Path, time::Duration};
 use tracing::info;
 
@@ -58,20 +57,20 @@ pub fn compare_audio_dumps<P: AsRef<Path> + fmt::Debug>(
 
     let AudioValidationConfig {
         sampling_intervals,
-        allowed_error,
         channels,
         sample_rate,
         samples_per_batch,
+        tolerance,
     } = config;
 
     if let Err(err) = audio::validate(
         &expected,
         actual,
         &sampling_intervals,
-        allowed_error,
         channels,
         sample_rate,
         samples_per_batch,
+        tolerance,
     ) {
         save_failed_test_dumps(&expected, actual, &snapshot_filename);
         handle_error(err, snapshot_filename, actual)?;
@@ -160,52 +159,50 @@ impl SamplingInterval {
     }
 }
 
-// TODO: @jbrs: Remove this before PR
-#[cfg(test)]
-mod interval_calculation_test {
-    use std::time::Duration;
+// It HAS TO be a power of 2 for FFT to work
+// As channels is always set to stereo this will result in 4096 samples
+// per channel. This number MUST NOT exceed 16384 per channel
+const DEFAULT_SAMPLES_PER_BATCH: usize = 32768;
+const DEFAULT_SAMPLE_RATE: u32 = 48000;
 
-    use crate::SamplingInterval;
+// TODO: @jbrs: Remove this annotation before PR
+#[allow(dead_code)]
+pub struct FFTTolerance {
+    /// Tolerance of max frequency. This value is the multiplier
+    /// by which frequency resolution shall be multiplied while calculating tolerance
+    pub max_frequency: u32,
+    pub average_magnitude: f64,
+    pub median_magnitude: f64,
+    pub avg_level: f64,
+}
 
-    #[test]
-    fn interval_calc_test() {
-        let range = Duration::from_millis(0)..Duration::from_millis(2000);
-        let intervals = SamplingInterval::from_range(&range, 48000, 4096);
-        println!("{:#?}", intervals);
+impl Default for FFTTolerance {
+    fn default() -> Self {
+        Self {
+            max_frequency: 0,
+            average_magnitude: 0.005,
+            median_magnitude: 0.005,
+            avg_level: 3.0,
+        }
     }
 }
 
-// It HAS TO be a power of 2 for FFT to work
-// As channels is always set to stereo this will result in 4096 samples
-// per channel
-pub const DEFAULT_SAMPLES_PER_BATCH: usize = 8192;
-pub const DEFAULT_SAMPLE_RATE: u32 = 48000;
-
-// struct FFTTolerance {
-//     average_magnitude: FrequencyValue,
-//     median_magnitude: FrequencyValue,
-//     magnitude_range: FrequencyValue,
-//     max_frequency: (Frequency, FrequencyValue),
-//     min_frequency: (Frequency, FrequencyValue),
-// }
-
 pub struct AudioValidationConfig {
     pub sampling_intervals: Vec<Range<Duration>>,
-    pub allowed_error: f32,
     pub channels: AudioChannels,
     pub sample_rate: u32,
     pub samples_per_batch: usize,
-    // pub tolerance: FFTTolerance,
+    pub tolerance: FFTTolerance,
 }
 
 impl Default for AudioValidationConfig {
     fn default() -> Self {
         Self {
             sampling_intervals: vec![Duration::from_secs(0)..Duration::from_secs(1)],
-            allowed_error: 4.0,
             channels: AudioChannels::Stereo,
             sample_rate: DEFAULT_SAMPLE_RATE,
             samples_per_batch: DEFAULT_SAMPLES_PER_BATCH,
+            tolerance: FFTTolerance::default(),
         }
     }
 }

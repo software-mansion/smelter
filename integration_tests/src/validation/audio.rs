@@ -1,23 +1,24 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use bytes::Bytes;
-use pitch_detection::detector::{mcleod::McLeodDetector, PitchDetector};
 use spectrum_analyzer::{
-    error::SpectrumAnalyzerError, samples_fft_to_spectrum, Frequency, FrequencyLimit,
-    FrequencySpectrum, FrequencyValue,
+    error::SpectrumAnalyzerError, samples_fft_to_spectrum, scaling::scale_to_zero_to_one,
+    windows::hann_window, Frequency, FrequencyLimit, FrequencyValue,
 };
 use std::{ops::Range, time::Duration};
 
 use crate::{
-    audio_decoder::{AudioChannels, AudioDecoder, AudioSampleBatch},
-    find_packets_for_payload_type, unmarshal_packets, SamplingInterval,
+    audio_decoder::{AudioChannels, AudioDecoder},
+    find_packets_for_payload_type, unmarshal_packets,
+    validation::FFTTolerance,
+    SamplingInterval,
 };
 
+#[derive(Debug)]
 struct FFTResult {
     average_magnitude: FrequencyValue,
     median_magnitude: FrequencyValue,
-    magnitude_range: FrequencyValue,
     max_frequency: (Frequency, FrequencyValue),
-    min_frequency: (Frequency, FrequencyValue),
+    avg_level: f64,
 }
 
 impl FFTResult {
@@ -25,16 +26,18 @@ impl FFTResult {
     fn compare(&self, other: &FFTResult) -> Result<()> {
         let values_match = self.average_magnitude == other.average_magnitude
             && self.median_magnitude == other.median_magnitude
-            && self.magnitude_range == other.magnitude_range
             && self.max_frequency.0 == other.max_frequency.0
             && self.max_frequency.1 == other.max_frequency.1
-            && self.min_frequency.0 == other.min_frequency.0
-            && self.min_frequency.1 == other.min_frequency.1;
+            && self.avg_level == other.avg_level;
 
         if values_match {
             Ok(())
         } else {
-            Err(anyhow::anyhow!("Audio mismatch!"))
+            Err(anyhow::anyhow!(
+                "Audio mismatch!: {:#?}, {:#?}",
+                self,
+                other
+            ))
         }
     }
 }
@@ -43,11 +46,13 @@ pub fn validate(
     expected: &Bytes,
     actual: &Bytes,
     time_intervals: &[Range<Duration>],
-    allowed_error: f32,
+
     // At current time it is set to stereo for all tests
     channels: AudioChannels,
     sample_rate: u32,
     samples_per_batch: usize,
+    // TODO: @jbrs: Temporary
+    _tolerance: FFTTolerance,
 ) -> Result<()> {
     let expected_packets = unmarshal_packets(expected)?;
     let actual_packets = unmarshal_packets(actual)?;
@@ -69,8 +74,7 @@ pub fn validate(
 
     let sampling_intervals = time_intervals
         .iter()
-        .map(|range| SamplingInterval::from_range(range, sample_rate, samples_per_batch))
-        .flatten()
+        .flat_map(|range| SamplingInterval::from_range(range, sample_rate, samples_per_batch))
         .collect::<Vec<_>>();
 
     for interval in sampling_intervals {
@@ -99,28 +103,29 @@ fn fft_result_from_samples(
     sample_rate: u32,
 ) -> Result<(FFTResult, FFTResult)> {
     fn calc_fft(samples: &[f32], sample_rate: u32) -> Result<FFTResult, SpectrumAnalyzerError> {
-        let spectrum = samples_fft_to_spectrum(samples, sample_rate, FrequencyLimit::All, None)?;
+        let spectrum = samples_fft_to_spectrum(
+            &hann_window(samples),
+            sample_rate,
+            FrequencyLimit::All,
+            Some(&scale_to_zero_to_one),
+        )?;
+        let avg_level = (spectrum.average().val() as f64).log10() * 20.0;
 
         Ok(FFTResult {
             average_magnitude: spectrum.average(),
             median_magnitude: spectrum.median(),
-            magnitude_range: spectrum.range(),
             max_frequency: spectrum.max(),
-            min_frequency: spectrum.min(),
+            avg_level,
         })
     }
 
-    let samples_left = sample_batch
-        .iter()
-        .step_by(2)
-        .map(|s| *s)
-        .collect::<Vec<_>>();
+    let samples_left = sample_batch.iter().step_by(2).copied().collect::<Vec<_>>();
 
     let samples_right = sample_batch
         .iter()
         .skip(1)
         .step_by(2)
-        .map(|s| *s)
+        .copied()
         .collect::<Vec<_>>();
 
     let fft_res_left = calc_fft(&samples_left, sample_rate)?;
