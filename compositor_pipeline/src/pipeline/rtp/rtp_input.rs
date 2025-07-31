@@ -17,7 +17,7 @@ use crate::{
         rtp_video_thread::RtpVideoThread,
     },
     prelude::*,
-    thread_utils::spawn_thread,
+    thread_utils::InitializableThread,
 };
 use crate::{
     pipeline::{
@@ -122,20 +122,20 @@ impl RtpInput {
 
         let (sender, receiver) = bounded(5);
         let handle = match options {
-            VideoDecoderOptions::FfmpegH264 => spawn_thread::<RtpVideoThread<FfmpegH264Decoder>>(
-                &input_id.0,
+            VideoDecoderOptions::FfmpegH264 => RtpVideoThread::<FfmpegH264Decoder>::spawn(
+                input_id.clone(),
                 (ctx.clone(), DepayloaderOptions::H264, sender),
             )?,
-            VideoDecoderOptions::FfmpegVp8 => spawn_thread::<RtpVideoThread<FfmpegVp8Decoder>>(
-                &input_id.0,
+            VideoDecoderOptions::FfmpegVp8 => RtpVideoThread::<FfmpegVp8Decoder>::spawn(
+                input_id.clone(),
                 (ctx.clone(), DepayloaderOptions::Vp8, sender),
             )?,
-            VideoDecoderOptions::FfmpegVp9 => spawn_thread::<RtpVideoThread<FfmpegVp9Decoder>>(
-                &input_id.0,
+            VideoDecoderOptions::FfmpegVp9 => RtpVideoThread::<FfmpegVp9Decoder>::spawn(
+                input_id.clone(),
                 (ctx.clone(), DepayloaderOptions::Vp9, sender),
             )?,
-            VideoDecoderOptions::VulkanH264 => spawn_thread::<RtpVideoThread<VulkanH264Decoder>>(
-                &input_id.0,
+            VideoDecoderOptions::VulkanH264 => RtpVideoThread::<VulkanH264Decoder>::spawn(
+                input_id.clone(),
                 (ctx.clone(), DepayloaderOptions::H264, sender),
             )?,
         };
@@ -160,8 +160,8 @@ impl RtpInput {
 
         let (sender, receiver) = bounded(5);
         let handle = match options {
-            RtpAudioOptions::Opus => spawn_thread::<RtpAudioThread<OpusDecoder>>(
-                &input_id.0,
+            RtpAudioOptions::Opus => RtpAudioThread::<OpusDecoder>::spawn(
+                input_id,
                 RtpAudioThreadOptions {
                     ctx: ctx.clone(),
                     sample_rate: 48_000,
@@ -174,8 +174,8 @@ impl RtpInput {
                 asc,
                 raw_asc,
                 depayloader_mode,
-            } => spawn_thread::<RtpAudioThread<FdkAacDecoder>>(
-                &input_id.0,
+            } => RtpAudioThread::<FdkAacDecoder>::spawn(
+                input_id,
                 RtpAudioThreadOptions {
                     ctx: ctx.clone(),
                     sample_rate: asc.sample_rate,

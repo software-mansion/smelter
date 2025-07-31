@@ -26,7 +26,7 @@ use crate::{
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
     },
     queue::QueueDataReceiver,
-    thread_utils::spawn_thread,
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
@@ -68,13 +68,13 @@ impl Mp4Input {
                 let (sender, receiver) = crossbeam_channel::bounded(10);
                 let handle = match track.decoder_options() {
                     DecoderOptions::H264(h264_config) => {
-                        spawn_thread::<VideoDecoderThread<ffmpeg_h264::FfmpegH264Decoder, _>>(
-                            &input_id.0,
+                        VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
+                            input_id.clone(),
                             VideoDecoderThreadOptions {
                                 ctx: ctx.clone(),
                                 transformer: Some(AvccToAnnexBRepacker::new(h264_config.clone())),
                                 frame_sender: sender,
-                                buffer_size: 5,
+                                input_buffer_size: 5,
                             },
                         )?
                     }
@@ -94,15 +94,15 @@ impl Mp4Input {
                 let (sender, receiver) = crossbeam_channel::bounded(10);
                 let handle = match track.decoder_options() {
                     DecoderOptions::Aac(data) => {
-                        spawn_thread::<AudioDecoderThread<fdk_aac::FdkAacDecoder>>(
-                            &input_id.0,
+                        AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
+                            input_id.clone(),
                             AudioDecoderThreadOptions {
                                 ctx: ctx.clone(),
                                 decoder_options: FdkAacDecoderOptions {
                                     asc: Some(data.clone()),
                                 },
                                 samples_sender: sender,
-                                buffer_size: 5,
+                                input_buffer_size: 5,
                             },
                         )?
                     }

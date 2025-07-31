@@ -35,7 +35,7 @@ use crate::{
         input::Input,
     },
     queue::QueueDataReceiver,
-    thread_utils::spawn_thread,
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
@@ -117,13 +117,13 @@ impl HlsInput {
                 let (samples_sender, samples_receiver) = bounded(5);
                 let state =
                     StreamState::new(input_start_time, ctx.queue_sync_point, stream.time_base());
-                let decoder_result = spawn_thread::<AudioDecoderThread<fdk_aac::FdkAacDecoder>>(
-                    &input_id.0,
+                let decoder_result = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
+                    input_id.clone(),
                     AudioDecoderThreadOptions {
                         ctx: ctx.clone(),
                         decoder_options: FdkAacDecoderOptions { asc },
                         samples_sender,
-                        buffer_size: 2000,
+                        input_buffer_size: 2000,
                     },
                 );
                 let handle = match decoder_result {
@@ -158,16 +158,15 @@ impl HlsInput {
                         }
                     });
 
-                let decoder_result =
-                    spawn_thread::<VideoDecoderThread<ffmpeg_h264::FfmpegH264Decoder, _>>(
-                        &input_id.0,
-                        VideoDecoderThreadOptions {
-                            ctx: ctx.clone(),
-                            transformer: h264_config.map(AvccToAnnexBRepacker::new),
-                            frame_sender,
-                            buffer_size: 2000,
-                        },
-                    );
+                let decoder_result = VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
+                    input_id,
+                    VideoDecoderThreadOptions {
+                        ctx: ctx.clone(),
+                        transformer: h264_config.map(AvccToAnnexBRepacker::new),
+                        frame_sender,
+                        input_buffer_size: 2000,
+                    },
+                );
                 let handle = match decoder_result {
                     Ok(handle) => handle,
                     Err(err) => {

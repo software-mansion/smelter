@@ -26,7 +26,7 @@ use crate::{
             WhipWhepServerState,
         },
     },
-    thread_utils::spawn_thread,
+    thread_utils::ThreadMetadata,
 };
 use crate::{prelude::*, thread_utils::InitializableThread};
 
@@ -48,10 +48,8 @@ pub async fn process_video_track(
 
     let WhipWhepServerState { inputs, ctx } = state;
     let frame_sender = inputs.get_with(&input_id, |input| Ok(input.frame_sender.clone()))?;
-    let handle = spawn_thread::<VideoTrackThread>(
-        &input_id.0,
-        (ctx.clone(), negotiated_codecs, frame_sender),
-    )?;
+    let handle =
+        VideoTrackThread::spawn(&input_id.0, (ctx.clone(), negotiated_codecs, frame_sender))?;
 
     let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_point, 90_000);
 
@@ -73,7 +71,10 @@ pub(crate) struct VideoTrackThreadHandle {
     pub rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpPacket>>,
 }
 
-pub(super) struct VideoTrackThread;
+pub(super) struct VideoTrackThread {
+    stream: Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
+    frame_sender: Sender<PipelineEvent<Frame>>,
+}
 
 impl InitializableThread for VideoTrackThread {
     type InitOptions = (
@@ -85,16 +86,9 @@ impl InitializableThread for VideoTrackThread {
     type SpawnOutput = VideoTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
-    type ThreadState = (
-        Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
-        Sender<PipelineEvent<Frame>>,
-    );
-
     const LABEL: &'static str = "Whip video decoder";
 
-    fn init(
-        options: Self::InitOptions,
-    ) -> Result<(Self::SpawnOutput, Self::ThreadState), Self::SpawnError> {
+    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let (ctx, codec_info, frame_sender) = options;
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5);
 
@@ -117,18 +111,27 @@ impl InitializableThread for VideoTrackThread {
             })
             .inspect(|frame| trace!(?frame, "WHIP input produced a frame"));
 
+        let state = Self {
+            stream: Box::new(result_stream),
+            frame_sender,
+        };
         let output = VideoTrackThreadHandle { rtp_packet_sender };
-        let state = (Box::new(result_stream) as Box<_>, frame_sender);
-        Ok((output, state))
+        Ok((state, output))
     }
 
-    fn run(state: Self::ThreadState) {
-        let (stream, frame_sender) = state;
-        for event in stream {
-            if frame_sender.send(event).is_err() {
+    fn run(self) {
+        for event in self.stream {
+            if self.frame_sender.send(event).is_err() {
                 warn!("Failed to send encoded video chunk from encoder. Channel closed.");
                 return;
             }
+        }
+    }
+
+    fn metadata() -> ThreadMetadata {
+        ThreadMetadata {
+            thread_name: "Whip video",
+            thread_instance_name: "Input",
         }
     }
 }

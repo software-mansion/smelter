@@ -6,7 +6,7 @@ use tracing::{debug, trace, warn};
 use webrtc::{rtp_transceiver::RTCRtpTransceiver, track::track_remote::TrackRemote};
 
 use crate::prelude::*;
-use crate::thread_utils::{spawn_thread, InitializableThread};
+use crate::thread_utils::{InitializableThread, ThreadMetadata};
 use crate::{
     error::DecoderInitError,
     pipeline::{
@@ -41,7 +41,7 @@ pub async fn process_audio_track(
     let WhipWhepServerState { inputs, ctx } = state;
     let samples_sender =
         inputs.get_with(&input_id, |input| Ok(input.input_samples_sender.clone()))?;
-    let handle = spawn_thread::<AudioTrackThread>(&input_id.0, (ctx.clone(), samples_sender))?;
+    let handle = AudioTrackThread::spawn(&input_id.0, (ctx.clone(), samples_sender))?;
 
     let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_point, 48_000);
 
@@ -63,7 +63,10 @@ pub(super) struct AudioTrackThreadHandle {
     pub rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpPacket>>,
 }
 
-pub(super) struct AudioTrackThread;
+pub(super) struct AudioTrackThread {
+    stream: Box<dyn Iterator<Item = PipelineEvent<InputAudioSamples>>>,
+    samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+}
 
 impl InitializableThread for AudioTrackThread {
     type InitOptions = (Arc<PipelineCtx>, Sender<PipelineEvent<InputAudioSamples>>);
@@ -71,16 +74,9 @@ impl InitializableThread for AudioTrackThread {
     type SpawnOutput = AudioTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
-    type ThreadState = (
-        Box<dyn Iterator<Item = PipelineEvent<InputAudioSamples>>>,
-        Sender<PipelineEvent<InputAudioSamples>>,
-    );
-
     const LABEL: &'static str = "Whip audio decoder";
 
-    fn init(
-        options: Self::InitOptions,
-    ) -> Result<(Self::SpawnOutput, Self::ThreadState), Self::SpawnError> {
+    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let (ctx, samples_sender) = options;
 
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5);
@@ -108,18 +104,27 @@ impl InitializableThread for AudioTrackThread {
             })
             .inspect(|batch| trace!(?batch, "WHIP input produced a sample batch"));
 
+        let state = Self {
+            stream: Box::new(result_stream),
+            samples_sender,
+        };
         let output = AudioTrackThreadHandle { rtp_packet_sender };
-        let state = (Box::new(result_stream) as Box<_>, samples_sender);
-        Ok((output, state))
+        Ok((state, output))
     }
 
-    fn run(state: Self::ThreadState) {
-        let (stream, samples_sender) = state;
-        for event in stream {
-            if samples_sender.send(event).is_err() {
+    fn run(self) {
+        for event in self.stream {
+            if self.samples_sender.send(event).is_err() {
                 warn!("Failed to send encoded audio chunk from decoder. Channel closed.");
                 return;
             }
+        }
+    }
+
+    fn metadata() -> ThreadMetadata {
+        ThreadMetadata {
+            thread_name: "Whip audio",
+            thread_instance_name: "Input",
         }
     }
 }

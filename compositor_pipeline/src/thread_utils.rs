@@ -1,53 +1,64 @@
-use tracing::{span, Level, Span};
+use tracing::{span, Level};
 
 pub(crate) trait InitializableThread: Sized {
     type InitOptions: Send + 'static;
 
-    /// Represents type returned on successful `init` to the caller of `spawn_thread`
+    /// Represents type returned on successful `init` to the caller of `Self::spawn`
     type SpawnOutput: Send + 'static;
-    /// Represents type returned on failed `init` to the caller of `spawn_thread`
+    /// Represents type returned on failed `init` to the caller of `Self::spawn`
     type SpawnError: std::error::Error + Send + 'static;
-
-    /// Internal thread state passed to `run`
-    type ThreadState;
 
     const LABEL: &'static str;
 
-    fn init(
-        options: Self::InitOptions,
-    ) -> Result<(Self::SpawnOutput, Self::ThreadState), Self::SpawnError>;
+    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError>;
 
-    fn thread_span(instance_id: &str) -> Span {
-        span!(Level::INFO, "Thread", label = Self::LABEL, instance_id)
+    fn run(self);
+
+    fn spawn<Id: ToString>(
+        thread_instance_id: Id,
+        opts: Self::InitOptions,
+    ) -> Result<Self::SpawnOutput, Self::SpawnError> {
+        let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
+
+        let instance_id = thread_instance_id.to_string();
+        let metadata = Self::metadata();
+        std::thread::Builder::new()
+            .name(metadata.thread_name.to_string())
+            .spawn(move || {
+                let _span = span!(
+                    Level::INFO,
+                    "Thread",
+                    label = Self::LABEL,
+                    thread = metadata.thread_name,
+                    instance = format!("{} {}", metadata.thread_instance_name, instance_id),
+                )
+                .entered();
+                let state = match Self::init(opts) {
+                    Ok((state, init_output)) => {
+                        result_sender.send(Ok(init_output)).unwrap();
+                        state
+                    }
+                    Err(err) => {
+                        result_sender.send(Err(err)).unwrap();
+                        return;
+                    }
+                };
+                Self::run(state);
+            })
+            .unwrap();
+
+        result_receiver.recv().unwrap()
     }
 
-    fn run(state: Self::ThreadState);
+    fn metadata() -> ThreadMetadata {
+        ThreadMetadata {
+            thread_name: "Initializable thread",
+            thread_instance_name: "Instance",
+        }
+    }
 }
 
-pub(crate) fn spawn_thread<Thread: InitializableThread>(
-    thread_instance_id: &str,
-    opts: Thread::InitOptions,
-) -> Result<Thread::SpawnOutput, Thread::SpawnError> {
-    let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
-
-    let thread_span = Thread::thread_span(thread_instance_id);
-    std::thread::Builder::new()
-        .name(format!("Thread {}: {}", Thread::LABEL, thread_instance_id))
-        .spawn(move || {
-            let _span = thread_span.entered();
-            let state = match Thread::init(opts) {
-                Ok((result, state)) => {
-                    result_sender.send(Ok(result)).unwrap();
-                    state
-                }
-                Err(err) => {
-                    result_sender.send(Err(err)).unwrap();
-                    return;
-                }
-            };
-            Thread::run(state);
-        })
-        .unwrap();
-
-    result_receiver.recv().unwrap()
+pub(crate) struct ThreadMetadata {
+    pub thread_name: &'static str,
+    pub thread_instance_name: &'static str,
 }

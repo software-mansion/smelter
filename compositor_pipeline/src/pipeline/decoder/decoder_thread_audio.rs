@@ -4,6 +4,7 @@ use crossbeam_channel::Sender;
 use tracing::warn;
 
 use crate::prelude::*;
+use crate::thread_utils::ThreadMetadata;
 use crate::{
     pipeline::{
         decoder::{AudioDecoderStream, DecoderThreadHandle},
@@ -18,10 +19,12 @@ pub(crate) struct AudioDecoderThreadOptions<Decoder: AudioDecoder> {
     pub ctx: Arc<PipelineCtx>,
     pub decoder_options: Decoder::Options,
     pub samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
-    pub buffer_size: usize,
+    pub input_buffer_size: usize,
 }
 
 pub(crate) struct AudioDecoderThread<Decoder: AudioDecoder> {
+    stream: Box<dyn Iterator<Item = PipelineEvent<InputAudioSamples>>>,
+    samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
     _decoder: PhantomData<Decoder>,
 }
 
@@ -34,21 +37,14 @@ where
     type SpawnOutput = DecoderThreadHandle;
     type SpawnError = DecoderInitError;
 
-    type ThreadState = (
-        Box<dyn Iterator<Item = PipelineEvent<InputAudioSamples>>>,
-        Sender<PipelineEvent<InputAudioSamples>>,
-    );
-
     const LABEL: &'static str = Decoder::LABEL;
 
-    fn init(
-        options: Self::InitOptions,
-    ) -> Result<(Self::SpawnOutput, Self::ThreadState), Self::SpawnError> {
+    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let AudioDecoderThreadOptions {
             ctx,
             decoder_options,
             samples_sender,
-            buffer_size,
+            input_buffer_size: buffer_size,
         } = options;
 
         let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(buffer_size);
@@ -63,18 +59,28 @@ where
         let resampled_stream =
             ResampledDecoderStream::new(output_sample_rate, decoded_stream.flatten()).flatten();
 
+        let state = Self {
+            stream: Box::new(resampled_stream),
+            samples_sender,
+            _decoder: PhantomData,
+        };
         let output = DecoderThreadHandle { chunk_sender };
-        let state = (Box::new(resampled_stream) as Box<_>, samples_sender);
-        Ok((output, state))
+        Ok((state, output))
     }
 
-    fn run(state: Self::ThreadState) {
-        let (stream, frame_sender) = state;
-        for event in stream {
-            if frame_sender.send(event).is_err() {
-                warn!("Failed to send encoded video chunk from encoder. Channel closed.");
+    fn run(self) {
+        for event in self.stream {
+            if self.samples_sender.send(event).is_err() {
+                warn!("Failed to send encoded audio chunk from decoder. Channel closed.");
                 return;
             }
+        }
+    }
+
+    fn metadata() -> ThreadMetadata {
+        ThreadMetadata {
+            thread_name: "Audio Decoder",
+            thread_instance_name: "Input",
         }
     }
 }
