@@ -26,8 +26,8 @@ use tracing::{debug, error, span, warn, Level};
 use crate::{
     pipeline::{
         decoder::{
-            decoder_thread_audio::spawn_audio_decoder_thread,
-            decoder_thread_video::spawn_video_decoder_thread,
+            decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
+            decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac, ffmpeg_h264,
             h264_utils::{AvccToAnnexBRepacker, H264AvcDecoderConfig},
             DecoderThreadHandle,
@@ -35,6 +35,7 @@ use crate::{
         input::Input,
     },
     queue::QueueDataReceiver,
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
@@ -116,11 +117,14 @@ impl HlsInput {
                 let (samples_sender, samples_receiver) = bounded(5);
                 let state =
                     StreamState::new(input_start_time, ctx.queue_sync_point, stream.time_base());
-                let decoder_result = spawn_audio_decoder_thread::<fdk_aac::FdkAacDecoder, 2000>(
-                    ctx.clone(),
+                let decoder_result = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
                     input_id.clone(),
-                    FdkAacDecoderOptions { asc },
-                    samples_sender,
+                    AudioDecoderThreadOptions {
+                        ctx: ctx.clone(),
+                        decoder_options: FdkAacDecoderOptions { asc },
+                        samples_sender,
+                        input_buffer_size: 2000,
+                    },
                 );
                 let handle = match decoder_result {
                     Ok(handle) => handle,
@@ -155,13 +159,15 @@ impl HlsInput {
                         }
                     });
 
-                let decoder_result =
-                    spawn_video_decoder_thread::<ffmpeg_h264::FfmpegH264Decoder, 2000, _>(
-                        ctx.clone(),
-                        input_id.clone(),
-                        h264_config.map(AvccToAnnexBRepacker::new),
+                let decoder_result = VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
+                    input_id,
+                    VideoDecoderThreadOptions {
+                        ctx: ctx.clone(),
+                        transformer: h264_config.map(AvccToAnnexBRepacker::new),
                         frame_sender,
-                    );
+                        input_buffer_size: 2000,
+                    },
+                );
                 let handle = match decoder_result {
                     Ok(handle) => handle,
                     Err(err) => {
