@@ -60,6 +60,7 @@ pub fn compare_audio_dumps<P: AsRef<Path> + fmt::Debug>(
         channels,
         sample_rate,
         samples_per_batch,
+        allowed_failed_batches,
         tolerance,
     } = config;
 
@@ -70,6 +71,7 @@ pub fn compare_audio_dumps<P: AsRef<Path> + fmt::Debug>(
         channels,
         sample_rate,
         samples_per_batch,
+        allowed_failed_batches,
         tolerance,
     ) {
         save_failed_test_dumps(&expected, actual, &snapshot_filename);
@@ -165,24 +167,24 @@ impl SamplingInterval {
 const DEFAULT_SAMPLES_PER_BATCH: usize = 32768;
 const DEFAULT_SAMPLE_RATE: u32 = 48000;
 
-// TODO: @jbrs: Remove this annotation before PR
-#[allow(dead_code)]
-pub struct FFTTolerance {
+pub struct AudioAnalyzeTolerance {
     /// Tolerance of max frequency. This value is the multiplier
     /// by which frequency resolution shall be multiplied while calculating tolerance
     pub max_frequency: u32,
-    pub average_magnitude: f64,
-    pub median_magnitude: f64,
-    pub avg_level: f64,
+    pub max_frequency_level: f32,
+    pub average_level: f32,
+    pub median_level: f32,
+    pub general_level: f64,
 }
 
-impl Default for FFTTolerance {
+impl Default for AudioAnalyzeTolerance {
     fn default() -> Self {
         Self {
-            max_frequency: 0,
-            average_magnitude: 0.005,
-            median_magnitude: 0.005,
-            avg_level: 3.0,
+            max_frequency: 1,
+            max_frequency_level: 3.0,
+            average_level: 5.0,
+            median_level: 5.0,
+            general_level: 3.0,
         }
     }
 }
@@ -192,7 +194,8 @@ pub struct AudioValidationConfig {
     pub channels: AudioChannels,
     pub sample_rate: u32,
     pub samples_per_batch: usize,
-    pub tolerance: FFTTolerance,
+    pub allowed_failed_batches: u8,
+    pub tolerance: AudioAnalyzeTolerance,
 }
 
 impl Default for AudioValidationConfig {
@@ -202,7 +205,8 @@ impl Default for AudioValidationConfig {
             channels: AudioChannels::Stereo,
             sample_rate: DEFAULT_SAMPLE_RATE,
             samples_per_batch: DEFAULT_SAMPLES_PER_BATCH,
-            tolerance: FFTTolerance::default(),
+            allowed_failed_batches: 0,
+            tolerance: AudioAnalyzeTolerance::default(),
         }
     }
 }

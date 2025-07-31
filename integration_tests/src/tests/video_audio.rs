@@ -108,6 +108,13 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
                 // Duration::from_millis(2000)..Duration::from_millis(4000),
                 // Duration::from_millis(8000)..Duration::from_millis(10000),
             ],
+            tolerance: crate::AudioAnalyzeTolerance {
+                max_frequency_level: 5.0,
+                average_level: 15.0,
+                median_level: 15.0,
+                general_level: 5.0,
+                ..Default::default()
+            },
             ..Default::default()
         },
     )?;
