@@ -143,12 +143,6 @@ impl SamplingInterval {
     }
 }
 
-// It HAS TO be a power of 2 for FFT to work
-// As channels is always set to stereo this will result in 4096 samples
-// per channel. This number MUST NOT exceed 16384 per channel
-const DEFAULT_SAMPLES_PER_BATCH: usize = 32768;
-const DEFAULT_SAMPLE_RATE: u32 = 48000;
-
 pub struct AudioAnalyzeTolerance {
     /// Tolerance of max frequency. This value is the multiplier
     /// by which frequency resolution shall be multiplied while calculating tolerance
@@ -162,6 +156,7 @@ pub struct AudioAnalyzeTolerance {
 impl Default for AudioAnalyzeTolerance {
     fn default() -> Self {
         Self {
+            // In case of spectral leaking
             max_frequency: 1,
             max_frequency_level: 3.0,
             average_level: 5.0,
@@ -185,8 +180,13 @@ impl Default for AudioValidationConfig {
         Self {
             sampling_intervals: vec![Duration::from_secs(0)..Duration::from_secs(1)],
             channels: AudioChannels::Stereo,
-            sample_rate: DEFAULT_SAMPLE_RATE,
-            samples_per_batch: DEFAULT_SAMPLES_PER_BATCH,
+            sample_rate: 48000,
+
+            // It HAS TO be a power of 2 for FFT to work.
+            // As 'channels' option is always set to stereo this will result in 16384 samples
+            // per channel which is approx. 0.34s for the default sample rate.
+            // This number MUST NOT exceed 16384 per channel.
+            samples_per_batch: 32768,
             allowed_failed_batches: 0,
             tolerance: AudioAnalyzeTolerance::default(),
         }

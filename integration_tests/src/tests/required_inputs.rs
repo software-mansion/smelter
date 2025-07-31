@@ -321,13 +321,14 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
         &new_output_dump,
         AudioValidationConfig {
             sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(5000),
+                Duration::from_millis(0)..Duration::from_millis(10000),
                 // Duration::from_millis(2000)..Duration::from_millis(4000),
                 // Duration::from_millis(6000)..Duration::from_millis(8000),
             ],
-            // In general this test failes 2 batches - 1 per channel at the sime pts,
-            // however sometimes it fails 2, so it is better to leave this safety as safety buffer
-            allowed_failed_batches: 4,
+            // In general this test failes 3 batches (each batch is around 0.34s) - 1 per channel at the same pts,
+            // and differences are not heard in output dumps.
+            // 8 batches to fail is a safety buffer.
+            allowed_failed_batches: 8,
             ..Default::default()
         },
     )?;
