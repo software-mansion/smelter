@@ -123,7 +123,7 @@ impl InitializableThread for AudioTrackThread {
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Whip audio",
+            thread_name: "Whip Audio Decoder",
             thread_instance_name: "Input",
         }
     }

@@ -10,13 +10,18 @@ use crate::{
     event::Event,
     pipeline::{
         encoder::{
-            encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
-            encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
+            encoder_thread_audio::{
+                AudioEncoderThread, AudioEncoderThreadHandle, AudioEncoderThreadOptions,
+            },
+            encoder_thread_video::{
+                VideoEncoderThread, VideoEncoderThreadHandle, VideoEncoderThreadOptions,
+            },
             fdk_aac::FdkAacEncoder,
             ffmpeg_h264::FfmpegH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
     },
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
@@ -140,11 +145,13 @@ impl HlsOutput {
 
         let encoder = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
-                spawn_video_encoder_thread::<FfmpegH264Encoder>(
-                    ctx.clone(),
+                VideoEncoderThread::<FfmpegH264Encoder>::spawn(
                     output_id.clone(),
-                    options.clone(),
-                    encoded_chunks_sender,
+                    VideoEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender: encoded_chunks_sender,
+                    },
                 )?
             }
             VideoEncoderOptions::FfmpegVp8(_) => {
@@ -196,11 +203,13 @@ impl HlsOutput {
         let sample_rate = options.sample_rate();
 
         let encoder = match options {
-            AudioEncoderOptions::FdkAac(options) => spawn_audio_encoder_thread::<FdkAacEncoder>(
-                ctx.clone(),
+            AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
                 output_id.clone(),
-                options,
-                encoded_chunks_sender,
+                AudioEncoderThreadOptions {
+                    ctx: ctx.clone(),
+                    encoder_options: options,
+                    chunks_sender: encoded_chunks_sender,
+                },
             )?,
             AudioEncoderOptions::Opus(_) => {
                 return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus))

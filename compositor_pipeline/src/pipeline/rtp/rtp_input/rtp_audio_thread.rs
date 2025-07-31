@@ -91,7 +91,7 @@ impl<Decoder: AudioDecoder + 'static> InitializableThread for RtpAudioThread<Dec
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Rtp audio track",
+            thread_name: "Rtp Audio Decoder",
             thread_instance_name: "Input",
         }
     }

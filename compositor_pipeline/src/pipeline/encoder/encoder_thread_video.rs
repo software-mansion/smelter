@@ -1,10 +1,13 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
-use compositor_render::{Frame, OutputId};
+use compositor_render::Frame;
 use crossbeam_channel::Sender;
-use tracing::{debug, span, warn, Level};
+use tracing::warn;
 
-use crate::prelude::*;
+use crate::{
+    prelude::*,
+    thread_utils::{InitializableThread, ThreadMetadata},
+};
 
 use super::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream};
 
@@ -14,75 +17,76 @@ pub(crate) struct VideoEncoderThreadHandle {
     pub config: VideoEncoderConfig,
 }
 
-pub fn spawn_video_encoder_thread<Encoder: VideoEncoder>(
-    ctx: Arc<PipelineCtx>,
-    output_id: OutputId,
-    options: Encoder::Options,
-    chunks_sender: Sender<EncodedOutputEvent>,
-) -> Result<VideoEncoderThreadHandle, EncoderInitError> {
-    let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
-
-    std::thread::Builder::new()
-        .name(format!("Audio encoder thread for output {}", &output_id))
-        .spawn(move || {
-            let _span = span!(
-                Level::INFO,
-                "Audio encoder thread",
-                output_id = output_id.to_string(),
-                encoder = Encoder::LABEL
-            )
-            .entered();
-
-            let result = init_encoder_stream::<Encoder>(ctx, options);
-            let stream = match result {
-                Ok((stream, handle)) => {
-                    result_sender.send(Ok(handle)).unwrap();
-                    stream
-                }
-                Err(err) => {
-                    result_sender.send(Err(err)).unwrap();
-                    return;
-                }
-            };
-            for event in stream {
-                if chunks_sender.send(event).is_err() {
-                    warn!("Failed to send encoded video chunk from encoder. Channel closed.");
-                    return;
-                }
-            }
-            debug!("Encoder thread finished.");
-        })
-        .unwrap();
-
-    result_receiver.recv().unwrap()
+pub(crate) struct VideoEncoderThreadOptions<Encoder: VideoEncoder> {
+    pub ctx: Arc<PipelineCtx>,
+    pub encoder_options: Encoder::Options,
+    pub chunks_sender: Sender<EncodedOutputEvent>,
 }
 
-fn init_encoder_stream<Encoder: VideoEncoder>(
-    ctx: Arc<PipelineCtx>,
-    options: Encoder::Options,
-) -> Result<
-    (
-        impl Iterator<Item = EncodedOutputEvent>,
-        VideoEncoderThreadHandle,
-    ),
-    EncoderInitError,
-> {
-    let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
-    let (encoded_stream, encoder_ctx) =
-        VideoEncoderStream::<Encoder, _>::new(ctx, options, frame_receiver.into_iter())?;
+pub(crate) struct VideoEncoderThread<Encoder: VideoEncoder> {
+    stream: Box<dyn Iterator<Item = EncodedOutputEvent>>,
+    chunks_sender: Sender<EncodedOutputEvent>,
+    _encoder: PhantomData<Encoder>,
+}
 
-    let stream = encoded_stream.flatten().map(|event| match event {
-        PipelineEvent::Data(chunk) => EncodedOutputEvent::Data(chunk),
-        PipelineEvent::EOS => EncodedOutputEvent::VideoEOS,
-    });
-    Ok((
-        stream,
-        VideoEncoderThreadHandle {
+impl<Encoder> InitializableThread for VideoEncoderThread<Encoder>
+where
+    Encoder: VideoEncoder + 'static,
+{
+    type InitOptions = VideoEncoderThreadOptions<Encoder>;
+
+    type SpawnOutput = VideoEncoderThreadHandle;
+    type SpawnError = EncoderInitError;
+
+    const LABEL: &'static str = Encoder::LABEL;
+
+    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
+        let VideoEncoderThreadOptions {
+            ctx,
+            encoder_options,
+            chunks_sender,
+        } = options;
+
+        let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
+        let (encoded_stream, encoder_ctx) = VideoEncoderStream::<Encoder, _>::new(
+            ctx,
+            encoder_options,
+            frame_receiver.into_iter(),
+        )?;
+
+        let stream = encoded_stream.flatten().map(|event| match event {
+            PipelineEvent::Data(chunk) => EncodedOutputEvent::Data(chunk),
+            PipelineEvent::EOS => EncodedOutputEvent::VideoEOS,
+        });
+
+        let state = Self {
+            stream: Box::new(stream),
+            chunks_sender,
+            _encoder: PhantomData,
+        };
+        let output = VideoEncoderThreadHandle {
             frame_sender,
             keyframe_request_sender: encoder_ctx.keyframe_request_sender,
             config: encoder_ctx.config,
-        },
-    ))
+        };
+        Ok((state, output))
+    }
+
+    fn run(self) {
+        for event in self.stream {
+            if self.chunks_sender.send(event).is_err() {
+                warn!("Failed to send encoded video chunk from encoder. Channel closed.");
+                return;
+            }
+        }
+    }
+
+    fn metadata() -> ThreadMetadata {
+        ThreadMetadata {
+            thread_name: "Video Encoder",
+            thread_instance_name: "Output",
+        }
+    }
 }
 
 impl VideoEncoderThreadHandle {

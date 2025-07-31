@@ -130,7 +130,7 @@ impl InitializableThread for VideoTrackThread {
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Whip video",
+            thread_name: "Whip Video Decoder",
             thread_instance_name: "Input",
         }
     }

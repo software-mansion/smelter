@@ -68,7 +68,7 @@ impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Rtp video track",
+            thread_name: "Rtp Video Decoder",
             thread_instance_name: "Input",
         }
     }
