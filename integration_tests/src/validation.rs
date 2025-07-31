@@ -55,25 +55,7 @@ pub fn compare_audio_dumps<P: AsRef<Path> + fmt::Debug>(
         }
     };
 
-    let AudioValidationConfig {
-        sampling_intervals,
-        channels,
-        sample_rate,
-        samples_per_batch,
-        allowed_failed_batches,
-        tolerance,
-    } = config;
-
-    if let Err(err) = audio::validate(
-        &expected,
-        actual,
-        &sampling_intervals,
-        channels,
-        sample_rate,
-        samples_per_batch,
-        allowed_failed_batches,
-        tolerance,
-    ) {
+    if let Err(err) = audio::validate(&expected, actual, config) {
         save_failed_test_dumps(&expected, actual, &snapshot_filename);
         handle_error(err, snapshot_filename, actual)?;
     }

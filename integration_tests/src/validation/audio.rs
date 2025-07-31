@@ -7,14 +7,12 @@ use spectrum_analyzer::{
     windows::hann_window,
     Frequency, FrequencyLimit, FrequencySpectrum, FrequencyValue,
 };
-use std::{fmt::Display, ops::Range, time::Duration};
+use std::fmt::Display;
 use tracing::error;
 
 use crate::{
-    audio_decoder::{AudioChannels, AudioDecoder},
-    find_packets_for_payload_type, unmarshal_packets,
-    validation::AudioAnalyzeTolerance,
-    SamplingInterval,
+    audio_decoder::AudioDecoder, find_packets_for_payload_type, unmarshal_packets,
+    validation::AudioAnalyzeTolerance, AudioValidationConfig, SamplingInterval,
 };
 
 #[derive(Debug)]
@@ -97,15 +95,23 @@ impl AnalyzeResult {
 pub fn validate(
     expected: &Bytes,
     actual: &Bytes,
-    time_intervals: &[Range<Duration>],
-
-    // At current time it is set to stereo for all tests
-    channels: AudioChannels,
-    sample_rate: u32,
-    samples_per_batch: usize,
-    allowed_failed_batches: u8,
-    tolerance: AudioAnalyzeTolerance,
+    test_config: AudioValidationConfig,
+    // time_intervals: &[Range<Duration>],
+    // channels: AudioChannels,
+    // sample_rate: u32,
+    // samples_per_batch: usize,
+    // allowed_failed_batches: u8,
+    // tolerance: AudioAnalyzeTolerance,
 ) -> Result<()> {
+    let AudioValidationConfig {
+        sampling_intervals: time_intervals,
+        channels,
+        sample_rate,
+        samples_per_batch,
+        allowed_failed_batches,
+        tolerance,
+    } = test_config;
+
     let expected_packets = unmarshal_packets(expected)?;
     let actual_packets = unmarshal_packets(actual)?;
     let expected_audio_packets = find_packets_for_payload_type(&expected_packets, 97);
