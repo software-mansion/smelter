@@ -261,8 +261,8 @@ fn analyze_samples(
 
     let left_scaler = expected_spectrum_left.max().1.val();
     let right_scaler = expected_spectrum_right.max().1.val();
-    //
-    // Channels and expected and actual sample batches should be of equal length
+    
+    // Expected and actual sample batches should be of equal length
     let mut working_buffer: Vec<(Frequency, FrequencyValue)> =
         vec![(0.0.into(), 0.0.into()); expected_spectrum_left.data().len()];
 

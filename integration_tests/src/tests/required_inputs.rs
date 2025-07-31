@@ -325,9 +325,9 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
                 // Duration::from_millis(2000)..Duration::from_millis(4000),
                 // Duration::from_millis(6000)..Duration::from_millis(8000),
             ],
-            // In general this test failes 3 batches (each batch is around 0.34s) - 1 per channel at the same pts,
-            // and differences are not heard in output dumps.
-            // 8 batches to fail is a safety buffer.
+            // In general this test failes 6 batches (each batch is around 0.34s) - 1 per channel at the same pts,
+            // and any differences cannot be heard in output dumps.
+            // 8 batches is a safety buffer.
             allowed_failed_batches: 8,
             ..Default::default()
         },

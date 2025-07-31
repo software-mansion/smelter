@@ -100,7 +100,7 @@ pub struct SamplingInterval {
 }
 
 impl SamplingInterval {
-    // Intervals returned are this function are not exact
+    // Intervals returned by this function are not exact
     // They may be slightly longer as this function fills the time with batches of size
     // specified as argument
     pub fn from_range(
@@ -145,7 +145,7 @@ impl SamplingInterval {
 
 pub struct AudioAnalyzeTolerance {
     /// Tolerance of max frequency. This value is the multiplier
-    /// by which frequency resolution shall be multiplied while calculating tolerance
+    /// by which frequency resolution shall be multiplied when comparing values
     pub max_frequency: u32,
     pub max_frequency_level: f32,
     pub average_level: f32,
