@@ -62,6 +62,7 @@ pub struct AudioMixerInputConfig {
 pub enum AudioMixingStrategy {
     SumClip,
     SumScale,
+    Compression,
 }
 
 #[derive(Debug, Clone)]

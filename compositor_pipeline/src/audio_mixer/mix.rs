@@ -56,6 +56,7 @@ impl SampleMixer {
         let mixed = match output_info.mixing_strategy {
             AudioMixingStrategy::SumClip => self.clip_samples(summed_samples),
             AudioMixingStrategy::SumScale => self.scale_samples(summed_samples),
+            AudioMixingStrategy::Compression => self.dynamic_range_compression(summed_samples),
         };
 
         match output_info.channels {
@@ -110,6 +111,10 @@ impl SampleMixer {
                 ((l * factor).clamp(-1.0, 1.0), (r * factor).clamp(-1.0, 1.0))
             })
             .collect()
+    }
+
+    fn dynamic_range_compression(&self, summed_samples: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
+        vec![]
     }
 
     /// Sums samples from inputs
