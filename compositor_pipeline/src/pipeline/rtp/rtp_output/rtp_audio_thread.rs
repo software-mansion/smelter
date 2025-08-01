@@ -5,7 +5,6 @@ use crossbeam_channel::Sender;
 use tracing::warn;
 
 use crate::prelude::*;
-use crate::thread_utils::{InitializableThread, ThreadMetadata};
 use crate::{
     error::EncoderInitError,
     pipeline::{
@@ -13,6 +12,7 @@ use crate::{
         resampler::encoder_resampler::ResampledForEncoderStream,
         rtp::payloader::{PayloaderOptions, PayloaderStream},
     },
+    thread_utils::{InitializableThread, ThreadMetadata},
 };
 
 use super::RtpEvent;
@@ -42,8 +42,6 @@ where
 
     type SpawnOutput = RtpAudioTrackThreadHandle;
     type SpawnError = EncoderInitError;
-
-    const LABEL: &'static str = Encoder::LABEL;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let RtpAudioTrackThreadOptions {
@@ -99,8 +97,8 @@ where
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Rtp Audio Encoder",
-            thread_instance_name: "Output",
+            thread_name: format!("Rtp Audio Encoder ({})", Encoder::LABEL),
+            thread_instance_name: "Output".to_string(),
         }
     }
 }

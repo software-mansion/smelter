@@ -6,7 +6,6 @@ use tokio::sync::mpsc;
 use tracing::warn;
 
 use crate::prelude::*;
-use crate::thread_utils::ThreadMetadata;
 use crate::{
     pipeline::{
         encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
@@ -15,7 +14,7 @@ use crate::{
             RtpPacket,
         },
     },
-    thread_utils::InitializableThread,
+    thread_utils::{InitializableThread, ThreadMetadata},
 };
 
 #[derive(Debug)]
@@ -46,8 +45,6 @@ where
 
     type SpawnOutput = WhipVideoTrackThreadHandle;
     type SpawnError = EncoderInitError;
-
-    const LABEL: &'static str = Encoder::LABEL;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let WhipVideoTrackThreadOptions {
@@ -102,8 +99,8 @@ where
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Whip Video Encoder",
-            thread_instance_name: "Output",
+            thread_name: "Whip Video Encoder".to_string(),
+            thread_instance_name: "Output".to_string(),
         }
     }
 }

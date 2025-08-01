@@ -8,8 +8,6 @@ pub(crate) trait InitializableThread: Sized {
     /// Represents type returned on failed `init` to the caller of `Self::spawn`
     type SpawnError: std::error::Error + Send + 'static;
 
-    const LABEL: &'static str;
-
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError>;
 
     fn run(self);
@@ -28,7 +26,6 @@ pub(crate) trait InitializableThread: Sized {
                 let _span = span!(
                     Level::INFO,
                     "Thread",
-                    label = Self::LABEL,
                     thread = metadata.thread_name,
                     instance = format!("{} {}", metadata.thread_instance_name, instance_id),
                 )
@@ -52,13 +49,13 @@ pub(crate) trait InitializableThread: Sized {
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Initializable thread",
-            thread_instance_name: "Instance",
+            thread_name: "Initializable thread".to_string(),
+            thread_instance_name: "Instance".to_string(),
         }
     }
 }
 
 pub(crate) struct ThreadMetadata {
-    pub thread_name: &'static str,
-    pub thread_instance_name: &'static str,
+    pub thread_name: String,
+    pub thread_instance_name: String,
 }

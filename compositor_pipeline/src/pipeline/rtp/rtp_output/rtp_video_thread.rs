@@ -6,13 +6,12 @@ use crossbeam_channel::Sender;
 use tracing::warn;
 
 use crate::prelude::*;
-use crate::thread_utils::ThreadMetadata;
 use crate::{
     pipeline::{
         encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
         rtp::payloader::{PayloaderOptions, PayloaderStream},
     },
-    thread_utils::InitializableThread,
+    thread_utils::{InitializableThread, ThreadMetadata},
 };
 
 use super::RtpEvent;
@@ -44,8 +43,6 @@ where
 
     type SpawnOutput = RtpVideoTrackThreadHandle;
     type SpawnError = EncoderInitError;
-
-    const LABEL: &'static str = Encoder::LABEL;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let RtpVideoTrackThreadOptions {
@@ -99,8 +96,8 @@ where
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Rtp Video Encoder",
-            thread_instance_name: "Output",
+            thread_name: format!("Rtp Video Encoder ({})", Encoder::LABEL),
+            thread_instance_name: "Output".to_string(),
         }
     }
 }

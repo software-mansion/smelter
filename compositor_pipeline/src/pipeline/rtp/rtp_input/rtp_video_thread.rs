@@ -5,7 +5,6 @@ use crossbeam_channel::Sender;
 use tracing::warn;
 
 use crate::prelude::*;
-use crate::thread_utils::ThreadMetadata;
 use crate::{
     pipeline::{
         decoder::{VideoDecoder, VideoDecoderStream},
@@ -14,7 +13,7 @@ use crate::{
             RtpPacket,
         },
     },
-    thread_utils::InitializableThread,
+    thread_utils::{InitializableThread, ThreadMetadata},
 };
 
 pub(crate) struct RtpVideoTrackThreadHandle {
@@ -36,8 +35,6 @@ impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
 
     type SpawnOutput = RtpVideoTrackThreadHandle;
     type SpawnError = DecoderInitError;
-
-    const LABEL: &'static str = Decoder::LABEL;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let (ctx, depayloader_options, frame_sender) = options;
@@ -68,8 +65,8 @@ impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Rtp Video Decoder",
-            thread_instance_name: "Input",
+            thread_name: format!("Rtp Video Decoder ({})", Decoder::LABEL),
+            thread_instance_name: "Input".to_string(),
         }
     }
 }

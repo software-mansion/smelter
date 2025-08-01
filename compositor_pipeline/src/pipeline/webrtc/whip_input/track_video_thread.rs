@@ -8,6 +8,7 @@ use webrtc::{
     track::track_remote::TrackRemote,
 };
 
+use crate::prelude::*;
 use crate::{
     codecs::{VideoCodec, VideoDecoderOptions},
     pipeline::{
@@ -26,9 +27,8 @@ use crate::{
             WhipWhepServerState,
         },
     },
-    thread_utils::ThreadMetadata,
+    thread_utils::{InitializableThread, ThreadMetadata},
 };
-use crate::{prelude::*, thread_utils::InitializableThread};
 
 pub async fn process_video_track(
     state: WhipWhepServerState,
@@ -86,8 +86,6 @@ impl InitializableThread for VideoTrackThread {
     type SpawnOutput = VideoTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
-    const LABEL: &'static str = "Whip video decoder";
-
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let (ctx, codec_info, frame_sender) = options;
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5);
@@ -130,8 +128,8 @@ impl InitializableThread for VideoTrackThread {
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Whip Video Decoder",
-            thread_instance_name: "Input",
+            thread_name: "Whip Video Decoder".to_string(),
+            thread_instance_name: "Input".to_string(),
         }
     }
 }

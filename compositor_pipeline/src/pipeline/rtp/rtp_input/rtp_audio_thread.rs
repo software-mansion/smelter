@@ -4,7 +4,6 @@ use crossbeam_channel::Sender;
 use tracing::warn;
 
 use crate::prelude::*;
-use crate::thread_utils::ThreadMetadata;
 use crate::{
     pipeline::{
         decoder::{AudioDecoder, AudioDecoderStream},
@@ -14,7 +13,7 @@ use crate::{
             RtpPacket,
         },
     },
-    thread_utils::InitializableThread,
+    thread_utils::{InitializableThread, ThreadMetadata},
 };
 
 pub(crate) struct RtpAudioTrackThreadHandle {
@@ -41,8 +40,6 @@ impl<Decoder: AudioDecoder + 'static> InitializableThread for RtpAudioThread<Dec
 
     type SpawnOutput = RtpAudioTrackThreadHandle;
     type SpawnError = DecoderInitError;
-
-    const LABEL: &'static str = Decoder::LABEL;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let RtpAudioThreadOptions {
@@ -91,8 +88,8 @@ impl<Decoder: AudioDecoder + 'static> InitializableThread for RtpAudioThread<Dec
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Rtp Audio Decoder",
-            thread_instance_name: "Input",
+            thread_name: format!("Rtp Audio Decoder ({})", Decoder::LABEL),
+            thread_instance_name: "Input".to_string(),
         }
     }
 }

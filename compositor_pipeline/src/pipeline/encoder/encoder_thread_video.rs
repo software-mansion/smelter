@@ -38,8 +38,6 @@ where
     type SpawnOutput = VideoEncoderThreadHandle;
     type SpawnError = EncoderInitError;
 
-    const LABEL: &'static str = Encoder::LABEL;
-
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let VideoEncoderThreadOptions {
             ctx,
@@ -83,8 +81,8 @@ where
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Video Encoder",
-            thread_instance_name: "Output",
+            thread_name: format!("Video Encoder ({})", Encoder::LABEL),
+            thread_instance_name: "Output".to_string(),
         }
     }
 }
