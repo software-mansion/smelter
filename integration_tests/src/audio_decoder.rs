@@ -1,14 +1,6 @@
-use std::time::Duration;
-
 use anyhow::Result;
 
 use rtp::{codecs::opus::OpusPacket, packetizer::Depacketizer};
-
-#[derive(Clone)]
-pub struct AudioSampleBatch {
-    pub samples: Vec<i16>,
-    pub pts: Duration,
-}
 
 #[derive(Debug, Clone, Copy)]
 pub enum AudioChannels {
@@ -20,8 +12,7 @@ pub struct AudioDecoder {
     buffer: Vec<i16>,
     depayloader: OpusPacket,
     decoder: opus::Decoder,
-    decoded_samples: Vec<AudioSampleBatch>,
-    sample_rate: u32,
+    decoded_samples: Vec<i16>,
 }
 
 impl AudioDecoder {
@@ -37,7 +28,6 @@ impl AudioDecoder {
             depayloader: OpusPacket,
             decoder,
             decoded_samples: Vec::new(),
-            sample_rate,
         })
     }
 
@@ -48,15 +38,13 @@ impl AudioDecoder {
         }
 
         let samples_count = self.decoder.decode(&chunk_data, &mut self.buffer, false)?;
-        self.decoded_samples.push(AudioSampleBatch {
-            samples: self.buffer[..samples_count].to_vec(),
-            pts: Duration::from_secs_f64(packet.header.timestamp as f64 / self.sample_rate as f64),
-        });
+        self.decoded_samples
+            .extend(self.buffer[..samples_count].iter());
 
         Ok(())
     }
 
-    pub fn take_samples(self) -> Vec<AudioSampleBatch> {
-        self.decoded_samples
+    pub fn take_samples(self) -> Vec<f32> {
+        self.decoded_samples.into_iter().map(|s| s as f32).collect()
     }
 }
