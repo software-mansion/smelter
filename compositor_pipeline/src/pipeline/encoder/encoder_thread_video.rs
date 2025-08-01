@@ -22,6 +22,7 @@ pub fn spawn_video_encoder_thread<Encoder: VideoEncoder>(
 ) -> Result<VideoEncoderThreadHandle, EncoderInitError> {
     let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
 
+    // println!("video::: {output_id:?}");
     std::thread::Builder::new()
         .name(format!("Audio encoder thread for output {}", &output_id))
         .spawn(move || {

@@ -22,7 +22,7 @@ use crate::{
             RtpPacket, RtpTimestampSync,
         },
         webrtc::{
-            error::WhipServerError,
+            error::WhipWhepServerError,
             whip_input::{negotiated_codecs::NegotiatedVideoCodecsInfo, AsyncReceiverIter},
             WhipWhepServerState,
         },
@@ -35,17 +35,17 @@ pub async fn process_video_track(
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
     video_preferences: Vec<VideoDecoderOptions>,
-) -> Result<(), WhipServerError> {
+) -> Result<(), WhipWhepServerError> {
     let Some(negotiated_codecs) =
         NegotiatedVideoCodecsInfo::new(transceiver, &video_preferences).await
     else {
         warn!("Skipping video track, no valid codec negotiated");
-        return Err(WhipServerError::InternalError(
+        return Err(WhipWhepServerError::InternalError(
             "No video codecs negotiated".to_string(),
         ));
     };
 
-    let WhipWhepServerState { inputs, ctx } = state;
+    let WhipWhepServerState { inputs, ctx, .. } = state;
     let frame_sender = inputs.get_with(&input_id, |input| Ok(input.frame_sender.clone()))?;
     let handle = spawn_video_track_thread(ctx.clone(), input_id, negotiated_codecs, frame_sender)?;
 

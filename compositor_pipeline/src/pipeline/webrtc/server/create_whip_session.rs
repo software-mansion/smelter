@@ -1,5 +1,5 @@
 use crate::pipeline::webrtc::{
-    error::WhipServerError,
+    error::WhipWhepServerError,
     peer_connection_recvonly::RecvonlyPeerConnection,
     whip_input::{
         track_audio_thread::process_audio_track, track_video_thread::process_video_track,
@@ -26,7 +26,7 @@ pub async fn handle_create_whip_session(
     State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
     offer: String,
-) -> Result<Response<Body>, WhipServerError> {
+) -> Result<Response<Body>, WhipWhepServerError> {
     let input_id = InputId(Arc::from(id.clone()));
     trace!("SDP offer: {}", offer);
     let inputs = state.inputs.clone();
@@ -101,20 +101,23 @@ pub async fn handle_create_whip_session(
         .status(StatusCode::CREATED)
         .header("Content-Type", "application/sdp")
         .header("Access-Control-Expose-Headers", "Location")
-        .header("Location", format!("/session/{}", urlencoding::encode(&id)))
+        .header(
+            "Location",
+            format!("/resource/{}", urlencoding::encode(&id)),
+        )
         .body(body)?;
     Ok(response)
 }
 
-pub fn validate_sdp_content_type(headers: &HeaderMap) -> Result<(), WhipServerError> {
+pub fn validate_sdp_content_type(headers: &HeaderMap) -> Result<(), WhipWhepServerError> {
     if let Some(content_type) = headers.get("Content-Type") {
         if content_type.as_bytes() != b"application/sdp" {
-            return Err(WhipServerError::InternalError(
+            return Err(WhipWhepServerError::InternalError(
                 "Invalid Content-Type".to_string(),
             ));
         }
     } else {
-        return Err(WhipServerError::BadRequest(
+        return Err(WhipWhepServerError::BadRequest(
             "Missing Content-Type header".to_string(),
         ));
     }

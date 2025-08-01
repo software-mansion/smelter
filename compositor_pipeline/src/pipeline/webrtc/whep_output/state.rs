@@ -4,67 +4,70 @@ use std::{
 };
 
 use axum::http::HeaderMap;
-use compositor_render::InputId;
+use compositor_render::OutputId;
 use tracing::error;
 
 use crate::pipeline::webrtc::{
     bearer_token::validate_token,
     error::WhipWhepServerError,
-    whip_input::connection_state::{WhipInputConnectionState, WhipInputConnectionStateOptions},
+    whep_output::connection_state::{WhepOutputConnectionState, WhepOutputConnectionStateOptions},
 };
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct WhipInputsState(Arc<Mutex<HashMap<InputId, WhipInputConnectionState>>>);
+pub(crate) struct WhepOutputsState(Arc<Mutex<HashMap<OutputId, WhepOutputConnectionState>>>);
 
-impl WhipInputsState {
+impl WhepOutputsState {
     pub fn get_with<
         T,
-        Func: FnOnce(&WhipInputConnectionState) -> Result<T, WhipWhepServerError>,
+        Func: FnOnce(&WhepOutputConnectionState) -> Result<T, WhipWhepServerError>,
     >(
         &self,
-        input_id: &InputId,
+        output_id: &OutputId,
         func: Func,
     ) -> Result<T, WhipWhepServerError> {
         let guard = self.0.lock().unwrap();
-        match guard.get(input_id) {
-            Some(input) => func(input),
+        match guard.get(output_id) {
+            Some(output) => func(output),
             None => Err(WhipWhepServerError::NotFound(format!(
-                "{input_id:?} not found"
+                "{output_id:?} not found"
             ))),
         }
     }
 
     pub fn get_mut_with<
         T,
-        Func: FnOnce(&mut WhipInputConnectionState) -> Result<T, WhipWhepServerError>,
+        Func: FnOnce(&mut WhepOutputConnectionState) -> Result<T, WhipWhepServerError>,
     >(
         &self,
-        input_id: &InputId,
+        output_id: &OutputId,
         func: Func,
     ) -> Result<T, WhipWhepServerError> {
         let mut guard = self.0.lock().unwrap();
-        match guard.get_mut(input_id) {
-            Some(input) => func(input),
+        match guard.get_mut(output_id) {
+            Some(output) => func(output),
             None => Err(WhipWhepServerError::NotFound(format!(
-                "{input_id:?} not found"
+                "{output_id:?} not found"
             ))),
         }
     }
 
-    pub fn add_input(&self, input_id: &InputId, options: WhipInputConnectionStateOptions) {
+    pub fn add_output(&self, output_id: &OutputId, options: WhepOutputConnectionStateOptions) {
         let mut guard = self.0.lock().unwrap();
-        guard.insert(input_id.clone(), WhipInputConnectionState::new(options));
+        guard.insert(output_id.clone(), WhepOutputConnectionState::new(options));
     }
 
     // called on drop (when input is unregistered)
-    pub fn ensure_input_closed(&self, input_id: &InputId) {
+    pub fn ensure_output_closed(&self, output_id: &OutputId) {
         let mut guard = self.0.lock().unwrap();
-        if let Some(input) = guard.remove(input_id) {
+        if let Some(input) = guard.remove(output_id) {
             if let Some(peer_connection) = input.peer_connection {
-                let input_id = input_id.clone();
+                let output_id = output_id.clone();
                 tokio::spawn(async move {
                     if let Err(err) = peer_connection.close().await {
-                        error!("Cannot close peer_connection for {:?}: {:?}", input_id, err);
+                        error!(
+                            "Cannot close peer_connection for {:?}: {:?}",
+                            output_id, err
+                        );
                     };
                 });
             }
@@ -73,14 +76,14 @@ impl WhipInputsState {
 
     pub async fn validate_token(
         &self,
-        input_id: &InputId,
+        output_id: &OutputId,
         headers: &HeaderMap,
     ) -> Result<(), WhipWhepServerError> {
-        let bearer_token = match self.0.lock().unwrap().get_mut(input_id) {
-            Some(input) => input.bearer_token.clone(),
+        let bearer_token = match self.0.lock().unwrap().get_mut(output_id) {
+            Some(output) => output.bearer_token.clone(),
             None => {
                 return Err(WhipWhepServerError::NotFound(format!(
-                    "{input_id:?} not found"
+                    "{output_id:?} not found"
                 )))
             }
         };

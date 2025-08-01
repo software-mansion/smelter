@@ -1,11 +1,11 @@
 use std::{sync::Arc, time::Duration};
 
 use tokio::{sync::watch, time::timeout};
-use tracing::{debug, warn};
+use tracing::debug;
 use webrtc::{
     api::{
         interceptor_registry::register_default_interceptors,
-        media_engine::{MediaEngine, MIME_TYPE_OPUS},
+        media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS},
         APIBuilder,
     },
     ice_transport::{
@@ -22,10 +22,11 @@ use webrtc::{
         rtp_transceiver_direction::RTCRtpTransceiverDirection,
         RTCRtpTransceiver, RTCRtpTransceiverInit,
     },
+    track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
 use crate::{
-    codecs::VideoDecoderOptions,
+    codecs::VideoEncoderOptions,
     pipeline::{
         webrtc::{
             error::WhipWhepServerError,
@@ -39,16 +40,15 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub(crate) struct RecvonlyPeerConnection {
+pub(crate) struct SendonlyPeerConnection {
     pc: Arc<RTCPeerConnection>,
 }
 
-impl RecvonlyPeerConnection {
-    pub async fn new(
-        ctx: &Arc<PipelineCtx>,
-        video_preferences: &Vec<VideoDecoderOptions>,
-    ) -> Result<Self, WhipWhepServerError> {
-        let mut media_engine = media_engine_with_codecs(video_preferences)?;
+impl SendonlyPeerConnection {
+    pub async fn new(ctx: &Arc<PipelineCtx>) -> Result<Self, WhipWhepServerError> {
+        // let mut media_engine = media_engine_with_codecs(video_preferences)?;
+        let mut media_engine = MediaEngine::default();
+        let _ = media_engine.register_default_codecs();
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
         let api = APIBuilder::new()
@@ -88,26 +88,22 @@ impl RecvonlyPeerConnection {
 
     pub async fn new_video_track(
         &self,
-        video_preferences: &Vec<VideoDecoderOptions>,
-    ) -> Result<Arc<RTCRtpTransceiver>, WhipWhepServerError> {
-        let transceiver = self
-            .pc
-            .add_transceiver_from_kind(
-                RTPCodecType::Video,
-                Some(RTCRtpTransceiverInit {
-                    direction: RTCRtpTransceiverDirection::Recvonly,
-                    send_encodings: vec![],
-                }),
-            )
-            .await?;
+        // encoder
+    ) -> Result<(), WhipWhepServerError> {
+        let track = Arc::new(TrackLocalStaticRTP::new(
+            RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_H264.to_owned(),
+                clock_rate: 90000,
+                channels: 0,
+                sdp_fmtp_line: "".to_owned(),
+                rtcp_feedback: vec![],
+            },
+            "video".to_string(),
+            "webrtc".to_string(),
+        ));
+        self.pc.add_track(track).await?;
 
-        if let Err(err) = transceiver
-            .set_codec_preferences(map_video_decoder_to_rtp_codec_parameters(video_preferences))
-            .await
-        {
-            warn!("Cannot set codec preferences for sdp answer: {err:?}");
-        }
-        Ok(transceiver)
+        Ok(())
     }
 
     pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpTransceiver>, WhipWhepServerError> {
@@ -116,7 +112,7 @@ impl RecvonlyPeerConnection {
             .add_transceiver_from_kind(
                 RTPCodecType::Audio,
                 Some(RTCRtpTransceiverInit {
-                    direction: RTCRtpTransceiverDirection::Recvonly,
+                    direction: RTCRtpTransceiverDirection::Sendonly,
                     send_encodings: vec![],
                 }),
             )
@@ -192,7 +188,7 @@ impl RecvonlyPeerConnection {
 }
 
 fn media_engine_with_codecs(
-    video_preferences: &Vec<VideoDecoderOptions>,
+    video_preferences: &Vec<VideoEncoderOptions>,
 ) -> webrtc::error::Result<MediaEngine> {
     let mut media_engine = MediaEngine::default();
     media_engine.register_codec(
@@ -225,24 +221,19 @@ fn media_engine_with_codecs(
         RTPCodecType::Audio,
     )?;
 
-    for video_decoder in video_preferences {
-        match video_decoder {
-            VideoDecoderOptions::FfmpegH264 => {
+    for video_encoder in video_preferences {
+        match video_encoder {
+            VideoEncoderOptions::FfmpegH264(..) => {
                 for codec in get_video_h264_codecs_for_media_engine() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
-            VideoDecoderOptions::VulkanH264 => {
-                for codec in get_video_h264_codecs_for_media_engine() {
-                    media_engine.register_codec(codec, RTPCodecType::Video)?;
-                }
-            }
-            VideoDecoderOptions::FfmpegVp8 => {
+            VideoEncoderOptions::FfmpegVp8(..) => {
                 for codec in get_video_vp8_codecs() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
-            VideoDecoderOptions::FfmpegVp9 => {
+            VideoEncoderOptions::FfmpegVp9(..) => {
                 for codec in get_video_vp9_codecs() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
@@ -253,8 +244,8 @@ fn media_engine_with_codecs(
     Ok(media_engine)
 }
 
-fn map_video_decoder_to_rtp_codec_parameters(
-    video_preferences: &Vec<VideoDecoderOptions>,
+fn map_video_encoder_to_rtp_codec_parameters(
+    video_preferences: &Vec<VideoEncoderOptions>,
 ) -> Vec<RTCRtpCodecParameters> {
     let video_vp8_codec = get_video_vp8_codecs();
     let video_vp9_codec = get_video_vp9_codecs();
@@ -264,16 +255,13 @@ fn map_video_decoder_to_rtp_codec_parameters(
 
     for decoder in video_preferences {
         match decoder {
-            VideoDecoderOptions::FfmpegH264 => {
+            VideoEncoderOptions::FfmpegH264(..) => {
                 codec_list.extend(video_h264_codecs.clone());
             }
-            VideoDecoderOptions::VulkanH264 => {
-                codec_list.extend(video_h264_codecs.clone());
-            }
-            VideoDecoderOptions::FfmpegVp8 => {
+            VideoEncoderOptions::FfmpegVp8(..) => {
                 codec_list.extend(video_vp8_codec.clone());
             }
-            VideoDecoderOptions::FfmpegVp9 => {
+            VideoEncoderOptions::FfmpegVp9(..) => {
                 codec_list.extend(video_vp9_codec.clone());
             }
         }
