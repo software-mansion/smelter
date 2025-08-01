@@ -26,8 +26,8 @@ use tracing::{debug, error, span, warn, Level};
 use crate::{
     pipeline::{
         decoder::{
-            decoder_thread_audio::spawn_audio_decoder_thread,
-            decoder_thread_video::spawn_video_decoder_thread,
+            decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
+            decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac, ffmpeg_h264,
             h264_utils::{AvccToAnnexBRepacker, H264AvcDecoderConfig},
             DecoderThreadHandle,
@@ -35,6 +35,7 @@ use crate::{
         input::Input,
     },
     queue::QueueDataReceiver,
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
@@ -116,11 +117,14 @@ impl HlsInput {
                 let (samples_sender, samples_receiver) = bounded(5);
                 let state =
                     StreamState::new(input_start_time, ctx.queue_sync_point, stream.time_base());
-                let decoder_result = spawn_audio_decoder_thread::<fdk_aac::FdkAacDecoder, 2000>(
-                    ctx.clone(),
+                let decoder_result = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
                     input_id.clone(),
-                    FdkAacDecoderOptions { asc },
-                    samples_sender,
+                    AudioDecoderThreadOptions {
+                        ctx: ctx.clone(),
+                        decoder_options: FdkAacDecoderOptions { asc },
+                        samples_sender,
+                        input_buffer_size: 2000,
+                    },
                 );
                 let handle = match decoder_result {
                     Ok(handle) => handle,
@@ -136,6 +140,7 @@ impl HlsInput {
             }
             None => (None, None),
         };
+
         let (mut video, mut frame_receiver) = match input_ctx.streams().best(Type::Video) {
             Some(stream) => {
                 let (frame_sender, frame_receiver) = bounded(5);
@@ -154,13 +159,15 @@ impl HlsInput {
                         }
                     });
 
-                let decoder_result =
-                    spawn_video_decoder_thread::<ffmpeg_h264::FfmpegH264Decoder, 2000, _>(
-                        ctx.clone(),
-                        input_id.clone(),
-                        h264_config.map(AvccToAnnexBRepacker::new),
+                let decoder_result = VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
+                    input_id,
+                    VideoDecoderThreadOptions {
+                        ctx: ctx.clone(),
+                        transformer: h264_config.map(AvccToAnnexBRepacker::new),
                         frame_sender,
-                    );
+                        input_buffer_size: 2000,
+                    },
+                );
                 let handle = match decoder_result {
                     Ok(handle) => handle,
                     Err(err) => {
@@ -311,17 +318,13 @@ struct StreamState {
     input_start_time: Instant,
     queue_start_time: Instant,
     first_pts: Option<Duration>,
-
-    prev_dts: Option<f64>,
-    next_predicted_dts: Option<f64>,
-    discontinuity_offset: f64,
     time_base: ffmpeg_next::Rational,
+
+    pts_discontinuity: DiscontinuityState,
+    dts_discontinuity: DiscontinuityState,
 }
 
 impl StreamState {
-    /// (10s) This value was picked arbitrarily but it's quite conservative.
-    const DISCONTINUITY_THRESHOLD: f64 = 10.0;
-
     fn new(
         input_start_time: Instant,
         queue_start_time: Instant,
@@ -331,59 +334,96 @@ impl StreamState {
             input_start_time,
             queue_start_time,
             first_pts: None,
-            prev_dts: None,
-            next_predicted_dts: None,
-            discontinuity_offset: 0.0,
             time_base,
+            pts_discontinuity: DiscontinuityState::new(false, time_base),
+            dts_discontinuity: DiscontinuityState::new(true, time_base),
         }
-    }
-
-    fn detect_discontinuity(&mut self, packet: &Packet) -> bool {
-        let dts = packet.dts().unwrap_or(0) as f64;
-        let (Some(prev_dts), Some(next_dts)) = (self.prev_dts, self.next_predicted_dts) else {
-            self.prev_dts = Some(dts);
-            self.next_predicted_dts = Some(dts + packet.duration() as f64);
-            return false;
-        };
-
-        // Detect discontinuity
-        let timestamp_delta = self.to_timestamp(f64::abs(next_dts - dts)).as_secs_f64();
-        let is_discontinuity = timestamp_delta >= Self::DISCONTINUITY_THRESHOLD || prev_dts > dts;
-        if is_discontinuity {
-            debug!("Discontinuity detected: {prev_dts} -> {dts} (dts)");
-            self.discontinuity_offset += next_dts - dts;
-        }
-
-        self.prev_dts = Some(dts);
-        self.next_predicted_dts = Some(dts + packet.duration() as f64);
-
-        is_discontinuity
     }
 
     fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>, bool) {
-        let is_discontinuity = self.detect_discontinuity(packet);
-        let pts = self.to_timestamp(packet.pts().unwrap_or(0) as f64 + self.discontinuity_offset);
-        let dts = packet
-            .dts()
-            .map(|dts| self.to_timestamp(dts as f64 + self.discontinuity_offset));
+        let pts = packet.pts().unwrap_or(0) as f64;
+        let dts = packet.dts().map(|dts| dts as f64);
+        let packet_duration = packet.duration() as f64;
+
+        let is_pts_discontinuity = self
+            .pts_discontinuity
+            .detect_discontinuity(pts, packet_duration);
+        let is_dts_discontinuity = match dts {
+            Some(dts) => self
+                .dts_discontinuity
+                .detect_discontinuity(dts, packet_duration),
+            None => false,
+        };
+
+        let pts = to_timestamp(pts + self.pts_discontinuity.offset, self.time_base);
+        let dts = dts.map(|dts| to_timestamp(dts + self.dts_discontinuity.offset, self.time_base));
 
         // Recalculate pts in regards to queue start time
         let first_pts = *self.first_pts.get_or_insert(pts);
         let pts = self.to_queue_timestamp(pts.saturating_sub(first_pts));
 
-        (pts, dts, is_discontinuity)
-    }
-
-    fn to_timestamp(&self, timestamp: f64) -> Duration {
-        Duration::from_secs_f64(
-            f64::max(timestamp, 0.0) * self.time_base.numerator() as f64
-                / self.time_base.denominator() as f64,
-        )
+        (pts, dts, is_pts_discontinuity || is_dts_discontinuity)
     }
 
     fn to_queue_timestamp(&self, input_timestamp: Duration) -> Duration {
         (self.input_start_time + input_timestamp).duration_since(self.queue_start_time)
     }
+}
+
+struct DiscontinuityState {
+    check_timestamp_monotonicity: bool,
+    time_base: ffmpeg_next::Rational,
+    prev_timestamp: Option<f64>,
+    next_predicted_timestamp: Option<f64>,
+    offset: f64,
+}
+
+impl DiscontinuityState {
+    /// (10s) This value was picked arbitrarily but it's quite conservative.
+    const DISCONTINUITY_THRESHOLD: f64 = 10.0;
+
+    fn new(check_timestamp_monotonicity: bool, time_base: ffmpeg_next::Rational) -> Self {
+        Self {
+            check_timestamp_monotonicity,
+            time_base,
+            prev_timestamp: None,
+            next_predicted_timestamp: None,
+            offset: 0.0,
+        }
+    }
+
+    fn detect_discontinuity(&mut self, timestamp: f64, packet_duration: f64) -> bool {
+        let (Some(prev_timestamp), Some(next_timestamp)) =
+            (self.prev_timestamp, self.next_predicted_timestamp)
+        else {
+            self.prev_timestamp = Some(timestamp);
+            self.next_predicted_timestamp = Some(timestamp + packet_duration);
+            return false;
+        };
+
+        // Detect discontinuity
+        let timestamp_delta =
+            to_timestamp(f64::abs(next_timestamp - timestamp), self.time_base).as_secs_f64();
+
+        let mut is_discontinuity = timestamp_delta >= Self::DISCONTINUITY_THRESHOLD
+            || (self.check_timestamp_monotonicity && prev_timestamp > timestamp);
+        if is_discontinuity {
+            debug!("Discontinuity detected: {prev_timestamp} -> {timestamp}");
+            self.offset += next_timestamp - timestamp;
+            is_discontinuity = true;
+        }
+
+        self.prev_timestamp = Some(timestamp);
+        self.next_predicted_timestamp = Some(timestamp + packet_duration);
+
+        is_discontinuity
+    }
+}
+
+fn to_timestamp(timestamp: f64, time_base: ffmpeg_next::Rational) -> Duration {
+    Duration::from_secs_f64(
+        f64::max(timestamp, 0.0) * time_base.numerator() as f64 / time_base.denominator() as f64,
+    )
 }
 
 /// Combined implementation of ffmpeg_next::format:input_with_interrupt and

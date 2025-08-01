@@ -1,6 +1,6 @@
 use std::{ptr, sync::Arc, time::Duration};
 
-use compositor_render::OutputId;
+use compositor_render::{Framerate, OutputId};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use ffmpeg_next::{self as ffmpeg, Dictionary, Rational, Rescale};
 use log::error;
@@ -10,13 +10,18 @@ use crate::{
     event::Event,
     pipeline::{
         encoder::{
-            encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
-            encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
+            encoder_thread_audio::{
+                AudioEncoderThread, AudioEncoderThreadHandle, AudioEncoderThreadOptions,
+            },
+            encoder_thread_video::{
+                VideoEncoderThread, VideoEncoderThreadHandle, VideoEncoderThreadOptions,
+            },
             fdk_aac::FdkAacEncoder,
             ffmpeg_h264::FfmpegH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
     },
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
@@ -111,13 +116,12 @@ impl HlsOutput {
                 let _span =
                     tracing::info_span!("HLS writer", output_id = output_id.to_string()).entered();
 
-                let frame_duration = ctx.output_framerate.num / ctx.output_framerate.den;
                 run_ffmpeg_output_thread(
                     output_ctx,
                     video_stream,
                     audio_stream,
                     encoded_chunks_receiver,
-                    frame_duration,
+                    ctx.output_framerate,
                 );
                 ctx.event_emitter.emit(Event::OutputDone(output_id.clone()));
                 debug!("Closing HLS writer thread.");
@@ -141,11 +145,13 @@ impl HlsOutput {
 
         let encoder = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
-                spawn_video_encoder_thread::<FfmpegH264Encoder>(
-                    ctx.clone(),
+                VideoEncoderThread::<FfmpegH264Encoder>::spawn(
                     output_id.clone(),
-                    options.clone(),
-                    encoded_chunks_sender,
+                    VideoEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender: encoded_chunks_sender,
+                    },
                 )?
             }
             VideoEncoderOptions::FfmpegVp8(_) => {
@@ -197,11 +203,13 @@ impl HlsOutput {
         let sample_rate = options.sample_rate();
 
         let encoder = match options {
-            AudioEncoderOptions::FdkAac(options) => spawn_audio_encoder_thread::<FdkAacEncoder>(
-                ctx.clone(),
+            AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
                 output_id.clone(),
-                options,
-                encoded_chunks_sender,
+                AudioEncoderThreadOptions {
+                    ctx: ctx.clone(),
+                    encoder_options: options,
+                    chunks_sender: encoded_chunks_sender,
+                },
             )?,
             AudioEncoderOptions::Opus(_) => {
                 return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus))
@@ -269,7 +277,7 @@ fn run_ffmpeg_output_thread(
     mut video_stream: Option<StreamState>,
     mut audio_stream: Option<StreamState>,
     packets_receiver: Receiver<EncodedOutputEvent>,
-    frame_duration: u32,
+    framerate: Framerate,
 ) {
     let mut received_video_eos = video_stream.as_ref().map(|_| false);
     let mut received_audio_eos = audio_stream.as_ref().map(|_| false);
@@ -282,7 +290,7 @@ fn run_ffmpeg_output_thread(
                     &mut video_stream,
                     &mut audio_stream,
                     &mut output_ctx,
-                    frame_duration,
+                    framerate.get_interval_duration(),
                 );
             }
             EncodedOutputEvent::VideoEOS => match received_video_eos {
@@ -319,7 +327,7 @@ fn write_chunk(
     video_stream: &mut Option<StreamState>,
     audio_stream: &mut Option<StreamState>,
     output_ctx: &mut ffmpeg::format::context::Output,
-    frame_duration: u32,
+    frame_duration: Duration,
 ) {
     let stream = match chunk.kind {
         MediaKind::Video(_) => {
@@ -362,9 +370,13 @@ fn write_chunk(
         NS_TIME_BASE,
         stream.time_base,
     )));
+    packet.set_duration(Rescale::rescale(
+        &(frame_duration.as_nanos() as i64),
+        NS_TIME_BASE,
+        stream.time_base,
+    ));
     packet.set_time_base(stream.time_base);
     packet.set_stream(stream.index);
-    packet.set_duration(frame_duration as i64);
 
     if chunk.is_keyframe {
         packet.set_flags(ffmpeg::packet::Flags::KEY)

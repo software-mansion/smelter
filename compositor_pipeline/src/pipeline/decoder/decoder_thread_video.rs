@@ -1,91 +1,80 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
-use compositor_render::{Frame, InputId};
+use compositor_render::Frame;
 use crossbeam_channel::Sender;
-use tracing::{debug, span, warn, Level};
+use tracing::warn;
 
 use crate::{
     error::DecoderInitError,
-    pipeline::{
-        decoder::{
-            BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle,
-            VideoDecoderStream,
-        },
-        PipelineCtx,
+    pipeline::decoder::{
+        BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, VideoDecoderStream,
     },
-    PipelineEvent,
+    thread_utils::{InitializableThread, ThreadMetadata},
+    PipelineCtx, PipelineEvent,
 };
 
 use super::VideoDecoder;
 
-pub fn spawn_video_decoder_thread<
-    Decoder: VideoDecoder,
-    const BUFFER_SIZE: usize,
-    Transformer: BytestreamTransformer,
->(
-    ctx: Arc<PipelineCtx>,
-    input_id: InputId,
-    transformer: Option<Transformer>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
-) -> Result<DecoderThreadHandle, DecoderInitError> {
-    let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
-
-    std::thread::Builder::new()
-        .name(format!("Decoder thread for input {}", &input_id))
-        .spawn(move || {
-            let _span = span!(
-                Level::INFO,
-                "Video decoder thread",
-                input_id = input_id.to_string(),
-                decoder = Decoder::LABEL
-            )
-            .entered();
-
-            let result = init_decoder_stream::<Decoder, BUFFER_SIZE, _>(ctx, transformer);
-            let stream = match result {
-                Ok((stream, handle)) => {
-                    result_sender.send(Ok(handle)).unwrap();
-                    stream
-                }
-                Err(err) => {
-                    result_sender.send(Err(err)).unwrap();
-                    return;
-                }
-            };
-            for event in stream {
-                if frame_sender.send(event).is_err() {
-                    warn!("Failed to send encoded video chunk from encoder. Channel closed.");
-                    return;
-                }
-            }
-            debug!("Decoder thread finished.");
-        })
-        .unwrap();
-
-    result_receiver.recv().unwrap()
+pub(crate) struct VideoDecoderThreadOptions<Transformer: BytestreamTransformer> {
+    pub ctx: Arc<PipelineCtx>,
+    pub transformer: Option<Transformer>,
+    pub frame_sender: Sender<PipelineEvent<Frame>>,
+    pub input_buffer_size: usize,
 }
 
-fn init_decoder_stream<
-    Decoder: VideoDecoder,
-    const BUFFER_SIZE: usize,
+pub(crate) struct VideoDecoderThread<Decoder: VideoDecoder, Transformer: BytestreamTransformer> {
+    stream: Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
+    frame_sender: Sender<PipelineEvent<Frame>>,
+    _decoder: PhantomData<Decoder>,
+    _transformer: PhantomData<Transformer>,
+}
+
+impl<Decoder, Transformer> InitializableThread for VideoDecoderThread<Decoder, Transformer>
+where
+    Decoder: VideoDecoder + 'static,
     Transformer: BytestreamTransformer,
->(
-    ctx: Arc<PipelineCtx>,
-    transformer: Option<Transformer>,
-) -> Result<
-    (
-        impl Iterator<Item = PipelineEvent<Frame>>,
-        DecoderThreadHandle,
-    ),
-    DecoderInitError,
-> {
-    let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(BUFFER_SIZE);
+{
+    type InitOptions = VideoDecoderThreadOptions<Transformer>;
 
-    let transformed_bytestream =
-        BytestreamTransformStream::new(transformer, chunk_receiver.into_iter());
+    type SpawnOutput = DecoderThreadHandle;
+    type SpawnError = DecoderInitError;
 
-    let decoded_stream =
-        VideoDecoderStream::<Decoder, _>::new(ctx, transformed_bytestream)?.flatten();
+    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
+        let VideoDecoderThreadOptions {
+            ctx,
+            transformer,
+            frame_sender,
+            input_buffer_size: buffer_size,
+        } = options;
+        let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(buffer_size);
 
-    Ok((decoded_stream, DecoderThreadHandle { chunk_sender }))
+        let transformed_bytestream =
+            BytestreamTransformStream::new(transformer, chunk_receiver.into_iter());
+        let decoder_stream = VideoDecoderStream::<Decoder, _>::new(ctx, transformed_bytestream)?;
+
+        let state = Self {
+            stream: Box::new(decoder_stream.flatten()),
+            frame_sender,
+            _decoder: PhantomData,
+            _transformer: PhantomData,
+        };
+        let output = DecoderThreadHandle { chunk_sender };
+        Ok((state, output))
+    }
+
+    fn run(self) {
+        for event in self.stream {
+            if self.frame_sender.send(event).is_err() {
+                warn!("Failed to send encoded video chunk from encoder. Channel closed.");
+                return;
+            }
+        }
+    }
+
+    fn metadata() -> ThreadMetadata {
+        ThreadMetadata {
+            thread_name: format!("Video Decoder ({})", Decoder::LABEL),
+            thread_instance_name: "Input".to_string(),
+        }
+    }
 }

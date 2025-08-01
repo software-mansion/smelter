@@ -2,12 +2,19 @@ use compositor_render::OutputId;
 use crossbeam_channel::{bounded, Sender};
 use packet_stream::RtpBinaryPacketStream;
 use rand::Rng;
-use rtp_audio_thread::{spawn_rtp_audio_thread, RtpAudioTrackThreadHandle};
-use rtp_video_thread::{spawn_rtp_video_thread, RtpVideoTrackThreadHandle};
+use rtp_audio_thread::RtpAudioTrackThreadHandle;
+use rtp_video_thread::RtpVideoTrackThreadHandle;
 use std::sync::{atomic::AtomicBool, Arc};
 use tracing::{debug, span, Level};
 
+use crate::pipeline::rtp::rtp_output::rtp_audio_thread::{
+    RtpAudioTrackThread, RtpAudioTrackThreadOptions,
+};
+use crate::pipeline::rtp::rtp_output::rtp_video_thread::{
+    RtpVideoTrackThread, RtpVideoTrackThreadOptions,
+};
 use crate::prelude::*;
+use crate::thread_utils::InitializableThread;
 use crate::{
     event::Event,
     pipeline::{
@@ -143,28 +150,38 @@ impl RtpOutput {
 
         let thread_handle = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
-                spawn_rtp_video_thread::<FfmpegH264Encoder>(
-                    ctx.clone(),
+                RtpVideoTrackThread::<FfmpegH264Encoder>::spawn(
                     output_id.clone(),
-                    options.clone(),
-                    payloader_options(PayloadedCodec::H264, mtu),
-                    sender,
+                    RtpVideoTrackThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        payloader_options: payloader_options(PayloadedCodec::H264, mtu),
+                        chunks_sender: sender,
+                    },
                 )?
             }
-            VideoEncoderOptions::FfmpegVp8(options) => spawn_rtp_video_thread::<FfmpegVp8Encoder>(
-                ctx.clone(),
-                output_id.clone(),
-                options.clone(),
-                payloader_options(PayloadedCodec::Vp8, mtu),
-                sender,
-            )?,
-            VideoEncoderOptions::FfmpegVp9(options) => spawn_rtp_video_thread::<FfmpegVp9Encoder>(
-                ctx.clone(),
-                output_id.clone(),
-                options.clone(),
-                payloader_options(PayloadedCodec::Vp9, mtu),
-                sender,
-            )?,
+            VideoEncoderOptions::FfmpegVp8(options) => {
+                RtpVideoTrackThread::<FfmpegVp8Encoder>::spawn(
+                    output_id.clone(),
+                    RtpVideoTrackThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        payloader_options: payloader_options(PayloadedCodec::Vp8, mtu),
+                        chunks_sender: sender,
+                    },
+                )?
+            }
+            VideoEncoderOptions::FfmpegVp9(options) => {
+                RtpVideoTrackThread::<FfmpegVp9Encoder>::spawn(
+                    output_id.clone(),
+                    RtpVideoTrackThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        payloader_options: payloader_options(PayloadedCodec::Vp9, mtu),
+                        chunks_sender: sender,
+                    },
+                )?
+            }
         };
         Ok(thread_handle)
     }
@@ -191,12 +208,14 @@ impl RtpOutput {
         }
 
         let thread_handle = match options {
-            AudioEncoderOptions::Opus(options) => spawn_rtp_audio_thread::<OpusEncoder>(
-                ctx.clone(),
+            AudioEncoderOptions::Opus(options) => RtpAudioTrackThread::<OpusEncoder>::spawn(
                 output_id.clone(),
-                options.clone(),
-                payloader_options(PayloadedCodec::Opus, 48_000, mtu),
-                sender,
+                RtpAudioTrackThreadOptions {
+                    ctx: ctx.clone(),
+                    encoder_options: options.clone(),
+                    payloader_options: payloader_options(PayloadedCodec::Opus, 48_000, mtu),
+                    chunks_sender: sender,
+                },
             )?,
             AudioEncoderOptions::FdkAac(_options) => {
                 return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Aac))
