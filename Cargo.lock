@@ -2494,7 +2494,6 @@ dependencies = [
  "image",
  "log",
  "opus",
- "pitch-detection",
  "rand",
  "regex",
  "reqwest",

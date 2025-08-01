@@ -320,13 +320,10 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         AudioValidationConfig {
-            sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(10000),
-                // Duration::from_millis(2000)..Duration::from_millis(4000),
-                // Duration::from_millis(6000)..Duration::from_millis(8000),
-            ],
-            // In general this test failes 6 batches (each batch is around 0.34s) - 1 per channel at the same pts,
-            // and any differences cannot be heard in output dumps.
+            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
+            // In general this test failes 6 batches - 1 per channel for each failed timestamp.
+            // Any differences cannot be heard in output dumps.
+            // Each batch is around 0.34s long.
             // 8 batches is a safety buffer.
             allowed_failed_batches: 8,
             ..Default::default()
@@ -412,11 +409,7 @@ pub fn required_audio_inputs_with_offset() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         AudioValidationConfig {
-            sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(10000),
-                // Duration::from_millis(2000)..Duration::from_millis(4000),
-                // Duration::from_millis(6000)..Duration::from_millis(8000),
-            ],
+            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
             ..Default::default()
         },
     )?;
@@ -506,11 +499,7 @@ pub fn required_audio_inputs_with_offset_missing_data() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         AudioValidationConfig {
-            sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(2000),
-                Duration::from_millis(2000)..Duration::from_millis(4000),
-                Duration::from_millis(6000)..Duration::from_millis(8000),
-            ],
+            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
             ..Default::default()
         },
     )?;

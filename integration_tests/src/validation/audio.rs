@@ -96,12 +96,6 @@ pub fn validate(
     expected: &Bytes,
     actual: &Bytes,
     test_config: AudioValidationConfig,
-    // time_intervals: &[Range<Duration>],
-    // channels: AudioChannels,
-    // sample_rate: u32,
-    // samples_per_batch: usize,
-    // allowed_failed_batches: u8,
-    // tolerance: AudioAnalyzeTolerance,
 ) -> Result<()> {
     let AudioValidationConfig {
         sampling_intervals: time_intervals,
@@ -205,6 +199,8 @@ fn analyze_samples(
             .collect::<Vec<_>>();
         (samples_left, samples_right)
     }
+    // Calculates volume in dBFS (dB relevant to full scale) where point 0 is
+    // calculated based on amplitude of expected batch.
     fn calc_level(samples: &[f32], amplitude: Option<f64>) -> (f64, f64) {
         // There should not be any NaN or Infinities and if there are the test should fail
         let max_sample = samples.iter().map(|s| s.abs()).reduce(f32::max).unwrap() as f64;
@@ -212,10 +208,11 @@ fn analyze_samples(
             Some(a) => a,
             None => max_sample,
         };
-        if amplitude == 0.0 {
-            (0.0, max_sample)
+        if amplitude > 0.0 {
+            let batch_dbfs = 20.0 * f64::log10(max_sample / amplitude);
+            (batch_dbfs, max_sample)
         } else {
-            (20.0 * f64::log10(max_sample / amplitude), max_sample)
+            (0.0, max_sample)
         }
     }
     fn calc_fft(

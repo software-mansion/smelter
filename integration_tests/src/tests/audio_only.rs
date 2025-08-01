@@ -93,11 +93,7 @@ pub fn audio_mixing_with_offset() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         AudioValidationConfig {
-            sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(10000),
-                // Duration::from_millis(2000)..Duration::from_millis(4000),
-                // Duration::from_millis(8000)..Duration::from_millis(10000),
-            ],
+            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
             ..Default::default()
         },
     )?;
@@ -195,11 +191,7 @@ pub fn audio_mixing_no_offset() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         AudioValidationConfig {
-            sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(10000),
-                // Duration::from_millis(2000)..Duration::from_millis(4000),
-                // Duration::from_millis(8000)..Duration::from_millis(10000),
-            ],
+            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
             ..Default::default()
         },
     )?;
@@ -277,11 +269,7 @@ pub fn single_input_opus() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         AudioValidationConfig {
-            sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(10000),
-                // Duration::from_millis(2000)..Duration::from_millis(4000),
-                // Duration::from_millis(8000)..Duration::from_millis(10000),
-            ],
+            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
             ..Default::default()
         },
     )?;
@@ -357,11 +345,7 @@ pub fn single_input_aac() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         AudioValidationConfig {
-            sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(10000),
-                // Duration::from_millis(2000)..Duration::from_millis(4000),
-                // Duration::from_millis(8000)..Duration::from_millis(10000),
-            ],
+            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
             ..Default::default()
         },
     )?;

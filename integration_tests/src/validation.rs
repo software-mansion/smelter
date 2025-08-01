@@ -100,9 +100,9 @@ pub struct SamplingInterval {
 }
 
 impl SamplingInterval {
-    // Intervals returned by this function are not exact
-    // They may be slightly longer as this function fills the time with batches of size
-    // specified as argument
+    // Intervals returned by this function to not match time stamp exactly.
+    // They usually are slightly longer, because interval must be split into
+    // batches of 16384 samples.
     pub fn from_range(
         time_range: &Range<Duration>,
         sample_rate: u32,
@@ -119,10 +119,9 @@ impl SamplingInterval {
         // It finds the sample that fits pts best
         // If it is not a multiple of samples_per_batch find the highest
         // multiple lower than current number to be the starting sample
-        let mut first_sample =
-            f64::floor(start_pts.as_secs_f64() * sample_rate as f64 / samples_per_batch as f64)
-                as usize
-                * samples_per_batch;
+        let mut first_sample = (start_pts.as_secs_f64() * sample_rate as f64
+            / samples_per_batch as f64) as usize
+            * samples_per_batch;
 
         let mut intervals = vec![];
         let mut n = 0;

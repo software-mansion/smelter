@@ -103,11 +103,7 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         AudioValidationConfig {
-            sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(10000),
-                // Duration::from_millis(2000)..Duration::from_millis(4000),
-                // Duration::from_millis(8000)..Duration::from_millis(10000),
-            ],
+            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
             tolerance: crate::AudioAnalyzeTolerance {
                 max_frequency_level: 5.0,
                 average_level: 15.0,
