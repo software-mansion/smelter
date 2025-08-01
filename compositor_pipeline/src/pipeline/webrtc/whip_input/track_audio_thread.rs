@@ -2,9 +2,12 @@ use std::sync::Arc;
 
 use compositor_render::InputId;
 use crossbeam_channel::Sender;
+use rtcp::sender_report::SenderReport;
+use tokio::sync::{oneshot, watch};
 use tracing::{debug, trace, warn};
 use webrtc::{rtp_transceiver::RTCRtpTransceiver, track::track_remote::TrackRemote};
 
+use crate::pipeline::rtp::RtpNtpSyncPoint;
 use crate::prelude::*;
 use crate::{
     error::DecoderInitError,
@@ -26,11 +29,13 @@ use crate::{
 };
 
 pub async fn process_audio_track(
+    sync_point: Arc<RtpNtpSyncPoint>,
     state: WhipWhepServerState,
     input_id: InputId,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
 ) -> Result<(), WhipServerError> {
+    let rtc_sender = transceiver.receiver().await;
     let Some(_negotiated_codecs) = NegotiatedAudioCodecsInfo::new(transceiver).await else {
         warn!("Skipping audio track, no valid codec negotiated");
         return Err(WhipServerError::InternalError(
@@ -43,9 +48,52 @@ pub async fn process_audio_track(
         inputs.get_with(&input_id, |input| Ok(input.input_samples_sender.clone()))?;
     let handle = AudioTrackThread::spawn(&input_id.0, (ctx.clone(), samples_sender))?;
 
-    let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_point, 48_000);
+    let mut timestamp_sync =
+        RtpTimestampSync::new(&sync_point, 48_000, ctx.default_buffer_duration);
+
+    let (sender_report_sender, sender_report_receiver) =
+        watch::channel::<Option<SenderReport>>(None);
+    {
+        ctx.tokio_rt.spawn(async move {
+            loop {
+                match rtc_sender.read_rtcp().await {
+                    Ok((packets, _attr)) => {
+                        for packet in packets {
+                            debug!(?packet, "Received RTCP packet");
+                            match packet.header().packet_type {
+                                rtcp::header::PacketType::SenderReport => {
+                                    let result = sender_report_sender.send(Some(
+                                        packet
+                                            .as_any()
+                                            .downcast_ref::<SenderReport>()
+                                            .unwrap()
+                                            .clone(),
+                                    ));
+                                    match result {
+                                        Ok(v) => Some(v),
+                                        Err(_) => None,
+                                    };
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    Err(webrtc::Error::ErrClosedPipe) => return,
+                    Err(err) => {
+                        debug!(%err, "Error while reading rtcp.");
+                    }
+                }
+            }
+        });
+    }
 
     while let Ok((packet, _)) = track.read_rtp().await {
+        if sender_report_receiver.has_changed().unwrap_or(false) {
+            let report = sender_report_receiver.borrow();
+            if let Some(report) = report.as_ref() {
+                timestamp_sync.on_sender_report(report.ntp_time, report.rtp_time);
+            }
+        }
         let timestamp = timestamp_sync.timestamp(packet.header.timestamp);
 
         if let Err(e) = handle

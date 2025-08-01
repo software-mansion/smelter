@@ -78,8 +78,13 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for Buffe
         &mut self,
         packet: RtpPacket,
     ) -> Result<Vec<EncodedInputChunk>, DepayloadingError> {
+        trace!(
+          payload=?packet.packet.payload[0..usize::min(10, packet.packet.payload.len())],
+          header=?packet.packet.header,
+          "RTP depayloader received new chunk"
+        );
         let chunk = self.depayloader.depacketize(&packet.packet.payload)?;
-        trace!(?chunk, header=?packet.packet.header, "RTP depayloader received new chunk");
+        trace!(chunk_size = chunk.len(), "RTP depayloaded chunk");
 
         if chunk.is_empty() {
             return Ok(Vec::new());
@@ -122,6 +127,11 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for Simpl
         &mut self,
         packet: RtpPacket,
     ) -> Result<Vec<EncodedInputChunk>, DepayloadingError> {
+        trace!(
+          payload=?packet.packet.payload[0..usize::min(10, packet.packet.payload.len())],
+          header=?packet.packet.header,
+          "RTP depayloader received new chunk"
+        );
         let data = self.depayloader.depacketize(&packet.packet.payload)?;
         let chunk = EncodedInputChunk {
             data,
@@ -167,6 +177,7 @@ where
         match self.source.next() {
             Some(PipelineEvent::Data(packet)) => match self.depayloader.depayload(packet) {
                 Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
+                Err(DepayloadingError::Rtp(rtp::Error::ErrShortPacket)) => Some(vec![]),
                 Err(err) => {
                     warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                     Some(vec![])

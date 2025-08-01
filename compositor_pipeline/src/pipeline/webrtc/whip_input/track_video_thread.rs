@@ -2,6 +2,8 @@ use std::{iter, sync::Arc};
 
 use compositor_render::{error::ErrorStack, Frame, InputId};
 use crossbeam_channel::Sender;
+use rtcp::sender_report::SenderReport;
+use tokio::sync::oneshot;
 use tracing::{debug, error, trace, warn};
 use webrtc::{
     rtp_transceiver::{PayloadType, RTCRtpTransceiver},
@@ -18,8 +20,8 @@ use crate::{
             VideoDecoderInstance,
         },
         rtp::{
-            depayloader::{new_depayloader, Depayloader, DepayloaderOptions},
-            RtpPacket, RtpTimestampSync,
+            depayloader::{new_depayloader, Depayloader, DepayloaderOptions, DepayloadingError},
+            RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
         },
         webrtc::{
             error::WhipServerError,
@@ -30,13 +32,17 @@ use crate::{
     thread_utils::{InitializableThread, ThreadMetadata},
 };
 
+use crate::prelude::*;
+
 pub async fn process_video_track(
+    sync_point: Arc<RtpNtpSyncPoint>,
     state: WhipWhepServerState,
     input_id: InputId,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
     video_preferences: Vec<VideoDecoderOptions>,
 ) -> Result<(), WhipServerError> {
+    let rtc_sender = transceiver.receiver().await;
     let Some(negotiated_codecs) =
         NegotiatedVideoCodecsInfo::new(transceiver, &video_preferences).await
     else {
@@ -51,9 +57,51 @@ pub async fn process_video_track(
     let handle =
         VideoTrackThread::spawn(&input_id.0, (ctx.clone(), negotiated_codecs, frame_sender))?;
 
-    let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_point, 90_000);
+    let mut timestamp_sync =
+        RtpTimestampSync::new(&sync_point, 90_000, ctx.default_buffer_duration);
+
+    let (sender_report_sender, mut sender_report_receiver) = oneshot::channel::<SenderReport>();
+    {
+        ctx.tokio_rt.spawn(async move {
+            let mut sender_report_sender = Some(sender_report_sender);
+            loop {
+                match rtc_sender.read_rtcp().await {
+                    Ok((packets, _attr)) => {
+                        for packet in packets {
+                            debug!(?packet, "Received RTCP packet");
+                            match packet.header().packet_type {
+                                rtcp::header::PacketType::SenderReport => {
+                                    sender_report_sender.take().and_then(|sender| {
+                                        let result = sender.send(
+                                            packet
+                                                .as_any()
+                                                .downcast_ref::<SenderReport>()
+                                                .unwrap()
+                                                .clone(),
+                                        );
+                                        match result {
+                                            Ok(v) => Some(v),
+                                            Err(_) => None,
+                                        }
+                                    });
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    Err(webrtc::Error::ErrClosedPipe) => return,
+                    Err(e) => {
+                        debug!(%e, "Error while reading rtcp.");
+                    }
+                }
+            }
+        });
+    }
 
     while let Ok((packet, _)) = track.read_rtp().await {
+        if let Ok(report) = sender_report_receiver.try_recv() {
+            timestamp_sync.on_sender_report(report.ntp_time, report.rtp_time);
+        }
         let timestamp = timestamp_sync.timestamp(packet.header.timestamp);
 
         if let Err(e) = handle
@@ -88,7 +136,7 @@ impl InitializableThread for VideoTrackThread {
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let (ctx, codec_info, frame_sender) = options;
-        let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5);
+        let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(1000);
 
         let packet_stream = AsyncReceiverIter {
             receiver: rtp_packet_receiver,
@@ -306,6 +354,7 @@ where
                 let depayloader = self.depayloader.as_mut()?;
                 match depayloader.depayload(packet) {
                     Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
+                    Err(DepayloadingError::Rtp(rtp::Error::ErrShortPacket)) => Some(vec![]),
                     Err(err) => {
                         warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                         Some(vec![])

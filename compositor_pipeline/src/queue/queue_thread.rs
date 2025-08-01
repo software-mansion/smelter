@@ -22,9 +22,9 @@ pub(super) struct QueueThread {
 }
 
 pub(super) struct QueueStartEvent {
-    pub(super) video_sender: Sender<QueueVideoOutput>,
-    pub(super) audio_sender: Sender<QueueAudioOutput>,
-    pub(super) start_time: Instant,
+    pub video_sender: Sender<QueueVideoOutput>,
+    pub audio_sender: Sender<QueueAudioOutput>,
+    pub start_time_pts: Duration,
 }
 
 impl QueueThread {
@@ -92,7 +92,6 @@ impl QueueThread {
 
 struct QueueThreadAfterStart {
     queue: Arc<Queue>,
-    start_time: Instant,
     audio_processor: AudioQueueProcessor,
     video_processor: VideoQueueProcessor,
     scheduled_event_receiver: Receiver<ScheduledEvent>,
@@ -103,18 +102,17 @@ impl QueueThreadAfterStart {
     fn new(queue_thread: QueueThread, start_event: QueueStartEvent) -> Self {
         Self {
             queue: queue_thread.queue.clone(),
-            start_time: start_event.start_time,
             audio_processor: AudioQueueProcessor {
                 queue: queue_thread.queue.clone(),
                 sender: start_event.audio_sender,
                 chunks_counter: 0,
-                queue_start_time: start_event.start_time,
+                queue_start_pts: start_event.start_time_pts,
             },
             video_processor: VideoQueueProcessor {
                 queue: queue_thread.queue,
                 sender: start_event.video_sender,
                 sent_batches_counter: 0,
-                queue_start_time: start_event.start_time,
+                queue_start_pts: start_event.start_time_pts,
             },
             scheduled_event_receiver: queue_thread.scheduled_event_receiver,
             scheduled_events: queue_thread.scheduled_events,
@@ -153,9 +151,6 @@ impl QueueThreadAfterStart {
                 }
             } else if video_pts > audio_pts_range.0 {
                 trace!(pts_range=?audio_pts_range, "Try to push audio samples for.");
-                self.queue
-                    .clock
-                    .update_delay(self.start_time, audio_pts_range.0);
                 if self
                     .audio_processor
                     .try_push_next_sample_batch(audio_pts_range)
@@ -165,7 +160,6 @@ impl QueueThreadAfterStart {
                 }
             } else {
                 trace!(pts=?video_pts, "Try to push video frames.");
-                self.queue.clock.update_delay(self.start_time, video_pts);
                 if self
                     .video_processor
                     .try_push_next_frame_set(video_pts)
@@ -203,7 +197,7 @@ impl QueueThreadAfterStart {
 struct VideoQueueProcessor {
     queue: Arc<Queue>,
     sent_batches_counter: u32,
-    queue_start_time: Instant,
+    queue_start_pts: Duration,
     sender: Sender<QueueVideoOutput>,
 }
 
@@ -216,16 +210,16 @@ impl VideoQueueProcessor {
     }
 
     fn should_push_for_pts(&self, pts: Duration, queue: &mut MutexGuard<VideoQueue>) -> bool {
-        if !self.queue.ahead_of_time_processing && self.queue_start_time.add(pts) > Instant::now() {
+        if !self.queue.ahead_of_time_processing && self.queue.sync_point.add(pts) > Instant::now() {
             return false;
         }
-        if queue.check_all_inputs_ready_for_pts(pts, self.queue_start_time) {
+        if queue.check_all_inputs_ready_for_pts(pts, self.queue_start_pts) {
             return true;
         }
-        if !queue.check_all_required_inputs_ready_for_pts(pts, self.queue_start_time) {
+        if !queue.check_all_required_inputs_ready_for_pts(pts, self.queue_start_pts) {
             return false;
         }
-        if self.queue_start_time.add(pts) < Instant::now() {
+        if self.queue.sync_point.add(pts) < Instant::now() {
             debug!("Pushing video frames while some inputs are not ready.");
             return true;
         }
@@ -240,7 +234,7 @@ impl VideoQueueProcessor {
                 warn!(?pts, "Dropping video frame on queue output.");
             }
         } else {
-            let send_deadline = self.queue_start_time.add(frames_batch.pts);
+            let send_deadline = self.queue.sync_point.add(frames_batch.pts);
             if self
                 .sender
                 .send_deadline(frames_batch, send_deadline)
@@ -262,10 +256,10 @@ impl VideoQueueProcessor {
             return None;
         }
 
-        let frames_batch = internal_queue.get_frames_batch(next_buffer_pts, self.queue_start_time);
+        let frames_batch = internal_queue.get_frames_batch(next_buffer_pts, self.queue_start_pts);
 
         let is_required = self.queue.never_drop_output_frames
-            || internal_queue.has_required_inputs_for_pts(next_buffer_pts, self.queue_start_time);
+            || internal_queue.has_required_inputs_for_pts(next_buffer_pts, self.queue_start_pts);
         drop(internal_queue);
 
         // potentially infinitely blocking if output is not consumed
@@ -279,7 +273,7 @@ impl VideoQueueProcessor {
 struct AudioQueueProcessor {
     queue: Arc<Queue>,
     chunks_counter: u32,
-    queue_start_time: Instant,
+    queue_start_pts: Duration,
     sender: Sender<QueueAudioOutput>,
 }
 
@@ -297,17 +291,17 @@ impl AudioQueueProcessor {
         queue: &mut MutexGuard<AudioQueue>,
     ) -> bool {
         if !self.queue.ahead_of_time_processing
-            && self.queue_start_time.add(pts_range.0) > Instant::now()
+            && self.queue.sync_point.add(pts_range.0) > Instant::now()
         {
             return false;
         }
-        if queue.check_all_inputs_ready_for_pts(pts_range, self.queue_start_time) {
+        if queue.check_all_inputs_ready_for_pts(pts_range, self.queue_start_pts) {
             return true;
         }
-        if !queue.check_all_required_inputs_ready_for_pts(pts_range, self.queue_start_time) {
+        if !queue.check_all_required_inputs_ready_for_pts(pts_range, self.queue_start_pts) {
             return false;
         }
-        if self.queue_start_time.add(pts_range.0) < Instant::now() {
+        if self.queue.sync_point.add(pts_range.0) < Instant::now() {
             debug!("Pushing audio samples while some inputs are not ready.");
             return true;
         }
@@ -328,10 +322,10 @@ impl AudioQueueProcessor {
             return None;
         }
 
-        let samples = internal_queue.pop_samples_set(next_buffer_pts_range, self.queue_start_time);
+        let samples = internal_queue.pop_samples_set(next_buffer_pts_range, self.queue_start_pts);
         let is_required = self.queue.never_drop_output_frames
             || internal_queue
-                .has_required_inputs_for_pts(next_buffer_pts_range.0, self.queue_start_time);
+                .has_required_inputs_for_pts(next_buffer_pts_range.0, self.queue_start_pts);
         drop(internal_queue);
 
         self.send_output_batch(samples, is_required);

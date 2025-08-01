@@ -1,5 +1,9 @@
 use std::{
-    sync::{atomic::AtomicBool, Arc},
+    i128,
+    sync::{
+        atomic::{AtomicBool},
+        Arc,  RwLock,
+    },
     time::{Duration, Instant},
 };
 
@@ -75,7 +79,14 @@ impl RtpInput {
             Self::start_audio_thread(&ctx, &input_id, opts.audio)?;
 
         // TODO: this could ran on the same thread as tcp/udp socket
-        Self::start_rtp_demuxer_thread(&input_id, raw_packets_receiver, audio_handle, video_handle);
+        Self::start_rtp_demuxer_thread(
+            &input_id,
+            ctx.queue_sync_point,
+            opts.buffer_duration.unwrap_or(ctx.default_buffer_duration),
+            raw_packets_receiver,
+            audio_handle,
+            video_handle,
+        );
 
         Ok((
             Input::Rtp(Self { should_close }),
@@ -89,6 +100,8 @@ impl RtpInput {
 
     fn start_rtp_demuxer_thread(
         input_id: &InputId,
+        sync_point: Instant,
+        buffer_duration: Duration,
         receiver: Receiver<bytes::Bytes>,
         audio: Option<RtpAudioTrackThreadHandle>,
         video: Option<RtpVideoTrackThreadHandle>,
@@ -99,7 +112,7 @@ impl RtpInput {
             .spawn(move || {
                 let _span =
                     span!(Level::INFO, "RTP demuxer", input_id = input_id.to_string()).entered();
-                run_rtp_demuxer_thread(receiver, video, audio)
+                run_rtp_demuxer_thread(sync_point, buffer_duration, receiver, video, audio)
             })
             .unwrap();
     }
@@ -197,6 +210,8 @@ impl Drop for RtpInput {
 }
 
 fn run_rtp_demuxer_thread(
+    sync_point: Instant,
+    buffer_duration: Duration,
     receiver: Receiver<bytes::Bytes>,
     video_handle: Option<RtpVideoTrackThreadHandle>,
     audio_handle: Option<RtpAudioTrackThreadHandle>,
@@ -206,15 +221,16 @@ fn run_rtp_demuxer_thread(
         time_sync: RtpTimestampSync,
         eos_received: bool,
     }
-    let start = Instant::now();
+
+    let sync_point = RtpNtpSyncPoint::new(sync_point);
 
     let mut audio = audio_handle.map(|handle| TrackState {
-        time_sync: RtpTimestampSync::new(start, handle.sample_rate),
+        time_sync: RtpTimestampSync::new(&sync_point, handle.sample_rate, buffer_duration),
         handle,
         eos_received: false,
     });
     let mut video = video_handle.map(|handle| TrackState {
-        time_sync: RtpTimestampSync::new(start, 90_000),
+        time_sync: RtpTimestampSync::new(&sync_point, 90_000, buffer_duration),
         handle,
         eos_received: false,
     });
@@ -337,38 +353,235 @@ impl From<BindToPortError> for RtpInputError {
     }
 }
 
+const POW_2_32: f64 = (1i64 << 32) as f64;
+
+#[derive(Debug)]
+pub struct RtpNtpSyncPoint {
+    sync_point: Instant,
+    /// First 32 bytes represent seconds, last 32 bytes fraction of the second.
+    /// Represents NTP time of sync point
+    ntp_time: RwLock<Option<u64>>,
+}
+
+impl RtpNtpSyncPoint {
+    pub fn new(sync_point: Instant) -> Arc<Self> {
+        Self { sync_point, ntp_time: RwLock::new(None) }.into()
+    }
+
+    pub fn ntp_time_to_pts(&self, ntp_time: u64) -> Duration {
+        let sync_point_ntp_time = self.ntp_time.read().unwrap().unwrap_or(0) as i128;
+
+        let ntp_time_diff_secs = (ntp_time as i128 - sync_point_ntp_time) as f64 / POW_2_32;
+
+            warn!(
+                ntp_time_diff_secs ,
+                ntp_time= (ntp_time as f64/ POW_2_32),
+                sync_point_ntp_time=(sync_point_ntp_time as f64 / POW_2_32) , "PTS from NTP time ");
+        Duration::try_from_secs_f64(ntp_time_diff_secs).unwrap_or_else(|err| {
+            warn!(%err, "NTP time from before sync point");
+            Duration::ZERO
+        })
+    }
+
+    /// ntp_time - absolute time from RTP packet
+    /// rtp_timestamp - rtp timestamp that represents the same time as ntp_time
+    /// cmp_rtp_timestamp - rtp timestamp of some RTP packet
+    /// cmp_pts - pts(duration from sync_point without buffer) representing above packet
+    pub fn ensure_sync_info(
+        &self,
+        ntp_time: u64,
+        rtp_timestamp: u32,
+        cmp_rtp_timestamp: u32,
+        cmp_pts: Duration,
+        clock_rate: u32,
+    ) {
+        //{
+        //    let guard = self.ntp_time.read().unwrap();
+        //    if guard.is_some() {
+        //        return;
+        //    }
+        //}
+
+        let mut guard = self.ntp_time.write().unwrap();
+        let rtp_diff_secs = (cmp_rtp_timestamp as f64 - rtp_timestamp as f64) / clock_rate as f64;
+
+        let sync_point_ntp_time = ntp_time as i128 
+            + (rtp_diff_secs * POW_2_32) as i128 // ntp time of cmp packet
+            - (cmp_pts.as_secs_f64() * POW_2_32) as i128; // ntp_time of sync_point
+                                                          //
+        warn!(
+            rtp_diff_secs, 
+            ntp_time, 
+            rtp_diff_in_ntp=(rtp_diff_secs * POW_2_32), 
+            ?cmp_pts,
+            cmp_pts_in_ntp=(cmp_pts.as_secs_f64() * POW_2_32),
+            pow=POW_2_32,
+            sync_point_ntp_time,
+            old_value=?*guard,
+            "timestamps"
+        );
+        if guard.is_none() {
+            *guard = Some(sync_point_ntp_time as u64);
+        }
+    }
+}
+
+#[derive(Debug)]
+enum PartialSyncInfo {
+    Synced,
+    None,
+    FirstPacket {
+        /// timestamp of some RTP packet
+        rtp_timestamp: u32,
+        /// pts(duration from sync_point without buffer) representing above packet
+        pts: Duration,
+    },
+    SenderReport {
+        ntp_time: u64,
+        /// rtp timestamp that represents the same time as ntp_time
+        rtp_timestamp: u32,
+    },
+}
+
 #[derive(Debug)]
 pub struct RtpTimestampSync {
-    sync_point: Instant,
-    // offset to sync timestamps to zer
+    // offset to sync timestamps to zero (and at the same time PTS of the first packet)
     rtp_timestamp_offset: Option<u64>,
-    // offset to sync final duration to sync_point
+    // offset to sync final duration to sync_point, assuming
+    // that pts of first packet was zero.
+    //
+    // Calculation:
+    // - best effort at start: elapsed since sync point on first packet
+    // - after sync:
+    //   - get pts of some packet from RtpNtpSyncPoint
+    //   - calculate pts of first packet based on the difference
+    //   - pts of first packet is an offset
     sync_offset: Option<Duration>,
+    // additional buffer that defines how much input start should be ahead
+    // of the queue.
+    buffer_duration: Duration,
     clock_rate: u32,
     rollover_state: RolloverState,
+
+    sync_point: Arc<RtpNtpSyncPoint>,
+    partial_sync_info: PartialSyncInfo,
 }
 
 impl RtpTimestampSync {
-    pub fn new(sync_point: Instant, clock_rate: u32) -> Self {
+    pub fn new(
+        sync_point: &Arc<RtpNtpSyncPoint>,
+        clock_rate: u32,
+        buffer_duration: Duration,
+    ) -> Self {
         Self {
-            sync_point,
             sync_offset: None,
             rtp_timestamp_offset: None,
+            buffer_duration,
+
             clock_rate,
             rollover_state: Default::default(),
+
+            sync_point: sync_point.clone(),
+            partial_sync_info: PartialSyncInfo::None,
         }
     }
 
-    pub fn timestamp(&mut self, current_timestamp: u32) -> Duration {
-        let sync_offset = *self
-            .sync_offset
-            .get_or_insert_with(|| self.sync_point.elapsed());
+    pub fn timestamp(&mut self, rtp_timestamp: u32) -> Duration {
+        let sync_offset = *self.sync_offset.get_or_insert_with(|| {
+            let sync_offset = self.sync_point.sync_point.elapsed();
+            debug!(
+                ?sync_offset,
+                initial_rtp_timestamp = rtp_timestamp,
+                "Init offset from sync point"
+            );
+            sync_offset
+        });
 
-        let rolled_timestamp = self.rollover_state.timestamp(current_timestamp);
+        let rolled_timestamp = self.rollover_state.timestamp(rtp_timestamp);
 
         let rtp_timestamp_offset = *self.rtp_timestamp_offset.get_or_insert(rolled_timestamp);
 
         let timestamp = rolled_timestamp - rtp_timestamp_offset;
-        Duration::from_secs_f64(timestamp as f64 / self.clock_rate as f64) + sync_offset
+        let next_pts =
+            Duration::from_secs_f64(timestamp as f64 / self.clock_rate as f64) + sync_offset;
+
+        match self.partial_sync_info {
+            PartialSyncInfo::None => {
+                self.partial_sync_info = PartialSyncInfo::FirstPacket {
+                    rtp_timestamp,
+                    pts: next_pts,
+                }
+            }
+            PartialSyncInfo::SenderReport {
+                ntp_time: sr_ntp_time,
+                rtp_timestamp: sr_rtp_timestamp,
+            } => {
+                panic!("I don't think this will ever happen");
+                self.sync_point.ensure_sync_info(
+                    sr_ntp_time,
+                    sr_rtp_timestamp,
+                    rtp_timestamp,
+                    next_pts,
+                    self.clock_rate,
+                );
+                self.partial_sync_info = PartialSyncInfo::Synced;
+                self.update_sync_offset(sr_ntp_time, sr_rtp_timestamp);
+            }
+            _ => (),
+        }
+
+        let next_pts = next_pts + self.buffer_duration;
+        trace!(?next_pts, "New PTS from synchronizer");
+        next_pts
+    }
+
+    pub fn on_sender_report(&mut self, ntp_time: u64, rtp_timestamp: u32) {
+        warn!(ntp_time, rtp_timestamp, "on_sender_report");
+        match self.partial_sync_info {
+            PartialSyncInfo::Synced => return,
+            PartialSyncInfo::None => {
+                self.partial_sync_info = PartialSyncInfo::SenderReport {
+                    ntp_time,
+                    rtp_timestamp,
+                }
+            }
+            PartialSyncInfo::FirstPacket {
+                rtp_timestamp: cmp_rtp_timestamp,
+                pts: cmp_pts,
+            } => {
+                self.sync_point.ensure_sync_info(
+                    ntp_time,
+                    rtp_timestamp,
+                    cmp_rtp_timestamp,
+                    cmp_pts,
+                    self.clock_rate,
+                );
+               // self.partial_sync_info = PartialSyncInfo::Synced;
+                self.update_sync_offset(ntp_time, rtp_timestamp);
+            }
+            PartialSyncInfo::SenderReport { .. } => return,
+        }
+    }
+
+    fn update_sync_offset(&mut self, ntp_time: u64, rtp_timestamp: u32) {
+        let Some(first_rtp_timestamp) = self.rtp_timestamp_offset else {
+            warn!("Updating sync offset before first packet, This should not happen.");
+            return;
+        };
+        // pts representing `rtp_timestamp`
+        let pts = self.sync_point.ntp_time_to_pts(ntp_time);
+        let pts_diff_secs =
+            (first_rtp_timestamp as i64 - rtp_timestamp as i64) as f64 / self.clock_rate as f64;
+
+        warn!(
+            old=?self.sync_offset,
+            new=?Some(Duration::from_secs_f64(pts.as_secs_f64() + pts_diff_secs)),
+            ?pts,
+            pts_diff_secs,
+            first_rtp_timestamp,
+            rtp_timestamp,
+            "Update sync offset"
+            );
+        self.sync_offset = Some(Duration::from_secs_f64(pts.as_secs_f64() + pts_diff_secs))
     }
 }
