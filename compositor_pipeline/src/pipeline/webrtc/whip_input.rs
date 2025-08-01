@@ -45,6 +45,7 @@ impl WhipInput {
         let bearer_token = options.bearer_token.unwrap_or_else(generate_token);
         state.inputs.add_input(
             &input_id,
+            options.input_id_prefix,
             WhipInputConnectionStateOptions {
                 bearer_token: bearer_token.clone(),
                 video_preferences: options.video_preferences,

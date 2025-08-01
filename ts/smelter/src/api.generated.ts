@@ -79,6 +79,10 @@ export type RegisterInput =
        */
       bearer_token?: string | null;
       /**
+       * Internal use only
+       */
+      input_id_prefix?: string | null;
+      /**
        * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
        */
       required?: boolean | null;
