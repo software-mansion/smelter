@@ -39,11 +39,11 @@ export type RegisterMp4Output = {
   /**
    * Video track configuration.
    */
-  video?: HlsVideoOptions;
+  video?: Mp4VideoOptions;
   /**
    * Audio track configuration.
    */
-  audio?: HlsAudioOptions;
+  audio?: Mp4AudioOptions;
 };
 
 export type RegisterHlsOutput = {
@@ -59,11 +59,11 @@ export type RegisterHlsOutput = {
   /**
    * Video track configuration.
    */
-  video?: Mp4VideoOptions;
+  video?: HlsVideoOptions;
   /**
    * Audio track configuration.
    */
-  audio?: Mp4AudioOptions;
+  audio?: HlsAudioOptions;
 };
 
 export type RegisterWhipOutput = {

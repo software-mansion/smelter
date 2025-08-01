@@ -16,14 +16,17 @@ use tracing::{debug, error, span, trace, Level, Span};
 use crate::{
     pipeline::{
         decoder::{
-            decoder_thread_audio::spawn_audio_decoder_thread,
-            decoder_thread_video::spawn_video_decoder_thread, fdk_aac, ffmpeg_h264,
-            h264_utils::AvccToAnnexBRepacker, DecoderThreadHandle,
+            decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
+            decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
+            fdk_aac, ffmpeg_h264,
+            h264_utils::AvccToAnnexBRepacker,
+            DecoderThreadHandle,
         },
         input::Input,
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
     },
     queue::QueueDataReceiver,
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
@@ -64,12 +67,15 @@ impl Mp4Input {
             Some(track) => {
                 let (sender, receiver) = crossbeam_channel::bounded(10);
                 let handle = match track.decoder_options() {
-                    DecoderOptions::H264(extra_data) => {
-                        spawn_video_decoder_thread::<ffmpeg_h264::FfmpegH264Decoder, 5, _>(
-                            ctx.clone(),
+                    DecoderOptions::H264(h264_config) => {
+                        VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
                             input_id.clone(),
-                            Some(AvccToAnnexBRepacker::new(extra_data.clone())),
-                            sender,
+                            VideoDecoderThreadOptions {
+                                ctx: ctx.clone(),
+                                transformer: Some(AvccToAnnexBRepacker::new(h264_config.clone())),
+                                frame_sender: sender,
+                                input_buffer_size: 5,
+                            },
                         )?
                     }
                     _ => {
@@ -88,13 +94,16 @@ impl Mp4Input {
                 let (sender, receiver) = crossbeam_channel::bounded(10);
                 let handle = match track.decoder_options() {
                     DecoderOptions::Aac(data) => {
-                        spawn_audio_decoder_thread::<fdk_aac::FdkAacDecoder, 5>(
-                            ctx.clone(),
+                        AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
                             input_id.clone(),
-                            FdkAacDecoderOptions {
-                                asc: Some(data.clone()),
+                            AudioDecoderThreadOptions {
+                                ctx: ctx.clone(),
+                                decoder_options: FdkAacDecoderOptions {
+                                    asc: Some(data.clone()),
+                                },
+                                samples_sender: sender,
+                                input_buffer_size: 5,
                             },
-                            sender,
                         )?
                     }
                     _ => {

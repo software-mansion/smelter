@@ -11,7 +11,14 @@ use webrtc_util::Unmarshal;
 
 use self::{tcp_server::start_tcp_server_thread, udp::start_udp_reader_thread};
 
-use crate::prelude::*;
+use crate::{
+    pipeline::rtp::rtp_input::{
+        rtp_audio_thread::{RtpAudioThread, RtpAudioThreadOptions},
+        rtp_video_thread::RtpVideoThread,
+    },
+    prelude::*,
+    thread_utils::InitializableThread,
+};
 use crate::{
     pipeline::{
         decoder::{
@@ -22,8 +29,8 @@ use crate::{
         rtp::{
             depayloader::DepayloaderOptions,
             rtp_input::{
-                rtp_audio_thread::{spawn_rtp_audio_thread, RtpAudioTrackThreadHandle},
-                rtp_video_thread::{spawn_rtp_video_thread, RtpVideoTrackThreadHandle},
+                rtp_audio_thread::RtpAudioTrackThreadHandle,
+                rtp_video_thread::RtpVideoTrackThreadHandle,
             },
             util::BindToPortError,
             RtpPacket,
@@ -115,29 +122,21 @@ impl RtpInput {
 
         let (sender, receiver) = bounded(5);
         let handle = match options {
-            VideoDecoderOptions::FfmpegH264 => spawn_rtp_video_thread::<FfmpegH264Decoder>(
-                ctx.clone(),
+            VideoDecoderOptions::FfmpegH264 => RtpVideoThread::<FfmpegH264Decoder>::spawn(
                 input_id.clone(),
-                DepayloaderOptions::H264,
-                sender,
+                (ctx.clone(), DepayloaderOptions::H264, sender),
             )?,
-            VideoDecoderOptions::FfmpegVp8 => spawn_rtp_video_thread::<FfmpegVp8Decoder>(
-                ctx.clone(),
+            VideoDecoderOptions::FfmpegVp8 => RtpVideoThread::<FfmpegVp8Decoder>::spawn(
                 input_id.clone(),
-                DepayloaderOptions::Vp8,
-                sender,
+                (ctx.clone(), DepayloaderOptions::Vp8, sender),
             )?,
-            VideoDecoderOptions::FfmpegVp9 => spawn_rtp_video_thread::<FfmpegVp9Decoder>(
-                ctx.clone(),
+            VideoDecoderOptions::FfmpegVp9 => RtpVideoThread::<FfmpegVp9Decoder>::spawn(
                 input_id.clone(),
-                DepayloaderOptions::Vp9,
-                sender,
+                (ctx.clone(), DepayloaderOptions::Vp9, sender),
             )?,
-            VideoDecoderOptions::VulkanH264 => spawn_rtp_video_thread::<VulkanH264Decoder>(
-                ctx.clone(),
+            VideoDecoderOptions::VulkanH264 => RtpVideoThread::<VulkanH264Decoder>::spawn(
                 input_id.clone(),
-                DepayloaderOptions::H264,
-                sender,
+                (ctx.clone(), DepayloaderOptions::H264, sender),
             )?,
         };
         Ok((Some(handle), Some(receiver)))
@@ -161,25 +160,29 @@ impl RtpInput {
 
         let (sender, receiver) = bounded(5);
         let handle = match options {
-            RtpAudioOptions::Opus => spawn_rtp_audio_thread::<OpusDecoder>(
-                ctx.clone(),
-                input_id.clone(),
-                48_000,
-                (),
-                DepayloaderOptions::Opus,
-                sender,
+            RtpAudioOptions::Opus => RtpAudioThread::<OpusDecoder>::spawn(
+                input_id,
+                RtpAudioThreadOptions {
+                    ctx: ctx.clone(),
+                    sample_rate: 48_000,
+                    decoder_options: (),
+                    depayloader_options: DepayloaderOptions::Opus,
+                    decoded_samples_sender: sender,
+                },
             )?,
             RtpAudioOptions::FdkAac {
                 asc,
                 raw_asc,
                 depayloader_mode,
-            } => spawn_rtp_audio_thread::<FdkAacDecoder>(
-                ctx.clone(),
-                input_id.clone(),
-                asc.sample_rate,
-                FdkAacDecoderOptions { asc: Some(raw_asc) },
-                DepayloaderOptions::Aac(depayloader_mode, asc),
-                sender,
+            } => RtpAudioThread::<FdkAacDecoder>::spawn(
+                input_id,
+                RtpAudioThreadOptions {
+                    ctx: ctx.clone(),
+                    sample_rate: asc.sample_rate,
+                    decoder_options: FdkAacDecoderOptions { asc: Some(raw_asc) },
+                    depayloader_options: DepayloaderOptions::Aac(depayloader_mode, asc),
+                    decoded_samples_sender: sender,
+                },
             )?,
         };
         Ok((Some(handle), Some(receiver)))
