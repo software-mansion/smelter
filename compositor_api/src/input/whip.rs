@@ -18,6 +18,8 @@ pub struct WhipInput {
     /// Token used for authentication in WHIP protocol. If not provided, the random value
     /// will be generated and returned in the response.
     pub bearer_token: Option<Arc<str>>,
+    /// Internal use only
+    pub input_id_prefix: Option<Arc<str>>,
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,

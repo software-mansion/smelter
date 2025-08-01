@@ -14,6 +14,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub(crate) struct WhipInputConnectionStateOptions {
     pub bearer_token: Arc<str>,
+    pub input_id_prefix: Option<Arc<str>>,
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
