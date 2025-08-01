@@ -6,7 +6,6 @@ use tracing::{debug, trace, warn};
 use webrtc::{rtp_transceiver::RTCRtpTransceiver, track::track_remote::TrackRemote};
 
 use crate::prelude::*;
-use crate::thread_utils::{InitializableThread, ThreadMetadata};
 use crate::{
     error::DecoderInitError,
     pipeline::{
@@ -23,6 +22,7 @@ use crate::{
         },
         PipelineCtx,
     },
+    thread_utils::{InitializableThread, ThreadMetadata},
 };
 
 pub async fn process_audio_track(
@@ -74,8 +74,6 @@ impl InitializableThread for AudioTrackThread {
     type SpawnOutput = AudioTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
-    const LABEL: &'static str = "Whip audio decoder";
-
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let (ctx, samples_sender) = options;
 
@@ -123,8 +121,8 @@ impl InitializableThread for AudioTrackThread {
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Whip audio",
-            thread_instance_name: "Input",
+            thread_name: "Whip Audio Decoder".to_string(),
+            thread_instance_name: "Input".to_string(),
         }
     }
 }
