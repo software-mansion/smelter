@@ -23,10 +23,8 @@ impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
         }
 
         let (video_encoder_options, output_video_options) = maybe_video_options(video.clone())?;
-        let video_whep_options =
-            video_encoder_options.map(|encoder| pipeline::VideoWhepOptions { encoder });
 
-        let (output_audio_options, audio_whep_options) = audio
+        let (output_audio_options, audio_encoder_options) = audio
             .map(resolve_audio_options)
             .transpose()?
             .unwrap_or_default();
@@ -34,8 +32,8 @@ impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
         Ok(Self {
             output_options: pipeline::ProtocolOutputOptions::Whep(pipeline::WhepSenderOptions {
                 bearer_token,
-                video: video_whep_options,
-                audio: audio_whep_options,
+                video: video_encoder_options,
+                audio: audio_encoder_options,
             }),
             video: output_video_options,
             audio: output_audio_options,
@@ -48,7 +46,7 @@ fn resolve_audio_options(
 ) -> Result<
     (
         Option<pipeline::RegisterOutputAudioOptions>,
-        Option<pipeline::AudioWhepOptions>,
+        Option<pipeline::AudioEncoderOptions>,
     ),
     TypeError,
 > {
@@ -95,12 +93,7 @@ fn resolve_audio_options(
         channels: resolved_channels.clone().into(),
     };
 
-    Ok((
-        Some(output_audio_options),
-        Some(pipeline::AudioWhepOptions {
-            encoder: audio_encoder_options,
-        }),
-    ))
+    Ok((Some(output_audio_options), Some(audio_encoder_options)))
 }
 
 fn maybe_video_options(

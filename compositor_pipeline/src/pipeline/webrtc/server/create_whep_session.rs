@@ -1,15 +1,10 @@
 use crate::{
-    codecs::VideoEncoderOptions,
     event::Event,
     pipeline::{
-        encoder::{
-            encoder_thread_video::spawn_video_encoder_thread, ffmpeg_h264::FfmpegH264Encoder,
-            ffmpeg_vp8::FfmpegVp8Encoder, ffmpeg_vp9::FfmpegVp9Encoder,
-        },
-        rtp::payloader::{PayloadedCodec, PayloaderOptions},
+        rtp::RtpPacket,
         webrtc::{
             error::WhipWhepServerError, peer_connection_sendonly::SendonlyPeerConnection,
-            whep_output::WhepSenderTrack, WhipWhepServerState,
+            WhipWhepServerState,
         },
     },
     PipelineCtx,
@@ -21,13 +16,12 @@ use axum::{
     http::{HeaderMap, Response, StatusCode},
 };
 use compositor_render::OutputId;
-use crossbeam_channel::bounded;
-use ffmpeg_next::format::Output;
 use std::{sync::Arc, time::Duration};
+use tokio::sync::broadcast;
 use tracing::{debug, info, trace, warn};
 use webrtc::{
     peer_connection::sdp::session_description::RTCSessionDescription,
-    rtp_transceiver::rtp_codec::RTPCodecType, track::track_local::TrackLocalWriter,
+    track::track_local::{track_local_static_rtp::TrackLocalStaticRTP, TrackLocalWriter},
 };
 
 #[debug_handler]
@@ -45,17 +39,21 @@ pub async fn handle_create_whep_session(
     validate_sdp_content_type(&headers)?;
     outputs.validate_token(&output_id, &headers).await?;
 
-    let video_encoder = outputs.get_with(&output_id, |output| {
-        Ok(output.video_encoder.clone().unwrap())
-    })?;
-    let audio_encoder = outputs.get_with(&output_id, |output| {
-        Ok(output.audio_encoder.clone().unwrap())
-    })?;
+    let video_encoder = outputs.get_with(&output_id, |output| Ok(output.video_encoder.clone()))?;
+    let audio_encoder = outputs.get_with(&output_id, |output| Ok(output.audio_encoder.clone()))?;
 
     let peer_connection = SendonlyPeerConnection::new(&state.ctx).await?;
 
-    peer_connection.new_video_track().await?;
-    peer_connection.new_audio_track().await?;
+    let video_track = if let Some(encoder) = video_encoder {
+        Some(peer_connection.new_video_track(encoder).await?)
+    } else {
+        None
+    };
+    let audio_track = if let Some(encoder) = audio_encoder {
+        Some(peer_connection.new_audio_track(encoder).await?)
+    } else {
+        None
+    };
 
     let offer = RTCSessionDescription::offer(offer)?;
     peer_connection.set_remote_description(offer).await?;
@@ -70,88 +68,34 @@ pub async fn handle_create_whep_session(
     let sdp_answer = peer_connection.local_description().await?;
     trace!("SDP answer: {}", sdp_answer.sdp);
 
-    fn payloader_options(codec: PayloadedCodec, payload_type: u8, ssrc: u32) -> PayloaderOptions {
-        PayloaderOptions {
-            codec,
-            payload_type,
-            clock_rate: 48_000,
-            mtu: 1200,
-            ssrc,
-        }
-    }
+    let video_recv = state
+        .outputs
+        .get_with(&output_id, |v| Ok(v.video_receiver.clone()))?;
+    let video_receiver = video_recv.map(|recv| recv.resubscribe());
 
-    {
-        let output_id = output_id.clone();
-        println!("{output_id:?}");
-        peer_connection.on_track(Box::new(move |track, _, transceiver| {
-            debug!(
-                kind = track.kind().to_string(),
-                ?output_id,
-                "on_track called"
-            );
-            println!("track-kind   {:?}", track.kind());
+    let audio_recv = state
+        .outputs
+        .get_with(&output_id, |v| Ok(v.audio_receiver.clone()))?;
+    let audio_receiver = audio_recv.map(|recv| recv.resubscribe());
 
-            let (sender, encoder) = crossbeam_channel::bounded(1);
+    let output_id_clone = output_id.clone();
 
-            match track.kind() {
-                RTPCodecType::Audio => {
-                    // spawn_audio_track_thread(
-                    //     state.ctx,
-                    //     output_id,
-                    //     audio_encoder,
-                    //     payloader_options(PayloadedCodec::Opus, 97, 1),
-                    //     sender,
-                    // );
-                }
-                RTPCodecType::Video => {
-                    let encoder = match &video_encoder {
-                        VideoEncoderOptions::FfmpegH264(options) => {
-                            spawn_video_encoder_thread::<FfmpegH264Encoder>(
-                                ctx.clone(),
-                                output_id.clone(),
-                                options.clone(),
-                                sender.clone(),
-                            )
-                        }
-                        VideoEncoderOptions::FfmpegVp8(options) => {
-                            spawn_video_encoder_thread::<FfmpegVp8Encoder>(
-                                ctx.clone(),
-                                output_id.clone(),
-                                options.clone(),
-                                sender.clone(),
-                            )
-                        }
-                        VideoEncoderOptions::FfmpegVp9(options) => {
-                            spawn_video_encoder_thread::<FfmpegVp9Encoder>(
-                                ctx.clone(),
-                                output_id.clone(),
-                                options.clone(),
-                                sender.clone(),
-                            )
-                        }
-                    };
+    tokio::spawn(async move {
+        run_send(
+            ctx,
+            &output_id_clone,
+            video_receiver,
+            audio_receiver,
+            video_track,
+            audio_track,
+        )
+        .await;
+    });
 
-                    // tokio::spawn(process_video_track(
-                    //     state.clone(),
-                    //     output_id.clone(),
-                    //     track,
-                    //     transceiver,
-                    //     video_preferences.clone(),
-                    // ));
-                }
-                RTPCodecType::Unspecified => {
-                    warn!("Unknown track kind")
-                }
-            };
-
-            Box::pin(async {})
-        }))
-    };
-
-    // It will fail if there is already connected peer connection
-    outputs.get_mut_with(&output_id, |output| {
-        output.maybe_replace_peer_connection(&output_id, peer_connection)
-    })?;
+    // // It will fail if there is already connected peer connection
+    // outputs.get_mut_with(&output_id, |output| {
+    //     output.maybe_replace_peer_connection(&output_id, peer_connection)
+    // })?;
 
     let body = Body::from(sdp_answer.sdp.to_string());
     let response = Response::builder()
@@ -179,20 +123,13 @@ pub fn validate_sdp_content_type(headers: &HeaderMap) -> Result<(), WhipWhepServ
 }
 
 async fn run_send(
-    ctx: PipelineCtx,
-    output_id: OutputId,
-    video_track: Option<WhepSenderTrack>,
-    audio_track: Option<WhepSenderTrack>,
+    ctx: Arc<PipelineCtx>,
+    output_id: &OutputId,
+    mut video_receiver: Option<broadcast::Receiver<RtpPacket>>,
+    mut audio_receiver: Option<broadcast::Receiver<RtpPacket>>,
+    video_track: Option<Arc<TrackLocalStaticRTP>>,
+    audio_track: Option<Arc<TrackLocalStaticRTP>>,
 ) {
-    let (mut audio_receiver, audio_track) = match audio_track {
-        Some(WhepSenderTrack { receiver, track }) => (Some(receiver), Some(track)),
-        None => (None, None),
-    };
-
-    let (mut video_receiver, video_track) = match video_track {
-        Some(WhepSenderTrack { receiver, track }) => (Some(receiver), Some(track)),
-        None => (None, None),
-    };
     let mut next_video_packet = None;
     let mut next_audio_packet = None;
 
@@ -205,10 +142,10 @@ async fn run_send(
         ) {
             (None, None, Some(video_receiver), Some(audio_receiver)) => {
                 tokio::select! {
-                    Some(packet) = video_receiver.recv() => {
+                    Ok(packet) = video_receiver.recv() => {
                         next_video_packet = Some(packet)
                     },
-                    Some(packet) = audio_receiver.recv() => {
+                    Ok(packet) = audio_receiver.recv() => {
                         next_audio_packet = Some(packet)
                     },
                     else => break,
@@ -216,18 +153,18 @@ async fn run_send(
             }
             (_video, None, _video_receiver, audio_receiver @ Some(_)) => {
                 match audio_receiver.as_mut().unwrap().recv().await {
-                    Some(packet) => {
+                    Ok(packet) => {
                         next_audio_packet = Some(packet);
                     }
-                    None => *audio_receiver = None,
+                    Err(_) => *audio_receiver = None,
                 };
             }
             (None, _, video_receiver @ Some(_), _) => {
                 match video_receiver.as_mut().unwrap().recv().await {
-                    Some(packet) => {
+                    Ok(packet) => {
                         next_video_packet = Some(packet);
                     }
-                    None => *video_receiver = None,
+                    Err(_) => *video_receiver = None,
                 };
             }
             (None, None, None, None) => {
@@ -289,6 +226,6 @@ async fn run_send(
         };
     }
 
-    ctx.event_emitter.emit(Event::OutputDone(output_id));
-    debug!("Closing WHIP sender thread.")
+    ctx.event_emitter.emit(Event::OutputDone(output_id.clone()));
+    debug!("Closing WHEP sender thread.")
 }

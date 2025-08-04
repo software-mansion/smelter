@@ -45,8 +45,8 @@ pub struct WhipSenderOptions {
 #[derive(Debug, Clone)]
 pub struct WhepSenderOptions {
     pub bearer_token: Option<Arc<str>>,
-    pub video: Option<VideoWhepOptions>,
-    pub audio: Option<AudioWhepOptions>,
+    pub video: Option<VideoEncoderOptions>,
+    pub audio: Option<AudioEncoderOptions>,
 }
 
 #[derive(Debug, thiserror::Error)]

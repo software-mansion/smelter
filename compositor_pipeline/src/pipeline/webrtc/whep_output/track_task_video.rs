@@ -1,18 +1,21 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
-use compositor_render::{error::ErrorStack, Frame, OutputId};
+use compositor_render::{error::ErrorStack, Frame};
 use crossbeam_channel::Sender;
-use tokio::sync::mpsc;
-use tracing::{debug, span, warn, Level};
+use tokio::sync::broadcast;
+use tracing::warn;
 
-use crate::pipeline::{
-    encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
-    rtp::{
-        payloader::{PayloaderOptions, PayloaderStream},
-        RtpPacket,
-    },
-};
 use crate::prelude::*;
+use crate::{
+    pipeline::{
+        encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
+        rtp::{
+            payloader::{PayloaderOptions, PayloaderStream},
+            RtpPacket,
+        },
+    },
+    thread_utils::{InitializableThread, ThreadMetadata},
+};
 
 #[derive(Debug)]
 pub(crate) struct WhepVideoTrackThreadHandle {
@@ -21,79 +24,83 @@ pub(crate) struct WhepVideoTrackThreadHandle {
     pub config: VideoEncoderConfig,
 }
 
-pub fn spawn_video_track_thread<Encoder: VideoEncoder>(
-    ctx: Arc<PipelineCtx>,
-    output_id: OutputId,
-    encoder_options: Encoder::Options,
-    payloader_options: PayloaderOptions,
-    chunks_sender: mpsc::Sender<RtpPacket>,
-) -> Result<WhepVideoTrackThreadHandle, EncoderInitError> {
-    let (result_sender, result_receiver) = crossbeam_channel::bounded(0);
-
-    std::thread::Builder::new()
-        .name(format!("WHEP video track thread for output {}", &output_id))
-        .spawn(move || {
-            let _span = span!(
-                Level::INFO,
-                "WHEP: video encoder + payloader thread",
-                output_id = output_id.to_string(),
-                encoder = Encoder::LABEL
-            )
-            .entered();
-
-            let result = init_stream::<Encoder>(ctx, encoder_options, payloader_options);
-            let stream = match result {
-                Ok((stream, handle)) => {
-                    result_sender.send(Ok(handle)).unwrap();
-                    stream
-                }
-                Err(err) => {
-                    result_sender.send(Err(err)).unwrap();
-                    return;
-                }
-            };
-            for event in stream {
-                if chunks_sender.blocking_send(event).is_err() {
-                    warn!("Failed to send encoded video chunk from encoder. Channel closed.");
-                    return;
-                }
-            }
-            debug!("Encoder thread finished.");
-        })
-        .unwrap();
-
-    result_receiver.recv().unwrap()
+pub(crate) struct WhepVideoTrackThreadOptions<Encoder: VideoEncoder> {
+    pub ctx: Arc<PipelineCtx>,
+    pub encoder_options: Encoder::Options,
+    pub payloader_options: PayloaderOptions,
+    pub chunks_sender: broadcast::Sender<RtpPacket>,
 }
 
-fn init_stream<Encoder: VideoEncoder>(
-    ctx: Arc<PipelineCtx>,
-    encoder_options: Encoder::Options,
-    payloader_options: PayloaderOptions,
-) -> Result<(impl Iterator<Item = RtpPacket>, WhepVideoTrackThreadHandle), EncoderInitError> {
-    let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
-    let (encoded_stream, encoder_ctx) =
-        VideoEncoderStream::<Encoder, _>::new(ctx, encoder_options, frame_receiver.into_iter())?;
+pub(crate) struct WhepVideoTrackThread<Encoder: VideoEncoder> {
+    stream: Box<dyn Iterator<Item = RtpPacket>>,
+    chunks_sender: broadcast::Sender<RtpPacket>,
+    _encoder: PhantomData<Encoder>,
+}
 
-    let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
+impl<Encoder> InitializableThread for WhepVideoTrackThread<Encoder>
+where
+    Encoder: VideoEncoder + 'static,
+{
+    type InitOptions = WhepVideoTrackThreadOptions<Encoder>;
 
-    let stream = payloaded_stream.flatten().filter_map(|event| match event {
-        Ok(PipelineEvent::Data(packet)) => Some(packet),
-        Ok(PipelineEvent::EOS) => None,
-        Err(err) => {
-            warn!(
-                "Depayloading error: {}",
-                ErrorStack::new(&err).into_string()
-            );
-            None
-        }
-    });
+    type SpawnOutput = WhepVideoTrackThreadHandle;
+    type SpawnError = EncoderInitError;
 
-    Ok((
-        stream,
-        WhepVideoTrackThreadHandle {
+    fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
+        let WhepVideoTrackThreadOptions {
+            ctx,
+            encoder_options,
+            payloader_options,
+            chunks_sender,
+        } = options;
+
+        let (frame_sender, frame_receiver) = crossbeam_channel::bounded(5);
+        let (encoded_stream, encoder_ctx) = VideoEncoderStream::<Encoder, _>::new(
+            ctx,
+            encoder_options,
+            frame_receiver.into_iter(),
+        )?;
+
+        let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
+
+        let stream = payloaded_stream.flatten().filter_map(|event| match event {
+            Ok(PipelineEvent::Data(packet)) => Some(packet),
+            Ok(PipelineEvent::EOS) => None,
+            Err(err) => {
+                warn!(
+                    "Depayloading error: {}",
+                    ErrorStack::new(&err).into_string()
+                );
+                None
+            }
+        });
+
+        let state = Self {
+            stream: Box::new(stream),
+            chunks_sender,
+            _encoder: PhantomData,
+        };
+        let output = WhepVideoTrackThreadHandle {
             frame_sender,
             keyframe_request_sender: encoder_ctx.keyframe_request_sender,
             config: encoder_ctx.config,
-        },
-    ))
+        };
+        Ok((state, output))
+    }
+
+    fn run(self) {
+        for event in self.stream {
+            if self.chunks_sender.send(event).is_err() {
+                warn!("Failed to send encoded video chunk from encoder. Channel closed.");
+                return;
+            }
+        }
+    }
+
+    fn metadata() -> ThreadMetadata {
+        ThreadMetadata {
+            thread_name: "Whep Video Encoder".to_string(),
+            thread_instance_name: "Output".to_string(),
+        }
+    }
 }
