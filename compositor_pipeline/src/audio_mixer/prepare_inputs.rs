@@ -92,7 +92,7 @@ fn frame_input_samples(
         sample
     });
 
-    for (batch_index, input_samples) in samples_iter.enumerate() {
+    for input_samples in samples_iter {
         let sample_count = samples_in_frame.len();
         let expected_next_sample_start_pts =
             start_pts + Duration::from_secs_f64(sample_count as f64 / sample_rate as f64);
@@ -122,8 +122,9 @@ fn frame_input_samples(
             let time_to_remove_from_start =
                 expected_next_sample_start_pts.saturating_sub(input_samples.start_pts);
             let samples_to_remove_from_start = time_to_sample_count(time_to_remove_from_start);
-            if batch_index != 0 {
-                // We should only drop samples in the first batch.
+            if sample_count != 0 {
+                // We should only drop samples in the first batch that overlaps with target batch
+                // timestamps.
                 warn!(
                     "Received overlapping batches on input. Dropping {} samples.",
                     samples_to_remove_from_start
