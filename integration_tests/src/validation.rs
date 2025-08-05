@@ -100,7 +100,7 @@ pub struct SamplingInterval {
 }
 
 impl SamplingInterval {
-    // Intervals returned by this function to not match time stamp exactly.
+    // Intervals returned by this function do not match time stamp exactly.
     // They usually are slightly longer, because interval must be split into
     // batches of 16384 samples.
     pub fn from_range(
