@@ -10,20 +10,26 @@ use webrtc::{
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
-use crate::pipeline::{
-    encoder::{
-        ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder, ffmpeg_vp9::FfmpegVp9Encoder,
-        libopus::OpusEncoder,
+use crate::{
+    pipeline::{
+        encoder::{
+            ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder,
+            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder,
+        },
+        rtp::payloader::{PayloadedCodec, PayloaderOptions},
+        webrtc::whip_output::{
+            track_task_audio::{WhipAudioTrackThread, WhipAudioTrackThreadOptions},
+            track_task_video::{WhipVideoTrackThread, WhipVideoTrackThreadOptions},
+            PeerConnection,
+        },
     },
-    rtp::payloader::{PayloadedCodec, PayloaderOptions},
-    webrtc::whip_output::{track_task_audio::spawn_audio_track_thread, PeerConnection},
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
 
 use super::{
-    track_task_audio::WhipAudioTrackThreadHandle,
-    track_task_video::{spawn_video_track_thread, WhipVideoTrackThreadHandle},
+    track_task_audio::WhipAudioTrackThreadHandle, track_task_video::WhipVideoTrackThreadHandle,
     WhipInputError, WhipSenderTrack,
 };
 
@@ -116,26 +122,46 @@ pub async fn setup_video_track(
     };
     let (sender, receiver) = mpsc::channel(1000);
     let handle = match options {
-        VideoEncoderOptions::FfmpegH264(options) => spawn_video_track_thread::<FfmpegH264Encoder>(
-            ctx.clone(),
+        VideoEncoderOptions::FfmpegH264(options) => {
+            WhipVideoTrackThread::<FfmpegH264Encoder>::spawn(
+                output_id.clone(),
+                WhipVideoTrackThreadOptions {
+                    ctx: ctx.clone(),
+                    encoder_options: options,
+                    payloader_options: payloader_options(
+                        PayloadedCodec::H264,
+                        codec_params.payload_type,
+                        ssrc,
+                    ),
+                    chunks_sender: sender,
+                },
+            )
+        }
+        VideoEncoderOptions::FfmpegVp8(options) => WhipVideoTrackThread::<FfmpegVp8Encoder>::spawn(
             output_id.clone(),
-            options,
-            payloader_options(PayloadedCodec::H264, codec_params.payload_type, ssrc),
-            sender,
+            WhipVideoTrackThreadOptions {
+                ctx: ctx.clone(),
+                encoder_options: options,
+                payloader_options: payloader_options(
+                    PayloadedCodec::Vp8,
+                    codec_params.payload_type,
+                    ssrc,
+                ),
+                chunks_sender: sender,
+            },
         ),
-        VideoEncoderOptions::FfmpegVp8(options) => spawn_video_track_thread::<FfmpegVp8Encoder>(
-            ctx.clone(),
+        VideoEncoderOptions::FfmpegVp9(options) => WhipVideoTrackThread::<FfmpegVp9Encoder>::spawn(
             output_id.clone(),
-            options,
-            payloader_options(PayloadedCodec::Vp8, codec_params.payload_type, ssrc),
-            sender,
-        ),
-        VideoEncoderOptions::FfmpegVp9(options) => spawn_video_track_thread::<FfmpegVp9Encoder>(
-            ctx.clone(),
-            output_id.clone(),
-            options,
-            payloader_options(PayloadedCodec::Vp9, codec_params.payload_type, ssrc),
-            sender,
+            WhipVideoTrackThreadOptions {
+                ctx: ctx.clone(),
+                encoder_options: options,
+                payloader_options: payloader_options(
+                    PayloadedCodec::Vp9,
+                    codec_params.payload_type,
+                    ssrc,
+                ),
+                chunks_sender: sender,
+            },
         ),
     }?;
 
@@ -227,12 +253,18 @@ pub async fn setup_audio_track(
     };
     let (sender, receiver) = mpsc::channel(1000);
     let handle = match options {
-        AudioEncoderOptions::Opus(options) => spawn_audio_track_thread::<OpusEncoder>(
-            ctx.clone(),
+        AudioEncoderOptions::Opus(options) => WhipAudioTrackThread::<OpusEncoder>::spawn(
             output_id.clone(),
-            options,
-            payloader_options(PayloadedCodec::Opus, codec_params.payload_type, ssrc),
-            sender,
+            WhipAudioTrackThreadOptions {
+                ctx: ctx.clone(),
+                encoder_options: options,
+                payloader_options: payloader_options(
+                    PayloadedCodec::Opus,
+                    codec_params.payload_type,
+                    ssrc,
+                ),
+                chunks_sender: sender,
+            },
         ),
         AudioEncoderOptions::FdkAac(_options) => {
             return Err(WhipInputError::UnsupportedCodec("aac"))
