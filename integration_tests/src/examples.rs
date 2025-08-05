@@ -60,6 +60,22 @@ pub fn run_example(client_code: fn() -> Result<()>) {
     server::run();
 }
 
+pub fn run_example_server() {
+    thread::spawn(move || {
+        ffmpeg_next::format::network::init();
+
+        download_all_assets().unwrap();
+
+        if let Err(err) = wait_for_server_ready(Duration::from_secs(10)) {
+            error!("{err}");
+            process::exit(1);
+        }
+
+        start_server_msg_listener();
+    });
+    server::run();
+}
+
 fn wait_for_server_ready(timeout: Duration) -> Result<()> {
     let server_status_url = "http://127.0.0.1:8081/status";
     let wait_start_time = Instant::now();
