@@ -46,3 +46,4 @@ tokio-tungstenite = "0.21.0"
 wgpu = { workspace = true }
 image = { workspace = true }
 regex = "1.10.6"
+inquire = "0.7.5"
