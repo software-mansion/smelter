@@ -17,7 +17,7 @@ use crate::{
     thread_utils::{InitializableThread, ThreadMetadata},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct WhepAudioTrackThreadHandle {
     pub sample_batch_sender: crossbeam_channel::Sender<PipelineEvent<OutputAudioSamples>>,
     pub packet_loss_sender: watch::Sender<i32>,

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{WhipInputError, WhipSenderOptions};
+use super::{WhipOutputError, WhipSenderOptions};
 use tracing::debug;
 use webrtc::{
     api::{
@@ -41,7 +41,7 @@ impl PeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
         options: &WhipSenderOptions,
-    ) -> Result<Self, WhipInputError> {
+    ) -> Result<Self, WhipOutputError> {
         let mut media_engine = media_engine_with_codecs(options)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
@@ -71,7 +71,7 @@ impl PeerConnection {
         })
     }
 
-    pub async fn new_video_track(&self) -> Result<Arc<RTCRtpSender>, WhipInputError> {
+    pub async fn new_video_track(&self) -> Result<Arc<RTCRtpSender>, WhipOutputError> {
         let track = Arc::new(TrackLocalStaticRTP::new(
             RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_VP8.to_owned(),
@@ -87,11 +87,11 @@ impl PeerConnection {
             .pc
             .add_track(track)
             .await
-            .map_err(WhipInputError::PeerConnectionInitError)?;
+            .map_err(WhipOutputError::PeerConnectionInitError)?;
         Ok(sender)
     }
 
-    pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpSender>, WhipInputError> {
+    pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpSender>, WhipOutputError> {
         let track = Arc::new(TrackLocalStaticRTP::new(
             RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_OPUS.to_owned(),
@@ -107,35 +107,35 @@ impl PeerConnection {
             .pc
             .add_track(track)
             .await
-            .map_err(WhipInputError::PeerConnectionInitError)?;
+            .map_err(WhipOutputError::PeerConnectionInitError)?;
         Ok(sender)
     }
 
     pub async fn set_remote_description(
         &self,
         answer: RTCSessionDescription,
-    ) -> Result<(), WhipInputError> {
+    ) -> Result<(), WhipOutputError> {
         self.pc
             .set_remote_description(answer)
             .await
-            .map_err(WhipInputError::RemoteDescriptionError)
+            .map_err(WhipOutputError::RemoteDescriptionError)
     }
 
     pub async fn set_local_description(
         &self,
         offer: RTCSessionDescription,
-    ) -> Result<(), WhipInputError> {
+    ) -> Result<(), WhipOutputError> {
         self.pc
             .set_local_description(offer)
             .await
-            .map_err(WhipInputError::LocalDescriptionError)
+            .map_err(WhipOutputError::LocalDescriptionError)
     }
 
-    pub async fn create_offer(&self) -> Result<RTCSessionDescription, WhipInputError> {
+    pub async fn create_offer(&self) -> Result<RTCSessionDescription, WhipOutputError> {
         self.pc
             .create_offer(None)
             .await
-            .map_err(WhipInputError::OfferCreationError)
+            .map_err(WhipOutputError::OfferCreationError)
     }
 
     pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {

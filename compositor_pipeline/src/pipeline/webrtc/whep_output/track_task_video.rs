@@ -17,7 +17,7 @@ use crate::{
     thread_utils::{InitializableThread, ThreadMetadata},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct WhepVideoTrackThreadHandle {
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub keyframe_request_sender: Sender<()>,

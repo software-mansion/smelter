@@ -109,7 +109,7 @@ pub enum OutputInitError {
     WhipInitTimeout,
 
     #[error("Failed to init whip output")]
-    WhipInitError(#[source] Box<WhipInputError>), // TODO output not input
+    WhipInitError(#[source] Box<WhipOutputError>),
 
     #[error("Unknown whep output error.")]
     UnknownWhepError,

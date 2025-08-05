@@ -10,14 +10,14 @@ use crate::{
             ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder,
         },
         output::{Output, OutputAudio, OutputVideo},
-        rtp::{
-            payloader::{PayloadedCodec, PayloaderOptions},
-            RtpPacket,
-        },
+        rtp::payloader::{PayloadedCodec, PayloaderOptions},
         webrtc::{
             bearer_token::generate_token,
             whep_output::{
-                connection_state::WhepOutputConnectionStateOptions,
+                connection_state::{
+                    WhepAudioConnectionOptions, WhepOutputConnectionStateOptions,
+                    WhepVideoConnectionOptions,
+                },
                 track_task_audio::{
                     WhepAudioTrackThread, WhepAudioTrackThreadHandle, WhepAudioTrackThreadOptions,
                 },
@@ -38,7 +38,6 @@ pub(super) mod state;
 pub(super) mod track_task_audio;
 pub(super) mod track_task_video;
 
-
 #[derive(Debug)]
 pub struct WhepOutput {
     video: Option<WhepVideoTrackThreadHandle>,
@@ -57,32 +56,31 @@ impl WhepOutput {
         };
         let bearer_token = options.bearer_token.clone().unwrap_or_else(generate_token);
 
-        let (video, video_receiver) = match options.video.clone() {
-            Some(video) => {
-                let (handle, receiver) = Self::init_video_thread(&ctx, &output_id, 1400, video)?;
-                (Some(handle), Some(receiver))
-            }
-            None => (None, None),
-        };
-        let (audio, audio_receiver) = match options.audio.clone() {
-            Some(audio) => {
-                let (handle, receiver) = Self::init_audio_thread(&ctx, &output_id, 1400, audio)?;
-                (Some(handle), Some(receiver))
-            }
-            None => (None, None),
-        };
+        let video_options = options
+            .video
+            .as_ref()
+            .map(|video| Self::init_video_thread(&ctx, &output_id, 1400, video.clone()))
+            .transpose()?;
+
+        let audio_options = options
+            .audio
+            .as_ref()
+            .map(|audio| Self::init_audio_thread(&ctx, &output_id, 1400, audio.clone()))
+            .transpose()?;
+
         state.outputs.add_output(
             &output_id,
             WhepOutputConnectionStateOptions {
                 bearer_token: bearer_token.clone(),
-                video_encoder: options.video.clone(),
-                audio_encoder: options.audio.clone(),
-                video_receiver,
-                audio_receiver,
+                video_options: video_options.clone(),
+                audio_options: audio_options.clone(),
             },
         );
 
-        Ok(Self { audio, video })
+        Ok(Self {
+            audio: audio_options.map(|a| a.track_thread_handle),
+            video: video_options.map(|v| v.track_thread_handle),
+        })
     }
 
     fn init_video_thread(
@@ -90,7 +88,7 @@ impl WhepOutput {
         output_id: &OutputId,
         mtu: usize,
         options: VideoEncoderOptions,
-    ) -> Result<(WhepVideoTrackThreadHandle, Arc<broadcast::Receiver<RtpPacket>>), OutputInitError> {
+    ) -> Result<WhepVideoConnectionOptions, OutputInitError> {
         fn payloader_options(codec: PayloadedCodec, mtu: usize) -> PayloaderOptions {
             PayloaderOptions {
                 codec,
@@ -136,10 +134,12 @@ impl WhepOutput {
                 )?
             }
         };
-        Ok((
-            thread_handle,
-            Arc::new(receiver),
-        ))
+
+        Ok(WhepVideoConnectionOptions {
+            encoder: options,
+            receiver: Arc::new(receiver),
+            track_thread_handle: thread_handle,
+        })
     }
 
     fn init_audio_thread(
@@ -147,28 +147,30 @@ impl WhepOutput {
         output_id: &OutputId,
         mtu: usize,
         options: AudioEncoderOptions,
-    ) -> Result<(WhepAudioTrackThreadHandle, Arc<broadcast::Receiver<RtpPacket>>), OutputInitError> {
+    ) -> Result<WhepAudioConnectionOptions, OutputInitError> {
+        let ssrc = rand::thread_rng().gen::<u32>();
         fn payloader_options(
             codec: PayloadedCodec,
             sample_rate: u32,
             mtu: usize,
+            ssrc: u32,
         ) -> PayloaderOptions {
             PayloaderOptions {
                 codec,
                 payload_type: 97,
                 clock_rate: sample_rate,
                 mtu,
-                ssrc: rand::thread_rng().gen::<u32>(),
+                ssrc,
             }
         }
         let (sender, receiver) = broadcast::channel(1000);
-        let thread_handle = match options {
+        let thread_handle = match options.clone() {
             AudioEncoderOptions::Opus(options) => WhepAudioTrackThread::<OpusEncoder>::spawn(
                 output_id.clone(),
                 WhepAudioTrackThreadOptions {
                     ctx: ctx.clone(),
                     encoder_options: options.clone(),
-                    payloader_options: payloader_options(PayloadedCodec::Opus, 48_000, mtu),
+                    payloader_options: payloader_options(PayloadedCodec::Opus, 48_000, mtu, ssrc),
                     chunks_sender: sender,
                 },
             )?,
@@ -176,10 +178,13 @@ impl WhepOutput {
                 return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Aac))
             }
         };
-        Ok((
-            thread_handle,
-            Arc::new(receiver),
-        ))
+
+        Ok(WhepAudioConnectionOptions {
+            encoder: options,
+            receiver: Arc::new(receiver),
+            track_thread_handle: thread_handle,
+            ssrc,
+        })
     }
 }
 

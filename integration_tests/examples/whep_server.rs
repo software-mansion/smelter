@@ -28,7 +28,7 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    let token = env::var("WHEP_TOKEN").map_err(|err| anyhow!("Couldn't read WHEP_TOKEN environmental variable. You must provide it in order to run `whip_client` example. Read env error: {}", err))?;
+    let token = env::var("WHEP_TOKEN").map_err(|err| anyhow!("Couldn't read WHEP_TOKEN environmental variable. You must provide it in order to run `whep_server` example. Read env error: {}", err))?;
 
     examples::post(
         "output/output_1/register",

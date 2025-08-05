@@ -5,19 +5,20 @@ use tracing::debug;
 use webrtc::{
     api::{
         interceptor_registry::register_default_interceptors,
-        media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS},
+        media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
         APIBuilder,
     },
     ice_transport::{
-        ice_candidate::RTCIceCandidateInit, ice_connection_state::RTCIceConnectionState,
-        ice_gatherer_state::RTCIceGathererState, ice_server::RTCIceServer,
+        ice_connection_state::RTCIceConnectionState, ice_gatherer_state::RTCIceGathererState,
+        ice_server::RTCIceServer,
     },
     interceptor::registry::Registry,
     peer_connection::{
-        configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState,
-        sdp::session_description::RTCSessionDescription, OnTrackHdlrFn, RTCPeerConnection,
+        configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
+        RTCPeerConnection,
     },
-    rtp_transceiver::rtp_codec::RTCRtpCodecCapability,
+    rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender},
+    stats::StatsReport,
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
@@ -33,9 +34,8 @@ pub(crate) struct SendonlyPeerConnection {
 
 impl SendonlyPeerConnection {
     pub async fn new(ctx: &Arc<PipelineCtx>) -> Result<Self, WhipWhepServerError> {
-        // let mut media_engine = media_engine_with_codecs(video_preferences)?;
         let mut media_engine = MediaEngine::default();
-        let _ = media_engine.register_default_codecs();
+        media_engine.register_default_codecs()?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
         let api = APIBuilder::new()
@@ -65,21 +65,22 @@ impl SendonlyPeerConnection {
         })
     }
 
-    pub fn connection_state(&self) -> RTCPeerConnectionState {
-        self.pc.connection_state()
-    }
-
-    pub async fn close(&self) -> Result<(), WhipWhepServerError> {
-        Ok(self.pc.close().await?)
+    pub async fn get_stats(&self) -> StatsReport {
+        self.pc.get_stats().await
     }
 
     pub async fn new_video_track(
         &self,
         encoder: VideoEncoderOptions,
-    ) -> Result<Arc<TrackLocalStaticRTP>, WhipWhepServerError> {
+    ) -> Result<(Arc<TrackLocalStaticRTP>, Arc<RTCRtpSender>), WhipWhepServerError> {
+        let mime_type = match encoder {
+            VideoEncoderOptions::FfmpegH264(_) => MIME_TYPE_H264,
+            VideoEncoderOptions::FfmpegVp8(_) => MIME_TYPE_VP8,
+            VideoEncoderOptions::FfmpegVp9(_) => MIME_TYPE_VP9,
+        };
         let track = Arc::new(TrackLocalStaticRTP::new(
             RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_H264.to_owned(),
+                mime_type: mime_type.to_owned(),
                 clock_rate: 90000,
                 channels: 0,
                 sdp_fmtp_line: "".to_owned(),
@@ -88,29 +89,38 @@ impl SendonlyPeerConnection {
             "video".to_string(),
             "webrtc".to_string(),
         ));
-        self.pc.add_track(track.clone()).await?;
+        let sender = self.pc.add_track(track.clone()).await?;
 
-        Ok(track)
+        Ok((track, sender))
     }
 
     pub async fn new_audio_track(
         &self,
         encoder: AudioEncoderOptions,
-    ) -> Result<Arc<TrackLocalStaticRTP>, WhipWhepServerError> {
-        let track = Arc::new(TrackLocalStaticRTP::new(
-            RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_OPUS.to_owned(),
-                clock_rate: 48000,
-                channels: 2,
-                sdp_fmtp_line: "".to_owned(),
-                rtcp_feedback: vec![],
-            },
-            "audio".to_string(),
-            "webrtc".to_string(),
-        ));
-        self.pc.add_track(track.clone()).await?;
+    ) -> Result<(Arc<TrackLocalStaticRTP>, Arc<RTCRtpSender>), WhipWhepServerError> {
+        let track = match encoder {
+            AudioEncoderOptions::Opus(_) => Arc::new(TrackLocalStaticRTP::new(
+                RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_OPUS.to_owned(),
+                    clock_rate: 48000,
+                    channels: 2,
+                    sdp_fmtp_line: "".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                "audio".to_string(),
+                "webrtc".to_string(),
+            )),
+            AudioEncoderOptions::FdkAac(_) => {
+                // this should never happen
+                return Err(WhipWhepServerError::InternalError(
+                    "AAC is not supported codec for WHEP output".to_owned(),
+                ));
+            }
+        };
 
-        Ok(track)
+        let sender = self.pc.add_track(track.clone()).await?;
+
+        Ok((track, sender))
     }
 
     pub async fn set_remote_description(
@@ -140,6 +150,23 @@ impl SendonlyPeerConnection {
         }
     }
 
+    pub async fn negotiate_connection(
+        &self,
+        offer: String,
+    ) -> Result<RTCSessionDescription, WhipWhepServerError> {
+        let offer = RTCSessionDescription::offer(offer)?;
+        self.set_remote_description(offer).await?;
+
+        let answer = self.create_answer().await?;
+        self.set_local_description(answer).await?;
+
+        self.wait_for_ice_candidates(Duration::from_secs(1)).await?;
+
+        let sdp_answer = self.local_description().await?;
+
+        Ok(sdp_answer)
+    }
+
     pub async fn wait_for_ice_candidates(
         &self,
         wait_timeout: Duration,
@@ -166,16 +193,5 @@ impl SendonlyPeerConnection {
             debug!("Maximum time for gathering candidate has elapsed.");
         }
         Ok(())
-    }
-
-    pub fn on_track(&self, f: OnTrackHdlrFn) {
-        self.pc.on_track(f);
-    }
-
-    pub async fn add_ice_candidate(
-        &self,
-        candidate: RTCIceCandidateInit,
-    ) -> Result<(), WhipWhepServerError> {
-        Ok(self.pc.add_ice_candidate(candidate).await?)
     }
 }

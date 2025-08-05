@@ -16,7 +16,7 @@ pub mod libopus;
 
 mod ffmpeg_utils;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct VideoEncoderConfig {
     pub resolution: Resolution,
     pub output_format: OutputFrameFormat,

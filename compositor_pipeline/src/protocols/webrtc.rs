@@ -25,16 +25,6 @@ pub struct AudioWhipOptions {
 }
 
 #[derive(Debug, Clone)]
-pub struct VideoWhepOptions {
-    pub encoder: VideoEncoderOptions,
-}
-
-#[derive(Debug, Clone)]
-pub struct AudioWhepOptions {
-    pub encoder: AudioEncoderOptions,
-}
-
-#[derive(Debug, Clone)]
 pub struct WhipSenderOptions {
     pub endpoint_url: Arc<str>,
     pub bearer_token: Option<Arc<str>>,
@@ -50,7 +40,7 @@ pub struct WhepSenderOptions {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum WhipInputError {
+pub enum WhipOutputError {
     #[error("Bad status in WHIP response Status: {0} Body:\n{1}")]
     BadStatus(StatusCode, String),
 

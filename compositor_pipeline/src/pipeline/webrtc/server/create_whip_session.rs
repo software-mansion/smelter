@@ -101,10 +101,7 @@ pub async fn handle_create_whip_session(
         .status(StatusCode::CREATED)
         .header("Content-Type", "application/sdp")
         .header("Access-Control-Expose-Headers", "Location")
-        .header(
-            "Location",
-            format!("/resource/{}", urlencoding::encode(&id)),
-        )
+        .header("Location", format!("/session/{}", urlencoding::encode(&id)))
         .body(body)?;
     Ok(response)
 }

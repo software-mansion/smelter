@@ -3,7 +3,12 @@ use crate::{
     pipeline::{
         rtp::RtpPacket,
         webrtc::{
-            error::WhipWhepServerError, peer_connection_sendonly::SendonlyPeerConnection,
+            error::WhipWhepServerError,
+            handle_keyframe_requests::handle_keyframe_requests,
+            peer_connection_sendonly::SendonlyPeerConnection,
+            whep_output::connection_state::{
+                WhepAudioConnectionOptions, WhepVideoConnectionOptions,
+            },
             WhipWhepServerState,
         },
     },
@@ -17,10 +22,11 @@ use axum::{
 };
 use compositor_render::OutputId;
 use std::{sync::Arc, time::Duration};
-use tokio::sync::broadcast;
-use tracing::{debug, info, trace, warn};
+use tokio::sync::{broadcast, watch};
+use tracing::{debug, error, span, trace, warn, Instrument, Level};
 use webrtc::{
-    peer_connection::sdp::session_description::RTCSessionDescription,
+    rtp_transceiver::rtp_sender::RTCRtpSender,
+    stats::StatsReportType,
     track::track_local::{track_local_static_rtp::TrackLocalStaticRTP, TrackLocalWriter},
 };
 
@@ -32,56 +38,102 @@ pub async fn handle_create_whep_session(
     offer: String,
 ) -> Result<Response<Body>, WhipWhepServerError> {
     let output_id = OutputId(Arc::from(id.clone()));
-    info!("SDP offer: {}", offer);
-    let outputs = state.outputs.clone();
-    let ctx = state.ctx.clone();
+    trace!("SDP offer: {}", offer);
 
     validate_sdp_content_type(&headers)?;
+    let outputs = state.outputs.clone();
     outputs.validate_token(&output_id, &headers).await?;
+    let ctx = state.ctx.clone();
 
-    let video_encoder = outputs.get_with(&output_id, |output| Ok(output.video_encoder.clone()))?;
-    let audio_encoder = outputs.get_with(&output_id, |output| Ok(output.audio_encoder.clone()))?;
+    let video_options = outputs.get_with(&output_id, |output| Ok(output.video_options.clone()))?;
+    let audio_options = outputs.get_with(&output_id, |output| Ok(output.audio_options.clone()))?;
 
-    let peer_connection = SendonlyPeerConnection::new(&state.ctx).await?;
+    let peer_connection = SendonlyPeerConnection::new(&ctx.clone()).await?;
 
-    let video_track = if let Some(encoder) = video_encoder {
-        Some(peer_connection.new_video_track(encoder).await?)
-    } else {
-        None
-    };
-    let audio_track = if let Some(encoder) = audio_encoder {
-        Some(peer_connection.new_audio_track(encoder).await?)
-    } else {
-        None
+    let (video_track, video_sender) = match video_options.clone() {
+        Some(opts) => {
+            let (track, sender) = peer_connection.new_video_track(opts.encoder).await?;
+            (Some(track), Some(sender))
+        }
+        None => (None, None),
     };
 
-    let offer = RTCSessionDescription::offer(offer)?;
-    peer_connection.set_remote_description(offer).await?;
+    let (audio_track, audio_sender) = match audio_options.clone() {
+        Some(opts) => {
+            let (track, sender) = peer_connection.new_audio_track(opts.encoder).await?;
+            (Some(track), Some(sender))
+        }
+        None => (None, None),
+    };
 
-    let answer = peer_connection.create_answer().await?;
-    peer_connection.set_local_description(answer).await?;
-
-    peer_connection
-        .wait_for_ice_candidates(Duration::from_secs(1))
-        .await?;
-
-    let sdp_answer = peer_connection.local_description().await?;
+    let sdp_answer = peer_connection.negotiate_connection(offer).await?;
     trace!("SDP answer: {}", sdp_answer.sdp);
 
-    let video_recv = state
-        .outputs
-        .get_with(&output_id, |v| Ok(v.video_receiver.clone()))?;
-    let video_receiver = video_recv.map(|recv| recv.resubscribe());
+    spawn_media_streaming_task(
+        ctx.clone(),
+        &output_id,
+        video_options.clone(),
+        audio_options.clone(),
+        video_track,
+        audio_track,
+    )
+    .await;
 
-    let audio_recv = state
-        .outputs
-        .get_with(&output_id, |v| Ok(v.audio_receiver.clone()))?;
-    let audio_receiver = audio_recv.map(|recv| recv.resubscribe());
+    if let (Some(sender), Some(video_opt)) = (video_sender, video_options) {
+        handle_keyframe_requests(
+            &ctx.clone(),
+            sender,
+            video_opt
+                .track_thread_handle
+                .keyframe_request_sender
+                .clone(),
+        );
+    }
+
+    if let (Some(sender), Some(audio_opt)) = (audio_sender, audio_options) {
+        handle_packet_loss_requests(
+            &ctx,
+            peer_connection,
+            sender.clone(),
+            audio_opt.track_thread_handle.packet_loss_sender.clone(),
+            audio_opt.ssrc,
+        );
+    }
+
+    let body = Body::from(sdp_answer.sdp.to_string());
+    let response = Response::builder()
+        .status(StatusCode::CREATED)
+        .header("Content-Type", "application/sdp")
+        .header(
+            "Location",
+            format!("/resource/{}", urlencoding::encode(&id)),
+        )
+        .body(body)?;
+    Ok(response)
+}
+
+// TODO split into seperate files
+
+async fn spawn_media_streaming_task(
+    ctx: Arc<PipelineCtx>,
+    output_id: &OutputId,
+    video_options: Option<WhepVideoConnectionOptions>,
+    audio_options: Option<WhepAudioConnectionOptions>,
+    video_track: Option<Arc<TrackLocalStaticRTP>>,
+    audio_track: Option<Arc<TrackLocalStaticRTP>>,
+) {
+    let video_receiver = video_options
+        .as_ref()
+        .map(|opts| opts.receiver.resubscribe());
+
+    let audio_receiver = audio_options
+        .as_ref()
+        .map(|opts| opts.receiver.resubscribe());
 
     let output_id_clone = output_id.clone();
 
     tokio::spawn(async move {
-        run_send(
+        stream_media_to_peer(
             ctx,
             &output_id_clone,
             video_receiver,
@@ -91,20 +143,6 @@ pub async fn handle_create_whep_session(
         )
         .await;
     });
-
-    // // It will fail if there is already connected peer connection
-    // outputs.get_mut_with(&output_id, |output| {
-    //     output.maybe_replace_peer_connection(&output_id, peer_connection)
-    // })?;
-
-    let body = Body::from(sdp_answer.sdp.to_string());
-    let response = Response::builder()
-        .status(StatusCode::CREATED)
-        .header("Content-Type", "application/sdp")
-        .header("Access-Control-Expose-Headers", "Location")
-        // .header("Location", format!("/session/{}", urlencoding::encode(&id)))
-        .body(body)?;
-    Ok(response)
 }
 
 pub fn validate_sdp_content_type(headers: &HeaderMap) -> Result<(), WhipWhepServerError> {
@@ -122,7 +160,7 @@ pub fn validate_sdp_content_type(headers: &HeaderMap) -> Result<(), WhipWhepServ
     Ok(())
 }
 
-async fn run_send(
+async fn stream_media_to_peer(
     ctx: Arc<PipelineCtx>,
     output_id: &OutputId,
     mut video_receiver: Option<broadcast::Receiver<RtpPacket>>,
@@ -228,4 +266,113 @@ async fn run_send(
 
     ctx.event_emitter.emit(Event::OutputDone(output_id.clone()));
     debug!("Closing WHEP sender thread.")
+}
+
+// Identifiers used in stats HashMap returnet by RTCPeerConnection::get_stats()
+const RTC_OUTBOUND_RTP_AUDIO_STREAM: &str = "RTCOutboundRTPAudioStream_";
+const RTC_REMOTE_INBOUND_RTP_AUDIO_STREAM: &str = "RTCRemoteInboundRTPAudioStream_";
+
+fn handle_packet_loss_requests(
+    ctx: &Arc<PipelineCtx>,
+    pc: SendonlyPeerConnection,
+    rtc_sender: Arc<RTCRtpSender>,
+    packet_loss_sender: watch::Sender<i32>,
+    ssrc: u32,
+) {
+    let mut cumulative_packets_sent: u64 = 0;
+    let mut cumulative_packets_lost: u64 = 0;
+
+    let span = span!(Level::DEBUG, "Packet loss handle");
+
+    ctx.tokio_rt.spawn(
+        async move {
+            loop {
+                if let Err(e) = rtc_sender.read_rtcp().await {
+                    debug!(%e, "Error while reading rtcp.");
+                }
+            }
+        }
+        .instrument(span.clone()),
+    );
+
+    ctx.tokio_rt.spawn(
+        async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                let stats = pc.get_stats().await.reports;
+                let outbound_id = String::from(RTC_OUTBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
+                let remote_inbound_id =
+                    String::from(RTC_REMOTE_INBOUND_RTP_AUDIO_STREAM) + &ssrc.to_string();
+
+                let outbound_stats = match stats.get(&outbound_id) {
+                    Some(StatsReportType::OutboundRTP(report)) => report,
+                    Some(_) => {
+                        error!("Invalid report type for given key! (This should not happen)");
+                        continue;
+                    }
+                    None => {
+                        debug!("OutboundRTP report is empty!");
+                        continue;
+                    }
+                };
+
+                let remote_inbound_stats = match stats.get(&remote_inbound_id) {
+                    Some(StatsReportType::RemoteInboundRTP(report)) => report,
+                    Some(_) => {
+                        error!("Invalid report type for given key! (This should not happen)");
+                        continue;
+                    }
+                    None => {
+                        debug!("RemoteInboundRTP report is empty!");
+                        continue;
+                    }
+                };
+
+                let packets_sent: u64 = outbound_stats.packets_sent;
+                // This can be lower than 0 in case of duplicates
+                let packets_lost: u64 = i64::max(remote_inbound_stats.packets_lost, 0) as u64;
+
+                let packet_loss_percentage = calculate_packet_loss_percentage(
+                    packets_sent,
+                    packets_lost,
+                    cumulative_packets_sent,
+                    cumulative_packets_lost,
+                );
+                if packet_loss_sender.send(packet_loss_percentage).is_err() {
+                    debug!("Packet loss channel closed.");
+                }
+                cumulative_packets_sent = packets_sent;
+                cumulative_packets_lost = packets_lost;
+            }
+        }
+        .instrument(span),
+    );
+}
+
+fn calculate_packet_loss_percentage(
+    packets_sent: u64,
+    packets_lost: u64,
+    cumulative_packets_sent: u64,
+    cumulative_packets_lost: u64,
+) -> i32 {
+    let packets_sent_since_last_report = packets_sent - cumulative_packets_sent;
+    let packets_lost_since_last_report = packets_lost - cumulative_packets_lost;
+
+    // I don't want the system to panic in case of some bug
+    let packet_loss_percentage: i32 = if packets_sent_since_last_report != 0 {
+        let mut loss =
+            100.0 * packets_lost_since_last_report as f64 / packets_sent_since_last_report as f64;
+        // loss is rounded up to the nearest multiple of 5
+        loss = f64::ceil(loss / 5.0) * 5.0;
+        loss as i32
+    } else {
+        0
+    };
+
+    trace!(
+        packets_sent_since_last_report,
+        packets_lost_since_last_report,
+        packet_loss_percentage,
+    );
+    packet_loss_percentage
 }
