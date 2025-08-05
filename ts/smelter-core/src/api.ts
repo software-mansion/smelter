@@ -19,6 +19,7 @@ export type MultipartRequest = {
 };
 
 export type RegisterInputResponse = {
+  bearer_token?: string;
   video_duration_ms?: number;
   audio_duration_ms?: number;
 };

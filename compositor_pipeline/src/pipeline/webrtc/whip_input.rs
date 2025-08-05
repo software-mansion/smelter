@@ -39,6 +39,7 @@ impl WhipInput {
             return Err(InputInitError::WhipWhepServerNotRunning);
         };
 
+        let input_id = options.override_input_id.unwrap_or(input_id);
         let (frame_sender, frame_receiver) = bounded(5);
         let (input_samples_sender, input_samples_receiver) = bounded(5);
 

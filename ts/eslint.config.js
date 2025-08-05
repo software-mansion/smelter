@@ -56,7 +56,7 @@ export default [
       '@typescript-eslint/no-floating-promises': ['error'],
       'no-constant-condition': [0],
       'no-unused-vars': 'off',
-      'curly': 'error',
+      curly: 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -76,6 +76,8 @@ export default [
           prefer: 'type-imports',
         },
       ],
+      'no-dupe-class-members': 'off',
+      '@typescript-eslint/no-dupe-class-members': 'error',
     },
   },
   {

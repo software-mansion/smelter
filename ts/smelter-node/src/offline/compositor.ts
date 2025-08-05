@@ -5,7 +5,12 @@ import type { SmelterManager } from '@swmansion/smelter-core';
 import { OfflineSmelter as CoreSmelter, StateGuard } from '@swmansion/smelter-core';
 import type { Renderers } from '@swmansion/smelter';
 
-import type { RegisterInput, RegisterOutput } from '../api';
+import type {
+  RegisterInput,
+  RegisterMp4InputResponse,
+  RegisterOutput,
+  RegisterWhipInputResponse,
+} from '../api';
 import { createLogger } from '../logger';
 import LocallySpawnedInstanceManager from '../manager/locallySpawnedInstance';
 
@@ -33,9 +38,34 @@ export default class OfflineSmelter {
     });
   }
 
-  public async registerInput(inputId: string, request: RegisterInput) {
-    await this.scheduler.run(async () => {
-      await this.coreSmelter.registerInput(inputId, request);
+  public async registerInput(
+    inputId: string,
+    request: Extract<RegisterInput, { type: 'whip' }>
+  ): Promise<RegisterWhipInputResponse>;
+
+  public async registerInput(
+    inputId: string,
+    request: Extract<RegisterInput, { type: 'mp4' }>
+  ): Promise<RegisterMp4InputResponse>;
+
+  public async registerInput(inputId: string, request: RegisterInput): Promise<object>;
+
+  public async registerInput(inputId: string, request: RegisterInput): Promise<object> {
+    return await this.scheduler.run(async () => {
+      let result = await this.coreSmelter.registerInput(inputId, request);
+      if (request.type === 'mp4') {
+        return {
+          videoDurationMs: result.video_duration_ms,
+          audioDurationMs: result.audio_duration_ms,
+        };
+      } else if (request.type === 'whip') {
+        return {
+          bearerToken: result.bearer_token,
+          endpointRoute: `/whip/${encodeURIComponent(inputId)}`,
+        };
+      } else {
+        return result;
+      }
     });
   }
 

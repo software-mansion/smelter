@@ -22,3 +22,13 @@ export type RegisterInput =
   | ({ type: 'mp4' } & RegisterMp4Input)
   | ({ type: 'hls' } & RegisterHlsInput)
   | ({ type: 'whip' } & RegisterWhipInput);
+
+export type RegisterMp4InputResponse = {
+  videoDurationMs?: number;
+  audioDurationMs?: number;
+};
+
+export type RegisterWhipInputResponse = {
+  bearerToken: string;
+  endointRoute: string;
+};

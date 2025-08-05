@@ -1,5 +1,6 @@
 import type { Renderers } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
+import type { RegisterInputResponse } from '../api';
 import { ApiClient } from '../api';
 import Output from './output';
 import type { SmelterManager } from '../smelterManager';
@@ -68,11 +69,14 @@ export class Smelter {
     return this.api.unregisterOutput(outputId, {});
   }
 
-  public async registerInput(inputId: string, request: RegisterInput): Promise<object> {
+  public async registerInput(
+    inputId: string,
+    request: RegisterInput
+  ): Promise<RegisterInputResponse> {
     this.logger.info({ inputId, type: request.type }, 'Register new input');
     return this.store.runBlocking(async updateStore => {
       const inputRef = { type: 'global', id: inputId } as const;
-      const result = await this.api.registerInput(inputRef, intoRegisterInput(request));
+      const result = await this.api.registerInput(inputRef, intoRegisterInput(inputId, request));
       updateStore({
         type: 'add_input',
         input: {
