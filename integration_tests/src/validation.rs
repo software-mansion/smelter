@@ -124,9 +124,8 @@ impl SamplingInterval {
             * samples_per_batch;
 
         let mut intervals = vec![];
-        let mut n = 0;
         loop {
-            let pts = start_pts + n * time_per_batch;
+            let pts = start_pts + intervals.len() as u32 * time_per_batch;
             if pts >= end_pts {
                 break;
             }
@@ -136,7 +135,6 @@ impl SamplingInterval {
                 samples: samples_per_batch,
             });
             first_sample += samples_per_batch;
-            n += 1;
         }
         intervals
     }

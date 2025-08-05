@@ -188,54 +188,6 @@ fn analyze_samples(
     expected_samples: Vec<f32>,
     sample_rate: u32,
 ) -> Result<(AnalyzeResult, AnalyzeResult, AnalyzeResult, AnalyzeResult)> {
-    fn split_samples(samples: Vec<f32>) -> (Vec<f32>, Vec<f32>) {
-        let samples_left = samples.iter().step_by(2).copied().collect::<Vec<_>>();
-
-        let samples_right = samples
-            .iter()
-            .skip(1)
-            .step_by(2)
-            .copied()
-            .collect::<Vec<_>>();
-        (samples_left, samples_right)
-    }
-    // Calculates volume in dBFS (dB relevant to full scale) where point 0 is
-    // calculated based on amplitude of expected batch.
-    fn calc_level(samples: &[f32], amplitude: Option<f64>) -> (f64, f64) {
-        // There should not be any NaN or Infinities and if there are the test should fail
-        let max_sample = samples.iter().map(|s| s.abs()).reduce(f32::max).unwrap() as f64;
-        let amplitude = match amplitude {
-            Some(a) => a,
-            None => max_sample,
-        };
-        if amplitude > 0.0 {
-            let batch_dbfs = 20.0 * f64::log10(max_sample / amplitude);
-            (batch_dbfs, max_sample)
-        } else {
-            (0.0, max_sample)
-        }
-    }
-    fn calc_fft(
-        samples: &[f32],
-        sample_rate: u32,
-    ) -> Result<FrequencySpectrum, SpectrumAnalyzerError> {
-        let samples = hann_window(samples);
-        samples_fft_to_spectrum(&samples, sample_rate, FrequencyLimit::All, None)
-    }
-    fn scale_fft_spectrum(
-        spectrum: &mut FrequencySpectrum,
-        scaler: Option<f32>,
-        working_buffer: &mut [(Frequency, FrequencyValue)],
-    ) -> Result<(), SpectrumAnalyzerError> {
-        let scaling_fn: Box<SpectrumScalingFunction> = match scaler {
-            Some(scaler) if scaler > 0.0 => Box::new(move |val, _info| val / scaler),
-            _ => Box::new(scale_to_zero_to_one),
-        };
-        spectrum.apply_scaling_fn(&scaling_fn, working_buffer)?;
-        spectrum.apply_scaling_fn(&scale_20_times_log10, working_buffer)?;
-        Ok(())
-    }
-
     let (expected_samples_left, expected_samples_right) = split_samples(expected_samples);
     let (actual_samples_left, actual_samples_right) = split_samples(actual_samples);
 
@@ -287,4 +239,49 @@ fn analyze_samples(
         actual_result_left,
         actual_result_right,
     ))
+}
+
+fn split_samples(samples: Vec<f32>) -> (Vec<f32>, Vec<f32>) {
+    let samples_left = samples.iter().step_by(2).copied().collect::<Vec<_>>();
+
+    let samples_right = samples
+        .iter()
+        .skip(1)
+        .step_by(2)
+        .copied()
+        .collect::<Vec<_>>();
+    (samples_left, samples_right)
+}
+// Calculates volume in dBFS (dB relevant to full scale) where point 0 is
+// calculated based on amplitude of expected batch.
+fn calc_level(samples: &[f32], amplitude: Option<f64>) -> (f64, f64) {
+    // There should not be any NaN or Infinities and if there are the test should fail
+    let max_sample = samples.iter().map(|s| s.abs()).reduce(f32::max).unwrap() as f64;
+    let amplitude = match amplitude {
+        Some(a) => a,
+        None => max_sample,
+    };
+    if amplitude > 0.0 {
+        let batch_dbfs = 20.0 * f64::log10(max_sample / amplitude);
+        (batch_dbfs, max_sample)
+    } else {
+        (0.0, max_sample)
+    }
+}
+fn calc_fft(samples: &[f32], sample_rate: u32) -> Result<FrequencySpectrum, SpectrumAnalyzerError> {
+    let samples = hann_window(samples);
+    samples_fft_to_spectrum(&samples, sample_rate, FrequencyLimit::All, None)
+}
+fn scale_fft_spectrum(
+    spectrum: &mut FrequencySpectrum,
+    scaler: Option<f32>,
+    working_buffer: &mut [(Frequency, FrequencyValue)],
+) -> Result<(), SpectrumAnalyzerError> {
+    let scaling_fn: Box<SpectrumScalingFunction> = match scaler {
+        Some(scaler) if scaler > 0.0 => Box::new(move |val, _info| val / scaler),
+        _ => Box::new(scale_to_zero_to_one),
+    };
+    spectrum.apply_scaling_fn(&scaling_fn, working_buffer)?;
+    spectrum.apply_scaling_fn(&scale_20_times_log10, working_buffer)?;
+    Ok(())
 }
