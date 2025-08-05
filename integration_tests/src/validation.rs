@@ -148,6 +148,7 @@ pub struct AudioAnalyzeTolerance {
     pub average_level: f32,
     pub median_level: f32,
     pub general_level: f64,
+    pub offset: Duration,
 }
 
 impl Default for AudioAnalyzeTolerance {
@@ -159,6 +160,7 @@ impl Default for AudioAnalyzeTolerance {
             average_level: 5.0,
             median_level: 5.0,
             general_level: 3.0,
+            offset: Duration::from_millis(20),
         }
     }
 }
@@ -168,7 +170,7 @@ pub struct AudioValidationConfig {
     pub channels: AudioChannels,
     pub sample_rate: u32,
     pub samples_per_batch: usize,
-    pub allowed_failed_batches: u8,
+    pub allowed_failed_batches: u32,
     pub tolerance: AudioAnalyzeTolerance,
 }
 

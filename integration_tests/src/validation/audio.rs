@@ -7,12 +7,14 @@ use spectrum_analyzer::{
     windows::hann_window,
     Frequency, FrequencyLimit, FrequencySpectrum, FrequencyValue,
 };
-use std::fmt::Display;
+use std::{cmp::Ordering, fmt::Display, iter::zip, ops::Range, time::Duration};
 use tracing::error;
 
 use crate::{
-    audio_decoder::AudioDecoder, find_packets_for_payload_type, unmarshal_packets,
-    validation::AudioAnalyzeTolerance, AudioValidationConfig, SamplingInterval,
+    audio_decoder::{AudioDecoder, AudioSampleBatch},
+    find_packets_for_payload_type, unmarshal_packets,
+    validation::AudioAnalyzeTolerance,
+    AudioValidationConfig, SamplingInterval,
 };
 
 #[derive(Debug)]
@@ -121,18 +123,27 @@ pub fn validate(
         actual_audio_decoder.decode(packet)?;
     }
 
-    let expected_samples = expected_audio_decoder.take_samples();
-    let actual_samples = actual_audio_decoder.take_samples();
+    let expected_batches = expected_audio_decoder.take_samples();
+    let actual_batches = actual_audio_decoder.take_samples();
+
+    for range in &time_intervals {
+        let actual_timestamps = find_timestamps(&actual_batches, range, tolerance.offset);
+        let expected_timestamps = find_timestamps(&expected_batches, range, tolerance.offset);
+        compare_timestamps(&actual_timestamps, &expected_timestamps, tolerance.offset)?;
+    }
 
     let sampling_intervals = time_intervals
         .iter()
         .flat_map(|range| SamplingInterval::from_range(range, sample_rate, samples_per_batch))
         .collect::<Vec<_>>();
 
-    let mut failed_batches: u8 = 0;
+    let full_expected_samples = extract_samples(expected_batches);
+    let full_actual_samples = extract_samples(actual_batches);
+
+    let mut failed_batches: u32 = 0;
     for interval in sampling_intervals {
-        let expected_samples = find_samples(&expected_samples, interval);
-        let actual_samples = find_samples(&actual_samples, interval);
+        let expected_samples = find_samples(&full_expected_samples, interval);
+        let actual_samples = find_samples(&full_actual_samples, interval);
 
         let (expected_result_left, expected_result_right, actual_result_left, actual_result_right) =
             analyze_samples(actual_samples, expected_samples, sample_rate)?;
@@ -167,6 +178,50 @@ pub fn validate(
     } else {
         Err(anyhow::anyhow!("Test failed!"))
     }
+}
+
+fn find_timestamps(
+    batches: &[AudioSampleBatch],
+    time_range: &Range<Duration>,
+    tolerance: Duration,
+) -> Vec<Duration> {
+    let lower = time_range.start.saturating_sub(tolerance);
+    let higher = time_range.end + tolerance;
+    let time_range = lower..higher;
+    batches
+        .iter()
+        .filter(|s| time_range.contains(&s.pts))
+        .map(|s| s.pts)
+        .collect()
+}
+
+fn compare_timestamps(
+    actual_timestamps: &[Duration],
+    expected_timestamps: &[Duration],
+    tolerance: Duration,
+) -> Result<()> {
+    for (actual, expected) in zip(actual_timestamps, expected_timestamps) {
+        let diff = match actual.cmp(expected) {
+            Ordering::Less | Ordering::Equal => *expected - *actual,
+            Ordering::Greater => *actual - *expected,
+        };
+        if diff > tolerance {
+            return Err(anyhow::anyhow!(
+                "actual.pts = {}, expected.pts = {}",
+                actual.as_secs_f64(),
+                expected.as_secs_f64(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn extract_samples(batches: Vec<AudioSampleBatch>) -> Vec<f32> {
+    let mut samples = vec![];
+    for batch in batches {
+        samples.extend(batch.samples);
+    }
+    samples
 }
 
 fn find_samples(samples: &[f32], interval: SamplingInterval) -> Vec<f32> {
