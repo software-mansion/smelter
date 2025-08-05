@@ -3,17 +3,24 @@ use std::sync::Arc;
 use compositor_render::OutputId;
 use crossbeam_channel::{bounded, Receiver};
 
-use crate::pipeline::{
-    encoder::{
-        encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
-        encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
-        fdk_aac::FdkAacEncoder,
-        ffmpeg_h264::FfmpegH264Encoder,
-        ffmpeg_vp8::FfmpegVp8Encoder,
-        ffmpeg_vp9::FfmpegVp9Encoder,
-        libopus::OpusEncoder,
+use crate::{
+    pipeline::{
+        encoder::{
+            encoder_thread_audio::{
+                AudioEncoderThread, AudioEncoderThreadHandle, AudioEncoderThreadOptions,
+            },
+            encoder_thread_video::{
+                VideoEncoderThread, VideoEncoderThreadHandle, VideoEncoderThreadOptions,
+            },
+            fdk_aac::FdkAacEncoder,
+            ffmpeg_h264::FfmpegH264Encoder,
+            ffmpeg_vp8::FfmpegVp8Encoder,
+            ffmpeg_vp9::FfmpegVp9Encoder,
+            libopus::OpusEncoder,
+        },
+        output::{Output, OutputAudio, OutputVideo},
     },
-    output::{Output, OutputAudio, OutputVideo},
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
@@ -33,27 +40,33 @@ impl EncodedDataOutput {
         let video = match &options.video {
             Some(video) => match video {
                 VideoEncoderOptions::FfmpegH264(options) => {
-                    Some(spawn_video_encoder_thread::<FfmpegH264Encoder>(
-                        ctx.clone(),
+                    Some(VideoEncoderThread::<FfmpegH264Encoder>::spawn(
                         output_id.clone(),
-                        options.clone(),
-                        sender.clone(),
+                        VideoEncoderThreadOptions {
+                            ctx: ctx.clone(),
+                            encoder_options: options.clone(),
+                            chunks_sender: sender.clone(),
+                        },
                     )?)
                 }
                 VideoEncoderOptions::FfmpegVp8(options) => {
-                    Some(spawn_video_encoder_thread::<FfmpegVp8Encoder>(
-                        ctx.clone(),
+                    Some(VideoEncoderThread::<FfmpegVp8Encoder>::spawn(
                         output_id.clone(),
-                        options.clone(),
-                        sender.clone(),
+                        VideoEncoderThreadOptions {
+                            ctx: ctx.clone(),
+                            encoder_options: options.clone(),
+                            chunks_sender: sender.clone(),
+                        },
                     )?)
                 }
                 VideoEncoderOptions::FfmpegVp9(options) => {
-                    Some(spawn_video_encoder_thread::<FfmpegVp9Encoder>(
-                        ctx.clone(),
+                    Some(VideoEncoderThread::<FfmpegVp9Encoder>::spawn(
                         output_id.clone(),
-                        options.clone(),
-                        sender.clone(),
+                        VideoEncoderThreadOptions {
+                            ctx: ctx.clone(),
+                            encoder_options: options.clone(),
+                            chunks_sender: sender.clone(),
+                        },
                     )?)
                 }
             },
@@ -63,19 +76,23 @@ impl EncodedDataOutput {
         let audio = match &options.audio {
             Some(audio) => match audio {
                 AudioEncoderOptions::Opus(options) => {
-                    Some(spawn_audio_encoder_thread::<OpusEncoder>(
-                        ctx.clone(),
+                    Some(AudioEncoderThread::<OpusEncoder>::spawn(
                         output_id.clone(),
-                        options.clone(),
-                        sender.clone(),
+                        AudioEncoderThreadOptions {
+                            ctx: ctx.clone(),
+                            encoder_options: options.clone(),
+                            chunks_sender: sender.clone(),
+                        },
                     )?)
                 }
                 AudioEncoderOptions::FdkAac(options) => {
-                    Some(spawn_audio_encoder_thread::<FdkAacEncoder>(
-                        ctx.clone(),
+                    Some(AudioEncoderThread::<FdkAacEncoder>::spawn(
                         output_id.clone(),
-                        options.clone(),
-                        sender.clone(),
+                        AudioEncoderThreadOptions {
+                            ctx: ctx.clone(),
+                            encoder_options: options.clone(),
+                            chunks_sender: sender.clone(),
+                        },
                     )?)
                 }
             },
