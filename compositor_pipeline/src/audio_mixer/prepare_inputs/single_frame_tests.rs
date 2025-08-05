@@ -365,8 +365,8 @@ fn test_prepare_inputs() {
         ]
     );
 
-    // Severly missaligned timestamps (to the left)
-    let first_batch_start = start - batch_duration;
+    // The first batch end before the result batch starts by at least one sample duration
+    let first_batch_start = start - (5 * sample_duration) - small_error;
     let second_batch_start = first_batch_start + (4 * sample_duration);
     assert_eq!(
         frame_input_samples(
@@ -387,9 +387,9 @@ fn test_prepare_inputs() {
             sample_rate
         ),
         vec![
+            (6.0, 6.0),
             (7.0, 7.0),
             (8.0, 8.0),
-            (0.0, 0.0),
             (0.0, 0.0),
             (0.0, 0.0),
             (0.0, 0.0),
