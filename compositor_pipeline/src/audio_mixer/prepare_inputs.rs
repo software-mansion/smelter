@@ -129,7 +129,7 @@ fn frame_input_samples(
                     samples_to_remove_from_start
                 );
             }
-            start_range = samples_to_remove_from_start;
+            start_range = usize::min(samples_to_remove_from_start, input_samples.samples.len());
         };
 
         // check if we need to drop samples at the end
@@ -140,7 +140,6 @@ fn frame_input_samples(
             end_range = start_range + desired_sample_count;
         }
 
-        // FIXME: This line sometimes panics.
         samples_in_frame.extend(input_samples.samples[start_range..end_range].iter());
     }
 

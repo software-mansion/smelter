@@ -364,4 +364,35 @@ fn test_prepare_inputs() {
             (5.0, 5.0)
         ]
     );
+
+    // Severly missaligned timestamps (to the left)
+    let first_batch_start = start - batch_duration;
+    let second_batch_start = first_batch_start + (4 * sample_duration);
+    assert_eq!(
+        frame_input_samples(
+            start,
+            end,
+            vec![
+                InputAudioSamples {
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
+                    start_pts: first_batch_start,
+                    end_pts: first_batch_start + (4 * sample_duration)
+                },
+                InputAudioSamples {
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
+                    start_pts: second_batch_start,
+                    end_pts: second_batch_start + (4 * sample_duration)
+                },
+            ],
+            sample_rate
+        ),
+        vec![
+            (7.0, 7.0),
+            (8.0, 8.0),
+            (0.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 0.0),
+        ],
+    );
 }
