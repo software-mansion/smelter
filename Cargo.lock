@@ -1590,6 +1590,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
 
 [[package]]
+name = "float-cmp"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b09cf3155332e944990140d967ff5eceb70df778b34f77d8075db46e4704e6d8"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2485,7 +2494,6 @@ dependencies = [
  "image",
  "log",
  "opus",
- "pitch-detection",
  "rand",
  "regex",
  "reqwest",
@@ -2496,6 +2504,7 @@ dependencies = [
  "signal-hook",
  "smelter",
  "socket2",
+ "spectrum-analyzer",
  "tokio",
  "tokio-tungstenite 0.21.0",
  "tracing",
@@ -2671,9 +2680,9 @@ dependencies = [
 
 [[package]]
 name = "libm"
-version = "0.2.11"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8355be11b20d696c8f18f6cc018c4e372165b1fa8126cef092399c9951984ffa"
+checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
 name = "libredox"
@@ -2834,6 +2843,17 @@ dependencies = [
  "log",
  "objc",
  "paste",
+]
+
+[[package]]
+name = "microfft"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2b6673eb0cc536241d6734c2ca45abfdbf90e9e7791c66a36a7ba3c315b76cf"
+dependencies = [
+ "cfg-if",
+ "num-complex",
+ "static_assertions",
 ]
 
 [[package]]
@@ -4530,6 +4550,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "spectrum-analyzer"
+version = "1.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f5353405212be77e7f9e95aa77934f0aafb0f80c586571680b9c20ce5bae758"
+dependencies = [
+ "float-cmp 0.10.0",
+ "libm",
+ "microfft",
+ "paste",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4578,7 +4610,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
 dependencies = [
- "float-cmp",
+ "float-cmp 0.9.0",
 ]
 
 [[package]]

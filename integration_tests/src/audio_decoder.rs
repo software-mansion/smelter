@@ -6,7 +6,7 @@ use rtp::{codecs::opus::OpusPacket, packetizer::Depacketizer};
 
 #[derive(Clone)]
 pub struct AudioSampleBatch {
-    pub samples: Vec<i16>,
+    pub samples: Vec<f32>,
     pub pts: Duration,
 }
 
@@ -36,7 +36,7 @@ impl AudioDecoder {
             buffer: vec![0; sample_rate as usize * 20],
             depayloader: OpusPacket,
             decoder,
-            decoded_samples: Vec::new(),
+            decoded_samples: vec![],
             sample_rate,
         })
     }
@@ -49,7 +49,7 @@ impl AudioDecoder {
 
         let samples_count = self.decoder.decode(&chunk_data, &mut self.buffer, false)?;
         self.decoded_samples.push(AudioSampleBatch {
-            samples: self.buffer[..samples_count].to_vec(),
+            samples: self.batch_to_f32(&self.buffer[..samples_count]),
             pts: Duration::from_secs_f64(packet.header.timestamp as f64 / self.sample_rate as f64),
         });
 
@@ -58,5 +58,9 @@ impl AudioDecoder {
 
     pub fn take_samples(self) -> Vec<AudioSampleBatch> {
         self.decoded_samples
+    }
+
+    fn batch_to_f32(&self, batch: &[i16]) -> Vec<f32> {
+        batch.iter().map(|s| *s as f32).collect()
     }
 }
