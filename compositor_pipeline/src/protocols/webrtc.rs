@@ -13,7 +13,7 @@ use crate::{
 pub struct WhipInputOptions {
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
-    pub override_input_id: Option<InputId>,
+    pub override_whip_session_id: Option<InputId>,
 }
 
 #[derive(Debug, Clone)]

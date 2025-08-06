@@ -19,8 +19,9 @@ pub struct WhipInput {
     /// will be generated and returned in the response.
     pub bearer_token: Option<Arc<str>>,
     /// Internal use only.
-    /// Overrides input id which is used when referencing the input via whip server
-    pub override_input_id: Option<InputId>,
+    /// Overrides whip session id which is used when referencing the input via whip server.
+    /// If not provided, it defaults to input id.
+    pub override_whip_session_id: Option<InputId>,
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,
