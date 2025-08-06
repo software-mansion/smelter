@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use compositor_api::Resolution;
 use serde_json::json;
-use std::{env, time::Duration};
+use std::time::Duration;
 
 use integration_tests::examples::{self, run_example};
 
@@ -28,13 +28,10 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    let token = env::var("WHEP_TOKEN").map_err(|err| anyhow!("Couldn't read WHEP_TOKEN environmental variable. You must provide it in order to run `whep_server` example. Read env error: {}", err))?;
-
     examples::post(
         "output/output_1/register",
         &json!({
             "type": "whep",
-            "bearer_token": token,
             "video": {
                 "resolution": {
                     "width": VIDEO_RESOLUTION.width,

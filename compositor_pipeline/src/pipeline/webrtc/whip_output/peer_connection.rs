@@ -1,6 +1,3 @@
-use std::sync::Arc;
-
-use super::{WhipOutputError, WhipSenderOptions};
 use tracing::debug;
 use webrtc::{
     api::{
@@ -15,22 +12,20 @@ use webrtc::{
     interceptor::registry::Registry,
     peer_connection::{
         configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
-        RTCPeerConnection,
     },
     rtp_transceiver::{
         rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
         rtp_sender::RTCRtpSender,
         RTCPFeedback,
     },
-    stats::StatsReport,
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
-use crate::{
-    codecs::{AudioEncoderOptions, VideoEncoderOptions},
-    pipeline::PipelineCtx,
-    AudioChannels,
-};
+use std::sync::Arc;
+
+use webrtc::peer_connection::RTCPeerConnection;
+
+use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct PeerConnection {
@@ -142,8 +137,8 @@ impl PeerConnection {
         self.pc.on_ice_candidate(f);
     }
 
-    pub async fn get_stats(&self) -> StatsReport {
-        self.pc.get_stats().await
+    pub fn get_rtc_peer_connection(&self) -> Arc<RTCPeerConnection> {
+        self.pc.clone()
     }
 }
 

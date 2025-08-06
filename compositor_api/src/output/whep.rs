@@ -36,9 +36,6 @@ pub struct OutputWhepAudioOptions {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WhepAudioEncoderOptions {
     Opus {
-        /// Specifies channels configuration.
-        channels: Option<AudioChannels>,
-
         /// (**default="voip"**) Specifies preset for audio output encoder.
         preset: Option<OpusEncoderPreset>,
 
@@ -47,5 +44,9 @@ pub enum WhepAudioEncoderOptions {
 
         /// (**default=`false`**) Specifies if forward error correction (FEC) should be used.
         forward_error_correction: Option<bool>,
+
+        /// (**default=`0`**) Expected packet loss. When `forward_error_correction` is set to `true`,
+        /// then this value should be greater than `0`. Allowed values: [0, 100];
+        expected_packet_loss: Option<u32>,
     },
 }

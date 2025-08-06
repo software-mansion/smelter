@@ -8,14 +8,14 @@ use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct WhepOutputConnectionStateOptions {
-    pub bearer_token: Arc<str>,
+    pub bearer_token: Option<Arc<str>>,
     pub video_options: Option<WhepVideoConnectionOptions>,
     pub audio_options: Option<WhepAudioConnectionOptions>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct WhepOutputConnectionState {
-    pub bearer_token: Arc<str>,
+    pub bearer_token: Option<Arc<str>>,
     pub video_options: Option<WhepVideoConnectionOptions>,
     pub audio_options: Option<WhepAudioConnectionOptions>,
 }

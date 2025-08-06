@@ -1,10 +1,6 @@
-use tracing::warn;
-
 use crate::common_pipeline::prelude as pipeline;
 use crate::output::whep::{OutputWhepAudioOptions, WhepAudioEncoderOptions, WhepOutput};
 use crate::*;
-
-const CHANNEL_DEPRECATION_MSG: &str = "The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.";
 
 impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
     type Error = TypeError;
@@ -62,24 +58,29 @@ fn resolve_audio_options(
         WhepAudioEncoderOptions::Opus {
             preset,
             sample_rate,
-            channels: deprecated_channels,
             forward_error_correction,
+            expected_packet_loss,
         } => {
-            if deprecated_channels.is_some() {
-                warn!(CHANNEL_DEPRECATION_MSG);
-            }
-            let resolved = channels
-                .or(deprecated_channels)
-                .unwrap_or(AudioChannels::Stereo);
+            let channels = channels.unwrap_or(AudioChannels::Stereo);
+            let packet_loss = match expected_packet_loss {
+                Some(x) if x > 100 => {
+                    return Err(TypeError::new(
+                        "Expected packet loss value must be from [0, 100] range.",
+                    ))
+                }
+                Some(x) => x as i32,
+                None => 0,
+            };
+
             (
                 pipeline::AudioEncoderOptions::Opus(pipeline::OpusEncoderOptions {
-                    channels: resolved.clone().into(),
+                    channels: channels.clone().into(),
                     preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
                     sample_rate: sample_rate.unwrap_or(48_000),
                     forward_error_correction: forward_error_correction.unwrap_or(false),
-                    packet_loss: 0,
+                    packet_loss,
                 }),
-                resolved,
+                channels,
             )
         }
     };
@@ -90,7 +91,7 @@ fn resolve_audio_options(
         mixing_strategy: mixing_strategy
             .unwrap_or(AudioMixingStrategy::SumClip)
             .into(),
-        channels: resolved_channels.clone().into(),
+        channels: resolved_channels.into(),
     };
 
     Ok((Some(output_audio_options), Some(audio_encoder_options)))

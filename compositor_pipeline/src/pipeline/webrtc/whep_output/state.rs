@@ -52,6 +52,9 @@ impl WhepOutputsState {
             }
         };
 
-        validate_token(&bearer_token, headers.get("Authorization")).await
+        match bearer_token {
+            Some(token) => validate_token(&token, headers.get("Authorization")).await,
+            None => Ok(()), // Bearer token not required, treat as validated
+        }
     }
 }

@@ -8,6 +8,7 @@ use whip_input::WhipInputsState;
 mod bearer_token;
 mod error;
 mod handle_keyframe_requests;
+mod handle_packet_loss_requests;
 mod peer_connection_recvonly;
 mod peer_connection_sendonly;
 mod server;

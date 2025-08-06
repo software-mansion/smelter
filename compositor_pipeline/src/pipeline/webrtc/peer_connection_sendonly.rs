@@ -18,14 +18,10 @@ use webrtc::{
         RTCPeerConnection,
     },
     rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender},
-    stats::StatsReport,
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
-use crate::{
-    codecs::{AudioEncoderOptions, VideoEncoderOptions},
-    pipeline::{webrtc::error::WhipWhepServerError, PipelineCtx},
-};
+use crate::{pipeline::webrtc::error::WhipWhepServerError, prelude::*};
 
 #[derive(Debug, Clone)]
 pub(crate) struct SendonlyPeerConnection {
@@ -63,10 +59,6 @@ impl SendonlyPeerConnection {
         Ok(Self {
             pc: peer_connection,
         })
-    }
-
-    pub async fn get_stats(&self) -> StatsReport {
-        self.pc.get_stats().await
     }
 
     pub async fn new_video_track(
@@ -148,6 +140,10 @@ impl SendonlyPeerConnection {
                 "Local description is not set, cannot read it".to_string(),
             )),
         }
+    }
+
+    pub fn get_rtc_peer_connection(&self) -> Arc<RTCPeerConnection> {
+        self.pc.clone()
     }
 
     pub async fn negotiate_connection(

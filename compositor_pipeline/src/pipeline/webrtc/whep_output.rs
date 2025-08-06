@@ -11,19 +11,16 @@ use crate::{
         },
         output::{Output, OutputAudio, OutputVideo},
         rtp::payloader::{PayloadedCodec, PayloaderOptions},
-        webrtc::{
-            bearer_token::generate_token,
-            whep_output::{
-                connection_state::{
-                    WhepAudioConnectionOptions, WhepOutputConnectionStateOptions,
-                    WhepVideoConnectionOptions,
-                },
-                track_task_audio::{
-                    WhepAudioTrackThread, WhepAudioTrackThreadHandle, WhepAudioTrackThreadOptions,
-                },
-                track_task_video::{
-                    WhepVideoTrackThread, WhepVideoTrackThreadHandle, WhepVideoTrackThreadOptions,
-                },
+        webrtc::whep_output::{
+            connection_state::{
+                WhepAudioConnectionOptions, WhepOutputConnectionStateOptions,
+                WhepVideoConnectionOptions,
+            },
+            track_task_audio::{
+                WhepAudioTrackThread, WhepAudioTrackThreadHandle, WhepAudioTrackThreadOptions,
+            },
+            track_task_video::{
+                WhepVideoTrackThread, WhepVideoTrackThreadHandle, WhepVideoTrackThreadOptions,
             },
         },
     },
@@ -34,7 +31,7 @@ use crate::prelude::*;
 
 pub(super) mod connection_state;
 pub(super) mod state;
-
+pub(super) mod stream_media_to_peer;
 pub(super) mod track_task_audio;
 pub(super) mod track_task_video;
 
@@ -54,7 +51,7 @@ impl WhepOutput {
         let Some(state) = state_clone else {
             return Err(OutputInitError::WhipWhepServerNotRunning);
         };
-        let bearer_token = options.bearer_token.clone().unwrap_or_else(generate_token);
+        let bearer_token = options.bearer_token.clone();
 
         let video_options = options
             .video
