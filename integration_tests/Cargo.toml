@@ -47,3 +47,4 @@ wgpu = { workspace = true }
 image = { workspace = true }
 regex = "1.10.6"
 inquire = "0.7.5"
+enum-iterator = "2.1.0"
