@@ -137,8 +137,15 @@ pub fn validate(
         .flat_map(|range| SamplingInterval::from_range(range, sample_rate, samples_per_batch))
         .collect::<Vec<_>>();
 
-    let full_expected_samples = extract_samples(expected_batches);
-    let full_actual_samples = extract_samples(actual_batches);
+    let full_expected_samples = expected_batches
+        .into_iter()
+        .flat_map(|s| s.samples)
+        .collect::<Vec<_>>();
+
+    let full_actual_samples = actual_batches
+        .into_iter()
+        .flat_map(|s| s.samples)
+        .collect::<Vec<_>>();
 
     let mut failed_batches: u32 = 0;
     for interval in sampling_intervals {
@@ -214,14 +221,6 @@ fn compare_timestamps(
         }
     }
     Ok(())
-}
-
-fn extract_samples(batches: Vec<AudioSampleBatch>) -> Vec<f32> {
-    let mut samples = vec![];
-    for batch in batches {
-        samples.extend(batch.samples);
-    }
-    samples
 }
 
 fn find_samples(samples: &[f32], interval: SamplingInterval) -> Vec<f32> {
