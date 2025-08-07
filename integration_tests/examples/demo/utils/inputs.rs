@@ -1,6 +1,12 @@
+use anyhow::Result;
 use std::fmt::Display;
 
 pub mod rtp;
+
+pub trait InputHandler {
+    fn setup_video(&mut self) -> Result<()>;
+    fn setup_audio(&mut self) -> Result<()>;
+}
 
 pub enum VideoDecoder {
     FfmpegH264,

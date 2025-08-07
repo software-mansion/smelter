@@ -1,11 +1,13 @@
 use anyhow::Result;
-use enum_iterator::{Sequence, all};
+use enum_iterator::{all, Sequence};
 use inquire::{min_length, Select, Text};
 use serde_json::{json, Value};
 use std::fmt::Display;
 
 mod inputs;
 mod outputs;
+
+use inputs::{rtp::RtpInput, InputHandler};
 
 #[derive(Sequence)]
 enum SmelterProtocol {
@@ -40,12 +42,12 @@ impl Display for TransportProtocol {
     }
 }
 
-pub struct ExampleState {
+pub struct SmelterState {
     inputs: Vec<Value>,
     outputs: Vec<Value>,
 }
 
-impl ExampleState {
+impl SmelterState {
     pub fn new() -> Self {
         Self {
             inputs: vec![],
@@ -54,9 +56,15 @@ impl ExampleState {
     }
 
     pub fn register_input() -> Result<()> {
-        let prot_opts = all::
+        let prot_opts = all::<SmelterProtocol>().collect();
 
         let protocol = Select::new("Select input protocol: ", prot_opts).prompt()?;
+
+        let input_handler: Box<dyn InputHandler> = match protocol {
+            SmelterProtocol::Rtp => Box::new(RtpInput::setup()?),
+            SmelterProtocol::Whip => {} // TODO
+            SmelterProtocol::Mp4 => {}  // TODO
+        };
 
         Ok(())
     }
