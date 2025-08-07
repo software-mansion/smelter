@@ -1,11 +1,11 @@
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use enum_iterator::{all, Sequence};
 use inquire::{min_length, Select, Text};
 use std::fmt::Display;
 use std::process;
 use tracing::error;
 
-use crate::utils::inputs::{AudioDecoder, VideoDecoder};
+use crate::utils::inputs::{AudioDecoder, InputHandler, VideoDecoder};
 
 #[derive(Sequence, Clone)]
 enum RegisterOptions {
@@ -48,18 +48,24 @@ impl RtpInput {
             let action = Select::new("What to do?", options.clone()).prompt()?;
 
             match action {
-                RegisterOptions::SetVideoStream => rtp_input.setup_video(),
-                RegisterOptions::SetAudioStream => rtp_input.setup_audio(),
+                RegisterOptions::SetVideoStream => rtp_input.setup_video()?,
+                RegisterOptions::SetAudioStream => rtp_input.setup_audio()?,
                 RegisterOptions::Done => break,
             }
         }
 
         Ok(rtp_input)
     }
+}
 
-    fn setup_video(&mut self) {}
+impl InputHandler for RtpInput {
+    fn setup_video(&mut self) -> Result<()> {
+        Ok(())
+    }
 
-    fn setup_audio(&mut self) {}
+    fn setup_audio(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 pub struct RtpInputVideoOptions {
