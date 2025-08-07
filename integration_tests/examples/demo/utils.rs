@@ -1,6 +1,16 @@
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicU16, Ordering},
+        OnceLock,
+    },
+};
+
 use anyhow::Result;
 use inquire::{min_length, Select, Text};
-use serde_json::{json, Value};
+use integration_tests::examples;
+use rand::RngCore;
+use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 mod inputs;
@@ -23,7 +33,7 @@ enum InputProtocol {
 }
 
 #[derive(Debug, EnumIter, Display)]
-enum TransportProtocol {
+pub enum TransportProtocol {
     #[strum(to_string = "udp")]
     Udp,
 
@@ -34,7 +44,7 @@ enum TransportProtocol {
 #[derive(Debug)]
 pub struct SmelterState {
     inputs: Vec<Box<dyn InputHandler>>,
-    outputs: Vec<Value>,
+    outputs: Vec<u8>, // That is just a placeholder
 }
 
 impl SmelterState {
@@ -62,20 +72,20 @@ impl SmelterState {
             }
         };
 
+        let input_json = input_handler.serialize();
+        let input_route = format!("input/{}/register", input_handler.name());
+
+        examples::post(&input_route, &input_json)?;
+
         self.inputs.push(input_handler);
 
         Ok(())
     }
 }
 
-#[derive(Debug, Display, EnumIter, Clone)]
-enum RegisterOptions {
-    #[strum(to_string = "Set video stream")]
-    SetVideoStream,
-
-    #[strum(to_string = "Set audio stream")]
-    SetAudioStream,
-
-    #[strum(to_string = "Done")]
-    Done,
+fn get_free_port() -> u16 {
+    static LAST_PORT: OnceLock<AtomicU16> = OnceLock::new();
+    let port =
+        LAST_PORT.get_or_init(|| AtomicU16::new(10_000 + (rand::random::<u16>() % 5_000) * 2));
+    port.fetch_add(2, Ordering::Relaxed)
 }
