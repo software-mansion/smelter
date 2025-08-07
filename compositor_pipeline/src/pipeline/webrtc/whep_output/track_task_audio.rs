@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use compositor_render::error::ErrorStack;
-use tokio::sync::{broadcast, watch};
+use tokio::sync::broadcast;
 use tracing::warn;
 
 use crate::prelude::*;
@@ -20,7 +20,6 @@ use crate::{
 #[derive(Debug, Clone)]
 pub(crate) struct WhepAudioTrackThreadHandle {
     pub sample_batch_sender: crossbeam_channel::Sender<PipelineEvent<OutputAudioSamples>>,
-    pub packet_loss_sender: watch::Sender<i32>,
 }
 
 pub(super) struct WhepAudioTrackThreadOptions<Encoder: AudioEncoder> {
@@ -62,7 +61,7 @@ where
         )
         .flatten();
 
-        let (encoded_stream, encoder_ctx) =
+        let (encoded_stream, _encoder_ctx) =
             AudioEncoderStream::<Encoder, _>::new(ctx, encoder_options, resampled_stream)?;
 
         let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
@@ -86,7 +85,6 @@ where
         };
         let output = WhepAudioTrackThreadHandle {
             sample_batch_sender,
-            packet_loss_sender: encoder_ctx.packet_loss_sender,
         };
         Ok((state, output))
     }

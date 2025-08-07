@@ -32,7 +32,6 @@ pub(crate) struct WhepAudioConnectionOptions {
     pub encoder: AudioEncoderOptions,
     pub receiver: Arc<broadcast::Receiver<RtpPacket>>,
     pub track_thread_handle: WhepAudioTrackThreadHandle,
-    pub ssrc: u32,
 }
 
 impl WhepOutputConnectionState {

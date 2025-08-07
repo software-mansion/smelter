@@ -24,11 +24,11 @@ use webrtc::{
 use crate::{pipeline::webrtc::error::WhipWhepServerError, prelude::*};
 
 #[derive(Debug, Clone)]
-pub(crate) struct SendonlyPeerConnection {
+pub(crate) struct PeerConnection {
     pc: Arc<RTCPeerConnection>,
 }
 
-impl SendonlyPeerConnection {
+impl PeerConnection {
     pub async fn new(ctx: &Arc<PipelineCtx>) -> Result<Self, WhipWhepServerError> {
         let mut media_engine = MediaEngine::default();
         media_engine.register_default_codecs()?;
@@ -89,7 +89,7 @@ impl SendonlyPeerConnection {
     pub async fn new_audio_track(
         &self,
         encoder: AudioEncoderOptions,
-    ) -> Result<(Arc<TrackLocalStaticRTP>, Arc<RTCRtpSender>), WhipWhepServerError> {
+    ) -> Result<Arc<TrackLocalStaticRTP>, WhipWhepServerError> {
         let track = match encoder {
             AudioEncoderOptions::Opus(_) => Arc::new(TrackLocalStaticRTP::new(
                 RTCRtpCodecCapability {
@@ -110,9 +110,9 @@ impl SendonlyPeerConnection {
             }
         };
 
-        let sender = self.pc.add_track(track.clone()).await?;
+        self.pc.add_track(track.clone()).await?;
 
-        Ok((track, sender))
+        Ok(track)
     }
 
     pub async fn set_remote_description(
@@ -140,10 +140,6 @@ impl SendonlyPeerConnection {
                 "Local description is not set, cannot read it".to_string(),
             )),
         }
-    }
-
-    pub fn get_rtc_peer_connection(&self) -> Arc<RTCPeerConnection> {
-        self.pc.clone()
     }
 
     pub async fn negotiate_connection(

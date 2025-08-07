@@ -8,8 +8,8 @@ use crate::*;
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct WhepOutput {
-    /// Token used for authentication in WHEP protocol. If not provided, the random value
-    /// will be generated and returned in the response.
+    /// Token used for authentication in WHEP protocol.
+    /// If not provided, the bearer token is not required to establish the session.
     pub bearer_token: Option<Arc<str>>,
     /// Video track configuration.
     pub video: Option<OutputVideoOptions>,

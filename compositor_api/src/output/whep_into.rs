@@ -18,7 +18,10 @@ impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
             ));
         }
 
-        let (video_encoder_options, output_video_options) = maybe_video_options(video.clone())?;
+        let (video_encoder_options, output_video_options) = video
+            .map(resolve_video_options)
+            .transpose()?
+            .unwrap_or_default();
 
         let (output_audio_options, audio_encoder_options) = audio
             .map(resolve_audio_options)
@@ -35,6 +38,50 @@ impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
             audio: output_audio_options,
         })
     }
+}
+
+fn resolve_video_options(
+    options: OutputVideoOptions,
+) -> Result<
+    (
+        Option<pipeline::VideoEncoderOptions>,
+        Option<pipeline::RegisterOutputVideoOptions>,
+    ),
+    TypeError,
+> {
+    let encoder_options = match options.encoder {
+        VideoEncoderOptions::FfmpegH264 {
+            preset,
+            pixel_format,
+            ffmpeg_options,
+        } => pipeline::VideoEncoderOptions::FfmpegH264(pipeline::FfmpegH264EncoderOptions {
+            preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
+            resolution: options.resolution.into(),
+            pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
+            raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+        }),
+        VideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
+            pipeline::VideoEncoderOptions::FfmpegVp8(pipeline::FfmpegVp8EncoderOptions {
+                resolution: options.resolution.into(),
+                raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+            })
+        }
+        VideoEncoderOptions::FfmpegVp9 {
+            pixel_format,
+            ffmpeg_options,
+        } => pipeline::VideoEncoderOptions::FfmpegVp9(pipeline::FfmpegVp9EncoderOptions {
+            resolution: options.resolution.into(),
+            pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
+            raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+        }),
+    };
+
+    let output_options = pipeline::RegisterOutputVideoOptions {
+        initial: options.initial.try_into()?,
+        end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
+    };
+
+    Ok((Some(encoder_options), Some(output_options)))
 }
 
 fn resolve_audio_options(
@@ -95,52 +142,4 @@ fn resolve_audio_options(
     };
 
     Ok((Some(output_audio_options), Some(audio_encoder_options)))
-}
-
-fn maybe_video_options(
-    options: Option<OutputVideoOptions>,
-) -> Result<
-    (
-        Option<pipeline::VideoEncoderOptions>,
-        Option<pipeline::RegisterOutputVideoOptions>,
-    ),
-    TypeError,
-> {
-    let Some(options) = options else {
-        return Ok((None, None));
-    };
-
-    let encoder_options = match options.encoder {
-        VideoEncoderOptions::FfmpegH264 {
-            preset,
-            pixel_format,
-            ffmpeg_options,
-        } => pipeline::VideoEncoderOptions::FfmpegH264(pipeline::FfmpegH264EncoderOptions {
-            preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
-            resolution: options.resolution.into(),
-            pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
-            raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
-        }),
-        VideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
-            pipeline::VideoEncoderOptions::FfmpegVp8(pipeline::FfmpegVp8EncoderOptions {
-                resolution: options.resolution.into(),
-                raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
-            })
-        }
-        VideoEncoderOptions::FfmpegVp9 {
-            pixel_format,
-            ffmpeg_options,
-        } => pipeline::VideoEncoderOptions::FfmpegVp9(pipeline::FfmpegVp9EncoderOptions {
-            resolution: options.resolution.into(),
-            pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
-            raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
-        }),
-    };
-
-    let output_options = pipeline::RegisterOutputVideoOptions {
-        initial: options.initial.try_into()?,
-        end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
-    };
-
-    Ok((Some(encoder_options), Some(output_options)))
 }

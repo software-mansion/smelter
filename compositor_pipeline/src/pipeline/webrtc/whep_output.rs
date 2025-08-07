@@ -30,6 +30,7 @@ use crate::{
 use crate::prelude::*;
 
 pub(super) mod connection_state;
+pub(super) mod peer_connection;
 pub(super) mod state;
 pub(super) mod stream_media_to_peer;
 pub(super) mod track_task_audio;
@@ -180,7 +181,6 @@ impl WhepOutput {
             encoder: options,
             receiver: Arc::new(receiver),
             track_thread_handle: thread_handle,
-            ssrc,
         })
     }
 }
