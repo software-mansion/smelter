@@ -10,11 +10,13 @@ pub mod whip;
 
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
+    fn port(&self) -> u16;
+    fn serialize(&self) -> serde_json::Value;
 }
 
 #[derive(Debug, EnumIter, Display, Clone)]
 pub enum VideoSetupOptions {
-    #[strum(to_string = "Decoder")]
+    #[strum(to_string = "Decoder (default: ffmpeg_h264)")]
     Decoder,
 
     #[strum(to_string = "Done")]
@@ -35,7 +37,7 @@ pub enum VideoDecoder {
 
 #[derive(Debug, EnumIter, Display, Clone)]
 pub enum AudioSetupOptions {
-    #[strum(to_string = "Decoder")]
+    #[strum(to_string = "Decoder (default: aac)")]
     Decoder,
 
     #[strum(to_string = "Done")]
