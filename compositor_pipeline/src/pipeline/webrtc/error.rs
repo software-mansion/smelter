@@ -2,46 +2,48 @@ use axum::response::{IntoResponse, Response};
 use reqwest::StatusCode;
 
 #[derive(Debug)]
-pub enum WhipServerError {
+pub enum WhipWhepServerError {
     BadRequest(String),
     InternalError(String),
     Unauthorized(String),
     NotFound(String),
 }
 
-impl<T> From<T> for WhipServerError
+impl<T> From<T> for WhipWhepServerError
 where
     T: std::error::Error + 'static,
 {
     fn from(err: T) -> Self {
-        WhipServerError::InternalError(err.to_string())
+        WhipWhepServerError::InternalError(err.to_string())
     }
 }
 
-impl std::fmt::Display for WhipServerError {
+impl std::fmt::Display for WhipWhepServerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WhipServerError::InternalError(message) => f.write_str(message),
-            WhipServerError::BadRequest(message) => f.write_str(message),
-            WhipServerError::Unauthorized(message) => f.write_str(message),
-            WhipServerError::NotFound(message) => f.write_str(message),
+            WhipWhepServerError::InternalError(message) => f.write_str(message),
+            WhipWhepServerError::BadRequest(message) => f.write_str(message),
+            WhipWhepServerError::Unauthorized(message) => f.write_str(message),
+            WhipWhepServerError::NotFound(message) => f.write_str(message),
         }
     }
 }
 
-impl IntoResponse for WhipServerError {
+impl IntoResponse for WhipWhepServerError {
     fn into_response(self) -> Response {
         match self {
-            WhipServerError::InternalError(message) => {
+            WhipWhepServerError::InternalError(message) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, message).into_response()
             }
-            WhipServerError::BadRequest(message) => {
+            WhipWhepServerError::BadRequest(message) => {
                 (StatusCode::BAD_REQUEST, message).into_response()
             }
-            WhipServerError::Unauthorized(message) => {
+            WhipWhepServerError::Unauthorized(message) => {
                 (StatusCode::UNAUTHORIZED, message).into_response()
             }
-            WhipServerError::NotFound(message) => (StatusCode::NOT_FOUND, message).into_response(),
+            WhipWhepServerError::NotFound(message) => {
+                (StatusCode::NOT_FOUND, message).into_response()
+            }
         }
     }
 }

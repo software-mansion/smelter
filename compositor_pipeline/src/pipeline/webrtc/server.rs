@@ -16,6 +16,7 @@ use crate::{
     pipeline::{
         webrtc::{
             server::{
+                create_whep_session::handle_create_whep_session,
                 create_whip_session::handle_create_whip_session,
                 new_whip_ice_candidates::handle_new_whip_ice_candidates,
                 terminate_whip_session::handle_terminate_whip_session,
@@ -26,6 +27,7 @@ use crate::{
     },
 };
 
+mod create_whep_session;
 mod create_whip_session;
 mod new_whip_ice_candidates;
 mod terminate_whip_session;
@@ -43,6 +45,7 @@ impl WhipWhepServer {
         let state = WhipWhepServerState {
             ctx: ctx.clone(),
             inputs: state.inputs.clone(),
+            outputs: state.outputs.clone(),
         };
 
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
@@ -82,6 +85,10 @@ impl WhipWhepServer {
             .route("/whip/:id", post(handle_create_whip_session))
             .route("/session/:id", patch(handle_new_whip_ice_candidates))
             .route("/session/:id", delete(handle_terminate_whip_session))
+            .route("/whep/:id", post(handle_create_whep_session))
+            // TODO
+            // .route("/resource/:id", patch(handle_new_whep_ice_candidates))
+            // .route("/resource/:id", delete(handle_terminate_whep_session))
             .layer(CorsLayer::permissive())
             .with_state(state);
 

@@ -28,7 +28,7 @@ use crate::{
     codecs::VideoDecoderOptions,
     pipeline::{
         webrtc::{
-            error::WhipServerError,
+            error::WhipWhepServerError,
             supported_video_codec_parameters::{
                 get_video_h264_codecs_for_codec_preferences,
                 get_video_h264_codecs_for_media_engine, get_video_vp8_codecs, get_video_vp9_codecs,
@@ -47,7 +47,7 @@ impl RecvonlyPeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
         video_preferences: &Vec<VideoDecoderOptions>,
-    ) -> Result<Self, WhipServerError> {
+    ) -> Result<Self, WhipWhepServerError> {
         let mut media_engine = media_engine_with_codecs(video_preferences)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
@@ -82,14 +82,14 @@ impl RecvonlyPeerConnection {
         self.pc.connection_state()
     }
 
-    pub async fn close(&self) -> Result<(), WhipServerError> {
+    pub async fn close(&self) -> Result<(), WhipWhepServerError> {
         Ok(self.pc.close().await?)
     }
 
     pub async fn new_video_track(
         &self,
         video_preferences: &Vec<VideoDecoderOptions>,
-    ) -> Result<Arc<RTCRtpTransceiver>, WhipServerError> {
+    ) -> Result<Arc<RTCRtpTransceiver>, WhipWhepServerError> {
         let transceiver = self
             .pc
             .add_transceiver_from_kind(
@@ -110,7 +110,7 @@ impl RecvonlyPeerConnection {
         Ok(transceiver)
     }
 
-    pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpTransceiver>, WhipServerError> {
+    pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpTransceiver>, WhipWhepServerError> {
         let transceiver = self
             .pc
             .add_transceiver_from_kind(
@@ -127,25 +127,25 @@ impl RecvonlyPeerConnection {
     pub async fn set_remote_description(
         &self,
         answer: RTCSessionDescription,
-    ) -> Result<(), WhipServerError> {
+    ) -> Result<(), WhipWhepServerError> {
         Ok(self.pc.set_remote_description(answer).await?)
     }
 
     pub async fn set_local_description(
         &self,
         offer: RTCSessionDescription,
-    ) -> Result<(), WhipServerError> {
+    ) -> Result<(), WhipWhepServerError> {
         Ok(self.pc.set_local_description(offer).await?)
     }
 
-    pub async fn create_answer(&self) -> Result<RTCSessionDescription, WhipServerError> {
+    pub async fn create_answer(&self) -> Result<RTCSessionDescription, WhipWhepServerError> {
         Ok(self.pc.create_answer(None).await?)
     }
 
-    pub async fn local_description(&self) -> Result<RTCSessionDescription, WhipServerError> {
+    pub async fn local_description(&self) -> Result<RTCSessionDescription, WhipWhepServerError> {
         match self.pc.local_description().await {
             Some(dsc) => Ok(dsc),
-            None => Err(WhipServerError::InternalError(
+            None => Err(WhipWhepServerError::InternalError(
                 "Local description is not set, cannot read it".to_string(),
             )),
         }
@@ -154,7 +154,7 @@ impl RecvonlyPeerConnection {
     pub async fn wait_for_ice_candidates(
         &self,
         wait_timeout: Duration,
-    ) -> Result<(), WhipServerError> {
+    ) -> Result<(), WhipWhepServerError> {
         let (sender, mut receiver) = watch::channel(RTCIceGathererState::Unspecified);
 
         self.pc
@@ -186,7 +186,7 @@ impl RecvonlyPeerConnection {
     pub async fn add_ice_candidate(
         &self,
         candidate: RTCIceCandidateInit,
-    ) -> Result<(), WhipServerError> {
+    ) -> Result<(), WhipWhepServerError> {
         Ok(self.pc.add_ice_candidate(candidate).await?)
     }
 }

@@ -9,7 +9,7 @@ use tracing::error;
 
 use crate::pipeline::webrtc::{
     bearer_token::validate_token,
-    error::WhipServerError,
+    error::WhipWhepServerError,
     whip_input::connection_state::{WhipInputConnectionState, WhipInputConnectionStateOptions},
 };
 
@@ -17,30 +17,37 @@ use crate::pipeline::webrtc::{
 pub(crate) struct WhipInputsState(Arc<Mutex<HashMap<InputId, WhipInputConnectionState>>>);
 
 impl WhipInputsState {
-    pub fn get_with<T, Func: FnOnce(&WhipInputConnectionState) -> Result<T, WhipServerError>>(
+    pub fn get_with<
+        T,
+        Func: FnOnce(&WhipInputConnectionState) -> Result<T, WhipWhepServerError>,
+    >(
         &self,
         input_id: &InputId,
         func: Func,
-    ) -> Result<T, WhipServerError> {
+    ) -> Result<T, WhipWhepServerError> {
         let guard = self.0.lock().unwrap();
         match guard.get(input_id) {
             Some(input) => func(input),
-            None => Err(WhipServerError::NotFound(format!("{input_id:?} not found"))),
+            None => Err(WhipWhepServerError::NotFound(format!(
+                "{input_id:?} not found"
+            ))),
         }
     }
 
     pub fn get_mut_with<
         T,
-        Func: FnOnce(&mut WhipInputConnectionState) -> Result<T, WhipServerError>,
+        Func: FnOnce(&mut WhipInputConnectionState) -> Result<T, WhipWhepServerError>,
     >(
         &self,
         input_id: &InputId,
         func: Func,
-    ) -> Result<T, WhipServerError> {
+    ) -> Result<T, WhipWhepServerError> {
         let mut guard = self.0.lock().unwrap();
         match guard.get_mut(input_id) {
             Some(input) => func(input),
-            None => Err(WhipServerError::NotFound(format!("{input_id:?} not found"))),
+            None => Err(WhipWhepServerError::NotFound(format!(
+                "{input_id:?} not found"
+            ))),
         }
     }
 
@@ -68,10 +75,14 @@ impl WhipInputsState {
         &self,
         input_id: &InputId,
         headers: &HeaderMap,
-    ) -> Result<(), WhipServerError> {
+    ) -> Result<(), WhipWhepServerError> {
         let bearer_token = match self.0.lock().unwrap().get_mut(input_id) {
             Some(input) => input.bearer_token.clone(),
-            None => return Err(WhipServerError::NotFound(format!("{input_id:?} not found"))),
+            None => {
+                return Err(WhipWhepServerError::NotFound(format!(
+                    "{input_id:?} not found"
+                )))
+            }
         };
 
         validate_token(&bearer_token, headers.get("Authorization")).await

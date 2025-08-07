@@ -8,7 +8,9 @@ use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use crate::prelude::*;
 use crate::{
     codecs::VideoDecoderOptions,
-    pipeline::webrtc::{error::WhipServerError, peer_connection_recvonly::RecvonlyPeerConnection},
+    pipeline::webrtc::{
+        error::WhipWhepServerError, peer_connection_recvonly::RecvonlyPeerConnection,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -43,11 +45,11 @@ impl WhipInputConnectionState {
         &mut self,
         input_id: &InputId,
         new_pc: RecvonlyPeerConnection,
-    ) -> Result<(), WhipServerError> {
+    ) -> Result<(), WhipWhepServerError> {
         // Deleting previous peer_connection on this input which was not in Connected state
         if let Some(peer_connection) = &self.peer_connection {
             if peer_connection.connection_state() == RTCPeerConnectionState::Connected {
-                return Err(WhipServerError::InternalError(format!(
+                return Err(WhipWhepServerError::InternalError(format!(
                       "Another stream is currently connected to the given input_id: {input_id:?}. \
                       Disconnect the existing stream before starting a new one, or check if the input_id is correct."
                   )));
