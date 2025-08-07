@@ -6,7 +6,7 @@ use crate::utils::{
     inputs::{
         input_name, AudioDecoder, AudioSetupOptions, InputHandler, VideoDecoder, VideoSetupOptions,
     },
-    RegisterOptions,
+    RegisterOptions, TransportProtocol,
 };
 
 #[derive(Debug)]
@@ -14,6 +14,7 @@ pub struct RtpInput {
     name: String,
     video: Option<RtpInputVideoOptions>,
     audio: Option<RtpInputAudioOptions>,
+    // transport_protocol: TransportProtocol,
 }
 
 impl RtpInput {
@@ -36,12 +37,6 @@ impl RtpInput {
         }
 
         Ok(rtp_input)
-    }
-}
-
-impl InputHandler for RtpInput {
-    fn name(&self) -> &str {
-        &self.name
     }
 
     fn setup_video(&mut self) -> Result<()> {
@@ -72,6 +67,12 @@ impl InputHandler for RtpInput {
             }
         }
         Ok(())
+    }
+}
+
+impl InputHandler for RtpInput {
+    fn name(&self) -> &str {
+        &self.name
     }
 }
 
