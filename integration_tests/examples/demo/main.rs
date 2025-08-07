@@ -1,39 +1,35 @@
 use anyhow::Result;
-use enum_iterator::{all, Sequence};
 use inquire::Select;
-use std::fmt::Display;
+use std::string::ToString;
+use strum::{Display, EnumIter, IntoEnumIterator};
 
 mod utils;
 
 use crate::utils::SmelterState;
 
-#[derive(Sequence)]
+#[derive(EnumIter, Display)]
 pub enum Action {
+    #[strum(to_string = "Add input")]
     AddInput,
+
+    #[strum(to_string = "Add output")]
     AddOutput,
+
+    #[strum(to_string = "Remove input")]
     RemoveInput,
+
+    #[strum(to_string = "Remove output")]
     RemoveOutput,
+
+    #[strum(to_string = "Start")]
     Start,
-}
-
-impl Display for Action {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Action::AddInput => "Add Input",
-            Action::AddOutput => "Add Output",
-            Action::RemoveInput => "Remove Input",
-            Action::RemoveOutput => "Remove Output",
-            Action::Start => "Start",
-        };
-
-        write!(f, "{msg}")
-    }
 }
 
 fn run_demo() -> Result<()> {
     let mut state = SmelterState::new();
 
-    let options = all::<Action>().collect();
+    // let options = all::<Action>().collect();
+    let options = Action::iter().collect();
 
     let action = Select::new("Select option:", options).prompt()?;
 

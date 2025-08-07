@@ -1,8 +1,7 @@
 use anyhow::Result;
-use enum_iterator::{all, Sequence};
 use inquire::{min_length, Select, Text};
 use serde_json::{json, Value};
-use std::fmt::Display;
+use strum::{Display, EnumIter, IntoEnumIterator};
 
 mod inputs;
 mod outputs;
@@ -11,37 +10,25 @@ use inputs::{rtp::RtpInput, InputHandler};
 
 use crate::utils::inputs::{mp4::Mp4Input, whip::WhipInput};
 
-#[derive(Sequence)]
+#[derive(EnumIter, Display)]
 enum SmelterProtocol {
+    #[strum(to_string = "rtp_stream")]
     Rtp,
+
+    #[strum(to_string = "whip")]
     Whip,
+
+    #[strum(to_string = "mp4")]
     Mp4,
 }
 
-impl Display for SmelterProtocol {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Self::Rtp => "rtp_stream",
-            Self::Whip => "whip",
-            Self::Mp4 => "mp4",
-        };
-        write!(f, "{msg}")
-    }
-}
-
+#[derive(EnumIter, Display)]
 enum TransportProtocol {
+    #[strum(to_string = "udp")]
     Udp,
-    TcpServer,
-}
 
-impl Display for TransportProtocol {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Self::TcpServer => "tcp_server",
-            Self::Udp => "udp",
-        };
-        write!(f, "{msg}")
-    }
+    #[strum(to_string = "tcp_server")]
+    TcpServer,
 }
 
 pub struct SmelterState {
@@ -58,9 +45,9 @@ impl SmelterState {
     }
 
     pub fn register_input(&mut self) -> Result<()> {
-        let prot_opts = all::<SmelterProtocol>().collect();
+        let prot_opts = SmelterProtocol::iter().collect();
 
-        let protocol = Select::new("Select input protocol: ", prot_opts).prompt()?;
+        let protocol = Select::new("Select input protocol:", prot_opts).prompt()?;
 
         let input_handler: Box<dyn InputHandler> = match protocol {
             SmelterProtocol::Rtp => Box::new(RtpInput::setup()?),
@@ -74,20 +61,14 @@ impl SmelterState {
     }
 }
 
-#[derive(Sequence, Clone)]
+#[derive(Display, EnumIter, Clone)]
 enum RegisterOptions {
+    #[strum(to_string = "Set video stream")]
     SetVideoStream,
-    SetAudioStream,
-    Done,
-}
 
-impl Display for RegisterOptions {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Self::SetVideoStream => "Set video stream",
-            Self::SetAudioStream => "Set audio stream",
-            Self::Done => "Done",
-        };
-        write!(f, "{msg}")
-    }
+    #[strum(to_string = "Set audio stream")]
+    SetAudioStream,
+
+    #[strum(to_string = "Done")]
+    Done,
 }
