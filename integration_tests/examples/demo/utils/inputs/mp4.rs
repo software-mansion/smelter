@@ -18,11 +18,4 @@ impl InputHandler for Mp4Input {
     fn name(&self) -> &str {
         &self.name
     }
-    fn setup_video(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    fn setup_audio(&mut self) -> Result<()> {
-        Ok(())
-    }
 }

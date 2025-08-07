@@ -10,8 +10,6 @@ pub mod whip;
 
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
-    fn setup_video(&mut self) -> Result<()>;
-    fn setup_audio(&mut self) -> Result<()>;
 }
 
 #[derive(Debug, EnumIter, Display, Clone)]
