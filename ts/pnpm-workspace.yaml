@@ -9,6 +9,7 @@ packages:
   - 'examples/vite-example'
   - 'examples/clipper'
   - 'examples/live-chat'
+  - 'examples/live-captions/smelter-server'
   - 'create-smelter-app'
   - 'create-smelter-app/templates/node-minimal'
   - 'create-smelter-app/templates/node-express-zustand'
