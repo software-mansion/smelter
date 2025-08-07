@@ -3,7 +3,9 @@ use inquire::{min_length, Select, Text};
 use strum::IntoEnumIterator;
 
 use crate::utils::{
-    inputs::{input_name, AudioDecoder, InputHandler, VideoDecoder, VideoSetupOptions},
+    inputs::{
+        input_name, AudioDecoder, AudioSetupOptions, InputHandler, VideoDecoder, VideoSetupOptions,
+    },
     RegisterOptions,
 };
 
@@ -58,6 +60,17 @@ impl InputHandler for RtpInput {
     }
 
     fn setup_audio(&mut self) -> Result<()> {
+        self.audio = Some(RtpInputAudioOptions::default());
+        let setup_options = AudioSetupOptions::iter().collect::<Vec<_>>();
+
+        loop {
+            let setup_choice = Select::new("Setup:", setup_options.clone()).prompt()?;
+
+            match setup_choice {
+                AudioSetupOptions::Decoder => self.audio.as_mut().unwrap().set_decoder_prompt()?,
+                AudioSetupOptions::Done => break,
+            }
+        }
         Ok(())
     }
 }
@@ -88,6 +101,16 @@ impl Default for RtpInputVideoOptions {
 #[derive(Debug)]
 pub struct RtpInputAudioOptions {
     pub decoder: AudioDecoder,
+}
+
+impl RtpInputAudioOptions {
+    pub fn set_decoder_prompt(&mut self) -> Result<()> {
+        let options = AudioDecoder::iter().collect();
+
+        let decoder = Select::new("Select decoder:", options).prompt()?;
+        self.decoder = decoder;
+        Ok(())
+    }
 }
 
 impl Default for RtpInputAudioOptions {
