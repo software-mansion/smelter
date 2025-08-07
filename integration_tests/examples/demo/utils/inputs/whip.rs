@@ -1,6 +1,7 @@
 use crate::utils::inputs::InputHandler;
 use anyhow::Result;
 
+#[derive(Debug)]
 pub struct WhipInput {
     name: String,
 }

@@ -3,10 +3,11 @@ use inquire::{min_length, Select, Text};
 use strum::IntoEnumIterator;
 
 use crate::utils::{
-    inputs::{AudioDecoder, InputHandler, VideoDecoder, VideoSetupOptions},
+    inputs::{input_name, AudioDecoder, InputHandler, VideoDecoder, VideoSetupOptions},
     RegisterOptions,
 };
 
+#[derive(Debug)]
 pub struct RtpInput {
     name: String,
     video: Option<RtpInputVideoOptions>,
@@ -15,12 +16,8 @@ pub struct RtpInput {
 
 impl RtpInput {
     pub fn setup() -> Result<Self> {
-        let name_validator = min_length!(1, "Please enter a valid input name.");
-        let name = Text::new("Enter input name:")
-            .with_validator(name_validator)
-            .prompt()?;
         let mut rtp_input = Self {
-            name,
+            name: input_name(),
             video: None,
             audio: None,
         };
@@ -46,9 +43,17 @@ impl InputHandler for RtpInput {
     }
 
     fn setup_video(&mut self) -> Result<()> {
-        // let setup_options = all::<VideoSetupOptions>().collect();
+        self.video = Some(RtpInputVideoOptions::default());
+        let setup_options = VideoSetupOptions::iter().collect::<Vec<_>>();
 
-        // let setup_choice = Select::new("Setup: ", setup_options).prompt();
+        loop {
+            let setup_choice = Select::new("Setup:", setup_options.clone()).prompt()?;
+
+            match setup_choice {
+                VideoSetupOptions::Decoder => self.video.as_mut().unwrap().set_decoder_prompt()?,
+                VideoSetupOptions::Done => break,
+            }
+        }
         Ok(())
     }
 
@@ -57,8 +62,19 @@ impl InputHandler for RtpInput {
     }
 }
 
+#[derive(Debug)]
 pub struct RtpInputVideoOptions {
     pub decoder: VideoDecoder,
+}
+
+impl RtpInputVideoOptions {
+    pub fn set_decoder_prompt(&mut self) -> Result<()> {
+        let options = VideoDecoder::iter().collect();
+
+        let decoder = Select::new("Select decoder:", options).prompt()?;
+        self.decoder = decoder;
+        Ok(())
+    }
 }
 
 impl Default for RtpInputVideoOptions {
@@ -69,6 +85,7 @@ impl Default for RtpInputVideoOptions {
     }
 }
 
+#[derive(Debug)]
 pub struct RtpInputAudioOptions {
     pub decoder: AudioDecoder,
 }

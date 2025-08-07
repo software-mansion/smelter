@@ -10,8 +10,8 @@ use inputs::{rtp::RtpInput, InputHandler};
 
 use crate::utils::inputs::{mp4::Mp4Input, whip::WhipInput};
 
-#[derive(EnumIter, Display)]
-enum SmelterProtocol {
+#[derive(Debug, EnumIter, Display)]
+enum InputProtocol {
     #[strum(to_string = "rtp_stream")]
     Rtp,
 
@@ -22,7 +22,7 @@ enum SmelterProtocol {
     Mp4,
 }
 
-#[derive(EnumIter, Display)]
+#[derive(Debug, EnumIter, Display)]
 enum TransportProtocol {
     #[strum(to_string = "udp")]
     Udp,
@@ -31,6 +31,7 @@ enum TransportProtocol {
     TcpServer,
 }
 
+#[derive(Debug)]
 pub struct SmelterState {
     inputs: Vec<Box<dyn InputHandler>>,
     outputs: Vec<Value>,
@@ -45,14 +46,20 @@ impl SmelterState {
     }
 
     pub fn register_input(&mut self) -> Result<()> {
-        let prot_opts = SmelterProtocol::iter().collect();
+        let prot_opts = InputProtocol::iter().collect();
 
         let protocol = Select::new("Select input protocol:", prot_opts).prompt()?;
 
         let input_handler: Box<dyn InputHandler> = match protocol {
-            SmelterProtocol::Rtp => Box::new(RtpInput::setup()?),
-            SmelterProtocol::Whip => Box::new(WhipInput::setup()?), // TODO
-            SmelterProtocol::Mp4 => Box::new(Mp4Input::setup()?),   // TODO
+            InputProtocol::Rtp => Box::new(RtpInput::setup()?),
+            InputProtocol::Whip => {
+                println!("Unimplemented!");
+                return Ok(());
+            }
+            InputProtocol::Mp4 => {
+                println!("Unimplemented!");
+                return Ok(());
+            }
         };
 
         self.inputs.push(input_handler);
@@ -61,7 +68,7 @@ impl SmelterState {
     }
 }
 
-#[derive(Display, EnumIter, Clone)]
+#[derive(Debug, Display, EnumIter, Clone)]
 enum RegisterOptions {
     #[strum(to_string = "Set video stream")]
     SetVideoStream,
