@@ -1,5 +1,5 @@
+use std::collections::HashMap;
 use std::time::Duration;
-use tracing::warn;
 
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
@@ -14,7 +14,7 @@ impl TryFrom<Mp4Input> for pipeline::RegisterInputOptions {
             required,
             offset_ms,
             should_loop,
-            video_decoder,
+            video,
         } = value;
 
         const BAD_URL_PATH_SPEC: &str =
@@ -34,31 +34,47 @@ impl TryFrom<Mp4Input> for pipeline::RegisterInputOptions {
             buffer_duration: None,
         };
 
-        if video_decoder.is_some() {
-            warn!("video_decoder option is deprecated.")
-        }
+        let video_decoders = match video.and_then(|v| v.decoders) {
+            Some(decoders) => decoders
+                .into_iter()
+                .map(|(codec, decoder)| {
+                    let decoders = match (codec, decoder) {
+                        (InputMp4VideoCodecs::H264, VideoDecoder::FfmpegH264) => (
+                            pipeline::VideoCodec::H264,
+                            pipeline::VideoDecoderOptions::FfmpegH264,
+                        ),
 
-        let video_decoder = match video_decoder.unwrap_or(VideoDecoder::FfmpegH264) {
-            VideoDecoder::FfmpegH264 => pipeline::VideoDecoderOptions::FfmpegH264,
-            VideoDecoder::FfmpegVp8 => return Err(TypeError::new("MP4 VP8 input not supported")),
-            VideoDecoder::FfmpegVp9 => return Err(TypeError::new("MP4 VP9 input not supported")),
+                        #[cfg(feature = "vk-video")]
+                        (
+                            InputMp4VideoCodecs::H264,
+                            VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo,
+                        ) => (
+                            pipeline::VideoCodec::H264,
+                            pipeline::VideoDecoderOptions::VulkanH264,
+                        ),
 
-            #[cfg(feature = "vk-video")]
-            VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
-                pipeline::VideoDecoderOptions::VulkanH264
-            }
+                        #[cfg(not(feature = "vk-video"))]
+                        (
+                            InputMp4VideoCodecs::H264,
+                            VideoDecoder::VulkanVideo | VideoDecoder::VulkanH264,
+                        ) => return Err(TypeError::new(super::NO_VULKAN_VIDEO)),
 
-            #[cfg(not(feature = "vk-video"))]
-            VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
-                return Err(TypeError::new(super::NO_VULKAN_VIDEO))
-            }
+                        (InputMp4VideoCodecs::H264, _) => {
+                            return Err(TypeError::new("Expected h264 decoder"))
+                        }
+                    };
+
+                    Ok(decoders)
+                })
+                .collect::<Result<_, _>>()?,
+            None => HashMap::new(),
         };
 
         Ok(pipeline::RegisterInputOptions {
             input_options: pipeline::ProtocolInputOptions::Mp4(pipeline::Mp4InputOptions {
                 source,
                 should_loop: should_loop.unwrap_or(false),
-                video_decoder,
+                video_decoders,
             }),
             queue_options,
         })

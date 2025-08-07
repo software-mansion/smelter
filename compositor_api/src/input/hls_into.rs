@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::common_pipeline::prelude as pipeline;
@@ -11,6 +12,7 @@ impl TryFrom<HlsInput> for pipeline::RegisterInputOptions {
             url,
             required,
             offset_ms,
+            video,
         } = value;
 
         let queue_options = compositor_pipeline::QueueInputOptions {
@@ -19,9 +21,45 @@ impl TryFrom<HlsInput> for pipeline::RegisterInputOptions {
             buffer_duration: None,
         };
 
+        let video_decoders = match video.and_then(|v| v.decoders) {
+            Some(decoders) => decoders
+                .into_iter()
+                .map(|(codec, decoder)| {
+                    let decoders = match (codec, decoder) {
+                        (InputHlsVideoCodecs::H264, VideoDecoder::FfmpegH264) => (
+                            pipeline::VideoCodec::H264,
+                            pipeline::VideoDecoderOptions::FfmpegH264,
+                        ),
+
+                        #[cfg(feature = "vk-video")]
+                        (
+                            InputHlsVideoCodecs::H264,
+                            VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo,
+                        ) => (
+                            pipeline::VideoCodec::H264,
+                            pipeline::VideoDecoderOptions::VulkanH264,
+                        ),
+
+                        #[cfg(not(feature = "vk-video"))]
+                        (
+                            InputHlsVideoCodecs::H264,
+                            VideoDecoder::VulkanVideo | VideoDecoder::VulkanH264,
+                        ) => return Err(TypeError::new(super::NO_VULKAN_VIDEO)),
+
+                        (InputHlsVideoCodecs::H264, _) => {
+                            return Err(TypeError::new("Expected h264 decoder"))
+                        }
+                    };
+
+                    Ok(decoders)
+                })
+                .collect::<Result<_, _>>()?,
+            None => HashMap::new(),
+        };
+
         let input_options = pipeline::HlsInputOptions {
             url,
-            video_decoder: pipeline::VideoDecoderOptions::FfmpegH264,
+            video_decoders,
         };
 
         Ok(pipeline::RegisterInputOptions {

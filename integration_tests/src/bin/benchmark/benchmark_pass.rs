@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use std::{
+    collections::HashMap,
     fmt,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -243,7 +244,7 @@ impl SingleBenchmarkPass {
             RegisterInputOptions {
                 input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
                     should_loop: true,
-                    video_decoder: self.decoder,
+                    video_decoders: HashMap::from([(VideoCodec::H264, self.decoder)]),
                     source: Mp4InputSource::File(path.to_path_buf()),
                 }),
                 queue_options: QueueInputOptions {

@@ -78,7 +78,7 @@ function intoMp4RegisterInput(input: Inputs.RegisterMp4Input): RegisterInputRequ
     loop: input.loop,
     required: input.required,
     offset_ms: input.offsetMs,
-    video_decoder: input.videoDecoder,
+    video: input.video && intoInputMp4VideoOptions(input.video),
   };
 }
 
@@ -88,6 +88,7 @@ function intoHlsRegisterInput(input: Inputs.RegisterHlsInput): RegisterInputRequ
     url: input.url,
     required: input.required,
     offset_ms: input.offsetMs,
+    video: input.video && intoInputHlsVideoOptions(input.video),
   };
 }
 
@@ -110,6 +111,22 @@ function intoWhipRegisterInput(input: Inputs.RegisterWhipInput): RegisterInputRe
     bearer_token: input.bearerToken,
     required: input.required,
     offset_ms: input.offsetMs,
+  };
+}
+
+export function intoInputMp4VideoOptions(
+  video: Inputs.InputMp4VideoOptions
+): Api.InputMp4VideoOptions {
+  return {
+    decoders: video.decoders,
+  };
+}
+
+export function intoInputHlsVideoOptions(
+  video: Inputs.InputHlsVideoOptions
+): Api.InputHlsVideoOptions {
+  return {
+    decoders: video.decoders,
   };
 }
 

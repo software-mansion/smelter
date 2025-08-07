@@ -1,12 +1,12 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
-use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
+use crate::codecs::{AudioEncoderOptions, VideoCodec, VideoDecoderOptions, VideoEncoderOptions};
 
 #[derive(Debug, Clone)]
 pub struct Mp4InputOptions {
     pub source: Mp4InputSource,
     pub should_loop: bool,
-    pub video_decoder: VideoDecoderOptions,
+    pub video_decoders: HashMap<VideoCodec, VideoDecoderOptions>,
 }
 
 #[derive(Debug, Clone)]

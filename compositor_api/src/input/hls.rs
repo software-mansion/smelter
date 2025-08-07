@@ -1,7 +1,9 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+use crate::VideoDecoder;
 
 /// Parameters for an input stream from HLS source.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -16,4 +18,19 @@ pub struct HlsInput {
     /// not defined then the stream will be synchronized based on the delivery time of the initial
     /// frames.
     pub offset_ms: Option<f64>,
+    /// Parameters of a HLS video track.
+    pub video: Option<InputHlsVideoOptions>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct InputHlsVideoOptions {
+    /// Configures decoders for the provided codecs.
+    pub decoders: Option<HashMap<InputHlsVideoCodecs, VideoDecoder>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum InputHlsVideoCodecs {
+    H264,
 }

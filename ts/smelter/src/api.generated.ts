@@ -60,9 +60,9 @@ export type RegisterInput =
        */
       offset_ms?: number | null;
       /**
-       * (**default=`ffmpeg_h264`**) The decoder to use for decoding video.
+       * Parameters of a Mp4 video track.
        */
-      video_decoder?: VideoDecoder | null;
+      video?: InputMp4VideoOptions | null;
     }
   | {
       type: "whip";
@@ -101,6 +101,10 @@ export type RegisterInput =
        * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
        */
       offset_ms?: number | null;
+      /**
+       * Parameters of a HLS video track.
+       */
+      video?: InputHlsVideoOptions | null;
     }
   | {
       type: "decklink";
@@ -904,9 +908,25 @@ export type WebEmbeddingMethod =
 export interface InputRtpVideoOptions {
   decoder: VideoDecoder;
 }
+export interface InputMp4VideoOptions {
+  /**
+   * Configures decoders for the provided codecs.
+   */
+  decoders?: {
+    [k: string]: VideoDecoder;
+  } | null;
+}
 export interface InputWhipVideoOptions {
   decoder?: VideoDecoder | null;
   decoder_preferences?: WhipVideoDecoder[] | null;
+}
+export interface InputHlsVideoOptions {
+  /**
+   * Configures decoders for the provided codecs.
+   */
+  decoders?: {
+    [k: string]: VideoDecoder;
+  } | null;
 }
 export interface OutputVideoOptions {
   /**

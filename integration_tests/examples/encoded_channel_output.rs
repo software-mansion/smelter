@@ -1,5 +1,5 @@
 use core::panic;
-use std::{fs::File, io::Write, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashMap, fs::File, io::Write, path::PathBuf, sync::Arc, time::Duration};
 
 use compositor_pipeline::{codecs::*, protocols::*, *};
 use compositor_render::{
@@ -80,7 +80,7 @@ fn main() {
         input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
             source: Mp4InputSource::File(root_dir.join(BUNNY_FILE_PATH)),
             should_loop: false,
-            video_decoder: VideoDecoderOptions::FfmpegH264,
+            video_decoders: HashMap::from([(VideoCodec::H264, VideoDecoderOptions::FfmpegH264)]),
         }),
         queue_options: QueueInputOptions {
             required: true,

@@ -11,6 +11,7 @@ import { OFFLINE_OUTPUT_ID } from './compositor';
 import { OutputRootComponent } from '../rootComponent';
 import type { Logger } from 'pino';
 import type { ImageRef } from '../api/image';
+import { intoRegisterInput } from '../api/input';
 
 type AudioContext = _smelterInternals.AudioContext;
 type OfflineTimeContext = _smelterInternals.OfflineTimeContext;
@@ -157,14 +158,17 @@ class OutputContext implements SmelterOutputContext {
     } as const;
     const offsetMs = this.timeContext.timestampMs();
     const { video_duration_ms: videoDurationMs, audio_duration_ms: audioDurationMs } =
-      await this.output.api.registerInput(inputRef, {
-        type: 'mp4',
-        offset_ms: offsetMs,
-        path: registerRequest.serverPath,
-        url: registerRequest.url,
-        required: registerRequest.required,
-        video_decoder: registerRequest.videoDecoder,
-      });
+      await this.output.api.registerInput(
+        inputRef,
+        intoRegisterInput({
+          type: 'mp4',
+          offsetMs: offsetMs,
+          serverPath: registerRequest.serverPath,
+          url: registerRequest.url,
+          required: registerRequest.required,
+          video: registerRequest.video,
+        })
+      );
     this.output.internalInputStreamStore.addInput({
       inputId,
       offsetMs,

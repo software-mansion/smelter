@@ -1,11 +1,11 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
+use crate::codecs::{AudioEncoderOptions, VideoCodec, VideoDecoderOptions, VideoEncoderOptions};
 
 #[derive(Debug, Clone)]
 pub struct HlsInputOptions {
     pub url: Arc<str>,
-    pub video_decoder: VideoDecoderOptions,
+    pub video_decoders: HashMap<VideoCodec, VideoDecoderOptions>,
 }
 
 #[derive(Debug, Clone)]

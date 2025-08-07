@@ -30,7 +30,7 @@ use crate::{
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac, ffmpeg_h264,
             h264_utils::{AvccToAnnexBRepacker, H264AvcDecoderConfig},
-            DecoderThreadHandle,
+            vulkan_h264, DecoderThreadHandle,
         },
         input::Input,
     },
@@ -159,15 +159,40 @@ impl HlsInput {
                         }
                     });
 
-                let decoder_result = VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
-                    input_id,
-                    VideoDecoderThreadOptions {
-                        ctx: ctx.clone(),
-                        transformer: h264_config.map(AvccToAnnexBRepacker::new),
-                        frame_sender,
-                        input_buffer_size: 2000,
-                    },
-                );
+                let decoder_thread_options = VideoDecoderThreadOptions {
+                    ctx: ctx.clone(),
+                    transformer: h264_config.map(AvccToAnnexBRepacker::new),
+                    frame_sender,
+                    input_buffer_size: 2000,
+                };
+                let video_decoder = options
+                    .video_decoders
+                    .get(&VideoCodec::H264)
+                    .cloned()
+                    .unwrap_or(VideoDecoderOptions::FfmpegH264);
+
+                let decoder_result = match video_decoder {
+                    VideoDecoderOptions::FfmpegH264 => {
+                        VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
+                            input_id,
+                            decoder_thread_options,
+                        )
+                    }
+                    VideoDecoderOptions::VulkanH264 => {
+                        VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
+                            input_id,
+                            decoder_thread_options,
+                        )
+                    }
+                    _ => {
+                        // This should never happend
+                        warn!("Non h264 decoder provided to HLS. Defaulting to ffmpeg h264");
+                        VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
+                            input_id,
+                            decoder_thread_options,
+                        )
+                    }
+                };
                 let handle = match decoder_result {
                     Ok(handle) => handle,
                     Err(err) => {
