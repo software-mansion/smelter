@@ -78,7 +78,7 @@ function intoMp4RegisterInput(input: Inputs.RegisterMp4Input): RegisterInputRequ
     loop: input.loop,
     required: input.required,
     offset_ms: input.offsetMs,
-    video_decoder: input.videoDecoder,
+    decoder_map: input.decoderMap,
   };
 }
 
@@ -88,6 +88,7 @@ function intoHlsRegisterInput(input: Inputs.RegisterHlsInput): RegisterInputRequ
     url: input.url,
     required: input.required,
     offset_ms: input.offsetMs,
+    decoder_map: input.decoderMap,
   };
 }
 

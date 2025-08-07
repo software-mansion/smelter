@@ -153,6 +153,9 @@ pub enum InputInitError {
 
     #[error("Failed to initialize decoder.")]
     DecoderError(#[from] DecoderInitError),
+
+    #[error("Invalid video decoder provided. Expected {expected:?} decoder")]
+    InvalidVideoDecoderProvided { expected: VideoCodec },
 }
 
 #[derive(Debug, thiserror::Error)]

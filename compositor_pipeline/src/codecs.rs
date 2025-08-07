@@ -14,7 +14,7 @@ pub use vp9::*;
 
 use crate::AudioChannels;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VideoCodec {
     H264,
     Vp8,
