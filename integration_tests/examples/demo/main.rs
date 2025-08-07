@@ -1,3 +1,4 @@
+use anyhow::Result;
 use enum_iterator::{all, Sequence};
 use inquire::Select;
 use std::fmt::Display;
@@ -29,19 +30,21 @@ impl Display for Action {
     }
 }
 
-fn run_demo() {
-    let state = SmelterState::new();
+fn run_demo() -> Result<()> {
+    let mut state = SmelterState::new();
 
     let options = all::<Action>().collect();
 
-    let action = Select::new("Select option:", options).prompt();
+    let action = Select::new("Select option:", options).prompt()?;
 
     match action {
-        Ok(a) => println!("{a}"),
-        Err(_) => println!("An error occured."),
+        Action::AddInput => state.register_input()?,
+        _ => {} // TODO
     }
+
+    Ok(())
 }
 
-fn main() {
-    run_demo();
+fn main() -> Result<()> {
+    run_demo()
 }

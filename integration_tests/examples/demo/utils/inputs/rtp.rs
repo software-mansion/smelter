@@ -1,34 +1,17 @@
-use anyhow::{Ok, Result};
+use anyhow::Result;
 use enum_iterator::{all, Sequence};
 use inquire::{min_length, Select, Text};
 use std::fmt::Display;
-use std::process;
-use tracing::error;
 
-use crate::utils::inputs::{AudioDecoder, InputHandler, VideoDecoder};
-
-#[derive(Sequence, Clone)]
-enum RegisterOptions {
-    SetVideoStream,
-    SetAudioStream,
-    Done,
-}
-
-impl Display for RegisterOptions {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Self::SetVideoStream => "Set video stream",
-            Self::SetAudioStream => "Set audio stream",
-            Self::Done => "Done",
-        };
-        write!(f, "{msg}")
-    }
-}
+use crate::utils::{
+    inputs::{AudioDecoder, InputHandler, VideoDecoder, VideoSetupOptions},
+    RegisterOptions,
+};
 
 pub struct RtpInput {
-    pub name: String,
-    pub video: Option<RtpInputVideoOptions>,
-    pub audio: Option<RtpInputAudioOptions>,
+    name: String,
+    video: Option<RtpInputVideoOptions>,
+    audio: Option<RtpInputAudioOptions>,
 }
 
 impl RtpInput {
@@ -59,8 +42,14 @@ impl RtpInput {
 }
 
 impl InputHandler for RtpInput {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
     fn setup_video(&mut self) -> Result<()> {
-        Ok(())
+        let setup_options = all::<VideoSetupOptions>().collect();
+
+        let setup_choice = Select::new("Setup: ", setup_options).prompt();
     }
 
     fn setup_audio(&mut self) -> Result<()> {
