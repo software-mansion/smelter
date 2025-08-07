@@ -7,7 +7,7 @@ mod utils;
 
 use crate::utils::SmelterState;
 
-#[derive(EnumIter, Display)]
+#[derive(Debug, EnumIter, Display, Clone)]
 pub enum Action {
     #[strum(to_string = "Add input")]
     AddInput,
@@ -28,15 +28,19 @@ pub enum Action {
 fn run_demo() -> Result<()> {
     let mut state = SmelterState::new();
 
-    // let options = all::<Action>().collect();
-    let options = Action::iter().collect();
+    let options = Action::iter().collect::<Vec<_>>();
 
-    let action = Select::new("Select option:", options).prompt()?;
+    loop {
+        let action = Select::new("Select option:", options.clone()).prompt()?;
 
-    match action {
-        Action::AddInput => state.register_input()?,
-        _ => {} // TODO
+        match action {
+            Action::AddInput => state.register_input()?,
+            Action::Start => break,
+            _ => {} // TODO
+        }
     }
+
+    println!("{state:?}");
 
     Ok(())
 }
