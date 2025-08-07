@@ -35,7 +35,7 @@ pub enum VideoDecoder {
     FfmpegVp9,
 }
 
-#[derive(Debug, EnumIter, Display)]
+#[derive(Debug, EnumIter, Display, Clone)]
 pub enum AudioSetupOptions {
     #[strum(to_string = "Decoder")]
     Decoder,
