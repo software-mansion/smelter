@@ -36,7 +36,7 @@ webrtc-util = { workspace = true }
 crossbeam-channel = { workspace = true }
 tracing = { workspace = true }
 opus = { workspace = true }
-pitch-detection = "0.3.0"
+spectrum-analyzer = "1.7.0"
 rand = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
