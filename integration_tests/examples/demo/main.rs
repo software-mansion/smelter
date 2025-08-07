@@ -4,7 +4,7 @@ use std::fmt::Display;
 
 mod utils;
 
-use crate::utils::ExampleState;
+use crate::utils::SmelterState;
 
 #[derive(Sequence)]
 pub enum Action {
@@ -30,7 +30,7 @@ impl Display for Action {
 }
 
 fn run_demo() {
-    let state = ExampleState::new();
+    let state = SmelterState::new();
 
     let options = all::<Action>().collect();
 
