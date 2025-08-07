@@ -1,7 +1,6 @@
 use anyhow::Result;
-use enum_iterator::{all, Sequence};
 use inquire::{min_length, Select, Text};
-use std::fmt::Display;
+use strum::IntoEnumIterator;
 
 use crate::utils::{
     inputs::{AudioDecoder, InputHandler, VideoDecoder, VideoSetupOptions},
@@ -17,7 +16,7 @@ pub struct RtpInput {
 impl RtpInput {
     pub fn setup() -> Result<Self> {
         let name_validator = min_length!(1, "Please enter a valid input name.");
-        let name = Text::new("Enter input name: ")
+        let name = Text::new("Enter input name:")
             .with_validator(name_validator)
             .prompt()?;
         let mut rtp_input = Self {
@@ -26,7 +25,7 @@ impl RtpInput {
             audio: None,
         };
 
-        let options = all::<RegisterOptions>().collect::<Vec<_>>();
+        let options = RegisterOptions::iter().collect::<Vec<_>>();
         loop {
             let action = Select::new("What to do?", options.clone()).prompt()?;
 
@@ -47,9 +46,10 @@ impl InputHandler for RtpInput {
     }
 
     fn setup_video(&mut self) -> Result<()> {
-        let setup_options = all::<VideoSetupOptions>().collect();
+        // let setup_options = all::<VideoSetupOptions>().collect();
 
-        let setup_choice = Select::new("Setup: ", setup_options).prompt();
+        // let setup_choice = Select::new("Setup: ", setup_options).prompt();
+        Ok(())
     }
 
     fn setup_audio(&mut self) -> Result<()> {

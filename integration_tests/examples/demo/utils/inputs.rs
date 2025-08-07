@@ -1,6 +1,5 @@
 use anyhow::Result;
-use enum_iterator::Sequence;
-use std::fmt::Display;
+use strum::{Display, EnumIter};
 
 pub mod mp4;
 pub mod rtp;
@@ -12,68 +11,41 @@ pub trait InputHandler {
     fn setup_audio(&mut self) -> Result<()>;
 }
 
-#[derive(Sequence)]
+#[derive(EnumIter, Display)]
 pub enum VideoSetupOptions {
+    #[strum(to_string = "Decoder")]
     Decoder,
+
+    #[strum(to_string = "Done")]
     Done,
 }
 
-impl Display for VideoSetupOptions {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Self::Decoder => "Decoder",
-            Self::Done => "Done",
-        };
-        write!(f, "{msg}")
-    }
-}
-
-#[derive(Sequence)]
+#[derive(EnumIter, Display)]
 pub enum VideoDecoder {
+    #[strum(to_string = "ffmpeg_h264")]
     FfmpegH264,
+
+    #[strum(to_string = "ffmpeg_vp8")]
     FfmpegVp8,
+
+    #[strum(to_string = "ffmpeg_vp9")]
     FfmpegVp9,
 }
 
-impl Display for VideoDecoder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Self::FfmpegH264 => "ffmpeg_h264",
-            Self::FfmpegVp8 => "ffmpeg_vp8",
-            Self::FfmpegVp9 => "ffmpeg_vp9",
-        };
-        write!(f, "{msg}")
-    }
-}
-
-#[derive(Sequence)]
+#[derive(EnumIter, Display)]
 pub enum AudioSetupOptions {
+    #[strum(to_string = "Decoder")]
     Decoder,
+
+    #[strum(to_string = "Done")]
     Done,
 }
 
-impl Display for AudioSetupOptions {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Self::Decoder => "Decoder",
-            Self::Done => "Done",
-        };
-        write!(f, "{msg}")
-    }
-}
-
-#[derive(Sequence)]
+#[derive(Display, EnumIter)]
 pub enum AudioDecoder {
+    #[strum(to_string = "opus")]
     Opus,
-    Aac,
-}
 
-impl Display for AudioDecoder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Self::Opus => "opus",
-            Self::Aac => "aac",
-        };
-        write!(f, "{msg}")
-    }
+    #[strum(to_string = "aac")]
+    Aac,
 }
