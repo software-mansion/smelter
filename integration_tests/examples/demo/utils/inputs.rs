@@ -45,5 +45,5 @@ pub enum AudioDecoder {
 
 pub fn input_name() -> String {
     let suffix = rand::thread_rng().next_u32().to_string();
-    "input_".to_string() + suffix.as_str()
+    format!("input_{suffix}")
 }
