@@ -1,7 +1,5 @@
+use rand::RngCore;
 use std::fmt::Debug;
-
-use anyhow::Result;
-use rand::{thread_rng, RngCore};
 use strum::{Display, EnumIter};
 
 pub mod mp4;
@@ -14,13 +12,16 @@ pub trait InputHandler: Debug {
     fn serialize(&self) -> serde_json::Value;
 }
 
-#[derive(Debug, EnumIter, Display, Clone)]
-pub enum VideoSetupOptions {
-    #[strum(to_string = "Decoder (default: ffmpeg_h264)")]
-    Decoder,
+#[derive(Debug, EnumIter, Display)]
+pub enum InputProtocol {
+    #[strum(to_string = "rtp_stream")]
+    Rtp,
 
-    #[strum(to_string = "Done")]
-    Done,
+    #[strum(to_string = "whip")]
+    Whip,
+
+    #[strum(to_string = "mp4")]
+    Mp4,
 }
 
 #[derive(Debug, EnumIter, Display)]
@@ -35,21 +36,11 @@ pub enum VideoDecoder {
     FfmpegVp9,
 }
 
-#[derive(Debug, EnumIter, Display, Clone)]
-pub enum AudioSetupOptions {
-    #[strum(to_string = "Decoder (default: opus)")]
-    Decoder,
-
-    #[strum(to_string = "Done")]
-    Done,
-}
-
 #[derive(Debug, Display, EnumIter)]
 pub enum AudioDecoder {
     #[strum(to_string = "opus")]
     Opus,
-    // #[strum(to_string = "aac")]
-    // Aac(AacDecoderOptions),
+    // TODO: AAC
 }
 
 pub fn input_name() -> String {

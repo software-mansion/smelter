@@ -5,19 +5,23 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 
 use crate::utils::{
     get_free_port,
-    inputs::{
-        input_name, AudioDecoder, AudioSetupOptions, InputHandler, VideoDecoder, VideoSetupOptions,
-    },
+    inputs::{input_name, AudioDecoder, InputHandler, VideoDecoder},
     TransportProtocol,
 };
 
 #[derive(Debug, Display, EnumIter, Clone)]
 pub enum RtpRegisterOptions {
-    #[strum(to_string = "Set video stream")]
-    SetVideoStream,
+    #[strum(to_string = "Add video stream")]
+    AddVideoStream,
 
-    #[strum(to_string = "Set audio stream")]
-    SetAudioStream,
+    #[strum(to_string = "Add audio stream")]
+    AddAudioStream,
+
+    #[strum(to_string = "Remove video stream")]
+    RemoveVideoStream,
+
+    #[strum(to_string = "Remove audio stream")]
+    RemoveAudioStream,
 
     #[strum(to_string = "Set transport protocol")]
     SetTransportProtocol,
@@ -53,8 +57,10 @@ impl RtpInput {
             let action = Select::new("What to do?", options.clone()).prompt()?;
 
             match action {
-                RtpRegisterOptions::SetVideoStream => rtp_input.setup_video()?,
-                RtpRegisterOptions::SetAudioStream => rtp_input.setup_audio()?,
+                RtpRegisterOptions::AddVideoStream => rtp_input.setup_video()?,
+                RtpRegisterOptions::AddAudioStream => rtp_input.setup_audio()?,
+                RtpRegisterOptions::RemoveVideoStream => rtp_input.video = None,
+                RtpRegisterOptions::RemoveAudioStream => rtp_input.audio = None,
                 RtpRegisterOptions::SetTransportProtocol => rtp_input.setup_transport_protocol()?,
                 RtpRegisterOptions::Done => {
                     if rtp_input.video.is_none() && rtp_input.audio.is_none() {
@@ -71,31 +77,11 @@ impl RtpInput {
 
     fn setup_video(&mut self) -> Result<()> {
         self.video = Some(RtpInputVideoOptions::default());
-        let setup_options = VideoSetupOptions::iter().collect::<Vec<_>>();
-
-        loop {
-            let setup_choice = Select::new("Setup:", setup_options.clone()).prompt()?;
-
-            match setup_choice {
-                VideoSetupOptions::Decoder => self.video.as_mut().unwrap().set_decoder_prompt()?,
-                VideoSetupOptions::Done => break,
-            }
-        }
         Ok(())
     }
 
     fn setup_audio(&mut self) -> Result<()> {
         self.audio = Some(RtpInputAudioOptions::default());
-        let setup_options = AudioSetupOptions::iter().collect::<Vec<_>>();
-
-        loop {
-            let setup_choice = Select::new("Setup:", setup_options.clone()).prompt()?;
-
-            match setup_choice {
-                AudioSetupOptions::Decoder => self.audio.as_mut().unwrap().set_decoder_prompt()?,
-                AudioSetupOptions::Done => break,
-            }
-        }
         Ok(())
     }
 
@@ -163,14 +149,6 @@ pub struct RtpInputAudioOptions {
 }
 
 impl RtpInputAudioOptions {
-    pub fn set_decoder_prompt(&mut self) -> Result<()> {
-        let options = AudioDecoder::iter().collect();
-
-        let decoder = Select::new("Select decoder:", options).prompt()?;
-        self.decoder = decoder;
-        Ok(())
-    }
-
     pub fn serialize(&self) -> serde_json::Value {
         json!({
             "decoder": self.decoder.to_string(),
