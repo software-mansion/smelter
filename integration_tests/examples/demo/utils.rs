@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicU16, Ordering},
-    OnceLock,
+use std::{
+    ops::Deref,
+    sync::{
+        atomic::{AtomicU16, Ordering},
+        OnceLock,
+    },
 };
 
 use anyhow::Result;
@@ -55,7 +58,7 @@ impl SmelterState {
         };
 
         for output in &mut self.outputs {
-            output.add_input(&input_handler);
+            output.add_input(input_handler.deref());
         }
 
         let input_json = input_handler.serialize();

@@ -13,8 +13,8 @@ pub trait OutputHandler: Debug {
     fn port(&self) -> u16;
     fn serialize(&self) -> serde_json::Value;
     fn set_initial_scene(&mut self, inputs: &[Box<dyn InputHandler>]);
-    fn add_input(&mut self, input: &Box<dyn InputHandler>);
-    fn remove_input(&mut self, input: &Box<dyn InputHandler>);
+    fn add_input(&mut self, input: &dyn InputHandler);
+    fn remove_input(&mut self, input: &dyn InputHandler);
 }
 
 #[derive(Debug, Display, EnumIter)]
@@ -65,13 +65,13 @@ impl std::fmt::Display for VideoResolution {
 #[derive(Debug, Display, EnumIter)]
 pub enum VideoResolutionOptions {
     #[strum(to_string = "2560x1440")]
-    QHD,
+    Qhd,
 
     #[strum(to_string = "1920x1080")]
-    FHD,
+    Fhd,
 
     #[strum(to_string = "1280x720")]
-    HD,
+    Hd,
 }
 
 #[derive(Debug, Display, EnumIter)]
