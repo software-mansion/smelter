@@ -109,7 +109,7 @@ impl HlsInput {
 
         let input_start_time = Instant::now();
 
-        let (mut audio, mut samples_receiver) = match input_ctx.streams().best(Type::Audio) {
+        let (mut audio, samples_receiver) = match input_ctx.streams().best(Type::Audio) {
             Some(stream) => {
                 // not tested it was always null, but audio is in ADTS, so config is not
                 // necessary
@@ -141,7 +141,7 @@ impl HlsInput {
             None => (None, None),
         };
 
-        let (mut video, mut frame_receiver) = match input_ctx.streams().best(Type::Video) {
+        let (mut video, frame_receiver) = match input_ctx.streams().best(Type::Video) {
             Some(stream) => {
                 let (frame_sender, frame_receiver) = bounded(5);
                 let state =
@@ -181,7 +181,13 @@ impl HlsInput {
             None => (None, None),
         };
 
-        let mut is_buffering = true;
+        result_sender
+            .send(Ok(QueueDataReceiver {
+                video: frame_receiver.take(),
+                audio: samples_receiver.take(),
+            }))
+            .unwrap();
+
         let mut pts_offset = Duration::ZERO;
         loop {
             let mut packet = Packet::empty();
@@ -213,8 +219,7 @@ impl HlsInput {
                     // to avoid audio sync issues.
                     if is_discontinuity {
                         pts_offset = Duration::ZERO;
-                    } else if !is_buffering && handle.chunk_sender.len() < HlsInput::MIN_BUFFER_SIZE
-                    {
+                    } else if handle.chunk_sender.len() < HlsInput::MIN_BUFFER_SIZE {
                         pts_offset += Duration::from_secs_f64(0.1);
                     }
                     let pts = pts + pts_offset;
@@ -263,17 +268,6 @@ impl HlsInput {
                     }
                 }
             }
-
-            if is_buffering && HlsInput::did_buffer_enough(video.as_ref(), audio.as_ref()) {
-                result_sender
-                    .send(Ok(QueueDataReceiver {
-                        video: frame_receiver.take(),
-                        audio: samples_receiver.take(),
-                    }))
-                    .unwrap();
-
-                is_buffering = false;
-            }
         }
 
         if let Some((_, handle, _)) = audio {
@@ -315,10 +309,11 @@ impl Drop for HlsInput {
 }
 
 struct StreamState {
-    input_start_time: Instant,
     queue_start_time: Instant,
-    first_pts: Option<Duration>,
+    buffer_duration: Duration,
     time_base: ffmpeg_next::Rational,
+
+    first_pts: Option<Duration>,
 
     pts_discontinuity: DiscontinuityState,
     dts_discontinuity: DiscontinuityState,
@@ -326,15 +321,16 @@ struct StreamState {
 
 impl StreamState {
     fn new(
-        input_start_time: Instant,
         queue_start_time: Instant,
         time_base: ffmpeg_next::Rational,
+        buffer_duration: Duration,
     ) -> Self {
         Self {
-            input_start_time,
             queue_start_time,
-            first_pts: None,
             time_base,
+            buffer_duration,
+
+            first_pts: None,
             pts_discontinuity: DiscontinuityState::new(false, time_base),
             dts_discontinuity: DiscontinuityState::new(true, time_base),
         }
@@ -362,7 +358,11 @@ impl StreamState {
         let first_pts = *self.first_pts.get_or_insert(pts);
         let pts = self.to_queue_timestamp(pts.saturating_sub(first_pts));
 
-        (pts, dts, is_pts_discontinuity || is_dts_discontinuity)
+        (
+            pts + self.buffer_duration,
+            dts.map(|dts| dts + self.buffer_duration),
+            is_pts_discontinuity || is_dts_discontinuity,
+        )
     }
 
     fn to_queue_timestamp(&self, input_timestamp: Duration) -> Duration {

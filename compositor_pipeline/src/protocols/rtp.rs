@@ -1,6 +1,6 @@
 mod aac;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 pub use aac::*;
 
@@ -27,6 +27,16 @@ pub struct RtpInputOptions {
     pub transport_protocol: RtpInputTransportProtocol,
     pub video: Option<VideoDecoderOptions>,
     pub audio: Option<RtpAudioOptions>,
+
+    /// Duration of stream that should be buffered before stream is started.
+    /// If you have both audio and video streams then make sure to use the same value
+    /// to avoid desync.
+    ///
+    /// This value defines minimal latency on the queue, but if you set it to low and fail
+    /// to deliver the input stream on time it can cause either black screen or flickering image.
+    ///
+    /// By default DEFAULT_BUFFER_DURATION will be used.
+    pub buffer_duration: Option<Duration>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
