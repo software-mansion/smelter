@@ -373,7 +373,7 @@ impl VulkanDevice {
         })
     }
 
-    pub fn create_bytes_decoder(self: &Arc<Self>) -> Result<BytesDecoder, DecoderError> {
+    pub fn create_bytes_decoder(self: &Arc<Self>) -> Result<BytesDecoder<'_>, DecoderError> {
         let parser = Parser::default();
         let vulkan_decoder = VulkanDecoder::new(self.clone())?;
         let frame_sorter = FrameSorter::<RawFrameData>::new();
@@ -758,7 +758,7 @@ impl Queue {
     ) -> Result<(), VulkanDecoderError> {
         fn to_sem_submit_info(
             submits: &[(vk::Semaphore, vk::PipelineStageFlags2)],
-        ) -> Vec<vk::SemaphoreSubmitInfo> {
+        ) -> Vec<vk::SemaphoreSubmitInfo<'_>> {
             submits
                 .iter()
                 .map(|&(sem, stage)| {
@@ -811,7 +811,7 @@ pub(crate) struct QueueIndices<'a> {
 }
 
 impl QueueIndices<'_> {
-    fn queue_create_infos(&self) -> Vec<vk::DeviceQueueCreateInfo> {
+    fn queue_create_infos(&self) -> Vec<vk::DeviceQueueCreateInfo<'_>> {
         [
             self.h264_decode.idx,
             self.transfer.idx,

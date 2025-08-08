@@ -118,13 +118,6 @@ impl TextureExt for wgpu::Texture {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-#[error("Passed invalid texture. Expected: {expected}, Actual: {actual}")]
-pub struct TextureCopyError {
-    expected: String,
-    actual: String,
-}
-
 fn copy_texture_to_texture(ctx: &WgpuCtx, source: &wgpu::Texture, destination: &wgpu::Texture) {
     let mut encoder = ctx.device.create_command_encoder(&Default::default());
 

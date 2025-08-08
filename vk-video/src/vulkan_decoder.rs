@@ -817,7 +817,7 @@ impl VulkanDecoder<'_> {
 
     fn prepare_references_dpb_slot_info(
         references_std_ref_info: &[vk::native::StdVideoDecodeH264ReferenceInfo],
-    ) -> Vec<vk::VideoDecodeH264DpbSlotInfoKHR> {
+    ) -> Vec<vk::VideoDecodeH264DpbSlotInfoKHR<'_>> {
         references_std_ref_info
             .iter()
             .map(|info| vk::VideoDecodeH264DpbSlotInfoKHR::default().std_reference_info(info))
