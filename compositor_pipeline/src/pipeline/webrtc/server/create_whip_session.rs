@@ -12,7 +12,6 @@ use axum::{
     extract::{Path, State},
     http::{HeaderMap, Response, StatusCode},
 };
-use compositor_render::InputId;
 use std::{sync::Arc, time::Duration};
 use tracing::{debug, trace, warn};
 use webrtc::{
@@ -27,15 +26,15 @@ pub async fn handle_create_whip_session(
     headers: HeaderMap,
     offer: String,
 ) -> Result<Response<Body>, WhipServerError> {
-    let input_id = InputId(Arc::from(id.clone()));
+    let session_id = Arc::from(id.clone());
     trace!("SDP offer: {}", offer);
     let inputs = state.inputs.clone();
 
     validate_sdp_content_type(&headers)?;
-    inputs.validate_token(&input_id, &headers).await?;
+    inputs.validate_token(&session_id, &headers).await?;
 
     let video_preferences =
-        inputs.get_with(&input_id, |input| Ok(input.video_preferences.clone()))?;
+        inputs.get_with(&session_id, |input| Ok(input.video_preferences.clone()))?;
 
     let peer_connection = RecvonlyPeerConnection::new(&state.ctx, &video_preferences).await?;
 
@@ -56,11 +55,11 @@ pub async fn handle_create_whip_session(
     trace!("SDP answer: {}", sdp_answer.sdp);
 
     {
-        let input_id = input_id.clone();
+        let session_id = session_id.clone();
         peer_connection.on_track(Box::new(move |track, _, transceiver| {
             debug!(
                 kind = track.kind().to_string(),
-                ?input_id,
+                ?session_id,
                 "on_track called"
             );
 
@@ -68,7 +67,7 @@ pub async fn handle_create_whip_session(
                 RTPCodecType::Audio => {
                     tokio::spawn(process_audio_track(
                         state.clone(),
-                        input_id.clone(),
+                        session_id.clone(),
                         track,
                         transceiver,
                     ));
@@ -76,7 +75,7 @@ pub async fn handle_create_whip_session(
                 RTPCodecType::Video => {
                     tokio::spawn(process_video_track(
                         state.clone(),
-                        input_id.clone(),
+                        session_id.clone(),
                         track,
                         transceiver,
                         video_preferences.clone(),
@@ -92,8 +91,8 @@ pub async fn handle_create_whip_session(
     };
 
     // It will fail if there is already connected peer connection
-    inputs.get_mut_with(&input_id, |input| {
-        input.maybe_replace_peer_connection(&input_id, peer_connection)
+    inputs.get_mut_with(&session_id, |input| {
+        input.maybe_replace_peer_connection(&session_id, peer_connection)
     })?;
 
     let body = Body::from(sdp_answer.sdp.to_string());

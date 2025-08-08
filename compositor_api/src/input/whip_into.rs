@@ -15,7 +15,7 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
             required,
             offset_ms,
             bearer_token,
-            override_whip_session_id,
+            whip_session_id_override,
         } = value;
 
         if video.clone().and_then(|v| v.decoder.clone()).is_some() {
@@ -70,7 +70,7 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                 pipeline::WhipInputOptions {
                     video_preferences,
                     bearer_token,
-                    override_whip_session_id: override_whip_session_id.map(Into::into),
+                    whip_session_id_override,
                 }
             }
             None => pipeline::WhipInputOptions {
@@ -88,7 +88,7 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                     pipeline::VideoDecoderOptions::FfmpegVp9,
                 ],
                 bearer_token,
-                override_whip_session_id: override_whip_session_id.map(Into::into),
+                whip_session_id_override,
             },
         };
 

@@ -3,7 +3,6 @@ use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
 };
-use compositor_render::InputId;
 use std::sync::Arc;
 use tracing::info;
 
@@ -12,23 +11,23 @@ pub async fn handle_terminate_whip_session(
     State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
 ) -> Result<StatusCode, WhipServerError> {
-    let input_id = InputId(Arc::from(id));
+    let session_id = Arc::from(id);
 
-    state.inputs.validate_token(&input_id, &headers).await?;
+    state.inputs.validate_token(&session_id, &headers).await?;
 
     let peer_connection = state
         .inputs
-        .get_mut_with(&input_id, |input| Ok(input.peer_connection.take()))?;
+        .get_mut_with(&session_id, |input| Ok(input.peer_connection.take()))?;
 
     match peer_connection {
         Some(peer_connection) => peer_connection.close().await?,
         None => {
             return Err(WhipServerError::InternalError(format!(
-                "None peer connection for {input_id:?}"
+                "None peer connection for {session_id:?}"
             )));
         }
     }
 
-    info!("WHIP session terminated for input: {:?}", input_id);
+    info!("WHIP session {session_id:?} terminated");
     Ok(StatusCode::OK)
 }

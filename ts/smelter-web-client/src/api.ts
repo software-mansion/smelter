@@ -30,5 +30,5 @@ export type RegisterMp4InputResponse = {
 
 export type RegisterWhipInputResponse = {
   bearerToken: string;
-  endointRoute: string;
+  endpointRoute: string;
 };

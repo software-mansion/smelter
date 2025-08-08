@@ -81,7 +81,7 @@ export type RegisterInput =
       /**
        * Internal use only. Overrides whip session id which is used when referencing the input via whip server. If not provided, it defaults to input id.
        */
-      override_whip_session_id?: InputId | null;
+      whip_session_id_override?: string | null;
       /**
        * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
        */
@@ -172,7 +172,6 @@ export type InputWhipAudioOptions = {
    */
   forward_error_correction?: boolean | null;
 };
-export type InputId = string;
 export type RegisterOutput =
   | {
       type: "rtp_stream";
@@ -259,6 +258,7 @@ export type RegisterOutput =
        */
       audio?: OutputHlsAudioOptions | null;
     };
+export type InputId = string;
 export type VideoEncoderOptions =
   | {
       type: "ffmpeg_h264";

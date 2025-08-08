@@ -21,7 +21,7 @@ pub struct WhipInput {
     /// Internal use only.
     /// Overrides whip session id which is used when referencing the input via whip server.
     /// If not provided, it defaults to input id.
-    pub override_whip_session_id: Option<InputId>,
+    pub whip_session_id_override: Option<Arc<str>>,
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,

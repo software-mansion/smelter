@@ -71,7 +71,7 @@ export default class Smelter {
       } else if (request.type === 'whip') {
         return {
           bearerToken: result.bearer_token,
-          endpointRoute: `/whip/${encodeURIComponent(inputId)}`,
+          endpointRoute: result.endpoint_route,
         };
       } else {
         return result;

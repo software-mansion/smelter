@@ -77,6 +77,10 @@ export class Smelter {
     return this.store.runBlocking(async updateStore => {
       const inputRef = { type: 'global', id: inputId } as const;
       const result = await this.api.registerInput(inputRef, intoRegisterInput(inputId, request));
+      if (request.type === 'whip') {
+        result.endpoint_route = `/whip/${encodeURIComponent(inputId)}`;
+      }
+
       updateStore({
         type: 'add_input',
         input: {
@@ -85,6 +89,7 @@ export class Smelter {
           audioDurationMs: result.audio_duration_ms,
         },
       });
+
       return result;
     });
   }

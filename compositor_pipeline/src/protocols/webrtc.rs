@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use compositor_render::InputId;
 use reqwest::{Method, StatusCode};
 use url::{ParseError, Url};
 
@@ -13,7 +12,7 @@ use crate::{
 pub struct WhipInputOptions {
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
-    pub override_whip_session_id: Option<InputId>,
+    pub whip_session_id_override: Option<Arc<str>>,
 }
 
 #[derive(Debug, Clone)]

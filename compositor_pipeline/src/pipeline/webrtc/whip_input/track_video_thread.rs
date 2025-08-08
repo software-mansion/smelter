@@ -1,6 +1,6 @@
 use std::{iter, sync::Arc};
 
-use compositor_render::{error::ErrorStack, Frame, InputId};
+use compositor_render::{error::ErrorStack, Frame};
 use crossbeam_channel::Sender;
 use tracing::{debug, error, trace, warn};
 use webrtc::{
@@ -32,7 +32,7 @@ use crate::{prelude::*, thread_utils::InitializableThread};
 
 pub async fn process_video_track(
     state: WhipWhepServerState,
-    input_id: InputId,
+    session_id: Arc<str>,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
     video_preferences: Vec<VideoDecoderOptions>,
@@ -47,9 +47,9 @@ pub async fn process_video_track(
     };
 
     let WhipWhepServerState { inputs, ctx } = state;
-    let frame_sender = inputs.get_with(&input_id, |input| Ok(input.frame_sender.clone()))?;
+    let frame_sender = inputs.get_with(&session_id, |input| Ok(input.frame_sender.clone()))?;
     let handle =
-        VideoTrackThread::spawn(&input_id.0, (ctx.clone(), negotiated_codecs, frame_sender))?;
+        VideoTrackThread::spawn(&session_id, (ctx.clone(), negotiated_codecs, frame_sender))?;
 
     let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_point, 90_000);
 

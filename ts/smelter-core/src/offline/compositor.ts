@@ -91,6 +91,9 @@ export class OfflineSmelter {
 
     const inputRef = { type: 'global', id: inputId } as const;
     const result = await this.api.registerInput(inputRef, intoRegisterInput(inputId, request));
+    if (request.type === 'whip') {
+      result.endpoint_route = `/whip/${encodeURIComponent(inputId)}`;
+    }
 
     const offsetMs = 'offsetMs' in request && request.offsetMs ? request.offsetMs : 0;
 
@@ -118,6 +121,7 @@ export class OfflineSmelter {
         this.inputTimestamps.push((offsetMs ?? 0) + result.audio_duration_ms);
       }
     }
+
     return result;
   }
 
