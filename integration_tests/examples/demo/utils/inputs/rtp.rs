@@ -45,7 +45,7 @@ impl RtpInput {
             name: input_name(),
 
             // TODO: (@jbrs) Make it possible for user
-            // to setup their own port
+            // to set their own port
             port: get_free_port(),
             video: None,
             audio: None,

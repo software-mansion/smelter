@@ -1,5 +1,6 @@
 use anyhow::Result;
 use inquire::Select;
+use smelter::{config::read_config, logger::init_logger};
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 mod utils;
@@ -34,6 +35,7 @@ fn run_demo() -> Result<()> {
 
         match action {
             Action::AddInput => state.register_input()?,
+            Action::AddOutput => state.register_output()?,
             Action::Start => break,
             _ => {} // TODO
         }
@@ -45,5 +47,7 @@ fn run_demo() -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    let config = read_config();
+    init_logger(config.logger.clone());
     run_demo()
 }
