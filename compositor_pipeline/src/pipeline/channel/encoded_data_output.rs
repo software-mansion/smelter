@@ -104,13 +104,13 @@ impl EncodedDataOutput {
 }
 
 impl Output for EncodedDataOutput {
-    fn audio(&self) -> Option<OutputAudio> {
+    fn audio(&self) -> Option<OutputAudio<'_>> {
         self.audio.as_ref().map(|audio| OutputAudio {
             samples_batch_sender: &audio.sample_batch_sender,
         })
     }
 
-    fn video(&self) -> Option<OutputVideo> {
+    fn video(&self) -> Option<OutputVideo<'_>> {
         self.video.as_ref().map(|video| OutputVideo {
             resolution: video.config.resolution,
             frame_format: video.config.output_format,

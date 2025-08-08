@@ -41,13 +41,13 @@ impl RawDataOutput {
 }
 
 impl Output for RawDataOutput {
-    fn audio(&self) -> Option<OutputAudio> {
+    fn audio(&self) -> Option<OutputAudio<'_>> {
         self.audio.as_ref().map(|audio| OutputAudio {
             samples_batch_sender: audio,
         })
     }
 
-    fn video(&self) -> Option<OutputVideo> {
+    fn video(&self) -> Option<OutputVideo<'_>> {
         // fake closed channel (keyframe request do not make sense for this output)
         static FAKE_SENDER: OnceLock<Sender<()>> = OnceLock::new();
         let keyframe_request_sender = FAKE_SENDER.get_or_init(|| bounded(1).0);
