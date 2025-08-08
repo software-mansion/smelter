@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use anyhow::Result;
 use inquire::Select;
 use serde_json::json;
@@ -126,11 +124,11 @@ impl OutputHandler for RtpOutput {
         }
     }
 
-    fn add_input(&mut self, input: &Box<dyn InputHandler>) {
+    fn add_input(&mut self, input: &dyn InputHandler) {
         self.inputs.push(input.name().to_string());
     }
 
-    fn remove_input(&mut self, input: &Box<dyn InputHandler>) {
+    fn remove_input(&mut self, input: &dyn InputHandler) {
         let index = self.inputs.iter().position(|name| name == input.name());
         if let Some(i) = index {
             self.inputs.remove(i);

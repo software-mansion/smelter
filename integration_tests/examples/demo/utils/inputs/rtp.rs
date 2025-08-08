@@ -120,14 +120,6 @@ pub struct RtpInputVideoOptions {
 }
 
 impl RtpInputVideoOptions {
-    pub fn set_decoder_prompt(&mut self) -> Result<()> {
-        let options = VideoDecoder::iter().collect();
-
-        let decoder = Select::new("Select decoder:", options).prompt()?;
-        self.decoder = decoder;
-        Ok(())
-    }
-
     pub fn serialize(&self) -> serde_json::Value {
         json!({
             "decoder": self.decoder.to_string(),
