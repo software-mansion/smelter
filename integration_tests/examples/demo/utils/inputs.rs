@@ -37,7 +37,7 @@ pub enum VideoDecoder {
 
 #[derive(Debug, EnumIter, Display, Clone)]
 pub enum AudioSetupOptions {
-    #[strum(to_string = "Decoder (default: aac)")]
+    #[strum(to_string = "Decoder (default: opus)")]
     Decoder,
 
     #[strum(to_string = "Done")]
@@ -48,9 +48,8 @@ pub enum AudioSetupOptions {
 pub enum AudioDecoder {
     #[strum(to_string = "opus")]
     Opus,
-
-    #[strum(to_string = "aac")]
-    Aac,
+    // #[strum(to_string = "aac")]
+    // Aac(AacDecoderOptions),
 }
 
 pub fn input_name() -> String {
