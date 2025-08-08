@@ -1,6 +1,5 @@
 use anyhow::Result;
 use inquire::Select;
-use std::string::ToString;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 mod utils;
