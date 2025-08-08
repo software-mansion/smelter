@@ -181,7 +181,7 @@ impl RtpInputAudioOptions {
 impl Default for RtpInputAudioOptions {
     fn default() -> Self {
         Self {
-            decoder: AudioDecoder::Aac,
+            decoder: AudioDecoder::Opus,
         }
     }
 }
