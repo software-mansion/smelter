@@ -11,6 +11,7 @@ mod handle_keyframe_requests;
 mod peer_connection_recvonly;
 mod server;
 mod supported_video_codec_parameters;
+mod trickle_ice_utils;
 mod whep_output;
 mod whip_input;
 mod whip_output;

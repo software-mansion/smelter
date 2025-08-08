@@ -18,7 +18,9 @@ use crate::{
             server::{
                 create_whep_session::handle_create_whep_session,
                 create_whip_session::handle_create_whip_session,
+                new_whep_ice_candidates::handle_new_whep_ice_candidates,
                 new_whip_ice_candidates::handle_new_whip_ice_candidates,
+                terminate_whep_session::handle_terminate_whep_session,
                 terminate_whip_session::handle_terminate_whip_session,
             },
             WhipWhepPipelineState, WhipWhepServerHandle, WhipWhepServerState,
@@ -29,7 +31,9 @@ use crate::{
 
 mod create_whep_session;
 mod create_whip_session;
+mod new_whep_ice_candidates;
 mod new_whip_ice_candidates;
+mod terminate_whep_session;
 mod terminate_whip_session;
 
 pub struct WhipWhepServer {
@@ -83,12 +87,17 @@ impl WhipWhepServer {
         let app = Router::new()
             .route("/status", get((StatusCode::OK, axum::Json(json!({})))))
             .route("/whip/:id", post(handle_create_whip_session))
-            .route("/session/:id", patch(handle_new_whip_ice_candidates))
-            .route("/session/:id", delete(handle_terminate_whip_session))
+            .route("/whip/:id", patch(handle_new_whip_ice_candidates))
+            .route("/whip/:id", delete(handle_terminate_whip_session))
             .route("/whep/:id", post(handle_create_whep_session))
-            // TODO
-            // .route("/resource/:id", patch(handle_new_whep_ice_candidates))
-            // .route("/resource/:id", delete(handle_terminate_whep_session))
+            .route(
+                "/whep/:id/:session_id",
+                patch(handle_new_whep_ice_candidates),
+            )
+            .route(
+                "/whep/:id/:session_id",
+                delete(handle_terminate_whep_session),
+            )
             .layer(CorsLayer::permissive())
             .with_state(state);
 

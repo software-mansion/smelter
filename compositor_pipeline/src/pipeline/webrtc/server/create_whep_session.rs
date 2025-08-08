@@ -15,6 +15,7 @@ use axum::{
 use compositor_render::OutputId;
 use std::sync::Arc;
 use tracing::trace;
+use uuid::Uuid;
 
 #[debug_handler]
 pub async fn handle_create_whep_session(
@@ -24,6 +25,7 @@ pub async fn handle_create_whep_session(
     offer: String,
 ) -> Result<Response<Body>, WhipWhepServerError> {
     let output_id = OutputId(Arc::from(id.clone()));
+    let session_id: Arc<str> = Arc::from(Uuid::new_v4().to_string()); // TODO maybe simple rand better
     trace!("SDP offer: {}", offer);
 
     validate_sdp_content_type(&headers)?;
@@ -52,6 +54,8 @@ pub async fn handle_create_whep_session(
     let sdp_answer = peer_connection.negotiate_connection(offer).await?;
     trace!("SDP answer: {}", sdp_answer.sdp);
 
+    outputs.add_session(&output_id, session_id.clone(), Arc::new(peer_connection))?;
+
     spawn_media_streaming_task(
         ctx.clone(),
         &output_id,
@@ -79,7 +83,11 @@ pub async fn handle_create_whep_session(
         .header("Content-Type", "application/sdp")
         .header(
             "Location",
-            format!("/resource/{}", urlencoding::encode(&id)),
+            format!(
+                "/whep/{}/{}",
+                urlencoding::encode(&id),
+                urlencoding::encode(&session_id),
+            ),
         )
         .body(body)?;
     Ok(response)
