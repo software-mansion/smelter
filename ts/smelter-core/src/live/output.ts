@@ -10,6 +10,7 @@ import { ThrottledFunction } from '../utils';
 import { OutputRootComponent } from '../rootComponent';
 import type { Logger } from 'pino';
 import type { ImageRef } from '../api/image';
+import { intoRegisterInput } from '../api/input';
 
 type AudioContext = _smelterInternals.AudioContext;
 type LiveTimeContext = _smelterInternals.LiveTimeContext;
@@ -145,10 +146,13 @@ class OutputContext implements SmelterOutputContext {
         id: inputId,
       } as const;
       const { video_duration_ms: videoDurationMs, audio_duration_ms: audioDurationMs } =
-        await this.output.api.registerInput(inputRef, {
-          type: 'mp4',
-          ...registerRequest,
-        });
+        await this.output.api.registerInput(
+          inputRef,
+          intoRegisterInput({
+            type: 'mp4',
+            ...registerRequest,
+          })
+        );
       updateStore({
         type: 'add_input',
         input: {
