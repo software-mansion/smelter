@@ -29,6 +29,8 @@ pub fn post<T: Serialize + ?Sized>(route: &str, json: &T) -> Result<Response> {
         .timeout(Duration::from_secs(100))
         .json(json)
         .send()
+        // TODO: (@jbrs) Handle this if couldn't connect to the server as it is
+        // manually started now
         .unwrap();
     if response.status() >= StatusCode::BAD_REQUEST {
         log_request_error(&json, response);

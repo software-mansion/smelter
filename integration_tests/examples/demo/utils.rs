@@ -1,16 +1,11 @@
-use std::{
-    collections::HashSet,
-    sync::{
-        atomic::{AtomicU16, Ordering},
-        OnceLock,
-    },
+use std::sync::{
+    atomic::{AtomicU16, Ordering},
+    OnceLock,
 };
 
 use anyhow::Result;
-use inquire::{min_length, Select, Text};
+use inquire::Select;
 use integration_tests::examples;
-use rand::RngCore;
-use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 mod inputs;
@@ -18,19 +13,7 @@ mod outputs;
 
 use inputs::{rtp::RtpInput, InputHandler};
 
-use crate::utils::inputs::{mp4::Mp4Input, whip::WhipInput};
-
-#[derive(Debug, EnumIter, Display)]
-enum InputProtocol {
-    #[strum(to_string = "rtp_stream")]
-    Rtp,
-
-    #[strum(to_string = "whip")]
-    Whip,
-
-    #[strum(to_string = "mp4")]
-    Mp4,
-}
+use crate::utils::inputs::InputProtocol;
 
 #[derive(Debug, EnumIter, Display)]
 pub enum TransportProtocol {
