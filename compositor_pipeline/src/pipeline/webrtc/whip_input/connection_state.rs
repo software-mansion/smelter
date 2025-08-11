@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use compositor_render::{Frame, InputId};
+use compositor_render::Frame;
 use crossbeam_channel::Sender;
 use tracing::warn;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
@@ -41,22 +41,24 @@ impl WhipInputConnectionState {
 
     pub fn maybe_replace_peer_connection(
         &mut self,
-        input_id: &InputId,
+        session_id: &Arc<str>,
         new_pc: RecvonlyPeerConnection,
     ) -> Result<(), WhipServerError> {
         // Deleting previous peer_connection on this input which was not in Connected state
         if let Some(peer_connection) = &self.peer_connection {
             if peer_connection.connection_state() == RTCPeerConnectionState::Connected {
                 return Err(WhipServerError::InternalError(format!(
-                      "Another stream is currently connected to the given input_id: {input_id:?}. \
-                      Disconnect the existing stream before starting a new one, or check if the input_id is correct."
+                      "Another stream is currently connected to the given session_id: {session_id:?}. \
+                      Disconnect the existing stream before starting a new one, or check if the session_id is correct."
                   )));
             }
             if let Some(peer_connection) = self.peer_connection.take() {
-                let input_id = input_id.clone();
+                let session_id = session_id.clone();
                 tokio::spawn(async move {
                     if let Err(err) = peer_connection.close().await {
-                        warn!("Error while closing previous peer connection {input_id:?}: {err:?}")
+                        warn!(
+                            "Error while closing previous peer connection {session_id:?}: {err:?}"
+                        )
                     }
                 });
             }
