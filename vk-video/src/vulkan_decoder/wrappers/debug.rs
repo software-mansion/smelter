@@ -114,7 +114,7 @@ impl DecodeQueryPool {
 
     // if we want to switch to inline queries we can use this, but we need to check how many
     // implementations support them
-    pub(crate) fn _inline_query(&self) -> vk::VideoInlineQueryInfoKHR {
+    pub(crate) fn _inline_query(&self) -> vk::VideoInlineQueryInfoKHR<'_> {
         vk::VideoInlineQueryInfoKHR::default()
             .query_pool(self.pool.pool)
             .first_query(0)
