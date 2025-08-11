@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use compositor_render::InputId;
 use crossbeam_channel::Sender;
 use tracing::{debug, trace, warn};
 use webrtc::{rtp_transceiver::RTCRtpTransceiver, track::track_remote::TrackRemote};
@@ -27,7 +26,7 @@ use crate::{
 
 pub async fn process_audio_track(
     state: WhipWhepServerState,
-    input_id: InputId,
+    session_id: Arc<str>,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
 ) -> Result<(), WhipWhepServerError> {
@@ -40,8 +39,8 @@ pub async fn process_audio_track(
 
     let WhipWhepServerState { inputs, ctx, .. } = state;
     let samples_sender =
-        inputs.get_with(&input_id, |input| Ok(input.input_samples_sender.clone()))?;
-    let handle = AudioTrackThread::spawn(&input_id.0, (ctx.clone(), samples_sender))?;
+        inputs.get_with(&session_id, |input| Ok(input.input_samples_sender.clone()))?;
+    let handle = AudioTrackThread::spawn(&session_id, (ctx.clone(), samples_sender))?;
 
     let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_point, 48_000);
 

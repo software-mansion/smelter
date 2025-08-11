@@ -22,7 +22,7 @@ pub(crate) trait VideoQueueExt {
     unsafe fn get_video_session_memory_requirements_khr(
         &self,
         video_session: vk::VideoSessionKHR,
-    ) -> VkResult<Vec<vk::VideoSessionMemoryRequirementsKHR>>;
+    ) -> VkResult<Vec<vk::VideoSessionMemoryRequirementsKHR<'_>>>;
 
     unsafe fn create_video_session_khr(
         &self,
@@ -89,7 +89,7 @@ impl VideoQueueExt for ash::khr::video_queue::Device {
     unsafe fn get_video_session_memory_requirements_khr(
         &self,
         video_session: vk::VideoSessionKHR,
-    ) -> VkResult<Vec<vk::VideoSessionMemoryRequirementsKHR>> {
+    ) -> VkResult<Vec<vk::VideoSessionMemoryRequirementsKHR<'_>>> {
         let mut memory_requirements_len = 0;
         unsafe {
             (self.fp().get_video_session_memory_requirements_khr)(

@@ -11,6 +11,15 @@ pub struct OpusEncoderOptions {
     pub packet_loss: i32,
 }
 
+impl OpusEncoderOptions {
+    pub fn channel_count(&self) -> u16 {
+        match self.channels {
+            AudioChannels::Mono => 1,
+            AudioChannels::Stereo => 2,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum OpusEncoderPreset {
     Quality,

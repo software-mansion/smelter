@@ -17,11 +17,20 @@ use webrtc::{
         configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
         RTCPeerConnection,
     },
-    rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender},
+    rtp_transceiver::{
+        rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
+        rtp_sender::RTCRtpSender,
+    },
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
-use crate::{pipeline::webrtc::error::WhipWhepServerError, prelude::*};
+use crate::pipeline::webrtc::{
+    error::WhipWhepServerError,
+    supported_video_codec_parameters::{
+        get_video_h264_codecs_for_media_engine, get_video_vp8_codecs, get_video_vp9_codecs,
+    },
+};
+use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct PeerConnection {
@@ -29,9 +38,15 @@ pub(crate) struct PeerConnection {
 }
 
 impl PeerConnection {
-    pub async fn new(ctx: &Arc<PipelineCtx>) -> Result<Self, WhipWhepServerError> {
+    pub async fn new(
+        ctx: &Arc<PipelineCtx>,
+        video_encoder: Option<VideoEncoderOptions>,
+        audio_encoder: Option<AudioEncoderOptions>,
+    ) -> Result<Self, WhipWhepServerError> {
         let mut media_engine = MediaEngine::default();
-        media_engine.register_default_codecs()?;
+
+        register_codecs(&mut media_engine, video_encoder, audio_encoder)?;
+
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
         let api = APIBuilder::new()
@@ -91,11 +106,11 @@ impl PeerConnection {
         encoder: AudioEncoderOptions,
     ) -> Result<Arc<TrackLocalStaticRTP>, WhipWhepServerError> {
         let track = match encoder {
-            AudioEncoderOptions::Opus(_) => Arc::new(TrackLocalStaticRTP::new(
+            AudioEncoderOptions::Opus(opts) => Arc::new(TrackLocalStaticRTP::new(
                 RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_OPUS.to_owned(),
                     clock_rate: 48000,
-                    channels: 2,
+                    channels: opts.channel_count(),
                     sdp_fmtp_line: "".to_owned(),
                     rtcp_feedback: vec![],
                 },
@@ -197,4 +212,57 @@ impl PeerConnection {
     pub async fn close(&self) -> Result<(), WhipWhepServerError> {
         Ok(self.pc.close().await?)
     }
+}
+
+fn register_codecs(
+    media_engine: &mut MediaEngine,
+    video_encoder: Option<VideoEncoderOptions>,
+    audio_encoder: Option<AudioEncoderOptions>,
+) -> Result<(), WhipWhepServerError> {
+    if let Some(encoder) = video_encoder {
+        match encoder {
+            VideoEncoderOptions::FfmpegH264(_) => {
+                for codec in get_video_h264_codecs_for_media_engine() {
+                    media_engine.register_codec(codec, RTPCodecType::Video)?;
+                }
+            }
+            VideoEncoderOptions::FfmpegVp8(_) => {
+                for codec in get_video_vp8_codecs() {
+                    media_engine.register_codec(codec, RTPCodecType::Video)?;
+                }
+            }
+            VideoEncoderOptions::FfmpegVp9(_) => {
+                for codec in get_video_vp9_codecs() {
+                    media_engine.register_codec(codec, RTPCodecType::Video)?;
+                }
+            }
+        };
+    };
+
+    if let Some(encoder) = audio_encoder {
+        match encoder {
+            AudioEncoderOptions::Opus(opts) => {
+                media_engine.register_codec(
+                    RTCRtpCodecParameters {
+                        capability: RTCRtpCodecCapability {
+                            mime_type: MIME_TYPE_OPUS.to_owned(),
+                            clock_rate: 48000,
+                            channels: opts.channel_count(),
+                            sdp_fmtp_line: "minptime=10;useinbandfec=1".to_owned(),
+                            rtcp_feedback: vec![],
+                        },
+                        payload_type: 111,
+                        ..Default::default()
+                    },
+                    RTPCodecType::Audio,
+                )?;
+            }
+            AudioEncoderOptions::FdkAac(_) => {
+                return Err(WhipWhepServerError::InternalError(
+                    "AAC is not supported codec for WHEP output".to_owned(),
+                ));
+            }
+        }
+    }
+    Ok(())
 }

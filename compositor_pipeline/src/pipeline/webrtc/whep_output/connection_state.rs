@@ -2,10 +2,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
-use crate::pipeline::rtp::RtpPacket;
-use crate::pipeline::webrtc::whep_output::peer_connection::PeerConnection;
-use crate::pipeline::webrtc::whep_output::track_task_audio::WhepAudioTrackThreadHandle;
-use crate::pipeline::webrtc::whep_output::track_task_video::WhepVideoTrackThreadHandle;
+use crate::pipeline::{
+    rtp::RtpPacket,
+    webrtc::whep_output::{
+        peer_connection::PeerConnection, track_task_audio::WhepAudioTrackThreadHandle,
+        track_task_video::WhepVideoTrackThreadHandle,
+    },
+};
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
