@@ -12,6 +12,12 @@ pub trait InputHandler: Debug {
     fn serialize(&self) -> serde_json::Value;
 }
 
+impl std::fmt::Display for dyn InputHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}, port: {}", self.name(), self.port())
+    }
+}
+
 #[derive(Debug, EnumIter, Display)]
 pub enum InputProtocol {
     #[strum(to_string = "rtp_stream")]

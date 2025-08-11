@@ -17,6 +17,12 @@ pub trait OutputHandler: Debug {
     fn remove_input(&mut self, input: &dyn InputHandler);
 }
 
+impl std::fmt::Display for dyn OutputHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}, port: {}", self.name(), self.port())
+    }
+}
+
 #[derive(Debug, Display, EnumIter)]
 pub enum OutputProtocol {
     #[strum(to_string = "rtp_stream")]

@@ -9,6 +9,7 @@ use std::{
 use anyhow::Result;
 use inquire::Select;
 use integration_tests::examples;
+use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 mod inputs;
@@ -93,6 +94,33 @@ impl SmelterState {
         examples::post(&output_route, &output_json)?;
 
         self.outputs.push(output_handler);
+
+        Ok(())
+    }
+
+    pub fn unregister_input(&mut self) -> Result<()> {
+        let to_delete = Select::new(
+            "Select input to remove:",
+            self.inputs.iter().clone().collect(),
+        )
+        .prompt()?;
+
+        for output in &mut self.outputs {
+            output.remove_input(to_delete.deref());
+        }
+
+        let unregister_route = format!("input/{}/unregister", to_delete.name());
+        examples::post(&unregister_route, &json!({}))?;
+
+        // Input to delete is chosen from existing inputs
+        // so it is guaranteed that it exists in vec.
+        let delete_index = self
+            .inputs
+            .iter()
+            .position(|input| input.name() == to_delete.name())
+            .unwrap();
+
+        self.inputs.remove(delete_index);
 
         Ok(())
     }
