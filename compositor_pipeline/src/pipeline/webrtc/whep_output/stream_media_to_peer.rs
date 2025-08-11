@@ -4,47 +4,8 @@ use tokio::sync::broadcast;
 use tracing::{debug, warn};
 use webrtc::track::track_local::{track_local_static_rtp::TrackLocalStaticRTP, TrackLocalWriter};
 
-use crate::{
-    event::Event,
-    pipeline::{
-        rtp::RtpPacket,
-        webrtc::whep_output::connection_state::{
-            WhepAudioConnectionOptions, WhepVideoConnectionOptions,
-        },
-    },
-    prelude::*,
-};
-
-pub async fn spawn_media_streaming_task(
-    ctx: Arc<PipelineCtx>,
-    output_id: &OutputId,
-    video_options: Option<WhepVideoConnectionOptions>,
-    audio_options: Option<WhepAudioConnectionOptions>,
-    video_track: Option<Arc<TrackLocalStaticRTP>>,
-    audio_track: Option<Arc<TrackLocalStaticRTP>>,
-) {
-    let video_receiver = video_options
-        .as_ref()
-        .map(|opts| opts.receiver.resubscribe());
-
-    let audio_receiver = audio_options
-        .as_ref()
-        .map(|opts| opts.receiver.resubscribe());
-
-    let output_id_clone = output_id.clone();
-
-    tokio::spawn(async move {
-        stream_media_to_peer(
-            ctx,
-            &output_id_clone,
-            video_receiver,
-            audio_receiver,
-            video_track,
-            audio_track,
-        )
-        .await;
-    });
-}
+use crate::prelude::*;
+use crate::{event::Event, pipeline::rtp::RtpPacket};
 
 pub async fn stream_media_to_peer(
     ctx: Arc<PipelineCtx>,
