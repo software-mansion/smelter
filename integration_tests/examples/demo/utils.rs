@@ -63,6 +63,7 @@ impl SmelterState {
 
         let input_json = input_handler.serialize();
         let input_route = format!("input/{}/register", input_handler.name());
+        let input_name = input_handler.name().to_string();
 
         examples::post(&input_route, &input_json)?;
 

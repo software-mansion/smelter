@@ -62,8 +62,14 @@ impl RtpOutput {
             match action {
                 RtpRegisterOptions::AddVideoStream => rtp_output.setup_video()?,
                 RtpRegisterOptions::AddAudioStream => rtp_output.setup_audio()?,
-                RtpRegisterOptions::RemoveVideoStream => rtp_output.video = None,
-                RtpRegisterOptions::RemoveAudioStream => rtp_output.audio = None,
+                RtpRegisterOptions::RemoveVideoStream => {
+                    rtp_output.video = None;
+                    println!("Video stream removed!");
+                }
+                RtpRegisterOptions::RemoveAudioStream => {
+                    rtp_output.audio = None;
+                    println!("Audio stream removed!");
+                }
                 RtpRegisterOptions::SetTransportProtocol => {
                     rtp_output.setup_transport_protocol()?
                 }
@@ -80,11 +86,19 @@ impl RtpOutput {
     }
 
     fn setup_video(&mut self) -> Result<()> {
+        match self.video {
+            Some(_) => println!("Video stream reset to default!"),
+            None => println!("Video stream added!"),
+        }
         self.video = Some(RtpOutputVideoOptions::default());
         Ok(())
     }
 
     fn setup_audio(&mut self) -> Result<()> {
+        match self.audio {
+            Some(_) => println!("Audio stream reset to default!"),
+            None => println!("Audio stream added!"),
+        }
         self.audio = Some(RtpOutputAudioOptions::default());
         Ok(())
     }
