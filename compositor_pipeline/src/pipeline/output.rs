@@ -37,8 +37,8 @@ pub(crate) struct OutputAudio<'a> {
 }
 
 pub(crate) trait Output: Send {
-    fn audio(&self) -> Option<OutputAudio>;
-    fn video(&self) -> Option<OutputVideo>;
+    fn audio(&self) -> Option<OutputAudio<'_>>;
+    fn video(&self) -> Option<OutputVideo<'_>>;
     fn kind(&self) -> OutputProtocolKind;
 }
 

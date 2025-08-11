@@ -4,7 +4,6 @@ use std::{
 };
 
 use axum::http::HeaderMap;
-use compositor_render::InputId;
 use tracing::error;
 
 use crate::pipeline::webrtc::{
@@ -14,7 +13,7 @@ use crate::pipeline::webrtc::{
 };
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct WhipInputsState(Arc<Mutex<HashMap<InputId, WhipInputConnectionState>>>);
+pub(crate) struct WhipInputsState(Arc<Mutex<HashMap<Arc<str>, WhipInputConnectionState>>>);
 
 impl WhipInputsState {
     pub fn get_with<
@@ -22,14 +21,14 @@ impl WhipInputsState {
         Func: FnOnce(&WhipInputConnectionState) -> Result<T, WhipWhepServerError>,
     >(
         &self,
-        input_id: &InputId,
+        session_id: &Arc<str>,
         func: Func,
     ) -> Result<T, WhipWhepServerError> {
         let guard = self.0.lock().unwrap();
-        match guard.get(input_id) {
+        match guard.get(session_id) {
             Some(input) => func(input),
             None => Err(WhipWhepServerError::NotFound(format!(
-                "{input_id:?} not found"
+                "{session_id:?} not found"
             ))),
         }
     }
@@ -39,32 +38,32 @@ impl WhipInputsState {
         Func: FnOnce(&mut WhipInputConnectionState) -> Result<T, WhipWhepServerError>,
     >(
         &self,
-        input_id: &InputId,
+        session_id: &Arc<str>,
         func: Func,
     ) -> Result<T, WhipWhepServerError> {
         let mut guard = self.0.lock().unwrap();
-        match guard.get_mut(input_id) {
+        match guard.get_mut(session_id) {
             Some(input) => func(input),
             None => Err(WhipWhepServerError::NotFound(format!(
-                "{input_id:?} not found"
+                "{session_id:?} not found"
             ))),
         }
     }
 
-    pub fn add_input(&self, input_id: &InputId, options: WhipInputConnectionStateOptions) {
+    pub fn add_input(&self, session_id: Arc<str>, options: WhipInputConnectionStateOptions) {
         let mut guard = self.0.lock().unwrap();
-        guard.insert(input_id.clone(), WhipInputConnectionState::new(options));
+        guard.insert(session_id, WhipInputConnectionState::new(options));
     }
 
     // called on drop (when input is unregistered)
-    pub fn ensure_input_closed(&self, input_id: &InputId) {
+    pub fn ensure_input_closed(&self, session_id: &Arc<str>) {
         let mut guard = self.0.lock().unwrap();
-        if let Some(input) = guard.remove(input_id) {
+        if let Some(input) = guard.remove(session_id) {
             if let Some(peer_connection) = input.peer_connection {
-                let input_id = input_id.clone();
+                let session_id = session_id.clone();
                 tokio::spawn(async move {
                     if let Err(err) = peer_connection.close().await {
-                        error!("Cannot close peer_connection for {:?}: {:?}", input_id, err);
+                        error!("Cannot close peer_connection for {session_id:?}: {err:?}");
                     };
                 });
             }
@@ -73,14 +72,14 @@ impl WhipInputsState {
 
     pub async fn validate_token(
         &self,
-        input_id: &InputId,
+        session_id: &Arc<str>,
         headers: &HeaderMap,
     ) -> Result<(), WhipWhepServerError> {
-        let bearer_token = match self.0.lock().unwrap().get_mut(input_id) {
+        let bearer_token = match self.0.lock().unwrap().get_mut(session_id) {
             Some(input) => input.bearer_token.clone(),
             None => {
                 return Err(WhipWhepServerError::NotFound(format!(
-                    "{input_id:?} not found"
+                    "{session_id:?} not found"
                 )))
             }
         };

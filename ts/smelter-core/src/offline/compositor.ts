@@ -1,5 +1,6 @@
 import type { Renderers } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
+import type { RegisterInputResponse } from '../api';
 import { ApiClient } from '../api';
 import type { SmelterManager } from '../smelterManager';
 import type { RegisterOutput } from '../api/output';
@@ -81,12 +82,18 @@ export class OfflineSmelter {
     await this.manager.terminate();
   }
 
-  public async registerInput(inputId: string, request: RegisterInput): Promise<object> {
+  public async registerInput(
+    inputId: string,
+    request: RegisterInput
+  ): Promise<RegisterInputResponse> {
     this.checkNotStarted();
     this.logger.info({ inputId, type: request.type }, 'Register new input');
 
     const inputRef = { type: 'global', id: inputId } as const;
-    const result = await this.api.registerInput(inputRef, intoRegisterInput(request));
+    const result = await this.api.registerInput(inputRef, intoRegisterInput(inputId, request));
+    if (request.type === 'whip') {
+      result.endpoint_route = `/whip/${encodeURIComponent(inputId)}`;
+    }
 
     const offsetMs = 'offsetMs' in request && request.offsetMs ? request.offsetMs : 0;
 
@@ -114,6 +121,7 @@ export class OfflineSmelter {
         this.inputTimestamps.push((offsetMs ?? 0) + result.audio_duration_ms);
       }
     }
+
     return result;
   }
 
