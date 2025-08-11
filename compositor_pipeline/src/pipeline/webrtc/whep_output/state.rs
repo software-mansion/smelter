@@ -5,6 +5,7 @@ use std::{
 
 use axum::http::HeaderMap;
 use compositor_render::OutputId;
+use uuid::Uuid;
 
 use crate::pipeline::webrtc::{
     bearer_token::validate_token,
@@ -44,14 +45,14 @@ impl WhepOutputsState {
     pub fn add_session(
         &self,
         output_id: &OutputId,
-        session_id: Arc<str>,
         peer_connection: Arc<PeerConnection>,
-    ) -> Result<(), WhipWhepServerError> {
+    ) -> Result<Arc<str>, WhipWhepServerError> {
         let mut guard = self.0.lock().unwrap();
         match guard.get_mut(output_id) {
             Some(output) => {
-                output.sessions.insert(session_id, peer_connection);
-                Ok(())
+                let session_id: Arc<str> = Arc::from(Uuid::new_v4().to_string());
+                output.sessions.insert(session_id.clone(), peer_connection);
+                Ok(session_id)
             }
             None => Err(WhipWhepServerError::NotFound(format!(
                 "{output_id:?} not found"
