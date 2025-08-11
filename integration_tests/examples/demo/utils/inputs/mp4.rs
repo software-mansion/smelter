@@ -1,4 +1,9 @@
-use crate::utils::inputs::{InputHandler, InputProtocol};
+// WARN: Remove this after implementing #remove
+#![allow(dead_code)]
+use crate::utils::{
+    inputs::{InputHandler, InputProtocol},
+    TransportProtocol,
+};
 use anyhow::Result;
 use serde_json::json;
 
@@ -7,6 +12,7 @@ pub struct Mp4Input {
     name: String,
     port: u16,
     protocol: InputProtocol,
+    transport_protocol: TransportProtocol,
 }
 
 impl Mp4Input {
@@ -15,6 +21,7 @@ impl Mp4Input {
             name: "dummy".to_string(),
             port: 40_000,
             protocol: InputProtocol::Mp4,
+            transport_protocol: TransportProtocol::Udp,
         })
     }
 }
@@ -30,6 +37,10 @@ impl InputHandler for Mp4Input {
 
     fn protocol(&self) -> InputProtocol {
         self.protocol
+    }
+
+    fn transport_protocol(&self) -> TransportProtocol {
+        self.transport_protocol
     }
 
     fn serialize(&self) -> serde_json::Value {

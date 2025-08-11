@@ -4,7 +4,7 @@ use rand::RngCore;
 use serde_json::json;
 use strum::{Display, EnumIter};
 
-use crate::utils::inputs::InputHandler;
+use crate::utils::{inputs::InputHandler, TransportProtocol};
 
 pub mod rtp;
 
@@ -12,10 +12,17 @@ pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
     fn port(&self) -> u16;
     fn protocol(&self) -> OutputProtocol;
-    fn serialize(&self) -> serde_json::Value;
-    fn set_initial_scene(&mut self, inputs: &[Box<dyn InputHandler>]);
+    fn transport_protocol(&self) -> TransportProtocol;
+    fn set_initial_scene(&mut self, inputs: &[Box<dyn InputHandler>]) {
+        for input in inputs {
+            self.inputs().push(input.name().to_string());
+        }
+    }
+
     fn add_input(&mut self, input: &dyn InputHandler);
     fn remove_input(&mut self, input: &dyn InputHandler);
+    fn serialize(&self) -> serde_json::Value;
+    fn inputs(&mut self) -> &mut Vec<String>;
 }
 
 impl std::fmt::Display for dyn OutputHandler {

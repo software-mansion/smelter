@@ -12,6 +12,7 @@ use integration_tests::examples;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
+mod ffmpeg;
 mod inputs;
 mod outputs;
 
@@ -22,7 +23,7 @@ use crate::utils::{
     outputs::{rtp::RtpOutput, OutputHandler, OutputProtocol},
 };
 
-#[derive(Debug, EnumIter, Display)]
+#[derive(Debug, EnumIter, Display, Clone, Copy)]
 pub enum TransportProtocol {
     #[strum(to_string = "udp")]
     Udp,
@@ -144,9 +145,6 @@ impl SmelterState {
 
         Ok(())
     }
-
-    // NOTE: This is just a first version and will be changed in future
-    pub fn start_smelter(&self) -> Result<()> {}
 }
 
 fn get_free_port() -> u16 {
