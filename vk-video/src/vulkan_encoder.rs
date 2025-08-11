@@ -1068,7 +1068,7 @@ impl VulkanEncoder<'_> {
     fn h264_rate_control_layers_for(
         &self,
         rate_control: RateControl,
-    ) -> Option<Vec<vk::VideoEncodeH264RateControlLayerInfoKHR>> {
+    ) -> Option<Vec<vk::VideoEncodeH264RateControlLayerInfoKHR<'_>>> {
         let layer_info = vk::VideoEncodeH264RateControlLayerInfoKHR::default()
             .use_min_qp(false)
             .use_max_qp(false)
@@ -1113,7 +1113,7 @@ impl VulkanEncoder<'_> {
     fn h264_rate_control(
         &self,
         layers: Option<&[vk::VideoEncodeRateControlLayerInfoKHR]>,
-    ) -> Option<vk::VideoEncodeH264RateControlInfoKHR> {
+    ) -> Option<vk::VideoEncodeH264RateControlInfoKHR<'_>> {
         let layers = layers?;
 
         Some(

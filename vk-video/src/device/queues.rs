@@ -30,7 +30,7 @@ impl Queue {
     ) -> Result<(), VulkanCommonError> {
         fn to_sem_submit_info(
             submits: &[(vk::Semaphore, vk::PipelineStageFlags2)],
-        ) -> Vec<vk::SemaphoreSubmitInfo> {
+        ) -> Vec<vk::SemaphoreSubmitInfo<'_>> {
             submits
                 .iter()
                 .map(|&(sem, stage)| {
@@ -85,7 +85,7 @@ pub(crate) struct QueueIndices<'a> {
 }
 
 impl QueueIndices<'_> {
-    pub(crate) fn queue_create_infos(&self) -> Vec<vk::DeviceQueueCreateInfo> {
+    pub(crate) fn queue_create_infos(&self) -> Vec<vk::DeviceQueueCreateInfo<'_>> {
         [
             self.h264_decode.idx,
             self.h264_encode.idx,

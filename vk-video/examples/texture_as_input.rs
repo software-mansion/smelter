@@ -1,5 +1,3 @@
-use std::num::NonZeroU32;
-
 #[cfg(vulkan)]
 fn main() {
     use std::{io::Write, num::NonZeroU32};
@@ -80,6 +78,7 @@ fn main() {
     }
 }
 
+#[cfg(vulkan)]
 struct WgpuState {
     pipeline: wgpu::RenderPipeline,
     texture: wgpu::Texture,
@@ -88,12 +87,13 @@ struct WgpuState {
     queue: wgpu::Queue,
 }
 
+#[cfg(vulkan)]
 impl WgpuState {
     fn new(
         device: wgpu::Device,
         queue: wgpu::Queue,
-        width: NonZeroU32,
-        height: NonZeroU32,
+        width: std::num::NonZeroU32,
+        height: std::num::NonZeroU32,
     ) -> WgpuState {
         let shader = wgpu::include_wgsl!("texture_as_input.wgsl");
         let shader = device.create_shader_module(shader);

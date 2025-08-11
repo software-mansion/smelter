@@ -506,7 +506,7 @@ impl<'a> DecodedPicturesBuffer<'a> {
         })
     }
 
-    pub(crate) fn reference_slot_info(&self) -> Vec<vk::VideoReferenceSlotInfoKHR> {
+    pub(crate) fn reference_slot_info(&self) -> Vec<vk::VideoReferenceSlotInfoKHR<'_>> {
         self.image
             .video_resource_info
             .iter()
@@ -531,7 +531,10 @@ impl<'a> DecodedPicturesBuffer<'a> {
         Ok(i as usize)
     }
 
-    pub(crate) fn video_resource_info(&self, i: usize) -> Option<&vk::VideoPictureResourceInfoKHR> {
+    pub(crate) fn video_resource_info(
+        &self,
+        i: usize,
+    ) -> Option<&vk::VideoPictureResourceInfoKHR<'_>> {
         self.image.video_resource_info.get(i)
     }
 

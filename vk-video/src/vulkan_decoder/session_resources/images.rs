@@ -113,7 +113,7 @@ impl<'a> DecodingImages<'a> {
         self.dst_image.as_ref().map(|i| i.extent())
     }
 
-    pub(crate) fn reference_slot_info(&self) -> Vec<vk::VideoReferenceSlotInfoKHR> {
+    pub(crate) fn reference_slot_info(&self) -> Vec<vk::VideoReferenceSlotInfoKHR<'_>> {
         self.dpb.reference_slot_info()
     }
 
@@ -121,7 +121,10 @@ impl<'a> DecodingImages<'a> {
         Ok(self.dpb.allocate_reference_picture()?)
     }
 
-    pub(crate) fn video_resource_info(&self, i: usize) -> Option<&vk::VideoPictureResourceInfoKHR> {
+    pub(crate) fn video_resource_info(
+        &self,
+        i: usize,
+    ) -> Option<&vk::VideoPictureResourceInfoKHR<'_>> {
         self.dpb.video_resource_info(i)
     }
 
