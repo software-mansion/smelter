@@ -5,7 +5,7 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 
 use crate::utils::{
     get_free_port,
-    inputs::{input_name, InputHandler},
+    inputs::InputHandler,
     outputs::{output_name, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     TransportProtocol,
 };

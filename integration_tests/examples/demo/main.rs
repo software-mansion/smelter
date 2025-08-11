@@ -37,8 +37,8 @@ fn run_demo() -> Result<()> {
             Action::AddInput => state.register_input()?,
             Action::AddOutput => state.register_output()?,
             Action::RemoveInput => state.unregister_input()?,
+            Action::RemoveOutput => state.unregister_output()?,
             Action::Start => break,
-            _ => {} // TODO
         }
     }
 
