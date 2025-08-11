@@ -9,6 +9,7 @@ pub mod whip;
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
     fn port(&self) -> u16;
+    fn protocol(&self) -> InputProtocol;
     fn serialize(&self) -> serde_json::Value;
 }
 
@@ -18,7 +19,7 @@ impl std::fmt::Display for dyn InputHandler {
     }
 }
 
-#[derive(Debug, EnumIter, Display)]
+#[derive(Debug, EnumIter, Display, Clone, Copy)]
 pub enum InputProtocol {
     #[strum(to_string = "rtp_stream")]
     Rtp,

@@ -144,6 +144,9 @@ impl SmelterState {
 
         Ok(())
     }
+
+    // NOTE: This is just a first version and will be changed in future
+    pub fn start_smelter(&self) -> Result<()> {}
 }
 
 fn get_free_port() -> u16 {
