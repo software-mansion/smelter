@@ -138,31 +138,18 @@ impl OutputHandler for RtpOutput {
     }
 
     fn serialize(&self) -> serde_json::Value {
+        let ip = match self.transport_protocol {
+            TransportProtocol::Udp => Some("127.0.0.1"),
+            TransportProtocol::TcpServer => None,
+        };
         json!({
             "type": "rtp_stream",
             "port": self.port,
-            "ip": "127.0.0.1",
+            "ip": ip,
             "transport_protocol": self.transport_protocol.to_string(),
             "video": self.video.as_ref().map(|v| v.serialize(&self.inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize(&self.inputs)),
         })
-    }
-
-    fn set_initial_scene(&mut self, inputs: &[Box<dyn InputHandler>]) {
-        for input in inputs {
-            self.inputs.push(input.name().to_string());
-        }
-    }
-
-    fn add_input(&mut self, input: &dyn InputHandler) {
-        self.inputs.push(input.name().to_string());
-    }
-
-    fn remove_input(&mut self, input: &dyn InputHandler) {
-        let index = self.inputs.iter().position(|name| name == input.name());
-        if let Some(i) = index {
-            self.inputs.remove(i);
-        }
     }
 }
 

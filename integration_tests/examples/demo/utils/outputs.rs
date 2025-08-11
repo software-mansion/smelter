@@ -13,16 +13,25 @@ pub trait OutputHandler: Debug {
     fn port(&self) -> u16;
     fn protocol(&self) -> OutputProtocol;
     fn transport_protocol(&self) -> TransportProtocol;
+    fn serialize(&self) -> serde_json::Value;
+    fn inputs(&mut self) -> &mut Vec<String>;
+
     fn set_initial_scene(&mut self, inputs: &[Box<dyn InputHandler>]) {
         for input in inputs {
             self.inputs().push(input.name().to_string());
         }
     }
 
-    fn add_input(&mut self, input: &dyn InputHandler);
-    fn remove_input(&mut self, input: &dyn InputHandler);
-    fn serialize(&self) -> serde_json::Value;
-    fn inputs(&mut self) -> &mut Vec<String>;
+    fn add_input(&mut self, input: &dyn InputHandler) {
+        self.inputs().push(input.name().to_string());
+    }
+
+    fn remove_input(&mut self, input: &dyn InputHandler) {
+        let index = self.inputs().iter().position(|name| name == input.name());
+        if let Some(i) = index {
+            self.inputs().remove(i);
+        }
+    }
 }
 
 impl std::fmt::Display for dyn OutputHandler {
