@@ -6,7 +6,9 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 use crate::utils::{
     get_free_port,
     inputs::InputHandler,
-    outputs::{output_name, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{
+        output_name, AudioEncoder, OutputHandler, OutputProtocol, VideoEncoder, VideoResolution,
+    },
     TransportProtocol,
 };
 
@@ -35,6 +37,7 @@ pub enum RtpRegisterOptions {
 pub struct RtpOutput {
     name: String,
     port: u16,
+    protocol: OutputProtocol,
     video: Option<RtpOutputVideoOptions>,
     audio: Option<RtpOutputAudioOptions>,
     transport_protocol: Option<TransportProtocol>,
@@ -49,6 +52,7 @@ impl RtpOutput {
             // TODO: (@jbrs) Make it possible for user
             // to set their own port
             port: get_free_port(),
+            protocol: OutputProtocol::Rtp,
             video: None,
             audio: None,
             transport_protocol: None,
@@ -119,6 +123,10 @@ impl OutputHandler for RtpOutput {
 
     fn port(&self) -> u16 {
         self.port
+    }
+
+    fn protocol(&self) -> OutputProtocol {
+        self.protocol
     }
 
     fn serialize(&self) -> serde_json::Value {

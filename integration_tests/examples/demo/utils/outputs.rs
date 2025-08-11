@@ -11,6 +11,7 @@ pub mod rtp;
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
     fn port(&self) -> u16;
+    fn protocol(&self) -> OutputProtocol;
     fn serialize(&self) -> serde_json::Value;
     fn set_initial_scene(&mut self, inputs: &[Box<dyn InputHandler>]);
     fn add_input(&mut self, input: &dyn InputHandler);
@@ -23,7 +24,7 @@ impl std::fmt::Display for dyn OutputHandler {
     }
 }
 
-#[derive(Debug, Display, EnumIter)]
+#[derive(Debug, Display, EnumIter, Clone, Copy)]
 pub enum OutputProtocol {
     #[strum(to_string = "rtp_stream")]
     Rtp,
