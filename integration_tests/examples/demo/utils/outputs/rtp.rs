@@ -40,7 +40,7 @@ pub struct RtpOutput {
     protocol: OutputProtocol,
     video: Option<RtpOutputVideoOptions>,
     audio: Option<RtpOutputAudioOptions>,
-    transport_protocol: Option<TransportProtocol>,
+    transport_protocol: TransportProtocol,
     inputs: Vec<String>,
 }
 
@@ -55,7 +55,7 @@ impl RtpOutput {
             protocol: OutputProtocol::Rtp,
             video: None,
             audio: None,
-            transport_protocol: None,
+            transport_protocol: TransportProtocol::Udp,
             inputs: vec![],
         };
 
@@ -111,7 +111,7 @@ impl RtpOutput {
         let options = TransportProtocol::iter().collect();
 
         let prot = Select::new("Select protocol:", options).prompt()?;
-        self.transport_protocol = Some(prot);
+        self.transport_protocol = prot;
         Ok(())
     }
 }
@@ -129,12 +129,20 @@ impl OutputHandler for RtpOutput {
         self.protocol
     }
 
+    fn transport_protocol(&self) -> TransportProtocol {
+        self.transport_protocol
+    }
+
+    fn inputs(&mut self) -> &mut Vec<String> {
+        &mut self.inputs
+    }
+
     fn serialize(&self) -> serde_json::Value {
         json!({
             "type": "rtp_stream",
             "port": self.port,
             "ip": "127.0.0.1",
-            "transport_protocol": self.transport_protocol.as_ref().map(|t| t.to_string()),
+            "transport_protocol": self.transport_protocol.to_string(),
             "video": self.video.as_ref().map(|v| v.serialize(&self.inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize(&self.inputs)),
         })

@@ -2,6 +2,8 @@ use rand::RngCore;
 use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
+use crate::utils::TransportProtocol;
+
 pub mod mp4;
 pub mod rtp;
 pub mod whip;
@@ -10,6 +12,7 @@ pub trait InputHandler: Debug {
     fn name(&self) -> &str;
     fn port(&self) -> u16;
     fn protocol(&self) -> InputProtocol;
+    fn transport_protocol(&self) -> TransportProtocol;
     fn serialize(&self) -> serde_json::Value;
 }
 
