@@ -1,5 +1,4 @@
 use crate::common_pipeline::prelude as pipeline;
-use crate::output::whep::{OutputWhepAudioOptions, WhepAudioEncoderOptions, WhepOutput};
 use crate::*;
 
 impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
@@ -21,12 +20,12 @@ impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
         let (video_encoder_options, output_video_options) = video
             .map(resolve_video_options)
             .transpose()?
-            .unwrap_or_default();
+            .map_or((None, None), |(enc, out)| (Some(enc), Some(out)));
 
-        let (output_audio_options, audio_encoder_options) = audio
+        let (audio_encoder_options, output_audio_options) = audio
             .map(resolve_audio_options)
             .transpose()?
-            .unwrap_or_default();
+            .map_or((None, None), |(enc, out)| (Some(enc), Some(out)));
 
         Ok(Self {
             output_options: pipeline::ProtocolOutputOptions::Whep(pipeline::WhepSenderOptions {
@@ -44,8 +43,8 @@ fn resolve_video_options(
     options: OutputVideoOptions,
 ) -> Result<
     (
-        Option<pipeline::VideoEncoderOptions>,
-        Option<pipeline::RegisterOutputVideoOptions>,
+        pipeline::VideoEncoderOptions,
+        pipeline::RegisterOutputVideoOptions,
     ),
     TypeError,
 > {
@@ -81,15 +80,15 @@ fn resolve_video_options(
         end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
     };
 
-    Ok((Some(encoder_options), Some(output_options)))
+    Ok((encoder_options, output_options))
 }
 
 fn resolve_audio_options(
     options: OutputWhepAudioOptions,
 ) -> Result<
     (
-        Option<pipeline::RegisterOutputAudioOptions>,
-        Option<pipeline::AudioEncoderOptions>,
+        pipeline::AudioEncoderOptions,
+        pipeline::RegisterOutputAudioOptions,
     ),
     TypeError,
 > {
@@ -141,5 +140,5 @@ fn resolve_audio_options(
         channels: resolved_channels.into(),
     };
 
-    Ok((Some(output_audio_options), Some(audio_encoder_options)))
+    Ok((audio_encoder_options, output_audio_options))
 }
