@@ -132,7 +132,7 @@ impl OutputHandler for RtpOutput {
         &mut self.inputs
     }
 
-    fn serialize(&self) -> serde_json::Value {
+    fn serialize_register(&self) -> serde_json::Value {
         let ip = match self.transport_protocol {
             TransportProtocol::Udp => Some(IP),
             TransportProtocol::TcpServer => None,
@@ -142,8 +142,14 @@ impl OutputHandler for RtpOutput {
             "port": self.port,
             "ip": ip,
             "transport_protocol": self.transport_protocol.to_string(),
-            "video": self.video.as_ref().map(|v| v.serialize(&self.inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize(&self.inputs)),
+            "video": self.video.as_ref().map(|v| v.serialize_register(&self.inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(&self.inputs)),
+        })
+    }
+    fn serialize_update(&self) -> serde_json::Value {
+        json!({
+           "video": self.video.as_ref().map(|v| v.serialize_update(&self.inputs)),
+           "audio": self.audio.as_ref().map(|a| a.serialize_update(&self.inputs)),
         })
     }
 
@@ -176,7 +182,7 @@ pub struct RtpOutputVideoOptions {
 }
 
 impl RtpOutputVideoOptions {
-    pub fn serialize(&self, inputs: &[String]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[String]) -> serde_json::Value {
         let input_json = inputs
             .iter()
             .map(|input_id| {
@@ -201,6 +207,26 @@ impl RtpOutputVideoOptions {
             }
         })
     }
+
+    pub fn serialize_update(&self, inputs: &[String]) -> serde_json::Value {
+        let input_json = inputs
+            .iter()
+            .map(|input_id| {
+                json!({
+                    "type": "input_stream",
+                    "id": input_id,
+                    "input_id": input_id,
+                })
+            })
+            .collect::<Vec<_>>();
+        json!({
+            "root": {
+                "type": "tiles",
+                "id": "tiles",
+                "children": input_json,
+            }
+        })
+    }
 }
 
 impl Default for RtpOutputVideoOptions {
@@ -221,7 +247,7 @@ pub struct RtpOutputAudioOptions {
 }
 
 impl RtpOutputAudioOptions {
-    pub fn serialize(&self, inputs: &[String]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[String]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .map(|input_id| {
@@ -238,6 +264,20 @@ impl RtpOutputAudioOptions {
             "initial": {
                 "inputs": inputs_json,
         }
+        })
+    }
+
+    pub fn serialize_update(&self, inputs: &[String]) -> serde_json::Value {
+        let inputs_json = inputs
+            .iter()
+            .map(|input_id| {
+                json!({
+                    "input_id": input_id,
+                })
+            })
+            .collect::<Vec<_>>();
+        json!({
+            "inputs": inputs_json,
         })
     }
 }

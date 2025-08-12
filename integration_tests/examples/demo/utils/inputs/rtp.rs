@@ -119,10 +119,6 @@ impl InputHandler for RtpInput {
         self.port
     }
 
-    fn transport_protocol(&self) -> TransportProtocol {
-        self.transport_protocol
-    }
-
     fn serialize(&self) -> serde_json::Value {
         json!({
             "type": "rtp_stream",

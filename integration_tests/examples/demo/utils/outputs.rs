@@ -13,7 +13,8 @@ pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
     fn port(&self) -> u16;
     fn transport_protocol(&self) -> TransportProtocol;
-    fn serialize(&self) -> serde_json::Value;
+    fn serialize_register(&self) -> serde_json::Value;
+    fn serialize_update(&self) -> serde_json::Value;
     fn inputs(&mut self) -> &mut Vec<String>;
     fn start_ffmpeg_receiver(&self) -> Result<()>;
 
