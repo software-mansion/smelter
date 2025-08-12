@@ -115,6 +115,12 @@ impl RtpInput {
     fn gstreamer_transmit_tcp(&self) -> Result<()> {
         let video_port = self.video.as_ref().map(|_| self.port);
         let audio_port = self.audio.as_ref().map(|_| self.port);
+
+        if video_port.is_some() && audio_port.is_some() {
+            return Err(anyhow!(
+                "Streaming both audio and video on the same port is possible only over UDP!"
+            ));
+        }
         start_gst_send_tcp(
             IP,
             video_port,
