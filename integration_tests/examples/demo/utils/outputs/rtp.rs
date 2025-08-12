@@ -9,11 +9,8 @@ use tracing::{error, info};
 
 use crate::utils::{
     get_free_port,
-    inputs::InputHandler,
-    outputs::{
-        output_name, AudioEncoder, OutputHandler, OutputProtocol, VideoEncoder, VideoResolution,
-    },
-    TransportProtocol,
+    outputs::{output_name, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    TransportProtocol, IP,
 };
 
 #[derive(Debug, Display, EnumIter, Clone)]
@@ -41,7 +38,6 @@ pub enum RtpRegisterOptions {
 pub struct RtpOutput {
     name: String,
     port: u16,
-    protocol: OutputProtocol,
     video: Option<RtpOutputVideoOptions>,
     audio: Option<RtpOutputAudioOptions>,
     transport_protocol: TransportProtocol,
@@ -56,7 +52,6 @@ impl RtpOutput {
             // TODO: (@jbrs) Make it possible for user
             // to set their own port
             port: get_free_port(),
-            protocol: OutputProtocol::Rtp,
             video: None,
             audio: None,
             transport_protocol: TransportProtocol::Udp,
@@ -118,27 +113,6 @@ impl RtpOutput {
         self.transport_protocol = prot;
         Ok(())
     }
-
-    pub fn start_ffmpeg_receiver(&self) -> Result<()> {
-        if self.transport_protocol == TransportProtocol::TcpServer {
-            return Err(anyhow!("FFmpeg cannot handle TCP connection."));
-        }
-        match (&self.video, &self.audio) {
-            (Some(_), Some(_)) => {
-                return Err(anyhow!(
-                    "FFmpeg can't handle both audio and video on a single port over RTP"
-                ));
-            }
-            (Some(video), None) => match video.encoder {
-                VideoEncoder::FfmpegH264 => start_ffmpeg_receive_h264(Some(self.port), None)?,
-                VideoEncoder::FfmpegVp8 => start_ffmpeg_receive_vp8(Some(self.port), None)?,
-                VideoEncoder::FfmpegVp9 => start_ffmpeg_receive_vp9(Some(self.port), None)?,
-            },
-            (None, Some(_audio)) => start_ffmpeg_receive_h264(None, Some(self.port))?,
-            (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
-        }
-        Ok(())
-    }
 }
 
 impl OutputHandler for RtpOutput {
@@ -148,10 +122,6 @@ impl OutputHandler for RtpOutput {
 
     fn port(&self) -> u16 {
         self.port
-    }
-
-    fn protocol(&self) -> OutputProtocol {
-        self.protocol
     }
 
     fn transport_protocol(&self) -> TransportProtocol {
@@ -164,7 +134,7 @@ impl OutputHandler for RtpOutput {
 
     fn serialize(&self) -> serde_json::Value {
         let ip = match self.transport_protocol {
-            TransportProtocol::Udp => Some("127.0.0.1"),
+            TransportProtocol::Udp => Some(IP),
             TransportProtocol::TcpServer => None,
         };
         json!({
@@ -175,6 +145,27 @@ impl OutputHandler for RtpOutput {
             "video": self.video.as_ref().map(|v| v.serialize(&self.inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize(&self.inputs)),
         })
+    }
+
+    fn start_ffmpeg_receiver(&self) -> Result<()> {
+        if self.transport_protocol == TransportProtocol::TcpServer {
+            return Err(anyhow!("FFmpeg cannot handle TCP connection."));
+        }
+        match (&self.video, &self.audio) {
+            (Some(_), Some(_)) => {
+                return Err(anyhow!(
+                    "FFmpeg can't handle both audio and video on a single port over RTP."
+                ));
+            }
+            (Some(video), None) => match video.encoder {
+                VideoEncoder::FfmpegH264 => start_ffmpeg_receive_h264(Some(self.port), None)?,
+                VideoEncoder::FfmpegVp8 => start_ffmpeg_receive_vp8(Some(self.port), None)?,
+                VideoEncoder::FfmpegVp9 => start_ffmpeg_receive_vp9(Some(self.port), None)?,
+            },
+            (None, Some(_audio)) => start_ffmpeg_receive_h264(None, Some(self.port))?,
+            (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
+        }
+        Ok(())
     }
 }
 

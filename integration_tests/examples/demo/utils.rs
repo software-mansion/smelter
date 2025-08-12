@@ -11,7 +11,7 @@ use inquire::Select;
 use integration_tests::examples;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
-use tracing::{error, info};
+use tracing::{error, warn};
 
 mod inputs;
 mod outputs;
@@ -22,8 +22,10 @@ use inputs::{rtp::RtpInput, InputHandler};
 use crate::utils::{
     inputs::InputProtocol,
     outputs::{rtp::RtpOutput, OutputHandler, OutputProtocol},
-    players::RtpOutputPlayerOptions,
+    players::{InputPlayerOptions, OutputPlayerOptions},
 };
+
+pub const IP: &str = "127.0.0.1";
 
 #[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq)]
 pub enum TransportProtocol {
@@ -56,7 +58,7 @@ impl SmelterState {
         let input_handler: Box<dyn InputHandler> = match protocol {
             InputProtocol::Rtp => Box::new(RtpInput::setup()?),
             _ => {
-                println!("Unimplemented!");
+                warn!("Unimplemented!");
                 return Ok(());
             }
         };
@@ -70,6 +72,21 @@ impl SmelterState {
 
         examples::post(&input_route, &input_json)?;
 
+        let player_options = InputPlayerOptions::iter().collect::<Vec<_>>();
+        loop {
+            let player_choice =
+                Select::new("Select transmitter:", player_options.clone()).prompt()?;
+            match player_choice {
+                InputPlayerOptions::StartFfmpegTransmitter => {
+                    match input_handler.start_ffmpeg_transmitter() {
+                        Ok(_) => break,
+                        Err(e) => error!("{e}"),
+                    }
+                }
+                InputPlayerOptions::Manual => break,
+            }
+        }
+
         self.inputs.push(input_handler);
 
         Ok(())
@@ -81,26 +98,9 @@ impl SmelterState {
         let protocol = Select::new("Select output protocol:", prot_opts).prompt()?;
 
         let mut output_handler: Box<dyn OutputHandler> = match protocol {
-            OutputProtocol::Rtp => {
-                let rtp_output = RtpOutput::setup()?;
-                let options = RtpOutputPlayerOptions::iter().collect::<Vec<_>>();
-                loop {
-                    let player_choice =
-                        Select::new("Chose player to start:", options.clone()).prompt()?;
-                    match player_choice {
-                        RtpOutputPlayerOptions::StartFfmpegReceiver => {
-                            match rtp_output.start_ffmpeg_receiver() {
-                                Ok(_) => break,
-                                Err(e) => error!("{e}"),
-                            }
-                        }
-                        RtpOutputPlayerOptions::Done => break,
-                    }
-                }
-                Box::new(rtp_output)
-            }
+            OutputProtocol::Rtp => Box::new(RtpOutput::setup()?),
             _ => {
-                info!("Unimplemented!");
+                warn!("Unimplemented!");
                 return Ok(());
             }
         };
@@ -110,7 +110,27 @@ impl SmelterState {
         let output_json = output_handler.serialize();
         let output_route = format!("output/{}/register", output_handler.name());
 
-        examples::post(&output_route, &output_json)?;
+        if output_handler.transport_protocol() == TransportProtocol::TcpServer {
+            examples::post(&output_route, &output_json)?;
+        }
+
+        let player_options = OutputPlayerOptions::iter().collect::<Vec<_>>();
+        loop {
+            let player_choice = Select::new("Select receiver", player_options.clone()).prompt()?;
+            match player_choice {
+                OutputPlayerOptions::StartFfmpegReceiver => {
+                    match output_handler.start_ffmpeg_receiver() {
+                        Ok(_) => break,
+                        Err(e) => error!("{e}"),
+                    }
+                }
+                OutputPlayerOptions::Manual => break,
+            }
+        }
+
+        if output_handler.transport_protocol() == TransportProtocol::Udp {
+            examples::post(&output_route, &output_json)?;
+        }
 
         self.outputs.push(output_handler);
 

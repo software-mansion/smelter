@@ -1,3 +1,4 @@
+use anyhow::Result;
 use rand::RngCore;
 use std::fmt::Debug;
 use strum::{Display, EnumIter};
@@ -11,9 +12,9 @@ pub mod whip;
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
     fn port(&self) -> u16;
-    fn protocol(&self) -> InputProtocol;
     fn transport_protocol(&self) -> TransportProtocol;
     fn serialize(&self) -> serde_json::Value;
+    fn start_ffmpeg_transmitter(&self) -> Result<()>;
 }
 
 impl std::fmt::Display for dyn InputHandler {
