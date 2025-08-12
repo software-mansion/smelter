@@ -6,7 +6,7 @@ use integration_tests::examples;
 use serde_json::json;
 use smelter::{config::read_config, logger::init_logger};
 use strum::{Display, EnumIter, IntoEnumIterator};
-use tracing::error;
+use tracing::{error, debug};
 
 mod utils;
 
@@ -61,7 +61,7 @@ fn run_demo() -> Result<()> {
             }
         }
     }
-    println!("{state:?}");
+    debug!("{state:?}");
 
     examples::post("start", &json!({}))?;
 
