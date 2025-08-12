@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use anyhow::Result;
 use rand::RngCore;
 use serde_json::json;
 use strum::{Display, EnumIter};
@@ -11,10 +12,10 @@ pub mod rtp;
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
     fn port(&self) -> u16;
-    fn protocol(&self) -> OutputProtocol;
     fn transport_protocol(&self) -> TransportProtocol;
     fn serialize(&self) -> serde_json::Value;
     fn inputs(&mut self) -> &mut Vec<String>;
+    fn start_ffmpeg_receiver(&self) -> Result<()>;
 
     fn set_initial_scene(&mut self, inputs: &[Box<dyn InputHandler>]) {
         for input in inputs {

@@ -1,5 +1,7 @@
 use anyhow::Result;
 use inquire::Select;
+use integration_tests::examples;
+use serde_json::json;
 use smelter::{config::read_config, logger::init_logger};
 use strum::{Display, EnumIter, IntoEnumIterator};
 
@@ -43,6 +45,8 @@ fn run_demo() -> Result<()> {
     }
 
     println!("{state:?}");
+
+    examples::post("start", &json!({}))?;
 
     Ok(())
 }

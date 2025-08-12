@@ -1,13 +1,14 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use inquire::Select;
+use integration_tests::ffmpeg::start_ffmpeg_send;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{error, info};
 
 use crate::utils::{
     get_free_port,
-    inputs::{input_name, AudioDecoder, InputHandler, InputProtocol, VideoDecoder},
-    TransportProtocol,
+    inputs::{input_name, AudioDecoder, InputHandler, VideoDecoder},
+    TransportProtocol, IP,
 };
 
 #[derive(Debug, Display, EnumIter, Clone)]
@@ -35,7 +36,6 @@ pub enum RtpRegisterOptions {
 pub struct RtpInput {
     name: String,
     port: u16,
-    protocol: InputProtocol,
     video: Option<RtpInputVideoOptions>,
     audio: Option<RtpInputAudioOptions>,
     transport_protocol: TransportProtocol,
@@ -49,7 +49,6 @@ impl RtpInput {
             // TODO: (@jbrs) Make it possible for user
             // to set their own port
             port: get_free_port(),
-            protocol: InputProtocol::Rtp,
             video: None,
             audio: None,
             transport_protocol: TransportProtocol::Udp,
@@ -120,10 +119,6 @@ impl InputHandler for RtpInput {
         self.port
     }
 
-    fn protocol(&self) -> InputProtocol {
-        self.protocol
-    }
-
     fn transport_protocol(&self) -> TransportProtocol {
         self.transport_protocol
     }
@@ -136,6 +131,33 @@ impl InputHandler for RtpInput {
             "video": self.video.as_ref().map(|v| v.serialize()),
             "audio": self.audio.as_ref().map(|a| a.serialize()),
         })
+    }
+
+    fn start_ffmpeg_transmitter(&self) -> Result<()> {
+        if self.transport_protocol == TransportProtocol::TcpServer {
+            return Err(anyhow!("FFmpeg cannot handle TCP connection."));
+        }
+        match (&self.video, &self.audio) {
+            (Some(_), Some(_)) => {
+                return Err(anyhow!(
+                    "FFmpeg can't handle both audio and video on a single port over RTP."
+                ));
+            }
+            (Some(_video), None) => start_ffmpeg_send(
+                IP,
+                Some(self.port),
+                None,
+                integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+            )?,
+            (None, Some(_audio)) => start_ffmpeg_send(
+                IP,
+                None,
+                Some(self.port),
+                integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+            )?,
+            (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
+        }
+        Ok(())
     }
 }
 
