@@ -34,7 +34,7 @@ impl GraphicsContext {
     pub fn new(opts: GraphicsContextOptions) -> Result<Self, InitPipelineError> {
         use compositor_render::{required_wgpu_features, set_required_wgpu_limits};
         use tracing::warn;
-        use vk_video::VulkanCtxError;
+        use vk_video::VulkanInitError;
 
         let GraphicsContextOptions {
             force_gpu,
@@ -49,7 +49,7 @@ impl GraphicsContext {
 
         let limits = set_required_wgpu_limits(limits);
 
-        let new_instance = || -> Result<_, VulkanCtxError> {
+        let new_instance = || -> Result<_, VulkanInitError> {
             let instance = match libvulkan_path {
                 Some(path) => vk_video::VulkanInstance::new_from(path),
                 None => vk_video::VulkanInstance::new(),

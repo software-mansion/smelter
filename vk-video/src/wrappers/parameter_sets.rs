@@ -66,7 +66,14 @@ impl SeqParameterSetExt for SeqParameterSet {
 
 pub(crate) struct VkSequenceParameterSet {
     pub(crate) sps: vk::native::StdVideoH264SequenceParameterSet,
+
+    /// # Safety
+    /// Do not modify this pointer or anything it points to
     scaling_lists_ptr: Option<NonNull<H264ScalingLists>>,
+
+    /// # Safety
+    /// Do not modify this pointer or anything it points to
+    offset_for_ref_frame: Option<NonNull<[i32]>>,
     // in the future, heap-allocated VUI and HRD parameters can be put here to have everything
     // together
 }
@@ -164,14 +171,25 @@ impl From<&'_ SeqParameterSet> for VkSequenceParameterSet {
             None => (0, 0, 0, 0),
         };
 
-        let pOffsetForRefFrame = match &sps.pic_order_cnt {
+        let offset_for_ref_frame = match &sps.pic_order_cnt {
             h264_reader::nal::sps::PicOrderCntType::TypeOne {
                 offsets_for_ref_frame,
                 ..
-            } => offsets_for_ref_frame.as_ptr(),
+            } => Some(offsets_for_ref_frame.clone()),
             h264_reader::nal::sps::PicOrderCntType::TypeZero { .. }
-            | h264_reader::nal::sps::PicOrderCntType::TypeTwo => std::ptr::null(),
+            | h264_reader::nal::sps::PicOrderCntType::TypeTwo => None,
         };
+
+        let offset_for_ref_frame = offset_for_ref_frame
+            .map(|o| o.into_boxed_slice())
+            .map(Box::leak);
+
+        let pOffsetForRefFrame = match offset_for_ref_frame.as_ref() {
+            Some(o) => o.as_ptr(),
+            None => std::ptr::null(),
+        };
+
+        let offset_for_ref_frame = offset_for_ref_frame.map(NonNull::from);
 
         let scaling_lists: Option<&mut H264ScalingLists> = sps
             .chroma_info
@@ -219,6 +237,7 @@ impl From<&'_ SeqParameterSet> for VkSequenceParameterSet {
                 pSequenceParameterSetVui,
             },
             scaling_lists_ptr,
+            offset_for_ref_frame,
         }
     }
 }
@@ -227,8 +246,14 @@ impl Drop for VkSequenceParameterSet {
     fn drop(&mut self) {
         self.scaling_lists_ptr
             .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
+
+        self.offset_for_ref_frame
+            .map(|p| unsafe { Box::from_raw(p.as_ptr()) });
     }
 }
+
+unsafe impl Send for VkSequenceParameterSet {}
+unsafe impl Sync for VkSequenceParameterSet {}
 
 pub(crate) struct H264ScalingLists {
     pub(crate) list: vk::native::StdVideoH264ScalingLists,
@@ -437,28 +462,54 @@ fn h264_profile_idc_to_vk(
     }
 }
 
-pub(crate) struct H264ProfileInfo<'a> {
+unsafe impl<'a, T: 'a + vk::ExtendsVideoProfileInfoKHR> Send for ProfileInfo<'a, T> {}
+unsafe impl<'a, T: 'a + vk::ExtendsVideoProfileInfoKHR> Sync for ProfileInfo<'a, T> {}
+
+pub(crate) struct ProfileInfo<'a, T: 'a + vk::ExtendsVideoProfileInfoKHR> {
     pub(crate) profile_info: vk::VideoProfileInfoKHR<'a>,
-    h264_info_ptr: NonNull<vk::VideoDecodeH264ProfileInfoKHR<'a>>,
+    additional_info_ptr: NonNull<T>,
 }
 
-impl PartialEq for H264ProfileInfo<'_> {
+impl<'a, T: vk::ExtendsVideoProfileInfoKHR> ProfileInfo<'a, T> {
+    pub(crate) fn new(profile_info: vk::VideoProfileInfoKHR<'a>, additional_info: T) -> Self {
+        let additional_info = Box::leak(Box::new(additional_info));
+        let additional_info_ptr = NonNull::from(&mut *additional_info);
+        let profile_info = profile_info.push_next(additional_info);
+
+        Self {
+            profile_info,
+            additional_info_ptr,
+        }
+    }
+}
+
+impl<T: vk::ExtendsVideoProfileInfoKHR> Drop for ProfileInfo<'_, T> {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = Box::from_raw(self.additional_info_ptr.as_ptr());
+        }
+    }
+}
+
+pub(crate) type H264DecodeProfileInfo<'a> = ProfileInfo<'a, vk::VideoDecodeH264ProfileInfoKHR<'a>>;
+
+impl PartialEq for H264DecodeProfileInfo<'_> {
     fn eq(&self, other: &Self) -> bool {
         unsafe {
             other.profile_info.chroma_subsampling == self.profile_info.chroma_subsampling
                 && other.profile_info.luma_bit_depth == self.profile_info.luma_bit_depth
                 && other.profile_info.chroma_bit_depth == self.profile_info.chroma_bit_depth
-                && (*other.h264_info_ptr.as_ptr()).std_profile_idc
-                    == (*self.h264_info_ptr.as_ptr()).std_profile_idc
-                && (*other.h264_info_ptr.as_ptr()).picture_layout
-                    == (*self.h264_info_ptr.as_ptr()).picture_layout
+                && (*other.additional_info_ptr.as_ptr()).std_profile_idc
+                    == (*self.additional_info_ptr.as_ptr()).std_profile_idc
+                && (*other.additional_info_ptr.as_ptr()).picture_layout
+                    == (*self.additional_info_ptr.as_ptr()).picture_layout
         }
     }
 }
 
-impl Eq for H264ProfileInfo<'_> {}
+impl Eq for H264DecodeProfileInfo<'_> {}
 
-impl H264ProfileInfo<'_> {
+impl H264DecodeProfileInfo<'_> {
     pub(crate) fn from_sps_decode(sps: &SeqParameterSet) -> Result<Self, VulkanDecoderError> {
         let profile_idc = h264_profile_idc_to_vk(sps.profile());
 
@@ -468,11 +519,9 @@ impl H264ProfileInfo<'_> {
             ));
         }
 
-        let h264_profile_info = Box::leak(Box::new(
-            vk::VideoDecodeH264ProfileInfoKHR::default()
-                .std_profile_idc(profile_idc)
-                .picture_layout(vk::VideoDecodeH264PictureLayoutFlagsKHR::PROGRESSIVE),
-        ));
+        let h264_profile_info = vk::VideoDecodeH264ProfileInfoKHR::default()
+            .std_profile_idc(profile_idc)
+            .picture_layout(vk::VideoDecodeH264PictureLayoutFlagsKHR::PROGRESSIVE);
 
         let chroma_subsampling = match sps.chroma_info.chroma_format {
             h264_reader::nal::sps::ChromaFormat::YUV420 => {
@@ -507,26 +556,13 @@ impl H264ProfileInfo<'_> {
             )));
         };
 
-        let h264_info_ptr = NonNull::from(&mut *h264_profile_info);
         let profile_info = vk::VideoProfileInfoKHR::default()
             .video_codec_operation(vk::VideoCodecOperationFlagsKHR::DECODE_H264)
             .chroma_subsampling(chroma_subsampling)
             .luma_bit_depth(luma_bit_depth)
-            .chroma_bit_depth(chroma_bit_depth)
-            .push_next(h264_profile_info);
+            .chroma_bit_depth(chroma_bit_depth);
 
-        Ok(Self {
-            profile_info,
-            h264_info_ptr,
-        })
-    }
-}
-
-impl Drop for H264ProfileInfo<'_> {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = Box::from_raw(self.h264_info_ptr.as_ptr());
-        }
+        Ok(ProfileInfo::new(profile_info, h264_profile_info))
     }
 }
 
@@ -600,6 +636,9 @@ impl From<&'_ h264_reader::nal::pps::PicParameterSet> for VkPictureParameterSet 
         }
     }
 }
+
+unsafe impl Send for VkPictureParameterSet {}
+unsafe impl Sync for VkPictureParameterSet {}
 
 impl Drop for VkPictureParameterSet {
     fn drop(&mut self) {

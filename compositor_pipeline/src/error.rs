@@ -18,7 +18,7 @@ pub enum InitPipelineError {
 
     #[cfg(feature = "vk-video")]
     #[error(transparent)]
-    VulkanCtxError(#[from] vk_video::VulkanCtxError),
+    VulkanInitError(#[from] vk_video::VulkanInitError),
 
     #[error("Failed to create tokio::Runtime.")]
     CreateTokioRuntime(#[source] std::io::Error),
