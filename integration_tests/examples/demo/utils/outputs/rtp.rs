@@ -1,7 +1,11 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use inquire::Select;
+use integration_tests::ffmpeg::{
+    start_ffmpeg_receive_h264, start_ffmpeg_receive_vp8, start_ffmpeg_receive_vp9,
+};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
+use tracing::{error, info};
 
 use crate::utils::{
     get_free_port,
@@ -68,18 +72,18 @@ impl RtpOutput {
                 RtpRegisterOptions::AddAudioStream => rtp_output.setup_audio()?,
                 RtpRegisterOptions::RemoveVideoStream => {
                     rtp_output.video = None;
-                    println!("Video stream removed!");
+                    info!("Video stream removed!");
                 }
                 RtpRegisterOptions::RemoveAudioStream => {
                     rtp_output.audio = None;
-                    println!("Audio stream removed!");
+                    info!("Audio stream removed!");
                 }
                 RtpRegisterOptions::SetTransportProtocol => {
                     rtp_output.setup_transport_protocol()?
                 }
                 RtpRegisterOptions::Done => {
                     if rtp_output.video.is_none() && rtp_output.audio.is_none() {
-                        println!("At least one of \"video\" and \"audio\" has to be defined.");
+                        error!("At least one of \"video\" and \"audio\" has to be defined.");
                     } else {
                         break;
                     }
@@ -91,8 +95,8 @@ impl RtpOutput {
 
     fn setup_video(&mut self) -> Result<()> {
         match self.video {
-            Some(_) => println!("Video stream reset to default!"),
-            None => println!("Video stream added!"),
+            Some(_) => info!("Video stream reset to default!"),
+            None => info!("Video stream added!"),
         }
         self.video = Some(RtpOutputVideoOptions::default());
         Ok(())
@@ -100,8 +104,8 @@ impl RtpOutput {
 
     fn setup_audio(&mut self) -> Result<()> {
         match self.audio {
-            Some(_) => println!("Audio stream reset to default!"),
-            None => println!("Audio stream added!"),
+            Some(_) => info!("Audio stream reset to default!"),
+            None => info!("Audio stream added!"),
         }
         self.audio = Some(RtpOutputAudioOptions::default());
         Ok(())
@@ -112,6 +116,27 @@ impl RtpOutput {
 
         let prot = Select::new("Select protocol:", options).prompt()?;
         self.transport_protocol = prot;
+        Ok(())
+    }
+
+    pub fn start_ffmpeg_receiver(&self) -> Result<()> {
+        if self.transport_protocol == TransportProtocol::TcpServer {
+            return Err(anyhow!("FFmpeg cannot handle TCP connection."));
+        }
+        match (&self.video, &self.audio) {
+            (Some(_), Some(_)) => {
+                return Err(anyhow!(
+                    "FFmpeg can't handle both audio and video on a single port over RTP"
+                ));
+            }
+            (Some(video), None) => match video.encoder {
+                VideoEncoder::FfmpegH264 => start_ffmpeg_receive_h264(Some(self.port), None)?,
+                VideoEncoder::FfmpegVp8 => start_ffmpeg_receive_vp8(Some(self.port), None)?,
+                VideoEncoder::FfmpegVp9 => start_ffmpeg_receive_vp9(Some(self.port), None)?,
+            },
+            (None, Some(_audio)) => start_ffmpeg_receive_h264(None, Some(self.port))?,
+            (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
+        }
         Ok(())
     }
 }
