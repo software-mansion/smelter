@@ -21,6 +21,6 @@ pub async fn handle_terminate_whep_session(
 
     peer_connection.close().await?;
 
-    info!("WHEP session terminated for output: {:?}", output_id);
+    info!(?session_id, ?output_id, "WHEP session terminated");
     Ok(StatusCode::OK)
 }

@@ -157,6 +157,10 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
 
     for encoder_options in &audio_encoder_preferences.unwrap_or_default() {
         if let AudioEncoderOptions::Opus(opts) = encoder_options {
+            let channels = match opts.channels {
+                AudioChannels::Mono => 1,
+                AudioChannels::Stereo => 2,
+            };
             let (fec, payload_type): (u8, u8) = match opts.forward_error_correction {
                 true => (1, 111),
                 false => (0, 110),
@@ -166,7 +170,7 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
                     capability: RTCRtpCodecCapability {
                         mime_type: MIME_TYPE_OPUS.to_owned(),
                         clock_rate: opts.sample_rate,
-                        channels: opts.channel_count(),
+                        channels,
                         sdp_fmtp_line: format!("minptime=10;useinbandfec={fec}").to_owned(),
                         rtcp_feedback: vec![],
                     },

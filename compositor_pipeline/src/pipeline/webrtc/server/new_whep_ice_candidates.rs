@@ -8,6 +8,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
 };
 use compositor_render::OutputId;
+use tracing::info;
 
 use std::sync::Arc;
 
@@ -31,6 +32,11 @@ pub async fn handle_new_whep_ice_candidates(
                 "Cannot add ice_candidate {candidate:?} for output {output_id:?} session {session_id:?}: {err:?}"
             )));
         }
+        info!(
+            ?session_id,
+            ?output_id,
+            "Added ICE candidate for WHEP session"
+        );
     }
 
     Ok(StatusCode::NO_CONTENT)
