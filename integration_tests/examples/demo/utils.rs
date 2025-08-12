@@ -86,6 +86,12 @@ impl SmelterState {
                         Err(e) => error!("{e}"),
                     }
                 }
+                InputPlayerOptions::StartGstreamerTransmitter => {
+                    match input_handler.start_gstreamer_transmitter() {
+                        Ok(_) => break,
+                        Err(e) => error!("{e}"),
+                    }
+                }
                 InputPlayerOptions::Manual => break,
             }
         }

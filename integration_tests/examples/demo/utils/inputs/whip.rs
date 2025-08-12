@@ -35,4 +35,8 @@ impl InputHandler for WhipInput {
     fn start_ffmpeg_transmitter(&self) -> Result<()> {
         Ok(())
     }
+
+    fn start_gstreamer_transmitter(&self) -> Result<()> {
+        Ok(())
+    }
 }

@@ -1,6 +1,9 @@
 use anyhow::{anyhow, Result};
 use inquire::Select;
-use integration_tests::ffmpeg::start_ffmpeg_send;
+use integration_tests::{
+    ffmpeg::start_ffmpeg_send,
+    gstreamer::{start_gst_send_tcp, start_gst_send_udp},
+};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
@@ -108,6 +111,28 @@ impl RtpInput {
         self.transport_protocol = prot;
         Ok(())
     }
+
+    fn gstreamer_transmit_tcp(&self) -> Result<()> {
+        let video_port = self.video.as_ref().map(|_| self.port);
+        let audio_port = self.audio.as_ref().map(|_| self.port);
+        start_gst_send_tcp(
+            IP,
+            video_port,
+            audio_port,
+            integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+        )
+    }
+
+    fn gstreamer_transmit_udp(&self) -> Result<()> {
+        let video_port = self.video.as_ref().map(|_| self.port);
+        let audio_port = self.audio.as_ref().map(|_| self.port);
+        start_gst_send_udp(
+            IP,
+            video_port,
+            audio_port,
+            integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+        )
+    }
 }
 
 impl InputHandler for RtpInput {
@@ -154,6 +179,13 @@ impl InputHandler for RtpInput {
             (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
         }
         Ok(())
+    }
+
+    fn start_gstreamer_transmitter(&self) -> Result<()> {
+        match self.transport_protocol {
+            TransportProtocol::Udp => self.gstreamer_transmit_udp(),
+            TransportProtocol::TcpServer => self.gstreamer_transmit_tcp(),
+        }
     }
 }
 

@@ -12,6 +12,7 @@ pub trait InputHandler: Debug {
     fn port(&self) -> u16;
     fn serialize(&self) -> serde_json::Value;
     fn start_ffmpeg_transmitter(&self) -> Result<()>;
+    fn start_gstreamer_transmitter(&self) -> Result<()>;
 }
 
 impl std::fmt::Display for dyn InputHandler {
