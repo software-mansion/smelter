@@ -202,6 +202,9 @@ impl RtpOutputVideoOptions {
                 "root": {
                     "type": "tiles",
                     "id": "tiles",
+                    "transition": {
+                        "duration_ms": 500,
+                    },
                     "children": input_json,
                 }
             }
@@ -223,6 +226,9 @@ impl RtpOutputVideoOptions {
             "root": {
                 "type": "tiles",
                 "id": "tiles",
+                "transition": {
+                    "duration_ms": 500,
+                },
                 "children": input_json,
             }
         })
