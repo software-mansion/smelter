@@ -65,6 +65,9 @@ impl SmelterState {
 
         for output in &mut self.outputs {
             output.add_input(input_handler.deref());
+            let update_route = format!("output/{}/update", output.name());
+            let update_json = output.serialize_update();
+            examples::post(&update_route, &update_json)?;
         }
 
         let input_json = input_handler.serialize();
@@ -107,7 +110,7 @@ impl SmelterState {
 
         output_handler.set_initial_scene(&self.inputs);
 
-        let output_json = output_handler.serialize();
+        let output_json = output_handler.serialize_register();
         let output_route = format!("output/{}/register", output_handler.name());
 
         if output_handler.transport_protocol() == TransportProtocol::TcpServer {

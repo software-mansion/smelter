@@ -1,6 +1,6 @@
 // WARN: Remove after implementing #remove
 #![allow(dead_code)]
-use crate::utils::{inputs::InputHandler, TransportProtocol};
+use crate::utils::inputs::InputHandler;
 use anyhow::Result;
 use serde_json::json;
 
@@ -8,7 +8,6 @@ use serde_json::json;
 pub struct WhipInput {
     name: String,
     port: u16,
-    transport_protocol: TransportProtocol,
 }
 
 impl WhipInput {
@@ -16,7 +15,6 @@ impl WhipInput {
         Ok(Self {
             name: "dummy".to_string(),
             port: 40_000,
-            transport_protocol: TransportProtocol::Udp,
         })
     }
 }
@@ -28,10 +26,6 @@ impl InputHandler for WhipInput {
 
     fn port(&self) -> u16 {
         self.port
-    }
-
-    fn transport_protocol(&self) -> TransportProtocol {
-        self.transport_protocol
     }
 
     fn serialize(&self) -> serde_json::Value {
