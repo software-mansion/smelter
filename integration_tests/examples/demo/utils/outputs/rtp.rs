@@ -5,7 +5,7 @@ use integration_tests::ffmpeg::{
 };
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
-use tracing::{error, info};
+use tracing::error;
 
 use crate::utils::{
     get_free_port,
@@ -67,11 +67,11 @@ impl RtpOutput {
                 RtpRegisterOptions::AddAudioStream => rtp_output.setup_audio()?,
                 RtpRegisterOptions::RemoveVideoStream => {
                     rtp_output.video = None;
-                    info!("Video stream removed!");
+                    println!("Video stream removed!");
                 }
                 RtpRegisterOptions::RemoveAudioStream => {
                     rtp_output.audio = None;
-                    info!("Audio stream removed!");
+                    println!("Audio stream removed!");
                 }
                 RtpRegisterOptions::SetTransportProtocol => {
                     rtp_output.setup_transport_protocol()?
@@ -90,8 +90,8 @@ impl RtpOutput {
 
     fn setup_video(&mut self) -> Result<()> {
         match self.video {
-            Some(_) => info!("Video stream reset to default!"),
-            None => info!("Video stream added!"),
+            Some(_) => println!("Video stream reset to default!"),
+            None => println!("Video stream added!"),
         }
         self.video = Some(RtpOutputVideoOptions::default());
         Ok(())
@@ -99,8 +99,8 @@ impl RtpOutput {
 
     fn setup_audio(&mut self) -> Result<()> {
         match self.audio {
-            Some(_) => info!("Audio stream reset to default!"),
-            None => info!("Audio stream added!"),
+            Some(_) => println!("Audio stream reset to default!"),
+            None => println!("Audio stream added!"),
         }
         self.audio = Some(RtpOutputAudioOptions::default());
         Ok(())
