@@ -1,4 +1,4 @@
-use crate::pipeline::webrtc::{error::WhipServerError, WhipWhepServerState};
+use crate::pipeline::webrtc::{error::WhipWhepServerError, WhipWhepServerState};
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
@@ -11,7 +11,7 @@ pub async fn handle_new_whip_ice_candidates(
     State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
     sdp_fragment_content: String,
-) -> Result<StatusCode, WhipServerError> {
+) -> Result<StatusCode, WhipWhepServerError> {
     let session_id = Arc::from(id);
 
     validate_content_type(&headers)?;
@@ -24,13 +24,13 @@ pub async fn handle_new_whip_ice_candidates(
     if let Some(peer_connection) = peer_connection {
         for candidate in ice_fragment_unmarshal(&sdp_fragment_content) {
             if let Err(err) = peer_connection.add_ice_candidate(candidate.clone()).await {
-                return Err(WhipServerError::BadRequest(format!(
+                return Err(WhipWhepServerError::BadRequest(format!(
                     "Cannot add ice_candidate {candidate:?} for session {session_id:?}: {err:?}"
                 )));
             }
         }
     } else {
-        return Err(WhipServerError::InternalError(format!(
+        return Err(WhipWhepServerError::InternalError(format!(
             "None peer connection for {session_id:?}"
         )));
     }
@@ -63,14 +63,14 @@ pub fn ice_fragment_unmarshal(sdp_fragment_content: &str) -> Vec<RTCIceCandidate
     candidates
 }
 
-pub fn validate_content_type(headers: &HeaderMap) -> Result<(), WhipServerError> {
+pub fn validate_content_type(headers: &HeaderMap) -> Result<(), WhipWhepServerError> {
     let content_type = headers
         .get("Content-Type")
         .and_then(|value| value.to_str().ok())
         .unwrap_or("");
 
     if content_type != "application/trickle-ice-sdpfrag" {
-        return Err(WhipServerError::BadRequest(
+        return Err(WhipWhepServerError::BadRequest(
             "Invalid Content-Type".to_owned(),
         ));
     }

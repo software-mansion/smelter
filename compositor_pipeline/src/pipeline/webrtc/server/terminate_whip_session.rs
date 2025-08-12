@@ -1,4 +1,4 @@
-use crate::pipeline::webrtc::{error::WhipServerError, WhipWhepServerState};
+use crate::pipeline::webrtc::{error::WhipWhepServerError, WhipWhepServerState};
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
@@ -10,7 +10,7 @@ pub async fn handle_terminate_whip_session(
     Path(id): Path<String>,
     State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
-) -> Result<StatusCode, WhipServerError> {
+) -> Result<StatusCode, WhipWhepServerError> {
     let session_id = Arc::from(id);
 
     state.inputs.validate_token(&session_id, &headers).await?;
@@ -22,7 +22,7 @@ pub async fn handle_terminate_whip_session(
     match peer_connection {
         Some(peer_connection) => peer_connection.close().await?,
         None => {
-            return Err(WhipServerError::InternalError(format!(
+            return Err(WhipWhepServerError::InternalError(format!(
                 "None peer connection for {session_id:?}"
             )));
         }

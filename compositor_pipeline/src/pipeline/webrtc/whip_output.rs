@@ -93,7 +93,7 @@ impl WhipClientTask {
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
         options: WhipSenderOptions,
-    ) -> Result<(Self, WhipOutput), WhipInputError> {
+    ) -> Result<(Self, WhipOutput), WhipOutputError> {
         let client = WhipHttpClient::new(&options)?;
         let pc = PeerConnection::new(&ctx, &options).await?;
 
@@ -281,7 +281,7 @@ impl Output for WhipOutput {
 }
 
 fn wait_with_deadline<T>(
-    mut result_receiver: oneshot::Receiver<Result<T, WhipInputError>>,
+    mut result_receiver: oneshot::Receiver<Result<T, WhipOutputError>>,
     timeout: Duration,
 ) -> Result<T, OutputInitError> {
     let start_time = Instant::now();
