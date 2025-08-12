@@ -106,17 +106,23 @@ impl PeerConnection {
         encoder: AudioEncoderOptions,
     ) -> Result<Arc<TrackLocalStaticRTP>, WhipWhepServerError> {
         let track = match encoder {
-            AudioEncoderOptions::Opus(opts) => Arc::new(TrackLocalStaticRTP::new(
-                RTCRtpCodecCapability {
-                    mime_type: MIME_TYPE_OPUS.to_owned(),
-                    clock_rate: 48000,
-                    channels: opts.channel_count(),
-                    sdp_fmtp_line: "".to_owned(),
-                    rtcp_feedback: vec![],
-                },
-                "audio".to_string(),
-                "webrtc".to_string(),
-            )),
+            AudioEncoderOptions::Opus(opts) => {
+                let channels = match opts.channels {
+                    AudioChannels::Mono => 1,
+                    AudioChannels::Stereo => 2,
+                };
+                Arc::new(TrackLocalStaticRTP::new(
+                    RTCRtpCodecCapability {
+                        mime_type: MIME_TYPE_OPUS.to_owned(),
+                        clock_rate: 48000,
+                        channels,
+                        sdp_fmtp_line: "".to_owned(),
+                        rtcp_feedback: vec![],
+                    },
+                    "audio".to_string(),
+                    "webrtc".to_string(),
+                ))
+            }
             AudioEncoderOptions::FdkAac(_) => {
                 // this should never happen
                 return Err(WhipWhepServerError::InternalError(
@@ -242,12 +248,16 @@ fn register_codecs(
     if let Some(encoder) = audio_encoder {
         match encoder {
             AudioEncoderOptions::Opus(opts) => {
+                let channels = match opts.channels {
+                    AudioChannels::Mono => 1,
+                    AudioChannels::Stereo => 2,
+                };
                 media_engine.register_codec(
                     RTCRtpCodecParameters {
                         capability: RTCRtpCodecCapability {
                             mime_type: MIME_TYPE_OPUS.to_owned(),
                             clock_rate: 48000,
-                            channels: opts.channel_count(),
+                            channels,
                             sdp_fmtp_line: "minptime=10;useinbandfec=1".to_owned(),
                             rtcp_feedback: vec![],
                         },

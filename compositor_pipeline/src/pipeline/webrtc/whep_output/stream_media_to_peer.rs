@@ -9,7 +9,7 @@ use crate::{event::Event, pipeline::rtp::RtpPacket};
 
 pub async fn stream_media_to_peer(
     ctx: Arc<PipelineCtx>,
-    output_id: &OutputId,
+    output_id: OutputId,
     mut video_receiver: Option<broadcast::Receiver<RtpPacket>>,
     mut audio_receiver: Option<broadcast::Receiver<RtpPacket>>,
     video_track: Option<Arc<TrackLocalStaticRTP>>,
@@ -111,6 +111,6 @@ pub async fn stream_media_to_peer(
         };
     }
 
-    ctx.event_emitter.emit(Event::OutputDone(output_id.clone()));
+    ctx.event_emitter.emit(Event::OutputDone(output_id));
     debug!("Closing WHEP sender thread.")
 }

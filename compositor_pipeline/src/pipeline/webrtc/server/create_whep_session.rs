@@ -71,18 +71,14 @@ pub async fn handle_create_whep_session(
 
     let session_id = outputs.add_session(&output_id, Arc::new(peer_connection))?;
 
-    let ctx_clone = ctx.clone();
-    tokio::spawn(async move {
-        stream_media_to_peer(
-            ctx_clone,
-            &output_id,
-            video_receiver,
-            audio_receiver,
-            video_track,
-            audio_track,
-        )
-        .await;
-    });
+    tokio::spawn(stream_media_to_peer(
+        ctx.clone(),
+        output_id,
+        video_receiver,
+        audio_receiver,
+        video_track,
+        audio_track,
+    ));
 
     if let (Some(sender), Some(keyframe_request_sender)) = (video_sender, keyframe_request_sender) {
         handle_keyframe_requests(&ctx.clone(), sender, keyframe_request_sender);
