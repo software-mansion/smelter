@@ -2,6 +2,7 @@ use anyhow::Result;
 use inquire::Select;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
+use tracing::{error, info};
 
 use crate::utils::{
     get_free_port,
@@ -63,16 +64,16 @@ impl RtpInput {
                 RtpRegisterOptions::AddAudioStream => rtp_input.setup_audio()?,
                 RtpRegisterOptions::RemoveVideoStream => {
                     rtp_input.video = None;
-                    println!("Video stream removed!");
+                    info!("Video stream removed!");
                 }
                 RtpRegisterOptions::RemoveAudioStream => {
                     rtp_input.audio = None;
-                    println!("Audio stream removed!");
+                    info!("Audio stream removed!");
                 }
                 RtpRegisterOptions::SetTransportProtocol => rtp_input.setup_transport_protocol()?,
                 RtpRegisterOptions::Done => {
                     if rtp_input.video.is_none() && rtp_input.audio.is_none() {
-                        println!("At least one of \"video\" and \"audio\" has to be defined.");
+                        error!("At least one of \"video\" and \"audio\" has to be defined.");
                     } else {
                         break;
                     }
@@ -85,8 +86,8 @@ impl RtpInput {
 
     fn setup_video(&mut self) -> Result<()> {
         match self.video {
-            Some(_) => println!("Video stream reset to default!"),
-            None => println!("Video stream added!"),
+            Some(_) => info!("Video stream reset to default!"),
+            None => info!("Video stream added!"),
         }
         self.video = Some(RtpInputVideoOptions::default());
         Ok(())
@@ -94,8 +95,8 @@ impl RtpInput {
 
     fn setup_audio(&mut self) -> Result<()> {
         match self.audio {
-            Some(_) => println!("Audio stream reset to default!"),
-            None => println!("Audio stream added!"),
+            Some(_) => info!("Audio stream reset to default!"),
+            None => info!("Audio stream added!"),
         }
         self.audio = Some(RtpInputAudioOptions::default());
         Ok(())

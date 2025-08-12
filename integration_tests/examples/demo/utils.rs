@@ -11,19 +11,21 @@ use inquire::Select;
 use integration_tests::examples;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
+use tracing::{error, info};
 
-mod ffmpeg;
 mod inputs;
 mod outputs;
+mod players;
 
 use inputs::{rtp::RtpInput, InputHandler};
 
 use crate::utils::{
     inputs::InputProtocol,
     outputs::{rtp::RtpOutput, OutputHandler, OutputProtocol},
+    players::RtpOutputPlayerOptions,
 };
 
-#[derive(Debug, EnumIter, Display, Clone, Copy)]
+#[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq)]
 pub enum TransportProtocol {
     #[strum(to_string = "udp")]
     Udp,
@@ -79,9 +81,26 @@ impl SmelterState {
         let protocol = Select::new("Select output protocol:", prot_opts).prompt()?;
 
         let mut output_handler: Box<dyn OutputHandler> = match protocol {
-            OutputProtocol::Rtp => Box::new(RtpOutput::setup()?),
+            OutputProtocol::Rtp => {
+                let rtp_output = RtpOutput::setup()?;
+                let options = RtpOutputPlayerOptions::iter().collect::<Vec<_>>();
+                loop {
+                    let player_choice =
+                        Select::new("Chose player to start:", options.clone()).prompt()?;
+                    match player_choice {
+                        RtpOutputPlayerOptions::StartFfmpegReceiver => {
+                            match rtp_output.start_ffmpeg_receiver() {
+                                Ok(_) => break,
+                                Err(e) => error!("{e}"),
+                            }
+                        }
+                        RtpOutputPlayerOptions::Done => break,
+                    }
+                }
+                Box::new(rtp_output)
+            }
             _ => {
-                println!("Unimplemented!");
+                info!("Unimplemented!");
                 return Ok(());
             }
         };
