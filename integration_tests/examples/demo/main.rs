@@ -9,7 +9,7 @@ mod utils;
 
 use crate::utils::SmelterState;
 
-#[derive(Debug, EnumIter, Display, Clone)]
+#[derive(Debug, EnumIter, Display, Clone, PartialEq)]
 pub enum Action {
     #[strum(to_string = "Add input")]
     AddInput,
@@ -43,11 +43,27 @@ fn run_demo() -> Result<()> {
             Action::Start => break,
         }
     }
-
     println!("{state:?}");
 
     examples::post("start", &json!({}))?;
 
+    let options = Action::iter()
+        .filter(|a| *a != Action::Start)
+        .collect::<Vec<_>>();
+
+    loop {
+        let action = Select::new("Select option:", options.clone()).prompt()?;
+
+        match action {
+            Action::AddInput => state.register_input()?,
+            Action::AddOutput => state.register_output()?,
+            Action::RemoveInput => state.unregister_input()?,
+            Action::RemoveOutput => state.unregister_output()?,
+            _ => panic!("Invalid option (unreachable)"),
+        }
+    }
+
+    #[allow(unreachable_code)]
     Ok(())
 }
 

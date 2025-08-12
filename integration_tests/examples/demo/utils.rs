@@ -149,6 +149,9 @@ impl SmelterState {
 
         for output in &mut self.outputs {
             output.remove_input(to_delete.deref());
+            let update_route = format!("output/{}/update", output.name());
+            let update_json = output.serialize_update();
+            examples::post(&update_route, &update_json)?;
         }
 
         let unregister_route = format!("input/{}/unregister", to_delete.name());
