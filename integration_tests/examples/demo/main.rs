@@ -6,7 +6,7 @@ use integration_tests::examples;
 use serde_json::json;
 use smelter::{config::read_config, logger::init_logger};
 use strum::{Display, EnumIter, IntoEnumIterator};
-use tracing::{error, debug};
+use tracing::{debug, error};
 
 mod utils;
 
