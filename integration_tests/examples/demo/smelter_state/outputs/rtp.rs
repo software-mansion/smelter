@@ -14,7 +14,7 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
-use crate::utils::{
+use crate::smelter_state::{
     get_free_port,
     outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayerOptions,

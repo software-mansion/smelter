@@ -16,7 +16,7 @@ mod players;
 
 use inputs::InputHandler;
 
-use crate::utils::{
+use crate::smelter_state::{
     inputs::{rtp::RtpInputBuilder, InputProtocol},
     outputs::{rtp::RtpOutputBuilder, OutputHandler, OutputProtocol},
 };
