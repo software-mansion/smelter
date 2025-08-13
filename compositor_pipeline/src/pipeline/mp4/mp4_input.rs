@@ -20,7 +20,7 @@ use crate::{
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac, ffmpeg_h264,
             h264_utils::AvccToAnnexBRepacker,
-            DecoderThreadHandle,
+            vulkan_h264, DecoderThreadHandle,
         },
         input::Input,
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
@@ -66,9 +66,20 @@ impl Mp4Input {
         let (video_handle, video_receiver, video_track) = match video {
             Some(track) => {
                 let (sender, receiver) = crossbeam_channel::bounded(10);
-                let handle = match track.decoder_options() {
-                    DecoderOptions::H264(h264_config) => {
+                let handle = match (track.decoder_options(), options.video_decoders.h264) {
+                    (DecoderOptions::H264(h264_config), VideoDecoderOptions::FfmpegH264) => {
                         VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
+                            input_id.clone(),
+                            VideoDecoderThreadOptions {
+                                ctx: ctx.clone(),
+                                transformer: Some(AvccToAnnexBRepacker::new(h264_config.clone())),
+                                frame_sender: sender,
+                                input_buffer_size: 5,
+                            },
+                        )?
+                    }
+                    (DecoderOptions::H264(h264_config), VideoDecoderOptions::VulkanH264) => {
+                        VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
                             input_id.clone(),
                             VideoDecoderThreadOptions {
                                 ctx: ctx.clone(),

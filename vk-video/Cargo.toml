@@ -28,6 +28,7 @@ wgpu =  "25.0.2"
 bytemuck = { version = "1.19.0", features = ["derive"] }
 clap = { version = "4.5.20", features = ["derive"] }
 tracing-subscriber = "0.3.18"
+wgpu = { version = "25.0.2", features = ["noop"] }
 winit = "0.29"
 
 [build-dependencies]

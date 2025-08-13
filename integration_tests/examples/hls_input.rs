@@ -36,6 +36,9 @@ fn client_code() -> Result<()> {
         &json!({
             "type": "hls",
             "url": args[1],
+            "decoder_map": {
+                "h264": "ffmpeg_h264"
+            }
         }),
     )?;
 

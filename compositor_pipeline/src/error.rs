@@ -18,7 +18,7 @@ pub enum InitPipelineError {
 
     #[cfg(feature = "vk-video")]
     #[error(transparent)]
-    VulkanCtxError(#[from] vk_video::VulkanCtxError),
+    VulkanInitError(#[from] vk_video::VulkanInitError),
 
     #[error("Failed to create tokio::Runtime.")]
     CreateTokioRuntime(#[source] std::io::Error),
@@ -165,6 +165,9 @@ pub enum InputInitError {
 
     #[error("Failed to initialize decoder.")]
     DecoderError(#[from] DecoderInitError),
+
+    #[error("Invalid video decoder provided. Expected {expected:?} decoder")]
+    InvalidVideoDecoderProvided { expected: VideoCodec },
 }
 
 #[derive(Debug, thiserror::Error)]

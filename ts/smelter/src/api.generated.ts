@@ -60,9 +60,11 @@ export type RegisterInput =
        */
       offset_ms?: number | null;
       /**
-       * (**default=`ffmpeg_h264`**) The decoder to use for decoding video.
+       * Assigns which decoder should be used for media encoded with a specific codec.
        */
-      video_decoder?: VideoDecoder | null;
+      decoder_map?: {
+        [k: string]: VideoDecoder;
+      } | null;
     }
   | {
       type: "whip";
@@ -105,6 +107,12 @@ export type RegisterInput =
        * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
        */
       offset_ms?: number | null;
+      /**
+       * Assigns which decoder should be used for media encoded with a specific codec.
+       */
+      decoder_map?: {
+        [k: string]: VideoDecoder;
+      } | null;
     }
   | {
       type: "decklink";
