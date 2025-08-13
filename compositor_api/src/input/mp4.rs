@@ -1,4 +1,5 @@
 use core::f64;
+use std::collections::HashMap;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,12 @@ pub struct Mp4Input {
     /// Offset in milliseconds relative to the pipeline start (start request). If offset is
     /// not defined then stream is synchronized based on the first frames delivery time.
     pub offset_ms: Option<f64>,
-    /// (**default=`ffmpeg_h264`**) The decoder to use for decoding video.
-    pub video_decoder: Option<VideoDecoder>,
+    /// Assigns which decoder should be used for media encoded with a specific codec.
+    pub decoder_map: Option<HashMap<InputMp4Codec, VideoDecoder>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum InputMp4Codec {
+    H264,
 }

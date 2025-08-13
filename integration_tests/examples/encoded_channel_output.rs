@@ -80,7 +80,9 @@ fn main() {
         input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
             source: Mp4InputSource::File(root_dir.join(BUNNY_FILE_PATH)),
             should_loop: false,
-            video_decoder: VideoDecoderOptions::FfmpegH264,
+            video_decoders: Mp4InputVideoDecoders {
+                h264: VideoDecoderOptions::FfmpegH264,
+            },
         }),
         queue_options: QueueInputOptions {
             required: true,

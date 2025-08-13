@@ -163,7 +163,7 @@ class OutputContext implements SmelterOutputContext {
         path: registerRequest.serverPath,
         url: registerRequest.url,
         required: registerRequest.required,
-        video_decoder: registerRequest.videoDecoder,
+        decoder_map: registerRequest.decoderMap,
       });
     this.output.internalInputStreamStore.addInput({
       inputId,
