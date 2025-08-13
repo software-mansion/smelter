@@ -69,6 +69,8 @@ pub async fn handle_create_whep_session(
     let sdp_answer = peer_connection.negotiate_connection(offer).await?;
     trace!("SDP answer: {}", sdp_answer.sdp);
 
+    let session_id = outputs.add_session(&output_id, Arc::new(peer_connection))?;
+
     tokio::spawn(stream_media_to_peer(
         ctx.clone(),
         output_id,
@@ -88,7 +90,11 @@ pub async fn handle_create_whep_session(
         .header("Content-Type", "application/sdp")
         .header(
             "Location",
-            format!("/resource/{}", urlencoding::encode(&id)),
+            format!(
+                "/whep/{}/{}",
+                urlencoding::encode(&id),
+                urlencoding::encode(&session_id),
+            ),
         )
         .body(body)?;
     Ok(response)

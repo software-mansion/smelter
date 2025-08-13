@@ -9,8 +9,8 @@ use webrtc::{
         APIBuilder,
     },
     ice_transport::{
-        ice_connection_state::RTCIceConnectionState, ice_gatherer_state::RTCIceGathererState,
-        ice_server::RTCIceServer,
+        ice_candidate::RTCIceCandidateInit, ice_connection_state::RTCIceConnectionState,
+        ice_gatherer_state::RTCIceGathererState, ice_server::RTCIceServer,
     },
     interceptor::registry::Registry,
     peer_connection::{
@@ -206,6 +206,17 @@ impl PeerConnection {
             debug!("Maximum time for gathering candidate has elapsed.");
         }
         Ok(())
+    }
+
+    pub async fn add_ice_candidate(
+        &self,
+        candidate: RTCIceCandidateInit,
+    ) -> Result<(), WhipWhepServerError> {
+        Ok(self.pc.add_ice_candidate(candidate).await?)
+    }
+
+    pub async fn close(&self) -> Result<(), WhipWhepServerError> {
+        Ok(self.pc.close().await?)
     }
 }
 
