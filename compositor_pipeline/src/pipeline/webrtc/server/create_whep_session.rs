@@ -2,7 +2,7 @@ use crate::pipeline::webrtc::{
     error::WhipWhepServerError,
     handle_keyframe_requests::handle_keyframe_requests,
     whep_output::{
-        init_payloaders::init_payloaders,
+        init_payloaders::{init_audio_payloader, init_video_payloader},
         peer_connection::PeerConnection,
         stream_media_to_peer::{stream_media_to_peer, MediaStream},
     },
@@ -57,19 +57,20 @@ pub async fn handle_create_whep_session(
     let peer_connection =
         PeerConnection::new(&ctx.clone(), video_encoder.clone(), audio_encoder.clone()).await?;
 
-    let (video_track, video_sender, video_ssrc) = match video_encoder.clone() {
+    let (video_track, video_sender, video_payloader) = match video_encoder.clone() {
         Some(encoder) => {
-            let (track, sender, ssrc) = peer_connection.new_video_track(encoder).await?;
-
-            (Some(track), Some(sender), Some(ssrc))
+            let (track, sender, ssrc) = peer_connection.new_video_track(encoder.clone()).await?;
+            let payloader = init_video_payloader(encoder, ssrc);
+            (Some(track), Some(sender), payloader)
         }
         None => (None, None, None),
     };
 
-    let (audio_track, audio_ssrc) = match audio_encoder.clone() {
+    let (audio_track, audio_payloader) = match audio_encoder.clone() {
         Some(encoder) => {
-            let (track, ssrc) = peer_connection.new_audio_track(encoder).await?;
-            (Some(track), Some(ssrc))
+            let (track, ssrc) = peer_connection.new_audio_track(encoder.clone()).await?;
+            let payloader = init_audio_payloader(encoder, ssrc);
+            (Some(track), payloader)
         }
         None => (None, None),
     };
@@ -78,13 +79,6 @@ pub async fn handle_create_whep_session(
     trace!("SDP answer: {}", sdp_answer.sdp);
 
     let session_id = outputs.add_session(&output_id, Arc::new(peer_connection))?;
-
-    let (video_payloader, audio_payloader) = init_payloaders(
-        video_encoder.clone(),
-        audio_encoder.clone(),
-        video_ssrc,
-        audio_ssrc,
-    );
 
     let video_media_stream = MediaStream {
         receiver: video_receiver,
