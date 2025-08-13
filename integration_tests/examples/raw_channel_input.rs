@@ -98,6 +98,8 @@ fn main() {
 
     let frames = generate_frames(&wgpu_device, &wgpu_queue);
 
+    // TODO: This should be handled properly in future
+    #[allow(clippy::zombie_processes)]
     start_gst_receive_tcp_h264("127.0.0.1", VIDEO_OUTPUT_PORT, false).unwrap();
 
     Pipeline::start(&pipeline);

@@ -1,6 +1,6 @@
 use strum::{Display, EnumIter};
 
-#[derive(Debug, EnumIter, Display, Clone)]
+#[derive(Debug, EnumIter, Display, Clone, PartialEq)]
 pub enum OutputPlayerOptions {
     #[strum(to_string = "Start FFmpeg receiver")]
     StartFfmpegReceiver,
@@ -12,7 +12,7 @@ pub enum OutputPlayerOptions {
     Manual,
 }
 
-#[derive(Debug, EnumIter, Display, Clone)]
+#[derive(Debug, EnumIter, Display, Clone, PartialEq)]
 pub enum InputPlayerOptions {
     #[strum(to_string = "Start FFmpeg transmitter")]
     StartFfmpegTransmitter,

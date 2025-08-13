@@ -1,5 +1,3 @@
-use std::process::{Command, Stdio};
-
 use anyhow::Result;
 use inquire::Select;
 use integration_tests::examples;
@@ -33,7 +31,7 @@ pub enum Action {
 fn run_demo() -> Result<()> {
     let mut state = SmelterState::new();
 
-    let options = Action::iter().collect::<Vec<_>>();
+    let mut options = Action::iter().collect::<Vec<_>>();
 
     loop {
         let action = Select::new("Select option:", options.clone()).prompt();
@@ -50,41 +48,12 @@ fn run_demo() -> Result<()> {
             Action::AddOutput => state.register_output(),
             Action::RemoveInput => state.unregister_input(),
             Action::RemoveOutput => state.unregister_output(),
-            Action::Start => break,
-        };
-
-        match action_result {
-            Ok(_) => {}
-            Err(e) => {
-                error!("{e}");
-                break;
+            Action::Start => {
+                debug!("{state:#?}");
+                options.retain(|a| *a != Action::Start);
+                examples::post("start", &json!({}))?;
+                Ok(())
             }
-        }
-    }
-    debug!("{state:?}");
-
-    examples::post("start", &json!({}))?;
-
-    let options = Action::iter()
-        .filter(|a| *a != Action::Start)
-        .collect::<Vec<_>>();
-
-    loop {
-        let action = Select::new("Select option:", options.clone()).prompt();
-        let action = match action {
-            Ok(a) => a,
-            Err(e) => {
-                error!("{e}");
-                break;
-            }
-        };
-
-        let action_result = match action {
-            Action::AddInput => state.register_input(),
-            Action::AddOutput => state.register_output(),
-            Action::RemoveInput => state.unregister_input(),
-            Action::RemoveOutput => state.unregister_output(),
-            _ => panic!("Invalid option (unreachable)"),
         };
 
         match action_result {
@@ -96,18 +65,6 @@ fn run_demo() -> Result<()> {
         }
     }
 
-    // Inquire handles Ctrl+c, after it causes to break
-    // out of the loop all players are killed
-    Command::new("pkill")
-        .args(["ffmpeg", "ffplay", "gst-launch"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap()
-        .wait()
-        .unwrap();
-
-    #[allow(unreachable_code)]
     Ok(())
 }
 

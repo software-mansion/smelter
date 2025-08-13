@@ -1,3 +1,5 @@
+use std::process::Child;
+
 use anyhow::{anyhow, Result};
 use inquire::Select;
 use integration_tests::{
@@ -10,7 +12,8 @@ use tracing::error;
 
 use crate::utils::{
     get_free_port,
-    inputs::{input_name, AudioDecoder, InputHandler, VideoDecoder},
+    inputs::{AudioDecoder, InputHandler, VideoDecoder},
+    players::InputPlayerOptions,
     TransportProtocol, IP,
 };
 
@@ -22,17 +25,8 @@ pub enum RtpRegisterOptions {
     #[strum(to_string = "Add audio stream")]
     AddAudioStream,
 
-    #[strum(to_string = "Remove video stream")]
-    RemoveVideoStream,
-
-    #[strum(to_string = "Remove audio stream")]
-    RemoveAudioStream,
-
-    #[strum(to_string = "Set transport protocol")]
-    SetTransportProtocol,
-
-    #[strum(to_string = "Done")]
-    Done,
+    #[strum(to_string = "Skip")]
+    Skip,
 }
 
 #[derive(Debug)]
@@ -41,78 +35,12 @@ pub struct RtpInput {
     port: u16,
     video: Option<RtpInputVideoOptions>,
     audio: Option<RtpInputAudioOptions>,
-    transport_protocol: TransportProtocol,
+    transport_protocol: Option<TransportProtocol>,
+    stream_handles: Vec<Child>,
 }
 
 impl RtpInput {
-    pub fn setup() -> Result<Self> {
-        let mut rtp_input = Self {
-            name: input_name(),
-
-            // TODO: (@jbrs) Make it possible for user
-            // to set their own port
-            port: get_free_port(),
-            video: None,
-            audio: None,
-            transport_protocol: TransportProtocol::Udp,
-        };
-
-        let options = RtpRegisterOptions::iter().collect::<Vec<_>>();
-        loop {
-            let action = Select::new("What to do?", options.clone()).prompt()?;
-
-            match action {
-                RtpRegisterOptions::AddVideoStream => rtp_input.setup_video()?,
-                RtpRegisterOptions::AddAudioStream => rtp_input.setup_audio()?,
-                RtpRegisterOptions::RemoveVideoStream => {
-                    rtp_input.video = None;
-                    println!("Video stream removed!");
-                }
-                RtpRegisterOptions::RemoveAudioStream => {
-                    rtp_input.audio = None;
-                    println!("Audio stream removed!");
-                }
-                RtpRegisterOptions::SetTransportProtocol => rtp_input.setup_transport_protocol()?,
-                RtpRegisterOptions::Done => {
-                    if rtp_input.video.is_none() && rtp_input.audio.is_none() {
-                        error!("At least one of \"video\" and \"audio\" has to be defined.");
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
-
-        Ok(rtp_input)
-    }
-
-    fn setup_video(&mut self) -> Result<()> {
-        match self.video {
-            Some(_) => println!("Video stream reset to default!"),
-            None => println!("Video stream added!"),
-        }
-        self.video = Some(RtpInputVideoOptions::default());
-        Ok(())
-    }
-
-    fn setup_audio(&mut self) -> Result<()> {
-        match self.audio {
-            Some(_) => println!("Audio stream reset to default!"),
-            None => println!("Audio stream added!"),
-        }
-        self.audio = Some(RtpInputAudioOptions::default());
-        Ok(())
-    }
-
-    fn setup_transport_protocol(&mut self) -> Result<()> {
-        let options = TransportProtocol::iter().collect();
-
-        let prot = Select::new("Select protocol:", options).prompt()?;
-        self.transport_protocol = prot;
-        Ok(())
-    }
-
-    fn gstreamer_transmit_tcp(&self) -> Result<()> {
+    fn gstreamer_transmit_tcp(&mut self) -> Result<()> {
         let video_port = self.video.as_ref().map(|_| self.port);
         let audio_port = self.audio.as_ref().map(|_| self.port);
 
@@ -121,23 +49,99 @@ impl RtpInput {
                 "Streaming both audio and video on the same port is possible only over UDP!"
             ));
         }
-        start_gst_send_tcp(
+        self.stream_handles.push(start_gst_send_tcp(
             IP,
             video_port,
             audio_port,
             integration_tests::examples::TestSample::ElephantsDreamH264Opus,
-        )
+        )?);
+        Ok(())
     }
 
-    fn gstreamer_transmit_udp(&self) -> Result<()> {
+    fn gstreamer_transmit_udp(&mut self) -> Result<()> {
         let video_port = self.video.as_ref().map(|_| self.port);
         let audio_port = self.audio.as_ref().map(|_| self.port);
-        start_gst_send_udp(
+        self.stream_handles.push(start_gst_send_udp(
             IP,
             video_port,
             audio_port,
             integration_tests::examples::TestSample::ElephantsDreamH264Opus,
-        )
+        )?);
+        Ok(())
+    }
+
+    fn ffmpeg_transmit(&mut self) -> Result<()> {
+        let (video_handle, audio_handle) = match (&self.video, &self.audio) {
+            (Some(_), Some(_)) => {
+                return Err(anyhow!(
+                    "FFmpeg can't handle both audio and video on a single port over RTP."
+                ))
+            }
+            (Some(_video), None) => start_ffmpeg_send(
+                IP,
+                Some(self.port),
+                None,
+                integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+            )?,
+            (None, Some(_audio)) => start_ffmpeg_send(
+                IP,
+                None,
+                Some(self.port),
+                integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+            )?,
+            (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
+        };
+
+        if let Some(handle) = video_handle {
+            self.stream_handles.push(handle);
+        }
+        if let Some(handle) = audio_handle {
+            self.stream_handles.push(handle);
+        }
+
+        Ok(())
+    }
+
+    fn on_after_registration_udp(&mut self) -> Result<()> {
+        let options = InputPlayerOptions::iter().collect::<Vec<_>>();
+
+        loop {
+            let player_choice = Select::new("Select player:", options.clone()).prompt()?;
+
+            let player_result = match player_choice {
+                InputPlayerOptions::StartFfmpegTransmitter => self.ffmpeg_transmit(),
+                InputPlayerOptions::StartGstreamerTransmitter => self.gstreamer_transmit_udp(),
+                InputPlayerOptions::Manual => Ok(()),
+            };
+
+            match player_result {
+                Ok(_) => break,
+                Err(e) => error!("{e}"),
+            }
+        }
+        Ok(())
+    }
+
+    fn on_after_registration_tcp(&mut self) -> Result<()> {
+        let options = InputPlayerOptions::iter()
+            .filter(|i| *i != InputPlayerOptions::StartFfmpegTransmitter)
+            .collect::<Vec<_>>();
+
+        loop {
+            let player_choice = Select::new("Select player:", options.clone()).prompt()?;
+
+            let player_result = match player_choice {
+                InputPlayerOptions::StartGstreamerTransmitter => self.gstreamer_transmit_tcp(),
+                InputPlayerOptions::Manual => break,
+                _ => unreachable!(),
+            };
+
+            match player_result {
+                Ok(_) => break,
+                Err(e) => error!("{e}"),
+            }
+        }
+        Ok(())
     }
 }
 
@@ -146,49 +150,138 @@ impl InputHandler for RtpInput {
         &self.name
     }
 
-    fn port(&self) -> u16 {
-        self.port
+    fn on_after_registration(&mut self) -> Result<()> {
+        match self.transport_protocol {
+            Some(TransportProtocol::TcpServer) => self.on_after_registration_tcp(),
+            Some(TransportProtocol::Udp) | None => self.on_after_registration_udp(),
+        }
+    }
+}
+
+impl Drop for RtpInput {
+    fn drop(&mut self) {
+        for stream_process in &mut self.stream_handles {
+            match stream_process.kill() {
+                Ok(_) => {}
+                Err(e) => error!("{e}"),
+            }
+        }
+    }
+}
+
+pub struct RtpInputBuilder {
+    name: String,
+    port: u16,
+    video: Option<RtpInputVideoOptions>,
+    audio: Option<RtpInputAudioOptions>,
+    transport_protocol: Option<TransportProtocol>,
+}
+
+impl RtpInputBuilder {
+    pub fn new() -> Self {
+        let port = get_free_port();
+        let name = format!("input_rtp_udp_{}", port);
+        Self {
+            name,
+            port,
+            video: None,
+            audio: None,
+            transport_protocol: None,
+        }
+    }
+
+    pub fn prompt(self) -> Result<Self> {
+        let mut builder = self;
+        let video_options = vec![RtpRegisterOptions::AddVideoStream, RtpRegisterOptions::Skip];
+        let audio_options = vec![RtpRegisterOptions::AddAudioStream, RtpRegisterOptions::Skip];
+
+        loop {
+            let video_selection =
+                Select::new("Add video stream?", video_options.clone()).prompt_skippable()?;
+
+            builder = match video_selection {
+                Some(RtpRegisterOptions::AddVideoStream) => {
+                    builder.with_video(RtpInputVideoOptions::default())
+                }
+                Some(RtpRegisterOptions::Skip) | None => builder,
+                _ => unreachable!(),
+            };
+
+            let audio_selection =
+                Select::new("Add audio stream?", audio_options.clone()).prompt_skippable()?;
+
+            builder = match audio_selection {
+                Some(RtpRegisterOptions::AddAudioStream) => {
+                    builder.with_audio(RtpInputAudioOptions::default())
+                }
+                Some(RtpRegisterOptions::Skip) | None => builder,
+                _ => unreachable!(),
+            };
+
+            if builder.video.is_none() && builder.audio.is_none() {
+                error!("At least one video or one audio stream has to be specified!");
+            } else {
+                break;
+            }
+        }
+
+        let transport_options = TransportProtocol::iter().collect();
+        let transport_selection =
+            Select::new("Select transport protocol?", transport_options).prompt_skippable()?;
+
+        builder = match transport_selection {
+            Some(prot) => builder.with_transport_protocol(prot),
+            None => builder,
+        };
+
+        Ok(builder)
+    }
+
+    pub fn with_video(mut self, video: RtpInputVideoOptions) -> Self {
+        self.video = Some(video);
+        self
+    }
+
+    pub fn with_audio(mut self, audio: RtpInputAudioOptions) -> Self {
+        self.audio = Some(audio);
+        self
+    }
+
+    pub fn with_transport_protocol(mut self, transport_protocol: TransportProtocol) -> Self {
+        match transport_protocol {
+            TransportProtocol::Udp => {
+                self.name = format!("input_rtp_udp_{}", self.port);
+            }
+            TransportProtocol::TcpServer => {
+                self.name = format!("input_rtp_tcp_{}", self.port);
+            }
+        }
+        self.transport_protocol = Some(transport_protocol);
+        self
     }
 
     fn serialize(&self) -> serde_json::Value {
         json!({
             "type": "rtp_stream",
             "port": self.port,
-            "transport_protocol": self.transport_protocol.to_string(),
+            "transport_protocol": self.transport_protocol.as_ref().map(|t| t.to_string()),
             "video": self.video.as_ref().map(|v| v.serialize()),
             "audio": self.audio.as_ref().map(|a| a.serialize()),
         })
     }
 
-    fn start_ffmpeg_transmitter(&self) -> Result<()> {
-        if self.transport_protocol == TransportProtocol::TcpServer {
-            return Err(anyhow!("FFmpeg cannot handle TCP connection."));
-        }
-        match (&self.video, &self.audio) {
-            (Some(_), Some(_)) => Err(anyhow!(
-                "FFmpeg can't handle both audio and video on a single port over RTP."
-            )),
-            (Some(_video), None) => start_ffmpeg_send(
-                IP,
-                Some(self.port),
-                None,
-                integration_tests::examples::TestSample::ElephantsDreamH264Opus,
-            ),
-            (None, Some(_audio)) => start_ffmpeg_send(
-                IP,
-                None,
-                Some(self.port),
-                integration_tests::examples::TestSample::ElephantsDreamH264Opus,
-            ),
-            (None, None) => Err(anyhow!("No stream specified, ffmpeg not started!")),
-        }
-    }
+    pub fn build(self) -> (RtpInput, serde_json::Value) {
+        let register_request = self.serialize();
+        let rtp_input = RtpInput {
+            name: self.name,
+            port: self.port,
+            video: self.video,
+            audio: self.audio,
+            transport_protocol: self.transport_protocol,
+            stream_handles: vec![],
+        };
 
-    fn start_gstreamer_transmitter(&self) -> Result<()> {
-        match self.transport_protocol {
-            TransportProtocol::Udp => self.gstreamer_transmit_udp(),
-            TransportProtocol::TcpServer => self.gstreamer_transmit_tcp(),
-        }
+        (rtp_input, register_request)
     }
 }
 

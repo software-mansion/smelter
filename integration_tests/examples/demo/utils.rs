@@ -1,9 +1,6 @@
-use std::{
-    ops::Deref,
-    sync::{
-        atomic::{AtomicU16, Ordering},
-        OnceLock,
-    },
+use std::sync::{
+    atomic::{AtomicU16, Ordering},
+    OnceLock,
 };
 
 use anyhow::Result;
@@ -11,18 +8,17 @@ use inquire::Select;
 use integration_tests::examples;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
-use tracing::{error, warn};
+use tracing::{debug, warn};
 
 mod inputs;
 mod outputs;
 mod players;
 
-use inputs::{rtp::RtpInput, InputHandler};
+use inputs::InputHandler;
 
 use crate::utils::{
-    inputs::InputProtocol,
-    outputs::{rtp::RtpOutput, OutputHandler, OutputProtocol},
-    players::{InputPlayerOptions, OutputPlayerOptions},
+    inputs::{rtp::RtpInputBuilder, InputProtocol},
+    outputs::{rtp::RtpOutputBuilder, OutputHandler, OutputProtocol},
 };
 
 pub const IP: &str = "127.0.0.1";
@@ -55,48 +51,31 @@ impl SmelterState {
 
         let protocol = Select::new("Select input protocol:", prot_opts).prompt()?;
 
-        let input_handler: Box<dyn InputHandler> = match protocol {
-            InputProtocol::Rtp => Box::new(RtpInput::setup()?),
-            _ => {
-                warn!("Unimplemented!");
-                return Ok(());
-            }
-        };
+        let (mut input_handler, input_json): (Box<dyn InputHandler>, serde_json::Value) =
+            match protocol {
+                InputProtocol::Rtp => {
+                    let (rtp_input, register_request) = RtpInputBuilder::new().prompt()?.build();
+                    (Box::new(rtp_input), register_request)
+                }
+                _ => {
+                    warn!("Unimplemented!");
+                    return Ok(());
+                }
+            };
 
-        for output in &mut self.outputs {
-            output.add_input(input_handler.deref());
-            let update_route = format!("output/{}/update", output.name());
-            let update_json = output.serialize_update();
-            examples::post(&update_route, &update_json)?;
-        }
-
-        let input_json = input_handler.serialize();
         let input_route = format!("input/{}/register", input_handler.name());
 
         examples::post(&input_route, &input_json)?;
-
-        let player_options = InputPlayerOptions::iter().collect::<Vec<_>>();
-        loop {
-            let player_choice =
-                Select::new("Select transmitter:", player_options.clone()).prompt()?;
-            match player_choice {
-                InputPlayerOptions::StartFfmpegTransmitter => {
-                    match input_handler.start_ffmpeg_transmitter() {
-                        Ok(_) => break,
-                        Err(e) => error!("{e}"),
-                    }
-                }
-                InputPlayerOptions::StartGstreamerTransmitter => {
-                    match input_handler.start_gstreamer_transmitter() {
-                        Ok(_) => break,
-                        Err(e) => error!("{e}"),
-                    }
-                }
-                InputPlayerOptions::Manual => break,
-            }
-        }
-
+        input_handler.on_after_registration()?;
         self.inputs.push(input_handler);
+
+        for output in &mut self.outputs {
+            let update_route = format!("output/{}/update", output.name());
+            let inputs = self.inputs.iter().map(|i| i.name()).collect::<Vec<_>>();
+            let update_json = output.serialize_update(&inputs);
+            debug!("{update_json:#?}");
+            examples::post(&update_route, &update_json)?;
+        }
 
         Ok(())
     }
@@ -106,46 +85,27 @@ impl SmelterState {
 
         let protocol = Select::new("Select output protocol:", prot_opts).prompt()?;
 
-        let mut output_handler: Box<dyn OutputHandler> = match protocol {
-            OutputProtocol::Rtp => Box::new(RtpOutput::setup()?),
-            _ => {
-                warn!("Unimplemented!");
-                return Ok(());
-            }
-        };
+        let inputs = self.inputs.iter().map(|i| i.name()).collect::<Vec<_>>();
+        let (mut output_handler, output_json): (Box<dyn OutputHandler>, serde_json::Value) =
+            match protocol {
+                OutputProtocol::Rtp => {
+                    let (rtp_output, register_request) =
+                        RtpOutputBuilder::new().prompt()?.build(&inputs);
+                    (Box::new(rtp_output), register_request)
+                }
+                _ => {
+                    warn!("Unimplemented!");
+                    return Ok(());
+                }
+            };
 
-        output_handler.set_initial_scene(&self.inputs);
+        output_handler.on_before_registration()?;
 
-        let output_json = output_handler.serialize_register();
         let output_route = format!("output/{}/register", output_handler.name());
 
-        if output_handler.transport_protocol() == TransportProtocol::TcpServer {
-            examples::post(&output_route, &output_json)?;
-        }
+        examples::post(&output_route, &output_json)?;
 
-        let player_options = OutputPlayerOptions::iter().collect::<Vec<_>>();
-        loop {
-            let player_choice = Select::new("Select receiver", player_options.clone()).prompt()?;
-            match player_choice {
-                OutputPlayerOptions::StartFfmpegReceiver => {
-                    match output_handler.start_ffmpeg_receiver() {
-                        Ok(_) => break,
-                        Err(e) => error!("{e}"),
-                    }
-                }
-                OutputPlayerOptions::StartGstreamerReceiver => {
-                    match output_handler.start_gstreamer_receiver() {
-                        Ok(_) => break,
-                        Err(e) => error!("{e}"),
-                    }
-                }
-                OutputPlayerOptions::Manual => break,
-            }
-        }
-
-        if output_handler.transport_protocol() == TransportProtocol::Udp {
-            examples::post(&output_route, &output_json)?;
-        }
+        output_handler.on_after_registration()?;
 
         self.outputs.push(output_handler);
 
@@ -155,29 +115,31 @@ impl SmelterState {
     pub fn unregister_input(&mut self) -> Result<()> {
         let to_delete = Select::new(
             "Select input to remove:",
-            self.inputs.iter().clone().collect(),
+            self.inputs.iter().map(|i| i.name().to_string()).collect(),
         )
         .prompt()?;
 
         for output in &mut self.outputs {
-            output.remove_input(to_delete.deref());
             let update_route = format!("output/{}/update", output.name());
-            let update_json = output.serialize_update();
+            let inputs = self
+                .inputs
+                .iter()
+                .filter_map(|i| {
+                    if i.name() == to_delete {
+                        None
+                    } else {
+                        Some(i.name())
+                    }
+                })
+                .collect::<Vec<_>>();
+            let update_json = output.serialize_update(&inputs);
             examples::post(&update_route, &update_json)?;
         }
 
-        let unregister_route = format!("input/{}/unregister", to_delete.name());
+        let unregister_route = format!("input/{}/unregister", to_delete);
         examples::post(&unregister_route, &json!({}))?;
 
-        // Input to delete is chosen from existing inputs
-        // so it is guaranteed that it exists in vec.
-        let delete_index = self
-            .inputs
-            .iter()
-            .position(|input| input.name() == to_delete.name())
-            .unwrap();
-
-        self.inputs.remove(delete_index);
+        self.inputs.retain(|i| i.name() != to_delete);
 
         Ok(())
     }
@@ -185,20 +147,14 @@ impl SmelterState {
     pub fn unregister_output(&mut self) -> Result<()> {
         let to_delete = Select::new(
             "Select output to remove:",
-            self.outputs.iter().clone().collect(),
+            self.outputs.iter().map(|o| o.name().to_string()).collect(),
         )
         .prompt()?;
 
-        let unregister_route = format!("output/{}/unregister", to_delete.name());
+        let unregister_route = format!("output/{}/unregister", to_delete);
         examples::post(&unregister_route, &json!({}))?;
 
-        let delete_index = self
-            .outputs
-            .iter()
-            .position(|output| output.name() == to_delete.name())
-            .unwrap();
-
-        self.outputs.remove(delete_index);
+        self.outputs.retain(|o| o.name() != to_delete);
 
         Ok(())
     }

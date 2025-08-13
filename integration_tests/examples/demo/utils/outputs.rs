@@ -1,45 +1,21 @@
 use std::fmt::Debug;
 
 use anyhow::Result;
-use rand::RngCore;
 use serde_json::json;
 use strum::{Display, EnumIter};
-
-use crate::utils::{inputs::InputHandler, TransportProtocol};
 
 pub mod rtp;
 
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
-    fn port(&self) -> u16;
-    fn transport_protocol(&self) -> TransportProtocol;
-    fn serialize_register(&self) -> serde_json::Value;
-    fn serialize_update(&self) -> serde_json::Value;
-    fn inputs(&mut self) -> &mut Vec<String>;
-    fn start_ffmpeg_receiver(&self) -> Result<()>;
-    fn start_gstreamer_receiver(&self) -> Result<()>;
-
-    fn set_initial_scene(&mut self, inputs: &[Box<dyn InputHandler>]) {
-        for input in inputs {
-            self.inputs().push(input.name().to_string());
-        }
-    }
-
-    fn add_input(&mut self, input: &dyn InputHandler) {
-        self.inputs().push(input.name().to_string());
-    }
-
-    fn remove_input(&mut self, input: &dyn InputHandler) {
-        let index = self.inputs().iter().position(|name| name == input.name());
-        if let Some(i) = index {
-            self.inputs().remove(i);
-        }
-    }
+    fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value;
+    fn on_before_registration(&mut self) -> Result<()>;
+    fn on_after_registration(&mut self) -> Result<()>;
 }
 
 impl std::fmt::Display for dyn OutputHandler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}, port: {}", self.name(), self.port())
+        write!(f, "{}", self.name())
     }
 }
 
@@ -116,9 +92,4 @@ pub enum VideoEncoder {
 pub enum AudioEncoder {
     #[strum(to_string = "opus")]
     Opus,
-}
-
-pub fn output_name() -> String {
-    let suffix = rand::thread_rng().next_u32().to_string();
-    format!("output_{suffix}")
 }

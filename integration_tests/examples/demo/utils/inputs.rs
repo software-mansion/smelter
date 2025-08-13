@@ -1,5 +1,4 @@
 use anyhow::Result;
-use rand::RngCore;
 use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
@@ -9,15 +8,12 @@ pub mod whip;
 
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
-    fn port(&self) -> u16;
-    fn serialize(&self) -> serde_json::Value;
-    fn start_ffmpeg_transmitter(&self) -> Result<()>;
-    fn start_gstreamer_transmitter(&self) -> Result<()>;
+    fn on_after_registration(&mut self) -> Result<()>;
 }
 
 impl std::fmt::Display for dyn InputHandler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}, port: {}", self.name(), self.port())
+        write!(f, "{}", self.name())
     }
 }
 
@@ -50,9 +46,4 @@ pub enum AudioDecoder {
     #[strum(to_string = "opus")]
     Opus,
     // TODO: AAC
-}
-
-pub fn input_name() -> String {
-    let suffix = rand::thread_rng().next_u32().to_string();
-    format!("input_{suffix}")
 }
