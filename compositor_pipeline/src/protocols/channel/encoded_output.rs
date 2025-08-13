@@ -13,7 +13,7 @@ pub struct EncodedDataOutputOptions {
     pub audio: Option<AudioEncoderOptions>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum EncodedOutputEvent {
     Data(EncodedOutputChunk),
     AudioEOS,
@@ -24,6 +24,7 @@ pub enum EncodedOutputEvent {
 ///
 /// Many codecs specify that encoded data is split into chunks.
 /// For example, H264 splits the data into NAL units and AV1 splits the data into OBU frames.
+#[derive(Clone)]
 pub struct EncodedOutputChunk {
     pub data: bytes::Bytes,
     pub pts: Duration,

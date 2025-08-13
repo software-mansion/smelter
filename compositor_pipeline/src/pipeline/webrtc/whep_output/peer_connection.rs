@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use rand::Rng;
 use tokio::{sync::watch, time::timeout};
 use tracing::debug;
 use webrtc::{
@@ -79,7 +80,7 @@ impl PeerConnection {
     pub async fn new_video_track(
         &self,
         encoder: VideoEncoderOptions,
-    ) -> Result<(Arc<TrackLocalStaticRTP>, Arc<RTCRtpSender>), WhipWhepServerError> {
+    ) -> Result<(Arc<TrackLocalStaticRTP>, Arc<RTCRtpSender>, u32), WhipWhepServerError> {
         let mime_type = match encoder {
             VideoEncoderOptions::FfmpegH264(_) => MIME_TYPE_H264,
             VideoEncoderOptions::FfmpegVp8(_) => MIME_TYPE_VP8,
@@ -98,13 +99,19 @@ impl PeerConnection {
         ));
         let sender = self.pc.add_track(track.clone()).await?;
 
-        Ok((track, sender))
+        let rtc_sender_params = sender.get_parameters().await;
+        let ssrc = match rtc_sender_params.encodings.first() {
+            Some(e) => e.ssrc,
+            None => rand::thread_rng().gen::<u32>(),
+        };
+
+        Ok((track, sender, ssrc))
     }
 
     pub async fn new_audio_track(
         &self,
         encoder: AudioEncoderOptions,
-    ) -> Result<Arc<TrackLocalStaticRTP>, WhipWhepServerError> {
+    ) -> Result<(Arc<TrackLocalStaticRTP>, u32), WhipWhepServerError> {
         let track = match encoder {
             AudioEncoderOptions::Opus(opts) => {
                 let channels = match opts.channels {
@@ -131,9 +138,15 @@ impl PeerConnection {
             }
         };
 
-        self.pc.add_track(track.clone()).await?;
+        let sender = self.pc.add_track(track.clone()).await?;
 
-        Ok(track)
+        let rtc_sender_params = sender.get_parameters().await;
+        let ssrc = match rtc_sender_params.encodings.first() {
+            Some(e) => e.ssrc,
+            None => rand::thread_rng().gen::<u32>(),
+        };
+
+        Ok((track, ssrc))
     }
 
     pub async fn set_remote_description(

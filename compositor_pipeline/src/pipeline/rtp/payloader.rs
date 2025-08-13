@@ -26,7 +26,7 @@ pub struct PayloaderOptions {
 }
 
 pub(crate) struct Payloader {
-    payloader: Box<dyn rtp::packetizer::Payloader>,
+    payloader: Box<dyn rtp::packetizer::Payloader + Send>,
     mtu: usize,
     ssrc: u32,
     payload_type: u8,
@@ -35,9 +35,9 @@ pub(crate) struct Payloader {
 }
 
 impl Payloader {
-    fn new(options: PayloaderOptions) -> Self {
+    pub fn new(options: PayloaderOptions) -> Self {
         info!(?options, "Initialize RTP payloader");
-        let payloader: Box<dyn rtp::packetizer::Payloader> = match options.codec {
+        let payloader: Box<dyn rtp::packetizer::Payloader + Send> = match options.codec {
             PayloadedCodec::H264 => Box::new(H264Payloader::default()),
             PayloadedCodec::Vp8 => Box::new(Vp8Payloader::default()),
             PayloadedCodec::Vp9 => Box::new(Vp9Payloader::default()),
