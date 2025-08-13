@@ -165,26 +165,23 @@ impl InputHandler for RtpInput {
             return Err(anyhow!("FFmpeg cannot handle TCP connection."));
         }
         match (&self.video, &self.audio) {
-            (Some(_), Some(_)) => {
-                return Err(anyhow!(
-                    "FFmpeg can't handle both audio and video on a single port over RTP."
-                ));
-            }
+            (Some(_), Some(_)) => Err(anyhow!(
+                "FFmpeg can't handle both audio and video on a single port over RTP."
+            )),
             (Some(_video), None) => start_ffmpeg_send(
                 IP,
                 Some(self.port),
                 None,
                 integration_tests::examples::TestSample::ElephantsDreamH264Opus,
-            )?,
+            ),
             (None, Some(_audio)) => start_ffmpeg_send(
                 IP,
                 None,
                 Some(self.port),
                 integration_tests::examples::TestSample::ElephantsDreamH264Opus,
-            )?,
-            (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
+            ),
+            (None, None) => Err(anyhow!("No stream specified, ffmpeg not started!")),
         }
-        Ok(())
     }
 
     fn start_gstreamer_transmitter(&self) -> Result<()> {

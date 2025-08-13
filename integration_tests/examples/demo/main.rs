@@ -99,7 +99,7 @@ fn run_demo() -> Result<()> {
     // Inquire handles Ctrl+c, after it causes to break
     // out of the loop all players are killed
     Command::new("pkill")
-        .args(["ffmpeg", "ffplay"])
+        .args(["ffmpeg", "ffplay", "gst-launch"])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

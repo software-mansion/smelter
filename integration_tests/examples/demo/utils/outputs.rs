@@ -17,6 +17,7 @@ pub trait OutputHandler: Debug {
     fn serialize_update(&self) -> serde_json::Value;
     fn inputs(&mut self) -> &mut Vec<String>;
     fn start_ffmpeg_receiver(&self) -> Result<()>;
+    fn start_gstreamer_receiver(&self) -> Result<()>;
 
     fn set_initial_scene(&mut self, inputs: &[Box<dyn InputHandler>]) {
         for input in inputs {

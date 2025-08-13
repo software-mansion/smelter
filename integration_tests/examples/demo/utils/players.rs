@@ -5,6 +5,9 @@ pub enum OutputPlayerOptions {
     #[strum(to_string = "Start FFmpeg receiver")]
     StartFfmpegReceiver,
 
+    #[strum(to_string = "Start GStreamer receiver")]
+    StartGstreamerReceiver,
+
     #[strum(to_string = "Manual")]
     Manual,
 }

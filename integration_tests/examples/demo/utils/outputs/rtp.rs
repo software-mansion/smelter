@@ -1,7 +1,12 @@
 use anyhow::{anyhow, Result};
 use inquire::Select;
-use integration_tests::ffmpeg::{
-    start_ffmpeg_receive_h264, start_ffmpeg_receive_vp8, start_ffmpeg_receive_vp9,
+use integration_tests::{
+    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_receive_vp8, start_ffmpeg_receive_vp9},
+    gstreamer::{
+        start_gst_receive_tcp_h264, start_gst_receive_tcp_vp8, start_gst_receive_tcp_vp9,
+        start_gst_receive_tcp_without_video, start_gst_receive_udp_h264, start_gst_receive_udp_vp8,
+        start_gst_receive_udp_vp9, start_gst_receive_udp_without_video,
+    },
 };
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -113,6 +118,42 @@ impl RtpOutput {
         self.transport_protocol = prot;
         Ok(())
     }
+
+    fn start_gst_recv_tcp(&self) -> Result<()> {
+        if self.video.is_none() && self.audio.is_none() {
+            return Err(anyhow!("No stream specified, GStreamer not started!"));
+        }
+        match &self.video {
+            Some(video) => {
+                let audio = self.audio.is_some();
+                match video.encoder {
+                    VideoEncoder::FfmpegH264 => start_gst_receive_tcp_h264(IP, self.port, audio),
+                    VideoEncoder::FfmpegVp8 => start_gst_receive_tcp_vp8(IP, self.port, audio),
+                    VideoEncoder::FfmpegVp9 => start_gst_receive_tcp_vp9(IP, self.port, audio),
+                }
+            }
+            None => start_gst_receive_tcp_without_video(IP, self.port, true),
+        }
+    }
+
+    fn start_gst_recv_udp(&self) -> Result<()> {
+        if self.video.is_none() && self.audio.is_none() {
+            return Err(anyhow!("No stream specified, GStreamer not started!"));
+        }
+        match &self.video {
+            Some(video) => {
+                if self.audio.is_some() {
+                    return Err(anyhow!("Receiving both audio and video on the same port is possible only over TCP!"));
+                }
+                match video.encoder {
+                    VideoEncoder::FfmpegH264 => start_gst_receive_udp_h264(self.port, false),
+                    VideoEncoder::FfmpegVp8 => start_gst_receive_udp_vp8(self.port, false),
+                    VideoEncoder::FfmpegVp9 => start_gst_receive_udp_vp9(self.port, false),
+                }
+            }
+            None => start_gst_receive_udp_without_video(self.port, true),
+        }
+    }
 }
 
 impl OutputHandler for RtpOutput {
@@ -158,20 +199,24 @@ impl OutputHandler for RtpOutput {
             return Err(anyhow!("FFmpeg cannot handle TCP connection."));
         }
         match (&self.video, &self.audio) {
-            (Some(_), Some(_)) => {
-                return Err(anyhow!(
-                    "FFmpeg can't handle both audio and video on a single port over RTP."
-                ));
-            }
+            (Some(_), Some(_)) => Err(anyhow!(
+                "FFmpeg can't handle both audio and video on a single port over RTP."
+            )),
             (Some(video), None) => match video.encoder {
-                VideoEncoder::FfmpegH264 => start_ffmpeg_receive_h264(Some(self.port), None)?,
-                VideoEncoder::FfmpegVp8 => start_ffmpeg_receive_vp8(Some(self.port), None)?,
-                VideoEncoder::FfmpegVp9 => start_ffmpeg_receive_vp9(Some(self.port), None)?,
+                VideoEncoder::FfmpegH264 => start_ffmpeg_receive_h264(Some(self.port), None),
+                VideoEncoder::FfmpegVp8 => start_ffmpeg_receive_vp8(Some(self.port), None),
+                VideoEncoder::FfmpegVp9 => start_ffmpeg_receive_vp9(Some(self.port), None),
             },
-            (None, Some(_audio)) => start_ffmpeg_receive_h264(None, Some(self.port))?,
-            (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
+            (None, Some(_audio)) => start_ffmpeg_receive_h264(None, Some(self.port)),
+            (None, None) => Err(anyhow!("No stream specified, ffmpeg not started!")),
         }
-        Ok(())
+    }
+
+    fn start_gstreamer_receiver(&self) -> Result<()> {
+        match self.transport_protocol {
+            TransportProtocol::TcpServer => self.start_gst_recv_tcp(),
+            TransportProtocol::Udp => self.start_gst_recv_udp(),
+        }
     }
 }
 
