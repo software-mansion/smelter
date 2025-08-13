@@ -6,9 +6,9 @@ use smelter::{config::read_config, logger::init_logger};
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{debug, error};
 
-mod utils;
+mod smelter_state;
 
-use crate::utils::SmelterState;
+use crate::smelter_state::SmelterState;
 
 #[derive(Debug, EnumIter, Display, Clone, PartialEq)]
 pub enum Action {

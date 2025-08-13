@@ -1,6 +1,6 @@
 // WARN: Remove after implementing #remove
 #![allow(dead_code)]
-use crate::utils::inputs::InputHandler;
+use crate::smelter_state::inputs::InputHandler;
 use anyhow::Result;
 
 #[derive(Debug)]
