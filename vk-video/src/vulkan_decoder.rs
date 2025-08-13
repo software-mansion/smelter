@@ -73,12 +73,6 @@ pub enum VulkanDecoderError {
     #[error("Invalid input data for the decoder: {0}.")]
     InvalidInputData(String),
 
-    #[error("Profile changed during the stream")]
-    ProfileChangeUnsupported,
-
-    #[error("Level changed during the stream")]
-    LevelChangeUnsupported,
-
     #[error("Monochrome video is not supported")]
     MonochromeChromaFormatUnsupported,
 
@@ -194,7 +188,7 @@ impl VulkanDecoder<'_> {
             } => {
                 return self
                     .process_reference_frame(decode_info, *reference_id)
-                    .map(Option::Some)
+                    .map(Option::Some);
             }
 
             DecoderInstruction::Idr {
@@ -203,7 +197,7 @@ impl VulkanDecoder<'_> {
             } => {
                 return self
                     .process_idr(decode_info, *reference_id)
-                    .map(Option::Some)
+                    .map(Option::Some);
             }
 
             DecoderInstruction::Drop { reference_ids } => {
@@ -228,12 +222,7 @@ impl VulkanDecoder<'_> {
 
     fn process_sps(&mut self, sps: &SeqParameterSet) -> Result<(), VulkanDecoderError> {
         match self.video_session_resources.as_mut() {
-            Some(session) => session.process_sps(
-                &self.vulkan_device,
-                &self.command_buffers.decode_buffer,
-                sps.clone(),
-                &self.sync_structures.fence_memory_barrier_completed,
-            )?,
+            Some(session) => session.process_sps(sps.clone())?,
             None => {
                 self.video_session_resources = Some(VideoSessionResources::new_from_sps(
                     &self.vulkan_device,
@@ -291,6 +280,20 @@ impl VulkanDecoder<'_> {
             .video_session_resources
             .as_mut()
             .ok_or(VulkanDecoderError::NoSession)?;
+
+        if is_idr {
+            if let Some(sps) = video_session_resources
+                .sps_needing_reset
+                .remove(&decode_information.sps_id)
+            {
+                video_session_resources.reset_session(
+                    &self.vulkan_device,
+                    &self.command_buffers.decode_buffer,
+                    sps,
+                    &self.sync_structures.fence_memory_barrier_completed,
+                )?;
+            }
+        }
 
         // upload data to a buffer
         let size = Self::pad_size_to_alignment(
