@@ -18,7 +18,7 @@ use inputs::InputHandler;
 
 use crate::smelter_state::{
     inputs::{rtp::RtpInputBuilder, InputProtocol},
-    outputs::{rtp::RtpOutputBuilder, OutputHandler, OutputProtocol},
+    outputs::{rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder, OutputHandler, OutputProtocol},
 };
 
 pub const IP: &str = "127.0.0.1";
@@ -92,6 +92,11 @@ impl SmelterState {
                     let (rtp_output, register_request) =
                         RtpOutputBuilder::new().prompt()?.build(&inputs);
                     (Box::new(rtp_output), register_request)
+                }
+                OutputProtocol::Rtmp => {
+                    let (rtmp_output, register_request) =
+                        RtmpOutputBuilder::new().prompt()?.build(&inputs);
+                    (Box::new(rtmp_output), register_request)
                 }
                 _ => {
                     warn!("Unimplemented!");
