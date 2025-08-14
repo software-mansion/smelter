@@ -29,15 +29,15 @@ pub async fn handle_create_whip_session(
     headers: HeaderMap,
     offer: String,
 ) -> Result<Response<Body>, WhipWhepServerError> {
-    let session_id = Arc::from(id.clone());
+    let input_id = Arc::from(id.clone());
     trace!("SDP offer: {}", offer);
-    let inputs = state.inputs.clone();
+    let mut inputs = state.inputs.clone();
 
     validate_sdp_content_type(&headers)?;
-    inputs.validate_token(&session_id, &headers).await?;
+    inputs.validate_token(&input_id, &headers).await?;
 
     let video_preferences =
-        inputs.get_with(&session_id, |input| Ok(input.video_preferences.clone()))?;
+        inputs.get_with(&input_id, |input| Ok(input.video_preferences.clone()))?;
 
     let peer_connection = RecvonlyPeerConnection::new(&state.ctx, &video_preferences).await?;
 
@@ -58,11 +58,11 @@ pub async fn handle_create_whip_session(
     trace!("SDP answer: {}", sdp_answer.sdp);
 
     {
-        let session_id = session_id.clone();
+        let input_id = input_id.clone();
         let sync_point = RtpNtpSyncPoint::new(state.ctx.queue_sync_point);
         peer_connection.on_track(Box::new(move |track, _, transceiver| {
             debug!(
-                ?session_id,
+                ?input_id,
                 kind=?track.kind(),
                 "on_track called"
             );
@@ -75,7 +75,7 @@ pub async fn handle_create_whip_session(
                         process_audio_track(
                             sync_point.clone(),
                             state.clone(),
-                            session_id.clone(),
+                            input_id.clone(),
                             track,
                             transceiver,
                         )
@@ -87,7 +87,7 @@ pub async fn handle_create_whip_session(
                         process_video_track(
                             sync_point.clone(),
                             state.clone(),
-                            session_id.clone(),
+                            input_id.clone(),
                             track,
                             transceiver,
                             video_preferences.clone(),
@@ -103,18 +103,28 @@ pub async fn handle_create_whip_session(
             Box::pin(async {})
         }))
     };
+    let peer_connection_arc = Arc::new(peer_connection);
+    let session_id = inputs.add_session(&input_id, peer_connection_arc.clone())?;
 
     // It will fail if there is already connected peer connection
-    inputs.get_mut_with(&session_id, |input| {
-        input.maybe_replace_peer_connection(&session_id, peer_connection)
-    })?;
+    inputs.maybe_replace_peer_connection(&input_id, &session_id, peer_connection_arc)?; // TODO think about on which level of abstroction should be replace pc and what it exactly should do
+                                                                                        // inputs.get_mut_with(&input_id, |input| {
+                                                                                        //     input.maybe_replace_peer_connection(&input_id, peer_connection)
+                                                                                        // })?;
 
     let body = Body::from(sdp_answer.sdp.to_string());
     let response = Response::builder()
         .status(StatusCode::CREATED)
         .header("Content-Type", "application/sdp")
         .header("Access-Control-Expose-Headers", "Location")
-        .header("Location", format!("/whip/{}", urlencoding::encode(&id)))
+        .header(
+            "Location",
+            format!(
+                "/whip/{}/{}",
+                urlencoding::encode(&id),
+                urlencoding::encode(&input_id)
+            ),
+        )
         .body(body)?;
     Ok(response)
 }
