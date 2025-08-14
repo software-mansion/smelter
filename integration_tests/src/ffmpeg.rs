@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use compositor_api::Resolution;
 use log::info;
+use std::process::Child;
 
 use super::examples::{get_asset_path, TestSample};
 use std::{
@@ -18,7 +19,7 @@ enum Video {
     VP9,
 }
 
-pub fn start_ffmpeg_rtmp_receive(port: u16) -> Result<()> {
+pub fn start_ffmpeg_rtmp_receive(port: u16) -> Result<Child> {
     let output_address = format!("rtmp://0.0.0.0:{port}");
     let rtmp_listener = Command::new("ffmpeg")
         .args([
@@ -37,17 +38,20 @@ pub fn start_ffmpeg_rtmp_receive(port: u16) -> Result<()> {
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()?;
-    Command::new("ffplay")
+    let player = Command::new("ffplay")
         .args(["-f", "flv", "-i", "-"])
         .stdin(Stdio::from(rtmp_listener.stdout.unwrap()))
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
 
-    Ok(())
+    Ok(player)
 }
 
-pub fn start_ffmpeg_receive_h264(video_port: Option<u16>, audio_port: Option<u16>) -> Result<()> {
+pub fn start_ffmpeg_receive_h264(
+    video_port: Option<u16>,
+    audio_port: Option<u16>,
+) -> Result<Child> {
     let output_sdp_path = match (video_port, audio_port) {
         (Some(video_port), Some(audio_port)) => {
             info!(
@@ -70,17 +74,17 @@ pub fn start_ffmpeg_receive_h264(video_port: Option<u16>, audio_port: Option<u16
         }
     }?;
 
-    Command::new("ffplay")
+    let handle = Command::new("ffplay")
         .args(["-protocol_whitelist", "file,rtp,udp", &output_sdp_path])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
     thread::sleep(Duration::from_secs(2));
 
-    Ok(())
+    Ok(handle)
 }
 
-pub fn start_ffmpeg_receive_vp8(video_port: Option<u16>, audio_port: Option<u16>) -> Result<()> {
+pub fn start_ffmpeg_receive_vp8(video_port: Option<u16>, audio_port: Option<u16>) -> Result<Child> {
     let output_sdp_path = match (video_port, audio_port) {
         (Some(video_port), Some(audio_port)) => {
             info!(
@@ -103,17 +107,17 @@ pub fn start_ffmpeg_receive_vp8(video_port: Option<u16>, audio_port: Option<u16>
         }
     }?;
 
-    Command::new("ffplay")
+    let handle = Command::new("ffplay")
         .args(["-protocol_whitelist", "file,rtp,udp", &output_sdp_path])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
     thread::sleep(Duration::from_secs(2));
 
-    Ok(())
+    Ok(handle)
 }
 
-pub fn start_ffmpeg_receive_vp9(video_port: Option<u16>, audio_port: Option<u16>) -> Result<()> {
+pub fn start_ffmpeg_receive_vp9(video_port: Option<u16>, audio_port: Option<u16>) -> Result<Child> {
     let output_sdp_path = match (video_port, audio_port) {
         (Some(video_port), Some(audio_port)) => {
             info!(
@@ -136,17 +140,17 @@ pub fn start_ffmpeg_receive_vp9(video_port: Option<u16>, audio_port: Option<u16>
         }
     }?;
 
-    Command::new("ffplay")
+    let handle = Command::new("ffplay")
         .args(["-protocol_whitelist", "file,rtp,udp", &output_sdp_path])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
     thread::sleep(Duration::from_secs(2));
 
-    Ok(())
+    Ok(handle)
 }
 
-pub fn start_ffmpeg_receive_hls(playlist_path: &Path) -> Result<()> {
+pub fn start_ffmpeg_receive_hls(playlist_path: &Path) -> Result<Child> {
     for _ in 0..20 {
         if playlist_path.exists() && !std::fs::read_to_string(playlist_path)?.trim().is_empty() {
             break;
@@ -157,14 +161,14 @@ pub fn start_ffmpeg_receive_hls(playlist_path: &Path) -> Result<()> {
         return Err(anyhow!("Playlist file does not exist: {playlist_path:?}"));
     }
 
-    Command::new("ffplay")
+    let handle = Command::new("ffplay")
         .args(["-i", playlist_path.to_str().unwrap()])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
     thread::sleep(Duration::from_secs(2));
 
-    Ok(())
+    Ok(handle)
 }
 
 pub fn start_ffmpeg_send(
@@ -172,7 +176,7 @@ pub fn start_ffmpeg_send(
     video_port: Option<u16>,
     audio_port: Option<u16>,
     test_sample: TestSample,
-) -> Result<()> {
+) -> Result<(Option<Child>, Option<Child>)> {
     match test_sample {
         TestSample::BigBuckBunnyH264Opus | TestSample::ElephantsDreamH264Opus => {
             start_ffmpeg_send_from_file(
@@ -209,72 +213,89 @@ pub fn start_ffmpeg_send(
             Video::H264,
         ),
         TestSample::SampleH264 => match video_port {
-            Some(port) => start_ffmpeg_send_video_from_file(
+            Some(port) => start_ffmpeg_send_from_file(
                 ip,
-                port,
+                Some(port),
+                None,
                 get_asset_path(test_sample)?,
                 Video::H264,
             ),
             None => Err(anyhow!("video port required for test sample")),
         },
         TestSample::SampleVP8 => match video_port {
-            Some(port) => start_ffmpeg_send_video_from_file(
+            Some(port) => start_ffmpeg_send_from_file(
                 ip,
-                port,
+                Some(port),
+                None,
                 get_asset_path(test_sample)?,
                 Video::VP8,
             ),
             None => Err(anyhow!("video port required for test sample")),
         },
         TestSample::SampleVP9 => match video_port {
-            Some(port) => start_ffmpeg_send_video_from_file(
+            Some(port) => start_ffmpeg_send_from_file(
                 ip,
-                port,
+                Some(port),
+                None,
                 get_asset_path(test_sample)?,
                 Video::VP9,
             ),
             None => Err(anyhow!("video port required for test sample")),
         },
         TestSample::SampleLoopH264 => match video_port {
-            Some(port) => {
-                start_ffmpeg_send_video_from_file_loop(ip, port, get_asset_path(test_sample)?)
-            }
+            Some(port) => Ok((
+                Some(start_ffmpeg_send_video_from_file_loop(
+                    ip,
+                    port,
+                    get_asset_path(test_sample)?,
+                )?),
+                None,
+            )),
             None => Err(anyhow!("video port required for test sample")),
         },
         TestSample::TestPatternH264 => match video_port {
-            Some(port) => start_ffmpeg_send_testsrc(
-                ip,
-                port,
-                Resolution {
-                    width: 1920,
-                    height: 1080,
-                },
-                Video::H264,
-            ),
+            Some(port) => Ok((
+                Some(start_ffmpeg_send_testsrc(
+                    ip,
+                    port,
+                    Resolution {
+                        width: 1920,
+                        height: 1080,
+                    },
+                    Video::H264,
+                )?),
+                None,
+            )),
             None => Err(anyhow!("video port required for generic")),
         },
         TestSample::TestPatternVP8 => match video_port {
-            Some(port) => start_ffmpeg_send_testsrc(
-                ip,
-                port,
-                Resolution {
-                    width: 1280,
-                    height: 720,
-                },
-                Video::VP8,
-            ),
+            Some(port) => Ok((
+                Some(start_ffmpeg_send_testsrc(
+                    ip,
+                    port,
+                    Resolution {
+                        width: 1280,
+                        height: 720,
+                    },
+                    Video::VP8,
+                )?),
+                None,
+            )),
             None => Err(anyhow!("video port required for generic")),
         },
         TestSample::TestPatternVP9 => match video_port {
-            Some(port) => start_ffmpeg_send_testsrc(
-                ip,
-                port,
-                Resolution {
-                    width: 1920,
-                    height: 1080,
-                },
-                Video::VP9,
-            ),
+            Some(port) => Ok((
+                Some(start_ffmpeg_send_testsrc(
+                    ip,
+                    port,
+                    Resolution {
+                        width: 1920,
+                        height: 1080,
+                    },
+                    Video::VP9,
+                )?),
+                None,
+            )),
             None => Err(anyhow!("video port required for generic")),
         },
     }
@@ -286,21 +307,31 @@ fn start_ffmpeg_send_from_file(
     audio_port: Option<u16>,
     path: PathBuf,
     video_codec: Video,
-) -> Result<()> {
+) -> Result<(Option<Child>, Option<Child>)> {
     if video_port.is_none() && audio_port.is_none() {
         return Err(anyhow!(
             "At least one of: 'video_port', 'audio_port' has to be specified."
         ));
     }
 
-    if let Some(port) = video_port {
-        start_ffmpeg_send_video_from_file(ip, port, path.clone(), video_codec)?;
-    }
-    if let Some(port) = audio_port {
-        start_ffmpeg_send_audio_from_file(ip, port, path, "libopus")?
-    }
+    let video_handle = match video_port {
+        Some(port) => Some(start_ffmpeg_send_video_from_file(
+            ip,
+            port,
+            path.clone(),
+            video_codec,
+        )?),
+        None => None,
+    };
 
-    Ok(())
+    let audio_handle = match audio_port {
+        Some(port) => Some(start_ffmpeg_send_audio_from_file(
+            ip, port, path, "libopus",
+        )?),
+        None => None,
+    };
+
+    Ok((video_handle, audio_handle))
 }
 
 fn start_ffmpeg_send_from_file_aac(
@@ -309,21 +340,31 @@ fn start_ffmpeg_send_from_file_aac(
     audio_port: Option<u16>,
     path: PathBuf,
     video_codec: Video,
-) -> Result<()> {
+) -> Result<(Option<Child>, Option<Child>)> {
     if video_port.is_none() && audio_port.is_none() {
         return Err(anyhow!(
             "At least one of: 'video_port', 'audio_port' has to be specified."
         ));
     }
 
-    if let Some(port) = video_port {
-        start_ffmpeg_send_video_from_file(ip, port, path.clone(), video_codec)?;
-    }
-    if let Some(port) = audio_port {
-        start_ffmpeg_send_audio_from_file(ip, port, path, "aac")?
-    }
+    let video_handle = match video_port {
+        Some(port) => Some(start_ffmpeg_send_video_from_file(
+            ip,
+            port,
+            path.clone(),
+            video_codec,
+        )?),
+        None => None,
+    };
 
-    Ok(())
+    let audio_handle = match audio_port {
+        Some(port) => Some(start_ffmpeg_send_audio_from_file(
+            ip, port, path, "libopus",
+        )?),
+        None => None,
+    };
+
+    Ok((video_handle, audio_handle))
 }
 
 fn start_ffmpeg_send_video_from_file(
@@ -331,7 +372,7 @@ fn start_ffmpeg_send_video_from_file(
     port: u16,
     path: PathBuf,
     video_codec: Video,
-) -> Result<()> {
+) -> Result<Child> {
     info!("[example] Start sending video to input port {port}.");
 
     let codec_specific_options = match video_codec {
@@ -340,7 +381,7 @@ fn start_ffmpeg_send_video_from_file(
         Video::VP9 => vec!["-strict", "experimental"],
     };
 
-    Command::new("ffmpeg")
+    let handle = Command::new("ffmpeg")
         .args(["-re", "-i"])
         .arg(path)
         .args(["-an", "-c:v", "copy", "-f", "rtp"])
@@ -350,13 +391,13 @@ fn start_ffmpeg_send_video_from_file(
         .stderr(Stdio::null())
         .spawn()?;
 
-    Ok(())
+    Ok(handle)
 }
 
-fn start_ffmpeg_send_video_from_file_loop(ip: &str, port: u16, path: PathBuf) -> Result<()> {
+fn start_ffmpeg_send_video_from_file_loop(ip: &str, port: u16, path: PathBuf) -> Result<Child> {
     info!("[example] Start sending video loop to input port {port}.");
 
-    Command::new("ffmpeg")
+    let handle = Command::new("ffmpeg")
         .args(["-stream_loop", "-1", "-re", "-i"])
         .arg(path)
         .args([
@@ -373,7 +414,7 @@ fn start_ffmpeg_send_video_from_file_loop(ip: &str, port: u16, path: PathBuf) ->
         .stderr(Stdio::null())
         .spawn()?;
 
-    Ok(())
+    Ok(handle)
 }
 
 fn start_ffmpeg_send_audio_from_file(
@@ -381,10 +422,10 @@ fn start_ffmpeg_send_audio_from_file(
     port: u16,
     path: PathBuf,
     codec: &str,
-) -> Result<()> {
+) -> Result<Child> {
     info!("[example] Start sending audio to input port {port}.");
 
-    Command::new("ffmpeg")
+    let handle = Command::new("ffmpeg")
         .args(["-stream_loop", "-1", "-re", "-i"])
         .arg(path.clone())
         .args([
@@ -399,7 +440,7 @@ fn start_ffmpeg_send_audio_from_file(
         .stderr(Stdio::null())
         .spawn()?;
 
-    Ok(())
+    Ok(handle)
 }
 
 fn start_ffmpeg_send_testsrc(
@@ -407,7 +448,7 @@ fn start_ffmpeg_send_testsrc(
     port: u16,
     resolution: Resolution,
     video_codec: Video,
-) -> Result<()> {
+) -> Result<Child> {
     info!("[example] Start sending generic video to input port {port}.");
 
     let ffmpeg_source = format!(
@@ -439,7 +480,7 @@ fn start_ffmpeg_send_testsrc(
         ],
     };
 
-    Command::new("ffmpeg")
+    let handle = Command::new("ffmpeg")
         .args(["-re", "-f", "lavfi", "-i", &ffmpeg_source, "-c:v"])
         .args(codec)
         .args(["-f", "rtp", &format!("rtp://{ip}:{port}?rtcpport={port}")])
@@ -447,7 +488,7 @@ fn start_ffmpeg_send_testsrc(
         .stderr(Stdio::null())
         .spawn()?;
 
-    Ok(())
+    Ok(handle)
 }
 
 /// The SDP file will describe an RTP session on localhost with H264 encoding.

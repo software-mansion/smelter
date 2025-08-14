@@ -29,6 +29,8 @@ pub fn post<T: Serialize + ?Sized>(route: &str, json: &T) -> Result<Response> {
         .timeout(Duration::from_secs(100))
         .json(json)
         .send()
+        // TODO: (@jbrs) Handle this if couldn't connect to the server as it is
+        // manually started now
         .unwrap();
     if response.status() >= StatusCode::BAD_REQUEST {
         log_request_error(&json, response);
@@ -54,6 +56,22 @@ pub fn run_example(client_code: fn() -> Result<()>) {
                 process::exit(1);
             }
         });
+
+        start_server_msg_listener();
+    });
+    server::run();
+}
+
+pub fn run_example_server() {
+    thread::spawn(move || {
+        ffmpeg_next::format::network::init();
+
+        download_all_assets().unwrap();
+
+        if let Err(err) = wait_for_server_ready(Duration::from_secs(10)) {
+            error!("{err}");
+            process::exit(1);
+        }
 
         start_server_msg_listener();
     });
