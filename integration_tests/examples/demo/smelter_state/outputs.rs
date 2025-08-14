@@ -93,4 +93,7 @@ pub enum VideoEncoder {
 pub enum AudioEncoder {
     #[strum(to_string = "opus")]
     Opus,
+
+    #[strum(to_string = "aac")]
+    Aac,
 }
