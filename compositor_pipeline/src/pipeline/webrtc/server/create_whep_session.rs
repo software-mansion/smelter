@@ -61,7 +61,7 @@ pub async fn handle_create_whep_session(
         Some(encoder) => {
             let (track, sender, ssrc) = peer_connection.new_video_track(encoder.clone()).await?;
             let payloader = init_video_payloader(encoder, ssrc);
-            (Some(track), Some(sender), payloader)
+            (Some(track), Some(sender), Some(payloader))
         }
         None => (None, None, None),
     };
@@ -69,8 +69,8 @@ pub async fn handle_create_whep_session(
     let (audio_track, audio_payloader) = match audio_encoder.clone() {
         Some(encoder) => {
             let (track, ssrc) = peer_connection.new_audio_track(encoder.clone()).await?;
-            let payloader = init_audio_payloader(encoder, ssrc);
-            (Some(track), payloader)
+            let payloader = init_audio_payloader(ssrc);
+            (Some(track), Some(payloader))
         }
         None => (None, None),
     };
@@ -80,16 +80,22 @@ pub async fn handle_create_whep_session(
 
     let session_id = outputs.add_session(&output_id, Arc::new(peer_connection))?;
 
-    let video_media_stream = MediaStream {
-        receiver: video_receiver,
-        track: video_track,
-        payloader: video_payloader,
+    let video_media_stream = match (video_receiver, video_track, video_payloader) {
+        (Some(receiver), Some(track), Some(payloader)) => Some(MediaStream {
+            receiver,
+            track,
+            payloader,
+        }),
+        _ => None,
     };
 
-    let audio_media_stream = MediaStream {
-        receiver: audio_receiver,
-        track: audio_track,
-        payloader: audio_payloader,
+    let audio_media_stream = match (audio_receiver, audio_track, audio_payloader) {
+        (Some(receiver), Some(track), Some(payloader)) => Some(MediaStream {
+            receiver,
+            track,
+            payloader,
+        }),
+        _ => None,
     };
 
     tokio::spawn(stream_media_to_peer(
