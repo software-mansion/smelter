@@ -4,6 +4,7 @@ use anyhow::Result;
 use serde_json::json;
 use strum::{Display, EnumIter};
 
+pub mod rtmp;
 pub mod rtp;
 
 pub trait OutputHandler: Debug {
@@ -92,4 +93,7 @@ pub enum VideoEncoder {
 pub enum AudioEncoder {
     #[strum(to_string = "opus")]
     Opus,
+
+    #[strum(to_string = "aac")]
+    Aac,
 }
