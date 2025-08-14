@@ -84,7 +84,7 @@ impl RtmpOutputBuilder {
             RtmpRegisterOptions::Skip,
         ];
         let audio_options = vec![
-            RtmpRegisterOptions::AddVideoStream,
+            RtmpRegisterOptions::AddAudioStream,
             RtmpRegisterOptions::Skip,
         ];
 
