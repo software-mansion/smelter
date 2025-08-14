@@ -24,13 +24,12 @@ impl TryFrom<Mp4Input> for pipeline::RegisterInputOptions {
                 return Err(TypeError::new(BAD_URL_PATH_SPEC));
             }
             (Some(url), None) => pipeline::Mp4InputSource::Url(url),
-            (None, Some(path)) => pipeline::Mp4InputSource::File(path.into()),
+            (None, Some(path)) => pipeline::Mp4InputSource::File(path),
         };
 
         let queue_options = compositor_pipeline::QueueInputOptions {
             required: required.unwrap_or(false),
             offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
-            buffer_duration: None,
         };
 
         let video_decoders = match decoder_map {

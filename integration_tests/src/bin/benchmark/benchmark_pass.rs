@@ -244,12 +244,11 @@ impl SingleBenchmarkPass {
                 input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
                     should_loop: true,
                     video_decoders: Mp4InputVideoDecoders { h264: self.decoder },
-                    source: Mp4InputSource::File(path.to_path_buf()),
+                    source: Mp4InputSource::File(path.to_path_buf().into()),
                 }),
                 queue_options: QueueInputOptions {
                     offset: None,
                     required: true,
-                    buffer_duration: None,
                 },
             },
         )
@@ -266,11 +265,11 @@ impl SingleBenchmarkPass {
             RawDataInputOptions {
                 video: true,
                 audio: false,
+                buffer_duration: None,
             },
             QueueInputOptions {
                 offset: None,
                 required: true,
-                buffer_duration: None,
             },
         )?;
 

@@ -1,5 +1,5 @@
 use core::f64;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -12,9 +12,9 @@ use crate::*;
 #[serde(deny_unknown_fields)]
 pub struct Mp4Input {
     /// URL of the MP4 file.
-    pub url: Option<String>,
+    pub url: Option<Arc<str>>,
     /// Path to the MP4 file.
-    pub path: Option<String>,
+    pub path: Option<Arc<Path>>,
     /// (**default=`false`**) If input should be played in the loop. <span class="badge badge--primary">Added in v0.4.0</span>
     #[serde(rename = "loop")]
     pub should_loop: Option<bool>,

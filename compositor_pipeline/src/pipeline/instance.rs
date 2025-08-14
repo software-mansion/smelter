@@ -268,7 +268,7 @@ impl Pipeline {
             return Err(UpdateSceneError::AudioVideoNotMatching(output_id));
         };
 
-        info!(?output_id, "Update scene {:#?}", scene_root);
+        info!(?output_id, "Update scene {:?}", scene_root);
 
         self.renderer.update_scene(
             output_id,
@@ -296,7 +296,7 @@ impl Pipeline {
             }
         }
 
-        info!(?output_id, "Update audio mixer {:#?}", audio);
+        info!(?output_id, "Update audio mixer {:?}", audio);
         self.audio_mixer.update_output(output_id, audio)
     }
 
@@ -504,8 +504,11 @@ fn create_pipeline(
 
     let ctx = Arc::new(PipelineCtx {
         queue_sync_point: Instant::now(),
+        default_buffer_duration: opts.default_buffer_duration,
+
         mixing_sample_rate: opts.mixing_sample_rate,
         output_framerate: opts.output_framerate,
+
         stun_servers: opts.whip_whep_stun_servers.clone(),
         download_dir,
         event_emitter: Arc::new(EventEmitter::new()),

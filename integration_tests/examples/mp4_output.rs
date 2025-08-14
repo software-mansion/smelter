@@ -1,7 +1,7 @@
 use anyhow::Result;
 use compositor_api::Resolution;
 use serde_json::json;
-use std::{thread::sleep, time::Duration};
+use std::time::Duration;
 
 use integration_tests::examples::{self, run_example};
 
@@ -18,24 +18,6 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    examples::post(
-        "input/input_1/register",
-        &json!({
-            "type": "mp4",
-            "url": BUNNY_URL,
-            "required": true,
-            "offset_ms": 0,
-        }),
-    )?;
-
-    let shader_source = include_str!("./silly.wgsl");
-    examples::post(
-        "shader/shader_example_1/register",
-        &json!({
-            "source": shader_source,
-        }),
-    )?;
-
     examples::post(
         "output/output_1/register",
         &json!({
@@ -73,11 +55,23 @@ fn client_code() -> Result<()> {
     )?;
 
     std::thread::sleep(Duration::from_millis(500));
-
+    examples::post(
+        "input/input_1/register",
+        &json!({
+            "type": "mp4",
+            "url": BUNNY_URL,
+            "offset_ms": 2000,
+            "required": true,
+        }),
+    )?;
     examples::post("start", &json!({}))?;
 
-    sleep(Duration::from_secs(20));
-    examples::post("output/output_1/unregister", &json!({}))?;
+    examples::post(
+        "output/output_1/unregister",
+        &json!({
+            "schedule_time_ms": 50000
+        }),
+    )?;
 
     Ok(())
 }

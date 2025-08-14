@@ -23,7 +23,6 @@ use crate::prelude::*;
 use self::{
     audio_queue::AudioQueue,
     queue_thread::{QueueStartEvent, QueueThread},
-    utils::Clock,
     video_queue::VideoQueue,
 };
 
@@ -37,9 +36,7 @@ pub struct QueueDataReceiver {
 
 #[derive(Debug, Clone, Copy)]
 pub struct QueueOptions {
-    pub default_buffer_duration: Duration,
     pub output_framerate: Framerate,
-
     pub ahead_of_time_processing: bool,
     pub run_late_scheduled_events: bool,
     pub never_drop_output_frames: bool,
@@ -48,7 +45,6 @@ pub struct QueueOptions {
 impl From<&PipelineOptions> for QueueOptions {
     fn from(opt: &PipelineOptions) -> Self {
         Self {
-            default_buffer_duration: opt.default_buffer_duration,
             output_framerate: opt.output_framerate,
 
             ahead_of_time_processing: opt.ahead_of_time_processing,
@@ -61,11 +57,17 @@ impl From<&PipelineOptions> for QueueOptions {
 /// Queue is responsible for consuming frames from different inputs and producing
 /// sets of frames from all inputs in a single batch.
 ///
-/// - PTS of inputs streams can be in any frame of reference.
-/// - PTS of frames stored in queue are in a frame of reference where PTS=0 represents.
-///   first frame/packet.
-/// - PTS of output frames is in a frame of reference where PTS=0 represents
-///   start request.
+/// - All PTS values represent duration from sync_point stored in pipeline.
+///   (That will mean that pts of queue start will not be zero)
+///   - If input has offset defined it is applied in queue, timestamps before represent
+///     packets as if there was no offset
+///   - offset value is counted from `start`, to calculate offset_pts you need to add queue_start_pts
+/// - Conversion from/to this time frame should happen
+///   - on input as early as possible (before decoder when handling protocol/container)
+///   - on output as late as possible (after encoder when handling protocol/container)
+/// - All public timestamp values should refer to time after start.
+///   `queue_start_pts = sync_point - queue_start_time`
+///   `public_pts = internal_pts - queue_start_pts`
 pub struct Queue {
     video_queue: Mutex<VideoQueue>,
     audio_queue: Mutex<AudioQueue>,
@@ -75,8 +77,6 @@ pub struct Queue {
     /// Duration of queue output samples set.
     audio_chunk_duration: Duration,
 
-    /// Define if queue should process frames if all inputs are ready.
-    ahead_of_time_processing: bool,
     /// If true do not drop output frames even if queue is behind the
     /// real time clock.
     never_drop_output_frames: bool,
@@ -86,19 +86,20 @@ pub struct Queue {
     /// false - Event will be discarded.
     run_late_scheduled_events: bool,
 
-    default_buffer_duration: Duration,
-
-    start_time: Mutex<Option<Instant>>,
+    sync_point: Instant,
+    /// Duration since sync point, represents time of
+    /// the queue start
+    start_time_pts: Mutex<Option<Duration>>,
     start_sender: Mutex<Option<Sender<QueueStartEvent>>>,
     scheduled_event_sender: Sender<ScheduledEvent>,
-
-    clock: Clock,
 
     should_close: AtomicBool,
 }
 
 #[derive(Debug)]
 pub(super) struct QueueVideoOutput {
+    // If required this batch can't be dropped even if processing is behind
+    pub(super) required: bool,
     pub(super) pts: Duration,
     pub(super) frames: HashMap<InputId, PipelineEvent<Frame>>,
 }
@@ -124,6 +125,7 @@ pub(super) struct QueueAudioOutput {
     pub samples: HashMap<InputId, PipelineEvent<Vec<InputAudioSamples>>>,
     pub start_pts: Duration,
     pub end_pts: Duration,
+    pub required: bool,
 }
 
 impl From<QueueAudioOutput> for InputSamplesSet {
@@ -143,14 +145,8 @@ impl From<QueueAudioOutput> for InputSamplesSet {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct InputOptions {
-    required: bool,
-    offset: Option<Duration>,
-    buffer_duration: Duration,
-}
-
 pub struct ScheduledEvent {
+    /// Public PTS value (relative to start, not to the sync_point)
     pts: Duration,
     callback: Box<dyn FnOnce() + Send>,
 }
@@ -168,23 +164,30 @@ impl Queue {
     pub(crate) fn new(opts: QueueOptions, ctx: &Arc<PipelineCtx>) -> Arc<Self> {
         let (queue_start_sender, queue_start_receiver) = bounded(0);
         let (scheduled_event_sender, scheduled_event_receiver) = bounded(0);
+        let sync_point = ctx.queue_sync_point;
         let queue = Arc::new(Queue {
-            video_queue: Mutex::new(VideoQueue::new(ctx.event_emitter.clone())),
+            video_queue: Mutex::new(VideoQueue::new(
+                sync_point,
+                ctx.event_emitter.clone(),
+                opts.ahead_of_time_processing,
+            )),
             output_framerate: opts.output_framerate,
 
-            audio_queue: Mutex::new(AudioQueue::new(ctx.event_emitter.clone())),
+            audio_queue: Mutex::new(AudioQueue::new(
+                sync_point,
+                ctx.event_emitter.clone(),
+                opts.ahead_of_time_processing,
+            )),
             audio_chunk_duration: DEFAULT_AUDIO_CHUNK_DURATION,
 
-            start_time: Mutex::new(None),
+            sync_point,
+            start_time_pts: Mutex::new(None),
 
             scheduled_event_sender,
             start_sender: Mutex::new(Some(queue_start_sender)),
-            ahead_of_time_processing: opts.ahead_of_time_processing,
             never_drop_output_frames: opts.never_drop_output_frames,
             run_late_scheduled_events: opts.run_late_scheduled_events,
-            default_buffer_duration: opts.default_buffer_duration,
 
-            clock: Clock::new(),
             should_close: AtomicBool::new(false),
         });
 
@@ -208,26 +211,21 @@ impl Queue {
         receiver: QueueDataReceiver,
         opts: QueueInputOptions,
     ) {
-        let input_options = InputOptions {
-            required: opts.required,
-            offset: opts.offset,
-            buffer_duration: opts.buffer_duration.unwrap_or(self.default_buffer_duration),
-        };
-
+        let shared_state = SharedState::default();
         if let Some(receiver) = receiver.video {
             self.video_queue.lock().unwrap().add_input(
                 input_id,
                 receiver,
-                input_options,
-                self.clock.clone(),
+                opts,
+                shared_state.clone(),
             );
         };
         if let Some(receiver) = receiver.audio {
             self.audio_queue.lock().unwrap().add_input(
                 input_id,
                 receiver,
-                input_options,
-                self.clock.clone(),
+                opts,
+                shared_state.clone(),
             );
         }
     }
@@ -243,13 +241,13 @@ impl Queue {
         audio_sender: Sender<QueueAudioOutput>,
     ) {
         if let Some(sender) = self.start_sender.lock().unwrap().take() {
-            let start_time = Instant::now();
-            *self.start_time.lock().unwrap() = Some(start_time);
+            let start_time_pts = Instant::now().duration_since(self.sync_point);
+            *self.start_time_pts.lock().unwrap() = Some(start_time_pts);
             sender
                 .send(QueueStartEvent {
                     audio_sender,
                     video_sender,
-                    start_time,
+                    start_time_pts,
                 })
                 .unwrap()
         }
@@ -268,5 +266,21 @@ impl Debug for ScheduledEvent {
             .field("pts", &self.pts)
             .field("callback", &"<callback>".to_string())
             .finish()
+    }
+}
+
+// struct that holds first PTS of either video or audio track,
+// when input has an offset defined, this value can be used to calculate
+// new PTS values while preserving synchronization between tracks
+#[derive(Default, Clone)]
+struct SharedState(Arc<Mutex<Option<Duration>>>);
+
+impl SharedState {
+    fn get_or_init_first_pts(&self, pts: Duration) -> Duration {
+        *self.0.lock().unwrap().get_or_insert(pts)
+    }
+
+    fn first_pts(&self) -> Option<Duration> {
+        *self.0.lock().unwrap()
     }
 }

@@ -30,7 +30,6 @@ use crate::prelude::*;
 struct StreamState {
     index: usize,
     time_base: Rational,
-    timestamp_offset: Option<Duration>,
 }
 
 pub struct HlsOutput {
@@ -91,7 +90,6 @@ impl HlsOutput {
                 Some(encoder),
                 Some(StreamState {
                     index,
-                    timestamp_offset: None,
                     time_base: output_ctx.stream(index).unwrap().time_base(),
                 }),
             ),
@@ -103,7 +101,6 @@ impl HlsOutput {
                 Some(encoder),
                 Some(StreamState {
                     index,
-                    timestamp_offset: None,
                     time_base: output_ctx.stream(index).unwrap().time_base(),
                 }),
             ),
@@ -281,16 +278,19 @@ fn run_ffmpeg_output_thread(
 ) {
     let mut received_video_eos = video_stream.as_ref().map(|_| false);
     let mut received_audio_eos = audio_stream.as_ref().map(|_| false);
+    let mut timestamp_offset = None;
 
     for packet in packets_receiver {
         match packet {
             EncodedOutputEvent::Data(chunk) => {
+                let timestamp_offset = *timestamp_offset.get_or_insert(chunk.pts);
                 write_chunk(
                     chunk,
                     &mut video_stream,
                     &mut audio_stream,
                     &mut output_ctx,
                     framerate.get_interval_duration(),
+                    timestamp_offset,
                 );
             }
             EncodedOutputEvent::VideoEOS => match received_video_eos {
@@ -328,6 +328,7 @@ fn write_chunk(
     audio_stream: &mut Option<StreamState>,
     output_ctx: &mut ffmpeg::format::context::Output,
     frame_duration: Duration,
+    timestamp_offset: Duration,
 ) {
     let stream = match chunk.kind {
         MediaKind::Video(_) => {
@@ -349,9 +350,6 @@ fn write_chunk(
             }
         }
     };
-
-    // Starting output PTS from 0
-    let timestamp_offset = *stream.timestamp_offset.get_or_insert(chunk.pts);
 
     let pts = chunk.pts.saturating_sub(timestamp_offset);
     let dts = chunk
