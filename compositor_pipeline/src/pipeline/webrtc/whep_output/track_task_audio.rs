@@ -1,6 +1,5 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use compositor_render::error::ErrorStack;
 use tokio::sync::broadcast;
 use tracing::warn;
 
@@ -9,10 +8,6 @@ use crate::{
     pipeline::{
         encoder::{AudioEncoder, AudioEncoderStream},
         resampler::encoder_resampler::ResampledForEncoderStream,
-        rtp::{
-            payloader::{PayloaderOptions, PayloaderStream},
-            RtpPacket,
-        },
     },
     thread_utils::{InitializableThread, ThreadMetadata},
 };
@@ -25,13 +20,12 @@ pub(crate) struct WhepAudioTrackThreadHandle {
 pub(super) struct WhepAudioTrackThreadOptions<Encoder: AudioEncoder> {
     pub ctx: Arc<PipelineCtx>,
     pub encoder_options: Encoder::Options,
-    pub payloader_options: PayloaderOptions,
-    pub chunks_sender: broadcast::Sender<RtpPacket>,
+    pub chunks_sender: broadcast::Sender<EncodedOutputEvent>,
 }
 
 pub(super) struct WhepAudioTrackThread<Encoder: AudioEncoder> {
-    stream: Box<dyn Iterator<Item = RtpPacket>>,
-    chunks_sender: broadcast::Sender<RtpPacket>,
+    stream: Box<dyn Iterator<Item = EncodedOutputEvent>>,
+    chunks_sender: broadcast::Sender<EncodedOutputEvent>,
     _encoder: PhantomData<Encoder>,
 }
 
@@ -48,7 +42,6 @@ where
         let WhepAudioTrackThreadOptions {
             ctx,
             encoder_options,
-            payloader_options,
             chunks_sender,
         } = options;
 
@@ -64,18 +57,9 @@ where
         let (encoded_stream, _encoder_ctx) =
             AudioEncoderStream::<Encoder, _>::new(ctx, encoder_options, resampled_stream)?;
 
-        let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
-
-        let stream = payloaded_stream.flatten().filter_map(|event| match event {
-            Ok(PipelineEvent::Data(packet)) => Some(packet),
-            Ok(PipelineEvent::EOS) => None,
-            Err(err) => {
-                warn!(
-                    "Depayloading error: {}",
-                    ErrorStack::new(&err).into_string()
-                );
-                None
-            }
+        let stream = encoded_stream.flatten().map(|event| match event {
+            PipelineEvent::Data(packet) => EncodedOutputEvent::Data(packet),
+            PipelineEvent::EOS => EncodedOutputEvent::AudioEOS,
         });
 
         let state = Self {

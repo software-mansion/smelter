@@ -1,7 +1,11 @@
 use crate::pipeline::webrtc::{
     error::WhipWhepServerError,
     handle_keyframe_requests::handle_keyframe_requests,
-    whep_output::{peer_connection::PeerConnection, stream_media_to_peer::stream_media_to_peer},
+    whep_output::{
+        init_payloaders::{init_audio_payloader, init_video_payloader},
+        peer_connection::PeerConnection,
+        stream_media_to_peer::{stream_media_to_peer, MediaStream},
+    },
     WhipWhepServerState,
 };
 use axum::{
@@ -53,17 +57,22 @@ pub async fn handle_create_whep_session(
     let peer_connection =
         PeerConnection::new(&ctx.clone(), video_encoder.clone(), audio_encoder.clone()).await?;
 
-    let (video_track, video_sender) = match video_encoder {
+    let (video_track, video_sender, video_payloader) = match video_encoder.clone() {
         Some(encoder) => {
-            let (track, sender) = peer_connection.new_video_track(encoder).await?;
-            (Some(track), Some(sender))
+            let (track, sender, ssrc) = peer_connection.new_video_track(encoder.clone()).await?;
+            let payloader = init_video_payloader(encoder, ssrc);
+            (Some(track), Some(sender), Some(payloader))
         }
-        None => (None, None),
+        None => (None, None, None),
     };
 
-    let audio_track = match audio_encoder {
-        Some(encoder) => Some(peer_connection.new_audio_track(encoder).await?),
-        None => None,
+    let (audio_track, audio_payloader) = match audio_encoder.clone() {
+        Some(encoder) => {
+            let (track, ssrc) = peer_connection.new_audio_track(encoder.clone()).await?;
+            let payloader = init_audio_payloader(ssrc);
+            (Some(track), Some(payloader))
+        }
+        None => (None, None),
     };
 
     let sdp_answer = peer_connection.negotiate_connection(offer).await?;
@@ -71,13 +80,29 @@ pub async fn handle_create_whep_session(
 
     let session_id = outputs.add_session(&output_id, Arc::new(peer_connection))?;
 
+    let video_media_stream = match (video_receiver, video_track, video_payloader) {
+        (Some(receiver), Some(track), Some(payloader)) => Some(MediaStream {
+            receiver,
+            track,
+            payloader,
+        }),
+        _ => None,
+    };
+
+    let audio_media_stream = match (audio_receiver, audio_track, audio_payloader) {
+        (Some(receiver), Some(track), Some(payloader)) => Some(MediaStream {
+            receiver,
+            track,
+            payloader,
+        }),
+        _ => None,
+    };
+
     tokio::spawn(stream_media_to_peer(
         ctx.clone(),
         output_id,
-        video_receiver,
-        audio_receiver,
-        video_track,
-        audio_track,
+        video_media_stream,
+        audio_media_stream,
     ));
 
     if let (Some(sender), Some(keyframe_request_sender)) = (video_sender, keyframe_request_sender) {

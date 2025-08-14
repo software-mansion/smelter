@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+
 use tokio::sync::broadcast;
 
-use crate::pipeline::{
-    rtp::RtpPacket,
-    webrtc::whep_output::{
-        peer_connection::PeerConnection, track_task_audio::WhepAudioTrackThreadHandle,
-        track_task_video::WhepVideoTrackThreadHandle,
-    },
+use crate::pipeline::webrtc::whep_output::{
+    peer_connection::PeerConnection, track_task_audio::WhepAudioTrackThreadHandle,
+    track_task_video::WhepVideoTrackThreadHandle,
 };
 use crate::prelude::*;
 
@@ -29,14 +27,14 @@ pub(crate) struct WhepOutputConnectionState {
 #[derive(Debug, Clone)]
 pub(crate) struct WhepVideoConnectionOptions {
     pub encoder: VideoEncoderOptions,
-    pub receiver: Arc<broadcast::Receiver<RtpPacket>>,
+    pub receiver: Arc<broadcast::Receiver<EncodedOutputEvent>>,
     pub track_thread_handle: WhepVideoTrackThreadHandle,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct WhepAudioConnectionOptions {
     pub encoder: AudioEncoderOptions,
-    pub receiver: Arc<broadcast::Receiver<RtpPacket>>,
+    pub receiver: Arc<broadcast::Receiver<EncodedOutputEvent>>,
     pub track_thread_handle: WhepAudioTrackThreadHandle,
 }
 

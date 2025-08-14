@@ -1,19 +1,13 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use compositor_render::{error::ErrorStack, Frame};
+use compositor_render::Frame;
 use crossbeam_channel::Sender;
 use tokio::sync::broadcast;
 use tracing::warn;
 
 use crate::prelude::*;
 use crate::{
-    pipeline::{
-        encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
-        rtp::{
-            payloader::{PayloaderOptions, PayloaderStream},
-            RtpPacket,
-        },
-    },
+    pipeline::encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
     thread_utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -27,13 +21,12 @@ pub(crate) struct WhepVideoTrackThreadHandle {
 pub(crate) struct WhepVideoTrackThreadOptions<Encoder: VideoEncoder> {
     pub ctx: Arc<PipelineCtx>,
     pub encoder_options: Encoder::Options,
-    pub payloader_options: PayloaderOptions,
-    pub chunks_sender: broadcast::Sender<RtpPacket>,
+    pub chunks_sender: broadcast::Sender<EncodedOutputEvent>,
 }
 
 pub(crate) struct WhepVideoTrackThread<Encoder: VideoEncoder> {
-    stream: Box<dyn Iterator<Item = RtpPacket>>,
-    chunks_sender: broadcast::Sender<RtpPacket>,
+    stream: Box<dyn Iterator<Item = EncodedOutputEvent>>,
+    chunks_sender: broadcast::Sender<EncodedOutputEvent>,
     _encoder: PhantomData<Encoder>,
 }
 
@@ -50,7 +43,6 @@ where
         let WhepVideoTrackThreadOptions {
             ctx,
             encoder_options,
-            payloader_options,
             chunks_sender,
         } = options;
 
@@ -61,18 +53,9 @@ where
             frame_receiver.into_iter(),
         )?;
 
-        let payloaded_stream = PayloaderStream::new(payloader_options, encoded_stream.flatten());
-
-        let stream = payloaded_stream.flatten().filter_map(|event| match event {
-            Ok(PipelineEvent::Data(packet)) => Some(packet),
-            Ok(PipelineEvent::EOS) => None,
-            Err(err) => {
-                warn!(
-                    "Depayloading error: {}",
-                    ErrorStack::new(&err).into_string()
-                );
-                None
-            }
+        let stream = encoded_stream.flatten().map(|event| match event {
+            PipelineEvent::Data(packet) => EncodedOutputEvent::Data(packet),
+            PipelineEvent::EOS => EncodedOutputEvent::VideoEOS,
         });
 
         let state = Self {
