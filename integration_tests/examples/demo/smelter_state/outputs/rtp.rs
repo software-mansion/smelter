@@ -166,9 +166,10 @@ impl OutputHandler for RtpOutput {
 
     fn on_after_registration(&mut self) -> Result<()> {
         if self.transport_protocol == Some(TransportProtocol::TcpServer) {
-            let options = OutputPlayerOptions::iter()
-                .filter(|o| *o != OutputPlayerOptions::StartFfmpegReceiver)
-                .collect::<Vec<_>>();
+            let options = vec![
+                OutputPlayerOptions::StartGstreamerReceiver,
+                OutputPlayerOptions::Manual,
+            ];
 
             loop {
                 let player_choice = Select::new("Select player:", options.clone()).prompt()?;

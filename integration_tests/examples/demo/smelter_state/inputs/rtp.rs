@@ -123,9 +123,10 @@ impl RtpInput {
     }
 
     fn on_after_registration_tcp(&mut self) -> Result<()> {
-        let options = InputPlayerOptions::iter()
-            .filter(|i| *i != InputPlayerOptions::StartFfmpegTransmitter)
-            .collect::<Vec<_>>();
+        let options = vec![
+            InputPlayerOptions::StartGstreamerTransmitter,
+            InputPlayerOptions::Manual,
+        ];
 
         loop {
             let player_choice = Select::new("Select player:", options.clone()).prompt()?;
