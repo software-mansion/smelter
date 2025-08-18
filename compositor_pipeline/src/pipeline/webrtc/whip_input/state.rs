@@ -75,18 +75,17 @@ impl WhipInputsState {
         input_id: &Arc<str>,
         session_id: &Arc<str>,
     ) -> Result<(), WhipWhepServerError> {
-        let mut guard = self.0.lock().unwrap();
-        if let Some(input) = guard.remove(input_id) {
-            if input.current_session_id != *session_id {
+        let guard = self.0.lock().unwrap();
+        if let Some(input) = guard.get(input_id) {
+            if input.current_session_id != Some(session_id.clone()) {
                 return Err(WhipWhepServerError::Unauthorized(format!(
-                    "Session_id {session_id} is not active now"
+                    "Session {session_id} is not active now"
                 )));
             }
         }
         Ok(())
     }
 
-    // TODO consider if one bearer_token per input is best approche
     pub async fn validate_token(
         &self,
         input_id: &Arc<str>,

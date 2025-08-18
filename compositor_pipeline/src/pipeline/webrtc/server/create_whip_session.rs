@@ -104,6 +104,7 @@ pub async fn handle_create_whip_session(
         }))
     };
 
+    // It will fail if there is already connected peer connection
     let session_id = inputs.get_mut_with(&input_id, |input| {
         input.maybe_replace_peer_connection(&input_id, peer_connection)
     })?;

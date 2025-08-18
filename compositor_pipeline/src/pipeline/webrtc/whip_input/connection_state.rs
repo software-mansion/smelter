@@ -24,7 +24,7 @@ pub(crate) struct WhipInputConnectionStateOptions {
 pub(crate) struct WhipInputConnectionState {
     pub bearer_token: Arc<str>,
     pub peer_connection: Option<RecvonlyPeerConnection>,
-    pub current_session_id: Arc<str>,
+    pub current_session_id: Option<Arc<str>>,
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
@@ -35,7 +35,7 @@ impl WhipInputConnectionState {
         WhipInputConnectionState {
             bearer_token: options.bearer_token,
             peer_connection: None,
-            current_session_id: Default::default(),
+            current_session_id: None,
             video_preferences: options.video_preferences,
             frame_sender: options.frame_sender,
             input_samples_sender: options.input_samples_sender,
@@ -57,8 +57,6 @@ impl WhipInputConnectionState {
             }
             if let Some(peer_connection) = self.peer_connection.take() {
                 let input_id = input_id.clone();
-                let session_id: Arc<str> = Arc::from(Uuid::new_v4().to_string());
-                self.current_session_id = session_id;
                 tokio::spawn(async move {
                     if let Err(err) = peer_connection.close().await {
                         warn!("Error while closing previous peer connection {input_id:?}: {err:?}")
@@ -67,6 +65,8 @@ impl WhipInputConnectionState {
             }
         };
         self.peer_connection = Some(new_pc);
-        Ok(self.current_session_id.clone())
+        let session_id: Arc<str> = Arc::from(Uuid::new_v4().to_string());
+        self.current_session_id = Some(session_id.clone());
+        Ok(session_id)
     }
 }
