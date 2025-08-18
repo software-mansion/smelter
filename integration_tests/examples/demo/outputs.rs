@@ -8,6 +8,7 @@ use crate::players::OutputPlayer;
 
 pub mod rtmp;
 pub mod rtp;
+pub mod whip;
 
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
