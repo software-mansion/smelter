@@ -22,20 +22,29 @@ pub async fn handle_new_whip_ice_candidates(
 
     validate_content_type(&headers)?;
     state.inputs.validate_token(&input_id, &headers).await?;
+    state.inputs.validate_session_id(&input_id, &session_id)?;
 
-    let peer_connection = state.inputs.get_session(&input_id, &session_id)?;
+    let peer_connection = state
+        .inputs
+        .get_with(&input_id, |input| Ok(input.peer_connection.clone()))?;
 
-    for candidate in ice_fragment_unmarshal(&sdp_fragment_content) {
-        if let Err(err) = peer_connection.add_ice_candidate(candidate.clone()).await {
-            return Err(WhipWhepServerError::BadRequest(format!(
-                "Cannot add ice_candidate {candidate:?} for session {input_id:?}: {err:?}"
-            )));
+    if let Some(peer_connection) = peer_connection {
+        for candidate in ice_fragment_unmarshal(&sdp_fragment_content) {
+            if let Err(err) = peer_connection.add_ice_candidate(candidate.clone()).await {
+                return Err(WhipWhepServerError::BadRequest(format!(
+                    "Cannot add ice_candidate {candidate:?} for session {input_id:?}: {err:?}"
+                )));
+            }
+            info!(
+                ?session_id,
+                ?input_id,
+                "Added ICE candidate for WHIP session"
+            );
         }
-        info!(
-            ?session_id,
-            ?input_id,
-            "Added ICE candidate for WHIP session"
-        );
+    } else {
+        return Err(WhipWhepServerError::InternalError(format!(
+            "None peer connection for {input_id:?}"
+        )));
     }
 
     Ok(StatusCode::NO_CONTENT)

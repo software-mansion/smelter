@@ -31,7 +31,7 @@ pub async fn handle_create_whip_session(
 ) -> Result<Response<Body>, WhipWhepServerError> {
     let input_id = Arc::from(id.clone());
     trace!("SDP offer: {}", offer);
-    let mut inputs = state.inputs.clone();
+    let inputs = state.inputs.clone();
 
     validate_sdp_content_type(&headers)?;
     inputs.validate_token(&input_id, &headers).await?;
@@ -103,14 +103,10 @@ pub async fn handle_create_whip_session(
             Box::pin(async {})
         }))
     };
-    let peer_connection_arc = Arc::new(peer_connection);
-    let session_id = inputs.add_session(&input_id, peer_connection_arc.clone())?;
 
-    // It will fail if there is already connected peer connection
-    inputs.maybe_replace_peer_connection(&input_id, &session_id, peer_connection_arc)?; // TODO think about on which level of abstroction should be replace pc and what it exactly should do
-                                                                                        // inputs.get_mut_with(&input_id, |input| {
-                                                                                        //     input.maybe_replace_peer_connection(&input_id, peer_connection)
-                                                                                        // })?;
+    let session_id = inputs.get_mut_with(&input_id, |input| {
+        input.maybe_replace_peer_connection(&input_id, peer_connection)
+    })?;
 
     let body = Body::from(sdp_answer.sdp.to_string());
     let response = Response::builder()
@@ -122,7 +118,7 @@ pub async fn handle_create_whip_session(
             format!(
                 "/whip/{}/{}",
                 urlencoding::encode(&id),
-                urlencoding::encode(&input_id)
+                urlencoding::encode(&session_id)
             ),
         )
         .body(body)?;
