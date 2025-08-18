@@ -84,6 +84,9 @@ impl PeerConnection {
             .add_track(track)
             .await
             .map_err(WhipOutputError::PeerConnectionInitError)?;
+
+        let rtc_sender_params = sender.get_parameters().await;
+        debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
         Ok(sender)
     }
 
@@ -104,6 +107,9 @@ impl PeerConnection {
             .add_track(track)
             .await
             .map_err(WhipOutputError::PeerConnectionInitError)?;
+
+        let rtc_sender_params = sender.get_parameters().await;
+        debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
         Ok(sender)
     }
 

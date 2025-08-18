@@ -78,7 +78,7 @@ fn main() {
 
     let input_options = RegisterInputOptions {
         input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
-            source: Mp4InputSource::File(root_dir.join(BUNNY_FILE_PATH)),
+            source: Mp4InputSource::File(root_dir.join(BUNNY_FILE_PATH).into()),
             should_loop: false,
             video_decoders: Mp4InputVideoDecoders {
                 h264: VideoDecoderOptions::FfmpegH264,
@@ -87,7 +87,6 @@ fn main() {
         queue_options: QueueInputOptions {
             required: true,
             offset: Some(Duration::ZERO),
-            buffer_duration: None,
         },
     };
 

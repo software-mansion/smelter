@@ -1,4 +1,4 @@
-use std::{ptr, sync::Arc};
+use std::{ops::Deref, ptr, sync::Arc};
 
 use crossbeam_channel::{bounded, Receiver, Sender};
 use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
@@ -39,12 +39,12 @@ impl RtmpClientOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
-        options: RtmpSenderOptions,
+        options: RtmpOutputOptions,
     ) -> Result<Self, OutputInitError> {
-        let mut output_ctx =
-            ffmpeg::format::output_as(&options.url, "flv").map_err(OutputInitError::FfmpegError)?;
+        let mut output_ctx = ffmpeg::format::output_as(&options.url.deref(), "flv")
+            .map_err(OutputInitError::FfmpegError)?;
 
-        let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
+        let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1000);
 
         let video = match options.video {
             Some(video) => Some(Self::init_video_track(
