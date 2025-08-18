@@ -1,14 +1,17 @@
 use anyhow::Result;
-use std::{env, process::Child};
+use integration_tests::ffmpeg::start_ffmpeg_rtmp_receive;
+use std::process::Child;
 
-use inquire::{Select, Text};
+use inquire::Select;
 use serde_json::json;
 use strum::Display;
 use tracing::error;
 
-use crate::smelter_state::outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution};
-
-pub const RTMP_URL: &str = "RTMP_URL";
+use crate::smelter_state::{
+    get_free_port,
+    outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    players::OutputPlayerOptions,
+};
 
 #[derive(Debug, Display, Clone)]
 pub enum RtmpRegisterOptions {
@@ -25,10 +28,18 @@ pub enum RtmpRegisterOptions {
 #[derive(Debug)]
 pub struct RtmpOutput {
     name: String,
-    url: String,
+    port: u16,
     video: Option<RtmpOutputVideoOptions>,
     audio: Option<RtmpOutputAudioOptions>,
     stream_handles: Vec<Child>,
+}
+
+impl RtmpOutput {
+    fn start_ffmpeg_recv(&mut self) -> Result<()> {
+        let handle = start_ffmpeg_rtmp_receive(self.port)?;
+        self.stream_handles.push(handle);
+        Ok(())
+    }
 }
 
 impl OutputHandler for RtmpOutput {
@@ -43,11 +54,30 @@ impl OutputHandler for RtmpOutput {
         })
     }
 
-    fn on_before_registration(&mut self) -> anyhow::Result<()> {
+    fn on_before_registration(&mut self) -> Result<()> {
+        let player_options = vec![
+            OutputPlayerOptions::StartFfmpegReceiver,
+            OutputPlayerOptions::Manual,
+        ];
+
+        loop {
+            let player_choice = Select::new("Select player:", player_options.clone()).prompt()?;
+
+            let player_result = match player_choice {
+                OutputPlayerOptions::StartFfmpegReceiver => self.start_ffmpeg_recv(),
+                OutputPlayerOptions::Manual => Ok(()),
+                _ => unreachable!(),
+            };
+
+            match player_result {
+                Ok(_) => break,
+                Err(e) => error!("{e}"),
+            }
+        }
         Ok(())
     }
 
-    fn on_after_registration(&mut self) -> anyhow::Result<()> {
+    fn on_after_registration(&mut self) -> Result<()> {
         Ok(())
     }
 }
@@ -55,15 +85,18 @@ impl OutputHandler for RtmpOutput {
 pub struct RtmpOutputBuilder {
     name: String,
     url: String,
+    port: u16,
     video: Option<RtmpOutputVideoOptions>,
     audio: Option<RtmpOutputAudioOptions>,
 }
 
 impl RtmpOutputBuilder {
     pub fn new() -> Self {
+        let port = get_free_port();
         Self {
-            name: String::new(),
-            url: String::new(),
+            name: format!("output_rtmp_{port}"),
+            url: format!("rtmp://127.0.0.1:{port}"),
+            port,
             video: None,
             audio: None,
         }
@@ -71,13 +104,6 @@ impl RtmpOutputBuilder {
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
-
-        let url: String = match env::var(RTMP_URL) {
-            Ok(url) => url,
-            Err(_) => builder.prompt_url()?,
-        };
-
-        builder = builder.with_url(url);
 
         let video_options = vec![
             RtmpRegisterOptions::AddVideoStream,
@@ -120,17 +146,6 @@ impl RtmpOutputBuilder {
         Ok(builder)
     }
 
-    fn prompt_url(&self) -> Result<String> {
-        Ok(Text::new("Url:").prompt()?)
-    }
-
-    pub fn with_url(mut self, url: String) -> Self {
-        let name = format!("output_rtmp_{url}");
-        self.name = name;
-        self.url = url;
-        self
-    }
-
     pub fn with_video(mut self, video: RtmpOutputVideoOptions) -> Self {
         self.video = Some(video);
         self
@@ -154,7 +169,7 @@ impl RtmpOutputBuilder {
         let register_request = self.serialize(inputs);
         let rtmp_output = RtmpOutput {
             name: self.name,
-            url: self.url,
+            port: self.port,
             video: self.video,
             audio: self.audio,
             stream_handles: vec![],

@@ -28,6 +28,8 @@ pub fn start_ffmpeg_rtmp_receive(port: u16) -> Result<Child> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
+    info!("Started RTMP FFmpeg listener on port {port}.");
+    thread::sleep(Duration::from_secs(2));
 
     Ok(handle)
 }
