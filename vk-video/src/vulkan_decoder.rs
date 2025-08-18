@@ -282,17 +282,11 @@ impl VulkanDecoder<'_> {
             .ok_or(VulkanDecoderError::NoSession)?;
 
         if is_idr {
-            if let Some(sps) = video_session_resources
-                .sps_needing_reset
-                .remove(&decode_information.sps_id)
-            {
-                video_session_resources.reset_session(
-                    &self.vulkan_device,
-                    &self.command_buffers.decode_buffer,
-                    sps,
-                    &self.sync_structures.fence_memory_barrier_completed,
-                )?;
-            }
+            video_session_resources.ensure_session(
+                &self.vulkan_device,
+                &self.command_buffers.decode_buffer,
+                &self.sync_structures.fence_memory_barrier_completed,
+            )?;
         }
 
         // upload data to a buffer
@@ -307,7 +301,7 @@ impl VulkanDecoder<'_> {
         video_session_resources.decode_buffer.upload_data(
             &decode_information.rbsp_bytes,
             size,
-            &video_session_resources.profile_info,
+            &video_session_resources.parameters.profile_info,
         )?;
 
         // decode
@@ -525,7 +519,7 @@ impl VulkanDecoder<'_> {
             layer: target_layer as u32,
             dimensions,
             picture_order_cnt: decode_information.picture_info.PicOrderCnt_for_decoding[0],
-            max_num_reorder_frames: video_session_resources.max_num_reorder_frames,
+            max_num_reorder_frames: video_session_resources.parameters.max_num_reorder_frames,
             is_idr,
             pts: decode_information.pts,
         })
