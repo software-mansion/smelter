@@ -115,11 +115,16 @@ impl SmelterState {
     }
 
     pub fn unregister_input(&mut self) -> Result<()> {
-        let to_delete = Select::new(
-            "Select input to remove:",
-            self.inputs.iter().map(|i| i.name().to_string()).collect(),
-        )
-        .prompt()?;
+        let input_names = self
+            .inputs
+            .iter()
+            .map(|i| i.name().to_string())
+            .collect::<Vec<_>>();
+        if input_names.is_empty() {
+            println!("No inputs to remove.");
+            return Ok(());
+        }
+        let to_delete = Select::new("Select input to remove:", input_names).prompt()?;
 
         for output in &mut self.outputs {
             let update_route = format!("output/{}/update", output.name());
@@ -147,11 +152,16 @@ impl SmelterState {
     }
 
     pub fn unregister_output(&mut self) -> Result<()> {
-        let to_delete = Select::new(
-            "Select output to remove:",
-            self.outputs.iter().map(|o| o.name().to_string()).collect(),
-        )
-        .prompt()?;
+        let output_names = self
+            .outputs
+            .iter()
+            .map(|o| o.name().to_string())
+            .collect::<Vec<_>>();
+        if output_names.is_empty() {
+            println!("No outputs to remove.");
+            return Ok(());
+        }
+        let to_delete = Select::new("Select output to remove:", output_names).prompt()?;
 
         let unregister_route = format!("output/{}/unregister", to_delete);
         examples::post(&unregister_route, &json!({}))?;
