@@ -8,7 +8,9 @@ pub mod whip;
 
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
-    fn on_after_registration(&mut self) -> Result<()>;
+    fn on_after_registration(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl std::fmt::Display for dyn InputHandler {

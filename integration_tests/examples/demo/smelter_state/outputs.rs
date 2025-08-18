@@ -10,8 +10,12 @@ pub mod rtp;
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
     fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value;
-    fn on_before_registration(&mut self) -> Result<()>;
-    fn on_after_registration(&mut self) -> Result<()>;
+    fn on_before_registration(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn on_after_registration(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl std::fmt::Display for dyn OutputHandler {
