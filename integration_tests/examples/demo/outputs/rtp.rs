@@ -25,11 +25,11 @@ use crate::smelter_state::TransportProtocol;
 
 #[derive(Debug, Display, EnumIter, Clone)]
 pub enum RtpRegisterOptions {
-    #[strum(to_string = "Add video stream")]
-    AddVideoStream,
+    #[strum(to_string = "Set video stream")]
+    SetVideoStream,
 
-    #[strum(to_string = "Add audio stream")]
-    AddAudioStream,
+    #[strum(to_string = "Set audio stream")]
+    SetAudioStream,
 
     #[strum(to_string = "Skip")]
     Skip,
@@ -226,15 +226,15 @@ impl RtpOutputBuilder {
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
-        let video_options = vec![RtpRegisterOptions::AddVideoStream, RtpRegisterOptions::Skip];
-        let audio_options = vec![RtpRegisterOptions::AddAudioStream, RtpRegisterOptions::Skip];
+        let video_options = vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
+        let audio_options = vec![RtpRegisterOptions::SetAudioStream, RtpRegisterOptions::Skip];
 
         loop {
             let video_selection =
                 Select::new("Add video stream?", video_options.clone()).prompt_skippable()?;
 
             builder = match video_selection {
-                Some(RtpRegisterOptions::AddVideoStream) => {
+                Some(RtpRegisterOptions::SetVideoStream) => {
                     builder.with_video(RtpOutputVideoOptions::default())
                 }
                 Some(RtpRegisterOptions::Skip) | None => builder,
@@ -245,7 +245,7 @@ impl RtpOutputBuilder {
                 Select::new("Add audio stream?", audio_options.clone()).prompt_skippable()?;
 
             builder = match audio_selection {
-                Some(RtpRegisterOptions::AddAudioStream) => {
+                Some(RtpRegisterOptions::SetAudioStream) => {
                     builder.with_audio(RtpOutputAudioOptions::default())
                 }
                 Some(RtpRegisterOptions::Skip) | None => builder,

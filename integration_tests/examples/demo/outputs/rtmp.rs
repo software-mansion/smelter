@@ -16,11 +16,11 @@ use crate::generators::get_free_port;
 
 #[derive(Debug, Display, Clone)]
 pub enum RtmpRegisterOptions {
-    #[strum(to_string = "Add video stream")]
-    AddVideoStream,
+    #[strum(to_string = "Set video stream")]
+    SetVideoStream,
 
-    #[strum(to_string = "Add audio stream")]
-    AddAudioStream,
+    #[strum(to_string = "Set audio stream")]
+    SetAudioStream,
 
     #[strum(to_string = "Skip")]
     Skip,
@@ -118,11 +118,11 @@ impl RtmpOutputBuilder {
         let mut builder = self;
 
         let video_options = vec![
-            RtmpRegisterOptions::AddVideoStream,
+            RtmpRegisterOptions::SetVideoStream,
             RtmpRegisterOptions::Skip,
         ];
         let audio_options = vec![
-            RtmpRegisterOptions::AddAudioStream,
+            RtmpRegisterOptions::SetAudioStream,
             RtmpRegisterOptions::Skip,
         ];
 
@@ -131,7 +131,7 @@ impl RtmpOutputBuilder {
                 Select::new("Add video stream?", video_options.clone()).prompt_skippable()?;
 
             builder = match video_selection {
-                Some(RtmpRegisterOptions::AddVideoStream) => {
+                Some(RtmpRegisterOptions::SetVideoStream) => {
                     builder.with_video(RtmpOutputVideoOptions::default())
                 }
                 Some(RtmpRegisterOptions::Skip) | None => builder,
@@ -142,7 +142,7 @@ impl RtmpOutputBuilder {
                 Select::new("Add audio stream?", audio_options.clone()).prompt_skippable()?;
 
             builder = match audio_selection {
-                Some(RtmpRegisterOptions::AddAudioStream) => {
+                Some(RtmpRegisterOptions::SetAudioStream) => {
                     builder.with_audio(RtmpOutputAudioOptions::default())
                 }
                 Some(RtmpRegisterOptions::Skip) | None => builder,
