@@ -98,6 +98,9 @@ pub enum VideoEncoder {
 
     #[strum(to_string = "ffmpeg_vp9")]
     FfmpegVp9,
+
+    #[strum(to_string = "any")]
+    Any,
 }
 
 #[derive(Debug, Display, EnumIter)]
@@ -107,4 +110,7 @@ pub enum AudioEncoder {
 
     #[strum(to_string = "aac")]
     Aac,
+
+    #[strum(to_string = "any")]
+    Any,
 }
