@@ -44,22 +44,24 @@ impl WhipInputConnectionState {
 
     pub fn maybe_replace_peer_connection(
         &mut self,
-        input_id: &Arc<str>,
+        endpoint_id: &Arc<str>,
         new_pc: RecvonlyPeerConnection,
     ) -> Result<Arc<str>, WhipWhepServerError> {
         // Deleting previous peer_connection on this input which was not in Connected state
         if let Some(peer_connection) = &self.peer_connection {
             if peer_connection.connection_state() == RTCPeerConnectionState::Connected {
                 return Err(WhipWhepServerError::InternalError(format!(
-                      "Another stream is currently connected to the given session_id: {input_id:?}. \
+                      "Another stream is currently connected to the given endpoint {endpoint_id:?} \
                       Disconnect the existing stream before starting a new one, or check if the session_id is correct."
                   )));
             }
             if let Some(peer_connection) = self.peer_connection.take() {
-                let input_id = input_id.clone();
+                let endpoint_id = endpoint_id.clone();
                 tokio::spawn(async move {
                     if let Err(err) = peer_connection.close().await {
-                        warn!("Error while closing previous peer connection {input_id:?}: {err:?}")
+                        warn!(
+                            "Error while closing previous peer connection {endpoint_id:?}: {err:?}"
+                        )
                     }
                 });
             }

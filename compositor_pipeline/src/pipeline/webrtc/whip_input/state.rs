@@ -21,14 +21,14 @@ impl WhipInputsState {
         Func: FnOnce(&WhipInputConnectionState) -> Result<T, WhipWhepServerError>,
     >(
         &self,
-        session_id: &Arc<str>,
+        endpoint_id: &Arc<str>,
         func: Func,
     ) -> Result<T, WhipWhepServerError> {
         let guard = self.0.lock().unwrap();
-        match guard.get(session_id) {
+        match guard.get(endpoint_id) {
             Some(input) => func(input),
             None => Err(WhipWhepServerError::NotFound(format!(
-                "{session_id:?} not found"
+                "{endpoint_id:?} not found"
             ))),
         }
     }
@@ -38,14 +38,14 @@ impl WhipInputsState {
         Func: FnOnce(&mut WhipInputConnectionState) -> Result<T, WhipWhepServerError>,
     >(
         &self,
-        session_id: &Arc<str>,
+        endpoint_id: &Arc<str>,
         func: Func,
     ) -> Result<T, WhipWhepServerError> {
         let mut guard = self.0.lock().unwrap();
-        match guard.get_mut(session_id) {
+        match guard.get_mut(endpoint_id) {
             Some(input) => func(input),
             None => Err(WhipWhepServerError::NotFound(format!(
-                "{session_id:?} not found"
+                "{endpoint_id:?} not found"
             ))),
         }
     }
@@ -56,14 +56,14 @@ impl WhipInputsState {
     }
 
     // called on drop (when input is unregistered)
-    pub fn ensure_input_closed(&self, input_id: &Arc<str>) {
+    pub fn ensure_input_closed(&self, endpoint_id: &Arc<str>) {
         let mut guard = self.0.lock().unwrap();
-        if let Some(input) = guard.remove(input_id) {
+        if let Some(input) = guard.remove(endpoint_id) {
             if let Some(peer_connection) = input.peer_connection {
-                let input_id = input_id.clone();
+                let endpoint_id = endpoint_id.clone();
                 tokio::spawn(async move {
                     if let Err(err) = peer_connection.close().await {
-                        error!("Cannot close peer_connection for {input_id:?}: {err:?}");
+                        error!("Cannot close peer_connection for {endpoint_id:?}: {err:?}");
                     };
                 });
             }
@@ -72,11 +72,11 @@ impl WhipInputsState {
 
     pub fn validate_session_id(
         &self,
-        input_id: &Arc<str>,
+        endpoint_id: &Arc<str>,
         session_id: &Arc<str>,
     ) -> Result<(), WhipWhepServerError> {
         let guard = self.0.lock().unwrap();
-        if let Some(input) = guard.get(input_id) {
+        if let Some(input) = guard.get(endpoint_id) {
             if input.current_session_id != Some(session_id.clone()) {
                 return Err(WhipWhepServerError::Unauthorized(format!(
                     "Session {session_id} is not active now"
@@ -88,14 +88,14 @@ impl WhipInputsState {
 
     pub async fn validate_token(
         &self,
-        input_id: &Arc<str>,
+        endpoint_id: &Arc<str>,
         headers: &HeaderMap,
     ) -> Result<(), WhipWhepServerError> {
-        let bearer_token = match self.0.lock().unwrap().get_mut(input_id) {
+        let bearer_token = match self.0.lock().unwrap().get_mut(endpoint_id) {
             Some(input) => input.bearer_token.clone(),
             None => {
                 return Err(WhipWhepServerError::NotFound(format!(
-                    "{input_id:?} not found"
+                    "{endpoint_id:?} not found"
                 )))
             }
         };
