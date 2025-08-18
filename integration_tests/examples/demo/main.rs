@@ -6,9 +6,15 @@ use smelter::{config::read_config, logger::init_logger};
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{debug, error};
 
+mod generators;
+mod inputs;
+mod outputs;
+mod players;
 mod smelter_state;
 
 use crate::smelter_state::SmelterState;
+
+pub const IP: &str = "127.0.0.1";
 
 #[derive(Debug, EnumIter, Display, Clone, PartialEq)]
 pub enum Action {

@@ -14,12 +14,14 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
-use crate::smelter_state::{
-    get_free_port,
+use crate::{
     outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayerOptions,
-    TransportProtocol, IP,
+    IP,
 };
+
+use crate::generators::get_free_port;
+use crate::smelter_state::TransportProtocol;
 
 #[derive(Debug, Display, EnumIter, Clone)]
 pub enum RtpRegisterOptions {

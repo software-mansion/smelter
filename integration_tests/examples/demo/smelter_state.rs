@@ -1,8 +1,3 @@
-use std::sync::{
-    atomic::{AtomicU16, Ordering},
-    OnceLock,
-};
-
 use anyhow::Result;
 use inquire::Select;
 use integration_tests::examples;
@@ -10,18 +5,12 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{debug, warn};
 
-mod inputs;
-mod outputs;
-mod players;
+use crate::inputs::InputHandler;
 
-use inputs::InputHandler;
-
-use crate::smelter_state::{
+use crate::{
     inputs::{rtp::RtpInputBuilder, InputProtocol},
     outputs::{rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder, OutputHandler, OutputProtocol},
 };
-
-pub const IP: &str = "127.0.0.1";
 
 #[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq)]
 pub enum TransportProtocol {
@@ -163,11 +152,4 @@ impl SmelterState {
 
         Ok(())
     }
-}
-
-fn get_free_port() -> u16 {
-    static LAST_PORT: OnceLock<AtomicU16> = OnceLock::new();
-    let port =
-        LAST_PORT.get_or_init(|| AtomicU16::new(10_000 + (rand::random::<u16>() % 5_000) * 2));
-    port.fetch_add(2, Ordering::Relaxed)
 }

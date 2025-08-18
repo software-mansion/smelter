@@ -1,14 +1,14 @@
-// WARN: Remove this after implementing #remove
+// WARN: Remove after implementing #remove
 #![allow(dead_code)]
-use crate::smelter_state::inputs::InputHandler;
+use crate::inputs::InputHandler;
 use anyhow::Result;
 
 #[derive(Debug)]
-pub struct Mp4Input {
+pub struct WhipInput {
     name: String,
 }
 
-impl Mp4Input {
+impl WhipInput {
     pub fn setup() -> Result<Self> {
         Ok(Self {
             name: "dummy".to_string(),
@@ -16,7 +16,7 @@ impl Mp4Input {
     }
 }
 
-impl InputHandler for Mp4Input {
+impl InputHandler for WhipInput {
     fn name(&self) -> &str {
         &self.name
     }

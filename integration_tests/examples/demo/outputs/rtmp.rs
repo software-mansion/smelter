@@ -7,11 +7,12 @@ use serde_json::json;
 use strum::Display;
 use tracing::error;
 
-use crate::smelter_state::{
-    get_free_port,
+use crate::{
     outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayerOptions,
 };
+
+use crate::generators::get_free_port;
 
 #[derive(Debug, Display, Clone)]
 pub enum RtmpRegisterOptions {
