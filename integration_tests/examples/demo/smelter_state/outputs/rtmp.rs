@@ -82,6 +82,17 @@ impl OutputHandler for RtmpOutput {
     }
 }
 
+impl Drop for RtmpOutput {
+    fn drop(&mut self) {
+        for stream_process in &mut self.stream_handles {
+            match stream_process.kill() {
+                Ok(_) => {}
+                Err(e) => error!("{e}"),
+            }
+        }
+    }
+}
+
 pub struct RtmpOutputBuilder {
     name: String,
     url: String,
