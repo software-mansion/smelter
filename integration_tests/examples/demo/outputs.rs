@@ -4,16 +4,22 @@ use anyhow::Result;
 use serde_json::json;
 use strum::{Display, EnumIter};
 
+use crate::players::OutputPlayer;
+
 pub mod rtmp;
 pub mod rtp;
 
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
     fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value;
-    fn on_before_registration(&mut self) -> Result<()> {
+
+    #[allow(unused_variables)]
+    fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
         Ok(())
     }
-    fn on_after_registration(&mut self) -> Result<()> {
+
+    #[allow(unused_variables)]
+    fn on_after_registration(&mut self, player: OutputPlayer) -> Result<()> {
         Ok(())
     }
 }

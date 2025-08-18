@@ -7,6 +7,7 @@ use tracing::{debug, warn};
 
 use crate::inputs::InputHandler;
 
+use crate::players::{InputPlayer, OutputPlayer};
 use crate::{
     inputs::{rtp::RtpInputBuilder, InputProtocol},
     outputs::{rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder, OutputHandler, OutputProtocol},
@@ -40,22 +41,26 @@ impl SmelterState {
 
         let protocol = Select::new("Select input protocol:", prot_opts).prompt()?;
 
-        let (mut input_handler, input_json): (Box<dyn InputHandler>, serde_json::Value) =
-            match protocol {
-                InputProtocol::Rtp => {
-                    let (rtp_input, register_request) = RtpInputBuilder::new().prompt()?.build();
-                    (Box::new(rtp_input), register_request)
-                }
-                _ => {
-                    warn!("Unimplemented!");
-                    return Ok(());
-                }
-            };
+        let (mut input_handler, input_json, player): (
+            Box<dyn InputHandler>,
+            serde_json::Value,
+            InputPlayer,
+        ) = match protocol {
+            InputProtocol::Rtp => {
+                let (rtp_input, register_request, player) =
+                    RtpInputBuilder::new().prompt()?.build();
+                (Box::new(rtp_input), register_request, player)
+            }
+            _ => {
+                warn!("Unimplemented!");
+                return Ok(());
+            }
+        };
 
         let input_route = format!("input/{}/register", input_handler.name());
 
         examples::post(&input_route, &input_json)?;
-        input_handler.on_after_registration()?;
+        input_handler.on_after_registration(player)?;
         self.inputs.push(input_handler);
 
         for output in &mut self.outputs {
@@ -75,31 +80,34 @@ impl SmelterState {
         let protocol = Select::new("Select output protocol:", prot_opts).prompt()?;
 
         let inputs = self.inputs.iter().map(|i| i.name()).collect::<Vec<_>>();
-        let (mut output_handler, output_json): (Box<dyn OutputHandler>, serde_json::Value) =
-            match protocol {
-                OutputProtocol::Rtp => {
-                    let (rtp_output, register_request) =
-                        RtpOutputBuilder::new().prompt()?.build(&inputs);
-                    (Box::new(rtp_output), register_request)
-                }
-                OutputProtocol::Rtmp => {
-                    let (rtmp_output, register_request) =
-                        RtmpOutputBuilder::new().prompt()?.build(&inputs);
-                    (Box::new(rtmp_output), register_request)
-                }
-                _ => {
-                    warn!("Unimplemented!");
-                    return Ok(());
-                }
-            };
+        let (mut output_handler, output_json, player): (
+            Box<dyn OutputHandler>,
+            serde_json::Value,
+            OutputPlayer,
+        ) = match protocol {
+            OutputProtocol::Rtp => {
+                let (rtp_output, register_request, player) =
+                    RtpOutputBuilder::new().prompt()?.build(&inputs);
+                (Box::new(rtp_output), register_request, player)
+            }
+            OutputProtocol::Rtmp => {
+                let (rtmp_output, register_request, player) =
+                    RtmpOutputBuilder::new().prompt()?.build(&inputs);
+                (Box::new(rtmp_output), register_request, player)
+            }
+            _ => {
+                warn!("Unimplemented!");
+                return Ok(());
+            }
+        };
 
-        output_handler.on_before_registration()?;
+        output_handler.on_before_registration(player)?;
 
         let output_route = format!("output/{}/register", output_handler.name());
 
         examples::post(&output_route, &output_json)?;
 
-        output_handler.on_after_registration()?;
+        output_handler.on_after_registration(player)?;
 
         self.outputs.push(output_handler);
 

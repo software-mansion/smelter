@@ -1,15 +1,15 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use integration_tests::ffmpeg::start_ffmpeg_rtmp_receive;
 use std::process::Child;
 
-use inquire::Select;
+use inquire::{Confirm, Select};
 use serde_json::json;
 use strum::Display;
 use tracing::error;
 
 use crate::{
     outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
-    players::OutputPlayerOptions,
+    players::OutputPlayer,
 };
 
 use crate::generators::get_free_port;
@@ -55,31 +55,17 @@ impl OutputHandler for RtmpOutput {
         })
     }
 
-    fn on_before_registration(&mut self) -> Result<()> {
-        let player_options = vec![
-            OutputPlayerOptions::StartFfmpegReceiver,
-            OutputPlayerOptions::Manual,
-        ];
-
-        loop {
-            let player_choice = Select::new("Select player:", player_options.clone()).prompt()?;
-
-            let player_result = match player_choice {
-                OutputPlayerOptions::StartFfmpegReceiver => self.start_ffmpeg_recv(),
-                OutputPlayerOptions::Manual => Ok(()),
-                _ => unreachable!(),
-            };
-
-            match player_result {
-                Ok(_) => break,
-                Err(e) => error!("{e}"),
-            }
+    fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
+        match player {
+            OutputPlayer::FfmpegReceiver => self.start_ffmpeg_recv(),
+            OutputPlayer::Manual => loop {
+                let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                if confirmation {
+                    return Ok(());
+                }
+            },
+            _ => Err(anyhow!("Invalid player for RTMP output!")),
         }
-        Ok(())
-    }
-
-    fn on_after_registration(&mut self) -> Result<()> {
-        Ok(())
     }
 }
 
@@ -100,6 +86,7 @@ pub struct RtmpOutputBuilder {
     port: u16,
     video: Option<RtmpOutputVideoOptions>,
     audio: Option<RtmpOutputAudioOptions>,
+    player: OutputPlayer,
 }
 
 impl RtmpOutputBuilder {
@@ -111,6 +98,7 @@ impl RtmpOutputBuilder {
             port,
             video: None,
             audio: None,
+            player: OutputPlayer::Manual,
         }
     }
 
@@ -155,6 +143,13 @@ impl RtmpOutputBuilder {
                 break;
             }
         }
+
+        let player_options = vec![OutputPlayer::FfmpegReceiver, OutputPlayer::Manual];
+        let player_choice = Select::new("Select player:", player_options).prompt_skippable()?;
+        builder = match player_choice {
+            Some(player) => builder.with_player(player),
+            None => builder,
+        };
         Ok(builder)
     }
 
@@ -168,6 +163,11 @@ impl RtmpOutputBuilder {
         self
     }
 
+    pub fn with_player(mut self, player: OutputPlayer) -> Self {
+        self.player = player;
+        self
+    }
+
     fn serialize(&self, inputs: &[&str]) -> serde_json::Value {
         json!({
             "type": "rtmp_client",
@@ -177,7 +177,7 @@ impl RtmpOutputBuilder {
         })
     }
 
-    pub fn build(self, inputs: &[&str]) -> (RtmpOutput, serde_json::Value) {
+    pub fn build(self, inputs: &[&str]) -> (RtmpOutput, serde_json::Value, OutputPlayer) {
         let register_request = self.serialize(inputs);
         let rtmp_output = RtmpOutput {
             name: self.name,
@@ -186,7 +186,7 @@ impl RtmpOutputBuilder {
             audio: self.audio,
             stream_handles: vec![],
         };
-        (rtmp_output, register_request)
+        (rtmp_output, register_request, self.player)
     }
 }
 

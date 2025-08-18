@@ -1,7 +1,7 @@
 use std::process::Child;
 
 use anyhow::{anyhow, Result};
-use inquire::Select;
+use inquire::{Confirm, Select};
 use integration_tests::{
     ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_receive_vp8, start_ffmpeg_receive_vp9},
     gstreamer::{
@@ -16,7 +16,7 @@ use tracing::error;
 
 use crate::{
     outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
-    players::OutputPlayerOptions,
+    players::OutputPlayer,
     IP,
 };
 
@@ -142,53 +142,36 @@ impl OutputHandler for RtpOutput {
         })
     }
 
-    fn on_before_registration(&mut self) -> Result<()> {
-        if self.transport_protocol == Some(TransportProtocol::Udp)
-            || self.transport_protocol.is_none()
-        {
-            let options = OutputPlayerOptions::iter().collect::<Vec<_>>();
-
-            loop {
-                let player_choice = Select::new("Select player:", options.clone()).prompt()?;
-
-                let player_result: Result<()> = match player_choice {
-                    OutputPlayerOptions::StartFfmpegReceiver => self.start_ffmpeg_receiver(),
-                    OutputPlayerOptions::StartGstreamerReceiver => self.start_gst_recv_udp(),
-                    OutputPlayerOptions::Manual => Ok(()),
-                };
-
-                match player_result {
-                    Ok(_) => break,
-                    Err(e) => error!("{e}"),
-                }
-            }
+    fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
+        match self.transport_protocol {
+            Some(TransportProtocol::Udp) | None => match player {
+                OutputPlayer::FfmpegReceiver => self.start_ffmpeg_receiver(),
+                OutputPlayer::GstreamerReceiver => self.start_gst_recv_udp(),
+                OutputPlayer::Manual => loop {
+                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                    if confirmation {
+                        return Ok(());
+                    }
+                },
+            },
+            Some(TransportProtocol::TcpServer) => Ok(()),
         }
-        Ok(())
     }
 
-    fn on_after_registration(&mut self) -> Result<()> {
-        if self.transport_protocol == Some(TransportProtocol::TcpServer) {
-            let options = vec![
-                OutputPlayerOptions::StartGstreamerReceiver,
-                OutputPlayerOptions::Manual,
-            ];
-
-            loop {
-                let player_choice = Select::new("Select player:", options.clone()).prompt()?;
-
-                let player_result: Result<()> = match player_choice {
-                    OutputPlayerOptions::StartGstreamerReceiver => self.start_gst_recv_tcp(),
-                    OutputPlayerOptions::Manual => Ok(()),
-                    _ => unreachable!(),
-                };
-
-                match player_result {
-                    Ok(_) => break,
-                    Err(e) => error!("{e}"),
-                }
-            }
+    fn on_after_registration(&mut self, player: OutputPlayer) -> Result<()> {
+        match self.transport_protocol {
+            Some(TransportProtocol::TcpServer) => match player {
+                OutputPlayer::GstreamerReceiver => self.start_gst_recv_tcp(),
+                OutputPlayer::Manual => loop {
+                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                    if confirmation {
+                        return Ok(());
+                    }
+                },
+                _ => Err(anyhow!("Invalid player for RTP in TCP server mode.")),
+            },
+            Some(TransportProtocol::Udp) | None => Ok(()),
         }
-        Ok(())
     }
 }
 
@@ -209,6 +192,7 @@ pub struct RtpOutputBuilder {
     video: Option<RtpOutputVideoOptions>,
     audio: Option<RtpOutputAudioOptions>,
     transport_protocol: Option<TransportProtocol>,
+    player: OutputPlayer,
 }
 
 impl RtpOutputBuilder {
@@ -221,6 +205,7 @@ impl RtpOutputBuilder {
             video: None,
             audio: None,
             transport_protocol: None,
+            player: OutputPlayer::Manual,
         }
     }
 
@@ -268,7 +253,34 @@ impl RtpOutputBuilder {
             None => builder,
         };
 
+        let player_choice = builder.prompt_player()?;
+        let builder = match player_choice {
+            Some(player) => builder.with_player(player),
+            None => builder,
+        };
         Ok(builder)
+    }
+
+    fn prompt_player(&self) -> Result<Option<OutputPlayer>> {
+        match self.transport_protocol {
+            Some(TransportProtocol::Udp) | None => {
+                let player_options = match (&self.video, &self.audio) {
+                    (Some(_), Some(_)) => {
+                        vec![OutputPlayer::Manual]
+                    }
+                    _ => OutputPlayer::iter().collect(),
+                };
+                let player_choice =
+                    Select::new("Select player:", player_options).prompt_skippable()?;
+                Ok(player_choice)
+            }
+            Some(TransportProtocol::TcpServer) => {
+                let player_options = vec![OutputPlayer::GstreamerReceiver, OutputPlayer::Manual];
+                let player_choice =
+                    Select::new("Select player:", player_options).prompt_skippable()?;
+                Ok(player_choice)
+            }
+        }
     }
 
     pub fn with_video(mut self, video: RtpOutputVideoOptions) -> Self {
@@ -294,6 +306,11 @@ impl RtpOutputBuilder {
         self
     }
 
+    pub fn with_player(mut self, player: OutputPlayer) -> Self {
+        self.player = player;
+        self
+    }
+
     fn serialize(&self, inputs: &[&str]) -> serde_json::Value {
         let ip = match self.transport_protocol {
             Some(TransportProtocol::Udp) | None => Some(IP),
@@ -309,7 +326,7 @@ impl RtpOutputBuilder {
         })
     }
 
-    pub fn build(self, inputs: &[&str]) -> (RtpOutput, serde_json::Value) {
+    pub fn build(self, inputs: &[&str]) -> (RtpOutput, serde_json::Value, OutputPlayer) {
         let register_request = self.serialize(inputs);
         let rtp_output = RtpOutput {
             name: self.name,
@@ -319,7 +336,7 @@ impl RtpOutputBuilder {
             transport_protocol: self.transport_protocol,
             stream_handles: vec![],
         };
-        (rtp_output, register_request)
+        (rtp_output, register_request, self.player)
     }
 }
 

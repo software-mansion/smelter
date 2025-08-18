@@ -2,13 +2,17 @@ use anyhow::Result;
 use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
+use crate::players::InputPlayer;
+
 pub mod mp4;
 pub mod rtp;
 pub mod whip;
 
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
-    fn on_after_registration(&mut self) -> Result<()> {
+
+    #[allow(unused_variables)]
+    fn on_after_registration(&mut self, player: InputPlayer) -> Result<()> {
         Ok(())
     }
 }
