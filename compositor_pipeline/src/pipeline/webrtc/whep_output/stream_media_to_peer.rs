@@ -15,6 +15,21 @@ pub struct MediaStream {
     pub payloader: Payloader,
 }
 
+enum OutputState {
+    Ready(EncodedOutputEvent),
+    Pending,
+    Done,
+}
+
+impl From<Option<EncodedOutputEvent>> for OutputState {
+    fn from(opt: Option<EncodedOutputEvent>) -> Self {
+        match opt {
+            Some(v) => OutputState::Ready(v),
+            None => OutputState::Pending,
+        }
+    }
+}
+
 pub async fn stream_media_to_peer(
     ctx: Arc<PipelineCtx>,
     output_id: OutputId,
@@ -72,19 +87,25 @@ pub async fn stream_media_to_peer(
             }
         };
 
-        let event: Option<EncodedOutputEvent> = get_output_encoded_event(
+        match get_output_encoded_event(
             &video_stream,
             &audio_stream,
             &mut next_video_event,
             &mut next_audio_event,
-        );
-        if let Some(event) = event {
-            if process_event(event, &mut video_stream, &mut audio_stream)
-                .await
-                .is_err()
-            {
-                break;
+        ) {
+            OutputState::Ready(EncodedOutputEvent::Data(chunk)) => {
+                if process_chunk(chunk, &mut video_stream, &mut audio_stream)
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
             }
+            OutputState::Ready(_) => {
+                // Ignore EOS events
+            }
+            OutputState::Done => break,
+            OutputState::Pending => {}
         }
     }
 
@@ -92,31 +113,74 @@ pub async fn stream_media_to_peer(
     debug!("Closing WHEP sender thread.");
 }
 
+async fn process_chunk(
+    chunk: EncodedOutputChunk,
+    video_stream: &mut Option<MediaStream>,
+    audio_stream: &mut Option<MediaStream>,
+) -> Result<(), Error> {
+    let (stream, kind_label) = match chunk.kind {
+        MediaKind::Video(_) => (video_stream.as_mut(), "video"),
+        MediaKind::Audio(_) => (audio_stream.as_mut(), "audio"),
+    };
+
+    if let Some(MediaStream {
+        track, payloader, ..
+    }) = stream
+    {
+        send_chunk_to_peer(chunk, track, payloader, kind_label).await
+    } else {
+        Ok(())
+    }
+}
+
+async fn send_chunk_to_peer(
+    chunk: EncodedOutputChunk,
+    track: &Arc<TrackLocalStaticRTP>,
+    payloader: &mut Payloader,
+    label: &str,
+) -> Result<(), Error> {
+    match payloader.payload(chunk) {
+        Ok(rtp_packets) => {
+            for rtp_packet in rtp_packets {
+                if let Err(err) = track.write_rtp(&rtp_packet.packet).await {
+                    warn!("Failed to write {} RTP packet: {}", label, err);
+                    return Err(err.into());
+                }
+            }
+        }
+        Err(err) => {
+            warn!("Failed to payload {} chunk: {}", label, err);
+            return Err(err.into());
+        }
+    }
+    Ok(())
+}
+
 fn get_output_encoded_event(
     video_stream: &Option<MediaStream>,
     audio_stream: &Option<MediaStream>,
     next_video_event: &mut Option<EncodedOutputEvent>,
     next_audio_event: &mut Option<EncodedOutputEvent>,
-) -> Option<EncodedOutputEvent> {
+) -> OutputState {
     match (&next_video_event, &next_audio_event) {
         // try to wait for both audio and video events to be ready
         (Some(video_event), Some(audio_event)) => {
             if get_event_timestamp(audio_event) > get_event_timestamp(video_event) {
-                next_video_event.take()
+                next_video_event.take().into()
             } else {
-                next_audio_event.take()
+                next_audio_event.take().into()
             }
         }
         // read audio if there is no way to get video event
-        (None, Some(_)) if video_stream.is_none() => next_audio_event.take(),
+        (None, Some(_)) if video_stream.is_none() => next_audio_event.take().into(),
         // read video if there is no way to get audio event
-        (Some(_), None) if audio_stream.is_none() => next_video_event.take(),
-        (None, None) => None,
+        (Some(_), None) if audio_stream.is_none() => next_video_event.take().into(),
+        (None, None) => OutputState::Done,
         // we can't do anything here, but there are still receivers
         // that can return something in the next loop.
         //
         // I don't think this can ever happen
-        (_, _) => None,
+        (_, _) => OutputState::Pending,
     }
 }
 
@@ -125,59 +189,4 @@ fn get_event_timestamp(event: &EncodedOutputEvent) -> std::time::Duration {
         EncodedOutputEvent::Data(chunk) => chunk.pts,
         _ => std::time::Duration::ZERO,
     }
-}
-
-async fn process_event(
-    event: EncodedOutputEvent,
-    video_stream: &mut Option<MediaStream>,
-    audio_stream: &mut Option<MediaStream>,
-) -> Result<(), Error> {
-    match event {
-        EncodedOutputEvent::Data(chunk) if matches!(chunk.kind, MediaKind::Video(_)) => {
-            if let Some(MediaStream {
-                track, payloader, ..
-            }) = video_stream
-            {
-                match payloader.payload(chunk) {
-                    Ok(rtp_packets) => {
-                        for rtp_packet in rtp_packets {
-                            if let Err(err) = track.write_rtp(&rtp_packet.packet).await {
-                                warn!("Failed to write video RTP packet: {}", err);
-                                return Err(err.into());
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        warn!("Failed to payload video chunk: {}", err);
-                        return Err(err.into());
-                    }
-                }
-            }
-        }
-        EncodedOutputEvent::Data(chunk) if matches!(chunk.kind, MediaKind::Audio(_)) => {
-            if let Some(MediaStream {
-                track, payloader, ..
-            }) = audio_stream
-            {
-                match payloader.payload(chunk) {
-                    Ok(rtp_packets) => {
-                        for rtp_packet in rtp_packets {
-                            if let Err(err) = track.write_rtp(&rtp_packet.packet).await {
-                                warn!("Failed to write audio RTP packet: {}", err);
-                                return Err(err.into());
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        warn!("Failed to payload audio chunk: {}", err);
-                        return Err(err.into());
-                    }
-                }
-            }
-        }
-        _ => {
-            // Ignore EOS
-        }
-    }
-    Ok(())
 }
