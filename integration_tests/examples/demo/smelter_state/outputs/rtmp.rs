@@ -8,7 +8,7 @@ use tracing::error;
 
 use crate::smelter_state::outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution};
 
-pub const SMELTER_RTMP_URL: &str = "SMELTER_RTMP_URL";
+pub const RTMP_URL: &str = "RTMP_URL";
 
 #[derive(Debug, Display, Clone)]
 pub enum RtmpRegisterOptions {
@@ -72,7 +72,7 @@ impl RtmpOutputBuilder {
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
 
-        let url: String = match env::var(SMELTER_RTMP_URL) {
+        let url: String = match env::var(RTMP_URL) {
             Ok(url) => url,
             Err(_) => builder.prompt_url()?,
         };
