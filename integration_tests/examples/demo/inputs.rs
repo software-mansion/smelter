@@ -11,8 +11,7 @@ pub mod whip;
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
 
-    #[allow(unused_variables)]
-    fn on_after_registration(&mut self, player: InputPlayer) -> Result<()> {
+    fn on_after_registration(&mut self, _player: InputPlayer) -> Result<()> {
         Ok(())
     }
 }

@@ -1,6 +1,6 @@
 // WARN: Remove this after implementing #remove
 #![allow(dead_code)]
-use crate::{inputs::InputHandler, players::InputPlayer};
+use crate::inputs::InputHandler;
 use anyhow::Result;
 
 #[derive(Debug)]
@@ -19,9 +19,5 @@ impl Mp4Input {
 impl InputHandler for Mp4Input {
     fn name(&self) -> &str {
         &self.name
-    }
-
-    fn on_after_registration(&mut self, _player: InputPlayer) -> Result<()> {
-        Ok(())
     }
 }
