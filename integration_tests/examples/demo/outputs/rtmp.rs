@@ -51,7 +51,7 @@ impl OutputHandler for RtmpOutput {
 
     fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value {
         json!({
-            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
+            "video": self.video.as_ref().map(|v| v.serialize_update(inputs, &self.name)),
             "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
@@ -173,7 +173,7 @@ impl RtmpOutputBuilder {
         json!({
             "type": "rtmp_client",
             "url": self.url,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs, &self.name)),
             "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
     }
@@ -199,14 +199,15 @@ pub struct RtmpOutputVideoOptions {
 }
 
 impl RtmpOutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&str]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&str], output_name: &str) -> serde_json::Value {
         let input_json = inputs
             .iter()
-            .map(|input_id| {
+            .map(|input_name| {
+                let id = format!("{input_name}_{output_name}");
                 json!({
                     "type": "input_stream",
-                    "id": input_id,
-                    "input_id": input_id,
+                    "id": id,
+                    "input_id": input_name,
                 })
             })
             .collect::<Vec<_>>();
@@ -229,14 +230,15 @@ impl RtmpOutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&str], output_name: &str) -> serde_json::Value {
         let input_json = inputs
             .iter()
-            .map(|input_id| {
+            .map(|input_name| {
+                let id = format!("{input_name}_{output_name}");
                 json!({
                     "type": "input_stream",
-                    "id": input_id,
-                    "input_id": input_id,
+                    "id": id,
+                    "input_id": input_name,
                 })
             })
             .collect::<Vec<_>>();
