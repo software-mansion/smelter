@@ -29,6 +29,7 @@ impl Depayloader for AacDepayloader {
         &mut self,
         packet: RtpPacket,
     ) -> Result<Vec<EncodedInputChunk>, DepayloadingError> {
+        trace!(?packet, "RTP AAC depayloader received new packet");
         let mut reader = std::io::Cursor::new(packet.packet.payload);
 
         if reader.remaining() < 2 {
@@ -91,7 +92,7 @@ impl Depayloader for AacDepayloader {
                 dts: None,
                 kind: MediaKind::Audio(AudioCodec::Aac),
             };
-            trace!(?chunk, "RTP depayloader produced new chunk");
+            trace!(?chunk, "RTP AAC depayloader produced a new chunk");
             chunks.push(chunk);
         }
 

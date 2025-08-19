@@ -7,7 +7,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use mp4::Mp4Sample;
+use mp4::{Mp4Sample, Mp4Track};
 use tracing::warn;
 
 use crate::{pipeline::decoder::h264_utils::H264AvcDecoderConfig, prelude::*};
@@ -69,6 +69,7 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             track_id,
             duration: track.duration(),
             decoder_options: DecoderOptions::Aac(asc),
+            offset: Self::calculate_offset(track),
             reader: self.reader,
         })
     }
@@ -111,8 +112,32 @@ impl<Reader: Read + Seek + Send + 'static> Mp4FileReader<Reader> {
             track_id,
             duration: track.duration(),
             decoder_options: DecoderOptions::H264(h264_config),
+            offset: Self::calculate_offset(track),
             reader: self.reader,
         })
+    }
+
+    /// This implementation synchronizes using first elst box. If box is missing or
+    /// first edit is empty then zero offset is used.
+    fn calculate_offset(track: &Mp4Track) -> Duration {
+        let first_elst = track
+            .trak
+            .edts
+            .as_ref()
+            .and_then(|edts| edts.elst.as_ref())
+            .and_then(|elst| elst.entries.first());
+
+        match first_elst {
+            Some(elst) => {
+                if elst.media_time == u32::MAX as u64 {
+                    // most likely the result of overflowing -1
+                    // it signifies empty edit
+                    return Duration::ZERO;
+                }
+                Duration::from_secs_f64(elst.media_time as f64 / track.timescale() as f64)
+            }
+            None => Duration::ZERO,
+        }
     }
 }
 
@@ -123,6 +148,7 @@ pub(crate) struct Track<Reader: Read + Seek + Send + 'static> {
     track_id: u32,
     duration: Duration,
     decoder_options: DecoderOptions,
+    offset: Duration,
 }
 
 impl<Reader: Read + Seek + Send + 'static> Track<Reader> {
@@ -183,7 +209,8 @@ impl<Reader: Read + Seek + Send + 'static> TrackChunks<'_, Reader> {
         let dts = Duration::from_secs_f64(start_time as f64 / self.track.timescale as f64);
         let pts = Duration::from_secs_f64(
             (start_time as f64 + rendering_offset as f64) / self.track.timescale as f64,
-        );
+        )
+        .saturating_sub(self.track.offset);
 
         let chunk = EncodedInputChunk {
             data: sample.bytes,

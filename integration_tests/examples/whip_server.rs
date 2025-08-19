@@ -5,7 +5,7 @@ use std::{thread::sleep, time::Duration};
 
 use integration_tests::{
     examples::{self, run_example},
-    gstreamer::start_gst_receive_tcp_vp8,
+    ffmpeg::start_ffmpeg_rtmp_receive,
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -13,46 +13,18 @@ const VIDEO_RESOLUTION: Resolution = Resolution {
     height: 720,
 };
 
-const IP: &str = "127.0.0.1";
-const OUTPUT_PORT: u16 = 8012;
+const OUTPUT_PORT: u16 = 9002;
 
 fn main() {
     run_example(client_code);
 }
 
 fn client_code() -> Result<()> {
-    examples::post(
-        "input/input_1/register",
-        &json!({
-            "type": "whip",
-            "bearer_token": "example",
-            "video": {
-                "decoder_preferences": [
-                    "ffmpeg_vp9"
-                ]
-            }
-        }),
-    )?
-    .json::<serde_json::Value>()?;
+    start_ffmpeg_rtmp_receive(OUTPUT_PORT)?;
+    std::thread::sleep(Duration::from_millis(2000));
 
     examples::post(
-        "input/input_2/register",
-        &json!({
-            "type": "whip",
-            "bearer_token": "example",
-            "video": {
-                "decoder_preferences": [
-                    "ffmpeg_vp8",
-                    "ffmpeg_h264",
-                    "any",
-                ]
-            },
-        }),
-    )?
-    .json::<serde_json::Value>()?;
-
-    examples::post(
-        "input/input_3/register",
+        "input/input/register",
         &json!({
             "type": "whip",
             "bearer_token": "example",
@@ -68,16 +40,16 @@ fn client_code() -> Result<()> {
     examples::post(
         "output/output_1/register",
         &json!({
-            "type": "rtp_stream",
-            "port": OUTPUT_PORT,
-            "transport_protocol": "tcp_server",
+            "url": format!("rtmp://127.0.0.1:{OUTPUT_PORT}"),
+            "type": "rtmp_client",
             "video": {
                 "resolution": {
                     "width": VIDEO_RESOLUTION.width,
                     "height": VIDEO_RESOLUTION.height,
                 },
                 "encoder": {
-                    "type": "ffmpeg_vp8",
+                    "type": "ffmpeg_h264",
+                    "preset": "ultrafast",
                 },
                 "initial": {
                     "root": {
@@ -86,15 +58,7 @@ fn client_code() -> Result<()> {
                         "children": [
                             {
                                 "type": "rescaler",
-                                "child": { "type": "input_stream", "input_id": "input_1" }
-                            },
-                            {
-                                "type": "rescaler",
-                                "child": { "type": "input_stream", "input_id": "input_2" }
-                            },
-                            {
-                                "type": "rescaler",
-                                "child": { "type": "input_stream", "input_id": "input_3" }
+                                "child": { "type": "input_stream", "input_id": "input" }
                             }
                         ]
                     }
@@ -104,13 +68,12 @@ fn client_code() -> Result<()> {
             "audio": {
                 "channels": "stereo",
                 "encoder": {
-                    "type": "opus",
+                    "type": "aac",
+                    "sample_rate": 48_000
                 },
                 "initial": {
                     "inputs": [
-                        {"input_id": "input_1"},
-                        {"input_id": "input_2"},
-                        {"input_id": "input_3"}
+                        {"input_id": "input"}
                     ]
                 }
             }
@@ -118,7 +81,6 @@ fn client_code() -> Result<()> {
     )?;
 
     std::thread::sleep(Duration::from_millis(500));
-    start_gst_receive_tcp_vp8(IP, OUTPUT_PORT, true)?;
     examples::post("start", &json!({}))?;
     sleep(Duration::MAX);
 

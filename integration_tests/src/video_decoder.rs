@@ -17,6 +17,7 @@ pub struct VideoDecoder {
     depayloader: H264Packet,
     decoder: decoder::Opened,
     decoded_frames: Vec<Frame>,
+    first_rtp_timestamp: Option<u32>,
 }
 
 impl VideoDecoder {
@@ -43,11 +44,15 @@ impl VideoDecoder {
             decoder,
             depayloader: H264Packet::default(),
             decoded_frames: Vec::new(),
+            first_rtp_timestamp: None,
         })
     }
 
     pub fn decode(&mut self, packet: rtp::packet::Packet) -> Result<()> {
-        let pts = packet.header.timestamp as f64 / 90000.0 * 1_000_000.0;
+        let first_rtp_timestamp = *self
+            .first_rtp_timestamp
+            .get_or_insert(packet.header.timestamp);
+        let pts = (packet.header.timestamp - first_rtp_timestamp) as f64 / 90000.0 * 1_000_000.0;
         let chunk_data = self.depayloader.depacketize(&packet.payload)?;
         if chunk_data.is_empty() {
             return Ok(());

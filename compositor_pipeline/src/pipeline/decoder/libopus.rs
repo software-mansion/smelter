@@ -46,6 +46,7 @@ impl AudioDecoder for OpusDecoder {
         &mut self,
         encoded_chunk: EncodedInputChunk,
     ) -> Result<Vec<DecodedSamples>, DecodingError> {
+        trace!(?encoded_chunk, "libopus decoder received a chunk.");
         let stream_gap = self.calculate_stream_gap(encoded_chunk.pts);
         let use_fec = self.should_use_fec(stream_gap);
 
@@ -58,10 +59,13 @@ impl AudioDecoder for OpusDecoder {
 
         self.set_end_pts(&decoded_samples);
 
-        match fec_samples {
+        let samples = match fec_samples {
             Some(samples) => Ok(vec![samples, decoded_samples]),
             None => Ok(vec![decoded_samples]),
-        }
+        };
+
+        trace!(?samples, "libopus decoder produced samples.");
+        samples
     }
 
     fn flush(&mut self) -> Vec<DecodedSamples> {
@@ -100,7 +104,9 @@ impl OpusDecoder {
             Some(pts) => current_start.saturating_sub(pts),
             None => Duration::ZERO,
         };
-        trace!("Calculated stream gap {stream_gap:?}");
+        if stream_gap != Duration::ZERO {
+            trace!("Calculated stream gap {stream_gap:?}");
+        }
         stream_gap
     }
 

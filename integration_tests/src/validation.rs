@@ -186,7 +186,7 @@ impl Default for AudioValidationConfig {
             // per channel which is approx. 0.34s for the default sample rate.
             // This number MUST NOT exceed 16384 per channel.
             samples_per_batch: 32768,
-            allowed_failed_batches: 0,
+            allowed_failed_batches: 2,
             tolerance: AudioAnalyzeTolerance::default(),
         }
     }

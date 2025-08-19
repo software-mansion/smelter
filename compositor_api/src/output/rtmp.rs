@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -6,7 +8,7 @@ use crate::*;
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RtmpClient {
-    pub url: String,
+    pub url: Arc<str>,
     /// Video stream configuration.
     pub video: Option<OutputVideoOptions>,
     /// Audio stream configuration.

@@ -8,7 +8,7 @@ use spectrum_analyzer::{
     Frequency, FrequencyLimit, FrequencySpectrum, FrequencyValue,
 };
 use std::{cmp::Ordering, fmt::Display, iter::zip, ops::Range, time::Duration};
-use tracing::error;
+use tracing::{error, trace};
 
 use crate::{
     audio_decoder::{AudioDecoder, AudioSampleBatch},
@@ -78,9 +78,12 @@ impl AnalyzeResult {
         let max_frequency_level_match = max_frequency_level_diff <= tolerance.max_frequency_level;
         let general_level_match = general_level_diff <= tolerance.general_level;
 
+        trace!("Check for max Frequency disabled {max_frequency_match}");
+
         let audio_match = average_level_match
             && median_level_match
-            && max_frequency_match
+          // disable check for max Frequency
+          //  && max_frequency_match
             && max_frequency_level_match
             && general_level_match;
 

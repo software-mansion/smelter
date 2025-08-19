@@ -1,4 +1,5 @@
 use crossbeam_channel::{Receiver, TryRecvError};
+use tracing::debug;
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -6,26 +7,31 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::event::Event;
-use crate::event::EventEmitter;
-
-use super::{
-    utils::{Clock, InputProcessor},
-    InputOptions, PipelineEvent, QueueVideoOutput,
+use crate::{
+    event::{Event, EventEmitter},
+    queue::{utils::EmitEventOnce, QueueVideoOutput, SharedState},
 };
 
 use crate::prelude::*;
 
 pub struct VideoQueue {
+    sync_point: Instant,
     inputs: HashMap<InputId, VideoQueueInput>,
     event_emitter: Arc<EventEmitter>,
+    ahead_of_time_processing: bool,
 }
 
 impl VideoQueue {
-    pub fn new(event_emitter: Arc<EventEmitter>) -> Self {
+    pub fn new(
+        sync_point: Instant,
+        event_emitter: Arc<EventEmitter>,
+        ahead_of_time_processing: bool,
+    ) -> Self {
         VideoQueue {
             inputs: HashMap::new(),
             event_emitter,
+            sync_point,
+            ahead_of_time_processing,
         }
     }
 
@@ -33,26 +39,34 @@ impl VideoQueue {
         &mut self,
         input_id: &InputId,
         receiver: Receiver<PipelineEvent<Frame>>,
-        opts: InputOptions,
-        clock: Clock,
+        opts: QueueInputOptions,
+        shared_state: SharedState,
     ) {
         self.inputs.insert(
             input_id.clone(),
             VideoQueueInput {
-                input_id: input_id.clone(),
                 queue: VecDeque::new(),
                 receiver,
-                input_frames_processor: InputProcessor::new(
-                    opts.buffer_duration,
-                    clock,
-                    input_id.clone(),
-                    self.event_emitter.clone(),
-                ),
                 required: opts.required,
-                offset: opts.offset,
-                eos_sent: false,
-                first_frame_sent: false,
-                event_emitter: self.event_emitter.clone(),
+
+                eos_received: false,
+                sync_point: self.sync_point,
+                shared_state,
+
+                offset_from_start: opts.offset,
+
+                emit_once_delivered_event: EmitEventOnce::new(
+                    Event::VideoInputStreamDelivered(input_id.clone()),
+                    &self.event_emitter,
+                ),
+                emit_once_playing_event: EmitEventOnce::new(
+                    Event::VideoInputStreamPlaying(input_id.clone()),
+                    &self.event_emitter,
+                ),
+                emit_once_eos_event: EmitEventOnce::new(
+                    Event::VideoInputStreamEos(input_id.clone()),
+                    &self.event_emitter,
+                ),
             },
         );
     }
@@ -66,63 +80,59 @@ impl VideoQueue {
     pub(super) fn get_frames_batch(
         &mut self,
         buffer_pts: Duration,
-        queue_start: Instant,
+        queue_start_pts: Duration,
     ) -> QueueVideoOutput {
+        let mut required = false;
         let frames = self
             .inputs
             .iter_mut()
-            .filter_map(|(input_id, input)| {
-                input
-                    .get_frame(buffer_pts, queue_start)
-                    .map(|frame| (input_id.clone(), frame))
-            })
+            .filter_map(
+                |(input_id, input)| match input.get_frame(buffer_pts, queue_start_pts) {
+                    Some(frame_event) => {
+                        required = required || frame_event.required;
+                        Some((input_id.clone(), frame_event.event))
+                    }
+                    None => None,
+                },
+            )
             .collect();
 
         QueueVideoOutput {
             frames,
+            required,
             pts: buffer_pts,
         }
     }
 
-    /// Checks if all inputs are ready to produce frames for specific PTS value (if all inputs have
-    /// frames closest to buffer_pts).
-    pub(super) fn check_all_inputs_ready_for_pts(
+    pub(super) fn should_push_next_frameset(
         &mut self,
-        next_buffer_pts: Duration,
-        queue_start: Instant,
+        next_pts: Duration,
+        queue_start_pts: Duration,
     ) -> bool {
-        self.inputs
+        if !self.ahead_of_time_processing && self.sync_point + next_pts > Instant::now() {
+            return false;
+        }
+
+        let all_inputs_ready = self
+            .inputs
             .values_mut()
-            .all(|input| input.check_ready_for_pts(next_buffer_pts, queue_start))
-    }
+            .all(|input| input.try_enqueue_until_ready_for_pts(next_pts, queue_start_pts));
+        if all_inputs_ready {
+            return true;
+        }
 
-    /// Checks if all required inputs are ready to produce frames for specific PTS value (if
-    /// all required inputs have frames closest to buffer_pts).
-    pub(super) fn check_all_required_inputs_ready_for_pts(
-        &mut self,
-        next_buffer_pts: Duration,
-        queue_start: Instant,
-    ) -> bool {
-        self.inputs.values_mut().all(|input| {
-            (!input.required) || input.check_ready_for_pts(next_buffer_pts, queue_start)
-        })
-    }
+        let all_required_inputs_ready = self.inputs.values_mut().all(|input| {
+            (!input.required) || input.try_enqueue_until_ready_for_pts(next_pts, queue_start_pts)
+        });
+        if !all_required_inputs_ready {
+            return false;
+        }
 
-    /// Checks if any of the required input stream have an offset that would
-    /// require the stream to be used for PTS=`next_buffer_pts`
-    pub(super) fn has_required_inputs_for_pts(
-        &mut self,
-        next_buffer_pts: Duration,
-        queue_start: Instant,
-    ) -> bool {
-        self.inputs.values_mut().any(|input| {
-            let should_already_start = |input: &mut VideoQueueInput| {
-                input
-                    .input_pts_from_queue_pts(next_buffer_pts, queue_start)
-                    .is_some()
-            };
-            input.required && should_already_start(input)
-        })
+        if self.sync_point + next_pts < Instant::now() {
+            debug!("Pushing video frames while some inputs are not ready.");
+            return true;
+        }
+        false
     }
 
     pub(super) fn drop_old_frames_before_start(&mut self) {
@@ -132,106 +142,106 @@ impl VideoQueue {
     }
 }
 
+struct FrameEvent {
+    required: bool,
+    event: PipelineEvent<Frame>,
+}
+
 pub struct VideoQueueInput {
-    input_id: InputId,
     /// Frames are PTS ordered where PTS=0 represents beginning of the stream.
     queue: VecDeque<Frame>,
     /// Frames from the channel might have any PTS, they need to be processed
     /// before adding them to the `queue`.
     receiver: Receiver<PipelineEvent<Frame>>,
-    /// Initial buffering + resets PTS to values starting with 0. All
-    /// frames from receiver should be processed by this element.
-    input_frames_processor: InputProcessor<Frame>,
     /// If stream is required the queue should wait for frames. For optional
     /// inputs a queue will wait only as long as a buffer allows.
     required: bool,
     /// Offset of the stream relative to the start. If set to `None`
     /// offset will be resolved automatically on the stream start.
-    offset: Option<Duration>,
+    offset_from_start: Option<Duration>,
 
-    eos_sent: bool,
-    first_frame_sent: bool,
+    eos_received: bool,
 
-    event_emitter: Arc<EventEmitter>,
+    sync_point: Instant,
+    shared_state: SharedState,
+
+    emit_once_delivered_event: EmitEventOnce,
+    emit_once_playing_event: EmitEventOnce,
+    emit_once_eos_event: EmitEventOnce,
 }
 
 impl VideoQueueInput {
     /// Return frame for PTS and drop all the older frames. This function does not check
     /// whether stream is required or not.
-    fn get_frame(
-        &mut self,
-        buffer_pts: Duration,
-        queue_start: Instant,
-    ) -> Option<PipelineEvent<Frame>> {
+    fn get_frame(&mut self, buffer_pts: Duration, queue_start_pts: Duration) -> Option<FrameEvent> {
         // ignore result, we only need to ensure frames are enqueued
-        self.check_ready_for_pts(buffer_pts, queue_start);
+        self.try_enqueue_until_ready_for_pts(buffer_pts, queue_start_pts);
+        self.drop_old_frames(buffer_pts, queue_start_pts);
 
-        self.drop_old_frames(buffer_pts, queue_start);
-        let input_start_time = self.input_start_time()?;
-        let frame = match self.offset {
-            // if stream should not start yet, do not send any frames
-            Some(offset) if offset > buffer_pts => None,
-            // if stream is started then take the frames
-            Some(offset) => self.queue.front().cloned().map(|mut frame| {
-                frame.pts += offset;
-                frame
-            }),
-            None => self.queue.front().cloned().map(|mut frame| {
-                frame.pts = (input_start_time + frame.pts).duration_since(queue_start);
-                frame
-            }),
+        let frame = match self.offset_pts(queue_start_pts) {
+            Some(offset_pts) => {
+                // if stream has offset and should not start yet, do not send any frames
+                let after_offset_pts = offset_pts < buffer_pts;
+                match after_offset_pts {
+                    true => self.queue.front().cloned(),
+                    false => None,
+                }
+            }
+            None => {
+                let after_first_pts = self
+                    .shared_state
+                    .first_pts()
+                    .is_some_and(|first_pts| first_pts < buffer_pts);
+                match after_first_pts {
+                    true => self.queue.front().cloned(),
+                    false => None,
+                }
+            }
         };
+
         // Handle a case where we have last frame and received EOS.
         // "drop_old_frames" is ensuring that there will only be one frame at
         // the end.
-        if self.input_frames_processor.did_receive_eos() && self.queue.len() == 1 {
+        if self.eos_received && self.queue.len() == 1 {
             self.queue.pop_front();
         }
 
-        if self.input_frames_processor.did_receive_eos() && frame.is_none() && !self.eos_sent {
-            self.eos_sent = true;
-            self.event_emitter
-                .emit(Event::VideoInputStreamEos(self.input_id.clone()));
-            Some(PipelineEvent::EOS)
-        } else {
-            if !self.first_frame_sent && frame.is_some() {
-                self.event_emitter
-                    .emit(Event::VideoInputStreamPlaying(self.input_id.clone()));
-                self.first_frame_sent = true
+        if self.eos_received && frame.is_none() && !self.emit_once_eos_event.already_sent() {
+            self.emit_once_eos_event.emit();
+            return Some(FrameEvent {
+                required: true,
+                event: PipelineEvent::EOS,
+            });
+        }
+
+        match frame {
+            Some(frame) => {
+                self.emit_once_playing_event.emit();
+                Some(FrameEvent {
+                    required: self.required,
+                    event: PipelineEvent::Data(frame),
+                })
             }
-            frame.map(PipelineEvent::Data)
+            None => None,
         }
     }
 
     /// Check if the input has enough data in the queue to produce frames for `next_buffer_pts`.
     /// In particular if `self.offset` is in the future, then it will still return true even
     /// if it shouldn't produce any frames.
+    /// After receiving EOS input is considered to always be "ready".
     ///
     /// We assume that the queue receives frames with monotonically increasing timestamps,
     /// so when all inputs queues have frames with pts larger or equal than buffer timestamp,
     /// the queue won't receive frames with pts "closer" to buffer pts.
-    fn check_ready_for_pts(&mut self, next_buffer_pts: Duration, queue_start: Instant) -> bool {
-        if self.input_frames_processor.did_receive_eos() {
+    fn try_enqueue_until_ready_for_pts(
+        &mut self,
+        next_buffer_pts: Duration,
+        queue_start_pts: Duration,
+    ) -> bool {
+        if self.eos_received {
             return true;
         }
-
-        let Some(next_buffer_pts) = self.input_pts_from_queue_pts(next_buffer_pts, queue_start)
-        else {
-            return match self.offset {
-                Some(offset) => {
-                    // if stream should start later than `next_buffer_pts`, then it's fine
-                    // to consider it ready, because we will not use frames for that PTS
-                    // regardless if they are there or not.
-                    offset > next_buffer_pts
-                }
-                None => {
-                    // It represents a stream that is still buffering. We know that frames
-                    // from this input will not be used for this batch, so it is fine
-                    // to consider this "ready".
-                    true
-                }
-            };
-        };
 
         fn has_frame_for_pts(queue: &VecDeque<Frame>, next_buffer_pts: Duration) -> bool {
             match queue.back() {
@@ -241,7 +251,7 @@ impl VideoQueueInput {
         }
 
         while !has_frame_for_pts(&self.queue, next_buffer_pts) {
-            if self.try_enqueue_frame().is_err() {
+            if self.try_enqueue_frame(Some(queue_start_pts)).is_err() {
                 return false;
             }
         }
@@ -256,15 +266,8 @@ impl VideoQueueInput {
     /// before the "closest" one.
     /// If dropping frames removes everything from the queue try to enqueue some new frames
     /// and repeat the process.
-    fn drop_old_frames(&mut self, next_buffer_pts: Duration, queue_start: Instant) {
-        let Some(next_buffer_pts) = self.input_pts_from_queue_pts(next_buffer_pts, queue_start)
-        else {
-            // before first frame so nothing to drop
-            return;
-        };
-
+    fn drop_old_frames(&mut self, next_buffer_pts: Duration, queue_start_pts: Duration) {
         let next_output_buffer_nanos = next_buffer_pts.as_nanos();
-
         loop {
             let closest_diff_frame_index = self
                 .queue
@@ -284,7 +287,7 @@ impl VideoQueueInput {
             }
 
             // if queue is empty then try to enqueue some more frames
-            if self.try_enqueue_frame().is_err() {
+            if self.try_enqueue_frame(Some(queue_start_pts)).is_err() {
                 return;
             }
         }
@@ -293,73 +296,58 @@ impl VideoQueueInput {
     /// Drops frames that won't be used for processing. This function should only be called before
     /// queue start.
     fn drop_old_frames_before_start(&mut self) {
-        let Some(start_input_stream) = self.input_start_time() else {
-            // before first frame, so nothing to do
-            return;
-        };
-
-        if self.offset.is_some() {
-            // if offset is defined never drop frames before start.
-            return;
-        };
-
         loop {
-            if self.queue.is_empty() && self.try_enqueue_frame().is_err() {
+            // if offset is defined try_enqueue_frame will always return err
+            if self.queue.is_empty() && self.try_enqueue_frame(None).is_err() {
                 return;
             }
             let Some(first_frame) = self.queue.front() else {
                 return;
             };
             // If frame is still in the future then do not drop.
-            if start_input_stream + first_frame.pts >= Instant::now() {
+            if self.sync_point + first_frame.pts >= Instant::now() {
                 return;
             }
             self.queue.pop_front();
         }
     }
 
-    /// Calculate input pts based on queue pts and queue start time. It can trigger
-    /// enqueue internally.
-    ///
-    /// Returns None if:
-    /// - Input is not ready and offset is unknown
-    /// - If offset is negative (PTS refers to moment from before stream start)
-    fn input_pts_from_queue_pts(
-        &mut self,
-        queue_pts: Duration,
-        queue_start_time: Instant,
-    ) -> Option<Duration> {
-        let input_start_time = self.input_start_time();
-        match self.offset {
-            Some(offset) => queue_pts.checked_sub(offset),
-            None => match input_start_time {
-                Some(input_start_time) => {
-                    (queue_start_time + queue_pts).checked_duration_since(input_start_time)
+    fn try_enqueue_frame(&mut self, queue_start_pts: Option<Duration>) -> Result<(), TryRecvError> {
+        if !self.receiver.is_empty() {
+            // if offset is defined the events are not dequeued before start
+            // so we need to handle it here
+            self.emit_once_delivered_event.emit();
+        }
+
+        if self.offset_from_start.is_none() {
+            match self.receiver.try_recv()? {
+                PipelineEvent::Data(frame) => {
+                    let _ = self.shared_state.get_or_init_first_pts(frame.pts);
+                    self.queue.push_back(frame);
                 }
-                None => None,
-            },
+                PipelineEvent::EOS => self.eos_received = true,
+            };
+        } else {
+            let Some(offset_pts) = queue_start_pts.and_then(|start| self.offset_pts(start)) else {
+                // if there is offset, do not enqueue before start
+                return Err(TryRecvError::Empty);
+            };
+            match self.receiver.try_recv()? {
+                // pts start from sync point
+                PipelineEvent::Data(mut frame) => {
+                    let first_pts = self.shared_state.get_or_init_first_pts(frame.pts);
+                    frame.pts = offset_pts + frame.pts - first_pts;
+                    self.queue.push_back(frame);
+                }
+                PipelineEvent::EOS => self.eos_received = true,
+            };
         }
-    }
-
-    /// Evaluate start time of this input. Start time represents an instant of time
-    /// when input switched from buffering state to ready.
-    fn input_start_time(&mut self) -> Option<Instant> {
-        loop {
-            if let Some(start_time) = self.input_frames_processor.start_time() {
-                return Some(start_time);
-            }
-
-            if self.try_enqueue_frame().is_err() {
-                return None;
-            }
-        }
-    }
-
-    fn try_enqueue_frame(&mut self) -> Result<(), TryRecvError> {
-        let frame = self.receiver.try_recv()?;
-        let mut frames = self.input_frames_processor.process_new_chunk(frame);
-        self.queue.append(&mut frames);
-
         Ok(())
+    }
+
+    /// Offset value calculated in form of PTS(relative to sync point)
+    fn offset_pts(&self, queue_start_pts: Duration) -> Option<Duration> {
+        self.offset_from_start
+            .map(|offset| queue_start_pts + offset)
     }
 }
