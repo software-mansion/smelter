@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use integration_tests::ffmpeg::start_ffmpeg_rtmp_receive;
+use rand::RngCore;
 use std::process::Child;
 
 use inquire::{Confirm, Select};
@@ -192,6 +193,7 @@ impl RtmpOutputBuilder {
 
 #[derive(Debug)]
 pub struct RtmpOutputVideoOptions {
+    root_id: String,
     resolution: VideoResolution,
     encoder: VideoEncoder,
 }
@@ -217,7 +219,7 @@ impl RtmpOutputVideoOptions {
             "initial": {
                 "root": {
                     "type": "tiles",
-                    "id": "tiles",
+                    "id": self.root_id,
                     "transition": {
                         "duration_ms": 500,
                     },
@@ -242,7 +244,7 @@ impl RtmpOutputVideoOptions {
         json!({
             "root": {
                 "type": "tiles",
-                "id": "tiles",
+                "id": self.root_id,
                 "transition": {
                     "duration_ms": 500,
                 },
@@ -258,7 +260,10 @@ impl Default for RtmpOutputVideoOptions {
             width: 1920,
             height: 1080,
         };
+        let suffix = rand::thread_rng().next_u32();
+        let root_id = format!("tiles_{suffix}");
         Self {
+            root_id,
             resolution,
             encoder: VideoEncoder::FfmpegH264,
         }

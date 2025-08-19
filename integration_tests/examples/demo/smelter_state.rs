@@ -59,6 +59,8 @@ impl SmelterState {
 
         let input_route = format!("input/{}/register", input_handler.name());
 
+        debug!("Input register request: {input_json:#?}");
+
         examples::post(&input_route, &input_json)?;
         input_handler.on_after_registration(player)?;
         self.inputs.push(input_handler);
@@ -104,6 +106,8 @@ impl SmelterState {
         output_handler.on_before_registration(player)?;
 
         let output_route = format!("output/{}/register", output_handler.name());
+
+        debug!("Output register request: {output_json:#?}");
 
         examples::post(&output_route, &output_json)?;
 

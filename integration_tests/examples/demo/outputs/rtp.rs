@@ -10,6 +10,7 @@ use integration_tests::{
         start_gst_receive_udp_vp9, start_gst_receive_udp_without_video,
     },
 };
+use rand::RngCore;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
@@ -342,8 +343,9 @@ impl RtpOutputBuilder {
 
 #[derive(Debug)]
 pub struct RtpOutputVideoOptions {
-    pub resolution: VideoResolution,
-    pub encoder: VideoEncoder,
+    root_id: String,
+    resolution: VideoResolution,
+    encoder: VideoEncoder,
 }
 
 impl RtpOutputVideoOptions {
@@ -366,7 +368,7 @@ impl RtpOutputVideoOptions {
             "initial": {
                 "root": {
                     "type": "tiles",
-                    "id": "tiles",
+                    "id": self.root_id,
                     "transition": {
                         "duration_ms": 500,
                     },
@@ -390,7 +392,7 @@ impl RtpOutputVideoOptions {
         json!({
             "root": {
                 "type": "tiles",
-                "id": "tiles",
+                "id": self.root_id,
                 "transition": {
                     "duration_ms": 500,
                 },
@@ -402,11 +404,15 @@ impl RtpOutputVideoOptions {
 
 impl Default for RtpOutputVideoOptions {
     fn default() -> Self {
+        let resolution = VideoResolution {
+            width: 1920,
+            height: 1080,
+        };
+        let suffix = rand::thread_rng().next_u32();
+        let root_id = format!("tiles_{suffix}");
         Self {
-            resolution: VideoResolution {
-                width: 1920,
-                height: 1080,
-            },
+            root_id,
+            resolution,
             encoder: VideoEncoder::FfmpegH264,
         }
     }
