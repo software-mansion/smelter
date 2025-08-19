@@ -220,12 +220,8 @@ pub fn single_input_opus() -> Result<()> {
                     "inputs": [
                         {
                             "input_id": "input_1",
-                            "volume": 0.3,
                         },
-                        {
-                            "input_id": "input_2",
-                            "volume": 0.7,
-                        }
+
                     ]
                 },
                 "channels": "stereo",
@@ -258,7 +254,7 @@ pub fn single_input_opus() -> Result<()> {
         }),
     )?;
 
-    let audio_input_1 = input_dump_from_disk("countdown_audio.rtp")?;
+    let audio_input_1 = input_dump_from_disk("a_libopus_audio.rtp")?;
     PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?.send(&audio_input_1)?;
 
     instance.send_request("start", json!({}))?;
