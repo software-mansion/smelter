@@ -29,11 +29,7 @@ pub(super) struct VideoSessionResources<'a> {
     pub(crate) pps: HashMap<(u8, u8), PicParameterSet>,
     pub(crate) decode_query_pool: Option<DecodingQueryPool>,
     pub(crate) decode_buffer: DecodeInputBuffer,
-    // HACK: Parser may produce incorrect decoder instructions where after new SPS,
-    // a reference frame is produced which references the previous SPS that got overriden.
-    // As a workaround, we insert the new SPS on reset (IDR) when we are sure there won't be any
-    // back references.
-    parameters_scheduled_for_reset: Option<(SessionParams<'a>, Vec<SeqParameterSet>)>,
+    parameters_scheduled_for_reset: Option<SessionParams<'a>>,
 }
 
 fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, VulkanDecoderError> {
@@ -164,16 +160,18 @@ impl VideoSessionResources<'_> {
             profile_info: Arc::new(ProfileInfo::from_sps_decode(&sps)?),
             level_idc: sps.level_idc,
         };
-        let (current_session_params, mut pending_sps) = self
+        let current_session_params = self
             .parameters_scheduled_for_reset
             .take()
-            .unwrap_or_else(|| (self.parameters.clone(), Vec::new()));
+            .unwrap_or_else(|| self.parameters.clone());
 
-        pending_sps.push(sps);
-        self.parameters_scheduled_for_reset = Some((
-            SessionParams::combine(current_session_params, new_session_params),
-            pending_sps,
+        self.parameters_scheduled_for_reset = Some(SessionParams::combine(
+            current_session_params,
+            new_session_params,
         ));
+
+        self.parameters_manager.put_sps(&sps)?;
+        self.sps.insert(sps.id().id(), sps);
 
         Ok(())
     }
@@ -193,15 +191,12 @@ impl VideoSessionResources<'_> {
         decode_buffer: &CommandBuffer,
         fence_memory_barrier_completed: &Fence,
     ) -> Result<(), VulkanDecoderError> {
-        let Some((new_params, pending_sps)) = self.parameters_scheduled_for_reset.take() else {
+        let Some(new_params) = self.parameters_scheduled_for_reset.take() else {
             return Ok(());
         };
 
         if self.parameters.is_valid(&new_params) {
             // no need to change the session
-            for sps in pending_sps {
-                self.put_sps(sps)?;
-            }
             self.parameters.max_num_reorder_frames = new_params.max_num_reorder_frames;
             return Ok(());
         }
@@ -262,16 +257,7 @@ impl VideoSessionResources<'_> {
         )?;
 
         self.parameters = new_params;
-        for sps in pending_sps {
-            self.put_sps(sps)?;
-        }
 
-        Ok(())
-    }
-
-    fn put_sps(&mut self, sps: SeqParameterSet) -> Result<(), VulkanDecoderError> {
-        self.parameters_manager.put_sps(&sps)?;
-        self.sps.insert(sps.id().id(), sps);
         Ok(())
     }
 
