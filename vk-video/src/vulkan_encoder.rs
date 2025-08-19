@@ -50,9 +50,6 @@ pub enum VulkanEncoderError {
     #[error("This device does not support the required capabilities: {0}")]
     UnsupportedDeviceCapabilities(&'static str),
 
-    #[error("The requested dimensions are not divisible by 16, which is unsupported")]
-    DimensionsNotDivisibleBy16,
-
     #[error("Encode operation failed with status {0:?}")]
     EncodeOperationFailed(vk::QueryResultStatusKHR),
 
