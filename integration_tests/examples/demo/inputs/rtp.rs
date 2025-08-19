@@ -17,7 +17,7 @@ use crate::{
     IP,
 };
 
-use crate::generators::get_free_port;
+use crate::utils::get_free_port;
 
 #[derive(Debug, Display, EnumIter, Clone)]
 pub enum RtpRegisterOptions {

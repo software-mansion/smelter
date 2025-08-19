@@ -12,7 +12,7 @@ use crate::{
     players::OutputPlayer,
 };
 
-use crate::generators::get_free_port;
+use crate::utils::get_free_port;
 
 #[derive(Debug, Display, Clone)]
 pub enum RtmpRegisterOptions {

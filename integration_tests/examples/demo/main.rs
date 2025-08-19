@@ -6,11 +6,11 @@ use smelter::{config::read_config, logger::init_logger};
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{debug, error};
 
-mod generators;
 mod inputs;
 mod outputs;
 mod players;
 mod smelter_state;
+mod utils;
 
 use crate::smelter_state::SmelterState;
 
