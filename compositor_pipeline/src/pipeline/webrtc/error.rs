@@ -1,6 +1,8 @@
 use axum::response::{IntoResponse, Response};
 use reqwest::StatusCode;
 
+use crate::pipeline::rtp::payloader::PayloadingError;
+
 #[derive(Debug)]
 pub enum WhipWhepServerError {
     BadRequest(String),
@@ -46,4 +48,13 @@ impl IntoResponse for WhipWhepServerError {
             }
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum WhepError {
+    #[error("Error payloading chunk: {0}")]
+    PayloadingError(#[from] PayloadingError),
+
+    #[error("Error writing RTP packet: {0}")]
+    RtpWriteError(#[from] webrtc::Error),
 }

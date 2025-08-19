@@ -79,7 +79,7 @@ impl PeerConnection {
 
     pub async fn new_video_track(
         &self,
-        encoder: VideoEncoderOptions,
+        encoder: &VideoEncoderOptions,
     ) -> Result<(Arc<TrackLocalStaticRTP>, Arc<RTCRtpSender>, u32), WhipWhepServerError> {
         let mime_type = match encoder {
             VideoEncoderOptions::FfmpegH264(_) => MIME_TYPE_H264,
@@ -110,7 +110,7 @@ impl PeerConnection {
 
     pub async fn new_audio_track(
         &self,
-        encoder: AudioEncoderOptions,
+        encoder: &AudioEncoderOptions,
     ) -> Result<(Arc<TrackLocalStaticRTP>, u32), WhipWhepServerError> {
         let track = match encoder {
             AudioEncoderOptions::Opus(opts) => {
