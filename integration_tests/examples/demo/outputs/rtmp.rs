@@ -37,8 +37,7 @@ pub struct RtmpOutput {
 
 impl RtmpOutput {
     fn start_ffmpeg_recv(&mut self) -> Result<()> {
-        let (listener_handle, player_handle) = start_ffmpeg_rtmp_receive(self.port)?;
-        self.stream_handles.push(listener_handle);
+        let player_handle = start_ffmpeg_rtmp_receive(self.port)?;
         self.stream_handles.push(player_handle);
         Ok(())
     }
