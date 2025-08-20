@@ -15,7 +15,7 @@ export type RegisterInput =
   | {
       type: 'whep';
       endpointUrl: string;
-      bearerToken: string;
+      bearerToken?: string;
     };
 
 export type RegisterOutput = {

@@ -62,7 +62,7 @@ export async function handleRegisterWhepInput(
   ctx: InstanceContext,
   inputId: string,
   endpointUrl: string,
-  bearerToken: string
+  bearerToken?: string
 ): Promise<RegisterInputResult> {
   const inputStream = new MediaStream();
 
