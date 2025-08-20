@@ -46,7 +46,7 @@ impl WhipInput {
 
         let bearer_token = options.bearer_token.unwrap_or_else(generate_token);
         state.inputs.add_input(
-            endpoint_id.clone(),
+            &endpoint_id,
             WhipInputConnectionStateOptions {
                 bearer_token: bearer_token.clone(),
                 video_preferences: options.video_preferences,
@@ -58,7 +58,7 @@ impl WhipInput {
         Ok((
             Input::Whip(Self {
                 whip_inputs_state: state.inputs.clone(),
-                endpoint_id: endpoint_id.clone(),
+                endpoint_id,
             }),
             InputInitInfo::Whip { bearer_token },
             QueueDataReceiver {

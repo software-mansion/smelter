@@ -50,9 +50,9 @@ impl WhipInputsState {
         }
     }
 
-    pub fn add_input(&self, session_id: Arc<str>, options: WhipInputConnectionStateOptions) {
+    pub fn add_input(&self, endpoint_id: &Arc<str>, options: WhipInputConnectionStateOptions) {
         let mut guard = self.0.lock().unwrap();
-        guard.insert(session_id, WhipInputConnectionState::new(options));
+        guard.insert(endpoint_id.clone(), WhipInputConnectionState::new(options));
     }
 
     // called on drop (when input is unregistered)
