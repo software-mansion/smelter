@@ -248,6 +248,21 @@ export type RegisterOutput =
       audio?: OutputWhipAudioOptions | null;
     }
   | {
+      type: "whep";
+      /**
+       * Token used for authentication in WHEP protocol. If not provided, the bearer token is not required to establish the session.
+       */
+      bearer_token?: string | null;
+      /**
+       * Video track configuration.
+       */
+      video?: OutputVideoOptions | null;
+      /**
+       * Audio track configuration.
+       */
+      audio?: OutputWhepAudioOptions | null;
+    }
+  | {
       type: "hls";
       /**
        * Path to output HLS playlist.
@@ -874,6 +889,25 @@ export type WhipAudioEncoderOptions =
   | {
       type: "any";
     };
+export type WhepAudioEncoderOptions = {
+  type: "opus";
+  /**
+   * (**default="voip"**) Specifies preset for audio output encoder.
+   */
+  preset?: OpusEncoderPreset | null;
+  /**
+   * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 48000].
+   */
+  sample_rate?: number | null;
+  /**
+   * (**default=`false`**) Specifies if forward error correction (FEC) should be used.
+   */
+  forward_error_correction?: boolean | null;
+  /**
+   * (**default=`0`**) Expected packet loss. When `forward_error_correction` is set to `true`, then this value should be greater than `0`. Allowed values: [0, 100];
+   */
+  expected_packet_loss?: number | null;
+};
 export type HlsAudioEncoderOptions = {
   type: "aac";
   /**
@@ -1111,6 +1145,28 @@ export interface OutputWhipAudioOptions {
    * Codec preferences list.
    */
   encoder_preferences?: WhipAudioEncoderOptions[] | null;
+  /**
+   * Initial audio mixer configuration for output.
+   */
+  initial: AudioScene;
+}
+export interface OutputWhepAudioOptions {
+  /**
+   * (**default="sum_clip"**) Specifies how audio should be mixed.
+   */
+  mixing_strategy?: AudioMixingStrategy | null;
+  /**
+   * Condition for termination of output stream based on the input streams states.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Audio encoder options.
+   */
+  encoder: WhepAudioEncoderOptions;
+  /**
+   * Specifies channels configuration.
+   */
+  channels?: AudioChannels | null;
   /**
    * Initial audio mixer configuration for output.
    */
