@@ -29,6 +29,7 @@ export {
   RegisterMp4Output,
   RegisterHlsOutput,
   RegisterWhipOutput,
+  RegisterWhepOutput,
   RegisterRtmpClientOutput,
 } from './types/output.js';
 
