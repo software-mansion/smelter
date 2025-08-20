@@ -301,7 +301,7 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
     )?;
 
     let mut input_sender = PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?;
-    let input_dump = input_dump_from_disk("countdown_audio.rtp")?;
+    let input_dump = input_dump_from_disk("a_libopus_audio.rtp")?;
     let (input_first_part, input_second_part) =
         split_rtp_packet_dump(input_dump, Duration::from_secs(1))?;
 
@@ -390,7 +390,7 @@ pub fn required_audio_inputs_with_offset() -> Result<()> {
     )?;
 
     let mut input_sender = PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?;
-    let input_dump = input_dump_from_disk("countdown_audio.rtp")?;
+    let input_dump = input_dump_from_disk("a_libopus_audio.rtp")?;
     let (input_first_part, input_second_part) =
         split_rtp_packet_dump(input_dump, Duration::from_secs(1))?;
 
@@ -478,7 +478,7 @@ pub fn required_audio_inputs_with_offset_missing_data() -> Result<()> {
     )?;
 
     let mut input_sender = PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?;
-    let input_dump = input_dump_from_disk("countdown_audio.rtp")?;
+    let input_dump = input_dump_from_disk("a_libopus_audio.rtp")?;
     let (input_first_part, input_second_part) =
         split_rtp_packet_dump(input_dump, Duration::from_secs(1))?;
     let (_dropped_2_seconds, input_second_part_2) =
