@@ -31,7 +31,7 @@ use crate::prelude::*;
 pub async fn process_audio_track(
     sync_point: Arc<RtpNtpSyncPoint>,
     state: WhipWhepServerState,
-    session_id: Arc<str>,
+    endpoint_id: Arc<str>,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
 ) -> Result<(), WhipWhepServerError> {
@@ -45,8 +45,8 @@ pub async fn process_audio_track(
 
     let WhipWhepServerState { inputs, ctx, .. } = state;
     let samples_sender =
-        inputs.get_with(&session_id, |input| Ok(input.input_samples_sender.clone()))?;
-    let handle = AudioTrackThread::spawn(&session_id, (ctx.clone(), samples_sender))?;
+        inputs.get_with(&endpoint_id, |input| Ok(input.input_samples_sender.clone()))?;
+    let handle = AudioTrackThread::spawn(&endpoint_id, (ctx.clone(), samples_sender))?;
 
     let mut timestamp_sync =
         RtpTimestampSync::new(&sync_point, 48_000, ctx.default_buffer_duration);

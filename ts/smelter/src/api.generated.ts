@@ -83,7 +83,7 @@ export type RegisterInput =
       /**
        * Internal use only. Overrides whip session id which is used when referencing the input via whip server. If not provided, it defaults to input id.
        */
-      whip_session_id_override?: string | null;
+      endpoint_override?: string | null;
       /**
        * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
        */

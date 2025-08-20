@@ -9,33 +9,43 @@ use axum::{
     http::{HeaderMap, StatusCode},
 };
 use std::sync::Arc;
+use tracing::info;
 
 pub async fn handle_new_whip_ice_candidates(
-    Path(id): Path<String>,
+    Path((endpoint_id, session_id)): Path<(String, String)>,
     State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
     sdp_fragment_content: String,
 ) -> Result<StatusCode, WhipWhepServerError> {
-    let session_id = Arc::from(id);
+    let endpoint_id = Arc::from(endpoint_id);
+    let session_id = Arc::from(session_id);
 
     validate_content_type(&headers)?;
-    state.inputs.validate_token(&session_id, &headers).await?;
+    state.inputs.validate_token(&endpoint_id, &headers).await?;
+    state
+        .inputs
+        .validate_session_id(&endpoint_id, &session_id)?;
 
     let peer_connection = state
         .inputs
-        .get_with(&session_id, |input| Ok(input.peer_connection.clone()))?;
+        .get_with(&endpoint_id, |input| Ok(input.peer_connection.clone()))?;
 
     if let Some(peer_connection) = peer_connection {
         for candidate in ice_fragment_unmarshal(&sdp_fragment_content) {
             if let Err(err) = peer_connection.add_ice_candidate(candidate.clone()).await {
                 return Err(WhipWhepServerError::BadRequest(format!(
-                    "Cannot add ice_candidate {candidate:?} for session {session_id:?}: {err:?}"
+                    "Cannot add ice_candidate {candidate:?} for session {session_id:?} (endpoint {endpoint_id:?}): {err:?}"
                 )));
             }
+            info!(
+                ?session_id,
+                ?endpoint_id,
+                "Added ICE candidate for WHIP session"
+            );
         }
     } else {
         return Err(WhipWhepServerError::InternalError(format!(
-            "None peer connection for {session_id:?}"
+            "None peer connection for {endpoint_id:?}"
         )));
     }
 

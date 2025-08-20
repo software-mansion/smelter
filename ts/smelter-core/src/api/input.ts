@@ -112,7 +112,7 @@ function intoWhipRegisterInput(
     type: 'whip',
     video: input.video && intoInputWhipVideoOptions(input.video),
     bearer_token: input.bearerToken,
-    whip_session_id_override: inputId,
+    endpoint_override: inputId,
     required: input.required,
     offset_ms: input.offsetMs,
   };
