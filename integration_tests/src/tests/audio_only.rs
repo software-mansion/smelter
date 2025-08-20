@@ -80,8 +80,8 @@ pub fn audio_mixing_with_offset() -> Result<()> {
         }),
     )?;
 
-    let audio_input_1 = input_dump_from_disk("countdown_audio.rtp")?;
-    let audio_input_2 = input_dump_from_disk("8_colors_input_reversed_audio.rtp")?;
+    let audio_input_1 = input_dump_from_disk("a_libopus_audio.rtp")?;
+    let audio_input_2 = input_dump_from_disk("c_sharp_libopus_audio.rtp")?;
     PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?.send(&audio_input_1)?;
     PacketSender::new(CommunicationProtocol::Tcp, input_2_port)?.send(&audio_input_2)?;
 
@@ -173,8 +173,8 @@ pub fn audio_mixing_no_offset() -> Result<()> {
         }),
     )?;
 
-    let audio_input_1 = input_dump_from_disk("countdown_audio.rtp")?;
-    let audio_input_2 = input_dump_from_disk("8_colors_input_reversed_audio.rtp")?;
+    let audio_input_1 = input_dump_from_disk("a_libopus_audio.rtp")?;
+    let audio_input_2 = input_dump_from_disk("c_sharp_libopus_audio.rtp")?;
     let audio_1_sender = PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?;
     let audio_2_sender = PacketSender::new(CommunicationProtocol::Tcp, input_2_port)?;
 
@@ -220,6 +220,7 @@ pub fn single_input_opus() -> Result<()> {
                     "inputs": [
                         {
                             "input_id": "input_1",
+                            "volume": 1.0,
                         },
 
                     ]
@@ -330,7 +331,7 @@ pub fn single_input_aac() -> Result<()> {
         }),
     )?;
 
-    let audio_input_1 = input_dump_from_disk("big_buck_bunny_10s_audio_aac.rtp")?;
+    let audio_input_1 = input_dump_from_disk("a_aac_audio_aac.rtp")?;
     PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?.send(&audio_input_1)?;
 
     instance.send_request("start", json!({}))?;
