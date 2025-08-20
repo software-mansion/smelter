@@ -1,14 +1,15 @@
-import { initializeSmelterInstance } from './smelter';
-import { app } from './routes';
-import { manageTwitchChannelInfo } from './manageTwitchChannelInfo';
+import { SmelterInstance } from './smelter';
+import { routes } from './server/routes';
+import { TwitchChannelSuggestions } from './twitch/ChannelMonitor';
 
 async function run() {
   console.log('Start monitoring Twitch categories.');
-  await manageTwitchChannelInfo();
+  void TwitchChannelSuggestions.monitor();
   console.log('Start Smelter instance');
-  await initializeSmelterInstance();
+  await SmelterInstance.init();
 
-  await app.listen({ port: 3001 });
+  console.log('Start listening on port 3001');
+  await routes.listen({ port: 3001 });
 }
 
 void run();
