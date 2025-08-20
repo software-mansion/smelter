@@ -53,3 +53,19 @@ export function intoApiEasingFunction(easing: EasingFunction): Api.EasingFunctio
     throw new Error(`Invalid Smelter.EasingFunction ${easing}`);
   }
 }
+
+export interface BoxShadow {
+  offsetX?: number | null;
+  offsetY?: number | null;
+  color?: string | null;
+  blurRadius?: number | null;
+}
+
+export function intoApiBoxShadow(boxShadows: BoxShadow[]): Api.BoxShadow[] {
+  return boxShadows.map(boxShadow => ({
+    offset_x: boxShadow.offsetX,
+    offset_y: boxShadow.offsetY,
+    color: boxShadow.color,
+    blur_radius: boxShadow.blurRadius,
+  }));
+}

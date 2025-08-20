@@ -1,7 +1,7 @@
 import type React from 'react';
 import type * as Api from '../api.js';
-import type { Transition } from './common.js';
-import { intoApiTransition } from './common.js';
+import type { BoxShadow, Transition } from './common.js';
+import { intoApiBoxShadow, intoApiTransition } from './common.js';
 import type { ComponentBaseProps, SceneComponent } from '../component.js';
 import { createSmelterComponent, sceneComponentIntoApi } from '../component.js';
 
@@ -77,7 +77,7 @@ export type RescalerStyleProps = {
   /**
    * Properties of the BoxShadow applied to the container.
    */
-  boxShadow?: Api.BoxShadow[];
+  boxShadow?: BoxShadow[];
 };
 
 export type RescalerProps = ComponentBaseProps & {
@@ -124,7 +124,7 @@ function sceneBuilder(
     border_radius: style?.borderRadius,
     border_width: style?.borderWidth,
     border_color: style?.borderColor,
-    box_shadow: style?.boxShadow,
+    box_shadow: style?.boxShadow && intoApiBoxShadow(style.boxShadow),
   };
 }
 
