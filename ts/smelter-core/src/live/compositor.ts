@@ -1,6 +1,6 @@
 import type { Renderers } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
-import type { RegisterInputResponse } from '../api';
+import type { RegisterInputResponse, RegisterOutputResponse } from '../api';
 import { ApiClient } from '../api';
 import Output from './output';
 import type { SmelterManager } from '../smelterManager';
@@ -42,7 +42,7 @@ export class Smelter {
     outputId: string,
     root: ReactElement,
     request: RegisterOutput
-  ): Promise<object> {
+  ): Promise<RegisterOutputResponse> {
     this.logger.info({ outputId, type: request.type }, 'Register new output');
     const output = new Output(
       outputId,
@@ -56,6 +56,9 @@ export class Smelter {
 
     const apiRequest = intoRegisterOutput(request, output.scene());
     const result = await this.api.registerOutput(outputId, apiRequest);
+    if (request.type === 'whep') {
+      result.endpoint_route = `/whep/${encodeURIComponent(outputId)}`;
+    }
     this.outputs[outputId] = output;
     await output.ready();
     return result;
