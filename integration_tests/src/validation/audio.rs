@@ -2,11 +2,15 @@ use anyhow::Result;
 use bytes::Bytes;
 use std::{cmp::Ordering, fmt::Display, iter::zip, ops::Range, time::Duration};
 
-use crate::audio_decoder::{AudioChannels, AudioSampleBatch};
+use crate::{
+    audio_decoder::{AudioChannels, AudioDecoder, AudioSampleBatch},
+    find_packets_for_payload_type, unmarshal_packets,
+};
 
 pub mod artificial;
-mod fft;
 pub mod real;
+
+mod fft;
 
 #[derive(Debug)]
 pub enum Channel {
@@ -135,8 +139,63 @@ pub fn validate(
     test_config: AudioValidationConfig,
     validation_mode: ValidationMode,
 ) -> Result<()> {
+    let AudioValidationConfig {
+        sampling_intervals: time_intervals,
+        channels,
+        sample_rate,
+        samples_per_batch,
+        allowed_failed_batches,
+        tolerance,
+    } = test_config;
+
+    let expected_packets = unmarshal_packets(expected)?;
+    let actual_packets = unmarshal_packets(actual)?;
+    let expected_audio_packets = find_packets_for_payload_type(&expected_packets, 97);
+    let actual_audio_packets = find_packets_for_payload_type(&actual_packets, 97);
+
+    let mut expected_audio_decoder = AudioDecoder::new(sample_rate, channels)?;
+    let mut actual_audio_decoder = AudioDecoder::new(sample_rate, channels)?;
+
+    for packet in expected_audio_packets {
+        expected_audio_decoder.decode(packet)?;
+    }
+    for packet in actual_audio_packets {
+        actual_audio_decoder.decode(packet)?;
+    }
+
+    let expected_batches = expected_audio_decoder.take_samples();
+    let actual_batches = actual_audio_decoder.take_samples();
+
+    for range in &time_intervals {
+        let actual_timestamps = find_timestamps(&actual_batches, range, tolerance.offset);
+        let expected_timestamps = find_timestamps(&expected_batches, range, tolerance.offset);
+        compare_timestamps(&actual_timestamps, &expected_timestamps, tolerance.offset)?;
+    }
+
+    let sampling_intervals = time_intervals
+        .iter()
+        .flat_map(|range| SamplingInterval::from_range(range, sample_rate, samples_per_batch))
+        .collect::<Vec<_>>();
+
+    let full_expected_samples = expected_batches
+        .into_iter()
+        .flat_map(|s| s.samples)
+        .collect::<Vec<_>>();
+
+    let full_actual_samples = actual_batches
+        .into_iter()
+        .flat_map(|s| s.samples)
+        .collect::<Vec<_>>();
+
     match validation_mode {
-        ValidationMode::Real => real::validate(expected, actual, test_config),
+        ValidationMode::Real => real::validate(
+            full_expected_samples,
+            full_actual_samples,
+            sample_rate,
+            sampling_intervals,
+            tolerance,
+            allowed_failed_batches,
+        ),
         ValidationMode::Artificial => todo!(),
     }
 }
