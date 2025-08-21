@@ -5,7 +5,6 @@ use std::{
 
 use axum::http::HeaderMap;
 use compositor_render::OutputId;
-use uuid::Uuid;
 
 use crate::pipeline::webrtc::{
     bearer_token::validate_token,
@@ -45,19 +44,53 @@ impl WhepOutputsState {
     pub fn add_session(
         &self,
         output_id: &OutputId,
+        session_id: &Arc<str>,
         peer_connection: Arc<PeerConnection>,
-    ) -> Result<Arc<str>, WhipWhepServerError> {
+    ) -> Result<(), WhipWhepServerError> {
         let mut guard = self.0.lock().unwrap();
         match guard.get_mut(output_id) {
             Some(output) => {
-                let session_id: Arc<str> = Arc::from(Uuid::new_v4().to_string());
                 output.sessions.insert(session_id.clone(), peer_connection);
-                Ok(session_id)
+                Ok(())
             }
             None => Err(WhipWhepServerError::NotFound(format!(
                 "{output_id:?} not found"
             ))),
         }
+    }
+
+    pub async fn remove_session(
+        &self,
+        output_id: &OutputId,
+        session_id: &Arc<str>,
+    ) -> Result<(), WhipWhepServerError> {
+        let peer_connection = {
+            let mut guard = self.0.lock().unwrap();
+            match guard.get_mut(output_id) {
+                Some(output) => {
+                    if let Some(pc) = output.sessions.remove(session_id) {
+                        pc
+                    } else {
+                        return Err(WhipWhepServerError::NotFound(format!(
+                            "Session {session_id:?} not found for {output_id:?}"
+                        )));
+                    }
+                }
+                None => {
+                    return Err(WhipWhepServerError::NotFound(format!(
+                        "{output_id:?} not found"
+                    )));
+                }
+            }
+        };
+
+        if let Err(e) = peer_connection.close().await {
+            return Err(WhipWhepServerError::InternalError(format!(
+                "Failed to close session {session_id:?}: {e}"
+            )));
+        }
+
+        Ok(())
     }
 
     pub fn get_session(

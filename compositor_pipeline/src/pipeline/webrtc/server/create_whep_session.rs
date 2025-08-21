@@ -17,6 +17,7 @@ use axum::{
 use compositor_render::OutputId;
 use std::sync::Arc;
 use tracing::trace;
+use uuid::Uuid;
 
 #[debug_handler]
 pub async fn handle_create_whep_session(
@@ -54,8 +55,16 @@ pub async fn handle_create_whep_session(
         }
     })?;
 
-    let peer_connection =
-        PeerConnection::new(&ctx.clone(), video_encoder.clone(), audio_encoder.clone()).await?;
+    let session_id: Arc<str> = Arc::from(Uuid::new_v4().to_string());
+    let peer_connection = PeerConnection::new(
+        &ctx.clone(),
+        outputs.clone(),
+        &output_id,
+        &session_id,
+        video_encoder.clone(),
+        audio_encoder.clone(),
+    )
+    .await?;
 
     let (video_media_stream, video_sender) = match (&video_encoder, video_receiver) {
         (Some(encoder), Some(receiver)) => {
@@ -89,7 +98,7 @@ pub async fn handle_create_whep_session(
     let sdp_answer = peer_connection.negotiate_connection(offer).await?;
     trace!("SDP answer: {}", sdp_answer.sdp);
 
-    let session_id = outputs.add_session(&output_id, Arc::new(peer_connection))?;
+    outputs.add_session(&output_id, &session_id, Arc::new(peer_connection))?;
 
     tokio::spawn(stream_media_to_peer(
         ctx.clone(),
