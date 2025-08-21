@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde_json::json;
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use crate::{
     compare_audio_dumps, input_dump_from_disk, AudioValidationConfig, CommunicationProtocol,
@@ -333,6 +333,80 @@ pub fn single_input_aac() -> Result<()> {
 
     let audio_input_1 = input_dump_from_disk("a_aac_audio_aac.rtp")?;
     PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?.send(&audio_input_1)?;
+
+    instance.send_request("start", json!({}))?;
+
+    let new_output_dump = output_receiver.wait_for_output()?;
+
+    compare_audio_dumps(
+        OUTPUT_DUMP_FILE,
+        &new_output_dump,
+        AudioValidationConfig {
+            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
+            ..Default::default()
+        },
+    )?;
+
+    Ok(())
+}
+
+/// An audio only mp4 file with AAC.
+///
+/// Play audio for 10 seconds.
+#[test]
+pub fn single_input_aac_mp4() -> Result<()> {
+    const OUTPUT_DUMP_FILE: &str = "single_input_aac_output.rtp";
+    let instance = CompositorInstance::start(None);
+    let output_port = instance.get_port();
+
+    instance.send_request(
+        "output/output_1/register",
+        json!({
+            "type": "rtp_stream",
+            "transport_protocol": "tcp_server",
+            "port": output_port,
+            "audio": {
+                "initial": {
+                    "inputs": [
+                        {
+                            "input_id": "input_1",
+                            "volume": 1.0,
+                        },
+                    ]
+                },
+                "channels": "stereo",
+                "encoder": {
+                    "type": "opus",
+                }
+            },
+        }),
+    )?;
+
+    let output_receiver = OutputReceiver::start(output_port, CommunicationProtocol::Tcp)?;
+
+    instance.send_request(
+        "output/output_1/unregister",
+        json!({
+            "schedule_time_ms": 10000,
+        }),
+    )?;
+
+    let input_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("snapshot_tests")
+        .join("snapshots")
+        .join("rtp_packet_dumps")
+        .join("inputs")
+        .join("a_aac.mp4");
+
+    instance.send_request(
+        "input/input_1/register",
+        json!({
+            "type": "mp4",
+            "path": input_path,
+        }),
+    )?;
 
     instance.send_request("start", json!({}))?;
 
