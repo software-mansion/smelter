@@ -1,21 +1,66 @@
 use anyhow::Result;
-use bytes::Bytes;
 use spectrum_analyzer::{Frequency, FrequencySpectrum, FrequencyValue};
 use tracing::{error, trace};
 
 use crate::{
-    audio::{AudioAnalyzeTolerance, AudioValidationConfig, SamplingInterval},
-    audio_decoder::AudioDecoder,
-    find_packets_for_payload_type, unmarshal_packets,
+    audio::{AudioAnalyzeTolerance, SamplingInterval},
     validation::audio::{
-        calc_level, compare_timestamps,
+        calc_level,
         fft::{calc_fft, scale_fft_spectrum},
-        find_samples, find_timestamps, split_samples, Channel,
+        find_samples, split_samples, Channel,
     },
 };
 
+pub fn validate(
+    full_expected_samples: Vec<f32>,
+    full_actual_samples: Vec<f32>,
+    sample_rate: u32,
+    sampling_intervals: Vec<SamplingInterval>,
+    tolerance: AudioAnalyzeTolerance,
+    allowed_failed_batches: u32,
+) -> Result<()> {
+    let mut failed_batches: u32 = 0;
+    for interval in sampling_intervals {
+        let expected_samples = find_samples(&full_expected_samples, interval);
+        let actual_samples = find_samples(&full_actual_samples, interval);
+
+        let (expected_result_left, expected_result_right, actual_result_left, actual_result_right) =
+            analyze_samples(actual_samples, expected_samples, sample_rate)?;
+
+        let left_result = AnalyzeResult::compare(
+            &actual_result_left,
+            &expected_result_left,
+            &tolerance,
+            interval.first_sample,
+            Channel::Left,
+        );
+        let right_result = AnalyzeResult::compare(
+            &actual_result_right,
+            &expected_result_right,
+            &tolerance,
+            interval.first_sample,
+            Channel::Right,
+        );
+
+        if let Err(err) = left_result {
+            error!("{err}");
+            failed_batches += 1;
+        }
+        if let Err(err) = right_result {
+            error!("{err}");
+            failed_batches += 1;
+        }
+    }
+
+    if failed_batches <= allowed_failed_batches {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("Test failed!"))
+    }
+}
+
 #[derive(Debug)]
-pub struct AnalyzeResult {
+struct AnalyzeResult {
     average_level: f32,
     median_level: f32,
     max_frequency: f32,
@@ -25,7 +70,7 @@ pub struct AnalyzeResult {
 }
 
 impl AnalyzeResult {
-    pub fn new(spectrum: FrequencySpectrum, general_level: f64) -> Self {
+    fn new(spectrum: FrequencySpectrum, general_level: f64) -> Self {
         Self {
             average_level: spectrum.average().val(),
             median_level: spectrum.median().val(),
@@ -36,7 +81,7 @@ impl AnalyzeResult {
         }
     }
 
-    pub fn compare(
+    fn compare(
         actual: &Self,
         expected: &Self,
         tolerance: &AudioAnalyzeTolerance,
@@ -78,7 +123,7 @@ impl AnalyzeResult {
     }
 }
 
-pub fn analyze_samples(
+fn analyze_samples(
     actual_samples: Vec<f32>,
     expected_samples: Vec<f32>,
     sample_rate: u32,
@@ -134,97 +179,4 @@ pub fn analyze_samples(
         actual_result_left,
         actual_result_right,
     ))
-}
-
-pub fn validate(
-    expected: &Bytes,
-    actual: &Bytes,
-    test_config: AudioValidationConfig,
-) -> Result<()> {
-    let AudioValidationConfig {
-        sampling_intervals: time_intervals,
-        channels,
-        sample_rate,
-        samples_per_batch,
-        allowed_failed_batches,
-        tolerance,
-    } = test_config;
-
-    let expected_packets = unmarshal_packets(expected)?;
-    let actual_packets = unmarshal_packets(actual)?;
-    let expected_audio_packets = find_packets_for_payload_type(&expected_packets, 97);
-    let actual_audio_packets = find_packets_for_payload_type(&actual_packets, 97);
-
-    let mut expected_audio_decoder = AudioDecoder::new(sample_rate, channels)?;
-    let mut actual_audio_decoder = AudioDecoder::new(sample_rate, channels)?;
-
-    for packet in expected_audio_packets {
-        expected_audio_decoder.decode(packet)?;
-    }
-    for packet in actual_audio_packets {
-        actual_audio_decoder.decode(packet)?;
-    }
-
-    let expected_batches = expected_audio_decoder.take_samples();
-    let actual_batches = actual_audio_decoder.take_samples();
-
-    for range in &time_intervals {
-        let actual_timestamps = find_timestamps(&actual_batches, range, tolerance.offset);
-        let expected_timestamps = find_timestamps(&expected_batches, range, tolerance.offset);
-        compare_timestamps(&actual_timestamps, &expected_timestamps, tolerance.offset)?;
-    }
-
-    let sampling_intervals = time_intervals
-        .iter()
-        .flat_map(|range| SamplingInterval::from_range(range, sample_rate, samples_per_batch))
-        .collect::<Vec<_>>();
-
-    let full_expected_samples = expected_batches
-        .into_iter()
-        .flat_map(|s| s.samples)
-        .collect::<Vec<_>>();
-
-    let full_actual_samples = actual_batches
-        .into_iter()
-        .flat_map(|s| s.samples)
-        .collect::<Vec<_>>();
-
-    let mut failed_batches: u32 = 0;
-    for interval in sampling_intervals {
-        let expected_samples = find_samples(&full_expected_samples, interval);
-        let actual_samples = find_samples(&full_actual_samples, interval);
-
-        let (expected_result_left, expected_result_right, actual_result_left, actual_result_right) =
-            analyze_samples(actual_samples, expected_samples, sample_rate)?;
-
-        let left_result = AnalyzeResult::compare(
-            &actual_result_left,
-            &expected_result_left,
-            &tolerance,
-            interval.first_sample,
-            Channel::Left,
-        );
-        let right_result = AnalyzeResult::compare(
-            &actual_result_right,
-            &expected_result_right,
-            &tolerance,
-            interval.first_sample,
-            Channel::Right,
-        );
-
-        if let Err(err) = left_result {
-            error!("{err}");
-            failed_batches += 1;
-        }
-        if let Err(err) = right_result {
-            error!("{err}");
-            failed_batches += 1;
-        }
-    }
-
-    if failed_batches <= allowed_failed_batches {
-        Ok(())
-    } else {
-        Err(anyhow::anyhow!("Test failed!"))
-    }
 }
