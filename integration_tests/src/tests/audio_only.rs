@@ -331,7 +331,7 @@ pub fn single_input_aac() -> Result<()> {
         }),
     )?;
 
-    let audio_input_1 = input_dump_from_disk("a_aac_audio_aac.rtp")?;
+    let audio_input_1 = input_dump_from_disk("big_buck_bunny_10s_audio_aac.rtp")?;
     PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?.send(&audio_input_1)?;
 
     instance.send_request("start", json!({}))?;
