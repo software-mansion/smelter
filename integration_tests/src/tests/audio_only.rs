@@ -80,8 +80,8 @@ pub fn audio_mixing_with_offset() -> Result<()> {
         }),
     )?;
 
-    let audio_input_1 = input_dump_from_disk("a_libopus_audio.rtp")?;
-    let audio_input_2 = input_dump_from_disk("c_sharp_libopus_audio.rtp")?;
+    let audio_input_1 = input_dump_from_disk("a_opus_audio.rtp")?;
+    let audio_input_2 = input_dump_from_disk("c_sharp_opus_audio.rtp")?;
     PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?.send(&audio_input_1)?;
     PacketSender::new(CommunicationProtocol::Tcp, input_2_port)?.send(&audio_input_2)?;
 
@@ -173,8 +173,8 @@ pub fn audio_mixing_no_offset() -> Result<()> {
         }),
     )?;
 
-    let audio_input_1 = input_dump_from_disk("a_libopus_audio.rtp")?;
-    let audio_input_2 = input_dump_from_disk("c_sharp_libopus_audio.rtp")?;
+    let audio_input_1 = input_dump_from_disk("a_opus_audio.rtp")?;
+    let audio_input_2 = input_dump_from_disk("c_sharp_opus_audio.rtp")?;
     let audio_1_sender = PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?;
     let audio_2_sender = PacketSender::new(CommunicationProtocol::Tcp, input_2_port)?;
 
@@ -255,7 +255,7 @@ pub fn single_input_opus() -> Result<()> {
         }),
     )?;
 
-    let audio_input_1 = input_dump_from_disk("a_libopus_audio.rtp")?;
+    let audio_input_1 = input_dump_from_disk("a_opus_audio.rtp")?;
     PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?.send(&audio_input_1)?;
 
     instance.send_request("start", json!({}))?;
@@ -355,7 +355,7 @@ pub fn single_input_aac() -> Result<()> {
 /// Play audio for 10 seconds.
 #[test]
 pub fn single_input_aac_mp4() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "single_input_aac_output.rtp";
+    const OUTPUT_DUMP_FILE: &str = "single_input_aac_mp4_output.rtp";
     let instance = CompositorInstance::start(None);
     let output_port = instance.get_port();
 
