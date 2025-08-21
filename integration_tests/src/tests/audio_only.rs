@@ -3,7 +3,7 @@ use serde_json::json;
 use std::{path::PathBuf, time::Duration};
 
 use crate::{
-    compare_audio_dumps, input_dump_from_disk, AudioValidationConfig, CommunicationProtocol,
+    audio::AudioValidationConfig, compare_audio_dumps, input_dump_from_disk, CommunicationProtocol,
     CompositorInstance, OutputReceiver, PacketSender,
 };
 

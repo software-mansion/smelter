@@ -3,8 +3,9 @@ use serde_json::json;
 use std::time::Duration;
 
 use crate::{
-    compare_audio_dumps, compare_video_dumps, input_dump_from_disk, AudioValidationConfig,
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, VideoValidationConfig,
+    audio::{AudioAnalyzeTolerance, AudioValidationConfig},
+    compare_audio_dumps, compare_video_dumps, input_dump_from_disk, CommunicationProtocol,
+    CompositorInstance, OutputReceiver, PacketSender, VideoValidationConfig,
 };
 
 /// Input and output streams with muxed video and audio.
@@ -104,7 +105,7 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
         &new_output_dump,
         AudioValidationConfig {
             sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
-            tolerance: crate::AudioAnalyzeTolerance {
+            tolerance: AudioAnalyzeTolerance {
                 max_frequency_level: 5.0,
                 average_level: 15.0,
                 median_level: 15.0,

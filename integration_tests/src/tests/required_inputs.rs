@@ -1,8 +1,8 @@
 use std::{thread, time::Duration};
 
 use crate::{
-    compare_audio_dumps, compare_video_dumps, input_dump_from_disk, split_rtp_packet_dump,
-    AudioValidationConfig, CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
+    audio::AudioValidationConfig, compare_audio_dumps, compare_video_dumps, input_dump_from_disk,
+    split_rtp_packet_dump, CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
     VideoValidationConfig,
 };
 use anyhow::Result;
