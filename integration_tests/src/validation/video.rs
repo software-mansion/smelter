@@ -7,6 +7,22 @@ use tracing::warn;
 
 use crate::{find_packets_for_payload_type, unmarshal_packets, video_decoder::VideoDecoder};
 
+pub struct VideoValidationConfig {
+    pub validation_intervals: Vec<Range<Duration>>,
+    pub allowed_error: f32,
+    pub allowed_invalid_frames: usize,
+}
+
+impl Default for VideoValidationConfig {
+    fn default() -> Self {
+        Self {
+            validation_intervals: vec![Duration::from_secs(1)..Duration::from_secs(3)],
+            allowed_error: 20.0,
+            allowed_invalid_frames: 0,
+        }
+    }
+}
+
 pub fn validate(
     expected: &Bytes,
     actual: &Bytes,
