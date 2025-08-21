@@ -1,11 +1,11 @@
 use anyhow::Result;
 use bytes::Bytes;
-use std::{fmt, ops::Range, path::Path, time::Duration};
+use std::{fmt, path::Path};
 use tracing::info;
 
 use crate::{
     output_dump_from_disk, save_failed_test_dumps, update_dump_on_disk,
-    validation::audio::AudioValidationConfig,
+    validation::audio::AudioValidationConfig, video::VideoValidationConfig,
 };
 
 pub mod audio;
@@ -75,20 +75,4 @@ fn handle_error<P: AsRef<Path> + fmt::Debug>(
     };
 
     Err(err)
-}
-
-pub struct VideoValidationConfig {
-    pub validation_intervals: Vec<Range<Duration>>,
-    pub allowed_error: f32,
-    pub allowed_invalid_frames: usize,
-}
-
-impl Default for VideoValidationConfig {
-    fn default() -> Self {
-        Self {
-            validation_intervals: vec![Duration::from_secs(1)..Duration::from_secs(3)],
-            allowed_error: 20.0,
-            allowed_invalid_frames: 0,
-        }
-    }
 }
