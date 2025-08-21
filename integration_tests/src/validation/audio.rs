@@ -7,10 +7,8 @@ use crate::{
     find_packets_for_payload_type, unmarshal_packets,
 };
 
-pub mod artificial;
-pub mod real;
-
-mod fft;
+mod artificial;
+mod real;
 
 #[derive(Debug)]
 pub enum Channel {
@@ -196,7 +194,14 @@ pub fn validate(
             tolerance,
             allowed_failed_batches,
         ),
-        ValidationMode::Artificial => todo!(),
+        ValidationMode::Artificial => artificial::validate(
+            full_expected_samples,
+            full_actual_samples,
+            sample_rate,
+            sampling_intervals,
+            tolerance,
+            allowed_failed_batches,
+        ),
     }
 }
 

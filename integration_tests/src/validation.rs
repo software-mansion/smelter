@@ -55,7 +55,8 @@ pub fn compare_audio_dumps<P: AsRef<Path> + fmt::Debug>(
         }
     };
 
-    if let Err(err) = audio::validate(&expected, actual, config, audio::ValidationMode::Real) {
+    if let Err(err) = audio::validate(&expected, actual, config, audio::ValidationMode::Artificial)
+    {
         save_failed_test_dumps(&expected, actual, &snapshot_filename);
         handle_error(err, snapshot_filename, actual)?;
     }
