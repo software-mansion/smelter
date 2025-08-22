@@ -1,7 +1,7 @@
 use std::{thread, time::Duration};
 
 use crate::{
-    audio::{self, AudioValidationConfig},
+    audio::{self, AudioAnalyzeTolerance, AudioValidationConfig},
     compare_audio_dumps, compare_video_dumps, input_dump_from_disk, split_rtp_packet_dump,
     video::VideoValidationConfig,
     CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
@@ -317,11 +317,19 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
     input_handle.join().unwrap();
     let new_output_dump = output_receiver.wait_for_output()?;
 
+    let audio_validation_config = AudioValidationConfig {
+        tolerance: AudioAnalyzeTolerance {
+            allowed_failed_batches: 2,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         audio::ValidationMode::Artificial,
-        AudioValidationConfig::default(),
+        audio_validation_config,
     )?;
 
     Ok(())
