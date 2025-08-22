@@ -208,14 +208,9 @@ impl Converter {
         })
     }
 
-    /// The returned image is NV12 with color attachment layout
-    ///
-    /// # Safety
-    /// The texture can not be a surface texture
-    pub(crate) unsafe fn convert(
-        &self,
-        texture: wgpu::Texture,
-    ) -> Result<ConvertState, YuvConverterError> {
+    // TODO: This should not be done in separate command encoder but it does not work otherwise.
+    // Validation layers don't notice that the texture was transitioned, unless the transition was submited beforehand.
+    fn transition_texture(&self, texture: &wgpu::Texture) {
         let mut command_encoder = self
             .device
             .wgpu_device()
@@ -224,12 +219,29 @@ impl Converter {
         command_encoder.transition_resources(
             [].into_iter(),
             [wgpu::TextureTransition {
-                texture: &texture,
+                texture,
                 state: wgpu::TextureUses::RESOURCE,
                 selector: None,
             }]
             .into_iter(),
         );
+
+        self.device.wgpu_queue().submit([command_encoder.finish()]);
+    }
+
+    /// The returned image is NV12 with color attachment layout
+    ///
+    /// # Safety
+    /// The texture can not be a surface texture
+    pub(crate) unsafe fn convert(
+        &self,
+        texture: wgpu::Texture,
+    ) -> Result<ConvertState, YuvConverterError> {
+        self.transition_texture(&texture);
+        let mut command_encoder = self
+            .device
+            .wgpu_device()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
         let image = unsafe {
             texture.as_hal::<VkApi, _, _>(|t| {

@@ -60,6 +60,13 @@ pub enum WhipVideoEncoderOptions {
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<String, String>>,
     },
+    #[serde(rename = "vulkan_h264")]
+    VulkanH264 {
+        /// (**default=`"high"`**) Encoding quality.
+        quality_level: Option<VulkanH264EncoderQualityLevel>,
+        /// (**default=`"encoder_default"`**) The rate control algorithm to be used by the encoder.
+        rate_control: Option<VulkanH264EncoderRateControl>,
+    },
     #[serde(rename = "any")]
     Any,
 }

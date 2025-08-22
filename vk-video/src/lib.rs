@@ -33,7 +33,7 @@
 //!             return;
 //!         }
 //!
-//!         let decoded_frames = decoder.decode(vk_video::EncodedChunk {
+//!         let decoded_frames = decoder.decode(vk_video::EncodedChunkInput {
 //!             data: &buffer[..n],
 //!             pts: None
 //!         }).unwrap();
@@ -175,9 +175,15 @@ impl H264Profile {
 /// one output frame.
 /// If `pts` is [`Option::None`], the chunk can contain bytestream from multiple consecutive
 /// frames.
-pub struct EncodedChunk<T> {
+pub struct EncodedChunkInput<T> {
     pub data: T,
     pub pts: Option<u64>,
+}
+
+pub struct EncodedChunkOutput<T> {
+    pub data: T,
+    pub pts: Option<u64>,
+    pub is_keyframe: bool,
 }
 
 /// Represents a single decoded frame.
@@ -206,7 +212,7 @@ impl WgpuTexturesDecoder {
     /// should be presented, used for synchronization with other tracks, e.g. with audio
     pub fn decode(
         &mut self,
-        frame: EncodedChunk<&[u8]>,
+        frame: EncodedChunkInput<&[u8]>,
     ) -> Result<Vec<Frame<wgpu::Texture>>, DecoderError> {
         let instructions = self.parser.parse(frame.data, frame.pts)?;
 
@@ -246,7 +252,7 @@ impl BytesDecoder {
     /// should be presented, used for synchronization with other tracks, e.g. with audio
     pub fn decode(
         &mut self,
-        frame: EncodedChunk<&[u8]>,
+        frame: EncodedChunkInput<&[u8]>,
     ) -> Result<Vec<Frame<RawFrameData>>, DecoderError> {
         let instructions = self.parser.parse(frame.data, frame.pts)?;
 
@@ -286,7 +292,7 @@ impl BytesEncoder {
         &mut self,
         frame: &Frame<RawFrameData>,
         force_keyframe: bool,
-    ) -> Result<EncodedChunk<Vec<u8>>, VulkanEncoderError> {
+    ) -> Result<EncodedChunkOutput<Vec<u8>>, VulkanEncoderError> {
         self.vulkan_encoder.encode_bytes(frame, force_keyframe)
     }
 }
@@ -309,7 +315,7 @@ impl WgpuTexturesEncoder {
         &mut self,
         frame: Frame<wgpu::Texture>,
         force_keyframe: bool,
-    ) -> Result<EncodedChunk<Vec<u8>>, VulkanEncoderError> {
+    ) -> Result<EncodedChunkOutput<Vec<u8>>, VulkanEncoderError> {
         self.vulkan_encoder.encode_texture(frame, force_keyframe)
     }
 }

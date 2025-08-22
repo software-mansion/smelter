@@ -6,7 +6,8 @@ use crate::{
     scene::RGBColor,
     state::{node::RenderNode, render_graph::RenderGraph, RenderCtx},
     wgpu::texture::{
-        PlanarYuvPendingDownload, PlanarYuvVariant, RgbaLinearTexture, RgbaSrgbTexture, TextureExt,
+        PlanarYuvPendingDownload, PlanarYuvVariant, RgbaLinearTexture, RgbaMultiViewTexture,
+        RgbaSrgbTexture, TextureExt,
     },
     Frame, FrameData, FrameSet, InputId, OutputId, RenderingMode, Resolution,
 };
@@ -78,7 +79,9 @@ pub(super) fn read_outputs(
                     });
                 }
                 OutputTexture::Rgba8UnormWgpuTexture { .. } => {
-                    let texture = node.texture().clone_texture(ctx.wgpu_ctx);
+                    let texture = node
+                        .texture()
+                        .clone_texture(ctx.wgpu_ctx, &[wgpu::TextureFormat::Rgba8Unorm]);
                     let frame = Frame {
                         resolution: texture.size().into(),
                         data: FrameData::Rgba8UnormWgpuTexture(texture.into()),
@@ -106,7 +109,10 @@ pub(super) fn read_outputs(
                 }
                 OutputTexture::Rgba8UnormWgpuTexture { resolution } => {
                     let wgpu_texture = match ctx.wgpu_ctx.mode {
-                        RenderingMode::GpuOptimized | RenderingMode::WebGl => {
+                        RenderingMode::GpuOptimized => {
+                            RgbaMultiViewTexture::new(ctx.wgpu_ctx, *resolution).texture_owned()
+                        }
+                        RenderingMode::WebGl => {
                             RgbaSrgbTexture::new(ctx.wgpu_ctx, *resolution).texture_owned()
                         }
                         RenderingMode::CpuOptimized => {
