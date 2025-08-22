@@ -27,7 +27,7 @@ pub(super) use state::WhipInputsState;
 
 pub struct WhipInput {
     whip_inputs_state: WhipInputsState,
-    session_id: Arc<str>,
+    endpoint_id: Arc<str>,
 }
 
 impl WhipInput {
@@ -40,13 +40,13 @@ impl WhipInput {
             return Err(InputInitError::WhipWhepServerNotRunning);
         };
 
-        let session_id = options.whip_session_id_override.unwrap_or(input_id.0);
+        let endpoint_id = options.endpoint_override.unwrap_or(input_id.0);
         let (frame_sender, frame_receiver) = bounded(5);
         let (input_samples_sender, input_samples_receiver) = bounded(5);
 
         let bearer_token = options.bearer_token.unwrap_or_else(generate_token);
         state.inputs.add_input(
-            session_id.clone(),
+            &endpoint_id,
             WhipInputConnectionStateOptions {
                 bearer_token: bearer_token.clone(),
                 video_preferences: options.video_preferences,
@@ -58,7 +58,7 @@ impl WhipInput {
         Ok((
             Input::Whip(Self {
                 whip_inputs_state: state.inputs.clone(),
-                session_id: session_id.clone(),
+                endpoint_id,
             }),
             InputInitInfo::Whip { bearer_token },
             QueueDataReceiver {
@@ -71,7 +71,8 @@ impl WhipInput {
 
 impl Drop for WhipInput {
     fn drop(&mut self) {
-        self.whip_inputs_state.ensure_input_closed(&self.session_id);
+        self.whip_inputs_state
+            .ensure_input_closed(&self.endpoint_id);
     }
 }
 

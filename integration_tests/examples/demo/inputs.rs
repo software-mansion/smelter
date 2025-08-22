@@ -2,13 +2,18 @@ use anyhow::Result;
 use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
+use crate::players::InputPlayer;
+
 pub mod mp4;
 pub mod rtp;
 pub mod whip;
 
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
-    fn on_after_registration(&mut self) -> Result<()>;
+
+    fn on_after_registration(&mut self, _player: InputPlayer) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl std::fmt::Display for dyn InputHandler {

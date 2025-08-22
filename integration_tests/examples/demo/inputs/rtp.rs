@@ -1,7 +1,7 @@
 use std::process::Child;
 
 use anyhow::{anyhow, Result};
-use inquire::Select;
+use inquire::{Confirm, Select};
 use integration_tests::{
     ffmpeg::start_ffmpeg_send,
     gstreamer::{start_gst_send_tcp, start_gst_send_udp},
@@ -10,20 +10,22 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
-use crate::utils::{
-    get_free_port,
+use crate::{
     inputs::{AudioDecoder, InputHandler, VideoDecoder},
-    players::InputPlayerOptions,
-    TransportProtocol, IP,
+    players::InputPlayer,
+    smelter_state::TransportProtocol,
+    IP,
 };
+
+use crate::utils::get_free_port;
 
 #[derive(Debug, Display, EnumIter, Clone)]
 pub enum RtpRegisterOptions {
-    #[strum(to_string = "Add video stream")]
-    AddVideoStream,
+    #[strum(to_string = "Set video stream")]
+    SetVideoStream,
 
-    #[strum(to_string = "Add audio stream")]
-    AddAudioStream,
+    #[strum(to_string = "Set audio stream")]
+    SetAudioStream,
 
     #[strum(to_string = "Skip")]
     Skip,
@@ -102,46 +104,30 @@ impl RtpInput {
         Ok(())
     }
 
-    fn on_after_registration_udp(&mut self) -> Result<()> {
-        let options = InputPlayerOptions::iter().collect::<Vec<_>>();
-
-        loop {
-            let player_choice = Select::new("Select player:", options.clone()).prompt()?;
-
-            let player_result = match player_choice {
-                InputPlayerOptions::StartFfmpegTransmitter => self.ffmpeg_transmit(),
-                InputPlayerOptions::StartGstreamerTransmitter => self.gstreamer_transmit_udp(),
-                InputPlayerOptions::Manual => Ok(()),
-            };
-
-            match player_result {
-                Ok(_) => break,
-                Err(e) => error!("{e}"),
-            }
+    fn on_after_registration_udp(&mut self, player: InputPlayer) -> Result<()> {
+        match player {
+            InputPlayer::FfmpegTransmitter => self.ffmpeg_transmit(),
+            InputPlayer::GstreamerTransmitter => self.gstreamer_transmit_udp(),
+            InputPlayer::Manual => loop {
+                let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                if confirmation {
+                    return Ok(());
+                }
+            },
         }
-        Ok(())
     }
 
-    fn on_after_registration_tcp(&mut self) -> Result<()> {
-        let options = InputPlayerOptions::iter()
-            .filter(|i| *i != InputPlayerOptions::StartFfmpegTransmitter)
-            .collect::<Vec<_>>();
-
-        loop {
-            let player_choice = Select::new("Select player:", options.clone()).prompt()?;
-
-            let player_result = match player_choice {
-                InputPlayerOptions::StartGstreamerTransmitter => self.gstreamer_transmit_tcp(),
-                InputPlayerOptions::Manual => break,
-                _ => unreachable!(),
-            };
-
-            match player_result {
-                Ok(_) => break,
-                Err(e) => error!("{e}"),
-            }
+    fn on_after_registration_tcp(&mut self, player: InputPlayer) -> Result<()> {
+        match player {
+            InputPlayer::GstreamerTransmitter => self.gstreamer_transmit_tcp(),
+            InputPlayer::Manual => loop {
+                let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                if confirmation {
+                    return Ok(());
+                }
+            },
+            _ => unreachable!(),
         }
-        Ok(())
     }
 }
 
@@ -150,10 +136,10 @@ impl InputHandler for RtpInput {
         &self.name
     }
 
-    fn on_after_registration(&mut self) -> Result<()> {
+    fn on_after_registration(&mut self, player: InputPlayer) -> Result<()> {
         match self.transport_protocol {
-            Some(TransportProtocol::TcpServer) => self.on_after_registration_tcp(),
-            Some(TransportProtocol::Udp) | None => self.on_after_registration_udp(),
+            Some(TransportProtocol::TcpServer) => self.on_after_registration_tcp(player),
+            Some(TransportProtocol::Udp) | None => self.on_after_registration_udp(player),
         }
     }
 }
@@ -175,6 +161,7 @@ pub struct RtpInputBuilder {
     video: Option<RtpInputVideoOptions>,
     audio: Option<RtpInputAudioOptions>,
     transport_protocol: Option<TransportProtocol>,
+    player: InputPlayer,
 }
 
 impl RtpInputBuilder {
@@ -187,20 +174,21 @@ impl RtpInputBuilder {
             video: None,
             audio: None,
             transport_protocol: None,
+            player: InputPlayer::Manual,
         }
     }
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
-        let video_options = vec![RtpRegisterOptions::AddVideoStream, RtpRegisterOptions::Skip];
-        let audio_options = vec![RtpRegisterOptions::AddAudioStream, RtpRegisterOptions::Skip];
+        let video_options = vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
+        let audio_options = vec![RtpRegisterOptions::SetAudioStream, RtpRegisterOptions::Skip];
 
         loop {
             let video_selection =
                 Select::new("Add video stream?", video_options.clone()).prompt_skippable()?;
 
             builder = match video_selection {
-                Some(RtpRegisterOptions::AddVideoStream) => {
+                Some(RtpRegisterOptions::SetVideoStream) => {
                     builder.with_video(RtpInputVideoOptions::default())
                 }
                 Some(RtpRegisterOptions::Skip) | None => builder,
@@ -211,7 +199,7 @@ impl RtpInputBuilder {
                 Select::new("Add audio stream?", audio_options.clone()).prompt_skippable()?;
 
             builder = match audio_selection {
-                Some(RtpRegisterOptions::AddAudioStream) => {
+                Some(RtpRegisterOptions::SetAudioStream) => {
                     builder.with_audio(RtpInputAudioOptions::default())
                 }
                 Some(RtpRegisterOptions::Skip) | None => builder,
@@ -234,7 +222,35 @@ impl RtpInputBuilder {
             None => builder,
         };
 
+        let player_selection = builder.prompt_player()?;
+        builder = match player_selection {
+            Some(player) => builder.with_player(player),
+            None => builder,
+        };
         Ok(builder)
+    }
+
+    fn prompt_player(&self) -> Result<Option<InputPlayer>> {
+        match self.transport_protocol {
+            Some(TransportProtocol::Udp) | None => {
+                let player_options = match (&self.video, &self.audio) {
+                    (Some(_), Some(_)) => {
+                        vec![InputPlayer::GstreamerTransmitter, InputPlayer::Manual]
+                    }
+                    _ => InputPlayer::iter().collect(),
+                };
+
+                let player_selection =
+                    Select::new("Select player:", player_options).prompt_skippable()?;
+                Ok(player_selection)
+            }
+            Some(TransportProtocol::TcpServer) => {
+                let player_options = vec![InputPlayer::GstreamerTransmitter, InputPlayer::Manual];
+                let player_selection =
+                    Select::new("Select player:", player_options).prompt_skippable()?;
+                Ok(player_selection)
+            }
+        }
     }
 
     pub fn with_video(mut self, video: RtpInputVideoOptions) -> Self {
@@ -260,6 +276,11 @@ impl RtpInputBuilder {
         self
     }
 
+    pub fn with_player(mut self, player: InputPlayer) -> Self {
+        self.player = player;
+        self
+    }
+
     fn serialize(&self) -> serde_json::Value {
         json!({
             "type": "rtp_stream",
@@ -270,7 +291,7 @@ impl RtpInputBuilder {
         })
     }
 
-    pub fn build(self) -> (RtpInput, serde_json::Value) {
+    pub fn build(self) -> (RtpInput, serde_json::Value, InputPlayer) {
         let register_request = self.serialize();
         let rtp_input = RtpInput {
             name: self.name,
@@ -281,7 +302,7 @@ impl RtpInputBuilder {
             stream_handles: vec![],
         };
 
-        (rtp_input, register_request)
+        (rtp_input, register_request, self.player)
     }
 }
 

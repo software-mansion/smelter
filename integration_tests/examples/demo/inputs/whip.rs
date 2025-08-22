@@ -1,6 +1,6 @@
 // WARN: Remove after implementing #remove
 #![allow(dead_code)]
-use crate::utils::inputs::InputHandler;
+use crate::inputs::InputHandler;
 use anyhow::Result;
 
 #[derive(Debug)]
@@ -19,9 +19,5 @@ impl WhipInput {
 impl InputHandler for WhipInput {
     fn name(&self) -> &str {
         &self.name
-    }
-
-    fn on_after_registration(&mut self) -> Result<()> {
-        Ok(())
     }
 }

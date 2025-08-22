@@ -24,10 +24,13 @@ pub fn start_ffmpeg_rtmp_receive(port: u16) -> Result<Child> {
 
     let handle = Command::new("bash")
         .arg("-c")
-        .arg(format!("ffmpeg -f flv -listen 1 -i {output_address} -vcodec copy -f flv - | ffplay -f flv -i -"))
+        .arg(format!("ffmpeg -f flv -listen 1 -i {output_address} -vcodec copy -f flv - | ffplay -autoexit -f flv -i -"))
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
+    info!("Started RTMP FFmpeg listener on port {port}.");
+    thread::sleep(Duration::from_secs(2));
 
     Ok(handle)
 }

@@ -564,6 +564,10 @@ impl H264DecodeProfileInfo<'_> {
 
         Ok(ProfileInfo::new(profile_info, h264_profile_info))
     }
+
+    pub(crate) fn profile_idc(&self) -> vk::native::StdVideoH264ProfileIdc {
+        unsafe { self.additional_info_ptr.as_ref().std_profile_idc }
+    }
 }
 
 pub(crate) struct VkPictureParameterSet {

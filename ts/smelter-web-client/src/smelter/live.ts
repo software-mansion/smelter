@@ -6,6 +6,7 @@ import type {
   RegisterInput,
   RegisterMp4InputResponse,
   RegisterOutput,
+  RegisterWhepOutputResponse,
   RegisterWhipInputResponse,
 } from '../api';
 import type { InstanceOptions } from '../manager';
@@ -39,10 +40,28 @@ export default class Smelter {
   public async registerOutput(
     outputId: string,
     root: ReactElement,
+    request: Extract<RegisterOutput, { type: 'whep' }>
+  ): Promise<RegisterWhepOutputResponse>;
+
+  public async registerOutput(
+    outputId: string,
+    root: ReactElement,
+    request: RegisterOutput
+  ): Promise<object>;
+
+  public async registerOutput(
+    outputId: string,
+    root: ReactElement,
     request: RegisterOutput
   ): Promise<object> {
     return await this.scheduler.run(async () => {
-      return await this.coreSmelter.registerOutput(outputId, root, request);
+      let result = await this.coreSmelter.registerOutput(outputId, root, request);
+      if (request.type === 'whep') {
+        return {
+          endpointRoute: result.endpoint_route,
+        };
+      }
+      return result;
     });
   }
 

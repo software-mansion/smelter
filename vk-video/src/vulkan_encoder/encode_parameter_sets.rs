@@ -8,18 +8,24 @@ const MACROBLOCK_SIZE: u32 = 16;
 pub(crate) const MAX_FRAME_NUM: u32 = 1 << 7;
 const LOG2_MAX_FRAME_NUM_MINUS_4: u8 = (MAX_FRAME_NUM.ilog2() as u8) - 4;
 
+#[allow(non_snake_case)]
 pub(crate) fn sps(
     profile: H264Profile,
     width: u32,
     height: u32,
     max_references: u32,
 ) -> Result<vk::native::StdVideoH264SequenceParameterSet, VulkanEncoderError> {
-    if width % MACROBLOCK_SIZE != 0 || height % MACROBLOCK_SIZE != 0 {
-        return Err(VulkanEncoderError::DimensionsNotDivisibleBy16);
-    }
+    // separate_colour_plane_flag is 0 so the crop units are based on SubWidthC and SubHeightC for YUV420
+    // with enabled frame_mbs_only_flag
+    let (CropUnitX, CropUnitY) = (2, 2);
 
-    let pic_width_in_mbs_minus1 = width / MACROBLOCK_SIZE - 1;
-    let pic_height_in_map_units_minus1 = height / MACROBLOCK_SIZE - 1;
+    let width_offset = (MACROBLOCK_SIZE - (width % MACROBLOCK_SIZE)) % MACROBLOCK_SIZE;
+    let height_offset = (MACROBLOCK_SIZE - (height % MACROBLOCK_SIZE)) % MACROBLOCK_SIZE;
+
+    let pic_width_in_mbs_minus1 = (width + width_offset) / MACROBLOCK_SIZE - 1;
+    let pic_height_in_map_units_minus1 = (height + height_offset) / MACROBLOCK_SIZE - 1;
+    let frame_crop_right_offset = width_offset / CropUnitX;
+    let frame_crop_bottom_offset = height_offset / CropUnitY;
 
     Ok(vk::native::StdVideoH264SequenceParameterSet {
         flags: vk::native::StdVideoH264SpsFlags {
@@ -31,7 +37,7 @@ pub(crate) fn sps(
                 0, 1, // 1 - no fields
                 0, // only for pic_order_cnt_type 1
                 0, 0, 0, // ffmpeg
-                0, // TODO: frame cropping
+                1, // use frame cropping
                 0, 0,
             ),
         },
@@ -53,9 +59,9 @@ pub(crate) fn sps(
         pic_width_in_mbs_minus1,
         pic_height_in_map_units_minus1,
         frame_crop_left_offset: 0,
-        frame_crop_right_offset: 0,
+        frame_crop_right_offset,
         frame_crop_top_offset: 0,
-        frame_crop_bottom_offset: 0,
+        frame_crop_bottom_offset,
         reserved2: 0,
         pOffsetForRefFrame: std::ptr::null(),
         pScalingLists: std::ptr::null(),

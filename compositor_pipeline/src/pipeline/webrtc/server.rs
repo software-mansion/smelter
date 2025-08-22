@@ -86,9 +86,15 @@ impl WhipWhepServer {
     ) {
         let app = Router::new()
             .route("/status", get((StatusCode::OK, axum::Json(json!({})))))
-            .route("/whip/:id", post(handle_create_whip_session))
-            .route("/whip/:id", patch(handle_new_whip_ice_candidates))
-            .route("/whip/:id", delete(handle_terminate_whip_session))
+            .route("/whip/:endpoint_id", post(handle_create_whip_session))
+            .route(
+                "/whip/:endpoint_id/:session_id",
+                patch(handle_new_whip_ice_candidates),
+            )
+            .route(
+                "/whip/:endpoint_id/:session_id",
+                delete(handle_terminate_whip_session),
+            )
             .route("/whep/:id", post(handle_create_whep_session))
             .route(
                 "/whep/:id/:session_id",

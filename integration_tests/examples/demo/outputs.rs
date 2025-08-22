@@ -4,13 +4,24 @@ use anyhow::Result;
 use serde_json::json;
 use strum::{Display, EnumIter};
 
+use crate::players::OutputPlayer;
+
+pub mod rtmp;
 pub mod rtp;
 
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
     fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value;
-    fn on_before_registration(&mut self) -> Result<()>;
-    fn on_after_registration(&mut self) -> Result<()>;
+
+    #[allow(unused_variables)]
+    fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
+        Ok(())
+    }
+
+    #[allow(unused_variables)]
+    fn on_after_registration(&mut self, player: OutputPlayer) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl std::fmt::Display for dyn OutputHandler {
@@ -92,4 +103,7 @@ pub enum VideoEncoder {
 pub enum AudioEncoder {
     #[strum(to_string = "opus")]
     Opus,
+
+    #[strum(to_string = "aac")]
+    Aac,
 }

@@ -1,35 +1,57 @@
 use h264_reader::nal::slice::PicOrderCountLsb;
 
+use crate::parser::nalu_parser::ParsedNalu;
+
 use super::nalu_parser::Slice;
 
 #[derive(Default)]
 pub(crate) struct AUSplitter {
-    buffered_nals: Vec<(Slice, Option<u64>)>,
+    buffered_nals: Vec<(ParsedNalu, Option<u64>)>,
 }
 
 impl AUSplitter {
-    pub(crate) fn put_slice(
+    pub(crate) fn put_nalu(
         &mut self,
-        slice: Slice,
+        nalu: ParsedNalu,
         pts: Option<u64>,
-    ) -> Option<Vec<(Slice, Option<u64>)>> {
-        if self.is_new_au(&slice) {
-            let au = std::mem::take(&mut self.buffered_nals);
-            self.buffered_nals.push((slice, pts));
+    ) -> Option<Vec<(ParsedNalu, Option<u64>)>> {
+        if self.is_new_au(&nalu) {
+            // retain frames at the back until you hit the previous slice
+            let i = self
+                .buffered_nals
+                .iter()
+                .enumerate()
+                .rev()
+                .find(|(_, (nalu, _))| matches!(nalu, ParsedNalu::Slice(_)))
+                .map(|(i, _)| i);
+            let au = match i {
+                Some(i) => self.buffered_nals.drain(..=i).collect::<Vec<_>>(),
+                None => Vec::new(),
+            };
+            self.buffered_nals.push((nalu, pts));
             if !au.is_empty() {
                 Some(au)
             } else {
                 None
             }
         } else {
-            self.buffered_nals.push((slice, pts));
+            self.buffered_nals.push((nalu, pts));
             None
         }
     }
 
     /// returns `true` if `slice` is a first slice in an Access Unit
-    fn is_new_au(&self, slice: &Slice) -> bool {
-        let Some((last, _)) = self.buffered_nals.last() else {
+    fn is_new_au(&self, nalu: &ParsedNalu) -> bool {
+        let ParsedNalu::Slice(slice) = nalu else {
+            return false;
+        };
+
+        let Some((ParsedNalu::Slice(last), _)) = self
+            .buffered_nals
+            .iter()
+            .rev()
+            .find(|(nalu, _)| matches!(nalu, ParsedNalu::Slice(_)))
+        else {
             return true;
         };
 

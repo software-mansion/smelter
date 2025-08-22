@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{cmp, collections::HashMap, sync::Arc};
 
 use ash::vk;
 use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
@@ -9,6 +9,8 @@ use crate::{
     },
     VulkanDecoderError, VulkanDevice,
 };
+
+use super::H264DecodeProfileInfo;
 
 /// Since `VideoSessionParameters` can only add sps and pps values (inserting sps or pps with an
 /// existing id is prohibited), this is an abstraction which provides the capability to replace an
@@ -115,5 +117,52 @@ impl VideoSessionParametersManager {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct SessionParams<'a> {
+    pub(crate) max_coded_extent: vk::Extent2D,
+    pub(crate) max_dpb_slots: u32,
+    pub(crate) max_active_references: u32,
+    pub(crate) max_num_reorder_frames: u64,
+    pub(crate) profile_info: Arc<H264DecodeProfileInfo<'a>>,
+    pub(crate) level_idc: u8,
+}
+
+impl SessionParams<'_> {
+    pub(crate) fn combine(current_params: Self, new_params: Self) -> Self {
+        Self {
+            max_coded_extent: vk::Extent2D {
+                width: u32::max(
+                    current_params.max_coded_extent.width,
+                    new_params.max_coded_extent.width,
+                ),
+                height: u32::max(
+                    current_params.max_coded_extent.height,
+                    new_params.max_coded_extent.height,
+                ),
+            },
+            max_dpb_slots: u32::max(current_params.max_dpb_slots, new_params.max_dpb_slots),
+            max_active_references: u32::max(
+                current_params.max_active_references,
+                new_params.max_active_references,
+            ),
+            // max_num_reorder_frames has to come from the new_params
+            max_num_reorder_frames: new_params.max_num_reorder_frames,
+            profile_info: cmp::max_by(
+                current_params.profile_info,
+                new_params.profile_info,
+                |p1, p2| p1.profile_idc().cmp(&p2.profile_idc()),
+            ),
+            level_idc: u8::max(current_params.level_idc, new_params.level_idc),
+        }
+    }
+
+    pub(crate) fn is_valid(&self, new_params: &Self) -> bool {
+        self.max_coded_extent.width >= new_params.max_coded_extent.width
+            && self.max_coded_extent.height >= new_params.max_coded_extent.height
+            && self.max_dpb_slots >= new_params.max_dpb_slots
+            && self.profile_info.profile_idc() >= new_params.profile_info.profile_idc()
     }
 }

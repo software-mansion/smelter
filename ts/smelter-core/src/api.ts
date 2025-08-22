@@ -25,6 +25,10 @@ export type RegisterInputResponse = {
   audio_duration_ms?: number;
 };
 
+export type RegisterOutputResponse = {
+  endpoint_route?: string;
+};
+
 export class ApiClient {
   private serverManager: SmelterManager;
 
@@ -40,7 +44,10 @@ export class ApiClient {
     });
   }
 
-  public async registerOutput(outputId: string, request: RegisterOutputRequest): Promise<object> {
+  public async registerOutput(
+    outputId: string,
+    request: RegisterOutputRequest
+  ): Promise<RegisterOutputResponse> {
     return this.serverManager.sendRequest({
       method: 'POST',
       route: `/api/output/${encodeURIComponent(outputId)}/register`,
