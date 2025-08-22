@@ -13,15 +13,13 @@ function WhepClientExample() {
     const queryParams = new URLSearchParams(window.location.search);
     const endpointUrl = queryParams.get('endpointUrl');
     const bearerToken = queryParams.get('bearerToken');
-    if (!endpointUrl && !bearerToken) {
-      alert('Add both "endpointUrl" and "bearerToken" query parameters for the WHEP connection.');
-    } else if (!endpointUrl) {
+    if (!endpointUrl) {
       alert('Missing "endpointUrl" query parameter. Provide your WHEP endpoint URL.');
-    } else if (!bearerToken) {
-      alert('Missing "bearerToken" query parameter. Provide your WHEP bearer token.');
     } else {
       setEndpointUrl(endpointUrl);
-      setBearerToken(bearerToken);
+      if (bearerToken) {
+        setBearerToken(bearerToken);
+      }
     }
   }, []);
 
@@ -30,8 +28,15 @@ function WhepClientExample() {
       return;
     }
     void (async () => {
-      if (endpointUrl && bearerToken) {
-        await smelter.registerInput('input', { type: 'whep', bearerToken, endpointUrl });
+      if (endpointUrl) {
+        try {
+          await smelter.registerInput('input', { type: 'whep', bearerToken, endpointUrl });
+        } catch (e) {
+          alert(
+            'Failed to register WHEP input. Ensure your bearerToken and endpointUrl are correct.'
+          );
+          console.error(e);
+        }
       }
     })();
   }, [smelter]);

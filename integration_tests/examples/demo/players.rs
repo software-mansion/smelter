@@ -1,24 +1,24 @@
 use strum::{Display, EnumIter};
 
-#[derive(Debug, EnumIter, Display, Clone, PartialEq)]
-pub enum OutputPlayerOptions {
+#[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq)]
+pub enum OutputPlayer {
     #[strum(to_string = "Start FFmpeg receiver")]
-    StartFfmpegReceiver,
+    FfmpegReceiver,
 
     #[strum(to_string = "Start GStreamer receiver")]
-    StartGstreamerReceiver,
+    GstreamerReceiver,
 
     #[strum(to_string = "Manual")]
     Manual,
 }
 
-#[derive(Debug, EnumIter, Display, Clone, PartialEq)]
-pub enum InputPlayerOptions {
+#[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq)]
+pub enum InputPlayer {
     #[strum(to_string = "Start FFmpeg transmitter")]
-    StartFfmpegTransmitter,
+    FfmpegTransmitter,
 
     #[strum(to_string = "Start GStreamer transmitter")]
-    StartGstreamerTransmitter,
+    GstreamerTransmitter,
 
     #[strum(to_string = "Manual")]
     Manual,

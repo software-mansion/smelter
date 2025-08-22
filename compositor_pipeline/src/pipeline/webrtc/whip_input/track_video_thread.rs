@@ -37,7 +37,7 @@ use crate::prelude::*;
 pub async fn process_video_track(
     sync_point: Arc<RtpNtpSyncPoint>,
     state: WhipWhepServerState,
-    session_id: Arc<str>,
+    endpoint_id: Arc<str>,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
     video_preferences: Vec<VideoDecoderOptions>,
@@ -53,9 +53,9 @@ pub async fn process_video_track(
     };
 
     let WhipWhepServerState { inputs, ctx, .. } = state;
-    let frame_sender = inputs.get_with(&session_id, |input| Ok(input.frame_sender.clone()))?;
+    let frame_sender = inputs.get_with(&endpoint_id, |input| Ok(input.frame_sender.clone()))?;
     let handle =
-        VideoTrackThread::spawn(&session_id, (ctx.clone(), negotiated_codecs, frame_sender))?;
+        VideoTrackThread::spawn(&endpoint_id, (ctx.clone(), negotiated_codecs, frame_sender))?;
 
     let mut timestamp_sync =
         RtpTimestampSync::new(&sync_point, 90_000, ctx.default_buffer_duration);

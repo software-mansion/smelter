@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use ash::vk;
 use h264_reader::nal::{
@@ -6,7 +6,7 @@ use h264_reader::nal::{
     sps::{Profile, SeqParameterSet},
 };
 use images::DecodingImages;
-use parameters::VideoSessionParametersManager;
+use parameters::{SessionParams, VideoSessionParametersManager};
 
 use crate::{
     wrappers::{
@@ -21,16 +21,15 @@ mod images;
 mod parameters;
 
 pub(super) struct VideoSessionResources<'a> {
-    pub(crate) profile_info: ProfileInfo<'a, vk::VideoDecodeH264ProfileInfoKHR<'a>>,
     pub(crate) video_session: VideoSession,
+    pub(crate) parameters: SessionParams<'a>,
     pub(crate) parameters_manager: VideoSessionParametersManager,
     pub(crate) decoding_images: DecodingImages<'a>,
     pub(crate) sps: HashMap<u8, SeqParameterSet>,
     pub(crate) pps: HashMap<(u8, u8), PicParameterSet>,
     pub(crate) decode_query_pool: Option<DecodingQueryPool>,
-    pub(crate) level_idc: u8,
-    pub(crate) max_num_reorder_frames: u64,
     pub(crate) decode_buffer: DecodeInputBuffer,
+    parameters_scheduled_for_reset: Option<SessionParams<'a>>,
 }
 
 fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, VulkanDecoderError> {
@@ -60,16 +59,16 @@ fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, Vulkan
 
 impl VideoSessionResources<'_> {
     pub(crate) fn new_from_sps(
-        vulkan_ctx: &VulkanDevice,
+        vulkan_device: &VulkanDevice,
         decode_buffer: &CommandBuffer,
         sps: SeqParameterSet,
         fence_memory_barrier_completed: &Fence,
     ) -> Result<Self, VulkanDecoderError> {
-        let profile_info = ProfileInfo::from_sps_decode(&sps)?;
+        let profile_info = Arc::new(ProfileInfo::from_sps_decode(&sps)?);
 
         let level_idc = sps.level_idc;
         let max_level_idc = vk_to_h264_level_idc(
-            vulkan_ctx
+            vulkan_device
                 .decode_capabilities
                 .h264_decode_capabilities
                 .max_level_idc,
@@ -88,25 +87,25 @@ impl VideoSessionResources<'_> {
         let max_num_reorder_frames = calculate_max_num_reorder_frames(&sps)?;
 
         let video_session = VideoSession::new(
-            vulkan_ctx,
+            vulkan_device,
             &profile_info.profile_info,
             max_coded_extent,
             max_dpb_slots,
             max_active_references,
             vk::VideoSessionCreateFlagsKHR::empty(),
-            &vulkan_ctx
+            &vulkan_device
                 .decode_capabilities
                 .video_capabilities
                 .std_header_version,
         )?;
 
         let mut parameters_manager =
-            VideoSessionParametersManager::new(vulkan_ctx, video_session.session)?;
+            VideoSessionParametersManager::new(vulkan_device, video_session.session)?;
 
         parameters_manager.put_sps(&sps)?;
 
         let decoding_images = Self::new_decoding_images(
-            vulkan_ctx,
+            vulkan_device,
             &profile_info,
             max_coded_extent,
             max_dpb_slots,
@@ -115,92 +114,63 @@ impl VideoSessionResources<'_> {
         )?;
 
         let sps = HashMap::from_iter([(sps.id().id(), sps)]);
-        let decode_query_pool = if vulkan_ctx
+        let decode_query_pool = if vulkan_device
             .queues
             .h264_decode
             .supports_result_status_queries()
         {
             Some(DecodingQueryPool::new(
-                vulkan_ctx.device.clone(),
+                vulkan_device.device.clone(),
                 profile_info.profile_info,
             )?)
         } else {
             None
         };
 
-        let decode_buffer = DecodeInputBuffer::new(vulkan_ctx.allocator.clone(), &profile_info)?;
+        let decode_buffer = DecodeInputBuffer::new(vulkan_device.allocator.clone(), &profile_info)?;
+
+        let parameters = SessionParams {
+            max_coded_extent,
+            max_dpb_slots,
+            max_active_references,
+            max_num_reorder_frames,
+            profile_info,
+            level_idc,
+        };
 
         Ok(VideoSessionResources {
-            profile_info,
+            parameters,
             video_session,
             parameters_manager,
             decoding_images,
             sps,
             pps: HashMap::new(),
             decode_query_pool,
-            level_idc,
-            max_num_reorder_frames,
             decode_buffer,
+            parameters_scheduled_for_reset: None,
         })
     }
 
-    pub(crate) fn process_sps(
-        &mut self,
-        vulkan_ctx: &VulkanDevice,
-        decode_buffer: &CommandBuffer,
-        sps: SeqParameterSet,
-        fence_memory_barrier_completed: &Fence,
-    ) -> Result<(), VulkanDecoderError> {
-        let new_profile = ProfileInfo::from_sps_decode(&sps)?;
+    pub(crate) fn process_sps(&mut self, sps: SeqParameterSet) -> Result<(), VulkanDecoderError> {
+        let new_session_params = SessionParams {
+            max_coded_extent: sps.size()?,
+            max_dpb_slots: sps.max_num_ref_frames + 1, // +1 for current frame
+            max_active_references: sps.max_num_ref_frames,
+            max_num_reorder_frames: calculate_max_num_reorder_frames(&sps)?,
+            profile_info: Arc::new(ProfileInfo::from_sps_decode(&sps)?),
+            level_idc: sps.level_idc,
+        };
+        let current_session_params = self
+            .parameters_scheduled_for_reset
+            .take()
+            .unwrap_or_else(|| self.parameters.clone());
 
-        if self.profile_info != new_profile {
-            return Err(VulkanDecoderError::ProfileChangeUnsupported);
-        }
+        self.parameters_scheduled_for_reset = Some(SessionParams::combine(
+            current_session_params,
+            new_session_params,
+        ));
 
-        if self.level_idc != sps.level_idc {
-            return Err(VulkanDecoderError::LevelChangeUnsupported);
-        }
-
-        let max_coded_extent = sps.size()?;
-        // +1 for current frame
-        let max_dpb_slots = sps.max_num_ref_frames + 1;
-        let max_active_references = sps.max_num_ref_frames;
-
-        if self.video_session.max_coded_extent.width >= max_coded_extent.width
-            && self.video_session.max_coded_extent.height >= max_coded_extent.height
-            && self.video_session.max_dpb_slots >= max_dpb_slots
-        {
-            // no need to change the session
-            self.parameters_manager.put_sps(&sps)?;
-            return Ok(());
-        }
-
-        self.video_session = VideoSession::new(
-            vulkan_ctx,
-            &self.profile_info.profile_info,
-            max_coded_extent,
-            max_dpb_slots,
-            max_active_references,
-            vk::VideoSessionCreateFlagsKHR::empty(),
-            &vulkan_ctx
-                .decode_capabilities
-                .video_capabilities
-                .std_header_version,
-        )?;
-
-        self.parameters_manager
-            .change_session(self.video_session.session)?;
         self.parameters_manager.put_sps(&sps)?;
-
-        self.decoding_images = Self::new_decoding_images(
-            vulkan_ctx,
-            &self.profile_info,
-            max_coded_extent,
-            max_dpb_slots,
-            decode_buffer,
-            fence_memory_barrier_completed,
-        )?;
-
         self.sps.insert(sps.id().id(), sps);
 
         Ok(())
@@ -215,34 +185,110 @@ impl VideoSessionResources<'_> {
         Ok(())
     }
 
+    pub(crate) fn ensure_session(
+        &mut self,
+        vulkan_device: &VulkanDevice,
+        decode_buffer: &CommandBuffer,
+        fence_memory_barrier_completed: &Fence,
+    ) -> Result<(), VulkanDecoderError> {
+        let Some(new_params) = self.parameters_scheduled_for_reset.take() else {
+            return Ok(());
+        };
+
+        if self.parameters.is_valid(&new_params) {
+            // no need to change the session
+            self.parameters.max_num_reorder_frames = new_params.max_num_reorder_frames;
+            return Ok(());
+        }
+
+        let max_level_idc = vk_to_h264_level_idc(
+            vulkan_device
+                .decode_capabilities
+                .h264_decode_capabilities
+                .max_level_idc,
+        )?;
+
+        if new_params.level_idc > max_level_idc {
+            return Err(VulkanDecoderError::InvalidInputData(format!(
+                "stream has level_idc = {}, while the GPU can decode at most {}",
+                new_params.level_idc, max_level_idc
+            )));
+        }
+
+        if self.parameters.profile_info != new_params.profile_info {
+            self.decode_query_pool = match vulkan_device
+                .queues
+                .h264_decode
+                .supports_result_status_queries()
+            {
+                true => Some(DecodingQueryPool::new(
+                    vulkan_device.device.clone(),
+                    new_params.profile_info.profile_info,
+                )?),
+                false => None,
+            };
+            self.decode_buffer =
+                DecodeInputBuffer::new(vulkan_device.allocator.clone(), &new_params.profile_info)?;
+        }
+
+        self.video_session = VideoSession::new(
+            vulkan_device,
+            &new_params.profile_info.profile_info,
+            new_params.max_coded_extent,
+            new_params.max_dpb_slots,
+            new_params.max_active_references,
+            vk::VideoSessionCreateFlagsKHR::empty(),
+            &vulkan_device
+                .decode_capabilities
+                .video_capabilities
+                .std_header_version,
+        )?;
+
+        self.parameters_manager
+            .change_session(self.video_session.session)?;
+
+        self.decoding_images = Self::new_decoding_images(
+            vulkan_device,
+            &new_params.profile_info,
+            self.video_session.max_coded_extent,
+            self.video_session.max_dpb_slots,
+            decode_buffer,
+            fence_memory_barrier_completed,
+        )?;
+
+        self.parameters = new_params;
+
+        Ok(())
+    }
+
+    /// Creates a new buffer of reference images used for decoding.
+    ///
+    /// If you're replacing existing decoding images, make sure the old references won't be used,
+    /// e.g. do it right before decoding IDR. Otherwise it may result in error because the decoder
+    /// could try to use references which no longer exist if there's a non IDR frame after SPS.
     fn new_decoding_images<'a>(
-        vulkan_ctx: &VulkanDevice,
+        vulkan_device: &VulkanDevice,
         profile: &H264DecodeProfileInfo,
         max_coded_extent: vk::Extent2D,
         max_dpb_slots: u32,
         decode_buffer: &CommandBuffer,
         fence_memory_barrier_completed: &Fence,
     ) -> Result<DecodingImages<'a>, VulkanDecoderError> {
-        // FIXME: usually, sps arrives either at the start of the stream (when all spses are sent
-        // at the begginning of the stream) or right before an IDR. It is however possible for an
-        // sps nal to arrive in between P-frames. This would cause us to loose the reference
-        // pictures we need to decode the stream until we receive a new IDR. Don't know if this is
-        // an issue worth fixing, I don't think I ever saw a stream like this.
         decode_buffer.begin()?;
 
         let decoding_images = DecodingImages::new(
-            vulkan_ctx,
+            vulkan_device,
             decode_buffer,
             profile,
-            &vulkan_ctx.decode_capabilities.h264_dpb_format_properties,
-            &vulkan_ctx.decode_capabilities.h264_dst_format_properties,
+            &vulkan_device.decode_capabilities.h264_dpb_format_properties,
+            &vulkan_device.decode_capabilities.h264_dst_format_properties,
             max_coded_extent,
             max_dpb_slots,
         )?;
 
         decode_buffer.end()?;
 
-        vulkan_ctx.queues.h264_decode.submit(
+        vulkan_device.queues.h264_decode.submit(
             decode_buffer,
             &[],
             &[],

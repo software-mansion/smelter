@@ -69,22 +69,17 @@ impl WhepOutputsState {
     ) -> Result<(), WhipWhepServerError> {
         let peer_connection = {
             let mut guard = self.0.lock().unwrap();
-            match guard.get_mut(output_id) {
-                Some(output) => {
-                    if let Some(pc) = output.sessions.remove(session_id) {
-                        pc
-                    } else {
-                        return Err(WhipWhepServerError::NotFound(format!(
-                            "Session {session_id:?} not found for {output_id:?}"
-                        )));
-                    }
-                }
-                None => {
-                    return Err(WhipWhepServerError::NotFound(format!(
-                        "{output_id:?} not found"
-                    )));
-                }
-            }
+            let Some(output) = guard.get_mut(output_id) else {
+                return Err(WhipWhepServerError::NotFound(format!(
+                    "{output_id:?} not found"
+                )));
+            };
+            let Some(pc) = output.sessions.remove(session_id) else {
+                return Err(WhipWhepServerError::NotFound(format!(
+                    "Session {session_id:?} not found for {output_id:?}"
+                )));
+            };
+            pc
         };
 
         if let Err(e) = peer_connection.close().await {

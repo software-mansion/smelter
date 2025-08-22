@@ -1,11 +1,14 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 use rand::Rng;
 use tokio::{
     sync::watch,
     time::{sleep, timeout},
 };
-use tracing::debug;
+use tracing::{debug, warn};
 use webrtc::{
     api::{
         interceptor_registry::register_default_interceptors,
@@ -236,32 +239,22 @@ impl PeerConnection {
     pub fn attach_cleanup_when_pc_failed(
         &self,
         outputs: WhepOutputsState,
-        output_id: &OutputId,
-        session_id: &Arc<str>,
+        output_id: OutputId,
+        session_id: Arc<str>,
     ) {
-        self.pc.on_peer_connection_state_change(Box::new({
-            let pc_clone = self.pc.clone();
-            let output_id = output_id.clone();
-            let session_id = session_id.clone();
-            move |state: RTCPeerConnectionState| {
-                let pc_inner = pc_clone.clone();
-                let outputs_clone = outputs.clone();
-                let output_id_clone = output_id.clone();
-                let session_id_clone = session_id.clone();
-                Box::pin(async move {
-                    if state == RTCPeerConnectionState::Failed {
-                        sleep(Duration::from_secs(150)).await; // 2min 30s
+        let last_connected_time = Arc::new(Mutex::new(None::<Instant>));
+        let pc = self.pc.clone();
 
-                        let current_state = pc_inner.connection_state();
-                        if current_state != RTCPeerConnectionState::Connected
-                            && current_state != RTCPeerConnectionState::Closed
-                        {
-                            let _ = outputs_clone
-                                .remove_session(&output_id_clone, &session_id_clone)
-                                .await;
-                        }
-                    }
-                })
+        self.pc.on_peer_connection_state_change(Box::new({
+            move |state: RTCPeerConnectionState| {
+                Box::pin(handle_peer_connection_state_change(
+                    state,
+                    pc.clone(),
+                    outputs.clone(),
+                    output_id.clone(),
+                    session_id.clone(),
+                    last_connected_time.clone(),
+                ))
             }
         }));
     }
@@ -322,4 +315,51 @@ fn register_codecs(
         }
     }
     Ok(())
+}
+
+async fn handle_peer_connection_state_change(
+    state: RTCPeerConnectionState,
+    pc: Arc<RTCPeerConnection>,
+    outputs: WhepOutputsState,
+    output_id: OutputId,
+    session_id: Arc<str>,
+    last_connected_time: Arc<Mutex<Option<Instant>>>,
+) {
+    match state {
+        RTCPeerConnectionState::Connected => {
+            if let Ok(mut time) = last_connected_time.lock() {
+                *time = Some(Instant::now());
+            }
+        }
+        RTCPeerConnectionState::Failed | RTCPeerConnectionState::Disconnected => {
+            let cleanup_delay = Duration::from_secs(150); // 2 min 30 s
+            sleep(cleanup_delay).await;
+
+            let current_state = pc.connection_state();
+            if current_state != RTCPeerConnectionState::Connected
+                && current_state != RTCPeerConnectionState::Connecting
+            {
+                let should_cleanup = last_connected_time
+                    .lock()
+                    .map(|time| match *time {
+                        Some(last) => last.elapsed() >= cleanup_delay,
+                        None => true,
+                    })
+                    .unwrap_or(true);
+
+                if should_cleanup {
+                    if let Err(err) = outputs.remove_session(&output_id, &session_id).await {
+                        warn!(
+                            ?session_id,
+                            ?output_id,
+                            "Failed to clean up peer connection: {err}"
+                        );
+                    }
+                }
+            }
+        }
+        _ => {
+            // Other states aren't crucial for cleanup
+        }
+    }
 }

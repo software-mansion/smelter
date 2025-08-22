@@ -73,12 +73,6 @@ pub enum VulkanDecoderError {
     #[error("Invalid input data for the decoder: {0}.")]
     InvalidInputData(String),
 
-    #[error("Profile changed during the stream")]
-    ProfileChangeUnsupported,
-
-    #[error("Level changed during the stream")]
-    LevelChangeUnsupported,
-
     #[error("Monochrome video is not supported")]
     MonochromeChromaFormatUnsupported,
 
@@ -194,7 +188,7 @@ impl VulkanDecoder<'_> {
             } => {
                 return self
                     .process_reference_frame(decode_info, *reference_id)
-                    .map(Option::Some)
+                    .map(Option::Some);
             }
 
             DecoderInstruction::Idr {
@@ -203,7 +197,7 @@ impl VulkanDecoder<'_> {
             } => {
                 return self
                     .process_idr(decode_info, *reference_id)
-                    .map(Option::Some)
+                    .map(Option::Some);
             }
 
             DecoderInstruction::Drop { reference_ids } => {
@@ -228,12 +222,7 @@ impl VulkanDecoder<'_> {
 
     fn process_sps(&mut self, sps: &SeqParameterSet) -> Result<(), VulkanDecoderError> {
         match self.video_session_resources.as_mut() {
-            Some(session) => session.process_sps(
-                &self.vulkan_device,
-                &self.command_buffers.decode_buffer,
-                sps.clone(),
-                &self.sync_structures.fence_memory_barrier_completed,
-            )?,
+            Some(session) => session.process_sps(sps.clone())?,
             None => {
                 self.video_session_resources = Some(VideoSessionResources::new_from_sps(
                     &self.vulkan_device,
@@ -292,6 +281,14 @@ impl VulkanDecoder<'_> {
             .as_mut()
             .ok_or(VulkanDecoderError::NoSession)?;
 
+        if is_idr {
+            video_session_resources.ensure_session(
+                &self.vulkan_device,
+                &self.command_buffers.decode_buffer,
+                &self.sync_structures.fence_memory_barrier_completed,
+            )?;
+        }
+
         // upload data to a buffer
         let size = Self::pad_size_to_alignment(
             decode_information.rbsp_bytes.len() as u64,
@@ -304,7 +301,7 @@ impl VulkanDecoder<'_> {
         video_session_resources.decode_buffer.upload_data(
             &decode_information.rbsp_bytes,
             size,
-            &video_session_resources.profile_info,
+            &video_session_resources.parameters.profile_info,
         )?;
 
         // decode
@@ -522,7 +519,7 @@ impl VulkanDecoder<'_> {
             layer: target_layer as u32,
             dimensions,
             picture_order_cnt: decode_information.picture_info.PicOrderCnt_for_decoding[0],
-            max_num_reorder_frames: video_session_resources.max_num_reorder_frames,
+            max_num_reorder_frames: video_session_resources.parameters.max_num_reorder_frames,
             is_idr,
             pts: decode_information.pts,
         })
