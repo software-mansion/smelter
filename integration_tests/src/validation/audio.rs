@@ -80,6 +80,25 @@ impl SamplingInterval {
 }
 
 pub struct AudioAnalyzeTolerance {
+    pub frequency_tolerance: FrequencyTolerance,
+    pub offset: Duration,
+}
+
+impl Default for AudioAnalyzeTolerance {
+    fn default() -> Self {
+        Self {
+            frequency_tolerance: FrequencyTolerance::Artificial(Default::default()),
+            offset: Duration::from_millis(20),
+        }
+    }
+}
+
+pub enum FrequencyTolerance {
+    Real(RealFrequencyTolerance),
+    Artificial(ArtificialFrequencyTolerance),
+}
+
+pub struct RealFrequencyTolerance {
     /// Tolerance of max frequency. This value is the multiplier
     /// by which frequency resolution shall be multiplied when comparing values
     pub max_frequency: u32,
@@ -87,10 +106,9 @@ pub struct AudioAnalyzeTolerance {
     pub average_level: f32,
     pub median_level: f32,
     pub general_level: f64,
-    pub offset: Duration,
 }
 
-impl Default for AudioAnalyzeTolerance {
+impl Default for RealFrequencyTolerance {
     fn default() -> Self {
         Self {
             // In case of spectral leaking
@@ -99,7 +117,18 @@ impl Default for AudioAnalyzeTolerance {
             average_level: 5.0,
             median_level: 5.0,
             general_level: 3.0,
-            offset: Duration::from_millis(20),
+        }
+    }
+}
+
+pub struct ArtificialFrequencyTolerance {
+    pub frequency_level: f32,
+}
+
+impl Default for ArtificialFrequencyTolerance {
+    fn default() -> Self {
+        Self {
+            frequency_level: 1.0,
         }
     }
 }
@@ -116,7 +145,7 @@ pub struct AudioValidationConfig {
 impl Default for AudioValidationConfig {
     fn default() -> Self {
         Self {
-            sampling_intervals: vec![Duration::from_secs(0)..Duration::from_secs(1)],
+            sampling_intervals: vec![Duration::from_secs(0)..Duration::from_secs(10)],
             channels: AudioChannels::Stereo,
             sample_rate: 48000,
 
