@@ -81,6 +81,7 @@ impl SamplingInterval {
 
 pub struct AudioAnalyzeTolerance {
     pub frequency_tolerance: FrequencyTolerance,
+    pub allowed_failed_batches: u32,
     pub offset: Duration,
 }
 
@@ -88,6 +89,7 @@ impl Default for AudioAnalyzeTolerance {
     fn default() -> Self {
         Self {
             frequency_tolerance: FrequencyTolerance::Artificial(Default::default()),
+            allowed_failed_batches: 0,
             offset: Duration::from_millis(20),
         }
     }
@@ -96,6 +98,22 @@ impl Default for AudioAnalyzeTolerance {
 pub enum FrequencyTolerance {
     Real(RealFrequencyTolerance),
     Artificial(ArtificialFrequencyTolerance),
+}
+
+impl FrequencyTolerance {
+    pub fn real_tolerance(self) -> Option<RealFrequencyTolerance> {
+        match self {
+            Self::Real(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    pub fn artificial_tolerance(self) -> Option<ArtificialFrequencyTolerance> {
+        match self {
+            Self::Artificial(t) => Some(t),
+            _ => None,
+        }
+    }
 }
 
 pub struct RealFrequencyTolerance {
@@ -128,7 +146,7 @@ pub struct ArtificialFrequencyTolerance {
 impl Default for ArtificialFrequencyTolerance {
     fn default() -> Self {
         Self {
-            frequency_level: 1.0,
+            frequency_level: 0.3,
         }
     }
 }
@@ -138,7 +156,6 @@ pub struct AudioValidationConfig {
     pub channels: AudioChannels,
     pub sample_rate: u32,
     pub samples_per_batch: usize,
-    pub allowed_failed_batches: u32,
     pub tolerance: AudioAnalyzeTolerance,
 }
 
@@ -154,7 +171,6 @@ impl Default for AudioValidationConfig {
             // per channel which is approx. 0.34s for the default sample rate.
             // This number MUST NOT exceed 16384 per channel.
             samples_per_batch: 32768,
-            allowed_failed_batches: 2,
             tolerance: AudioAnalyzeTolerance::default(),
         }
     }
@@ -171,7 +187,6 @@ pub fn validate(
         channels,
         sample_rate,
         samples_per_batch,
-        allowed_failed_batches,
         tolerance,
     } = test_config;
 
@@ -214,23 +229,34 @@ pub fn validate(
         .flat_map(|s| s.samples)
         .collect::<Vec<_>>();
 
+    let allowed_failed_batches = tolerance.allowed_failed_batches;
+
     match validation_mode {
-        ValidationMode::Real => real::validate(
-            full_expected_samples,
-            full_actual_samples,
-            sample_rate,
-            sampling_intervals,
-            tolerance,
-            allowed_failed_batches,
-        ),
-        ValidationMode::Artificial => artificial::validate(
-            full_expected_samples,
-            full_actual_samples,
-            sample_rate,
-            sampling_intervals,
-            tolerance,
-            allowed_failed_batches,
-        ),
+        ValidationMode::Real => {
+            let tolerance = tolerance.frequency_tolerance.real_tolerance().unwrap();
+            real::validate(
+                full_expected_samples,
+                full_actual_samples,
+                sample_rate,
+                sampling_intervals,
+                tolerance,
+                allowed_failed_batches,
+            )
+        }
+        ValidationMode::Artificial => {
+            let tolerance = tolerance
+                .frequency_tolerance
+                .artificial_tolerance()
+                .unwrap();
+            artificial::validate(
+                full_expected_samples,
+                full_actual_samples,
+                sample_rate,
+                sampling_intervals,
+                tolerance,
+                allowed_failed_batches,
+            )
+        }
     }
 }
 

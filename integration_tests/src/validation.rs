@@ -46,6 +46,7 @@ pub fn compare_video_dumps<P: AsRef<Path> + fmt::Debug>(
 pub fn compare_audio_dumps<P: AsRef<Path> + fmt::Debug>(
     snapshot_filename: P,
     actual: &Bytes,
+    validation_mode: audio::ValidationMode,
     config: AudioValidationConfig,
 ) -> Result<()> {
     let expected = match output_dump_from_disk(&snapshot_filename) {
@@ -55,8 +56,7 @@ pub fn compare_audio_dumps<P: AsRef<Path> + fmt::Debug>(
         }
     };
 
-    if let Err(err) = audio::validate(&expected, actual, config, audio::ValidationMode::Artificial)
-    {
+    if let Err(err) = audio::validate(&expected, actual, config, validation_mode) {
         save_failed_test_dumps(&expected, actual, &snapshot_filename);
         handle_error(err, snapshot_filename, actual)?;
     }

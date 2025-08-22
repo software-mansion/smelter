@@ -1,10 +1,11 @@
 use anyhow::Result;
 use serde_json::json;
-use std::{path::PathBuf, time::Duration};
+use std::path::PathBuf;
 
 use crate::{
-    audio::AudioValidationConfig, compare_audio_dumps, input_dump_from_disk, CommunicationProtocol,
-    CompositorInstance, OutputReceiver, PacketSender,
+    audio::{self, AudioAnalyzeTolerance, AudioValidationConfig},
+    compare_audio_dumps, input_dump_from_disk, CommunicationProtocol, CompositorInstance,
+    OutputReceiver, PacketSender,
 };
 
 /// Two audio input streams mixed together with different volumes.
@@ -92,10 +93,8 @@ pub fn audio_mixing_with_offset() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioValidationConfig {
-            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
-            ..Default::default()
-        },
+        audio::ValidationMode::Artificial,
+        AudioValidationConfig::default(),
     )?;
 
     Ok(())
@@ -190,10 +189,8 @@ pub fn audio_mixing_no_offset() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioValidationConfig {
-            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
-            ..Default::default()
-        },
+        audio::ValidationMode::Artificial,
+        AudioValidationConfig::default(),
     )?;
 
     Ok(())
@@ -204,6 +201,7 @@ pub fn audio_mixing_no_offset() -> Result<()> {
 /// Play audio for 20 seconds, the last few second should be silent
 #[test]
 pub fn single_input_opus() -> Result<()> {
+    // const OUTPUT_DUMP_FILE: &str = "single_input_opus_output.rtp";
     const OUTPUT_DUMP_FILE: &str = "single_input_opus_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
@@ -265,10 +263,8 @@ pub fn single_input_opus() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioValidationConfig {
-            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
-            ..Default::default()
-        },
+        audio::ValidationMode::Artificial,
+        AudioValidationConfig::default(),
     )?;
 
     Ok(())
@@ -338,13 +334,19 @@ pub fn single_input_aac() -> Result<()> {
 
     let new_output_dump = output_receiver.wait_for_output()?;
 
+    let audio_validation_config = AudioValidationConfig {
+        tolerance: AudioAnalyzeTolerance {
+            frequency_tolerance: audio::FrequencyTolerance::Real(Default::default()),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioValidationConfig {
-            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
-            ..Default::default()
-        },
+        audio::ValidationMode::Real,
+        audio_validation_config,
     )?;
 
     Ok(())
@@ -415,10 +417,8 @@ pub fn single_input_aac_mp4() -> Result<()> {
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioValidationConfig {
-            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
-            ..Default::default()
-        },
+        audio::ValidationMode::Artificial,
+        AudioValidationConfig::default(),
     )?;
 
     Ok(())

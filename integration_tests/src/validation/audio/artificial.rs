@@ -1,17 +1,24 @@
+use std::cmp::Ordering;
+
 use anyhow::{anyhow, Result};
 use spectrum_analyzer::{
     error::SpectrumAnalyzerError, samples_fft_to_spectrum, scaling::SpectrumDataStats,
-    windows::hann_window, FrequencyLimit, FrequencySpectrum,
+    windows::hann_window, Frequency, FrequencyLimit, FrequencySpectrum, FrequencyValue,
 };
 
-use crate::audio::{find_samples, split_samples, AudioAnalyzeTolerance, SamplingInterval};
+use crate::audio::{find_samples, split_samples, ArtificialFrequencyTolerance, SamplingInterval};
+
+type SpectrumBins = Vec<(Frequency, FrequencyValue)>;
+
+/// Number of top detected frequencies to be compared
+const COMPARED_BINS: usize = 10;
 
 pub fn validate(
     full_expected_samples: Vec<f32>,
     full_actual_samples: Vec<f32>,
     sample_rate: u32,
     sampling_intervals: Vec<SamplingInterval>,
-    tolerance: AudioAnalyzeTolerance,
+    tolerance: ArtificialFrequencyTolerance,
     allowed_failed_batches: u32,
 ) -> Result<()> {
     // let mut failed_batches: u32 = 0;
@@ -23,53 +30,54 @@ pub fn validate(
             analyze_samples(actual_samples, expected_samples, sample_rate)?;
 
         // println!("Expected spectrum: {:#?}", expected_result_left.spectrum);
-        println!("Actual spectrum: {:#?}", actual_result_left.spectrum);
+        println!("Actual spectrum: {:#?}", actual_result_left);
+        println!("Expected spectrum: {:#?}", expected_result_left);
     }
 
     // This is just a placeholder #remove
     Err(anyhow!("Test failed"))
 }
 
-struct AnalyzeResult {
-    spectrum: FrequencySpectrum,
-}
-
-impl AnalyzeResult {
-    fn new(spectrum: FrequencySpectrum) -> Self {
-        Self { spectrum }
-    }
-}
-
 fn analyze_samples(
     actual_samples: Vec<f32>,
     expected_samples: Vec<f32>,
     sample_rate: u32,
-) -> Result<(AnalyzeResult, AnalyzeResult, AnalyzeResult, AnalyzeResult)> {
+) -> Result<(SpectrumBins, SpectrumBins, SpectrumBins, SpectrumBins)> {
     let (expected_samples_left, expected_samples_right) = split_samples(expected_samples);
     let (actual_samples_left, actual_samples_right) = split_samples(actual_samples);
 
-    let mut expected_spectrum_left = calc_fft(&expected_samples_left, sample_rate)?;
-    let mut expected_spectrum_right = calc_fft(&expected_samples_right, sample_rate)?;
-    let mut actual_spectrum_left = calc_fft(&actual_samples_left, sample_rate)?;
-    let mut actual_spectrum_right = calc_fft(&actual_samples_right, sample_rate)?;
+    let mut expected_spectrum_left = calc_fft(&expected_samples_left, sample_rate)?
+        .data()
+        .to_vec();
 
-    // scale_fft_spectrum(&mut actual_spectrum_left, None, &mut working_buffer)?;
-    // scale_fft_spectrum(&mut actual_spectrum_right, None, &mut working_buffer)?;
-    // scale_fft_spectrum(
-    //     &mut actual_spectrum_left,
-    //     Some(left_scaler),
-    //     &mut working_buffer,
-    // )?;
-    // scale_fft_spectrum(
-    //     &mut actual_spectrum_right,
-    //     Some(right_scaler),
-    //     &mut working_buffer,
-    // )?;
+    let mut expected_spectrum_right = calc_fft(&expected_samples_right, sample_rate)?
+        .data()
+        .to_vec();
 
-    let expected_result_left = AnalyzeResult::new(expected_spectrum_left);
-    let expected_result_right = AnalyzeResult::new(expected_spectrum_right);
-    let actual_result_left = AnalyzeResult::new(actual_spectrum_left);
-    let actual_result_right = AnalyzeResult::new(actual_spectrum_right);
+    let mut actual_spectrum_left = calc_fft(&actual_samples_left, sample_rate)?.data().to_vec();
+
+    let mut actual_spectrum_right = calc_fft(&actual_samples_right, sample_rate)?
+        .data()
+        .to_vec();
+
+    let cmp = |a: &(Frequency, FrequencyValue), b: &(Frequency, FrequencyValue)| -> Ordering {
+        let negative = FrequencyValue::from(-1.0);
+
+        let a = a.1 * negative;
+        let b = b.1 * negative;
+
+        a.cmp(&b)
+    };
+
+    expected_spectrum_left.sort_by(cmp);
+    expected_spectrum_right.sort_by(cmp);
+    actual_spectrum_left.sort_by(cmp);
+    actual_spectrum_right.sort_by(cmp);
+
+    let expected_result_left = expected_spectrum_left[..COMPARED_BINS].to_vec();
+    let expected_result_right = expected_spectrum_right[..COMPARED_BINS].to_vec();
+    let actual_result_left = actual_spectrum_left[..COMPARED_BINS].to_vec();
+    let actual_result_right = actual_spectrum_right[..COMPARED_BINS].to_vec();
 
     Ok((
         expected_result_left,
@@ -93,7 +101,7 @@ fn calc_fft(samples: &[f32], sample_rate: u32) -> Result<FrequencySpectrum, Spec
     samples_fft_to_spectrum(
         &samples,
         sample_rate,
-        FrequencyLimit::Range(100.0, 1000.0),
+        FrequencyLimit::All,
         Some(&fft_scaler),
     )
 }
