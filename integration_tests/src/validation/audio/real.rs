@@ -9,7 +9,7 @@ use spectrum_analyzer::{
 use tracing::{error, trace};
 
 use crate::{
-    audio::{AudioAnalyzeTolerance, SamplingInterval},
+    audio::{RealFrequencyTolerance, SamplingInterval},
     validation::audio::{calc_level, find_samples, split_samples, Channel},
 };
 
@@ -18,7 +18,7 @@ pub fn validate(
     full_actual_samples: Vec<f32>,
     sample_rate: u32,
     sampling_intervals: Vec<SamplingInterval>,
-    tolerance: AudioAnalyzeTolerance,
+    tolerance: RealFrequencyTolerance,
     allowed_failed_batches: u32,
 ) -> Result<()> {
     let mut failed_batches: u32 = 0;
@@ -86,7 +86,7 @@ impl AnalyzeResult {
     fn compare(
         actual: &Self,
         expected: &Self,
-        tolerance: &AudioAnalyzeTolerance,
+        tolerance: &RealFrequencyTolerance,
         first_sample: usize,
         channel: Channel,
     ) -> Result<()> {
