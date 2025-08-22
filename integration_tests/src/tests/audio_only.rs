@@ -201,7 +201,6 @@ pub fn audio_mixing_no_offset() -> Result<()> {
 /// Play audio for 20 seconds, the last few second should be silent
 #[test]
 pub fn single_input_opus() -> Result<()> {
-    // const OUTPUT_DUMP_FILE: &str = "single_input_opus_output.rtp";
     const OUTPUT_DUMP_FILE: &str = "single_input_opus_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
