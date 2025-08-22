@@ -190,6 +190,8 @@ fn calc_fft(samples: &[f32], sample_rate: u32) -> Result<FrequencySpectrum, Spec
 
 fn scale_fft_spectrum(
     spectrum: &mut FrequencySpectrum,
+
+    // TODO: (@jbrs) Change this parameter to plain f32
     scaler: Option<f32>,
     working_buffer: &mut [(Frequency, FrequencyValue)],
 ) -> Result<(), SpectrumAnalyzerError> {
