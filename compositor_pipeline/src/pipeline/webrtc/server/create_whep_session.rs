@@ -1,7 +1,11 @@
 use crate::pipeline::webrtc::{
     error::WhipWhepServerError,
     handle_keyframe_requests::handle_keyframe_requests,
-    whep_output::{peer_connection::PeerConnection, stream_media_to_peer::stream_media_to_peer},
+    whep_output::{
+        init_payloaders::{init_audio_payloader, init_video_payloader},
+        peer_connection::PeerConnection,
+        stream_media_to_peer::{stream_media_to_peer, MediaStream},
+    },
     WhipWhepServerState,
 };
 use axum::{
@@ -53,17 +57,33 @@ pub async fn handle_create_whep_session(
     let peer_connection =
         PeerConnection::new(&ctx.clone(), video_encoder.clone(), audio_encoder.clone()).await?;
 
-    let (video_track, video_sender) = match video_encoder {
-        Some(encoder) => {
-            let (track, sender) = peer_connection.new_video_track(encoder).await?;
-            (Some(track), Some(sender))
+    let (video_media_stream, video_sender) = match (&video_encoder, video_receiver) {
+        (Some(encoder), Some(receiver)) => {
+            let (track, sender, ssrc) = peer_connection.new_video_track(encoder).await?;
+            let payloader = init_video_payloader(encoder, ssrc);
+            (
+                Some(MediaStream {
+                    receiver,
+                    track,
+                    payloader,
+                }),
+                Some(sender),
+            )
         }
-        None => (None, None),
+        _ => (None, None),
     };
 
-    let audio_track = match audio_encoder {
-        Some(encoder) => Some(peer_connection.new_audio_track(encoder).await?),
-        None => None,
+    let audio_media_stream = match (&audio_encoder, audio_receiver) {
+        (Some(encoder), Some(receiver)) => {
+            let (track, ssrc) = peer_connection.new_audio_track(encoder).await?;
+            let payloader = init_audio_payloader(ssrc);
+            Some(MediaStream {
+                receiver,
+                track,
+                payloader,
+            })
+        }
+        _ => None,
     };
 
     let sdp_answer = peer_connection.negotiate_connection(offer).await?;
@@ -74,10 +94,8 @@ pub async fn handle_create_whep_session(
     tokio::spawn(stream_media_to_peer(
         ctx.clone(),
         output_id,
-        video_receiver,
-        audio_receiver,
-        video_track,
-        audio_track,
+        video_media_stream,
+        audio_media_stream,
     ));
 
     if let (Some(sender), Some(keyframe_request_sender)) = (video_sender, keyframe_request_sender) {
