@@ -1,10 +1,7 @@
 use anyhow::{anyhow, Result};
 use spectrum_analyzer::{
-    error::SpectrumAnalyzerError,
-    samples_fft_to_spectrum,
-    scaling::{scale_20_times_log10, scale_to_zero_to_one, SpectrumScalingFunction},
-    windows::hann_window,
-    Frequency, FrequencyLimit, FrequencySpectrum, FrequencyValue,
+    error::SpectrumAnalyzerError, samples_fft_to_spectrum, scaling::SpectrumDataStats,
+    windows::hann_window, FrequencyLimit, FrequencySpectrum,
 };
 
 use crate::audio::{find_samples, split_samples, AudioAnalyzeTolerance, SamplingInterval};
@@ -56,9 +53,6 @@ fn analyze_samples(
     let mut actual_spectrum_left = calc_fft(&actual_samples_left, sample_rate)?;
     let mut actual_spectrum_right = calc_fft(&actual_samples_right, sample_rate)?;
 
-    let mut working_buffer: Vec<(Frequency, FrequencyValue)> =
-        vec![(0.0.into(), 0.0.into()); expected_spectrum_left.data().len()];
-
     // scale_fft_spectrum(&mut actual_spectrum_left, None, &mut working_buffer)?;
     // scale_fft_spectrum(&mut actual_spectrum_right, None, &mut working_buffer)?;
     // scale_fft_spectrum(
@@ -86,20 +80,20 @@ fn analyze_samples(
 }
 
 fn calc_fft(samples: &[f32], sample_rate: u32) -> Result<FrequencySpectrum, SpectrumAnalyzerError> {
-    let samples = hann_window(samples);
-    samples_fft_to_spectrum(&samples, sample_rate, FrequencyLimit::All, None)
-}
+    let fft_scaler: Box<dyn Fn(f32, &SpectrumDataStats) -> f32> = Box::new(|fr_val, stats| {
+        let max_val = stats.max;
+        if max_val == 0.0 {
+            0.0
+        } else {
+            100.0 * fr_val / max_val
+        }
+    });
 
-fn scale_fft_spectrum(
-    spectrum: &mut FrequencySpectrum,
-    scaler: Option<f32>,
-    working_buffer: &mut [(Frequency, FrequencyValue)],
-) -> Result<(), SpectrumAnalyzerError> {
-    let scaling_fn: Box<SpectrumScalingFunction> = match scaler {
-        Some(scaler) if scaler > 0.0 => Box::new(move |val, _info| val / scaler),
-        _ => Box::new(scale_to_zero_to_one),
-    };
-    spectrum.apply_scaling_fn(&scaling_fn, working_buffer)?;
-    spectrum.apply_scaling_fn(&scale_20_times_log10, working_buffer)?;
-    Ok(())
+    let samples = hann_window(samples);
+    samples_fft_to_spectrum(
+        &samples,
+        sample_rate,
+        FrequencyLimit::Range(100.0, 1000.0),
+        Some(&fft_scaler),
+    )
 }
