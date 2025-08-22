@@ -45,19 +45,55 @@ impl WhepOutputsState {
     pub fn add_session(
         &self,
         output_id: &OutputId,
-        peer_connection: Arc<PeerConnection>,
+        peer_connection: PeerConnection,
     ) -> Result<Arc<str>, WhipWhepServerError> {
         let mut guard = self.0.lock().unwrap();
         match guard.get_mut(output_id) {
             Some(output) => {
                 let session_id: Arc<str> = Arc::from(Uuid::new_v4().to_string());
-                output.sessions.insert(session_id.clone(), peer_connection);
+                output
+                    .sessions
+                    .insert(session_id.clone(), Arc::from(peer_connection));
                 Ok(session_id)
             }
             None => Err(WhipWhepServerError::NotFound(format!(
                 "{output_id:?} not found"
             ))),
         }
+    }
+
+    pub async fn remove_session(
+        &self,
+        output_id: &OutputId,
+        session_id: &Arc<str>,
+    ) -> Result<(), WhipWhepServerError> {
+        let peer_connection = {
+            let mut guard = self.0.lock().unwrap();
+            match guard.get_mut(output_id) {
+                Some(output) => {
+                    if let Some(pc) = output.sessions.remove(session_id) {
+                        pc
+                    } else {
+                        return Err(WhipWhepServerError::NotFound(format!(
+                            "Session {session_id:?} not found for {output_id:?}"
+                        )));
+                    }
+                }
+                None => {
+                    return Err(WhipWhepServerError::NotFound(format!(
+                        "{output_id:?} not found"
+                    )));
+                }
+            }
+        };
+
+        if let Err(e) = peer_connection.close().await {
+            return Err(WhipWhepServerError::InternalError(format!(
+                "Failed to close session {session_id:?}: {e}"
+            )));
+        }
+
+        Ok(())
     }
 
     pub fn get_session(

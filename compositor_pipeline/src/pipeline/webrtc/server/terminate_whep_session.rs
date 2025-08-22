@@ -17,9 +17,10 @@ pub async fn handle_terminate_whep_session(
 
     state.outputs.validate_token(&output_id, &headers).await?;
 
-    let peer_connection = state.outputs.get_session(&output_id, &session_id)?;
-
-    peer_connection.close().await?;
+    state
+        .outputs
+        .remove_session(&output_id, &session_id)
+        .await?;
 
     info!(?session_id, ?output_id, "WHEP session terminated");
     Ok(StatusCode::OK)
