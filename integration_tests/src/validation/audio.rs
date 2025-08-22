@@ -146,7 +146,7 @@ pub struct ArtificialFrequencyTolerance {
 impl Default for ArtificialFrequencyTolerance {
     fn default() -> Self {
         Self {
-            frequency_level: 0.3,
+            frequency_level: 0.1,
         }
     }
 }
