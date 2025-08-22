@@ -19,6 +19,10 @@ export type RegisterOutput =
   | ({ type: 'whep' } & RegisterWhepOutput)
   | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput);
 
+export type RegisterWhepOutputResponse = {
+  endpointRoute: string;
+};
+
 export type RegisterInput =
   | ({ type: 'rtp_stream' } & RegisterRtpInput)
   | ({ type: 'mp4' } & RegisterMp4Input)
