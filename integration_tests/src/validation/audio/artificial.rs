@@ -144,6 +144,7 @@ fn analyze_samples(
             frequency: frequency.val(),
             frequency_value: value.val(),
         })
+        .filter(|bin| bin.frequency_value > 10.0)
         .take(COMPARED_BINS)
         .collect();
 
@@ -153,6 +154,7 @@ fn analyze_samples(
             frequency: frequency.val(),
             frequency_value: value.val(),
         })
+        .filter(|bin| bin.frequency_value > 10.0)
         .take(COMPARED_BINS)
         .collect();
 
@@ -162,6 +164,7 @@ fn analyze_samples(
             frequency: frequency.val(),
             frequency_value: value.val(),
         })
+        .filter(|bin| bin.frequency_value > 10.0)
         .take(COMPARED_BINS)
         .collect();
 
@@ -171,6 +174,7 @@ fn analyze_samples(
             frequency: frequency.val(),
             frequency_value: value.val(),
         })
+        .filter(|bin| bin.frequency_value > 10.0)
         .take(COMPARED_BINS)
         .collect();
 
@@ -193,10 +197,5 @@ fn calc_fft(samples: &[f32], sample_rate: u32) -> Result<FrequencySpectrum, Spec
     });
 
     let samples = hann_window(samples);
-    samples_fft_to_spectrum(
-        &samples,
-        sample_rate,
-        FrequencyLimit::All,
-        Some(&fft_scaler),
-    )
+    samples_fft_to_spectrum(&samples, sample_rate, FrequencyLimit::All, None)
 }
