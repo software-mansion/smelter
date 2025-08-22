@@ -45,15 +45,16 @@ pub(crate) struct PeerConnection {
 impl PeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
-        outputs: WhepOutputsState,
-        output_id: &OutputId,
-        session_id: &Arc<str>,
-        video_encoder: Option<VideoEncoderOptions>,
-        audio_encoder: Option<AudioEncoderOptions>,
+        video_encoder: &Option<VideoEncoderOptions>,
+        audio_encoder: &Option<AudioEncoderOptions>,
     ) -> Result<Self, WhipWhepServerError> {
         let mut media_engine = MediaEngine::default();
 
-        register_codecs(&mut media_engine, video_encoder, audio_encoder)?;
+        register_codecs(
+            &mut media_engine,
+            video_encoder.clone(),
+            audio_encoder.clone(),
+        )?;
 
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
@@ -71,34 +72,6 @@ impl PeerConnection {
         };
 
         let peer_connection = Arc::new(api.new_peer_connection(config).await?);
-
-        // TODO refactor
-        peer_connection.on_peer_connection_state_change(Box::new({
-            let pc_clone = peer_connection.clone();
-            let outputs = outputs.clone();
-            let output_id = output_id.clone();
-            let session_id = session_id.clone();
-            move |state: RTCPeerConnectionState| {
-                let pc_inner = pc_clone.clone();
-                let outputs_clone = outputs.clone();
-                let output_id_clone = output_id.clone();
-                let session_id_clone = session_id.clone();
-                Box::pin(async move {
-                    if state == RTCPeerConnectionState::Failed {
-                        sleep(Duration::from_secs(150)).await; // 2min 30s
-
-                        let current_state = pc_inner.connection_state();
-                        if current_state != RTCPeerConnectionState::Connected
-                            && current_state != RTCPeerConnectionState::Closed
-                        {
-                            let _ = outputs_clone
-                                .remove_session(&output_id_clone, &session_id_clone)
-                                .await;
-                        }
-                    }
-                })
-            }
-        }));
 
         Ok(Self {
             pc: peer_connection,
@@ -258,6 +231,39 @@ impl PeerConnection {
 
     pub async fn close(&self) -> Result<(), WhipWhepServerError> {
         Ok(self.pc.close().await?)
+    }
+
+    pub fn attach_cleanup_when_pc_failed(
+        &self,
+        outputs: WhepOutputsState,
+        output_id: &OutputId,
+        session_id: &Arc<str>,
+    ) {
+        self.pc.on_peer_connection_state_change(Box::new({
+            let pc_clone = self.pc.clone();
+            let output_id = output_id.clone();
+            let session_id = session_id.clone();
+            move |state: RTCPeerConnectionState| {
+                let pc_inner = pc_clone.clone();
+                let outputs_clone = outputs.clone();
+                let output_id_clone = output_id.clone();
+                let session_id_clone = session_id.clone();
+                Box::pin(async move {
+                    if state == RTCPeerConnectionState::Failed {
+                        sleep(Duration::from_secs(150)).await; // 2min 30s
+
+                        let current_state = pc_inner.connection_state();
+                        if current_state != RTCPeerConnectionState::Connected
+                            && current_state != RTCPeerConnectionState::Closed
+                        {
+                            let _ = outputs_clone
+                                .remove_session(&output_id_clone, &session_id_clone)
+                                .await;
+                        }
+                    }
+                })
+            }
+        }));
     }
 }
 
