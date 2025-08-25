@@ -171,7 +171,7 @@ impl Default for AudioValidationConfig {
             // It HAS TO be a power of 2 for FFT to work.
             // As 'channels' option is always set to stereo this will result in 16384 samples
             // per channel which is approx. 0.34s for the default sample rate.
-            // This number MUST NOT exceed 16384 per channel.
+            // This number MUST NOT exceed 32768 per channel.
             samples_per_batch: 32768,
             tolerance: AudioAnalyzeTolerance::default(),
         }

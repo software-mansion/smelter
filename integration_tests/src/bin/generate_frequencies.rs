@@ -43,8 +43,8 @@ fn main() {
 
             let file_name = format!("{name}_{file_suffix}.mp4");
 
-            // If value is multiplied by 3 then max samples are around 8500 so mixing 3 of them
-            // SHOULD NOT cause any clipping
+            // BUG: If volume is multiplied by 3 then max sample value is around 8500 so mixing 3 of them
+            // SHOULD NOT cause any clipping, yet it does
             let cmd = format!("ffmpeg -y -f lavfi -i \"sine=frequency={freq}:sample_rate=48000:duration=20\" -af \"volume=3\" -c:a {encoder_name} -b:a 192k -ac 2 -ar 48000 -vn {file_name}");
 
             Command::new("bash")
