@@ -209,7 +209,7 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
 
     for encoder_options in &video_encoder_preferences.unwrap_or_default() {
         match encoder_options {
-            VideoEncoderOptions::FfmpegH264(_) => {
+            VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
                 let h264_codec_parameters = vec![
                     RTCRtpCodecParameters {
                         capability: RTCRtpCodecCapability {

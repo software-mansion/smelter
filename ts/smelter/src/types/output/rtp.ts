@@ -1,5 +1,5 @@
 import type * as Api from '../../api.js';
-import type { OutputEndCondition } from './common.js';
+import type { OutputEndCondition, VulkanH264EncoderRateControl } from './common.js';
 
 export type RtpVideoOptions = {
   /**
@@ -30,14 +30,14 @@ export type RtpVideoEncoderOptions =
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
-      ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
+      ffmpegOptions?: Extract<Api.VideoEncoderOptions, { type: 'ffmpeg_h264' }>['ffmpeg_options'];
     }
   | {
       type: 'ffmpeg_vp8';
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
-      ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
+      ffmpegOptions?: Extract<Api.VideoEncoderOptions, { type: 'ffmpeg_vp8' }>['ffmpeg_options'];
     }
   | {
       type: 'ffmpeg_vp9';
@@ -48,7 +48,18 @@ export type RtpVideoEncoderOptions =
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
-      ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
+      ffmpegOptions?: Extract<Api.VideoEncoderOptions, { type: 'ffmpeg_vp9' }>['ffmpeg_options'];
+    }
+  | {
+      type: 'vulkan_h264';
+      /**
+       * (**default=`"high"`**) Encoding quality.
+       */
+      qualityLevel?: Api.VulkanH264EncoderQualityLevel;
+      /**
+       * (**default=`"encoder_default"`**) The rate control algorithm to be used by the encoder.
+       */
+      rateControl?: VulkanH264EncoderRateControl;
     };
 
 export type RtpAudioOptions = {

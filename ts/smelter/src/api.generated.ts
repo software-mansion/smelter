@@ -81,7 +81,7 @@ export type RegisterInput =
        */
       bearer_token?: string | null;
       /**
-       * Internal use only. Overrides whip session id which is used when referencing the input via whip server. If not provided, it defaults to input id.
+       * Internal use only. Overrides whip endpoint id which is used when referencing the input via whip server. If not provided, it defaults to input id.
        */
       endpoint_override?: string | null;
       /**
@@ -321,6 +321,17 @@ export type VideoEncoderOptions =
       ffmpeg_options?: {
         [k: string]: string;
       } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * (**default=`"high"`**) Encoding quality
+       */
+      quality_level?: VulkanH264EncoderQualityLevel | null;
+      /**
+       * (**default=`"encoder_default"`**) The rate control algorithm to be used by the encoder.
+       */
+      rate_control?: VulkanH264EncoderRateControl | null;
     };
 export type H264EncoderPreset =
   | "ultrafast"
@@ -334,6 +345,19 @@ export type H264EncoderPreset =
   | "veryslow"
   | "placebo";
 export type PixelFormat = "yuv420p" | "yuv422p" | "yuv444p";
+export type VulkanH264EncoderQualityLevel = "low" | "high";
+export type VulkanH264EncoderRateControl =
+  | {
+      type: "encoder_default";
+    }
+  | {
+      type: "vbr";
+      average_bitrate: number;
+      max_bitrate: number;
+    }
+  | {
+      type: "disabled";
+    };
 export type Component =
   | {
       type: "input_stream";
@@ -862,6 +886,17 @@ export type WhipVideoEncoderOptions =
       ffmpeg_options?: {
         [k: string]: string;
       } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * (**default=`"high"`**) Encoding quality.
+       */
+      quality_level?: VulkanH264EncoderQualityLevel | null;
+      /**
+       * (**default=`"encoder_default"`**) The rate control algorithm to be used by the encoder.
+       */
+      rate_control?: VulkanH264EncoderRateControl | null;
     }
   | {
       type: "any";

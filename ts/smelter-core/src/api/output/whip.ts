@@ -1,6 +1,6 @@
 import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputRequest } from '../output';
-import { intoOutputEosCondition } from './common';
+import { intoOutputEosCondition, intoVulkanH264EncoderRateControl } from './common';
 
 export function intoRegisterWhipOutput(
   output: Outputs.RegisterWhipOutput,
@@ -55,6 +55,13 @@ function intoWhipVideoEncoderPreferences(
           preset: encoder.preset,
           pixel_format: encoder.pixelFormat,
           ffmpeg_options: encoder.ffmpegOptions,
+        };
+      case 'vulkan_h264':
+        return {
+          type: 'vulkan_h264',
+          quality_level: encoder.qualityLevel,
+          rate_control:
+            encoder.rateControl && intoVulkanH264EncoderRateControl(encoder.rateControl),
         };
       case 'any':
         return {

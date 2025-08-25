@@ -83,3 +83,32 @@ impl From<PixelFormat> for pipeline::OutputPixelFormat {
         }
     }
 }
+
+impl From<VulkanH264EncoderQualityLevel> for pipeline::VulkanH264EncoderQualityLevel {
+    fn from(value: VulkanH264EncoderQualityLevel) -> Self {
+        match value {
+            VulkanH264EncoderQualityLevel::Low => pipeline::VulkanH264EncoderQualityLevel::Low,
+            VulkanH264EncoderQualityLevel::High => pipeline::VulkanH264EncoderQualityLevel::High,
+        }
+    }
+}
+
+impl From<VulkanH264EncoderRateControl> for pipeline::VulkanH264EncoderRateControl {
+    fn from(value: VulkanH264EncoderRateControl) -> Self {
+        match value {
+            VulkanH264EncoderRateControl::EncoderDefault => {
+                pipeline::VulkanH264EncoderRateControl::EncoderDefault
+            }
+            VulkanH264EncoderRateControl::Vbr {
+                average_bitrate,
+                max_bitrate,
+            } => pipeline::VulkanH264EncoderRateControl::Vbr {
+                average_bitrate,
+                max_bitrate,
+            },
+            VulkanH264EncoderRateControl::Disabled => {
+                pipeline::VulkanH264EncoderRateControl::Disabled
+            }
+        }
+    }
+}

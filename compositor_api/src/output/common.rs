@@ -28,6 +28,30 @@ pub enum PixelFormat {
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum VulkanH264EncoderRateControl {
+    /// Uses the default setting of the encoder implementation. **It's not necessarily a good default**, for most use cases, `vbr` is the correct option.
+    EncoderDefault,
+    /// Variable bitrate rate control. This setting fits most use cases. The encoder will try to
+    /// keep the bitrate around the average, but may increase it temporarily up to the max when
+    /// necessary. Bitrate is measured in bits/second.
+    Vbr {
+        average_bitrate: u64,
+        max_bitrate: u64,
+    },
+    /// Rate control is turned off, frames are compressed with a constant rate. A more complicated
+    /// frame will just be bigger.
+    Disabled,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum VulkanH264EncoderQualityLevel {
+    Low,
+    High,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum VideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
     FfmpegH264 {
@@ -51,6 +75,13 @@ pub enum VideoEncoderOptions {
         pixel_format: Option<PixelFormat>,
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<String, String>>,
+    },
+    #[serde(rename = "vulkan_h264")]
+    VulkanH264 {
+        /// (**default=`"high"`**) Encoding quality
+        quality_level: Option<VulkanH264EncoderQualityLevel>,
+        /// (**default=`"encoder_default"`**) The rate control algorithm to be used by the encoder.
+        rate_control: Option<VulkanH264EncoderRateControl>,
     },
 }
 
@@ -100,3 +131,6 @@ pub enum OpusEncoderPreset {
     /// Only use when lowest-achievable latency is what matters most.
     LowestLatency,
 }
+
+pub const NO_VULKAN_VIDEO: &str =
+    "Requested `vulkan_h264` encoder, but this binary was compiled without the `vk-video` feature.";
