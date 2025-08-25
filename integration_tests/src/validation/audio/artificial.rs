@@ -2,7 +2,7 @@ use std::{cmp::Ordering, iter::zip};
 
 use anyhow::{anyhow, Result};
 use spectrum_analyzer::{
-    error::SpectrumAnalyzerError, samples_fft_to_spectrum, scaling::SpectrumScalingFunction,
+    error::SpectrumAnalyzerError, samples_fft_to_spectrum, scaling::divide_by_N,
     windows::hann_window, Frequency, FrequencyLimit, FrequencySpectrum, FrequencyValue,
 };
 use tracing::error;
@@ -19,6 +19,10 @@ struct SpectrumBin {
 
 /// Number of top detected frequencies to be compared
 const COMPARED_BINS: usize = 10;
+
+// WARN: This is dependent on the amplitude of input fixtups. If amplitudes are changed in
+// `generate_frequencies.rs` bin then this value should be adjusted.
+const NOISE_VALUE: f32 = 100.0;
 
 pub fn validate(
     full_expected_samples: Vec<f32>,
@@ -144,7 +148,7 @@ fn analyze_samples(
             frequency: frequency.val(),
             frequency_value: value.val(),
         })
-        .filter(|bin| bin.frequency_value > 10.0)
+        .filter(|bin| bin.frequency_value > NOISE_VALUE)
         .take(COMPARED_BINS)
         .collect();
 
@@ -154,7 +158,7 @@ fn analyze_samples(
             frequency: frequency.val(),
             frequency_value: value.val(),
         })
-        .filter(|bin| bin.frequency_value > 10.0)
+        .filter(|bin| bin.frequency_value > NOISE_VALUE)
         .take(COMPARED_BINS)
         .collect();
 
@@ -164,7 +168,7 @@ fn analyze_samples(
             frequency: frequency.val(),
             frequency_value: value.val(),
         })
-        .filter(|bin| bin.frequency_value > 10.0)
+        .filter(|bin| bin.frequency_value > NOISE_VALUE)
         .take(COMPARED_BINS)
         .collect();
 
@@ -174,7 +178,7 @@ fn analyze_samples(
             frequency: frequency.val(),
             frequency_value: value.val(),
         })
-        .filter(|bin| bin.frequency_value > 10.0)
+        .filter(|bin| bin.frequency_value > NOISE_VALUE)
         .take(COMPARED_BINS)
         .collect();
 
@@ -187,15 +191,11 @@ fn analyze_samples(
 }
 
 fn calc_fft(samples: &[f32], sample_rate: u32) -> Result<FrequencySpectrum, SpectrumAnalyzerError> {
-    let fft_scaler: Box<SpectrumScalingFunction> = Box::new(|fr_val, stats| {
-        let max_val = stats.max;
-        if max_val == 0.0 {
-            0.0
-        } else {
-            100.0 * fr_val / max_val
-        }
-    });
-
     let samples = hann_window(samples);
-    samples_fft_to_spectrum(&samples, sample_rate, FrequencyLimit::All, None)
+    samples_fft_to_spectrum(
+        &samples,
+        sample_rate,
+        FrequencyLimit::All,
+        Some(&divide_by_N),
+    )
 }
