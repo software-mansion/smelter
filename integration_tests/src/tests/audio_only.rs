@@ -186,6 +186,8 @@ pub fn audio_mixing_no_offset() -> Result<()> {
     audio_2_handle.join().unwrap();
     let new_output_dump = output_receiver.wait_for_output()?;
 
+    // This test is flaky due to no_offset being set so we allow 1 failed batch per channel
+    // (usually fails first batch)
     let audio_validation_config = AudioValidationConfig {
         tolerance: AudioAnalyzeTolerance {
             allowed_failed_batches: 2,
@@ -225,7 +227,6 @@ pub fn single_input_opus() -> Result<()> {
                     "inputs": [
                         {
                             "input_id": "input_1",
-                            "volume": 1.0,
                         },
 
                     ]

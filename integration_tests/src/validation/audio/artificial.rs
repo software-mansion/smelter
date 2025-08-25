@@ -22,6 +22,8 @@ const COMPARED_BINS: usize = 10;
 
 // WARN: This is dependent on the amplitude of input fixtups. If amplitudes are changed in
 // `generate_frequencies.rs` bin then this value should be adjusted.
+
+/// All frequencies with magnitude below this value are considered noise and ignored in test.
 const NOISE_VALUE: f32 = 200.0;
 
 pub fn validate(
@@ -128,59 +130,25 @@ fn analyze_samples(
         .data()
         .to_vec();
 
-    let cmp = |a: &(Frequency, FrequencyValue), b: &(Frequency, FrequencyValue)| -> Ordering {
-        let negative = FrequencyValue::from(-1.0);
+    let frequency_sort_cmp =
+        |a: &(Frequency, FrequencyValue), b: &(Frequency, FrequencyValue)| -> Ordering {
+            let negative = FrequencyValue::from(-1.0);
 
-        let a = a.1 * negative;
-        let b = b.1 * negative;
+            let a = a.1 * negative;
+            let b = b.1 * negative;
 
-        a.cmp(&b)
-    };
+            a.cmp(&b)
+        };
 
-    expected_spectrum_left.sort_by(cmp);
-    expected_spectrum_right.sort_by(cmp);
-    actual_spectrum_left.sort_by(cmp);
-    actual_spectrum_right.sort_by(cmp);
+    expected_spectrum_left.sort_by(frequency_sort_cmp);
+    expected_spectrum_right.sort_by(frequency_sort_cmp);
+    actual_spectrum_left.sort_by(frequency_sort_cmp);
+    actual_spectrum_right.sort_by(frequency_sort_cmp);
 
-    let expected_result_left = expected_spectrum_left
-        .into_iter()
-        .map(|(frequency, value)| SpectrumBin {
-            frequency: frequency.val(),
-            frequency_value: value.val(),
-        })
-        .filter(|bin| bin.frequency_value > NOISE_VALUE)
-        .take(COMPARED_BINS)
-        .collect();
-
-    let expected_result_right = expected_spectrum_right
-        .into_iter()
-        .map(|(frequency, value)| SpectrumBin {
-            frequency: frequency.val(),
-            frequency_value: value.val(),
-        })
-        .filter(|bin| bin.frequency_value > NOISE_VALUE)
-        .take(COMPARED_BINS)
-        .collect();
-
-    let actual_result_left = actual_spectrum_left
-        .into_iter()
-        .map(|(frequency, value)| SpectrumBin {
-            frequency: frequency.val(),
-            frequency_value: value.val(),
-        })
-        .filter(|bin| bin.frequency_value > NOISE_VALUE)
-        .take(COMPARED_BINS)
-        .collect();
-
-    let actual_result_right = actual_spectrum_right
-        .into_iter()
-        .map(|(frequency, value)| SpectrumBin {
-            frequency: frequency.val(),
-            frequency_value: value.val(),
-        })
-        .filter(|bin| bin.frequency_value > NOISE_VALUE)
-        .take(COMPARED_BINS)
-        .collect();
+    let expected_result_left = prepare_spectrum_for_comparison(expected_spectrum_left);
+    let expected_result_right = prepare_spectrum_for_comparison(expected_spectrum_right);
+    let actual_result_left = prepare_spectrum_for_comparison(actual_spectrum_left);
+    let actual_result_right = prepare_spectrum_for_comparison(actual_spectrum_right);
 
     Ok((
         expected_result_left,
@@ -198,4 +166,18 @@ fn calc_fft(samples: &[f32], sample_rate: u32) -> Result<FrequencySpectrum, Spec
         FrequencyLimit::All,
         Some(&divide_by_N),
     )
+}
+
+fn prepare_spectrum_for_comparison(
+    spectrum_data: Vec<(Frequency, FrequencyValue)>,
+) -> Vec<SpectrumBin> {
+    spectrum_data
+        .into_iter()
+        .map(|(frequency, value)| SpectrumBin {
+            frequency: frequency.val(),
+            frequency_value: value.val(),
+        })
+        .filter(|bin| bin.frequency_value > NOISE_VALUE)
+        .take(COMPARED_BINS)
+        .collect()
 }

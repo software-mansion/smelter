@@ -267,7 +267,6 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
                     "inputs": [
                         {
                             "input_id": "input_1",
-                            "volume": 1.0,
                         },
                     ]
                 },
@@ -317,6 +316,8 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
     input_handle.join().unwrap();
     let new_output_dump = output_receiver.wait_for_output()?;
 
+    // Because no offset is set and http request take nondeterministic time starting frames may
+    // fail as they arrive at slightly different timestamps for each test.
     let audio_validation_config = AudioValidationConfig {
         tolerance: AudioAnalyzeTolerance {
             allowed_failed_batches: 2,
