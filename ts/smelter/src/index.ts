@@ -22,14 +22,14 @@ export {
   RegisterRtpInput,
   RegisterMp4Input,
   RegisterHlsInput,
-  RegisterWhipInput,
+  RegisterWhipServerInput,
 } from './types/input.js';
 export {
   RegisterRtpOutput,
   RegisterMp4Output,
   RegisterHlsOutput,
-  RegisterWhipOutput,
-  RegisterWhepOutput,
+  RegisterWhipClientOutput,
+  RegisterWhepServerOutput,
   RegisterRtmpClientOutput,
 } from './types/output.js';
 

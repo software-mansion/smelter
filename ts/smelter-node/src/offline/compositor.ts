@@ -9,7 +9,7 @@ import type {
   RegisterInput,
   RegisterMp4InputResponse,
   RegisterOutput,
-  RegisterWhipInputResponse,
+  RegisterWhipServerInputResponse,
 } from '../api';
 import { createLogger } from '../logger';
 import LocallySpawnedInstanceManager from '../manager/locallySpawnedInstance';
@@ -40,8 +40,8 @@ export default class OfflineSmelter {
 
   public async registerInput(
     inputId: string,
-    request: Extract<RegisterInput, { type: 'whip' }>
-  ): Promise<RegisterWhipInputResponse>;
+    request: Extract<RegisterInput, { type: 'whip_server' }>
+  ): Promise<RegisterWhipServerInputResponse>;
 
   public async registerInput(
     inputId: string,
@@ -58,7 +58,7 @@ export default class OfflineSmelter {
           videoDurationMs: result.video_duration_ms,
           audioDurationMs: result.audio_duration_ms,
         };
-      } else if (request.type === 'whip') {
+      } else if (request.type === 'whip_server') {
         return {
           bearerToken: result.bearer_token,
           endpointRoute: result.endpoint_route,

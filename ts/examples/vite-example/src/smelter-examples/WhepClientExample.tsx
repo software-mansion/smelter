@@ -30,7 +30,7 @@ function WhepClientExample() {
     void (async () => {
       if (endpointUrl) {
         try {
-          await smelter.registerInput('input', { type: 'whep', bearerToken, endpointUrl });
+          await smelter.registerInput('input', { type: 'whep_client', bearerToken, endpointUrl });
         } catch (e) {
           alert(
             'Failed to register WHEP input. Ensure your bearerToken and endpointUrl are correct.'

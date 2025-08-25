@@ -5,11 +5,11 @@ use tracing::warn;
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
 
-impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
+impl TryFrom<WhipServer> for pipeline::RegisterInputOptions {
     type Error = TypeError;
 
-    fn try_from(value: WhipInput) -> Result<Self, Self::Error> {
-        let WhipInput {
+    fn try_from(value: WhipServer) -> Result<Self, Self::Error> {
+        let WhipServer {
             video,
             audio: _,
             required,
@@ -27,27 +27,27 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
         let whip_options = match video {
             Some(options) => {
                 let video_preferences = match options.decoder_preferences.as_deref() {
-                    Some([]) | None => vec![WhipVideoDecoder::Any],
+                    Some([]) | None => vec![WhipServerVideoDecoder::Any],
                     Some(v) => v.to_vec(),
                 };
                 let video_preferences: Vec<pipeline::VideoDecoderOptions> = video_preferences
                     .into_iter()
                     .flat_map(|codec| match codec {
-                        WhipVideoDecoder::FfmpegH264 => {
+                        WhipServerVideoDecoder::FfmpegH264 => {
                             vec![pipeline::VideoDecoderOptions::FfmpegH264]
                         }
                         #[cfg(feature = "vk-video")]
-                        WhipVideoDecoder::VulkanH264 => {
+                        WhipServerVideoDecoder::VulkanH264 => {
                             vec![pipeline::VideoDecoderOptions::VulkanH264]
                         }
-                        WhipVideoDecoder::FfmpegVp8 => {
+                        WhipServerVideoDecoder::FfmpegVp8 => {
                             vec![pipeline::VideoDecoderOptions::FfmpegVp8]
                         }
-                        WhipVideoDecoder::FfmpegVp9 => {
+                        WhipServerVideoDecoder::FfmpegVp9 => {
                             vec![pipeline::VideoDecoderOptions::FfmpegVp9]
                         }
                         #[cfg(not(feature = "vk-video"))]
-                        WhipVideoDecoder::Any => {
+                        WhipServerVideoDecoder::Any => {
                             vec![
                                 pipeline::VideoDecoderOptions::FfmpegVp9,
                                 pipeline::VideoDecoderOptions::FfmpegVp8,
@@ -55,7 +55,7 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                             ]
                         }
                         #[cfg(feature = "vk-video")]
-                        WhipVideoDecoder::Any => {
+                        WhipServerVideoDecoder::Any => {
                             vec![
                                 pipeline::VideoDecoderOptions::FfmpegVp9,
                                 pipeline::VideoDecoderOptions::FfmpegVp8,
@@ -63,7 +63,7 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
                             ]
                         }
                         #[cfg(not(feature = "vk-video"))]
-                        WhipVideoDecoder::VulkanH264 => vec![],
+                        WhipServerVideoDecoder::VulkanH264 => vec![],
                     })
                     .unique()
                     .collect();

@@ -25,7 +25,27 @@ export type RegisterOutput =
       audio?: boolean;
     }
   | {
+      /**
+       * @deprecated Use `whip_client` instead.
+       */
       type: 'whip';
+      /**
+       * WHIP server endpoint.
+       */
+      endpointUrl: string;
+      /**
+       * Token for authenticating communication with the WHIP server.
+       */
+      bearerToken?: string;
+      iceServers?: RTCConfiguration['iceServers'];
+      video: {
+        resolution: Api.Resolution;
+        maxBitrate?: number;
+      };
+      audio?: boolean;
+    }
+  | {
+      type: 'whip_client';
       /**
        * WHIP server endpoint.
        */
@@ -51,6 +71,9 @@ export function intoRegisterOutputRequest(request: RegisterOutput): Output.Regis
       type: 'web-wasm-canvas',
     };
   } else if (request.type === 'whip') {
+    console.warn('The "whip" output type is deprecated. Please use "whip_client" instead.');
+    return { ...request, type: 'web-wasm-whip' };
+  } else if (request.type === 'whip_client') {
     return { ...request, type: 'web-wasm-whip' };
   }
   throw new Error('Unknown output type');
@@ -61,4 +84,4 @@ export type RegisterInput =
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: MediaStream }
-  | { type: 'whep'; endpointUrl: string; bearerToken?: string };
+  | { type: 'whep_client'; endpointUrl: string; bearerToken?: string };
