@@ -83,7 +83,7 @@ impl BenchmarkSuiteContext {
 
             input_file: InputFile::Mp4(PathBuf::new()), // always override
 
-            encoder: EncoderOptions::Enabled(FfmpegH264EncoderPreset::Ultrafast),
+            encoder: EncoderOptions::Ffmpeg(FfmpegH264EncoderPreset::Ultrafast),
             decoder: VideoDecoderOptions::FfmpegH264,
 
             warm_up_time: Duration::from_secs(2),
@@ -294,7 +294,7 @@ fn benchmark_set_constant_input_output_ratio(
                 input_count: value * scene.2,
                 output_count: value,
                 scene_builder: scene.1,
-                encoder: EncoderOptions::Enabled(encoder),
+                encoder: EncoderOptions::Ffmpeg(encoder),
                 decoder,
                 input_file: input.1.clone(),
                 ..ctx.default()
@@ -320,7 +320,7 @@ fn benchmark_set_ffmpeg_h264_encoder_preset(ctx: &'static BenchmarkSuiteContext)
             input_count: 1,
             output_count: value,
             scene_builder: simple_tiles_with_all_inputs,
-            encoder: EncoderOptions::Enabled(encoder_preset),
+            encoder: EncoderOptions::Ffmpeg(encoder_preset),
             input_file: ctx.bbb_raw_720p_input.clone(), // no decoder
             ..ctx.default()
         })),
@@ -344,7 +344,7 @@ fn benchmark_set_output_resolutions(ctx: &'static BenchmarkSuiteContext) -> Vec<
             output_count: value,
             output_resolution: resolution_preset.into(),
             scene_builder: simple_tiles_with_all_inputs,
-            encoder: EncoderOptions::Enabled(FfmpegH264EncoderPreset::Veryfast),
+            encoder: EncoderOptions::Ffmpeg(FfmpegH264EncoderPreset::Veryfast),
             input_file: ctx.bbb_raw_720p_input.clone(), // no decoder
             ..ctx.default()
         })),
@@ -391,6 +391,54 @@ fn benchmark_set_renderer_only(ctx: &'static BenchmarkSuiteContext) -> Vec<Bench
 }
 
 fn benchmark_set_decoder_only(ctx: &'static BenchmarkSuiteContext) -> Vec<Benchmark> {
+    let decoder_only_inputs = [
+        (
+            "bbb_mp4_480p24fps",
+            InputFile::Mp4(ctx.bbb_mp4_480p24fps.clone()),
+        ),
+        (
+            "bbb_mp4_720p24fps",
+            InputFile::Mp4(ctx.bbb_mp4_720p24fps.clone()),
+        ),
+        (
+            "bbb_mp4_1080p30fps",
+            InputFile::Mp4(ctx.bbb_mp4_1080p30fps.clone()),
+        ),
+        (
+            "bbb_mp4_1080p60fps",
+            InputFile::Mp4(ctx.bbb_mp4_1080p60fps.clone()),
+        ),
+        (
+            "bbb_mp4_2160p30fps",
+            InputFile::Mp4(ctx.bbb_mp4_2160p30fps.clone()),
+        ),
+    ];
+
+    supported_decoders(ctx)
+        .iter()
+        .flat_map(|decoder| {
+            decoder_only_inputs
+                .iter()
+                .map(|input| (input.clone(), *decoder))
+                .collect::<Vec<_>>()
+        })
+        .map(|(input, decoder)| Benchmark {
+            id: format!("decoding only - decoder: {:?}, input: {}", decoder, input.0).leak(),
+            bench_pass_builder: Arc::new(Box::new(move |value: u64| SingleBenchmarkPass {
+                input_count: value,
+                output_count: 1,
+                output_resolution: ResolutionPreset::Res144p.into(),
+                encoder: EncoderOptions::Disabled,
+                decoder,
+                input_file: input.1.clone(),
+                scene_builder: blank,
+                ..ctx.default()
+            })),
+        })
+        .collect()
+}
+
+fn benchmark_set_encoder_only(ctx: &'static BenchmarkSuiteContext) -> Vec<Benchmark> {
     let decoder_only_inputs = [
         (
             "bbb_mp4_480p24fps",
