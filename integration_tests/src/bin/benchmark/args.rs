@@ -64,6 +64,15 @@ impl From<VideoDecoder> for VideoDecoderOptions {
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 #[clap(rename_all = "snake_case")]
+pub enum VideoEncoder {
+    FfmpegH264,
+    #[cfg(not(target_os = "macos"))]
+    VulkanH264,
+    Disabled,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+#[clap(rename_all = "snake_case")]
 pub enum EncoderPreset {
     Ultrafast,
     Superfast,
@@ -265,8 +274,8 @@ pub struct Args {
     pub output_resolution: ResolutionArgument,
 
     /// disable encoder
-    #[arg(long, default_value("false"))]
-    pub disable_encoder: bool,
+    #[arg(long, default_value("ffmpeg_h264"))]
+    pub video_encoder: VideoEncoder,
 
     /// FFmpeg_H264 encoder preset
     #[arg(long, default_value("ultrafast"))]

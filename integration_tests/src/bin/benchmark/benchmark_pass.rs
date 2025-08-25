@@ -144,8 +144,12 @@ impl SingleBenchmarkPass {
                     EncoderOptions::Disabled => {
                         self.register_pipeline_raw_output(&pipeline, output_id, root)?
                     }
-                    EncoderOptions::Enabled(preset) => {
-                        self.register_pipeline_encoded_output(&pipeline, output_id, root, preset)?
+                    EncoderOptions::Ffmpeg(preset) => self
+                        .register_pipeline_encoded_output_ffmpeg(
+                            &pipeline, output_id, root, preset,
+                        )?,
+                    EncoderOptions::Vulkan => {
+                        self.register_pipeline_encoded_output_vulkan(&pipeline, output_id, root)?
                     }
                 };
 
@@ -169,7 +173,7 @@ impl SingleBenchmarkPass {
         Ok(result)
     }
 
-    fn register_pipeline_encoded_output(
+    fn register_pipeline_encoded_output_ffmpeg(
         &self,
         pipeline: &Arc<Mutex<Pipeline>>,
         output_id: &OutputId,
@@ -195,6 +199,39 @@ impl SingleBenchmarkPass {
                         },
                         pixel_format: OutputPixelFormat::YUV420P,
                         raw_options: vec![("threads".to_string(), "0".to_string())],
+                    })),
+                },
+            },
+        )?;
+        Ok(Box::new(result))
+    }
+
+    fn register_pipeline_encoded_output_vulkan(
+        &self,
+        pipeline: &Arc<Mutex<Pipeline>>,
+        output_id: &OutputId,
+        root: Component,
+    ) -> Result<Box<dyn DurationReceiver + Send>, RegisterOutputError> {
+        let result = Pipeline::register_encoded_data_output(
+            pipeline,
+            output_id.clone(),
+            RegisterEncodedDataOutputOptions {
+                video: Some(RegisterOutputVideoOptions {
+                    initial: root,
+                    end_condition: PipelineOutputEndCondition::Never,
+                }),
+                audio: None,
+                output_options: EncodedDataOutputOptions {
+                    audio: None,
+                    video: Some(VideoEncoderOptions::VulkanH264(VulkanH264EncoderOptions {
+                        resolution: compositor_render::Resolution {
+                            width: self.output_resolution.width,
+                            height: self.output_resolution.height,
+                        },
+                        // TODO: Make it configurable?
+                        rate_control: VulkanH264EncoderRateControl::EncoderDefault,
+                        // TODO: Make it configurable?
+                        quality_level: VulkanH264EncoderQualityLevel::High,
                     })),
                 },
             },
