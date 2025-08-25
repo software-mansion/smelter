@@ -225,7 +225,6 @@ pub fn single_input_opus() -> Result<()> {
                     "inputs": [
                         {
                             "input_id": "input_1",
-                            "volume": 1.0,
                         },
 
                     ]
