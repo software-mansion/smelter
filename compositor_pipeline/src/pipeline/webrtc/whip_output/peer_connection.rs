@@ -36,7 +36,7 @@ pub(super) struct PeerConnection {
 impl PeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
-        options: &WhipSenderOptions,
+        options: &WhipClientOutputOptions,
     ) -> Result<Self, WhipOutputError> {
         let mut media_engine = media_engine_with_codecs(options)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
@@ -149,7 +149,9 @@ impl PeerConnection {
     }
 }
 
-fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Result<MediaEngine> {
+fn media_engine_with_codecs(
+    options: &WhipClientOutputOptions,
+) -> webrtc::error::Result<MediaEngine> {
     let mut media_engine = MediaEngine::default();
 
     let video_encoder_preferences = options

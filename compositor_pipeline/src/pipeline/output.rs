@@ -13,7 +13,7 @@ use crate::pipeline::{
     mp4::Mp4Output,
     rtmp::RtmpClientOutput,
     rtp::RtpOutput,
-    webrtc::{WhepOutput, WhipOutput},
+    webrtc::{WhepServerOutput, WhipClientOutput},
 };
 use crate::prelude::*;
 
@@ -65,11 +65,11 @@ pub(super) fn new_external_output(
             Ok((Box::new(output), None))
         }
         ProtocolOutputOptions::Whip(opt) => {
-            let output = WhipOutput::new(ctx, output_id, opt)?;
+            let output = WhipClientOutput::new(ctx, output_id, opt)?;
             Ok((Box::new(output), None))
         }
         ProtocolOutputOptions::Whep(opt) => {
-            let output = WhepOutput::new(ctx, output_id, opt)?;
+            let output = WhepServerOutput::new(ctx, output_id, opt)?;
             Ok((Box::new(output), None))
         }
     }

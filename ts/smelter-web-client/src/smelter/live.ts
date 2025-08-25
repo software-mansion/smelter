@@ -6,8 +6,8 @@ import type {
   RegisterInput,
   RegisterMp4InputResponse,
   RegisterOutput,
-  RegisterWhepOutputResponse,
-  RegisterWhipInputResponse,
+  RegisterWhepServerOutputResponse,
+  RegisterWhipServerInputResponse,
 } from '../api';
 import type { InstanceOptions } from '../manager';
 import RemoteInstanceManager from '../manager';

@@ -7,25 +7,25 @@ use crate::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct WhepOutput {
+pub struct WhepServer {
     /// Token used for authentication in WHEP protocol.
     /// If not provided, the bearer token is not required to establish the session.
     pub bearer_token: Option<Arc<str>>,
     /// Video track configuration.
     pub video: Option<OutputVideoOptions>,
     /// Audio track configuration.
-    pub audio: Option<OutputWhepAudioOptions>,
+    pub audio: Option<OutputWhepServerAudioOptions>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct OutputWhepAudioOptions {
+pub struct OutputWhepServerAudioOptions {
     /// (**default="sum_clip"**) Specifies how audio should be mixed.
     pub mixing_strategy: Option<AudioMixingStrategy>,
     /// Condition for termination of output stream based on the input streams states.
     pub send_eos_when: Option<OutputEndCondition>,
     /// Audio encoder options.
-    pub encoder: WhepAudioEncoderOptions,
+    pub encoder: WhepServerAudioEncoderOptions,
     /// Specifies channels configuration.
     pub channels: Option<AudioChannels>,
     /// Initial audio mixer configuration for output.
@@ -34,7 +34,7 @@ pub struct OutputWhepAudioOptions {
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
-pub enum WhepAudioEncoderOptions {
+pub enum WhepServerAudioEncoderOptions {
     Opus {
         /// (**default="voip"**) Specifies preset for audio output encoder.
         preset: Option<OpusEncoderPreset>,

@@ -7,20 +7,20 @@ use crate::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct WhipOutput {
+pub struct WhipClient {
     /// WHIP server endpoint
     pub endpoint_url: Arc<str>,
     // Bearer token
     pub bearer_token: Option<Arc<str>>,
     /// Video track configuration.
-    pub video: Option<OutputWhipVideoOptions>,
+    pub video: Option<OutputWhipClientVideoOptions>,
     /// Audio track configuration.
-    pub audio: Option<OutputWhipAudioOptions>,
+    pub audio: Option<OutputWhipClientAudioOptions>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct OutputWhipVideoOptions {
+pub struct OutputWhipClientVideoOptions {
     /// Output resolution in pixels.
     pub resolution: Resolution,
     /// Defines when output stream should end if some of the input streams are finished. If output includes both audio and video streams, then EOS needs to be sent on both.
@@ -28,14 +28,14 @@ pub struct OutputWhipVideoOptions {
     /// Video encoder options.
     pub encoder: Option<VideoEncoderOptions>,
     /// Codec preferences list.
-    pub encoder_preferences: Option<Vec<WhipVideoEncoderOptions>>,
+    pub encoder_preferences: Option<Vec<WhipClientVideoEncoderOptions>>,
     /// Root of a component tree/scene that should be rendered for the output.
     pub initial: VideoScene,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
-pub enum WhipVideoEncoderOptions {
+pub enum WhipClientVideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
     FfmpegH264 {
         /// (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
@@ -66,24 +66,24 @@ pub enum WhipVideoEncoderOptions {
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct OutputWhipAudioOptions {
+pub struct OutputWhipClientAudioOptions {
     /// (**default="sum_clip"**) Specifies how audio should be mixed.
     pub mixing_strategy: Option<AudioMixingStrategy>,
     /// Condition for termination of output stream based on the input streams states.
     pub send_eos_when: Option<OutputEndCondition>,
     /// Audio encoder options.
-    pub encoder: Option<WhipAudioEncoderOptions>,
+    pub encoder: Option<WhipClientAudioEncoderOptions>,
     /// Specifies channels configuration.
     pub channels: Option<AudioChannels>,
     /// Codec preferences list.
-    pub encoder_preferences: Option<Vec<WhipAudioEncoderOptions>>,
+    pub encoder_preferences: Option<Vec<WhipClientAudioEncoderOptions>>,
     /// Initial audio mixer configuration for output.
     pub initial: AudioScene,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
-pub enum WhipAudioEncoderOptions {
+pub enum WhipClientAudioEncoderOptions {
     Opus {
         /// Specifies channels configuration.
         channels: Option<AudioChannels>,

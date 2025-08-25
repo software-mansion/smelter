@@ -17,9 +17,9 @@ mod whip_input;
 mod whip_output;
 
 pub(super) use server::WhipWhepServer;
-pub(super) use whep_output::WhepOutput;
+pub(super) use whep_output::WhepServerOutput;
 pub(super) use whip_input::WhipInput;
-pub(super) use whip_output::WhipOutput;
+pub(super) use whip_output::WhipClientOutput;
 
 use crate::pipeline::{webrtc::whep_output::state::WhepOutputsState, PipelineCtx};
 

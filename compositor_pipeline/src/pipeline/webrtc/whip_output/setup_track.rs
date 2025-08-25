@@ -32,7 +32,7 @@ use crate::prelude::*;
 
 use super::{
     track_task_audio::WhipAudioTrackThreadHandle, track_task_video::WhipVideoTrackThreadHandle,
-    WhipOutputError, WhipSenderTrack,
+    WhipClientTrack, WhipOutputError,
 };
 
 pub trait MatchCodecCapability {
@@ -78,7 +78,7 @@ pub async fn setup_video_track(
     output_id: &OutputId,
     rtc_sender: Arc<RTCRtpSender>,
     options: &VideoWhipOptions,
-) -> Result<(WhipVideoTrackThreadHandle, WhipSenderTrack), WhipOutputError> {
+) -> Result<(WhipVideoTrackThreadHandle, WhipClientTrack), WhipOutputError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
@@ -173,7 +173,7 @@ pub async fn setup_video_track(
         handle.keyframe_request_sender.clone(),
     );
 
-    Ok((handle, WhipSenderTrack { receiver, track }))
+    Ok((handle, WhipClientTrack { receiver, track }))
 }
 
 pub async fn setup_audio_track(
@@ -182,7 +182,7 @@ pub async fn setup_audio_track(
     rtc_sender: Arc<RTCRtpSender>,
     pc: PeerConnection,
     options: &AudioWhipOptions,
-) -> Result<(WhipAudioTrackThreadHandle, WhipSenderTrack), WhipOutputError> {
+) -> Result<(WhipAudioTrackThreadHandle, WhipClientTrack), WhipOutputError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
 
@@ -254,7 +254,7 @@ pub async fn setup_audio_track(
         ssrc,
     );
 
-    Ok((handle, WhipSenderTrack { receiver, track }))
+    Ok((handle, WhipClientTrack { receiver, track }))
 }
 
 // Identifiers used in stats HashMap returnet by RTCPeerConnection::get_stats()

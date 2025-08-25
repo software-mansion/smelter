@@ -58,11 +58,12 @@ impl TryFrom<RtmpOutput> for pipeline::RegisterOutputOptions {
             None => (None, None),
         };
 
-        let output_options = pipeline::ProtocolOutputOptions::Rtmp(pipeline::RtmpOutputOptions {
-            url,
-            video: video_encoder_options,
-            audio: audio_encoder_options,
-        });
+        let output_options =
+            pipeline::ProtocolOutputOptions::Rtmp(pipeline::RtmpClientOutputOptions {
+                url,
+                video: video_encoder_options,
+                audio: audio_encoder_options,
+            });
 
         Ok(Self {
             output_options,

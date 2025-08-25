@@ -2,7 +2,7 @@ import { sleep } from '../../utils';
 import type { Input, RegisterInputResult } from '../input';
 import type { InstanceContext } from '../instance';
 
-type WhepInputOptions = {
+type WhepClientInputOptions = {
   ctx: InstanceContext;
   pc: RTCPeerConnection;
 
@@ -22,7 +22,7 @@ export class WhepInput implements Input {
 
   private audioElement?: HTMLAudioElement;
 
-  constructor(inputId: string, options: WhepInputOptions) {
+  constructor(inputId: string, options: WhepClientInputOptions) {
     this.inputId = inputId;
     this.ctx = options.ctx;
     this.pc = options.pc;
@@ -58,7 +58,7 @@ export class WhepInput implements Input {
   }
 }
 
-export async function handleRegisterWhepInput(
+export async function handleRegisterWhepClientInput(
   ctx: InstanceContext,
   inputId: string,
   endpointUrl: string,

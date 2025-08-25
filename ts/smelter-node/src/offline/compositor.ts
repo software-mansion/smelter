@@ -9,7 +9,7 @@ import type {
   RegisterInput,
   RegisterMp4InputResponse,
   RegisterOutput,
-  RegisterWhipInputResponse,
+  RegisterWhipServerInputResponse,
 } from '../api';
 import { createLogger } from '../logger';
 import LocallySpawnedInstanceManager from '../manager/locallySpawnedInstance';
