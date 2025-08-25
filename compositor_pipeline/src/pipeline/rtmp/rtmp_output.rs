@@ -39,7 +39,7 @@ impl RtmpClientOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
-        options: RtmpOutputOptions,
+        options: RtmpClientOutputOptions,
     ) -> Result<Self, OutputInitError> {
         let mut output_ctx = ffmpeg::format::output_as(&options.url.deref(), "flv")
             .map_err(OutputInitError::FfmpegError)?;

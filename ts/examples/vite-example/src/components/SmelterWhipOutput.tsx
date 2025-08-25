@@ -35,7 +35,7 @@ export default function SmelterWhipOutput(props: SmelterWhipProps) {
     const outputId = getNewOutputId();
     const promise = (async () => {
       const { stream } = await smelter.registerOutput(outputId, children, {
-        type: 'whip',
+        type: 'whip_client',
         endpointUrl,
         bearerToken,
         video: {

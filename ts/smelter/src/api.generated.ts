@@ -67,21 +67,48 @@ export type RegisterInput =
       } | null;
     }
   | {
-      type: "whip";
+      type: "whip_server";
       /**
        * Parameters of a video source included in the RTP stream.
        */
-      video?: InputWhipVideoOptions | null;
+      video?: InputWhipServerVideoOptions | null;
       /**
        * Parameters of an audio source included in the RTP stream.
        */
-      audio?: InputWhipAudioOptions | null;
+      audio?: InputWhipServerAudioOptions | null;
       /**
        * Token used for authentication in WHIP protocol. If not provided, the random value will be generated and returned in the response.
        */
       bearer_token?: string | null;
       /**
-       * Internal use only. Overrides whip session id which is used when referencing the input via whip server. If not provided, it defaults to input id.
+       * Internal use only. Overrides whip endpoint id which is used when referencing the input via whip server. If not provided, it defaults to input id.
+       */
+      endpoint_override?: string | null;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
+       */
+      offset_ms?: number | null;
+    }
+  | {
+      type: "whip";
+      /**
+       * Parameters of a video source included in the RTP stream.
+       */
+      video?: InputWhipServerVideoOptions | null;
+      /**
+       * Parameters of an audio source included in the RTP stream.
+       */
+      audio?: InputWhipServerAudioOptions | null;
+      /**
+       * Token used for authentication in WHIP protocol. If not provided, the random value will be generated and returned in the response.
+       */
+      bearer_token?: string | null;
+      /**
+       * Internal use only. Overrides whip endpoint id which is used when referencing the input via whip server. If not provided, it defaults to input id.
        */
       endpoint_override?: string | null;
       /**
@@ -172,8 +199,8 @@ export type InputRtpAudioOptions =
       rtp_mode?: AacRtpMode | null;
     };
 export type AacRtpMode = "low_bitrate" | "high_bitrate";
-export type WhipVideoDecoder = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
-export type InputWhipAudioOptions = {
+export type WhipServerVideoDecoder = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
+export type InputWhipServerAudioOptions = {
   decoder: "opus";
   /**
    * (**default=`false`**) Specifies whether the stream uses forward error correction. It's specific for Opus codec. For more information, check out [RFC](https://datatracker.ietf.org/doc/html/rfc6716#section-2.1.7).
@@ -232,6 +259,22 @@ export type RegisterOutput =
       audio?: OutputMp4AudioOptions | null;
     }
   | {
+      type: "whip_client";
+      /**
+       * WHIP server endpoint
+       */
+      endpoint_url: string;
+      bearer_token?: string | null;
+      /**
+       * Video track configuration.
+       */
+      video?: OutputWhipClientVideoOptions | null;
+      /**
+       * Audio track configuration.
+       */
+      audio?: OutputWhipClientAudioOptions | null;
+    }
+  | {
       type: "whip";
       /**
        * WHIP server endpoint
@@ -241,14 +284,14 @@ export type RegisterOutput =
       /**
        * Video track configuration.
        */
-      video?: OutputWhipVideoOptions | null;
+      video?: OutputWhipClientVideoOptions | null;
       /**
        * Audio track configuration.
        */
-      audio?: OutputWhipAudioOptions | null;
+      audio?: OutputWhipClientAudioOptions | null;
     }
   | {
-      type: "whep";
+      type: "whep_server";
       /**
        * Token used for authentication in WHEP protocol. If not provided, the bearer token is not required to establish the session.
        */
@@ -260,7 +303,7 @@ export type RegisterOutput =
       /**
        * Audio track configuration.
        */
-      audio?: OutputWhepAudioOptions | null;
+      audio?: OutputWhepServerAudioOptions | null;
     }
   | {
       type: "hls";
@@ -823,7 +866,7 @@ export type Mp4AudioEncoderOptions = {
    */
   sample_rate?: number | null;
 };
-export type WhipVideoEncoderOptions =
+export type WhipClientVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
@@ -866,7 +909,7 @@ export type WhipVideoEncoderOptions =
   | {
       type: "any";
     };
-export type WhipAudioEncoderOptions =
+export type WhipClientAudioEncoderOptions =
   | {
       type: "opus";
       /**
@@ -889,7 +932,7 @@ export type WhipAudioEncoderOptions =
   | {
       type: "any";
     };
-export type WhepAudioEncoderOptions = {
+export type WhepServerAudioEncoderOptions = {
   type: "opus";
   /**
    * (**default="voip"**) Specifies preset for audio output encoder.
@@ -950,9 +993,9 @@ export type WebEmbeddingMethod =
 export interface InputRtpVideoOptions {
   decoder: VideoDecoder;
 }
-export interface InputWhipVideoOptions {
+export interface InputWhipServerVideoOptions {
   decoder?: VideoDecoder | null;
-  decoder_preferences?: WhipVideoDecoder[] | null;
+  decoder_preferences?: WhipServerVideoDecoder[] | null;
 }
 export interface OutputVideoOptions {
   /**
@@ -1102,7 +1145,7 @@ export interface OutputMp4AudioOptions {
    */
   initial: AudioScene;
 }
-export interface OutputWhipVideoOptions {
+export interface OutputWhipClientVideoOptions {
   /**
    * Output resolution in pixels.
    */
@@ -1118,13 +1161,13 @@ export interface OutputWhipVideoOptions {
   /**
    * Codec preferences list.
    */
-  encoder_preferences?: WhipVideoEncoderOptions[] | null;
+  encoder_preferences?: WhipClientVideoEncoderOptions[] | null;
   /**
    * Root of a component tree/scene that should be rendered for the output.
    */
   initial: VideoScene;
 }
-export interface OutputWhipAudioOptions {
+export interface OutputWhipClientAudioOptions {
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
@@ -1136,7 +1179,7 @@ export interface OutputWhipAudioOptions {
   /**
    * Audio encoder options.
    */
-  encoder?: WhipAudioEncoderOptions | null;
+  encoder?: WhipClientAudioEncoderOptions | null;
   /**
    * Specifies channels configuration.
    */
@@ -1144,13 +1187,13 @@ export interface OutputWhipAudioOptions {
   /**
    * Codec preferences list.
    */
-  encoder_preferences?: WhipAudioEncoderOptions[] | null;
+  encoder_preferences?: WhipClientAudioEncoderOptions[] | null;
   /**
    * Initial audio mixer configuration for output.
    */
   initial: AudioScene;
 }
-export interface OutputWhepAudioOptions {
+export interface OutputWhepServerAudioOptions {
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
@@ -1162,7 +1205,7 @@ export interface OutputWhepAudioOptions {
   /**
    * Audio encoder options.
    */
-  encoder: WhepAudioEncoderOptions;
+  encoder: WhepServerAudioEncoderOptions;
   /**
    * Specifies channels configuration.
    */

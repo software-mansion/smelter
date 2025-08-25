@@ -1,11 +1,11 @@
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
 
-impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
+impl TryFrom<WhepServer> for pipeline::RegisterOutputOptions {
     type Error = TypeError;
 
-    fn try_from(request: WhepOutput) -> Result<Self, Self::Error> {
-        let WhepOutput {
+    fn try_from(request: WhepServer) -> Result<Self, Self::Error> {
+        let WhepServer {
             bearer_token,
             video,
             audio,
@@ -28,11 +28,13 @@ impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
             .map_or((None, None), |(enc, out)| (Some(enc), Some(out)));
 
         Ok(Self {
-            output_options: pipeline::ProtocolOutputOptions::Whep(pipeline::WhepSenderOptions {
-                bearer_token,
-                video: video_encoder_options,
-                audio: audio_encoder_options,
-            }),
+            output_options: pipeline::ProtocolOutputOptions::Whep(
+                pipeline::WhepServerOutputOptions {
+                    bearer_token,
+                    video: video_encoder_options,
+                    audio: audio_encoder_options,
+                },
+            ),
             video: output_video_options,
             audio: output_audio_options,
         })
@@ -84,7 +86,7 @@ fn resolve_video_options(
 }
 
 fn resolve_audio_options(
-    options: OutputWhepAudioOptions,
+    options: OutputWhepServerAudioOptions,
 ) -> Result<
     (
         pipeline::AudioEncoderOptions,
@@ -92,7 +94,7 @@ fn resolve_audio_options(
     ),
     TypeError,
 > {
-    let OutputWhepAudioOptions {
+    let OutputWhepServerAudioOptions {
         mixing_strategy,
         send_eos_when,
         encoder,
@@ -101,7 +103,7 @@ fn resolve_audio_options(
     } = options;
 
     let (audio_encoder_options, resolved_channels) = match encoder {
-        WhepAudioEncoderOptions::Opus {
+        WhepServerAudioEncoderOptions::Opus {
             preset,
             sample_rate,
             forward_error_correction,

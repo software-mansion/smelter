@@ -56,7 +56,7 @@ export class Smelter {
 
     const apiRequest = intoRegisterOutput(request, output.scene());
     const result = await this.api.registerOutput(outputId, apiRequest);
-    if (request.type === 'whep') {
+    if (request.type === 'whep_server') {
       result.endpoint_route = `/whep/${encodeURIComponent(outputId)}`;
     }
     this.outputs[outputId] = output;
@@ -80,7 +80,7 @@ export class Smelter {
     return this.store.runBlocking(async updateStore => {
       const inputRef = { type: 'global', id: inputId } as const;
       const result = await this.api.registerInput(inputRef, intoRegisterInput(inputId, request));
-      if (request.type === 'whip') {
+      if (request.type === 'whip_server') {
         result.endpoint_route = `/whip/${encodeURIComponent(inputId)}`;
       }
 

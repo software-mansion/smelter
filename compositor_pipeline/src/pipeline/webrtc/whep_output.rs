@@ -35,16 +35,16 @@ pub(super) mod track_task_audio;
 pub(super) mod track_task_video;
 
 #[derive(Debug)]
-pub struct WhepOutput {
+pub struct WhepServerOutput {
     video: Option<WhepVideoTrackThreadHandle>,
     audio: Option<WhepAudioTrackThreadHandle>,
 }
 
-impl WhepOutput {
+impl WhepServerOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
-        options: WhepSenderOptions,
+        options: WhepServerOutputOptions,
     ) -> Result<Self, OutputInitError> {
         let state_clone = ctx.whip_whep_state.clone();
         let Some(state) = state_clone else {
@@ -153,7 +153,7 @@ impl WhepOutput {
     }
 }
 
-impl Output for WhepOutput {
+impl Output for WhepServerOutput {
     fn audio(&self) -> Option<OutputAudio<'_>> {
         self.audio.as_ref().map(|audio| OutputAudio {
             samples_batch_sender: &audio.sample_batch_sender,

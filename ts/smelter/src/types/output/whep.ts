@@ -1,7 +1,7 @@
 import type * as Api from '../../api.js';
 import type { OutputEndCondition } from './common.js';
 
-export type WhepVideoOptions = {
+export type WhepServerVideoOptions = {
   /**
    * Output resolution in pixels.
    */
@@ -13,10 +13,10 @@ export type WhepVideoOptions = {
   /**
    * Video encoder options.
    */
-  encoder: WhepVideoEncoderOptions;
+  encoder: WhepServerVideoEncoderOptions;
 };
 
-export type WhepVideoEncoderOptions =
+export type WhepServerVideoEncoderOptions =
   | {
       type: 'ffmpeg_h264';
       /**
@@ -51,7 +51,7 @@ export type WhepVideoEncoderOptions =
       ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
     };
 
-export type WhepAudioOptions = {
+export type WhepServerAudioOptions = {
   /**
    * (**default="stereo"**) Specifies channels configuration.
    */
@@ -67,10 +67,10 @@ export type WhepAudioOptions = {
   /**
    * Audio encoder options.
    */
-  encoder: WhepAudioEncoderOptions;
+  encoder: WhepServerAudioEncoderOptions;
 };
 
-export type WhepAudioEncoderOptions = {
+export type WhepServerAudioEncoderOptions = {
   type: 'opus';
   /**
    * (**default="voip"**) Specifies preset for audio output encoder.
