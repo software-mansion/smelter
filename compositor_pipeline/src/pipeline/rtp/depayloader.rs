@@ -78,8 +78,8 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for Buffe
         &mut self,
         packet: RtpPacket,
     ) -> Result<Vec<EncodedInputChunk>, DepayloadingError> {
+        trace!(?packet, "RTP depayloader received new packet");
         let chunk = self.depayloader.depacketize(&packet.packet.payload)?;
-        trace!(?chunk, header=?packet.packet.header, "RTP depayloader received new chunk");
 
         if chunk.is_empty() {
             return Ok(Vec::new());
@@ -98,7 +98,7 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for Buffe
             kind: self.kind,
         };
 
-        trace!(chunk=?new_chunk, "RTP depayloader produced new chunk");
+        trace!(chunk=?new_chunk, "RTP depayloader produced a new chunk");
         Ok(vec![new_chunk])
     }
 }
@@ -122,6 +122,7 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for Simpl
         &mut self,
         packet: RtpPacket,
     ) -> Result<Vec<EncodedInputChunk>, DepayloadingError> {
+        trace!(?packet, "RTP depayloader received new packet");
         let data = self.depayloader.depacketize(&packet.packet.payload)?;
         let chunk = EncodedInputChunk {
             data,
@@ -130,7 +131,7 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for Simpl
             kind: self.kind,
         };
 
-        trace!(?chunk, "RTP depayloader produced new chunk");
+        trace!(?chunk, "RTP depayloader produced a new chunk");
         Ok(vec![chunk])
     }
 }
@@ -167,6 +168,8 @@ where
         match self.source.next() {
             Some(PipelineEvent::Data(packet)) => match self.depayloader.depayload(packet) {
                 Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
+                // TODO: Remove after updating webrc-rs
+                Err(DepayloadingError::Rtp(rtp::Error::ErrShortPacket)) => Some(vec![]),
                 Err(err) => {
                     warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                     Some(vec![])

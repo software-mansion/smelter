@@ -1,5 +1,6 @@
 import type { Renderers } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
+import type { RegisterInputResponse, RegisterOutputResponse } from '../api';
 import { ApiClient } from '../api';
 import Output from './output';
 import type { SmelterManager } from '../smelterManager';
@@ -41,7 +42,7 @@ export class Smelter {
     outputId: string,
     root: ReactElement,
     request: RegisterOutput
-  ): Promise<object> {
+  ): Promise<RegisterOutputResponse> {
     this.logger.info({ outputId, type: request.type }, 'Register new output');
     const output = new Output(
       outputId,
@@ -55,6 +56,9 @@ export class Smelter {
 
     const apiRequest = intoRegisterOutput(request, output.scene());
     const result = await this.api.registerOutput(outputId, apiRequest);
+    if (request.type === 'whep') {
+      result.endpoint_route = `/whep/${encodeURIComponent(outputId)}`;
+    }
     this.outputs[outputId] = output;
     await output.ready();
     return result;
@@ -68,11 +72,18 @@ export class Smelter {
     return this.api.unregisterOutput(outputId, {});
   }
 
-  public async registerInput(inputId: string, request: RegisterInput): Promise<object> {
+  public async registerInput(
+    inputId: string,
+    request: RegisterInput
+  ): Promise<RegisterInputResponse> {
     this.logger.info({ inputId, type: request.type }, 'Register new input');
     return this.store.runBlocking(async updateStore => {
       const inputRef = { type: 'global', id: inputId } as const;
-      const result = await this.api.registerInput(inputRef, intoRegisterInput(request));
+      const result = await this.api.registerInput(inputRef, intoRegisterInput(inputId, request));
+      if (request.type === 'whip') {
+        result.endpoint_route = `/whip/${encodeURIComponent(inputId)}`;
+      }
+
       updateStore({
         type: 'add_input',
         input: {
@@ -81,6 +92,7 @@ export class Smelter {
           audioDurationMs: result.audio_duration_ms,
         },
       });
+
       return result;
     });
   }

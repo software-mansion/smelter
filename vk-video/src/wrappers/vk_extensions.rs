@@ -22,7 +22,7 @@ pub(crate) trait VideoQueueExt {
     unsafe fn get_video_session_memory_requirements_khr(
         &self,
         video_session: vk::VideoSessionKHR,
-    ) -> VkResult<Vec<vk::VideoSessionMemoryRequirementsKHR>>;
+    ) -> VkResult<Vec<vk::VideoSessionMemoryRequirementsKHR<'_>>>;
 
     unsafe fn create_video_session_khr(
         &self,
@@ -89,7 +89,7 @@ impl VideoQueueExt for ash::khr::video_queue::Device {
     unsafe fn get_video_session_memory_requirements_khr(
         &self,
         video_session: vk::VideoSessionKHR,
-    ) -> VkResult<Vec<vk::VideoSessionMemoryRequirementsKHR>> {
+    ) -> VkResult<Vec<vk::VideoSessionMemoryRequirementsKHR<'_>>> {
         let mut memory_requirements_len = 0;
         unsafe {
             (self.fp().get_video_session_memory_requirements_khr)(
@@ -224,5 +224,66 @@ impl VideoDecodeQueueExt for ash::khr::video_decode_queue::Device {
         decode_info: &vk::VideoDecodeInfoKHR,
     ) {
         unsafe { (self.fp().cmd_decode_video_khr)(command_buffer, decode_info) }
+    }
+}
+
+pub(crate) trait VideoEncodeQueueExt {
+    unsafe fn get_encoded_video_session_parameters_khr(
+        &self,
+        video_session_parameters_info: &vk::VideoEncodeSessionParametersGetInfoKHR,
+        feedback_info: Option<&mut vk::VideoEncodeSessionParametersFeedbackInfoKHR>,
+    ) -> VkResult<Vec<u8>>;
+
+    unsafe fn cmd_encode_video_khr(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        encode_info: &vk::VideoEncodeInfoKHR,
+    );
+}
+
+impl VideoEncodeQueueExt for ash::khr::video_encode_queue::Device {
+    unsafe fn get_encoded_video_session_parameters_khr(
+        &self,
+        video_session_parameters_info: &vk::VideoEncodeSessionParametersGetInfoKHR,
+        feedback_info: Option<&mut vk::VideoEncodeSessionParametersFeedbackInfoKHR>,
+    ) -> VkResult<Vec<u8>> {
+        let feedback_info = match feedback_info {
+            Some(f) => f as *mut _,
+            None => std::ptr::null_mut(),
+        };
+
+        let mut len = 0;
+
+        unsafe {
+            (self.fp().get_encoded_video_session_parameters_khr)(
+                self.device(),
+                video_session_parameters_info,
+                feedback_info,
+                &mut len,
+                std::ptr::null_mut(),
+            )
+            .result()?;
+        }
+
+        let mut data = vec![0u8; len];
+
+        unsafe {
+            (self.fp().get_encoded_video_session_parameters_khr)(
+                self.device(),
+                video_session_parameters_info,
+                feedback_info,
+                &mut len,
+                data.as_mut_ptr() as *mut _,
+            )
+            .result_with_success(data)
+        }
+    }
+
+    unsafe fn cmd_encode_video_khr(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        encode_info: &vk::VideoEncodeInfoKHR,
+    ) {
+        unsafe { (self.fp().cmd_encode_video_khr)(command_buffer, encode_info) }
     }
 }

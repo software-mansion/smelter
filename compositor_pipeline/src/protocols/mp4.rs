@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
 
@@ -6,7 +9,7 @@ use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOption
 pub struct Mp4InputOptions {
     pub source: Mp4InputSource,
     pub should_loop: bool,
-    pub video_decoder: VideoDecoderOptions,
+    pub video_decoders: Mp4InputVideoDecoders,
 }
 
 #[derive(Debug, Clone)]
@@ -18,8 +21,13 @@ pub struct Mp4OutputOptions {
 
 #[derive(Debug, Clone)]
 pub enum Mp4InputSource {
-    Url(String),
-    File(PathBuf),
+    Url(Arc<str>),
+    File(Arc<Path>),
+}
+
+#[derive(Debug, Clone)]
+pub struct Mp4InputVideoDecoders {
+    pub h264: VideoDecoderOptions,
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -8,8 +8,12 @@ use crossbeam_channel::Sender;
 use tracing::{info, warn};
 
 use crate::pipeline::{
-    hls::HlsOutput, input::PipelineInput, mp4::Mp4Output, rtmp::RtmpClientOutput, rtp::RtpOutput,
-    webrtc::WhipOutput,
+    hls::HlsOutput,
+    input::PipelineInput,
+    mp4::Mp4Output,
+    rtmp::RtmpClientOutput,
+    rtp::RtpOutput,
+    webrtc::{WhepOutput, WhipOutput},
 };
 use crate::prelude::*;
 
@@ -33,8 +37,8 @@ pub(crate) struct OutputAudio<'a> {
 }
 
 pub(crate) trait Output: Send {
-    fn audio(&self) -> Option<OutputAudio>;
-    fn video(&self) -> Option<OutputVideo>;
+    fn audio(&self) -> Option<OutputAudio<'_>>;
+    fn video(&self) -> Option<OutputVideo<'_>>;
     fn kind(&self) -> OutputProtocolKind;
 }
 
@@ -62,6 +66,10 @@ pub(super) fn new_external_output(
         }
         ProtocolOutputOptions::Whip(opt) => {
             let output = WhipOutput::new(ctx, output_id, opt)?;
+            Ok((Box::new(output), None))
+        }
+        ProtocolOutputOptions::Whep(opt) => {
+            let output = WhepOutput::new(ctx, output_id, opt)?;
             Ok((Box::new(output), None))
         }
     }

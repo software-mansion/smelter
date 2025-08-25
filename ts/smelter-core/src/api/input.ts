@@ -21,7 +21,7 @@ export type RegisterInputRequest =
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any }
-  | { type: 'whep'; endpointUrl: string; bearerToken: string };
+  | { type: 'whep'; endpointUrl: string; bearerToken?: string };
 
 export type RegisterRtpStreamInputRequest = Extract<Api.RegisterInput, { type: 'rtp_stream' }>;
 export type RegisterMp4InputRequest = { blob?: any } & Extract<Api.RegisterInput, { type: 'mp4' }>;
@@ -41,13 +41,13 @@ export type RegisterInput =
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any }
-  | { type: 'whep'; endpointUrl: string; bearerToken: string };
+  | { type: 'whep'; endpointUrl: string; bearerToken?: string };
 
 /**
  * Converts object passed by user (or modified by platform specific interface) into
  * HTTP request
  */
-export function intoRegisterInput(input: RegisterInput): RegisterInputRequest {
+export function intoRegisterInput(inputId: string, input: RegisterInput): RegisterInputRequest {
   if (input.type === 'mp4') {
     return intoMp4RegisterInput(input);
   } else if (input.type === 'hls') {
@@ -55,7 +55,7 @@ export function intoRegisterInput(input: RegisterInput): RegisterInputRequest {
   } else if (input.type === 'rtp_stream') {
     return intoRtpRegisterInput(input);
   } else if (input.type === 'whip') {
-    return intoWhipRegisterInput(input);
+    return intoWhipRegisterInput(inputId, input);
   } else if (input.type === 'camera') {
     return { type: 'camera' };
   } else if (input.type === 'screen_capture') {
@@ -78,7 +78,7 @@ function intoMp4RegisterInput(input: Inputs.RegisterMp4Input): RegisterInputRequ
     loop: input.loop,
     required: input.required,
     offset_ms: input.offsetMs,
-    video_decoder: input.videoDecoder,
+    decoder_map: input.decoderMap,
   };
 }
 
@@ -88,6 +88,7 @@ function intoHlsRegisterInput(input: Inputs.RegisterHlsInput): RegisterInputRequ
     url: input.url,
     required: input.required,
     offset_ms: input.offsetMs,
+    decoder_map: input.decoderMap,
   };
 }
 
@@ -103,11 +104,15 @@ function intoRtpRegisterInput(input: Inputs.RegisterRtpInput): RegisterInputRequ
   };
 }
 
-function intoWhipRegisterInput(input: Inputs.RegisterWhipInput): RegisterInputRequest {
+function intoWhipRegisterInput(
+  inputId: string,
+  input: Inputs.RegisterWhipInput
+): RegisterInputRequest {
   return {
     type: 'whip',
     video: input.video && intoInputWhipVideoOptions(input.video),
     bearer_token: input.bearerToken,
+    endpoint_override: inputId,
     required: input.required,
     offset_ms: input.offsetMs,
   };

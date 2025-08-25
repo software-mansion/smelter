@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use log::info;
+use std::process::Child;
 
 use std::{
     path::PathBuf,
@@ -17,27 +18,23 @@ enum Video {
     VP9,
 }
 
-pub fn start_gst_receive_tcp_h264(ip: &str, port: u16, audio: bool) -> Result<()> {
-    start_gst_receive_tcp(ip, port, Some(Video::H264), audio)?;
-    Ok(())
+pub fn start_gst_receive_tcp_h264(ip: &str, port: u16, audio: bool) -> Result<Child> {
+    start_gst_receive_tcp(ip, port, Some(Video::H264), audio)
 }
 
-pub fn start_gst_receive_tcp_vp8(ip: &str, port: u16, audio: bool) -> Result<()> {
-    start_gst_receive_tcp(ip, port, Some(Video::VP8), audio)?;
-    Ok(())
+pub fn start_gst_receive_tcp_vp8(ip: &str, port: u16, audio: bool) -> Result<Child> {
+    start_gst_receive_tcp(ip, port, Some(Video::VP8), audio)
 }
 
-pub fn start_gst_receive_tcp_vp9(ip: &str, port: u16, audio: bool) -> Result<()> {
-    start_gst_receive_tcp(ip, port, Some(Video::VP9), audio)?;
-    Ok(())
+pub fn start_gst_receive_tcp_vp9(ip: &str, port: u16, audio: bool) -> Result<Child> {
+    start_gst_receive_tcp(ip, port, Some(Video::VP9), audio)
 }
 
-pub fn start_gst_receive_tcp_without_video(ip: &str, port: u16, audio: bool) -> Result<()> {
-    start_gst_receive_tcp(ip, port, None, audio)?;
-    Ok(())
+pub fn start_gst_receive_tcp_without_video(ip: &str, port: u16, audio: bool) -> Result<Child> {
+    start_gst_receive_tcp(ip, port, None, audio)
 }
 
-fn start_gst_receive_tcp(ip: &str, port: u16, video: Option<Video>, audio: bool) -> Result<()> {
+fn start_gst_receive_tcp(ip: &str, port: u16, video: Option<Video>, audio: bool) -> Result<Child> {
     match (video.clone(), audio) {
         (Some(_), true) => info!("[example] Start listening video and audio on port {port}."),
         (Some(_), false) => info!("[example] Start listening video on port {port}."),
@@ -61,7 +58,7 @@ fn start_gst_receive_tcp(ip: &str, port: u16, video: Option<Video>, audio: bool)
         gst_output_command.push_str("demux.src_97 ! \"application/x-rtp,media=audio,clock-rate=48000,encoding-name=OPUS\" ! queue ! rtpopusdepay ! decodebin ! audioconvert ! autoaudiosink ");
     }
 
-    Command::new("bash")
+    let handle = Command::new("bash")
         .arg("-c")
         .arg(gst_output_command)
         .stdout(Stdio::null())
@@ -69,26 +66,26 @@ fn start_gst_receive_tcp(ip: &str, port: u16, video: Option<Video>, audio: bool)
         .spawn()?;
     thread::sleep(Duration::from_secs(2));
 
-    Ok(())
+    Ok(handle)
 }
 
-pub fn start_gst_receive_udp_h264(port: u16, audio: bool) -> Result<()> {
+pub fn start_gst_receive_udp_h264(port: u16, audio: bool) -> Result<Child> {
     start_gst_receive_udp(port, Some(Video::H264), audio)
 }
 
-pub fn start_gst_receive_udp_vp8(port: u16, audio: bool) -> Result<()> {
+pub fn start_gst_receive_udp_vp8(port: u16, audio: bool) -> Result<Child> {
     start_gst_receive_udp(port, Some(Video::VP8), audio)
 }
 
-pub fn start_gst_receive_udp_vp9(port: u16, audio: bool) -> Result<()> {
+pub fn start_gst_receive_udp_vp9(port: u16, audio: bool) -> Result<Child> {
     start_gst_receive_udp(port, Some(Video::VP9), audio)
 }
 
-pub fn start_gst_receive_udp_without_video(port: u16, audio: bool) -> Result<()> {
+pub fn start_gst_receive_udp_without_video(port: u16, audio: bool) -> Result<Child> {
     start_gst_receive_udp(port, None, audio)
 }
 
-fn start_gst_receive_udp(port: u16, video: Option<Video>, audio: bool) -> Result<()> {
+fn start_gst_receive_udp(port: u16, video: Option<Video>, audio: bool) -> Result<Child> {
     match (video.clone(), audio) {
         (Some(_), true) => info!("[example] Start listening video and audio on port {port}."),
         (Some(_), false) => info!("[example] Start listening video on port {port}."),
@@ -113,7 +110,7 @@ fn start_gst_receive_udp(port: u16, video: Option<Video>, audio: bool) -> Result
         gst_output_command.push_str("demux.src_97 ! \"application/x-rtp,media=audio,clock-rate=48000,encoding-name=OPUS\" ! queue ! rtpopusdepay ! decodebin ! audioconvert ! autoaudiosink sync=false");
     }
 
-    Command::new("bash")
+    let handle = Command::new("bash")
         .arg("-c")
         .arg(gst_output_command)
         .stdout(Stdio::null())
@@ -121,7 +118,7 @@ fn start_gst_receive_udp(port: u16, video: Option<Video>, audio: bool) -> Result
         .spawn()?;
     thread::sleep(Duration::from_secs(2));
 
-    Ok(())
+    Ok(handle)
 }
 
 pub fn start_gst_send_tcp(
@@ -129,7 +126,7 @@ pub fn start_gst_send_tcp(
     video_port: Option<u16>,
     audio_port: Option<u16>,
     test_sample: TestSample,
-) -> Result<()> {
+) -> Result<Child> {
     match test_sample {
         TestSample::BigBuckBunnyH264Opus
         | TestSample::ElephantsDreamH264Opus
@@ -181,7 +178,7 @@ pub fn start_gst_send_udp(
     video_port: Option<u16>,
     audio_port: Option<u16>,
     test_sample: TestSample,
-) -> Result<()> {
+) -> Result<Child> {
     match test_sample {
         TestSample::BigBuckBunnyH264Opus
         | TestSample::ElephantsDreamH264Opus
@@ -234,7 +231,7 @@ fn start_gst_send_from_file_tcp(
     audio_port: Option<u16>,
     path: PathBuf,
     video_codec: Option<Video>,
-) -> Result<()> {
+) -> Result<Child> {
     match (video_port, audio_port) {
         (Some(video_port), Some(audio_port)) => info!(
             "[example] Start sending video on port {video_port} and audio on port {audio_port}."
@@ -270,14 +267,14 @@ fn start_gst_send_from_file_tcp(
         gst_input_command = gst_input_command + &format!("demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 !  rtpstreampay ! tcpclientsink host={ip} port={port} ");
     }
 
-    Command::new("bash")
+    let handle = Command::new("bash")
         .arg("-c")
         .arg(gst_input_command)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
 
-    Ok(())
+    Ok(handle)
 }
 
 fn start_gst_send_from_file_udp(
@@ -286,7 +283,7 @@ fn start_gst_send_from_file_udp(
     audio_port: Option<u16>,
     path: PathBuf,
     video_codec: Option<Video>,
-) -> Result<()> {
+) -> Result<Child> {
     match (video_port, audio_port) {
         (Some(video_port), Some(audio_port)) => info!(
             "[example] Start sending video on port {video_port} and audio on port {audio_port}."
@@ -325,14 +322,14 @@ fn start_gst_send_from_file_udp(
         gst_input_command = gst_input_command + &format!("demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! udpsink host={ip} port={port} ");
     }
 
-    Command::new("bash")
+    let handle = Command::new("bash")
         .arg("-c")
         .arg(gst_input_command)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
 
-    Ok(())
+    Ok(handle)
 }
 
 fn start_gst_send_testsrc_tcp(
@@ -340,7 +337,7 @@ fn start_gst_send_testsrc_tcp(
     video_port: Option<u16>,
     audio_port: Option<u16>,
     video_codec: Option<Video>,
-) -> Result<()> {
+) -> Result<Child> {
     match (video_port, audio_port) {
         (Some(video_port), Some(audio_port)) => info!(
             "[example] Start sending generic video on port {video_port} and audio on port {audio_port}."
@@ -372,14 +369,14 @@ fn start_gst_send_testsrc_tcp(
         gst_input_command = gst_input_command + &format!(" audiotestsrc ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! rtpstreampay ! tcpclientsink host={ip} port={port}");
     }
 
-    Command::new("bash")
+    let handle = Command::new("bash")
         .arg("-c")
         .arg(gst_input_command)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
 
-    Ok(())
+    Ok(handle)
 }
 
 fn start_gst_send_testsrc_udp(
@@ -387,7 +384,7 @@ fn start_gst_send_testsrc_udp(
     video_port: Option<u16>,
     audio_port: Option<u16>,
     video_codec: Option<Video>,
-) -> Result<()> {
+) -> Result<Child> {
     match (video_port, audio_port) {
         (Some(video_port), Some(audio_port)) => info!(
             "[example] Start sending generic video on port {video_port} and audio on port {audio_port}."
@@ -419,12 +416,12 @@ fn start_gst_send_testsrc_udp(
         gst_input_command = gst_input_command + &format!(" audiotestsrc ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! udpsink host={ip} port={port}");
     }
 
-    Command::new("bash")
+    let handle = Command::new("bash")
         .arg("-c")
         .arg(gst_input_command)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
 
-    Ok(())
+    Ok(handle)
 }

@@ -4,74 +4,100 @@ use std::{
 };
 
 use axum::http::HeaderMap;
-use compositor_render::InputId;
 use tracing::error;
 
 use crate::pipeline::webrtc::{
     bearer_token::validate_token,
-    error::WhipServerError,
+    error::WhipWhepServerError,
     whip_input::connection_state::{WhipInputConnectionState, WhipInputConnectionStateOptions},
 };
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct WhipInputsState(Arc<Mutex<HashMap<InputId, WhipInputConnectionState>>>);
+pub(crate) struct WhipInputsState(Arc<Mutex<HashMap<Arc<str>, WhipInputConnectionState>>>);
 
 impl WhipInputsState {
-    pub fn get_with<T, Func: FnOnce(&WhipInputConnectionState) -> Result<T, WhipServerError>>(
+    pub fn get_with<
+        T,
+        Func: FnOnce(&WhipInputConnectionState) -> Result<T, WhipWhepServerError>,
+    >(
         &self,
-        input_id: &InputId,
+        endpoint_id: &Arc<str>,
         func: Func,
-    ) -> Result<T, WhipServerError> {
+    ) -> Result<T, WhipWhepServerError> {
         let guard = self.0.lock().unwrap();
-        match guard.get(input_id) {
+        match guard.get(endpoint_id) {
             Some(input) => func(input),
-            None => Err(WhipServerError::NotFound(format!("{input_id:?} not found"))),
+            None => Err(WhipWhepServerError::NotFound(format!(
+                "{endpoint_id:?} not found"
+            ))),
         }
     }
 
     pub fn get_mut_with<
         T,
-        Func: FnOnce(&mut WhipInputConnectionState) -> Result<T, WhipServerError>,
+        Func: FnOnce(&mut WhipInputConnectionState) -> Result<T, WhipWhepServerError>,
     >(
         &self,
-        input_id: &InputId,
+        endpoint_id: &Arc<str>,
         func: Func,
-    ) -> Result<T, WhipServerError> {
+    ) -> Result<T, WhipWhepServerError> {
         let mut guard = self.0.lock().unwrap();
-        match guard.get_mut(input_id) {
+        match guard.get_mut(endpoint_id) {
             Some(input) => func(input),
-            None => Err(WhipServerError::NotFound(format!("{input_id:?} not found"))),
+            None => Err(WhipWhepServerError::NotFound(format!(
+                "{endpoint_id:?} not found"
+            ))),
         }
     }
 
-    pub fn add_input(&self, input_id: &InputId, options: WhipInputConnectionStateOptions) {
+    pub fn add_input(&self, endpoint_id: &Arc<str>, options: WhipInputConnectionStateOptions) {
         let mut guard = self.0.lock().unwrap();
-        guard.insert(input_id.clone(), WhipInputConnectionState::new(options));
+        guard.insert(endpoint_id.clone(), WhipInputConnectionState::new(options));
     }
 
     // called on drop (when input is unregistered)
-    pub fn ensure_input_closed(&self, input_id: &InputId) {
+    pub fn ensure_input_closed(&self, endpoint_id: &Arc<str>) {
         let mut guard = self.0.lock().unwrap();
-        if let Some(input) = guard.remove(input_id) {
+        if let Some(input) = guard.remove(endpoint_id) {
             if let Some(peer_connection) = input.peer_connection {
-                let input_id = input_id.clone();
+                let endpoint_id = endpoint_id.clone();
                 tokio::spawn(async move {
                     if let Err(err) = peer_connection.close().await {
-                        error!("Cannot close peer_connection for {:?}: {:?}", input_id, err);
+                        error!("Cannot close peer_connection for {endpoint_id:?}: {err:?}");
                     };
                 });
             }
         }
     }
 
+    pub fn validate_session_id(
+        &self,
+        endpoint_id: &Arc<str>,
+        session_id: &Arc<str>,
+    ) -> Result<(), WhipWhepServerError> {
+        let guard = self.0.lock().unwrap();
+        if let Some(input) = guard.get(endpoint_id) {
+            if input.current_session_id != Some(session_id.clone()) {
+                return Err(WhipWhepServerError::Unauthorized(format!(
+                    "Session {session_id} is not active now"
+                )));
+            }
+        }
+        Ok(())
+    }
+
     pub async fn validate_token(
         &self,
-        input_id: &InputId,
+        endpoint_id: &Arc<str>,
         headers: &HeaderMap,
-    ) -> Result<(), WhipServerError> {
-        let bearer_token = match self.0.lock().unwrap().get_mut(input_id) {
+    ) -> Result<(), WhipWhepServerError> {
+        let bearer_token = match self.0.lock().unwrap().get_mut(endpoint_id) {
             Some(input) => input.bearer_token.clone(),
-            None => return Err(WhipServerError::NotFound(format!("{input_id:?} not found"))),
+            None => {
+                return Err(WhipWhepServerError::NotFound(format!(
+                    "{endpoint_id:?} not found"
+                )))
+            }
         };
 
         validate_token(&bearer_token, headers.get("Authorization")).await

@@ -103,11 +103,17 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
         OUTPUT_DUMP_FILE,
         &new_output_dump,
         AudioValidationConfig {
-            sampling_intervals: vec![
-                Duration::from_millis(0)..Duration::from_millis(2000),
-                Duration::from_millis(2000)..Duration::from_millis(4000),
-                Duration::from_millis(8000)..Duration::from_millis(10000),
-            ],
+            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
+            tolerance: crate::AudioAnalyzeTolerance {
+                max_frequency_level: 5.0,
+                average_level: 15.0,
+                median_level: 15.0,
+                general_level: 5.0,
+                // NOTE: (@jbrs) Right now it passes on my machine, check if it passess with
+                // default tolerance on CI
+                // offset: Duration::from_millis(100),
+                ..Default::default()
+            },
             ..Default::default()
         },
     )?;

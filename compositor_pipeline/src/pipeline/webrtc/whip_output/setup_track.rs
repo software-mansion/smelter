@@ -1,8 +1,7 @@
 use rand::Rng;
-use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{mpsc, watch};
-use tracing::{debug, error, info, span, trace, warn, Instrument, Level};
+use tracing::{debug, error, span, trace, Instrument, Level};
 use webrtc::{
     api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
     rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender},
@@ -10,21 +9,30 @@ use webrtc::{
     track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
-use crate::pipeline::{
-    encoder::{
-        ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder, ffmpeg_vp9::FfmpegVp9Encoder,
-        libopus::OpusEncoder,
+use crate::{
+    pipeline::{
+        encoder::{
+            ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder,
+            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder,
+        },
+        rtp::payloader::{PayloadedCodec, PayloaderOptions},
+        webrtc::{
+            handle_keyframe_requests::handle_keyframe_requests,
+            whip_output::{
+                track_task_audio::{WhipAudioTrackThread, WhipAudioTrackThreadOptions},
+                track_task_video::{WhipVideoTrackThread, WhipVideoTrackThreadOptions},
+                PeerConnection,
+            },
+        },
     },
-    rtp::payloader::{PayloadedCodec, PayloaderOptions},
-    webrtc::whip_output::{track_task_audio::spawn_audio_track_thread, PeerConnection},
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
 
 use super::{
-    track_task_audio::WhipAudioTrackThreadHandle,
-    track_task_video::{spawn_video_track_thread, WhipVideoTrackThreadHandle},
-    WhipInputError, WhipSenderTrack,
+    track_task_audio::WhipAudioTrackThreadHandle, track_task_video::WhipVideoTrackThreadHandle,
+    WhipOutputError, WhipSenderTrack,
 };
 
 pub trait MatchCodecCapability {
@@ -70,7 +78,7 @@ pub async fn setup_video_track(
     output_id: &OutputId,
     rtc_sender: Arc<RTCRtpSender>,
     options: &VideoWhipOptions,
-) -> Result<(WhipVideoTrackThreadHandle, WhipSenderTrack), WhipInputError> {
+) -> Result<(WhipVideoTrackThreadHandle, WhipSenderTrack), WhipOutputError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
@@ -89,7 +97,7 @@ pub async fn setup_video_track(
                 Some((encoder_options.clone(), supported.clone()))
             })
     else {
-        return Err(WhipInputError::NoVideoCodecNegotiated);
+        return Err(WhipOutputError::NoVideoCodecNegotiated);
     };
 
     let track = Arc::new(TrackLocalStaticRTP::new(
@@ -116,26 +124,46 @@ pub async fn setup_video_track(
     };
     let (sender, receiver) = mpsc::channel(1000);
     let handle = match options {
-        VideoEncoderOptions::FfmpegH264(options) => spawn_video_track_thread::<FfmpegH264Encoder>(
-            ctx.clone(),
+        VideoEncoderOptions::FfmpegH264(options) => {
+            WhipVideoTrackThread::<FfmpegH264Encoder>::spawn(
+                output_id.clone(),
+                WhipVideoTrackThreadOptions {
+                    ctx: ctx.clone(),
+                    encoder_options: options,
+                    payloader_options: payloader_options(
+                        PayloadedCodec::H264,
+                        codec_params.payload_type,
+                        ssrc,
+                    ),
+                    chunks_sender: sender,
+                },
+            )
+        }
+        VideoEncoderOptions::FfmpegVp8(options) => WhipVideoTrackThread::<FfmpegVp8Encoder>::spawn(
             output_id.clone(),
-            options,
-            payloader_options(PayloadedCodec::H264, codec_params.payload_type, ssrc),
-            sender,
+            WhipVideoTrackThreadOptions {
+                ctx: ctx.clone(),
+                encoder_options: options,
+                payloader_options: payloader_options(
+                    PayloadedCodec::Vp8,
+                    codec_params.payload_type,
+                    ssrc,
+                ),
+                chunks_sender: sender,
+            },
         ),
-        VideoEncoderOptions::FfmpegVp8(options) => spawn_video_track_thread::<FfmpegVp8Encoder>(
-            ctx.clone(),
+        VideoEncoderOptions::FfmpegVp9(options) => WhipVideoTrackThread::<FfmpegVp9Encoder>::spawn(
             output_id.clone(),
-            options,
-            payloader_options(PayloadedCodec::Vp8, codec_params.payload_type, ssrc),
-            sender,
-        ),
-        VideoEncoderOptions::FfmpegVp9(options) => spawn_video_track_thread::<FfmpegVp9Encoder>(
-            ctx.clone(),
-            output_id.clone(),
-            options,
-            payloader_options(PayloadedCodec::Vp9, codec_params.payload_type, ssrc),
-            sender,
+            WhipVideoTrackThreadOptions {
+                ctx: ctx.clone(),
+                encoder_options: options,
+                payloader_options: payloader_options(
+                    PayloadedCodec::Vp9,
+                    codec_params.payload_type,
+                    ssrc,
+                ),
+                chunks_sender: sender,
+            },
         ),
     }?;
 
@@ -148,40 +176,13 @@ pub async fn setup_video_track(
     Ok((handle, WhipSenderTrack { receiver, track }))
 }
 
-fn handle_keyframe_requests(
-    ctx: &Arc<PipelineCtx>,
-    sender: Arc<RTCRtpSender>,
-    keyframe_sender: crossbeam_channel::Sender<()>,
-) {
-    ctx.tokio_rt.spawn(async move {
-        loop {
-            if let Ok((packets, _)) = sender.read_rtcp().await {
-                for packet in packets {
-                    if packet
-                        .as_any()
-                        .downcast_ref::<PictureLossIndication>()
-                        .is_some()
-                    {
-                        info!("Request keyframe");
-                        if let Err(err) = keyframe_sender.send(()) {
-                            warn!(%err, "Failed to send keyframe request to the encoder.");
-                        };
-                    }
-                }
-            } else {
-                debug!("Failed to read RTCP packets from the sender.");
-            }
-        }
-    });
-}
-
 pub async fn setup_audio_track(
     ctx: &Arc<PipelineCtx>,
     output_id: &OutputId,
     rtc_sender: Arc<RTCRtpSender>,
     pc: PeerConnection,
     options: &AudioWhipOptions,
-) -> Result<(WhipAudioTrackThreadHandle, WhipSenderTrack), WhipInputError> {
+) -> Result<(WhipAudioTrackThreadHandle, WhipSenderTrack), WhipOutputError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
 
@@ -200,7 +201,7 @@ pub async fn setup_audio_track(
                 Some((encoder_options.clone(), supported.clone()))
             })
     else {
-        return Err(WhipInputError::NoAudioCodecNegotiated);
+        return Err(WhipOutputError::NoAudioCodecNegotiated);
     };
 
     let track = Arc::new(TrackLocalStaticRTP::new(
@@ -227,15 +228,21 @@ pub async fn setup_audio_track(
     };
     let (sender, receiver) = mpsc::channel(1000);
     let handle = match options {
-        AudioEncoderOptions::Opus(options) => spawn_audio_track_thread::<OpusEncoder>(
-            ctx.clone(),
+        AudioEncoderOptions::Opus(options) => WhipAudioTrackThread::<OpusEncoder>::spawn(
             output_id.clone(),
-            options,
-            payloader_options(PayloadedCodec::Opus, codec_params.payload_type, ssrc),
-            sender,
+            WhipAudioTrackThreadOptions {
+                ctx: ctx.clone(),
+                encoder_options: options,
+                payloader_options: payloader_options(
+                    PayloadedCodec::Opus,
+                    codec_params.payload_type,
+                    ssrc,
+                ),
+                chunks_sender: sender,
+            },
         ),
         AudioEncoderOptions::FdkAac(_options) => {
-            return Err(WhipInputError::UnsupportedCodec("aac"))
+            return Err(WhipOutputError::UnsupportedCodec("aac"))
         }
     }?;
 

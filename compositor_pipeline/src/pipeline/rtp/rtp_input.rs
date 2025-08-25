@@ -5,20 +5,12 @@ use std::{
 
 use compositor_render::{Frame, InputId};
 use crossbeam_channel::{bounded, Receiver};
-use rtcp::header::PacketType;
+use rtcp::{header::PacketType, sender_report::SenderReport};
 use tracing::{debug, span, trace, warn, Level};
 use webrtc_util::Unmarshal;
 
 use self::{tcp_server::start_tcp_server_thread, udp::start_udp_reader_thread};
 
-use crate::{
-    pipeline::rtp::rtp_input::{
-        rtp_audio_thread::{RtpAudioThread, RtpAudioThreadOptions},
-        rtp_video_thread::RtpVideoThread,
-    },
-    prelude::*,
-    thread_utils::InitializableThread,
-};
 use crate::{
     pipeline::{
         decoder::{
@@ -29,14 +21,19 @@ use crate::{
         rtp::{
             depayloader::DepayloaderOptions,
             rtp_input::{
-                rtp_audio_thread::RtpAudioTrackThreadHandle,
-                rtp_video_thread::RtpVideoTrackThreadHandle,
+                rtcp_sync::{RtpNtpSyncPoint, RtpTimestampSync},
+                rtp_audio_thread::{
+                    RtpAudioThread, RtpAudioThreadOptions, RtpAudioTrackThreadHandle,
+                },
+                rtp_video_thread::{RtpVideoThread, RtpVideoTrackThreadHandle},
             },
             util::BindToPortError,
             RtpPacket,
         },
     },
+    prelude::*,
     queue::QueueDataReceiver,
+    thread_utils::InitializableThread,
 };
 
 mod rollover_state;
@@ -45,7 +42,7 @@ mod rtp_video_thread;
 mod tcp_server;
 mod udp;
 
-pub(crate) use rollover_state::RolloverState;
+pub(super) mod rtcp_sync;
 
 pub struct RtpInput {
     should_close: Arc<AtomicBool>,
@@ -75,7 +72,14 @@ impl RtpInput {
             Self::start_audio_thread(&ctx, &input_id, opts.audio)?;
 
         // TODO: this could ran on the same thread as tcp/udp socket
-        Self::start_rtp_demuxer_thread(&input_id, raw_packets_receiver, audio_handle, video_handle);
+        Self::start_rtp_demuxer_thread(
+            &input_id,
+            ctx.queue_sync_point,
+            opts.buffer_duration.unwrap_or(ctx.default_buffer_duration),
+            raw_packets_receiver,
+            audio_handle,
+            video_handle,
+        );
 
         Ok((
             Input::Rtp(Self { should_close }),
@@ -89,6 +93,8 @@ impl RtpInput {
 
     fn start_rtp_demuxer_thread(
         input_id: &InputId,
+        sync_point: Instant,
+        buffer_duration: Duration,
         receiver: Receiver<bytes::Bytes>,
         audio: Option<RtpAudioTrackThreadHandle>,
         video: Option<RtpVideoTrackThreadHandle>,
@@ -99,7 +105,7 @@ impl RtpInput {
             .spawn(move || {
                 let _span =
                     span!(Level::INFO, "RTP demuxer", input_id = input_id.to_string()).entered();
-                run_rtp_demuxer_thread(receiver, video, audio)
+                run_rtp_demuxer_thread(sync_point, buffer_duration, receiver, video, audio)
             })
             .unwrap();
     }
@@ -197,6 +203,8 @@ impl Drop for RtpInput {
 }
 
 fn run_rtp_demuxer_thread(
+    sync_point: Instant,
+    buffer_duration: Duration,
     receiver: Receiver<bytes::Bytes>,
     video_handle: Option<RtpVideoTrackThreadHandle>,
     audio_handle: Option<RtpAudioTrackThreadHandle>,
@@ -206,15 +214,16 @@ fn run_rtp_demuxer_thread(
         time_sync: RtpTimestampSync,
         eos_received: bool,
     }
-    let start = Instant::now();
+
+    let sync_point = RtpNtpSyncPoint::new(sync_point);
 
     let mut audio = audio_handle.map(|handle| TrackState {
-        time_sync: RtpTimestampSync::new(start, handle.sample_rate),
+        time_sync: RtpTimestampSync::new(&sync_point, handle.sample_rate, buffer_duration),
         handle,
         eos_received: false,
     });
     let mut video = video_handle.map(|handle| TrackState {
-        time_sync: RtpTimestampSync::new(start, 90_000),
+        time_sync: RtpTimestampSync::new(&sync_point, 90_000, buffer_duration),
         handle,
         eos_received: false,
     });
@@ -261,7 +270,7 @@ fn run_rtp_demuxer_thread(
                 if packet.header.payload_type == 96 {
                     video_ssrc.get_or_insert(packet.header.ssrc);
                     if let Some(video) = &mut video {
-                        let timestamp = video.time_sync.timestamp(packet.header.timestamp);
+                        let timestamp = video.time_sync.pts_from_timestamp(packet.header.timestamp);
                         let sender = &video.handle.rtp_packet_sender;
                         trace!(?timestamp, packet=?packet.header, "Received video RTP packet");
                         if sender
@@ -275,7 +284,7 @@ fn run_rtp_demuxer_thread(
                 } else if packet.header.payload_type == 97 {
                     audio_ssrc.get_or_insert(packet.header.ssrc);
                     if let Some(audio) = &mut audio {
-                        let timestamp = audio.time_sync.timestamp(packet.header.timestamp);
+                        let timestamp = audio.time_sync.pts_from_timestamp(packet.header.timestamp);
                         let sender = &audio.handle.rtp_packet_sender;
                         trace!(?timestamp, packet=?packet.header, "Received audio RTP packet");
                         if sender
@@ -292,20 +301,45 @@ fn run_rtp_demuxer_thread(
                 match rtcp::packet::unmarshal(&mut buffer) {
                     Ok(rtcp_packets) => {
                         for rtcp_packet in rtcp_packets {
-                            if let PacketType::Goodbye = rtcp_packet.header().packet_type {
-                                for ssrc in rtcp_packet.destination_ssrc() {
-                                    if Some(ssrc) == audio_ssrc {
-                                        maybe_send_audio_eos(&mut audio)
+                            let header = rtcp_packet.header();
+                            match header.packet_type {
+                                PacketType::SenderReport => {
+                                    let sender_report = rtcp_packet
+                                        .as_any()
+                                        .downcast_ref::<SenderReport>()
+                                        .unwrap();
+
+                                    if Some(sender_report.ssrc) == audio_ssrc {
+                                        if let Some(audio) = &mut audio {
+                                            audio.time_sync.on_sender_report(
+                                                sender_report.ntp_time,
+                                                sender_report.rtp_time,
+                                            );
+                                        }
                                     }
-                                    if Some(ssrc) == video_ssrc {
-                                        maybe_send_video_eos(&mut video)
+
+                                    if Some(sender_report.ssrc) == video_ssrc {
+                                        if let Some(video) = &mut video {
+                                            video.time_sync.on_sender_report(
+                                                sender_report.ntp_time,
+                                                sender_report.rtp_time,
+                                            );
+                                        }
                                     }
                                 }
-                            } else {
-                                debug!(
-                                    packet_type=?rtcp_packet.header().packet_type,
-                                    "Received RTCP packet"
-                                )
+                                PacketType::Goodbye => {
+                                    for ssrc in rtcp_packet.destination_ssrc() {
+                                        if Some(ssrc) == audio_ssrc {
+                                            maybe_send_audio_eos(&mut audio)
+                                        }
+                                        if Some(ssrc) == video_ssrc {
+                                            maybe_send_video_eos(&mut video)
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    debug!(?header, "Received RTCP packet")
+                                }
                             }
                         }
                     }
@@ -334,41 +368,5 @@ impl From<BindToPortError> for RtpInputError {
                 upper_bound,
             },
         }
-    }
-}
-
-#[derive(Debug)]
-pub struct RtpTimestampSync {
-    sync_point: Instant,
-    // offset to sync timestamps to zer
-    rtp_timestamp_offset: Option<u64>,
-    // offset to sync final duration to sync_point
-    sync_offset: Option<Duration>,
-    clock_rate: u32,
-    rollover_state: RolloverState,
-}
-
-impl RtpTimestampSync {
-    pub fn new(sync_point: Instant, clock_rate: u32) -> Self {
-        Self {
-            sync_point,
-            sync_offset: None,
-            rtp_timestamp_offset: None,
-            clock_rate,
-            rollover_state: Default::default(),
-        }
-    }
-
-    pub fn timestamp(&mut self, current_timestamp: u32) -> Duration {
-        let sync_offset = *self
-            .sync_offset
-            .get_or_insert_with(|| self.sync_point.elapsed());
-
-        let rolled_timestamp = self.rollover_state.timestamp(current_timestamp);
-
-        let rtp_timestamp_offset = *self.rtp_timestamp_offset.get_or_insert(rolled_timestamp);
-
-        let timestamp = rolled_timestamp - rtp_timestamp_offset;
-        Duration::from_secs_f64(timestamp as f64 / self.clock_rate as f64) + sync_offset
     }
 }

@@ -2,7 +2,13 @@ import type { ReactElement } from 'react';
 import { pino } from 'pino';
 import type { Renderers } from '@swmansion/smelter';
 import { Smelter as CoreSmelter, StateGuard } from '@swmansion/smelter-core';
-import type { RegisterInput, RegisterOutput } from '../api';
+import type {
+  RegisterInput,
+  RegisterMp4InputResponse,
+  RegisterOutput,
+  RegisterWhepOutputResponse,
+  RegisterWhipInputResponse,
+} from '../api';
 import type { InstanceOptions } from '../manager';
 import RemoteInstanceManager from '../manager';
 
@@ -34,10 +40,28 @@ export default class Smelter {
   public async registerOutput(
     outputId: string,
     root: ReactElement,
+    request: Extract<RegisterOutput, { type: 'whep' }>
+  ): Promise<RegisterWhepOutputResponse>;
+
+  public async registerOutput(
+    outputId: string,
+    root: ReactElement,
+    request: RegisterOutput
+  ): Promise<object>;
+
+  public async registerOutput(
+    outputId: string,
+    root: ReactElement,
     request: RegisterOutput
   ): Promise<object> {
     return await this.scheduler.run(async () => {
-      return await this.coreSmelter.registerOutput(outputId, root, request);
+      let result = await this.coreSmelter.registerOutput(outputId, root, request);
+      if (request.type === 'whep') {
+        return {
+          endpointRoute: result.endpoint_route,
+        };
+      }
+      return result;
     });
   }
 
@@ -47,22 +71,34 @@ export default class Smelter {
     });
   }
 
+  public async registerInput(
+    inputId: string,
+    request: Extract<RegisterInput, { type: 'whip' }>
+  ): Promise<RegisterWhipInputResponse>;
+
+  public async registerInput(
+    inputId: string,
+    request: Extract<RegisterInput, { type: 'mp4' }>
+  ): Promise<RegisterMp4InputResponse>;
+
+  public async registerInput(inputId: string, request: RegisterInput): Promise<object>;
+
   public async registerInput(inputId: string, request: RegisterInput): Promise<object> {
     return await this.scheduler.run(async () => {
       let result = await this.coreSmelter.registerInput(inputId, request);
-
-      const mappedResult: any = {};
-      if ('bearer_token' in result) {
-        mappedResult.bearerToken = result['bearer_token'];
+      if (request.type === 'mp4') {
+        return {
+          videoDurationMs: result.video_duration_ms,
+          audioDurationMs: result.audio_duration_ms,
+        };
+      } else if (request.type === 'whip') {
+        return {
+          bearerToken: result.bearer_token,
+          endpointRoute: result.endpoint_route,
+        };
+      } else {
+        return result;
       }
-      if ('video_duration_ms' in result) {
-        mappedResult.videoDurationMs = result['video_duration_ms'];
-      }
-      if ('audio_duration_ms' in result) {
-        mappedResult.audioDurationMs = result['audio_duration_ms'];
-      }
-
-      return mappedResult;
     });
   }
 

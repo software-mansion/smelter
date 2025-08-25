@@ -51,7 +51,7 @@ fn main() {
     });
     let pipeline = Arc::new(Mutex::new(pipeline));
     let output_id = OutputId("output_1".into());
-    let input_id = InputId("input_id".into());
+    let input_id = InputId("input_1".into());
 
     let output_options = RegisterOutputOptions {
         output_options: ProtocolOutputOptions::Rtp(RtpOutputOptions {
@@ -85,11 +85,11 @@ fn main() {
         RawDataInputOptions {
             video: true,
             audio: false,
+            buffer_duration: None,
         },
         QueueInputOptions {
             required: true,
             offset: Some(Duration::ZERO),
-            buffer_duration: None,
         },
     )
     .unwrap();
@@ -98,6 +98,8 @@ fn main() {
 
     let frames = generate_frames(&wgpu_device, &wgpu_queue);
 
+    // TODO: This should be handled properly in future
+    #[allow(clippy::zombie_processes)]
     start_gst_receive_tcp_h264("127.0.0.1", VIDEO_OUTPUT_PORT, false).unwrap();
 
     Pipeline::start(&pipeline);

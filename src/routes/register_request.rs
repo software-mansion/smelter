@@ -13,7 +13,8 @@ use crate::{
 };
 use compositor_api::{
     DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId,
-    RtmpClient, RtpInput, RtpOutput, ShaderSpec, WebRendererSpec, WhipInput, WhipOutput,
+    RtmpClient, RtpInput, RtpOutput, ShaderSpec, WebRendererSpec, WhepOutput, WhipInput,
+    WhipOutput,
 };
 
 use super::ApiState;
@@ -36,6 +37,7 @@ pub enum RegisterOutput {
     RtmpClient(RtmpClient),
     Mp4(Mp4Output),
     Whip(WhipOutput),
+    Whep(WhepOutput),
     Hls(HlsOutput),
 }
 
@@ -99,6 +101,9 @@ pub(super) async fn handle_output(
             }
             RegisterOutput::Whip(whip) => {
                 Pipeline::register_output(&api.pipeline, output_id.into(), whip.try_into()?)?
+            }
+            RegisterOutput::Whep(whep) => {
+                Pipeline::register_output(&api.pipeline, output_id.into(), whep.try_into()?)?
             }
             RegisterOutput::RtmpClient(rtmp) => {
                 Pipeline::register_output(&api.pipeline, output_id.into(), rtmp.try_into()?)?

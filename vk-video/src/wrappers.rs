@@ -4,6 +4,7 @@ use ash::Entry;
 
 mod command;
 mod debug;
+mod graphics;
 mod mem;
 mod parameter_sets;
 mod sync;
@@ -12,6 +13,7 @@ mod vk_extensions;
 
 pub(crate) use command::*;
 pub(crate) use debug::*;
+pub(crate) use graphics::*;
 pub(crate) use mem::*;
 pub(crate) use parameter_sets::*;
 pub(crate) use sync::*;
@@ -22,6 +24,7 @@ pub(crate) struct Instance {
     pub(crate) instance: ash::Instance,
     pub(crate) _entry: Arc<Entry>,
     pub(crate) video_queue_instance_ext: ash::khr::video_queue::Instance,
+    pub(crate) video_encode_queue_instance_ext: ash::khr::video_encode_queue::Instance,
     pub(crate) debug_utils_instance_ext: ash::ext::debug_utils::Instance,
 }
 
@@ -43,6 +46,7 @@ pub(crate) struct Device {
     pub(crate) device: ash::Device,
     pub(crate) video_queue_ext: ash::khr::video_queue::Device,
     pub(crate) video_decode_queue_ext: ash::khr::video_decode_queue::Device,
+    pub(crate) video_encode_queue_ext: ash::khr::video_encode_queue::Device,
     pub(crate) _instance: Arc<Instance>,
 }
 

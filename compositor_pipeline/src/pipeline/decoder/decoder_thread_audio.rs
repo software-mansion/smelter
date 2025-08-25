@@ -37,8 +37,6 @@ where
     type SpawnOutput = DecoderThreadHandle;
     type SpawnError = DecoderInitError;
 
-    const LABEL: &'static str = Decoder::LABEL;
-
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let AudioDecoderThreadOptions {
             ctx,
@@ -79,8 +77,8 @@ where
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Audio Decoder",
-            thread_instance_name: "Input",
+            thread_name: format!("Audio Decoder ({})", Decoder::LABEL),
+            thread_instance_name: "Input".to_string(),
         }
     }
 }

@@ -80,8 +80,11 @@ pub const DEFAULT_BUFFER_DURATION: Duration = Duration::from_millis(16 * 5); // 
 #[derive(Clone)]
 pub struct PipelineCtx {
     pub queue_sync_point: Instant,
+    pub default_buffer_duration: Duration,
+
     pub mixing_sample_rate: u32,
     pub output_framerate: Framerate,
+
     pub stun_servers: Arc<Vec<String>>,
     pub download_dir: Arc<Path>,
     pub graphics_context: GraphicsContext,

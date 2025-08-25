@@ -7,21 +7,26 @@ use whip_input::WhipInputsState;
 
 mod bearer_token;
 mod error;
+mod handle_keyframe_requests;
 mod peer_connection_recvonly;
 mod server;
 mod supported_video_codec_parameters;
+mod trickle_ice_utils;
+mod whep_output;
 mod whip_input;
 mod whip_output;
 
 pub(super) use server::WhipWhepServer;
+pub(super) use whep_output::WhepOutput;
 pub(super) use whip_input::WhipInput;
 pub(super) use whip_output::WhipOutput;
 
-use crate::pipeline::PipelineCtx;
+use crate::pipeline::{webrtc::whep_output::state::WhepOutputsState, PipelineCtx};
 
 #[derive(Debug, Clone)]
 struct WhipWhepServerState {
     inputs: WhipInputsState,
+    outputs: WhepOutputsState,
     ctx: Arc<PipelineCtx>,
 }
 
@@ -29,6 +34,7 @@ struct WhipWhepServerState {
 pub struct WhipWhepPipelineState {
     pub port: u16,
     pub inputs: WhipInputsState,
+    pub outputs: WhepOutputsState,
 }
 
 impl WhipWhepPipelineState {
@@ -36,6 +42,7 @@ impl WhipWhepPipelineState {
         Arc::new(Self {
             port,
             inputs: WhipInputsState::default(),
+            outputs: WhepOutputsState::default(),
         })
     }
 }

@@ -10,13 +10,18 @@ use crate::{
     event::Event,
     pipeline::{
         encoder::{
-            encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
-            encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
+            encoder_thread_audio::{
+                AudioEncoderThread, AudioEncoderThreadHandle, AudioEncoderThreadOptions,
+            },
+            encoder_thread_video::{
+                VideoEncoderThread, VideoEncoderThreadHandle, VideoEncoderThreadOptions,
+            },
             fdk_aac::FdkAacEncoder,
             ffmpeg_h264::FfmpegH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
     },
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
@@ -25,7 +30,6 @@ use crate::prelude::*;
 struct StreamState {
     index: usize,
     time_base: Rational,
-    timestamp_offset: Option<Duration>,
 }
 
 pub struct Mp4Output {
@@ -100,7 +104,6 @@ impl Mp4Output {
                 Some(encoder),
                 Some(StreamState {
                     index,
-                    timestamp_offset: None,
                     time_base: output_ctx.stream(index).unwrap().time_base(),
                 }),
             ),
@@ -112,7 +115,6 @@ impl Mp4Output {
                 Some(encoder),
                 Some(StreamState {
                     index,
-                    timestamp_offset: None,
                     time_base: output_ctx.stream(index).unwrap().time_base(),
                 }),
             ),
@@ -153,11 +155,13 @@ impl Mp4Output {
 
         let encoder = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
-                spawn_video_encoder_thread::<FfmpegH264Encoder>(
-                    ctx.clone(),
+                VideoEncoderThread::<FfmpegH264Encoder>::spawn(
                     output_id.clone(),
-                    options.clone(),
-                    encoded_chunks_sender,
+                    VideoEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender: encoded_chunks_sender,
+                    },
                 )?
             }
             VideoEncoderOptions::FfmpegVp8(_) => {
@@ -209,11 +213,13 @@ impl Mp4Output {
         let sample_rate = options.sample_rate();
 
         let encoder = match options {
-            AudioEncoderOptions::FdkAac(options) => spawn_audio_encoder_thread::<FdkAacEncoder>(
-                ctx.clone(),
+            AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
                 output_id.clone(),
-                options,
-                encoded_chunks_sender,
+                AudioEncoderThreadOptions {
+                    ctx: ctx.clone(),
+                    encoder_options: options,
+                    chunks_sender: encoded_chunks_sender,
+                },
             )?,
             AudioEncoderOptions::Opus(_) => {
                 return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus))
@@ -253,13 +259,13 @@ impl Mp4Output {
 }
 
 impl Output for Mp4Output {
-    fn audio(&self) -> Option<OutputAudio> {
+    fn audio(&self) -> Option<OutputAudio<'_>> {
         self.audio.as_ref().map(|audio| OutputAudio {
             samples_batch_sender: &audio.sample_batch_sender,
         })
     }
 
-    fn video(&self) -> Option<OutputVideo> {
+    fn video(&self) -> Option<OutputVideo<'_>> {
         self.video.as_ref().map(|video| OutputVideo {
             resolution: video.config.resolution,
             frame_format: video.config.output_format,
@@ -284,11 +290,19 @@ fn run_ffmpeg_output_thread(
 ) {
     let mut received_video_eos = video_stream.as_ref().map(|_| false);
     let mut received_audio_eos = audio_stream.as_ref().map(|_| false);
+    let mut timestamp_offset = None;
 
     for packet in packets_receiver {
         match packet {
             EncodedOutputEvent::Data(chunk) => {
-                write_chunk(chunk, &mut video_stream, &mut audio_stream, &mut output_ctx);
+                let timestamp_offset = *timestamp_offset.get_or_insert(chunk.pts);
+                write_chunk(
+                    chunk,
+                    &mut video_stream,
+                    &mut audio_stream,
+                    &mut output_ctx,
+                    timestamp_offset,
+                );
             }
             EncodedOutputEvent::VideoEOS => match received_video_eos {
                 Some(false) => received_video_eos = Some(true),
@@ -324,6 +338,7 @@ fn write_chunk(
     video_stream: &mut Option<StreamState>,
     audio_stream: &mut Option<StreamState>,
     output_ctx: &mut ffmpeg::format::context::Output,
+    timestamp_offset: Duration,
 ) {
     let stream = match chunk.kind {
         MediaKind::Video(_) => {
@@ -345,9 +360,6 @@ fn write_chunk(
             }
         }
     };
-
-    // Starting output PTS from 0
-    let timestamp_offset = *stream.timestamp_offset.get_or_insert(chunk.pts);
 
     let pts = chunk.pts.saturating_sub(timestamp_offset);
     let dts = chunk

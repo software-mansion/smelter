@@ -1,56 +1,70 @@
 use std::sync::Arc;
 
-use compositor_render::InputId;
 use crossbeam_channel::Sender;
+use tokio::sync::oneshot;
 use tracing::{debug, trace, warn};
 use webrtc::{rtp_transceiver::RTCRtpTransceiver, track::track_remote::TrackRemote};
 
-use crate::prelude::*;
-use crate::thread_utils::{InitializableThread, ThreadMetadata};
 use crate::{
-    error::DecoderInitError,
     pipeline::{
         decoder::{libopus::OpusDecoder, AudioDecoderStream},
         resampler::decoder_resampler::ResampledDecoderStream,
         rtp::{
             depayloader::{DepayloaderOptions, DepayloaderStream},
-            RtpPacket, RtpTimestampSync,
+            RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
         },
         webrtc::{
-            error::WhipServerError,
-            whip_input::{negotiated_codecs::NegotiatedAudioCodecsInfo, AsyncReceiverIter},
+            error::WhipWhepServerError,
+            whip_input::{
+                negotiated_codecs::NegotiatedAudioCodecsInfo, utils::listen_for_rtcp,
+                AsyncReceiverIter,
+            },
             WhipWhepServerState,
         },
         PipelineCtx,
     },
+    thread_utils::{InitializableThread, ThreadMetadata},
 };
 
+use crate::prelude::*;
+
 pub async fn process_audio_track(
+    sync_point: Arc<RtpNtpSyncPoint>,
     state: WhipWhepServerState,
-    input_id: InputId,
+    endpoint_id: Arc<str>,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
-) -> Result<(), WhipServerError> {
+) -> Result<(), WhipWhepServerError> {
+    let rtc_receiver = transceiver.receiver().await;
     let Some(_negotiated_codecs) = NegotiatedAudioCodecsInfo::new(transceiver).await else {
         warn!("Skipping audio track, no valid codec negotiated");
-        return Err(WhipServerError::InternalError(
+        return Err(WhipWhepServerError::InternalError(
             "No audio codecs negotiated".to_string(),
         ));
     };
 
-    let WhipWhepServerState { inputs, ctx } = state;
+    let WhipWhepServerState { inputs, ctx, .. } = state;
     let samples_sender =
-        inputs.get_with(&input_id, |input| Ok(input.input_samples_sender.clone()))?;
-    let handle = AudioTrackThread::spawn(&input_id.0, (ctx.clone(), samples_sender))?;
+        inputs.get_with(&endpoint_id, |input| Ok(input.input_samples_sender.clone()))?;
+    let handle = AudioTrackThread::spawn(&endpoint_id, (ctx.clone(), samples_sender))?;
 
-    let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_point, 48_000);
+    let mut timestamp_sync =
+        RtpTimestampSync::new(&sync_point, 48_000, ctx.default_buffer_duration);
+
+    let (sender_report_sender, mut sender_report_receiver) = oneshot::channel();
+    listen_for_rtcp(&ctx, rtc_receiver, sender_report_sender);
 
     while let Ok((packet, _)) = track.read_rtp().await {
-        let timestamp = timestamp_sync.timestamp(packet.header.timestamp);
+        if let Ok(report) = sender_report_receiver.try_recv() {
+            timestamp_sync.on_sender_report(report.ntp_time, report.rtp_time);
+        }
+        let timestamp = timestamp_sync.pts_from_timestamp(packet.header.timestamp);
 
+        let packet = RtpPacket { packet, timestamp };
+        trace!(?packet, "Sending RTP packet");
         if let Err(e) = handle
             .rtp_packet_sender
-            .send(PipelineEvent::Data(RtpPacket { packet, timestamp }))
+            .send(PipelineEvent::Data(packet))
             .await
         {
             debug!("Failed to send audio RTP packet: {e}");
@@ -74,12 +88,10 @@ impl InitializableThread for AudioTrackThread {
     type SpawnOutput = AudioTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
-    const LABEL: &'static str = "Whip audio decoder";
-
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let (ctx, samples_sender) = options;
 
-        let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5);
+        let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
         let output_sample_rate = ctx.mixing_sample_rate;
 
         let packet_stream = AsyncReceiverIter {
@@ -123,8 +135,8 @@ impl InitializableThread for AudioTrackThread {
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Whip audio",
-            thread_instance_name: "Input",
+            thread_name: "Whip Audio Decoder".to_string(),
+            thread_instance_name: "Input".to_string(),
         }
     }
 }

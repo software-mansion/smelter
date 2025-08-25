@@ -138,26 +138,31 @@ impl Parser {
         let mut instructions = Vec::new();
         for (nalu, pts) in nalus {
             let nalu = nalu?;
-            match nalu {
-                ParsedNalu::Sps(seq_parameter_set) => {
-                    instructions.push(DecoderInstruction::Sps(seq_parameter_set))
-                }
-                ParsedNalu::Pps(pic_parameter_set) => {
-                    instructions.push(DecoderInstruction::Pps(pic_parameter_set))
-                }
-                ParsedNalu::Slice(slice) => {
-                    let Some(slices) = self.au_splitter.put_slice(slice, pts) else {
-                        continue;
-                    };
 
-                    // TODO: warn when not all pts are equal here
+            let Some(nalus) = self.au_splitter.put_nalu(nalu, pts) else {
+                continue;
+            };
 
-                    let mut inst = self.reference_ctx.put_picture(slices)?;
-                    instructions.append(&mut inst);
+            let mut slices = Vec::new();
+            for (nalu, pts) in nalus {
+                match nalu {
+                    ParsedNalu::Sps(seq_parameter_set) => {
+                        instructions.push(DecoderInstruction::Sps(seq_parameter_set))
+                    }
+                    ParsedNalu::Pps(pic_parameter_set) => {
+                        instructions.push(DecoderInstruction::Pps(pic_parameter_set))
+                    }
+                    ParsedNalu::Slice(slice) => {
+                        slices.push((slice, pts));
+                    }
+
+                    ParsedNalu::Other(_) => {}
                 }
-
-                ParsedNalu::Other(_) => {}
             }
+
+            // TODO: warn when not all pts are equal here
+            let mut inst = self.reference_ctx.put_picture(slices)?;
+            instructions.append(&mut inst);
         }
 
         Ok(instructions)

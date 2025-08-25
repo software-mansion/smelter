@@ -50,6 +50,7 @@ impl VideoDecoder for FfmpegH264Decoder {
 
 impl VideoDecoderInstance for FfmpegH264Decoder {
     fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame> {
+        trace!(?chunk, "H264 decoder received a chunk.");
         let av_packet = match create_av_packet(chunk, VideoCodec::H264, TIME_BASE) {
             Ok(packet) => packet,
             Err(err) => {

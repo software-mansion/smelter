@@ -1,7 +1,8 @@
 use std::{iter, sync::Arc};
 
-use compositor_render::{error::ErrorStack, Frame, InputId};
+use compositor_render::{error::ErrorStack, Frame};
 use crossbeam_channel::Sender;
+use tokio::sync::oneshot;
 use tracing::{debug, error, trace, warn};
 use webrtc::{
     rtp_transceiver::{PayloadType, RTCRtpTransceiver},
@@ -9,7 +10,6 @@ use webrtc::{
 };
 
 use crate::{
-    codecs::{VideoCodec, VideoDecoderOptions},
     pipeline::{
         decoder::{
             ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder,
@@ -17,48 +17,63 @@ use crate::{
             VideoDecoderInstance,
         },
         rtp::{
-            depayloader::{new_depayloader, Depayloader, DepayloaderOptions},
-            RtpPacket, RtpTimestampSync,
+            depayloader::{new_depayloader, Depayloader, DepayloaderOptions, DepayloadingError},
+            RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
         },
         webrtc::{
-            error::WhipServerError,
-            whip_input::{negotiated_codecs::NegotiatedVideoCodecsInfo, AsyncReceiverIter},
+            error::WhipWhepServerError,
+            whip_input::{
+                negotiated_codecs::NegotiatedVideoCodecsInfo, utils::listen_for_rtcp,
+                AsyncReceiverIter,
+            },
             WhipWhepServerState,
         },
     },
-    thread_utils::ThreadMetadata,
+    thread_utils::{InitializableThread, ThreadMetadata},
 };
-use crate::{prelude::*, thread_utils::InitializableThread};
+
+use crate::prelude::*;
 
 pub async fn process_video_track(
+    sync_point: Arc<RtpNtpSyncPoint>,
     state: WhipWhepServerState,
-    input_id: InputId,
+    endpoint_id: Arc<str>,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
     video_preferences: Vec<VideoDecoderOptions>,
-) -> Result<(), WhipServerError> {
+) -> Result<(), WhipWhepServerError> {
+    let rtc_receiver = transceiver.receiver().await;
     let Some(negotiated_codecs) =
         NegotiatedVideoCodecsInfo::new(transceiver, &video_preferences).await
     else {
         warn!("Skipping video track, no valid codec negotiated");
-        return Err(WhipServerError::InternalError(
+        return Err(WhipWhepServerError::InternalError(
             "No video codecs negotiated".to_string(),
         ));
     };
 
-    let WhipWhepServerState { inputs, ctx } = state;
-    let frame_sender = inputs.get_with(&input_id, |input| Ok(input.frame_sender.clone()))?;
+    let WhipWhepServerState { inputs, ctx, .. } = state;
+    let frame_sender = inputs.get_with(&endpoint_id, |input| Ok(input.frame_sender.clone()))?;
     let handle =
-        VideoTrackThread::spawn(&input_id.0, (ctx.clone(), negotiated_codecs, frame_sender))?;
+        VideoTrackThread::spawn(&endpoint_id, (ctx.clone(), negotiated_codecs, frame_sender))?;
 
-    let mut timestamp_sync = RtpTimestampSync::new(ctx.queue_sync_point, 90_000);
+    let mut timestamp_sync =
+        RtpTimestampSync::new(&sync_point, 90_000, ctx.default_buffer_duration);
+
+    let (sender_report_sender, mut sender_report_receiver) = oneshot::channel();
+    listen_for_rtcp(&ctx, rtc_receiver, sender_report_sender);
 
     while let Ok((packet, _)) = track.read_rtp().await {
-        let timestamp = timestamp_sync.timestamp(packet.header.timestamp);
+        if let Ok(report) = sender_report_receiver.try_recv() {
+            timestamp_sync.on_sender_report(report.ntp_time, report.rtp_time);
+        }
+        let timestamp = timestamp_sync.pts_from_timestamp(packet.header.timestamp);
 
+        let packet = RtpPacket { packet, timestamp };
+        trace!(?packet, "Sending RTP packet");
         if let Err(e) = handle
             .rtp_packet_sender
-            .send(PipelineEvent::Data(RtpPacket { packet, timestamp }))
+            .send(PipelineEvent::Data(packet))
             .await
         {
             debug!("Failed to send audio RTP packet: {e}");
@@ -86,11 +101,9 @@ impl InitializableThread for VideoTrackThread {
     type SpawnOutput = VideoTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
-    const LABEL: &'static str = "Whip video decoder";
-
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let (ctx, codec_info, frame_sender) = options;
-        let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5);
+        let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
         let packet_stream = AsyncReceiverIter {
             receiver: rtp_packet_receiver,
@@ -130,8 +143,8 @@ impl InitializableThread for VideoTrackThread {
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Whip video",
-            thread_instance_name: "Input",
+            thread_name: "Whip Video Decoder".to_string(),
+            thread_instance_name: "Input".to_string(),
         }
     }
 }
@@ -308,6 +321,8 @@ where
                 let depayloader = self.depayloader.as_mut()?;
                 match depayloader.depayload(packet) {
                     Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
+                    // TODO: Remove after updating webrc-rs
+                    Err(DepayloadingError::Rtp(rtp::Error::ErrShortPacket)) => Some(vec![]),
                     Err(err) => {
                         warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                         Some(vec![])

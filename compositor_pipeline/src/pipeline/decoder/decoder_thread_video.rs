@@ -39,8 +39,6 @@ where
     type SpawnOutput = DecoderThreadHandle;
     type SpawnError = DecoderInitError;
 
-    const LABEL: &'static str = Decoder::LABEL;
-
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
         let VideoDecoderThreadOptions {
             ctx,
@@ -75,8 +73,8 @@ where
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Video Decoder",
-            thread_instance_name: "Input",
+            thread_name: format!("Video Decoder ({})", Decoder::LABEL),
+            thread_instance_name: "Input".to_string(),
         }
     }
 }

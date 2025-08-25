@@ -1,8 +1,8 @@
 import type * as Api from '../api.js';
 import type { ComponentBaseProps, SceneComponent } from '../component.js';
 import { createSmelterComponent, sceneComponentIntoApi } from '../component.js';
-import type { Transition } from './common.js';
-import { intoApiTransition } from './common.js';
+import type { BoxShadow, Transition } from './common.js';
+import { intoApiBoxShadow, intoApiTransition } from './common.js';
 
 export type ViewStyleProps = {
   /**
@@ -76,7 +76,7 @@ export type ViewStyleProps = {
   /**
    * Properties of the BoxShadow applied to the container.
    */
-  boxShadow?: Api.BoxShadow[];
+  boxShadow?: BoxShadow[];
   /**
    * (**default=`0.0`**) Sets padding for all sides of the component.
    */
@@ -147,7 +147,7 @@ function sceneBuilder(
     border_width: style.borderWidth,
     border_color: style.borderColor,
 
-    box_shadow: style.boxShadow,
+    box_shadow: style.boxShadow && intoApiBoxShadow(style.boxShadow),
 
     padding: style.padding,
     padding_vertical: style.paddingVertical,

@@ -93,7 +93,7 @@ impl WhipClientTask {
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
         options: WhipSenderOptions,
-    ) -> Result<(Self, WhipOutput), WhipInputError> {
+    ) -> Result<(Self, WhipOutput), WhipOutputError> {
         let client = WhipHttpClient::new(&options)?;
         let pc = PeerConnection::new(&ctx, &options).await?;
 
@@ -104,7 +104,12 @@ impl WhipClientTask {
 
         // disable tracks before set remote description
         video_rtc_sender.replace_track(None).await?;
+        let rtc_sender_params = video_rtc_sender.get_parameters().await;
+        debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
+
         audio_rtc_sender.replace_track(None).await?;
+        let rtc_sender_params = audio_rtc_sender.get_parameters().await;
+        debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
 
         pc.set_remote_description(answer).await?;
 
@@ -260,13 +265,13 @@ impl WhipClientTask {
 }
 
 impl Output for WhipOutput {
-    fn audio(&self) -> Option<OutputAudio> {
+    fn audio(&self) -> Option<OutputAudio<'_>> {
         self.audio.as_ref().map(|audio| OutputAudio {
             samples_batch_sender: &audio.sample_batch_sender,
         })
     }
 
-    fn video(&self) -> Option<OutputVideo> {
+    fn video(&self) -> Option<OutputVideo<'_>> {
         self.video.as_ref().map(|video| OutputVideo {
             resolution: video.config.resolution,
             frame_format: video.config.output_format,
@@ -281,7 +286,7 @@ impl Output for WhipOutput {
 }
 
 fn wait_with_deadline<T>(
-    mut result_receiver: oneshot::Receiver<Result<T, WhipInputError>>,
+    mut result_receiver: oneshot::Receiver<Result<T, WhipOutputError>>,
     timeout: Duration,
 ) -> Result<T, OutputInitError> {
     let start_time = Instant::now();

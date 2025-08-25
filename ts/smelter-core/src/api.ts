@@ -19,8 +19,14 @@ export type MultipartRequest = {
 };
 
 export type RegisterInputResponse = {
+  endpoint_route?: string;
+  bearer_token?: string;
   video_duration_ms?: number;
   audio_duration_ms?: number;
+};
+
+export type RegisterOutputResponse = {
+  endpoint_route?: string;
 };
 
 export class ApiClient {
@@ -38,7 +44,10 @@ export class ApiClient {
     });
   }
 
-  public async registerOutput(outputId: string, request: RegisterOutputRequest): Promise<object> {
+  public async registerOutput(
+    outputId: string,
+    request: RegisterOutputRequest
+  ): Promise<RegisterOutputResponse> {
     return this.serverManager.sendRequest({
       method: 'POST',
       route: `/api/output/${encodeURIComponent(outputId)}/register`,

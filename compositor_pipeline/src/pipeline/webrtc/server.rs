@@ -16,8 +16,11 @@ use crate::{
     pipeline::{
         webrtc::{
             server::{
+                create_whep_session::handle_create_whep_session,
                 create_whip_session::handle_create_whip_session,
+                new_whep_ice_candidates::handle_new_whep_ice_candidates,
                 new_whip_ice_candidates::handle_new_whip_ice_candidates,
+                terminate_whep_session::handle_terminate_whep_session,
                 terminate_whip_session::handle_terminate_whip_session,
             },
             WhipWhepPipelineState, WhipWhepServerHandle, WhipWhepServerState,
@@ -26,8 +29,11 @@ use crate::{
     },
 };
 
+mod create_whep_session;
 mod create_whip_session;
+mod new_whep_ice_candidates;
 mod new_whip_ice_candidates;
+mod terminate_whep_session;
 mod terminate_whip_session;
 
 pub struct WhipWhepServer {
@@ -43,6 +49,7 @@ impl WhipWhepServer {
         let state = WhipWhepServerState {
             ctx: ctx.clone(),
             inputs: state.inputs.clone(),
+            outputs: state.outputs.clone(),
         };
 
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
@@ -79,9 +86,24 @@ impl WhipWhepServer {
     ) {
         let app = Router::new()
             .route("/status", get((StatusCode::OK, axum::Json(json!({})))))
-            .route("/whip/:id", post(handle_create_whip_session))
-            .route("/session/:id", patch(handle_new_whip_ice_candidates))
-            .route("/session/:id", delete(handle_terminate_whip_session))
+            .route("/whip/:endpoint_id", post(handle_create_whip_session))
+            .route(
+                "/whip/:endpoint_id/:session_id",
+                patch(handle_new_whip_ice_candidates),
+            )
+            .route(
+                "/whip/:endpoint_id/:session_id",
+                delete(handle_terminate_whip_session),
+            )
+            .route("/whep/:id", post(handle_create_whep_session))
+            .route(
+                "/whep/:id/:session_id",
+                patch(handle_new_whep_ice_candidates),
+            )
+            .route(
+                "/whep/:id/:session_id",
+                delete(handle_terminate_whep_session),
+            )
             .layer(CorsLayer::permissive())
             .with_state(state);
 

@@ -18,7 +18,7 @@ pub enum InitPipelineError {
 
     #[cfg(feature = "vk-video")]
     #[error(transparent)]
-    VulkanCtxError(#[from] vk_video::VulkanCtxError),
+    VulkanInitError(#[from] vk_video::VulkanInitError),
 
     #[error("Failed to create tokio::Runtime.")]
     CreateTokioRuntime(#[source] std::io::Error),
@@ -102,14 +102,26 @@ pub enum OutputInitError {
     #[error("Failed to register output. FFmpeg error: {0}.")]
     FfmpegError(ffmpeg_next::Error),
 
-    #[error("Unknown Whip output error.")]
+    #[error("Unknown whip output error.")]
     UnknownWhipError,
 
     #[error("Whip init timeout exceeded")]
     WhipInitTimeout,
 
     #[error("Failed to init whip output")]
-    WhipInitError(#[source] Box<WhipInputError>),
+    WhipInitError(#[source] Box<WhipOutputError>),
+
+    #[error("Unknown whep output error.")]
+    UnknownWhepError,
+
+    #[error("Whep init timeout exceeded")]
+    WhepInitTimeout,
+
+    #[error("Failed to init whep output")]
+    WhepInitError(#[source] Box<WhepOutputError>),
+
+    #[error("WHIP WHEP server is not running, cannot start WHEP output")]
+    WhipWhepServerNotRunning,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -153,6 +165,9 @@ pub enum InputInitError {
 
     #[error("Failed to initialize decoder.")]
     DecoderError(#[from] DecoderInitError),
+
+    #[error("Invalid video decoder provided. Expected {expected:?} decoder")]
+    InvalidVideoDecoderProvided { expected: VideoCodec },
 }
 
 #[derive(Debug, thiserror::Error)]

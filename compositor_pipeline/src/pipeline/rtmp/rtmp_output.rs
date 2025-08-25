@@ -1,4 +1,4 @@
-use std::{ptr, sync::Arc};
+use std::{ops::Deref, ptr, sync::Arc};
 
 use crossbeam_channel::{bounded, Receiver, Sender};
 use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
@@ -8,13 +8,18 @@ use crate::{
     event::Event,
     pipeline::{
         encoder::{
-            encoder_thread_audio::{spawn_audio_encoder_thread, AudioEncoderThreadHandle},
-            encoder_thread_video::{spawn_video_encoder_thread, VideoEncoderThreadHandle},
+            encoder_thread_audio::{
+                AudioEncoderThread, AudioEncoderThreadHandle, AudioEncoderThreadOptions,
+            },
+            encoder_thread_video::{
+                VideoEncoderThread, VideoEncoderThreadHandle, VideoEncoderThreadOptions,
+            },
             fdk_aac::FdkAacEncoder,
             ffmpeg_h264::FfmpegH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
     },
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
@@ -34,12 +39,12 @@ impl RtmpClientOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
-        options: RtmpSenderOptions,
+        options: RtmpOutputOptions,
     ) -> Result<Self, OutputInitError> {
-        let mut output_ctx =
-            ffmpeg::format::output_as(&options.url, "flv").map_err(OutputInitError::FfmpegError)?;
+        let mut output_ctx = ffmpeg::format::output_as(&options.url.deref(), "flv")
+            .map_err(OutputInitError::FfmpegError)?;
 
-        let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
+        let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1000);
 
         let video = match options.video {
             Some(video) => Some(Self::init_video_track(
@@ -126,11 +131,13 @@ impl RtmpClientOutput {
 
         let encoder = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
-                spawn_video_encoder_thread::<FfmpegH264Encoder>(
-                    ctx.clone(),
+                VideoEncoderThread::<FfmpegH264Encoder>::spawn(
                     output_id.clone(),
-                    options.clone(),
-                    encoded_chunks_sender,
+                    VideoEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender: encoded_chunks_sender,
+                    },
                 )?
             }
             VideoEncoderOptions::FfmpegVp8(_) => {
@@ -180,11 +187,13 @@ impl RtmpClientOutput {
         let sample_rate = options.sample_rate();
 
         let encoder = match options {
-            AudioEncoderOptions::FdkAac(options) => spawn_audio_encoder_thread::<FdkAacEncoder>(
-                ctx.clone(),
+            AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
                 output_id.clone(),
-                options,
-                encoded_chunks_sender,
+                AudioEncoderThreadOptions {
+                    ctx: ctx.clone(),
+                    encoder_options: options,
+                    chunks_sender: encoded_chunks_sender,
+                },
             )?,
             AudioEncoderOptions::Opus(_) => {
                 return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus))
@@ -223,13 +232,13 @@ impl RtmpClientOutput {
 }
 
 impl Output for RtmpClientOutput {
-    fn audio(&self) -> Option<OutputAudio> {
+    fn audio(&self) -> Option<OutputAudio<'_>> {
         self.audio.as_ref().map(|audio| OutputAudio {
             samples_batch_sender: &audio.sample_batch_sender,
         })
     }
 
-    fn video(&self) -> Option<OutputVideo> {
+    fn video(&self) -> Option<OutputVideo<'_>> {
         self.video.as_ref().map(|video| OutputVideo {
             resolution: video.config.resolution,
             frame_format: video.config.output_format,

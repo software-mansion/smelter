@@ -76,6 +76,7 @@ pub(super) async fn status_handler(
                 OutputProtocolKind::Rtmp => "rtmp",
                 OutputProtocolKind::Mp4 => "mp4",
                 OutputProtocolKind::Whip => "whip",
+                OutputProtocolKind::Whep => "whep",
                 OutputProtocolKind::Hls => "hls",
                 OutputProtocolKind::EncodedDataChannel => "encoded_data",
                 OutputProtocolKind::RawDataChannel => "raw_data",

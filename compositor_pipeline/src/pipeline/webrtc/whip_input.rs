@@ -18,6 +18,7 @@ use crate::prelude::*;
 pub(super) mod connection_state;
 pub(super) mod negotiated_codecs;
 pub(super) mod state;
+mod utils;
 
 pub(super) mod track_audio_thread;
 pub(super) mod track_video_thread;
@@ -26,7 +27,7 @@ pub(super) use state::WhipInputsState;
 
 pub struct WhipInput {
     whip_inputs_state: WhipInputsState,
-    input_id: InputId,
+    endpoint_id: Arc<str>,
 }
 
 impl WhipInput {
@@ -39,12 +40,13 @@ impl WhipInput {
             return Err(InputInitError::WhipWhepServerNotRunning);
         };
 
+        let endpoint_id = options.endpoint_override.unwrap_or(input_id.0);
         let (frame_sender, frame_receiver) = bounded(5);
         let (input_samples_sender, input_samples_receiver) = bounded(5);
 
         let bearer_token = options.bearer_token.unwrap_or_else(generate_token);
         state.inputs.add_input(
-            &input_id,
+            &endpoint_id,
             WhipInputConnectionStateOptions {
                 bearer_token: bearer_token.clone(),
                 video_preferences: options.video_preferences,
@@ -56,7 +58,7 @@ impl WhipInput {
         Ok((
             Input::Whip(Self {
                 whip_inputs_state: state.inputs.clone(),
-                input_id: input_id.clone(),
+                endpoint_id,
             }),
             InputInitInfo::Whip { bearer_token },
             QueueDataReceiver {
@@ -69,7 +71,8 @@ impl WhipInput {
 
 impl Drop for WhipInput {
     fn drop(&mut self) {
-        self.whip_inputs_state.ensure_input_closed(&self.input_id);
+        self.whip_inputs_state
+            .ensure_input_closed(&self.endpoint_id);
     }
 }
 
