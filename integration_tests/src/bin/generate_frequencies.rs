@@ -43,7 +43,9 @@ fn main() {
 
             let file_name = format!("{name}_{file_suffix}.mp4");
 
-            let cmd = format!("ffmpeg -f lavfi -i \"sine=frequency={freq}:sample_rate=48000:duration=20\" -af \"volume=0.4\" -c:a {encoder_name} -b:a 192k -ac 2 -ar 48000 -vn {file_name}");
+            // If value is multiplied by 3 then max samples are around 8500 so mixing 3 of them
+            // SHOULD NOT cause any clipping
+            let cmd = format!("ffmpeg -y -f lavfi -i \"sine=frequency={freq}:sample_rate=48000:duration=20\" -af \"volume=3\" -c:a {encoder_name} -b:a 192k -ac 2 -ar 48000 -vn {file_name}");
 
             Command::new("bash")
                 .arg("-c")
