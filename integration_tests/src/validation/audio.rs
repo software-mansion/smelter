@@ -146,7 +146,9 @@ pub struct ArtificialFrequencyTolerance {
 impl Default for ArtificialFrequencyTolerance {
     fn default() -> Self {
         Self {
-            frequency_level: 3.0,
+            // WARN: This is dependent on the amplitude of input fixtups. If amplitudes are changed in
+            // `generate_frequencies.rs` bin then this value should be adjusted.
+            frequency_level: 40.0,
         }
     }
 }

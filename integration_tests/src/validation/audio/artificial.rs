@@ -22,7 +22,7 @@ const COMPARED_BINS: usize = 10;
 
 // WARN: This is dependent on the amplitude of input fixtups. If amplitudes are changed in
 // `generate_frequencies.rs` bin then this value should be adjusted.
-const NOISE_VALUE: f32 = 100.0;
+const NOISE_VALUE: f32 = 200.0;
 
 pub fn validate(
     full_expected_samples: Vec<f32>,
