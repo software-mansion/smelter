@@ -38,3 +38,4 @@ target/
 /result
 
 demo_json.json
+secret.env
