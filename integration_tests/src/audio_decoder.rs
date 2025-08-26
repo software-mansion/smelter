@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use rtp::{codecs::opus::OpusPacket, packetizer::Depacketizer};
+use webrtc::rtp::{codecs::opus::OpusPacket, packetizer::Depacketizer};
 
 #[derive(Clone)]
 pub struct AudioSampleBatch {
@@ -43,7 +43,7 @@ impl AudioDecoder {
         })
     }
 
-    pub fn decode(&mut self, packet: rtp::packet::Packet) -> Result<()> {
+    pub fn decode(&mut self, packet: webrtc::rtp::packet::Packet) -> Result<()> {
         let first_rtp_timestamp = *self
             .first_rtp_timestamp
             .get_or_insert(packet.header.timestamp);

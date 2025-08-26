@@ -63,8 +63,9 @@ pub fn split_rtp_packet_dump(dump: Bytes, split_at_pts: Duration) -> Result<(Byt
         let packet_len = u16::from_be_bytes([dump[read_bytes], dump[read_bytes + 1]]) as usize;
         read_bytes += 2;
 
-        let packet =
-            rtp::packet::Packet::unmarshal(&mut dump.slice(read_bytes..(read_bytes + packet_len)))?;
+        let packet = webrtc::rtp::packet::Packet::unmarshal(
+            &mut dump.slice(read_bytes..(read_bytes + packet_len)),
+        )?;
         read_bytes += packet_len;
 
         let packet_pts = match packet.header.payload_type {
@@ -111,9 +112,9 @@ pub fn save_failed_test_dumps<P: AsRef<Path>>(
 }
 
 pub fn find_packets_for_payload_type(
-    packets: &[rtp::packet::Packet],
+    packets: &[webrtc::rtp::packet::Packet],
     payload_type: u8,
-) -> Vec<rtp::packet::Packet> {
+) -> Vec<webrtc::rtp::packet::Packet> {
     packets
         .iter()
         .filter(|p| p.header.payload_type == payload_type)
@@ -121,7 +122,7 @@ pub fn find_packets_for_payload_type(
         .collect()
 }
 
-pub fn unmarshal_packets(data: &Bytes) -> Result<Vec<rtp::packet::Packet>> {
+pub fn unmarshal_packets(data: &Bytes) -> Result<Vec<webrtc::rtp::packet::Packet>> {
     let mut packets = Vec::new();
     let mut read_bytes = 0;
     while read_bytes < data.len() {
@@ -133,8 +134,9 @@ pub fn unmarshal_packets(data: &Bytes) -> Result<Vec<rtp::packet::Packet>> {
         }
 
         // TODO(noituri): Goodbye packet
-        let packet =
-            rtp::packet::Packet::unmarshal(&mut &data[read_bytes..(read_bytes + packet_size)])?;
+        let packet = webrtc::rtp::packet::Packet::unmarshal(
+            &mut &data[read_bytes..(read_bytes + packet_size)],
+        )?;
         read_bytes += packet_size;
 
         packets.push(packet);

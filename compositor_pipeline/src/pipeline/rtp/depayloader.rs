@@ -2,8 +2,8 @@ use std::mem;
 
 use bytes::Bytes;
 use compositor_render::error::ErrorStack;
-use rtp::codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet, vp9::Vp9Packet};
 use tracing::{info, trace, warn};
+use webrtc::rtp::codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet, vp9::Vp9Packet};
 
 use crate::prelude::*;
 use crate::{
@@ -52,18 +52,18 @@ pub(crate) trait Depayloader {
 #[derive(Debug, thiserror::Error)]
 pub enum DepayloadingError {
     #[error(transparent)]
-    Rtp(#[from] rtp::Error),
+    Rtp(#[from] webrtc::rtp::Error),
     #[error("AAC depayloading error")]
     Aac(#[from] AacDepayloadingError),
 }
 
-struct BufferedDepayloader<T: rtp::packetizer::Depacketizer + Default + 'static> {
+struct BufferedDepayloader<T: webrtc::rtp::packetizer::Depacketizer + Default + 'static> {
     kind: MediaKind,
     buffer: Vec<Bytes>,
     depayloader: T,
 }
 
-impl<T: rtp::packetizer::Depacketizer + Default + 'static> BufferedDepayloader<T> {
+impl<T: webrtc::rtp::packetizer::Depacketizer + Default + 'static> BufferedDepayloader<T> {
     fn new_boxed(kind: MediaKind) -> Box<dyn Depayloader> {
         Box::new(Self {
             kind,
@@ -73,7 +73,9 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> BufferedDepayloader<T
     }
 }
 
-impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for BufferedDepayloader<T> {
+impl<T: webrtc::rtp::packetizer::Depacketizer + Default + 'static> Depayloader
+    for BufferedDepayloader<T>
+{
     fn depayload(
         &mut self,
         packet: RtpPacket,
@@ -103,12 +105,12 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for Buffe
     }
 }
 
-struct SimpleDepayloader<T: rtp::packetizer::Depacketizer + Default + 'static> {
+struct SimpleDepayloader<T: webrtc::rtp::packetizer::Depacketizer + Default + 'static> {
     kind: MediaKind,
     depayloader: T,
 }
 
-impl<T: rtp::packetizer::Depacketizer + Default + 'static> SimpleDepayloader<T> {
+impl<T: webrtc::rtp::packetizer::Depacketizer + Default + 'static> SimpleDepayloader<T> {
     fn new_boxed(kind: MediaKind) -> Box<dyn Depayloader> {
         Box::new(Self {
             kind,
@@ -117,7 +119,9 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> SimpleDepayloader<T> 
     }
 }
 
-impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for SimpleDepayloader<T> {
+impl<T: webrtc::rtp::packetizer::Depacketizer + Default + 'static> Depayloader
+    for SimpleDepayloader<T>
+{
     fn depayload(
         &mut self,
         packet: RtpPacket,
@@ -169,7 +173,7 @@ where
             Some(PipelineEvent::Data(packet)) => match self.depayloader.depayload(packet) {
                 Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
                 // TODO: Remove after updating webrc-rs
-                Err(DepayloadingError::Rtp(rtp::Error::ErrShortPacket)) => Some(vec![]),
+                Err(DepayloadingError::Rtp(webrtc::rtp::Error::ErrShortPacket)) => Some(vec![]),
                 Err(err) => {
                     warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                     Some(vec![])

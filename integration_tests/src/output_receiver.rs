@@ -108,11 +108,11 @@ impl OutputReceiver {
 }
 
 fn unmarshal_packet(mut buffer: Bytes) -> Result<Packet> {
-    let rtp_packet = rtp::packet::Packet::unmarshal(&mut buffer.clone())?;
+    let rtp_packet = webrtc::rtp::packet::Packet::unmarshal(&mut buffer.clone())?;
     let packet = if rtp_packet.header.payload_type < 64 || rtp_packet.header.payload_type > 95 {
         Packet::Rtp(buffer)
     } else {
-        rtcp::goodbye::Goodbye::unmarshal(&mut buffer).map(|_| Packet::RtcpGoodbye)?
+        webrtc::rtcp::goodbye::Goodbye::unmarshal(&mut buffer).map(|_| Packet::RtcpGoodbye)?
     };
 
     Ok(packet)

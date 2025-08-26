@@ -53,8 +53,8 @@ pub(crate) struct RtpOutput {
 #[derive(Debug)]
 pub enum RtpEvent {
     Data(RtpPacket),
-    AudioEos(rtcp::goodbye::Goodbye),
-    VideoEos(rtcp::goodbye::Goodbye),
+    AudioEos(webrtc::rtcp::goodbye::Goodbye),
+    VideoEos(webrtc::rtcp::goodbye::Goodbye),
     Err(PayloadingError),
 }
 

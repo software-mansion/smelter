@@ -15,7 +15,7 @@ pub(crate) use rtp_output::RtpOutput;
 
 #[derive(Clone)]
 pub struct RtpPacket {
-    pub packet: rtp::packet::Packet,
+    pub packet: webrtc::rtp::packet::Packet,
     pub timestamp: Duration,
 }
 

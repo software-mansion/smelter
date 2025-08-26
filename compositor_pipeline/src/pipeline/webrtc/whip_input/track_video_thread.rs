@@ -322,7 +322,7 @@ where
                 match depayloader.depayload(packet) {
                     Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
                     // TODO: Remove after updating webrc-rs
-                    Err(DepayloadingError::Rtp(rtp::Error::ErrShortPacket)) => Some(vec![]),
+                    Err(DepayloadingError::Rtp(webrtc::rtp::Error::ErrShortPacket)) => Some(vec![]),
                     Err(err) => {
                         warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                         Some(vec![])

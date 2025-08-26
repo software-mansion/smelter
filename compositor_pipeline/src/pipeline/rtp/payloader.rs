@@ -2,7 +2,9 @@ use std::fmt::Debug;
 use tracing::{error, info};
 
 use rand::Rng;
-use rtp::codecs::{h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader, vp9::Vp9Payloader};
+use webrtc::rtp::codecs::{
+    h264::H264Payloader, opus::OpusPayloader, vp8::Vp8Payloader, vp9::Vp9Payloader,
+};
 
 use crate::prelude::*;
 
@@ -26,7 +28,7 @@ pub struct PayloaderOptions {
 }
 
 pub(crate) struct Payloader {
-    payloader: Box<dyn rtp::packetizer::Payloader + Send>,
+    payloader: Box<dyn webrtc::rtp::packetizer::Payloader + Send>,
     mtu: usize,
     ssrc: u32,
     payload_type: u8,
@@ -37,7 +39,7 @@ pub(crate) struct Payloader {
 impl Payloader {
     pub fn new(options: PayloaderOptions) -> Self {
         info!(?options, "Initialize RTP payloader");
-        let payloader: Box<dyn rtp::packetizer::Payloader + Send> = match options.codec {
+        let payloader: Box<dyn webrtc::rtp::packetizer::Payloader + Send> = match options.codec {
             PayloadedCodec::H264 => Box::new(H264Payloader::default()),
             PayloadedCodec::Vp8 => Box::new(Vp8Payloader::default()),
             PayloadedCodec::Vp9 => Box::new(Vp9Payloader::default()),
@@ -66,7 +68,7 @@ impl Payloader {
             .into_iter()
             .enumerate()
             .map(|(i, payload)| {
-                let header = rtp::header::Header {
+                let header = webrtc::rtp::header::Header {
                     version: 2,
                     padding: false,
                     extension: false,
@@ -80,7 +82,7 @@ impl Payloader {
                 self.next_sequence_number = self.next_sequence_number.wrapping_add(1);
 
                 Ok(RtpPacket {
-                    packet: rtp::packet::Packet { header, payload },
+                    packet: webrtc::rtp::packet::Packet { header, payload },
                     timestamp: chunk.pts,
                 })
             })
@@ -141,7 +143,7 @@ where
 #[derive(Debug, thiserror::Error)]
 pub enum PayloadingError {
     #[error(transparent)]
-    RtpLibError(#[from] rtp::Error),
+    RtpLibError(#[from] webrtc::rtp::Error),
 
     #[error(transparent)]
     MarshalError(#[from] webrtc_util::Error),
