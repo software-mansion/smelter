@@ -7,7 +7,7 @@ export function intoRegisterWhepOutput(
   initial: { video?: Api.VideoScene; audio?: Api.AudioScene }
 ): RegisterOutputRequest {
   return {
-    type: 'whep',
+    type: 'whep_server',
     bearer_token: output.bearerToken,
 
     video: output.video && initial.video && intoOutputWhepVideoOptions(output.video, initial.video),

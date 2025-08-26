@@ -34,7 +34,7 @@ fn client_code() -> Result<()> {
     examples::post(
         "output/output_1/register",
         &json!({
-            "type": "whip",
+            "type": "whip_client",
             "endpoint_url": endpoint_url,
             "bearer_token": token,
             "video": {

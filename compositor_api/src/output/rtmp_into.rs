@@ -3,11 +3,11 @@ use tracing::warn;
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
 
-impl TryFrom<RtmpClient> for pipeline::RegisterOutputOptions {
+impl TryFrom<RtmpOutput> for pipeline::RegisterOutputOptions {
     type Error = TypeError;
 
-    fn try_from(value: RtmpClient) -> Result<Self, Self::Error> {
-        let RtmpClient { url, video, audio } = value;
+    fn try_from(value: RtmpOutput) -> Result<Self, Self::Error> {
+        let RtmpOutput { url, video, audio } = value;
 
         if video.is_none() && audio.is_none() {
             return Err(TypeError::new(

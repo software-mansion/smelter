@@ -67,6 +67,33 @@ export type RegisterInput =
       } | null;
     }
   | {
+      type: "whip_server";
+      /**
+       * Parameters of a video source included in the RTP stream.
+       */
+      video?: InputWhipVideoOptions | null;
+      /**
+       * Parameters of an audio source included in the RTP stream.
+       */
+      audio?: InputWhipAudioOptions | null;
+      /**
+       * Token used for authentication in WHIP protocol. If not provided, the random value will be generated and returned in the response.
+       */
+      bearer_token?: string | null;
+      /**
+       * Internal use only. Overrides whip endpoint id which is used when referencing the input via whip server. If not provided, it defaults to input id.
+       */
+      endpoint_override?: string | null;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
+       */
+      offset_ms?: number | null;
+    }
+  | {
       type: "whip";
       /**
        * Parameters of a video source included in the RTP stream.
@@ -81,7 +108,7 @@ export type RegisterInput =
        */
       bearer_token?: string | null;
       /**
-       * Internal use only. Overrides whip session id which is used when referencing the input via whip server. If not provided, it defaults to input id.
+       * Internal use only. Overrides whip endpoint id which is used when referencing the input via whip server. If not provided, it defaults to input id.
        */
       endpoint_override?: string | null;
       /**
@@ -232,6 +259,22 @@ export type RegisterOutput =
       audio?: OutputMp4AudioOptions | null;
     }
   | {
+      type: "whip_client";
+      /**
+       * WHIP server endpoint
+       */
+      endpoint_url: string;
+      bearer_token?: string | null;
+      /**
+       * Video track configuration.
+       */
+      video?: OutputWhipVideoOptions | null;
+      /**
+       * Audio track configuration.
+       */
+      audio?: OutputWhipAudioOptions | null;
+    }
+  | {
       type: "whip";
       /**
        * WHIP server endpoint
@@ -248,7 +291,7 @@ export type RegisterOutput =
       audio?: OutputWhipAudioOptions | null;
     }
   | {
-      type: "whep";
+      type: "whep_server";
       /**
        * Token used for authentication in WHEP protocol. If not provided, the bearer token is not required to establish the session.
        */

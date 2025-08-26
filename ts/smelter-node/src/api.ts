@@ -15,8 +15,8 @@ export type RegisterOutput =
   | ({ type: 'rtp_stream' } & RegisterRtpOutput)
   | ({ type: 'mp4' } & RegisterMp4Output)
   | ({ type: 'hls' } & RegisterHlsOutput)
-  | ({ type: 'whip' } & RegisterWhipOutput)
-  | ({ type: 'whep' } & RegisterWhepOutput)
+  | ({ type: 'whip_client' } & RegisterWhipOutput)
+  | ({ type: 'whep_server' } & RegisterWhepOutput)
   | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput);
 
 export type RegisterWhepOutputResponse = {
@@ -27,7 +27,7 @@ export type RegisterInput =
   | ({ type: 'rtp_stream' } & RegisterRtpInput)
   | ({ type: 'mp4' } & RegisterMp4Input)
   | ({ type: 'hls' } & RegisterHlsInput)
-  | ({ type: 'whip' } & RegisterWhipInput);
+  | ({ type: 'whip_server' } & RegisterWhipInput);
 
 export type RegisterMp4InputResponse = {
   videoDurationMs?: number;
