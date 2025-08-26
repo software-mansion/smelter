@@ -1,0 +1,16 @@
+services:
+  smelter-demo:
+    env_file:
+      - common.env
+      - secret.env
+    build: .
+    ports:
+      - 3001:3001
+      - 9000:9000
+    # AMD GPU
+    # devices:
+    #  - '/dev/dri'
+    #
+    # Nvidia GPU
+    gpus: 'all'
+    runtime: 'nvidia'
