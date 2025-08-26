@@ -97,12 +97,14 @@ fn frame_input_samples(
         let expected_next_sample_start_pts =
             start_pts + Duration::from_secs_f64(sample_count as f64 / sample_rate as f64);
 
-        // potentially fill missing spots
+        // Potentially fill missing spots
         if expected_next_sample_start_pts + max_error < input_samples.start_pts {
             let missing_time = input_samples
                 .start_pts
                 .saturating_sub(expected_next_sample_start_pts);
             let missing_samples_count = time_to_sample_count(missing_time);
+
+            // NOTE: This needs reviewing as it does not make sense at first glance.
             if missing_samples_count < 1 {
                 warn!(
                     ?missing_time,
@@ -116,7 +118,7 @@ fn frame_input_samples(
         let expected_next_sample_start_pts =
             start_pts + Duration::from_secs_f64(sample_count as f64 / sample_rate as f64);
 
-        // check if we need to drop samples at the beginning
+        // Check if we need to drop samples at the beginning
         let mut start_range = 0;
         if expected_next_sample_start_pts > input_samples.start_pts + max_error {
             let time_to_remove_from_start =
@@ -126,14 +128,13 @@ fn frame_input_samples(
                 // We should only drop samples in the first batch that overlaps with target batch
                 // timestamps.
                 warn!(
-                    "Received overlapping batches on input. Dropping {} samples.",
-                    samples_to_remove_from_start
+                    "Received overlapping batches on input. Dropping {samples_to_remove_from_start} samples.",
                 );
             }
             start_range = usize::min(samples_to_remove_from_start, input_samples.samples.len());
         };
 
-        // check if we need to drop samples at the end
+        // Check if we need to drop samples at the end
         let mut end_range = input_samples.len();
         if input_samples.end_pts > end_pts + max_error {
             let desired_duration = end_pts.saturating_sub(expected_next_sample_start_pts);
@@ -141,6 +142,7 @@ fn frame_input_samples(
             end_range = start_range + desired_sample_count;
         }
 
+        // BUG: (@jbrs) This sometimes panics
         samples_in_frame.extend(input_samples.samples[start_range..end_range].iter());
     }
 
