@@ -47,3 +47,5 @@ target/
 
 .direnv
 /result
+
+secret.env
