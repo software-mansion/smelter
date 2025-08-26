@@ -435,10 +435,9 @@ pub fn required_audio_inputs_with_offset() -> Result<()> {
 
 /// Required inputs with some packets delayed and some dropped. Offset set to 1000ms.
 ///
-/// Countdown from 10
 /// - 1 seconds of silence
 /// - 1 second of audio (from the start of the recording)
-/// - 2 seconds of silence (cuts of part of "10" and "9" from countdown)
+/// - 2 seconds of silence
 /// - remaining part of audio (2 seconds from previous step are missing)
 #[test]
 pub fn required_audio_inputs_with_offset_missing_data() -> Result<()> {
