@@ -62,6 +62,7 @@ fn client_code() -> Result<()> {
             "audio": {
                 "decoder": "opus",
             },
+            "offset_ms": 0.0,
         }),
     )?;
 
@@ -89,7 +90,7 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    let path = Path::new(PATH).join("examples/assets/lachrymaAudioOnly2PercentLoss.opus");
+    let path = Path::new(PATH).join("examples/assets/a_opus.mp4");
     // let path = Path::new(PATH).join("examples/assets/lachrymaAudioOnly10PercentLoss.opus");
     // let path = Path::new(PATH).join("examples/assets/lachrymaAudioOnly20PercentLoss.opus");
     // let path = Path::new(PATH).join("examples/assets/lachrymaSkipIntro.mp4");
