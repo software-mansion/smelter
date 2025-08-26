@@ -360,7 +360,7 @@ pub fn single_input_aac() -> Result<()> {
     Ok(())
 }
 
-/// Single audio input with a 440 Hz tone.
+/// Single mp4 audio input with a 440 Hz tone.
 ///
 /// Play audio for 10 seconds.
 #[test]
