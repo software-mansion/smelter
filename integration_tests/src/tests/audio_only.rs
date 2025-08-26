@@ -206,7 +206,7 @@ pub fn audio_mixing_no_offset() -> Result<()> {
     Ok(())
 }
 
-/// Single input with audio of a countdown.
+/// Single audio input with a 440 Hz tone.
 ///
 /// Play audio for 20 seconds, the last few second should be silent
 #[test]
@@ -360,7 +360,7 @@ pub fn single_input_aac() -> Result<()> {
     Ok(())
 }
 
-/// An audio only mp4 file with AAC.
+/// Single audio input with a 440 Hz tone.
 ///
 /// Play audio for 10 seconds.
 #[test]
