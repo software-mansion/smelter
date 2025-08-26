@@ -139,10 +139,12 @@ fn frame_input_samples(
         if input_samples.end_pts > end_pts + max_error {
             let desired_duration = end_pts.saturating_sub(expected_next_sample_start_pts);
             let desired_sample_count = time_to_sample_count(desired_duration);
-            end_range = start_range + desired_sample_count;
+            end_range = usize::min(
+                start_range + desired_sample_count,
+                input_samples.samples.len(),
+            );
         }
 
-        // BUG: (@jbrs) This sometimes panics
         samples_in_frame.extend(input_samples.samples[start_range..end_range].iter());
     }
 
