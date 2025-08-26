@@ -10,7 +10,7 @@ type Config = {
 };
 
 export const config: Config =
-  process.env.NODE_ENV === 'production'
+  process.env.ENVIRONMENT === 'production'
     ? {
         logger: {
           level: 'info',
