@@ -17,6 +17,13 @@ struct SpectrumBin {
     frequency_value: f32,
 }
 
+struct AnalyzedSpectrum {
+    actual_left: Vec<SpectrumBin>,
+    expected_left: Vec<SpectrumBin>,
+    actual_right: Vec<SpectrumBin>,
+    expected_right: Vec<SpectrumBin>,
+}
+
 /// Number of top detected frequencies to be compared
 const COMPARED_BINS: usize = 10;
 
@@ -39,24 +46,19 @@ pub fn validate(
         let expected_samples = find_samples(&full_expected_samples, interval);
         let actual_samples = find_samples(&full_actual_samples, interval);
 
-        let (
-            expected_samples_left,
-            expected_samples_right,
-            actual_samples_left,
-            actual_samples_right,
-        ) = analyze_samples(actual_samples, expected_samples, sample_rate)?;
+        let spectrum = analyze_samples(actual_samples, expected_samples, sample_rate)?;
 
         let left_result = compare(
-            &actual_samples_left,
-            &expected_samples_left,
+            &spectrum.actual_left,
+            &spectrum.expected_left,
             &tolerance,
             interval.first_sample,
             Channel::Left,
         );
 
         let right_result = compare(
-            &actual_samples_right,
-            &expected_samples_right,
+            &spectrum.actual_right,
+            &spectrum.expected_right,
             &tolerance,
             interval.first_sample,
             Channel::Right,
@@ -101,18 +103,11 @@ fn compare(
     Ok(())
 }
 
-type AnalyzeResult = (
-    Vec<SpectrumBin>,
-    Vec<SpectrumBin>,
-    Vec<SpectrumBin>,
-    Vec<SpectrumBin>,
-);
-
 fn analyze_samples(
     actual_samples: Vec<f32>,
     expected_samples: Vec<f32>,
     sample_rate: u32,
-) -> Result<AnalyzeResult> {
+) -> Result<AnalyzedSpectrum> {
     let (expected_samples_left, expected_samples_right) = split_samples(expected_samples);
     let (actual_samples_left, actual_samples_right) = split_samples(actual_samples);
 
@@ -150,12 +145,12 @@ fn analyze_samples(
     let actual_result_left = prepare_spectrum_for_comparison(actual_spectrum_left);
     let actual_result_right = prepare_spectrum_for_comparison(actual_spectrum_right);
 
-    Ok((
-        expected_result_left,
-        expected_result_right,
-        actual_result_left,
-        actual_result_right,
-    ))
+    Ok(AnalyzedSpectrum {
+        actual_left: actual_result_left,
+        expected_left: expected_result_left,
+        actual_right: actual_result_right,
+        expected_right: expected_result_right,
+    })
 }
 
 fn calc_fft(samples: &[f32], sample_rate: u32) -> Result<FrequencySpectrum, SpectrumAnalyzerError> {
