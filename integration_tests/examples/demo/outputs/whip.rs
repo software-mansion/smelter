@@ -1,4 +1,4 @@
-use crate::smelter_state::outputs::{AudioEncoder, VideoEncoder, VideoResolution};
+use crate::outputs::{AudioEncoder, VideoEncoder, VideoResolution};
 
 const WHIP_PORT_ENV: &str = "WHIP_PORT";
 const WHIP_URL_ENV: &str = "WHIP_URL";
