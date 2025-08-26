@@ -1,6 +1,6 @@
 type Config = {
   logger: {
-    level: 'info';
+    level: 'info' | 'warn';
     transport?: {
       target: 'pino-pretty';
     };
@@ -10,12 +10,12 @@ type Config = {
 };
 
 export const config: Config =
-  process.env.NODE_ENV === 'production'
+  process.env.ENVIRONMENT === 'production'
     ? {
         logger: {
-          level: 'info',
+          level: 'warn',
         },
-        whepBaseUrl: 'https://demo.smelter.dev:9000/whep',
+        whepBaseUrl: 'https://puffer.fishjam.io/smelter-demo-whep',
         h264Decoder: 'vulkan_h264',
       }
     : {
