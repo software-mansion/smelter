@@ -1,15 +1,5 @@
 use std::{path::PathBuf, process::Command};
 
-fn snapshot_dir_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("snapshot_tests")
-        .join("snapshots")
-        .join("rtp_packet_dumps")
-        .join("inputs")
-}
-
 enum Encoder {
     Aac,
     Opus,
@@ -35,7 +25,14 @@ fn main() {
     let encoders = vec![Encoder::Aac, Encoder::Opus];
     let notes = vec![("a", 440.0), ("c_sharp", 554.37), ("e", 659.26)];
 
-    let cmd_wd = snapshot_dir_path();
+    let cmd_wd = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("snapshot_tests")
+        .join("snapshots")
+        .join("rtp_packet_dumps")
+        .join("inputs");
+
     for encoder in &encoders {
         for (name, freq) in &notes {
             let file_suffix = encoder.file_name();
@@ -43,8 +40,6 @@ fn main() {
 
             let file_name = format!("{name}_{file_suffix}.mp4");
 
-            // BUG: If volume is multiplied by 3 then max sample value is around 8500 so mixing 3 of them
-            // SHOULD NOT cause any clipping, yet it does
             let cmd = format!("ffmpeg -y -f lavfi -i \"sine=frequency={freq}:sample_rate=48000:duration=20\" -af \"volume=3\" -c:a {encoder_name} -b:a 192k -ac 2 -ar 48000 -vn {file_name}");
 
             Command::new("bash")
