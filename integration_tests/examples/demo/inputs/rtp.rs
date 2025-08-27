@@ -55,7 +55,7 @@ impl RtpInput {
             IP,
             video_port,
             audio_port,
-            integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+            integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
         )?);
         Ok(())
     }
@@ -67,7 +67,7 @@ impl RtpInput {
             IP,
             video_port,
             audio_port,
-            integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+            integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
         )?);
         Ok(())
     }
@@ -83,13 +83,13 @@ impl RtpInput {
                 IP,
                 Some(self.port),
                 None,
-                integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+                integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
             )?,
             (None, Some(_audio)) => start_ffmpeg_send(
                 IP,
                 None,
                 Some(self.port),
-                integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+                integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
             )?,
             (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
         };
