@@ -209,18 +209,7 @@ impl WgpuState {
             render_pass.draw(0..3, 0..1);
         }
 
-        encoder.transition_resources(
-            [].into_iter(),
-            [wgpu::TextureTransition {
-                texture: &self.texture,
-                state: wgpu::TextureUses::RESOURCE,
-                selector: None,
-            }]
-            .into_iter(),
-        );
-
         let buffer = encoder.finish();
-
         self.queue.submit([buffer]);
     }
 }
