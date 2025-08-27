@@ -1,14 +1,14 @@
 use std::env;
 
-use anyhow::{anyhow, Result};
-use inquire::{Select, Text};
+use anyhow::Result;
+use inquire::{Confirm, Select, Text};
 use rand::RngCore;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
-    outputs::{AudioEncoder, VideoEncoder, VideoResolution},
+    outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayer,
 };
 
@@ -27,14 +27,42 @@ pub enum WhipRegisterOptions {
     Skip,
 }
 
+#[derive(Debug)]
 pub struct WhipOutput {
     name: String,
     endpoint_url: String,
     bearer_token: Option<String>,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
+    player: OutputPlayer,
 }
 
+impl OutputHandler for WhipOutput {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
+        match player {
+            OutputPlayer::Manual => loop {
+                let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                if confirmation {
+                    return Ok(());
+                }
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value {
+        json!({
+           "video": self.video.as_ref().map(|v| v.serialize_update(inputs, &self.name)),
+           "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
+        })
+    }
+}
+
+#[derive(Debug)]
 pub struct WhipOutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
@@ -112,6 +140,7 @@ impl Default for WhipOutputVideoOptions {
     }
 }
 
+#[derive(Debug)]
 pub struct WhipOutputAudioOptions {
     encoder: AudioEncoder,
 }
@@ -168,6 +197,7 @@ pub struct WhipOutputBuilder {
     bearer_token: Option<String>,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
+    player: OutputPlayer,
 }
 
 impl WhipOutputBuilder {
@@ -179,6 +209,7 @@ impl WhipOutputBuilder {
             bearer_token: None,
             video: None,
             audio: None,
+            player: OutputPlayer::Manual,
         }
     }
 
@@ -293,25 +324,29 @@ impl WhipOutputBuilder {
         self
     }
 
-    fn serialize(&self, _inputs: &[&str]) -> serde_json::Value {
-        json!({})
+    fn serialize(&self, inputs: &[&str]) -> serde_json::Value {
+        let endpoint_url = self.endpoint_url.as_ref().unwrap();
+        json!({
+            "type": "whip",
+            "endpoint_url": endpoint_url,
+            "bearer_token": self.bearer_token,
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs, &self.name)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
     }
 
-    pub fn build(self, inputs: &[&str]) -> Result<(WhipOutput, serde_json::Value)> {
+    pub fn build(self, inputs: &[&str]) -> (WhipOutput, serde_json::Value, OutputPlayer) {
         let register_request = self.serialize(inputs);
-
-        let endpoint_url = self
-            .endpoint_url
-            .ok_or_else(|| anyhow!("WHIP output requires an endpoint URL to be specified."))?;
 
         let whip_output = WhipOutput {
             name: self.name,
-            endpoint_url,
+            endpoint_url: self.endpoint_url.unwrap(),
             bearer_token: self.bearer_token,
             video: self.video,
             audio: self.audio,
+            player: self.player,
         };
 
-        Ok((whip_output, register_request))
+        (whip_output, register_request, self.player)
     }
 }

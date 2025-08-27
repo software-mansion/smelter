@@ -14,13 +14,11 @@ pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
     fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value;
 
-    #[allow(unused_variables)]
-    fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
+    fn on_before_registration(&mut self, _player: OutputPlayer) -> Result<()> {
         Ok(())
     }
 
-    #[allow(unused_variables)]
-    fn on_after_registration(&mut self, player: OutputPlayer) -> Result<()> {
+    fn on_after_registration(&mut self, _player: OutputPlayer) -> Result<()> {
         Ok(())
     }
 }
