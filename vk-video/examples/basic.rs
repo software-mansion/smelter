@@ -2,7 +2,7 @@
 fn main() {
     use std::io::Write;
 
-    use vk_video::{EncodedChunk, Frame, VulkanInstance};
+    use vk_video::{EncodedInputChunk, Frame, VulkanInstance};
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::INFO)
@@ -36,7 +36,7 @@ fn main() {
     let mut output_file = std::fs::File::create("output.nv12").unwrap();
 
     for chunk in h264_bytestream.chunks(256) {
-        let data = EncodedChunk {
+        let data = EncodedInputChunk {
             data: chunk,
             pts: None,
         };

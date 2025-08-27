@@ -16,7 +16,7 @@ use crate::{
         ProfileInfo, QueryPool, Semaphore, VideoEncodeQueueExt, VideoQueueExt, VideoSession,
         VideoSessionParameters,
     },
-    EncodedChunk, Frame, H264Profile, RawFrameData, VulkanCommonError, VulkanDevice,
+    EncodedOutputChunk, Frame, H264Profile, RawFrameData, VulkanCommonError, VulkanDevice,
 };
 
 mod encode_parameter_sets;
@@ -989,16 +989,18 @@ impl VulkanEncoder<'_> {
         &mut self,
         frame: &Frame<RawFrameData>,
         force_idr: bool,
-    ) -> Result<EncodedChunk<Vec<u8>>, VulkanEncoderError> {
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         let (image, _buffer) = self.transfer_buffer_to_image(frame)?;
 
         let image = Arc::new(Mutex::new(image));
 
+        let is_keyframe = force_idr || self.idr_period_counter == 0;
         let result = self.encode(image, force_idr, *self.sync_structures.sem_ready_to_encode)?;
 
-        Ok(EncodedChunk {
+        Ok(EncodedOutputChunk {
             data: result,
             pts: frame.pts,
+            is_keyframe,
         })
     }
 
@@ -1009,7 +1011,7 @@ impl VulkanEncoder<'_> {
         &mut self,
         frame: Frame<wgpu::Texture>,
         force_idr: bool,
-    ) -> Result<EncodedChunk<Vec<u8>>, VulkanEncoderError> {
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         let convert_state =
             unsafe { self.converter.as_ref().unwrap().convert(frame.data) }.unwrap();
 
@@ -1020,6 +1022,7 @@ impl VulkanEncoder<'_> {
             }
         };
 
+        let is_keyframe = force_idr || self.idr_period_counter == 0;
         let result = self.encode(convert_state.image, force_idr, sem)?;
 
         unsafe {
@@ -1030,9 +1033,10 @@ impl VulkanEncoder<'_> {
                 })
         }
 
-        Ok(EncodedChunk {
+        Ok(EncodedOutputChunk {
             data: result,
             pts: frame.pts,
+            is_keyframe,
         })
     }
 
