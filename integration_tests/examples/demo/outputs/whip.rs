@@ -5,7 +5,7 @@ use inquire::{Confirm, Select, Text};
 use rand::RngCore;
 use serde_json::json;
 use strum::{Display, EnumIter};
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{
     outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
@@ -229,6 +229,7 @@ impl WhipOutputBuilder {
                 }
                 None | Some(_) => match env::var(WHIP_URL_ENV).ok() {
                     Some(url) => {
+                        info!("WHIP endpoint url read from env: {url}");
                         builder = builder.with_endpoint_url(url);
                         break;
                     }
@@ -251,6 +252,7 @@ impl WhipOutputBuilder {
                 }
                 None | Some(_) => match env::var(WHIP_TOKEN_ENV).ok() {
                     Some(token) => {
+                        info!("WHIP bearer token read from env: {token}");
                         builder = builder.with_bearer_token(token);
                         break;
                     }
