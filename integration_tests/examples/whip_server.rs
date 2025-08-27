@@ -26,7 +26,7 @@ fn client_code() -> Result<()> {
     examples::post(
         "input/input/register",
         &json!({
-            "type": "whip",
+            "type": "whip_server",
             "bearer_token": "example",
             "video": {
                 "decoder_preferences": [

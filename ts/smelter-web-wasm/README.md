@@ -45,7 +45,7 @@ async function startSmelterInstance(video: HTMLVideoElement) {
   await smelter.registerInput('camera-input', { type: 'camera' });
 
   const { stream } = await smelter.registerOutput('output', <SmelterApp />, {
-    type: 'whip',
+    type: 'whip_client',
     endpointUrl: 'https://example.com/whip',
     bearerToken: '<EXAMPLE TOKEN>',
     video: {

@@ -25,7 +25,7 @@ export type RegisterOutput =
       audio?: boolean;
     }
   | {
-      type: 'whip';
+      type: 'whip_client';
       /**
        * WHIP server endpoint.
        */
@@ -50,7 +50,7 @@ export function intoRegisterOutputRequest(request: RegisterOutput): Output.Regis
       ...request,
       type: 'web-wasm-canvas',
     };
-  } else if (request.type === 'whip') {
+  } else if (request.type === 'whip_client') {
     return { ...request, type: 'web-wasm-whip' };
   }
   throw new Error('Unknown output type');
@@ -61,4 +61,4 @@ export type RegisterInput =
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: MediaStream }
-  | { type: 'whep'; endpointUrl: string; bearerToken?: string };
+  | { type: 'whep_client'; endpointUrl: string; bearerToken?: string };

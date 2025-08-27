@@ -68,8 +68,8 @@ export type RegisterOutput =
   | ({ type: 'rtp_stream' } & RegisterRtpOutput)
   | ({ type: 'mp4' } & RegisterMp4Output)
   | ({ type: 'hls' } & RegisterHlsOutput)
-  | ({ type: 'whip' } & RegisterWhipOutput)
-  | ({ type: 'whep' } & RegisterWhepOutput)
+  | ({ type: 'whip_client' } & RegisterWhipOutput)
+  | ({ type: 'whep_server' } & RegisterWhepOutput)
   | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput)
   | RegisterWasmSpecificOutput;
 
@@ -86,9 +86,9 @@ export function intoRegisterOutput(
     return intoRegisterMp4Output(output, initial);
   } else if (output.type === 'hls') {
     return intoRegisterHlsOutput(output, initial);
-  } else if (output.type === 'whip') {
+  } else if (output.type === 'whip_client') {
     return intoRegisterWhipOutput(output, initial);
-  } else if (output.type === 'whep') {
+  } else if (output.type === 'whep_server') {
     return intoRegisterWhepOutput(output, initial);
   } else if (output.type === 'rtmp_client') {
     return intoRegisterRtmpClientOutput(output, initial);

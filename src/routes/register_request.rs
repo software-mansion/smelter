@@ -5,6 +5,7 @@ use compositor_pipeline::{protocols::Port, InputInitInfo, Pipeline};
 use glyphon::fontdb::Source;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 use crate::{
     error::ApiError,
@@ -13,7 +14,7 @@ use crate::{
 };
 use compositor_api::{
     DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId,
-    RtmpClient, RtpInput, RtpOutput, ShaderSpec, WebRendererSpec, WhepOutput, WhipInput,
+    RtmpOutput, RtpInput, RtpOutput, ShaderSpec, WebRendererSpec, WhepOutput, WhipInput,
     WhipOutput,
 };
 
@@ -24,6 +25,8 @@ use super::ApiState;
 pub enum RegisterInput {
     RtpStream(RtpInput),
     Mp4(Mp4Input),
+    WhipServer(WhipInput),
+    // deprecated
     Whip(WhipInput),
     Hls(HlsInput),
     #[serde(rename = "decklink")]
@@ -34,10 +37,12 @@ pub enum RegisterInput {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RegisterOutput {
     RtpStream(RtpOutput),
-    RtmpClient(RtmpClient),
+    RtmpClient(RtmpOutput),
     Mp4(Mp4Output),
+    WhipClient(WhipOutput),
+    // deprecated
     Whip(WhipOutput),
-    Whep(WhepOutput),
+    WhepServer(WhepOutput),
     Hls(HlsOutput),
 }
 
@@ -58,7 +63,11 @@ pub(super) async fn handle_input(
             RegisterInput::DeckLink(decklink) => {
                 Pipeline::register_input(&api.pipeline, input_id.into(), decklink.try_into()?)?
             }
+            RegisterInput::WhipServer(whip) => {
+                Pipeline::register_input(&api.pipeline, input_id.into(), whip.try_into()?)?
+            }
             RegisterInput::Whip(whip) => {
+                warn!("The input name 'whip' is deprecated and will be replaced by 'whip_server' in future releases.");
                 Pipeline::register_input(&api.pipeline, input_id.into(), whip.try_into()?)?
             }
             RegisterInput::Hls(hls) => {
@@ -99,10 +108,14 @@ pub(super) async fn handle_output(
             RegisterOutput::Mp4(mp4) => {
                 Pipeline::register_output(&api.pipeline, output_id.into(), mp4.try_into()?)?
             }
-            RegisterOutput::Whip(whip) => {
+            RegisterOutput::WhipClient(whip) => {
                 Pipeline::register_output(&api.pipeline, output_id.into(), whip.try_into()?)?
             }
-            RegisterOutput::Whep(whep) => {
+            RegisterOutput::Whip(whip) => {
+                warn!("The output name 'whip' is deprecated and will be replaced by 'whip_client' in future releases.");
+                Pipeline::register_output(&api.pipeline, output_id.into(), whip.try_into()?)?
+            }
+            RegisterOutput::WhepServer(whep) => {
                 Pipeline::register_output(&api.pipeline, output_id.into(), whep.try_into()?)?
             }
             RegisterOutput::RtmpClient(rtmp) => {

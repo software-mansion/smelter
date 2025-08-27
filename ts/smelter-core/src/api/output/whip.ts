@@ -7,7 +7,7 @@ export function intoRegisterWhipOutput(
   initial: { video?: Api.VideoScene; audio?: Api.AudioScene }
 ): RegisterOutputRequest {
   return {
-    type: 'whip',
+    type: 'whip_client',
     endpoint_url: output.endpointUrl,
     bearer_token: output.bearerToken,
 

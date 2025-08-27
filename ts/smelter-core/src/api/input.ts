@@ -21,12 +21,12 @@ export type RegisterInputRequest =
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any }
-  | { type: 'whep'; endpointUrl: string; bearerToken?: string };
+  | { type: 'whep_client'; endpointUrl: string; bearerToken?: string };
 
 export type RegisterRtpStreamInputRequest = Extract<Api.RegisterInput, { type: 'rtp_stream' }>;
 export type RegisterMp4InputRequest = { blob?: any } & Extract<Api.RegisterInput, { type: 'mp4' }>;
 export type RegisterHlsInputRequest = Extract<Api.RegisterInput, { type: 'hls' }>;
-export type RegisterWhipInputRequest = Extract<Api.RegisterInput, { type: 'whip' }>;
+export type RegisterWhipInputRequest = Extract<Api.RegisterInput, { type: 'whip_server' }>;
 export type RegisterDecklinkInputRequest = Extract<Api.RegisterInput, { type: 'decklink' }>;
 
 export type InputRef = _smelterInternals.InputRef;
@@ -37,11 +37,11 @@ export type RegisterInput =
   | ({ type: 'rtp_stream' } & RegisterRtpInput)
   | ({ type: 'mp4' } & RegisterMp4Input)
   | ({ type: 'hls' } & RegisterHlsInput)
-  | ({ type: 'whip' } & RegisterWhipInput)
+  | ({ type: 'whip_server' } & RegisterWhipInput)
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any }
-  | { type: 'whep'; endpointUrl: string; bearerToken?: string };
+  | { type: 'whep_client'; endpointUrl: string; bearerToken?: string };
 
 /**
  * Converts object passed by user (or modified by platform specific interface) into
@@ -54,7 +54,7 @@ export function intoRegisterInput(inputId: string, input: RegisterInput): Regist
     return intoHlsRegisterInput(input);
   } else if (input.type === 'rtp_stream') {
     return intoRtpRegisterInput(input);
-  } else if (input.type === 'whip') {
+  } else if (input.type === 'whip_server') {
     return intoWhipRegisterInput(inputId, input);
   } else if (input.type === 'camera') {
     return { type: 'camera' };
@@ -62,8 +62,8 @@ export function intoRegisterInput(inputId: string, input: RegisterInput): Regist
     return { type: 'screen_capture' };
   } else if (input.type === 'stream') {
     return { type: 'stream', stream: input.stream };
-  } else if (input.type === 'whep') {
-    return { type: 'whep', endpointUrl: input.endpointUrl, bearerToken: input.bearerToken };
+  } else if (input.type === 'whep_client') {
+    return { type: 'whep_client', endpointUrl: input.endpointUrl, bearerToken: input.bearerToken };
   } else {
     throw new Error(`Unknown input type ${(input as any).type}`);
   }
@@ -109,7 +109,7 @@ function intoWhipRegisterInput(
   input: Inputs.RegisterWhipInput
 ): RegisterInputRequest {
   return {
-    type: 'whip',
+    type: 'whip_server',
     video: input.video && intoInputWhipVideoOptions(input.video),
     bearer_token: input.bearerToken,
     endpoint_override: inputId,
