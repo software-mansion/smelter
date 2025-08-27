@@ -162,10 +162,8 @@ impl WhipOutputBuilder {
                 _ => unreachable!(),
             };
 
-            if builder.video.is_none() && builder.audio.is_none() {
-                error!(
-                    "At least one video or one audio stream has to be specified for WHIP output!"
-                );
+            if builder.video.is_none() || builder.audio.is_none() {
+                error!("Both video and audio have to be specified for WHIP output.");
             } else {
                 break;
             }
