@@ -70,6 +70,30 @@ impl WhipOutputVideoOptions {
             },
         })
     }
+
+    pub fn serialize_update(&self, inputs: &[&str], output_name: &str) -> serde_json::Value {
+        let input_json = inputs
+            .iter()
+            .map(|input_name| {
+                let id = format!("{input_name}_{output_name}");
+                json!({
+                    "type": "input_stream",
+                    "id": id,
+                    "input_id": input_name,
+                })
+            })
+            .collect::<Vec<_>>();
+        json!({
+            "root": {
+                "type": "tiles",
+                "id": self.root_id,
+                "transition": {
+                    "duration_ms": 500,
+                },
+                "children": input_json,
+            }
+        })
+    }
 }
 
 impl Default for WhipOutputVideoOptions {
@@ -90,6 +114,44 @@ impl Default for WhipOutputVideoOptions {
 
 pub struct WhipOutputAudioOptions {
     encoder: AudioEncoder,
+}
+
+impl WhipOutputAudioOptions {
+    pub fn serialize_register(&self, inputs: &[&str]) -> serde_json::Value {
+        let inputs_json = inputs
+            .iter()
+            .map(|input_id| {
+                json!({
+                    "input_id": input_id,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        json!({
+            "encoder_preferences": [
+                {
+                    "type": self.encoder.to_string(),
+                }
+            ],
+            "initial": {
+                "inputs": inputs_json,
+        }
+        })
+    }
+
+    pub fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value {
+        let inputs_json = inputs
+            .iter()
+            .map(|input_id| {
+                json!({
+                    "input_id": input_id,
+                })
+            })
+            .collect::<Vec<_>>();
+        json!({
+            "inputs": inputs_json,
+        })
+    }
 }
 
 impl Default for WhipOutputAudioOptions {
