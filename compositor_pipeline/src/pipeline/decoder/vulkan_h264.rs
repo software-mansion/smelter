@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use compositor_render::{Frame, FrameData, Resolution};
 use tracing::{info, warn};
-use vk_video::{EncodedChunk, WgpuTexturesDecoder};
+use vk_video::WgpuTexturesDecoder;
 
 use crate::pipeline::decoder::{VideoDecoder, VideoDecoderInstance};
 use crate::prelude::*;
@@ -29,7 +29,7 @@ impl VideoDecoder for VulkanH264Decoder {
 
 impl VideoDecoderInstance for VulkanH264Decoder {
     fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame> {
-        let chunk = EncodedChunk {
+        let chunk = vk_video::EncodedInputChunk {
             data: chunk.data.as_ref(),
             pts: Some(chunk.pts.as_micros() as u64),
         };
