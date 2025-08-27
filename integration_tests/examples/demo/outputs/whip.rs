@@ -4,7 +4,7 @@ use anyhow::Result;
 use inquire::{Confirm, Select, Text};
 use rand::RngCore;
 use serde_json::json;
-use strum::{Display, EnumIter, IntoEnumIterator};
+use strum::{Display, EnumIter};
 use tracing::error;
 
 use crate::{
@@ -30,11 +30,8 @@ pub enum WhipRegisterOptions {
 #[derive(Debug)]
 pub struct WhipOutput {
     name: String,
-    endpoint_url: String,
-    bearer_token: Option<String>,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
-    player: OutputPlayer,
 }
 
 impl OutputHandler for WhipOutput {
@@ -85,7 +82,11 @@ impl WhipOutputVideoOptions {
 
         json!({
             "resolution": self.resolution.serialize(),
-            "encoder_preferences": self.encoder.to_string(),
+            "encoder_preferences": [
+                {
+                    "type": self.encoder.to_string(),
+                },
+            ],
             "initial": {
                 "root": {
                     "type": "tiles",
@@ -340,11 +341,8 @@ impl WhipOutputBuilder {
 
         let whip_output = WhipOutput {
             name: self.name,
-            endpoint_url: self.endpoint_url.unwrap(),
-            bearer_token: self.bearer_token,
             video: self.video,
             audio: self.audio,
-            player: self.player,
         };
 
         (whip_output, register_request, self.player)
