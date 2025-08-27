@@ -70,7 +70,8 @@ pub struct WhipOutputBuilder {
 
 impl WhipOutputBuilder {
     pub fn new() -> Self {
-        let name = "output_whip".to_string();
+        let suffix = rand::thread_rng().next_u32();
+        let name = format!("output_whip_{suffix}");
         Self {
             name,
             endpoint_url: None,
