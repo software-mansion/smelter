@@ -80,7 +80,10 @@ impl WhipInputBuilder {
                 info!("WHIP bearer token read from env: {token}");
                 builder.with_bearer_token(token)
             }
-            None => builder,
+            None => {
+                info!("Using default WHIP bearer token '{}'", builder.bearer_token);
+                builder
+            }
         };
 
         builder = builder.with_video(WhipInputVideoOptions::default());
