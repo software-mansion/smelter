@@ -7,6 +7,7 @@ use rtp_video_thread::RtpVideoTrackThreadHandle;
 use std::sync::{atomic::AtomicBool, Arc};
 use tracing::{debug, span, Level};
 
+use crate::pipeline::encoder::vulkan_h264::VulkanH264Encoder;
 use crate::pipeline::rtp::rtp_output::rtp_audio_thread::{
     RtpAudioTrackThread, RtpAudioTrackThreadOptions,
 };
@@ -151,6 +152,17 @@ impl RtpOutput {
         let thread_handle = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 RtpVideoTrackThread::<FfmpegH264Encoder>::spawn(
+                    output_id.clone(),
+                    RtpVideoTrackThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        payloader_options: payloader_options(PayloadedCodec::H264, mtu),
+                        chunks_sender: sender,
+                    },
+                )?
+            }
+            VideoEncoderOptions::VulkanH264(options) => {
+                RtpVideoTrackThread::<VulkanH264Encoder>::spawn(
                     output_id.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),

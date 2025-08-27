@@ -15,3 +15,12 @@ export function intoOutputEosCondition(
     throw new Error('Invalid "send_eos_when" value.');
   }
 }
+
+export function intoVulkanH264EncoderBitrate(
+  rate_control: Outputs.VulkanH264EncoderBitrate
+): Api.VulkanH264EncoderBitrate {
+  return {
+    average_bitrate: rate_control.averageBitrate,
+    max_bitrate: rate_control.maxBitrate,
+  };
+}

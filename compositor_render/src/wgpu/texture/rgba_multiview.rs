@@ -87,6 +87,10 @@ impl RgbaMultiViewTexture {
         &self.texture
     }
 
+    pub fn texture_owned(self) -> wgpu::Texture {
+        self.texture
+    }
+
     pub fn linear_view(&self) -> &wgpu::TextureView {
         &self.linear_view
     }

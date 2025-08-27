@@ -24,6 +24,18 @@ pub struct FfmpegH264EncoderOptions {
     pub raw_options: Vec<(String, String)>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VulkanH264EncoderBitrate {
+    pub average_bitrate: u64,
+    pub max_bitrate: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct VulkanH264EncoderOptions {
+    pub resolution: Resolution,
+    pub bitrate: Option<VulkanH264EncoderBitrate>,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum H264AvcDecoderConfigError {
     #[error("Incorrect AVCDecoderConfig. Expected more bytes.")]

@@ -18,6 +18,7 @@ use crate::{
             },
             fdk_aac::FdkAacEncoder,
             ffmpeg_h264::FfmpegH264Encoder,
+            vulkan_h264::VulkanH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
     },
@@ -156,6 +157,16 @@ impl Mp4Output {
         let encoder = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 VideoEncoderThread::<FfmpegH264Encoder>::spawn(
+                    output_id.clone(),
+                    VideoEncoderThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender: encoded_chunks_sender,
+                    },
+                )?
+            }
+            VideoEncoderOptions::VulkanH264(options) => {
+                VideoEncoderThread::<VulkanH264Encoder>::spawn(
                     output_id.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
