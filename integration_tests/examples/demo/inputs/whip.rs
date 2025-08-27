@@ -1,10 +1,10 @@
 use std::env;
 
 use anyhow::Result;
-use inquire::{Confirm, Text};
+use inquire::Confirm;
 use rand::RngCore;
 use serde_json::json;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::{
     inputs::{InputHandler, VideoDecoder},
@@ -12,7 +12,6 @@ use crate::{
 };
 
 const WHIP_TOKEN_ENV: &str = "WHIP_INPUT_BEARER_TOKEN";
-const WHIP_URL_ENV: &str = "WHIP_INPUT_URL";
 
 #[derive(Debug)]
 pub struct WhipInput {
@@ -39,7 +38,6 @@ impl InputHandler for WhipInput {
 
 pub struct WhipInputBuilder {
     name: String,
-    endpoint_url: Option<String>,
     bearer_token: String,
     video: Option<WhipInputVideoOptions>,
     player: InputPlayer,
@@ -51,7 +49,6 @@ impl WhipInputBuilder {
         let name = format!("input_whip_{suffix}");
         Self {
             name,
-            endpoint_url: None,
             bearer_token: "example".to_string(),
             video: None,
             player: InputPlayer::Manual,
@@ -60,29 +57,6 @@ impl WhipInputBuilder {
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
-
-        loop {
-            let endpoint_url_input =
-                Text::new("Enter the WHIP endpoint URL (ESC to try env WHIP_INPUT_URL):")
-                    .prompt_skippable()?;
-
-            match endpoint_url_input {
-                Some(url) if !url.trim().is_empty() => {
-                    builder = builder.with_endpoint_url(url);
-                    break;
-                }
-                None | Some(_) => match env::var(WHIP_URL_ENV).ok() {
-                    Some(url) => {
-                        info!("WHIP endpoint url read from env: {url}");
-                        builder = builder.with_endpoint_url(url);
-                        break;
-                    }
-                    None => {
-                        error!("Environment variable {WHIP_URL_ENV} not found or invalid. Please enter the URL manually.");
-                    }
-                },
-            }
-        }
 
         builder = match env::var(WHIP_TOKEN_ENV).ok() {
             Some(token) => {
@@ -102,21 +76,14 @@ impl WhipInputBuilder {
         self
     }
 
-    pub fn with_endpoint_url(mut self, url: String) -> Self {
-        self.endpoint_url = Some(url);
-        self
-    }
-
     pub fn with_bearer_token(mut self, token: String) -> Self {
         self.bearer_token = token;
         self
     }
 
     fn serialize(&self) -> serde_json::Value {
-        let endpoint_url = self.endpoint_url.as_ref().unwrap();
         json!({
             "type": "whip_server",
-            "endpoint_url": endpoint_url,
             "bearer_token": self.bearer_token,
             "video": self.video.as_ref().map(|v| v.serialize_register()),
         })
