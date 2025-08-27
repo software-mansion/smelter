@@ -18,12 +18,12 @@ use std::sync::Arc;
 use tracing::trace;
 
 pub async fn handle_create_whep_session(
-    Path(id): Path<String>,
+    Path(endpoint_id): Path<String>,
     State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
     offer: String,
 ) -> Result<Response<Body>, WhipWhepServerError> {
-    let output_id = OutputId(Arc::from(id.clone()));
+    let output_id = OutputId(Arc::from(endpoint_id.clone()));
     trace!("SDP offer: {}", offer);
 
     validate_sdp_content_type(&headers)?;
@@ -112,7 +112,7 @@ pub async fn handle_create_whep_session(
             "Location",
             format!(
                 "/whep/{}/{}",
-                urlencoding::encode(&id),
+                urlencoding::encode(&endpoint_id),
                 urlencoding::encode(&session_id),
             ),
         )

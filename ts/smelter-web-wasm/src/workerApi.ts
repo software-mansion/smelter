@@ -13,7 +13,7 @@ export type RegisterInput =
       videoStream?: ReadableStream;
     }
   | {
-      type: 'whep';
+      type: 'whep_client';
       endpointUrl: string;
       bearerToken?: string;
     };

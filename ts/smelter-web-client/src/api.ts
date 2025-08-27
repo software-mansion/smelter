@@ -15,15 +15,15 @@ export type RegisterOutput =
   | ({ type: 'rtp_stream' } & RegisterRtpOutput)
   | ({ type: 'mp4' } & RegisterMp4Output)
   | ({ type: 'hls' } & RegisterHlsOutput)
-  | ({ type: 'whep' } & RegisterWhepOutput)
-  | ({ type: 'whip' } & RegisterWhipOutput)
+  | ({ type: 'whep_server' } & RegisterWhepOutput)
+  | ({ type: 'whip_client' } & RegisterWhipOutput)
   | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput);
 
 export type RegisterInput =
   | ({ type: 'rtp_stream' } & RegisterRtpInput)
   | ({ type: 'mp4' } & RegisterMp4Input)
   | ({ type: 'hls' } & RegisterHlsInput)
-  | ({ type: 'whip' } & RegisterWhipInput);
+  | ({ type: 'whip_server' } & RegisterWhipInput);
 
 export type RegisterWhepOutputResponse = {
   endpointRoute: string;
