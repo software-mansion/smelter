@@ -1,5 +1,5 @@
 import type * as Api from '../../api.js';
-import type { OutputEndCondition } from './common.js';
+import type { OutputEndCondition, VulkanH264EncoderBitrate } from './common.js';
 
 export type HlsVideoOptions = {
   /**
@@ -16,21 +16,29 @@ export type HlsVideoOptions = {
   encoder: HlsVideoEncoderOptions;
 };
 
-export type HlsVideoEncoderOptions = {
-  type: 'ffmpeg_h264';
-  /**
-   * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
-   */
-  preset?: Api.H264EncoderPreset;
-  /**
-   * (**default=`"yuv420p"`**) Encoder pixel format
-   */
-  pixelFormat?: Api.PixelFormat;
-  /**
-   * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-   */
-  ffmpegOptions?: Api.VideoEncoderOptions['ffmpeg_options'];
-};
+export type HlsVideoEncoderOptions =
+  | {
+      type: 'ffmpeg_h264';
+      /**
+       * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: Api.H264EncoderPreset;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixelFormat?: Api.PixelFormat;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpegOptions?: Extract<Api.VideoEncoderOptions, { type: 'ffmpeg_h264' }>['ffmpeg_options'];
+    }
+  | {
+      type: 'vulkan_h264';
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+       */
+      bitrate?: VulkanH264EncoderBitrate;
+    };
 
 export type HlsAudioOptions = {
   /**

@@ -5,7 +5,7 @@ use crate::{
     pipeline::{
         encoder::{
             ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder,
-            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder,
+            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder, vulkan_h264::VulkanH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
         webrtc::whep_output::{
@@ -89,6 +89,16 @@ impl WhepOutput {
         let thread_handle = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 WhepVideoTrackThread::<FfmpegH264Encoder>::spawn(
+                    output_id.clone(),
+                    WhepVideoTrackThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender: sender,
+                    },
+                )?
+            }
+            VideoEncoderOptions::VulkanH264(options) => {
+                WhepVideoTrackThread::<VulkanH264Encoder>::spawn(
                     output_id.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),

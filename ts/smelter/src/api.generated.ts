@@ -308,6 +308,13 @@ export type VideoEncoderOptions =
       ffmpeg_options?: {
         [k: string]: string;
       } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+       */
+      bitrate?: VulkanH264EncoderBitrate | null;
     };
 export type H264EncoderPreset =
   | "ultrafast"
@@ -845,6 +852,13 @@ export type WhipVideoEncoderOptions =
       } | null;
     }
   | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+       */
+      bitrate?: VulkanH264EncoderBitrate | null;
+    }
+  | {
       type: "any";
     };
 export type WhipAudioEncoderOptions =
@@ -982,6 +996,16 @@ export interface OutputEndCondition {
    * Terminate output stream if all the input streams finish. In particular, output stream will **be** terminated if no inputs were ever connected.
    */
   all_inputs?: boolean | null;
+}
+export interface VulkanH264EncoderBitrate {
+  /**
+   * Averate bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average, but may temporarily increase it to the provided max bitrate.
+   */
+  average_bitrate: number;
+  /**
+   * Max bitrate measured in bits/second.
+   */
+  max_bitrate: number;
 }
 export interface VideoScene {
   root: Component;

@@ -27,6 +27,16 @@ pub enum PixelFormat {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VulkanH264EncoderBitrate {
+    /// Averate bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,
+    /// but may temporarily increase it to the provided max bitrate.
+    pub average_bitrate: u64,
+    /// Max bitrate measured in bits/second.
+    pub max_bitrate: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum VideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
@@ -51,6 +61,11 @@ pub enum VideoEncoderOptions {
         pixel_format: Option<PixelFormat>,
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<String, String>>,
+    },
+    #[serde(rename = "vulkan_h264")]
+    VulkanH264 {
+        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+        bitrate: Option<VulkanH264EncoderBitrate>,
     },
 }
 
@@ -100,3 +115,6 @@ pub enum OpusEncoderPreset {
     /// Only use when lowest-achievable latency is what matters most.
     LowestLatency,
 }
+
+pub const NO_VULKAN_VIDEO: &str =
+    "Requested `vulkan_h264` encoder, but this binary was compiled without the `vk-video` feature.";

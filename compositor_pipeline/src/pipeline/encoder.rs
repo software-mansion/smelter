@@ -14,6 +14,13 @@ pub mod ffmpeg_vp8;
 pub mod ffmpeg_vp9;
 pub mod libopus;
 
+#[cfg(feature = "vk-video")]
+pub mod vulkan_h264;
+
+#[cfg(not(feature = "vk-video"))]
+#[path = "./encoder/vulkan_h264_fallback.rs"]
+pub mod vulkan_h264;
+
 mod ffmpeg_utils;
 
 #[derive(Debug, Clone)]

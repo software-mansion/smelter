@@ -87,7 +87,9 @@ impl PeerConnection {
         encoder: &VideoEncoderOptions,
     ) -> Result<(Arc<TrackLocalStaticRTP>, Arc<RTCRtpSender>, u32), WhipWhepServerError> {
         let mime_type = match encoder {
-            VideoEncoderOptions::FfmpegH264(_) => MIME_TYPE_H264,
+            VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
+                MIME_TYPE_H264
+            }
             VideoEncoderOptions::FfmpegVp8(_) => MIME_TYPE_VP8,
             VideoEncoderOptions::FfmpegVp9(_) => MIME_TYPE_VP9,
         };
@@ -263,7 +265,7 @@ fn register_codecs(
 ) -> Result<(), WhipWhepServerError> {
     if let Some(encoder) = video_encoder {
         match encoder {
-            VideoEncoderOptions::FfmpegH264(_) => {
+            VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
                 for codec in get_video_h264_codecs_for_media_engine() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
