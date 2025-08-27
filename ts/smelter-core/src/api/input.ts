@@ -22,6 +22,7 @@ export type RegisterInputRequest =
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any }
   | { type: 'whep_client'; endpointUrl: string; bearerToken?: string };
+  | { type: 'whep_client'; endpointUrl: string; bearerToken?: string };
 
 export type RegisterRtpStreamInputRequest = Extract<Api.RegisterInput, { type: 'rtp_stream' }>;
 export type RegisterMp4InputRequest = { blob?: any } & Extract<Api.RegisterInput, { type: 'mp4' }>;
@@ -41,6 +42,7 @@ export type RegisterInput =
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any }
+  | { type: 'whep_client'; endpointUrl: string; bearerToken?: string };
   | { type: 'whep_client'; endpointUrl: string; bearerToken?: string };
 
 /**
