@@ -5,6 +5,7 @@ use strum::{Display, EnumIter};
 use crate::players::InputPlayer;
 
 pub mod rtp;
+pub mod whip;
 
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
