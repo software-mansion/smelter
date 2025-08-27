@@ -1,8 +1,10 @@
-use std::env;
+use std::{
+    env,
+    sync::{atomic::AtomicU32, OnceLock},
+};
 
 use anyhow::Result;
-use inquire::Confirm;
-use rand::RngCore;
+use inquire::{Confirm, Text};
 use serde_json::json;
 use tracing::info;
 
@@ -45,18 +47,33 @@ pub struct WhipInputBuilder {
 
 impl WhipInputBuilder {
     pub fn new() -> Self {
-        let suffix = rand::thread_rng().next_u32();
-        let name = format!("input_whip_{suffix}");
         Self {
-            name,
+            name: String::new(),
             bearer_token: "example".to_string(),
             video: None,
             player: InputPlayer::Manual,
         }
     }
 
+    fn generate_name() -> String {
+        static LAST_INPUT: OnceLock<AtomicU32> = OnceLock::new();
+        let atomic_suffix = LAST_INPUT.get_or_init(|| AtomicU32::new(0));
+        let suffix = atomic_suffix.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        format!("input_whip_{suffix}")
+    }
+
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
+
+        let name_input = Text::new("Input name (optional):")
+            .with_initial_value(&builder.name)
+            .prompt_skippable()?;
+
+        builder = match name_input {
+            Some(name) if !name.trim().is_empty() => builder.with_name(name),
+            None | Some(_) => builder.with_name(WhipInputBuilder::generate_name()),
+        };
 
         builder = match env::var(WHIP_TOKEN_ENV).ok() {
             Some(token) => {
@@ -69,6 +86,11 @@ impl WhipInputBuilder {
         builder = builder.with_video(WhipInputVideoOptions::default());
 
         Ok(builder)
+    }
+
+    pub fn with_name(mut self, name: String) -> Self {
+        self.name = name;
+        self
     }
 
     pub fn with_video(mut self, video: WhipInputVideoOptions) -> Self {
@@ -107,9 +129,7 @@ impl WhipInputVideoOptions {
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "decoder_preferences": [
-                {
-                    "type": self.decoder.to_string(),
-                },
+                self.decoder.to_string(),
             ],
         })
     }
