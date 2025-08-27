@@ -7,6 +7,7 @@ use tracing::{debug, warn};
 
 use crate::inputs::InputHandler;
 
+use crate::outputs::whip::WhipOutputBuilder;
 use crate::players::{InputPlayer, OutputPlayer};
 use crate::{
     inputs::{rtp::RtpInputBuilder, InputProtocol},
@@ -96,6 +97,11 @@ impl SmelterState {
                 let (rtmp_output, register_request, player) =
                     RtmpOutputBuilder::new().prompt()?.build(&inputs);
                 (Box::new(rtmp_output), register_request, player)
+            }
+            OutputProtocol::Whip => {
+                let (whip_output, register_request, player) =
+                    WhipOutputBuilder::new().prompt()?.build(&inputs);
+                (Box::new(whip_output), register_request, player)
             }
             _ => {
                 warn!("Unimplemented!");

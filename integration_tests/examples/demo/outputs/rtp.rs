@@ -64,6 +64,7 @@ impl RtpOutput {
                     VideoEncoder::FfmpegVp9 => self
                         .stream_handles
                         .push(start_gst_receive_tcp_vp9(IP, self.port, audio)?),
+                    _ => return Err(anyhow!("Invalid encoder for RTP output.")),
                 }
             }
             None => self
@@ -92,6 +93,7 @@ impl RtpOutput {
                     VideoEncoder::FfmpegVp9 => self
                         .stream_handles
                         .push(start_gst_receive_udp_vp9(self.port, false)?),
+                    _ => return Err(anyhow!("Invalid encoder for RTP output.")),
                 }
             }
             None => self
@@ -121,6 +123,7 @@ impl RtpOutput {
                 VideoEncoder::FfmpegVp9 => self
                     .stream_handles
                     .push(start_ffmpeg_receive_vp9(Some(self.port), None)?),
+                _ => return Err(anyhow!("Invalid encoder for RTP output.")),
             },
             (None, Some(_audio)) => self
                 .stream_handles
@@ -217,7 +220,7 @@ impl RtpOutputBuilder {
 
         loop {
             let video_selection =
-                Select::new("Add video stream?", video_options.clone()).prompt_skippable()?;
+                Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
 
             builder = match video_selection {
                 Some(RtpRegisterOptions::SetVideoStream) => {
@@ -228,7 +231,7 @@ impl RtpOutputBuilder {
             };
 
             let audio_selection =
-                Select::new("Add audio stream?", audio_options.clone()).prompt_skippable()?;
+                Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
 
             builder = match audio_selection {
                 Some(RtpRegisterOptions::SetAudioStream) => {

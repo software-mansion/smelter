@@ -8,18 +8,17 @@ use crate::players::OutputPlayer;
 
 pub mod rtmp;
 pub mod rtp;
+pub mod whip;
 
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
     fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value;
 
-    #[allow(unused_variables)]
-    fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
+    fn on_before_registration(&mut self, _player: OutputPlayer) -> Result<()> {
         Ok(())
     }
 
-    #[allow(unused_variables)]
-    fn on_after_registration(&mut self, player: OutputPlayer) -> Result<()> {
+    fn on_after_registration(&mut self, _player: OutputPlayer) -> Result<()> {
         Ok(())
     }
 }
@@ -97,6 +96,9 @@ pub enum VideoEncoder {
 
     #[strum(to_string = "ffmpeg_vp9")]
     FfmpegVp9,
+
+    #[strum(to_string = "any")]
+    Any,
 }
 
 #[derive(Debug, Display, EnumIter)]
@@ -106,4 +108,7 @@ pub enum AudioEncoder {
 
     #[strum(to_string = "aac")]
     Aac,
+
+    #[strum(to_string = "any")]
+    Any,
 }

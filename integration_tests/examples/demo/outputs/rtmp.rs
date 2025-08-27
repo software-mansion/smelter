@@ -117,7 +117,7 @@ impl RtmpOutputBuilder {
 
         loop {
             let video_selection =
-                Select::new("Add video stream?", video_options.clone()).prompt_skippable()?;
+                Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
 
             builder = match video_selection {
                 Some(RtmpRegisterOptions::SetVideoStream) => {
@@ -128,7 +128,7 @@ impl RtmpOutputBuilder {
             };
 
             let audio_selection =
-                Select::new("Add audio stream?", audio_options.clone()).prompt_skippable()?;
+                Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
 
             builder = match audio_selection {
                 Some(RtmpRegisterOptions::SetAudioStream) => {
