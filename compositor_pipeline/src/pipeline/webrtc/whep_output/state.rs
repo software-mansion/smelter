@@ -51,9 +51,7 @@ impl WhepOutputsState {
         match guard.get_mut(output_id) {
             Some(output) => {
                 let session_id: Arc<str> = Arc::from(Uuid::new_v4().to_string());
-                output
-                    .sessions
-                    .insert(session_id.clone(), Arc::from(peer_connection));
+                output.sessions.insert(session_id.clone(), peer_connection);
                 Ok(session_id)
             }
             None => Err(WhipWhepServerError::NotFound(format!(
@@ -95,7 +93,7 @@ impl WhepOutputsState {
         &self,
         output_id: &OutputId,
         session_id: &Arc<str>,
-    ) -> Result<Arc<PeerConnection>, WhipWhepServerError> {
+    ) -> Result<PeerConnection, WhipWhepServerError> {
         let guard = self.0.lock().unwrap();
         match guard.get(output_id) {
             Some(output) => match output.sessions.get(session_id) {
