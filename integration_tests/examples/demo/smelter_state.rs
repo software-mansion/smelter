@@ -5,6 +5,7 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{debug, warn};
 
+use crate::inputs::whip::WhipInputBuilder;
 use crate::inputs::InputHandler;
 
 use crate::outputs::whip::WhipOutputBuilder;
@@ -51,6 +52,11 @@ impl SmelterState {
                 let (rtp_input, register_request, player) =
                     RtpInputBuilder::new().prompt()?.build();
                 (Box::new(rtp_input), register_request, player)
+            }
+            InputProtocol::Whip => {
+                let (whip_input, register_request, player) =
+                    WhipInputBuilder::new().prompt()?.build();
+                (Box::new(whip_input), register_request, player)
             }
             _ => {
                 warn!("Unimplemented!");
