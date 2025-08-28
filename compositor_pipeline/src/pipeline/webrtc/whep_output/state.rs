@@ -45,7 +45,7 @@ impl WhepOutputsState {
     pub fn add_session(
         &self,
         output_id: &OutputId,
-        peer_connection: Arc<PeerConnection>,
+        peer_connection: PeerConnection,
     ) -> Result<Arc<str>, WhipWhepServerError> {
         let mut guard = self.0.lock().unwrap();
         match guard.get_mut(output_id) {
@@ -60,11 +60,40 @@ impl WhepOutputsState {
         }
     }
 
+    pub async fn remove_session(
+        &self,
+        output_id: &OutputId,
+        session_id: &Arc<str>,
+    ) -> Result<(), WhipWhepServerError> {
+        let peer_connection = {
+            let mut guard = self.0.lock().unwrap();
+            let Some(output) = guard.get_mut(output_id) else {
+                return Err(WhipWhepServerError::NotFound(format!(
+                    "{output_id:?} not found"
+                )));
+            };
+            let Some(pc) = output.sessions.remove(session_id) else {
+                return Err(WhipWhepServerError::NotFound(format!(
+                    "Session {session_id:?} not found for {output_id:?}"
+                )));
+            };
+            pc
+        };
+
+        if let Err(e) = peer_connection.close().await {
+            return Err(WhipWhepServerError::InternalError(format!(
+                "Failed to close session {session_id:?}: {e}"
+            )));
+        }
+
+        Ok(())
+    }
+
     pub fn get_session(
         &self,
         output_id: &OutputId,
         session_id: &Arc<str>,
-    ) -> Result<Arc<PeerConnection>, WhipWhepServerError> {
+    ) -> Result<PeerConnection, WhipWhepServerError> {
         let guard = self.0.lock().unwrap();
         match guard.get(output_id) {
             Some(output) => match output.sessions.get(session_id) {
