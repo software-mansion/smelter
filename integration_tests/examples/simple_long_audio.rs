@@ -91,9 +91,6 @@ fn client_code() -> Result<()> {
     )?;
 
     let path = Path::new(PATH).join("examples/assets/a_opus.mp4");
-    // let path = Path::new(PATH).join("examples/assets/lachrymaAudioOnly10PercentLoss.opus");
-    // let path = Path::new(PATH).join("examples/assets/lachrymaAudioOnly20PercentLoss.opus");
-    // let path = Path::new(PATH).join("examples/assets/lachrymaSkipIntro.mp4");
 
     ffmpeg_audio_stream_from_file(&path, IP, INPUT_AUDIO_PORT)?;
 
