@@ -3,8 +3,8 @@ import type { Mp4AudioOptions, Mp4VideoOptions } from './output/mp4.js';
 import type { HlsAudioOptions, HlsVideoOptions } from './output/hls.js';
 import type { RtmpClientAudioOptions, RtmpClientVideoOptions } from './output/rtmp.js';
 import type { RtpAudioOptions, RtpVideoOptions } from './output/rtp.js';
-import type { WhipClientAudioOptions, WhipClientVideoOptions } from './output/whip.js';
-import type { WhepServerAudioOptions, WhepServerVideoOptions } from './output/whep.js';
+import type { WhipAudioOptions, WhipVideoOptions } from './output/whip.js';
+import type { WhepAudioOptions, WhepVideoOptions } from './output/whep.js';
 
 export * from './output/mp4.js';
 export * from './output/hls.js';
@@ -68,7 +68,7 @@ export type RegisterHlsOutput = {
   audio?: HlsAudioOptions;
 };
 
-export type RegisterWhipClientOutput = {
+export type RegisterWhipOutput = {
   /**
    * WHIP server endpoint.
    */
@@ -80,14 +80,14 @@ export type RegisterWhipClientOutput = {
   /**
    * Video track configuration.
    */
-  video?: WhipClientVideoOptions | null;
+  video?: WhipVideoOptions | null;
   /**
    * Audio track configuration.
    */
-  audio?: true | WhipClientAudioOptions | null;
+  audio?: true | WhipAudioOptions | null;
 };
 
-export type RegisterWhepServerOutput = {
+export type RegisterWhepOutput = {
   /**
    * Token for authenticating comunication with the WHEP server.
    */
@@ -95,11 +95,11 @@ export type RegisterWhepServerOutput = {
   /**
    * Video track configuration.
    */
-  video?: WhepServerVideoOptions | null;
+  video?: WhepVideoOptions | null;
   /**
    * Audio track configuration.
    */
-  audio?: WhepServerAudioOptions | null;
+  audio?: WhepAudioOptions | null;
 };
 
 export type RegisterRtmpClientOutput = {

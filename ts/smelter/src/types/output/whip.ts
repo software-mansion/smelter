@@ -1,7 +1,7 @@
 import type * as Api from '../../api.js';
 import type { OutputEndCondition } from './common.js';
 
-export type WhipClientVideoOptions = {
+export type WhipVideoOptions = {
   /**
    * Output resolution in pixels.
    */
@@ -13,10 +13,10 @@ export type WhipClientVideoOptions = {
   /**
    * Video encoder preferences list.
    */
-  encoderPreferences?: WhipClientVideoEncoderOptions[] | null;
+  encoderPreferences?: WhipVideoEncoderOptions[] | null;
 };
 
-export type WhipClientVideoEncoderOptions =
+export type WhipVideoEncoderOptions =
   | {
       type: 'ffmpeg_h264';
       /**
@@ -54,7 +54,7 @@ export type WhipClientVideoEncoderOptions =
       type: 'any';
     };
 
-export type WhipClientAudioOptions = {
+export type WhipAudioOptions = {
   /**
    * (**default="stereo"**) Specifies channels configuration.
    */
@@ -70,10 +70,10 @@ export type WhipClientAudioOptions = {
   /**
    * Audio encoder preferences list.
    */
-  encoderPreferences?: WhipClientAudioEncoderOptions[] | null;
+  encoderPreferences?: WhipAudioEncoderOptions[] | null;
 };
 
-export type WhipClientAudioEncoderOptions =
+export type WhipAudioEncoderOptions =
   | {
       type: 'opus';
       /**

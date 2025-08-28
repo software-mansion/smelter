@@ -3,14 +3,14 @@ import type {
   RegisterRtpOutput,
   RegisterMp4Output,
   RegisterHlsOutput,
-  RegisterWhipClientOutput,
-  RegisterWhepServerOutput,
+  RegisterWhipOutput,
+  RegisterWhepOutput,
   _smelterInternals,
   RegisterRtmpClientOutput,
 } from '@swmansion/smelter';
 import { inputRefIntoRawId } from './input';
-import { intoRegisterWhipClientOutput } from './output/whip';
-import { intoRegisterWhepServerOutput } from './output/whep';
+import { intoRegisterWhipOutput } from './output/whip';
+import { intoRegisterWhepOutput } from './output/whep';
 import { intoRegisterRtpOutput } from './output/rtp';
 import { intoRegisterMp4Output } from './output/mp4';
 import { intoRegisterHlsOutput } from './output/hls';

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crossbeam_channel::Sender;
 use tracing::warn;
+use webrtc::rtcp;
 
 use crate::prelude::*;
 use crate::{
@@ -68,7 +69,7 @@ where
 
         let stream = payloaded_stream.flatten().map(move |event| match event {
             Ok(PipelineEvent::Data(packet)) => RtpEvent::Data(packet),
-            Ok(PipelineEvent::EOS) => RtpEvent::AudioEos(webrtc::rtcp::goodbye::Goodbye {
+            Ok(PipelineEvent::EOS) => RtpEvent::AudioEos(rtcp::goodbye::Goodbye {
                 sources: vec![ssrc],
                 reason: bytes::Bytes::from("Unregister output stream"),
             }),

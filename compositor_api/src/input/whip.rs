@@ -10,11 +10,11 @@ use crate::*;
 /// At least one of `video` and `audio` has to be defined.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct WhipServer {
+pub struct WhipInput {
     /// Parameters of a video source included in the RTP stream.
-    pub video: Option<InputWhipServerVideoOptions>,
+    pub video: Option<InputWhipVideoOptions>,
     /// Parameters of an audio source included in the RTP stream.
-    pub audio: Option<InputWhipServerAudioOptions>,
+    pub audio: Option<InputWhipAudioOptions>,
     /// Token used for authentication in WHIP protocol. If not provided, the random value
     /// will be generated and returned in the response.
     pub bearer_token: Option<Arc<str>>,
@@ -33,7 +33,7 @@ pub struct WhipServer {
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(tag = "decoder", rename_all = "snake_case", deny_unknown_fields)]
-pub enum InputWhipServerAudioOptions {
+pub enum InputWhipAudioOptions {
     Opus {
         /// (**default=`false`**) Specifies whether the stream uses forward error correction.
         /// It's specific for Opus codec.
@@ -44,14 +44,14 @@ pub enum InputWhipServerAudioOptions {
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct InputWhipServerVideoOptions {
+pub struct InputWhipVideoOptions {
     pub decoder: Option<VideoDecoder>,
-    pub decoder_preferences: Option<Vec<WhipServerVideoDecoder>>,
+    pub decoder_preferences: Option<Vec<WhipVideoDecoder>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub enum WhipServerVideoDecoder {
+pub enum WhipVideoDecoder {
     /// Use the software h264 decoder based on ffmpeg.
     FfmpegH264,
 

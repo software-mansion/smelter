@@ -11,7 +11,7 @@ use ffmpeg_next::{
     media::Type,
     Rational,
 };
-use webrtc::rtp::{codecs::h264::H264Packet, packetizer::Depacketizer};
+use webrtc::rtp::{self, codecs::h264::H264Packet, packetizer::Depacketizer};
 
 pub struct VideoDecoder {
     depayloader: H264Packet,
@@ -48,7 +48,7 @@ impl VideoDecoder {
         })
     }
 
-    pub fn decode(&mut self, packet: webrtc::rtp::packet::Packet) -> Result<()> {
+    pub fn decode(&mut self, packet: rtp::packet::Packet) -> Result<()> {
         let first_rtp_timestamp = *self
             .first_rtp_timestamp
             .get_or_insert(packet.header.timestamp);

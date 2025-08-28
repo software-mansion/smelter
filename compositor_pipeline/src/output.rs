@@ -26,11 +26,11 @@ pub struct RegisterRawDataOutputOptions {
 #[derive(Debug, Clone)]
 pub enum ProtocolOutputOptions {
     Rtp(RtpOutputOptions),
-    Rtmp(RtmpClientOutputOptions),
+    Rtmp(RtmpOutputOptions),
     Mp4(Mp4OutputOptions),
     Hls(HlsOutputOptions),
-    Whip(WhipClientOutputOptions),
-    Whep(WhepServerOutputOptions),
+    Whip(WhipSenderOptions),
+    Whep(WhepSenderOptions),
 }
 
 #[derive(Debug, Clone)]

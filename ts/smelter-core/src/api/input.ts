@@ -4,7 +4,7 @@ import type {
   RegisterHlsInput,
   RegisterRtpInput,
   Inputs,
-  RegisterWhipServerInput,
+  RegisterWhipInput,
 } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
 
@@ -16,12 +16,11 @@ export type RegisterInputRequest =
   | RegisterRtpStreamInputRequest
   | RegisterMp4InputRequest
   | RegisterHlsInputRequest
-  | RegisterWhipServerInputRequest
+  | RegisterWhipInputRequest
   | RegisterDecklinkInputRequest
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any }
-  | { type: 'whep_client'; endpointUrl: string; bearerToken?: string };
   | { type: 'whep_client'; endpointUrl: string; bearerToken?: string };
 
 export type RegisterRtpStreamInputRequest = Extract<Api.RegisterInput, { type: 'rtp_stream' }>;
@@ -42,7 +41,6 @@ export type RegisterInput =
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any }
-  | { type: 'whep_client'; endpointUrl: string; bearerToken?: string };
   | { type: 'whep_client'; endpointUrl: string; bearerToken?: string };
 
 /**
@@ -108,7 +106,7 @@ function intoRtpRegisterInput(input: Inputs.RegisterRtpInput): RegisterInputRequ
 
 function intoWhipRegisterInput(
   inputId: string,
-  input: Inputs.RegisterWhipServerInput
+  input: Inputs.RegisterWhipInput
 ): RegisterInputRequest {
   return {
     type: 'whip_server',
@@ -120,9 +118,9 @@ function intoWhipRegisterInput(
   };
 }
 
-export function intoInputWhipServerVideoOptions(
-  video: Inputs.InputWhipServerVideoOptions
-): Api.InputWhipServerVideoOptions {
+export function intoInputWhipVideoOptions(
+  video: Inputs.InputWhipVideoOptions
+): Api.InputWhipVideoOptions {
   return {
     decoder_preferences: video.decoderPreferences,
   };

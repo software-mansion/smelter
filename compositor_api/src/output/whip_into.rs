@@ -8,11 +8,11 @@ const ENCODER_DEPRECATION_MSG: &str = "Field 'encoder' is deprecated. The codec 
 
 const CHANNEL_DEPRECATION_MSG: &str = "The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.";
 
-impl TryFrom<WhipClient> for pipeline::RegisterOutputOptions {
+impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
     type Error = TypeError;
 
-    fn try_from(request: WhipClient) -> Result<Self, Self::Error> {
-        let WhipClient {
+    fn try_from(request: WhipOutput) -> Result<Self, Self::Error> {
+        let WhipOutput {
             endpoint_url,
             bearer_token,
             video,
@@ -25,7 +25,7 @@ impl TryFrom<WhipClient> for pipeline::RegisterOutputOptions {
             ));
         }
 
-        if let Some(OutputWhipClientVideoOptions {
+        if let Some(OutputWhipVideoOptions {
             encoder: Some(_encoder),
             ..
         }) = &video
@@ -33,7 +33,7 @@ impl TryFrom<WhipClient> for pipeline::RegisterOutputOptions {
             warn!(ENCODER_DEPRECATION_MSG)
         }
 
-        if let Some(OutputWhipClientAudioOptions {
+        if let Some(OutputWhipAudioOptions {
             encoder: Some(_encoder),
             ..
         }) = &audio
@@ -47,14 +47,14 @@ impl TryFrom<WhipClient> for pipeline::RegisterOutputOptions {
                 end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
             };
             let encoder_preferences = match options.encoder_preferences.as_deref() {
-                Some([]) | None => vec![WhipClientVideoEncoderOptions::Any],
+                Some([]) | None => vec![WhipVideoEncoderOptions::Any],
                 Some(v) => v.to_vec(),
             };
 
             let encoder_preferences: Vec<pipeline::VideoEncoderOptions> = encoder_preferences
                 .into_iter()
                 .flat_map(|codec| match codec {
-                    WhipClientVideoEncoderOptions::FfmpegH264 {
+                    WhipVideoEncoderOptions::FfmpegH264 {
                         preset,
                         pixel_format,
                         ffmpeg_options,
@@ -71,7 +71,7 @@ impl TryFrom<WhipClient> for pipeline::RegisterOutputOptions {
                             },
                         )]
                     }
-                    WhipClientVideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
+                    WhipVideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
                         vec![pipeline::VideoEncoderOptions::FfmpegVp8(
                             pipeline::FfmpegVp8EncoderOptions {
                                 resolution: options.resolution.clone().into(),
@@ -82,7 +82,7 @@ impl TryFrom<WhipClient> for pipeline::RegisterOutputOptions {
                             },
                         )]
                     }
-                    WhipClientVideoEncoderOptions::FfmpegVp9 {
+                    WhipVideoEncoderOptions::FfmpegVp9 {
                         pixel_format,
                         ffmpeg_options,
                     } => {
@@ -97,7 +97,7 @@ impl TryFrom<WhipClient> for pipeline::RegisterOutputOptions {
                             },
                         )]
                     }
-                    WhipClientVideoEncoderOptions::Any => {
+                    WhipVideoEncoderOptions::Any => {
                         vec![
                             pipeline::VideoEncoderOptions::FfmpegVp9(
                                 pipeline::FfmpegVp9EncoderOptions {
@@ -135,7 +135,7 @@ impl TryFrom<WhipClient> for pipeline::RegisterOutputOptions {
         };
 
         let (output_audio_options, audio_whip_options) = match audio {
-            Some(OutputWhipClientAudioOptions {
+            Some(OutputWhipAudioOptions {
                 mixing_strategy,
                 send_eos_when,
                 encoder,
@@ -144,7 +144,7 @@ impl TryFrom<WhipClient> for pipeline::RegisterOutputOptions {
                 initial,
             }) => {
                 let resolved_channels = match encoder {
-                    Some(WhipClientAudioEncoderOptions::Opus {
+                    Some(WhipAudioEncoderOptions::Opus {
                         channels: channels_deprecated,
                         ..
                     }) => {
@@ -167,14 +167,14 @@ impl TryFrom<WhipClient> for pipeline::RegisterOutputOptions {
                 };
 
                 let encoder_preferences = match encoder_preferences.as_deref() {
-                    Some([]) | None => vec![WhipClientAudioEncoderOptions::Any],
+                    Some([]) | None => vec![WhipAudioEncoderOptions::Any],
                     Some(v) => v.to_vec(),
                 };
 
                 let encoder_preferences: Vec<pipeline::AudioEncoderOptions> = encoder_preferences
                     .into_iter()
                     .flat_map(|codec| match codec {
-                        WhipClientAudioEncoderOptions::Opus {
+                        WhipAudioEncoderOptions::Opus {
                             preset,
                             sample_rate,
                             forward_error_correction,
@@ -191,7 +191,7 @@ impl TryFrom<WhipClient> for pipeline::RegisterOutputOptions {
                                 },
                             )]
                         }
-                        WhipClientAudioEncoderOptions::Any => {
+                        WhipAudioEncoderOptions::Any => {
                             vec![
                                 pipeline::AudioEncoderOptions::Opus(pipeline::OpusEncoderOptions {
                                     channels: resolved_channels.clone().into(),
@@ -235,13 +235,12 @@ impl TryFrom<WhipClient> for pipeline::RegisterOutputOptions {
             }
         };
 
-        let output_options =
-            pipeline::ProtocolOutputOptions::Whip(pipeline::WhipClientOutputOptions {
-                endpoint_url,
-                bearer_token,
-                video: video_whip_options,
-                audio: audio_whip_options,
-            });
+        let output_options = pipeline::ProtocolOutputOptions::Whip(pipeline::WhipSenderOptions {
+            endpoint_url,
+            bearer_token,
+            video: video_whip_options,
+            audio: audio_whip_options,
+        });
 
         Ok(Self {
             output_options,

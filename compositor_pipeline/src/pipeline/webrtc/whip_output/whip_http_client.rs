@@ -9,7 +9,7 @@ use webrtc::{
     peer_connection::sdp::session_description::RTCSessionDescription,
 };
 
-use super::{WhipClientOutputOptions, WhipOutputError};
+use super::{WhipOutputError, WhipSenderOptions};
 
 #[derive(Debug)]
 pub(super) struct WhipHttpClient {
@@ -24,7 +24,7 @@ pub(super) struct SdpAnswer {
 }
 
 impl WhipHttpClient {
-    pub fn new(options: &WhipClientOutputOptions) -> Result<Arc<Self>, WhipOutputError> {
+    pub fn new(options: &WhipSenderOptions) -> Result<Arc<Self>, WhipOutputError> {
         let endpoint_url = Url::parse(&options.endpoint_url).map_err(|e| {
             WhipOutputError::InvalidEndpointUrl(e, options.endpoint_url.to_string())
         })?;

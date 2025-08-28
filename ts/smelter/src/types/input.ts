@@ -2,7 +2,7 @@ import type * as Api from '../api.js';
 import type { InputHlsDecoderMap } from './input/hls.js';
 import type { InputMp4DecoderMap } from './input/mp4.js';
 import type { InputRtpAudioOptions, InputRtpVideoOptions } from './input/rtp.js';
-import type { InputWhipServerVideoOptions } from './input/whip.js';
+import type { InputWhipVideoOptions } from './input/whip.js';
 
 export * from './input/mp4.js';
 export * from './input/hls.js';
@@ -94,11 +94,11 @@ export type RegisterHlsInput = {
   decoderMap?: InputHlsDecoderMap | null;
 };
 
-export type RegisterWhipServerInput = {
+export type RegisterWhipInput = {
   /**
    * Parameters of a video source included in the RTP stream.
    */
-  video?: InputWhipServerVideoOptions | null;
+  video?: InputWhipVideoOptions | null;
   /**
    * Bearer token used for authenticating WHIP connection. If not provided, a random token
    * will be generated and returned from the register input call.

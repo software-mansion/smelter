@@ -6,9 +6,9 @@ import type {
   RegisterRtmpClientOutput,
   RegisterRtpInput,
   RegisterRtpOutput,
-  RegisterWhipServerInput,
-  RegisterWhipClientOutput,
-  RegisterWhepServerOutput,
+  RegisterWhipInput,
+  RegisterWhipOutput,
+  RegisterWhepOutput,
 } from '@swmansion/smelter';
 
 export type RegisterOutput =
@@ -19,7 +19,7 @@ export type RegisterOutput =
   | ({ type: 'whep_server' } & RegisterWhepOutput)
   | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput);
 
-export type RegisterWhepServerOutputResponse = {
+export type RegisterWhepOutputResponse = {
   endpointRoute: string;
 };
 
@@ -34,7 +34,7 @@ export type RegisterMp4InputResponse = {
   audioDurationMs?: number;
 };
 
-export type RegisterWhipServerInputResponse = {
+export type RegisterWhipInputResponse = {
   bearerToken: string;
   endpointRoute: string;
 };

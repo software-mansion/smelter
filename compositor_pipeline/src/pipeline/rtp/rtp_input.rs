@@ -6,7 +6,10 @@ use std::{
 use compositor_render::{Frame, InputId};
 use crossbeam_channel::{bounded, Receiver};
 use tracing::{debug, span, trace, warn, Level};
-use webrtc::rtcp::{header::PacketType, sender_report::SenderReport};
+use webrtc::{
+    rtcp::{self, header::PacketType, sender_report::SenderReport},
+    rtp,
+};
 use webrtc_util::Unmarshal;
 
 use self::{tcp_server::start_tcp_server_thread, udp::start_udp_reader_thread};
@@ -259,7 +262,7 @@ fn run_rtp_demuxer_thread(
             break;
         };
 
-        match webrtc::rtp::packet::Packet::unmarshal(&mut buffer.clone()) {
+        match rtp::packet::Packet::unmarshal(&mut buffer.clone()) {
             // https://datatracker.ietf.org/doc/html/rfc5761#section-4
             //
             // Given these constraints, it is RECOMMENDED to follow the guidelines
@@ -298,7 +301,7 @@ fn run_rtp_demuxer_thread(
                 }
             }
             Ok(_) | Err(_) => {
-                match webrtc::rtcp::packet::unmarshal(&mut buffer) {
+                match rtcp::packet::unmarshal(&mut buffer) {
                     Ok(rtcp_packets) => {
                         for rtcp_packet in rtcp_packets {
                             let header = rtcp_packet.header();

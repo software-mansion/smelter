@@ -35,18 +35,18 @@ mod track_task_video;
 mod whip_http_client;
 
 #[derive(Debug)]
-pub(crate) struct WhipClientOutput {
+pub(crate) struct WhipOutput {
     pub video: Option<WhipVideoTrackThreadHandle>,
     pub audio: Option<WhipAudioTrackThreadHandle>,
 }
 
 const WHIP_INIT_TIMEOUT: Duration = Duration::from_secs(60);
 
-impl WhipClientOutput {
+impl WhipOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
-        options: WhipClientOutputOptions,
+        options: WhipSenderOptions,
     ) -> Result<Self, OutputInitError> {
         let (init_confirmation_sender, init_confirmation_receiver) = oneshot::channel();
 
@@ -74,7 +74,7 @@ impl WhipClientOutput {
     }
 }
 
-struct WhipClientTrack {
+struct WhipSenderTrack {
     receiver: mpsc::Receiver<RtpPacket>,
     track: Arc<TrackLocalStaticRTP>,
 }
@@ -84,16 +84,16 @@ struct WhipClientTask {
     ctx: Arc<PipelineCtx>,
     client: Arc<WhipHttpClient>,
     output_id: OutputId,
-    video_track: Option<WhipClientTrack>,
-    audio_track: Option<WhipClientTrack>,
+    video_track: Option<WhipSenderTrack>,
+    audio_track: Option<WhipSenderTrack>,
 }
 
 impl WhipClientTask {
     async fn new(
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
-        options: WhipClientOutputOptions,
-    ) -> Result<(Self, WhipClientOutput), WhipOutputError> {
+        options: WhipSenderOptions,
+    ) -> Result<(Self, WhipOutput), WhipOutputError> {
         let client = WhipHttpClient::new(&options)?;
         let pc = PeerConnection::new(&ctx, &options).await?;
 
@@ -140,7 +140,7 @@ impl WhipClientTask {
                 video_track,
                 audio_track,
             },
-            WhipClientOutput {
+            WhipOutput {
                 video: video_thread_handle,
                 audio: audio_thread_handle,
             },
@@ -149,12 +149,12 @@ impl WhipClientTask {
 
     async fn run(self) {
         let (mut audio_receiver, audio_track) = match self.audio_track {
-            Some(WhipClientTrack { receiver, track }) => (Some(receiver), Some(track)),
+            Some(WhipSenderTrack { receiver, track }) => (Some(receiver), Some(track)),
             None => (None, None),
         };
 
         let (mut video_receiver, video_track) = match self.video_track {
-            Some(WhipClientTrack { receiver, track }) => (Some(receiver), Some(track)),
+            Some(WhipSenderTrack { receiver, track }) => (Some(receiver), Some(track)),
             None => (None, None),
         };
         let mut next_video_packet = None;
@@ -264,7 +264,7 @@ impl WhipClientTask {
     }
 }
 
-impl Output for WhipClientOutput {
+impl Output for WhipOutput {
     fn audio(&self) -> Option<OutputAudio<'_>> {
         self.audio.as_ref().map(|audio| OutputAudio {
             samples_batch_sender: &audio.sample_batch_sender,

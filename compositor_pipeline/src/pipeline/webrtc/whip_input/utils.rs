@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use tokio::sync::oneshot::Sender;
 use tracing::{debug, warn};
-use webrtc::rtcp::sender_report::SenderReport;
-use webrtc::rtp_transceiver::rtp_receiver::RTCRtpReceiver;
+use webrtc::{
+    rtcp::{self, sender_report::SenderReport},
+    rtp_transceiver::rtp_receiver::RTCRtpReceiver,
+};
 
 use crate::PipelineCtx;
 
@@ -19,9 +21,7 @@ pub(super) fn listen_for_rtcp(
                 Ok((packets, _attr)) => {
                     for packet in packets {
                         debug!(?packet, "Received RTCP packet");
-                        if packet.header().packet_type
-                            == webrtc::rtcp::header::PacketType::SenderReport
-                        {
+                        if packet.header().packet_type == rtcp::header::PacketType::SenderReport {
                             if let Some(sender) = sender.take() {
                                 let result = sender.send(
                                     packet

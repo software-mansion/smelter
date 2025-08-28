@@ -11,8 +11,8 @@ import type {
   RegisterInput,
   RegisterMp4InputResponse,
   RegisterOutput,
-  RegisterWhepServerOutputResponse,
-  RegisterWhipServerInputResponse,
+  RegisterWhepOutputResponse,
+  RegisterWhipInputResponse,
 } from '../api';
 
 export default class Smelter {

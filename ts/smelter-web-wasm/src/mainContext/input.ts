@@ -4,7 +4,7 @@ import { handleRegisterCameraInput } from './input/camera';
 import { handleRegisterScreenCaptureInput } from './input/screenCapture';
 import { handleRegisterStreamInput } from './input/stream';
 import { handleRegisterMp4Input } from './input/mp4';
-import { handleRegisterWhepClientInput } from './input/whep';
+import { handleRegisterWhepInput } from './input/whep';
 import type { InstanceContext } from './instance';
 
 export interface Input {

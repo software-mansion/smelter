@@ -6,6 +6,7 @@ use rtp_audio_thread::RtpAudioTrackThreadHandle;
 use rtp_video_thread::RtpVideoTrackThreadHandle;
 use std::sync::{atomic::AtomicBool, Arc};
 use tracing::{debug, span, Level};
+use webrtc::rtcp;
 
 use crate::pipeline::rtp::rtp_output::rtp_audio_thread::{
     RtpAudioTrackThread, RtpAudioTrackThreadOptions,
@@ -53,8 +54,8 @@ pub(crate) struct RtpOutput {
 #[derive(Debug)]
 pub enum RtpEvent {
     Data(RtpPacket),
-    AudioEos(webrtc::rtcp::goodbye::Goodbye),
-    VideoEos(webrtc::rtcp::goodbye::Goodbye),
+    AudioEos(rtcp::goodbye::Goodbye),
+    VideoEos(rtcp::goodbye::Goodbye),
     Err(PayloadingError),
 }
 

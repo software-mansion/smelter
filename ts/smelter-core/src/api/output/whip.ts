@@ -2,8 +2,8 @@ import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputRequest } from '../output';
 import { intoOutputEosCondition } from './common';
 
-export function intoRegisterWhipClientOutput(
-  output: Outputs.RegisterWhipClientOutput,
+export function intoRegisterWhipOutput(
+  output: Outputs.RegisterWhipOutput,
   initial: { video?: Api.VideoScene; audio?: Api.AudioScene }
 ): RegisterOutputRequest {
   return {
@@ -11,15 +11,15 @@ export function intoRegisterWhipClientOutput(
     endpoint_url: output.endpointUrl,
     bearer_token: output.bearerToken,
 
-    video: intoOutputWhipClientVideoOptions(output.video, initial.video),
-    audio: intoOutputWhipClientAudioOptions(output.audio, initial.audio),
+    video: intoOutputWhipVideoOptions(output.video, initial.video),
+    audio: intoOutputWhipAudioOptions(output.audio, initial.audio),
   };
 }
 
-export function intoOutputWhipClientVideoOptions(
-  video: Outputs.WhipClientVideoOptions | null | undefined,
+export function intoOutputWhipVideoOptions(
+  video: Outputs.WhipVideoOptions | null | undefined,
   initial: Api.VideoScene | undefined
-): Api.OutputWhipClientVideoOptions | undefined {
+): Api.OutputWhipVideoOptions | undefined {
   if (!video || !initial) {
     return undefined;
   }
@@ -34,8 +34,8 @@ export function intoOutputWhipClientVideoOptions(
 }
 
 function intoWhipVideoEncoderPreferences(
-  encoder_preferences: Outputs.WhipClientVideoEncoderOptions[]
-): Api.WhipClientVideoEncoderOptions[] {
+  encoder_preferences: Outputs.WhipVideoEncoderOptions[]
+): Api.WhipVideoEncoderOptions[] {
   return encoder_preferences.map(encoder => {
     switch (encoder.type) {
       case 'ffmpeg_vp9':
@@ -64,10 +64,10 @@ function intoWhipVideoEncoderPreferences(
   });
 }
 
-function intoOutputWhipClientAudioOptions(
-  audio: true | Outputs.WhipClientAudioOptions | null | undefined,
+function intoOutputWhipAudioOptions(
+  audio: true | Outputs.WhipAudioOptions | null | undefined,
   initial: Api.AudioScene | undefined
-): Api.OutputWhipClientAudioOptions | undefined {
+): Api.OutputWhipAudioOptions | undefined {
   if (!audio || !initial) {
     return undefined;
   }
@@ -86,8 +86,8 @@ function intoOutputWhipClientAudioOptions(
 }
 
 function intoWhipAudioEncoderPreferences(
-  encoder_preferences: Outputs.WhipClientAudioEncoderOptions[]
-): Api.WhipClientAudioEncoderOptions[] {
+  encoder_preferences: Outputs.WhipAudioEncoderOptions[]
+): Api.WhipAudioEncoderOptions[] {
   return encoder_preferences.map(encoder => {
     switch (encoder.type) {
       case 'opus':

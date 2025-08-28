@@ -5,6 +5,7 @@ use crossbeam_channel::Sender;
 use tokio::sync::oneshot;
 use tracing::{debug, error, trace, warn};
 use webrtc::{
+    rtp,
     rtp_transceiver::{PayloadType, RTCRtpTransceiver},
     track::track_remote::TrackRemote,
 };
@@ -322,7 +323,7 @@ where
                 match depayloader.depayload(packet) {
                     Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
                     // TODO: Remove after updating webrc-rs
-                    Err(DepayloadingError::Rtp(webrtc::rtp::Error::ErrShortPacket)) => Some(vec![]),
+                    Err(DepayloadingError::Rtp(rtp::Error::ErrShortPacket)) => Some(vec![]),
                     Err(err) => {
                         warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                         Some(vec![])

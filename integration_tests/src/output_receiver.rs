@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 use bytes::{Bytes, BytesMut};
 use crossbeam_channel::Receiver;
 use tracing::error;
+use webrtc::{rtcp, rtp};
 use webrtc_util::Unmarshal;
 
 pub struct OutputReceiver {
@@ -108,11 +109,11 @@ impl OutputReceiver {
 }
 
 fn unmarshal_packet(mut buffer: Bytes) -> Result<Packet> {
-    let rtp_packet = webrtc::rtp::packet::Packet::unmarshal(&mut buffer.clone())?;
+    let rtp_packet = rtp::packet::Packet::unmarshal(&mut buffer.clone())?;
     let packet = if rtp_packet.header.payload_type < 64 || rtp_packet.header.payload_type > 95 {
         Packet::Rtp(buffer)
     } else {
-        webrtc::rtcp::goodbye::Goodbye::unmarshal(&mut buffer).map(|_| Packet::RtcpGoodbye)?
+        rtcp::goodbye::Goodbye::unmarshal(&mut buffer).map(|_| Packet::RtcpGoodbye)?
     };
 
     Ok(packet)

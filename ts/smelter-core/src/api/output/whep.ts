@@ -2,27 +2,21 @@ import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputRequest } from '../output';
 import { intoOutputEosCondition } from './common';
 
-export function intoRegisterWhepServerOutput(
-  output: Outputs.RegisterWhepServerOutput,
+export function intoRegisterWhepOutput(
+  output: Outputs.RegisterWhepOutput,
   initial: { video?: Api.VideoScene; audio?: Api.AudioScene }
 ): RegisterOutputRequest {
   return {
     type: 'whep_server',
     bearer_token: output.bearerToken,
 
-    video:
-      output.video &&
-      initial.video &&
-      intoOutputWhepServerVideoOptions(output.video, initial.video),
-    audio:
-      output.audio &&
-      initial.audio &&
-      intoOutputWhepServerAudioOptions(output.audio, initial.audio),
+    video: output.video && initial.video && intoOutputWhepVideoOptions(output.video, initial.video),
+    audio: output.audio && initial.audio && intoOutputWhepAudioOptions(output.audio, initial.audio),
   };
 }
 
-export function intoOutputWhepServerVideoOptions(
-  video: Outputs.WhepServerVideoOptions | null | undefined,
+export function intoOutputWhepVideoOptions(
+  video: Outputs.WhepVideoOptions | null | undefined,
   initial: Api.VideoScene | undefined
 ): Api.OutputVideoOptions | undefined {
   if (!video || !initial) {
@@ -32,13 +26,13 @@ export function intoOutputWhepServerVideoOptions(
   return {
     resolution: video.resolution,
     send_eos_when: video.sendEosWhen && intoOutputEosCondition(video.sendEosWhen),
-    encoder: video.encoder && intoWhepServerVideoEncoderOptions(video.encoder),
+    encoder: video.encoder && intoWhepVideoEncoderOptions(video.encoder),
     initial,
   };
 }
 
-export function intoWhepServerVideoEncoderOptions(
-  encoder: Outputs.WhepServerVideoEncoderOptions
+export function intoWhepVideoEncoderOptions(
+  encoder: Outputs.WhepVideoEncoderOptions
 ): Api.VideoEncoderOptions {
   switch (encoder.type) {
     case 'ffmpeg_vp9':
@@ -62,21 +56,21 @@ export function intoWhepServerVideoEncoderOptions(
   }
 }
 
-function intoOutputWhepServerAudioOptions(
-  audio: Outputs.WhepServerAudioOptions,
+function intoOutputWhepAudioOptions(
+  audio: Outputs.WhepAudioOptions,
   initial: Api.AudioScene
-): Api.OutputWhepServerAudioOptions {
+): Api.OutputWhepAudioOptions {
   return {
     send_eos_when: audio.sendEosWhen && intoOutputEosCondition(audio.sendEosWhen),
-    encoder: intoWhepServerAudioEncoderOptions(audio.encoder),
+    encoder: intoWhepAudioEncoderOptions(audio.encoder),
     channels: audio.channels,
     initial,
   };
 }
 
-function intoWhepServerAudioEncoderOptions(
-  encoder: Outputs.WhepServerAudioEncoderOptions
-): Api.WhepServerAudioEncoderOptions {
+function intoWhepAudioEncoderOptions(
+  encoder: Outputs.WhepAudioEncoderOptions
+): Api.WhepAudioEncoderOptions {
   return {
     type: 'opus',
     preset: encoder.preset,

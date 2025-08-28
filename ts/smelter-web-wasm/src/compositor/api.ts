@@ -40,23 +40,6 @@ export type RegisterOutput =
         maxBitrate?: number;
       };
       audio?: boolean;
-    }
-  | {
-      type: 'whip_client';
-      /**
-       * WHIP server endpoint.
-       */
-      endpointUrl: string;
-      /**
-       * Token for authenticating communication with the WHIP server.
-       */
-      bearerToken?: string;
-      iceServers?: RTCConfiguration['iceServers'];
-      video: {
-        resolution: Api.Resolution;
-        maxBitrate?: number;
-      };
-      audio?: boolean;
     };
 
 export function intoRegisterOutputRequest(request: RegisterOutput): Output.RegisterOutput {

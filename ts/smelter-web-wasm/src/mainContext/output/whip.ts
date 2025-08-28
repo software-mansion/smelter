@@ -65,7 +65,7 @@ export class WhipOutput implements Output {
   }
 }
 
-export async function handleRegisterWhipClientOutput(
+export async function handleRegisterWhipOutput(
   ctx: InstanceContext,
   outputId: string,
   request: RegisterWasmWhipOutput
