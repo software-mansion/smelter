@@ -60,6 +60,10 @@ impl OutputHandler for RtmpOutput {
         match player {
             OutputPlayer::FfmpegReceiver => self.start_ffmpeg_recv(),
             OutputPlayer::Manual => loop {
+                let cmd = format!("ffmpeg -f flv -listen 1 -i 'rtmp://0.0.0.0:{}' -vcodec copy -f flv - | ffplay -autoexit -f flv -i -", self.port);
+
+                println!("Sample command to start FFmpeg player: {cmd}");
+
                 let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
                 if confirmation {
                     return Ok(());
