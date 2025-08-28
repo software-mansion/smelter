@@ -22,7 +22,7 @@ mod scenes;
 mod suite;
 mod utils;
 
-use args::{Args, BenchmarkSuite, NumericArgument, Resolution, ResolutionArgument};
+use args::{Args, BenchmarkSuite, NumericArgument, Resolution, ResolutionArgument, VideoEncoder};
 use utils::{ensure_default_mp4, generate_yuv_from_mp4};
 
 fn main() {
@@ -137,10 +137,15 @@ fn benchmark_from_args(args: Args) -> Vec<Benchmark> {
                     true => InputFile::Raw(generate_yuv_from_mp4(&input_path).unwrap()),
                     false => InputFile::Mp4(input_path.clone()),
                 },
-                encoder: match args.disable_encoder {
-                    true => EncoderOptions::Disabled,
-                    false => EncoderOptions::Enabled(args.encoder_preset.into()),
-                },
+                encoder: args
+                    .disable_encoder
+                    .then_some(EncoderOptions::Disabled)
+                    .unwrap_or_else(|| match args.video_encoder {
+                        VideoEncoder::FfmpegH264 => {
+                            EncoderOptions::FfmpegH264(args.encoder_preset.into())
+                        }
+                        VideoEncoder::VulkanH264 => EncoderOptions::VulkanH264,
+                    }),
                 decoder: args.video_decoder.into(),
 
                 warm_up_time: Duration::from_secs(2),

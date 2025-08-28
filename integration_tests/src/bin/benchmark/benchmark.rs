@@ -11,7 +11,8 @@ use crate::{
 
 #[derive(Debug, Clone, Copy)]
 pub enum EncoderOptions {
-    Enabled(FfmpegH264EncoderPreset),
+    FfmpegH264(FfmpegH264EncoderPreset),
+    VulkanH264,
     Disabled,
 }
 
