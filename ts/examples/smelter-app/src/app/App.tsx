@@ -1,9 +1,17 @@
-import { Text, View, InputStream, Tiles, Rescaler } from '@swmansion/smelter';
+import {
+  Text,
+  View,
+  InputStream,
+  Image,
+  Tiles,
+  Rescaler,
+  useInputStreams,
+} from '@swmansion/smelter';
 
 import { createRoomStore, type InputConfig as InputConfig, type RoomStore } from './store';
 import type { StoreApi } from 'zustand';
 import { useStore } from 'zustand';
-import React, { createContext, useContext } from 'react';
+import { createContext, useContext } from 'react';
 
 export const StoreContext = createContext<StoreApi<RoomStore>>(createRoomStore());
 
@@ -35,12 +43,31 @@ function OutputScene() {
 }
 
 function Input({ input }: { input: InputConfig }) {
+  const streams = useInputStreams();
+  const streamState = streams[input.inputId]?.videoState ?? 'finished';
+  console.log(streams, input);
   return (
     <Rescaler>
       <View style={{ width: 1920, height: 1080, direction: 'column' }}>
-        <Rescaler style={{ rescaleMode: 'fill' }}>
-          <InputStream inputId={input.inputId} volume={input.volume} />
-        </Rescaler>
+        {streamState === 'playing' ? (
+          <Rescaler style={{ rescaleMode: 'fill' }}>
+            <InputStream inputId={input.inputId} volume={input.volume} />
+          </Rescaler>
+        ) : streamState === 'ready' ? (
+          <View style={{ padding: 300 }}>
+            <Rescaler style={{ rescaleMode: 'fit' }}>
+              <Image imageId="spinner" />
+            </Rescaler>
+          </View>
+        ) : streamState === 'finished' ? (
+          <View style={{ padding: 300 }}>
+            <Rescaler style={{ rescaleMode: 'fit' }}>
+              <Text style={{ fontSize: 600 }}>Stream offline</Text>
+            </Rescaler>
+          </View>
+        ) : (
+          <View />
+        )}
         <View
           style={{
             backgroundColor: '#493880',

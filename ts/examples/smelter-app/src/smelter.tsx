@@ -1,3 +1,4 @@
+import path from 'path';
 import type { StoreApi } from 'zustand';
 import Smelter from '@swmansion/smelter-node';
 
@@ -37,6 +38,10 @@ export class SmelterManager {
   public async init() {
     await SmelterInstance['instance'].init();
     await SmelterInstance['instance'].start();
+    await SmelterInstance['instance'].registerImage('spinner', {
+      serverPath: path.join(__dirname, '../loading.gif'),
+      assetType: 'gif',
+    });
   }
 
   public async registerOutput(roomId: string): Promise<SmelterOutput> {
