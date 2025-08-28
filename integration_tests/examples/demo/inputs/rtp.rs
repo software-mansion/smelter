@@ -55,7 +55,7 @@ impl RtpInput {
             IP,
             video_port,
             audio_port,
-            integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+            integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
         )?);
         Ok(())
     }
@@ -67,7 +67,7 @@ impl RtpInput {
             IP,
             video_port,
             audio_port,
-            integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+            integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
         )?);
         Ok(())
     }
@@ -83,13 +83,13 @@ impl RtpInput {
                 IP,
                 Some(self.port),
                 None,
-                integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+                integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
             )?,
             (None, Some(_audio)) => start_ffmpeg_send(
                 IP,
                 None,
                 Some(self.port),
-                integration_tests::examples::TestSample::ElephantsDreamH264Opus,
+                integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
             )?,
             (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
         };
@@ -185,7 +185,7 @@ impl RtpInputBuilder {
 
         loop {
             let video_selection =
-                Select::new("Add video stream?", video_options.clone()).prompt_skippable()?;
+                Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
 
             builder = match video_selection {
                 Some(RtpRegisterOptions::SetVideoStream) => {
@@ -196,7 +196,7 @@ impl RtpInputBuilder {
             };
 
             let audio_selection =
-                Select::new("Add audio stream?", audio_options.clone()).prompt_skippable()?;
+                Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
 
             builder = match audio_selection {
                 Some(RtpRegisterOptions::SetAudioStream) => {

@@ -95,13 +95,13 @@ impl WhipWhepServer {
                 "/whip/:endpoint_id/:session_id",
                 delete(handle_terminate_whip_session),
             )
-            .route("/whep/:id", post(handle_create_whep_session))
+            .route("/whep/:endpoint_id", post(handle_create_whep_session))
             .route(
-                "/whep/:id/:session_id",
+                "/whep/:endpoint_id/:session_id",
                 patch(handle_new_whep_ice_candidates),
             )
             .route(
-                "/whep/:id/:session_id",
+                "/whep/:endpoint_id/:session_id",
                 delete(handle_terminate_whep_session),
             )
             .layer(CorsLayer::permissive())

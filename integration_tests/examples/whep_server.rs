@@ -31,7 +31,7 @@ fn client_code() -> Result<()> {
     examples::post(
         "output/output_1/register",
         &json!({
-            "type": "whep",
+            "type": "whep_server",
             "video": {
                 "resolution": {
                     "width": VIDEO_RESOLUTION.width,

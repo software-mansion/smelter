@@ -31,13 +31,13 @@ export function parseImageRef(rawId: string): ImageRef {
   } else if (split[0] === 'global') {
     return {
       type: 'global',
-      id: split.slice(1).join(),
+      id: split.slice(1).join(':'),
     };
   } else if (split[0] === 'output-specific-image') {
     return {
       type: 'output-specific-image',
       id: Number(split[1]),
-      outputId: split.slice(2).join(),
+      outputId: split.slice(2).join(':'),
     };
   } else {
     throw new Error(`Unknown image type (${split[0]}).`);

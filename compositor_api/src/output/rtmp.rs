@@ -7,7 +7,7 @@ use crate::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct RtmpClient {
+pub struct RtmpOutput {
     pub url: Arc<str>,
     /// Video stream configuration.
     pub video: Option<OutputVideoOptions>,

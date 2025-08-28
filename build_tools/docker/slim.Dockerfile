@@ -1,10 +1,10 @@
 # Builder image
-FROM ubuntu:noble-20240423 as builder
+FROM ubuntu:noble-20250716 as builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG USERNAME=smelter
-ARG RUST_VERSION=1.81
+ARG RUST_VERSION=1.89
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -24,7 +24,7 @@ WORKDIR /root/project
 RUN source ~/.cargo/env && cargo build --release --no-default-features
 
 # Runtime image
-FROM ubuntu:noble-20240423
+FROM ubuntu:noble-20250716
 
 LABEL org.opencontainers.image.source https://github.com/software-mansion/smelter
 

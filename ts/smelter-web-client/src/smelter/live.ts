@@ -40,7 +40,7 @@ export default class Smelter {
   public async registerOutput(
     outputId: string,
     root: ReactElement,
-    request: Extract<RegisterOutput, { type: 'whep' }>
+    request: Extract<RegisterOutput, { type: 'whep_server' }>
   ): Promise<RegisterWhepOutputResponse>;
 
   public async registerOutput(
@@ -56,7 +56,7 @@ export default class Smelter {
   ): Promise<object> {
     return await this.scheduler.run(async () => {
       let result = await this.coreSmelter.registerOutput(outputId, root, request);
-      if (request.type === 'whep') {
+      if (request.type === 'whep_server') {
         return {
           endpointRoute: result.endpoint_route,
         };
@@ -73,7 +73,7 @@ export default class Smelter {
 
   public async registerInput(
     inputId: string,
-    request: Extract<RegisterInput, { type: 'whip' }>
+    request: Extract<RegisterInput, { type: 'whip_server' }>
   ): Promise<RegisterWhipInputResponse>;
 
   public async registerInput(
@@ -91,7 +91,7 @@ export default class Smelter {
           videoDurationMs: result.video_duration_ms,
           audioDurationMs: result.audio_duration_ms,
         };
-      } else if (request.type === 'whip') {
+      } else if (request.type === 'whip_server') {
         return {
           bearerToken: result.bearer_token,
           endpointRoute: result.endpoint_route,

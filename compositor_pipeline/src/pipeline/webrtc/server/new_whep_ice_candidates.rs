@@ -13,12 +13,12 @@ use tracing::info;
 use std::sync::Arc;
 
 pub async fn handle_new_whep_ice_candidates(
-    Path((id, session_id)): Path<(String, String)>,
+    Path((endpoint_id, session_id)): Path<(String, String)>,
     State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
     sdp_fragment_content: String,
 ) -> Result<StatusCode, WhipWhepServerError> {
-    let output_id = OutputId(Arc::from(id));
+    let output_id = OutputId(Arc::from(endpoint_id));
     let session_id = Arc::from(session_id);
 
     validate_content_type(&headers)?;
