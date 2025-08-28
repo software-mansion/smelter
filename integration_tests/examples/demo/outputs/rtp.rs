@@ -162,16 +162,30 @@ impl OutputHandler for RtpOutput {
                     ]
                     .concat();
 
-                    let video_cmd = cmd_base.clone() + "demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264\" ! queue ! rtph264depay ! decodebin ! videoconvert ! autovideosink ";
-                    let audio_cmd = cmd_base + "demux.src_97 ! \"application/x-rtp,media=audio,clock-rate=48000,encoding-name=OPUS\" ! queue ! rtpopusdepay ! decodebin ! audioconvert ! autoaudiosink sync=false";
+                    let video_cmd = "demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264\" ! queue ! rtph264depay ! decodebin ! videoconvert ! autovideosink ";
+                    let audio_cmd = "demux.src_97 ! \"application/x-rtp,media=audio,clock-rate=48000,encoding-name=OPUS\" ! queue ! rtpopusdepay ! decodebin ! audioconvert ! autoaudiosink sync=false";
 
-                    println!("Start stream receiver for H264 encoded video");
-                    println!("{video_cmd}");
-                    println!();
-
-                    println!("Start stream receiver for OPUS encoded audio");
-                    println!("{audio_cmd}");
-                    println!();
+                    match (&self.video, &self.audio) {
+                        (Some(_), Some(_)) => {
+                            let cmd = cmd_base + video_cmd + audio_cmd;
+                            println!("Start stream receiver for H264 encoded video and OPUS encoded audio:");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        (Some(_), None) => {
+                            let cmd = cmd_base + video_cmd;
+                            println!("Start stream receiver for H264 encoded video:");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        (None, Some(_)) => {
+                            let cmd = cmd_base + audio_cmd;
+                            println!("Start stream receiver for OPUS encoded audio");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        _ => unreachable!(),
+                    }
 
                     loop {
                         let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
@@ -200,13 +214,29 @@ impl OutputHandler for RtpOutput {
                     let video_cmd = "demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264\" ! queue ! rtph264depay ! decodebin ! videoconvert ! autovideosink ";
                     let audio_cmd = "demux.src_97 ! \"application/x-rtp,media=audio,clock-rate=48000,encoding-name=OPUS\" ! queue ! rtpopusdepay ! decodebin ! audioconvert ! autoaudiosink";
 
-                    let cmd = cmd_base + video_cmd + audio_cmd;
-
-                    println!(
-                        "Start stream receiver for H264 encoded video and OPUS encoded audio:"
-                    );
-                    println!("{cmd}");
-                    println!();
+                    match (&self.video, &self.audio) {
+                        (Some(_), Some(_)) => {
+                            let cmd = cmd_base + video_cmd + audio_cmd;
+                            println!(
+                                "Start stream receiver for H264 encoded video and OPUS encoded audio:"
+                            );
+                            println!("{cmd}");
+                            println!();
+                        }
+                        (Some(_), None) => {
+                            let cmd = cmd_base + video_cmd;
+                            println!("Start stream receiver for H264 encoded video:");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        (None, Some(_)) => {
+                            let cmd = cmd_base + audio_cmd;
+                            println!("Start stream receiver for OPUS encoded audio:");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        _ => unreachable!(),
+                    }
 
                     loop {
                         let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
