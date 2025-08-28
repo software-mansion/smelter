@@ -109,18 +109,36 @@ impl RtpInput {
             InputPlayer::FfmpegTransmitter => self.ffmpeg_transmit(),
             InputPlayer::GstreamerTransmitter => self.gstreamer_transmit_udp(),
             InputPlayer::Manual => {
-                let video_cmd = format!(
-                    "ffmpeg -re -i <FILE_PATH> -an -c:v libx264 -f rtp 'rtp://127.0.0.1:{}'",
-                    self.port
-                );
-                let audio_cmd = format!(
-                    "ffmpeg -re -i <FILE_PATH> -nn -c:a libopus -f rtp 'rtp://127.0.0.1:{}'",
-                    self.port
-                );
+                let cmd_base = [
+                    "gst-launch-1.0 -v ",
+                    "filesrc location=<PATH_TO_FILE> ! qtdemux name=demux ",
+                ]
+                .concat();
 
-                println!("Sample command to start streaming video encoded in H264: {video_cmd}");
-                println!("Sample command to start streaming audio encoded in OPUS: {audio_cmd}");
-                println!();
+                let video_cmd = format!(" demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! udpsink host='127.0.0.1' port={} ", self.port);
+                let audio_cmd = format!("demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! udpsink host='127.0.0.1' port={} ", self.port);
+
+                match (&self.video, &self.audio) {
+                    (Some(_), Some(_)) => {
+                        let cmd = cmd_base + &video_cmd + &audio_cmd;
+                        println!("Start streaming H264 encoded video and OPUS encoded audio:");
+                        println!("{cmd}");
+                        println!();
+                    }
+                    (Some(_), None) => {
+                        let cmd = cmd_base + &video_cmd;
+                        println!("Start streaming H264 encoded video:");
+                        println!("{cmd}");
+                        println!();
+                    }
+                    (None, Some(_)) => {
+                        let cmd = cmd_base + &audio_cmd;
+                        println!("Start streaming OPUS encoded audio:");
+                        println!("{cmd}");
+                        println!();
+                    }
+                    _ => unreachable!(),
+                }
 
                 loop {
                     let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
@@ -141,16 +159,30 @@ impl RtpInput {
                     "filesrc location=<FILE_PATH> ! qtdemux name=demux ",
                 ]
                 .concat();
-                let video_cmd = cmd_base.clone() + &format!("demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! rtpstreampay ! tcpclientsink host='127.0.0.1' port={} ", self.port);
-                let audio_cmd = cmd_base + &format!("demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! rtpstreampay ! tcpclientsink host='127.0.0.1' port={}", self.port);
+                let video_cmd = format!("demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! rtpstreampay ! tcpclientsink host='127.0.0.1' port={} ", self.port);
+                let audio_cmd = format!("demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! rtpstreampay ! tcpclientsink host='127.0.0.1' port={}", self.port);
 
-                println!("Sample command to start streaming video encoded in H264:");
-                println!("{video_cmd}");
-                println!();
-
-                println!("Sample command to start streaming audio encoded in OPUS:");
-                println!("{audio_cmd}");
-                println!();
+                match (&self.video, &self.audio) {
+                    (Some(_), Some(_)) => {
+                        let cmd = cmd_base + &video_cmd + &audio_cmd;
+                        println!("Start streaming H264 encoded video and OPUS encoded audio:");
+                        println!("{cmd}");
+                        println!();
+                    }
+                    (Some(_), None) => {
+                        let cmd = cmd_base + &video_cmd;
+                        println!("Start streaming H264 encoded video:");
+                        println!("{cmd}");
+                        println!();
+                    }
+                    (None, Some(_)) => {
+                        let cmd = cmd_base + &audio_cmd;
+                        println!("Start streaming OPUS encoded audio:");
+                        println!("{cmd}");
+                        println!();
+                    }
+                    _ => unreachable!(),
+                }
 
                 loop {
                     let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
