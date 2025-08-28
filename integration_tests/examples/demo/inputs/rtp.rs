@@ -108,7 +108,7 @@ impl RtpInput {
         match player {
             InputPlayer::FfmpegTransmitter => self.ffmpeg_transmit(),
             InputPlayer::GstreamerTransmitter => self.gstreamer_transmit_udp(),
-            InputPlayer::Manual => loop {
+            InputPlayer::Manual => {
                 let video_cmd = format!(
                     "ffmpeg -re -i <FILE_PATH> -an -c:v libx264 -f rtp 'rtp://127.0.0.1:{}'",
                     self.port
@@ -122,18 +122,20 @@ impl RtpInput {
                 println!("Sample command to start streaming audio encoded in OPUS: {audio_cmd}");
                 println!();
 
-                let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                if confirmation {
-                    return Ok(());
+                loop {
+                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                    if confirmation {
+                        return Ok(());
+                    }
                 }
-            },
+            }
         }
     }
 
     fn on_after_registration_tcp(&mut self, player: InputPlayer) -> Result<()> {
         match player {
             InputPlayer::GstreamerTransmitter => self.gstreamer_transmit_tcp(),
-            InputPlayer::Manual => loop {
+            InputPlayer::Manual => {
                 let cmd_base = [
                     "gst-launch-1.0 -v ",
                     "filesrc location=<FILE_PATH> ! qtdemux name=demux ",
@@ -150,11 +152,13 @@ impl RtpInput {
                 println!("{audio_cmd}");
                 println!();
 
-                let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                if confirmation {
-                    return Ok(());
+                loop {
+                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                    if confirmation {
+                        return Ok(());
+                    }
                 }
-            },
+            }
             _ => unreachable!(),
         }
     }

@@ -28,17 +28,19 @@ impl InputHandler for WhipInput {
 
     fn on_after_registration(&mut self, player: InputPlayer) -> Result<()> {
         match player {
-            InputPlayer::Manual => loop {
+            InputPlayer::Manual => {
                 println!("Instructions to start streaming:");
                 println!("1. Open OBS Studio");
                 println!("2. In a 'Stream' tab enter 'http://127.0.0.1:9000/whip/{} in 'Server' field and '{}' in 'Bearer Token' field", self.name, self.bearer_token);
                 println!();
 
-                let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                if confirmation {
-                    return Ok(());
+                loop {
+                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                    if confirmation {
+                        return Ok(());
+                    }
                 }
-            },
+            }
             _ => unreachable!(),
         }
     }
