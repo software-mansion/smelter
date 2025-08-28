@@ -42,7 +42,7 @@ export class SmelterManager {
   public async registerOutput(roomId: string): Promise<SmelterOutput> {
     let store = createRoomStore();
     await this.instance.registerOutput(roomId, <App store={store} />, {
-      type: 'whep',
+      type: 'whep_server',
       video: {
         encoder: {
           type: 'ffmpeg_h264',
