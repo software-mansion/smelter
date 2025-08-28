@@ -196,7 +196,6 @@ pub fn four_video_layout(ctx: &SceneContext, output_id: &OutputId) -> Component 
 }
 
 // One less copy than single_video_layout
-#[allow(dead_code)]
 pub fn single_video_pass_through(ctx: &SceneContext, output_id: &OutputId) -> Component {
     let (output_index, _) = ctx
         .outputs

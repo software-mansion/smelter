@@ -22,8 +22,10 @@ mod scenes;
 mod suite;
 mod utils;
 
-use args::{Args, BenchmarkSuite, NumericArgument, Resolution, ResolutionArgument};
+use args::{Args, BenchmarkSuite, NumericArgument, Resolution, ResolutionArgument, VideoEncoder};
 use utils::{ensure_default_mp4, generate_yuv_from_mp4};
+
+use crate::suite::encoders_only_benchmark_suite;
 
 fn main() {
     let args = Args::parse();
@@ -49,6 +51,7 @@ fn main() {
         BenchmarkSuite::Full => full_benchmark_suite(&ctx),
         BenchmarkSuite::CpuOptimized => cpu_optimized_benchmark_suite(&ctx),
         BenchmarkSuite::Minimal => minimal_benchmark_suite(&ctx),
+        BenchmarkSuite::EncodersOnly => encoders_only_benchmark_suite(&ctx),
         BenchmarkSuite::None => benchmark_from_args(args.clone()),
     };
 
@@ -139,8 +142,15 @@ fn benchmark_from_args(args: Args) -> Vec<Benchmark> {
                 },
                 encoder: match args.disable_encoder {
                     true => EncoderOptions::Disabled,
-                    false => EncoderOptions::Enabled(args.encoder_preset.into()),
+                    false => match args.video_encoder {
+                        VideoEncoder::FfmpegH264 => {
+                            EncoderOptions::FfmpegH264(args.encoder_preset.into())
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        VideoEncoder::VulkanH264 => EncoderOptions::VulkanH264,
+                    },
                 },
+
                 decoder: args.video_decoder.into(),
 
                 warm_up_time: Duration::from_secs(2),
