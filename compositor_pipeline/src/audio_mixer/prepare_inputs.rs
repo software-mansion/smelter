@@ -70,7 +70,16 @@ fn frame_input_samples(
         .map(|batch| {
             let duration_secs = start_pts.as_secs_f64() - batch.start_pts.as_secs_f64();
             let sample_duration_secs = 1.0 / sample_rate as f64;
-            Duration::from_secs_f64(duration_secs.rem_euclid(sample_duration_secs))
+            let offset_secs = duration_secs.rem_euclid(sample_duration_secs);
+
+            // This is necessary because of numerical inconsistence in calculation of
+            // `duration_secs`. If offset is set to any value divisible by sample length then an
+            // underflow may occur that sets the offset to the full sample length.
+            if offset_secs > 0.99 * sample_duration_secs {
+                Duration::ZERO
+            } else {
+                Duration::from_secs_f64(offset_secs)
+            }
         })
         .unwrap_or(Duration::ZERO);
 
