@@ -23,7 +23,7 @@ export const config: Config =
           transport: {
             target: 'pino-pretty',
           },
-          level: 'info',
+          level: 'warn',
         },
         whepBaseUrl: 'http://127.0.0.1:9000/whep',
         h264Decoder: 'ffmpeg_h264',
