@@ -46,8 +46,8 @@ function Input({ input }: { input: InputConfig }) {
   const streams = useInputStreams();
   const streamState = streams[input.inputId]?.videoState ?? 'finished';
   return (
-    <Rescaler>
-      <View style={{ width: 1920, height: 1080, direction: 'column' }}>
+    <Rescaler style={{ width: 1920, height: 1210 }}>
+      <View style={{ width: 1920, height: 1210, direction: 'column' }}>
         {streamState === 'playing' ? (
           <Rescaler style={{ rescaleMode: 'fill' }}>
             <InputStream inputId={input.inputId} volume={input.volume} />
@@ -99,7 +99,7 @@ function SmallInput({ input }: { input: InputConfig }) {
             borderRadius: 10,
             direction: 'column',
           }}>
-          <Text style={{ fontSize: 30, color: 'white' }}>{input.inputId}</Text>
+          <Text style={{ fontSize: 30, color: 'white' }}>{input.title}</Text>
         </View>
       </View>
     </Rescaler>
@@ -111,7 +111,7 @@ function GridLayout() {
   const inputs = useStore(store, state => state.inputs);
 
   return (
-    <Tiles transition={{ durationMs: 300 }} style={{ padding: 20, tileAspectRatio: '2010:1080' }}>
+    <Tiles transition={{ durationMs: 300 }} style={{ padding: 20, tileAspectRatio: '1920:1210' }}>
       {Object.values(inputs).map(input => (
         <Input key={input.inputId} input={input} />
       ))}
