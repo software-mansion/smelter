@@ -1,7 +1,7 @@
 import { RoomState } from './roomState';
 import { v4 as uuidv4 } from 'uuid';
-import { SmelterManager } from '../smelter';
 import { errorCodes } from 'fastify';
+import { SmelterInstance } from '../smelter';
 
 export type CreateRoomResult = {
   roomId: string;
@@ -13,10 +13,8 @@ const ROOM_COUNT_HARD_LIMIT = 5;
 
 class ServerState {
   private rooms: Record<string, RoomState> = {};
-  private smelterManager: SmelterManager;
 
   constructor() {
-    this.smelterManager = new SmelterManager();
     setInterval(async () => {
       await this.monitorConnectedRooms();
     }, 1000);
@@ -24,7 +22,7 @@ class ServerState {
 
   public async createRoom(): Promise<CreateRoomResult> {
     const roomId = uuidv4();
-    const smelterOutput = await this.smelterManager.registerOutput(roomId);
+    const smelterOutput = await SmelterInstance.registerOutput(roomId);
     const room = new RoomState(roomId, smelterOutput);
     this.rooms[roomId] = room;
     return { roomId, room };
