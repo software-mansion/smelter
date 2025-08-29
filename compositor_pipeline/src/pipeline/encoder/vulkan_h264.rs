@@ -4,12 +4,13 @@ use compositor_render::{FrameData, OutputFrameFormat};
 use tracing::{error, info};
 use vk_video::{RateControl, Rational, VideoParameters, WgpuTexturesEncoder};
 
-use crate::prelude::*;
+use crate::{graphics_context::GraphicsContext, prelude::*};
 
 use super::{VideoEncoder, VideoEncoderConfig};
 
 pub struct VulkanH264Encoder {
     encoder: WgpuTexturesEncoder,
+    ctx: GraphicsContext,
 }
 
 impl VideoEncoder for VulkanH264Encoder {
@@ -63,7 +64,10 @@ impl VideoEncoder for VulkanH264Encoder {
         let encoder = device.create_wgpu_textures_encoder(encoder_params)?;
 
         Ok((
-            Self { encoder },
+            Self {
+                encoder,
+                ctx: ctx.graphics_context.clone(),
+            },
             VideoEncoderConfig {
                 resolution: options.resolution,
                 output_format: OutputFrameFormat::RgbaWgpuTexture,
@@ -78,6 +82,7 @@ impl VideoEncoder for VulkanH264Encoder {
             return Vec::new();
         };
 
+        transition_texture(&self.ctx, &texture);
         let result = unsafe {
             self.encoder.encode(
                 vk_video::Frame {
@@ -108,4 +113,22 @@ impl VideoEncoder for VulkanH264Encoder {
         // Encoder does not store frames (this will change with B-frame support)
         Vec::new()
     }
+}
+
+fn transition_texture(ctx: &GraphicsContext, texture: &wgpu::Texture) {
+    let mut command_encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+    command_encoder.transition_resources(
+        [].into_iter(),
+        [wgpu::TextureTransition {
+            texture,
+            state: wgpu::TextureUses::RESOURCE,
+            selector: None,
+        }]
+        .into_iter(),
+    );
+
+    ctx.queue.submit([command_encoder.finish()]);
 }
