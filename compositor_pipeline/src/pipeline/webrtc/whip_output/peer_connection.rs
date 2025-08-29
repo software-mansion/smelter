@@ -10,17 +10,17 @@ use webrtc::{
         ice_server::RTCIceServer,
     },
     interceptor::registry::Registry,
-    peer_connection::RTCPeerConnection,
     peer_connection::{
         configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
+        RTCPeerConnection,
     },
     rtp_transceiver::{
         rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
         rtp_sender::RTCRtpSender,
-        RTCPFeedback,
+        rtp_transceiver_direction::RTCRtpTransceiverDirection,
+        RTCPFeedback, RTCRtpTransceiverInit,
     },
     stats::StatsReport,
-    track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
 use std::sync::Arc;
@@ -35,7 +35,7 @@ pub(super) struct PeerConnection {
 impl PeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
-        options: &WhipSenderOptions,
+        options: &WhipOutputOptions,
     ) -> Result<Self, WhipOutputError> {
         let mut media_engine = media_engine_with_codecs(options)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
@@ -67,46 +67,36 @@ impl PeerConnection {
     }
 
     pub async fn new_video_track(&self) -> Result<Arc<RTCRtpSender>, WhipOutputError> {
-        let track = Arc::new(TrackLocalStaticRTP::new(
-            RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_VP8.to_owned(),
-                clock_rate: 90000,
-                channels: 0,
-                sdp_fmtp_line: "".to_owned(),
-                rtcp_feedback: vec![],
-            },
-            "video".to_string(),
-            "webrtc".to_string(),
-        ));
-        let sender = self
+        let transceiver = self
             .pc
-            .add_track(track)
+            .add_transceiver_from_kind(
+                RTPCodecType::Video,
+                Some(RTCRtpTransceiverInit {
+                    direction: RTCRtpTransceiverDirection::Sendonly,
+                    send_encodings: vec![],
+                }),
+            )
             .await
             .map_err(WhipOutputError::PeerConnectionInitError)?;
-
+        let sender = transceiver.sender().await;
         let rtc_sender_params = sender.get_parameters().await;
         debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
         Ok(sender)
     }
 
     pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpSender>, WhipOutputError> {
-        let track = Arc::new(TrackLocalStaticRTP::new(
-            RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_OPUS.to_owned(),
-                clock_rate: 48000,
-                channels: 0,
-                sdp_fmtp_line: "".to_owned(),
-                rtcp_feedback: vec![],
-            },
-            "audio".to_string(),
-            "webrtc".to_string(),
-        ));
-        let sender = self
+        let transceiver = self
             .pc
-            .add_track(track)
+            .add_transceiver_from_kind(
+                RTPCodecType::Audio,
+                Some(RTCRtpTransceiverInit {
+                    direction: RTCRtpTransceiverDirection::Sendonly,
+                    send_encodings: vec![],
+                }),
+            )
             .await
             .map_err(WhipOutputError::PeerConnectionInitError)?;
-
+        let sender = transceiver.sender().await;
         let rtc_sender_params = sender.get_parameters().await;
         debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
         Ok(sender)
@@ -148,7 +138,7 @@ impl PeerConnection {
     }
 }
 
-fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Result<MediaEngine> {
+fn media_engine_with_codecs(options: &WhipOutputOptions) -> webrtc::error::Result<MediaEngine> {
     let mut media_engine = MediaEngine::default();
 
     let video_encoder_preferences = options
@@ -160,31 +150,26 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
         .as_ref()
         .map(|a| a.encoder_preferences.clone());
 
-    for encoder_options in &audio_encoder_preferences.unwrap_or_default() {
-        if let AudioEncoderOptions::Opus(opts) = encoder_options {
-            let channels = match opts.channels {
-                AudioChannels::Mono => 1,
-                AudioChannels::Stereo => 2,
-            };
-            let (fec, payload_type): (u8, u8) = match opts.forward_error_correction {
-                true => (1, 111),
-                false => (0, 110),
-            };
-            media_engine.register_codec(
-                RTCRtpCodecParameters {
-                    capability: RTCRtpCodecCapability {
-                        mime_type: MIME_TYPE_OPUS.to_owned(),
-                        clock_rate: opts.sample_rate,
-                        channels,
-                        sdp_fmtp_line: format!("minptime=10;useinbandfec={fec}").to_owned(),
-                        rtcp_feedback: vec![],
-                    },
-                    payload_type,
-                    ..Default::default()
-                },
-                RTPCodecType::Audio,
-            )?;
-        }
+    // Opus is the only supported codec. The only negotiable option in AudioEncoderOptions is FEC.
+    // Since FEC is the only variant, we can just check the first option’s FEC value
+    // and register Opus with/without FEC accordingly, in the preferred order.
+    // Channels field is the same for all encoder preferences.
+    if let Some(AudioEncoderOptions::Opus(opts)) =
+        audio_encoder_preferences.unwrap_or_default().first()
+    {
+        let channels = match opts.channels {
+            AudioChannels::Mono => 1,
+            AudioChannels::Stereo => 2,
+        };
+        register_opus_for_both_fec(
+            &mut media_engine,
+            opts.sample_rate,
+            channels,
+            opts.forward_error_correction,
+        )?;
+    } else {
+        // default Opus register to make Twitch work
+        register_opus_for_both_fec(&mut media_engine, 48000, 2, true)?;
     }
 
     let video_rtcp_feedback = vec![
@@ -316,4 +301,43 @@ fn media_engine_with_codecs(options: &WhipSenderOptions) -> webrtc::error::Resul
     }
 
     Ok(media_engine)
+}
+
+fn register_opus_for_both_fec(
+    media_engine: &mut MediaEngine,
+    sample_rate: u32,
+    channels: u16,
+    fec_first: bool,
+) -> webrtc::error::Result<()> {
+    media_engine.register_codec(
+        create_opus_codec_params(sample_rate, channels, fec_first),
+        RTPCodecType::Audio,
+    )?;
+
+    media_engine.register_codec(
+        create_opus_codec_params(sample_rate, channels, !fec_first),
+        RTPCodecType::Audio,
+    )?;
+
+    Ok(())
+}
+
+fn create_opus_codec_params(
+    sample_rate: u32,
+    channels: u16,
+    fec_enabled: bool,
+) -> RTCRtpCodecParameters {
+    let (payload_type, fec) = if fec_enabled { (111, 1) } else { (110, 0) };
+
+    RTCRtpCodecParameters {
+        capability: RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_OPUS.to_owned(),
+            clock_rate: sample_rate,
+            channels,
+            sdp_fmtp_line: format!("minptime=10;useinbandfec={fec}"),
+            rtcp_feedback: vec![],
+        },
+        payload_type,
+        ..Default::default()
+    }
 }

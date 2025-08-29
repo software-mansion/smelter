@@ -29,7 +29,7 @@ pub enum ProtocolOutputOptions {
     Rtmp(RtmpOutputOptions),
     Mp4(Mp4OutputOptions),
     Hls(HlsOutputOptions),
-    Whip(WhipSenderOptions),
+    Whip(WhipOutputOptions),
     Whep(WhepSenderOptions),
 }
 
