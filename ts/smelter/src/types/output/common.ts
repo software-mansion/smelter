@@ -28,7 +28,7 @@ export type OutputEndCondition =
 
 export type VulkanH264EncoderBitrate = {
   /**
-   * Averate bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,
+   * Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,
    * but may temporarily increase it to the provided max bitrate.
    */
   averageBitrate: number;
