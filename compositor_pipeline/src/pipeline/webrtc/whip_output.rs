@@ -46,7 +46,7 @@ impl WhipOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
-        options: WhipSenderOptions,
+        options: WhipOutputOptions,
     ) -> Result<Self, OutputInitError> {
         let (init_confirmation_sender, init_confirmation_receiver) = oneshot::channel();
 
@@ -92,7 +92,7 @@ impl WhipClientTask {
     async fn new(
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
-        options: WhipSenderOptions,
+        options: WhipOutputOptions,
     ) -> Result<(Self, WhipOutput), WhipOutputError> {
         let client = WhipHttpClient::new(&options)?;
         let pc = PeerConnection::new(&ctx, &options).await?;
@@ -101,15 +101,6 @@ impl WhipClientTask {
         let audio_rtc_sender = pc.new_audio_track().await?;
 
         let (session_url, answer) = exchange_sdp_offers(&pc, &client).await?;
-
-        // disable tracks before set remote description
-        video_rtc_sender.replace_track(None).await?;
-        let rtc_sender_params = video_rtc_sender.get_parameters().await;
-        debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
-
-        audio_rtc_sender.replace_track(None).await?;
-        let rtc_sender_params = audio_rtc_sender.get_parameters().await;
-        debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
 
         pc.set_remote_description(answer).await?;
 

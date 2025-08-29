@@ -186,28 +186,21 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                                     preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
                                     sample_rate: sample_rate.unwrap_or(48000),
                                     forward_error_correction: forward_error_correction
-                                        .unwrap_or(false),
+                                        .unwrap_or(true),
                                     packet_loss: 0,
                                 },
                             )]
                         }
                         WhipAudioEncoderOptions::Any => {
-                            vec![
-                                pipeline::AudioEncoderOptions::Opus(pipeline::OpusEncoderOptions {
+                            vec![pipeline::AudioEncoderOptions::Opus(
+                                pipeline::OpusEncoderOptions {
                                     channels: resolved_channels.clone().into(),
                                     preset: OpusEncoderPreset::Voip.into(),
                                     sample_rate: 48000,
                                     forward_error_correction: true,
                                     packet_loss: 0,
-                                }),
-                                pipeline::AudioEncoderOptions::Opus(pipeline::OpusEncoderOptions {
-                                    channels: resolved_channels.clone().into(),
-                                    preset: OpusEncoderPreset::Voip.into(),
-                                    sample_rate: 48000,
-                                    forward_error_correction: false,
-                                    packet_loss: 0,
-                                }),
-                            ]
+                                },
+                            )]
                         }
                     })
                     .unique()
@@ -218,24 +211,10 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                 };
                 (Some(output_audio_options), Some(audio_whip_options))
             }
-            None => {
-                // even if audio field is unregistered add opus codec in order to make Twitch work
-                let audio_whip_options = pipeline::AudioWhipOptions {
-                    encoder_preferences: vec![pipeline::AudioEncoderOptions::Opus(
-                        pipeline::OpusEncoderOptions {
-                            channels: compositor_pipeline::AudioChannels::Stereo,
-                            preset: OpusEncoderPreset::Voip.into(),
-                            sample_rate: 48000,
-                            forward_error_correction: false,
-                            packet_loss: 0,
-                        },
-                    )],
-                };
-                (None, Some(audio_whip_options))
-            }
+            None => (None, None),
         };
 
-        let output_options = pipeline::ProtocolOutputOptions::Whip(pipeline::WhipSenderOptions {
+        let output_options = pipeline::ProtocolOutputOptions::Whip(pipeline::WhipOutputOptions {
             endpoint_url,
             bearer_token,
             video: video_whip_options,
