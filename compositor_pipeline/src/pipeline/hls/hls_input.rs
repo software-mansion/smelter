@@ -21,7 +21,7 @@ use ffmpeg_next::{
     util::interrupt,
     Dictionary, Packet, Stream,
 };
-use tracing::{debug, error, info, span, trace, warn, Level};
+use tracing::{debug, error, span, trace, warn, Level};
 
 use crate::{
     pipeline::{
@@ -95,7 +95,10 @@ impl HlsInput {
         // I do not know why this happens
         let mut input_ctx = match input_with_dictionary_and_interrupt(
             &options.url,
-            Dictionary::from_iter([("protocol_whitelist", "tcp,hls,http,https,file,tls")]),
+            Dictionary::from_iter([
+                ("protocol_whitelist", "tcp,hls,http,https,file,tls"),
+                ("live_start_index", "-1"),
+            ]),
             || should_close.load(Ordering::Relaxed),
         ) {
             Ok(i) => i,
@@ -349,7 +352,6 @@ impl StreamState {
     fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>, bool) {
         let pts_timestamp = packet.pts().unwrap_or(0) as f64;
         let dts_timestamp = packet.dts().map(|dts| dts as f64);
-        info!(pts_timestamp, dts_timestamp);
         let packet_duration = packet.duration() as f64;
 
         let is_pts_discontinuity = self
