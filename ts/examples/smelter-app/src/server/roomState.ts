@@ -245,7 +245,7 @@ function registerOptionsFromInput(input: RoomInputState): RegisterSmelterInputOp
 }
 
 function inputIdForTwitchInput(idPrefix: string, twitchChannelId: string): string {
-  return `${idPrefix}::twitch::${twitchChannelId} `;
+  return `${idPrefix}::twitch::${twitchChannelId}`;
 }
 
 function getInitialInputState(idPrefix: string): RoomInputState[] {
