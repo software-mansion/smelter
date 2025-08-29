@@ -305,6 +305,7 @@ impl WgpuTexturesEncoder {
     ///
     /// # Safety
     /// - The texture cannot be a surface texture
+    /// - The texture has to be transitioned to [`wgpu::TextureUses::RESOURCE`] usage
     pub unsafe fn encode(
         &mut self,
         frame: Frame<wgpu::Texture>,
