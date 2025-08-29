@@ -14,6 +14,7 @@ import type {
   RegisterWhepOutputResponse,
   RegisterWhipInputResponse,
 } from '../api';
+import { getSmelterStatus } from '../getSmelterStatus';
 
 export default class Smelter {
   private coreSmelter: CoreSmelter;
@@ -177,6 +178,12 @@ export default class Smelter {
   public async terminate(): Promise<void> {
     await this.scheduler.runBlocking(async () => {
       await this.coreSmelter.terminate();
+    });
+  }
+
+  public async status(): Promise<any> {
+    return await this.scheduler.run(async () => {
+      return await getSmelterStatus(this.coreSmelter.manager);
     });
   }
 }
