@@ -29,7 +29,7 @@ pub enum PixelFormat {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct VulkanH264EncoderBitrate {
-    /// Averate bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,
+    /// Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,
     /// but may temporarily increase it to the provided max bitrate.
     pub average_bitrate: u64,
     /// Max bitrate measured in bits/second.
@@ -65,6 +65,7 @@ pub enum VideoEncoderOptions {
     #[serde(rename = "vulkan_h264")]
     VulkanH264 {
         /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+        /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
         bitrate: Option<VulkanH264EncoderBitrate>,
     },
 }

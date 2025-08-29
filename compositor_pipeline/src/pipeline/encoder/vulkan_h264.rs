@@ -30,10 +30,15 @@ impl VideoEncoder for VulkanH264Encoder {
         let height = NonZero::new(u32::max(options.resolution.height as u32, 1)).unwrap();
         let framerate = ctx.output_framerate;
         let bitrate = options.bitrate.unwrap_or_else(|| {
+            let precision = 500_000.0; // 500kb
+            let bpp = 0.08;
+
             let average_bitrate = (width.get() * height.get()) as f64
                 * (framerate.num as f64 / framerate.den as f64)
-                * 0.08;
+                * bpp;
+            let average_bitrate = (average_bitrate / precision).ceil() * precision;
             let max_bitrate = average_bitrate * 1.25;
+
             VulkanH264EncoderBitrate {
                 average_bitrate: average_bitrate as u64,
                 max_bitrate: max_bitrate as u64,
