@@ -60,6 +60,7 @@ routes.post<RoomIdParams & { Body: Static<typeof UpdateRoomSchema> }>(
   { schema: { body: UpdateRoomSchema } },
   async (req, res) => {
     const { roomId } = req.params;
+    console.log('[request] Update room', { body: req.body, roomId });
     const room = state.getRoom(roomId);
     if (req.body.inputOrder) {
       room.reorderInputs(req.body.inputOrder);
@@ -88,8 +89,10 @@ routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
   '/room/:roomId/input',
   { schema: { body: AddInputSchema } },
   async (req, res) => {
-    const room = state.getRoom(req.params.roomId);
-    console.log(req.body);
+    const roomId = req.params.roomId;
+    console.log('[request] Create input', { body: req.body, roomId });
+
+    const room = state.getRoom(roomId);
     const inputId = await room.addNewInput(req.body);
 
     res.status(200).send({ inputId });
@@ -97,15 +100,19 @@ routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
 );
 
 routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/connect', async (req, res) => {
-  const room = state.getRoom(req.params.roomId);
-  await room.connectInput(req.params.inputId);
+  const { roomId, inputId } = req.params;
+  console.log('[request] Connect input', { roomId, inputId });
+  const room = state.getRoom(roomId);
+  await room.connectInput(inputId);
 
   res.status(200).send({ status: 'ok' });
 });
 
 routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/disconnect', async (req, res) => {
-  const room = state.getRoom(req.params.roomId);
-  await room.disconnectInput(req.params.inputId);
+  const { roomId, inputId } = req.params;
+  console.log('[request] Disconnect input', { roomId, inputId });
+  const room = state.getRoom(roomId);
+  await room.disconnectInput(inputId);
 
   res.status(200).send({ status: 'ok' });
 });
@@ -118,16 +125,21 @@ routes.post<RoomAndInputIdParams & { Body: Static<typeof UpdateInputSchema> }>(
   '/room/:roomId/input/:inputId',
   { schema: { body: UpdateInputSchema } },
   async (req, res) => {
-    const room = state.getRoom(req.params.roomId);
-    await room.updateInput(req.params.inputId, req.body);
+    const { roomId, inputId } = req.params;
+    console.log('[request] Update input', { roomId, inputId, body: req.body });
+
+    const room = state.getRoom(roomId);
+    await room.updateInput(inputId, req.body);
 
     res.status(200).send({ status: 'ok' });
   }
 );
 
 routes.delete<RoomAndInputIdParams>('/room/:roomId/input/:inputId', async (req, res) => {
-  const room = state.getRoom(req.params.roomId);
-  await room.removeInput(req.params.inputId);
+  const { roomId, inputId } = req.params;
+  console.log('[request] Remove input', { roomId, inputId });
+  const room = state.getRoom(roomId);
+  await room.removeInput(inputId);
 
   res.status(200).send({ status: 'ok' });
 });

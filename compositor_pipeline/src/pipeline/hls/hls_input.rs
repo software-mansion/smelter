@@ -95,7 +95,10 @@ impl HlsInput {
         // I do not know why this happens
         let mut input_ctx = match input_with_dictionary_and_interrupt(
             &options.url,
-            Dictionary::from_iter([("protocol_whitelist", "tcp,hls,http,https,file,tls")]),
+            Dictionary::from_iter([
+                ("protocol_whitelist", "tcp,hls,http,https,file,tls"),
+                ("live_start_index", "-1"),
+            ]),
             || should_close.load(Ordering::Relaxed),
         ) {
             Ok(i) => i,
