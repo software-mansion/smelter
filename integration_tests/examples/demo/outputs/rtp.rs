@@ -151,12 +151,49 @@ impl OutputHandler for RtpOutput {
             Some(TransportProtocol::Udp) | None => match player {
                 OutputPlayer::FfmpegReceiver => self.start_ffmpeg_receiver(),
                 OutputPlayer::GstreamerReceiver => self.start_gst_recv_udp(),
-                OutputPlayer::Manual => loop {
-                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                    if confirmation {
-                        return Ok(());
+                OutputPlayer::Manual => {
+                    let cmd_base = [
+                        "gst-launch-1.0 -v ",
+                        "rtpptdemux name=demux ",
+                        &format!(
+                            "udpsrc port={} ! \"application/x-rtp\" ! queue ! demux. ",
+                            self.port
+                        ),
+                    ]
+                    .concat();
+
+                    let video_cmd = "demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264\" ! queue ! rtph264depay ! decodebin ! videoconvert ! autovideosink ";
+                    let audio_cmd = "demux.src_97 ! \"application/x-rtp,media=audio,clock-rate=48000,encoding-name=OPUS\" ! queue ! rtpopusdepay ! decodebin ! audioconvert ! autoaudiosink sync=false";
+
+                    match (&self.video, &self.audio) {
+                        (Some(_), Some(_)) => {
+                            let cmd = cmd_base + video_cmd + audio_cmd;
+                            println!("Start stream receiver for H264 encoded video and OPUS encoded audio:");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        (Some(_), None) => {
+                            let cmd = cmd_base + video_cmd;
+                            println!("Start stream receiver for H264 encoded video:");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        (None, Some(_)) => {
+                            let cmd = cmd_base + audio_cmd;
+                            println!("Start stream receiver for OPUS encoded audio");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        _ => unreachable!(),
                     }
-                },
+
+                    loop {
+                        let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                        if confirmation {
+                            return Ok(());
+                        }
+                    }
+                }
             },
             Some(TransportProtocol::TcpServer) => Ok(()),
         }
@@ -166,12 +203,48 @@ impl OutputHandler for RtpOutput {
         match self.transport_protocol {
             Some(TransportProtocol::TcpServer) => match player {
                 OutputPlayer::GstreamerReceiver => self.start_gst_recv_tcp(),
-                OutputPlayer::Manual => loop {
-                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                    if confirmation {
-                        return Ok(());
+                OutputPlayer::Manual => {
+                    let cmd_base = [
+                        "gst-launch-1.0 -v ",
+                        "rtpptdemux name=demux ",
+                        &format!("tcpclientsrc host='127.0.0.1' port={} ! \"application/x-rtp-stream\" ! rtpstreamdepay ! queue ! demux. ", self.port),
+                    ]
+                    .concat();
+
+                    let video_cmd = "demux.src_96 ! \"application/x-rtp,media=video,clock-rate=90000,encoding-name=H264\" ! queue ! rtph264depay ! decodebin ! videoconvert ! autovideosink ";
+                    let audio_cmd = "demux.src_97 ! \"application/x-rtp,media=audio,clock-rate=48000,encoding-name=OPUS\" ! queue ! rtpopusdepay ! decodebin ! audioconvert ! autoaudiosink";
+
+                    match (&self.video, &self.audio) {
+                        (Some(_), Some(_)) => {
+                            let cmd = cmd_base + video_cmd + audio_cmd;
+                            println!(
+                                "Start stream receiver for H264 encoded video and OPUS encoded audio:"
+                            );
+                            println!("{cmd}");
+                            println!();
+                        }
+                        (Some(_), None) => {
+                            let cmd = cmd_base + video_cmd;
+                            println!("Start stream receiver for H264 encoded video:");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        (None, Some(_)) => {
+                            let cmd = cmd_base + audio_cmd;
+                            println!("Start stream receiver for OPUS encoded audio:");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        _ => unreachable!(),
                     }
-                },
+
+                    loop {
+                        let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                        if confirmation {
+                            return Ok(());
+                        }
+                    }
+                }
                 _ => Err(anyhow!("Invalid player for RTP in TCP server mode.")),
             },
             Some(TransportProtocol::Udp) | None => Ok(()),

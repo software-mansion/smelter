@@ -30,6 +30,7 @@ pub enum WhipRegisterOptions {
 #[derive(Debug)]
 pub struct WhipOutput {
     name: String,
+    bearer_token: String,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
 }
@@ -41,12 +42,22 @@ impl OutputHandler for WhipOutput {
 
     fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
         match player {
-            OutputPlayer::Manual => loop {
-                let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                if confirmation {
-                    return Ok(());
+            OutputPlayer::Manual => {
+                let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
+                let url = "http://127.0.0.1:8080";
+
+                println!("Instructions to start receiving stream:");
+                println!("1. Start Broadcast Box: {cmd}");
+                println!("2. Open: {url}");
+                println!("3. Enter '{}' in 'Stream Key' field", self.bearer_token);
+
+                loop {
+                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                    if confirmation {
+                        return Ok(());
+                    }
                 }
-            },
+            }
             _ => unreachable!(),
         }
     }
@@ -195,10 +206,11 @@ impl WhipOutputBuilder {
 
     fn serialize(&self, inputs: &[&str]) -> serde_json::Value {
         let endpoint_url = self.endpoint_url.as_ref().unwrap();
+        let bearer_token = self.bearer_token.as_ref().unwrap();
         json!({
             "type": "whip_client",
             "endpoint_url": endpoint_url,
-            "bearer_token": self.bearer_token,
+            "bearer_token": bearer_token,
             "video": self.video.as_ref().map(|v| v.serialize_register(inputs, &self.name)),
             "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
@@ -209,6 +221,7 @@ impl WhipOutputBuilder {
 
         let whip_output = WhipOutput {
             name: self.name,
+            bearer_token: self.bearer_token.unwrap(),
             video: self.video,
             audio: self.audio,
         };
