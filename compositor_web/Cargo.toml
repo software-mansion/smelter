@@ -13,7 +13,7 @@ compositor_api = { workspace = true }
 console_error_panic_hook = "0.1.7"
 tracing-wasm = "0.2.1"
 tracing = { workspace = true }
-tracing-subscriber = "0.3.18"
+tracing-subscriber = "0.3.20"
 log = { workspace = true }
 js-sys = "0.3.77"
 wasm-bindgen = "0.2.100"
