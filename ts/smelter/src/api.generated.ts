@@ -81,7 +81,7 @@ export type RegisterInput =
        */
       bearer_token?: string | null;
       /**
-       * Internal use only. Overrides whip session id which is used when referencing the input via whip server. If not provided, it defaults to input id.
+       * Internal use only. Overrides whip endpoint id which is used when referencing the input via whip server. If not provided, it defaults to input id.
        */
       endpoint_override?: string | null;
       /**
@@ -321,6 +321,13 @@ export type VideoEncoderOptions =
       ffmpeg_options?: {
         [k: string]: string;
       } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VulkanH264EncoderBitrate | null;
     };
 export type H264EncoderPreset =
   | "ultrafast"
@@ -864,6 +871,13 @@ export type WhipVideoEncoderOptions =
       } | null;
     }
   | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+       */
+      bitrate?: VulkanH264EncoderBitrate | null;
+    }
+  | {
       type: "any";
     };
 export type WhipAudioEncoderOptions =
@@ -1002,6 +1016,16 @@ export interface OutputEndCondition {
    * Terminate output stream if all the input streams finish. In particular, output stream will **be** terminated if no inputs were ever connected.
    */
   all_inputs?: boolean | null;
+}
+export interface VulkanH264EncoderBitrate {
+  /**
+   * Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average, but may temporarily increase it to the provided max bitrate.
+   */
+  average_bitrate: number;
+  /**
+   * Max bitrate measured in bits/second.
+   */
+  max_bitrate: number;
 }
 export interface VideoScene {
   root: Component;

@@ -75,7 +75,6 @@ fn maybe_audio_options(
             .into(),
         channels: resolved_channels.into(),
     };
-
     Ok((Some(audio_encoder_options), Some(output_audio_options)))
 }
 
@@ -103,6 +102,17 @@ fn maybe_video_options_h264_only(
             pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         }),
+        #[cfg(feature = "vk-video")]
+        VideoEncoderOptions::VulkanH264 { bitrate } => {
+            pipeline::VideoEncoderOptions::VulkanH264(pipeline::VulkanH264EncoderOptions {
+                resolution: options.resolution.into(),
+                bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
+            })
+        }
+        #[cfg(not(feature = "vk-video"))]
+        VideoEncoderOptions::VulkanH264 { .. } => {
+            return Err(TypeError::new(super::NO_VULKAN_VIDEO));
+        }
         VideoEncoderOptions::FfmpegVp8 { .. } => {
             return Err(TypeError::new(
                 "VP8 output not supported for given protocol",
