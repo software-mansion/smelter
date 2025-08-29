@@ -19,10 +19,9 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }
 ffmpeg-next = { workspace = true }
-rtp = { workspace = true }
+webrtc = { workspace = true }
 webrtc-util = { workspace = true }
 socket2 = { workspace = true }
-rtcp = { workspace = true }
 opus = { workspace = true }
 rand = { workspace = true }
 mp4 = { git = "https://github.com/membraneframework-labs/mp4-rust.git", branch = "preserve-asc" }
@@ -34,7 +33,6 @@ rubato = "0.15.0"
 wgpu = { workspace = true }
 vk-video = { path = "../vk-video/", optional = true }
 glyphon = { workspace = true }
-webrtc = "0.11.0"
 tokio = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }

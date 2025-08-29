@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use rtp::{codecs::opus::OpusPacket, packetizer::Depacketizer};
+use webrtc::rtp::{self, codecs::opus::OpusPacket, packetizer::Depacketizer};
 
 #[derive(Clone)]
 pub struct AudioSampleBatch {
