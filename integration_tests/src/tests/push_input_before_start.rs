@@ -4,8 +4,8 @@ use anyhow::Result;
 use serde_json::json;
 
 use crate::{
-    compare_video_dumps, input_dump_from_disk, CommunicationProtocol, CompositorInstance,
-    OutputReceiver, PacketSender, VideoValidationConfig,
+    compare_video_dumps, input_dump_from_disk, video::VideoValidationConfig, CommunicationProtocol,
+    CompositorInstance, OutputReceiver, PacketSender,
 };
 
 /// Check if the input stream is passed to the output correctly even if entire

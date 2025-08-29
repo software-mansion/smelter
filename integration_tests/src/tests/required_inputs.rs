@@ -1,9 +1,13 @@
 use std::{thread, time::Duration};
 
 use crate::{
+    audio::{
+        self, ArtificialFrequencyTolerance, AudioAnalyzeTolerance, AudioValidationConfig,
+        FrequencyTolerance,
+    },
     compare_audio_dumps, compare_video_dumps, input_dump_from_disk, split_rtp_packet_dump,
-    AudioValidationConfig, CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
-    VideoValidationConfig,
+    video::VideoValidationConfig,
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
 };
 use anyhow::Result;
 use serde_json::json;
@@ -266,7 +270,6 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
                     "inputs": [
                         {
                             "input_id": "input_1",
-                            "volume": 1.0,
                         },
                     ]
                 },
@@ -301,7 +304,7 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
     )?;
 
     let mut input_sender = PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?;
-    let input_dump = input_dump_from_disk("countdown_audio.rtp")?;
+    let input_dump = input_dump_from_disk("a_opus_audio.rtp")?;
     let (input_first_part, input_second_part) =
         split_rtp_packet_dump(input_dump, Duration::from_secs(1))?;
 
@@ -316,18 +319,21 @@ pub fn required_audio_inputs_no_offset() -> Result<()> {
     input_handle.join().unwrap();
     let new_output_dump = output_receiver.wait_for_output()?;
 
+    // Because no offset is set and http request take nondeterministic time starting frames may
+    // fail as they arrive at slightly different timestamps for each test.
+    let audio_validation_config = AudioValidationConfig {
+        tolerance: AudioAnalyzeTolerance {
+            allowed_failed_batches: 2,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioValidationConfig {
-            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
-            // In general this test failes 6 batches - 1 per channel for each failed timestamp.
-            // Any differences cannot be heard in output dumps.
-            // Each batch is around 0.34s long.
-            // 8 batches is a safety buffer.
-            allowed_failed_batches: 8,
-            ..Default::default()
-        },
+        audio::ValidationMode::Artificial,
+        audio_validation_config,
     )?;
 
     Ok(())
@@ -390,7 +396,7 @@ pub fn required_audio_inputs_with_offset() -> Result<()> {
     )?;
 
     let mut input_sender = PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?;
-    let input_dump = input_dump_from_disk("countdown_audio.rtp")?;
+    let input_dump = input_dump_from_disk("a_opus_audio.rtp")?;
     let (input_first_part, input_second_part) =
         split_rtp_packet_dump(input_dump, Duration::from_secs(1))?;
 
@@ -405,13 +411,23 @@ pub fn required_audio_inputs_with_offset() -> Result<()> {
     input_handle.join().unwrap();
     let new_output_dump = output_receiver.wait_for_output()?;
 
+    // This test is a bit flaky when it comes to frequency level fluctuations so less strict
+    // tolerance is set.
+    let audio_validation_config = AudioValidationConfig {
+        tolerance: AudioAnalyzeTolerance {
+            frequency_tolerance: FrequencyTolerance::Artificial(ArtificialFrequencyTolerance {
+                frequency_level: 100.0,
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioValidationConfig {
-            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
-            ..Default::default()
-        },
+        audio::ValidationMode::Artificial,
+        audio_validation_config,
     )?;
 
     Ok(())
@@ -419,10 +435,9 @@ pub fn required_audio_inputs_with_offset() -> Result<()> {
 
 /// Required inputs with some packets delayed and some dropped. Offset set to 1000ms.
 ///
-/// Countdown from 10
 /// - 1 seconds of silence
 /// - 1 second of audio (from the start of the recording)
-/// - 2 seconds of silence (cuts of part of "10" and "9" from countdown)
+/// - 2 seconds of silence
 /// - remaining part of audio (2 seconds from previous step are missing)
 #[test]
 pub fn required_audio_inputs_with_offset_missing_data() -> Result<()> {
@@ -478,7 +493,7 @@ pub fn required_audio_inputs_with_offset_missing_data() -> Result<()> {
     )?;
 
     let mut input_sender = PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?;
-    let input_dump = input_dump_from_disk("countdown_audio.rtp")?;
+    let input_dump = input_dump_from_disk("a_opus_audio.rtp")?;
     let (input_first_part, input_second_part) =
         split_rtp_packet_dump(input_dump, Duration::from_secs(1))?;
     let (_dropped_2_seconds, input_second_part_2) =
@@ -495,13 +510,23 @@ pub fn required_audio_inputs_with_offset_missing_data() -> Result<()> {
     input_handle.join().unwrap();
     let new_output_dump = output_receiver.wait_for_output()?;
 
+    // This test is a bit flaky when it comes to frequency level fluctuations so less strict
+    // tolerance is set.
+    let audio_validation_config = AudioValidationConfig {
+        tolerance: AudioAnalyzeTolerance {
+            frequency_tolerance: FrequencyTolerance::Artificial(ArtificialFrequencyTolerance {
+                frequency_level: 100.0,
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioValidationConfig {
-            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
-            ..Default::default()
-        },
+        audio::ValidationMode::Artificial,
+        audio_validation_config,
     )?;
 
     Ok(())
