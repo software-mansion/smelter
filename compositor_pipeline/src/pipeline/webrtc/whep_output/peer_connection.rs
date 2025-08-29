@@ -118,12 +118,13 @@ impl PeerConnection {
                     AudioChannels::Mono => 1,
                     AudioChannels::Stereo => 2,
                 };
+                let fec = opts.forward_error_correction;
                 Arc::new(TrackLocalStaticRTP::new(
                     RTCRtpCodecCapability {
                         mime_type: MIME_TYPE_OPUS.to_owned(),
                         clock_rate: 48000,
                         channels,
-                        sdp_fmtp_line: "".to_owned(),
+                        sdp_fmtp_line: format!("minptime=10;useinbandfec={}", fec as u8).to_owned(),
                         rtcp_feedback: vec![],
                     },
                     "audio".to_string(),
@@ -265,16 +266,35 @@ fn register_codecs(
                     AudioChannels::Mono => 1,
                     AudioChannels::Stereo => 2,
                 };
+                let first_fec = opts.forward_error_correction;
                 media_engine.register_codec(
                     RTCRtpCodecParameters {
                         capability: RTCRtpCodecCapability {
                             mime_type: MIME_TYPE_OPUS.to_owned(),
                             clock_rate: 48000,
                             channels,
-                            sdp_fmtp_line: "minptime=10;useinbandfec=1".to_owned(),
+                            sdp_fmtp_line: format!("minptime=10;useinbandfec={}", first_fec as u8)
+                                .to_owned(),
                             rtcp_feedback: vec![],
                         },
-                        payload_type: 111,
+                        payload_type: if first_fec { 111 } else { 110 },
+                        ..Default::default()
+                    },
+                    RTPCodecType::Audio,
+                )?;
+
+                let second_fec = !first_fec;
+                media_engine.register_codec(
+                    RTCRtpCodecParameters {
+                        capability: RTCRtpCodecCapability {
+                            mime_type: MIME_TYPE_OPUS.to_owned(),
+                            clock_rate: 48000,
+                            channels,
+                            sdp_fmtp_line: format!("minptime=10;useinbandfec={}", second_fec as u8)
+                                .to_owned(),
+                            rtcp_feedback: vec![],
+                        },
+                        payload_type: if second_fec { 111 } else { 110 },
                         ..Default::default()
                     },
                     RTPCodecType::Audio,
