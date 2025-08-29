@@ -30,7 +30,7 @@ pub enum ProtocolOutputOptions {
     Mp4(Mp4OutputOptions),
     Hls(HlsOutputOptions),
     Whip(WhipOutputOptions),
-    Whep(WhepSenderOptions),
+    Whep(WhepOutputOptions),
 }
 
 #[derive(Debug, Clone)]

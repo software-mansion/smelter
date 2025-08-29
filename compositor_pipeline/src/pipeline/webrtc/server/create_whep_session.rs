@@ -75,8 +75,8 @@ pub async fn handle_create_whep_session(
 
     let audio_media_stream = match (&audio_encoder, audio_receiver) {
         (Some(encoder), Some(receiver)) => {
-            let (track, ssrc) = peer_connection.new_audio_track(encoder).await?;
-            let payloader = init_audio_payloader(ssrc);
+            let (track, ssrc, payload_type) = peer_connection.new_audio_track(encoder).await?;
+            let payloader = init_audio_payloader(ssrc, payload_type);
             Some(MediaStream {
                 receiver,
                 track,
