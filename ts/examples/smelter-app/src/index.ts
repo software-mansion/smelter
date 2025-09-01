@@ -8,8 +8,9 @@ async function run() {
   console.log('Start Smelter instance');
   await SmelterInstance.init();
 
-  console.log('Start listening on port 3001');
-  await routes.listen({ port: 3001, host: '0.0.0.0' });
+  const port = Number(process.env.SMELTER_DEMO_API_PORT) || 3001;
+  console.log(`Start listening on port ${port}`);
+  await routes.listen({ port, host: '0.0.0.0' });
 }
 
 void run();
