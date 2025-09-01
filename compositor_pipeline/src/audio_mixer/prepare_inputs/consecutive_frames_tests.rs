@@ -12,7 +12,7 @@ fn test_continuity_between_frames() {
     let end = start + batch_duration;
     let sample_rate = 48000;
     let sample_duration = Duration::from_secs_f64(1.0 / sample_rate as f64);
-    let small_error = Duration::from_secs_f64(sample_duration.as_secs_f64() * 0.001);
+    let small_error = Duration::from_secs_f64(sample_duration.as_secs_f64() * 0.005);
     let half_sample = Duration::from_secs_f64(sample_duration.as_secs_f64() * 0.5);
 
     let first_batch = Arc::new(vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)]);

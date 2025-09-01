@@ -12,7 +12,7 @@ fn test_prepare_inputs() {
     let end = start + batch_duration;
     let sample_rate = 48000;
     let sample_duration = Duration::from_secs_f64(1.0 / sample_rate as f64);
-    let small_error = Duration::from_secs_f64(sample_duration.as_secs_f64() * 0.001);
+    let small_error = Duration::from_secs_f64(sample_duration.as_secs_f64() * 0.005);
     let half_sample = Duration::from_secs_f64(sample_duration.as_secs_f64() * 0.5);
 
     assert_eq!(
