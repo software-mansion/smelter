@@ -75,7 +75,7 @@ fn frame_input_samples(
             // This is necessary because of numerical inconsistence in calculation of
             // `duration_secs`. If offset is set to any value divisible by sample length then an
             // underflow may occur that sets the offset to the full sample length.
-            if offset_secs > 0.997 * sample_duration_secs {
+            if offset_secs > 0.999 * sample_duration_secs {
                 Duration::ZERO
             } else {
                 Duration::from_secs_f64(offset_secs)
