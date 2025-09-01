@@ -13,9 +13,9 @@ export const config: Config =
   process.env.ENVIRONMENT === 'production'
     ? {
         logger: {
-          level: 'warn',
+          level: (process.env.SMELTER_DEMO_ROUTER_LOGGER_LEVEL ?? 'warn') as any,
         },
-        whepBaseUrl: 'https://puffer.fishjam.io/smelter-demo-whep',
+        whepBaseUrl: 'https://puffer.fishjam.io/smelter-demo-whep/whep',
         h264Decoder: 'vulkan_h264',
       }
     : {
@@ -23,7 +23,7 @@ export const config: Config =
           transport: {
             target: 'pino-pretty',
           },
-          level: 'warn',
+          level: (process.env.SMELTER_DEMO_ROUTER_LOGGER_LEVEL ?? 'warn') as any,
         },
         whepBaseUrl: 'http://127.0.0.1:9000/whep',
         h264Decoder: 'ffmpeg_h264',
