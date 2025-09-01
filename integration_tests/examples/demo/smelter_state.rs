@@ -3,12 +3,13 @@ use inquire::Select;
 use integration_tests::examples;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
-use tracing::{debug, warn};
+use tracing::debug;
 
 use crate::inputs::mp4::Mp4InputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
 use crate::inputs::InputHandler;
 
+use crate::outputs::mp4::Mp4OutputBuilder;
 use crate::outputs::whip::WhipOutputBuilder;
 use crate::players::{InputPlayer, OutputPlayer};
 use crate::{
@@ -111,9 +112,10 @@ impl SmelterState {
                     WhipOutputBuilder::new().prompt()?.build(&inputs);
                 (Box::new(whip_output), register_request, player)
             }
-            _ => {
-                warn!("Unimplemented!");
-                return Ok(());
+            OutputProtocol::Mp4 => {
+                let (mp4_output, register_request, player) =
+                    Mp4OutputBuilder::new().prompt()?.build(&inputs);
+                (Box::new(mp4_output), register_request, player)
             }
         };
 
