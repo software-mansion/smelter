@@ -1,12 +1,20 @@
 services:
   smelter-demo:
-    env_file:
-      - common.env
-      - secret.env
+    env_file: secret.env
     build: .
+    environment:
+      SMELTER_DEMO_API_PORT: "9081"
+      SMELTER_DEMO_ROUTER_LOGGER_LEVEL: "warn"
+      SMELTER_WHIP_WHEP_SERVER_PORT: "9082"
+      SMELTER_LOGGER_FORMAT: compact
+      SMELTER_LOGGER_LEVEL: info 
+      SMELTER_SERVER_LOGGER_LEVEL: info
+      ENVIRONMENT: production
     ports:
-      - 3001:3001
-      - 9000:9000
+      # JS API
+      - 9081:9081
+      # JS API
+      - 9082:9082
     # AMD GPU
     # devices:
     #  - '/dev/dri'
