@@ -6,6 +6,7 @@ use strum::{Display, EnumIter};
 
 use crate::players::OutputPlayer;
 
+pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
 pub mod whip;
