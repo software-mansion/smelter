@@ -59,12 +59,18 @@ impl OutputHandler for RtmpOutput {
     fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
         match player {
             OutputPlayer::FfmpegReceiver => self.start_ffmpeg_recv(),
-            OutputPlayer::Manual => loop {
-                let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                if confirmation {
-                    return Ok(());
+            OutputPlayer::Manual => {
+                let cmd = format!("ffmpeg -f flv -listen 1 -i 'rtmp://0.0.0.0:{}' -vcodec copy -f flv - | ffplay -autoexit -f flv -i -", self.port);
+
+                println!("Start player: {cmd}");
+
+                loop {
+                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                    if confirmation {
+                        return Ok(());
+                    }
                 }
-            },
+            }
             _ => Err(anyhow!("Invalid player for RTMP output!")),
         }
     }
