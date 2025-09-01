@@ -12,7 +12,13 @@ fn test_prepare_inputs() {
     let end = start + batch_duration;
     let sample_rate = 48000;
     let sample_duration = Duration::from_secs_f64(1.0 / sample_rate as f64);
+
+    // This is for testing small offset and NOT numerical error
     let small_error = Duration::from_secs_f64(sample_duration.as_secs_f64() * 0.005);
+
+    // This value is less than numerical error to threshold (which is currently set at 0.999 of
+    // sample duration)
+    let numerical_error = Duration::from_secs_f64(sample_duration.as_secs_f64() * 0.0005);
     let half_sample = Duration::from_secs_f64(sample_duration.as_secs_f64() * 0.5);
 
     assert_eq!(
@@ -394,5 +400,35 @@ fn test_prepare_inputs() {
             (0.0, 0.0),
             (0.0, 0.0),
         ],
+    );
+
+    let first_batch_start = start + numerical_error;
+    let second_batch_start = first_batch_start + (4 * sample_duration) - numerical_error;
+    assert_eq!(
+        frame_input_samples(
+            start,
+            end,
+            vec![
+                InputAudioSamples {
+                    samples: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)].into(),
+                    start_pts: first_batch_start,
+                    end_pts: first_batch_start + (4 * sample_duration)
+                },
+                InputAudioSamples {
+                    samples: vec![(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)].into(),
+                    start_pts: second_batch_start,
+                    end_pts: second_batch_start + (4 * sample_duration)
+                },
+            ],
+            sample_rate
+        ),
+        vec![
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (3.0, 3.0),
+            (4.0, 4.0),
+            (5.0, 5.0),
+            (6.0, 6.0)
+        ]
     );
 }
