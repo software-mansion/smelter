@@ -26,6 +26,7 @@ export const routes = Fastify({
 }).withTypeProvider<TypeBoxTypeProvider>();
 
 routes.post('/room', async (_req, res) => {
+  console.log('[request] Create new room');
   const { roomId, room } = await state.createRoom();
   res.status(200).send({ roomId, whepUrl: room.getWhepUrl() });
 });
