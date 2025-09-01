@@ -107,7 +107,7 @@ impl BorderRadius {
     }
 
     pub fn clip_to_size(&self, size: Size) -> Self {
-        let max_radius = f32::min(size.width, size.height) / 2.0;
+        let max_radius = f32::max(0.0, f32::min(size.width, size.height) / 2.0);
         Self {
             top_left: f32::clamp(self.top_left, 0.0, max_radius),
             top_right: f32::clamp(self.top_right, 0.0, max_radius),
