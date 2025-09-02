@@ -27,7 +27,7 @@ impl OnCleanupSessionHdlr {
             output_id,
             session_id,
         } = self;
-        if let Err(err) = outputs.remove_session(&output_id, &session_id).await {
+        if let Err(err) = outputs.remove_session(output_id, session_id).await {
             warn!(?session_id, ?output_id, "Failed to remove session: {err}");
         }
     }

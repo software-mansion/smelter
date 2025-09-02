@@ -4,7 +4,9 @@ use strum::{Display, EnumIter};
 
 use crate::players::InputPlayer;
 
+pub mod mp4;
 pub mod rtp;
+pub mod whip;
 
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
@@ -42,6 +44,9 @@ pub enum VideoDecoder {
 
     #[strum(to_string = "ffmpeg_vp9")]
     FfmpegVp9,
+
+    #[strum(to_string = "any")]
+    Any,
 }
 
 #[derive(Debug, Display, EnumIter)]

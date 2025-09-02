@@ -45,7 +45,7 @@ impl WhepOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
-        options: WhepSenderOptions,
+        options: WhepOutputOptions,
     ) -> Result<Self, OutputInitError> {
         let state_clone = ctx.whip_whep_state.clone();
         let Some(state) = state_clone else {
