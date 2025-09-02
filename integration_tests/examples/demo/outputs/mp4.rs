@@ -115,8 +115,8 @@ impl Mp4OutputBuilder {
                 _ => unreachable!(),
             };
 
-            if builder.video.is_none() || builder.audio.is_none() {
-                error!("Both video and audio have to be specified.");
+            if builder.video.is_none() && builder.audio.is_none() {
+                error!("Either video or audio has to be specified.");
             } else {
                 break;
             }
