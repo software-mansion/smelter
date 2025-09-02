@@ -1,6 +1,11 @@
 name: package for release
 on:
     workflow_dispatch: {}
+    push:
+        branches: [wkazmierczak/update-ffmpeg-to-8.0.0-check-pckg-release]
+    pull_request:
+        types: [opened, synchronize]
+
 
 jobs:
     linux:
@@ -100,105 +105,3 @@ jobs:
               with:
                 name: smelter_with_web_renderer_darwin_aarch64.tar.gz
                 path: smelter_with_web_renderer_darwin_aarch64.tar.gz
-
-    docker-amd64:
-      runs-on: ubuntu-latest
-      steps:
-          - name: 📥 Checkout repo
-            uses: actions/checkout@v4
-
-          - name: 🛠️ Setup Docker
-            run: |
-              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-          - name: 🔨 Build Smelter image
-            run: |
-              docker buildx build --platform linux/amd64 -t ghcr.io/software-mansion/smelter:${{ github.sha }} -f build_tools/docker/slim.Dockerfile .
-
-          - name: 📤  Upload image
-            run: docker push ghcr.io/software-mansion/smelter:${{ github.sha }}
-
-    docker-arm64:
-      needs: [docker-amd64, docker-with-web-renderer-arm64]
-      runs-on: ubuntu-24.04-arm
-      steps:
-          - name: 📥 Checkout repo
-            uses: actions/checkout@v4
-
-          - name: 🛠️ Setup Docker
-            run: |
-              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-          - name: 🎣 Pull Smleter AMD64 image
-            run: |
-              docker pull ghcr.io/software-mansion/smelter:${{ github.sha }}
-              echo "AMD64_IMAGE_ID=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/software-mansion/smelter:${{ github.sha }})" >> "$GITHUB_ENV"
-
-          - name: 🔨 Build Smelter ARM64 image
-            run: |
-              docker buildx build --platform linux/arm64 -t ghcr.io/software-mansion/smelter:${{ github.sha }} -f build_tools/docker/slim.Dockerfile .
-
-          - name: ⏩ Push ARM64 image
-            run: |
-              docker push ghcr.io/software-mansion/smelter:${{ github.sha }}
-              echo "ARM64_IMAGE_ID=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/software-mansion/smelter:${{ github.sha }})" >> "$GITHUB_ENV"
-
-          - name: 🔗 Merge AMD64 and ARM64 images
-            run: |
-              docker manifest create ghcr.io/software-mansion/smelter:${{ github.sha }} ${{ env.AMD64_IMAGE_ID }} ${{ env.ARM64_IMAGE_ID }}
-              docker manifest annotate ghcr.io/software-mansion/smelter:${{ github.sha }} ${{ env.AMD64_IMAGE_ID }} --arch amd64
-              docker manifest annotate ghcr.io/software-mansion/smelter:${{ github.sha }} ${{ env.ARM64_IMAGE_ID }} --arch arm64
-
-          - name: 📤  Upload image
-            run: docker manifest push ghcr.io/software-mansion/smelter:${{ github.sha }}
-
-    docker-with-web-renderer-amd64:
-      runs-on: ubuntu-latest
-      steps:
-          - name: 📥 Checkout repo
-            uses: actions/checkout@v4
-
-          - name: 🛠️ Setup Docker
-            run: |
-              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-          - name: 🔨 Build Smelter with Web Renderer image
-            run: |
-              docker buildx build --platform linux/amd64 -t ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer -f build_tools/docker/full.Dockerfile .
-
-          - name: 📤  Upload image
-            run: docker push ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer
-
-    docker-with-web-renderer-arm64:
-      needs: docker-with-web-renderer-amd64
-      runs-on: ubuntu-24.04-arm
-      steps:
-          - name: 📥 Checkout repo
-            uses: actions/checkout@v4
-
-          - name: 🛠️ Setup Docker
-            run: |
-              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-          - name: 🎣 Pull Smleter AMD64 image
-            run: |
-              docker pull ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer
-              echo "AMD64_IMAGE_ID=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer)" >> "$GITHUB_ENV"
-
-          - name: 🔨 Build Smelter ARM64 image
-            run: |
-              docker buildx build --platform linux/arm64 -t ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer -f build_tools/docker/full.Dockerfile .
-
-          - name: ⏩ Push ARM64 image
-            run: |
-              docker push ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer
-              echo "ARM64_IMAGE_ID=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer)" >> "$GITHUB_ENV"
-
-          - name: 🔗 Merge AMD64 and ARM64 images
-            run: |
-              docker manifest create ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer ${{ env.AMD64_IMAGE_ID }} ${{ env.ARM64_IMAGE_ID }}
-              docker manifest annotate ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer ${{ env.AMD64_IMAGE_ID }} --arch amd64
-              docker manifest annotate ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer ${{ env.ARM64_IMAGE_ID }} --arch arm64
-
-          - name: 📤  Upload image
-            run: docker manifest push ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer
