@@ -66,8 +66,6 @@ pub fn run_example_server() {
     thread::spawn(move || {
         ffmpeg_next::format::network::init();
 
-        download_all_assets().unwrap();
-
         if let Err(err) = wait_for_server_ready(Duration::from_secs(10)) {
             error!("{err}");
             process::exit(1);
@@ -229,9 +227,9 @@ pub enum TestSample {
 }
 
 #[derive(Debug)]
-struct AssetData {
-    url: String,
-    path: PathBuf,
+pub struct AssetData {
+    pub url: String,
+    pub path: PathBuf,
 }
 
 pub fn download_all_assets() -> Result<()> {
@@ -352,9 +350,11 @@ pub fn download_file(url: &str, path: &str) -> Result<PathBuf> {
     Ok(sample_path)
 }
 
-fn download_asset(asset: &AssetData) -> Result<()> {
+pub fn download_asset(asset: &AssetData) -> Result<()> {
     fs::create_dir_all(asset.path.parent().unwrap())?;
     if !asset.path.exists() {
+        let file = asset.path.file_name().unwrap().to_str().unwrap();
+        info!("Asset \"{file}\" not found and will be donwloaded.");
         let mut resp = reqwest::blocking::get(&asset.url)?;
         let mut out = File::create(asset.path.clone())?;
         io::copy(&mut resp, &mut out)?;

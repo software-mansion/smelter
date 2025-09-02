@@ -2,6 +2,7 @@ use std::env;
 
 use anyhow::Result;
 use inquire::{Select, Text};
+use integration_tests::examples::examples_root_dir;
 use rand::RngCore;
 use serde_json::json;
 use strum::Display;
@@ -68,10 +69,11 @@ impl Mp4OutputBuilder {
         let mut builder = self;
         let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
 
+        let default_path = examples_root_dir().join("example_output.mp4");
         let path_output =
             Text::new("Output path (absolute or relative to 'smelter/integration_tests'):")
                 .with_initial_value(&env_path)
-                .with_default("example_output.mp4")
+                .with_default(default_path.to_str().unwrap())
                 .prompt()?;
 
         builder = builder.with_path(path_output);
