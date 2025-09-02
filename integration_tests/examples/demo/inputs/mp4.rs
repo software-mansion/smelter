@@ -1,4 +1,4 @@
-use std::{env, fs};
+use std::{env, fs, path::PathBuf};
 
 use anyhow::Result;
 use inquire::Text;
@@ -9,6 +9,8 @@ use tracing::{error, info};
 use crate::{inputs::InputHandler, players::InputPlayer};
 
 const MP4_INPUT_PATH: &str = "MP4_INPUT_PATH";
+
+const ROOT: &str = env!("CARGO_MANIFEST_DIR");
 
 #[derive(Debug)]
 pub struct Mp4Input {
@@ -23,7 +25,7 @@ impl InputHandler for Mp4Input {
 
 pub struct Mp4InputBuilder {
     name: String,
-    path: Option<String>,
+    path: Option<PathBuf>,
 }
 
 impl Mp4InputBuilder {
@@ -35,41 +37,24 @@ impl Mp4InputBuilder {
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
+        let env_path = env::var(MP4_INPUT_PATH).unwrap_or_default();
 
-        loop {
-            let path_input = Text::new(&format!(
-                "Absolute input path (ESC for env {MP4_INPUT_PATH}):"
-            ))
-            .prompt_skippable()?;
+        let path_input =
+            Text::new("Input path (absolute or relative to 'smelter/integration_tests'):")
+                .with_initial_value(&env_path)
+                .prompt()?;
 
-            builder = match path_input {
-                Some(path) if fs::exists(&path).unwrap_or(false) => builder.with_path(path),
-                Some(path) => {
-                    error!("{path} does not exist");
-                    continue;
-                }
-                None => match env::var(MP4_INPUT_PATH).ok() {
-                    Some(path) if fs::exists(&path).unwrap_or(false) => {
-                        info!("Path read from env: {path}");
-                        builder.with_path(path)
-                    }
-                    Some(path) => {
-                        error!("{path} does not exist");
-                        continue;
-                    }
-                    None => {
-                        error!("Env {MP4_INPUT_PATH} not found or invalid. Please enter path manually.");
-                        continue;
-                    }
-                },
-            };
-            break;
-        }
+        builder = if path_input.is_empty() {
+            let path = PathBuf::from(ROOT).join(path_input);
+            builder.with_path(path)
+        } else {
+            builder.with_path(path_input.into())
+        };
 
         Ok(builder)
     }
 
-    pub fn with_path(mut self, path: String) -> Self {
+    pub fn with_path(mut self, path: PathBuf) -> Self {
         self.path = Some(path);
         self
     }
