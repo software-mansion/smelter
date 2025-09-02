@@ -14,6 +14,7 @@ use crate::{
     inputs::{AudioDecoder, InputHandler, VideoDecoder},
     players::InputPlayer,
     smelter_state::TransportProtocol,
+    utils::download_bunny,
     IP,
 };
 
@@ -50,6 +51,8 @@ impl RtpInput {
             return Err(anyhow!(
                 "Streaming both audio and video on the same port is possible only over UDP!"
             ));
+        } else if video_port.is_some() {
+            download_bunny()?;
         }
         self.stream_handles.push(start_gst_send_tcp(
             IP,
@@ -61,6 +64,9 @@ impl RtpInput {
     }
 
     fn gstreamer_transmit_udp(&mut self) -> Result<()> {
+        if self.video.is_some() {
+            download_bunny()?;
+        }
         let video_port = self.video.as_ref().map(|_| self.port);
         let audio_port = self.audio.as_ref().map(|_| self.port);
         self.stream_handles.push(start_gst_send_udp(
@@ -79,12 +85,15 @@ impl RtpInput {
                     "FFmpeg can't handle both audio and video on a single port over RTP."
                 ))
             }
-            (Some(_video), None) => start_ffmpeg_send(
-                IP,
-                Some(self.port),
-                None,
-                integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
-            )?,
+            (Some(_video), None) => {
+                download_bunny()?;
+                start_ffmpeg_send(
+                    IP,
+                    Some(self.port),
+                    None,
+                    integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
+                )?
+            }
             (None, Some(_audio)) => start_ffmpeg_send(
                 IP,
                 None,

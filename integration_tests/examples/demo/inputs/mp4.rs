@@ -2,14 +2,14 @@ use std::{env, path::PathBuf};
 
 use anyhow::Result;
 use inquire::Text;
-use integration_tests::examples::{download_asset, examples_root_dir, AssetData};
+use integration_tests::examples::examples_root_dir;
 use rand::RngCore;
 use serde_json::json;
 
 use crate::{
     inputs::InputHandler,
     players::InputPlayer,
-    utils::{ELEPHANT_PATH, ELEPHANT_URL},
+    utils::{download_elephant, ELEPHANT_PATH},
 };
 
 const MP4_INPUT_PATH: &str = "MP4_INPUT_PATH";
@@ -49,11 +49,7 @@ impl Mp4InputBuilder {
         // TODO: Change that do Big Buck Bunny (which is currently not working)
         builder = if path_input.is_empty() {
             let path = examples_root_dir().join(ELEPHANT_PATH);
-            let bunny_data = AssetData {
-                url: ELEPHANT_URL.to_string(),
-                path: path.clone(),
-            };
-            download_asset(&bunny_data)?;
+            download_elephant()?;
             builder.with_path(path)
         } else {
             builder.with_path(path_input.into())
