@@ -5,7 +5,7 @@ use inquire::{Select, Text};
 use rand::RngCore;
 use serde_json::json;
 use strum::Display;
-use tracing::{error, info};
+use tracing::error;
 
 use crate::{
     outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
@@ -66,28 +66,15 @@ impl Mp4OutputBuilder {
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
+        let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
 
-        loop {
-            let path_output = Text::new(&format!(
-                "Absolute output path (ESC for env {MP4_OUTPUT_PATH}):"
-            ))
-            .prompt_skippable()?;
+        let path_output =
+            Text::new("Output path (absolute or relative to 'smelter/integration_tests'):")
+                .with_initial_value(&env_path)
+                .with_default("example_output.mp4")
+                .prompt()?;
 
-            builder = match path_output {
-                Some(path) => builder.with_path(path),
-                None => match env::var(MP4_OUTPUT_PATH).ok() {
-                    Some(path) => {
-                        info!("Path read from env: {path}");
-                        builder.with_path(path)
-                    }
-                    None => {
-                        error!("Env {MP4_OUTPUT_PATH} not found or invalid. Please enter path manually.");
-                        continue;
-                    }
-                },
-            };
-            break;
-        }
+        builder = builder.with_path(path_output);
 
         let video_options = vec![Mp4RegisterOptions::SetVideoStream, Mp4RegisterOptions::Skip];
         let audio_options = vec![Mp4RegisterOptions::SetAudioStream, Mp4RegisterOptions::Skip];
