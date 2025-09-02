@@ -2,6 +2,7 @@ use crate::pipeline::webrtc::{
     error::WhipWhepServerError,
     handle_keyframe_requests::handle_keyframe_requests,
     whep_output::{
+        cleanup_session_handler::OnCleanupSessionHdlr,
         init_payloaders::{init_audio_payloader, init_video_payloader},
         peer_connection::PeerConnection,
         stream_media_to_peer::{stream_media_to_peer, MediaStream},
@@ -10,7 +11,6 @@ use crate::pipeline::webrtc::{
 };
 use axum::{
     body::Body,
-    debug_handler,
     extract::{Path, State},
     http::{HeaderMap, Response, StatusCode},
 };
@@ -18,7 +18,6 @@ use compositor_render::OutputId;
 use std::sync::Arc;
 use tracing::trace;
 
-#[debug_handler]
 pub async fn handle_create_whep_session(
     Path(endpoint_id): Path<String>,
     State(state): State<WhipWhepServerState>,
@@ -29,7 +28,7 @@ pub async fn handle_create_whep_session(
     trace!("SDP offer: {}", offer);
 
     validate_sdp_content_type(&headers)?;
-    let outputs = state.outputs.clone();
+    let outputs = state.outputs;
     outputs.validate_token(&output_id, &headers).await?;
     let ctx = state.ctx.clone();
 
@@ -54,8 +53,7 @@ pub async fn handle_create_whep_session(
         }
     })?;
 
-    let peer_connection =
-        PeerConnection::new(&ctx.clone(), video_encoder.clone(), audio_encoder.clone()).await?;
+    let peer_connection = PeerConnection::new(&ctx, &video_encoder, &audio_encoder).await?;
 
     let (video_media_stream, video_sender) = match (&video_encoder, video_receiver) {
         (Some(encoder), Some(receiver)) => {
@@ -89,7 +87,13 @@ pub async fn handle_create_whep_session(
     let sdp_answer = peer_connection.negotiate_connection(offer).await?;
     trace!("SDP answer: {}", sdp_answer.sdp);
 
-    let session_id = outputs.add_session(&output_id, Arc::new(peer_connection))?;
+    let session_id = outputs.add_session(&output_id, peer_connection.clone())?;
+
+    peer_connection.on_peer_connection_cleanup(OnCleanupSessionHdlr::new(
+        &outputs,
+        &output_id,
+        &session_id,
+    ));
 
     tokio::spawn(stream_media_to_peer(
         ctx.clone(),
