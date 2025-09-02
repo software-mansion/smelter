@@ -1,14 +1,17 @@
-use std::process::Child;
+use std::{env, fs, path::PathBuf, process::Child};
 
 use anyhow::{anyhow, Result};
-use inquire::{Confirm, Select};
+use inquire::{Confirm, Select, Text};
 use integration_tests::{
     ffmpeg::start_ffmpeg_send,
-    gstreamer::{start_gst_send_tcp, start_gst_send_udp},
+    gstreamer::{
+        self, start_gst_send_from_file_tcp, start_gst_send_from_file_udp, start_gst_send_tcp,
+        start_gst_send_udp,
+    },
 };
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{
     inputs::{AudioDecoder, InputHandler, VideoDecoder},
@@ -18,6 +21,8 @@ use crate::{
 };
 
 use crate::utils::get_free_port;
+
+const RTP_INPUT_PATH: &str = "RTP_INPUT_PATH";
 
 #[derive(Debug, Display, EnumIter, Clone)]
 pub enum RtpRegisterOptions {
@@ -38,6 +43,7 @@ pub struct RtpInput {
     video: Option<RtpInputVideoOptions>,
     audio: Option<RtpInputAudioOptions>,
     transport_protocol: Option<TransportProtocol>,
+    path: Option<PathBuf>,
     stream_handles: Vec<Child>,
 }
 
@@ -51,24 +57,42 @@ impl RtpInput {
                 "Streaming both audio and video on the same port is possible only over UDP!"
             ));
         }
-        self.stream_handles.push(start_gst_send_tcp(
-            IP,
-            video_port,
-            audio_port,
-            integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
-        )?);
+
+        let stream_handle = match &self.path {
+            Some(path) => {
+                let video_codec: Option<gstreamer::Video> =
+                    self.video.as_ref().map(|v| v.decoder.into());
+                start_gst_send_from_file_tcp(IP, video_port, audio_port, path.clone(), video_codec)
+            }
+            None => start_gst_send_tcp(
+                IP,
+                video_port,
+                audio_port,
+                integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
+            ),
+        };
+
+        self.stream_handles.push(stream_handle?);
         Ok(())
     }
 
     fn gstreamer_transmit_udp(&mut self) -> Result<()> {
         let video_port = self.video.as_ref().map(|_| self.port);
         let audio_port = self.audio.as_ref().map(|_| self.port);
-        self.stream_handles.push(start_gst_send_udp(
-            IP,
-            video_port,
-            audio_port,
-            integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
-        )?);
+        let stream_handle = match &self.path {
+            Some(path) => {
+                let video_codec: Option<gstreamer::Video> =
+                    self.video.as_ref().map(|v| v.decoder.into());
+                start_gst_send_from_file_udp(IP, video_port, audio_port, path.clone(), video_codec)
+            }
+            None => start_gst_send_udp(
+                IP,
+                video_port,
+                audio_port,
+                integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
+            ),
+        };
+        self.stream_handles.push(stream_handle?);
         Ok(())
     }
 
@@ -226,6 +250,7 @@ pub struct RtpInputBuilder {
     video: Option<RtpInputVideoOptions>,
     audio: Option<RtpInputAudioOptions>,
     transport_protocol: Option<TransportProtocol>,
+    path: Option<PathBuf>,
     player: InputPlayer,
 }
 
@@ -239,6 +264,7 @@ impl RtpInputBuilder {
             video: None,
             audio: None,
             transport_protocol: None,
+            path: None,
             player: InputPlayer::Manual,
         }
     }
@@ -287,12 +313,40 @@ impl RtpInputBuilder {
             None => builder,
         };
 
+        builder.path = builder.prompt_path()?;
+
         let player_selection = builder.prompt_player()?;
         builder = match player_selection {
             Some(player) => builder.with_player(player),
             None => builder,
         };
         Ok(builder)
+    }
+
+    fn prompt_path(&self) -> Result<Option<PathBuf>> {
+        loop {
+            let path_input = Text::new(&format!(
+                "Specify path (empty for default, ESC for env {RTP_INPUT_PATH}):"
+            ))
+            .prompt_skippable()?;
+
+            match path_input {
+                Some(p) if p.is_empty() => {
+                    info!("No path specified, using default input file.");
+                    return Ok(None);
+                }
+                Some(p) if fs::exists(&p).unwrap_or(false) => return Ok(Some(PathBuf::from(p))),
+                Some(p) => error!("Path '{p}' doesn't exist."),
+                None => match env::var(RTP_INPUT_PATH).ok() {
+                    Some(p) if fs::exists(&p).unwrap_or(false) => {
+                        info!("Path read from env: {p}");
+                        return Ok(Some(PathBuf::from(p)));
+                    }
+                    Some(p) => error!("Path '{p}' doesn't exist."),
+                    None => error!("Env {RTP_INPUT_PATH} not set or invalid."),
+                },
+            }
+        }
     }
 
     fn prompt_player(&self) -> Result<Option<InputPlayer>> {
@@ -341,6 +395,13 @@ impl RtpInputBuilder {
         self
     }
 
+    // NOTE: This value is only acquired by prompt at the moment so the function is not used
+    //
+    // pub fn with_path(mut self, path: PathBuf) -> Self {
+    //     self.path = Some(path);
+    //     self
+    // }
+
     pub fn with_player(mut self, player: InputPlayer) -> Self {
         self.player = player;
         self
@@ -364,6 +425,7 @@ impl RtpInputBuilder {
             video: self.video,
             audio: self.audio,
             transport_protocol: self.transport_protocol,
+            path: self.path,
             stream_handles: vec![],
         };
 

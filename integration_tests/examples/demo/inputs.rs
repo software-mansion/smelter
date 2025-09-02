@@ -1,4 +1,5 @@
 use anyhow::Result;
+use integration_tests::gstreamer;
 use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
@@ -34,7 +35,7 @@ pub enum InputProtocol {
     Mp4,
 }
 
-#[derive(Debug, EnumIter, Display)]
+#[derive(Debug, EnumIter, Display, Clone, Copy)]
 pub enum VideoDecoder {
     #[strum(to_string = "ffmpeg_h264")]
     FfmpegH264,
@@ -47,6 +48,16 @@ pub enum VideoDecoder {
 
     #[strum(to_string = "any")]
     Any,
+}
+
+impl From<VideoDecoder> for gstreamer::Video {
+    fn from(value: VideoDecoder) -> Self {
+        match value {
+            VideoDecoder::Any | VideoDecoder::FfmpegH264 => Self::H264,
+            VideoDecoder::FfmpegVp9 => Self::VP9,
+            VideoDecoder::FfmpegVp8 => Self::VP8,
+        }
+    }
 }
 
 #[derive(Debug, Display, EnumIter)]
