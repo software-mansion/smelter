@@ -21,7 +21,7 @@ use ffmpeg_next::{
     util::interrupt,
     Dictionary, Packet, Stream,
 };
-use tracing::{debug, error, info, span, trace, warn, Level};
+use tracing::{debug, error, span, trace, warn, Level};
 
 use crate::{
     pipeline::{
@@ -349,7 +349,6 @@ impl StreamState {
     fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>, bool) {
         let pts_timestamp = packet.pts().unwrap_or(0) as f64;
         let dts_timestamp = packet.dts().map(|dts| dts as f64);
-        info!(pts_timestamp, dts_timestamp);
         let packet_duration = packet.duration() as f64;
 
         let is_pts_discontinuity = self
