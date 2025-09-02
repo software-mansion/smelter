@@ -43,12 +43,11 @@ ffmpeg-next = "8.0.0"
 anyhow = "1.0.71"
 image = { version = "0.24.7", features = ["jpeg", "png"] }
 itertools = "0.14.0"
-rtp = "0.11.0"
-rtcp = "0.11.0"
 rand = "0.8.5"
 tracing = "0.1.40"
 socket2 = "0.5.5"
-webrtc-util = "0.9.0"
+webrtc = "0.13.0"
+webrtc-util = "0.11.0"
 opus = "0.3.0"
 rubato = "0.15.0"
 glyphon = "0.9.0"
@@ -86,7 +85,6 @@ fs_extra = "1.3.0"
 schemars = { workspace = true }
 image = { workspace = true }
 thiserror = { workspace = true }
-rtp = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 libc = "0.2.151"

@@ -10,6 +10,7 @@ use webrtc::{
         ice_server::RTCIceServer,
     },
     interceptor::registry::Registry,
+    peer_connection::RTCPeerConnection,
     peer_connection::{
         configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
     },
@@ -23,8 +24,6 @@ use webrtc::{
 };
 
 use std::sync::Arc;
-
-use webrtc::peer_connection::RTCPeerConnection;
 
 use crate::prelude::*;
 
