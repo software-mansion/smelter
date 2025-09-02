@@ -26,7 +26,7 @@ pub struct AudioWhipOptions {
 }
 
 #[derive(Debug, Clone)]
-pub struct WhipSenderOptions {
+pub struct WhipOutputOptions {
     pub endpoint_url: Arc<str>,
     pub bearer_token: Option<Arc<str>>,
     pub video: Option<VideoWhipOptions>,
