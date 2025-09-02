@@ -37,13 +37,13 @@ use crate::pipeline::webrtc::{
     supported_video_codec_parameters::{
         get_video_h264_codecs_for_media_engine, get_video_vp8_codecs, get_video_vp9_codecs,
     },
+    whep_output::cleanup_session_handler::OnCleanupSessionHdlr,
 };
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct PeerConnection {
     pc: Arc<RTCPeerConnection>,
-    cleanup_task_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
 }
 
 impl PeerConnection {
@@ -79,7 +79,6 @@ impl PeerConnection {
 
         Ok(Self {
             pc: peer_connection,
-            cleanup_task_handle: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -238,16 +237,9 @@ impl PeerConnection {
         Ok(self.pc.close().await?)
     }
 
-    pub fn on_peer_connection_cleanup<F>(&self, cleanup_session_handler: F)
-    where
-        F: Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
-            + Send
-            + Sync
-            + Clone
-            + 'static,
-    {
+    pub fn on_peer_connection_cleanup(&self, cleanup_session_handler: OnCleanupSessionHdlr) {
         let pc = self.pc.clone();
-        let cleanup_task_handle = self.cleanup_task_handle.clone();
+        let cleanup_task_handle = Arc::new(Mutex::new(None));
 
         self.pc.on_peer_connection_state_change(Box::new({
             move |state: RTCPeerConnectionState| {
@@ -320,18 +312,12 @@ fn register_codecs(
     Ok(())
 }
 
-fn handle_cleanup_on_disconnect<F>(
+fn handle_cleanup_on_disconnect(
     state: RTCPeerConnectionState,
     pc: Arc<RTCPeerConnection>,
     cleanup_task_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
-    remove_session_handler: F,
-) where
-    F: Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
-        + Send
-        + Sync
-        + Clone
-        + 'static,
-{
+    remove_session_handler: OnCleanupSessionHdlr,
+) {
     match state {
         RTCPeerConnectionState::Connected => {
             if let Ok(mut handle) = cleanup_task_handle.lock() {
@@ -343,30 +329,21 @@ fn handle_cleanup_on_disconnect<F>(
         RTCPeerConnectionState::Failed | RTCPeerConnectionState::Disconnected => {
             if let Ok(handle @ None) = cleanup_task_handle.lock().as_deref_mut() {
                 // schedule task only if none is pending, crucial in transitions failed <-> disconnected
-                let task = tokio::spawn(maybe_cleanup_peer_connection(pc, remove_session_handler));
+                let task = tokio::spawn(async move {
+                    sleep(Duration::from_secs(150)).await; // 2 min 30 s
+
+                    let current_state = pc.connection_state();
+                    if current_state != RTCPeerConnectionState::Connected
+                        && current_state != RTCPeerConnectionState::Connecting
+                    {
+                        remove_session_handler.call_handler().await;
+                    }
+                });
                 *handle = Some(task);
             }
         }
         _ => {
             // Other states aren't crucial for cleanup
         }
-    }
-}
-
-async fn maybe_cleanup_peer_connection<F>(pc: Arc<RTCPeerConnection>, remove_session_handler: F)
-where
-    F: Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
-        + Send
-        + Sync
-        + 'static,
-{
-    let cleanup_delay = Duration::from_secs(150); // 2 min 30 s
-    sleep(cleanup_delay).await;
-
-    let current_state = pc.connection_state();
-    if current_state != RTCPeerConnectionState::Connected
-        && current_state != RTCPeerConnectionState::Connecting
-    {
-        remove_session_handler().await;
     }
 }
