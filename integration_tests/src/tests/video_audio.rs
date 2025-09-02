@@ -106,8 +106,6 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
         average_level: 15.0,
         median_level: 15.0,
         general_level: 5.0,
-        // NOTE: (@jbrs) Right now it passes on my machine, check if it passess with
-        // default tolerance on CI
         ..Default::default()
     };
 
