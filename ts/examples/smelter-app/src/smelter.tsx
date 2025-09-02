@@ -56,6 +56,9 @@ export class SmelterManager {
         encoder: {
           type: 'ffmpeg_h264',
           preset: 'ultrafast',
+          ffmpegOptions: {
+            tune: 'zerolatency',
+          },
         },
         resolution: {
           width: 1920,
