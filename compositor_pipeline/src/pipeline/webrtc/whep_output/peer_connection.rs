@@ -111,19 +111,20 @@ impl PeerConnection {
     pub async fn new_audio_track(
         &self,
         encoder: &AudioEncoderOptions,
-    ) -> Result<(Arc<TrackLocalStaticRTP>, u32), WhipWhepServerError> {
+    ) -> Result<(Arc<TrackLocalStaticRTP>, u32, u8), WhipWhepServerError> {
         let track = match encoder {
             AudioEncoderOptions::Opus(opts) => {
                 let channels = match opts.channels {
                     AudioChannels::Mono => 1,
                     AudioChannels::Stereo => 2,
                 };
+                let fec = opts.forward_error_correction;
                 Arc::new(TrackLocalStaticRTP::new(
                     RTCRtpCodecCapability {
                         mime_type: MIME_TYPE_OPUS.to_owned(),
-                        clock_rate: 48000,
+                        clock_rate: opts.sample_rate,
                         channels,
-                        sdp_fmtp_line: "".to_owned(),
+                        sdp_fmtp_line: format!("minptime=10;useinbandfec={}", fec as u8).to_owned(),
                         rtcp_feedback: vec![],
                     },
                     "audio".to_string(),
@@ -141,12 +142,12 @@ impl PeerConnection {
         let sender = self.pc.add_track(track.clone()).await?;
 
         let rtc_sender_params = sender.get_parameters().await;
-        let ssrc = match rtc_sender_params.encodings.first() {
-            Some(e) => e.ssrc,
-            None => rand::thread_rng().gen::<u32>(),
+        let (ssrc, payload_type) = match rtc_sender_params.encodings.first() {
+            Some(e) => (e.ssrc, e.payload_type),
+            None => (rand::thread_rng().gen::<u32>(), 111),
         };
 
-        Ok((track, ssrc))
+        Ok((track, ssrc, payload_type))
     }
 
     pub async fn set_remote_description(
@@ -265,18 +266,14 @@ fn register_codecs(
                     AudioChannels::Mono => 1,
                     AudioChannels::Stereo => 2,
                 };
+                let fec_first = opts.forward_error_correction;
                 media_engine.register_codec(
-                    RTCRtpCodecParameters {
-                        capability: RTCRtpCodecCapability {
-                            mime_type: MIME_TYPE_OPUS.to_owned(),
-                            clock_rate: 48000,
-                            channels,
-                            sdp_fmtp_line: "minptime=10;useinbandfec=1".to_owned(),
-                            rtcp_feedback: vec![],
-                        },
-                        payload_type: 111,
-                        ..Default::default()
-                    },
+                    create_opus_codec_params(opts.sample_rate, channels, fec_first),
+                    RTPCodecType::Audio,
+                )?;
+
+                media_engine.register_codec(
+                    create_opus_codec_params(opts.sample_rate, channels, !fec_first),
                     RTPCodecType::Audio,
                 )?;
             }
@@ -288,4 +285,24 @@ fn register_codecs(
         }
     }
     Ok(())
+}
+
+fn create_opus_codec_params(
+    sample_rate: u32,
+    channels: u16,
+    fec_enabled: bool,
+) -> RTCRtpCodecParameters {
+    let (payload_type, fec) = if fec_enabled { (111, 1) } else { (110, 0) };
+
+    RTCRtpCodecParameters {
+        capability: RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_OPUS.to_owned(),
+            clock_rate: sample_rate,
+            channels,
+            sdp_fmtp_line: format!("minptime=10;useinbandfec={fec}"),
+            rtcp_feedback: vec![],
+        },
+        payload_type,
+        ..Default::default()
+    }
 }
