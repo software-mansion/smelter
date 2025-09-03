@@ -74,9 +74,12 @@ impl Mp4OutputBuilder {
             Text::new("Output path (absolute or relative to 'smelter/integration_tests'):")
                 .with_initial_value(&env_path)
                 .with_default(default_path.to_str().unwrap())
-                .prompt()?;
+                .prompt_skippable()?;
 
-        builder = builder.with_path(path_output);
+        builder = match path_output {
+            Some(path) => builder.with_path(path),
+            None => builder,
+        };
 
         let video_options = vec![Mp4RegisterOptions::SetVideoStream, Mp4RegisterOptions::Skip];
         let audio_options = vec![Mp4RegisterOptions::SetAudioStream, Mp4RegisterOptions::Skip];
