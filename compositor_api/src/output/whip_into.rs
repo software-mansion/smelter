@@ -1,12 +1,7 @@
 use itertools::Itertools;
-use tracing::warn;
 
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
-
-const ENCODER_DEPRECATION_MSG: &str = "Field 'encoder' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.";
-
-const CHANNEL_DEPRECATION_MSG: &str = "The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.";
 
 impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
     type Error = TypeError;
@@ -23,22 +18,6 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
             return Err(TypeError::new(
                 "At least one of \"video\" and \"audio\" fields have to be specified.",
             ));
-        }
-
-        if let Some(OutputWhipVideoOptions {
-            encoder: Some(_encoder),
-            ..
-        }) = &video
-        {
-            warn!(ENCODER_DEPRECATION_MSG)
-        }
-
-        if let Some(OutputWhipAudioOptions {
-            encoder: Some(_encoder),
-            ..
-        }) = &audio
-        {
-            warn!(ENCODER_DEPRECATION_MSG)
         }
 
         let (output_video_options, video_whip_options) = if let Some(options) = video {
@@ -138,25 +117,11 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
             Some(OutputWhipAudioOptions {
                 mixing_strategy,
                 send_eos_when,
-                encoder,
                 channels,
                 encoder_preferences,
                 initial,
             }) => {
-                let resolved_channels = match encoder {
-                    Some(WhipAudioEncoderOptions::Opus {
-                        channels: channels_deprecated,
-                        ..
-                    }) => {
-                        if channels_deprecated.is_some() {
-                            warn!(CHANNEL_DEPRECATION_MSG);
-                        }
-                        channels
-                            .or(channels_deprecated)
-                            .unwrap_or(AudioChannels::Stereo)
-                    }
-                    _ => channels.unwrap_or(AudioChannels::Stereo),
-                };
+                let resolved_channels = channels.unwrap_or(AudioChannels::Stereo);
                 let output_audio_options = pipeline::RegisterOutputAudioOptions {
                     initial: initial.try_into()?,
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,

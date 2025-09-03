@@ -39,9 +39,6 @@ pub enum VideoDecoder {
     /// to be compiled with the `vk-video` feature enabled (enabled by default on platforms which
     /// support Vulkan, i.e. non-Apple operating systems and not the web).
     VulkanH264,
-
-    /// Deprected
-    VulkanVideo,
 }
 
 const NO_VULKAN_VIDEO: &str =

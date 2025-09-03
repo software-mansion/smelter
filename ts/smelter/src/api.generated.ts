@@ -73,37 +73,6 @@ export type RegisterInput =
        */
       video?: InputWhipVideoOptions | null;
       /**
-       * Parameters of an audio source included in the RTP stream.
-       */
-      audio?: InputWhipAudioOptions | null;
-      /**
-       * Token used for authentication in WHIP protocol. If not provided, the random value will be generated and returned in the response.
-       */
-      bearer_token?: string | null;
-      /**
-       * Internal use only. Overrides whip endpoint id which is used when referencing the input via whip server. If not provided, it defaults to input id.
-       */
-      endpoint_override?: string | null;
-      /**
-       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
-       */
-      required?: boolean | null;
-      /**
-       * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
-       */
-      offset_ms?: number | null;
-    }
-  | {
-      type: "whip";
-      /**
-       * Parameters of a video source included in the RTP stream.
-       */
-      video?: InputWhipVideoOptions | null;
-      /**
-       * Parameters of an audio source included in the RTP stream.
-       */
-      audio?: InputWhipAudioOptions | null;
-      /**
        * Token used for authentication in WHIP protocol. If not provided, the random value will be generated and returned in the response.
        */
       bearer_token?: string | null;
@@ -172,14 +141,10 @@ export type RegisterInput =
     };
 export type PortOrPortRange = string | number;
 export type TransportProtocol = "udp" | "tcp_server";
-export type VideoDecoder = "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264" | "vulkan_video";
+export type VideoDecoder = "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type InputRtpAudioOptions =
   | {
       decoder: "opus";
-      /**
-       * (**default=`false`**) Specifies whether the stream uses forward error correction. It's specific for Opus codec. For more information, check out [RFC](https://datatracker.ietf.org/doc/html/rfc6716#section-2.1.7).
-       */
-      forward_error_correction?: boolean | null;
     }
   | {
       decoder: "aac";
@@ -200,13 +165,6 @@ export type InputRtpAudioOptions =
     };
 export type AacRtpMode = "low_bitrate" | "high_bitrate";
 export type WhipVideoDecoder = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
-export type InputWhipAudioOptions = {
-  decoder: "opus";
-  /**
-   * (**default=`false`**) Specifies whether the stream uses forward error correction. It's specific for Opus codec. For more information, check out [RFC](https://datatracker.ietf.org/doc/html/rfc6716#section-2.1.7).
-   */
-  forward_error_correction?: boolean | null;
-};
 export type RegisterOutput =
   | {
       type: "rtp_stream";
@@ -260,22 +218,6 @@ export type RegisterOutput =
     }
   | {
       type: "whip_client";
-      /**
-       * WHIP server endpoint
-       */
-      endpoint_url: string;
-      bearer_token?: string | null;
-      /**
-       * Video track configuration.
-       */
-      video?: OutputWhipVideoOptions | null;
-      /**
-       * Audio track configuration.
-       */
-      audio?: OutputWhipAudioOptions | null;
-    }
-  | {
-      type: "whip";
       /**
        * WHIP server endpoint
        */
@@ -828,10 +770,6 @@ export type AudioMixingStrategy = "sum_clip" | "sum_scale";
 export type RtpAudioEncoderOptions = {
   type: "opus";
   /**
-   * Specifies channels configuration.
-   */
-  channels?: AudioChannels | null;
-  /**
    * (**default="voip"**) Specifies preset for audio output encoder.
    */
   preset?: OpusEncoderPreset | null;
@@ -848,11 +786,10 @@ export type RtpAudioEncoderOptions = {
    */
   expected_packet_loss?: number | null;
 };
-export type AudioChannels = "mono" | "stereo";
 export type OpusEncoderPreset = "quality" | "voip" | "lowest_latency";
+export type AudioChannels = "mono" | "stereo";
 export type RtmpClientAudioEncoderOptions = {
   type: "aac";
-  channels?: AudioChannels | null;
   /**
    * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
    */
@@ -860,7 +797,6 @@ export type RtmpClientAudioEncoderOptions = {
 };
 export type Mp4AudioEncoderOptions = {
   type: "aac";
-  channels?: AudioChannels | null;
   /**
    * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
    */
@@ -994,7 +930,6 @@ export interface InputRtpVideoOptions {
   decoder: VideoDecoder;
 }
 export interface InputWhipVideoOptions {
-  decoder?: VideoDecoder | null;
   decoder_preferences?: WhipVideoDecoder[] | null;
 }
 export interface OutputVideoOptions {
@@ -1155,10 +1090,6 @@ export interface OutputWhipVideoOptions {
    */
   send_eos_when?: OutputEndCondition | null;
   /**
-   * Video encoder options.
-   */
-  encoder?: VideoEncoderOptions | null;
-  /**
    * Codec preferences list.
    */
   encoder_preferences?: WhipVideoEncoderOptions[] | null;
@@ -1176,10 +1107,6 @@ export interface OutputWhipAudioOptions {
    * Condition for termination of output stream based on the input streams states.
    */
   send_eos_when?: OutputEndCondition | null;
-  /**
-   * Audio encoder options.
-   */
-  encoder?: WhipAudioEncoderOptions | null;
   /**
    * Specifies channels configuration.
    */
