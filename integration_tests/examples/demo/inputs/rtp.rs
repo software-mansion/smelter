@@ -3,8 +3,11 @@ use std::process::Child;
 use anyhow::{anyhow, Result};
 use inquire::{Confirm, Select};
 use integration_tests::{
-    assets::{BUNNY_H264_PATH, BUNNY_H264_URL},
-    examples::{download_asset, examples_root_dir, AssetData},
+    assets::{
+        BUNNY_H264_PATH, BUNNY_H264_URL, BUNNY_VP8_PATH, BUNNY_VP8_URL, BUNNY_VP9_PATH,
+        BUNNY_VP9_URL,
+    },
+    examples::{download_asset, examples_root_dir, AssetData, TestSample},
     ffmpeg::start_ffmpeg_send,
     gstreamer::{start_gst_send_tcp, start_gst_send_udp},
 };
@@ -44,6 +47,49 @@ pub struct RtpInput {
 }
 
 impl RtpInput {
+    fn test_sample(&self) -> TestSample {
+        match &self.video {
+            Some(RtpInputVideoOptions {
+                decoder: VideoDecoder::FfmpegH264,
+            })
+            | None => TestSample::BigBuckBunnyH264Opus,
+            Some(RtpInputVideoOptions {
+                decoder: VideoDecoder::FfmpegVp8,
+            }) => TestSample::BigBuckBunnyVP8Opus,
+            Some(RtpInputVideoOptions {
+                decoder: VideoDecoder::FfmpegVp9,
+            }) => TestSample::BigBuckBunnyVP9Opus,
+            _ => unreachable!(),
+        }
+    }
+
+    fn download_asset(&self) -> Result<()> {
+        let asset = match self.video {
+            Some(RtpInputVideoOptions {
+                decoder: VideoDecoder::FfmpegH264,
+            })
+            | None => AssetData {
+                url: BUNNY_H264_URL.to_string(),
+                path: examples_root_dir().join(BUNNY_H264_PATH),
+            },
+            Some(RtpInputVideoOptions {
+                decoder: VideoDecoder::FfmpegVp8,
+            }) => AssetData {
+                url: BUNNY_VP8_URL.to_string(),
+                path: examples_root_dir().join(BUNNY_VP8_PATH),
+            },
+            Some(RtpInputVideoOptions {
+                decoder: VideoDecoder::FfmpegVp9,
+            }) => AssetData {
+                url: BUNNY_VP9_URL.to_string(),
+                path: examples_root_dir().join(BUNNY_VP9_PATH),
+            },
+            _ => unreachable!(),
+        };
+
+        download_asset(&asset)
+    }
+
     fn gstreamer_transmit_tcp(&mut self) -> Result<()> {
         let video_port = self.video.as_ref().map(|_| self.port);
         let audio_port = self.audio.as_ref().map(|_| self.port);
@@ -53,26 +99,20 @@ impl RtpInput {
                 "Streaming both audio and video on the same port is possible only over UDP!"
             ));
         } else if video_port.is_some() {
-            download_asset(&AssetData {
-                url: BUNNY_H264_URL.to_string(),
-                path: examples_root_dir().join(BUNNY_H264_PATH),
-            })?;
+            self.download_asset()?;
         }
         self.stream_handles.push(start_gst_send_tcp(
             IP,
             video_port,
             audio_port,
-            integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
+            self.test_sample(),
         )?);
         Ok(())
     }
 
     fn gstreamer_transmit_udp(&mut self) -> Result<()> {
         if self.video.is_some() {
-            download_asset(&AssetData {
-                url: BUNNY_H264_URL.to_string(),
-                path: examples_root_dir().join(BUNNY_H264_PATH),
-            })?;
+            self.download_asset()?;
         }
         let video_port = self.video.as_ref().map(|_| self.port);
         let audio_port = self.audio.as_ref().map(|_| self.port);
@@ -80,7 +120,7 @@ impl RtpInput {
             IP,
             video_port,
             audio_port,
-            integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
+            self.test_sample(),
         )?);
         Ok(())
     }
@@ -93,23 +133,13 @@ impl RtpInput {
                 ))
             }
             (Some(_video), None) => {
-                download_asset(&AssetData {
-                    url: BUNNY_H264_URL.to_string(),
-                    path: examples_root_dir().join(BUNNY_H264_PATH),
-                })?;
-                start_ffmpeg_send(
-                    IP,
-                    Some(self.port),
-                    None,
-                    integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
-                )?
+                self.download_asset()?;
+                start_ffmpeg_send(IP, Some(self.port), None, self.test_sample())?
             }
-            (None, Some(_audio)) => start_ffmpeg_send(
-                IP,
-                None,
-                Some(self.port),
-                integration_tests::examples::TestSample::BigBuckBunnyH264Opus,
-            )?,
+            (None, Some(_audio)) => {
+                self.download_asset()?;
+                start_ffmpeg_send(IP, None, Some(self.port), self.test_sample())?
+            }
             (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
         };
 
