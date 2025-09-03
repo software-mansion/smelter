@@ -4,7 +4,7 @@ use anyhow::Result;
 
 use webrtc::rtp::{self, codecs::opus::OpusPacket, packetizer::Depacketizer};
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AudioSampleBatch {
     pub samples: Vec<f32>,
     pub pts: Duration,
@@ -23,6 +23,7 @@ pub struct AudioDecoder {
     decoded_samples: Vec<AudioSampleBatch>,
     sample_rate: u32,
     first_rtp_timestamp: Option<u32>,
+    sample_multiplier: usize,
 }
 
 impl AudioDecoder {
@@ -33,6 +34,11 @@ impl AudioDecoder {
         };
         let decoder = opus::Decoder::new(sample_rate, channels)?;
 
+        let sample_multiplier = match channels {
+            opus::Channels::Mono => 1,
+            opus::Channels::Stereo => 2,
+        };
+
         Ok(Self {
             buffer: vec![0; sample_rate as usize * 20],
             depayloader: OpusPacket,
@@ -40,6 +46,7 @@ impl AudioDecoder {
             decoded_samples: vec![],
             sample_rate,
             first_rtp_timestamp: None,
+            sample_multiplier,
         })
     }
 
@@ -54,7 +61,7 @@ impl AudioDecoder {
 
         let samples_count = self.decoder.decode(&chunk_data, &mut self.buffer, false)?;
         self.decoded_samples.push(AudioSampleBatch {
-            samples: self.batch_to_f32(&self.buffer[..samples_count]),
+            samples: self.batch_to_f32(&self.buffer[..(self.sample_multiplier * samples_count)]),
             pts: Duration::from_secs_f64(
                 (packet.header.timestamp - first_rtp_timestamp) as f64 / self.sample_rate as f64,
             ),
