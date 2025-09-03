@@ -12,7 +12,7 @@ use std::{
 use super::examples::{get_asset_path, TestSample};
 
 #[derive(Clone)]
-enum Video {
+pub enum Video {
     H264,
     VP8,
     VP9,
@@ -225,7 +225,7 @@ pub fn start_gst_send_udp(
     }
 }
 
-fn start_gst_send_from_file_tcp(
+pub fn start_gst_send_from_file_tcp(
     ip: &str,
     video_port: Option<u16>,
     audio_port: Option<u16>,
@@ -277,7 +277,7 @@ fn start_gst_send_from_file_tcp(
     Ok(handle)
 }
 
-fn start_gst_send_from_file_udp(
+pub fn start_gst_send_from_file_udp(
     ip: &str,
     video_port: Option<u16>,
     audio_port: Option<u16>,
