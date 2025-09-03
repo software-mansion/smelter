@@ -44,18 +44,19 @@ impl Mp4InputBuilder {
         let path_input =
             Text::new("Input path (absolute or relative to 'smelter/integration_tests'):")
                 .with_initial_value(&env_path)
-                .prompt()?;
+                .prompt_skippable()?;
 
-        builder = if path_input.is_empty() {
-            let path = examples_root_dir().join(BUNNY_H264_PATH);
-            info!("Using default asset at \"{}\"", path.to_str().unwrap());
-            download_asset(&AssetData {
-                url: BUNNY_H264_URL.to_string(),
-                path: path.clone(),
-            })?;
-            builder.with_path(path)
-        } else {
-            builder.with_path(path_input.into())
+        builder = match path_input {
+            Some(path) if !path.is_empty() => builder.with_path(path.into()),
+            Some(_) | None => {
+                let path = examples_root_dir().join(BUNNY_H264_PATH);
+                info!("Using default asset at \"{}\"", path.to_str().unwrap());
+                download_asset(&AssetData {
+                    url: BUNNY_H264_URL.to_string(),
+                    path: path.clone(),
+                })?;
+                builder.with_path(path)
+            }
         };
 
         Ok(builder)
