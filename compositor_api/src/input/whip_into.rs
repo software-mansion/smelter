@@ -16,74 +16,19 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
             endpoint_override,
         } = value;
 
-        // TODO: move this logic to pipeline and resolve the final values
-        // when we know if vulkan decoder is supported
-        let whip_options = match video {
-            Some(options) => {
-                let video_preferences = match options.decoder_preferences.as_deref() {
-                    Some([]) | None => vec![WhipVideoDecoder::Any],
-                    Some(v) => v.to_vec(),
-                };
-                let video_preferences: Vec<pipeline::VideoDecoderOptions> = video_preferences
-                    .into_iter()
-                    .flat_map(|codec| match codec {
-                        WhipVideoDecoder::FfmpegH264 => {
-                            vec![pipeline::VideoDecoderOptions::FfmpegH264]
-                        }
-                        #[cfg(feature = "vk-video")]
-                        WhipVideoDecoder::VulkanH264 => {
-                            vec![pipeline::VideoDecoderOptions::VulkanH264]
-                        }
-                        WhipVideoDecoder::FfmpegVp8 => {
-                            vec![pipeline::VideoDecoderOptions::FfmpegVp8]
-                        }
-                        WhipVideoDecoder::FfmpegVp9 => {
-                            vec![pipeline::VideoDecoderOptions::FfmpegVp9]
-                        }
-                        #[cfg(not(feature = "vk-video"))]
-                        WhipVideoDecoder::Any => {
-                            vec![
-                                pipeline::VideoDecoderOptions::FfmpegVp9,
-                                pipeline::VideoDecoderOptions::FfmpegVp8,
-                                pipeline::VideoDecoderOptions::FfmpegH264,
-                            ]
-                        }
-                        #[cfg(feature = "vk-video")]
-                        WhipVideoDecoder::Any => {
-                            vec![
-                                pipeline::VideoDecoderOptions::FfmpegVp9,
-                                pipeline::VideoDecoderOptions::FfmpegVp8,
-                                pipeline::VideoDecoderOptions::VulkanH264,
-                            ]
-                        }
-                        #[cfg(not(feature = "vk-video"))]
-                        WhipVideoDecoder::VulkanH264 => vec![],
-                    })
-                    .unique()
-                    .collect();
-                pipeline::WhipInputOptions {
-                    video_preferences,
-                    bearer_token,
-                    endpoint_override,
-                }
-            }
-            None => pipeline::WhipInputOptions {
-                #[cfg(not(feature = "vk-video"))]
-                video_preferences: vec![
-                    pipeline::VideoDecoderOptions::FfmpegH264,
-                    pipeline::VideoDecoderOptions::FfmpegVp8,
-                    pipeline::VideoDecoderOptions::FfmpegVp9,
-                ],
-                #[cfg(feature = "vk-video")]
-                video_preferences: vec![
-                    pipeline::VideoDecoderOptions::VulkanH264,
-                    pipeline::VideoDecoderOptions::FfmpegH264,
-                    pipeline::VideoDecoderOptions::FfmpegVp8,
-                    pipeline::VideoDecoderOptions::FfmpegVp9,
-                ],
-                bearer_token,
-                endpoint_override,
-            },
+        let video_preferences = video
+            .and_then(|options| options.decoder_preferences)
+            .filter(|v| !v.is_empty())
+            .unwrap_or(vec![WhipVideoDecoderOptions::Any])
+            .into_iter()
+            .map(Into::into)
+            .unique()
+            .collect();
+
+        let whip_options = pipeline::WhipInputOptions {
+            video_preferences,
+            bearer_token,
+            endpoint_override,
         };
 
         let input_options = pipeline::ProtocolInputOptions::Whip(whip_options);

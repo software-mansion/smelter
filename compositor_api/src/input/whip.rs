@@ -4,6 +4,9 @@ use std::sync::Arc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::common_pipeline::prelude as pipeline;
+use crate::*;
+
 /// Parameters for an input stream for WHIP server.
 /// At least one of `video` and `audio` has to be defined.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -30,12 +33,12 @@ pub struct WhipInput {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct InputWhipVideoOptions {
-    pub decoder_preferences: Option<Vec<WhipVideoDecoder>>,
+    pub decoder_preferences: Option<Vec<WhipVideoDecoderOptions>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub enum WhipVideoDecoder {
+pub enum WhipVideoDecoderOptions {
     /// Use the software h264 decoder based on ffmpeg.
     FfmpegH264,
 
@@ -56,4 +59,16 @@ pub enum WhipVideoDecoder {
     VulkanH264,
 
     Any,
+}
+
+impl From<WhipVideoDecoderOptions> for pipeline::WhipVideoDecoderOptions {
+    fn from(decoder: WhipVideoDecoderOptions) -> Self {
+        match decoder {
+            WhipVideoDecoderOptions::FfmpegH264 => pipeline::WhipVideoDecoderOptions::FfmpegH264,
+            WhipVideoDecoderOptions::FfmpegVp8 => pipeline::WhipVideoDecoderOptions::FfmpegVp8,
+            WhipVideoDecoderOptions::FfmpegVp9 => pipeline::WhipVideoDecoderOptions::FfmpegVp9,
+            WhipVideoDecoderOptions::VulkanH264 => pipeline::WhipVideoDecoderOptions::VulkanH264,
+            WhipVideoDecoderOptions::Any => pipeline::WhipVideoDecoderOptions::Any,
+        }
+    }
 }
