@@ -98,7 +98,7 @@ fn main() {
             source: Mp4InputSource::File(root_dir().join(BUNNY_FILE_PATH).into()),
             should_loop: false,
             video_decoders: Mp4InputVideoDecoders {
-                h264: VideoDecoderOptions::FfmpegH264,
+                h264: Some(VideoDecoderOptions::FfmpegH264),
             },
         }),
         queue_options: QueueInputOptions {
