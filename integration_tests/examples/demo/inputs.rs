@@ -34,7 +34,7 @@ pub enum InputProtocol {
     Mp4,
 }
 
-#[derive(Debug, EnumIter, Display)]
+#[derive(Debug, EnumIter, Display, PartialEq)]
 pub enum VideoDecoder {
     #[strum(to_string = "ffmpeg_h264")]
     FfmpegH264,

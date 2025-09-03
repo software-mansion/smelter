@@ -3,6 +3,8 @@ use std::process::Child;
 use anyhow::{anyhow, Result};
 use inquire::{Confirm, Select};
 use integration_tests::{
+    assets::{BUNNY_H264_PATH, BUNNY_H264_URL},
+    examples::{download_asset, examples_root_dir, AssetData},
     ffmpeg::start_ffmpeg_send,
     gstreamer::{start_gst_send_tcp, start_gst_send_udp},
 };
@@ -14,7 +16,6 @@ use crate::{
     inputs::{AudioDecoder, InputHandler, VideoDecoder},
     players::InputPlayer,
     smelter_state::TransportProtocol,
-    utils::download_bunny,
     IP,
 };
 
@@ -52,7 +53,10 @@ impl RtpInput {
                 "Streaming both audio and video on the same port is possible only over UDP!"
             ));
         } else if video_port.is_some() {
-            download_bunny()?;
+            download_asset(&AssetData {
+                url: BUNNY_H264_URL.to_string(),
+                path: examples_root_dir().join(BUNNY_H264_PATH),
+            })?;
         }
         self.stream_handles.push(start_gst_send_tcp(
             IP,
@@ -65,7 +69,10 @@ impl RtpInput {
 
     fn gstreamer_transmit_udp(&mut self) -> Result<()> {
         if self.video.is_some() {
-            download_bunny()?;
+            download_asset(&AssetData {
+                url: BUNNY_H264_URL.to_string(),
+                path: examples_root_dir().join(BUNNY_H264_PATH),
+            })?;
         }
         let video_port = self.video.as_ref().map(|_| self.port);
         let audio_port = self.audio.as_ref().map(|_| self.port);
@@ -86,7 +93,10 @@ impl RtpInput {
                 ))
             }
             (Some(_video), None) => {
-                download_bunny()?;
+                download_asset(&AssetData {
+                    url: BUNNY_H264_URL.to_string(),
+                    path: examples_root_dir().join(BUNNY_H264_PATH),
+                })?;
                 start_ffmpeg_send(
                     IP,
                     Some(self.port),
@@ -254,21 +264,10 @@ impl RtpInputBuilder {
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
-        let video_options = vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
         let audio_options = vec![RtpRegisterOptions::SetAudioStream, RtpRegisterOptions::Skip];
 
         loop {
-            let video_selection =
-                Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
-
-            builder = match video_selection {
-                Some(RtpRegisterOptions::SetVideoStream) => {
-                    builder.with_video(RtpInputVideoOptions::default())
-                }
-                Some(RtpRegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
-
+            builder = builder.prompt_video()?;
             let audio_selection =
                 Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
 
@@ -302,6 +301,31 @@ impl RtpInputBuilder {
             None => builder,
         };
         Ok(builder)
+    }
+
+    fn prompt_video(self) -> Result<Self> {
+        let video_options = vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
+
+        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+
+        match video_selection {
+            Some(RtpRegisterOptions::SetVideoStream) => {
+                let codec_options = VideoDecoder::iter()
+                    .filter(|enc| *enc != VideoDecoder::Any)
+                    .collect();
+
+                let codec_choice =
+                    Select::new("Select video codec to test:", codec_options).prompt_skippable()?;
+
+                match codec_choice {
+                    Some(codec) => Ok(self.with_video(RtpInputVideoOptions { decoder: codec })),
+                    None => Ok(self.with_video(RtpInputVideoOptions {
+                        decoder: VideoDecoder::FfmpegH264,
+                    })),
+                }
+            }
+            Some(_) | None => Ok(self),
+        }
     }
 
     fn prompt_player(&self) -> Result<Option<InputPlayer>> {
