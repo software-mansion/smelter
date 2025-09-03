@@ -5,6 +5,7 @@ use inquire::Text;
 use integration_tests::examples::examples_root_dir;
 use rand::RngCore;
 use serde_json::json;
+use tracing::info;
 
 use crate::{
     inputs::InputHandler,
@@ -49,6 +50,7 @@ impl Mp4InputBuilder {
         // TODO: Change that do Big Buck Bunny (which is currently not working)
         builder = if path_input.is_empty() {
             let path = examples_root_dir().join(ELEPHANT_PATH);
+            info!("Using default asset at \"{}\"", path.to_str().unwrap());
             download_elephant()?;
             builder.with_path(path)
         } else {
