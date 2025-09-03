@@ -12,7 +12,7 @@ use integration_tests::{
         BUNNY_VP9_URL,
     },
     examples::{download_asset, examples_root_dir, AssetData, TestSample},
-    ffmpeg::start_ffmpeg_send,
+    ffmpeg::{start_ffmpeg_send, start_ffmpeg_send_from_file},
     gstreamer::{
         start_gst_send_from_file_tcp, start_gst_send_from_file_udp, start_gst_send_tcp,
         start_gst_send_udp,
@@ -146,14 +146,31 @@ impl RtpInput {
                     "FFmpeg can't handle both audio and video on a single port over RTP."
                 ))
             }
-            (Some(_video), None) => {
-                self.download_asset()?;
-                start_ffmpeg_send(IP, Some(self.port), None, self.test_sample())?
+            (Some(video), None) => {
+                let video_codec = video.decoder.into();
+                match &self.path {
+                    Some(path) => start_ffmpeg_send_from_file(
+                        IP,
+                        Some(self.port),
+                        None,
+                        path.clone(),
+                        Some(video_codec),
+                    )?,
+                    None => {
+                        self.download_asset()?;
+                        start_ffmpeg_send(IP, Some(self.port), None, self.test_sample())?
+                    }
+                }
             }
-            (None, Some(_audio)) => {
-                self.download_asset()?;
-                start_ffmpeg_send(IP, None, Some(self.port), self.test_sample())?
-            }
+            (None, Some(_audio)) => match &self.path {
+                Some(path) => {
+                    start_ffmpeg_send_from_file(IP, None, Some(self.port), path.clone(), None)?
+                }
+                None => {
+                    self.download_asset()?;
+                    start_ffmpeg_send(IP, None, Some(self.port), self.test_sample())?
+                }
+            },
             (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
         };
 

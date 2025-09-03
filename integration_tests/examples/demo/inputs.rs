@@ -1,5 +1,5 @@
 use anyhow::Result;
-use integration_tests::gstreamer;
+use integration_tests::{ffmpeg, gstreamer};
 use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
@@ -51,6 +51,16 @@ pub enum VideoDecoder {
 }
 
 impl From<VideoDecoder> for gstreamer::Video {
+    fn from(value: VideoDecoder) -> Self {
+        match value {
+            VideoDecoder::FfmpegH264 | VideoDecoder::Any => Self::H264,
+            VideoDecoder::FfmpegVp8 => Self::VP8,
+            VideoDecoder::FfmpegVp9 => Self::VP9,
+        }
+    }
+}
+
+impl From<VideoDecoder> for ffmpeg::Video {
     fn from(value: VideoDecoder) -> Self {
         match value {
             VideoDecoder::FfmpegH264 | VideoDecoder::Any => Self::H264,
