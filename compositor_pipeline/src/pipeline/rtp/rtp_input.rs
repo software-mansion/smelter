@@ -143,10 +143,15 @@ impl RtpInput {
                 input_id.clone(),
                 (ctx.clone(), DepayloaderOptions::Vp9, sender),
             )?,
-            VideoDecoderOptions::VulkanH264 => RtpVideoThread::<VulkanH264Decoder>::spawn(
-                input_id.clone(),
-                (ctx.clone(), DepayloaderOptions::H264, sender),
-            )?,
+            VideoDecoderOptions::VulkanH264 => {
+                if !ctx.graphics_context.has_vulkan_support() {
+                    return Err(DecoderInitError::VulkanContextRequiredForVulkanDecoder);
+                }
+                RtpVideoThread::<VulkanH264Decoder>::spawn(
+                    input_id.clone(),
+                    (ctx.clone(), DepayloaderOptions::H264, sender),
+                )?
+            }
         };
         Ok((Some(handle), Some(receiver)))
     }
