@@ -11,6 +11,13 @@ pub mod whip;
 
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
+    fn has_video(&self) -> bool {
+        true
+    }
+
+    fn has_audio(&self) -> bool {
+        true
+    }
 
     fn on_after_registration(&mut self, _player: InputPlayer) -> Result<()> {
         Ok(())

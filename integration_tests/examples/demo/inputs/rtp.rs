@@ -281,6 +281,14 @@ impl InputHandler for RtpInput {
         &self.name
     }
 
+    fn has_video(&self) -> bool {
+        self.video.is_some()
+    }
+
+    fn has_audio(&self) -> bool {
+        self.audio.is_some()
+    }
+
     fn on_after_registration(&mut self, player: InputPlayer) -> Result<()> {
         match self.transport_protocol {
             TransportProtocol::TcpServer => self.on_after_registration_tcp(player),

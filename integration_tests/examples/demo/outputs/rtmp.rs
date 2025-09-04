@@ -216,14 +216,18 @@ impl RtmpOutputVideoOptions {
     ) -> serde_json::Value {
         let input_json = inputs
             .iter()
-            .map(|input| {
-                let input_name = input.name();
-                let id = format!("{input_name}_{output_name}");
-                json!({
-                    "type": "input_stream",
-                    "id": id,
-                    "input_id": input_name,
-                })
+            .filter_map(|input| {
+                if input.has_video() {
+                    let input_name = input.name();
+                    let id = format!("{input_name}_{output_name}");
+                    Some(json!({
+                        "type": "input_stream",
+                        "id": id,
+                        "input_id": input_name,
+                    }))
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
 
@@ -252,14 +256,18 @@ impl RtmpOutputVideoOptions {
     ) -> serde_json::Value {
         let input_json = inputs
             .iter()
-            .map(|input| {
-                let input_name = input.name();
-                let id = format!("{input_name}_{output_name}");
-                json!({
-                    "type": "input_stream",
-                    "id": id,
-                    "input_id": input_name,
-                })
+            .filter_map(|input| {
+                if input.has_video() {
+                    let input_name = input.name();
+                    let id = format!("{input_name}_{output_name}");
+                    Some(json!({
+                        "type": "input_stream",
+                        "id": id,
+                        "input_id": input_name,
+                    }))
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
 
@@ -301,11 +309,14 @@ impl RtmpOutputAudioOptions {
     pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let input_json = inputs
             .iter()
-            .map(|input| {
-                let input_id = input.name();
-                json!({
-                    "input_id": input_id,
-                })
+            .filter_map(|input| {
+                if input.has_audio() {
+                    Some(json!({
+                        "input_id": input.name(),
+                    }))
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
 
@@ -322,11 +333,14 @@ impl RtmpOutputAudioOptions {
     pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let input_json = inputs
             .iter()
-            .map(|input| {
-                let input_id = input.name();
-                json!({
-                    "input_id": input_id,
-                })
+            .filter_map(|input| {
+                if input.has_audio() {
+                    Some(json!({
+                        "input_id": input.name(),
+                    }))
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
 
