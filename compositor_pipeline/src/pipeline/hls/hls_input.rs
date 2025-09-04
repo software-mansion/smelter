@@ -167,7 +167,17 @@ impl HlsInput {
                     frame_sender,
                     input_buffer_size: 2000,
                 };
-                let decoder_result = match options.video_decoders.h264 {
+
+                let vulkan_supported = ctx.graphics_context.has_vulkan_support();
+                let h264_decoder = options.video_decoders.h264.unwrap_or({
+                    if vulkan_supported {
+                        VideoDecoderOptions::VulkanH264
+                    } else {
+                        VideoDecoderOptions::FfmpegH264
+                    }
+                });
+
+                let decoder_result = match h264_decoder {
                     VideoDecoderOptions::FfmpegH264 => {
                         VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
                             input_id,
@@ -175,6 +185,14 @@ impl HlsInput {
                         )
                     }
                     VideoDecoderOptions::VulkanH264 => {
+                        if !vulkan_supported {
+                            result_sender
+                                .send(Err(InputInitError::DecoderError(
+                                    DecoderInitError::VulkanContextRequiredForVulkanDecoder,
+                                )))
+                                .unwrap();
+                            return;
+                        }
                         VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
                             input_id,
                             decoder_thread_options,
