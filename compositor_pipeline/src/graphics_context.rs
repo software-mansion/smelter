@@ -114,4 +114,13 @@ impl GraphicsContext {
             instance,
         })
     }
+
+    #[cfg(feature = "vk-video")]
+    pub fn has_vulkan_support(&self) -> bool {
+        self.vulkan_ctx.is_some()
+    }
+    #[cfg(not(feature = "vk-video"))]
+    pub fn has_vulkan_support(&self) -> bool {
+        false
+    }
 }

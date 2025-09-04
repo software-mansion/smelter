@@ -164,7 +164,7 @@ export type InputRtpAudioOptions =
       rtp_mode?: AacRtpMode | null;
     };
 export type AacRtpMode = "low_bitrate" | "high_bitrate";
-export type WhipVideoDecoder = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
+export type WhipVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type RegisterOutput =
   | {
       type: "rtp_stream";
@@ -930,7 +930,7 @@ export interface InputRtpVideoOptions {
   decoder: VideoDecoder;
 }
 export interface InputWhipVideoOptions {
-  decoder_preferences?: WhipVideoDecoder[] | null;
+  decoder_preferences?: WhipVideoDecoderOptions[] | null;
 }
 export interface OutputVideoOptions {
   /**

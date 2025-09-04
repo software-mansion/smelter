@@ -30,12 +30,12 @@ pub struct WhipInput {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct InputWhipVideoOptions {
-    pub decoder_preferences: Option<Vec<WhipVideoDecoder>>,
+    pub decoder_preferences: Option<Vec<WhipVideoDecoderOptions>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub enum WhipVideoDecoder {
+pub enum WhipVideoDecoderOptions {
     /// Use the software h264 decoder based on ffmpeg.
     FfmpegH264,
 

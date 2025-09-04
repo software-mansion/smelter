@@ -28,6 +28,15 @@ pub enum AudioCodec {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WhipVideoDecoderOptions {
+    FfmpegH264,
+    FfmpegVp8,
+    FfmpegVp9,
+    VulkanH264,
+    Any,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VideoDecoderOptions {
     FfmpegH264,
     FfmpegVp8,
