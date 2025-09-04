@@ -26,6 +26,7 @@ use crate::{
     inputs::{AudioDecoder, InputHandler, VideoDecoder},
     players::InputPlayer,
     smelter_state::TransportProtocol,
+    utils::resolve_path,
     IP,
 };
 
@@ -395,13 +396,12 @@ impl RtpInputBuilder {
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(RTP_INPUT_PATH).unwrap_or_default();
 
-        let path_input =
-            Text::new("Input path (absolute or relative to 'smelter/integration_tests'):")
-                .with_initial_value(&env_path)
-                .prompt_skippable()?;
+        let path_input = Text::new("Input path:")
+            .with_initial_value(&env_path)
+            .prompt_skippable()?;
 
         match path_input {
-            Some(path) if !path.is_empty() => Ok(self.with_path(path.into())),
+            Some(path) if !path.is_empty() => Ok(self.with_path(resolve_path(path.into())?)),
             Some(_) | None => Ok(self),
         }
     }

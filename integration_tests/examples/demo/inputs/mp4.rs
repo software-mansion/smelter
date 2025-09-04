@@ -10,7 +10,7 @@ use rand::RngCore;
 use serde_json::json;
 use tracing::info;
 
-use crate::{inputs::InputHandler, players::InputPlayer};
+use crate::{inputs::InputHandler, players::InputPlayer, utils::resolve_path};
 
 const MP4_INPUT_PATH: &str = "MP4_INPUT_PATH";
 
@@ -41,13 +41,12 @@ impl Mp4InputBuilder {
         let mut builder = self;
         let env_path = env::var(MP4_INPUT_PATH).unwrap_or_default();
 
-        let path_input =
-            Text::new("Input path (absolute or relative to 'smelter/integration_tests'):")
-                .with_initial_value(&env_path)
-                .prompt_skippable()?;
+        let path_input = Text::new("Input path:")
+            .with_initial_value(&env_path)
+            .prompt_skippable()?;
 
         builder = match path_input {
-            Some(path) if !path.is_empty() => builder.with_path(path.into()),
+            Some(path) if !path.is_empty() => builder.with_path(resolve_path(path.into())?),
             Some(_) | None => {
                 let path = examples_root_dir().join(BUNNY_H264_PATH);
                 info!("Using default asset at \"{}\"", path.to_str().unwrap());

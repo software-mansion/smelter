@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, path::PathBuf};
 
 use anyhow::Result;
 use inquire::{Select, Text};
@@ -11,6 +11,7 @@ use tracing::error;
 use crate::{
     outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayer,
+    utils::resolve_path,
 };
 const MP4_OUTPUT_PATH: &str = "MP4_OUTPUT_PATH";
 
@@ -48,7 +49,7 @@ impl OutputHandler for Mp4Output {
 
 pub struct Mp4OutputBuilder {
     name: String,
-    path: Option<String>,
+    path: Option<PathBuf>,
     video: Option<Mp4OutputVideoOptions>,
     audio: Option<Mp4OutputAudioOptions>,
 }
@@ -70,14 +71,13 @@ impl Mp4OutputBuilder {
         let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
 
         let default_path = examples_root_dir().join("example_output.mp4");
-        let path_output =
-            Text::new("Output path (absolute or relative to 'smelter/integration_tests'):")
-                .with_initial_value(&env_path)
-                .with_default(default_path.to_str().unwrap())
-                .prompt_skippable()?;
+        let path_output = Text::new("Output path:")
+            .with_initial_value(&env_path)
+            .with_default(default_path.to_str().unwrap())
+            .prompt_skippable()?;
 
         builder = match path_output {
-            Some(path) => builder.with_path(path),
+            Some(path) => builder.with_path(resolve_path(path.into())?),
             None => builder,
         };
 
@@ -117,7 +117,7 @@ impl Mp4OutputBuilder {
         Ok(builder)
     }
 
-    pub fn with_path(mut self, path: String) -> Self {
+    pub fn with_path(mut self, path: PathBuf) -> Self {
         self.path = Some(path);
         self
     }
