@@ -1,6 +1,5 @@
 use itertools::Itertools;
 use std::time::Duration;
-use tracing::warn;
 
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
@@ -11,16 +10,11 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
     fn try_from(value: WhipInput) -> Result<Self, Self::Error> {
         let WhipInput {
             video,
-            audio: _,
             required,
             offset_ms,
             bearer_token,
             endpoint_override,
         } = value;
-
-        if video.clone().and_then(|v| v.decoder.clone()).is_some() {
-            warn!("Field 'decoder' in video options is deprecated. The codec will now be set automatically based on WHIP negotiation, manual specification is no longer needed.")
-        }
 
         // TODO: move this logic to pipeline and resolve the final values
         // when we know if vulkan decoder is supported

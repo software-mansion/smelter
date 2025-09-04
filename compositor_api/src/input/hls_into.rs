@@ -26,14 +26,10 @@ impl TryFrom<HlsInput> for pipeline::RegisterInputOptions {
                         VideoDecoder::FfmpegH264 => Ok(pipeline::VideoDecoderOptions::FfmpegH264),
 
                         #[cfg(feature = "vk-video")]
-                        VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo => {
-                            Ok(pipeline::VideoDecoderOptions::VulkanH264)
-                        }
+                        VideoDecoder::VulkanH264 => Ok(pipeline::VideoDecoderOptions::VulkanH264),
 
                         #[cfg(not(feature = "vk-video"))]
-                        VideoDecoder::VulkanVideo | VideoDecoder::VulkanH264 => {
-                            Err(TypeError::new(super::NO_VULKAN_VIDEO))
-                        }
+                        VideoDecoder::VulkanH264 => Err(TypeError::new(super::NO_VULKAN_VIDEO)),
 
                         _ => Err(TypeError::new("Expected h264 decoder")),
                     })

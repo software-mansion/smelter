@@ -34,7 +34,6 @@ pub struct OutputRtmpClientAudioOptions {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RtmpClientAudioEncoderOptions {
     Aac {
-        channels: Option<AudioChannels>,
         /// (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
         sample_rate: Option<u32>,
     },

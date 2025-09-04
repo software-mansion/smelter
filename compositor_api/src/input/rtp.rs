@@ -35,13 +35,7 @@ pub enum AacRtpMode {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(tag = "decoder", rename_all = "snake_case", deny_unknown_fields)]
 pub enum InputRtpAudioOptions {
-    Opus {
-        /// (**default=`false`**) Specifies whether the stream uses forward error correction.
-        /// It's specific for Opus codec.
-        /// For more information, check out [RFC](https://datatracker.ietf.org/doc/html/rfc6716#section-2.1.7).
-        forward_error_correction: Option<bool>,
-    },
-
+    Opus,
     Aac {
         /// AudioSpecificConfig as described in MPEG-4 part 3, section 1.6.2.1
         /// The config should be encoded as described in [RFC 3640](https://datatracker.ietf.org/doc/html/rfc3640#section-4.1).

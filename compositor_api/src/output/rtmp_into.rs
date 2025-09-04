@@ -1,5 +1,3 @@
-use tracing::warn;
-
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
 
@@ -25,16 +23,8 @@ impl TryFrom<RtmpOutput> for pipeline::RegisterOutputOptions {
                 initial,
             }) => {
                 let (audio_encoder_options, resolved_channels) = match encoder {
-                    RtmpClientAudioEncoderOptions::Aac {
-                        sample_rate,
-                        channels: channels_deprecated,
-                    } => {
-                        if channels_deprecated.is_some() {
-                            warn!("The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.");
-                        }
-                        let resolved_channels = channels
-                            .or(channels_deprecated)
-                            .unwrap_or(AudioChannels::Stereo);
+                    RtmpClientAudioEncoderOptions::Aac { sample_rate } => {
+                        let resolved_channels = channels.unwrap_or(AudioChannels::Stereo);
                         (
                             pipeline::AudioEncoderOptions::FdkAac(pipeline::FdkAacEncoderOptions {
                                 channels: resolved_channels.clone().into(),
