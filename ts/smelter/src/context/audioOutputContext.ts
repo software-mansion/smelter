@@ -54,6 +54,13 @@ export class AudioContext {
     if (inputConfig) {
       // opt !== options compares objects by reference
       inputConfig.volumeComponents = inputConfig.volumeComponents.filter(opt => opt !== options);
+
+      if (inputConfig.volumeComponents.length === 0) {
+        this.audioMixerConfig = this.audioMixerConfig.filter(
+          config => !areRefsEqual(config.inputRef, inputRef)
+        );
+      }
+
       this.onChange();
     }
   }
