@@ -9,6 +9,7 @@ use strum::Display;
 use tracing::error;
 
 use crate::{
+    inputs::InputHandler,
     outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayer,
 };
@@ -49,7 +50,7 @@ impl OutputHandler for RtmpOutput {
         &self.name
     }
 
-    fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value {
+    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         json!({
             "video": self.video.as_ref().map(|v| v.serialize_update(inputs, &self.name)),
             "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
@@ -175,7 +176,7 @@ impl RtmpOutputBuilder {
         self
     }
 
-    fn serialize(&self, inputs: &[&str]) -> serde_json::Value {
+    fn serialize(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         json!({
             "type": "rtmp_client",
             "url": self.url,
@@ -184,7 +185,10 @@ impl RtmpOutputBuilder {
         })
     }
 
-    pub fn build(self, inputs: &[&str]) -> (RtmpOutput, serde_json::Value, OutputPlayer) {
+    pub fn build(
+        self,
+        inputs: &[&dyn InputHandler],
+    ) -> (RtmpOutput, serde_json::Value, OutputPlayer) {
         let register_request = self.serialize(inputs);
         let rtmp_output = RtmpOutput {
             name: self.name,
@@ -205,10 +209,15 @@ pub struct RtmpOutputVideoOptions {
 }
 
 impl RtmpOutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&str], output_name: &str) -> serde_json::Value {
+    pub fn serialize_register(
+        &self,
+        inputs: &[&dyn InputHandler],
+        output_name: &str,
+    ) -> serde_json::Value {
         let input_json = inputs
             .iter()
-            .map(|input_name| {
+            .map(|input| {
+                let input_name = input.name();
                 let id = format!("{input_name}_{output_name}");
                 json!({
                     "type": "input_stream",
@@ -236,10 +245,15 @@ impl RtmpOutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&str], output_name: &str) -> serde_json::Value {
+    pub fn serialize_update(
+        &self,
+        inputs: &[&dyn InputHandler],
+        output_name: &str,
+    ) -> serde_json::Value {
         let input_json = inputs
             .iter()
-            .map(|input_name| {
+            .map(|input| {
+                let input_name = input.name();
                 let id = format!("{input_name}_{output_name}");
                 json!({
                     "type": "input_stream",
@@ -284,10 +298,11 @@ pub struct RtmpOutputAudioOptions {
 }
 
 impl RtmpOutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&str]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let input_json = inputs
             .iter()
-            .map(|input_id| {
+            .map(|input| {
+                let input_id = input.name();
                 json!({
                     "input_id": input_id,
                 })
@@ -304,10 +319,11 @@ impl RtmpOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let input_json = inputs
             .iter()
-            .map(|input_id| {
+            .map(|input| {
+                let input_id = input.name();
                 json!({
                     "input_id": input_id,
                 })
