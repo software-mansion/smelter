@@ -11,7 +11,7 @@ pub mod rtmp;
 pub mod rtp;
 pub mod whip;
 
-pub mod scenes;
+pub mod scene;
 
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
@@ -56,7 +56,7 @@ pub enum VideoSetupOptions {
     Done,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct VideoResolution {
     pub width: u16,
     pub height: u16,

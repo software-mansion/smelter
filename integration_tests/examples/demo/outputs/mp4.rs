@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf};
+use std::{env, ops::Deref, path::PathBuf};
 
 use anyhow::Result;
 use inquire::{Select, Text};
@@ -9,8 +9,8 @@ use strum::Display;
 use tracing::error;
 
 use crate::{
-    inputs::InputHandler,
-    outputs::{scenes::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    inputs::{filter_video_inputs, InputHandler},
+    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayer,
     utils::resolve_path,
 };
@@ -187,30 +187,14 @@ impl Mp4OutputVideoOptions {
         inputs: &[&dyn InputHandler],
         output_name: &str,
     ) -> serde_json::Value {
-        let input_json = inputs
-            .iter()
-            .filter_map(|input| {
-                if input.has_video() {
-                    let input_name = input.name();
-                    let id = format!("{input_name}_{output_name}");
-                    Some(json!({
-                        "type": "input_stream",
-                        "id": id,
-                        "input_id": input_name,
-                    }))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
+        let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
             "encoder": {
                 "type": self.encoder.to_string(),
             },
             "initial": {
-                "root": self.scene.serialize(&self.root_id, input_json),
+                "root": self.scene.serialize(&self.root_id, &inputs, output_name, self.resolution),
             },
         })
     }
@@ -220,24 +204,9 @@ impl Mp4OutputVideoOptions {
         inputs: &[&dyn InputHandler],
         output_name: &str,
     ) -> serde_json::Value {
-        let input_json = inputs
-            .iter()
-            .filter_map(|input| {
-                if input.has_video() {
-                    let input_name = input.name();
-                    let id = format!("{input_name}_{output_name}");
-                    Some(json!({
-                        "type": "input_stream",
-                        "id": id,
-                        "input_id": input_name,
-                    }))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let inputs = filter_video_inputs(inputs);
         json!({
-            "root": self.scene.serialize(&self.root_id, input_json),
+            "root": self.scene.serialize(&self.root_id, &inputs, output_name, self.resolution),
         })
     }
 }

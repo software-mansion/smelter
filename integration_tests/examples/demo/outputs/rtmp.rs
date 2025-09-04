@@ -10,7 +10,7 @@ use tracing::error;
 
 use crate::{
     inputs::InputHandler,
-    outputs::{scenes::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayer,
 };
 
@@ -238,7 +238,7 @@ impl RtmpOutputVideoOptions {
                 "type": self.encoder.to_string(),
             },
             "initial": {
-                "root": self.scene.serialize(&self.root_id, input_json),
+                "root": self.scene.serialize(&self.root_id, input_json, self.resolution),
             }
         })
     }
@@ -266,7 +266,7 @@ impl RtmpOutputVideoOptions {
             .collect::<Vec<_>>();
 
         json!({
-            "root": self.scene.serialize(&self.root_id, input_json),
+            "root": self.scene.serialize(&self.root_id, input_json, self.resolution),
         })
     }
 }
