@@ -304,8 +304,11 @@ impl AudioQueueProcessor {
             if self.sender.send(samples).is_err() {
                 warn!(?pts_range, "Dropping audio batch on queue output.");
             }
-        } else if self.sender.try_send(samples).is_err() {
-            warn!(?pts_range, "Dropping audio batch on queue output.")
+        } else {
+            let deadline = self.queue.sync_point.add(samples.start_pts);
+            if self.sender.send_deadline(samples, deadline).is_err() {
+                warn!(?pts_range, "Dropping audio batch on queue output.")
+            }
         }
         self.chunks_counter += 1;
     }
