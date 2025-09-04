@@ -5,7 +5,7 @@ use inquire::{Confirm, Select, Text};
 use rand::RngCore;
 use serde_json::json;
 use strum::{Display, EnumIter};
-use tracing::{error, info};
+use tracing::error;
 
 use crate::{
     inputs::InputHandler,
@@ -97,51 +97,9 @@ impl WhipOutputBuilder {
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
 
-        loop {
-            let endpoint_url_input =
-                Text::new("Enter the WHIP endpoint URL (ESC to try env WHIP_OUTPUT_URL):")
-                    .prompt_skippable()?;
+        builder = builder.prompt_url()?;
 
-            match endpoint_url_input {
-                Some(url) if !url.trim().is_empty() => {
-                    builder = builder.with_endpoint_url(url);
-                    break;
-                }
-                None | Some(_) => match env::var(WHIP_URL_ENV).ok() {
-                    Some(url) => {
-                        info!("WHIP endpoint url read from env: {url}");
-                        builder = builder.with_endpoint_url(url);
-                        break;
-                    }
-                    None => {
-                        error!("Environment variable {WHIP_URL_ENV} not found or invalid. Please enter the URL manually.");
-                    }
-                },
-            }
-        }
-
-        loop {
-            let bearer_token_input =
-                Text::new("Enter the bearer token (ESC to try env WHIP_OUTPUT_BEARER_TOKEN):")
-                    .prompt_skippable()?;
-
-            match bearer_token_input {
-                Some(token) if !token.trim().is_empty() => {
-                    builder = builder.with_bearer_token(token);
-                    break;
-                }
-                None | Some(_) => match env::var(WHIP_TOKEN_ENV).ok() {
-                    Some(token) => {
-                        info!("WHIP bearer token read from env: {token}");
-                        builder = builder.with_bearer_token(token);
-                        break;
-                    }
-                    None => {
-                        error!("Environment variable {WHIP_TOKEN_ENV} not found or invalid. Please enter the token manually.");
-                    }
-                },
-            }
-        }
+        builder = builder.prompt_token()?;
 
         let video_options = vec![
             WhipRegisterOptions::SetVideoStream,
@@ -183,6 +141,40 @@ impl WhipOutputBuilder {
         }
 
         Ok(builder)
+    }
+
+    fn prompt_url(self) -> Result<Self> {
+        let env_url = env::var(WHIP_URL_ENV).unwrap_or_default();
+        loop {
+            let endpoint_url_input = Text::new("Enter the WHIP endpoint URL:")
+                .with_initial_value(&env_url)
+                .prompt_skippable()?;
+
+            match endpoint_url_input {
+                Some(url) if !url.is_empty() => return Ok(self.with_endpoint_url(url)),
+                Some(_) | None => {
+                    error!("URL cannot be empty.");
+                    continue;
+                }
+            }
+        }
+    }
+
+    fn prompt_token(self) -> Result<Self> {
+        let env_token = env::var(WHIP_TOKEN_ENV).unwrap_or_default();
+        loop {
+            let endpoint_token_input = Text::new("Enter the WHIP endpoint bearer token:")
+                .with_initial_value(&env_token)
+                .prompt_skippable()?;
+
+            match endpoint_token_input {
+                Some(token) if !token.is_empty() => return Ok(self.with_bearer_token(token)),
+                Some(_) | None => {
+                    error!("Bearer token cannot be empty.");
+                    continue;
+                }
+            }
+        }
     }
 
     pub fn with_video(mut self, video: WhipOutputVideoOptions) -> Self {
