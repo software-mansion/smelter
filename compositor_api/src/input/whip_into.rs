@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use std::time::Duration;
 
 use crate::common_pipeline::prelude as pipeline;
@@ -16,14 +15,13 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
             endpoint_override,
         } = value;
 
-        let video_preferences = video
-            .and_then(|options| options.decoder_preferences)
-            .filter(|v| !v.is_empty())
-            .unwrap_or(vec![WhipVideoDecoderOptions::Any])
-            .into_iter()
-            .map(Into::into)
-            .unique()
-            .collect();
+        let video_preferences = match video {
+            Some(options) => match options.decoder_preferences.as_deref() {
+                Some([]) | None => vec![pipeline::WhipVideoDecoderOptions::Any],
+                Some(v) => v.iter().copied().map(Into::into).collect(),
+            },
+            None => vec![pipeline::WhipVideoDecoderOptions::Any],
+        };
 
         let whip_options = pipeline::WhipInputOptions {
             video_preferences,
@@ -42,5 +40,17 @@ impl TryFrom<WhipInput> for pipeline::RegisterInputOptions {
             input_options,
             queue_options,
         })
+    }
+}
+
+impl From<WhipVideoDecoderOptions> for pipeline::WhipVideoDecoderOptions {
+    fn from(decoder: WhipVideoDecoderOptions) -> Self {
+        match decoder {
+            WhipVideoDecoderOptions::FfmpegH264 => pipeline::WhipVideoDecoderOptions::FfmpegH264,
+            WhipVideoDecoderOptions::FfmpegVp8 => pipeline::WhipVideoDecoderOptions::FfmpegVp8,
+            WhipVideoDecoderOptions::FfmpegVp9 => pipeline::WhipVideoDecoderOptions::FfmpegVp9,
+            WhipVideoDecoderOptions::VulkanH264 => pipeline::WhipVideoDecoderOptions::VulkanH264,
+            WhipVideoDecoderOptions::Any => pipeline::WhipVideoDecoderOptions::Any,
+        }
     }
 }
