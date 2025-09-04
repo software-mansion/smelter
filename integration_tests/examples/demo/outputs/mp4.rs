@@ -10,7 +10,7 @@ use tracing::error;
 
 use crate::{
     inputs::InputHandler,
-    outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{scenes::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayer,
     utils::resolve_path,
 };
@@ -178,6 +178,7 @@ pub struct Mp4OutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
     root_id: String,
+    scene: Scene,
 }
 
 impl Mp4OutputVideoOptions {
@@ -209,14 +210,7 @@ impl Mp4OutputVideoOptions {
                 "type": self.encoder.to_string(),
             },
             "initial": {
-                "root": {
-                    "type": "tiles",
-                    "id": self.root_id,
-                    "transition": {
-                        "duration_ms": 500,
-                    },
-                    "children": input_json,
-                },
+                "root": self.scene.serialize(&self.root_id, input_json),
             },
         })
     }
@@ -243,14 +237,7 @@ impl Mp4OutputVideoOptions {
             })
             .collect::<Vec<_>>();
         json!({
-            "root": {
-                "type": "tiles",
-                "id": self.root_id,
-                "transition": {
-                    "duration_ms": 500,
-                },
-                "children": input_json,
-            }
+            "root": self.scene.serialize(&self.root_id, input_json),
         })
     }
 }
@@ -267,6 +254,7 @@ impl Default for Mp4OutputVideoOptions {
             resolution,
             encoder: VideoEncoder::FfmpegH264,
             root_id,
+            scene: Scene::Tiles,
         }
     }
 }

@@ -17,7 +17,7 @@ use tracing::error;
 
 use crate::{
     inputs::InputHandler,
-    outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{scenes::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayer,
     IP,
 };
@@ -426,6 +426,7 @@ pub struct RtpOutputVideoOptions {
     root_id: String,
     resolution: VideoResolution,
     encoder: VideoEncoder,
+    scene: Scene,
 }
 
 impl RtpOutputVideoOptions {
@@ -456,14 +457,7 @@ impl RtpOutputVideoOptions {
                 "type": self.encoder.to_string(),
             },
             "initial": {
-                "root": {
-                    "type": "tiles",
-                    "id": self.root_id,
-                    "transition": {
-                        "duration_ms": 500,
-                    },
-                    "children": input_json,
-                }
+                "root": self.scene.serialize(&self.root_id, input_json),
             }
         })
     }
@@ -490,14 +484,7 @@ impl RtpOutputVideoOptions {
             })
             .collect::<Vec<_>>();
         json!({
-            "root": {
-                "type": "tiles",
-                "id": self.root_id,
-                "transition": {
-                    "duration_ms": 500,
-                },
-                "children": input_json,
-            }
+            "root": self.scene.serialize(&self.root_id, input_json),
         })
     }
 }
@@ -514,6 +501,7 @@ impl Default for RtpOutputVideoOptions {
             root_id,
             resolution,
             encoder: VideoEncoder::FfmpegH264,
+            scene: Scene::Tiles,
         }
     }
 }
