@@ -158,7 +158,7 @@ impl DynamicResampler {
                             DynamicResamplerBatch {
                                 samples: AudioSamples::Stereo(joined_samples.collect()),
                                 start_pts: l.start_pts,
-                                sample_rate: batch.sample_rate,
+                                sample_rate: self.output_sample_rate,
                             }
                         })
                         .collect())
