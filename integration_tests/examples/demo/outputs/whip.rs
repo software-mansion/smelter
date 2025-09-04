@@ -151,7 +151,7 @@ impl WhipOutputBuilder {
                 .prompt_skippable()?;
 
             match endpoint_url_input {
-                Some(url) if !url.is_empty() => return Ok(self.with_endpoint_url(url)),
+                Some(url) if !url.trim().is_empty() => return Ok(self.with_endpoint_url(url)),
                 Some(_) | None => {
                     error!("URL cannot be empty.");
                     continue;
@@ -168,7 +168,7 @@ impl WhipOutputBuilder {
                 .prompt_skippable()?;
 
             match endpoint_token_input {
-                Some(token) if !token.is_empty() => return Ok(self.with_bearer_token(token)),
+                Some(token) if !token.trim().is_empty() => return Ok(self.with_bearer_token(token)),
                 Some(_) | None => {
                     error!("Bearer token cannot be empty.");
                     continue;
