@@ -11,6 +11,8 @@ pub mod rtmp;
 pub mod rtp;
 pub mod whip;
 
+pub mod scenes;
+
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value;
