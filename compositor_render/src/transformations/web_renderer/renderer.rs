@@ -46,9 +46,9 @@ impl WebRenderer {
         instance_id: &RendererId,
         spec: WebRendererSpec,
     ) -> Result<Self, CreateWebRendererError> {
-        if ctx.chromium.context.is_none() {
+        let Some(chromium_context) = ctx.chromium_context.clone() else {
             return Err(CreateWebRendererError::WebRendererDisabled);
-        }
+        };
 
         info!("Starting web renderer for {}", &spec.url);
 
@@ -60,7 +60,7 @@ impl WebRenderer {
             source_transforms.clone(),
             spec.resolution,
         );
-        let chromium_sender = ChromiumSender::new(ctx, instance_id, &spec, client);
+        let chromium_sender = ChromiumSender::new(chromium_context, instance_id, &spec, client);
         let embedding_helper = EmbeddingHelper::new(ctx, chromium_sender, spec.embedding_method);
         let render_website_shader = WebRendererShader::new(&ctx.wgpu_ctx)?;
         let website_texture = WebsiteTexture::new(&ctx.wgpu_ctx, spec.resolution);

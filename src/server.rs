@@ -1,4 +1,4 @@
-use compositor_render::{error::ErrorStack, EventLoopError};
+use compositor_render::error::ErrorStack;
 use crossbeam_channel::Receiver;
 use log::info;
 use signal_hook::{consts, iterator::Signals};
@@ -16,12 +16,13 @@ pub fn run() {
 
     info!("Starting Smelter with config:\n{:#?}", config);
     let runtime = Arc::new(Runtime::new().unwrap());
-    let (state, event_loop) = ApiState::new(config, runtime.clone()).unwrap_or_else(|err| {
+    let state = ApiState::new(config, runtime.clone()).unwrap_or_else(|err| {
         panic!(
             "Failed to start Smelter instance.\n{}",
             ErrorStack::new(&err).into_string()
         )
     });
+    let chromium_context = state.chromium_context.clone();
 
     thread::Builder::new()
         .name("HTTP server startup thread".to_string())
@@ -33,17 +34,18 @@ pub fn run() {
             }
         })
         .unwrap();
-    match event_loop.run() {
-        Ok(_) => {}
-        Err(EventLoopError::NoEventLoop) => {
+    match chromium_context {
+        None => {
             let mut signals = Signals::new([consts::SIGINT]).unwrap();
             signals.forever().next();
         }
-        Err(err) => {
-            panic!(
-                "Failed to start event loop.\n{}",
-                ErrorStack::new(&err).into_string()
-            )
+        Some(chromium_context) => {
+            if let Err(err) = chromium_context.run_event_loop() {
+                panic!(
+                    "Failed to start event loop.\n{}",
+                    ErrorStack::new(&err).into_string()
+                )
+            }
         }
     }
 }

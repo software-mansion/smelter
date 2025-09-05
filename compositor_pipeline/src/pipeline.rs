@@ -6,9 +6,7 @@ use std::{
 
 use tokio::runtime::Runtime;
 
-use compositor_render::{
-    web_renderer::WebRendererInitOptions, Framerate, RenderingMode, WgpuFeatures,
-};
+use compositor_render::{web_renderer::ChromiumContext, Framerate, RenderingMode, WgpuFeatures};
 
 use crate::{
     event::EventEmitter, graphics_context::GraphicsContext, pipeline::webrtc::WhipWhepPipelineState,
@@ -55,7 +53,9 @@ pub struct PipelineOptions {
     pub wgpu_options: PipelineWgpuOptions,
     pub tokio_rt: Option<Arc<Runtime>>,
 
-    pub web_renderer: WebRendererInitOptions,
+    /// required for web rendering support
+    pub chromium_context: Option<Arc<ChromiumContext>>,
+
     pub whip_whep_server: PipelineWhipWhepServerOptions,
     pub whip_whep_stun_servers: Arc<Vec<String>>,
 }

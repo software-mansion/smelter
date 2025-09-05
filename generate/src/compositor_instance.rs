@@ -42,7 +42,7 @@ impl CompositorInstance {
     pub fn start() -> Self {
         init_compositor_prerequisites();
         let mut config = read_config();
-        let mut options = pipeline_options_from_config(&config, runtime());
+        let mut options = pipeline_options_from_config(&config, &runtime(), &None);
         let api_port = get_free_port();
         config.api_port = api_port;
         options.ahead_of_time_processing = true;
@@ -53,10 +53,12 @@ impl CompositorInstance {
         info!("Starting Smelter Integration Test with config:\n{config:#?}",);
 
         let (should_close_sender, should_close_receiver) = crossbeam_channel::bounded(1);
-        let (pipeline, _) = Pipeline::new(options).unwrap();
+        let pipeline = Pipeline::new(options).unwrap();
         let state = ApiState {
             pipeline: Arc::new(Mutex::new(pipeline)),
             config,
+            chromium_context: None,
+            runtime: runtime(),
         };
 
         let events = state.pipeline.lock().unwrap().subscribe_pipeline_events();
