@@ -73,7 +73,12 @@ impl SmelterState {
 
         debug!("Input register request: {input_json:#?}");
 
-        examples::post(&input_route, &input_json)?;
+        let register_result = examples::post(&input_route, &input_json);
+        if register_result.is_err() {
+            println!();
+            return Ok(());
+        }
+
         input_handler.on_after_registration(player)?;
         self.inputs.push(input_handler);
 
@@ -127,7 +132,11 @@ impl SmelterState {
 
         debug!("Output register request: {output_json:#?}");
 
-        examples::post(&output_route, &output_json)?;
+        let register_result = examples::post(&output_route, &output_json);
+        if register_result.is_err() {
+            println!();
+            return Ok(());
+        }
 
         output_handler.on_after_registration(player)?;
 
@@ -166,7 +175,12 @@ impl SmelterState {
         }
 
         let unregister_route = format!("input/{}/unregister", to_delete);
-        examples::post(&unregister_route, &json!({}))?;
+
+        let unregister_result = examples::post(&unregister_route, &json!({}));
+        if unregister_result.is_err() {
+            println!();
+            return Ok(());
+        }
 
         self.inputs.retain(|i| i.name() != to_delete);
 
@@ -186,7 +200,12 @@ impl SmelterState {
         let to_delete = Select::new("Select output to remove:", output_names).prompt()?;
 
         let unregister_route = format!("output/{}/unregister", to_delete);
-        examples::post(&unregister_route, &json!({}))?;
+
+        let unregister_result = examples::post(&unregister_route, &json!({}));
+        if unregister_result.is_err() {
+            println!();
+            return Ok(());
+        }
 
         self.outputs.retain(|o| o.name() != to_delete);
 
