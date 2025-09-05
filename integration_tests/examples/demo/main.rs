@@ -30,6 +30,9 @@ pub enum Action {
     #[strum(to_string = "Remove output")]
     RemoveOutput,
 
+    #[strum(to_string = "Reorder inputs")]
+    ReorderInputs,
+
     #[strum(to_string = "Start")]
     Start,
 }
@@ -54,6 +57,7 @@ fn run_demo() -> Result<()> {
             Action::AddOutput => state.register_output(),
             Action::RemoveInput => state.unregister_input(),
             Action::RemoveOutput => state.unregister_output(),
+            Action::ReorderInputs => state.reorder_inputs(),
             Action::Start => {
                 debug!("{state:#?}");
                 options.retain(|a| *a != Action::Start);
