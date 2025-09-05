@@ -1,10 +1,14 @@
 use serde_json::json;
+use strum::{Display, EnumIter};
 
 use crate::{inputs::InputHandler, outputs::VideoResolution};
 
-#[derive(Debug)]
+#[derive(Debug, Display, EnumIter)]
 pub enum Scene {
+    #[strum(to_string = "Tiles")]
     Tiles,
+
+    #[strum(to_string = "Primary left")]
     PrimaryLeft,
 }
 
@@ -58,7 +62,7 @@ impl Scene {
             })
             .unwrap_or(json!([]));
 
-        let column_width = resolution.width / 10;
+        let column_width = resolution.width / 4;
         let input_json = inputs
             .iter()
             .skip(1)

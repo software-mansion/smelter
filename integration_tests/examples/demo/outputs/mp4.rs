@@ -5,7 +5,7 @@ use inquire::{Select, Text};
 use integration_tests::examples::examples_root_dir;
 use rand::RngCore;
 use serde_json::json;
-use strum::Display;
+use strum::{Display, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
@@ -72,20 +72,10 @@ impl Mp4OutputBuilder {
 
         builder = builder.prompt_path()?;
 
-        let video_options = vec![Mp4RegisterOptions::SetVideoStream, Mp4RegisterOptions::Skip];
         let audio_options = vec![Mp4RegisterOptions::SetAudioStream, Mp4RegisterOptions::Skip];
 
         loop {
-            let video_selection =
-                Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
-
-            builder = match video_selection {
-                Some(Mp4RegisterOptions::SetVideoStream) => {
-                    builder.with_video(Mp4OutputVideoOptions::default())
-                }
-                Some(Mp4RegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder.prompt_video()?;
 
             let audio_selection =
                 Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
@@ -130,6 +120,29 @@ impl Mp4OutputBuilder {
                 }
                 Some(_) | None => break Ok(self),
             }
+        }
+    }
+
+    fn prompt_video(self) -> Result<Self> {
+        let video_options = vec![Mp4RegisterOptions::SetVideoStream, Mp4RegisterOptions::Skip];
+        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+
+        match video_selection {
+            Some(Mp4RegisterOptions::SetVideoStream) => {
+                let scene_options = Scene::iter().collect();
+                let scene_choice =
+                    Select::new("Select scene:", scene_options).prompt_skippable()?;
+                let video = match scene_choice {
+                    Some(scene) => Mp4OutputVideoOptions {
+                        scene,
+                        ..Default::default()
+                    },
+                    None => Mp4OutputVideoOptions::default(),
+                };
+                Ok(self.with_video(video))
+            }
+            Some(Mp4RegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
         }
     }
 
