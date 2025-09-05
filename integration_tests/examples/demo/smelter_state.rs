@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use std::ptr;
 
 use anyhow::{Context, Result};
 use inquire::Select;
@@ -198,6 +199,44 @@ impl SmelterState {
             .with_context(|| "Output unregistration failed".to_string())?;
 
         self.outputs.retain(|o| o.name() != to_delete);
+
+        Ok(())
+    }
+
+    pub fn reorder_inputs(&mut self) -> Result<()> {
+        let mut input_names = self
+            .inputs
+            .iter()
+            .filter_map(|input| {
+                if input.has_video() {
+                    Some(input.name().to_string())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        println!("Select inputs to swap places:");
+        let input_name_1 = Select::new("Input 1:", input_names.clone()).prompt()?;
+        input_names.retain(|input| *input != input_name_1);
+        let input_name_2 = Select::new("Input 2:", input_names).prompt()?;
+
+        let idx_1 = self
+            .inputs
+            .iter()
+            .position(|input| input.name() == input_name_1)
+            .unwrap();
+        let idx_2 = self
+            .inputs
+            .iter()
+            .position(|input| input.name() == input_name_2)
+            .unwrap();
+
+        unsafe {
+            let input_1 = &mut self.inputs[idx_1] as *mut Box<dyn InputHandler>;
+            let input_2 = &mut self.inputs[idx_2] as *mut Box<dyn InputHandler>;
+            ptr::swap(input_1, input_2);
+        }
 
         Ok(())
     }
