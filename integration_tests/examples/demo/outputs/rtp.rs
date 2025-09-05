@@ -289,20 +289,10 @@ impl RtpOutputBuilder {
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
-        let video_options = vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
         let audio_options = vec![RtpRegisterOptions::SetAudioStream, RtpRegisterOptions::Skip];
 
         loop {
-            let video_selection =
-                Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
-
-            builder = match video_selection {
-                Some(RtpRegisterOptions::SetVideoStream) => {
-                    builder.with_video(RtpOutputVideoOptions::default())
-                }
-                Some(RtpRegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder.prompt_video()?;
 
             let audio_selection =
                 Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
@@ -337,6 +327,30 @@ impl RtpOutputBuilder {
             None => builder,
         };
         Ok(builder)
+    }
+
+    fn prompt_video(self) -> Result<Self> {
+        let video_options = vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
+        let video_selection =
+            Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
+
+        match video_selection {
+            Some(RtpRegisterOptions::SetVideoStream) => {
+                let scene_options = Scene::iter().collect();
+                let scene_choice =
+                    Select::new("Select scene:", scene_options).prompt_skippable()?;
+                let video = match scene_choice {
+                    Some(scene) => RtpOutputVideoOptions {
+                        scene,
+                        ..Default::default()
+                    },
+                    None => RtpOutputVideoOptions::default(),
+                };
+                Ok(self.with_video(video))
+            }
+            Some(RtpRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
     }
 
     fn prompt_player(&self) -> Result<Option<OutputPlayer>> {
