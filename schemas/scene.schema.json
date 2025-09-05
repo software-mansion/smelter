@@ -1528,7 +1528,7 @@
           "$ref": "#/definitions/InputId"
         },
         "volume": {
-          "description": "(**default=`1.0`**) float in `[0, 1]` range representing input volume",
+          "description": "(**default=`1.0`**) float in `[0, 2]` range representing input volume",
           "type": [
             "number",
             "null"
