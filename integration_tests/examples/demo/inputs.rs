@@ -1,6 +1,6 @@
 use anyhow::Result;
 use integration_tests::{ffmpeg, gstreamer};
-use std::{fmt::Debug, ops::Deref};
+use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
 use crate::players::InputPlayer;
@@ -86,10 +86,10 @@ pub enum AudioDecoder {
 
 pub fn filter_video_inputs<'a>(inputs: &'a [&'a dyn InputHandler]) -> Vec<&'a dyn InputHandler> {
     inputs
-        .into_iter()
+        .iter()
         .filter_map(|input| {
             if input.has_video() {
-                Some(input.deref())
+                Some(*input)
             } else {
                 None
             }

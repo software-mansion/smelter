@@ -1,4 +1,4 @@
-use std::{env, ops::Deref, path::PathBuf};
+use std::{env, path::PathBuf};
 
 use anyhow::Result;
 use inquire::{Select, Text};

@@ -9,7 +9,7 @@ use strum::Display;
 use tracing::error;
 
 use crate::{
-    inputs::InputHandler,
+    inputs::{filter_video_inputs, InputHandler},
     outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayer,
 };
@@ -215,22 +215,7 @@ impl RtmpOutputVideoOptions {
         inputs: &[&dyn InputHandler],
         output_name: &str,
     ) -> serde_json::Value {
-        let input_json = inputs
-            .iter()
-            .filter_map(|input| {
-                if input.has_video() {
-                    let input_name = input.name();
-                    let id = format!("{input_name}_{output_name}");
-                    Some(json!({
-                        "type": "input_stream",
-                        "id": id,
-                        "input_id": input_name,
-                    }))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let inputs = filter_video_inputs(inputs);
 
         json!({
             "resolution": self.resolution.serialize(),
@@ -238,7 +223,7 @@ impl RtmpOutputVideoOptions {
                 "type": self.encoder.to_string(),
             },
             "initial": {
-                "root": self.scene.serialize(&self.root_id, input_json, self.resolution),
+                "root": self.scene.serialize(&self.root_id, &inputs, output_name, self.resolution),
             }
         })
     }
@@ -248,25 +233,10 @@ impl RtmpOutputVideoOptions {
         inputs: &[&dyn InputHandler],
         output_name: &str,
     ) -> serde_json::Value {
-        let input_json = inputs
-            .iter()
-            .filter_map(|input| {
-                if input.has_video() {
-                    let input_name = input.name();
-                    let id = format!("{input_name}_{output_name}");
-                    Some(json!({
-                        "type": "input_stream",
-                        "id": id,
-                        "input_id": input_name,
-                    }))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let inputs = filter_video_inputs(inputs);
 
         json!({
-            "root": self.scene.serialize(&self.root_id, input_json, self.resolution),
+            "root": self.scene.serialize(&self.root_id, &inputs, output_name, self.resolution),
         })
     }
 }

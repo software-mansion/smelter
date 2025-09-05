@@ -11,7 +11,7 @@ pub enum Scene {
 impl Scene {
     fn tiles(
         &self,
-        id: &str,
+        root_id: &str,
         inputs: &[&dyn InputHandler],
         output_name: &str,
     ) -> serde_json::Value {
@@ -30,7 +30,7 @@ impl Scene {
 
         json!({
             "type": "tiles",
-            "id": id,
+            "id": root_id,
             "transition": {
                 "duration_ms": 500,
             },
@@ -40,29 +40,59 @@ impl Scene {
 
     fn primary_left(
         &self,
-        id: &str,
+        root_id: &str,
         inputs: &[&dyn InputHandler],
         output_name: &str,
         resolution: VideoResolution,
     ) -> serde_json::Value {
+        let primary_input = inputs
+            .first()
+            .map(|input| {
+                let input_name = input.name();
+                let id = format!("{input_name}_{output_name}");
+                json!([{
+                    "type": "input_stream",
+                    "id": id,
+                    "input_id": input_name,
+                }])
+            })
+            .unwrap_or(json!([]));
+
         let column_width = resolution.width / 10;
+        let input_json = inputs
+            .iter()
+            .skip(1)
+            .map(|input| {
+                let input_name = input.name();
+                let id = format!("{input_name}_{output_name}");
+                json!({
+                    "type": "rescaler",
+                    "width": column_width,
+                    "child": {
+                        "type": "input_stream",
+                        "id": id,
+                        "input_id": input_name,
+                    },
+                })
+            })
+            .collect::<Vec<_>>();
+
         json!({
             "type": "view",
+            "id": root_id,
             "children": [
                 {
                     "type": "view",
-                    "children": [
-                        {
-                            "type": "rescaler",
-                        }
-                    ]
+                    "children": primary_input,
                 },
                 {
                     "type": "view",
                     "direction": "column",
+                    "width": column_width,
+                    "children": input_json,
 
-                }
-            ]
+                },
+            ],
         })
     }
 
