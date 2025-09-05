@@ -16,8 +16,7 @@ use compositor_render::{
         UpdateSceneError,
     },
     scene::Component,
-    EventLoop, FrameSet, InputId, OutputId, RegistryType, Renderer, RendererId, RendererOptions,
-    RendererSpec,
+    FrameSet, InputId, OutputId, RegistryType, Renderer, RendererId, RendererOptions, RendererSpec,
 };
 
 use crate::{
@@ -51,7 +50,7 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(opts: PipelineOptions) -> Result<(Self, Arc<dyn EventLoop>), InitPipelineError> {
+    pub fn new(opts: PipelineOptions) -> Result<Self, InitPipelineError> {
         create_pipeline(opts)
     }
 
@@ -464,9 +463,7 @@ fn run_audio_mixer_thread(
     info!("Stopping audio mixer thread.")
 }
 
-fn create_pipeline(
-    opts: PipelineOptions,
-) -> Result<(Pipeline, Arc<dyn EventLoop>), InitPipelineError> {
+fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError> {
     let queue_options = QueueOptions::from(&opts);
 
     let graphics_context = match opts.wgpu_options {
@@ -481,8 +478,8 @@ fn create_pipeline(
         })?,
     };
 
-    let (renderer, event_loop) = Renderer::new(RendererOptions {
-        web_renderer: opts.web_renderer,
+    let renderer = Renderer::new(RendererOptions {
+        chromium_context: opts.chromium_context,
         framerate: opts.output_framerate,
         stream_fallback_timeout: opts.stream_fallback_timeout,
         load_system_fonts: opts.load_system_fonts,
@@ -538,5 +535,5 @@ fn create_pipeline(
         whip_whep_handle,
     };
 
-    Ok((pipeline, event_loop))
+    Ok(pipeline)
 }
