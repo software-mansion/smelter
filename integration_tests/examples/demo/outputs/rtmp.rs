@@ -5,7 +5,7 @@ use std::process::Child;
 
 use inquire::{Confirm, Select};
 use serde_json::json;
-use strum::Display;
+use strum::{Display, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
@@ -113,26 +113,13 @@ impl RtmpOutputBuilder {
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
 
-        let video_options = vec![
-            RtmpRegisterOptions::SetVideoStream,
-            RtmpRegisterOptions::Skip,
-        ];
         let audio_options = vec![
             RtmpRegisterOptions::SetAudioStream,
             RtmpRegisterOptions::Skip,
         ];
 
         loop {
-            let video_selection =
-                Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
-
-            builder = match video_selection {
-                Some(RtmpRegisterOptions::SetVideoStream) => {
-                    builder.with_video(RtmpOutputVideoOptions::default())
-                }
-                Some(RtmpRegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder.prompt_video()?;
 
             let audio_selection =
                 Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
@@ -159,6 +146,32 @@ impl RtmpOutputBuilder {
             None => builder,
         };
         Ok(builder)
+    }
+
+    fn prompt_video(self) -> Result<Self> {
+        let video_options = vec![
+            RtmpRegisterOptions::SetVideoStream,
+            RtmpRegisterOptions::Skip,
+        ];
+        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+
+        match video_selection {
+            Some(RtmpRegisterOptions::SetVideoStream) => {
+                let scene_options = Scene::iter().collect();
+                let scene_choice =
+                    Select::new("Select scene:", scene_options).prompt_skippable()?;
+                let video = match scene_choice {
+                    Some(scene) => RtmpOutputVideoOptions {
+                        scene,
+                        ..Default::default()
+                    },
+                    None => RtmpOutputVideoOptions::default(),
+                };
+                Ok(self.with_video(video))
+            }
+            Some(RtmpRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
     }
 
     pub fn with_video(mut self, video: RtmpOutputVideoOptions) -> Self {

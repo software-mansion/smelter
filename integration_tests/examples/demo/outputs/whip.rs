@@ -4,7 +4,7 @@ use anyhow::Result;
 use inquire::{Confirm, Select, Text};
 use rand::RngCore;
 use serde_json::json;
-use strum::{Display, EnumIter};
+use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
@@ -101,26 +101,13 @@ impl WhipOutputBuilder {
 
         builder = builder.prompt_token()?;
 
-        let video_options = vec![
-            WhipRegisterOptions::SetVideoStream,
-            WhipRegisterOptions::Skip,
-        ];
         let audio_options = vec![
             WhipRegisterOptions::SetAudioStream,
             WhipRegisterOptions::Skip,
         ];
 
         loop {
-            let video_selection =
-                Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
-
-            builder = match video_selection {
-                Some(WhipRegisterOptions::SetVideoStream) => {
-                    builder.with_video(WhipOutputVideoOptions::default())
-                }
-                Some(WhipRegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder.prompt_video()?;
 
             let audio_selection =
                 Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
@@ -141,6 +128,32 @@ impl WhipOutputBuilder {
         }
 
         Ok(builder)
+    }
+
+    fn prompt_video(self) -> Result<Self> {
+        let video_options = vec![
+            WhipRegisterOptions::SetVideoStream,
+            WhipRegisterOptions::Skip,
+        ];
+        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+
+        match video_selection {
+            Some(WhipRegisterOptions::SetVideoStream) => {
+                let scene_options = Scene::iter().collect();
+                let scene_choice =
+                    Select::new("Select scene:", scene_options).prompt_skippable()?;
+                let video = match scene_choice {
+                    Some(scene) => WhipOutputVideoOptions {
+                        scene,
+                        ..Default::default()
+                    },
+                    None => WhipOutputVideoOptions::default(),
+                };
+                Ok(self.with_video(video))
+            }
+            Some(WhipRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
     }
 
     fn prompt_url(self) -> Result<Self> {
