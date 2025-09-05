@@ -3,8 +3,8 @@ use std::fmt::Display;
 use axum::{http::StatusCode, response::IntoResponse};
 use compositor_api::TypeError;
 use compositor_pipeline::error::{
-    ErrorType, PipelineErrorInfo, RegisterInputError, RegisterOutputError, UnregisterInputError,
-    UnregisterOutputError,
+    ErrorType, InitPipelineError, PipelineErrorInfo, RegisterInputError, RegisterOutputError,
+    UnregisterInputError, UnregisterOutputError,
 };
 use compositor_render::error::{
     ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
@@ -75,6 +75,7 @@ impl_api_err!(UnregisterInputError);
 impl_api_err!(UnregisterOutputError);
 impl_api_err!(UnregisterRendererError);
 impl_api_err!(UpdateSceneError);
+impl_api_err!(InitPipelineError);
 
 impl From<TypeError> for ApiError {
     fn from(err: TypeError) -> Self {

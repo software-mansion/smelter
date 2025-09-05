@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::{Arc, Mutex, MutexGuard},
+};
 
 use axum::response::IntoResponse;
 use compositor_pipeline::{
@@ -10,7 +13,7 @@ use compositor_render::web_renderer::{ChromiumContext, ChromiumContextInitError}
 use serde::Serialize;
 use tokio::runtime::Runtime;
 
-use crate::config::Config;
+use crate::{config::Config, error::ApiError};
 
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
@@ -45,7 +48,7 @@ pub enum ApiStateInitError {
 
 #[derive(Clone)]
 pub struct ApiState {
-    pub pipeline: Arc<Mutex<Pipeline>>,
+    pub pipeline: Arc<Mutex<Option<Pipeline>>>,
     pub config: Config,
     pub chromium_context: Option<Arc<ChromiumContext>>,
     pub runtime: Arc<Runtime>,
@@ -63,15 +66,44 @@ impl ApiState {
         let options = pipeline_options_from_config(&config, &runtime, &chromium_context);
         let pipeline = Pipeline::new(options)?;
         Ok(ApiState {
-            pipeline: Mutex::new(pipeline).into(),
+            pipeline: Arc::new(Mutex::new(Some(pipeline))),
             config,
             runtime,
             chromium_context,
         })
     }
 
-    pub(crate) fn pipeline(&self) -> MutexGuard<'_, Pipeline> {
-        self.pipeline.lock().unwrap()
+    pub(crate) fn pipeline(&self) -> Result<PipelineGuard<'_>, ApiError> {
+        let guard = self.pipeline.lock().unwrap();
+        if guard.is_some() {
+            return Ok(PipelineGuard(guard));
+        }
+        self.restart()
+    }
+
+    pub fn restart(&self) -> Result<PipelineGuard<'_>, ApiError> {
+        let mut guard = self.pipeline.lock().unwrap();
+        guard.take();
+        let options =
+            pipeline_options_from_config(&self.config, &self.runtime, &self.chromium_context);
+        *guard = Some(Pipeline::new(options)?);
+        Ok(PipelineGuard(guard))
+    }
+}
+
+struct PipelineGuard<'a>(MutexGuard<'a, Option<Pipeline>>);
+
+impl Deref for PipelineGuard<'_> {
+    type Target = Pipeline;
+
+    fn deref(&self) -> &Pipeline {
+        self.0.deref().as_ref().unwrap()
+    }
+}
+
+impl DerefMut for PipelineGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Pipeline {
+        self.0.deref_mut().as_mut().unwrap()
     }
 }
 

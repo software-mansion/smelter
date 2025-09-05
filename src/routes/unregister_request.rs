@@ -44,7 +44,7 @@ pub(super) async fn handle_input(
         Some(schedule_time_ms) => {
             let pipeline = api.pipeline.clone();
             let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
-            api.pipeline().queue().schedule_event(
+            api.pipeline()?.queue().schedule_event(
                 schedule_time,
                 Box::new(move || {
                     if let Err(err) = pipeline.lock().unwrap().unregister_input(&input_id.into()) {
@@ -58,7 +58,7 @@ pub(super) async fn handle_input(
             );
         }
         None => {
-            api.pipeline().unregister_input(&input_id.into())?;
+            api.pipeline()?.unregister_input(&input_id.into())?;
         }
     }
     Ok(Response::Ok {})
