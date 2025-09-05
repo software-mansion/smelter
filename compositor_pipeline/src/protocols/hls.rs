@@ -28,5 +28,5 @@ pub struct HlsOutputOptions {
 
 #[derive(Debug, Clone)]
 pub struct HlsInputVideoDecoders {
-    pub h264: VideoDecoderOptions,
+    pub h264: Option<VideoDecoderOptions>,
 }
