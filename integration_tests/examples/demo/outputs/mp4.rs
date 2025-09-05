@@ -5,11 +5,12 @@ use inquire::{Select, Text};
 use integration_tests::examples::examples_root_dir;
 use rand::RngCore;
 use serde_json::json;
-use strum::Display;
+use strum::{Display, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
-    outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    inputs::{filter_video_inputs, InputHandler},
+    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayer,
     utils::resolve_path,
 };
@@ -39,7 +40,7 @@ impl OutputHandler for Mp4Output {
         &self.name
     }
 
-    fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value {
+    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         json!({
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs, &self.name)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
@@ -71,20 +72,10 @@ impl Mp4OutputBuilder {
 
         builder = builder.prompt_path()?;
 
-        let video_options = vec![Mp4RegisterOptions::SetVideoStream, Mp4RegisterOptions::Skip];
         let audio_options = vec![Mp4RegisterOptions::SetAudioStream, Mp4RegisterOptions::Skip];
 
         loop {
-            let video_selection =
-                Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
-
-            builder = match video_selection {
-                Some(Mp4RegisterOptions::SetVideoStream) => {
-                    builder.with_video(Mp4OutputVideoOptions::default())
-                }
-                Some(Mp4RegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder.prompt_video()?;
 
             let audio_selection =
                 Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
@@ -132,6 +123,29 @@ impl Mp4OutputBuilder {
         }
     }
 
+    fn prompt_video(self) -> Result<Self> {
+        let video_options = vec![Mp4RegisterOptions::SetVideoStream, Mp4RegisterOptions::Skip];
+        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+
+        match video_selection {
+            Some(Mp4RegisterOptions::SetVideoStream) => {
+                let scene_options = Scene::iter().collect();
+                let scene_choice =
+                    Select::new("Select scene:", scene_options).prompt_skippable()?;
+                let video = match scene_choice {
+                    Some(scene) => Mp4OutputVideoOptions {
+                        scene,
+                        ..Default::default()
+                    },
+                    None => Mp4OutputVideoOptions::default(),
+                };
+                Ok(self.with_video(video))
+            }
+            Some(Mp4RegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
+    }
+
     pub fn with_path(mut self, path: PathBuf) -> Self {
         self.path = Some(path);
         self
@@ -147,7 +161,7 @@ impl Mp4OutputBuilder {
         self
     }
 
-    fn serialize(&self, inputs: &[&str]) -> serde_json::Value {
+    fn serialize(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         json!({
             "type": "mp4",
             "path": self.path.as_ref().unwrap(),
@@ -156,7 +170,10 @@ impl Mp4OutputBuilder {
         })
     }
 
-    pub fn build(self, inputs: &[&str]) -> (Mp4Output, serde_json::Value, OutputPlayer) {
+    pub fn build(
+        self,
+        inputs: &[&dyn InputHandler],
+    ) -> (Mp4Output, serde_json::Value, OutputPlayer) {
         let register_request = self.serialize(inputs);
 
         let mp4_output = Mp4Output {
@@ -174,61 +191,35 @@ pub struct Mp4OutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
     root_id: String,
+    scene: Scene,
 }
 
 impl Mp4OutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&str], output_name: &str) -> serde_json::Value {
-        let input_json = inputs
-            .iter()
-            .map(|input_name| {
-                let id = format!("{input_name}_{output_name}");
-                json!({
-                    "type": "input_stream",
-                    "id": id,
-                    "input_id": input_name,
-                })
-            })
-            .collect::<Vec<_>>();
-
+    pub fn serialize_register(
+        &self,
+        inputs: &[&dyn InputHandler],
+        output_name: &str,
+    ) -> serde_json::Value {
+        let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
             "encoder": {
                 "type": self.encoder.to_string(),
             },
             "initial": {
-                "root": {
-                    "type": "tiles",
-                    "id": self.root_id,
-                    "transition": {
-                        "duration_ms": 500,
-                    },
-                    "children": input_json,
-                },
+                "root": self.scene.serialize(&self.root_id, &inputs, output_name, self.resolution),
             },
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&str], output_name: &str) -> serde_json::Value {
-        let input_json = inputs
-            .iter()
-            .map(|input_name| {
-                let id = format!("{input_name}_{output_name}");
-                json!({
-                    "type": "input_stream",
-                    "id": id,
-                    "input_id": input_name,
-                })
-            })
-            .collect::<Vec<_>>();
+    pub fn serialize_update(
+        &self,
+        inputs: &[&dyn InputHandler],
+        output_name: &str,
+    ) -> serde_json::Value {
+        let inputs = filter_video_inputs(inputs);
         json!({
-            "root": {
-                "type": "tiles",
-                "id": self.root_id,
-                "transition": {
-                    "duration_ms": 500,
-                },
-                "children": input_json,
-            }
+            "root": self.scene.serialize(&self.root_id, &inputs, output_name, self.resolution),
         })
     }
 }
@@ -245,6 +236,7 @@ impl Default for Mp4OutputVideoOptions {
             resolution,
             encoder: VideoEncoder::FfmpegH264,
             root_id,
+            scene: Scene::Tiles,
         }
     }
 }
@@ -255,13 +247,17 @@ pub struct Mp4OutputAudioOptions {
 }
 
 impl Mp4OutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&str]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
-            .map(|input_id| {
-                json!({
-                    "input_id": input_id,
-                })
+            .filter_map(|input| {
+                if input.has_audio() {
+                    Some(json!({
+                        "input_id": input.name(),
+                    }))
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
 
@@ -275,13 +271,17 @@ impl Mp4OutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
-            .map(|input_id| {
-                json!({
-                    "input_id": input_id,
-                })
+            .filter_map(|input| {
+                if input.has_audio() {
+                    Some(json!({
+                        "input_id": input.name(),
+                    }))
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
         json!({

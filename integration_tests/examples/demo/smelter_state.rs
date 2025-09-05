@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use anyhow::Result;
 use inquire::Select;
 use integration_tests::examples;
@@ -75,9 +77,9 @@ impl SmelterState {
         input_handler.on_after_registration(player)?;
         self.inputs.push(input_handler);
 
+        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
         for output in &mut self.outputs {
             let update_route = format!("output/{}/update", output.name());
-            let inputs = self.inputs.iter().map(|i| i.name()).collect::<Vec<_>>();
             let update_json = output.serialize_update(&inputs);
             debug!("{update_json:#?}");
             examples::post(&update_route, &update_json)?;
@@ -91,7 +93,7 @@ impl SmelterState {
 
         let protocol = Select::new("Select output protocol:", prot_opts).prompt()?;
 
-        let inputs = self.inputs.iter().map(|i| i.name()).collect::<Vec<_>>();
+        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
         let (mut output_handler, output_json, player): (
             Box<dyn OutputHandler>,
             serde_json::Value,
@@ -155,7 +157,7 @@ impl SmelterState {
                     if i.name() == to_delete {
                         None
                     } else {
-                        Some(i.name())
+                        Some(i.deref())
                     }
                 })
                 .collect::<Vec<_>>();

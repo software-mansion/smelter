@@ -4,16 +4,18 @@ use anyhow::Result;
 use serde_json::json;
 use strum::{Display, EnumIter};
 
-use crate::players::OutputPlayer;
+use crate::{inputs::InputHandler, players::OutputPlayer};
 
 pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
 pub mod whip;
 
+pub mod scene;
+
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
-    fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value;
+    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value;
 
     fn on_before_registration(&mut self, _player: OutputPlayer) -> Result<()> {
         Ok(())
@@ -54,7 +56,7 @@ pub enum VideoSetupOptions {
     Done,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct VideoResolution {
     pub width: u16,
     pub height: u16,

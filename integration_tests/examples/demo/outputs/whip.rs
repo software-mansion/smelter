@@ -4,11 +4,12 @@ use anyhow::Result;
 use inquire::{Confirm, Select, Text};
 use rand::RngCore;
 use serde_json::json;
-use strum::{Display, EnumIter};
-use tracing::{error, info};
+use strum::{Display, EnumIter, IntoEnumIterator};
+use tracing::error;
 
 use crate::{
-    outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    inputs::{filter_video_inputs, InputHandler},
+    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayer,
 };
 
@@ -62,7 +63,7 @@ impl OutputHandler for WhipOutput {
         }
     }
 
-    fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value {
+    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         json!({
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs, &self.name)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
@@ -96,72 +97,17 @@ impl WhipOutputBuilder {
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
 
-        loop {
-            let endpoint_url_input =
-                Text::new("Enter the WHIP endpoint URL (ESC to try env WHIP_OUTPUT_URL):")
-                    .prompt_skippable()?;
+        builder = builder.prompt_url()?;
 
-            match endpoint_url_input {
-                Some(url) if !url.trim().is_empty() => {
-                    builder = builder.with_endpoint_url(url);
-                    break;
-                }
-                None | Some(_) => match env::var(WHIP_URL_ENV).ok() {
-                    Some(url) => {
-                        info!("WHIP endpoint url read from env: {url}");
-                        builder = builder.with_endpoint_url(url);
-                        break;
-                    }
-                    None => {
-                        error!("Environment variable {WHIP_URL_ENV} not found or invalid. Please enter the URL manually.");
-                    }
-                },
-            }
-        }
+        builder = builder.prompt_token()?;
 
-        loop {
-            let bearer_token_input =
-                Text::new("Enter the bearer token (ESC to try env WHIP_OUTPUT_BEARER_TOKEN):")
-                    .prompt_skippable()?;
-
-            match bearer_token_input {
-                Some(token) if !token.trim().is_empty() => {
-                    builder = builder.with_bearer_token(token);
-                    break;
-                }
-                None | Some(_) => match env::var(WHIP_TOKEN_ENV).ok() {
-                    Some(token) => {
-                        info!("WHIP bearer token read from env: {token}");
-                        builder = builder.with_bearer_token(token);
-                        break;
-                    }
-                    None => {
-                        error!("Environment variable {WHIP_TOKEN_ENV} not found or invalid. Please enter the token manually.");
-                    }
-                },
-            }
-        }
-
-        let video_options = vec![
-            WhipRegisterOptions::SetVideoStream,
-            WhipRegisterOptions::Skip,
-        ];
         let audio_options = vec![
             WhipRegisterOptions::SetAudioStream,
             WhipRegisterOptions::Skip,
         ];
 
         loop {
-            let video_selection =
-                Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
-
-            builder = match video_selection {
-                Some(WhipRegisterOptions::SetVideoStream) => {
-                    builder.with_video(WhipOutputVideoOptions::default())
-                }
-                Some(WhipRegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder.prompt_video()?;
 
             let audio_selection =
                 Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
@@ -184,6 +130,66 @@ impl WhipOutputBuilder {
         Ok(builder)
     }
 
+    fn prompt_video(self) -> Result<Self> {
+        let video_options = vec![
+            WhipRegisterOptions::SetVideoStream,
+            WhipRegisterOptions::Skip,
+        ];
+        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+
+        match video_selection {
+            Some(WhipRegisterOptions::SetVideoStream) => {
+                let scene_options = Scene::iter().collect();
+                let scene_choice =
+                    Select::new("Select scene:", scene_options).prompt_skippable()?;
+                let video = match scene_choice {
+                    Some(scene) => WhipOutputVideoOptions {
+                        scene,
+                        ..Default::default()
+                    },
+                    None => WhipOutputVideoOptions::default(),
+                };
+                Ok(self.with_video(video))
+            }
+            Some(WhipRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
+    }
+
+    fn prompt_url(self) -> Result<Self> {
+        let env_url = env::var(WHIP_URL_ENV).unwrap_or_default();
+        loop {
+            let endpoint_url_input = Text::new("Enter the WHIP endpoint URL:")
+                .with_initial_value(&env_url)
+                .prompt_skippable()?;
+
+            match endpoint_url_input {
+                Some(url) if !url.trim().is_empty() => return Ok(self.with_endpoint_url(url)),
+                Some(_) | None => {
+                    error!("URL cannot be empty.");
+                    continue;
+                }
+            }
+        }
+    }
+
+    fn prompt_token(self) -> Result<Self> {
+        let env_token = env::var(WHIP_TOKEN_ENV).unwrap_or_default();
+        loop {
+            let endpoint_token_input = Text::new("Enter the WHIP endpoint bearer token:")
+                .with_initial_value(&env_token)
+                .prompt_skippable()?;
+
+            match endpoint_token_input {
+                Some(token) if !token.trim().is_empty() => return Ok(self.with_bearer_token(token)),
+                Some(_) | None => {
+                    error!("Bearer token cannot be empty.");
+                    continue;
+                }
+            }
+        }
+    }
+
     pub fn with_video(mut self, video: WhipOutputVideoOptions) -> Self {
         self.video = Some(video);
         self
@@ -204,7 +210,7 @@ impl WhipOutputBuilder {
         self
     }
 
-    fn serialize(&self, inputs: &[&str]) -> serde_json::Value {
+    fn serialize(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let endpoint_url = self.endpoint_url.as_ref().unwrap();
         let bearer_token = self.bearer_token.as_ref().unwrap();
         json!({
@@ -216,7 +222,10 @@ impl WhipOutputBuilder {
         })
     }
 
-    pub fn build(self, inputs: &[&str]) -> (WhipOutput, serde_json::Value, OutputPlayer) {
+    pub fn build(
+        self,
+        inputs: &[&dyn InputHandler],
+    ) -> (WhipOutput, serde_json::Value, OutputPlayer) {
         let register_request = self.serialize(inputs);
 
         let whip_output = WhipOutput {
@@ -235,22 +244,16 @@ pub struct WhipOutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
     root_id: String,
+    scene: Scene,
 }
 
 impl WhipOutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&str], output_name: &str) -> serde_json::Value {
-        let input_json = inputs
-            .iter()
-            .map(|input_name| {
-                let id = format!("{input_name}_{output_name}");
-                json!({
-                    "type": "input_stream",
-                    "id": id,
-                    "input_id": input_name,
-                })
-            })
-            .collect::<Vec<_>>();
-
+    pub fn serialize_register(
+        &self,
+        inputs: &[&dyn InputHandler],
+        output_name: &str,
+    ) -> serde_json::Value {
+        let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
             "encoder_preferences": [
@@ -259,39 +262,19 @@ impl WhipOutputVideoOptions {
                 },
             ],
             "initial": {
-                "root": {
-                    "type": "tiles",
-                    "id": self.root_id,
-                    "transition": {
-                        "duration_ms": 500,
-                    },
-                    "children": input_json,
-                },
+                "root": self.scene.serialize(&self.root_id, &inputs, output_name, self.resolution),
             },
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&str], output_name: &str) -> serde_json::Value {
-        let input_json = inputs
-            .iter()
-            .map(|input_name| {
-                let id = format!("{input_name}_{output_name}");
-                json!({
-                    "type": "input_stream",
-                    "id": id,
-                    "input_id": input_name,
-                })
-            })
-            .collect::<Vec<_>>();
+    pub fn serialize_update(
+        &self,
+        inputs: &[&dyn InputHandler],
+        output_name: &str,
+    ) -> serde_json::Value {
+        let inputs = filter_video_inputs(inputs);
         json!({
-            "root": {
-                "type": "tiles",
-                "id": self.root_id,
-                "transition": {
-                    "duration_ms": 500,
-                },
-                "children": input_json,
-            }
+            "root": self.scene.serialize(&self.root_id, &inputs, output_name, self.resolution),
         })
     }
 }
@@ -308,6 +291,7 @@ impl Default for WhipOutputVideoOptions {
             resolution,
             encoder: VideoEncoder::Any,
             root_id,
+            scene: Scene::Tiles,
         }
     }
 }
@@ -318,13 +302,17 @@ pub struct WhipOutputAudioOptions {
 }
 
 impl WhipOutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&str]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
-            .map(|input_id| {
-                json!({
-                    "input_id": input_id,
-                })
+            .filter_map(|input| {
+                if input.has_audio() {
+                    Some(json!({
+                        "input_id": input.name(),
+                    }))
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
 
@@ -340,13 +328,17 @@ impl WhipOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
-            .map(|input_id| {
-                json!({
-                    "input_id": input_id,
-                })
+            .filter_map(|input| {
+                if input.has_audio() {
+                    Some(json!({
+                        "input_id": input.name(),
+                    }))
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
         json!({
