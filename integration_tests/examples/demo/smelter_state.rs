@@ -215,6 +215,10 @@ impl SmelterState {
                 }
             })
             .collect::<Vec<_>>();
+        if input_names.is_empty() {
+            println!("There are no inputs registered.");
+            return Ok(());
+        }
 
         println!("Select inputs to swap places:");
         let input_name_1 = Select::new("Input 1:", input_names.clone()).prompt()?;
@@ -236,6 +240,14 @@ impl SmelterState {
             let input_1 = &mut self.inputs[idx_1] as *mut Box<dyn InputHandler>;
             let input_2 = &mut self.inputs[idx_2] as *mut Box<dyn InputHandler>;
             ptr::swap(input_1, input_2);
+        }
+
+        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
+        for output in &mut self.outputs {
+            let update_route = format!("output/{}/update", output.name());
+            let update_json = output.serialize_update(&inputs);
+            debug!("{update_json:#?}");
+            examples::post(&update_route, &update_json)?;
         }
 
         Ok(())
