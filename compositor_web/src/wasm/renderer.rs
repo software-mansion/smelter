@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use compositor_api as api;
 use compositor_render::{
     InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RendererOptions, RendererSpec,
@@ -25,8 +23,7 @@ impl Renderer {
         upload_frames_with_copy_external: bool,
         options: RendererOptions,
     ) -> Result<Self, JsValue> {
-        let (renderer, _) =
-            compositor_render::Renderer::new(options).map_err(types::to_js_error)?;
+        let renderer = compositor_render::Renderer::new(options).map_err(types::to_js_error)?;
         let inputs = RendererInputs::new(upload_frames_with_copy_external);
         let outputs = RendererOutputs::default();
 
