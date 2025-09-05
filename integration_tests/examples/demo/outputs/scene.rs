@@ -54,13 +54,15 @@ impl Scene {
             .map(|input| {
                 let input_name = input.name();
                 let id = format!("{input_name}_{output_name}");
-                json!([{
+                json!({
                     "type": "input_stream",
                     "id": id,
                     "input_id": input_name,
-                }])
+                })
             })
-            .unwrap_or(json!([]));
+            .unwrap_or(json!({
+                "type": "view",
+            }));
 
         let column_width = resolution.width / 4;
         let input_json = inputs
@@ -71,7 +73,6 @@ impl Scene {
                 let id = format!("{input_name}_{output_name}");
                 json!({
                     "type": "rescaler",
-                    "width": column_width,
                     "child": {
                         "type": "input_stream",
                         "id": id,
@@ -87,7 +88,12 @@ impl Scene {
             "children": [
                 {
                     "type": "view",
-                    "children": primary_input,
+                    "children": [
+                        {
+                            "type": "rescaler",
+                            "child": primary_input,
+                        }
+                    ],
                 },
                 {
                     "type": "view",
