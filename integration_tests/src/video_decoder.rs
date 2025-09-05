@@ -11,7 +11,7 @@ use ffmpeg_next::{
     media::Type,
     Rational,
 };
-use rtp::{codecs::h264::H264Packet, packetizer::Depacketizer};
+use webrtc::rtp::{self, codecs::h264::H264Packet, packetizer::Depacketizer};
 
 pub struct VideoDecoder {
     depayloader: H264Packet,

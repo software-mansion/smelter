@@ -19,7 +19,7 @@ pub(crate) struct WhepOutputConnectionStateOptions {
 #[derive(Debug, Clone)]
 pub(crate) struct WhepOutputConnectionState {
     pub bearer_token: Option<Arc<str>>,
-    pub sessions: HashMap<Arc<str>, Arc<PeerConnection>>,
+    pub sessions: HashMap<Arc<str>, PeerConnection>,
     pub video_options: Option<WhepVideoConnectionOptions>,
     pub audio_options: Option<WhepAudioConnectionOptions>,
 }

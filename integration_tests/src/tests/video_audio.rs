@@ -3,8 +3,10 @@ use serde_json::json;
 use std::time::Duration;
 
 use crate::{
-    compare_audio_dumps, compare_video_dumps, input_dump_from_disk, AudioValidationConfig,
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, VideoValidationConfig,
+    audio::{self, AudioAnalyzeTolerance, AudioValidationConfig, RealFrequencyTolerance},
+    compare_audio_dumps, compare_video_dumps, input_dump_from_disk,
+    video::VideoValidationConfig,
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
 };
 
 /// Input and output streams with muxed video and audio.
@@ -99,23 +101,27 @@ pub fn single_input_with_video_and_audio_flaky() -> Result<()> {
         },
     )?;
 
+    let audio_validation_tolerance = RealFrequencyTolerance {
+        max_frequency_level: 5.0,
+        average_level: 15.0,
+        median_level: 15.0,
+        general_level: 5.0,
+        ..Default::default()
+    };
+
+    let audio_validation_config = AudioValidationConfig {
+        tolerance: AudioAnalyzeTolerance {
+            frequency_tolerance: audio::FrequencyTolerance::Real(audio_validation_tolerance),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
     compare_audio_dumps(
         OUTPUT_DUMP_FILE,
         &new_output_dump,
-        AudioValidationConfig {
-            sampling_intervals: vec![Duration::from_millis(0)..Duration::from_millis(10000)],
-            tolerance: crate::AudioAnalyzeTolerance {
-                max_frequency_level: 5.0,
-                average_level: 15.0,
-                median_level: 15.0,
-                general_level: 5.0,
-                // NOTE: (@jbrs) Right now it passes on my machine, check if it passess with
-                // default tolerance on CI
-                // offset: Duration::from_millis(100),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
+        audio::ValidationMode::Real,
+        audio_validation_config,
     )?;
 
     Ok(())

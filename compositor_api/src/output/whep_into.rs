@@ -28,7 +28,7 @@ impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
             .map_or((None, None), |(enc, out)| (Some(enc), Some(out)));
 
         Ok(Self {
-            output_options: pipeline::ProtocolOutputOptions::Whep(pipeline::WhepSenderOptions {
+            output_options: pipeline::ProtocolOutputOptions::Whep(pipeline::WhepOutputOptions {
                 bearer_token,
                 video: video_encoder_options,
                 audio: audio_encoder_options,
@@ -123,7 +123,7 @@ fn resolve_audio_options(
                     channels: channels.clone().into(),
                     preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
                     sample_rate: sample_rate.unwrap_or(48_000),
-                    forward_error_correction: forward_error_correction.unwrap_or(false),
+                    forward_error_correction: forward_error_correction.unwrap_or(true),
                     packet_loss,
                 }),
                 channels,

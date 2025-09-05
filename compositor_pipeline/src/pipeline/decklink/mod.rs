@@ -53,9 +53,9 @@ impl DeckLink {
             .map_err(DeckLinkInputError::DecklinkError)?;
 
         let (callback, receivers) = ChannelCallbackAdapter::new(
+            &ctx,
             span,
             opts.enable_audio,
-            ctx.mixing_sample_rate,
             opts.pixel_format,
             Arc::<decklink::Input>::downgrade(&input),
             (

@@ -4,6 +4,7 @@ use strum::{Display, EnumIter};
 
 use crate::players::InputPlayer;
 
+pub mod mp4;
 pub mod rtp;
 pub mod whip;
 

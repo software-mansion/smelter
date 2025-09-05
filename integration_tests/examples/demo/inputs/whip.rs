@@ -18,6 +18,7 @@ const WHIP_TOKEN_ENV: &str = "WHIP_INPUT_BEARER_TOKEN";
 #[derive(Debug)]
 pub struct WhipInput {
     name: String,
+    bearer_token: String,
 }
 
 impl InputHandler for WhipInput {
@@ -27,12 +28,19 @@ impl InputHandler for WhipInput {
 
     fn on_after_registration(&mut self, player: InputPlayer) -> Result<()> {
         match player {
-            InputPlayer::Manual => loop {
-                let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                if confirmation {
-                    return Ok(());
+            InputPlayer::Manual => {
+                println!("Instructions to start streaming:");
+                println!("1. Open OBS Studio");
+                println!("2. In a 'Stream' tab enter 'http://127.0.0.1:9000/whip/{} in 'Server' field and '{}' in 'Bearer Token' field", self.name, self.bearer_token);
+                println!();
+
+                loop {
+                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                    if confirmation {
+                        return Ok(());
+                    }
                 }
-            },
+            }
             _ => unreachable!(),
         }
     }
@@ -117,7 +125,10 @@ impl WhipInputBuilder {
     pub fn build(self) -> (WhipInput, serde_json::Value, InputPlayer) {
         let register_request = self.serialize();
 
-        let whip_input = WhipInput { name: self.name };
+        let whip_input = WhipInput {
+            name: self.name,
+            bearer_token: self.bearer_token,
+        };
 
         (whip_input, register_request, self.player)
     }

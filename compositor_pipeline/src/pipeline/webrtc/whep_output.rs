@@ -26,6 +26,7 @@ use crate::{
 
 use crate::prelude::*;
 
+pub(crate) mod cleanup_session_handler;
 pub(super) mod connection_state;
 pub(super) mod init_payloaders;
 pub(super) mod peer_connection;
@@ -44,7 +45,7 @@ impl WhepOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
         output_id: OutputId,
-        options: WhepSenderOptions,
+        options: WhepOutputOptions,
     ) -> Result<Self, OutputInitError> {
         let state_clone = ctx.whip_whep_state.clone();
         let Some(state) = state_clone else {

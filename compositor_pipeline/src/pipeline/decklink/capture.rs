@@ -1,5 +1,5 @@
 use std::{
-    sync::{Mutex, OnceLock, Weak},
+    sync::{Arc, Mutex, Weak},
     time::{Duration, Instant},
 };
 
@@ -36,17 +36,18 @@ pub(super) struct ChannelCallbackAdapter {
     // I'm not sure, but I suspect that holding Arc here would create a circular
     // dependency
     input: Weak<decklink::Input>,
-    start_time: OnceLock<Instant>,
-    offset: Mutex<Duration>,
+    sync_point: Instant,
+    audio_offset: Mutex<Option<Duration>>,
+    video_offset: Mutex<Option<Duration>>,
     pixel_format: Option<PixelFormat>,
     last_format: Mutex<(DisplayModeType, PixelFormat)>,
 }
 
 impl ChannelCallbackAdapter {
     pub(super) fn new(
+        ctx: &Arc<PipelineCtx>,
         span: Span,
         enable_audio: bool,
-        output_sample_rate: u32,
         pixel_format: Option<PixelFormat>,
         input: Weak<decklink::Input>,
         initial_format: (DisplayModeType, PixelFormat),
@@ -64,10 +65,12 @@ impl ChannelCallbackAdapter {
                 video_sender: Some(video_sender),
                 audio_sender,
                 span,
-                audio_resampler: Mutex::new(DynamicResampler::new(output_sample_rate)),
+                audio_resampler: Mutex::new(DynamicResampler::new(ctx.mixing_sample_rate)),
                 input,
-                start_time: OnceLock::new(),
-                offset: Mutex::new(Duration::ZERO),
+                // 15 ms is a buffer that should be enough for frame to be delivered to queue
+                sync_point: ctx.queue_sync_point + Duration::from_millis(15),
+                audio_offset: Mutex::new(None),
+                video_offset: Mutex::new(None),
                 pixel_format,
                 last_format: Mutex::new(initial_format),
             },
@@ -78,17 +81,17 @@ impl ChannelCallbackAdapter {
         )
     }
 
-    fn start_time(&self) -> Instant {
-        *self.start_time.get_or_init(Instant::now)
-    }
-
     fn handle_video_frame(
         &self,
         video_frame: &mut VideoInputFrame,
         sender: &Sender<PipelineEvent<Frame>>,
     ) -> Result<(), decklink::DeckLinkError> {
-        let offset = *self.offset.lock().unwrap();
-        let pts = video_frame.stream_time()? + offset;
+        let stream_time = video_frame.stream_time()?;
+        let offset = {
+            let mut guard = self.video_offset.lock().unwrap();
+            *guard.get_or_insert_with(|| self.sync_point.elapsed().saturating_sub(stream_time))
+        };
+        let pts = stream_time + offset;
 
         let width = video_frame.width();
         let height = video_frame.height();
@@ -156,8 +159,12 @@ impl ChannelCallbackAdapter {
         audio_packet: &mut AudioInputPacket,
         sender: &Sender<PipelineEvent<InputAudioSamples>>,
     ) -> Result<(), decklink::DeckLinkError> {
-        let offset = *self.offset.lock().unwrap();
-        let pts = audio_packet.packet_time()? + offset;
+        let packet_time = audio_packet.packet_time()?;
+        let offset = {
+            let mut guard = self.audio_offset.lock().unwrap();
+            *guard.get_or_insert_with(|| self.sync_point.elapsed().saturating_sub(packet_time))
+        };
+        let pts = packet_time + offset;
 
         let samples = audio_packet.as_32_bit_stereo()?;
         let samples = DynamicResamplerBatch {
@@ -184,8 +191,8 @@ impl ChannelCallbackAdapter {
                 Ok(_) => (),
                 Err(TrySendError::Full(_)) => {
                     warn!(
-                    "Failed to send samples from DeckLink. Channel is full, dropping samples pts={pts:?}."
-                )
+                        "Failed to send samples from DeckLink. Channel is full, dropping samples pts={pts:?}."
+                    )
                 }
                 Err(TrySendError::Disconnected(_)) => {
                     debug!("Failed to send samples from DeckLink. Channel closed.")
@@ -263,7 +270,9 @@ impl ChannelCallbackAdapter {
         input.flush_streams()?;
         input.start_streams()?;
 
-        *self.offset.lock().unwrap() = self.start_time().elapsed();
+        // it will reset on the next packet
+        *self.video_offset.lock().unwrap() = None;
+        *self.audio_offset.lock().unwrap() = None;
 
         Ok(())
     }
@@ -276,9 +285,6 @@ impl InputCallback for ChannelCallbackAdapter {
         audio_packet: Option<&mut AudioInputPacket>,
     ) -> InputCallbackResult {
         let _span = self.span.enter();
-
-        // ensure init start time on first frame
-        self.start_time();
 
         if let (Some(video_frame), Some(sender)) = (video_frame, &self.video_sender) {
             if let Err(err) = self.handle_video_frame(video_frame, sender) {

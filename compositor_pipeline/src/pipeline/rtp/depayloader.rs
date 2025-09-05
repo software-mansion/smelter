@@ -2,8 +2,12 @@ use std::mem;
 
 use bytes::Bytes;
 use compositor_render::error::ErrorStack;
-use rtp::codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet, vp9::Vp9Packet};
 use tracing::{info, trace, warn};
+use webrtc::rtp::{
+    self,
+    codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet, vp9::Vp9Packet},
+    packetizer::Depacketizer,
+};
 
 use crate::prelude::*;
 use crate::{
@@ -57,13 +61,13 @@ pub enum DepayloadingError {
     Aac(#[from] AacDepayloadingError),
 }
 
-struct BufferedDepayloader<T: rtp::packetizer::Depacketizer + Default + 'static> {
+struct BufferedDepayloader<T: Depacketizer + Default + 'static> {
     kind: MediaKind,
     buffer: Vec<Bytes>,
     depayloader: T,
 }
 
-impl<T: rtp::packetizer::Depacketizer + Default + 'static> BufferedDepayloader<T> {
+impl<T: Depacketizer + Default + 'static> BufferedDepayloader<T> {
     fn new_boxed(kind: MediaKind) -> Box<dyn Depayloader> {
         Box::new(Self {
             kind,
@@ -73,7 +77,7 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> BufferedDepayloader<T
     }
 }
 
-impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for BufferedDepayloader<T> {
+impl<T: Depacketizer + Default + 'static> Depayloader for BufferedDepayloader<T> {
     fn depayload(
         &mut self,
         packet: RtpPacket,
@@ -103,12 +107,12 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for Buffe
     }
 }
 
-struct SimpleDepayloader<T: rtp::packetizer::Depacketizer + Default + 'static> {
+struct SimpleDepayloader<T: Depacketizer + Default + 'static> {
     kind: MediaKind,
     depayloader: T,
 }
 
-impl<T: rtp::packetizer::Depacketizer + Default + 'static> SimpleDepayloader<T> {
+impl<T: Depacketizer + Default + 'static> SimpleDepayloader<T> {
     fn new_boxed(kind: MediaKind) -> Box<dyn Depayloader> {
         Box::new(Self {
             kind,
@@ -117,7 +121,7 @@ impl<T: rtp::packetizer::Depacketizer + Default + 'static> SimpleDepayloader<T> 
     }
 }
 
-impl<T: rtp::packetizer::Depacketizer + Default + 'static> Depayloader for SimpleDepayloader<T> {
+impl<T: Depacketizer + Default + 'static> Depayloader for SimpleDepayloader<T> {
     fn depayload(
         &mut self,
         packet: RtpPacket,
