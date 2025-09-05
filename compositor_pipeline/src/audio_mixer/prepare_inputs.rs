@@ -22,6 +22,11 @@ pub(super) fn prepare_input_samples(
         .samples
         .into_iter()
         .map(|(input_id, input_batch)| {
+            #[cfg(debug_assertions)]
+            input_batch
+                .iter()
+                .for_each(|batch| check_input_batch(batch, mixing_sample_rate));
+
             let samples = frame_input_samples(
                 input_samples_set.start_pts,
                 input_samples_set.end_pts,
@@ -59,7 +64,7 @@ fn frame_input_samples(
 
     // Real numerical errors are a lot smaller, but taking max error as 1% of a sample duration
     // seems to be safe enough.
-    let max_error = Duration::from_secs_f64(0.01 / sample_rate as f64);
+    let max_error = Duration::from_secs_f64(0.001 / sample_rate as f64);
 
     // Output and input samples have the same sample rate, but they are not synced with each
     // other. We need to calculate an offset between input and output samples. This value
@@ -72,10 +77,10 @@ fn frame_input_samples(
             let sample_duration_secs = 1.0 / sample_rate as f64;
             let offset_secs = duration_secs.rem_euclid(sample_duration_secs);
 
-            // This is necessary because of numerical inconsistence in calculation of
+            // This is necessary because of numerical inconsistency in calculation of
             // `duration_secs`. If offset is set to any value divisible by sample length then an
             // underflow may occur that sets the offset to the full sample length.
-            if offset_secs > 0.999 * sample_duration_secs {
+            if offset_secs + max_error.as_secs_f64() > sample_duration_secs {
                 Duration::ZERO
             } else {
                 Duration::from_secs_f64(offset_secs)
@@ -87,7 +92,7 @@ fn frame_input_samples(
         let sample_count = duration.as_secs_f64() * sample_rate as f64;
         // If value is close to the integer then round it, otherwise fallback to standard
         // integer division behavior. Close is defined as 1% of a sample (the same as max_error).
-        if (sample_count - sample_count.round()).abs() < 0.01 {
+        if (sample_count - sample_count.round()).abs() < 0.001 {
             sample_count.round() as usize
         } else {
             sample_count.floor() as usize
@@ -113,8 +118,10 @@ fn frame_input_samples(
                 .saturating_sub(expected_next_sample_start_pts);
             let missing_samples_count = time_to_sample_count(missing_time);
 
-            // NOTE: This needs reviewing as it does not make sense at first glance.
             if missing_samples_count < 1 {
+                // This case implies a bug or malformed input data. It can happen when error is
+                // smaller than a sample (to small to be a packet drop), but larger than numerical
+                // error.
                 warn!(
                     ?missing_time,
                     "Distance between samples is higher than expected."
@@ -134,8 +141,8 @@ fn frame_input_samples(
                 expected_next_sample_start_pts.saturating_sub(input_samples.start_pts);
             let samples_to_remove_from_start = time_to_sample_count(time_to_remove_from_start);
             if sample_count != 0 {
-                // We should only drop samples in the first batch that overlaps with target batch
-                // timestamps.
+                // We should only drop samples in the first batch that overlaps with target batch.
+                // It is possible that first batch does not overlap at all with the result range.
                 warn!(
                     "Received overlapping batches on input. Dropping {samples_to_remove_from_start} samples.",
                 );
@@ -148,9 +155,10 @@ fn frame_input_samples(
         if input_samples.end_pts > end_pts + max_error {
             let desired_duration = end_pts.saturating_sub(expected_next_sample_start_pts);
             let desired_sample_count = time_to_sample_count(desired_duration);
+
             end_range = usize::min(
                 start_range + desired_sample_count,
-                input_samples.samples.len(),
+                input_samples.samples.len(), // can be triggered only if input batch end PTS is incorrect
             );
         }
 
@@ -209,5 +217,19 @@ fn ensure_correct_amount_of_samples(
         samples_buffer.extend(missing_samples);
     } else {
         samples_buffer.drain(expected_samples_count..samples_buffer.len());
+    }
+}
+
+/// Checks if provided batch have a correct amount of samples to be at a defined sample rate
+#[cfg(debug_assertions)]
+fn check_input_batch(samples: &InputAudioSamples, expected_sample_rate: u32) {
+    let sample_rate =
+        samples.samples.len() as f64 / (samples.end_pts - samples.start_pts).as_secs_f64();
+    if f64::abs(sample_rate - expected_sample_rate as f64) > 0.0001 {
+        tracing::error!(
+            expected_sample_rate,
+            ?samples,
+            "Sample count does not match expected_sample_rate"
+        )
     }
 }
