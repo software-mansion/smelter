@@ -396,13 +396,22 @@ impl RtpInputBuilder {
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(RTP_INPUT_PATH).unwrap_or_default();
 
-        let path_input = Text::new("Input path:")
-            .with_initial_value(&env_path)
-            .prompt_skippable()?;
+        loop {
+            let path_input = Text::new("Input path:")
+                .with_initial_value(&env_path)
+                .prompt_skippable()?;
 
-        match path_input {
-            Some(path) if !path.is_empty() => Ok(self.with_path(resolve_path(path.into())?)),
-            Some(_) | None => Ok(self),
+            match path_input {
+                Some(path) if !path.trim().is_empty() => {
+                    let path = resolve_path(path.into())?;
+                    if path.exists() {
+                        break Ok(self.with_path(path));
+                    } else {
+                        error!("Path is not valid");
+                    }
+                }
+                Some(_) | None => break Ok(self),
+            }
         }
     }
 

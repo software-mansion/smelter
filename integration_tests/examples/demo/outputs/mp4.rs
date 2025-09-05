@@ -68,18 +68,8 @@ impl Mp4OutputBuilder {
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
-        let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
 
-        let default_path = examples_root_dir().join("example_output.mp4");
-        let path_output = Text::new("Output path:")
-            .with_initial_value(&env_path)
-            .with_default(default_path.to_str().unwrap())
-            .prompt_skippable()?;
-
-        builder = match path_output {
-            Some(path) => builder.with_path(resolve_path(path.into())?),
-            None => builder,
-        };
+        builder = builder.prompt_path()?;
 
         let video_options = vec![Mp4RegisterOptions::SetVideoStream, Mp4RegisterOptions::Skip];
         let audio_options = vec![Mp4RegisterOptions::SetAudioStream, Mp4RegisterOptions::Skip];
@@ -115,6 +105,31 @@ impl Mp4OutputBuilder {
         }
 
         Ok(builder)
+    }
+
+    fn prompt_path(self) -> Result<Self> {
+        let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
+
+        let default_path = examples_root_dir().join("example_output.mp4");
+
+        loop {
+            let path_output = Text::new("Output path:")
+                .with_initial_value(&env_path)
+                .with_default(default_path.to_str().unwrap())
+                .prompt_skippable()?;
+
+            match path_output {
+                Some(path) if !path.trim().is_empty() => {
+                    let path = resolve_path(path.into())?;
+                    let parent = path.parent();
+                    match parent {
+                        Some(p) if p.exists() => break Ok(self.with_path(path)),
+                        Some(_) | None => error!("Path is not valid"),
+                    }
+                }
+                Some(_) | None => break Ok(self),
+            }
+        }
     }
 
     pub fn with_path(mut self, path: PathBuf) -> Self {

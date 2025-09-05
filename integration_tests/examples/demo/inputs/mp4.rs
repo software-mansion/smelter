@@ -8,7 +8,7 @@ use integration_tests::{
 };
 use rand::RngCore;
 use serde_json::json;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{inputs::InputHandler, players::InputPlayer, utils::resolve_path};
 
@@ -41,21 +41,30 @@ impl Mp4InputBuilder {
         let mut builder = self;
         let env_path = env::var(MP4_INPUT_PATH).unwrap_or_default();
 
-        let path_input = Text::new("Input path:")
-            .with_initial_value(&env_path)
-            .prompt_skippable()?;
+        builder = loop {
+            let path_input = Text::new("Input path:")
+                .with_initial_value(&env_path)
+                .prompt_skippable()?;
 
-        builder = match path_input {
-            Some(path) if !path.is_empty() => builder.with_path(resolve_path(path.into())?),
-            Some(_) | None => {
-                let path = examples_root_dir().join(BUNNY_H264_PATH);
-                info!("Using default asset at \"{}\"", path.to_str().unwrap());
-                download_asset(&AssetData {
-                    url: BUNNY_H264_URL.to_string(),
-                    path: path.clone(),
-                })?;
-                builder.with_path(path)
-            }
+            match path_input {
+                Some(path) if !path.trim().is_empty() => {
+                    let path = resolve_path(path.into())?;
+                    if path.exists() {
+                        break builder.with_path(path);
+                    } else {
+                        error!("Path is not valid");
+                    }
+                }
+                Some(_) | None => {
+                    let path = examples_root_dir().join(BUNNY_H264_PATH);
+                    info!("Using default asset at \"{}\"", path.to_str().unwrap());
+                    download_asset(&AssetData {
+                        url: BUNNY_H264_URL.to_string(),
+                        path: path.clone(),
+                    })?;
+                    break builder.with_path(path);
+                }
+            };
         };
 
         Ok(builder)
