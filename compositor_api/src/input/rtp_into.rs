@@ -32,13 +32,18 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
                 .as_ref()
                 .map(|video| {
                     let options = match video.decoder {
-                        VideoDecoder::FfmpegH264 => pipeline::VideoDecoderOptions::FfmpegH264,
-                        VideoDecoder::FfmpegVp8 => pipeline::VideoDecoderOptions::FfmpegVp8,
-                        VideoDecoder::FfmpegVp9 => pipeline::VideoDecoderOptions::FfmpegVp9,
-                        VideoDecoder::VulkanH264 if !cfg!(feature = "vk-video") => {
-                            return Err(TypeError::new(super::NO_VULKAN_VIDEO))
+                        RtpVideoDecoderOptions::FfmpegH264 => {
+                            pipeline::VideoDecoderOptions::FfmpegH264
                         }
-                        VideoDecoder::VulkanH264 => pipeline::VideoDecoderOptions::VulkanH264,
+                        RtpVideoDecoderOptions::FfmpegVp8 => {
+                            pipeline::VideoDecoderOptions::FfmpegVp8
+                        }
+                        RtpVideoDecoderOptions::FfmpegVp9 => {
+                            pipeline::VideoDecoderOptions::FfmpegVp9
+                        }
+                        RtpVideoDecoderOptions::VulkanH264 => {
+                            pipeline::VideoDecoderOptions::VulkanH264
+                        }
                     };
                     Ok(options)
                 })
