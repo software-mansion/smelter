@@ -63,7 +63,7 @@ export type RegisterInput =
        * Assigns which decoder should be used for media encoded with a specific codec.
        */
       decoder_map?: {
-        [k: string]: VideoDecoder;
+        [k: string]: Mp4VideoDecoderOptions;
       } | null;
     }
   | {
@@ -107,7 +107,7 @@ export type RegisterInput =
        * Assigns which decoder should be used for media encoded with a specific codec.
        */
       decoder_map?: {
-        [k: string]: VideoDecoder;
+        [k: string]: HlsVideoDecoderOptions;
       } | null;
     }
   | {
@@ -141,7 +141,7 @@ export type RegisterInput =
     };
 export type PortOrPortRange = string | number;
 export type TransportProtocol = "udp" | "tcp_server";
-export type VideoDecoder = "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
+export type RtpVideoDecoderOptions = "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type InputRtpAudioOptions =
   | {
       decoder: "opus";
@@ -164,7 +164,9 @@ export type InputRtpAudioOptions =
       rtp_mode?: AacRtpMode | null;
     };
 export type AacRtpMode = "low_bitrate" | "high_bitrate";
+export type Mp4VideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type WhipVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
+export type HlsVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type RegisterOutput =
   | {
       type: "rtp_stream";
@@ -927,7 +929,7 @@ export type WebEmbeddingMethod =
   | "native_embedding_under_content";
 
 export interface InputRtpVideoOptions {
-  decoder: VideoDecoder;
+  decoder: RtpVideoDecoderOptions;
 }
 export interface InputWhipVideoOptions {
   decoder_preferences?: WhipVideoDecoderOptions[] | null;
