@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     async_trait,
     extract::{rejection::JsonRejection, ws::WebSocketUpgrade, FromRequest, Request, State},
@@ -33,7 +35,7 @@ pub use register_request::{RegisterInput, RegisterOutput};
 pub use unregister_request::{UnregisterInput, UnregisterOutput};
 pub use update_output::UpdateOutputRequest;
 
-pub fn routes(state: ApiState) -> Router {
+pub fn routes(state: Arc<ApiState>) -> Router {
     let inputs = Router::new()
         .route("/:id/register", post(register_request::handle_input))
         .route("/:id/unregister", post(unregister_request::handle_input));
@@ -61,8 +63,13 @@ pub fn routes(state: ApiState) -> Router {
 
     let font = Router::new().route("/register", post(register_request::handle_font));
 
-    async fn handle_start(State(state): State<ApiState>) -> Result<Response, ApiError> {
-        Pipeline::start(&state.pipeline);
+    async fn handle_start(State(state): State<Arc<ApiState>>) -> Result<Response, ApiError> {
+        Pipeline::start(&state.pipeline()?);
+        Ok(Response::Ok {})
+    }
+
+    async fn handle_restart(State(state): State<Arc<ApiState>>) -> Result<Response, ApiError> {
+        state.restart()?;
         Ok(Response::Ok {})
     }
 
@@ -75,6 +82,7 @@ pub fn routes(state: ApiState) -> Router {
         .nest("/api/font", font)
         // Start request
         .route("/api/start", post(handle_start))
+        .route("/api/restart", post(handle_restart))
         // WebSocket - events
         .route("/ws", get(ws_handler))
         .route("/status", get(status_handler))

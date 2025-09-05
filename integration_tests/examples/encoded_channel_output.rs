@@ -90,13 +90,16 @@ fn main() {
         },
     };
 
-    Pipeline::register_input(&state.pipeline, input_id.clone(), input_options).unwrap();
+    Pipeline::register_input(&state.pipeline().unwrap(), input_id.clone(), input_options).unwrap();
 
-    let output_receiver =
-        Pipeline::register_encoded_data_output(&state.pipeline, output_id.clone(), output_options)
-            .unwrap();
+    let output_receiver = Pipeline::register_encoded_data_output(
+        &state.pipeline().unwrap(),
+        output_id.clone(),
+        output_options,
+    )
+    .unwrap();
 
-    Pipeline::start(&state.pipeline);
+    Pipeline::start(&state.pipeline().unwrap());
 
     let mut h264_dump =
         File::create(root_dir.join("examples/encoded_channel_output_dump.h264")).unwrap();

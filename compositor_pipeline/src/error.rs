@@ -209,6 +209,12 @@ impl PipelineErrorInfo {
     }
 }
 
+impl From<&InitPipelineError> for PipelineErrorInfo {
+    fn from(_value: &InitPipelineError) -> Self {
+        PipelineErrorInfo::new("PIPELINE_INIT_FAILED", ErrorType::ServerError)
+    }
+}
+
 const INPUT_STREAM_ALREADY_REGISTERED: &str = "INPUT_STREAM_ALREADY_REGISTERED";
 const INPUT_ERROR: &str = "INPUT_STREAM_INPUT_ERROR";
 

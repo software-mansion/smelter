@@ -42,7 +42,7 @@ pub enum RegisterOutput {
 }
 
 pub(super) async fn handle_input(
-    State(api): State<ApiState>,
+    State(api): State<Arc<ApiState>>,
     Path(input_id): Path<InputId>,
     Json(request): Json<RegisterInput>,
 ) -> Result<Response, ApiError> {
@@ -50,19 +50,19 @@ pub(super) async fn handle_input(
     tokio::task::spawn_blocking(move || {
         let response = match request {
             RegisterInput::RtpStream(rtp) => {
-                Pipeline::register_input(&api.pipeline, input_id.into(), rtp.try_into()?)?
+                Pipeline::register_input(&api.pipeline()?, input_id.into(), rtp.try_into()?)?
             }
             RegisterInput::Mp4(mp4) => {
-                Pipeline::register_input(&api.pipeline, input_id.into(), mp4.try_into()?)?
+                Pipeline::register_input(&api.pipeline()?, input_id.into(), mp4.try_into()?)?
             }
             RegisterInput::DeckLink(decklink) => {
-                Pipeline::register_input(&api.pipeline, input_id.into(), decklink.try_into()?)?
+                Pipeline::register_input(&api.pipeline()?, input_id.into(), decklink.try_into()?)?
             }
             RegisterInput::WhipServer(whip) => {
-                Pipeline::register_input(&api.pipeline, input_id.into(), whip.try_into()?)?
+                Pipeline::register_input(&api.pipeline()?, input_id.into(), whip.try_into()?)?
             }
             RegisterInput::Hls(hls) => {
-                Pipeline::register_input(&api.pipeline, input_id.into(), hls.try_into()?)?
+                Pipeline::register_input(&api.pipeline()?, input_id.into(), hls.try_into()?)?
             }
         };
         match response {
@@ -86,7 +86,7 @@ pub(super) async fn handle_input(
 }
 
 pub(super) async fn handle_output(
-    State(api): State<ApiState>,
+    State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
     Json(request): Json<RegisterOutput>,
 ) -> Result<Response, ApiError> {
@@ -94,22 +94,22 @@ pub(super) async fn handle_output(
     tokio::task::spawn_blocking(move || {
         let response = match request {
             RegisterOutput::RtpStream(rtp) => {
-                Pipeline::register_output(&api.pipeline, output_id.into(), rtp.try_into()?)?
+                Pipeline::register_output(&api.pipeline()?, output_id.into(), rtp.try_into()?)?
             }
             RegisterOutput::Mp4(mp4) => {
-                Pipeline::register_output(&api.pipeline, output_id.into(), mp4.try_into()?)?
+                Pipeline::register_output(&api.pipeline()?, output_id.into(), mp4.try_into()?)?
             }
             RegisterOutput::WhipClient(whip) => {
-                Pipeline::register_output(&api.pipeline, output_id.into(), whip.try_into()?)?
+                Pipeline::register_output(&api.pipeline()?, output_id.into(), whip.try_into()?)?
             }
             RegisterOutput::WhepServer(whep) => {
-                Pipeline::register_output(&api.pipeline, output_id.into(), whep.try_into()?)?
+                Pipeline::register_output(&api.pipeline()?, output_id.into(), whep.try_into()?)?
             }
             RegisterOutput::RtmpClient(rtmp) => {
-                Pipeline::register_output(&api.pipeline, output_id.into(), rtmp.try_into()?)?
+                Pipeline::register_output(&api.pipeline()?, output_id.into(), rtmp.try_into()?)?
             }
             RegisterOutput::Hls(hls) => {
-                Pipeline::register_output(&api.pipeline, output_id.into(), hls.try_into()?)?
+                Pipeline::register_output(&api.pipeline()?, output_id.into(), hls.try_into()?)?
             }
         };
         match response {
@@ -122,13 +122,13 @@ pub(super) async fn handle_output(
 }
 
 pub(super) async fn handle_shader(
-    State(api): State<ApiState>,
+    State(api): State<Arc<ApiState>>,
     Path(shader_id): Path<RendererId>,
     Json(request): Json<ShaderSpec>,
 ) -> Result<Response, ApiError> {
     let api = api.clone();
     tokio::task::spawn_blocking(move || {
-        Pipeline::register_renderer(&api.pipeline, shader_id.into(), request.try_into()?)?;
+        Pipeline::register_renderer(&api.pipeline()?, shader_id.into(), request.try_into()?)?;
         Ok(Response::Ok {})
     })
     .await
@@ -136,13 +136,13 @@ pub(super) async fn handle_shader(
 }
 
 pub(super) async fn handle_web_renderer(
-    State(api): State<ApiState>,
+    State(api): State<Arc<ApiState>>,
     Path(instance_id): Path<RendererId>,
     Json(request): Json<WebRendererSpec>,
 ) -> Result<Response, ApiError> {
     let api = api.clone();
     tokio::task::spawn_blocking(move || {
-        Pipeline::register_renderer(&api.pipeline, instance_id.into(), request.try_into()?)?;
+        Pipeline::register_renderer(&api.pipeline()?, instance_id.into(), request.try_into()?)?;
         Ok(Response::Ok {})
     })
     .await
@@ -150,13 +150,13 @@ pub(super) async fn handle_web_renderer(
 }
 
 pub(super) async fn handle_image(
-    State(api): State<ApiState>,
+    State(api): State<Arc<ApiState>>,
     Path(image_id): Path<RendererId>,
     Json(request): Json<ImageSpec>,
 ) -> Result<Response, ApiError> {
     let api = api.clone();
     tokio::task::spawn_blocking(move || {
-        Pipeline::register_renderer(&api.pipeline, image_id.into(), request.try_into()?)?;
+        Pipeline::register_renderer(&api.pipeline()?, image_id.into(), request.try_into()?)?;
         Ok(Response::Ok {})
     })
     .await
@@ -164,7 +164,7 @@ pub(super) async fn handle_image(
 }
 
 pub(super) async fn handle_font(
-    State(api): State<ApiState>,
+    State(api): State<Arc<ApiState>>,
     Multipart(mut multipart): Multipart,
 ) -> Result<Response, ApiError> {
     let Some(field) = multipart
@@ -183,7 +183,10 @@ pub(super) async fn handle_font(
     let binary_font_source = Source::Binary(Arc::new(bytes));
 
     tokio::task::spawn_blocking(move || {
-        Pipeline::register_font(&api.pipeline.lock().unwrap(), binary_font_source);
+        api.pipeline()?
+            .lock()
+            .unwrap()
+            .register_font(binary_font_source);
         Ok(Response::Ok {})
     })
     .await

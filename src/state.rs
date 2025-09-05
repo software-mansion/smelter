@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 
 use axum::response::IntoResponse;
 use compositor_pipeline::{
@@ -10,7 +10,7 @@ use compositor_render::web_renderer::{ChromiumContext, ChromiumContextInitError}
 use serde::Serialize;
 use tokio::runtime::Runtime;
 
-use crate::config::Config;
+use crate::{config::Config, error::ApiError};
 
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
@@ -43,16 +43,15 @@ pub enum ApiStateInitError {
     ChromiumContextInit(#[from] ChromiumContextInitError),
 }
 
-#[derive(Clone)]
 pub struct ApiState {
-    pub pipeline: Arc<Mutex<Pipeline>>,
+    pub pipeline: Mutex<Option<Arc<Mutex<Pipeline>>>>,
     pub config: Config,
     pub chromium_context: Option<Arc<ChromiumContext>>,
     pub runtime: Arc<Runtime>,
 }
 
 impl ApiState {
-    pub fn new(config: Config, runtime: Arc<Runtime>) -> Result<ApiState, ApiStateInitError> {
+    pub fn new(config: Config, runtime: Arc<Runtime>) -> Result<Arc<ApiState>, ApiStateInitError> {
         let chromium_context = match config.web_renderer_enable && cfg!(feature = "web_renderer") {
             true => Some(ChromiumContext::new(
                 config.output_framerate,
@@ -62,16 +61,29 @@ impl ApiState {
         };
         let options = pipeline_options_from_config(&config, &runtime, &chromium_context);
         let pipeline = Pipeline::new(options)?;
-        Ok(ApiState {
-            pipeline: Mutex::new(pipeline).into(),
+        Ok(Arc::new(ApiState {
+            pipeline: Mutex::new(Some(Arc::new(Mutex::new(pipeline)))),
             config,
             runtime,
             chromium_context,
-        })
+        }))
     }
 
-    pub(crate) fn pipeline(&self) -> MutexGuard<'_, Pipeline> {
-        self.pipeline.lock().unwrap()
+    pub fn pipeline(&self) -> Result<Arc<Mutex<Pipeline>>, ApiError> {
+        match self.pipeline.lock().unwrap().clone() {
+            Some(pipeline) => Ok(pipeline),
+            None => self.restart(),
+        }
+    }
+
+    pub fn restart(&self) -> Result<Arc<Mutex<Pipeline>>, ApiError> {
+        let mut guard = self.pipeline.lock().unwrap();
+        guard.take();
+        let options =
+            pipeline_options_from_config(&self.config, &self.runtime, &self.chromium_context);
+        let pipeline = Arc::new(Mutex::new(Pipeline::new(options)?));
+        *guard = Some(pipeline.clone());
+        Ok(pipeline)
     }
 }
 

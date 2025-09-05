@@ -53,15 +53,15 @@ impl CompositorInstance {
         info!("Starting Smelter Integration Test with config:\n{config:#?}",);
 
         let (should_close_sender, should_close_receiver) = crossbeam_channel::bounded(1);
-        let pipeline = Pipeline::new(options).unwrap();
-        let state = ApiState {
-            pipeline: Arc::new(Mutex::new(pipeline)),
+        let pipeline = Arc::new(Mutex::new(Pipeline::new(options).unwrap()));
+        let state = Arc::new(ApiState {
+            pipeline: Mutex::new(Some(pipeline.clone())),
             config,
             chromium_context: None,
             runtime: runtime(),
-        };
+        });
 
-        let events = state.pipeline.lock().unwrap().subscribe_pipeline_events();
+        let events = pipeline.lock().unwrap().subscribe_pipeline_events();
         thread::Builder::new()
             .name("HTTP server startup thread".to_string())
             .spawn(move || {
