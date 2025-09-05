@@ -27,7 +27,7 @@ pub enum Mp4InputSource {
 
 #[derive(Debug, Clone)]
 pub struct Mp4InputVideoDecoders {
-    pub h264: VideoDecoderOptions,
+    pub h264: Option<VideoDecoderOptions>,
 }
 
 #[derive(Debug, thiserror::Error)]

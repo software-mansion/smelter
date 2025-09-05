@@ -243,7 +243,9 @@ impl SingleBenchmarkPass {
             RegisterInputOptions {
                 input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
                     should_loop: true,
-                    video_decoders: Mp4InputVideoDecoders { h264: self.decoder },
+                    video_decoders: Mp4InputVideoDecoders {
+                        h264: Some(self.decoder),
+                    },
                     source: Mp4InputSource::File(path.to_path_buf().into()),
                 }),
                 queue_options: QueueInputOptions {

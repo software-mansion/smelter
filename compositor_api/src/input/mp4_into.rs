@@ -32,29 +32,16 @@ impl TryFrom<Mp4Input> for pipeline::RegisterInputOptions {
             offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
         };
 
-        let video_decoders = match decoder_map {
-            Some(decoders) => {
-                let h264 = decoders
-                    .get(&InputMp4Codec::H264)
-                    .map(|decoder| match decoder {
-                        VideoDecoder::FfmpegH264 => Ok(pipeline::VideoDecoderOptions::FfmpegH264),
+        let h264 = decoder_map
+            .as_ref()
+            .and_then(|decoders| decoders.get(&InputMp4Codec::H264))
+            .map(|decoder| match decoder {
+                Mp4VideoDecoderOptions::FfmpegH264 => Ok(pipeline::VideoDecoderOptions::FfmpegH264),
+                Mp4VideoDecoderOptions::VulkanH264 => Ok(pipeline::VideoDecoderOptions::VulkanH264),
+            })
+            .transpose()?;
 
-                        #[cfg(feature = "vk-video")]
-                        VideoDecoder::VulkanH264 => Ok(pipeline::VideoDecoderOptions::VulkanH264),
-
-                        #[cfg(not(feature = "vk-video"))]
-                        VideoDecoder::VulkanH264 => Err(TypeError::new(super::NO_VULKAN_VIDEO)),
-
-                        _ => Err(TypeError::new("Expected h264 decoder")),
-                    })
-                    .unwrap_or(Ok(pipeline::VideoDecoderOptions::FfmpegH264))?;
-
-                pipeline::Mp4InputVideoDecoders { h264 }
-            }
-            None => pipeline::Mp4InputVideoDecoders {
-                h264: pipeline::VideoDecoderOptions::FfmpegH264,
-            },
-        };
+        let video_decoders = pipeline::Mp4InputVideoDecoders { h264 };
 
         Ok(pipeline::RegisterInputOptions {
             input_options: pipeline::ProtocolInputOptions::Mp4(pipeline::Mp4InputOptions {
