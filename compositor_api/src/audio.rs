@@ -14,7 +14,7 @@ pub struct AudioScene {
 #[serde(deny_unknown_fields)]
 pub struct AudioSceneInput {
     pub input_id: InputId,
-    /// (**default=`1.0`**) float in `[0, 1]` range representing input volume
+    /// (**default=`1.0`**) float in `[0, 2]` range representing input volume
     pub volume: Option<f32>,
 }
 
@@ -55,8 +55,8 @@ impl TryFrom<AudioSceneInput> for pipeline::AudioMixerInputConfig {
 
     fn try_from(value: AudioSceneInput) -> Result<Self, Self::Error> {
         if let Some(volume) = value.volume {
-            if !(0.0..=1.0).contains(&volume) {
-                return Err(TypeError::new("Input volume has to be in [0, 1] range."));
+            if !(0.0..=2.0).contains(&volume) {
+                return Err(TypeError::new("Input volume has to be in [0, 2] range."));
             }
         }
         Ok(Self {
