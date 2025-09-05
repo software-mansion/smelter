@@ -1,12 +1,16 @@
-use std::{env, fs};
+use std::{env, path::PathBuf};
 
 use anyhow::Result;
 use inquire::Text;
+use integration_tests::{
+    assets::{BUNNY_H264_PATH, BUNNY_H264_URL},
+    examples::{download_asset, examples_root_dir, AssetData},
+};
 use rand::RngCore;
 use serde_json::json;
 use tracing::{error, info};
 
-use crate::{inputs::InputHandler, players::InputPlayer};
+use crate::{inputs::InputHandler, players::InputPlayer, utils::resolve_path};
 
 const MP4_INPUT_PATH: &str = "MP4_INPUT_PATH";
 
@@ -23,7 +27,7 @@ impl InputHandler for Mp4Input {
 
 pub struct Mp4InputBuilder {
     name: String,
-    path: Option<String>,
+    path: Option<PathBuf>,
 }
 
 impl Mp4InputBuilder {
@@ -35,41 +39,38 @@ impl Mp4InputBuilder {
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
+        let env_path = env::var(MP4_INPUT_PATH).unwrap_or_default();
 
-        loop {
-            let path_input = Text::new(&format!(
-                "Absolute input path (ESC for env {MP4_INPUT_PATH}):"
-            ))
-            .prompt_skippable()?;
+        builder = loop {
+            let path_input = Text::new("Input path:")
+                .with_initial_value(&env_path)
+                .prompt_skippable()?;
 
-            builder = match path_input {
-                Some(path) if fs::exists(&path).unwrap_or(false) => builder.with_path(path),
-                Some(path) => {
-                    error!("{path} does not exist");
-                    continue;
+            match path_input {
+                Some(path) if !path.trim().is_empty() => {
+                    let path = resolve_path(path.into())?;
+                    if path.exists() {
+                        break builder.with_path(path);
+                    } else {
+                        error!("Path is not valid");
+                    }
                 }
-                None => match env::var(MP4_INPUT_PATH).ok() {
-                    Some(path) if fs::exists(&path).unwrap_or(false) => {
-                        info!("Path read from env: {path}");
-                        builder.with_path(path)
-                    }
-                    Some(path) => {
-                        error!("{path} does not exist");
-                        continue;
-                    }
-                    None => {
-                        error!("Env {MP4_INPUT_PATH} not found or invalid. Please enter path manually.");
-                        continue;
-                    }
-                },
+                Some(_) | None => {
+                    let path = examples_root_dir().join(BUNNY_H264_PATH);
+                    info!("Using default asset at \"{}\"", path.to_str().unwrap());
+                    download_asset(&AssetData {
+                        url: BUNNY_H264_URL.to_string(),
+                        path: path.clone(),
+                    })?;
+                    break builder.with_path(path);
+                }
             };
-            break;
-        }
+        };
 
         Ok(builder)
     }
 
-    pub fn with_path(mut self, path: String) -> Self {
+    pub fn with_path(mut self, path: PathBuf) -> Self {
         self.path = Some(path);
         self
     }

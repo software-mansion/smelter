@@ -13,7 +13,7 @@ use std::{
     time::Duration,
 };
 
-enum Video {
+pub enum Video {
     H264,
     VP8,
     VP9,
@@ -171,7 +171,7 @@ pub fn start_ffmpeg_send(
                 video_port,
                 audio_port,
                 get_asset_path(test_sample)?,
-                Video::H264,
+                Some(Video::H264),
             )
         }
         TestSample::BigBuckBunnyVP8Opus | TestSample::ElephantsDreamVP8Opus => {
@@ -180,7 +180,7 @@ pub fn start_ffmpeg_send(
                 video_port,
                 audio_port,
                 get_asset_path(test_sample)?,
-                Video::VP8,
+                Some(Video::VP8),
             )
         }
         TestSample::BigBuckBunnyVP9Opus | TestSample::ElephantsDreamVP9Opus => {
@@ -189,7 +189,7 @@ pub fn start_ffmpeg_send(
                 video_port,
                 audio_port,
                 get_asset_path(test_sample)?,
-                Video::VP9,
+                Some(Video::VP9),
             )
         }
         TestSample::BigBuckBunnyH264AAC => start_ffmpeg_send_from_file_aac(
@@ -205,7 +205,7 @@ pub fn start_ffmpeg_send(
                 Some(port),
                 None,
                 get_asset_path(test_sample)?,
-                Video::H264,
+                Some(Video::H264),
             ),
             None => Err(anyhow!("video port required for test sample")),
         },
@@ -215,7 +215,7 @@ pub fn start_ffmpeg_send(
                 Some(port),
                 None,
                 get_asset_path(test_sample)?,
-                Video::VP8,
+                Some(Video::VP8),
             ),
             None => Err(anyhow!("video port required for test sample")),
         },
@@ -225,7 +225,7 @@ pub fn start_ffmpeg_send(
                 Some(port),
                 None,
                 get_asset_path(test_sample)?,
-                Video::VP9,
+                Some(Video::VP9),
             ),
             None => Err(anyhow!("video port required for test sample")),
         },
@@ -288,12 +288,12 @@ pub fn start_ffmpeg_send(
     }
 }
 
-fn start_ffmpeg_send_from_file(
+pub fn start_ffmpeg_send_from_file(
     ip: &str,
     video_port: Option<u16>,
     audio_port: Option<u16>,
     path: PathBuf,
-    video_codec: Video,
+    video_codec: Option<Video>,
 ) -> Result<(Option<Child>, Option<Child>)> {
     if video_port.is_none() && audio_port.is_none() {
         return Err(anyhow!(
@@ -306,7 +306,7 @@ fn start_ffmpeg_send_from_file(
             ip,
             port,
             path.clone(),
-            video_codec,
+            video_codec.unwrap(),
         )?),
         None => None,
     };

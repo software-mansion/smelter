@@ -6,6 +6,7 @@ use strum::{Display, EnumIter};
 
 use crate::players::OutputPlayer;
 
+pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
 pub mod whip;
@@ -86,7 +87,7 @@ pub enum VideoResolutionOptions {
     Hd,
 }
 
-#[derive(Debug, Display, EnumIter)]
+#[derive(Debug, Display, EnumIter, PartialEq)]
 pub enum VideoEncoder {
     #[strum(to_string = "ffmpeg_h264")]
     FfmpegH264,
