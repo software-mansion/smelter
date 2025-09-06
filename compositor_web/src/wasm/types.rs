@@ -1,6 +1,4 @@
-use compositor_render::{
-    error::ErrorStack, web_renderer::WebRendererInitOptions, InputId, OutputId, Resolution,
-};
+use compositor_render::{error::ErrorStack, InputId, OutputId, Resolution};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
 use wasm_bindgen::prelude::*;
@@ -92,7 +90,7 @@ pub fn new_render_options(
     queue: Arc<wgpu::Queue>,
 ) -> compositor_render::RendererOptions {
     compositor_render::RendererOptions {
-        web_renderer: WebRendererInitOptions::Disable,
+        chromium_context: None,
         // Framerate is only required by web renderer which is not used
         framerate: compositor_render::Framerate { num: 30, den: 1 },
         stream_fallback_timeout: Duration::from_millis(value.stream_fallback_timeout_ms),

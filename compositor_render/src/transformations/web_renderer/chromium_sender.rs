@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use crate::{
-    scene::ComponentId,
-    state::{node_texture::NodeTexture, RegisterCtx},
-    RendererId, Resolution,
+    scene::ComponentId, state::node_texture::NodeTexture,
+    transformations::web_renderer::chromium_context::ChromiumContext, RendererId, Resolution,
 };
 use crossbeam_channel::{Receiver, Sender};
 use log::error;
@@ -29,7 +28,7 @@ impl Drop for ChromiumSender {
 
 impl ChromiumSender {
     pub fn new(
-        ctx: &RegisterCtx,
+        chromium_context: Arc<ChromiumContext>,
         instance_id: &RendererId,
         spec: &WebRendererSpec,
         browser_client: BrowserClient,
@@ -38,7 +37,7 @@ impl ChromiumSender {
         let (unmap_signal_sender, unmap_signal_receiver) = crossbeam_channel::bounded(0);
 
         ChromiumSenderThread::new(
-            ctx,
+            chromium_context,
             instance_id,
             spec,
             browser_client,

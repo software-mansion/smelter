@@ -326,7 +326,6 @@ impl From<&RequestKeyframeError> for PipelineErrorInfo {
 }
 
 const WGPU_INIT_ERROR: &str = "WGPU_INIT_ERROR";
-const WEB_RENDERER_INIT_ERROR: &str = "WEB_RENDERER_INIT_ERROR";
 const LAYOUT_INIT_ERROR: &str = "LAYOUT_INIT_ERROR";
 
 impl From<&InitRendererEngineError> for PipelineErrorInfo {
@@ -334,9 +333,6 @@ impl From<&InitRendererEngineError> for PipelineErrorInfo {
         match err {
             InitRendererEngineError::FailedToInitWgpuCtx(_) => {
                 PipelineErrorInfo::new(WGPU_INIT_ERROR, ErrorType::ServerError)
-            }
-            InitRendererEngineError::FailedToInitChromiumCtx(_) => {
-                PipelineErrorInfo::new(WEB_RENDERER_INIT_ERROR, ErrorType::ServerError)
             }
             InitRendererEngineError::LayoutTransformationsInitError(_) => {
                 PipelineErrorInfo::new(LAYOUT_INIT_ERROR, ErrorType::ServerError)

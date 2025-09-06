@@ -17,7 +17,8 @@ fn main() {
 
     let config = read_config();
 
-    let mut options = pipeline_options_from_config(&config, Arc::new(Runtime::new().unwrap()));
+    let mut options =
+        pipeline_options_from_config(&config, &Arc::new(Runtime::new().unwrap()), &None);
     options.wgpu_options = PipelineWgpuOptions::Context(graphics_context);
     let _pipeline = Pipeline::new(options).unwrap();
 }

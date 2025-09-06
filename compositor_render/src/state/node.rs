@@ -12,7 +12,7 @@ use crate::InputId;
 use crate::transformations::text_renderer::TextRenderParams;
 use crate::transformations::web_renderer::WebRenderer;
 use crate::transformations::{
-    image::ImageNode, text_renderer::TextRendererNode, web_renderer::node::WebRendererNode,
+    image::ImageNode, text_renderer::TextRendererNode, web_renderer::WebRendererNode,
 };
 
 use super::input_texture::InputTexture;

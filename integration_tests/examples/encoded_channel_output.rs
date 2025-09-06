@@ -26,7 +26,7 @@ fn main() {
     config.ahead_of_time_processing = true;
     // no chromium support, so we can ignore _event_loop
     let runtime = Arc::new(Runtime::new().unwrap());
-    let (state, _event_loop) = ApiState::new(config, runtime).unwrap_or_else(|err| {
+    let state = ApiState::new(config, runtime).unwrap_or_else(|err| {
         panic!(
             "Failed to start compositor.\n{}",
             ErrorStack::new(&err).into_string()

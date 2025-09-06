@@ -10,7 +10,6 @@ use log::error;
 
 use crate::error::ErrorStack;
 use crate::scene::ComponentId;
-use crate::state::RegisterCtx;
 use crate::transformations::web_renderer::chromium_sender::{
     ChromiumSenderMessage, UpdateSharedMemoryInfo,
 };
@@ -23,7 +22,7 @@ use super::{browser_client::BrowserClient, chromium_context::ChromiumContext};
 use super::{utils, WebRendererSpec, EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE};
 
 pub(super) struct ChromiumSenderThread {
-    chromium_ctx: Arc<ChromiumContext>,
+    chromium_context: Arc<ChromiumContext>,
     url: String,
     web_renderer_id: RendererId,
     browser_client: BrowserClient,
@@ -34,7 +33,7 @@ pub(super) struct ChromiumSenderThread {
 
 impl ChromiumSenderThread {
     pub fn new(
-        ctx: &RegisterCtx,
+        chromium_context: Arc<ChromiumContext>,
         instance_id: &RendererId,
         spec: &WebRendererSpec,
         browser_client: BrowserClient,
@@ -42,7 +41,7 @@ impl ChromiumSenderThread {
         unmap_signal_sender: Sender<()>,
     ) -> Self {
         Self {
-            chromium_ctx: ctx.chromium.clone(),
+            chromium_context,
             url: spec.url.clone(),
             web_renderer_id: instance_id.clone(),
             browser_client,
@@ -57,7 +56,7 @@ impl ChromiumSenderThread {
 
     fn run(&mut self) {
         let Ok(browser) = self
-            .chromium_ctx
+            .chromium_context
             .start_browser(&self.url, self.browser_client.clone())
         else {
             error!("Couldn't start browser for {}", self.url);
@@ -66,7 +65,7 @@ impl ChromiumSenderThread {
 
         let mut state = ThreadState::new(
             browser,
-            self.chromium_ctx.instance_id(),
+            self.chromium_context.instance_id(),
             &self.web_renderer_id,
         );
         loop {

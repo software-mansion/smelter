@@ -95,7 +95,7 @@ pub struct SingleBenchmarkPass {
 
 impl SingleBenchmarkPass {
     pub fn run(&self, ctx: GraphicsContext) -> Result<bool> {
-        let (pipeline, _event_loop) = Pipeline::new(benchmark_pipeline_options(
+        let pipeline = Pipeline::new(benchmark_pipeline_options(
             self.framerate,
             ctx,
             self.rendering_mode,
