@@ -145,13 +145,16 @@ impl SmelterState {
         let input_names = self
             .inputs
             .iter()
-            .map(|i| i.name().to_string())
+            .enumerate()
+            .map(|(idx, i)| format!("{}. {}", idx + 1, i.name()))
             .collect::<Vec<_>>();
         if input_names.is_empty() {
             println!("No inputs to remove.");
             return Ok(());
         }
         let to_delete = Select::new("Select input to remove:", input_names).prompt()?;
+
+        let to_delete = self.reformat_name(to_delete);
 
         for output in &mut self.outputs {
             let update_route = format!("output/{}/update", output.name());
@@ -185,13 +188,17 @@ impl SmelterState {
         let output_names = self
             .outputs
             .iter()
-            .map(|o| o.name().to_string())
+            .enumerate()
+            .map(|(idx, o)| format!("{}. {}", idx + 1, o.name()))
             .collect::<Vec<_>>();
         if output_names.is_empty() {
             println!("No outputs to remove.");
             return Ok(());
         }
+
         let to_delete = Select::new("Select output to remove:", output_names).prompt()?;
+
+        let to_delete = self.reformat_name(to_delete);
 
         let unregister_route = format!("output/{}/unregister", to_delete);
 
@@ -211,14 +218,9 @@ impl SmelterState {
             .enumerate()
             .map(|(idx, input)| format!("{}. {}", idx + 1, input.name()))
             .collect::<Vec<_>>();
-        if input_names.is_empty() {
-            println!("There are no inputs registered.");
+        if input_names.len() < 2 {
+            println!("Too few inputs for reorder to be possible.");
             return Ok(());
-        }
-
-        fn reformat_input(input: String) -> String {
-            let dot_offset = input.find(".").unwrap();
-            input[dot_offset + 2..].to_string()
         }
 
         println!("Select inputs to swap places:");
@@ -226,8 +228,8 @@ impl SmelterState {
         input_names.retain(|input| *input != input_name_1);
         let input_name_2 = Select::new("Input 2:", input_names).prompt()?;
 
-        let input_name_1 = reformat_input(input_name_1);
-        let input_name_2 = reformat_input(input_name_2);
+        let input_name_1 = self.reformat_name(input_name_1);
+        let input_name_2 = self.reformat_name(input_name_2);
 
         let idx_1 = self
             .inputs
@@ -255,5 +257,10 @@ impl SmelterState {
         }
 
         Ok(())
+    }
+
+    fn reformat_name(&self, input: String) -> String {
+        let dot_offset = input.find(".").unwrap();
+        input[dot_offset + 2..].to_string()
     }
 }
