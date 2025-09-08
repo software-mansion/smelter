@@ -1034,7 +1034,7 @@ export interface AudioScene {
 export interface AudioSceneInput {
   input_id: InputId;
   /**
-   * (**default=`1.0`**) float in `[0, 1]` range representing input volume
+   * (**default=`1.0`**) float in `[0, 2]` range representing input volume
    */
   volume?: number | null;
 }
