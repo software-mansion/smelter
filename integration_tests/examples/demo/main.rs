@@ -1,10 +1,10 @@
-use anyhow::Result;
-use inquire::Select;
+use anyhow::{bail, Result};
+use inquire::{InquireError, Select};
 use integration_tests::examples;
 use serde_json::json;
 use smelter::{config::read_config, logger::init_logger};
 use strum::{Display, EnumIter, IntoEnumIterator};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 mod inputs;
 mod outputs;
@@ -43,10 +43,16 @@ fn run_demo() -> Result<()> {
         let action = Select::new("Select option:", options.clone()).prompt();
         let action = match action {
             Ok(a) => a,
-            Err(e) => {
-                error!("{e}");
-                break;
-            }
+            Err(e) => match e {
+                InquireError::OperationInterrupted | InquireError::OperationCanceled => {
+                    info!("Exit.");
+                    break;
+                }
+                _ => {
+                    error!("{e}");
+                    bail!("An error occured.");
+                }
+            },
         };
 
         let action_result = match action {
@@ -65,8 +71,24 @@ fn run_demo() -> Result<()> {
         match action_result {
             Ok(_) => {}
             Err(e) => {
-                error!("{e}");
-                break;
+                if e.is::<InquireError>() {
+                    let inquire_err = e.downcast::<InquireError>()?;
+                    match inquire_err {
+                        InquireError::OperationCanceled | InquireError::OperationInterrupted => {
+                            println!("Operation interrupted, repeat the action to exit demo.");
+                        }
+                        _ => {
+                            error!("{inquire_err}");
+                            bail!("An error occured.");
+                        }
+                    }
+                } else {
+                    error!("{e}");
+                    let root_cause = e.root_cause();
+                    if root_cause.to_string() != "Request failed." {
+                        bail!("An error occured");
+                    }
+                }
             }
         }
     }
