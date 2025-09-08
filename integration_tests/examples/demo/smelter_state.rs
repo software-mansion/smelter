@@ -207,23 +207,27 @@ impl SmelterState {
         let mut input_names = self
             .inputs
             .iter()
-            .filter_map(|input| {
-                if input.has_video() {
-                    Some(input.name().to_string())
-                } else {
-                    None
-                }
-            })
+            .filter(|input| input.has_video())
+            .enumerate()
+            .map(|(idx, input)| format!("{}. {}", idx + 1, input.name()))
             .collect::<Vec<_>>();
         if input_names.is_empty() {
             println!("There are no inputs registered.");
             return Ok(());
         }
 
+        fn reformat_input(input: String) -> String {
+            let dot_offset = input.find(".").unwrap();
+            input[dot_offset + 2..].to_string()
+        }
+
         println!("Select inputs to swap places:");
         let input_name_1 = Select::new("Input 1:", input_names.clone()).prompt()?;
         input_names.retain(|input| *input != input_name_1);
         let input_name_2 = Select::new("Input 2:", input_names).prompt()?;
+
+        let input_name_1 = reformat_input(input_name_1);
+        let input_name_2 = reformat_input(input_name_2);
 
         let idx_1 = self
             .inputs
