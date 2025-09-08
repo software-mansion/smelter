@@ -69,7 +69,9 @@ pub fn routes(state: Arc<ApiState>) -> Router {
     }
 
     async fn handle_restart(State(state): State<Arc<ApiState>>) -> Result<Response, ApiError> {
-        state.restart()?;
+        tokio::task::spawn_blocking(move || state.restart())
+            .await
+            .unwrap()?;
         Ok(Response::Ok {})
     }
 

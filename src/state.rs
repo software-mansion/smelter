@@ -7,6 +7,7 @@ use compositor_pipeline::{
 };
 use compositor_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
 
+use reqwest::StatusCode;
 use serde::Serialize;
 use tokio::runtime::Runtime;
 
@@ -72,18 +73,24 @@ impl ApiState {
     pub fn pipeline(&self) -> Result<Arc<Mutex<Pipeline>>, ApiError> {
         match self.pipeline.lock().unwrap().clone() {
             Some(pipeline) => Ok(pipeline),
-            None => self.restart(),
+            None => Err(ApiError {
+                error_code: "PIPELINE_DOWN",
+                message: "Pipeline reset failed. Pipeline is down".to_string(),
+                stack: Vec::new(),
+                http_status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            }),
         }
     }
 
-    pub fn restart(&self) -> Result<Arc<Mutex<Pipeline>>, ApiError> {
+    pub fn restart(&self) -> Result<(), ApiError> {
         let mut guard = self.pipeline.lock().unwrap();
         guard.take();
+
         let options =
             pipeline_options_from_config(&self.config, &self.runtime, &self.chromium_context);
         let pipeline = Arc::new(Mutex::new(Pipeline::new(options)?));
-        *guard = Some(pipeline.clone());
-        Ok(pipeline)
+        *guard = Some(pipeline);
+        Ok(())
     }
 }
 

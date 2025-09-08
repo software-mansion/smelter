@@ -137,7 +137,7 @@ impl RtpTimestampSync {
 
         let rtp_timestamp_offset = *self.rtp_timestamp_offset.get_or_insert(rolled_timestamp);
 
-        let timestamp = rolled_timestamp - rtp_timestamp_offset;
+        let timestamp = rolled_timestamp.saturating_sub(rtp_timestamp_offset);
         let pts = Duration::from_secs_f64(timestamp as f64 / self.clock_rate as f64) + sync_offset;
 
         match self.partial_sync_info {
