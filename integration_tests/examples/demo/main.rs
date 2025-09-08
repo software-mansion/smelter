@@ -68,28 +68,8 @@ fn run_demo() -> Result<()> {
             }
         };
 
-        match action_result {
-            Ok(_) => {}
-            Err(e) => {
-                if e.is::<InquireError>() {
-                    let inquire_err = e.downcast::<InquireError>()?;
-                    match inquire_err {
-                        InquireError::OperationCanceled | InquireError::OperationInterrupted => {
-                            println!("Operation interrupted, repeat the action to exit demo.");
-                        }
-                        _ => {
-                            error!("{inquire_err}");
-                            bail!("An error occured.");
-                        }
-                    }
-                } else {
-                    error!("{e}");
-                    let root_cause = e.root_cause();
-                    if root_cause.to_string() != "Request failed." {
-                        bail!("An error occured");
-                    }
-                }
-            }
+        if let Err(e) = action_result {
+            error!("{e}");
         }
     }
 
