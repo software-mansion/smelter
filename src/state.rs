@@ -82,7 +82,7 @@ impl ApiState {
         }
     }
 
-    pub fn restart(&self) -> Result<(), ApiError> {
+    pub fn reset(&self) -> Result<(), ApiError> {
         let mut guard = self.pipeline.lock().unwrap();
         guard.take();
 

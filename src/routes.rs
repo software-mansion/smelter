@@ -68,8 +68,8 @@ pub fn routes(state: Arc<ApiState>) -> Router {
         Ok(Response::Ok {})
     }
 
-    async fn handle_restart(State(state): State<Arc<ApiState>>) -> Result<Response, ApiError> {
-        tokio::task::spawn_blocking(move || state.restart())
+    async fn handle_reset(State(state): State<Arc<ApiState>>) -> Result<Response, ApiError> {
+        tokio::task::spawn_blocking(move || state.reset())
             .await
             .unwrap()?;
         Ok(Response::Ok {})
@@ -84,7 +84,7 @@ pub fn routes(state: Arc<ApiState>) -> Router {
         .nest("/api/font", font)
         // Start request
         .route("/api/start", post(handle_start))
-        .route("/api/restart", post(handle_restart))
+        .route("/api/reset", post(handle_reset))
         // WebSocket - events
         .route("/ws", get(ws_handler))
         .route("/status", get(status_handler))
