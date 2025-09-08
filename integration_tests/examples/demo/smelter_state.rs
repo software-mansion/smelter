@@ -13,6 +13,7 @@ use crate::inputs::whip::WhipInputBuilder;
 use crate::inputs::InputHandler;
 
 use crate::outputs::mp4::Mp4OutputBuilder;
+use crate::outputs::whep::WhepOutputBuilder;
 use crate::outputs::whip::WhipOutputBuilder;
 use crate::players::{InputPlayer, OutputPlayer};
 use crate::{
@@ -122,6 +123,11 @@ impl SmelterState {
                 let (mp4_output, register_request, player) =
                     Mp4OutputBuilder::new().prompt()?.build(&inputs);
                 (Box::new(mp4_output), register_request, player)
+            }
+            OutputProtocol::Whep => {
+                let (whep_output, register_request, player) =
+                    WhepOutputBuilder::new().prompt()?.build(&inputs);
+                (Box::new(whep_output), register_request, player)
             }
         };
 
