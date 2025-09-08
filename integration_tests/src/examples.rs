@@ -27,7 +27,7 @@ pub fn post<T: Serialize + ?Sized>(route: &str, json: &T) -> Result<Response> {
     info!("[example] Sent post request to `{route}`.");
 
     let client = reqwest::blocking::Client::new();
-    let response = client
+    let response_result = client
         .post(format!(
             "http://127.0.0.1:{}/api/{}",
             read_config().api_port,
@@ -35,15 +35,19 @@ pub fn post<T: Serialize + ?Sized>(route: &str, json: &T) -> Result<Response> {
         ))
         .timeout(Duration::from_secs(100))
         .json(json)
-        .send()
-        // TODO: (@jbrs) Handle this if couldn't connect to the server as it is
-        // manually started now
-        .unwrap();
-    if response.status() >= StatusCode::BAD_REQUEST {
-        log_request_error(&json, response);
-        return Err(anyhow!("Request failed."));
+        .send();
+
+    match response_result {
+        Ok(response) if response.status() >= StatusCode::BAD_REQUEST => {
+            log_request_error(&json, response);
+            Err(anyhow!("Request failed."))
+        }
+        Ok(response) => Ok(response),
+        Err(_) => {
+            error!("Couldn't send request. Make sure the example server is running.");
+            Err(anyhow!("Request failed."))
+        }
     }
-    Ok(response)
 }
 
 pub fn run_example(client_code: fn() -> Result<()>) {

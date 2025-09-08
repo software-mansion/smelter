@@ -1,10 +1,9 @@
-use anyhow::Result;
-use inquire::Select;
+use inquire::{InquireError, Select};
 use integration_tests::examples;
 use serde_json::json;
 use smelter::{config::read_config, logger::init_logger};
 use strum::{Display, EnumIter, IntoEnumIterator};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 mod inputs;
 mod outputs;
@@ -34,7 +33,7 @@ pub enum Action {
     Start,
 }
 
-fn run_demo() -> Result<()> {
+fn run_demo() {
     let mut state = SmelterState::new();
 
     let mut options = Action::iter().collect::<Vec<_>>();
@@ -43,10 +42,16 @@ fn run_demo() -> Result<()> {
         let action = Select::new("Select option:", options.clone()).prompt();
         let action = match action {
             Ok(a) => a,
-            Err(e) => {
-                error!("{e}");
-                break;
-            }
+            Err(e) => match e {
+                InquireError::OperationInterrupted | InquireError::OperationCanceled => {
+                    info!("Exit.");
+                    break;
+                }
+                _ => {
+                    error!("{e}");
+                    continue;
+                }
+            },
         };
 
         let action_result = match action {
@@ -56,25 +61,23 @@ fn run_demo() -> Result<()> {
             Action::RemoveOutput => state.unregister_output(),
             Action::Start => {
                 debug!("{state:#?}");
-                options.retain(|a| *a != Action::Start);
-                examples::post("start", &json!({}))?;
-                Ok(())
+                match examples::post("start", &json!({})) {
+                    Ok(_) => {
+                        options.retain(|a| *a != Action::Start);
+                        Ok(())
+                    }
+                    Err(e) => Err(e.context("Start request failed")),
+                }
             }
         };
 
-        match action_result {
-            Ok(_) => {}
-            Err(e) => {
-                error!("{e}");
-                break;
-            }
+        if let Err(e) = action_result {
+            error!("{e}");
         }
     }
-
-    Ok(())
 }
 
-fn main() -> Result<()> {
+fn main() {
     let config = read_config();
     init_logger(config.logger.clone());
     run_demo()

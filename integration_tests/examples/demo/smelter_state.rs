@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use inquire::Select;
 use integration_tests::examples;
 use serde_json::json;
@@ -73,7 +73,9 @@ impl SmelterState {
 
         debug!("Input register request: {input_json:#?}");
 
-        examples::post(&input_route, &input_json)?;
+        examples::post(&input_route, &input_json)
+            .with_context(|| "Input registration failed.".to_string())?;
+
         input_handler.on_after_registration(player)?;
         self.inputs.push(input_handler);
 
@@ -82,7 +84,8 @@ impl SmelterState {
             let update_route = format!("output/{}/update", output.name());
             let update_json = output.serialize_update(&inputs);
             debug!("{update_json:#?}");
-            examples::post(&update_route, &update_json)?;
+            examples::post(&update_route, &update_json)
+                .with_context(|| "Output update failed".to_string())?;
         }
 
         Ok(())
@@ -127,7 +130,8 @@ impl SmelterState {
 
         debug!("Output register request: {output_json:#?}");
 
-        examples::post(&output_route, &output_json)?;
+        examples::post(&output_route, &output_json)
+            .with_context(|| "Output registration failed".to_string())?;
 
         output_handler.on_after_registration(player)?;
 
@@ -162,11 +166,14 @@ impl SmelterState {
                 })
                 .collect::<Vec<_>>();
             let update_json = output.serialize_update(&inputs);
-            examples::post(&update_route, &update_json)?;
+            examples::post(&update_route, &update_json)
+                .with_context(|| "Output update failed".to_string())?;
         }
 
         let unregister_route = format!("input/{}/unregister", to_delete);
-        examples::post(&unregister_route, &json!({}))?;
+
+        examples::post(&unregister_route, &json!({}))
+            .with_context(|| "Input unregistration failed".to_string())?;
 
         self.inputs.retain(|i| i.name() != to_delete);
 
@@ -186,7 +193,9 @@ impl SmelterState {
         let to_delete = Select::new("Select output to remove:", output_names).prompt()?;
 
         let unregister_route = format!("output/{}/unregister", to_delete);
-        examples::post(&unregister_route, &json!({}))?;
+
+        examples::post(&unregister_route, &json!({}))
+            .with_context(|| "Output unregistration failed".to_string())?;
 
         self.outputs.retain(|o| o.name() != to_delete);
 
