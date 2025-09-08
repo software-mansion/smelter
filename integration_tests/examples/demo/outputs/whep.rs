@@ -1,7 +1,11 @@
-use std::env;
+use std::{
+    env,
+    sync::{atomic::AtomicU32, OnceLock},
+};
 
 use anyhow::Result;
 use inquire::{Confirm, Select, Text};
+use integration_tests::examples::examples_root_dir;
 use rand::RngCore;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -43,13 +47,21 @@ impl OutputHandler for WhepOutput {
     fn on_after_registration(&mut self, player: OutputPlayer) -> Result<()> {
         match player {
             OutputPlayer::Manual => {
-                let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
-                let url = "http://127.0.0.1:8080";
+                let html_path = examples_root_dir()
+                    .join("examples")
+                    .join("demo")
+                    .join("whep.html");
+
+                let url = format!(
+                    "file://{}?url=http://127.0.0.1:9000/whep/{}&token={}",
+                    html_path.to_str().unwrap(),
+                    self.name,
+                    self.bearer_token
+                );
 
                 println!("Instructions to start receiving stream:");
-                println!("1. Start Broadcast Box: {cmd}");
-                println!("2. Open: {url}");
-                println!("3. Enter '{}' in 'Stream Key' field", self.bearer_token);
+                println!("Open in browser:");
+                println!("{url}");
 
                 loop {
                     let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
@@ -80,10 +92,8 @@ pub struct WhepOutputBuilder {
 
 impl WhepOutputBuilder {
     pub fn new() -> Self {
-        let suffix = rand::thread_rng().next_u32();
-        let name = format!("output_whep_{suffix}");
         Self {
-            name,
+            name: "".to_string(),
             bearer_token: None,
             video: None,
             audio: None,
@@ -91,8 +101,25 @@ impl WhepOutputBuilder {
         }
     }
 
+    fn generate_name() -> String {
+        static LAST_INPUT: OnceLock<AtomicU32> = OnceLock::new();
+        let atomic_suffix = LAST_INPUT.get_or_init(|| AtomicU32::new(0));
+        let suffix = atomic_suffix.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        format!("input_whip_{suffix}")
+    }
+
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
+
+        let name_input = Text::new("Input name (optional):")
+            .with_initial_value(&builder.name)
+            .prompt_skippable()?;
+
+        builder = match name_input {
+            Some(name) if !name.trim().is_empty() => builder.with_name(name),
+            None | Some(_) => builder.with_name(WhepOutputBuilder::generate_name()),
+        };
 
         builder = builder.prompt_token()?;
 
@@ -166,6 +193,11 @@ impl WhepOutputBuilder {
                 }
             }
         }
+    }
+
+    pub fn with_name(mut self, name: String) -> Self {
+        self.name = name;
+        self
     }
 
     pub fn with_video(mut self, video: WhepOutputVideoOptions) -> Self {
@@ -288,6 +320,7 @@ impl WhepOutputAudioOptions {
         json!({
             "encoder": {
                 "type": self.encoder.to_string(),
+                "preset": "quality",
             },
             "initial": {
                 "inputs": inputs_json,
