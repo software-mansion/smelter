@@ -9,6 +9,7 @@ use crate::{inputs::InputHandler, players::OutputPlayer};
 pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
+pub mod whep;
 pub mod whip;
 
 pub mod scene;
