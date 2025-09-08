@@ -35,7 +35,7 @@ pub enum InputProtocol {
     #[strum(to_string = "rtp_stream")]
     Rtp,
 
-    #[strum(to_string = "whip")]
+    #[strum(to_string = "whip_server")]
     Whip,
 
     #[strum(to_string = "mp4")]
