@@ -6,7 +6,6 @@ use std::{
 use anyhow::Result;
 use inquire::{Confirm, Select, Text};
 use integration_tests::examples::examples_root_dir;
-use rand::RngCore;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
@@ -76,7 +75,7 @@ impl OutputHandler for WhepOutput {
 
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         json!({
-           "video": self.video.as_ref().map(|v| v.serialize_update(inputs, &self.name)),
+           "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
@@ -218,7 +217,7 @@ impl WhepOutputBuilder {
         json!({
             "type": "whep_server",
             "bearer_token": bearer_token,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs, &self.name)),
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
     }
@@ -249,11 +248,7 @@ pub struct WhepOutputVideoOptions {
 }
 
 impl WhepOutputVideoOptions {
-    pub fn serialize_register(
-        &self,
-        inputs: &[&dyn InputHandler],
-        output_name: &str,
-    ) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
@@ -261,19 +256,15 @@ impl WhepOutputVideoOptions {
                 "type": self.encoder.to_string(),
             },
             "initial": {
-                "root": self.scene.serialize(&self.root_id, &inputs, output_name, self.resolution),
+                "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
             },
         })
     }
 
-    pub fn serialize_update(
-        &self,
-        inputs: &[&dyn InputHandler],
-        output_name: &str,
-    ) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
-            "root": self.scene.serialize(&self.root_id, &inputs, output_name, self.resolution),
+            "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
         })
     }
 }
@@ -284,8 +275,7 @@ impl Default for WhepOutputVideoOptions {
             width: 1920,
             height: 1080,
         };
-        let suffix = rand::thread_rng().next_u32();
-        let root_id = format!("tiles_{suffix}");
+        let root_id = "root".to_string();
         Self {
             resolution,
             encoder: VideoEncoder::FfmpegH264,

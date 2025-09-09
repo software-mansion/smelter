@@ -10,7 +10,6 @@ use integration_tests::{
         start_gst_receive_udp_vp9, start_gst_receive_udp_without_video,
     },
 };
-use rand::RngCore;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
@@ -142,7 +141,7 @@ impl OutputHandler for RtpOutput {
 
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         json!({
-           "video": self.video.as_ref().map(|v| v.serialize_update(inputs, &self.name)),
+           "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
@@ -408,7 +407,7 @@ impl RtpOutputBuilder {
             "port": self.port,
             "ip": ip,
             "transport_protocol": self.transport_protocol.as_ref().map(|t| t.to_string()),
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs, &self.name)),
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
     }
@@ -439,11 +438,7 @@ pub struct RtpOutputVideoOptions {
 }
 
 impl RtpOutputVideoOptions {
-    pub fn serialize_register(
-        &self,
-        inputs: &[&dyn InputHandler],
-        output_name: &str,
-    ) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
 
         json!({
@@ -452,20 +447,16 @@ impl RtpOutputVideoOptions {
                 "type": self.encoder.to_string(),
             },
             "initial": {
-                "root": self.scene.serialize(&self.root_id, &inputs, output_name, self.resolution),
+                "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
             }
         })
     }
 
-    pub fn serialize_update(
-        &self,
-        inputs: &[&dyn InputHandler],
-        output_name: &str,
-    ) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
 
         json!({
-            "root": self.scene.serialize(&self.root_id, &inputs, output_name, self.resolution),
+            "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
         })
     }
 }
@@ -476,8 +467,7 @@ impl Default for RtpOutputVideoOptions {
             width: 1920,
             height: 1080,
         };
-        let suffix = rand::thread_rng().next_u32();
-        let root_id = format!("tiles_{suffix}");
+        let root_id = "root".to_string();
         Self {
             root_id,
             resolution,
