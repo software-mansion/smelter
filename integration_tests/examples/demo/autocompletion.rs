@@ -1,3 +1,5 @@
+// https://github.com/mikaelmello/inquire/blob/main/inquire/examples/complex_autocompletion.rs
+
 use std::io::ErrorKind;
 
 use fuzzy_matcher::skim::SkimMatcherV2;

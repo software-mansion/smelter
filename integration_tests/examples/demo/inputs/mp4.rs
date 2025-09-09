@@ -10,7 +10,10 @@ use rand::RngCore;
 use serde_json::json;
 use tracing::{error, info};
 
-use crate::{inputs::InputHandler, players::InputPlayer, utils::resolve_path};
+use crate::{
+    autocompletion::FilePathCompleter, inputs::InputHandler, players::InputPlayer,
+    utils::resolve_path,
+};
 
 const MP4_INPUT_PATH: &str = "MP4_INPUT_PATH";
 
@@ -40,11 +43,16 @@ impl Mp4InputBuilder {
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
         let env_path = env::var(MP4_INPUT_PATH).unwrap_or_default();
+        let default_path = examples_root_dir().join(BUNNY_H264_PATH);
 
         builder = loop {
-            let path_input = Text::new("Input path:")
-                .with_initial_value(&env_path)
-                .prompt_skippable()?;
+            let path_input = Text::new(&format!(
+                "Input path (ESC for {}):",
+                default_path.to_str().unwrap(),
+            ))
+            .with_initial_value(&env_path)
+            .with_autocomplete(FilePathCompleter::default())
+            .prompt_skippable()?;
 
             match path_input {
                 Some(path) if !path.trim().is_empty() => {
@@ -56,13 +64,15 @@ impl Mp4InputBuilder {
                     }
                 }
                 Some(_) | None => {
-                    let path = examples_root_dir().join(BUNNY_H264_PATH);
-                    info!("Using default asset at \"{}\"", path.to_str().unwrap());
+                    info!(
+                        "Using default asset at \"{}\"",
+                        default_path.to_str().unwrap()
+                    );
                     download_asset(&AssetData {
                         url: BUNNY_H264_URL.to_string(),
-                        path: path.clone(),
+                        path: default_path.clone(),
                     })?;
-                    break builder.with_path(path);
+                    break builder.with_path(default_path);
                 }
             };
         };
