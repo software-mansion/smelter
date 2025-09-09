@@ -1,6 +1,6 @@
 import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputRequest } from '../output';
-import { intoOutputEosCondition } from './common';
+import { intoOutputEosCondition, intoVulkanH264EncoderBitrate } from './common';
 
 export function intoRegisterMp4Output(
   output: Outputs.RegisterMp4Output,
@@ -29,12 +29,20 @@ export function intoOutputMp4VideoOptions(
 function intoMp4VideoEncoderOptions(
   encoder: Outputs.Mp4VideoEncoderOptions
 ): Api.VideoEncoderOptions {
-  return {
-    type: 'ffmpeg_h264',
-    preset: encoder.preset,
-    pixel_format: encoder.pixelFormat,
-    ffmpeg_options: encoder.ffmpegOptions,
-  };
+  switch (encoder.type) {
+    case 'ffmpeg_h264':
+      return {
+        type: 'ffmpeg_h264',
+        preset: encoder.preset,
+        pixel_format: encoder.pixelFormat,
+        ffmpeg_options: encoder.ffmpegOptions,
+      };
+    case 'vulkan_h264':
+      return {
+        type: 'vulkan_h264',
+        bitrate: encoder.bitrate && intoVulkanH264EncoderBitrate(encoder.bitrate),
+      };
+  }
 }
 
 function intoOutputMp4AudioOptions(

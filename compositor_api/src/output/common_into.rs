@@ -83,3 +83,20 @@ impl From<PixelFormat> for pipeline::OutputPixelFormat {
         }
     }
 }
+
+impl TryFrom<VulkanH264EncoderBitrate> for pipeline::VulkanH264EncoderBitrate {
+    type Error = TypeError;
+
+    fn try_from(value: VulkanH264EncoderBitrate) -> Result<Self, Self::Error> {
+        if value.average_bitrate > value.max_bitrate {
+            return Err(TypeError::new(
+                "max_bitrate has to be greater than average_bitrate",
+            ));
+        }
+
+        Ok(pipeline::VulkanH264EncoderBitrate {
+            average_bitrate: value.average_bitrate,
+            max_bitrate: value.max_bitrate,
+        })
+    }
+}

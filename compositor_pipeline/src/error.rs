@@ -140,6 +140,13 @@ pub enum EncoderInitError {
 
     #[error(transparent)]
     ResamplerError(#[from] rubato::ResamplerConstructionError),
+
+    #[cfg(feature = "vk-video")]
+    #[error(transparent)]
+    VulkanEncoderError(#[from] vk_video::VulkanEncoderError),
+
+    #[error("Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video encoder")]
+    VulkanContextRequiredForVulkanEncoder,
 }
 
 #[derive(Debug, thiserror::Error)]
