@@ -408,7 +408,7 @@ impl RtpInputBuilder {
                 "Input path (ESC for {}):",
                 default_path.to_str().unwrap(),
             ))
-            .with_autocomplete(FilePathCompleter::files())
+            .with_autocomplete(FilePathCompleter::default())
             .with_initial_value(&env_path)
             .prompt_skippable()?;
 

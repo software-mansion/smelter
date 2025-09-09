@@ -106,7 +106,7 @@ impl Mp4OutputBuilder {
 
         loop {
             let path_output = Text::new("Output path (ESC for default):")
-                .with_autocomplete(FilePathCompleter::directories())
+                .with_autocomplete(FilePathCompleter::default())
                 .with_initial_value(&env_path)
                 .with_default(default_path.to_str().unwrap())
                 .prompt_skippable()?;
