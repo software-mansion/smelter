@@ -1,5 +1,5 @@
+use std::mem;
 use std::ops::Deref;
-use std::ptr;
 
 use anyhow::{Context, Result};
 use inquire::Select;
@@ -242,11 +242,8 @@ impl SmelterState {
             .position(|input| input.name() == input_name_2)
             .unwrap();
 
-        unsafe {
-            let input_1 = &mut self.inputs[idx_1] as *mut Box<dyn InputHandler>;
-            let input_2 = &mut self.inputs[idx_2] as *mut Box<dyn InputHandler>;
-            ptr::swap(input_1, input_2);
-        }
+        let [input_1, input_2] = self.inputs.get_disjoint_mut([idx_1, idx_2])?;
+        mem::swap(input_1, input_2);
 
         let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
         for output in &mut self.outputs {
