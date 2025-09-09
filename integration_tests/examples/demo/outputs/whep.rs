@@ -106,7 +106,7 @@ impl WhepOutputBuilder {
         let atomic_suffix = LAST_INPUT.get_or_init(|| AtomicU32::new(0));
         let suffix = atomic_suffix.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-        format!("input_whip_{suffix}")
+        format!("input_whep_{suffix}")
     }
 
     pub fn prompt(self) -> Result<Self> {
