@@ -9,6 +9,7 @@ use crate::{inputs::InputHandler, players::OutputPlayer};
 pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
+pub mod whep;
 pub mod whip;
 
 pub mod scene;
@@ -37,11 +38,14 @@ pub enum OutputProtocol {
     #[strum(to_string = "rtp_stream")]
     Rtp,
 
-    #[strum(to_string = "rtmp")]
+    #[strum(to_string = "rtmp_client")]
     Rtmp,
 
-    #[strum(to_string = "whip")]
+    #[strum(to_string = "whip_client")]
     Whip,
+
+    #[strum(to_string = "whep_server")]
+    Whep,
 
     #[strum(to_string = "mp4")]
     Mp4,
