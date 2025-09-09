@@ -187,9 +187,11 @@ impl PeerConnection {
         offer: String,
     ) -> Result<RTCSessionDescription, WhipWhepServerError> {
         let offer = RTCSessionDescription::offer(offer)?;
+        debug!("SDP offer: {}", offer.sdp);
         self.set_remote_description(offer).await?;
 
         let answer = self.create_answer().await?;
+        debug!("SDP answer: {}", answer.sdp);
         self.set_local_description(answer).await?;
 
         self.wait_for_ice_candidates(Duration::from_secs(1)).await?;
