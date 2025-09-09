@@ -46,9 +46,10 @@ struct InstanceConfiguration {
 }
 
 pub(super) async fn status_handler(
-    State(state): State<ApiState>,
+    State(state): State<Arc<ApiState>>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let pipeline = state.pipeline.lock().unwrap();
+    let pipeline = state.pipeline()?;
+    let pipeline = pipeline.lock().unwrap();
 
     let inputs: Vec<InputInfo> = pipeline
         .inputs()
@@ -97,8 +98,8 @@ pub(super) async fn status_handler(
         ahead_of_time_processing: state.config.ahead_of_time_processing,
         never_drop_output_frames: state.config.never_drop_output_frames,
         run_late_scheduled_events: state.config.run_late_scheduled_events,
-        download_root: state.config.download_root,
-        whip_whep_stun_servers: state.config.whip_whep_stun_servers,
+        download_root: state.config.download_root.clone(),
+        whip_whep_stun_servers: state.config.whip_whep_stun_servers.clone(),
         web_renderer_enable: state.config.web_renderer_enable,
         web_renderer_enable_gpu: state.config.web_renderer_gpu_enable,
         whip_whep_enable: state.config.whip_whep_enable,

@@ -1,6 +1,7 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use axum::extract::{Path, State};
+use compositor_pipeline::Pipeline;
 use compositor_render::error::ErrorStack;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -24,7 +25,7 @@ pub struct UpdateOutputRequest {
 }
 
 pub(super) async fn handle_output_update(
-    State(api): State<ApiState>,
+    State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
     Json(request): Json<UpdateOutputRequest>,
 ) -> Result<Response, ApiError> {
@@ -37,35 +38,34 @@ pub(super) async fn handle_output_update(
 
     match request.schedule_time_ms {
         Some(schedule_time_ms) => {
-            let pipeline = api.pipeline.clone();
             let schedule_time = Duration::from_secs_f64(schedule_time_ms / 1000.0);
-            api.pipeline().queue().schedule_event(
-                schedule_time,
-                Box::new(move || {
-                    if let Err(err) = pipeline
-                        .lock()
-                        .unwrap()
-                        .update_output(output_id, scene, audio)
-                    {
-                        error!(
-                            "Error while running scheduled output update for pts {}ms: {}",
-                            schedule_time.as_millis(),
-                            ErrorStack::new(&err).into_string()
-                        )
-                    }
-                }),
-            );
+            Pipeline::schedule_event(&api.pipeline()?, schedule_time, move |pipeline| {
+                if let Err(err) = pipeline.update_output(output_id, scene, audio) {
+                    error!(
+                        "Error while running scheduled output update for pts {}ms: {}",
+                        schedule_time.as_millis(),
+                        ErrorStack::new(&err).into_string()
+                    )
+                }
+            });
         }
-        None => api.pipeline().update_output(output_id, scene, audio)?,
+        None => api
+            .pipeline()?
+            .lock()
+            .unwrap()
+            .update_output(output_id, scene, audio)?,
     };
     Ok(Response::Ok {})
 }
 
 pub(super) async fn handle_keyframe_request(
-    State(api): State<ApiState>,
+    State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
 ) -> Result<Response, ApiError> {
-    api.pipeline().request_keyframe(output_id.into())?;
+    api.pipeline()?
+        .lock()
+        .unwrap()
+        .request_keyframe(output_id.into())?;
 
     Ok(Response::Ok {})
 }

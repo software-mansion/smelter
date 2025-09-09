@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
     routing::{delete, get, patch, post},
@@ -9,7 +9,7 @@ use reqwest::StatusCode;
 use serde_json::json;
 use tokio::{net::TcpListener, sync::oneshot};
 use tower_http::cors::CorsLayer;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::{
     error::InitPipelineError,
@@ -73,10 +73,20 @@ impl WhipWhepServer {
 
     async fn new(port: u16) -> Result<Self, InitPipelineError> {
         let addr = SocketAddr::from(([0, 0, 0, 0], port));
-        match tokio::net::TcpListener::bind(addr).await {
-            Ok(listener) => Ok(Self { listener }),
-            Err(err) => Err(InitPipelineError::WhipWhepServerInitError(err)),
+        let mut last_error: Option<std::io::Error> = None;
+        for _ in 0..5 {
+            match tokio::net::TcpListener::bind(addr).await {
+                Ok(listener) => return Ok(Self { listener }),
+                Err(err) => {
+                    warn!("Failed to bind to port {port}. Retrying ...");
+                    last_error = Some(err)
+                }
+            };
+            tokio::time::sleep(Duration::from_millis(1000)).await;
         }
+        Err(InitPipelineError::WhipWhepServerInitError(
+            last_error.unwrap(),
+        ))
     }
 
     async fn run(

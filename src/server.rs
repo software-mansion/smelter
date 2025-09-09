@@ -51,7 +51,7 @@ pub fn run() {
 }
 
 pub fn run_api(
-    state: ApiState,
+    state: Arc<ApiState>,
     runtime: Arc<Runtime>,
     should_close: Receiver<()>,
 ) -> tokio::io::Result<()> {

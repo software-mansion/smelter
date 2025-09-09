@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex, Weak},
     thread,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use crossbeam_channel::{bounded, Receiver};
@@ -324,6 +324,26 @@ impl Pipeline {
         })
     }
 
+    pub fn schedule_event<F: FnOnce(&mut Self) + Send + 'static>(
+        pipeline: &Arc<Mutex<Self>>,
+        pts: Duration,
+        callback: F,
+    ) {
+        let weak = Arc::downgrade(pipeline);
+        let guard = pipeline.lock().unwrap();
+        guard.queue.schedule_event(
+            pts,
+            Box::new(move || {
+                let Some(pipeline) = weak.upgrade() else {
+                    warn!("Unable to call scheduled callback. Pipeline already dropped.");
+                    return;
+                };
+                let mut guard = pipeline.lock().unwrap();
+                callback(&mut guard)
+            }),
+        );
+    }
+
     pub fn outputs(&self) -> impl Iterator<Item = (&OutputId, OutputInfo)> {
         self.outputs.iter().map(|(id, output)| {
             let protocol = output.output.kind();
@@ -334,6 +354,7 @@ impl Pipeline {
 
 impl Drop for Pipeline {
     fn drop(&mut self) {
+        info!("Stopping pipeline");
         self.queue.shutdown()
     }
 }
