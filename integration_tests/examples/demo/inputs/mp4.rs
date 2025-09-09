@@ -1,14 +1,13 @@
 use std::{env, path::PathBuf};
 
 use anyhow::Result;
-use inquire::{Select, Text};
+use inquire::{Confirm, Text};
 use integration_tests::{
     assets::{BUNNY_H264_PATH, BUNNY_H264_URL},
     examples::{download_asset, examples_root_dir, AssetData},
 };
 use rand::RngCore;
 use serde_json::json;
-use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{error, info};
 
 use crate::{
@@ -17,15 +16,6 @@ use crate::{
 };
 
 const MP4_INPUT_PATH: &str = "MP4_INPUT_PATH";
-
-#[derive(Debug, Display, EnumIter)]
-enum Mp4RegisterOptions {
-    #[strum(to_string = "Loop")]
-    Loop,
-
-    #[strum(to_string = "Skip")]
-    Skip,
-}
 
 #[derive(Debug)]
 pub struct Mp4Input {
@@ -60,11 +50,10 @@ impl Mp4InputBuilder {
 
         builder = builder.prompt_path()?;
 
-        let loop_options = Mp4RegisterOptions::iter().collect::<Vec<_>>();
-        let loop_selection = Select::new("Set loop:", loop_options).prompt_skippable()?;
+        let loop_selection = Confirm::new("Loop input [y/n]:").prompt_skippable()?;
         builder = match loop_selection {
-            Some(Mp4RegisterOptions::Loop) => builder.with_loop(true),
-            Some(_) | None => builder,
+            Some(r#loop) => builder.with_loop(r#loop),
+            None => builder,
         };
 
         Ok(builder)
