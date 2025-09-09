@@ -146,40 +146,27 @@ impl SmelterState {
             .inputs
             .iter()
             .enumerate()
-            .map(|(idx, i)| format!("{}. {}", idx + 1, i.name()))
+            .map(|(idx, i)| OrderedItem::new(idx, i.name()))
             .collect::<Vec<_>>();
         if input_names.is_empty() {
             println!("No inputs to remove.");
             return Ok(());
         }
         let to_delete = Select::new("Select input to remove:", input_names).prompt()?;
+        self.inputs.remove(to_delete.idx);
 
-        let to_delete = self.reformat_name(to_delete);
-
+        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
         for output in &mut self.outputs {
             let update_route = format!("output/{}/update", output.name());
-            let inputs = self
-                .inputs
-                .iter()
-                .filter_map(|i| {
-                    if i.name() == to_delete {
-                        None
-                    } else {
-                        Some(i.deref())
-                    }
-                })
-                .collect::<Vec<_>>();
             let update_json = output.serialize_update(&inputs);
             examples::post(&update_route, &update_json)
                 .with_context(|| "Output update failed".to_string())?;
         }
 
-        let unregister_route = format!("input/{}/unregister", to_delete);
+        let unregister_route = format!("input/{}/unregister", to_delete.name);
 
         examples::post(&unregister_route, &json!({}))
             .with_context(|| "Input unregistration failed".to_string())?;
-
-        self.inputs.retain(|i| i.name() != to_delete);
 
         Ok(())
     }
@@ -189,7 +176,7 @@ impl SmelterState {
             .outputs
             .iter()
             .enumerate()
-            .map(|(idx, o)| format!("{}. {}", idx + 1, o.name()))
+            .map(|(idx, o)| OrderedItem::new(idx, o.name()))
             .collect::<Vec<_>>();
         if output_names.is_empty() {
             println!("No outputs to remove.");
@@ -197,15 +184,12 @@ impl SmelterState {
         }
 
         let to_delete = Select::new("Select output to remove:", output_names).prompt()?;
+        self.outputs.remove(to_delete.idx);
 
-        let to_delete = self.reformat_name(to_delete);
-
-        let unregister_route = format!("output/{}/unregister", to_delete);
+        let unregister_route = format!("output/{}/unregister", to_delete.name);
 
         examples::post(&unregister_route, &json!({}))
             .with_context(|| "Output unregistration failed".to_string())?;
-
-        self.outputs.retain(|o| o.name() != to_delete);
 
         Ok(())
     }
@@ -251,11 +235,6 @@ impl SmelterState {
         }
 
         Ok(())
-    }
-
-    fn reformat_name(&self, input: String) -> String {
-        let dot_offset = input.find(".").unwrap();
-        input[dot_offset + 2..].to_string()
     }
 }
 
