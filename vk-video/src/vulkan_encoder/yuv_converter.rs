@@ -211,7 +211,8 @@ impl Converter {
     /// The returned image is NV12 with color attachment layout
     ///
     /// # Safety
-    /// The texture can not be a surface texture
+    /// - The texture can not be a surface texture
+    /// - The texture has to be transitioned to [`wgpu::TextureUses::RESOURCE`] usage
     pub(crate) unsafe fn convert(
         &self,
         texture: wgpu::Texture,
@@ -220,16 +221,6 @@ impl Converter {
             .device
             .wgpu_device()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
-        command_encoder.transition_resources(
-            [].into_iter(),
-            [wgpu::TextureTransition {
-                texture: &texture,
-                state: wgpu::TextureUses::RESOURCE,
-                selector: None,
-            }]
-            .into_iter(),
-        );
 
         let image = unsafe {
             texture.as_hal::<VkApi, _, _>(|t| {
