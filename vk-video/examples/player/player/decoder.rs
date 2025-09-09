@@ -5,7 +5,7 @@ use std::{
 };
 
 use bytes::BytesMut;
-use vk_video::{EncodedChunk, Frame, VulkanDevice};
+use vk_video::{EncodedInputChunk, Frame, VulkanDevice};
 
 use super::FrameWithPts;
 
@@ -36,7 +36,7 @@ pub fn run_decoder(
             return;
         }
 
-        let frame = EncodedChunk {
+        let frame = EncodedInputChunk {
             data: &buffer[..n],
             pts: None,
         };
