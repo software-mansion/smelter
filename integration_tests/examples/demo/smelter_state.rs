@@ -216,7 +216,7 @@ impl SmelterState {
             .iter()
             .filter(|input| input.has_video())
             .enumerate()
-            .map(|(idx, input)| format!("{}. {}", idx + 1, input.name()))
+            .map(|(idx, input)| OrderedItem::new(idx, input.name()))
             .collect::<Vec<_>>();
         if input_names.len() < 2 {
             println!("Too few inputs for reorder to be possible.");
@@ -224,22 +224,19 @@ impl SmelterState {
         }
 
         println!("Select inputs to swap places:");
-        let input_name_1 = Select::new("Input 1:", input_names.clone()).prompt()?;
-        input_names.retain(|input| *input != input_name_1);
-        let input_name_2 = Select::new("Input 2:", input_names).prompt()?;
-
-        let input_name_1 = self.reformat_name(input_name_1);
-        let input_name_2 = self.reformat_name(input_name_2);
+        let input_1 = Select::new("Input 1:", input_names.clone()).prompt()?;
+        input_names.retain(|input| input.name != input_1.name);
+        let input_2 = Select::new("Input 2:", input_names).prompt()?;
 
         let idx_1 = self
             .inputs
             .iter()
-            .position(|input| input.name() == input_name_1)
+            .position(|input| input.name() == input_1.name)
             .unwrap();
         let idx_2 = self
             .inputs
             .iter()
-            .position(|input| input.name() == input_name_2)
+            .position(|input| input.name() == input_2.name)
             .unwrap();
 
         let [input_1, input_2] = self.inputs.get_disjoint_mut([idx_1, idx_2])?;
@@ -259,5 +256,26 @@ impl SmelterState {
     fn reformat_name(&self, input: String) -> String {
         let dot_offset = input.find(".").unwrap();
         input[dot_offset + 2..].to_string()
+    }
+}
+
+#[derive(Clone)]
+struct OrderedItem {
+    idx: usize,
+    name: String,
+}
+
+impl OrderedItem {
+    fn new(idx: usize, name: &str) -> Self {
+        Self {
+            idx,
+            name: name.to_string(),
+        }
+    }
+}
+
+impl std::fmt::Display for OrderedItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}. {}", self.idx + 1, self.name)
     }
 }
