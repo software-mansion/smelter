@@ -13,9 +13,24 @@ use inquire::{
 pub struct FilePathCompleter {
     input: String,
     paths: Vec<String>,
+    dir_only: bool,
 }
 
 impl FilePathCompleter {
+    pub fn files() -> Self {
+        Self {
+            dir_only: false,
+            ..Default::default()
+        }
+    }
+
+    pub fn directories() -> Self {
+        Self {
+            dir_only: true,
+            ..Default::default()
+        }
+    }
+
     fn update_input(&mut self, input: &str) -> Result<(), CustomUserError> {
         if input == self.input && !self.paths.is_empty() {
             return Ok(());
@@ -51,6 +66,9 @@ impl FilePathCompleter {
         .collect::<Result<Vec<_>, _>>()?;
 
         for entry in entries {
+            if self.dir_only && !entry.file_type()?.is_dir() {
+                continue;
+            }
             let path = entry.path();
             let path_str = if path.is_dir() {
                 format!("{}/", path.to_string_lossy())

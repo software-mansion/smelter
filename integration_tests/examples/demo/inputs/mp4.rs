@@ -51,7 +51,7 @@ impl Mp4InputBuilder {
                 default_path.to_str().unwrap(),
             ))
             .with_initial_value(&env_path)
-            .with_autocomplete(FilePathCompleter::default())
+            .with_autocomplete(FilePathCompleter::files())
             .prompt_skippable()?;
 
             match path_input {
