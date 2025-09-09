@@ -321,11 +321,8 @@ impl RtpOutputBuilder {
             None => builder,
         };
 
-        let player_choice = builder.prompt_player()?;
-        let builder = match player_choice {
-            Some(player) => builder.with_player(player),
-            None => builder,
-        };
+        builder = builder.prompt_player()?;
+
         Ok(builder)
     }
 
@@ -353,7 +350,7 @@ impl RtpOutputBuilder {
         }
     }
 
-    fn prompt_player(&self) -> Result<Option<OutputPlayer>> {
+    fn prompt_player(self) -> Result<Self> {
         match self.transport_protocol {
             Some(TransportProtocol::Udp) | None => {
                 let player_options = match (&self.video, &self.audio) {
@@ -362,15 +359,13 @@ impl RtpOutputBuilder {
                     }
                     _ => OutputPlayer::iter().collect(),
                 };
-                let player_choice =
-                    Select::new("Select player:", player_options).prompt_skippable()?;
-                Ok(player_choice)
+                let player_choice = Select::new("Select player:", player_options).prompt()?;
+                Ok(self.with_player(player_choice))
             }
             Some(TransportProtocol::TcpServer) => {
                 let player_options = vec![OutputPlayer::GstreamerReceiver, OutputPlayer::Manual];
-                let player_choice =
-                    Select::new("Select player:", player_options).prompt_skippable()?;
-                Ok(player_choice)
+                let player_choice = Select::new("Select player:", player_options).prompt()?;
+                Ok(self.with_player(player_choice))
             }
         }
     }

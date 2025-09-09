@@ -1,3 +1,4 @@
+use std::mem;
 use std::ops::Deref;
 
 use anyhow::{Context, Result};
@@ -144,38 +145,28 @@ impl SmelterState {
         let input_names = self
             .inputs
             .iter()
-            .map(|i| i.name().to_string())
+            .enumerate()
+            .map(|(idx, i)| OrderedItem::new(idx, i.name()))
             .collect::<Vec<_>>();
         if input_names.is_empty() {
             println!("No inputs to remove.");
             return Ok(());
         }
         let to_delete = Select::new("Select input to remove:", input_names).prompt()?;
+        self.inputs.remove(to_delete.idx);
 
+        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
         for output in &mut self.outputs {
             let update_route = format!("output/{}/update", output.name());
-            let inputs = self
-                .inputs
-                .iter()
-                .filter_map(|i| {
-                    if i.name() == to_delete {
-                        None
-                    } else {
-                        Some(i.deref())
-                    }
-                })
-                .collect::<Vec<_>>();
             let update_json = output.serialize_update(&inputs);
             examples::post(&update_route, &update_json)
                 .with_context(|| "Output update failed".to_string())?;
         }
 
-        let unregister_route = format!("input/{}/unregister", to_delete);
+        let unregister_route = format!("input/{}/unregister", to_delete.name);
 
         examples::post(&unregister_route, &json!({}))
             .with_context(|| "Input unregistration failed".to_string())?;
-
-        self.inputs.retain(|i| i.name() != to_delete);
 
         Ok(())
     }
@@ -184,21 +175,86 @@ impl SmelterState {
         let output_names = self
             .outputs
             .iter()
-            .map(|o| o.name().to_string())
+            .enumerate()
+            .map(|(idx, o)| OrderedItem::new(idx, o.name()))
             .collect::<Vec<_>>();
         if output_names.is_empty() {
             println!("No outputs to remove.");
             return Ok(());
         }
-        let to_delete = Select::new("Select output to remove:", output_names).prompt()?;
 
-        let unregister_route = format!("output/{}/unregister", to_delete);
+        let to_delete = Select::new("Select output to remove:", output_names).prompt()?;
+        self.outputs.remove(to_delete.idx);
+
+        let unregister_route = format!("output/{}/unregister", to_delete.name);
 
         examples::post(&unregister_route, &json!({}))
             .with_context(|| "Output unregistration failed".to_string())?;
 
-        self.outputs.retain(|o| o.name() != to_delete);
+        Ok(())
+    }
+
+    pub fn reorder_inputs(&mut self) -> Result<()> {
+        let mut input_names = self
+            .inputs
+            .iter()
+            .filter(|input| input.has_video())
+            .enumerate()
+            .map(|(idx, input)| OrderedItem::new(idx, input.name()))
+            .collect::<Vec<_>>();
+        if input_names.len() < 2 {
+            println!("Too few inputs for reorder to be possible.");
+            return Ok(());
+        }
+
+        println!("Select inputs to swap places:");
+        let input_1 = Select::new("Input 1:", input_names.clone()).prompt()?;
+        input_names.retain(|input| input.name != input_1.name);
+        let input_2 = Select::new("Input 2:", input_names).prompt()?;
+
+        let idx_1 = self
+            .inputs
+            .iter()
+            .position(|input| input.name() == input_1.name)
+            .unwrap();
+        let idx_2 = self
+            .inputs
+            .iter()
+            .position(|input| input.name() == input_2.name)
+            .unwrap();
+
+        let [input_1, input_2] = self.inputs.get_disjoint_mut([idx_1, idx_2])?;
+        mem::swap(input_1, input_2);
+
+        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
+        for output in &mut self.outputs {
+            let update_route = format!("output/{}/update", output.name());
+            let update_json = output.serialize_update(&inputs);
+            debug!("{update_json:#?}");
+            examples::post(&update_route, &update_json)?;
+        }
 
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct OrderedItem {
+    idx: usize,
+    name: String,
+}
+
+impl OrderedItem {
+    fn new(idx: usize, name: &str) -> Self {
+        Self {
+            idx,
+            name: name.to_string(),
+        }
+    }
+}
+
+impl std::fmt::Display for OrderedItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}. {}", self.idx + 1, self.name)
     }
 }

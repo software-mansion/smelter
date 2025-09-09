@@ -368,11 +368,8 @@ impl RtpInputBuilder {
             None => builder,
         };
 
-        let player_selection = builder.prompt_player()?;
-        builder = match player_selection {
-            Some(player) => builder.with_player(player),
-            None => builder,
-        };
+        builder = builder.prompt_player()?;
+
         Ok(builder)
     }
 
@@ -423,7 +420,7 @@ impl RtpInputBuilder {
         }
     }
 
-    fn prompt_player(&self) -> Result<Option<InputPlayer>> {
+    fn prompt_player(self) -> Result<Self> {
         match self.transport_protocol {
             Some(TransportProtocol::Udp) | None => {
                 let player_options = match (&self.video, &self.audio) {
@@ -433,15 +430,13 @@ impl RtpInputBuilder {
                     _ => InputPlayer::iter().collect(),
                 };
 
-                let player_selection =
-                    Select::new("Select player:", player_options).prompt_skippable()?;
-                Ok(player_selection)
+                let player_selection = Select::new("Select player:", player_options).prompt()?;
+                Ok(self.with_player(player_selection))
             }
             Some(TransportProtocol::TcpServer) => {
                 let player_options = vec![InputPlayer::GstreamerTransmitter, InputPlayer::Manual];
-                let player_selection =
-                    Select::new("Select player:", player_options).prompt_skippable()?;
-                Ok(player_selection)
+                let player_selection = Select::new("Select player:", player_options).prompt()?;
+                Ok(self.with_player(player_selection))
             }
         }
     }
