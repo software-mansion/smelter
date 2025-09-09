@@ -305,7 +305,37 @@ impl WgpuTexturesEncoder {
     ///
     /// # Safety
     /// - The texture cannot be a surface texture
-    /// - The texture has to be transitioned to [`wgpu::TextureUses::RESOURCE`] usage
+    /// - The texture has to be transitioned to [`wgpu::TextureUses::RESOURCE`] usage:
+    ///   ```rust
+    ///   # let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    ///   # let texture = device.create_texture(&wgpu::TextureDescriptor {
+    ///   #     label: None,
+    ///   #     size: wgpu::Extent3d {
+    ///   #         width: 1280,
+    ///   #         height: 720,
+    ///   #         depth_or_array_layers: 1,
+    ///   #     },
+    ///   #     mip_level_count: 1,
+    ///   #     sample_count: 1,
+    ///   #     dimension: wgpu::TextureDimension::D2,
+    ///   #     format: wgpu::TextureFormat::Rgba8Unorm,
+    ///   #     usage: wgpu::TextureUsages::TEXTURE_BINDING,
+    ///   #     view_formats: &[],
+    ///   # });
+    ///   let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    ///   encoder.transition_resources(
+    ///       [].into_iter(),
+    ///       [wgpu::TextureTransition {
+    ///           texture: &texture,
+    ///           state: wgpu::TextureUses::RESOURCE,
+    ///           selector: None,
+    ///       }]
+    ///       .into_iter(),
+    ///   );
+    ///   queue.submit([encoder.finish()]);
+    ///
+    ///   // Now you can use `WgpuTexturesEncoder::encode` on `texture`
+    ///   ```
     pub unsafe fn encode(
         &mut self,
         frame: Frame<wgpu::Texture>,
