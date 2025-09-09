@@ -4,26 +4,25 @@ use std::time::Duration;
 use glyphon::fontdb;
 use tracing::trace;
 
-use crate::error::{RegisterRendererError, UnregisterRendererError};
-
-use crate::scene::{Component, OutputScene};
-use crate::transformations::image::Image;
-use crate::transformations::shader::Shader;
-use crate::transformations::web_renderer::{self, WebRenderer};
 use crate::{
-    error::{InitRendererEngineError, RenderSceneError, UpdateSceneError},
+    error::{
+        InitRendererEngineError, RegisterRendererError, RenderSceneError, UnregisterRendererError,
+        UpdateSceneError,
+    },
+    image,
+    scene::{Component, OutputScene, SceneState},
+    shader,
     transformations::{
-        text_renderer::TextRendererCtx, web_renderer::chromium_context::ChromiumContext,
+        image::Image,
+        shader::Shader,
+        text_renderer::TextRendererCtx,
+        web_renderer::{self, ChromiumContext, WebRenderer},
     },
     types::Framerate,
-    EventLoop, FrameSet, InputId, OutputId,
-};
-use crate::{image, OutputFrameFormat, RenderingMode, Resolution};
-use crate::{
-    scene::SceneState,
     wgpu::{WgpuCtx, WgpuErrorScope},
+    FrameSet, InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RenderingMode,
+    Resolution,
 };
-use crate::{shader, RegistryType, RendererId};
 
 use self::{
     render_graph::RenderGraph,
@@ -41,7 +40,7 @@ mod render_loop;
 pub mod renderers;
 
 pub struct RendererOptions {
-    pub web_renderer: web_renderer::WebRendererInitOptions,
+    pub chromium_context: Option<Arc<ChromiumContext>>,
     pub framerate: Framerate,
     pub stream_fallback_timeout: Duration,
     pub load_system_fonts: bool,
@@ -56,7 +55,8 @@ pub struct Renderer(Arc<Mutex<InnerRenderer>>);
 struct InnerRenderer {
     wgpu_ctx: Arc<WgpuCtx>,
     text_renderer_ctx: Arc<TextRendererCtx>,
-    chromium_context: Arc<ChromiumContext>,
+
+    chromium_context: Option<Arc<ChromiumContext>>,
 
     render_graph: RenderGraph,
     scene: SceneState,
@@ -75,7 +75,8 @@ pub(crate) struct RenderCtx<'a> {
 
 pub(crate) struct RegisterCtx {
     pub(crate) wgpu_ctx: Arc<WgpuCtx>,
-    pub(crate) chromium: Arc<ChromiumContext>,
+    #[allow(dead_code)]
+    pub(crate) chromium_context: Option<Arc<ChromiumContext>>,
 }
 
 /// RendererSpec provides configuration necessary to construct Renderer. Renderers
@@ -89,13 +90,10 @@ pub enum RendererSpec {
 }
 
 impl Renderer {
-    pub fn new(
-        opts: RendererOptions,
-    ) -> Result<(Self, Arc<dyn EventLoop>), InitRendererEngineError> {
+    pub fn new(opts: RendererOptions) -> Result<Self, InitRendererEngineError> {
         let renderer = InnerRenderer::new(opts)?;
-        let event_loop = renderer.chromium_context.event_loop();
 
-        Ok((Self(Arc::new(Mutex::new(renderer))), event_loop))
+        Ok(Self(Arc::new(Mutex::new(renderer))))
     }
 
     pub fn register_input(&self, input_id: InputId) {
@@ -202,18 +200,18 @@ impl InnerRenderer {
                 &wgpu_ctx.device,
                 opts.load_system_fonts,
             )),
-            chromium_context: Arc::new(ChromiumContext::new(opts.web_renderer, opts.framerate)?),
             render_graph: RenderGraph::empty(),
             renderers: Renderers::new(wgpu_ctx)?,
             stream_fallback_timeout: opts.stream_fallback_timeout,
             scene: SceneState::new(),
+            chromium_context: opts.chromium_context,
         })
     }
 
     pub(super) fn register_ctx(&self) -> RegisterCtx {
         RegisterCtx {
             wgpu_ctx: self.wgpu_ctx.clone(),
-            chromium: self.chromium_context.clone(),
+            chromium_context: self.chromium_context.clone(),
         }
     }
 

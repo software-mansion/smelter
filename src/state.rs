@@ -5,7 +5,7 @@ use compositor_pipeline::{
     error::InitPipelineError, Pipeline, PipelineOptions, PipelineWgpuOptions,
     PipelineWhipWhepServerOptions,
 };
-use compositor_render::{web_renderer::WebRendererInitOptions, EventLoop};
+use compositor_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
 
 use serde::Serialize;
 use tokio::runtime::Runtime;
@@ -34,26 +34,40 @@ impl IntoResponse for Response {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ApiStateInitError {
+    #[error(transparent)]
+    PipelineInit(#[from] InitPipelineError),
+
+    #[error(transparent)]
+    ChromiumContextInit(#[from] ChromiumContextInitError),
+}
+
 #[derive(Clone)]
 pub struct ApiState {
     pub pipeline: Arc<Mutex<Pipeline>>,
     pub config: Config,
+    pub chromium_context: Option<Arc<ChromiumContext>>,
+    pub runtime: Arc<Runtime>,
 }
 
 impl ApiState {
-    pub fn new(
-        config: Config,
-        runtime: Arc<Runtime>,
-    ) -> Result<(ApiState, Arc<dyn EventLoop>), InitPipelineError> {
-        let options = pipeline_options_from_config(&config, runtime);
-        let (pipeline, event_loop) = Pipeline::new(options)?;
-        Ok((
-            ApiState {
-                pipeline: Mutex::new(pipeline).into(),
-                config,
-            },
-            event_loop,
-        ))
+    pub fn new(config: Config, runtime: Arc<Runtime>) -> Result<ApiState, ApiStateInitError> {
+        let chromium_context = match config.web_renderer_enable && cfg!(feature = "web_renderer") {
+            true => Some(ChromiumContext::new(
+                config.output_framerate,
+                config.web_renderer_gpu_enable,
+            )?),
+            false => None,
+        };
+        let options = pipeline_options_from_config(&config, &runtime, &chromium_context);
+        let pipeline = Pipeline::new(options)?;
+        Ok(ApiState {
+            pipeline: Mutex::new(pipeline).into(),
+            config,
+            runtime,
+            chromium_context,
+        })
     }
 
     pub(crate) fn pipeline(&self) -> MutexGuard<'_, Pipeline> {
@@ -61,7 +75,11 @@ impl ApiState {
     }
 }
 
-pub fn pipeline_options_from_config(opt: &Config, tokio_rt: Arc<Runtime>) -> PipelineOptions {
+pub fn pipeline_options_from_config(
+    opt: &Config,
+    tokio_rt: &Arc<Runtime>,
+    chromium_context: &Option<Arc<ChromiumContext>>,
+) -> PipelineOptions {
     PipelineOptions {
         stream_fallback_timeout: opt.stream_fallback_timeout,
         download_root: opt.download_root.clone(),
@@ -76,14 +94,9 @@ pub fn pipeline_options_from_config(opt: &Config, tokio_rt: Arc<Runtime>) -> Pip
         output_framerate: opt.output_framerate,
 
         rendering_mode: opt.rendering_mode,
-        tokio_rt: Some(tokio_rt),
+        tokio_rt: Some(tokio_rt.clone()),
 
-        web_renderer: match opt.web_renderer_enable {
-            true => WebRendererInitOptions::Enable {
-                enable_gpu: opt.web_renderer_gpu_enable,
-            },
-            false => WebRendererInitOptions::Disable,
-        },
+        chromium_context: chromium_context.clone(),
         wgpu_options: PipelineWgpuOptions::Options {
             features: opt.wgpu_required_features,
             force_gpu: opt.wgpu_force_gpu,

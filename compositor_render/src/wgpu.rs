@@ -23,7 +23,7 @@ impl WgpuErrorScope {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(crate) fn push(device: &wgpu::Device) -> Self {
+    pub(crate) fn push(_device: &wgpu::Device) -> Self {
         Self
     }
 
@@ -39,7 +39,7 @@ impl WgpuErrorScope {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(crate) fn pop(self, device: &wgpu::Device) -> Result<(), WgpuError> {
+    pub(crate) fn pop(self, _device: &wgpu::Device) -> Result<(), WgpuError> {
         Ok(())
     }
 }

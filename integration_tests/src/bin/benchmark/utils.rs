@@ -12,9 +12,7 @@ use std::{
 };
 use tracing::warn;
 
-use compositor_render::{
-    web_renderer::WebRendererInitOptions, Framerate, RenderingMode, YuvPlanes,
-};
+use compositor_render::{Framerate, RenderingMode, YuvPlanes};
 
 use crate::{args::Resolution, benchmark_pass::RawInputFile};
 
@@ -32,7 +30,7 @@ pub fn benchmark_pipeline_options(
         default_buffer_duration: DEFAULT_BUFFER_DURATION,
         ahead_of_time_processing: false,
         run_late_scheduled_events: true,
-        web_renderer: WebRendererInitOptions::Disable,
+        chromium_context: None,
         download_root: std::env::temp_dir().into(),
         load_system_fonts: false,
         mixing_sample_rate: 48_000,

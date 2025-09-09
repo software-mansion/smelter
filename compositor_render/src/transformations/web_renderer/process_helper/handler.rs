@@ -5,10 +5,10 @@ use compositor_chromium::cef::{self, V8ObjectError};
 use log::error;
 
 use crate::error::ErrorStack;
-use crate::web_renderer::process_helper::state::FrameInfo;
-use crate::web_renderer::{
+use crate::transformations::web_renderer::{
     EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE, UNEMBED_SOURCE_FRAMES_MESSAGE,
 };
+use crate::web_renderer::process_helper::state::FrameInfo;
 
 use super::state::State;
 

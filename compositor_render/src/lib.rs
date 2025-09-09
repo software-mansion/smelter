@@ -4,14 +4,11 @@ pub mod scene;
 
 pub(crate) mod registry;
 pub(crate) mod transformations;
-pub(crate) mod utils;
 pub(crate) mod wgpu;
 
-mod event_loop;
 mod state;
 mod types;
 
-pub use event_loop::{EventLoop, EventLoopError};
 pub use types::*;
 
 pub use registry::RegistryType;
@@ -33,8 +30,7 @@ pub mod shader {
 
 pub mod web_renderer {
     pub use crate::transformations::web_renderer::{
-        WebEmbeddingMethod, WebRendererInitOptions, WebRendererSpec, EMBED_SOURCE_FRAMES_MESSAGE,
-        GET_FRAME_POSITIONS_MESSAGE, UNEMBED_SOURCE_FRAMES_MESSAGE,
+        ChromiumContext, ChromiumContextInitError, WebEmbeddingMethod, WebRendererSpec,
     };
 
     #[cfg(feature = "web_renderer")]

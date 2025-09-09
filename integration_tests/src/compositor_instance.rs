@@ -44,7 +44,7 @@ impl CompositorInstance {
 
         let (should_close_sender, should_close_receiver) = crossbeam_channel::bounded(1);
         let runtime = Arc::new(Runtime::new().unwrap());
-        let (state, _event_loop) = ApiState::new(config, runtime.clone()).unwrap();
+        let state = ApiState::new(config, runtime.clone()).unwrap();
 
         thread::Builder::new()
             .name("HTTP server startup thread".to_string())

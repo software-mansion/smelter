@@ -123,16 +123,15 @@ impl Image {
 
     fn download_file(src: &ImageSource) -> Result<bytes::Bytes, ImageError> {
         match src {
-            ImageSource::Url { url } => {
-                #[cfg(target_arch = "wasm32")]
+            #[cfg(target_arch = "wasm32")]
+            ImageSource::Url { .. } => {
                 return Err(ImageError::ImageSourceUrlNotSupported);
-
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    let response = reqwest::blocking::get(url)?;
-                    let response = response.error_for_status()?;
-                    Ok(response.bytes()?)
-                }
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            ImageSource::Url { url } => {
+                let response = reqwest::blocking::get(url)?;
+                let response = response.error_for_status()?;
+                Ok(response.bytes()?)
             }
             ImageSource::LocalPath { path } => {
                 let file = fs::read(path)?;
