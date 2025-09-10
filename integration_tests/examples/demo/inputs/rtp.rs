@@ -23,6 +23,7 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
+    autocompletion::FilePathCompleter,
     inputs::{AudioDecoder, InputHandler, VideoDecoder},
     players::InputPlayer,
     smelter_state::TransportProtocol,
@@ -400,11 +401,16 @@ impl RtpInputBuilder {
 
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(RTP_INPUT_PATH).unwrap_or_default();
+        let default_path = examples_root_dir().join(BUNNY_H264_PATH);
 
         loop {
-            let path_input = Text::new("Input path:")
-                .with_initial_value(&env_path)
-                .prompt_skippable()?;
+            let path_input = Text::new(&format!(
+                "Input path (ESC for {}):",
+                default_path.to_str().unwrap(),
+            ))
+            .with_autocomplete(FilePathCompleter::default())
+            .with_initial_value(&env_path)
+            .prompt_skippable()?;
 
             match path_input {
                 Some(path) if !path.trim().is_empty() => {

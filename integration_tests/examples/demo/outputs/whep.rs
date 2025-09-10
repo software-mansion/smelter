@@ -180,18 +180,16 @@ impl WhepOutputBuilder {
 
     fn prompt_token(self) -> Result<Self> {
         let env_token = env::var(WHEP_TOKEN_ENV).unwrap_or_default();
-        loop {
-            let endpoint_token_input = Text::new("Enter the WHEP endpoint bearer token:")
+        let default_token = "example";
+        let endpoint_token_input =
+            Text::new("Enter the WHEP endpoint bearer token (ESC for default):")
+                .with_default(default_token)
                 .with_initial_value(&env_token)
                 .prompt_skippable()?;
 
-            match endpoint_token_input {
-                Some(token) if !token.trim().is_empty() => return Ok(self.with_bearer_token(token)),
-                Some(_) | None => {
-                    error!("Bearer token cannot be empty.");
-                    continue;
-                }
-            }
+        match endpoint_token_input {
+            Some(token) => Ok(self.with_bearer_token(token)),
+            None => Ok(self.with_bearer_token(default_token.to_string())),
         }
     }
 

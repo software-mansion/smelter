@@ -9,6 +9,7 @@ use strum::{Display, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
+    autocompletion::FilePathCompleter,
     inputs::{filter_video_inputs, InputHandler},
     outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayer,
@@ -101,10 +102,13 @@ impl Mp4OutputBuilder {
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
 
-        let default_path = examples_root_dir().join("example_output.mp4");
+        let default_path = env::current_dir()
+            .unwrap_or(examples_root_dir())
+            .join("example_output.mp4");
 
         loop {
-            let path_output = Text::new("Output path:")
+            let path_output = Text::new("Output path (ESC for default):")
+                .with_autocomplete(FilePathCompleter::default())
                 .with_initial_value(&env_path)
                 .with_default(default_path.to_str().unwrap())
                 .prompt_skippable()?;
@@ -118,7 +122,7 @@ impl Mp4OutputBuilder {
                         Some(_) | None => error!("Path is not valid"),
                     }
                 }
-                Some(_) | None => break Ok(self),
+                Some(_) | None => break Ok(self.with_path(default_path)),
             }
         }
     }

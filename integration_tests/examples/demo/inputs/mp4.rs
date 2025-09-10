@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf};
 
 use anyhow::Result;
-use inquire::Text;
+use inquire::{Confirm, Text};
 use integration_tests::{
     assets::{BUNNY_H264_PATH, BUNNY_H264_URL},
     examples::{download_asset, examples_root_dir, AssetData},
@@ -10,7 +10,10 @@ use rand::RngCore;
 use serde_json::json;
 use tracing::{error, info};
 
-use crate::{inputs::InputHandler, players::InputPlayer, utils::resolve_path};
+use crate::{
+    autocompletion::FilePathCompleter, inputs::InputHandler, players::InputPlayer,
+    utils::resolve_path,
+};
 
 const MP4_INPUT_PATH: &str = "MP4_INPUT_PATH";
 
@@ -28,46 +31,69 @@ impl InputHandler for Mp4Input {
 pub struct Mp4InputBuilder {
     name: String,
     path: Option<PathBuf>,
+    r#loop: bool,
 }
 
 impl Mp4InputBuilder {
     pub fn new() -> Self {
         let suffix = rand::thread_rng().next_u32();
         let name = format!("mp4_input_{suffix}");
-        Self { name, path: None }
+        Self {
+            name,
+            path: None,
+            r#loop: false,
+        }
     }
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
-        let env_path = env::var(MP4_INPUT_PATH).unwrap_or_default();
 
-        builder = loop {
-            let path_input = Text::new("Input path:")
-                .with_initial_value(&env_path)
-                .prompt_skippable()?;
+        builder = builder.prompt_path()?;
+
+        let loop_selection = Confirm::new("Loop input [y/n]:").prompt_skippable()?;
+        builder = match loop_selection {
+            Some(r#loop) => builder.with_loop(r#loop),
+            None => builder,
+        };
+
+        Ok(builder)
+    }
+
+    pub fn prompt_path(self) -> Result<Self> {
+        let env_path = env::var(MP4_INPUT_PATH).unwrap_or_default();
+        let default_path = examples_root_dir().join(BUNNY_H264_PATH);
+
+        loop {
+            let path_input = Text::new(&format!(
+                "Input path (ESC for {}):",
+                default_path.to_str().unwrap(),
+            ))
+            .with_initial_value(&env_path)
+            .with_autocomplete(FilePathCompleter::default())
+            .prompt_skippable()?;
 
             match path_input {
                 Some(path) if !path.trim().is_empty() => {
                     let path = resolve_path(path.into())?;
                     if path.exists() {
-                        break builder.with_path(path);
+                        break Ok(self.with_path(path));
                     } else {
                         error!("Path is not valid");
                     }
                 }
                 Some(_) | None => {
-                    let path = examples_root_dir().join(BUNNY_H264_PATH);
-                    info!("Using default asset at \"{}\"", path.to_str().unwrap());
+                    info!(
+                        "Using default asset at \"{}\"",
+                        default_path.to_str().unwrap()
+                    );
                     download_asset(&AssetData {
                         url: BUNNY_H264_URL.to_string(),
-                        path: path.clone(),
+                        path: default_path.clone(),
                     })?;
-                    break builder.with_path(path);
+                    break Ok(self.with_path(default_path));
                 }
-            };
-        };
-
-        Ok(builder)
+            }
+        }
     }
 
     pub fn with_path(mut self, path: PathBuf) -> Self {
@@ -75,10 +101,16 @@ impl Mp4InputBuilder {
         self
     }
 
+    pub fn with_loop(mut self, r#loop: bool) -> Self {
+        self.r#loop = r#loop;
+        self
+    }
+
     fn serialize(&self) -> serde_json::Value {
         json!({
             "type": "mp4",
             "path": self.path.as_ref().unwrap(),
+            "loop": self.r#loop,
         })
     }
 
