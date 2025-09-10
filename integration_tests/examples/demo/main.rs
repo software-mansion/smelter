@@ -33,11 +33,17 @@ pub enum Action {
     #[strum(to_string = "Reorder inputs")]
     ReorderInputs,
 
+    #[strum(to_string = "Reset")]
+    Reset,
+
     #[strum(to_string = "Start")]
     Start,
 }
 
 fn run_demo() {
+    if let Err(e) = examples::post("reset", &json!({})) {
+        error!("Initial reset failed: {e}");
+    }
     let mut state = SmelterState::new();
 
     let mut options = Action::iter().collect::<Vec<_>>();
@@ -64,6 +70,16 @@ fn run_demo() {
             Action::RemoveInput => state.unregister_input(),
             Action::RemoveOutput => state.unregister_output(),
             Action::ReorderInputs => state.reorder_inputs(),
+            Action::Reset => match examples::post("reset", &json!({})) {
+                Ok(_) => {
+                    if !options.contains(&Action::Start) {
+                        options.push(Action::Start);
+                    }
+                    state = SmelterState::new();
+                    Ok(())
+                }
+                Err(e) => Err(e.context("Reset request failed")),
+            },
             Action::Start => {
                 debug!("{state:#?}");
                 match examples::post("start", &json!({})) {

@@ -13,21 +13,14 @@ pub enum Scene {
 }
 
 impl Scene {
-    fn tiles(
-        &self,
-        root_id: &str,
-        inputs: &[&dyn InputHandler],
-        output_name: &str,
-    ) -> serde_json::Value {
+    fn tiles(&self, root_id: &str, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let input_json = inputs
             .iter()
             .map(|input| {
-                let input_name = input.name();
-                let id = format!("{input_name}_{output_name}");
                 json!({
                     "type": "input_stream",
-                    "id": id,
-                    "input_id": input_name,
+                    "id": input.name(),
+                    "input_id": input.name(),
                 })
             })
             .collect::<Vec<_>>();
@@ -46,18 +39,15 @@ impl Scene {
         &self,
         root_id: &str,
         inputs: &[&dyn InputHandler],
-        output_name: &str,
         resolution: VideoResolution,
     ) -> serde_json::Value {
         let primary_input = inputs
             .first()
             .map(|input| {
-                let input_name = input.name();
-                let id = format!("{input_name}_{output_name}");
                 json!({
                     "type": "input_stream",
-                    "id": id,
-                    "input_id": input_name,
+                    "id": input.name(),
+                    "input_id": input.name(),
                 })
             })
             .unwrap_or(json!({
@@ -69,14 +59,12 @@ impl Scene {
             .iter()
             .skip(1)
             .map(|input| {
-                let input_name = input.name();
-                let id = format!("{input_name}_{output_name}");
                 json!({
                     "type": "rescaler",
                     "child": {
                         "type": "input_stream",
-                        "id": id,
-                        "input_id": input_name,
+                        "id": input.name(),
+                        "input_id": input.name(),
                     },
                 })
             })
@@ -110,12 +98,11 @@ impl Scene {
         &self,
         id: &str,
         inputs: &[&dyn InputHandler],
-        output_name: &str,
         resolution: VideoResolution,
     ) -> serde_json::Value {
         match self {
-            Self::Tiles => self.tiles(id, inputs, output_name),
-            Self::PrimaryLeft => self.primary_left(id, inputs, output_name, resolution),
+            Self::Tiles => self.tiles(id, inputs),
+            Self::PrimaryLeft => self.primary_left(id, inputs, resolution),
         }
     }
 }
