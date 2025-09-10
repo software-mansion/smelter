@@ -120,7 +120,7 @@ impl Mp4OutputBuilder {
                         Some(_) | None => error!("Path is not valid"),
                     }
                 }
-                Some(_) | None => break Ok(self),
+                Some(_) | None => break Ok(self.with_path(default_path)),
             }
         }
     }
