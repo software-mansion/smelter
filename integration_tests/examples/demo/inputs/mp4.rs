@@ -93,10 +93,10 @@ impl Mp4InputBuilder {
 
         loop {
             let source_input = Text::new(&format!(
-                "Input path (ESC for {}):",
+                "Input path or url (ESC for {}):",
                 default_path.to_str().unwrap(),
             ))
-            // .with_autocomplete(FilePathCompleter::default())
+            .with_autocomplete(FilePathCompleter::default())
             .with_initial_value(&env_source)
             .prompt_skippable()?;
 

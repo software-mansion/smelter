@@ -1,6 +1,6 @@
 // https://github.com/mikaelmello/inquire/blob/main/inquire/examples/complex_autocompletion.rs
 
-use std::io::ErrorKind;
+use std::{env, io::ErrorKind};
 
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
@@ -45,7 +45,15 @@ impl FilePathCompleter {
 
         let entries = match std::fs::read_dir(scan_dir) {
             Ok(read_dir) => Ok(read_dir),
-            Err(err) if err.kind() == ErrorKind::NotFound => std::fs::read_dir(fallback_parent),
+            Err(err) if err.kind() == ErrorKind::NotFound => {
+                match std::fs::read_dir(fallback_parent) {
+                    Ok(parent) => Ok(parent),
+                    Err(e) if e.kind() == ErrorKind::NotFound => {
+                        std::fs::read_dir(env::current_dir()?)
+                    }
+                    Err(e) => Err(e),
+                }
+            }
             Err(err) => Err(err),
         }?
         .collect::<Result<Vec<_>, _>>()?;
