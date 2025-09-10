@@ -30,9 +30,7 @@ impl InputHandler for WhipInput {
     }
 
     fn json_dump(&self) -> Result<serde_json::Value> {
-        let json_string = serde_json::to_string(self)?;
-        let json_value = serde_json::from_str(&json_string)?;
-        Ok(json_value)
+        Ok(serde_json::to_value(self)?)
     }
 
     fn has_video(&self) -> bool {

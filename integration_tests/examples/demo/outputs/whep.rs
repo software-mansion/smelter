@@ -6,13 +6,16 @@ use std::{
 use anyhow::Result;
 use inquire::{Confirm, Select, Text};
 use integration_tests::examples::examples_root_dir;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
     inputs::{filter_video_inputs, InputHandler},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{
+        scene::Scene, AudioEncoder, OutputHandler, OutputProtocol, VideoEncoder, VideoResolution,
+    },
     players::OutputPlayer,
 };
 
@@ -30,8 +33,9 @@ pub enum WhepRegisterOptions {
     Skip,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhepOutput {
+    r#type: OutputProtocol,
     name: String,
     bearer_token: String,
     video: Option<WhepOutputVideoOptions>,
@@ -41,6 +45,10 @@ pub struct WhepOutput {
 impl OutputHandler for WhepOutput {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::to_value(self)?)
     }
 
     fn on_after_registration(&mut self, player: OutputPlayer) -> Result<()> {
@@ -229,6 +237,7 @@ impl WhepOutputBuilder {
         let register_request = self.serialize(inputs);
 
         let whep_output = WhepOutput {
+            r#type: OutputProtocol::Whep,
             name: self.name,
             bearer_token: self.bearer_token.unwrap(),
             video: self.video,
@@ -239,7 +248,7 @@ impl WhepOutputBuilder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhepOutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
@@ -285,7 +294,7 @@ impl Default for WhepOutputVideoOptions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhepOutputAudioOptions {
     encoder: AudioEncoder,
 }

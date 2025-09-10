@@ -10,13 +10,16 @@ use integration_tests::{
         start_gst_receive_udp_vp9, start_gst_receive_udp_without_video,
     },
 };
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
     inputs::{filter_video_inputs, InputHandler},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{
+        scene::Scene, AudioEncoder, OutputHandler, OutputProtocol, VideoEncoder, VideoResolution,
+    },
     players::OutputPlayer,
     IP,
 };
@@ -36,13 +39,18 @@ pub enum RtpRegisterOptions {
     Skip,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RtpOutput {
+    r#type: OutputProtocol,
     name: String,
+
+    #[serde(skip, default = "crate::utils::get_free_port")]
     port: u16,
     video: Option<RtpOutputVideoOptions>,
     audio: Option<RtpOutputAudioOptions>,
     transport_protocol: Option<TransportProtocol>,
+
+    #[serde(skip)]
     stream_handles: Vec<Child>,
 }
 
@@ -144,6 +152,10 @@ impl OutputHandler for RtpOutput {
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
+    }
+
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::to_value(self)?)
     }
 
     fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
@@ -418,6 +430,7 @@ impl RtpOutputBuilder {
     ) -> (RtpOutput, serde_json::Value, OutputPlayer) {
         let register_request = self.serialize(inputs);
         let rtp_output = RtpOutput {
+            r#type: OutputProtocol::Rtp,
             name: self.name,
             port: self.port,
             video: self.video,
@@ -429,7 +442,7 @@ impl RtpOutputBuilder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RtpOutputVideoOptions {
     root_id: String,
     resolution: VideoResolution,
@@ -477,7 +490,7 @@ impl Default for RtpOutputVideoOptions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RtpOutputAudioOptions {
     pub encoder: AudioEncoder,
 }

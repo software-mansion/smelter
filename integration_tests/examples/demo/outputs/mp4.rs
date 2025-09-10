@@ -4,6 +4,7 @@ use anyhow::Result;
 use inquire::{Select, Text};
 use integration_tests::examples::examples_root_dir;
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, IntoEnumIterator};
 use tracing::error;
@@ -11,7 +12,9 @@ use tracing::error;
 use crate::{
     autocompletion::FilePathCompleter,
     inputs::{filter_video_inputs, InputHandler},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{
+        scene::Scene, AudioEncoder, OutputHandler, OutputProtocol, VideoEncoder, VideoResolution,
+    },
     players::OutputPlayer,
     utils::resolve_path,
 };
@@ -29,8 +32,9 @@ pub enum Mp4RegisterOptions {
     Skip,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Mp4Output {
+    r#type: OutputProtocol,
     name: String,
     video: Option<Mp4OutputVideoOptions>,
     audio: Option<Mp4OutputAudioOptions>,
@@ -39,6 +43,10 @@ pub struct Mp4Output {
 impl OutputHandler for Mp4Output {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::to_value(self)?)
     }
 
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
@@ -181,6 +189,7 @@ impl Mp4OutputBuilder {
         let register_request = self.serialize(inputs);
 
         let mp4_output = Mp4Output {
+            r#type: OutputProtocol::Mp4,
             name: self.name,
             video: self.video,
             audio: self.audio,
@@ -190,7 +199,7 @@ impl Mp4OutputBuilder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Mp4OutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
@@ -236,7 +245,7 @@ impl Default for Mp4OutputVideoOptions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Mp4OutputAudioOptions {
     encoder: AudioEncoder,
 }

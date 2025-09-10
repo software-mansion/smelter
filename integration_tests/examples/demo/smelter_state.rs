@@ -256,8 +256,19 @@ impl SmelterState {
                 }
             })
             .collect::<Vec<_>>();
+        let outputs = self
+            .outputs
+            .iter()
+            .filter_map(|o| match o.json_dump() {
+                Ok(value) => Some(value),
+                Err(e) => {
+                    error!("Unable to serialize output {}: {e}", o.name());
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
 
-        let json = json!({"inputs": inputs});
+        let json = json!({"inputs": inputs, "outputs": outputs});
         Ok(fs::write("json_dump.json", json.to_string())?)
     }
 }
