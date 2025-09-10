@@ -4,7 +4,8 @@ use std::{
 };
 
 use anyhow::Result;
-use inquire::{Confirm, Text};
+use inquire::Text;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
 
@@ -15,36 +16,44 @@ use crate::{
 
 const WHIP_TOKEN_ENV: &str = "WHIP_INPUT_BEARER_TOKEN";
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhipInput {
     name: String,
     bearer_token: String,
     video: Option<WhipInputVideoOptions>,
+    player: InputPlayer,
 }
 
+#[typetag::serde]
 impl InputHandler for WhipInput {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn serialize_register(&self) -> serde_json::Value {
+        json!({
+            "type": "whip_server",
+            "bearer_token": self.bearer_token,
+            "video": self.video.as_ref().map(|v| v.serialize_register()),
+        })
+    }
+
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::to_value(self)?)
     }
 
     fn has_video(&self) -> bool {
         self.video.is_some()
     }
 
-    fn on_after_registration(&mut self, player: InputPlayer) -> Result<()> {
-        match player {
+    fn on_after_registration(&mut self) -> Result<()> {
+        match self.player {
             InputPlayer::Manual => {
                 println!("Instructions to start streaming:");
                 println!("1. Open OBS Studio");
                 println!("2. In a 'Stream' tab enter 'http://127.0.0.1:9000/whip/{} in 'Server' field and '{}' in 'Bearer Token' field", self.name, self.bearer_token);
                 println!();
-
-                loop {
-                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                    if confirmation {
-                        return Ok(());
-                    }
-                }
+                Ok(())
             }
             _ => unreachable!(),
         }
@@ -119,28 +128,17 @@ impl WhipInputBuilder {
         self
     }
 
-    fn serialize(&self) -> serde_json::Value {
-        json!({
-            "type": "whip_server",
-            "bearer_token": self.bearer_token,
-            "video": self.video.as_ref().map(|v| v.serialize_register()),
-        })
-    }
-
-    pub fn build(self) -> (WhipInput, serde_json::Value, InputPlayer) {
-        let register_request = self.serialize();
-
-        let whip_input = WhipInput {
+    pub fn build(self) -> WhipInput {
+        WhipInput {
             name: self.name,
             bearer_token: self.bearer_token,
             video: self.video,
-        };
-
-        (whip_input, register_request, self.player)
+            player: self.player,
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhipInputVideoOptions {
     decoder: VideoDecoder,
 }

@@ -1,10 +1,11 @@
 use std::fmt::Debug;
 
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter};
 
-use crate::{inputs::InputHandler, players::OutputPlayer};
+use crate::inputs::InputHandler;
 
 pub mod mp4;
 pub mod rtmp;
@@ -14,15 +15,18 @@ pub mod whip;
 
 pub mod scene;
 
+#[typetag::serde(tag = "type")]
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
+    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value;
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value;
+    fn json_dump(&self) -> Result<serde_json::Value>;
 
-    fn on_before_registration(&mut self, _player: OutputPlayer) -> Result<()> {
+    fn on_before_registration(&mut self) -> Result<()> {
         Ok(())
     }
 
-    fn on_after_registration(&mut self, _player: OutputPlayer) -> Result<()> {
+    fn on_after_registration(&mut self) -> Result<()> {
         Ok(())
     }
 }
@@ -33,7 +37,7 @@ impl std::fmt::Display for dyn OutputHandler {
     }
 }
 
-#[derive(Debug, Display, EnumIter, Clone, Copy)]
+#[derive(Debug, Display, EnumIter, Clone, Copy, Serialize, Deserialize)]
 pub enum OutputProtocol {
     #[strum(to_string = "rtp_stream")]
     Rtp,
@@ -60,7 +64,7 @@ pub enum VideoSetupOptions {
     Done,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct VideoResolution {
     pub width: u16,
     pub height: u16,
@@ -93,7 +97,7 @@ pub enum VideoResolutionOptions {
     Hd,
 }
 
-#[derive(Debug, Display, EnumIter, PartialEq)]
+#[derive(Debug, Display, EnumIter, PartialEq, Serialize, Deserialize, Clone, Copy)]
 pub enum VideoEncoder {
     #[strum(to_string = "ffmpeg_h264")]
     FfmpegH264,
@@ -108,7 +112,7 @@ pub enum VideoEncoder {
     Any,
 }
 
-#[derive(Debug, Display, EnumIter)]
+#[derive(Debug, Display, EnumIter, Serialize, Deserialize, Clone, Copy)]
 pub enum AudioEncoder {
     #[strum(to_string = "opus")]
     Opus,

@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter};
 
-#[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq)]
+#[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum OutputPlayer {
     #[strum(to_string = "Start FFmpeg receiver")]
     FfmpegReceiver,
@@ -12,7 +13,7 @@ pub enum OutputPlayer {
     Manual,
 }
 
-#[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq)]
+#[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum InputPlayer {
     #[strum(to_string = "Start FFmpeg transmitter")]
     FfmpegTransmitter,

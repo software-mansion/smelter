@@ -1,9 +1,10 @@
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter};
 
 use crate::{inputs::InputHandler, outputs::VideoResolution};
 
-#[derive(Debug, Display, EnumIter)]
+#[derive(Debug, Display, EnumIter, Serialize, Deserialize, Clone, Copy)]
 pub enum Scene {
     #[strum(to_string = "Tiles")]
     Tiles,

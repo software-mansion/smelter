@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use inquire::{Confirm, Select, Text};
+use inquire::{Select, Text};
 use integration_tests::{
     assets::{
         BUNNY_H264_PATH, BUNNY_H264_URL, BUNNY_VP8_PATH, BUNNY_VP8_URL, BUNNY_VP9_PATH,
@@ -18,6 +18,7 @@ use integration_tests::{
         start_gst_send_udp,
     },
 };
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
@@ -47,7 +48,8 @@ pub enum RtpRegisterOptions {
     Skip,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(from = "RtpInputSerialize")]
 pub struct RtpInput {
     name: String,
     port: u16,
@@ -55,7 +57,48 @@ pub struct RtpInput {
     audio: Option<RtpInputAudioOptions>,
     transport_protocol: TransportProtocol,
     path: Option<PathBuf>,
+
+    #[serde(skip)]
     stream_handles: Vec<Child>,
+    player: InputPlayer,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RtpInputSerialize {
+    video: Option<RtpInputVideoOptions>,
+    audio: Option<RtpInputAudioOptions>,
+    transport_protocol: TransportProtocol,
+    path: Option<PathBuf>,
+    player: InputPlayer,
+}
+
+impl From<RtpInputSerialize> for RtpInput {
+    fn from(value: RtpInputSerialize) -> Self {
+        let port = get_free_port();
+        let name = format!("rtp_input_{}_{port}", value.transport_protocol);
+        Self {
+            name,
+            port,
+            video: value.video,
+            audio: value.audio,
+            transport_protocol: value.transport_protocol,
+            path: value.path,
+            stream_handles: vec![],
+            player: value.player,
+        }
+    }
+}
+
+impl From<&RtpInput> for RtpInputSerialize {
+    fn from(value: &RtpInput) -> Self {
+        Self {
+            video: value.video.clone(),
+            audio: value.audio.clone(),
+            transport_protocol: value.transport_protocol,
+            path: value.path.clone(),
+            player: value.player,
+        }
+    }
 }
 
 impl RtpInput {
@@ -186,8 +229,8 @@ impl RtpInput {
         Ok(())
     }
 
-    fn on_after_registration_udp(&mut self, player: InputPlayer) -> Result<()> {
-        match player {
+    fn on_after_registration_udp(&mut self) -> Result<()> {
+        match self.player {
             InputPlayer::FfmpegTransmitter => self.ffmpeg_transmit(),
             InputPlayer::GstreamerTransmitter => self.gstreamer_transmit_udp(),
             InputPlayer::Manual => {
@@ -220,19 +263,13 @@ impl RtpInput {
                     }
                     _ => unreachable!(),
                 }
-
-                loop {
-                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                    if confirmation {
-                        return Ok(());
-                    }
-                }
+                Ok(())
             }
         }
     }
 
-    fn on_after_registration_tcp(&mut self, player: InputPlayer) -> Result<()> {
-        match player {
+    fn on_after_registration_tcp(&mut self) -> Result<()> {
+        match self.player {
             InputPlayer::GstreamerTransmitter => self.gstreamer_transmit_tcp(),
             InputPlayer::Manual => {
                 let video_codec = self.video.as_ref().map(|opts| opts.decoder);
@@ -264,22 +301,32 @@ impl RtpInput {
                     }
                     _ => unreachable!(),
                 }
-
-                loop {
-                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                    if confirmation {
-                        return Ok(());
-                    }
-                }
+                Ok(())
             }
             _ => unreachable!(),
         }
     }
 }
 
+#[typetag::serde]
 impl InputHandler for RtpInput {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn serialize_register(&self) -> serde_json::Value {
+        json!({
+            "type": "rtp_stream",
+            "port": self.port,
+            "transport_protocol": self.transport_protocol.to_string(),
+            "video": self.video.as_ref().map(|v| v.serialize()),
+            "audio": self.audio.as_ref().map(|a| a.serialize()),
+        })
+    }
+
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        let rtp_input_serde: RtpInputSerialize = self.into();
+        Ok(serde_json::to_value(rtp_input_serde)?)
     }
 
     fn has_video(&self) -> bool {
@@ -290,10 +337,10 @@ impl InputHandler for RtpInput {
         self.audio.is_some()
     }
 
-    fn on_after_registration(&mut self, player: InputPlayer) -> Result<()> {
+    fn on_after_registration(&mut self) -> Result<()> {
         match self.transport_protocol {
-            TransportProtocol::TcpServer => self.on_after_registration_tcp(player),
-            TransportProtocol::Udp => self.on_after_registration_udp(player),
+            TransportProtocol::TcpServer => self.on_after_registration_tcp(),
+            TransportProtocol::Udp => self.on_after_registration_udp(),
         }
     }
 }
@@ -480,19 +527,8 @@ impl RtpInputBuilder {
         self
     }
 
-    fn serialize(&self) -> serde_json::Value {
-        json!({
-            "type": "rtp_stream",
-            "port": self.port,
-            "transport_protocol": self.transport_protocol.as_ref().map(|t| t.to_string()),
-            "video": self.video.as_ref().map(|v| v.serialize()),
-            "audio": self.audio.as_ref().map(|a| a.serialize()),
-        })
-    }
-
-    pub fn build(self) -> (RtpInput, serde_json::Value, InputPlayer) {
-        let register_request = self.serialize();
-        let rtp_input = RtpInput {
+    pub fn build(self) -> RtpInput {
+        RtpInput {
             name: self.name,
             port: self.port,
             video: self.video,
@@ -500,13 +536,12 @@ impl RtpInputBuilder {
             path: self.path,
             transport_protocol: self.transport_protocol.unwrap_or(TransportProtocol::Udp),
             stream_handles: vec![],
-        };
-
-        (rtp_input, register_request, self.player)
+            player: self.player,
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RtpInputVideoOptions {
     pub decoder: VideoDecoder,
 }
@@ -527,7 +562,7 @@ impl Default for RtpInputVideoOptions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RtpInputAudioOptions {
     pub decoder: AudioDecoder,
 }
