@@ -102,7 +102,9 @@ impl Mp4OutputBuilder {
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
 
-        let default_path = examples_root_dir().join("example_output.mp4");
+        let default_path = env::current_dir()
+            .unwrap_or(examples_root_dir())
+            .join("example_output.mp4");
 
         loop {
             let path_output = Text::new("Output path (ESC for default):")
