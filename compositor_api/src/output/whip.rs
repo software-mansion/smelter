@@ -86,9 +86,6 @@ pub struct OutputWhipAudioOptions {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WhipAudioEncoderOptions {
     Opus {
-        /// Specifies channels configuration.
-        channels: Option<AudioChannels>,
-
         /// (**default="voip"**) Specifies preset for audio output encoder.
         preset: Option<OpusEncoderPreset>,
 

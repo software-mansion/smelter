@@ -35,9 +35,10 @@ pub(super) struct PeerConnection {
 impl PeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
-        options: &WhipOutputOptions,
+        video_preferences: &Vec<VideoEncoderOptions>,
+        audio_preferences: &[AudioEncoderOptions],
     ) -> Result<Self, WhipOutputError> {
-        let mut media_engine = media_engine_with_codecs(options)?;
+        let mut media_engine = media_engine_with_codecs(video_preferences, audio_preferences)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
         let api = APIBuilder::new()
@@ -138,25 +139,17 @@ impl PeerConnection {
     }
 }
 
-fn media_engine_with_codecs(options: &WhipOutputOptions) -> webrtc::error::Result<MediaEngine> {
+fn media_engine_with_codecs(
+    video_encoder_preferences: &Vec<VideoEncoderOptions>,
+    audio_encoder_preferences: &[AudioEncoderOptions],
+) -> webrtc::error::Result<MediaEngine> {
     let mut media_engine = MediaEngine::default();
-
-    let video_encoder_preferences = options
-        .video
-        .as_ref()
-        .map(|v| v.encoder_preferences.clone());
-    let audio_encoder_preferences = options
-        .audio
-        .as_ref()
-        .map(|a| a.encoder_preferences.clone());
 
     // Opus is the only supported codec. The only negotiable option in AudioEncoderOptions is FEC.
     // Since FEC is the only variant, we can just check the first option’s FEC value
     // and register Opus with/without FEC accordingly, in the preferred order.
     // Channels field is the same for all encoder preferences.
-    if let Some(AudioEncoderOptions::Opus(opts)) =
-        audio_encoder_preferences.unwrap_or_default().first()
-    {
+    if let Some(AudioEncoderOptions::Opus(opts)) = audio_encoder_preferences.first() {
         let channels = match opts.channels {
             AudioChannels::Mono => 1,
             AudioChannels::Stereo => 2,
@@ -191,7 +184,7 @@ fn media_engine_with_codecs(options: &WhipOutputOptions) -> webrtc::error::Resul
         },
     ];
 
-    for encoder_options in &video_encoder_preferences.unwrap_or_default() {
+    for encoder_options in video_encoder_preferences {
         match encoder_options {
             VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
                 let h264_codec_parameters = vec![

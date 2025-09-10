@@ -51,11 +51,26 @@ pub enum AudioDecoderOptions {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum WhipVideoEncoderOptions {
+    FfmpegH264(FfmpegH264EncoderOptions),
+    FfmpegVp8(FfmpegVp8EncoderOptions),
+    FfmpegVp9(FfmpegVp9EncoderOptions),
+    VulkanH264(VulkanH264EncoderOptions),
+    Any(Resolution),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum VideoEncoderOptions {
     FfmpegH264(FfmpegH264EncoderOptions),
     FfmpegVp8(FfmpegVp8EncoderOptions),
     FfmpegVp9(FfmpegVp9EncoderOptions),
     VulkanH264(VulkanH264EncoderOptions),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum WhipAudioEncoderOptions {
+    Opus(OpusEncoderOptions),
+    Any(AudioChannels),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

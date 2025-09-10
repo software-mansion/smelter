@@ -9,7 +9,9 @@ use webrtc::{
     peer_connection::sdp::session_description::RTCSessionDescription,
 };
 
-use super::{WhipOutputError, WhipOutputOptions};
+use crate::prelude::WhipOutputOptions;
+
+use super::WhipOutputError;
 
 #[derive(Debug)]
 pub(super) struct WhipHttpClient {
