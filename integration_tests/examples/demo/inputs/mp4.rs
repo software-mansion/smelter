@@ -7,27 +7,40 @@ use integration_tests::{
     examples::{download_asset, examples_root_dir, AssetData},
 };
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info};
 
 use crate::{
-    autocompletion::FilePathCompleter, inputs::InputHandler, players::InputPlayer,
+    autocompletion::FilePathCompleter,
+    inputs::{InputHandler, InputProtocol},
+    players::InputPlayer,
     utils::resolve_path,
 };
 
 const MP4_INPUT_SOURCE: &str = "MP4_INPUT_SOURCE";
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Mp4Input {
+    r#type: InputProtocol,
     name: String,
+    source: Mp4InputSource,
+    r#loop: bool,
 }
 
 impl InputHandler for Mp4Input {
     fn name(&self) -> &str {
         &self.name
     }
+
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        let json_string = serde_json::to_string(self)?;
+        let json_value = serde_json::from_str(&json_string)?;
+        Ok(json_value)
+    }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Mp4InputSource {
     Path(PathBuf),
     Url(String),
@@ -151,7 +164,12 @@ impl Mp4InputBuilder {
     pub fn build(self) -> (Mp4Input, serde_json::Value, InputPlayer) {
         let register_request = self.serialize();
 
-        let mp4_input = Mp4Input { name: self.name };
+        let mp4_input = Mp4Input {
+            r#type: InputProtocol::Mp4,
+            name: self.name,
+            source: self.source.unwrap(),
+            r#loop: self.r#loop,
+        };
 
         (mp4_input, register_request, InputPlayer::Manual)
     }

@@ -5,18 +5,20 @@ use std::{
 
 use anyhow::Result;
 use inquire::{Confirm, Text};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
 
 use crate::{
-    inputs::{InputHandler, VideoDecoder},
+    inputs::{InputHandler, InputProtocol, VideoDecoder},
     players::InputPlayer,
 };
 
 const WHIP_TOKEN_ENV: &str = "WHIP_INPUT_BEARER_TOKEN";
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhipInput {
+    r#type: InputProtocol,
     name: String,
     bearer_token: String,
     video: Option<WhipInputVideoOptions>,
@@ -25,6 +27,12 @@ pub struct WhipInput {
 impl InputHandler for WhipInput {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        let json_string = serde_json::to_string(self)?;
+        let json_value = serde_json::from_str(&json_string)?;
+        Ok(json_value)
     }
 
     fn has_video(&self) -> bool {
@@ -131,6 +139,7 @@ impl WhipInputBuilder {
         let register_request = self.serialize();
 
         let whip_input = WhipInput {
+            r#type: InputProtocol::Whip,
             name: self.name,
             bearer_token: self.bearer_token,
             video: self.video,
@@ -140,7 +149,7 @@ impl WhipInputBuilder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhipInputVideoOptions {
     decoder: VideoDecoder,
 }

@@ -18,13 +18,14 @@ use integration_tests::{
         start_gst_send_udp,
     },
 };
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
     autocompletion::FilePathCompleter,
-    inputs::{AudioDecoder, InputHandler, VideoDecoder},
+    inputs::{AudioDecoder, InputHandler, InputProtocol, VideoDecoder},
     players::InputPlayer,
     smelter_state::TransportProtocol,
     utils::resolve_path,
@@ -47,14 +48,19 @@ pub enum RtpRegisterOptions {
     Skip,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RtpInput {
+    r#type: InputProtocol,
     name: String,
+
+    #[serde(skip, default = "crate::utils::get_free_port")]
     port: u16,
     video: Option<RtpInputVideoOptions>,
     audio: Option<RtpInputAudioOptions>,
     transport_protocol: TransportProtocol,
     path: Option<PathBuf>,
+
+    #[serde(skip)]
     stream_handles: Vec<Child>,
 }
 
@@ -282,6 +288,12 @@ impl InputHandler for RtpInput {
         &self.name
     }
 
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        let json_string = serde_json::to_string(self)?;
+        let json_value = serde_json::from_str(&json_string)?;
+        Ok(json_value)
+    }
+
     fn has_video(&self) -> bool {
         self.video.is_some()
     }
@@ -493,6 +505,7 @@ impl RtpInputBuilder {
     pub fn build(self) -> (RtpInput, serde_json::Value, InputPlayer) {
         let register_request = self.serialize();
         let rtp_input = RtpInput {
+            r#type: InputProtocol::Rtp,
             name: self.name,
             port: self.port,
             video: self.video,
@@ -506,7 +519,7 @@ impl RtpInputBuilder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RtpInputVideoOptions {
     pub decoder: VideoDecoder,
 }
@@ -527,7 +540,7 @@ impl Default for RtpInputVideoOptions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RtpInputAudioOptions {
     pub decoder: AudioDecoder,
 }

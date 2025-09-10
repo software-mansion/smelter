@@ -38,6 +38,9 @@ pub enum Action {
 
     #[strum(to_string = "Start")]
     Start,
+
+    #[strum(to_string = "JSON dump")]
+    JsonDump,
 }
 
 fn run_demo() {
@@ -90,6 +93,7 @@ fn run_demo() {
                     Err(e) => Err(e.context("Start request failed")),
                 }
             }
+            Action::JsonDump => state.json_dump(),
         };
 
         if let Err(e) = action_result {

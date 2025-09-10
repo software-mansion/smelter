@@ -1,12 +1,13 @@
-use std::mem;
 use std::ops::Deref;
+use std::{fs, mem};
 
 use anyhow::{Context, Result};
 use inquire::Select;
 use integration_tests::examples;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::inputs::mp4::Mp4InputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
@@ -21,7 +22,7 @@ use crate::{
     outputs::{rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder, OutputHandler, OutputProtocol},
 };
 
-#[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq)]
+#[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum TransportProtocol {
     #[strum(to_string = "udp")]
     Udp,
@@ -241,6 +242,23 @@ impl SmelterState {
         }
 
         Ok(())
+    }
+
+    pub fn json_dump(&self) -> Result<()> {
+        let inputs = self
+            .inputs
+            .iter()
+            .filter_map(|i| match i.json_dump() {
+                Ok(value) => Some(value),
+                Err(e) => {
+                    error!("Unable to serialize input {}: {e}", i.name());
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let json = json!({"inputs": inputs});
+        Ok(fs::write("json_dump.json", json.to_string())?)
     }
 }
 
