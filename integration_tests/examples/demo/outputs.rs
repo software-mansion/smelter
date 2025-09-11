@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter};
 
-use crate::{inputs::InputHandler, players::OutputPlayer};
+use crate::inputs::InputHandler;
 
 pub mod mp4;
 pub mod rtmp;

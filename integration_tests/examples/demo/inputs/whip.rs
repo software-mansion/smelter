@@ -144,7 +144,7 @@ impl WhipInputBuilder {
         })
     }
 
-    pub fn build(self) -> (WhipInput, serde_json::Value, InputPlayer) {
+    pub fn build(self) -> (WhipInput, serde_json::Value) {
         let register_request = self.serialize();
 
         let whip_input = WhipInput {
@@ -155,7 +155,7 @@ impl WhipInputBuilder {
             player: self.player,
         };
 
-        (whip_input, register_request, self.player)
+        (whip_input, register_request)
     }
 }
 

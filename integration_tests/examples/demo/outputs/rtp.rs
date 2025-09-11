@@ -444,10 +444,7 @@ impl RtpOutputBuilder {
         })
     }
 
-    pub fn build(
-        self,
-        inputs: &[&dyn InputHandler],
-    ) -> (RtpOutput, serde_json::Value, OutputPlayer) {
+    pub fn build(self, inputs: &[&dyn InputHandler]) -> (RtpOutput, serde_json::Value) {
         let register_request = self.serialize(inputs);
         let rtp_output = RtpOutput {
             r#type: OutputProtocol::Rtp,
@@ -459,7 +456,7 @@ impl RtpOutputBuilder {
             stream_handles: vec![],
             player: self.player,
         };
-        (rtp_output, register_request, self.player)
+        (rtp_output, register_request)
     }
 }
 

@@ -1,4 +1,4 @@
-use std::{env, fs, path::PathBuf, thread, time::Duration};
+use std::{env, thread, time::Duration};
 
 use inquire::{InquireError, Select};
 use integration_tests::examples;

@@ -171,7 +171,7 @@ impl Mp4InputBuilder {
         })
     }
 
-    pub fn build(self) -> (Mp4Input, serde_json::Value, InputPlayer) {
+    pub fn build(self) -> (Mp4Input, serde_json::Value) {
         let register_request = self.serialize();
 
         let mp4_input = Mp4Input {
@@ -182,6 +182,6 @@ impl Mp4InputBuilder {
             player: InputPlayer::Manual,
         };
 
-        (mp4_input, register_request, InputPlayer::Manual)
+        (mp4_input, register_request)
     }
 }

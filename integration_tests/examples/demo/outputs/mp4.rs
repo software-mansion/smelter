@@ -195,10 +195,7 @@ impl Mp4OutputBuilder {
         })
     }
 
-    pub fn build(
-        self,
-        inputs: &[&dyn InputHandler],
-    ) -> (Mp4Output, serde_json::Value, OutputPlayer) {
+    pub fn build(self, inputs: &[&dyn InputHandler]) -> (Mp4Output, serde_json::Value) {
         let register_request = self.serialize(inputs);
 
         let mp4_output = Mp4Output {
@@ -210,7 +207,7 @@ impl Mp4OutputBuilder {
             player: OutputPlayer::Manual,
         };
 
-        (mp4_output, register_request, OutputPlayer::Manual)
+        (mp4_output, register_request)
     }
 }
 

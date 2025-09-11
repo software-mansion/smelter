@@ -244,10 +244,7 @@ impl WhipOutputBuilder {
         })
     }
 
-    pub fn build(
-        self,
-        inputs: &[&dyn InputHandler],
-    ) -> (WhipOutput, serde_json::Value, OutputPlayer) {
+    pub fn build(self, inputs: &[&dyn InputHandler]) -> (WhipOutput, serde_json::Value) {
         let register_request = self.serialize(inputs);
 
         let whip_output = WhipOutput {
@@ -260,7 +257,7 @@ impl WhipOutputBuilder {
             player: self.player,
         };
 
-        (whip_output, register_request, self.player)
+        (whip_output, register_request)
     }
 }
 

@@ -219,10 +219,7 @@ impl RtmpOutputBuilder {
         })
     }
 
-    pub fn build(
-        self,
-        inputs: &[&dyn InputHandler],
-    ) -> (RtmpOutput, serde_json::Value, OutputPlayer) {
+    pub fn build(self, inputs: &[&dyn InputHandler]) -> (RtmpOutput, serde_json::Value) {
         let register_request = self.serialize(inputs);
         let rtmp_output = RtmpOutput {
             r#type: OutputProtocol::Rtmp,
@@ -234,7 +231,7 @@ impl RtmpOutputBuilder {
             stream_handles: vec![],
             player: self.player,
         };
-        (rtmp_output, register_request, self.player)
+        (rtmp_output, register_request)
     }
 }
 

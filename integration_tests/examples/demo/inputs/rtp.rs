@@ -511,7 +511,7 @@ impl RtpInputBuilder {
         })
     }
 
-    pub fn build(self) -> (RtpInput, serde_json::Value, InputPlayer) {
+    pub fn build(self) -> (RtpInput, serde_json::Value) {
         let register_request = self.serialize();
         let rtp_input = RtpInput {
             r#type: InputProtocol::Rtp,
@@ -525,7 +525,7 @@ impl RtpInputBuilder {
             player: self.player,
         };
 
-        (rtp_input, register_request, self.player)
+        (rtp_input, register_request)
     }
 }
 

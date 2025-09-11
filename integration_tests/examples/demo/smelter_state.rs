@@ -19,7 +19,6 @@ use crate::outputs::rtmp::RtmpOutput;
 use crate::outputs::rtp::RtpOutput;
 use crate::outputs::whep::{WhepOutput, WhepOutputBuilder};
 use crate::outputs::whip::{WhipOutput, WhipOutputBuilder};
-use crate::players::{InputPlayer, OutputPlayer};
 use crate::{
     inputs::{rtp::RtpInputBuilder, InputProtocol},
     outputs::{rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder, OutputHandler, OutputProtocol},
@@ -77,27 +76,21 @@ impl SmelterState {
 
         let protocol = Select::new("Select input protocol:", prot_opts).prompt()?;
 
-        let (mut input_handler, input_json, player): (
-            Box<dyn InputHandler>,
-            serde_json::Value,
-            InputPlayer,
-        ) = match protocol {
-            InputProtocol::Rtp => {
-                let (rtp_input, register_request, player) =
-                    RtpInputBuilder::new().prompt()?.build();
-                (Box::new(rtp_input), register_request, player)
-            }
-            InputProtocol::Whip => {
-                let (whip_input, register_request, player) =
-                    WhipInputBuilder::new().prompt()?.build();
-                (Box::new(whip_input), register_request, player)
-            }
-            InputProtocol::Mp4 => {
-                let (mp4_input, register_request, player) =
-                    Mp4InputBuilder::new().prompt()?.build();
-                (Box::new(mp4_input), register_request, player)
-            }
-        };
+        let (mut input_handler, input_json): (Box<dyn InputHandler>, serde_json::Value) =
+            match protocol {
+                InputProtocol::Rtp => {
+                    let (rtp_input, register_request) = RtpInputBuilder::new().prompt()?.build();
+                    (Box::new(rtp_input), register_request)
+                }
+                InputProtocol::Whip => {
+                    let (whip_input, register_request) = WhipInputBuilder::new().prompt()?.build();
+                    (Box::new(whip_input), register_request)
+                }
+                InputProtocol::Mp4 => {
+                    let (mp4_input, register_request) = Mp4InputBuilder::new().prompt()?.build();
+                    (Box::new(mp4_input), register_request)
+                }
+            };
 
         let input_route = format!("input/{}/register", input_handler.name());
 
@@ -127,37 +120,34 @@ impl SmelterState {
         let protocol = Select::new("Select output protocol:", prot_opts).prompt()?;
 
         let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
-        let (mut output_handler, output_json, player): (
-            Box<dyn OutputHandler>,
-            serde_json::Value,
-            OutputPlayer,
-        ) = match protocol {
-            OutputProtocol::Rtp => {
-                let (rtp_output, register_request, player) =
-                    RtpOutputBuilder::new().prompt()?.build(&inputs);
-                (Box::new(rtp_output), register_request, player)
-            }
-            OutputProtocol::Rtmp => {
-                let (rtmp_output, register_request, player) =
-                    RtmpOutputBuilder::new().prompt()?.build(&inputs);
-                (Box::new(rtmp_output), register_request, player)
-            }
-            OutputProtocol::Whip => {
-                let (whip_output, register_request, player) =
-                    WhipOutputBuilder::new().prompt()?.build(&inputs);
-                (Box::new(whip_output), register_request, player)
-            }
-            OutputProtocol::Mp4 => {
-                let (mp4_output, register_request, player) =
-                    Mp4OutputBuilder::new().prompt()?.build(&inputs);
-                (Box::new(mp4_output), register_request, player)
-            }
-            OutputProtocol::Whep => {
-                let (whep_output, register_request, player) =
-                    WhepOutputBuilder::new().prompt()?.build(&inputs);
-                (Box::new(whep_output), register_request, player)
-            }
-        };
+        let (mut output_handler, output_json): (Box<dyn OutputHandler>, serde_json::Value) =
+            match protocol {
+                OutputProtocol::Rtp => {
+                    let (rtp_output, register_request) =
+                        RtpOutputBuilder::new().prompt()?.build(&inputs);
+                    (Box::new(rtp_output), register_request)
+                }
+                OutputProtocol::Rtmp => {
+                    let (rtmp_output, register_request) =
+                        RtmpOutputBuilder::new().prompt()?.build(&inputs);
+                    (Box::new(rtmp_output), register_request)
+                }
+                OutputProtocol::Whip => {
+                    let (whip_output, register_request) =
+                        WhipOutputBuilder::new().prompt()?.build(&inputs);
+                    (Box::new(whip_output), register_request)
+                }
+                OutputProtocol::Mp4 => {
+                    let (mp4_output, register_request) =
+                        Mp4OutputBuilder::new().prompt()?.build(&inputs);
+                    (Box::new(mp4_output), register_request)
+                }
+                OutputProtocol::Whep => {
+                    let (whep_output, register_request) =
+                        WhepOutputBuilder::new().prompt()?.build(&inputs);
+                    (Box::new(whep_output), register_request)
+                }
+            };
 
         output_handler.on_before_registration()?;
 
