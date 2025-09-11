@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -17,11 +17,57 @@ pub struct RtpOutput {
     /// (**default=`"udp"`**) Transport layer protocol that will be used to send RTP packets.
     pub transport_protocol: Option<TransportProtocol>,
     /// Video stream configuration.
-    pub video: Option<OutputVideoOptions>,
+    pub video: Option<OutputRtpVideoOptions>,
     /// Audio stream configuration.
     pub audio: Option<OutputRtpAudioOptions>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OutputRtpVideoOptions {
+    /// Output resolution in pixels.
+    pub resolution: Resolution,
+    /// Defines when output stream should end if some of the input streams are finished. If output includes both audio and video streams, then EOS needs to be sent on both.
+    pub send_eos_when: Option<OutputEndCondition>,
+    /// Video encoder options.
+    pub encoder: RtpVideoEncoderOptions,
+    /// Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+    pub initial: VideoScene,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RtpVideoEncoderOptions {
+    #[serde(rename = "ffmpeg_h264")]
+    FfmpegH264 {
+        /// (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+        preset: Option<H264EncoderPreset>,
+
+        /// (**default=`"yuv420p"`**) Encoder pixel format
+        pixel_format: Option<PixelFormat>,
+
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<String, String>>,
+    },
+    #[serde(rename = "ffmpeg_vp8")]
+    FfmpegVp8 {
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<String, String>>,
+    },
+    #[serde(rename = "ffmpeg_vp9")]
+    FfmpegVp9 {
+        /// (**default=`"yuv420p"`**) Encoder pixel format
+        pixel_format: Option<PixelFormat>,
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<String, String>>,
+    },
+    #[serde(rename = "vulkan_h264")]
+    VulkanH264 {
+        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+        /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+        bitrate: Option<VulkanH264EncoderBitrate>,
+    },
+}
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OutputRtpAudioOptions {
