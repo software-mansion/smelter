@@ -43,6 +43,10 @@ pub struct RtmpOutput {
     player: OutputPlayer,
 }
 
+// URL and name fields of `RtmpOutput` depend on the port field which has to be calculated
+// dynamically to avoid situation in which ports collide. This struct is required to make it
+// possible for name and URL fields to read the port value. JSON is deserialized to this struct and
+// remaining fields are determined during conversion
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RtmpOutputSerde {
     r#type: OutputProtocol,
