@@ -289,7 +289,7 @@ impl SmelterState {
             .collect::<Vec<_>>();
 
         let json = json!({"inputs": inputs, "outputs": outputs});
-        let filename = resolve_json_filename().with_context(|| "Failed to save JSON dump")?;
+        let filename = resolve_json_filename().with_context(|| "Failed to resolve JSON filename")?;
         Ok(fs::write(filename, json.to_string())?)
     }
 
