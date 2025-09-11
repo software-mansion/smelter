@@ -1,3 +1,5 @@
+use std::{thread, time::Duration};
+
 use inquire::{InquireError, Select};
 use integration_tests::examples;
 use serde_json::json;
@@ -44,9 +46,11 @@ pub enum Action {
 }
 
 fn run_demo() {
-    if let Err(e) = examples::post("reset", &json!({})) {
+    while let Err(e) = examples::post("reset", &json!({})) {
         error!("Initial reset failed: {e}");
+        thread::sleep(Duration::from_secs(3));
     }
+
     let mut state = SmelterState::new();
 
     let mut options = Action::iter().collect::<Vec<_>>();
