@@ -70,13 +70,13 @@ extern "C" fn ffmpeg_log_callback(
 }
 
 pub fn init_logger(opts: LoggerConfig) {
-    let env_filter = tracing_subscriber::EnvFilter::new(opts.level.clone());
-
-    let stdout_layer = match opts.format {
+    let stdio_filter = tracing_subscriber::EnvFilter::new(opts.stdio_level.clone());
+    let stdio_layer = match opts.format {
         LoggerFormat::Pretty => fmt::Layer::default().pretty().boxed(),
         LoggerFormat::Json => fmt::Layer::default().json().boxed(),
         LoggerFormat::Compact => fmt::Layer::default().compact().boxed(),
-    };
+    }
+    .with_filter(stdio_filter);
 
     let file_layer = if let Some(log_file) = opts.log_file {
         if log_file.exists() {
@@ -84,21 +84,23 @@ pub fn init_logger(opts: LoggerConfig) {
         };
         fs::create_dir_all(log_file.parent().unwrap()).unwrap();
         let writer = File::create(log_file).unwrap();
-        Some(fmt::Layer::default().json().with_writer(writer))
+        let filter = tracing_subscriber::EnvFilter::new(opts.file_level.clone());
+        Some(
+            fmt::Layer::default()
+                .json()
+                .with_writer(writer)
+                .with_filter(filter),
+        )
     } else {
         None
     };
 
     match file_layer {
         Some(file_layer) => Registry::default()
-            .with(stdout_layer)
+            .with(stdio_layer)
             .with(file_layer)
-            .with(env_filter)
             .init(),
-        None => Registry::default()
-            .with(stdout_layer)
-            .with(env_filter)
-            .init(),
+        None => Registry::default().with(stdio_layer).init(),
     }
 
     unsafe {

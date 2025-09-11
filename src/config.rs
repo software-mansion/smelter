@@ -47,7 +47,8 @@ pub struct Config {
 pub struct LoggerConfig {
     pub ffmpeg_logger_level: FfmpegLogLevel,
     pub format: LoggerFormat,
-    pub level: String,
+    pub stdio_level: String,
+    pub file_level: String,
     pub log_file: Option<Arc<Path>>,
 }
 
@@ -132,6 +133,14 @@ fn try_read_config() -> Result<Config, String> {
     let logger_level = match env::var("SMELTER_LOGGER_LEVEL") {
         Ok(level) => level,
         Err(_) => "info,wgpu_hal=warn,wgpu_core=warn".to_string(),
+    };
+    let stdio_logger_level = match env::var("SMELTER_STDIO_LOGGER_LEVEL") {
+        Ok(level) => level,
+        Err(_) => logger_level.clone(),
+    };
+    let file_logger_level = match env::var("SMELTER_FILE_LOGGER_LEVEL") {
+        Ok(level) => level,
+        Err(_) => logger_level.clone(),
     };
 
     // When building in repo use compact logger
@@ -253,7 +262,8 @@ fn try_read_config() -> Result<Config, String> {
         logger: LoggerConfig {
             ffmpeg_logger_level,
             format: logger_format,
-            level: logger_level,
+            stdio_level: stdio_logger_level,
+            file_level: file_logger_level,
             log_file,
         },
         default_buffer_duration,
