@@ -269,7 +269,7 @@ fn test_rtcp_sync_pts_with_rollover_before_sender_report_second_stream() {
     assert_duration_eq(stream_2_first_pts, Duration::from_millis(100), PREC_RUNTIME);
 
     // after 10 seconds
-    let stream_1_second_pts = stream_1.pts_from_timestamp(stream_1_first_rtp_timestamp + 10_000); // rolled over
+    let stream_1_second_pts = stream_1.pts_from_timestamp(stream_1_first_rtp_timestamp + 10_000);
     let stream_2_second_pts = stream_2.pts_from_timestamp(5_000);
 
     assert_eq!(
