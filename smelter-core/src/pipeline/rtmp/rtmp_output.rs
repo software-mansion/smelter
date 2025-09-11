@@ -143,6 +143,11 @@ impl RtmpClientOutput {
                 )?
             }
             VideoEncoderOptions::VulkanH264(options) => {
+                if !ctx.graphics_context.has_vulkan_encoder_support() {
+                    return Err(OutputInitError::EncoderError(
+                        EncoderInitError::VulkanContextRequiredForVulkanEncoder,
+                    ));
+                }
                 VideoEncoderThread::<VulkanH264Encoder>::spawn(
                     output_id.clone(),
                     VideoEncoderThreadOptions {
