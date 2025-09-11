@@ -48,21 +48,59 @@ pub enum RtpRegisterOptions {
     Skip,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
+#[serde(from = "RtpInputSerde")]
 pub struct RtpInput {
     r#type: InputProtocol,
     name: String,
-
-    #[serde(skip, default = "crate::utils::get_free_port")]
     port: u16,
     video: Option<RtpInputVideoOptions>,
     audio: Option<RtpInputAudioOptions>,
     transport_protocol: TransportProtocol,
     path: Option<PathBuf>,
-
-    #[serde(skip)]
     stream_handles: Vec<Child>,
     player: InputPlayer,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RtpInputSerde {
+    r#type: InputProtocol,
+    video: Option<RtpInputVideoOptions>,
+    audio: Option<RtpInputAudioOptions>,
+    transport_protocol: TransportProtocol,
+    path: Option<PathBuf>,
+    player: InputPlayer,
+}
+
+impl From<RtpInputSerde> for RtpInput {
+    fn from(value: RtpInputSerde) -> Self {
+        let port = get_free_port();
+        let name = format!("rtp_input_{}_{port}", value.transport_protocol);
+        Self {
+            r#type: value.r#type,
+            name,
+            port,
+            video: value.video,
+            audio: value.audio,
+            transport_protocol: value.transport_protocol,
+            path: value.path,
+            stream_handles: vec![],
+            player: value.player,
+        }
+    }
+}
+
+impl From<&RtpInput> for RtpInputSerde {
+    fn from(value: &RtpInput) -> Self {
+        Self {
+            r#type: value.r#type,
+            video: value.video.clone(),
+            audio: value.audio.clone(),
+            transport_protocol: value.transport_protocol,
+            path: value.path.clone(),
+            player: value.player,
+        }
+    }
 }
 
 impl RtpInput {
@@ -288,7 +326,8 @@ impl InputHandler for RtpInput {
     }
 
     fn json_dump(&self) -> Result<serde_json::Value> {
-        Ok(serde_json::to_value(self)?)
+        let rtp_input_serde: RtpInputSerde = self.into();
+        Ok(serde_json::to_value(rtp_input_serde)?)
     }
 
     fn has_video(&self) -> bool {
@@ -504,7 +543,7 @@ impl RtpInputBuilder {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RtpInputVideoOptions {
     pub decoder: VideoDecoder,
 }
@@ -525,7 +564,7 @@ impl Default for RtpInputVideoOptions {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RtpInputAudioOptions {
     pub decoder: AudioDecoder,
 }

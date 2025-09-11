@@ -95,7 +95,7 @@ pub enum VideoResolutionOptions {
     Hd,
 }
 
-#[derive(Debug, Display, EnumIter, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Display, EnumIter, PartialEq, Serialize, Deserialize, Clone, Copy)]
 pub enum VideoEncoder {
     #[strum(to_string = "ffmpeg_h264")]
     FfmpegH264,
@@ -110,7 +110,7 @@ pub enum VideoEncoder {
     Any,
 }
 
-#[derive(Debug, Display, EnumIter, Serialize, Deserialize)]
+#[derive(Debug, Display, EnumIter, Serialize, Deserialize, Clone, Copy)]
 pub enum AudioEncoder {
     #[strum(to_string = "opus")]
     Opus,

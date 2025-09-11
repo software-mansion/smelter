@@ -30,20 +30,54 @@ pub enum RtmpRegisterOptions {
     Skip,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
+#[serde(from = "RtmpOutputSerde")]
 pub struct RtmpOutput {
     r#type: OutputProtocol,
     name: String,
     url: String,
-
-    #[serde(skip, default = "crate::utils::get_free_port")]
     port: u16,
     video: Option<RtmpOutputVideoOptions>,
     audio: Option<RtmpOutputAudioOptions>,
-
-    #[serde(skip)]
     stream_handles: Vec<Child>,
     player: OutputPlayer,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RtmpOutputSerde {
+    r#type: OutputProtocol,
+    video: Option<RtmpOutputVideoOptions>,
+    audio: Option<RtmpOutputAudioOptions>,
+    player: OutputPlayer,
+}
+
+impl From<RtmpOutputSerde> for RtmpOutput {
+    fn from(value: RtmpOutputSerde) -> Self {
+        let port = get_free_port();
+        let name = format!("rtmp_output_{port}");
+        let url = format!("rtmp://127.0.0.1:{port}");
+        Self {
+            r#type: value.r#type,
+            name,
+            url,
+            port,
+            video: value.video,
+            audio: value.audio,
+            stream_handles: vec![],
+            player: value.player,
+        }
+    }
+}
+
+impl From<&RtmpOutput> for RtmpOutputSerde {
+    fn from(value: &RtmpOutput) -> Self {
+        Self {
+            r#type: value.r#type,
+            video: value.video.clone(),
+            audio: value.audio.clone(),
+            player: value.player,
+        }
+    }
 }
 
 impl RtmpOutput {
@@ -68,7 +102,8 @@ impl OutputHandler for RtmpOutput {
     }
 
     fn json_dump(&self) -> Result<serde_json::Value> {
-        Ok(serde_json::to_value(self)?)
+        let rtmp_output_serde: RtmpOutputSerde = self.into();
+        Ok(serde_json::to_value(rtmp_output_serde)?)
     }
 
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
@@ -224,7 +259,7 @@ impl RtmpOutputBuilder {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RtmpOutputVideoOptions {
     root_id: String,
     resolution: VideoResolution,
@@ -272,7 +307,7 @@ impl Default for RtmpOutputVideoOptions {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RtmpOutputAudioOptions {
     encoder: AudioEncoder,
 }

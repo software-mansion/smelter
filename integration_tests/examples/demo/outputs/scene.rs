@@ -4,7 +4,7 @@ use strum::{Display, EnumIter};
 
 use crate::{inputs::InputHandler, outputs::VideoResolution};
 
-#[derive(Debug, Display, EnumIter, Serialize, Deserialize)]
+#[derive(Debug, Display, EnumIter, Serialize, Deserialize, Clone, Copy)]
 pub enum Scene {
     #[strum(to_string = "Tiles")]
     Tiles,

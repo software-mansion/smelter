@@ -78,7 +78,7 @@ impl From<VideoDecoder> for ffmpeg::Video {
     }
 }
 
-#[derive(Debug, Display, EnumIter, Serialize, Deserialize)]
+#[derive(Debug, Display, EnumIter, Serialize, Deserialize, Clone, Copy)]
 pub enum AudioDecoder {
     #[strum(to_string = "opus")]
     Opus,
