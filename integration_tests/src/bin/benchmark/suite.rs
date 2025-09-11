@@ -111,17 +111,17 @@ pub fn full_benchmark_suite(ctx: &GraphicsContext) -> Vec<Benchmark> {
         // - different input resolutions/fps
         // - different encoder presets
         // - different input/output ratios
-        benchmark_set_constant_input_output_ratio(ctx),
-        // benchmark multiple encoding presets with ffmpeg encoder / single input no decoder
-        benchmark_set_ffmpeg_h264_encoder_preset(ctx),
-        // benchmark multiple output resolutions with encoder / single input no decoder
-        benchmark_set_output_resolutions(ctx),
-        // rendering only / multiple outputs no encoder / single input no decoder
-        benchmark_set_renderer_only(ctx),
-        // decoder only tests / one output low resolution no encoder blank scene
-        benchmark_set_decoder_only(ctx),
+        //benchmark_set_constant_input_output_ratio(ctx),
+        //// benchmark multiple encoding presets with ffmpeg encoder / single input no decoder
+        //benchmark_set_ffmpeg_h264_encoder_preset(ctx),
+        //// benchmark multiple output resolutions with encoder / single input no decoder
+        //benchmark_set_output_resolutions(ctx),
+        //// rendering only / multiple outputs no encoder / single input no decoder
+        //benchmark_set_renderer_only(ctx),
         // encoder only tests / one input passthrough scene
         benchmark_set_encoder_only(ctx),
+        // decoder only tests / one output low resolution no encoder blank scene
+        benchmark_set_decoder_only(ctx),
     ]
     .concat()
 }
