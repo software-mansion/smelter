@@ -1,4 +1,4 @@
-use std::{thread, time::Duration};
+use std::{env, fs, path::PathBuf, thread, time::Duration};
 
 use inquire::{InquireError, Select};
 use integration_tests::examples;
@@ -14,9 +14,10 @@ mod players;
 mod smelter_state;
 mod utils;
 
-use crate::smelter_state::SmelterState;
+use crate::{smelter_state::SmelterState, utils::parse_json};
 
 pub const IP: &str = "127.0.0.1";
+const JSON_ENV: &str = "DEMO_JSON";
 
 #[derive(Debug, EnumIter, Display, Clone, PartialEq)]
 pub enum Action {
@@ -51,7 +52,28 @@ fn run_demo() {
         thread::sleep(Duration::from_secs(3));
     }
 
-    let mut state = SmelterState::new();
+    let mut state = match env::var(JSON_ENV) {
+        Ok(json_path) => {
+            let json_val = parse_json(json_path.into());
+            match json_val {
+                Ok(json) => {
+                    debug!("{json:#?}");
+                    match SmelterState::from_json(json) {
+                        Ok(state) => state,
+                        Err(e) => {
+                            error!("Failed to create start from provided JSON dump: {e}");
+                            SmelterState::new()
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to parse JSON: {e}");
+                    SmelterState::new()
+                }
+            }
+        }
+        Err(_) => SmelterState::new(),
+    };
 
     let mut options = Action::iter().collect::<Vec<_>>();
 

@@ -22,7 +22,7 @@ pub trait InputHandler: Debug {
         true
     }
 
-    fn on_after_registration(&mut self, _player: InputPlayer) -> Result<()> {
+    fn on_after_registration(&mut self) -> Result<()> {
         Ok(())
     }
 }

@@ -35,9 +35,23 @@ pub enum WhipRegisterOptions {
 pub struct WhipOutput {
     r#type: OutputProtocol,
     name: String,
+    endpoint_url: String,
     bearer_token: String,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
+    player: OutputPlayer,
+}
+
+impl WhipOutput {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        json!({
+            "type": "whip_client",
+            "endpoint_url": self.endpoint_url,
+            "bearer_token": self.bearer_token,
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
+    }
 }
 
 impl OutputHandler for WhipOutput {
@@ -49,8 +63,8 @@ impl OutputHandler for WhipOutput {
         Ok(serde_json::to_value(self)?)
     }
 
-    fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
-        match player {
+    fn on_before_registration(&mut self) -> Result<()> {
+        match self.player {
             OutputPlayer::Manual => {
                 let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
                 let url = "http://127.0.0.1:8080";
@@ -239,9 +253,11 @@ impl WhipOutputBuilder {
         let whip_output = WhipOutput {
             r#type: OutputProtocol::Whip,
             name: self.name,
+            endpoint_url: self.endpoint_url.unwrap(),
             bearer_token: self.bearer_token.unwrap(),
             video: self.video,
             audio: self.audio,
+            player: self.player,
         };
 
         (whip_output, register_request, self.player)

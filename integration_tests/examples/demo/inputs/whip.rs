@@ -22,6 +22,17 @@ pub struct WhipInput {
     name: String,
     bearer_token: String,
     video: Option<WhipInputVideoOptions>,
+    player: InputPlayer,
+}
+
+impl WhipInput {
+    pub fn serialize_register(&self) -> serde_json::Value {
+        json!({
+            "type": "whip_server",
+            "bearer_token": self.bearer_token,
+            "video": self.video.as_ref().map(|v| v.serialize_register()),
+        })
+    }
 }
 
 impl InputHandler for WhipInput {
@@ -37,8 +48,8 @@ impl InputHandler for WhipInput {
         self.video.is_some()
     }
 
-    fn on_after_registration(&mut self, player: InputPlayer) -> Result<()> {
-        match player {
+    fn on_after_registration(&mut self) -> Result<()> {
+        match self.player {
             InputPlayer::Manual => {
                 println!("Instructions to start streaming:");
                 println!("1. Open OBS Studio");
@@ -141,6 +152,7 @@ impl WhipInputBuilder {
             name: self.name,
             bearer_token: self.bearer_token,
             video: self.video,
+            player: self.player,
         };
 
         (whip_input, register_request, self.player)

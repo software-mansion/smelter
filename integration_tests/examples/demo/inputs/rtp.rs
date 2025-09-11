@@ -62,9 +62,20 @@ pub struct RtpInput {
 
     #[serde(skip)]
     stream_handles: Vec<Child>,
+    player: InputPlayer,
 }
 
 impl RtpInput {
+    pub fn serialize_register(&self) -> serde_json::Value {
+        json!({
+            "type": "rtp_stream",
+            "port": self.port,
+            "transport_protocol": self.transport_protocol.to_string(),
+            "video": self.video.as_ref().map(|v| v.serialize()),
+            "audio": self.audio.as_ref().map(|a| a.serialize()),
+        })
+    }
+
     fn test_sample(&self) -> TestSample {
         match &self.video {
             Some(RtpInputVideoOptions {
@@ -192,8 +203,8 @@ impl RtpInput {
         Ok(())
     }
 
-    fn on_after_registration_udp(&mut self, player: InputPlayer) -> Result<()> {
-        match player {
+    fn on_after_registration_udp(&mut self) -> Result<()> {
+        match self.player {
             InputPlayer::FfmpegTransmitter => self.ffmpeg_transmit(),
             InputPlayer::GstreamerTransmitter => self.gstreamer_transmit_udp(),
             InputPlayer::Manual => {
@@ -237,8 +248,8 @@ impl RtpInput {
         }
     }
 
-    fn on_after_registration_tcp(&mut self, player: InputPlayer) -> Result<()> {
-        match player {
+    fn on_after_registration_tcp(&mut self) -> Result<()> {
+        match self.player {
             InputPlayer::GstreamerTransmitter => self.gstreamer_transmit_tcp(),
             InputPlayer::Manual => {
                 let video_codec = self.video.as_ref().map(|opts| opts.decoder);
@@ -300,10 +311,10 @@ impl InputHandler for RtpInput {
         self.audio.is_some()
     }
 
-    fn on_after_registration(&mut self, player: InputPlayer) -> Result<()> {
+    fn on_after_registration(&mut self) -> Result<()> {
         match self.transport_protocol {
-            TransportProtocol::TcpServer => self.on_after_registration_tcp(player),
-            TransportProtocol::Udp => self.on_after_registration_udp(player),
+            TransportProtocol::TcpServer => self.on_after_registration_tcp(),
+            TransportProtocol::Udp => self.on_after_registration_udp(),
         }
     }
 }
@@ -511,6 +522,7 @@ impl RtpInputBuilder {
             path: self.path,
             transport_protocol: self.transport_protocol.unwrap_or(TransportProtocol::Udp),
             stream_handles: vec![],
+            player: self.player,
         };
 
         (rtp_input, register_request, self.player)

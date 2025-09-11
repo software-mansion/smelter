@@ -26,6 +26,18 @@ pub struct Mp4Input {
     name: String,
     source: Mp4InputSource,
     r#loop: bool,
+    player: InputPlayer,
+}
+
+impl Mp4Input {
+    pub fn serialize_register(&self) -> serde_json::Value {
+        let (source_key, source_val) = self.source.serialize();
+        json!({
+            "type": "mp4",
+            source_key: source_val,
+            "loop": self.r#loop,
+        })
+    }
 }
 
 impl InputHandler for Mp4Input {
@@ -167,6 +179,7 @@ impl Mp4InputBuilder {
             name: self.name,
             source: self.source.unwrap(),
             r#loop: self.r#loop,
+            player: InputPlayer::Manual,
         };
 
         (mp4_input, register_request, InputPlayer::Manual)

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::{
-    env,
+    env, fs,
     path::PathBuf,
     sync::{
         atomic::{AtomicU16, Ordering},
@@ -23,4 +23,9 @@ pub fn resolve_path(path: PathBuf) -> Result<PathBuf> {
 
         Ok(cwd.join(path))
     }
+}
+
+pub fn parse_json(json_path: PathBuf) -> Result<serde_json::Value> {
+    let json_str = fs::read_to_string(json_path)?;
+    Ok(serde_json::from_str(&json_str)?)
 }

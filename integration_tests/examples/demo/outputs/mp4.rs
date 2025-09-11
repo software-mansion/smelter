@@ -36,8 +36,21 @@ pub enum Mp4RegisterOptions {
 pub struct Mp4Output {
     r#type: OutputProtocol,
     name: String,
+    path: PathBuf,
     video: Option<Mp4OutputVideoOptions>,
     audio: Option<Mp4OutputAudioOptions>,
+    player: OutputPlayer,
+}
+
+impl Mp4Output {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        json!({
+            "type": "mp4",
+            "path": self.path,
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
+    }
 }
 
 impl OutputHandler for Mp4Output {
@@ -191,8 +204,10 @@ impl Mp4OutputBuilder {
         let mp4_output = Mp4Output {
             r#type: OutputProtocol::Mp4,
             name: self.name,
+            path: self.path.unwrap(),
             video: self.video,
             audio: self.audio,
+            player: OutputPlayer::Manual,
         };
 
         (mp4_output, register_request, OutputPlayer::Manual)

@@ -34,6 +34,7 @@ pub enum RtmpRegisterOptions {
 pub struct RtmpOutput {
     r#type: OutputProtocol,
     name: String,
+    url: String,
 
     #[serde(skip, default = "crate::utils::get_free_port")]
     port: u16,
@@ -42,9 +43,18 @@ pub struct RtmpOutput {
 
     #[serde(skip)]
     stream_handles: Vec<Child>,
+    player: OutputPlayer,
 }
 
 impl RtmpOutput {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        json!({
+            "type": "rtmp_client",
+            "url": self.url,
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
+    }
     fn start_ffmpeg_recv(&mut self) -> Result<()> {
         let player_handle = start_ffmpeg_rtmp_receive(self.port)?;
         self.stream_handles.push(player_handle);
@@ -68,8 +78,8 @@ impl OutputHandler for RtmpOutput {
         })
     }
 
-    fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
-        match player {
+    fn on_before_registration(&mut self) -> Result<()> {
+        match self.player {
             OutputPlayer::FfmpegReceiver => self.start_ffmpeg_recv(),
             OutputPlayer::Manual => {
                 let cmd = format!("ffmpeg -f flv -listen 1 -i 'rtmp://0.0.0.0:{}' -vcodec copy -f flv - | ffplay -autoexit -f flv -i -", self.port);
@@ -217,10 +227,12 @@ impl RtmpOutputBuilder {
         let rtmp_output = RtmpOutput {
             r#type: OutputProtocol::Rtmp,
             name: self.name,
+            url: self.url,
             port: self.port,
             video: self.video,
             audio: self.audio,
             stream_handles: vec![],
+            player: self.player,
         };
         (rtmp_output, register_request, self.player)
     }

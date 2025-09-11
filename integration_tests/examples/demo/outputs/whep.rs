@@ -40,6 +40,18 @@ pub struct WhepOutput {
     bearer_token: String,
     video: Option<WhepOutputVideoOptions>,
     audio: Option<WhepOutputAudioOptions>,
+    player: OutputPlayer,
+}
+
+impl WhepOutput {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        json!({
+            "type": "whep_server",
+            "bearer_token": self.bearer_token,
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
+    }
 }
 
 impl OutputHandler for WhepOutput {
@@ -51,8 +63,8 @@ impl OutputHandler for WhepOutput {
         Ok(serde_json::to_value(self)?)
     }
 
-    fn on_after_registration(&mut self, player: OutputPlayer) -> Result<()> {
-        match player {
+    fn on_after_registration(&mut self) -> Result<()> {
+        match self.player {
             OutputPlayer::Manual => {
                 let html_path = examples_root_dir()
                     .join("examples")
@@ -242,6 +254,7 @@ impl WhepOutputBuilder {
             bearer_token: self.bearer_token.unwrap(),
             video: self.video,
             audio: self.audio,
+            player: self.player,
         };
 
         (whep_output, register_request, self.player)

@@ -48,13 +48,28 @@ pub struct RtpOutput {
     port: u16,
     video: Option<RtpOutputVideoOptions>,
     audio: Option<RtpOutputAudioOptions>,
-    transport_protocol: Option<TransportProtocol>,
+    transport_protocol: TransportProtocol,
 
     #[serde(skip)]
     stream_handles: Vec<Child>,
+    player: OutputPlayer,
 }
 
 impl RtpOutput {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        let ip = match self.transport_protocol {
+            TransportProtocol::Udp => Some(IP),
+            TransportProtocol::TcpServer => None,
+        };
+        json!({
+            "type": "rtp_stream",
+            "port": self.port,
+            "ip": ip,
+            "transport_protocol": self.transport_protocol.to_string(),
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
+    }
     fn start_gst_recv_tcp(&mut self) -> Result<()> {
         if self.video.is_none() && self.audio.is_none() {
             return Err(anyhow!("No stream specified, GStreamer not started!"));
@@ -112,7 +127,7 @@ impl RtpOutput {
     }
 
     fn start_ffmpeg_receiver(&mut self) -> Result<()> {
-        if self.transport_protocol == Some(TransportProtocol::TcpServer) {
+        if self.transport_protocol == TransportProtocol::TcpServer {
             return Err(anyhow!("FFmpeg cannot handle TCP connection."));
         }
         match (&self.video, &self.audio) {
@@ -158,9 +173,9 @@ impl OutputHandler for RtpOutput {
         Ok(serde_json::to_value(self)?)
     }
 
-    fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
+    fn on_before_registration(&mut self) -> Result<()> {
         match self.transport_protocol {
-            Some(TransportProtocol::Udp) | None => match player {
+            TransportProtocol::Udp => match self.player {
                 OutputPlayer::FfmpegReceiver => self.start_ffmpeg_receiver(),
                 OutputPlayer::GstreamerReceiver => self.start_gst_recv_udp(),
                 OutputPlayer::Manual => {
@@ -207,13 +222,13 @@ impl OutputHandler for RtpOutput {
                     }
                 }
             },
-            Some(TransportProtocol::TcpServer) => Ok(()),
+            TransportProtocol::TcpServer => Ok(()),
         }
     }
 
-    fn on_after_registration(&mut self, player: OutputPlayer) -> Result<()> {
+    fn on_after_registration(&mut self) -> Result<()> {
         match self.transport_protocol {
-            Some(TransportProtocol::TcpServer) => match player {
+            TransportProtocol::TcpServer => match self.player {
                 OutputPlayer::GstreamerReceiver => self.start_gst_recv_tcp(),
                 OutputPlayer::Manual => {
                     let cmd_base = [
@@ -259,7 +274,7 @@ impl OutputHandler for RtpOutput {
                 }
                 _ => Err(anyhow!("Invalid player for RTP in TCP server mode.")),
             },
-            Some(TransportProtocol::Udp) | None => Ok(()),
+            TransportProtocol::Udp => Ok(()),
         }
     }
 }
@@ -414,11 +429,16 @@ impl RtpOutputBuilder {
             Some(TransportProtocol::Udp) | None => Some(IP),
             Some(TransportProtocol::TcpServer) => None,
         };
+        let transport_protocol = self
+            .transport_protocol
+            .as_ref()
+            .unwrap_or(&TransportProtocol::Udp)
+            .to_string();
         json!({
             "type": "rtp_stream",
             "port": self.port,
             "ip": ip,
-            "transport_protocol": self.transport_protocol.as_ref().map(|t| t.to_string()),
+            "transport_protocol": transport_protocol,
             "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
@@ -435,8 +455,9 @@ impl RtpOutputBuilder {
             port: self.port,
             video: self.video,
             audio: self.audio,
-            transport_protocol: self.transport_protocol,
+            transport_protocol: self.transport_protocol.unwrap_or(TransportProtocol::Udp),
             stream_handles: vec![],
+            player: self.player,
         };
         (rtp_output, register_request, self.player)
     }

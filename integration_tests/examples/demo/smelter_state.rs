@@ -1,7 +1,7 @@
 use std::ops::Deref;
 use std::{fs, mem};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use inquire::Select;
 use integration_tests::examples;
 use serde::{Deserialize, Serialize};
@@ -9,13 +9,16 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{debug, error};
 
-use crate::inputs::mp4::Mp4InputBuilder;
-use crate::inputs::whip::WhipInputBuilder;
+use crate::inputs::mp4::{Mp4Input, Mp4InputBuilder};
+use crate::inputs::rtp::RtpInput;
+use crate::inputs::whip::{WhipInput, WhipInputBuilder};
 use crate::inputs::InputHandler;
 
-use crate::outputs::mp4::Mp4OutputBuilder;
-use crate::outputs::whep::WhepOutputBuilder;
-use crate::outputs::whip::WhipOutputBuilder;
+use crate::outputs::mp4::{Mp4Output, Mp4OutputBuilder};
+use crate::outputs::rtmp::RtmpOutput;
+use crate::outputs::rtp::RtpOutput;
+use crate::outputs::whep::{WhepOutput, WhepOutputBuilder};
+use crate::outputs::whip::{WhipOutput, WhipOutputBuilder};
 use crate::players::{InputPlayer, OutputPlayer};
 use crate::{
     inputs::{rtp::RtpInputBuilder, InputProtocol},
@@ -43,6 +46,30 @@ impl SmelterState {
             inputs: vec![],
             outputs: vec![],
         }
+    }
+
+    // TODO: (@jbrs) Serialize selected player to reuse it
+    pub fn from_json(json: serde_json::Value) -> Result<Self> {
+        let json_inputs_option = json.get("inputs");
+        let inputs = match json_inputs_option {
+            Some(json_inputs_val) if json_inputs_val.is_array() => {
+                let json_inputs = json_inputs_val.as_array().unwrap();
+                Self::parse_json_inputs(json_inputs)?
+            }
+            Some(_) | None => bail!("Failed to parse inputs"),
+        };
+
+        let inputs_ref = inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
+        let json_outputs_option = json.get("outputs");
+        let outputs = match json_outputs_option {
+            Some(json_outputs_val) if json_outputs_val.is_array() => {
+                let json_outputs = json_outputs_val.as_array().unwrap();
+                Self::parse_json_outputs(json_outputs, &inputs_ref)?
+            }
+            Some(_) | None => bail!("Failed to parse outputs"),
+        };
+
+        Ok(Self { inputs, outputs })
     }
 
     pub fn register_input(&mut self) -> Result<()> {
@@ -79,7 +106,7 @@ impl SmelterState {
         examples::post(&input_route, &input_json)
             .with_context(|| "Input registration failed.".to_string())?;
 
-        input_handler.on_after_registration(player)?;
+        input_handler.on_after_registration()?;
         self.inputs.push(input_handler);
 
         let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
@@ -132,7 +159,7 @@ impl SmelterState {
             }
         };
 
-        output_handler.on_before_registration(player)?;
+        output_handler.on_before_registration()?;
 
         let output_route = format!("output/{}/register", output_handler.name());
 
@@ -141,7 +168,7 @@ impl SmelterState {
         examples::post(&output_route, &output_json)
             .with_context(|| "Output registration failed".to_string())?;
 
-        output_handler.on_after_registration(player)?;
+        output_handler.on_after_registration()?;
 
         self.outputs.push(output_handler);
 
@@ -270,6 +297,125 @@ impl SmelterState {
 
         let json = json!({"inputs": inputs, "outputs": outputs});
         Ok(fs::write("json_dump.json", json.to_string())?)
+    }
+
+    fn parse_json_inputs(
+        json_inputs: &Vec<serde_json::Value>,
+    ) -> Result<Vec<Box<dyn InputHandler>>> {
+        let mut inputs: Vec<Box<dyn InputHandler>> = vec![];
+        for input in json_inputs {
+            let input_protocol_option = input.get("type");
+            match input_protocol_option {
+                Some(input_protocol_value) => {
+                    let input_protocol: InputProtocol =
+                        serde_json::from_value(input_protocol_value.clone())?;
+                    match input_protocol {
+                        InputProtocol::Mp4 => {
+                            let mut mp4_input: Mp4Input = serde_json::from_value(input.clone())?;
+                            examples::post(
+                                &format!("input/{}/register", mp4_input.name()),
+                                &mp4_input.serialize_register(),
+                            )?;
+                            mp4_input.on_after_registration()?;
+                            inputs.push(Box::new(mp4_input));
+                        }
+                        InputProtocol::Whip => {
+                            let mut whip_input: WhipInput = serde_json::from_value(input.clone())?;
+                            examples::post(
+                                &format!("input/{}/register", whip_input.name()),
+                                &whip_input.serialize_register(),
+                            )?;
+                            whip_input.on_after_registration()?;
+                            inputs.push(Box::new(whip_input));
+                        }
+                        InputProtocol::Rtp => {
+                            let mut rtp_input: RtpInput = serde_json::from_value(input.clone())?;
+                            examples::post(
+                                &format!("input/{}/register", rtp_input.name()),
+                                &rtp_input.serialize_register(),
+                            )?;
+                            rtp_input.on_after_registration()?;
+                            inputs.push(Box::new(rtp_input));
+                        }
+                    }
+                }
+                None => bail!("Failed to parse input protocol"),
+            }
+        }
+        Ok(inputs)
+    }
+
+    fn parse_json_outputs(
+        json_outputs: &Vec<serde_json::Value>,
+        inputs: &[&dyn InputHandler],
+    ) -> Result<Vec<Box<dyn OutputHandler>>> {
+        let mut outputs: Vec<Box<dyn OutputHandler>> = vec![];
+        for output in json_outputs {
+            let output_protocol_option = output.get("type");
+            match output_protocol_option {
+                Some(output_protocol_value) => {
+                    let output_protocol: OutputProtocol =
+                        serde_json::from_value(output_protocol_value.clone())?;
+                    match output_protocol {
+                        OutputProtocol::Mp4 => {
+                            let mut mp4_output: Mp4Output = serde_json::from_value(output.clone())?;
+                            mp4_output.on_before_registration()?;
+                            examples::post(
+                                &format!("output/{}/register", mp4_output.name()),
+                                &mp4_output.serialize_register(inputs),
+                            )?;
+                            mp4_output.on_after_registration()?;
+                            outputs.push(Box::new(mp4_output));
+                        }
+                        OutputProtocol::Whep => {
+                            let mut whep_output: WhepOutput =
+                                serde_json::from_value(output.clone())?;
+                            whep_output.on_before_registration()?;
+                            examples::post(
+                                &format!("output/{}/register", whep_output.name()),
+                                &whep_output.serialize_register(inputs),
+                            )?;
+                            whep_output.on_after_registration()?;
+                            outputs.push(Box::new(whep_output));
+                        }
+                        OutputProtocol::Whip => {
+                            let mut whip_output: WhipOutput =
+                                serde_json::from_value(output.clone())?;
+                            whip_output.on_before_registration()?;
+                            examples::post(
+                                &format!("output/{}/register", whip_output.name()),
+                                &whip_output.serialize_register(inputs),
+                            )?;
+                            whip_output.on_after_registration()?;
+                            outputs.push(Box::new(whip_output));
+                        }
+                        OutputProtocol::Rtp => {
+                            let mut rtp_output: RtpOutput = serde_json::from_value(output.clone())?;
+                            rtp_output.on_before_registration()?;
+                            examples::post(
+                                &format!("output/{}/register", rtp_output.name()),
+                                &rtp_output.serialize_register(inputs),
+                            )?;
+                            rtp_output.on_after_registration()?;
+                            outputs.push(Box::new(rtp_output));
+                        }
+                        OutputProtocol::Rtmp => {
+                            let mut rtmp_output: RtmpOutput =
+                                serde_json::from_value(output.clone())?;
+                            rtmp_output.on_before_registration()?;
+                            examples::post(
+                                &format!("output/{}/register", rtmp_output.name()),
+                                &rtmp_output.serialize_register(inputs),
+                            )?;
+                            rtmp_output.on_after_registration()?;
+                            outputs.push(Box::new(rtmp_output));
+                        }
+                    }
+                }
+                None => bail!("Failed to parse output protocol"),
+            }
+        }
+        Ok(outputs)
     }
 }
 

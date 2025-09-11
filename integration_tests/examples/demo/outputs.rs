@@ -20,11 +20,11 @@ pub trait OutputHandler: Debug {
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value;
     fn json_dump(&self) -> Result<serde_json::Value>;
 
-    fn on_before_registration(&mut self, _player: OutputPlayer) -> Result<()> {
+    fn on_before_registration(&mut self) -> Result<()> {
         Ok(())
     }
 
-    fn on_after_registration(&mut self, _player: OutputPlayer) -> Result<()> {
+    fn on_after_registration(&mut self) -> Result<()> {
         Ok(())
     }
 }
