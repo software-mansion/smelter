@@ -10,7 +10,7 @@ use std::{
 
 use bytes::Bytes;
 use compositor_render::InputId;
-use crossbeam_channel::{bounded, Sender};
+use crossbeam_channel::{bounded, Receiver};
 use ffmpeg_next::{
     ffi::{
         avformat_alloc_context, avformat_close_input, avformat_find_stream_info,
@@ -30,7 +30,7 @@ use crate::{
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac, ffmpeg_h264,
             h264_utils::{AvccToAnnexBRepacker, H264AvcDecoderConfig},
-            vulkan_h264,
+            vulkan_h264, DecoderThreadHandle,
         },
         input::Input,
     },
@@ -44,6 +44,12 @@ pub struct HlsInput {
     should_close: Arc<AtomicBool>,
 }
 
+struct Track {
+    index: usize,
+    handle: DecoderThreadHandle,
+    state: StreamState,
+}
+
 impl HlsInput {
     const PREFERABLE_BUFFER_SIZE: usize = 30;
     const MIN_BUFFER_SIZE: usize = Self::PREFERABLE_BUFFER_SIZE / 2;
@@ -54,7 +60,39 @@ impl HlsInput {
         opts: HlsInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
-        let receivers = Self::spawn_thread(ctx, input_id, should_close.clone(), opts)?;
+        let buffer_duration = opts
+            .buffer_duration
+            .unwrap_or(Duration::from_secs_f64(10.0));
+
+        let input_ctx = FfmpegInputContext::new(&opts.url, should_close.clone())?;
+        let (audio, samples_receiver) = match input_ctx.audio_stream() {
+            Some(stream) => {
+                let (track, receiver) =
+                    Self::handle_audio_track(&ctx, &input_id, &stream, buffer_duration)?;
+                (Some(track), Some(receiver))
+            }
+            None => (None, None),
+        };
+        let (video, frame_receiver) = match input_ctx.video_stream() {
+            Some(stream) => {
+                let (track, receiver) = Self::handle_video_track(
+                    &ctx,
+                    &input_id,
+                    &stream,
+                    opts.video_decoders,
+                    buffer_duration,
+                )?;
+                (Some(track), Some(receiver))
+            }
+            None => (None, None),
+        };
+
+        let receivers = QueueDataReceiver {
+            video: frame_receiver,
+            audio: samples_receiver,
+        };
+
+        Self::spawn_demuxer_thread(input_id, input_ctx, audio, video);
 
         Ok((
             Input::Hls(Self { should_close }),
@@ -63,182 +101,142 @@ impl HlsInput {
         ))
     }
 
-    fn spawn_thread(
-        ctx: Arc<PipelineCtx>,
+    fn handle_audio_track(
+        ctx: &Arc<PipelineCtx>,
+        input_id: &InputId,
+        stream: &Stream<'_>,
+        buffer_duration: Duration,
+    ) -> Result<(Track, Receiver<PipelineEvent<InputAudioSamples>>), InputInitError> {
+        // not tested it was always null, but audio is in ADTS, so config is not
+        // necessary
+        let asc = read_extra_data(stream);
+        let (samples_sender, samples_receiver) = bounded(5);
+        let state = StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer_duration);
+        let handle = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
+            input_id.clone(),
+            AudioDecoderThreadOptions {
+                ctx: ctx.clone(),
+                decoder_options: FdkAacDecoderOptions { asc },
+                samples_sender,
+                input_buffer_size: 2000,
+            },
+        )?;
+
+        Ok((
+            Track {
+                index: stream.index(),
+                handle,
+                state,
+            },
+            samples_receiver,
+        ))
+    }
+
+    fn handle_video_track(
+        ctx: &Arc<PipelineCtx>,
+        input_id: &InputId,
+        stream: &Stream<'_>,
+        video_decoders: HlsInputVideoDecoders,
+        buffer_duration: Duration,
+    ) -> Result<(Track, Receiver<PipelineEvent<Frame>>), InputInitError> {
+        let (frame_sender, frame_receiver) = bounded(5);
+        let state = StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer_duration);
+
+        let extra_data = read_extra_data(stream);
+        let h264_config = extra_data
+            .map(H264AvcDecoderConfig::parse)
+            .transpose()
+            .unwrap_or_else(|e| match e {
+                H264AvcDecoderConfigError::NotAVCC => None,
+                _ => {
+                    warn!("Could not parse extra data: {e}");
+                    None
+                }
+            });
+
+        let decoder_thread_options = VideoDecoderThreadOptions {
+            ctx: ctx.clone(),
+            transformer: h264_config.map(AvccToAnnexBRepacker::new),
+            frame_sender,
+            input_buffer_size: 2000,
+        };
+
+        let vulkan_supported = ctx.graphics_context.has_vulkan_support();
+        let h264_decoder = video_decoders.h264.unwrap_or({
+            match vulkan_supported {
+                true => VideoDecoderOptions::VulkanH264,
+                false => VideoDecoderOptions::FfmpegH264,
+            }
+        });
+
+        let handle = match h264_decoder {
+            VideoDecoderOptions::FfmpegH264 => {
+                VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
+                    input_id,
+                    decoder_thread_options,
+                )?
+            }
+            VideoDecoderOptions::VulkanH264 => {
+                if !vulkan_supported {
+                    return Err(InputInitError::DecoderError(
+                        DecoderInitError::VulkanContextRequiredForVulkanDecoder,
+                    ));
+                }
+                VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
+                    input_id,
+                    decoder_thread_options,
+                )?
+            }
+            _ => {
+                return Err(InputInitError::InvalidVideoDecoderProvided {
+                    expected: VideoCodec::H264,
+                });
+            }
+        };
+
+        Ok((
+            Track {
+                index: stream.index(),
+                handle,
+                state,
+            },
+            frame_receiver,
+        ))
+    }
+
+    fn spawn_demuxer_thread(
         input_id: InputId,
-        should_close: Arc<AtomicBool>,
-        options: HlsInputOptions,
-    ) -> Result<QueueDataReceiver, InputInitError> {
-        let (result_sender, result_receiver) = bounded(1);
+        input_ctx: FfmpegInputContext,
+        audio: Option<Track>,
+        video: Option<Track>,
+    ) {
         std::thread::Builder::new()
             .name(format!("HLS thread for input {}", input_id.clone()))
             .spawn(move || {
                 let _span =
                     span!(Level::INFO, "HLS thread", input_id = input_id.to_string()).entered();
 
-                Self::run_thread(ctx, input_id, options, should_close, result_sender);
+                Self::run_demuxer_thread(input_ctx, audio, video);
             })
             .unwrap();
-
-        result_receiver.recv().unwrap()
     }
 
-    #[allow(clippy::type_complexity)]
-    fn run_thread(
-        ctx: Arc<PipelineCtx>,
-        input_id: InputId,
-        options: HlsInputOptions,
-        should_close: Arc<AtomicBool>,
-        result_sender: Sender<Result<QueueDataReceiver, InputInitError>>,
+    fn run_demuxer_thread(
+        mut input_ctx: FfmpegInputContext,
+        mut audio: Option<Track>,
+        mut video: Option<Track>,
     ) {
-        // careful: moving the input context in any way will cause ffmpeg to segfault
-        // I do not know why this happens
-        let mut input_ctx = match input_with_dictionary_and_interrupt(
-            &options.url,
-            Dictionary::from_iter([("protocol_whitelist", "tcp,hls,http,https,file,tls")]),
-            || should_close.load(Ordering::Relaxed),
-        ) {
-            Ok(i) => i,
-            Err(e) => {
-                result_sender
-                    .send(Err(InputInitError::FfmpegError(e)))
-                    .unwrap();
-                return;
-            }
-        };
-
-        let buffer_duration = options
-            .buffer_duration
-            .unwrap_or(Duration::from_secs_f64(10.0));
-
-        let (mut audio, mut samples_receiver) = match input_ctx.streams().best(Type::Audio) {
-            Some(stream) => {
-                // not tested it was always null, but audio is in ADTS, so config is not
-                // necessary
-                let asc = read_extra_data(&stream);
-                let (samples_sender, samples_receiver) = bounded(5);
-                let state =
-                    StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer_duration);
-                let decoder_result = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
-                    input_id.clone(),
-                    AudioDecoderThreadOptions {
-                        ctx: ctx.clone(),
-                        decoder_options: FdkAacDecoderOptions { asc },
-                        samples_sender,
-                        input_buffer_size: 2000,
-                    },
-                );
-                let handle = match decoder_result {
-                    Ok(handle) => handle,
-                    Err(err) => {
-                        result_sender.send(Err(err.into())).unwrap();
-                        return;
-                    }
-                };
-                (
-                    Some((stream.index(), handle, state)),
-                    Some(samples_receiver),
-                )
-            }
-            None => (None, None),
-        };
-
-        let (mut video, mut frame_receiver) = match input_ctx.streams().best(Type::Video) {
-            Some(stream) => {
-                let (frame_sender, frame_receiver) = bounded(5);
-                let state =
-                    StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer_duration);
-
-                let extra_data = read_extra_data(&stream);
-                let h264_config = extra_data
-                    .map(H264AvcDecoderConfig::parse)
-                    .transpose()
-                    .unwrap_or_else(|e| match e {
-                        H264AvcDecoderConfigError::NotAVCC => None,
-                        _ => {
-                            warn!("Could not parse extra data: {e}");
-                            None
-                        }
-                    });
-
-                let decoder_thread_options = VideoDecoderThreadOptions {
-                    ctx: ctx.clone(),
-                    transformer: h264_config.map(AvccToAnnexBRepacker::new),
-                    frame_sender,
-                    input_buffer_size: 2000,
-                };
-
-                let vulkan_supported = ctx.graphics_context.has_vulkan_support();
-                let h264_decoder = options.video_decoders.h264.unwrap_or({
-                    if vulkan_supported {
-                        VideoDecoderOptions::VulkanH264
-                    } else {
-                        VideoDecoderOptions::FfmpegH264
-                    }
-                });
-
-                let decoder_result = match h264_decoder {
-                    VideoDecoderOptions::FfmpegH264 => {
-                        VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
-                            input_id,
-                            decoder_thread_options,
-                        )
-                    }
-                    VideoDecoderOptions::VulkanH264 => {
-                        if !vulkan_supported {
-                            result_sender
-                                .send(Err(InputInitError::DecoderError(
-                                    DecoderInitError::VulkanContextRequiredForVulkanDecoder,
-                                )))
-                                .unwrap();
-                            return;
-                        }
-                        VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
-                            input_id,
-                            decoder_thread_options,
-                        )
-                    }
-                    _ => {
-                        result_sender
-                            .send(Err(InputInitError::InvalidVideoDecoderProvided {
-                                expected: VideoCodec::H264,
-                            }))
-                            .unwrap();
-                        return;
-                    }
-                };
-                let handle = match decoder_result {
-                    Ok(handle) => handle,
-                    Err(err) => {
-                        result_sender.send(Err(err.into())).unwrap();
-                        return;
-                    }
-                };
-
-                (Some((stream.index(), handle, state)), Some(frame_receiver))
-            }
-            None => (None, None),
-        };
-
-        result_sender
-            .send(Ok(QueueDataReceiver {
-                video: frame_receiver.take(),
-                audio: samples_receiver.take(),
-            }))
-            .unwrap();
-
         let mut pts_offset = Duration::ZERO;
         let start_time = Instant::now();
         loop {
-            let mut packet = Packet::empty();
-            match packet.read(&mut input_ctx) {
-                Ok(_) => (),
+            let packet = match input_ctx.read_packet() {
+                Ok(packet) => packet,
                 Err(ffmpeg_next::Error::Eof | ffmpeg_next::Error::Exit) => break,
                 Err(err) => {
                     warn!("HLS read error {err:?}");
                     continue;
                 }
-            }
+            };
 
             if packet.is_corrupt() {
                 error!(
@@ -249,9 +247,9 @@ impl HlsInput {
                 continue;
             }
 
-            if let Some((index, ref handle, ref mut state)) = video {
-                if packet.stream() == index {
-                    let (pts, dts, is_discontinuity) = state.pts_dts_from_packet(&packet);
+            if let Some(track) = &mut video {
+                if packet.stream() == track.index {
+                    let (pts, dts, is_discontinuity) = track.state.pts_dts_from_packet(&packet);
 
                     // Some streams give us packets "from the past", which get dropped by the queue
                     // resulting in no video or blinking. This heuristic moves the next packets forward in
@@ -259,11 +257,11 @@ impl HlsInput {
                     // to avoid audio sync issues.
                     if is_discontinuity {
                         pts_offset = Duration::ZERO;
-                    } else if handle.chunk_sender.len() < HlsInput::MIN_BUFFER_SIZE
+                    } else if track.handle.chunk_sender.len() < HlsInput::MIN_BUFFER_SIZE
                         && start_time.elapsed() > Duration::from_secs(10)
                     {
-                        warn!("Increasing offset");
                         pts_offset += Duration::from_secs_f64(0.1);
+                        warn!(?pts_offset, "Increasing offset");
                     }
                     let pts = pts + pts_offset;
 
@@ -274,23 +272,20 @@ impl HlsInput {
                         kind: MediaKind::Video(VideoCodec::H264),
                     };
 
-                    if handle.chunk_sender.is_empty() {
+                    let sender = &track.handle.chunk_sender;
+                    trace!(?chunk, "Sending video chunk");
+                    if sender.is_empty() {
                         debug!("HLS input video channel was drained");
                     }
-                    trace!(?chunk, "Sending video chunk");
-                    if handle
-                        .chunk_sender
-                        .send(PipelineEvent::Data(chunk))
-                        .is_err()
-                    {
+                    if sender.send(PipelineEvent::Data(chunk)).is_err() {
                         debug!("Channel closed")
                     }
                 }
             }
 
-            if let Some((index, ref sender, ref mut state)) = audio {
-                if packet.stream() == index {
-                    let (pts, dts, _) = state.pts_dts_from_packet(&packet);
+            if let Some(track) = &mut audio {
+                if packet.stream() == track.index {
+                    let (pts, dts, _) = track.state.pts_dts_from_packet(&packet);
                     let pts = pts + pts_offset;
 
                     let chunk = EncodedInputChunk {
@@ -300,30 +295,27 @@ impl HlsInput {
                         kind: MediaKind::Audio(AudioCodec::Aac),
                     };
 
-                    if sender.chunk_sender.is_empty() {
+                    let sender = &track.handle.chunk_sender;
+                    trace!(?chunk, "Sending audio chunk");
+                    if sender.is_empty() {
                         debug!("HLS input audio channel was drained");
                     }
-                    trace!(?chunk, "Sending audio chunk");
-                    if sender
-                        .chunk_sender
-                        .send(PipelineEvent::Data(chunk))
-                        .is_err()
-                    {
+                    if sender.send(PipelineEvent::Data(chunk)).is_err() {
                         debug!("Channel closed")
                     }
                 }
             }
         }
 
-        if let Some((_, handle, _)) = audio {
+        if let Some(Track { handle, .. }) = &audio {
             if handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
-                debug!("Failed to send EOS message.")
+                debug!("Channel closed. Failed to send audio EOS.")
             }
         }
 
-        if let Some((_, handle, _)) = video {
+        if let Some(Track { handle, .. }) = &video {
             if handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
-                debug!("Failed to send EOS message.")
+                debug!("Channel closed. Failed to send video EOS.")
             }
         }
     }
@@ -454,6 +446,51 @@ fn timestamp_to_secs(timestamp: f64, time_base: ffmpeg_next::Rational) -> f64 {
     f64::max(timestamp, 0.0) * time_base.numerator() as f64 / time_base.denominator() as f64
 }
 
+fn read_extra_data(stream: &Stream<'_>) -> Option<Bytes> {
+    unsafe {
+        let codecpar = (*stream.as_ptr()).codecpar;
+        let size = (*codecpar).extradata_size;
+        if size > 0 {
+            Some(Bytes::copy_from_slice(slice::from_raw_parts(
+                (*codecpar).extradata,
+                size as usize,
+            )))
+        } else {
+            None
+        }
+    }
+}
+
+struct FfmpegInputContext {
+    ctx: context::Input,
+}
+
+impl FfmpegInputContext {
+    fn new(url: &Arc<str>, should_close: Arc<AtomicBool>) -> Result<Self, ffmpeg_next::Error> {
+        let ctx = input_with_dictionary_and_interrupt(
+            url,
+            Dictionary::from_iter([("protocol_whitelist", "tcp,hls,http,https,file,tls")]),
+            // move is required even though types do not require it
+            move || should_close.load(Ordering::Relaxed),
+        )?;
+        Ok(Self { ctx })
+    }
+
+    fn audio_stream(&self) -> Option<Stream<'_>> {
+        self.ctx.streams().best(Type::Audio)
+    }
+
+    fn video_stream(&self) -> Option<Stream<'_>> {
+        self.ctx.streams().best(Type::Video)
+    }
+
+    fn read_packet(&mut self) -> Result<Packet, ffmpeg_next::Error> {
+        let mut packet = Packet::empty();
+        packet.read(&mut self.ctx)?;
+        Ok(packet)
+    }
+}
+
 /// Combined implementation of ffmpeg_next::format:input_with_interrupt and
 /// ffmpeg_next::format::input_with_dictionary that allows passing both interrupt
 /// callback and Dictionary with options
@@ -486,21 +523,6 @@ where
             },
 
             e => Err(ffmpeg_next::Error::from(e)),
-        }
-    }
-}
-
-fn read_extra_data(stream: &Stream<'_>) -> Option<Bytes> {
-    unsafe {
-        let codecpar = (*stream.as_ptr()).codecpar;
-        let size = (*codecpar).extradata_size;
-        if size > 0 {
-            Some(Bytes::copy_from_slice(slice::from_raw_parts(
-                (*codecpar).extradata,
-                size as usize,
-            )))
-        } else {
-            None
         }
     }
 }
