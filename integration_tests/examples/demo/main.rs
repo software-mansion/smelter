@@ -52,30 +52,36 @@ fn run_demo() {
         thread::sleep(Duration::from_secs(3));
     }
 
-    let mut state = match env::var(JSON_ENV) {
+    let (mut state, autostart) = match env::var(JSON_ENV) {
         Ok(json_path) => {
             let json_val = parse_json(json_path.into());
             match json_val {
                 Ok(json) => {
                     debug!("{json:#?}");
                     match SmelterState::from_json(json) {
-                        Ok(state) => state,
+                        Ok(state) => (state, true),
                         Err(e) => {
                             error!("Failed to create start from provided JSON dump: {e}");
-                            SmelterState::new()
+                            (SmelterState::new(), false)
                         }
                     }
                 }
                 Err(e) => {
                     error!("Failed to parse JSON: {e}");
-                    SmelterState::new()
+                    (SmelterState::new(), false)
                 }
             }
         }
-        Err(_) => SmelterState::new(),
+        Err(_) => (SmelterState::new(), false),
     };
 
     let mut options = Action::iter().collect::<Vec<_>>();
+    if autostart {
+        match examples::post("start", &json!({})) {
+            Ok(_) => options.retain(|a| *a != Action::Start),
+            Err(e) => error!("Start request failed: {e}"),
+        }
+    }
 
     loop {
         let action = Select::new("Select option:", options.clone()).prompt();
