@@ -19,6 +19,7 @@ use crate::outputs::rtmp::RtmpOutput;
 use crate::outputs::rtp::RtpOutput;
 use crate::outputs::whep::{WhepOutput, WhepOutputBuilder};
 use crate::outputs::whip::{WhipOutput, WhipOutputBuilder};
+use crate::utils::resolve_json_filename;
 use crate::{
     inputs::{rtp::RtpInputBuilder, InputProtocol},
     outputs::{rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder, OutputHandler, OutputProtocol},
@@ -288,7 +289,8 @@ impl SmelterState {
             .collect::<Vec<_>>();
 
         let json = json!({"inputs": inputs, "outputs": outputs});
-        Ok(fs::write("json_dump.json", json.to_string())?)
+        let filename = resolve_json_filename().with_context(|| "Failed to save JSON dump")?;
+        Ok(fs::write(filename, json.to_string())?)
     }
 
     fn parse_json_inputs(
