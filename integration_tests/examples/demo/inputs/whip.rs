@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use inquire::{Confirm, Text};
+use inquire::Text;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
@@ -55,13 +55,7 @@ impl InputHandler for WhipInput {
                 println!("1. Open OBS Studio");
                 println!("2. In a 'Stream' tab enter 'http://127.0.0.1:9000/whip/{} in 'Server' field and '{}' in 'Bearer Token' field", self.name, self.bearer_token);
                 println!();
-
-                loop {
-                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                    if confirmation {
-                        return Ok(());
-                    }
-                }
+                Ok(())
             }
             _ => unreachable!(),
         }

@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use inquire::{Confirm, Select, Text};
+use inquire::{Select, Text};
 use integration_tests::{
     assets::{
         BUNNY_H264_PATH, BUNNY_H264_URL, BUNNY_VP8_PATH, BUNNY_VP8_URL, BUNNY_VP9_PATH,
@@ -237,13 +237,7 @@ impl RtpInput {
                     }
                     _ => unreachable!(),
                 }
-
-                loop {
-                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                    if confirmation {
-                        return Ok(());
-                    }
-                }
+                Ok(())
             }
         }
     }
@@ -281,13 +275,7 @@ impl RtpInput {
                     }
                     _ => unreachable!(),
                 }
-
-                loop {
-                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                    if confirmation {
-                        return Ok(());
-                    }
-                }
+                Ok(())
             }
             _ => unreachable!(),
         }

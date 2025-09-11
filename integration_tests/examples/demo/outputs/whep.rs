@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use inquire::{Confirm, Select, Text};
+use inquire::{Select, Text};
 use integration_tests::examples::examples_root_dir;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -81,13 +81,7 @@ impl OutputHandler for WhepOutput {
                 println!("Instructions to start receiving stream:");
                 println!("Open in browser:");
                 println!("{url}");
-
-                loop {
-                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                    if confirmation {
-                        return Ok(());
-                    }
-                }
+                Ok(())
             }
             _ => unreachable!(),
         }

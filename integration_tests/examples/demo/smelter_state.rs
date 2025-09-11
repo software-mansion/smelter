@@ -47,7 +47,6 @@ impl SmelterState {
         }
     }
 
-    // TODO: (@jbrs) Serialize selected player to reuse it
     pub fn from_json(json: serde_json::Value) -> Result<Self> {
         let json_inputs_option = json.get("inputs");
         let inputs = match json_inputs_option {

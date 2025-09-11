@@ -264,13 +264,7 @@ impl OutputHandler for RtpOutput {
                         }
                         _ => unreachable!(),
                     }
-
-                    loop {
-                        let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                        if confirmation {
-                            return Ok(());
-                        }
-                    }
+                    Ok(())
                 }
                 _ => Err(anyhow!("Invalid player for RTP in TCP server mode.")),
             },
