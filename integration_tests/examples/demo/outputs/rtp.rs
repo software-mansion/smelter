@@ -424,29 +424,8 @@ impl RtpOutputBuilder {
         self
     }
 
-    fn serialize(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
-        let ip = match self.transport_protocol {
-            Some(TransportProtocol::Udp) | None => Some(IP),
-            Some(TransportProtocol::TcpServer) => None,
-        };
-        let transport_protocol = self
-            .transport_protocol
-            .as_ref()
-            .unwrap_or(&TransportProtocol::Udp)
-            .to_string();
-        json!({
-            "type": "rtp_stream",
-            "port": self.port,
-            "ip": ip,
-            "transport_protocol": transport_protocol,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
-        })
-    }
-
-    pub fn build(self, inputs: &[&dyn InputHandler]) -> (RtpOutput, serde_json::Value) {
-        let register_request = self.serialize(inputs);
-        let rtp_output = RtpOutput {
+    pub fn build(self) -> RtpOutput {
+        RtpOutput {
             r#type: OutputProtocol::Rtp,
             name: self.name,
             port: self.port,
@@ -455,8 +434,7 @@ impl RtpOutputBuilder {
             transport_protocol: self.transport_protocol.unwrap_or(TransportProtocol::Udp),
             stream_handles: vec![],
             player: self.player,
-        };
-        (rtp_output, register_request)
+        }
     }
 }
 

@@ -79,15 +79,18 @@ impl SmelterState {
         let (mut input_handler, input_json): (Box<dyn InputHandler>, serde_json::Value) =
             match protocol {
                 InputProtocol::Rtp => {
-                    let (rtp_input, register_request) = RtpInputBuilder::new().prompt()?.build();
+                    let rtp_input = RtpInputBuilder::new().prompt()?.build();
+                    let register_request = rtp_input.serialize_register();
                     (Box::new(rtp_input), register_request)
                 }
                 InputProtocol::Whip => {
-                    let (whip_input, register_request) = WhipInputBuilder::new().prompt()?.build();
+                    let whip_input = WhipInputBuilder::new().prompt()?.build();
+                    let register_request = whip_input.serialize_register();
                     (Box::new(whip_input), register_request)
                 }
                 InputProtocol::Mp4 => {
-                    let (mp4_input, register_request) = Mp4InputBuilder::new().prompt()?.build();
+                    let mp4_input = Mp4InputBuilder::new().prompt()?.build();
+                    let register_request = mp4_input.serialize_register();
                     (Box::new(mp4_input), register_request)
                 }
             };
@@ -123,28 +126,28 @@ impl SmelterState {
         let (mut output_handler, output_json): (Box<dyn OutputHandler>, serde_json::Value) =
             match protocol {
                 OutputProtocol::Rtp => {
-                    let (rtp_output, register_request) =
-                        RtpOutputBuilder::new().prompt()?.build(&inputs);
+                    let rtp_output = RtpOutputBuilder::new().prompt()?.build();
+                    let register_request = rtp_output.serialize_register(&inputs);
                     (Box::new(rtp_output), register_request)
                 }
                 OutputProtocol::Rtmp => {
-                    let (rtmp_output, register_request) =
-                        RtmpOutputBuilder::new().prompt()?.build(&inputs);
+                    let rtmp_output = RtmpOutputBuilder::new().prompt()?.build();
+                    let register_request = rtmp_output.serialize_register(&inputs);
                     (Box::new(rtmp_output), register_request)
                 }
                 OutputProtocol::Whip => {
-                    let (whip_output, register_request) =
-                        WhipOutputBuilder::new().prompt()?.build(&inputs);
+                    let whip_output = WhipOutputBuilder::new().prompt()?.build();
+                    let register_request = whip_output.serialize_register(&inputs);
                     (Box::new(whip_output), register_request)
                 }
                 OutputProtocol::Mp4 => {
-                    let (mp4_output, register_request) =
-                        Mp4OutputBuilder::new().prompt()?.build(&inputs);
+                    let mp4_output = Mp4OutputBuilder::new().prompt()?.build();
+                    let register_request = mp4_output.serialize_register(&inputs);
                     (Box::new(mp4_output), register_request)
                 }
                 OutputProtocol::Whep => {
-                    let (whep_output, register_request) =
-                        WhepOutputBuilder::new().prompt()?.build(&inputs);
+                    let whep_output = WhepOutputBuilder::new().prompt()?.build();
+                    let register_request = whep_output.serialize_register(&inputs);
                     (Box::new(whep_output), register_request)
                 }
             };

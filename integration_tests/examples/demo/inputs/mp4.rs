@@ -161,27 +161,13 @@ impl Mp4InputBuilder {
         self
     }
 
-    fn serialize(&self) -> serde_json::Value {
-        let source = self.source.as_ref().unwrap();
-        let (source_key, source_val) = source.serialize();
-        json!({
-            "type": "mp4",
-            source_key: source_val,
-            "loop": self.r#loop,
-        })
-    }
-
-    pub fn build(self) -> (Mp4Input, serde_json::Value) {
-        let register_request = self.serialize();
-
-        let mp4_input = Mp4Input {
+    pub fn build(self) -> Mp4Input {
+        Mp4Input {
             r#type: InputProtocol::Mp4,
             name: self.name,
             source: self.source.unwrap(),
             r#loop: self.r#loop,
             player: InputPlayer::Manual,
-        };
-
-        (mp4_input, register_request)
+        }
     }
 }

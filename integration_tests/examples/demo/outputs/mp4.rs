@@ -186,28 +186,15 @@ impl Mp4OutputBuilder {
         self
     }
 
-    fn serialize(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
-        json!({
-            "type": "mp4",
-            "path": self.path.as_ref().unwrap(),
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
-        })
-    }
-
-    pub fn build(self, inputs: &[&dyn InputHandler]) -> (Mp4Output, serde_json::Value) {
-        let register_request = self.serialize(inputs);
-
-        let mp4_output = Mp4Output {
+    pub fn build(self) -> Mp4Output {
+        Mp4Output {
             r#type: OutputProtocol::Mp4,
             name: self.name,
             path: self.path.unwrap(),
             video: self.video,
             audio: self.audio,
             player: OutputPlayer::Manual,
-        };
-
-        (mp4_output, register_request)
+        }
     }
 }
 

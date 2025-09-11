@@ -210,18 +210,8 @@ impl RtmpOutputBuilder {
         self
     }
 
-    fn serialize(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
-        json!({
-            "type": "rtmp_client",
-            "url": self.url,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
-        })
-    }
-
-    pub fn build(self, inputs: &[&dyn InputHandler]) -> (RtmpOutput, serde_json::Value) {
-        let register_request = self.serialize(inputs);
-        let rtmp_output = RtmpOutput {
+    pub fn build(self) -> RtmpOutput {
+        RtmpOutput {
             r#type: OutputProtocol::Rtmp,
             name: self.name,
             url: self.url,
@@ -230,8 +220,7 @@ impl RtmpOutputBuilder {
             audio: self.audio,
             stream_handles: vec![],
             player: self.player,
-        };
-        (rtmp_output, register_request)
+        }
     }
 }
 

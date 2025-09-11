@@ -232,29 +232,15 @@ impl WhepOutputBuilder {
         self
     }
 
-    fn serialize(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
-        let bearer_token = self.bearer_token.as_ref().unwrap();
-        json!({
-            "type": "whep_server",
-            "bearer_token": bearer_token,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
-        })
-    }
-
-    pub fn build(self, inputs: &[&dyn InputHandler]) -> (WhepOutput, serde_json::Value) {
-        let register_request = self.serialize(inputs);
-
-        let whep_output = WhepOutput {
+    pub fn build(self) -> WhepOutput {
+        WhepOutput {
             r#type: OutputProtocol::Whep,
             name: self.name,
             bearer_token: self.bearer_token.unwrap(),
             video: self.video,
             audio: self.audio,
             player: self.player,
-        };
-
-        (whep_output, register_request)
+        }
     }
 }
 

@@ -232,22 +232,8 @@ impl WhipOutputBuilder {
         self
     }
 
-    fn serialize(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
-        let endpoint_url = self.endpoint_url.as_ref().unwrap();
-        let bearer_token = self.bearer_token.as_ref().unwrap();
-        json!({
-            "type": "whip_client",
-            "endpoint_url": endpoint_url,
-            "bearer_token": bearer_token,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
-        })
-    }
-
-    pub fn build(self, inputs: &[&dyn InputHandler]) -> (WhipOutput, serde_json::Value) {
-        let register_request = self.serialize(inputs);
-
-        let whip_output = WhipOutput {
+    pub fn build(self) -> WhipOutput {
+        WhipOutput {
             r#type: OutputProtocol::Whip,
             name: self.name,
             endpoint_url: self.endpoint_url.unwrap(),
@@ -255,9 +241,7 @@ impl WhipOutputBuilder {
             video: self.video,
             audio: self.audio,
             player: self.player,
-        };
-
-        (whip_output, register_request)
+        }
     }
 }
 
