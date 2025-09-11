@@ -77,7 +77,8 @@ fn spawn_video_repacking_thread(
                 };
                 trace!(?event, "Sending raw frame");
                 if output_sender.send(event).is_err() {
-                    debug!("Failed to send packet. Channel closed.")
+                    debug!("Failed to send packet. Channel closed.");
+                    break;
                 }
             }
         })
@@ -121,7 +122,8 @@ fn spawn_audio_repacking_thread(
                 };
                 trace!(?event, "Sending raw samples");
                 if output_sender.send(event).is_err() {
-                    debug!("Failed to send packet. Channel closed.")
+                    debug!("Failed to send packet. Channel closed.");
+                    break;
                 }
             }
         })
