@@ -32,7 +32,7 @@ fn main() {
     let config = read_config();
     ffmpeg_next::format::network::init();
     let logger_config = LoggerConfig {
-        level: "compositor_pipeline=error,vk-video=info,benchmark=info".into(),
+        stdio_level: "compositor_pipeline=error,vk-video=info,benchmark=info".into(),
         ..config.logger
     };
     logger::init_logger(logger_config);
