@@ -500,7 +500,7 @@ fn input_with_dictionary_and_interrupt<F>(
     interrupt_fn: F,
 ) -> Result<context::Input, ffmpeg_next::Error>
 where
-    F: FnMut() -> bool,
+    F: FnMut() -> bool + 'static,
 {
     unsafe {
         let mut ps = avformat_alloc_context();
