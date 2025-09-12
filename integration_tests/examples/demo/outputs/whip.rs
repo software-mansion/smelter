@@ -36,7 +36,6 @@ pub struct WhipOutput {
     bearer_token: String,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
-    player: OutputPlayer,
 }
 
 #[typetag::serde]
@@ -56,24 +55,19 @@ impl OutputHandler for WhipOutput {
     }
 
     fn on_before_registration(&mut self) -> Result<()> {
-        match self.player {
-            OutputPlayer::Manual => {
-                let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
-                let url = "http://127.0.0.1:8080";
+        let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
+        let url = "http://127.0.0.1:8080";
 
-                println!("Instructions to start receiving stream:");
-                println!("1. Start Broadcast Box: {cmd}");
-                println!("2. Open: {url}");
-                println!("3. Enter '{}' in 'Stream Key' field", self.bearer_token);
+        println!("Instructions to start receiving stream:");
+        println!("1. Start Broadcast Box: {cmd}");
+        println!("2. Open: {url}");
+        println!("3. Enter '{}' in 'Stream Key' field", self.bearer_token);
 
-                loop {
-                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                    if confirmation {
-                        return Ok(());
-                    }
-                }
+        loop {
+            let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+            if confirmation {
+                return Ok(());
             }
-            _ => unreachable!(),
         }
     }
 
@@ -91,7 +85,6 @@ pub struct WhipOutputBuilder {
     bearer_token: Option<String>,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
-    player: OutputPlayer,
 }
 
 impl WhipOutputBuilder {
@@ -104,35 +97,18 @@ impl WhipOutputBuilder {
             bearer_token: None,
             video: None,
             audio: None,
-            player: OutputPlayer::Manual,
         }
     }
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
 
-        builder = builder.prompt_url()?;
-
-        builder = builder.prompt_token()?;
-
-        let audio_options = vec![
-            WhipRegisterOptions::SetAudioStream,
-            WhipRegisterOptions::Skip,
-        ];
+        builder = builder.prompt_url()?.prompt_token()?;
 
         loop {
-            builder = builder.prompt_video()?;
-
-            let audio_selection =
-                Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
-
-            builder = match audio_selection {
-                Some(WhipRegisterOptions::SetAudioStream) => {
-                    builder.with_audio(WhipOutputAudioOptions::default())
-                }
-                Some(WhipRegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder
+                .prompt_video()?
+                .with_audio(WhipOutputAudioOptions::default());
 
             if builder.video.is_none() || builder.audio.is_none() {
                 error!("Both video and audio have to be specified for WHIP output.");
@@ -142,32 +118,6 @@ impl WhipOutputBuilder {
         }
 
         Ok(builder)
-    }
-
-    fn prompt_video(self) -> Result<Self> {
-        let video_options = vec![
-            WhipRegisterOptions::SetVideoStream,
-            WhipRegisterOptions::Skip,
-        ];
-        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
-
-        match video_selection {
-            Some(WhipRegisterOptions::SetVideoStream) => {
-                let scene_options = Scene::iter().collect();
-                let scene_choice =
-                    Select::new("Select scene:", scene_options).prompt_skippable()?;
-                let video = match scene_choice {
-                    Some(scene) => WhipOutputVideoOptions {
-                        scene,
-                        ..Default::default()
-                    },
-                    None => WhipOutputVideoOptions::default(),
-                };
-                Ok(self.with_video(video))
-            }
-            Some(WhipRegisterOptions::Skip) | None => Ok(self),
-            _ => unreachable!(),
-        }
     }
 
     fn prompt_url(self) -> Result<Self> {
@@ -204,6 +154,51 @@ impl WhipOutputBuilder {
         }
     }
 
+    fn prompt_video(self) -> Result<Self> {
+        let video_options = vec![
+            WhipRegisterOptions::SetVideoStream,
+            WhipRegisterOptions::Skip,
+        ];
+        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+
+        match video_selection {
+            Some(WhipRegisterOptions::SetVideoStream) => {
+                let scene_options = Scene::iter().collect();
+                let scene_choice =
+                    Select::new("Select scene:", scene_options).prompt_skippable()?;
+                let video = match scene_choice {
+                    Some(scene) => WhipOutputVideoOptions {
+                        scene,
+                        ..Default::default()
+                    },
+                    None => WhipOutputVideoOptions::default(),
+                };
+                Ok(self.with_video(video))
+            }
+            Some(WhipRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
+    }
+
+    // Currently unusable because video only streams don't work
+    fn _prompt_audio(self) -> Result<Self> {
+        let audio_options = vec![
+            WhipRegisterOptions::SetAudioStream,
+            WhipRegisterOptions::Skip,
+        ];
+
+        let audio_selection =
+            Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
+
+        match audio_selection {
+            Some(WhipRegisterOptions::SetAudioStream) => {
+                Ok(self.with_audio(WhipOutputAudioOptions::default()))
+            }
+            Some(WhipRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
+    }
+
     pub fn with_video(mut self, video: WhipOutputVideoOptions) -> Self {
         self.video = Some(video);
         self
@@ -231,7 +226,6 @@ impl WhipOutputBuilder {
             bearer_token: self.bearer_token.unwrap(),
             video: self.video,
             audio: self.audio,
-            player: self.player,
         }
     }
 }

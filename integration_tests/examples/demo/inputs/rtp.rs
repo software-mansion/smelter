@@ -372,19 +372,8 @@ impl RtpInputBuilder {
 
         builder = builder.prompt_path()?;
 
-        let audio_options = vec![RtpRegisterOptions::SetAudioStream, RtpRegisterOptions::Skip];
         loop {
-            builder = builder.prompt_video()?;
-            let audio_selection =
-                Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
-
-            builder = match audio_selection {
-                Some(RtpRegisterOptions::SetAudioStream) => {
-                    builder.with_audio(RtpInputAudioOptions::default())
-                }
-                Some(RtpRegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder.prompt_video()?.prompt_audio()?;
 
             if builder.video.is_none() && builder.audio.is_none() {
                 error!("At least one video or one audio stream has to be specified!");
@@ -393,43 +382,7 @@ impl RtpInputBuilder {
             }
         }
 
-        let transport_options = TransportProtocol::iter().collect();
-        let transport_selection =
-            Select::new("Select transport protocol?", transport_options).prompt_skippable()?;
-
-        builder = match transport_selection {
-            Some(prot) => builder.with_transport_protocol(prot),
-            None => builder,
-        };
-
-        builder = builder.prompt_player()?;
-
-        Ok(builder)
-    }
-
-    fn prompt_video(self) -> Result<Self> {
-        let video_options = vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
-
-        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
-
-        match video_selection {
-            Some(RtpRegisterOptions::SetVideoStream) => {
-                let codec_options = VideoDecoder::iter()
-                    .filter(|dec| *dec != VideoDecoder::Any)
-                    .collect();
-
-                let codec_choice =
-                    Select::new("Select video codec to test:", codec_options).prompt_skippable()?;
-
-                match codec_choice {
-                    Some(codec) => Ok(self.with_video(RtpInputVideoOptions { decoder: codec })),
-                    None => Ok(self.with_video(RtpInputVideoOptions {
-                        decoder: VideoDecoder::FfmpegH264,
-                    })),
-                }
-            }
-            Some(_) | None => Ok(self),
-        }
+        builder.prompt_transport_protocol()?.prompt_player()
     }
 
     fn prompt_path(self) -> Result<Self> {
@@ -459,6 +412,59 @@ impl RtpInputBuilder {
         }
     }
 
+    fn prompt_video(self) -> Result<Self> {
+        let video_options = vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
+
+        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+
+        match video_selection {
+            Some(RtpRegisterOptions::SetVideoStream) => {
+                let codec_options = VideoDecoder::iter()
+                    .filter(|dec| *dec != VideoDecoder::Any)
+                    .collect();
+
+                let codec_choice =
+                    Select::new("Select video codec to test:", codec_options).prompt_skippable()?;
+
+                match codec_choice {
+                    Some(codec) => Ok(self.with_video(RtpInputVideoOptions { decoder: codec })),
+                    None => Ok(self.with_video(RtpInputVideoOptions {
+                        decoder: VideoDecoder::FfmpegH264,
+                    })),
+                }
+            }
+            Some(_) | None => Ok(self),
+        }
+    }
+
+    fn prompt_audio(self) -> Result<Self> {
+        let audio_options = vec![RtpRegisterOptions::SetAudioStream, RtpRegisterOptions::Skip];
+        let audio_selection =
+            Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
+
+        match audio_selection {
+            Some(RtpRegisterOptions::SetAudioStream) => {
+                Ok(self.with_audio(RtpInputAudioOptions::default()))
+            }
+            Some(RtpRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
+    }
+
+    fn prompt_transport_protocol(self) -> Result<Self> {
+        let transport_options = TransportProtocol::iter().collect();
+        let transport_selection = Select::new(
+            "Select transport protocol (ESC for udp):",
+            transport_options,
+        )
+        .prompt_skippable()?;
+
+        match transport_selection {
+            Some(prot) => Ok(self.with_transport_protocol(prot)),
+            None => Ok(self),
+        }
+    }
+
     fn prompt_player(self) -> Result<Self> {
         match self.transport_protocol {
             Some(TransportProtocol::Udp) | None => {
@@ -469,13 +475,23 @@ impl RtpInputBuilder {
                     _ => InputPlayer::iter().collect(),
                 };
 
-                let player_selection = Select::new("Select player:", player_options).prompt()?;
-                Ok(self.with_player(player_selection))
+                let player_selection =
+                    Select::new("Select player (ESC for GStreamer):", player_options)
+                        .prompt_skippable()?;
+                match player_selection {
+                    Some(player) => Ok(self.with_player(player)),
+                    None => Ok(self.with_player(InputPlayer::GstreamerTransmitter)),
+                }
             }
             Some(TransportProtocol::TcpServer) => {
-                let player_options = vec![InputPlayer::GstreamerTransmitter, InputPlayer::Manual];
-                let player_selection = Select::new("Select player:", player_options).prompt()?;
-                Ok(self.with_player(player_selection))
+                let player_options = vec![InputPlayer::Manual];
+                let player_selection =
+                    Select::new("Select player (ESC for Manual):", player_options)
+                        .prompt_skippable()?;
+                match player_selection {
+                    Some(player) => Ok(self.with_player(player)),
+                    None => Ok(self.with_player(InputPlayer::Manual)),
+                }
             }
         }
     }

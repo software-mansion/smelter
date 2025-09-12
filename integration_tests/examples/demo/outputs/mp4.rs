@@ -36,7 +36,6 @@ pub struct Mp4Output {
     path: PathBuf,
     video: Option<Mp4OutputVideoOptions>,
     audio: Option<Mp4OutputAudioOptions>,
-    player: OutputPlayer,
 }
 
 #[typetag::serde]
@@ -86,21 +85,8 @@ impl Mp4OutputBuilder {
 
         builder = builder.prompt_path()?;
 
-        let audio_options = vec![Mp4RegisterOptions::SetAudioStream, Mp4RegisterOptions::Skip];
-
         loop {
-            builder = builder.prompt_video()?;
-
-            let audio_selection =
-                Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
-
-            builder = match audio_selection {
-                Some(Mp4RegisterOptions::SetAudioStream) => {
-                    builder.with_audio(Mp4OutputAudioOptions::default())
-                }
-                Some(Mp4RegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder.prompt_video()?.prompt_audio()?;
 
             if builder.video.is_none() && builder.audio.is_none() {
                 error!("Either video or audio has to be specified.");
@@ -163,6 +149,20 @@ impl Mp4OutputBuilder {
         }
     }
 
+    fn prompt_audio(self) -> Result<Self> {
+        let audio_options = vec![Mp4RegisterOptions::SetAudioStream, Mp4RegisterOptions::Skip];
+        let audio_selection =
+            Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
+
+        match audio_selection {
+            Some(Mp4RegisterOptions::SetAudioStream) => {
+                Ok(self.with_audio(Mp4OutputAudioOptions::default()))
+            }
+            Some(Mp4RegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
+    }
+
     pub fn with_path(mut self, path: PathBuf) -> Self {
         self.path = Some(path);
         self
@@ -184,7 +184,6 @@ impl Mp4OutputBuilder {
             path: self.path.unwrap(),
             video: self.video,
             audio: self.audio,
-            player: OutputPlayer::Manual,
         }
     }
 }

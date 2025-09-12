@@ -161,24 +161,8 @@ impl RtmpOutputBuilder {
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
 
-        let audio_options = vec![
-            RtmpRegisterOptions::SetAudioStream,
-            RtmpRegisterOptions::Skip,
-        ];
-
         loop {
-            builder = builder.prompt_video()?;
-
-            let audio_selection =
-                Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
-
-            builder = match audio_selection {
-                Some(RtmpRegisterOptions::SetAudioStream) => {
-                    builder.with_audio(RtmpOutputAudioOptions::default())
-                }
-                Some(RtmpRegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder.prompt_video()?.prompt_audio()?;
 
             if builder.video.is_none() && builder.audio.is_none() {
                 error!("At least one video or one audio stream has to be specified!");
@@ -187,13 +171,7 @@ impl RtmpOutputBuilder {
             }
         }
 
-        let player_options = vec![OutputPlayer::FfmpegReceiver, OutputPlayer::Manual];
-        let player_choice = Select::new("Select player:", player_options).prompt_skippable()?;
-        builder = match player_choice {
-            Some(player) => builder.with_player(player),
-            None => builder,
-        };
-        Ok(builder)
+        builder.prompt_player()
     }
 
     fn prompt_video(self) -> Result<Self> {
@@ -219,6 +197,34 @@ impl RtmpOutputBuilder {
             }
             Some(RtmpRegisterOptions::Skip) | None => Ok(self),
             _ => unreachable!(),
+        }
+    }
+
+    fn prompt_audio(self) -> Result<Self> {
+        let audio_options = vec![
+            RtmpRegisterOptions::SetAudioStream,
+            RtmpRegisterOptions::Skip,
+        ];
+
+        let audio_selection =
+            Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
+
+        match audio_selection {
+            Some(RtmpRegisterOptions::SetAudioStream) => {
+                Ok(self.with_audio(RtmpOutputAudioOptions::default()))
+            }
+            Some(RtmpRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
+    }
+
+    fn prompt_player(self) -> Result<Self> {
+        let player_options = vec![OutputPlayer::FfmpegReceiver, OutputPlayer::Manual];
+        let player_choice =
+            Select::new("Select player (ESC for FFmpeg):", player_options).prompt_skippable()?;
+        match player_choice {
+            Some(player) => Ok(self.with_player(player)),
+            None => Ok(self.with_player(OutputPlayer::FfmpegReceiver)),
         }
     }
 

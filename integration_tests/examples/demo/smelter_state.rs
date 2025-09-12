@@ -94,6 +94,11 @@ impl SmelterState {
                     let register_request = mp4_input.serialize_register();
                     (Box::new(mp4_input), register_request)
                 }
+                InputProtocol::Hls => {
+                    let hls_input = HlsInputBuilder::new().prompt()?.build();
+                    let register_request = hls_input.serialize_register();
+                    (Box::new(hls_input), register_request)
+                }
             };
 
         let input_route = format!("input/{}/register", input_handler.name());
