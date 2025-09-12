@@ -19,11 +19,13 @@ use crate::outputs::rtmp::RtmpOutput;
 use crate::outputs::rtp::RtpOutput;
 use crate::outputs::whep::{WhepOutput, WhepOutputBuilder};
 use crate::outputs::whip::{WhipOutput, WhipOutputBuilder};
-use crate::utils::resolve_json_filename;
+use crate::utils::rename_old_dump;
 use crate::{
     inputs::{rtp::RtpInputBuilder, InputProtocol},
     outputs::{rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder, OutputHandler, OutputProtocol},
 };
+
+pub const JSON_BASE: &str = "demo_json.json";
 
 #[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum TransportProtocol {
@@ -289,9 +291,8 @@ impl SmelterState {
             .collect::<Vec<_>>();
 
         let json = json!({"inputs": inputs, "outputs": outputs});
-        let filename =
-            resolve_json_filename().with_context(|| "Failed to resolve JSON filename")?;
-        Ok(fs::write(filename, json.to_string())?)
+        rename_old_dump().with_context(|| "Failed to check existing JSON dumps")?;
+        Ok(fs::write(JSON_BASE, json.to_string())?)
     }
 
     fn parse_json_inputs(

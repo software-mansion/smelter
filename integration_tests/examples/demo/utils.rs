@@ -8,6 +8,8 @@ use std::{
     },
 };
 
+use crate::smelter_state::JSON_BASE;
+
 pub fn get_free_port() -> u16 {
     static LAST_PORT: OnceLock<AtomicU16> = OnceLock::new();
     let port =
@@ -30,8 +32,7 @@ pub fn parse_json(json_path: PathBuf) -> Result<serde_json::Value> {
     Ok(serde_json::from_str(&json_str)?)
 }
 
-pub fn resolve_json_filename() -> Result<String> {
-    const BASE: &str = "demo_json.json";
+pub fn rename_old_dump() -> Result<()> {
     const OLD_BASE: &str = "demo_json.json.old";
 
     let find_old = || {
@@ -45,9 +46,13 @@ pub fn resolve_json_filename() -> Result<String> {
         }
     };
 
-    match fs::exists(BASE) {
-        Ok(false) => Ok(BASE.to_string()),
-        Ok(true) => Ok(find_old()?),
+    match fs::exists(JSON_BASE) {
+        Ok(false) => Ok(()),
+        Ok(true) => {
+            let old_filename = find_old()?;
+            fs::rename(JSON_BASE, old_filename)?;
+            Ok(())
+        }
         Err(e) => Err(e.into()),
     }
 }
