@@ -22,8 +22,9 @@ class TwitchChannelSuggestionsMonitor {
   public async monitor() {
     while (true) {
       try {
+        console.log(`[twitch] Refresh category info.`);
         await this.refreshCategoryInfo(CATEGORIES);
-        await sleep(60_00);
+        await sleep(60_000);
       } catch (err) {
         console.log('Failed to refresh Twitch channel information', err);
       }
@@ -79,6 +80,7 @@ export class TwitchChannelMonitor {
 
   private async monitor() {
     while (!this.shouldStop) {
+      console.log(`[twitch] Check stream state ${this.channelId}`);
       try {
         const streamInfo = await getStreamInfo(this.channelId);
         if (streamInfo) {
@@ -89,7 +91,7 @@ export class TwitchChannelMonitor {
           this.isStreamLive = false;
           return;
         }
-        await sleep(60_00);
+        await sleep(10_000);
       } catch (err) {
         console.log('Failed to refresh Twitch channel information', err);
       }
