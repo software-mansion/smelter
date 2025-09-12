@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
+pub mod hls;
 pub mod mp4;
 pub mod rtp;
 pub mod whip;
@@ -42,6 +43,9 @@ pub enum InputProtocol {
 
     #[strum(to_string = "mp4")]
     Mp4,
+
+    #[strum(to_string = "hls")]
+    Hls,
 }
 
 #[derive(Debug, EnumIter, Display, PartialEq, Clone, Copy, Serialize, Deserialize)]

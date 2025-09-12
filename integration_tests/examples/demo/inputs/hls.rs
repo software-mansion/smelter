@@ -1,0 +1,91 @@
+use std::env;
+
+use anyhow::Result;
+use inquire::Text;
+use rand::RngCore;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use tracing::error;
+
+use crate::{
+    inputs::{InputHandler, InputProtocol},
+    players::InputPlayer,
+};
+
+const HLS_INPUT_URL: &str = "HLS_INPUT_URL";
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HlsInput {
+    r#type: InputProtocol,
+    name: String,
+    url: String,
+    player: InputPlayer,
+}
+
+impl InputHandler for HlsInput {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn serialize_register(&self) -> serde_json::Value {
+        json!({
+            "type": "hls",
+            "url": self.url,
+        })
+    }
+
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::to_value(self)?)
+    }
+}
+
+pub struct HlsInputBuilder {
+    name: String,
+    url: Option<String>,
+}
+
+impl HlsInputBuilder {
+    pub fn new() -> Self {
+        let suffix = rand::thread_rng().next_u32();
+        let name = format!("hls_input_{suffix}");
+        Self { name, url: None }
+    }
+
+    pub fn prompt(self) -> Result<Self> {
+        let mut builder = self;
+
+        builder = builder.prompt_url()?;
+
+        Ok(builder)
+    }
+
+    fn prompt_url(self) -> Result<Self> {
+        let env_url = env::var(HLS_INPUT_URL).unwrap_or_default();
+        loop {
+            let hls_url = Text::new("HLS input url:")
+                .with_initial_value(&env_url)
+                .prompt_skippable()?;
+            match hls_url {
+                Some(url) => break Ok(self.with_url(url)),
+                None => {
+                    error!("URL must be specified!");
+                    continue;
+                }
+            }
+        }
+    }
+
+    pub fn with_url(mut self, url: String) -> Self {
+        self.url = Some(url);
+        self
+    }
+
+    pub fn build(self) -> HlsInput {
+        HlsInput {
+            r#type: InputProtocol::Hls,
+            name: self.name,
+            url: self.url.unwrap(),
+            player: InputPlayer::Manual,
+        }
+    }
+}
