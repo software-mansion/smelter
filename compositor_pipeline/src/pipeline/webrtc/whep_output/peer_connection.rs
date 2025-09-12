@@ -334,6 +334,7 @@ fn handle_cleanup_on_disconnect(
                     let current_state = pc.connection_state();
                     if current_state != RTCPeerConnectionState::Connected
                         && current_state != RTCPeerConnectionState::Connecting
+                        && current_state != RTCPeerConnectionState::Closed
                     {
                         remove_session_handler.call_handler().await;
                     }
