@@ -35,7 +35,7 @@ export type Mp4VideoEncoderOptions =
   | {
       type: 'vulkan_h264';
       /**
-       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+       * Encoding bitrate in bits/second. If not provided, bitrate is calculated based on resolution and framerate.
        * For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VulkanH264EncoderBitrate;

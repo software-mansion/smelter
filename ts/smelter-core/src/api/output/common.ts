@@ -17,10 +17,14 @@ export function intoOutputEosCondition(
 }
 
 export function intoVulkanH264EncoderBitrate(
-  rate_control: Outputs.VulkanH264EncoderBitrate
+  bitrate: Outputs.VulkanH264EncoderBitrate
 ): Api.VulkanH264EncoderBitrate {
+  if (typeof bitrate === 'number') {
+    return bitrate;
+  }
+
   return {
-    average_bitrate: rate_control.averageBitrate,
-    max_bitrate: rate_control.maxBitrate,
+    average_bitrate: bitrate.averageBitrate,
+    max_bitrate: bitrate.maxBitrate,
   };
 }
