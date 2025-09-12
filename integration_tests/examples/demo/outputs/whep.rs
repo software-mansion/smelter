@@ -16,7 +16,6 @@ use crate::{
     outputs::{
         scene::Scene, AudioEncoder, OutputHandler, OutputProtocol, VideoEncoder, VideoResolution,
     },
-    players::OutputPlayer,
 };
 
 const WHEP_TOKEN_ENV: &str = "WHEP_OUTPUT_BEARER_TOKEN";
@@ -40,7 +39,6 @@ pub struct WhepOutput {
     bearer_token: String,
     video: Option<WhepOutputVideoOptions>,
     audio: Option<WhepOutputAudioOptions>,
-    player: OutputPlayer,
 }
 
 impl OutputHandler for WhepOutput {
@@ -62,27 +60,22 @@ impl OutputHandler for WhepOutput {
     }
 
     fn on_after_registration(&mut self) -> Result<()> {
-        match self.player {
-            OutputPlayer::Manual => {
-                let html_path = examples_root_dir()
-                    .join("examples")
-                    .join("demo")
-                    .join("whep.html");
+        let html_path = examples_root_dir()
+            .join("examples")
+            .join("demo")
+            .join("whep.html");
 
-                let url = format!(
-                    "file://{}?url=http://127.0.0.1:9000/whep/{}&token={}",
-                    html_path.to_str().unwrap(),
-                    self.name,
-                    self.bearer_token
-                );
+        let url = format!(
+            "file://{}?url=http://127.0.0.1:9000/whep/{}&token={}",
+            html_path.to_str().unwrap(),
+            self.name,
+            self.bearer_token
+        );
 
-                println!("Instructions to start receiving stream:");
-                println!("Open in browser:");
-                println!("{url}");
-                Ok(())
-            }
-            _ => unreachable!(),
-        }
+        println!("Instructions to start receiving stream:");
+        println!("Open in browser:");
+        println!("{url}");
+        Ok(())
     }
 
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
@@ -98,7 +91,6 @@ pub struct WhepOutputBuilder {
     bearer_token: Option<String>,
     video: Option<WhepOutputVideoOptions>,
     audio: Option<WhepOutputAudioOptions>,
-    player: OutputPlayer,
 }
 
 impl WhepOutputBuilder {
@@ -108,7 +100,6 @@ impl WhepOutputBuilder {
             bearer_token: None,
             video: None,
             audio: None,
-            player: OutputPlayer::Manual,
         }
     }
 
@@ -231,7 +222,6 @@ impl WhepOutputBuilder {
             bearer_token: self.bearer_token.unwrap(),
             video: self.video,
             audio: self.audio,
-            player: self.player,
         }
     }
 }

@@ -6,10 +6,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::{
-    inputs::{InputHandler, InputProtocol},
-    players::InputPlayer,
-};
+use crate::inputs::{InputHandler, InputProtocol};
 
 const HLS_INPUT_URL: &str = "HLS_INPUT_URL";
 
@@ -18,7 +15,6 @@ pub struct HlsInput {
     r#type: InputProtocol,
     name: String,
     url: String,
-    player: InputPlayer,
 }
 
 impl InputHandler for HlsInput {
@@ -81,7 +77,6 @@ impl HlsInputBuilder {
             r#type: InputProtocol::Hls,
             name: self.name,
             url: self.url.unwrap(),
-            player: InputPlayer::Manual,
         }
     }
 }

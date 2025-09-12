@@ -13,7 +13,6 @@ use crate::{
     outputs::{
         scene::Scene, AudioEncoder, OutputHandler, OutputProtocol, VideoEncoder, VideoResolution,
     },
-    players::OutputPlayer,
 };
 
 const WHIP_TOKEN_ENV: &str = "WHIP_OUTPUT_BEARER_TOKEN";
@@ -39,7 +38,6 @@ pub struct WhipOutput {
     bearer_token: String,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
-    player: OutputPlayer,
 }
 
 impl OutputHandler for WhipOutput {
@@ -62,24 +60,19 @@ impl OutputHandler for WhipOutput {
     }
 
     fn on_before_registration(&mut self) -> Result<()> {
-        match self.player {
-            OutputPlayer::Manual => {
-                let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
-                let url = "http://127.0.0.1:8080";
+        let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
+        let url = "http://127.0.0.1:8080";
 
-                println!("Instructions to start receiving stream:");
-                println!("1. Start Broadcast Box: {cmd}");
-                println!("2. Open: {url}");
-                println!("3. Enter '{}' in 'Stream Key' field", self.bearer_token);
+        println!("Instructions to start receiving stream:");
+        println!("1. Start Broadcast Box: {cmd}");
+        println!("2. Open: {url}");
+        println!("3. Enter '{}' in 'Stream Key' field", self.bearer_token);
 
-                loop {
-                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                    if confirmation {
-                        return Ok(());
-                    }
-                }
+        loop {
+            let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+            if confirmation {
+                return Ok(());
             }
-            _ => unreachable!(),
         }
     }
 
@@ -97,7 +90,6 @@ pub struct WhipOutputBuilder {
     bearer_token: Option<String>,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
-    player: OutputPlayer,
 }
 
 impl WhipOutputBuilder {
@@ -110,7 +102,6 @@ impl WhipOutputBuilder {
             bearer_token: None,
             video: None,
             audio: None,
-            player: OutputPlayer::Manual,
         }
     }
 
@@ -238,7 +229,6 @@ impl WhipOutputBuilder {
             bearer_token: self.bearer_token.unwrap(),
             video: self.video,
             audio: self.audio,
-            player: self.player,
         }
     }
 }

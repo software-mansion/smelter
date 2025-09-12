@@ -15,7 +15,6 @@ use crate::{
     outputs::{
         scene::Scene, AudioEncoder, OutputHandler, OutputProtocol, VideoEncoder, VideoResolution,
     },
-    players::OutputPlayer,
     utils::resolve_path,
 };
 const MP4_OUTPUT_PATH: &str = "MP4_OUTPUT_PATH";
@@ -39,7 +38,6 @@ pub struct Mp4Output {
     path: PathBuf,
     video: Option<Mp4OutputVideoOptions>,
     audio: Option<Mp4OutputAudioOptions>,
-    player: OutputPlayer,
 }
 
 impl OutputHandler for Mp4Output {
@@ -191,7 +189,6 @@ impl Mp4OutputBuilder {
             path: self.path.unwrap(),
             video: self.video,
             audio: self.audio,
-            player: OutputPlayer::Manual,
         }
     }
 }

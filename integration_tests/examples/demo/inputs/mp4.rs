@@ -14,7 +14,6 @@ use tracing::{error, info};
 use crate::{
     autocompletion::FilePathCompleter,
     inputs::{InputHandler, InputProtocol},
-    players::InputPlayer,
     utils::resolve_path,
 };
 
@@ -26,7 +25,6 @@ pub struct Mp4Input {
     name: String,
     source: Mp4InputSource,
     r#loop: bool,
-    player: InputPlayer,
 }
 
 impl InputHandler for Mp4Input {
@@ -165,7 +163,6 @@ impl Mp4InputBuilder {
             name: self.name,
             source: self.source.unwrap(),
             r#loop: self.r#loop,
-            player: InputPlayer::Manual,
         }
     }
 }

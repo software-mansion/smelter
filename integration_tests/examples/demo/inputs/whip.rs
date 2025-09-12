@@ -9,10 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
 
-use crate::{
-    inputs::{InputHandler, InputProtocol, VideoDecoder},
-    players::InputPlayer,
-};
+use crate::inputs::{InputHandler, InputProtocol, VideoDecoder};
 
 const WHIP_TOKEN_ENV: &str = "WHIP_INPUT_BEARER_TOKEN";
 
@@ -22,7 +19,6 @@ pub struct WhipInput {
     name: String,
     bearer_token: String,
     video: Option<WhipInputVideoOptions>,
-    player: InputPlayer,
 }
 
 impl InputHandler for WhipInput {
@@ -47,16 +43,11 @@ impl InputHandler for WhipInput {
     }
 
     fn on_after_registration(&mut self) -> Result<()> {
-        match self.player {
-            InputPlayer::Manual => {
-                println!("Instructions to start streaming:");
-                println!("1. Open OBS Studio");
-                println!("2. In a 'Stream' tab enter 'http://127.0.0.1:9000/whip/{} in 'Server' field and '{}' in 'Bearer Token' field", self.name, self.bearer_token);
-                println!();
-                Ok(())
-            }
-            _ => unreachable!(),
-        }
+        println!("Instructions to start streaming:");
+        println!("1. Open OBS Studio");
+        println!("2. In a 'Stream' tab enter 'http://127.0.0.1:9000/whip/{} in 'Server' field and '{}' in 'Bearer Token' field", self.name, self.bearer_token);
+        println!();
+        Ok(())
     }
 }
 
@@ -64,7 +55,6 @@ pub struct WhipInputBuilder {
     name: String,
     bearer_token: String,
     video: Option<WhipInputVideoOptions>,
-    player: InputPlayer,
 }
 
 impl WhipInputBuilder {
@@ -73,7 +63,6 @@ impl WhipInputBuilder {
             name: String::new(),
             bearer_token: "example".to_string(),
             video: None,
-            player: InputPlayer::Manual,
         }
     }
 
@@ -134,7 +123,6 @@ impl WhipInputBuilder {
             name: self.name,
             bearer_token: self.bearer_token,
             video: self.video,
-            player: self.player,
         }
     }
 }
