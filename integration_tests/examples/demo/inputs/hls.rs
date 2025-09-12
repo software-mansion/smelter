@@ -6,7 +6,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::inputs::InputHandler;
+use crate::inputs::InputHandle;
 
 const HLS_INPUT_URL: &str = "HLS_INPUT_URL";
 
@@ -17,7 +17,7 @@ pub struct HlsInput {
 }
 
 #[typetag::serde]
-impl InputHandler for HlsInput {
+impl InputHandle for HlsInput {
     fn name(&self) -> &str {
         &self.name
     }

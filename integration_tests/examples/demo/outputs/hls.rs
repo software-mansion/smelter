@@ -1,8 +1,8 @@
-use std::{env, path::PathBuf};
+use std::{fs, path::PathBuf, process::Child};
 
 use anyhow::Result;
-use inquire::{Select, Text};
-use integration_tests::examples::examples_root_dir;
+use inquire::Select;
+use integration_tests::{examples::examples_root_dir, ffmpeg::start_ffmpeg_receive_hls};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -10,15 +10,16 @@ use strum::{Display, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
-    autocompletion::FilePathCompleter,
     inputs::{filter_video_inputs, InputHandle},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
-    utils::resolve_path,
+    outputs::{
+        scene::Scene, AudioEncoder, OutputHandle, OutputProtocol, VideoEncoder, VideoResolution,
+    },
+    players::OutputPlayer,
+    smelter_state::RunningState,
 };
-const MP4_OUTPUT_PATH: &str = "MP4_OUTPUT_PATH";
 
 #[derive(Debug, Display, Clone)]
-pub enum Mp4RegisterOptions {
+pub enum HlsRegisterOptions {
     #[strum(to_string = "Set video stream")]
     SetVideoStream,
 
@@ -30,59 +31,104 @@ pub enum Mp4RegisterOptions {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Mp4Output {
+pub struct HlsOutput {
+    r#type: OutputProtocol,
     name: String,
     path: PathBuf,
-    video: Option<Mp4OutputVideoOptions>,
-    audio: Option<Mp4OutputAudioOptions>,
+    video: Option<HlsOutputVideoOptions>,
+    audio: Option<HlsOutputAudioOptions>,
+    player: OutputPlayer,
+
+    #[serde(skip)]
+    stream_handles: Vec<Child>,
 }
 
-#[typetag::serde]
-impl OutputHandle for Mp4Output {
+impl HlsOutput {
+    fn start_ffmpeg_receiver(&mut self) -> Result<()> {
+        let stream_handle = start_ffmpeg_receive_hls(&self.path)?;
+        self.stream_handles.push(stream_handle);
+        Ok(())
+    }
+}
+
+impl OutputHandle for HlsOutput {
     fn name(&self) -> &str {
         &self.name
     }
 
     fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         json!({
-            "type": "mp4",
+            "type": "hls",
             "path": self.path,
             "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         json!({
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
+
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::to_value(self)?)
+    }
+
+    fn on_before_registration(&mut self) -> Result<()> {
+        let dir_path = self.path.parent().unwrap();
+        Ok(fs::create_dir(dir_path)?)
+    }
+
+    fn on_after_registration(&mut self) -> Result<()> {
+        match self.player {
+            OutputPlayer::Ffmpeg => self.start_ffmpeg_receiver(),
+            OutputPlayer::Manual => {
+                let cmd = format!("ffplay -i {}", self.path.to_str().unwrap());
+                println!("Run this command AFTER the start request:");
+                println!("{cmd}");
+                Ok(())
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
-pub struct Mp4OutputBuilder {
+impl Drop for HlsOutput {
+    fn drop(&mut self) {
+        let dir_path = self.path.parent().unwrap();
+        fs::remove_dir_all(dir_path).unwrap();
+
+        for stream in &mut self.stream_handles {
+            if let Err(e) = stream.kill() {
+                error!("{e}");
+            }
+        }
+    }
+}
+
+pub struct HlsOutputBuilder {
     name: String,
-    path: Option<PathBuf>,
-    video: Option<Mp4OutputVideoOptions>,
-    audio: Option<Mp4OutputAudioOptions>,
+    video: Option<HlsOutputVideoOptions>,
+    audio: Option<HlsOutputAudioOptions>,
+    player: OutputPlayer,
 }
 
-impl Mp4OutputBuilder {
+impl HlsOutputBuilder {
     pub fn new() -> Self {
         let suffix = rand::thread_rng().next_u32();
-        let name = format!("mp4_output_{suffix}");
+        let name = format!("hls_output_{suffix}");
         Self {
             name,
-            path: None,
             video: None,
             audio: None,
+            player: OutputPlayer::Manual,
         }
     }
 
-    pub fn prompt(self) -> Result<Self> {
+    pub fn prompt(self, running_state: RunningState) -> Result<Self> {
         let mut builder = self;
-
-        builder = builder.prompt_path()?;
 
         loop {
             builder = builder.prompt_video()?.prompt_audio()?;
@@ -94,108 +140,105 @@ impl Mp4OutputBuilder {
             }
         }
 
-        Ok(builder)
-    }
-
-    fn prompt_path(self) -> Result<Self> {
-        let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
-
-        let default_path = env::current_dir()
-            .unwrap_or(examples_root_dir())
-            .join("example_output.mp4");
-
-        loop {
-            let path_output = Text::new("Output path (ESC for default):")
-                .with_autocomplete(FilePathCompleter::default())
-                .with_initial_value(&env_path)
-                .with_default(default_path.to_str().unwrap())
-                .prompt_skippable()?;
-
-            match path_output {
-                Some(path) if !path.trim().is_empty() => {
-                    let path = resolve_path(path.into())?;
-                    let parent = path.parent();
-                    match parent {
-                        Some(p) if p.exists() => break Ok(self.with_path(path)),
-                        Some(_) | None => error!("Path is not valid"),
-                    }
-                }
-                Some(_) | None => break Ok(self.with_path(default_path)),
-            }
-        }
+        builder.prompt_player(running_state)
     }
 
     fn prompt_video(self) -> Result<Self> {
-        let video_options = vec![Mp4RegisterOptions::SetVideoStream, Mp4RegisterOptions::Skip];
+        let video_options = vec![HlsRegisterOptions::SetVideoStream, HlsRegisterOptions::Skip];
         let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
 
         match video_selection {
-            Some(Mp4RegisterOptions::SetVideoStream) => {
+            Some(HlsRegisterOptions::SetVideoStream) => {
                 let scene_options = Scene::iter().collect();
                 let scene_choice =
                     Select::new("Select scene:", scene_options).prompt_skippable()?;
                 let video = match scene_choice {
-                    Some(scene) => Mp4OutputVideoOptions {
+                    Some(scene) => HlsOutputVideoOptions {
                         scene,
                         ..Default::default()
                     },
-                    None => Mp4OutputVideoOptions::default(),
+                    None => HlsOutputVideoOptions::default(),
                 };
                 Ok(self.with_video(video))
             }
-            Some(Mp4RegisterOptions::Skip) | None => Ok(self),
+            Some(HlsRegisterOptions::Skip) | None => Ok(self),
             _ => unreachable!(),
         }
     }
 
     fn prompt_audio(self) -> Result<Self> {
-        let audio_options = vec![Mp4RegisterOptions::SetAudioStream, Mp4RegisterOptions::Skip];
+        let audio_options = vec![HlsRegisterOptions::SetAudioStream, HlsRegisterOptions::Skip];
         let audio_selection =
             Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
 
         match audio_selection {
-            Some(Mp4RegisterOptions::SetAudioStream) => {
-                Ok(self.with_audio(Mp4OutputAudioOptions::default()))
+            Some(HlsRegisterOptions::SetAudioStream) => {
+                Ok(self.with_audio(HlsOutputAudioOptions::default()))
             }
-            Some(Mp4RegisterOptions::Skip) | None => Ok(self),
+            Some(HlsRegisterOptions::Skip) | None => Ok(self),
             _ => unreachable!(),
         }
     }
 
-    pub fn with_path(mut self, path: PathBuf) -> Self {
-        self.path = Some(path);
-        self
+    fn prompt_player(self, running_state: RunningState) -> Result<Self> {
+        let (player_options, default_player) = match running_state {
+            RunningState::Running => (
+                vec![OutputPlayer::Ffmpeg, OutputPlayer::Manual],
+                OutputPlayer::Ffmpeg,
+            ),
+            RunningState::Idle => (vec![OutputPlayer::Manual], OutputPlayer::Manual),
+        };
+
+        let player_selection = Select::new(
+            &format!("Select player (ESC for {default_player}):"),
+            player_options,
+        )
+        .prompt_skippable()?;
+
+        match player_selection {
+            Some(player) => Ok(self.with_player(player)),
+            None => Ok(self.with_player(default_player)),
+        }
     }
 
-    pub fn with_video(mut self, video: Mp4OutputVideoOptions) -> Self {
+    pub fn with_video(mut self, video: HlsOutputVideoOptions) -> Self {
         self.video = Some(video);
         self
     }
 
-    pub fn with_audio(mut self, audio: Mp4OutputAudioOptions) -> Self {
+    pub fn with_audio(mut self, audio: HlsOutputAudioOptions) -> Self {
         self.audio = Some(audio);
         self
     }
 
-    pub fn build(self) -> Mp4Output {
-        Mp4Output {
+    pub fn with_player(mut self, player: OutputPlayer) -> Self {
+        self.player = player;
+        self
+    }
+
+    pub fn build(self) -> HlsOutput {
+        let path = examples_root_dir().join(&self.name).join("index.m3u8");
+        HlsOutput {
+            r#type: OutputProtocol::Hls,
             name: self.name,
-            path: self.path.unwrap(),
+            path,
             video: self.video,
             audio: self.audio,
+            player: self.player,
+            stream_handles: vec![],
         }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Mp4OutputVideoOptions {
+pub struct HlsOutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
     root_id: String,
     scene: Scene,
 }
 
-impl Mp4OutputVideoOptions {
+impl HlsOutputVideoOptions {
     pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
@@ -217,7 +260,7 @@ impl Mp4OutputVideoOptions {
     }
 }
 
-impl Default for Mp4OutputVideoOptions {
+impl Default for HlsOutputVideoOptions {
     fn default() -> Self {
         let resolution = VideoResolution {
             width: 1920,
@@ -234,11 +277,11 @@ impl Default for Mp4OutputVideoOptions {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Mp4OutputAudioOptions {
+pub struct HlsOutputAudioOptions {
     encoder: AudioEncoder,
 }
 
-impl Mp4OutputAudioOptions {
+impl HlsOutputAudioOptions {
     pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
@@ -282,7 +325,7 @@ impl Mp4OutputAudioOptions {
     }
 }
 
-impl Default for Mp4OutputAudioOptions {
+impl Default for HlsOutputAudioOptions {
     fn default() -> Self {
         Self {
             encoder: AudioEncoder::Aac,

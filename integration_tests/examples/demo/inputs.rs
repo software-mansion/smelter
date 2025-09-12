@@ -10,7 +10,7 @@ pub mod rtp;
 pub mod whip;
 
 #[typetag::serde(tag = "type")]
-pub trait InputHandler: Debug {
+pub trait InputHandle: Debug {
     fn name(&self) -> &str;
     fn serialize_register(&self) -> serde_json::Value;
 
@@ -27,7 +27,7 @@ pub trait InputHandler: Debug {
     }
 }
 
-impl std::fmt::Display for dyn InputHandler {
+impl std::fmt::Display for dyn InputHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
@@ -90,7 +90,7 @@ pub enum AudioDecoder {
     // TODO: AAC
 }
 
-pub fn filter_video_inputs<'a>(inputs: &'a [&'a dyn InputHandler]) -> Vec<&'a dyn InputHandler> {
+pub fn filter_video_inputs<'a>(inputs: &'a [&'a dyn InputHandle]) -> Vec<&'a dyn InputHandle> {
     inputs
         .iter()
         .filter_map(|input| {

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
 
-use crate::inputs::{InputHandler, VideoDecoder};
+use crate::inputs::{InputHandle, VideoDecoder};
 
 const WHIP_TOKEN_ENV: &str = "WHIP_INPUT_BEARER_TOKEN";
 
@@ -21,7 +21,7 @@ pub struct WhipInput {
 }
 
 #[typetag::serde]
-impl InputHandler for WhipInput {
+impl InputHandle for WhipInput {
     fn name(&self) -> &str {
         &self.name
     }
