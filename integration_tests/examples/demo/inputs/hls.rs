@@ -47,11 +47,7 @@ impl HlsInputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        let mut builder = self;
-
-        builder = builder.prompt_url()?;
-
-        Ok(builder)
+        self.prompt_url()
     }
 
     fn prompt_url(self) -> Result<Self> {

@@ -93,20 +93,10 @@ impl Mp4InputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        let mut builder = self;
-
-        builder = builder.prompt_source()?;
-
-        let loop_selection = Confirm::new("Loop input [y/n]:").prompt_skippable()?;
-        builder = match loop_selection {
-            Some(r#loop) => builder.with_loop(r#loop),
-            None => builder,
-        };
-
-        Ok(builder)
+        self.prompt_source()?.prompt_loop()
     }
 
-    pub fn prompt_source(self) -> Result<Self> {
+    fn prompt_source(self) -> Result<Self> {
         let env_source = env::var(MP4_INPUT_SOURCE).unwrap_or_default();
         let default_path = examples_root_dir().join(BUNNY_H264_PATH);
 
@@ -144,6 +134,14 @@ impl Mp4InputBuilder {
                     break Ok(self.with_source(source));
                 }
             }
+        }
+    }
+
+    fn prompt_loop(self) -> Result<Self> {
+        let loop_selection = Confirm::new("Loop input [y/n]:").prompt_skippable()?;
+        match loop_selection {
+            Some(r#loop) => Ok(self.with_loop(r#loop)),
+            None => Ok(self),
         }
     }
 

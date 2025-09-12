@@ -108,28 +108,12 @@ impl WhipOutputBuilder {
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
 
-        builder = builder.prompt_url()?;
-
-        builder = builder.prompt_token()?;
-
-        let audio_options = vec![
-            WhipRegisterOptions::SetAudioStream,
-            WhipRegisterOptions::Skip,
-        ];
+        builder = builder.prompt_url()?.prompt_token()?;
 
         loop {
-            builder = builder.prompt_video()?;
-
-            let audio_selection =
-                Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
-
-            builder = match audio_selection {
-                Some(WhipRegisterOptions::SetAudioStream) => {
-                    builder.with_audio(WhipOutputAudioOptions::default())
-                }
-                Some(WhipRegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder
+                .prompt_video()?
+                .with_audio(WhipOutputAudioOptions::default());
 
             if builder.video.is_none() || builder.audio.is_none() {
                 error!("Both video and audio have to be specified for WHIP output.");
@@ -139,32 +123,6 @@ impl WhipOutputBuilder {
         }
 
         Ok(builder)
-    }
-
-    fn prompt_video(self) -> Result<Self> {
-        let video_options = vec![
-            WhipRegisterOptions::SetVideoStream,
-            WhipRegisterOptions::Skip,
-        ];
-        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
-
-        match video_selection {
-            Some(WhipRegisterOptions::SetVideoStream) => {
-                let scene_options = Scene::iter().collect();
-                let scene_choice =
-                    Select::new("Select scene:", scene_options).prompt_skippable()?;
-                let video = match scene_choice {
-                    Some(scene) => WhipOutputVideoOptions {
-                        scene,
-                        ..Default::default()
-                    },
-                    None => WhipOutputVideoOptions::default(),
-                };
-                Ok(self.with_video(video))
-            }
-            Some(WhipRegisterOptions::Skip) | None => Ok(self),
-            _ => unreachable!(),
-        }
     }
 
     fn prompt_url(self) -> Result<Self> {
@@ -198,6 +156,51 @@ impl WhipOutputBuilder {
                     continue;
                 }
             }
+        }
+    }
+
+    fn prompt_video(self) -> Result<Self> {
+        let video_options = vec![
+            WhipRegisterOptions::SetVideoStream,
+            WhipRegisterOptions::Skip,
+        ];
+        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+
+        match video_selection {
+            Some(WhipRegisterOptions::SetVideoStream) => {
+                let scene_options = Scene::iter().collect();
+                let scene_choice =
+                    Select::new("Select scene:", scene_options).prompt_skippable()?;
+                let video = match scene_choice {
+                    Some(scene) => WhipOutputVideoOptions {
+                        scene,
+                        ..Default::default()
+                    },
+                    None => WhipOutputVideoOptions::default(),
+                };
+                Ok(self.with_video(video))
+            }
+            Some(WhipRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
+    }
+
+    // Currently unusable because video only streams don't work
+    fn _prompt_audio(self) -> Result<Self> {
+        let audio_options = vec![
+            WhipRegisterOptions::SetAudioStream,
+            WhipRegisterOptions::Skip,
+        ];
+
+        let audio_selection =
+            Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
+
+        match audio_selection {
+            Some(WhipRegisterOptions::SetAudioStream) => {
+                Ok(self.with_audio(WhipOutputAudioOptions::default()))
+            }
+            Some(WhipRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
         }
     }
 
