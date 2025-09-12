@@ -28,13 +28,13 @@ type UpdateInputOptions = {
 
 export type RegisterInputOptions =
   | {
-      type: 'twitch-channel';
-      twitchChannelId: string;
-    }
+    type: 'twitch-channel';
+    twitchChannelId: string;
+  }
   | {
-      type: 'kick-channel';
-      kickChannelId: string;
-    };
+    type: 'kick-channel';
+    kickChannelId: string;
+  };
 
 export class RoomState {
   private inputs: RoomInputState[];
@@ -117,6 +117,9 @@ export class RoomState {
     const input = this.getInput(inputId);
     this.inputs = this.inputs.filter(input => input.inputId !== inputId);
     this.updateStoreWithState();
+    if (input.type === 'twitch-channel') {
+      input.monitor.stop()
+    }
 
     while (input.status === 'pending') {
       await sleep(500);
@@ -265,7 +268,7 @@ function getInitialInputState(idPrefix: string): RoomInputState[] {
     });
   }
 
-  const nbaFilePath = path.join(process.cwd(), `fc_25_gameplay.mp4`);
+  const nbaFilePath = path.join(process.cwd(), `nba_gameplay.mp4`);
   if (fs.existsSync(path.join(process.cwd(), `nba_gameplay.mp4`))) {
     inputs.push({
       inputId: `${idPrefix}::local::nba_gameplay`,
