@@ -267,7 +267,7 @@ impl Pipeline {
             return Err(UpdateSceneError::AudioVideoNotMatching(output_id));
         };
 
-        info!(?output_id, "Update scene {:?}", scene_root);
+        info!(?output_id, "Update scene");
 
         self.renderer.update_scene(
             output_id,
@@ -295,7 +295,7 @@ impl Pipeline {
             }
         }
 
-        info!(?output_id, "Update audio mixer {:?}", audio);
+        info!(?output_id, "Update audio mixer");
         self.audio_mixer.update_output(output_id, audio)
     }
 
