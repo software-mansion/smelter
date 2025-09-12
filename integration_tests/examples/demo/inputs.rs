@@ -1,9 +1,8 @@
 use anyhow::Result;
 use integration_tests::{ffmpeg, gstreamer};
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use strum::{Display, EnumIter};
-
-use crate::players::InputPlayer;
 
 pub mod mp4;
 pub mod rtp;
@@ -11,6 +10,9 @@ pub mod whip;
 
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
+    fn json_dump(&self) -> Result<serde_json::Value>;
+    fn serialize_register(&self) -> serde_json::Value;
+
     fn has_video(&self) -> bool {
         true
     }
@@ -19,7 +21,7 @@ pub trait InputHandler: Debug {
         true
     }
 
-    fn on_after_registration(&mut self, _player: InputPlayer) -> Result<()> {
+    fn on_after_registration(&mut self) -> Result<()> {
         Ok(())
     }
 }
@@ -30,7 +32,7 @@ impl std::fmt::Display for dyn InputHandler {
     }
 }
 
-#[derive(Debug, EnumIter, Display, Clone, Copy)]
+#[derive(Debug, EnumIter, Display, Clone, Copy, Serialize, Deserialize)]
 pub enum InputProtocol {
     #[strum(to_string = "rtp_stream")]
     Rtp,
@@ -42,7 +44,7 @@ pub enum InputProtocol {
     Mp4,
 }
 
-#[derive(Debug, EnumIter, Display, PartialEq, Clone, Copy)]
+#[derive(Debug, EnumIter, Display, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum VideoDecoder {
     #[strum(to_string = "ffmpeg_h264")]
     FfmpegH264,
@@ -77,7 +79,7 @@ impl From<VideoDecoder> for ffmpeg::Video {
     }
 }
 
-#[derive(Debug, Display, EnumIter)]
+#[derive(Debug, Display, EnumIter, Serialize, Deserialize, Clone, Copy)]
 pub enum AudioDecoder {
     #[strum(to_string = "opus")]
     Opus,

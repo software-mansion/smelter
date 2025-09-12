@@ -3,3 +3,4 @@
 /examples/raw_channel_output_audio_dump.debug
 /examples/raw_channel_output_video_frame_*.png
 /examples/assets/image.png
+/examples/demo/*.json

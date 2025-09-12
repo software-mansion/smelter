@@ -3,13 +3,16 @@ use std::env;
 use anyhow::Result;
 use inquire::{Confirm, Select, Text};
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
     inputs::{filter_video_inputs, InputHandler},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{
+        scene::Scene, AudioEncoder, OutputHandler, OutputProtocol, VideoEncoder, VideoResolution,
+    },
     players::OutputPlayer,
 };
 
@@ -28,12 +31,15 @@ pub enum WhipRegisterOptions {
     Skip,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhipOutput {
+    r#type: OutputProtocol,
     name: String,
+    endpoint_url: String,
     bearer_token: String,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
+    player: OutputPlayer,
 }
 
 impl OutputHandler for WhipOutput {
@@ -41,8 +47,22 @@ impl OutputHandler for WhipOutput {
         &self.name
     }
 
-    fn on_before_registration(&mut self, player: OutputPlayer) -> Result<()> {
-        match player {
+    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        json!({
+            "type": "whip_client",
+            "endpoint_url": self.endpoint_url,
+            "bearer_token": self.bearer_token,
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
+    }
+
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::to_value(self)?)
+    }
+
+    fn on_before_registration(&mut self) -> Result<()> {
+        match self.player {
             OutputPlayer::Manual => {
                 let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
                 let url = "http://127.0.0.1:8080";
@@ -210,36 +230,20 @@ impl WhipOutputBuilder {
         self
     }
 
-    fn serialize(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
-        let endpoint_url = self.endpoint_url.as_ref().unwrap();
-        let bearer_token = self.bearer_token.as_ref().unwrap();
-        json!({
-            "type": "whip_client",
-            "endpoint_url": endpoint_url,
-            "bearer_token": bearer_token,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
-        })
-    }
-
-    pub fn build(
-        self,
-        inputs: &[&dyn InputHandler],
-    ) -> (WhipOutput, serde_json::Value, OutputPlayer) {
-        let register_request = self.serialize(inputs);
-
-        let whip_output = WhipOutput {
+    pub fn build(self) -> WhipOutput {
+        WhipOutput {
+            r#type: OutputProtocol::Whip,
             name: self.name,
+            endpoint_url: self.endpoint_url.unwrap(),
             bearer_token: self.bearer_token.unwrap(),
             video: self.video,
             audio: self.audio,
-        };
-
-        (whip_output, register_request, self.player)
+            player: self.player,
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhipOutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
@@ -287,7 +291,7 @@ impl Default for WhipOutputVideoOptions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhipOutputAudioOptions {
     encoder: AudioEncoder,
 }

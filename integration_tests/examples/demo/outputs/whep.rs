@@ -4,15 +4,18 @@ use std::{
 };
 
 use anyhow::Result;
-use inquire::{Confirm, Select, Text};
+use inquire::{Select, Text};
 use integration_tests::examples::examples_root_dir;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
     inputs::{filter_video_inputs, InputHandler},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{
+        scene::Scene, AudioEncoder, OutputHandler, OutputProtocol, VideoEncoder, VideoResolution,
+    },
     players::OutputPlayer,
 };
 
@@ -30,12 +33,14 @@ pub enum WhepRegisterOptions {
     Skip,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhepOutput {
+    r#type: OutputProtocol,
     name: String,
     bearer_token: String,
     video: Option<WhepOutputVideoOptions>,
     audio: Option<WhepOutputAudioOptions>,
+    player: OutputPlayer,
 }
 
 impl OutputHandler for WhepOutput {
@@ -43,8 +48,21 @@ impl OutputHandler for WhepOutput {
         &self.name
     }
 
-    fn on_after_registration(&mut self, player: OutputPlayer) -> Result<()> {
-        match player {
+    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        json!({
+            "type": "whep_server",
+            "bearer_token": self.bearer_token,
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
+    }
+
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::to_value(self)?)
+    }
+
+    fn on_after_registration(&mut self) -> Result<()> {
+        match self.player {
             OutputPlayer::Manual => {
                 let html_path = examples_root_dir()
                     .join("examples")
@@ -61,13 +79,7 @@ impl OutputHandler for WhepOutput {
                 println!("Instructions to start receiving stream:");
                 println!("Open in browser:");
                 println!("{url}");
-
-                loop {
-                    let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
-                    if confirmation {
-                        return Ok(());
-                    }
-                }
+                Ok(())
             }
             _ => unreachable!(),
         }
@@ -212,34 +224,19 @@ impl WhepOutputBuilder {
         self
     }
 
-    fn serialize(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
-        let bearer_token = self.bearer_token.as_ref().unwrap();
-        json!({
-            "type": "whep_server",
-            "bearer_token": bearer_token,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
-        })
-    }
-
-    pub fn build(
-        self,
-        inputs: &[&dyn InputHandler],
-    ) -> (WhepOutput, serde_json::Value, OutputPlayer) {
-        let register_request = self.serialize(inputs);
-
-        let whep_output = WhepOutput {
+    pub fn build(self) -> WhepOutput {
+        WhepOutput {
+            r#type: OutputProtocol::Whep,
             name: self.name,
             bearer_token: self.bearer_token.unwrap(),
             video: self.video,
             audio: self.audio,
-        };
-
-        (whep_output, register_request, self.player)
+            player: self.player,
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhepOutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
@@ -285,7 +282,7 @@ impl Default for WhepOutputVideoOptions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhepOutputAudioOptions {
     encoder: AudioEncoder,
 }
