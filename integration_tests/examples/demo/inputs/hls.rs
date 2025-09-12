@@ -5,7 +5,6 @@ use inquire::Text;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tracing::error;
 
 use crate::{
     inputs::{InputHandler, InputProtocol},
@@ -60,18 +59,15 @@ impl HlsInputBuilder {
     }
 
     fn prompt_url(self) -> Result<Self> {
+        const DEFAULT_URL: &str = "https://raw.githubusercontent.com/membraneframework/membrane_http_adaptive_stream_plugin/master/test/membrane_http_adaptive_stream/integration_test/fixtures/audio_multiple_video_tracks/index.m3u8";
         let env_url = env::var(HLS_INPUT_URL).unwrap_or_default();
-        loop {
-            let hls_url = Text::new("HLS input url:")
-                .with_initial_value(&env_url)
-                .prompt_skippable()?;
-            match hls_url {
-                Some(url) => break Ok(self.with_url(url)),
-                None => {
-                    error!("URL must be specified!");
-                    continue;
-                }
-            }
+        let hls_url = Text::new("HLS input url (ESC for default):")
+            .with_default(DEFAULT_URL)
+            .with_initial_value(&env_url)
+            .prompt_skippable()?;
+        match hls_url {
+            Some(url) => Ok(self.with_url(url)),
+            None => Ok(self.with_url(DEFAULT_URL.to_string())),
         }
     }
 
