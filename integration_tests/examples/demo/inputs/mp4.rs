@@ -14,7 +14,6 @@ use tracing::{error, info};
 use crate::{
     autocompletion::FilePathCompleter,
     inputs::{InputHandler, InputProtocol},
-    players::InputPlayer,
     utils::resolve_path,
 };
 
@@ -26,7 +25,6 @@ pub struct Mp4Input {
     name: String,
     source: Mp4InputSource,
     r#loop: bool,
-    player: InputPlayer,
 }
 
 impl InputHandler for Mp4Input {
@@ -95,20 +93,10 @@ impl Mp4InputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        let mut builder = self;
-
-        builder = builder.prompt_source()?;
-
-        let loop_selection = Confirm::new("Loop input [y/n]:").prompt_skippable()?;
-        builder = match loop_selection {
-            Some(r#loop) => builder.with_loop(r#loop),
-            None => builder,
-        };
-
-        Ok(builder)
+        self.prompt_source()?.prompt_loop()
     }
 
-    pub fn prompt_source(self) -> Result<Self> {
+    fn prompt_source(self) -> Result<Self> {
         let env_source = env::var(MP4_INPUT_SOURCE).unwrap_or_default();
         let default_path = examples_root_dir().join(BUNNY_H264_PATH);
 
@@ -149,6 +137,14 @@ impl Mp4InputBuilder {
         }
     }
 
+    fn prompt_loop(self) -> Result<Self> {
+        let loop_selection = Confirm::new("Loop input [y/n]:").prompt_skippable()?;
+        match loop_selection {
+            Some(r#loop) => Ok(self.with_loop(r#loop)),
+            None => Ok(self),
+        }
+    }
+
     pub fn with_source(mut self, source: Mp4InputSource) -> Self {
         self.source = Some(source);
         self
@@ -165,7 +161,6 @@ impl Mp4InputBuilder {
             name: self.name,
             source: self.source.unwrap(),
             r#loop: self.r#loop,
-            player: InputPlayer::Manual,
         }
     }
 }

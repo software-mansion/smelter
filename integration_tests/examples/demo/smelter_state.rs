@@ -9,6 +9,7 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{debug, error};
 
+use crate::inputs::hls::{HlsInput, HlsInputBuilder};
 use crate::inputs::mp4::{Mp4Input, Mp4InputBuilder};
 use crate::inputs::rtp::RtpInput;
 use crate::inputs::whip::{WhipInput, WhipInputBuilder};
@@ -94,6 +95,11 @@ impl SmelterState {
                     let mp4_input = Mp4InputBuilder::new().prompt()?.build();
                     let register_request = mp4_input.serialize_register();
                     (Box::new(mp4_input), register_request)
+                }
+                InputProtocol::Hls => {
+                    let hls_input = HlsInputBuilder::new().prompt()?.build();
+                    let register_request = hls_input.serialize_register();
+                    (Box::new(hls_input), register_request)
                 }
             };
 
@@ -317,6 +323,10 @@ impl SmelterState {
                         InputProtocol::Rtp => {
                             let rtp_input: RtpInput = serde_json::from_value(input.clone())?;
                             Box::new(rtp_input)
+                        }
+                        InputProtocol::Hls => {
+                            let hls_input: HlsInput = serde_json::from_value(input.clone())?;
+                            Box::new(hls_input)
                         }
                     };
                     examples::post(
