@@ -1,0 +1,298 @@
+use std::{env, path::PathBuf};
+
+use anyhow::Result;
+use inquire::{Select, Text};
+use integration_tests::examples::examples_root_dir;
+use rand::RngCore;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use strum::{Display, IntoEnumIterator};
+use tracing::error;
+
+use crate::{
+    autocompletion::FilePathCompleter,
+    inputs::{filter_video_inputs, InputHandler},
+    outputs::{
+        scene::Scene, AudioEncoder, OutputHandler, OutputProtocol, VideoEncoder, VideoResolution,
+    },
+    utils::resolve_path,
+};
+const MP4_OUTPUT_PATH: &str = "MP4_OUTPUT_PATH";
+
+#[derive(Debug, Display, Clone)]
+pub enum HlsRegisterOptions {
+    #[strum(to_string = "Set video stream")]
+    SetVideoStream,
+
+    #[strum(to_string = "Set audio stream")]
+    SetAudioStream,
+
+    #[strum(to_string = "Skip")]
+    Skip,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HlsOutput {
+    r#type: OutputProtocol,
+    name: String,
+    path: PathBuf,
+    video: Option<HlsOutputVideoOptions>,
+    audio: Option<HlsOutputAudioOptions>,
+}
+
+impl OutputHandler for HlsOutput {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        json!({
+            "type": "hls",
+            "path": self.path,
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
+    }
+
+    fn json_dump(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::to_value(self)?)
+    }
+
+    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        json!({
+           "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
+           "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
+        })
+    }
+}
+
+pub struct HlsOutputBuilder {
+    name: String,
+    path: Option<PathBuf>,
+    video: Option<HlsOutputVideoOptions>,
+    audio: Option<HlsOutputAudioOptions>,
+}
+
+impl HlsOutputBuilder {
+    pub fn new() -> Self {
+        let suffix = rand::thread_rng().next_u32();
+        let name = format!("hls_output_{suffix}");
+        Self {
+            name,
+            path: None,
+            video: None,
+            audio: None,
+        }
+    }
+
+    pub fn prompt(self) -> Result<Self> {
+        let mut builder = self;
+
+        builder = builder.prompt_path()?;
+
+        loop {
+            builder = builder.prompt_video()?.prompt_audio()?;
+
+            if builder.video.is_none() && builder.audio.is_none() {
+                error!("Either video or audio has to be specified.");
+            } else {
+                break;
+            }
+        }
+
+        Ok(builder)
+    }
+
+    fn prompt_path(self) -> Result<Self> {
+        let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
+
+        let default_path = env::current_dir()
+            .unwrap_or(examples_root_dir())
+            .join("example_playlist.m3u8");
+
+        loop {
+            let path_output = Text::new("Output path (ESC for default):")
+                .with_autocomplete(FilePathCompleter::default())
+                .with_initial_value(&env_path)
+                .with_default(default_path.to_str().unwrap())
+                .prompt_skippable()?;
+
+            match path_output {
+                Some(path) if !path.trim().is_empty() => {
+                    let path = resolve_path(path.into())?;
+                    let parent = path.parent();
+                    match parent {
+                        Some(p) if p.exists() => break Ok(self.with_path(path)),
+                        Some(_) | None => error!("Path is not valid"),
+                    }
+                }
+                Some(_) | None => break Ok(self.with_path(default_path)),
+            }
+        }
+    }
+
+    fn prompt_video(self) -> Result<Self> {
+        let video_options = vec![HlsRegisterOptions::SetVideoStream, HlsRegisterOptions::Skip];
+        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+
+        match video_selection {
+            Some(HlsRegisterOptions::SetVideoStream) => {
+                let scene_options = Scene::iter().collect();
+                let scene_choice =
+                    Select::new("Select scene:", scene_options).prompt_skippable()?;
+                let video = match scene_choice {
+                    Some(scene) => HlsOutputVideoOptions {
+                        scene,
+                        ..Default::default()
+                    },
+                    None => HlsOutputVideoOptions::default(),
+                };
+                Ok(self.with_video(video))
+            }
+            Some(HlsRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
+    }
+
+    fn prompt_audio(self) -> Result<Self> {
+        let audio_options = vec![HlsRegisterOptions::SetAudioStream, HlsRegisterOptions::Skip];
+        let audio_selection =
+            Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
+
+        match audio_selection {
+            Some(HlsRegisterOptions::SetAudioStream) => {
+                Ok(self.with_audio(HlsOutputAudioOptions::default()))
+            }
+            Some(HlsRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn with_path(mut self, path: PathBuf) -> Self {
+        self.path = Some(path);
+        self
+    }
+
+    pub fn with_video(mut self, video: HlsOutputVideoOptions) -> Self {
+        self.video = Some(video);
+        self
+    }
+
+    pub fn with_audio(mut self, audio: HlsOutputAudioOptions) -> Self {
+        self.audio = Some(audio);
+        self
+    }
+
+    pub fn build(self) -> HlsOutput {
+        HlsOutput {
+            r#type: OutputProtocol::Hls,
+            name: self.name,
+            path: self.path.unwrap(),
+            video: self.video,
+            audio: self.audio,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HlsOutputVideoOptions {
+    resolution: VideoResolution,
+    encoder: VideoEncoder,
+    root_id: String,
+    scene: Scene,
+}
+
+impl HlsOutputVideoOptions {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        let inputs = filter_video_inputs(inputs);
+        json!({
+            "resolution": self.resolution.serialize(),
+            "encoder": {
+                "type": self.encoder.to_string(),
+            },
+            "initial": {
+                "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
+            },
+        })
+    }
+
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        let inputs = filter_video_inputs(inputs);
+        json!({
+            "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
+        })
+    }
+}
+
+impl Default for HlsOutputVideoOptions {
+    fn default() -> Self {
+        let resolution = VideoResolution {
+            width: 1920,
+            height: 1080,
+        };
+        let root_id = "root".to_string();
+        Self {
+            resolution,
+            encoder: VideoEncoder::FfmpegH264,
+            root_id,
+            scene: Scene::Tiles,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HlsOutputAudioOptions {
+    encoder: AudioEncoder,
+}
+
+impl HlsOutputAudioOptions {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        let inputs_json = inputs
+            .iter()
+            .filter_map(|input| {
+                if input.has_audio() {
+                    Some(json!({
+                        "input_id": input.name(),
+                    }))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        json!({
+            "encoder": {
+                "type": self.encoder.to_string(),
+            },
+            "initial": {
+                "inputs": inputs_json,
+        }
+        })
+    }
+
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        let inputs_json = inputs
+            .iter()
+            .filter_map(|input| {
+                if input.has_audio() {
+                    Some(json!({
+                        "input_id": input.name(),
+                    }))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        json!({
+            "inputs": inputs_json,
+        })
+    }
+}
+
+impl Default for HlsOutputAudioOptions {
+    fn default() -> Self {
+        Self {
+            encoder: AudioEncoder::Aac,
+        }
+    }
+}
