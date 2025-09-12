@@ -4,7 +4,10 @@ use reqwest::{Method, StatusCode};
 use url::{ParseError, Url};
 
 use crate::{
-    codecs::{AudioEncoderOptions, VideoEncoderOptions, WhipVideoDecoderOptions},
+    codecs::{
+        AudioEncoderOptions, VideoEncoderOptions, WhipAudioEncoderOptions, WhipVideoDecoderOptions,
+        WhipVideoEncoderOptions,
+    },
     error::EncoderInitError,
 };
 
@@ -17,12 +20,12 @@ pub struct WhipInputOptions {
 
 #[derive(Debug, Clone)]
 pub struct VideoWhipOptions {
-    pub encoder_preferences: Vec<VideoEncoderOptions>,
+    pub encoder_preferences: Vec<WhipVideoEncoderOptions>,
 }
 
 #[derive(Debug, Clone)]
 pub struct AudioWhipOptions {
-    pub encoder_preferences: Vec<AudioEncoderOptions>,
+    pub encoder_preferences: Vec<WhipAudioEncoderOptions>,
 }
 
 #[derive(Debug, Clone)]

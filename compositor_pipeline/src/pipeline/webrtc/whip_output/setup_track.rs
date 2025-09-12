@@ -32,7 +32,7 @@ use crate::prelude::*;
 
 use super::{
     track_task_audio::WhipAudioTrackThreadHandle, track_task_video::WhipVideoTrackThreadHandle,
-    WhipOutputError, WhipSenderTrack,
+    WhipClientTrack, WhipOutputError,
 };
 
 pub trait MatchCodecCapability {
@@ -70,26 +70,21 @@ pub async fn setup_video_track(
     ctx: &Arc<PipelineCtx>,
     output_id: &OutputId,
     rtc_sender: Arc<RTCRtpSender>,
-    options: &VideoWhipOptions,
-) -> Result<(WhipVideoTrackThreadHandle, WhipSenderTrack), WhipOutputError> {
+    encoder_preferences: Vec<VideoEncoderOptions>,
+) -> Result<(WhipVideoTrackThreadHandle, WhipClientTrack), WhipOutputError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
 
-    let Some((options, codec_params)) =
-        options
-            .encoder_preferences
-            .iter()
-            .find_map(|encoder_options| {
-                let supported = supported_codecs.iter().find_map(|codec_params| {
-                    match encoder_options.matches(&codec_params.capability) {
-                        true => Some(codec_params.clone()),
-                        false => None,
-                    }
-                })?;
-                Some((encoder_options.clone(), supported.clone()))
-            })
-    else {
+    let Some((options, codec_params)) = encoder_preferences.iter().find_map(|encoder_options| {
+        let supported = supported_codecs.iter().find_map(|codec_params| {
+            match encoder_options.matches(&codec_params.capability) {
+                true => Some(codec_params.clone()),
+                false => None,
+            }
+        })?;
+        Some((encoder_options.clone(), supported.clone()))
+    }) else {
         return Err(WhipOutputError::NoVideoCodecNegotiated);
     };
 
@@ -181,7 +176,7 @@ pub async fn setup_video_track(
         handle.keyframe_request_sender.clone(),
     );
 
-    Ok((handle, WhipSenderTrack { receiver, track }))
+    Ok((handle, WhipClientTrack { receiver, track }))
 }
 
 pub async fn setup_audio_track(
@@ -189,26 +184,21 @@ pub async fn setup_audio_track(
     output_id: &OutputId,
     rtc_sender: Arc<RTCRtpSender>,
     pc: PeerConnection,
-    options: &AudioWhipOptions,
-) -> Result<(WhipAudioTrackThreadHandle, WhipSenderTrack), WhipOutputError> {
+    encoder_preferences: Vec<AudioEncoderOptions>,
+) -> Result<(WhipAudioTrackThreadHandle, WhipClientTrack), WhipOutputError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
 
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
-    let Some((options, codec_params)) =
-        options
-            .encoder_preferences
-            .iter()
-            .find_map(|encoder_options| {
-                let supported = supported_codecs.iter().find_map(|codec_params| {
-                    match encoder_options.matches(&codec_params.capability) {
-                        true => Some(codec_params.clone()),
-                        false => None,
-                    }
-                })?;
-                Some((encoder_options.clone(), supported.clone()))
-            })
-    else {
+    let Some((options, codec_params)) = encoder_preferences.iter().find_map(|encoder_options| {
+        let supported = supported_codecs.iter().find_map(|codec_params| {
+            match encoder_options.matches(&codec_params.capability) {
+                true => Some(codec_params.clone()),
+                false => None,
+            }
+        })?;
+        Some((encoder_options.clone(), supported.clone()))
+    }) else {
         return Err(WhipOutputError::NoAudioCodecNegotiated);
     };
 
@@ -262,7 +252,7 @@ pub async fn setup_audio_track(
         ssrc,
     );
 
-    Ok((handle, WhipSenderTrack { receiver, track }))
+    Ok((handle, WhipClientTrack { receiver, track }))
 }
 
 // Identifiers used in stats HashMap returnet by RTCPeerConnection::get_stats()
