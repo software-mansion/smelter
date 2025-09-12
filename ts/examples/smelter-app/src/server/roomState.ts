@@ -28,13 +28,13 @@ type UpdateInputOptions = {
 
 export type RegisterInputOptions =
   | {
-    type: 'twitch-channel';
-    twitchChannelId: string;
-  }
+      type: 'twitch-channel';
+      twitchChannelId: string;
+    }
   | {
-    type: 'kick-channel';
-    kickChannelId: string;
-  };
+      type: 'kick-channel';
+      kickChannelId: string;
+    };
 
 export class RoomState {
   private inputs: RoomInputState[];
@@ -118,7 +118,7 @@ export class RoomState {
     this.inputs = this.inputs.filter(input => input.inputId !== inputId);
     this.updateStoreWithState();
     if (input.type === 'twitch-channel') {
-      input.monitor.stop()
+      input.monitor.stop();
     }
 
     while (input.status === 'pending') {
@@ -202,6 +202,9 @@ export class RoomState {
     const inputs = this.inputs;
     this.inputs = [];
     for (const input of inputs) {
+      if (input.type === 'twitch-channel') {
+        input.monitor.stop();
+      }
       try {
         await SmelterInstance.unregisterInput(input.inputId);
       } catch (err: any) {
