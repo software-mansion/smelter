@@ -104,16 +104,6 @@ impl From<&RtpInput> for RtpInputSerde {
 }
 
 impl RtpInput {
-    pub fn serialize_register(&self) -> serde_json::Value {
-        json!({
-            "type": "rtp_stream",
-            "port": self.port,
-            "transport_protocol": self.transport_protocol.to_string(),
-            "video": self.video.as_ref().map(|v| v.serialize()),
-            "audio": self.audio.as_ref().map(|a| a.serialize()),
-        })
-    }
-
     fn test_sample(&self) -> TestSample {
         match &self.video {
             Some(RtpInputVideoOptions {
@@ -323,6 +313,16 @@ impl RtpInput {
 impl InputHandler for RtpInput {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn serialize_register(&self) -> serde_json::Value {
+        json!({
+            "type": "rtp_stream",
+            "port": self.port,
+            "transport_protocol": self.transport_protocol.to_string(),
+            "video": self.video.as_ref().map(|v| v.serialize()),
+            "audio": self.audio.as_ref().map(|a| a.serialize()),
+        })
     }
 
     fn json_dump(&self) -> Result<serde_json::Value> {

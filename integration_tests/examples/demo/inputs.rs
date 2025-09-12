@@ -11,6 +11,7 @@ pub mod whip;
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
     fn json_dump(&self) -> Result<serde_json::Value>;
+    fn serialize_register(&self) -> serde_json::Value;
 
     fn has_video(&self) -> bool {
         true

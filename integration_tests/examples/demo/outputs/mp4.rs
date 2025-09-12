@@ -42,20 +42,18 @@ pub struct Mp4Output {
     player: OutputPlayer,
 }
 
-impl Mp4Output {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+impl OutputHandler for Mp4Output {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         json!({
             "type": "mp4",
             "path": self.path,
             "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
-    }
-}
-
-impl OutputHandler for Mp4Output {
-    fn name(&self) -> &str {
-        &self.name
     }
 
     fn json_dump(&self) -> Result<serde_json::Value> {

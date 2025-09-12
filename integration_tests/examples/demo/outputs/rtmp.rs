@@ -85,14 +85,6 @@ impl From<&RtmpOutput> for RtmpOutputSerde {
 }
 
 impl RtmpOutput {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
-        json!({
-            "type": "rtmp_client",
-            "url": self.url,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
-        })
-    }
     fn start_ffmpeg_recv(&mut self) -> Result<()> {
         let player_handle = start_ffmpeg_rtmp_receive(self.port)?;
         self.stream_handles.push(player_handle);
@@ -103,6 +95,15 @@ impl RtmpOutput {
 impl OutputHandler for RtmpOutput {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        json!({
+            "type": "rtmp_client",
+            "url": self.url,
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
     }
 
     fn json_dump(&self) -> Result<serde_json::Value> {

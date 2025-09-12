@@ -25,19 +25,17 @@ pub struct WhipInput {
     player: InputPlayer,
 }
 
-impl WhipInput {
-    pub fn serialize_register(&self) -> serde_json::Value {
+impl InputHandler for WhipInput {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "whip_server",
             "bearer_token": self.bearer_token,
             "video": self.video.as_ref().map(|v| v.serialize_register()),
         })
-    }
-}
-
-impl InputHandler for WhipInput {
-    fn name(&self) -> &str {
-        &self.name
     }
 
     fn json_dump(&self) -> Result<serde_json::Value> {

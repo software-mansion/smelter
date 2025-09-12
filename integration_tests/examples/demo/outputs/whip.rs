@@ -42,8 +42,12 @@ pub struct WhipOutput {
     player: OutputPlayer,
 }
 
-impl WhipOutput {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+impl OutputHandler for WhipOutput {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         json!({
             "type": "whip_client",
             "endpoint_url": self.endpoint_url,
@@ -51,12 +55,6 @@ impl WhipOutput {
             "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
-    }
-}
-
-impl OutputHandler for WhipOutput {
-    fn name(&self) -> &str {
-        &self.name
     }
 
     fn json_dump(&self) -> Result<serde_json::Value> {

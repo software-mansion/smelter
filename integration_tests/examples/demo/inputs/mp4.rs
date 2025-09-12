@@ -29,20 +29,18 @@ pub struct Mp4Input {
     player: InputPlayer,
 }
 
-impl Mp4Input {
-    pub fn serialize_register(&self) -> serde_json::Value {
+impl InputHandler for Mp4Input {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn serialize_register(&self) -> serde_json::Value {
         let (source_key, source_val) = self.source.serialize();
         json!({
             "type": "mp4",
             source_key: source_val,
             "loop": self.r#loop,
         })
-    }
-}
-
-impl InputHandler for Mp4Input {
-    fn name(&self) -> &str {
-        &self.name
     }
 
     fn json_dump(&self) -> Result<serde_json::Value> {

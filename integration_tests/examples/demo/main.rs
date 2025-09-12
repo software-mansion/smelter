@@ -16,7 +16,7 @@ mod utils;
 
 use crate::{smelter_state::SmelterState, utils::parse_json};
 
-pub const IP: &str = "127.0.0.1";
+const IP: &str = "127.0.0.1";
 const JSON_ENV: &str = "DEMO_JSON";
 
 #[derive(Debug, EnumIter, Display, Clone, PartialEq)]
@@ -61,7 +61,7 @@ fn run_demo() {
                     match SmelterState::from_json(json) {
                         Ok(state) => (state, true),
                         Err(e) => {
-                            error!("Failed to create start from provided JSON dump: {e}");
+                            error!("Failed to create state from provided JSON dump: {e}");
                             (SmelterState::new(), false)
                         }
                     }

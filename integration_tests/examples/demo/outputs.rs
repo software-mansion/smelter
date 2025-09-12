@@ -17,6 +17,7 @@ pub mod scene;
 
 pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
+    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value;
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value;
     fn json_dump(&self) -> Result<serde_json::Value>;
 

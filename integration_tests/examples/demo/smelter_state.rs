@@ -289,7 +289,8 @@ impl SmelterState {
             .collect::<Vec<_>>();
 
         let json = json!({"inputs": inputs, "outputs": outputs});
-        let filename = resolve_json_filename().with_context(|| "Failed to resolve JSON filename")?;
+        let filename =
+            resolve_json_filename().with_context(|| "Failed to resolve JSON filename")?;
         Ok(fs::write(filename, json.to_string())?)
     }
 
@@ -303,35 +304,26 @@ impl SmelterState {
                 Some(input_protocol_value) => {
                     let input_protocol: InputProtocol =
                         serde_json::from_value(input_protocol_value.clone())?;
-                    match input_protocol {
+                    let mut input: Box<dyn InputHandler> = match input_protocol {
                         InputProtocol::Mp4 => {
-                            let mut mp4_input: Mp4Input = serde_json::from_value(input.clone())?;
-                            examples::post(
-                                &format!("input/{}/register", mp4_input.name()),
-                                &mp4_input.serialize_register(),
-                            )?;
-                            mp4_input.on_after_registration()?;
-                            inputs.push(Box::new(mp4_input));
+                            let mp4_input: Mp4Input = serde_json::from_value(input.clone())?;
+                            Box::new(mp4_input)
                         }
                         InputProtocol::Whip => {
-                            let mut whip_input: WhipInput = serde_json::from_value(input.clone())?;
-                            examples::post(
-                                &format!("input/{}/register", whip_input.name()),
-                                &whip_input.serialize_register(),
-                            )?;
-                            whip_input.on_after_registration()?;
-                            inputs.push(Box::new(whip_input));
+                            let whip_input: WhipInput = serde_json::from_value(input.clone())?;
+                            Box::new(whip_input)
                         }
                         InputProtocol::Rtp => {
-                            let mut rtp_input: RtpInput = serde_json::from_value(input.clone())?;
-                            examples::post(
-                                &format!("input/{}/register", rtp_input.name()),
-                                &rtp_input.serialize_register(),
-                            )?;
-                            rtp_input.on_after_registration()?;
-                            inputs.push(Box::new(rtp_input));
+                            let rtp_input: RtpInput = serde_json::from_value(input.clone())?;
+                            Box::new(rtp_input)
                         }
-                    }
+                    };
+                    examples::post(
+                        &format!("input/{}/register", input.name()),
+                        &input.serialize_register(),
+                    )?;
+                    input.on_after_registration()?;
+                    inputs.push(input);
                 }
                 None => bail!("Failed to parse input protocol"),
             }
@@ -350,61 +342,35 @@ impl SmelterState {
                 Some(output_protocol_value) => {
                     let output_protocol: OutputProtocol =
                         serde_json::from_value(output_protocol_value.clone())?;
-                    match output_protocol {
+                    let mut output: Box<dyn OutputHandler> = match output_protocol {
                         OutputProtocol::Mp4 => {
-                            let mut mp4_output: Mp4Output = serde_json::from_value(output.clone())?;
-                            mp4_output.on_before_registration()?;
-                            examples::post(
-                                &format!("output/{}/register", mp4_output.name()),
-                                &mp4_output.serialize_register(inputs),
-                            )?;
-                            mp4_output.on_after_registration()?;
-                            outputs.push(Box::new(mp4_output));
+                            let mp4_output: Mp4Output = serde_json::from_value(output.clone())?;
+                            Box::new(mp4_output)
                         }
                         OutputProtocol::Whep => {
-                            let mut whep_output: WhepOutput =
-                                serde_json::from_value(output.clone())?;
-                            whep_output.on_before_registration()?;
-                            examples::post(
-                                &format!("output/{}/register", whep_output.name()),
-                                &whep_output.serialize_register(inputs),
-                            )?;
-                            whep_output.on_after_registration()?;
-                            outputs.push(Box::new(whep_output));
+                            let whep_output: WhepOutput = serde_json::from_value(output.clone())?;
+                            Box::new(whep_output)
                         }
                         OutputProtocol::Whip => {
-                            let mut whip_output: WhipOutput =
-                                serde_json::from_value(output.clone())?;
-                            whip_output.on_before_registration()?;
-                            examples::post(
-                                &format!("output/{}/register", whip_output.name()),
-                                &whip_output.serialize_register(inputs),
-                            )?;
-                            whip_output.on_after_registration()?;
-                            outputs.push(Box::new(whip_output));
+                            let whip_output: WhipOutput = serde_json::from_value(output.clone())?;
+                            Box::new(whip_output)
                         }
                         OutputProtocol::Rtp => {
-                            let mut rtp_output: RtpOutput = serde_json::from_value(output.clone())?;
-                            rtp_output.on_before_registration()?;
-                            examples::post(
-                                &format!("output/{}/register", rtp_output.name()),
-                                &rtp_output.serialize_register(inputs),
-                            )?;
-                            rtp_output.on_after_registration()?;
-                            outputs.push(Box::new(rtp_output));
+                            let rtp_output: RtpOutput = serde_json::from_value(output.clone())?;
+                            Box::new(rtp_output)
                         }
                         OutputProtocol::Rtmp => {
-                            let mut rtmp_output: RtmpOutput =
-                                serde_json::from_value(output.clone())?;
-                            rtmp_output.on_before_registration()?;
-                            examples::post(
-                                &format!("output/{}/register", rtmp_output.name()),
-                                &rtmp_output.serialize_register(inputs),
-                            )?;
-                            rtmp_output.on_after_registration()?;
-                            outputs.push(Box::new(rtmp_output));
+                            let rtmp_output: RtmpOutput = serde_json::from_value(output.clone())?;
+                            Box::new(rtmp_output)
                         }
-                    }
+                    };
+                    output.on_before_registration()?;
+                    examples::post(
+                        &format!("output/{}/register", output.name()),
+                        &output.serialize_register(inputs),
+                    )?;
+                    output.on_after_registration()?;
+                    outputs.push(output);
                 }
                 None => bail!("Failed to parse output protocol"),
             }

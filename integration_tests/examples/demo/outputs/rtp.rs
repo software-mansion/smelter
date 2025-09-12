@@ -91,20 +91,6 @@ impl From<&RtpOutput> for RtpOutputSerde {
 }
 
 impl RtpOutput {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
-        let ip = match self.transport_protocol {
-            TransportProtocol::Udp => Some(IP),
-            TransportProtocol::TcpServer => None,
-        };
-        json!({
-            "type": "rtp_stream",
-            "port": self.port,
-            "ip": ip,
-            "transport_protocol": self.transport_protocol.to_string(),
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
-        })
-    }
     fn start_gst_recv_tcp(&mut self) -> Result<()> {
         if self.video.is_none() && self.audio.is_none() {
             return Err(anyhow!("No stream specified, GStreamer not started!"));
@@ -195,6 +181,21 @@ impl RtpOutput {
 impl OutputHandler for RtpOutput {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        let ip = match self.transport_protocol {
+            TransportProtocol::Udp => Some(IP),
+            TransportProtocol::TcpServer => None,
+        };
+        json!({
+            "type": "rtp_stream",
+            "port": self.port,
+            "ip": ip,
+            "transport_protocol": self.transport_protocol.to_string(),
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
     }
 
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
