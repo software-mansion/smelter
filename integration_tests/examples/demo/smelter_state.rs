@@ -9,7 +9,7 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{debug, error};
 
-use crate::inputs::hls::HlsInputBuilder;
+use crate::inputs::hls::{HlsInput, HlsInputBuilder};
 use crate::inputs::mp4::{Mp4Input, Mp4InputBuilder};
 use crate::inputs::rtp::RtpInput;
 use crate::inputs::whip::{WhipInput, WhipInputBuilder};
@@ -324,7 +324,10 @@ impl SmelterState {
                             let rtp_input: RtpInput = serde_json::from_value(input.clone())?;
                             Box::new(rtp_input)
                         }
-                        InputProtocol::Hls => todo!(),
+                        InputProtocol::Hls => {
+                            let hls_input: HlsInput = serde_json::from_value(input.clone())?;
+                            Box::new(hls_input)
+                        }
                     };
                     examples::post(
                         &format!("input/{}/register", input.name()),
