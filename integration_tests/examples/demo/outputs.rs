@@ -7,6 +7,7 @@ use strum::{Display, EnumIter};
 
 use crate::inputs::InputHandler;
 
+pub mod hls;
 pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
@@ -52,6 +53,9 @@ pub enum OutputProtocol {
 
     #[strum(to_string = "mp4")]
     Mp4,
+
+    #[strum(to_string = "hls")]
+    Hls,
 }
 
 #[derive(Debug, EnumIter, Display, Clone)]

@@ -15,6 +15,7 @@ use crate::inputs::rtp::RtpInput;
 use crate::inputs::whip::{WhipInput, WhipInputBuilder};
 use crate::inputs::InputHandler;
 
+use crate::outputs::hls::{HlsOutput, HlsOutputBuilder};
 use crate::outputs::mp4::{Mp4Output, Mp4OutputBuilder};
 use crate::outputs::rtmp::RtmpOutput;
 use crate::outputs::rtp::RtpOutput;
@@ -157,6 +158,11 @@ impl SmelterState {
                     let whep_output = WhepOutputBuilder::new().prompt()?.build();
                     let register_request = whep_output.serialize_register(&inputs);
                     (Box::new(whep_output), register_request)
+                }
+                OutputProtocol::Hls => {
+                    let hls_output = HlsOutputBuilder::new().prompt()?.build();
+                    let register_request = hls_output.serialize_register(&inputs);
+                    (Box::new(hls_output), register_request)
                 }
             };
 
@@ -373,6 +379,10 @@ impl SmelterState {
                         OutputProtocol::Rtmp => {
                             let rtmp_output: RtmpOutput = serde_json::from_value(output.clone())?;
                             Box::new(rtmp_output)
+                        }
+                        OutputProtocol::Hls => {
+                            let hls_output: HlsOutput = serde_json::from_value(output.clone())?;
+                            Box::new(hls_output)
                         }
                     };
                     output.on_before_registration()?;
