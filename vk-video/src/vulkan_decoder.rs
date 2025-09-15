@@ -7,10 +7,11 @@ use session_resources::VideoSessionResources;
 use tracing::error;
 
 use crate::{
+    device::DecodingDevice,
     parser::{DecodeInformation, DecoderInstruction, ReferenceId},
     RawFrameData,
 };
-use crate::{wrappers::*, VulkanCommonError, VulkanDevice};
+use crate::{wrappers::*, VulkanCommonError};
 
 mod frame_sorter;
 mod session_resources;
@@ -18,7 +19,7 @@ mod session_resources;
 pub(crate) use frame_sorter::FrameSorter;
 
 pub struct VulkanDecoder<'a> {
-    vulkan_device: Arc<VulkanDevice>,
+    decoding_device: Arc<DecodingDevice>,
     video_session_resources: Option<VideoSessionResources<'a>>,
     command_buffers: CommandBuffers,
     _command_pools: CommandPools,
@@ -61,6 +62,9 @@ pub enum VulkanDecoderError {
     #[error("Vulkan error: {0}")]
     VkError(#[from] vk::Result),
 
+    #[error("The device does not support vulkan h264 decoding")]
+    VulkanDecoderUnsupported,
+
     #[error("A NALU requiring a session received before a session was created (probably before receiving first SPS)")]
     NoSession,
 
@@ -81,15 +85,15 @@ pub enum VulkanDecoderError {
 }
 
 impl VulkanDecoder<'_> {
-    pub fn new(vulkan_ctx: Arc<VulkanDevice>) -> Result<Self, VulkanDecoderError> {
+    pub fn new(decoding_device: Arc<DecodingDevice>) -> Result<Self, VulkanDecoderError> {
         let decode_pool = Arc::new(CommandPool::new(
-            vulkan_ctx.clone(),
-            vulkan_ctx.queues.h264_decode.idx,
+            decoding_device.vulkan_device.clone(),
+            decoding_device.h264_decode_queue.idx,
         )?);
 
         let transfer_pool = Arc::new(CommandPool::new(
-            vulkan_ctx.clone(),
-            vulkan_ctx.queues.transfer.idx,
+            decoding_device.vulkan_device.clone(),
+            decoding_device.queues.transfer.idx,
         )?);
 
         let decode_buffer = CommandBuffer::new_primary(decode_pool.clone())?;
@@ -104,13 +108,16 @@ impl VulkanDecoder<'_> {
         };
 
         let sync_structures = SyncStructures {
-            sem_decode_done: Semaphore::new(vulkan_ctx.device.clone())?,
-            fence_transfer_done: Fence::new(vulkan_ctx.device.clone(), false)?,
-            fence_memory_barrier_completed: Fence::new(vulkan_ctx.device.clone(), false)?,
+            sem_decode_done: Semaphore::new(decoding_device.vulkan_device.device.clone())?,
+            fence_transfer_done: Fence::new(decoding_device.vulkan_device.device.clone(), false)?,
+            fence_memory_barrier_completed: Fence::new(
+                decoding_device.vulkan_device.device.clone(),
+                false,
+            )?,
         };
 
         Ok(Self {
-            vulkan_device: vulkan_ctx,
+            decoding_device,
             video_session_resources: None,
             _command_pools: command_pools,
             command_buffers: CommandBuffers {
@@ -225,7 +232,7 @@ impl VulkanDecoder<'_> {
             Some(session) => session.process_sps(sps.clone())?,
             None => {
                 self.video_session_resources = Some(VideoSessionResources::new_from_sps(
-                    &self.vulkan_device,
+                    &self.decoding_device,
                     &self.command_buffers.decode_buffer,
                     sps.clone(),
                     &self.sync_structures.fence_memory_barrier_completed,
@@ -283,7 +290,7 @@ impl VulkanDecoder<'_> {
 
         if is_idr {
             video_session_resources.ensure_session(
-                &self.vulkan_device,
+                &self.decoding_device,
                 &self.command_buffers.decode_buffer,
                 &self.sync_structures.fence_memory_barrier_completed,
             )?;
@@ -292,7 +299,7 @@ impl VulkanDecoder<'_> {
         // upload data to a buffer
         let size = Self::pad_size_to_alignment(
             decode_information.rbsp_bytes.len() as u64,
-            self.vulkan_device
+            self.decoding_device
                 .decode_capabilities
                 .video_capabilities
                 .min_bitstream_buffer_offset_alignment,
@@ -326,10 +333,13 @@ impl VulkanDecoder<'_> {
             );
 
         unsafe {
-            self.vulkan_device.device.cmd_pipeline_barrier2(
-                *self.command_buffers.decode_buffer,
-                &vk::DependencyInfo::default().memory_barriers(&[memory_barrier]),
-            )
+            self.decoding_device
+                .vulkan_device
+                .device
+                .cmd_pipeline_barrier2(
+                    *self.command_buffers.decode_buffer,
+                    &vk::DependencyInfo::default().memory_barriers(&[memory_barrier]),
+                )
         };
 
         if let Some(pool) = video_session_resources.decode_query_pool.as_ref() {
@@ -346,7 +356,8 @@ impl VulkanDecoder<'_> {
             .reference_slots(&reference_slots);
 
         unsafe {
-            self.vulkan_device
+            self.decoding_device
+                .vulkan_device
                 .device
                 .video_queue_ext
                 .cmd_begin_video_coding_khr(*self.command_buffers.decode_buffer, &begin_info)
@@ -358,7 +369,8 @@ impl VulkanDecoder<'_> {
                 .flags(vk::VideoCodingControlFlagsKHR::RESET);
 
             unsafe {
-                self.vulkan_device
+                self.decoding_device
+                    .vulkan_device
                     .device
                     .video_queue_ext
                     .cmd_control_video_coding_khr(
@@ -470,7 +482,8 @@ impl VulkanDecoder<'_> {
         }
 
         unsafe {
-            self.vulkan_device
+            self.decoding_device
+                .vulkan_device
                 .device
                 .video_decode_queue_ext
                 .cmd_decode_video_khr(*self.command_buffers.decode_buffer, &decode_info)
@@ -481,7 +494,8 @@ impl VulkanDecoder<'_> {
         }
 
         unsafe {
-            self.vulkan_device
+            self.decoding_device
+                .vulkan_device
                 .device
                 .video_queue_ext
                 .cmd_end_video_coding_khr(
@@ -492,7 +506,7 @@ impl VulkanDecoder<'_> {
 
         self.command_buffers.decode_buffer.end()?;
 
-        self.vulkan_device.queues.h264_decode.submit(
+        self.decoding_device.h264_decode_queue.submit(
             &self.command_buffers.decode_buffer,
             &[],
             &[(
@@ -536,8 +550,8 @@ impl VulkanDecoder<'_> {
         };
 
         let queue_indices = [
-            self.vulkan_device.queues.transfer.idx as u32,
-            self.vulkan_device.queues.wgpu.idx as u32,
+            self.decoding_device.queues.transfer.idx as u32,
+            self.decoding_device.queues.wgpu.idx as u32,
         ];
 
         let create_info = vk::ImageCreateInfo::default()
@@ -558,7 +572,7 @@ impl VulkanDecoder<'_> {
             .queue_family_indices(&queue_indices)
             .initial_layout(vk::ImageLayout::UNDEFINED);
 
-        let mut image = Image::new(self.vulkan_device.allocator.clone(), &create_info)?;
+        let mut image = Image::new(self.decoding_device.allocator.clone(), &create_info)?;
 
         self.command_buffers
             .vulkan_to_wgpu_transfer_buffer
@@ -624,7 +638,7 @@ impl VulkanDecoder<'_> {
         ];
 
         unsafe {
-            self.vulkan_device.device.cmd_copy_image(
+            self.decoding_device.vulkan_device.device.cmd_copy_image(
                 *self.command_buffers.vulkan_to_wgpu_transfer_buffer,
                 decode_output.image.lock().unwrap().image,
                 vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -656,7 +670,7 @@ impl VulkanDecoder<'_> {
 
         self.command_buffers.vulkan_to_wgpu_transfer_buffer.end()?;
 
-        self.vulkan_device.queues.transfer.submit(
+        self.decoding_device.queues.transfer.submit(
             &self.command_buffers.vulkan_to_wgpu_transfer_buffer,
             &[(
                 decode_output.wait_semaphore,
@@ -714,7 +728,7 @@ impl VulkanDecoder<'_> {
         };
 
         let wgpu_texture = unsafe {
-            self.vulkan_device
+            self.decoding_device
                 .wgpu_device
                 .create_texture_from_hal::<wgpu::hal::vulkan::Api>(
                     hal_texture,
@@ -850,7 +864,7 @@ impl VulkanDecoder<'_> {
         let y_plane_size = dimensions.width as u64 * dimensions.height as u64;
 
         let dst_buffer = Buffer::new_transfer(
-            self.vulkan_device.allocator.clone(),
+            self.decoding_device.allocator.clone(),
             y_plane_size * 3 / 2,
             TransferDirection::GpuToMem,
         )?;
@@ -891,13 +905,16 @@ impl VulkanDecoder<'_> {
         ];
 
         unsafe {
-            self.vulkan_device.device.cmd_copy_image_to_buffer(
-                *self.command_buffers.gpu_to_mem_transfer_buffer,
-                **image,
-                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                *dst_buffer,
-                &copy_info,
-            )
+            self.decoding_device
+                .vulkan_device
+                .device
+                .cmd_copy_image_to_buffer(
+                    *self.command_buffers.gpu_to_mem_transfer_buffer,
+                    **image,
+                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                    *dst_buffer,
+                    &copy_info,
+                )
         };
 
         image.transition_layout_single_layer(
@@ -910,7 +927,7 @@ impl VulkanDecoder<'_> {
 
         self.command_buffers.gpu_to_mem_transfer_buffer.end()?;
 
-        self.vulkan_device.queues.transfer.submit(
+        self.decoding_device.queues.transfer.submit(
             &self.command_buffers.gpu_to_mem_transfer_buffer,
             wait_semaphores,
             signal_semaphores,

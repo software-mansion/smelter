@@ -17,11 +17,11 @@
 //! ) {
 //!     let instance = vk_video::VulkanInstance::new().unwrap();
 //!     let surface = instance.wgpu_instance().create_surface(window).unwrap();
-//!     let device = instance
+//!     let adapter = instance.create_adapter(Some(&surface)).unwrap();
+//!     let device = adapter
 //!         .create_device(
 //!             wgpu::Features::empty(),
 //!             wgpu::Limits::default(),
-//!             Some(&surface),
 //!         )
 //!         .unwrap();
 //!
@@ -74,6 +74,7 @@
 //!
 
 #![cfg(not(target_os = "macos"))]
+mod adapter;
 mod device;
 mod instance;
 mod parser;
@@ -85,6 +86,7 @@ use ash::vk;
 use parser::Parser;
 use vulkan_decoder::{FrameSorter, VulkanDecoder};
 
+pub use adapter::{AdapterInfo, VulkanAdapter};
 pub use device::caps::{EncodeCapabilities, EncodeH264Capabilities, EncodeH264ProfileCapabilities};
 pub use device::{EncoderParameters, Rational, VideoParameters, VulkanDevice};
 pub use instance::VulkanInstance;

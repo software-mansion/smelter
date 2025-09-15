@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use ash::vk;
 
-use crate::{VulkanCommonError, VulkanDevice};
+use crate::{device::queues::Queue, VulkanCommonError, VulkanDevice};
 
 use super::{CommandBuffer, Device, Image, ImageView, MemoryAllocation, VideoQueueExt};
 
@@ -115,8 +115,10 @@ pub(crate) struct VideoSession {
 }
 
 impl VideoSession {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         vulkan_ctx: &VulkanDevice,
+        queue: &Queue,
         profile_info: &vk::VideoProfileInfoKHR,
         max_coded_extent: vk::Extent2D,
         max_dpb_slots: u32,
@@ -129,7 +131,7 @@ impl VideoSession {
         let format = vk::Format::G8_B8R8_2PLANE_420_UNORM;
 
         let session_create_info = vk::VideoSessionCreateInfoKHR::default()
-            .queue_family_index(vulkan_ctx.queues.h264_decode.idx as u32)
+            .queue_family_index(queue.idx as u32)
             .video_profile(profile_info)
             .picture_format(format)
             .flags(flags)

@@ -5,8 +5,9 @@ use ash::vk;
 use crate::wrappers::*;
 use crate::VulkanCommonError;
 
+#[derive(Clone)]
 pub(crate) struct Queue {
-    pub(crate) queue: Mutex<vk::Queue>,
+    pub(crate) queue: Arc<Mutex<vk::Queue>>,
     pub(crate) idx: usize,
     pub(crate) _video_properties: vk::QueueFamilyVideoPropertiesKHR<'static>,
     pub(crate) query_result_status_properties:
@@ -66,8 +67,8 @@ impl Queue {
 
 pub(crate) struct Queues {
     pub(crate) transfer: Queue,
-    pub(crate) h264_decode: Queue,
-    pub(crate) h264_encode: Queue,
+    pub(crate) h264_decode: Option<Queue>,
+    pub(crate) h264_encode: Option<Queue>,
     pub(crate) wgpu: Queue,
 }
 
@@ -79,20 +80,21 @@ pub(crate) struct QueueIndex<'a> {
 
 pub(crate) struct QueueIndices<'a> {
     pub(crate) transfer: QueueIndex<'a>,
-    pub(crate) h264_decode: QueueIndex<'a>,
-    pub(crate) h264_encode: QueueIndex<'a>,
+    pub(crate) h264_decode: Option<QueueIndex<'a>>,
+    pub(crate) h264_encode: Option<QueueIndex<'a>>,
     pub(crate) graphics_transfer_compute: QueueIndex<'a>,
 }
 
 impl QueueIndices<'_> {
     pub(crate) fn queue_create_infos(&self) -> Vec<vk::DeviceQueueCreateInfo<'_>> {
         [
-            self.h264_decode.idx,
-            self.h264_encode.idx,
-            self.transfer.idx,
-            self.graphics_transfer_compute.idx,
+            self.h264_decode.as_ref().map(|q| q.idx),
+            self.h264_encode.as_ref().map(|q| q.idx),
+            Some(self.transfer.idx),
+            Some(self.graphics_transfer_compute.idx),
         ]
         .into_iter()
+        .flatten()
         .collect::<std::collections::HashSet<usize>>()
         .into_iter()
         .map(|i| {
