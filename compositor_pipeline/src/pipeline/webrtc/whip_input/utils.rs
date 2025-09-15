@@ -32,6 +32,7 @@ pub(super) fn listen_for_rtcp(
                                 );
                                 if let Err(err) = result {
                                     warn!(%err, "Error while reading SenderReport.");
+                                    return;
                                 }
                             }
                         }
@@ -40,6 +41,7 @@ pub(super) fn listen_for_rtcp(
                 Err(webrtc::Error::ErrClosedPipe) => return,
                 Err(err) => {
                     warn!(%err, "Error while reading RTCP packet.");
+                    return;
                 }
             }
         }
