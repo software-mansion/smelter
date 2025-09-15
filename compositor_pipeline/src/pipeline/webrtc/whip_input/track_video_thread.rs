@@ -71,7 +71,7 @@ pub async fn process_video_track(
         let timestamp = timestamp_sync.pts_from_timestamp(packet.header.timestamp);
 
         let packet = RtpPacket { packet, timestamp };
-        trace!(?packet, "Sending RTP packet");
+        trace!(?packet, "WHIP input produced RTP packet");
         if let Err(e) = handle
             .rtp_packet_sender
             .send(PipelineEvent::Data(packet))

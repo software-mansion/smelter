@@ -107,6 +107,7 @@ impl VideoEncoder for FfmpegH264Encoder {
     }
 
     fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedOutputChunk> {
+        trace!(?frame, force_keyframe, "H264 encoder received a frame.");
         let mut av_frame = match create_av_frame(frame, TIME_BASE) {
             Ok(av_frame) => av_frame,
             Err(e) => {

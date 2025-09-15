@@ -21,10 +21,13 @@ fn client_code() -> Result<()> {
     examples::post(
         "input/input_1/register",
         &json!({
-            "type": "mp4",
-            "url": BUNNY_URL,
-            "required": true,
-            "offset_ms": 0,
+            "type": "whip_server",
+            "bearer_token": "example",
+            "video": {
+                "decoder_preferences": [
+                    "ffmpeg_h264"
+                ]
+            }
         }),
     )?;
 
@@ -39,7 +42,10 @@ fn client_code() -> Result<()> {
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
+                    "preset": "ultrafast",
+                    "ffmpeg_options": {
+                        "tune": "zerolatency"
+                    }
                 },
                 "initial": {
                     "root": {
