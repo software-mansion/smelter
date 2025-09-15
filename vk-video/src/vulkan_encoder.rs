@@ -10,13 +10,13 @@ use wgpu::hal::Device as _;
 use yuv_converter::Converter;
 
 use crate::{
-    device::Rational,
+    device::{EncodingDevice, Rational},
     wrappers::{
         Buffer, CommandBuffer, CommandPool, DecodedPicturesBuffer, Device, Fence, Image, ImageView,
         ProfileInfo, QueryPool, Semaphore, VideoEncodeQueueExt, VideoQueueExt, VideoSession,
         VideoSessionParameters,
     },
-    EncodedOutputChunk, Frame, H264Profile, RawFrameData, VulkanCommonError, VulkanDevice,
+    EncodedOutputChunk, Frame, H264Profile, RawFrameData, VulkanCommonError,
 };
 
 mod encode_parameter_sets;
@@ -37,6 +37,9 @@ pub enum VulkanEncoderError {
 
     #[error(transparent)]
     VulkanCommonError(#[from] VulkanCommonError),
+
+    #[error("The device does not support vulkan h264 encoding")]
+    VulkanEncoderUnsupported,
 
     #[error("The byte length of the provided frame ({bytes}) is not the same as the picture size calculated from the dimensions ({size_from_resolution})")]
     InconsistentPictureDimensions {
@@ -72,12 +75,12 @@ struct VideoSessionResources<'a> {
 
 impl VideoSessionResources<'_> {
     fn new(
-        device: &VulkanDevice,
+        encoding_device: &EncodingDevice,
         command_buffer: &CommandBuffer,
         parameters: FullEncoderParameters,
         profile_info: &vk::VideoProfileInfoKHR,
     ) -> Result<Self, VulkanEncoderError> {
-        let encode_capabilities = device
+        let encode_capabilities = encoding_device
             .native_encode_capabilities
             .profile(parameters.profile)
             .ok_or(VulkanEncoderError::ProfileUnsupported(parameters.profile))?;
@@ -91,7 +94,8 @@ impl VideoSessionResources<'_> {
         let max_dpb_slots = max_references + 1; // +1 for current picture
 
         let video_session = VideoSession::new(
-            device,
+            &encoding_device.vulkan_device,
+            &encoding_device.h264_encode_queue,
             profile_info,
             extent,
             max_dpb_slots,
@@ -100,7 +104,7 @@ impl VideoSessionResources<'_> {
             &encode_capabilities.video_capabilities.std_header_version,
         )?;
 
-        let use_separate_images = device
+        let use_separate_images = encoding_device
             .native_encode_capabilities
             .profile(parameters.profile)
             .unwrap()
@@ -109,7 +113,7 @@ impl VideoSessionResources<'_> {
             .contains(vk::VideoCapabilityFlagsKHR::SEPARATE_REFERENCE_IMAGES);
 
         let dpb = DecodedPicturesBuffer::new(
-            device,
+            encoding_device,
             command_buffer,
             use_separate_images,
             profile_info,
@@ -130,7 +134,7 @@ impl VideoSessionResources<'_> {
         let pps = pps();
 
         let session_parameters = VideoSessionParameters::new(
-            device.device.clone(),
+            encoding_device.vulkan_device.device.clone(),
             video_session.session,
             &[sps],
             &[pps],
@@ -181,11 +185,11 @@ impl std::ops::Deref for EncodingQueryPool {
 
 impl EncodingQueryPool {
     pub(crate) fn new(
-        device: &VulkanDevice,
+        encoding_device: &EncodingDevice,
         profile: H264Profile,
         profile_info: vk::VideoProfileInfoKHR,
     ) -> Result<Self, VulkanEncoderError> {
-        let encode_capabilities = device
+        let encode_capabilities = encoding_device
             .native_encode_capabilities
             .profile(profile)
             .ok_or(VulkanEncoderError::ProfileUnsupported(profile))?;
@@ -201,7 +205,7 @@ impl EncodingQueryPool {
         }
 
         let pool = QueryPool::new(
-            device.device.clone(),
+            encoding_device.vulkan_device.device.clone(),
             vk::QueryType::VIDEO_ENCODE_FEEDBACK_KHR,
             1,
             Some(profile_info),
@@ -255,10 +259,18 @@ struct CommandPools {
 }
 
 impl CommandPools {
-    fn new(device: Arc<VulkanDevice>) -> Result<Self, VulkanEncoderError> {
+    fn new(device: Arc<EncodingDevice>) -> Result<Self, VulkanEncoderError> {
         Ok(CommandPools {
-            encode_pool: CommandPool::new(device.clone(), device.queues.h264_encode.idx)?.into(),
-            transfer_pool: CommandPool::new(device.clone(), device.queues.transfer.idx)?.into(),
+            encode_pool: CommandPool::new(
+                device.vulkan_device.clone(),
+                device.h264_encode_queue.idx,
+            )?
+            .into(),
+            transfer_pool: CommandPool::new(
+                device.vulkan_device.clone(),
+                device.queues.transfer.idx,
+            )?
+            .into(),
         })
     }
 
@@ -285,7 +297,7 @@ impl SyncStructures {
 }
 
 pub struct VulkanEncoder<'a> {
-    device: Arc<VulkanDevice>,
+    encoding_device: Arc<EncodingDevice>,
     _command_pools: CommandPools,
     command_buffers: CommandBuffers,
     sync_structures: SyncStructures,
@@ -320,7 +332,7 @@ impl VulkanEncoder<'_> {
     const OUTPUT_BUFFER_LEN: u64 = 4 * MB;
 
     pub(crate) fn new_with_converter(
-        device: Arc<VulkanDevice>,
+        device: Arc<EncodingDevice>,
         parameters: FullEncoderParameters,
     ) -> Result<Self, VulkanEncoderError> {
         let mut enc = Self::new(device.clone(), parameters)?;
@@ -339,22 +351,25 @@ impl VulkanEncoder<'_> {
     }
 
     pub(crate) fn new(
-        device: Arc<VulkanDevice>,
+        encoding_device: Arc<EncodingDevice>,
         parameters: FullEncoderParameters,
     ) -> Result<Self, VulkanEncoderError> {
         let profile_info = H264EncodeProfileInfo::new_encode(parameters.profile);
-        let command_pools = CommandPools::new(device.clone())?;
+        let command_pools = CommandPools::new(encoding_device.clone())?;
 
         let command_buffers = command_pools.buffers()?;
 
-        let sync_structures = SyncStructures::new(device.device.clone())?;
+        let sync_structures = SyncStructures::new(encoding_device.vulkan_device.device.clone())?;
 
-        let query_pool =
-            EncodingQueryPool::new(&device, parameters.profile, profile_info.profile_info)?;
+        let query_pool = EncodingQueryPool::new(
+            &encoding_device,
+            parameters.profile,
+            profile_info.profile_info,
+        )?;
 
         // TODO: this buffer should grow when necessary
         let output_buffer = Buffer::new_encode(
-            device.allocator.clone(),
+            encoding_device.allocator.clone(),
             Self::OUTPUT_BUFFER_LEN,
             &profile_info,
         )?;
@@ -362,7 +377,7 @@ impl VulkanEncoder<'_> {
         command_buffers.encode_buffer.begin()?;
 
         let session_resources = VideoSessionResources::new(
-            &device,
+            &encoding_device,
             &command_buffers.encode_buffer,
             parameters,
             &profile_info.profile_info,
@@ -370,7 +385,7 @@ impl VulkanEncoder<'_> {
 
         command_buffers.encode_buffer.end()?;
 
-        device.queues.h264_encode.submit(
+        encoding_device.h264_encode_queue.submit(
             &command_buffers.encode_buffer,
             &[],
             &[],
@@ -387,7 +402,7 @@ impl VulkanEncoder<'_> {
             active_reference_slots: VecDeque::with_capacity(session_resources.dpb.len as usize),
             profile: parameters.profile,
             profile_info,
-            device,
+            encoding_device,
             _command_pools: command_pools,
             command_buffers,
             sync_structures,
@@ -446,7 +461,8 @@ impl VulkanEncoder<'_> {
         }
 
         unsafe {
-            self.device
+            self.encoding_device
+                .vulkan_device
                 .device
                 .video_queue_ext
                 .cmd_begin_video_coding_khr(*self.command_buffers.encode_buffer, &begin_info);
@@ -484,7 +500,8 @@ impl VulkanEncoder<'_> {
         }
 
         unsafe {
-            self.device
+            self.encoding_device
+                .vulkan_device
                 .device
                 .video_queue_ext
                 .cmd_control_video_coding_khr(*self.command_buffers.encode_buffer, &control_info);
@@ -516,8 +533,8 @@ impl VulkanEncoder<'_> {
             .profiles(std::slice::from_ref(&self.profile_info.profile_info));
 
         let queue_family_indices = [
-            self.device.queues.transfer.idx as u32,
-            self.device.queues.h264_encode.idx as u32,
+            self.encoding_device.queues.transfer.idx as u32,
+            self.encoding_device.h264_encode_queue.idx as u32,
         ];
 
         let image_create_info = vk::ImageCreateInfo::default()
@@ -535,7 +552,7 @@ impl VulkanEncoder<'_> {
             .queue_family_indices(&queue_family_indices)
             .push_next(&mut profile_list_info);
 
-        let mut image = Image::new(self.device.allocator.clone(), &image_create_info)?;
+        let mut image = Image::new(self.encoding_device.allocator.clone(), &image_create_info)?;
 
         self.command_buffers.transfer_buffer.begin()?;
 
@@ -547,55 +564,60 @@ impl VulkanEncoder<'_> {
             0,
         )?;
 
-        let buffer =
-            Buffer::new_transfer_with_data(self.device.allocator.clone(), &frame.data.frame)?;
+        let buffer = Buffer::new_transfer_with_data(
+            self.encoding_device.allocator.clone(),
+            &frame.data.frame,
+        )?;
 
         unsafe {
-            self.device.device.cmd_copy_buffer_to_image(
-                *self.command_buffers.transfer_buffer,
-                *buffer,
-                *image,
-                image.layout[0],
-                &[
-                    vk::BufferImageCopy::default()
-                        .buffer_offset(0)
-                        .buffer_row_length(0)
-                        .buffer_image_height(0)
-                        .image_subresource(vk::ImageSubresourceLayers {
-                            aspect_mask: vk::ImageAspectFlags::PLANE_0,
-                            layer_count: 1,
-                            base_array_layer: 0,
-                            mip_level: 0,
-                        })
-                        .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
-                        .image_extent(vk::Extent3D {
-                            width: frame.data.width,
-                            height: frame.data.height,
-                            depth: 1,
-                        }),
-                    vk::BufferImageCopy::default()
-                        .buffer_offset(frame.data.width as u64 * frame.data.height as u64)
-                        .buffer_row_length(0)
-                        .buffer_image_height(0)
-                        .image_subresource(vk::ImageSubresourceLayers {
-                            aspect_mask: vk::ImageAspectFlags::PLANE_1,
-                            layer_count: 1,
-                            base_array_layer: 0,
-                            mip_level: 0,
-                        })
-                        .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
-                        .image_extent(vk::Extent3D {
-                            width: frame.data.width / 2,
-                            height: frame.data.height / 2,
-                            depth: 1,
-                        }),
-                ],
-            );
+            self.encoding_device
+                .vulkan_device
+                .device
+                .cmd_copy_buffer_to_image(
+                    *self.command_buffers.transfer_buffer,
+                    *buffer,
+                    *image,
+                    image.layout[0],
+                    &[
+                        vk::BufferImageCopy::default()
+                            .buffer_offset(0)
+                            .buffer_row_length(0)
+                            .buffer_image_height(0)
+                            .image_subresource(vk::ImageSubresourceLayers {
+                                aspect_mask: vk::ImageAspectFlags::PLANE_0,
+                                layer_count: 1,
+                                base_array_layer: 0,
+                                mip_level: 0,
+                            })
+                            .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
+                            .image_extent(vk::Extent3D {
+                                width: frame.data.width,
+                                height: frame.data.height,
+                                depth: 1,
+                            }),
+                        vk::BufferImageCopy::default()
+                            .buffer_offset(frame.data.width as u64 * frame.data.height as u64)
+                            .buffer_row_length(0)
+                            .buffer_image_height(0)
+                            .image_subresource(vk::ImageSubresourceLayers {
+                                aspect_mask: vk::ImageAspectFlags::PLANE_1,
+                                layer_count: 1,
+                                base_array_layer: 0,
+                                mip_level: 0,
+                            })
+                            .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
+                            .image_extent(vk::Extent3D {
+                                width: frame.data.width / 2,
+                                height: frame.data.height / 2,
+                                depth: 1,
+                            }),
+                    ],
+                );
         }
 
         self.command_buffers.transfer_buffer.end()?;
 
-        self.device.queues.transfer.submit(
+        self.encoding_device.queues.transfer.submit(
             &self.command_buffers.transfer_buffer,
             &[],
             &[(
@@ -662,7 +684,11 @@ impl VulkanEncoder<'_> {
             })
             .push_next(&mut view_usage_create_info);
 
-        let view = ImageView::new(self.device.device.clone(), image.clone(), &view_create_info)?;
+        let view = ImageView::new(
+            self.encoding_device.vulkan_device.device.clone(),
+            image.clone(),
+            &view_create_info,
+        )?;
 
         self.query_pool.reset(*self.command_buffers.encode_buffer);
 
@@ -739,7 +765,11 @@ impl VulkanEncoder<'_> {
             [vk::VideoEncodeH264NaluSliceInfoKHR::default().std_slice_header(&slice_header)];
 
         if let RateControl::Disabled = self.rate_control {
-            if let Some(caps) = self.device.native_encode_capabilities.profile(self.profile) {
+            if let Some(caps) = self
+                .encoding_device
+                .native_encode_capabilities
+                .profile(self.profile)
+            {
                 let quality_properties =
                     &caps.quality_level_properties[self.session_resources.quality_level as usize];
 
@@ -894,7 +924,8 @@ impl VulkanEncoder<'_> {
             .begin_query(*self.command_buffers.encode_buffer);
 
         unsafe {
-            self.device
+            self.encoding_device
+                .vulkan_device
                 .device
                 .video_encode_queue_ext
                 .cmd_encode_video_khr(*self.command_buffers.encode_buffer, &encode_info);
@@ -904,10 +935,14 @@ impl VulkanEncoder<'_> {
             .end_query(*self.command_buffers.encode_buffer);
 
         unsafe {
-            self.device.device.video_queue_ext.cmd_end_video_coding_khr(
-                *self.command_buffers.encode_buffer,
-                &vk::VideoEndCodingInfoKHR::default(),
-            );
+            self.encoding_device
+                .vulkan_device
+                .device
+                .video_queue_ext
+                .cmd_end_video_coding_khr(
+                    *self.command_buffers.encode_buffer,
+                    &vk::VideoEndCodingInfoKHR::default(),
+                );
         }
 
         image.lock().unwrap().transition_layout_single_layer(
@@ -933,8 +968,8 @@ impl VulkanEncoder<'_> {
             .command_buffer_infos(std::slice::from_ref(&buffer_info));
 
         unsafe {
-            self.device.device.device.queue_submit2(
-                *self.device.queues.h264_encode.queue.lock().unwrap(),
+            self.encoding_device.vulkan_device.device.queue_submit2(
+                *self.encoding_device.h264_encode_queue.queue.lock().unwrap(),
                 &[submit_info],
                 *self.sync_structures.fence_done,
             )?
@@ -960,7 +995,8 @@ impl VulkanEncoder<'_> {
                 .push_next(&mut h264_get_info);
 
             unsafe {
-                self.device
+                self.encoding_device
+                    .vulkan_device
                     .device
                     .video_encode_queue_ext
                     .get_encoded_video_session_parameters_khr(&get_info, None)?
@@ -1026,7 +1062,7 @@ impl VulkanEncoder<'_> {
         let result = self.encode(convert_state.image, force_idr, sem)?;
 
         unsafe {
-            self.device
+            self.encoding_device
                 .wgpu_device()
                 .as_hal::<wgpu::hal::vulkan::Api, _, _>(|d| {
                     d.unwrap().destroy_fence(convert_state.fence)

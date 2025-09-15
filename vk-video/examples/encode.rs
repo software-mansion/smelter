@@ -25,32 +25,36 @@ fn main() {
         std::fs::File::open(&args[1]).unwrap_or_else(|e| panic!("open {}: {}", args[1], e));
 
     let vulkan_instance = VulkanInstance::new().unwrap();
-    let vulkan_device = vulkan_instance
+    let vulkan_adapter = vulkan_instance.create_adapter(None).unwrap();
+    let vulkan_device = vulkan_adapter
         .create_device(
             wgpu::Features::empty(),
             wgpu::Limits {
                 max_push_constant_size: 128,
                 ..Default::default()
             },
-            None,
         )
         .unwrap();
 
     let mut encoder = vulkan_device
-        .create_bytes_encoder(vulkan_device.encoder_parameters_high_quality(
-            VideoParameters {
-                width,
-                height,
-                target_framerate: Rational {
-                    numerator: 24,
-                    denominator: NonZeroU32::new(1).unwrap(),
-                },
-            },
-            RateControl::Vbr {
-                average_bitrate: 1_000_000,
-                max_bitrate: 4_000_000,
-            },
-        ))
+        .create_bytes_encoder(
+            vulkan_device
+                .encoder_parameters_high_quality(
+                    VideoParameters {
+                        width,
+                        height,
+                        target_framerate: Rational {
+                            numerator: 24,
+                            denominator: NonZeroU32::new(1).unwrap(),
+                        },
+                    },
+                    RateControl::Vbr {
+                        average_bitrate: 1_000_000,
+                        max_bitrate: 4_000_000,
+                    },
+                )
+                .unwrap(),
+        )
         .expect("create encoder");
 
     let mut output_file = std::fs::File::create("output.h264").unwrap();

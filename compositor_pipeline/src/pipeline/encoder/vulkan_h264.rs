@@ -60,7 +60,7 @@ impl VideoEncoder for VulkanH264Encoder {
             },
         };
 
-        let encoder_params = device.encoder_parameters_high_quality(video_params, rate_control);
+        let encoder_params = device.encoder_parameters_high_quality(video_params, rate_control)?;
         let encoder = device.create_wgpu_textures_encoder(encoder_params)?;
 
         Ok((
