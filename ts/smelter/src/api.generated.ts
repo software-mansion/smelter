@@ -63,7 +63,7 @@ export type RegisterInput =
        * Assigns which decoder should be used for media encoded with a specific codec.
        */
       decoder_map?: {
-        [k: string]: VideoDecoder;
+        [k: string]: Mp4VideoDecoderOptions;
       } | null;
     }
   | {
@@ -72,37 +72,6 @@ export type RegisterInput =
        * Parameters of a video source included in the RTP stream.
        */
       video?: InputWhipVideoOptions | null;
-      /**
-       * Parameters of an audio source included in the RTP stream.
-       */
-      audio?: InputWhipAudioOptions | null;
-      /**
-       * Token used for authentication in WHIP protocol. If not provided, the random value will be generated and returned in the response.
-       */
-      bearer_token?: string | null;
-      /**
-       * Internal use only. Overrides whip endpoint id which is used when referencing the input via whip server. If not provided, it defaults to input id.
-       */
-      endpoint_override?: string | null;
-      /**
-       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
-       */
-      required?: boolean | null;
-      /**
-       * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
-       */
-      offset_ms?: number | null;
-    }
-  | {
-      type: "whip";
-      /**
-       * Parameters of a video source included in the RTP stream.
-       */
-      video?: InputWhipVideoOptions | null;
-      /**
-       * Parameters of an audio source included in the RTP stream.
-       */
-      audio?: InputWhipAudioOptions | null;
       /**
        * Token used for authentication in WHIP protocol. If not provided, the random value will be generated and returned in the response.
        */
@@ -138,7 +107,7 @@ export type RegisterInput =
        * Assigns which decoder should be used for media encoded with a specific codec.
        */
       decoder_map?: {
-        [k: string]: VideoDecoder;
+        [k: string]: HlsVideoDecoderOptions;
       } | null;
     }
   | {
@@ -172,14 +141,10 @@ export type RegisterInput =
     };
 export type PortOrPortRange = string | number;
 export type TransportProtocol = "udp" | "tcp_server";
-export type VideoDecoder = "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264" | "vulkan_video";
+export type RtpVideoDecoderOptions = "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type InputRtpAudioOptions =
   | {
       decoder: "opus";
-      /**
-       * (**default=`false`**) Specifies whether the stream uses forward error correction. It's specific for Opus codec. For more information, check out [RFC](https://datatracker.ietf.org/doc/html/rfc6716#section-2.1.7).
-       */
-      forward_error_correction?: boolean | null;
     }
   | {
       decoder: "aac";
@@ -199,14 +164,9 @@ export type InputRtpAudioOptions =
       rtp_mode?: AacRtpMode | null;
     };
 export type AacRtpMode = "low_bitrate" | "high_bitrate";
-export type WhipVideoDecoder = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
-export type InputWhipAudioOptions = {
-  decoder: "opus";
-  /**
-   * (**default=`false`**) Specifies whether the stream uses forward error correction. It's specific for Opus codec. For more information, check out [RFC](https://datatracker.ietf.org/doc/html/rfc6716#section-2.1.7).
-   */
-  forward_error_correction?: boolean | null;
-};
+export type Mp4VideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
+export type WhipVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
+export type HlsVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type RegisterOutput =
   | {
       type: "rtp_stream";
@@ -260,22 +220,6 @@ export type RegisterOutput =
     }
   | {
       type: "whip_client";
-      /**
-       * WHIP server endpoint
-       */
-      endpoint_url: string;
-      bearer_token?: string | null;
-      /**
-       * Video track configuration.
-       */
-      video?: OutputWhipVideoOptions | null;
-      /**
-       * Audio track configuration.
-       */
-      audio?: OutputWhipAudioOptions | null;
-    }
-  | {
-      type: "whip";
       /**
        * WHIP server endpoint
        */
@@ -364,6 +308,13 @@ export type VideoEncoderOptions =
       ffmpeg_options?: {
         [k: string]: string;
       } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VulkanH264EncoderBitrate | null;
     };
 export type H264EncoderPreset =
   | "ultrafast"
@@ -828,10 +779,6 @@ export type AudioMixingStrategy = "sum_clip" | "sum_scale";
 export type RtpAudioEncoderOptions = {
   type: "opus";
   /**
-   * Specifies channels configuration.
-   */
-  channels?: AudioChannels | null;
-  /**
    * (**default="voip"**) Specifies preset for audio output encoder.
    */
   preset?: OpusEncoderPreset | null;
@@ -848,11 +795,10 @@ export type RtpAudioEncoderOptions = {
    */
   expected_packet_loss?: number | null;
 };
-export type AudioChannels = "mono" | "stereo";
 export type OpusEncoderPreset = "quality" | "voip" | "lowest_latency";
+export type AudioChannels = "mono" | "stereo";
 export type RtmpClientAudioEncoderOptions = {
   type: "aac";
-  channels?: AudioChannels | null;
   /**
    * (**default=`48000`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
    */
@@ -860,7 +806,6 @@ export type RtmpClientAudioEncoderOptions = {
 };
 export type Mp4AudioEncoderOptions = {
   type: "aac";
-  channels?: AudioChannels | null;
   /**
    * (**default=`44100`**) Sample rate. Allowed values: [8000, 16000, 24000, 44100, 48000].
    */
@@ -905,6 +850,13 @@ export type WhipVideoEncoderOptions =
       ffmpeg_options?: {
         [k: string]: string;
       } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VulkanH264EncoderBitrate | null;
     }
   | {
       type: "any";
@@ -991,11 +943,10 @@ export type WebEmbeddingMethod =
   | "native_embedding_under_content";
 
 export interface InputRtpVideoOptions {
-  decoder: VideoDecoder;
+  decoder: RtpVideoDecoderOptions;
 }
 export interface InputWhipVideoOptions {
-  decoder?: VideoDecoder | null;
-  decoder_preferences?: WhipVideoDecoder[] | null;
+  decoder_preferences?: WhipVideoDecoderOptions[] | null;
 }
 export interface OutputVideoOptions {
   /**
@@ -1045,6 +996,16 @@ export interface OutputEndCondition {
    * Terminate output stream if all the input streams finish. In particular, output stream will **be** terminated if no inputs were ever connected.
    */
   all_inputs?: boolean | null;
+}
+export interface VulkanH264EncoderBitrate {
+  /**
+   * Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average, but may temporarily increase it to the provided max bitrate.
+   */
+  average_bitrate: number;
+  /**
+   * Max bitrate measured in bits/second.
+   */
+  max_bitrate: number;
 }
 export interface VideoScene {
   root: Component;
@@ -1097,7 +1058,7 @@ export interface AudioScene {
 export interface AudioSceneInput {
   input_id: InputId;
   /**
-   * (**default=`1.0`**) float in `[0, 1]` range representing input volume
+   * (**default=`1.0`**) float in `[0, 2]` range representing input volume
    */
   volume?: number | null;
 }
@@ -1155,10 +1116,6 @@ export interface OutputWhipVideoOptions {
    */
   send_eos_when?: OutputEndCondition | null;
   /**
-   * Video encoder options.
-   */
-  encoder?: VideoEncoderOptions | null;
-  /**
    * Codec preferences list.
    */
   encoder_preferences?: WhipVideoEncoderOptions[] | null;
@@ -1176,10 +1133,6 @@ export interface OutputWhipAudioOptions {
    * Condition for termination of output stream based on the input streams states.
    */
   send_eos_when?: OutputEndCondition | null;
-  /**
-   * Audio encoder options.
-   */
-  encoder?: WhipAudioEncoderOptions | null;
   /**
    * Specifies channels configuration.
    */

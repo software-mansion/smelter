@@ -19,11 +19,16 @@ const WHIP_TOKEN_ENV: &str = "WHIP_INPUT_BEARER_TOKEN";
 pub struct WhipInput {
     name: String,
     bearer_token: String,
+    video: Option<WhipInputVideoOptions>,
 }
 
 impl InputHandler for WhipInput {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn has_video(&self) -> bool {
+        self.video.is_some()
     }
 
     fn on_after_registration(&mut self, player: InputPlayer) -> Result<()> {
@@ -128,6 +133,7 @@ impl WhipInputBuilder {
         let whip_input = WhipInput {
             name: self.name,
             bearer_token: self.bearer_token,
+            video: self.video,
         };
 
         (whip_input, register_request, self.player)

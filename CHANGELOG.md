@@ -3,6 +3,13 @@
 ## unreleased
 
 ### 💥 Breaking changes
+- Replace `vulkan_video` option with `vulkan_h264`. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
+- Remove `video_decoder` option in MP4 input. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
+- Remove `audio` field in WHIP input ([#997](https://github.com/software-mansion/smelter/pull/997) by [@wkazmierczak](https://github.com/wkazmierczak))
+- Remove `decoder` options in WHIP input and `encoder` in WHIP output. ([#1061](https://github.com/software-mansion/smelter/pull/1061), [#1084](https://github.com/software-mansion/smelter/pull/1084) by [@wkazmierczak](https://github.com/wkazmierczak))
+- Move `channels` field from `encoder` to `audio` options. ([#1067](https://github.com/software-mansion/smelter/pull/1067) by [@wkazmierczak](https://github.com/wkazmierczak))
+- Remove `forward_error_correction` option for OPUS in RTP and WHIP inputs. ([#1156](https://github.com/software-mansion/smelter/pull/1156) by [@JBRS307](https://github.com/JBRS307))
+- Rename `whip` input name to `whip_server` and `whip` output name with `whip_client`. ([#1245](https://github.com/software-mansion/smelter/pull/1245) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ### ✨ New features
 
@@ -16,14 +23,6 @@
 - Fix web renderer crashing when multiple Smelter instances are run. ([#1016](https://github.com/software-mansion/smelter/pull/1016) by [@noituri](https://github.com/noituri))
 - Fix web renderer's `chromium_embedding`. ([#1033](https://github.com/software-mansion/smelter/pull/1033) by [@noituri](https://github.com/noituri))
 - Fix memory leaks in web renderer. ([#1068](https://github.com/software-mansion/smelter/pull/1068) by [@noituri](https://github.com/noituri))
-
-### 🔧 Others
-
-- Deprecate `vulkan_video` option in favor of `vulkan_h264`. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
-- Deprecate `video_decoder` option in MP4 input. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
-- Deprecate `decoder` options in WHIP input and `encoder` in WHIP output. ([#1061](https://github.com/software-mansion/smelter/pull/1061), [#1084](https://github.com/software-mansion/smelter/pull/1084) by [@wkazmierczak](https://github.com/wkazmierczak))
-- Move `channels` field from `encoder` to `audio` options. ([#1067](https://github.com/software-mansion/smelter/pull/1067) by [@wkazmierczak](https://github.com/wkazmierczak))
-- Deprecate `forward_error_correction` option for OPUS in RTP and WHIP inputs. ([#1156](https://github.com/software-mansion/smelter/pull/1156) by [@JBRS307](https://github.com/JBRS307))
 
 ## [v0.4.2](https://github.com/software-mansion/live-compositor/releases/tag/v0.4.2)
 

@@ -35,13 +35,7 @@ pub enum AacRtpMode {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(tag = "decoder", rename_all = "snake_case", deny_unknown_fields)]
 pub enum InputRtpAudioOptions {
-    Opus {
-        /// (**default=`false`**) Specifies whether the stream uses forward error correction.
-        /// It's specific for Opus codec.
-        /// For more information, check out [RFC](https://datatracker.ietf.org/doc/html/rfc6716#section-2.1.7).
-        forward_error_correction: Option<bool>,
-    },
-
+    Opus,
     Aac {
         /// AudioSpecificConfig as described in MPEG-4 part 3, section 1.6.2.1
         /// The config should be encoded as described in [RFC 3640](https://datatracker.ietf.org/doc/html/rfc3640#section-4.1).
@@ -67,5 +61,28 @@ pub enum InputRtpAudioOptions {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct InputRtpVideoOptions {
-    pub decoder: VideoDecoder,
+    pub decoder: RtpVideoDecoderOptions,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum RtpVideoDecoderOptions {
+    /// Use the software h264 decoder based on ffmpeg.
+    FfmpegH264,
+
+    /// Use the software vp8 decoder based on ffmpeg.
+    FfmpegVp8,
+
+    /// Use the software vp9 decoder based on ffmpeg.
+    FfmpegVp9,
+
+    /// Use hardware decoder based on Vulkan Video.
+    ///
+    /// This should be faster and more scalable than teh ffmpeg decoder, if the hardware and OS
+    /// support it.
+    ///
+    /// This requires hardware that supports Vulkan Video. Another requirement is this program has
+    /// to be compiled with the `vk-video` feature enabled (enabled by default on platforms which
+    /// support Vulkan, i.e. non-Apple operating systems and not the web).
+    VulkanH264,
 }

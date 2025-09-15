@@ -16,11 +16,18 @@ use tracing::{error, info, warn};
 
 use serde::Serialize;
 
+use crate::assets::{
+    BUNNY_H264_PATH, BUNNY_H264_URL, BUNNY_VP8_PATH, BUNNY_VP8_URL, BUNNY_VP9_PATH, BUNNY_VP9_URL,
+    ELEPHANT_H264_PATH, ELEPHANT_H264_URL, ELEPHANT_VP8_PATH, ELEPHANT_VP8_URL, ELEPHANT_VP9_PATH,
+    ELEPHANT_VP9_URL, OCEAN_H264_PATH, OCEAN_H264_URL, OCEAN_VP8_PATH, OCEAN_VP8_URL,
+    OCEAN_VP9_PATH, OCEAN_VP9_URL,
+};
+
 pub fn post<T: Serialize + ?Sized>(route: &str, json: &T) -> Result<Response> {
     info!("[example] Sent post request to `{route}`.");
 
     let client = reqwest::blocking::Client::new();
-    let response = client
+    let response_result = client
         .post(format!(
             "http://127.0.0.1:{}/api/{}",
             read_config().api_port,
@@ -28,15 +35,19 @@ pub fn post<T: Serialize + ?Sized>(route: &str, json: &T) -> Result<Response> {
         ))
         .timeout(Duration::from_secs(100))
         .json(json)
-        .send()
-        // TODO: (@jbrs) Handle this if couldn't connect to the server as it is
-        // manually started now
-        .unwrap();
-    if response.status() >= StatusCode::BAD_REQUEST {
-        log_request_error(&json, response);
-        return Err(anyhow!("Request failed."));
+        .send();
+
+    match response_result {
+        Ok(response) if response.status() >= StatusCode::BAD_REQUEST => {
+            log_request_error(&json, response);
+            Err(anyhow!("Request failed."))
+        }
+        Ok(response) => Ok(response),
+        Err(_) => {
+            error!("Couldn't send request. Make sure the example server is running.");
+            Err(anyhow!("Request failed."))
+        }
     }
-    Ok(response)
 }
 
 pub fn run_example(client_code: fn() -> Result<()>) {
@@ -65,8 +76,6 @@ pub fn run_example(client_code: fn() -> Result<()>) {
 pub fn run_example_server() {
     thread::spawn(move || {
         ffmpeg_next::format::network::init();
-
-        download_all_assets().unwrap();
 
         if let Err(err) = wait_for_server_ready(Duration::from_secs(10)) {
             error!("{err}");
@@ -229,48 +238,50 @@ pub enum TestSample {
 }
 
 #[derive(Debug)]
-struct AssetData {
-    url: String,
-    path: PathBuf,
+pub struct AssetData {
+    pub url: String,
+    pub path: PathBuf,
 }
 
 pub fn download_all_assets() -> Result<()> {
-    let assets = [AssetData {
-        url: String::from("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"),
-        path: examples_root_dir().join("examples/assets/BigBuckBunny720p24fps597s.mp4"),
-    },
-    AssetData {
-        url: String::from("http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"),
-        path: examples_root_dir().join("examples/assets/ElephantsDream720p24fps654s.mp4"),
-    },
-    AssetData {
-        url: String::from("https://filesamples.com/samples/video/mp4/sample_1280x720.mp4"),
-        path: examples_root_dir().join("examples/assets/OceanSample720p24fps28s.mp4"),
-    },
-    AssetData {
-        url: String::from("https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/BigBuckBunny720p24fps60s.vp8.webm"),
-        path: examples_root_dir().join("examples/assets/BigBuckBunny720p24fps60s.vp8.webm"),
-    },
+    let assets = [
         AssetData {
-        url: String::from("https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/BigBuckBunny720p24fps60s.vp9.webm"),
-        path: examples_root_dir().join("examples/assets/BigBuckBunny720p24fps60s.vp9.webm"),
-    },
+            url: String::from(BUNNY_H264_URL),
+            path: examples_root_dir().join(BUNNY_H264_PATH),
+        },
         AssetData {
-        url: String::from("https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/ElephantsDream720p24fps60s.vp8.webm"),
-        path: examples_root_dir().join("examples/assets/ElephantsDream720p24fps60s.vp8.webm"),
-    },
+            url: String::from(ELEPHANT_H264_URL),
+            path: examples_root_dir().join(ELEPHANT_H264_PATH),
+        },
         AssetData {
-        url: String::from("https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/ElephantsDream720p24fps60s.vp9.webm"),
-        path: examples_root_dir().join("examples/assets/ElephantsDream720p24fps60s.vp9.webm"),
-    },
+            url: String::from(OCEAN_H264_URL),
+            path: examples_root_dir().join(OCEAN_H264_PATH),
+        },
         AssetData {
-        url: String::from("https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/OceanSample720p24fps28s.vp8.webm"),
-        path: examples_root_dir().join("examples/assets/OceanSample720p24fps28s.vp8.webm"),
-    },
+            url: String::from(BUNNY_VP8_URL),
+            path: examples_root_dir().join(BUNNY_VP8_PATH),
+        },
         AssetData {
-        url: String::from("https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/OceanSample720p24fps28s.vp9.webm"),
-        path: examples_root_dir().join("examples/assets/OceanSample720p24fps28s.vp9.webm"),
-    }];
+            url: String::from(BUNNY_VP9_URL),
+            path: examples_root_dir().join(BUNNY_VP9_PATH),
+        },
+        AssetData {
+            url: String::from(ELEPHANT_VP8_URL),
+            path: examples_root_dir().join(ELEPHANT_VP8_PATH),
+        },
+        AssetData {
+            url: String::from(ELEPHANT_VP9_URL),
+            path: examples_root_dir().join(ELEPHANT_VP9_PATH),
+        },
+        AssetData {
+            url: String::from(OCEAN_VP8_URL),
+            path: examples_root_dir().join(OCEAN_VP8_PATH),
+        },
+        AssetData {
+            url: String::from(OCEAN_VP9_URL),
+            path: examples_root_dir().join(OCEAN_VP9_PATH),
+        },
+    ];
 
     for asset in assets {
         if let Err(err) = download_asset(&asset) {
@@ -352,9 +363,11 @@ pub fn download_file(url: &str, path: &str) -> Result<PathBuf> {
     Ok(sample_path)
 }
 
-fn download_asset(asset: &AssetData) -> Result<()> {
+pub fn download_asset(asset: &AssetData) -> Result<()> {
     fs::create_dir_all(asset.path.parent().unwrap())?;
     if !asset.path.exists() {
+        let file = asset.path.file_name().unwrap().to_str().unwrap();
+        info!("Asset \"{file}\" not found and will be donwloaded.");
         let mut resp = reqwest::blocking::get(&asset.url)?;
         let mut out = File::create(asset.path.clone())?;
         io::copy(&mut resp, &mut out)?;

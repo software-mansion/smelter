@@ -1,5 +1,3 @@
-use tracing::warn;
-
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
 
@@ -34,16 +32,10 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions {
                     RtpAudioEncoderOptions::Opus {
                         preset,
                         sample_rate,
-                        channels: channels_deprecated,
                         forward_error_correction,
                         expected_packet_loss,
                     } => {
-                        if channels_deprecated.is_some() {
-                            warn!("The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.");
-                        }
-                        let resolved_channels = channels
-                            .or(channels_deprecated)
-                            .unwrap_or(AudioChannels::Stereo);
+                        let resolved_channels = channels.unwrap_or(AudioChannels::Stereo);
 
                         let packet_loss = match expected_packet_loss {
                             Some(x) if x > 100 => {
@@ -149,6 +141,17 @@ fn maybe_video_options(
             pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         }),
+        #[cfg(feature = "vk-video")]
+        VideoEncoderOptions::VulkanH264 { bitrate } => {
+            pipeline::VideoEncoderOptions::VulkanH264(pipeline::VulkanH264EncoderOptions {
+                resolution: options.resolution.into(),
+                bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
+            })
+        }
+        #[cfg(not(feature = "vk-video"))]
+        VideoEncoderOptions::VulkanH264 { .. } => {
+            return Err(TypeError::new(super::NO_VULKAN_VIDEO));
+        }
         VideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
             pipeline::VideoEncoderOptions::FfmpegVp8(pipeline::FfmpegVp8EncoderOptions {
                 resolution: options.resolution.into(),

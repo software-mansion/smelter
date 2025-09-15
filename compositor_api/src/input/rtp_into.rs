@@ -1,6 +1,5 @@
 use compositor_render::error::ErrorStack;
 use std::time::Duration;
-use tracing::warn;
 
 use bytes::Bytes;
 
@@ -33,20 +32,16 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
                 .as_ref()
                 .map(|video| {
                     let options = match video.decoder {
-                        VideoDecoder::FfmpegH264 => pipeline::VideoDecoderOptions::FfmpegH264,
-                        VideoDecoder::FfmpegVp8 => pipeline::VideoDecoderOptions::FfmpegVp8,
-                        VideoDecoder::FfmpegVp9 => pipeline::VideoDecoderOptions::FfmpegVp9,
-
-                        VideoDecoder::VulkanH264 | VideoDecoder::VulkanVideo
-                            if !cfg!(feature = "vk-video") =>
-                        {
-                            return Err(TypeError::new(super::NO_VULKAN_VIDEO))
+                        RtpVideoDecoderOptions::FfmpegH264 => {
+                            pipeline::VideoDecoderOptions::FfmpegH264
                         }
-                        VideoDecoder::VulkanH264 => pipeline::VideoDecoderOptions::VulkanH264,
-                        VideoDecoder::VulkanVideo => {
-                            tracing::warn!(
-                                "vulkan_video option is deprecated, use vulkan_h264 instead."
-                            );
+                        RtpVideoDecoderOptions::FfmpegVp8 => {
+                            pipeline::VideoDecoderOptions::FfmpegVp8
+                        }
+                        RtpVideoDecoderOptions::FfmpegVp9 => {
+                            pipeline::VideoDecoderOptions::FfmpegVp9
+                        }
+                        RtpVideoDecoderOptions::VulkanH264 => {
                             pipeline::VideoDecoderOptions::VulkanH264
                         }
                     };
@@ -75,14 +70,7 @@ impl TryFrom<InputRtpAudioOptions> for pipeline::RtpAudioOptions {
 
     fn try_from(audio: InputRtpAudioOptions) -> Result<Self, Self::Error> {
         match audio {
-            InputRtpAudioOptions::Opus {
-                forward_error_correction,
-            } => {
-                if forward_error_correction.is_some() {
-                    warn!("The 'forward_error_correction' field is deprecated!");
-                }
-                Ok(pipeline::RtpAudioOptions::Opus)
-            }
+            InputRtpAudioOptions::Opus => Ok(pipeline::RtpAudioOptions::Opus),
             InputRtpAudioOptions::Aac {
                 audio_specific_config,
                 rtp_mode,

@@ -47,9 +47,9 @@ fn main() {
     let ctx = GraphicsContext::new(Default::default()).unwrap();
     let (wgpu_device, wgpu_queue) = (ctx.device.clone(), ctx.queue.clone());
     // no chromium support, so we can ignore _event_loop
-    let (pipeline, _event_loop) = Pipeline::new(PipelineOptions {
+    let pipeline = Pipeline::new(PipelineOptions {
         wgpu_options: PipelineWgpuOptions::Context(ctx),
-        ..pipeline_options_from_config(&config, Arc::new(Runtime::new().unwrap()))
+        ..pipeline_options_from_config(&config, &Arc::new(Runtime::new().unwrap()), &None)
     })
     .unwrap_or_else(|err| {
         panic!(
@@ -98,7 +98,7 @@ fn main() {
             source: Mp4InputSource::File(root_dir().join(BUNNY_FILE_PATH).into()),
             should_loop: false,
             video_decoders: Mp4InputVideoDecoders {
-                h264: VideoDecoderOptions::FfmpegH264,
+                h264: Some(VideoDecoderOptions::FfmpegH264),
             },
         }),
         queue_options: QueueInputOptions {

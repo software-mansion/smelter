@@ -33,7 +33,7 @@
 //!             return;
 //!         }
 //!
-//!         let decoded_frames = decoder.decode(vk_video::EncodedChunk {
+//!         let decoded_frames = decoder.decode(vk_video::EncodedInputChunk {
 //!             data: &buffer[..n],
 //!             pts: None
 //!         }).unwrap();
@@ -52,7 +52,7 @@
 //! On Linux, the library should work on NVIDIA and AMD GPUs out of the box with recent Mesa drivers. For AMD GPUs with a bit older Mesa drivers, you may need to set the `RADV_PERFTEST=video_decode` environment variable:
 //!
 //! ```sh
-//! RADV_PERFTEST=video_decode cargo run
+//! RADV_PERFTEST=video_decode,video_encode cargo run
 //! ```
 //!
 //! It should work on Windows with recent drivers out of the box. Be sure to submit an issue if it doesn't.
@@ -169,15 +169,22 @@ impl H264Profile {
     }
 }
 
-/// Represents a chunk of encoded video data.
+/// Represents a chunk of encoded video data used for decoding.
 ///
 /// If `pts` is [`Option::Some`], it is inferred that the chunk contains bytestream that belongs to
 /// one output frame.
 /// If `pts` is [`Option::None`], the chunk can contain bytestream from multiple consecutive
 /// frames.
-pub struct EncodedChunk<T> {
+pub struct EncodedInputChunk<T> {
     pub data: T,
     pub pts: Option<u64>,
+}
+
+/// Represents a chunk of encoded video data returned by the encoder.
+pub struct EncodedOutputChunk<T> {
+    pub data: T,
+    pub pts: Option<u64>,
+    pub is_keyframe: bool,
 }
 
 /// Represents a single decoded frame.
@@ -206,7 +213,7 @@ impl WgpuTexturesDecoder {
     /// should be presented, used for synchronization with other tracks, e.g. with audio
     pub fn decode(
         &mut self,
-        frame: EncodedChunk<&[u8]>,
+        frame: EncodedInputChunk<&[u8]>,
     ) -> Result<Vec<Frame<wgpu::Texture>>, DecoderError> {
         let instructions = self.parser.parse(frame.data, frame.pts)?;
 
@@ -246,7 +253,7 @@ impl BytesDecoder {
     /// should be presented, used for synchronization with other tracks, e.g. with audio
     pub fn decode(
         &mut self,
-        frame: EncodedChunk<&[u8]>,
+        frame: EncodedInputChunk<&[u8]>,
     ) -> Result<Vec<Frame<RawFrameData>>, DecoderError> {
         let instructions = self.parser.parse(frame.data, frame.pts)?;
 
@@ -286,7 +293,7 @@ impl BytesEncoder {
         &mut self,
         frame: &Frame<RawFrameData>,
         force_keyframe: bool,
-    ) -> Result<EncodedChunk<Vec<u8>>, VulkanEncoderError> {
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         self.vulkan_encoder.encode_bytes(frame, force_keyframe)
     }
 }
@@ -305,11 +312,42 @@ impl WgpuTexturesEncoder {
     ///
     /// # Safety
     /// - The texture cannot be a surface texture
+    /// - The texture has to be transitioned to [`wgpu::TextureUses::RESOURCE`] usage:
+    ///   ```rust
+    ///   # let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    ///   # let texture = device.create_texture(&wgpu::TextureDescriptor {
+    ///   #     label: None,
+    ///   #     size: wgpu::Extent3d {
+    ///   #         width: 1280,
+    ///   #         height: 720,
+    ///   #         depth_or_array_layers: 1,
+    ///   #     },
+    ///   #     mip_level_count: 1,
+    ///   #     sample_count: 1,
+    ///   #     dimension: wgpu::TextureDimension::D2,
+    ///   #     format: wgpu::TextureFormat::Rgba8Unorm,
+    ///   #     usage: wgpu::TextureUsages::TEXTURE_BINDING,
+    ///   #     view_formats: &[],
+    ///   # });
+    ///   let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    ///   encoder.transition_resources(
+    ///       [].into_iter(),
+    ///       [wgpu::TextureTransition {
+    ///           texture: &texture,
+    ///           state: wgpu::TextureUses::RESOURCE,
+    ///           selector: None,
+    ///       }]
+    ///       .into_iter(),
+    ///   );
+    ///   queue.submit([encoder.finish()]);
+    ///
+    ///   // Now you can use `WgpuTexturesEncoder::encode` on `texture`
+    ///   ```
     pub unsafe fn encode(
         &mut self,
         frame: Frame<wgpu::Texture>,
         force_keyframe: bool,
-    ) -> Result<EncodedChunk<Vec<u8>>, VulkanEncoderError> {
+    ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         self.vulkan_encoder.encode_texture(frame, force_keyframe)
     }
 }

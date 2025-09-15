@@ -26,7 +26,7 @@ fn main() {
     config.ahead_of_time_processing = true;
     // no chromium support, so we can ignore _event_loop
     let runtime = Arc::new(Runtime::new().unwrap());
-    let (state, _event_loop) = ApiState::new(config, runtime).unwrap_or_else(|err| {
+    let state = ApiState::new(config, runtime).unwrap_or_else(|err| {
         panic!(
             "Failed to start compositor.\n{}",
             ErrorStack::new(&err).into_string()
@@ -81,7 +81,7 @@ fn main() {
             source: Mp4InputSource::File(root_dir.join(BUNNY_FILE_PATH).into()),
             should_loop: false,
             video_decoders: Mp4InputVideoDecoders {
-                h264: VideoDecoderOptions::FfmpegH264,
+                h264: Some(VideoDecoderOptions::FfmpegH264),
             },
         }),
         queue_options: QueueInputOptions {
@@ -90,13 +90,16 @@ fn main() {
         },
     };
 
-    Pipeline::register_input(&state.pipeline, input_id.clone(), input_options).unwrap();
+    Pipeline::register_input(&state.pipeline().unwrap(), input_id.clone(), input_options).unwrap();
 
-    let output_receiver =
-        Pipeline::register_encoded_data_output(&state.pipeline, output_id.clone(), output_options)
-            .unwrap();
+    let output_receiver = Pipeline::register_encoded_data_output(
+        &state.pipeline().unwrap(),
+        output_id.clone(),
+        output_options,
+    )
+    .unwrap();
 
-    Pipeline::start(&state.pipeline);
+    Pipeline::start(&state.pipeline().unwrap());
 
     let mut h264_dump =
         File::create(root_dir.join("examples/encoded_channel_output_dump.h264")).unwrap();

@@ -55,7 +55,7 @@ pub struct AudioMixerConfig {
 #[derive(Debug, Clone)]
 pub struct AudioMixerInputConfig {
     pub input_id: InputId,
-    // [0, 1] range of input volume
+    // [0, 2] range of input volume
     pub volume: f32,
 }
 

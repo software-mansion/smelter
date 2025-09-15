@@ -2497,6 +2497,7 @@ dependencies = [
  "crossbeam-channel",
  "ffmpeg-next",
  "futures-util",
+ "fuzzy-matcher",
  "image",
  "inquire",
  "log",

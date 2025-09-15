@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale-1.0">
+  <title>WHEP Video Client</title>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: black;
+      display: flex;
+      justify-content: center;
+    }
+
+    video {
+      width: 90vw;
+    }
+
+    /* Style for the video player's poster */
+    video[poster] {
+      object-fit: cover;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div>
+    <video id="video-player" controls autoplay playsinline
+      poster="https://placehold.co/1280x720/000000/333333?text=Waiting+for+stream...">
+    </video>
+  </div>
+
+  <script>
+    const run = async () => {
+      const queryString = window.location.search;
+      const urlParams = new URLSearchParams(queryString);
+
+      const endpointUrl = urlParams.get('url');
+      const bearerToken = urlParams.get('token');
+
+      const stream = await connect(endpointUrl, bearerToken);
+
+      const videoPlayer = document.getElementById("video-player");
+      videoPlayer.srcObject = stream;
+    }
+    run();
+
+    async function connect(endpointUrl, token) {
+      const pc = new RTCPeerConnection({
+        iceServers: [{urls: 'stun:stun.l.google.com:19302'}],
+        bundlePolicy: 'max-bundle',
+      });
+
+      const tracksPromise = new Promise((res) => {
+        let videoTrack;
+        let audioTrack;
+        pc.ontrack = (ev) => {
+          if (ev.track.kind === 'video') {
+            console.log('New video track');
+            videoTrack = ev.track;
+          }
+          if (ev.track.kind === 'audio') {
+            console.log('New audio track');
+            audioTrack = ev.track;
+          }
+          if (videoTrack && audioTrack) {
+            res({video: videoTrack, audio: audioTrack});
+          }
+        };
+      });
+
+      console.log('add transceivers');
+      pc.addTransceiver('video', {direction: 'recvonly'});
+      pc.addTransceiver('audio', {direction: 'recvonly'});
+
+      console.log('establish WHEP connection');
+      await establishWhipConnection(pc, endpointUrl, token);
+
+      const tracks = await tracksPromise;
+
+      const stream = new MediaStream();
+      stream.addTrack(tracks.video);
+      stream.addTrack(tracks.audio);
+      return stream;
+    }
+
+    async function establishWhipConnection(
+      pc,
+      endpoint,
+      token,
+    ) {
+      await pc.setLocalDescription(await pc.createOffer());
+
+      const offer = await gatherICECandidates(pc);
+      if (!offer) {
+        throw Error('failed to gather ICE candidates for offer');
+      }
+
+      /**
+       * This response contains the server's SDP offer.
+       * This specifies how the client should communicate,
+       * and what kind of media client and server have negotiated to exchange.
+       */
+      const {sdp: sdpAnswer, location} = await postSdpOffer(
+        endpoint,
+        offer.sdp,
+        token,
+      );
+
+      await pc.setRemoteDescription(
+        new RTCSessionDescription({type: 'answer', sdp: sdpAnswer}),
+      );
+      return location ?? endpoint;
+    }
+
+    async function gatherICECandidates(
+      peerConnection,
+    ) {
+      return new Promise((res) => {
+        setTimeout(function () {
+          res(peerConnection.localDescription);
+        }, 2000);
+
+        peerConnection.onicegatheringstatechange = () => {
+          if (peerConnection.iceGatheringState === 'complete') {
+            res(peerConnection.localDescription);
+          }
+        };
+      });
+    }
+
+    async function postSdpOffer(
+      endpoint,
+      sdpOffer,
+      token,
+    ) {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+          'content-type': 'application/sdp',
+          ...(token ? {authorization: `Bearer ${token}`} : {}),
+        },
+        body: sdpOffer,
+      });
+
+      if (response.status === 201) {
+        return {
+          sdp: await response.text(),
+          location: getLocationFromHeader(response.headers, endpoint),
+        };
+      } else {
+        const errorMessage = await response.text();
+        throw new Error(errorMessage);
+      }
+    }
+
+    function getLocationFromHeader(headers, endpoint) {
+      const locationHeader = headers.get('Location');
+      if (!locationHeader) {
+        // e.g. Twitch CORS blocks access to Location header, so in this case let's assume that
+        // location is under the same URL.
+        return endpoint;
+      }
+
+      return new URL(locationHeader, endpoint).toString();
+    }
+  </script>
+
+</body>
+
+</html>

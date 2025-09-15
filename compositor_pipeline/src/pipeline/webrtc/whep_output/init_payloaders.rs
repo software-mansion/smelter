@@ -3,7 +3,9 @@ use crate::prelude::*;
 
 pub(crate) fn init_video_payloader(encoder: &VideoEncoderOptions, ssrc: u32) -> Payloader {
     let (codec, payload_type, clock_rate) = match encoder {
-        VideoEncoderOptions::FfmpegH264(_) => (PayloadedCodec::H264, 102, 90000),
+        VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
+            (PayloadedCodec::H264, 102, 90000)
+        }
         VideoEncoderOptions::FfmpegVp8(_) => (PayloadedCodec::Vp8, 96, 90000),
         VideoEncoderOptions::FfmpegVp9(_) => (PayloadedCodec::Vp9, 98, 90000),
     };

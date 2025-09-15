@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex, Weak},
     thread,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use crossbeam_channel::{bounded, Receiver};
@@ -16,8 +16,7 @@ use compositor_render::{
         UpdateSceneError,
     },
     scene::Component,
-    EventLoop, FrameSet, InputId, OutputId, RegistryType, Renderer, RendererId, RendererOptions,
-    RendererSpec,
+    FrameSet, InputId, OutputId, RegistryType, Renderer, RendererId, RendererOptions, RendererSpec,
 };
 
 use crate::{
@@ -51,7 +50,7 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(opts: PipelineOptions) -> Result<(Self, Arc<dyn EventLoop>), InitPipelineError> {
+    pub fn new(opts: PipelineOptions) -> Result<Self, InitPipelineError> {
         create_pipeline(opts)
     }
 
@@ -325,6 +324,26 @@ impl Pipeline {
         })
     }
 
+    pub fn schedule_event<F: FnOnce(&mut Self) + Send + 'static>(
+        pipeline: &Arc<Mutex<Self>>,
+        pts: Duration,
+        callback: F,
+    ) {
+        let weak = Arc::downgrade(pipeline);
+        let guard = pipeline.lock().unwrap();
+        guard.queue.schedule_event(
+            pts,
+            Box::new(move || {
+                let Some(pipeline) = weak.upgrade() else {
+                    warn!("Unable to call scheduled callback. Pipeline already dropped.");
+                    return;
+                };
+                let mut guard = pipeline.lock().unwrap();
+                callback(&mut guard)
+            }),
+        );
+    }
+
     pub fn outputs(&self) -> impl Iterator<Item = (&OutputId, OutputInfo)> {
         self.outputs.iter().map(|(id, output)| {
             let protocol = output.output.kind();
@@ -335,6 +354,7 @@ impl Pipeline {
 
 impl Drop for Pipeline {
     fn drop(&mut self) {
+        info!("Stopping pipeline");
         self.queue.shutdown()
     }
 }
@@ -464,9 +484,7 @@ fn run_audio_mixer_thread(
     info!("Stopping audio mixer thread.")
 }
 
-fn create_pipeline(
-    opts: PipelineOptions,
-) -> Result<(Pipeline, Arc<dyn EventLoop>), InitPipelineError> {
+fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError> {
     let queue_options = QueueOptions::from(&opts);
 
     let graphics_context = match opts.wgpu_options {
@@ -481,8 +499,8 @@ fn create_pipeline(
         })?,
     };
 
-    let (renderer, event_loop) = Renderer::new(RendererOptions {
-        web_renderer: opts.web_renderer,
+    let renderer = Renderer::new(RendererOptions {
+        chromium_context: opts.chromium_context,
         framerate: opts.output_framerate,
         stream_fallback_timeout: opts.stream_fallback_timeout,
         load_system_fonts: opts.load_system_fonts,
@@ -538,5 +556,5 @@ fn create_pipeline(
         whip_whep_handle,
     };
 
-    Ok((pipeline, event_loop))
+    Ok(pipeline)
 }

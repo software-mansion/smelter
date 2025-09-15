@@ -140,6 +140,13 @@ pub enum EncoderInitError {
 
     #[error(transparent)]
     ResamplerError(#[from] rubato::ResamplerConstructionError),
+
+    #[cfg(feature = "vk-video")]
+    #[error(transparent)]
+    VulkanEncoderError(#[from] vk_video::VulkanEncoderError),
+
+    #[error("Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video encoder")]
+    VulkanContextRequiredForVulkanEncoder,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -206,6 +213,12 @@ impl PipelineErrorInfo {
             error_code,
             error_type,
         }
+    }
+}
+
+impl From<&InitPipelineError> for PipelineErrorInfo {
+    fn from(_value: &InitPipelineError) -> Self {
+        PipelineErrorInfo::new("PIPELINE_INIT_FAILED", ErrorType::ServerError)
     }
 }
 
@@ -326,7 +339,6 @@ impl From<&RequestKeyframeError> for PipelineErrorInfo {
 }
 
 const WGPU_INIT_ERROR: &str = "WGPU_INIT_ERROR";
-const WEB_RENDERER_INIT_ERROR: &str = "WEB_RENDERER_INIT_ERROR";
 const LAYOUT_INIT_ERROR: &str = "LAYOUT_INIT_ERROR";
 
 impl From<&InitRendererEngineError> for PipelineErrorInfo {
@@ -334,9 +346,6 @@ impl From<&InitRendererEngineError> for PipelineErrorInfo {
         match err {
             InitRendererEngineError::FailedToInitWgpuCtx(_) => {
                 PipelineErrorInfo::new(WGPU_INIT_ERROR, ErrorType::ServerError)
-            }
-            InitRendererEngineError::FailedToInitChromiumCtx(_) => {
-                PipelineErrorInfo::new(WEB_RENDERER_INIT_ERROR, ErrorType::ServerError)
             }
             InitRendererEngineError::LayoutTransformationsInitError(_) => {
                 PipelineErrorInfo::new(LAYOUT_INIT_ERROR, ErrorType::ServerError)

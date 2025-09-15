@@ -46,8 +46,6 @@ pub(super) fn validate_scene_update(
 }
 
 fn validate_component_ids_uniqueness(outputs: &[&OutputScene]) -> Result<(), SceneError> {
-    let mut ids: HashSet<&ComponentId> = HashSet::new();
-
     fn visit<'a>(
         component: &'a Component,
         ids: &mut HashSet<&'a ComponentId>,
@@ -67,9 +65,10 @@ fn validate_component_ids_uniqueness(outputs: &[&OutputScene]) -> Result<(), Sce
             .try_for_each(|c| visit(c, ids))
     }
 
-    outputs
-        .iter()
-        .try_for_each(|output| visit(&output.scene_root, &mut ids))
+    outputs.iter().try_for_each(|output| {
+        let mut ids: HashSet<&ComponentId> = HashSet::new();
+        visit(&output.scene_root, &mut ids)
+    })
 }
 
 fn validate_web_renderer_ids_uniqueness(outputs: &[&OutputScene]) -> Result<(), SceneError> {

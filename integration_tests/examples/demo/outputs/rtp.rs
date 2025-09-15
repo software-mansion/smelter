@@ -10,13 +10,13 @@ use integration_tests::{
         start_gst_receive_udp_vp9, start_gst_receive_udp_without_video,
     },
 };
-use rand::RngCore;
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
-    outputs::{AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    inputs::{filter_video_inputs, InputHandler},
+    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
     players::OutputPlayer,
     IP,
 };
@@ -139,9 +139,9 @@ impl OutputHandler for RtpOutput {
         &self.name
     }
 
-    fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value {
+    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         json!({
-           "video": self.video.as_ref().map(|v| v.serialize_update(inputs, &self.name)),
+           "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
@@ -288,20 +288,10 @@ impl RtpOutputBuilder {
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
-        let video_options = vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
         let audio_options = vec![RtpRegisterOptions::SetAudioStream, RtpRegisterOptions::Skip];
 
         loop {
-            let video_selection =
-                Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
-
-            builder = match video_selection {
-                Some(RtpRegisterOptions::SetVideoStream) => {
-                    builder.with_video(RtpOutputVideoOptions::default())
-                }
-                Some(RtpRegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder.prompt_video()?;
 
             let audio_selection =
                 Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
@@ -330,15 +320,36 @@ impl RtpOutputBuilder {
             None => builder,
         };
 
-        let player_choice = builder.prompt_player()?;
-        let builder = match player_choice {
-            Some(player) => builder.with_player(player),
-            None => builder,
-        };
+        builder = builder.prompt_player()?;
+
         Ok(builder)
     }
 
-    fn prompt_player(&self) -> Result<Option<OutputPlayer>> {
+    fn prompt_video(self) -> Result<Self> {
+        let video_options = vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
+        let video_selection =
+            Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
+
+        match video_selection {
+            Some(RtpRegisterOptions::SetVideoStream) => {
+                let scene_options = Scene::iter().collect();
+                let scene_choice =
+                    Select::new("Select scene:", scene_options).prompt_skippable()?;
+                let video = match scene_choice {
+                    Some(scene) => RtpOutputVideoOptions {
+                        scene,
+                        ..Default::default()
+                    },
+                    None => RtpOutputVideoOptions::default(),
+                };
+                Ok(self.with_video(video))
+            }
+            Some(RtpRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
+    }
+
+    fn prompt_player(self) -> Result<Self> {
         match self.transport_protocol {
             Some(TransportProtocol::Udp) | None => {
                 let player_options = match (&self.video, &self.audio) {
@@ -347,15 +358,13 @@ impl RtpOutputBuilder {
                     }
                     _ => OutputPlayer::iter().collect(),
                 };
-                let player_choice =
-                    Select::new("Select player:", player_options).prompt_skippable()?;
-                Ok(player_choice)
+                let player_choice = Select::new("Select player:", player_options).prompt()?;
+                Ok(self.with_player(player_choice))
             }
             Some(TransportProtocol::TcpServer) => {
                 let player_options = vec![OutputPlayer::GstreamerReceiver, OutputPlayer::Manual];
-                let player_choice =
-                    Select::new("Select player:", player_options).prompt_skippable()?;
-                Ok(player_choice)
+                let player_choice = Select::new("Select player:", player_options).prompt()?;
+                Ok(self.with_player(player_choice))
             }
         }
     }
@@ -388,7 +397,7 @@ impl RtpOutputBuilder {
         self
     }
 
-    fn serialize(&self, inputs: &[&str]) -> serde_json::Value {
+    fn serialize(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let ip = match self.transport_protocol {
             Some(TransportProtocol::Udp) | None => Some(IP),
             Some(TransportProtocol::TcpServer) => None,
@@ -398,12 +407,15 @@ impl RtpOutputBuilder {
             "port": self.port,
             "ip": ip,
             "transport_protocol": self.transport_protocol.as_ref().map(|t| t.to_string()),
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs, &self.name)),
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
     }
 
-    pub fn build(self, inputs: &[&str]) -> (RtpOutput, serde_json::Value, OutputPlayer) {
+    pub fn build(
+        self,
+        inputs: &[&dyn InputHandler],
+    ) -> (RtpOutput, serde_json::Value, OutputPlayer) {
         let register_request = self.serialize(inputs);
         let rtp_output = RtpOutput {
             name: self.name,
@@ -422,60 +434,29 @@ pub struct RtpOutputVideoOptions {
     root_id: String,
     resolution: VideoResolution,
     encoder: VideoEncoder,
+    scene: Scene,
 }
 
 impl RtpOutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&str], output_name: &str) -> serde_json::Value {
-        let input_json = inputs
-            .iter()
-            .map(|input_name| {
-                let id = format!("{input_name}_{output_name}");
-                json!({
-                    "type": "input_stream",
-                    "id": id,
-                    "input_id": input_name,
-                })
-            })
-            .collect::<Vec<_>>();
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        let inputs = filter_video_inputs(inputs);
+
         json!({
             "resolution": self.resolution.serialize(),
             "encoder": {
                 "type": self.encoder.to_string(),
             },
             "initial": {
-                "root": {
-                    "type": "tiles",
-                    "id": self.root_id,
-                    "transition": {
-                        "duration_ms": 500,
-                    },
-                    "children": input_json,
-                }
+                "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
             }
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&str], output_name: &str) -> serde_json::Value {
-        let input_json = inputs
-            .iter()
-            .map(|input_name| {
-                let id = format!("{input_name}_{output_name}");
-                json!({
-                    "type": "input_stream",
-                    "id": id,
-                    "input_id": input_name,
-                })
-            })
-            .collect::<Vec<_>>();
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        let inputs = filter_video_inputs(inputs);
+
         json!({
-            "root": {
-                "type": "tiles",
-                "id": self.root_id,
-                "transition": {
-                    "duration_ms": 500,
-                },
-                "children": input_json,
-            }
+            "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
         })
     }
 }
@@ -486,12 +467,12 @@ impl Default for RtpOutputVideoOptions {
             width: 1920,
             height: 1080,
         };
-        let suffix = rand::thread_rng().next_u32();
-        let root_id = format!("tiles_{suffix}");
+        let root_id = "root".to_string();
         Self {
             root_id,
             resolution,
             encoder: VideoEncoder::FfmpegH264,
+            scene: Scene::Tiles,
         }
     }
 }
@@ -502,13 +483,17 @@ pub struct RtpOutputAudioOptions {
 }
 
 impl RtpOutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&str]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
-            .map(|input_id| {
-                json!({
-                    "input_id": input_id,
-                })
+            .filter_map(|input| {
+                if input.has_audio() {
+                    Some(json!({
+                        "input_id": input.name(),
+                    }))
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
 
@@ -522,13 +507,17 @@ impl RtpOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&str]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
-            .map(|input_id| {
-                json!({
-                    "input_id": input_id,
-                })
+            .filter_map(|input| {
+                if input.has_audio() {
+                    Some(json!({
+                        "input_id": input.name(),
+                    }))
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
         json!({

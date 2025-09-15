@@ -3,8 +3,8 @@ use std::{io::Write, sync::OnceLock, time::Duration};
 
 use bytes::BufMut;
 use compositor_render::{
-    create_wgpu_ctx, web_renderer::WebRendererInitOptions, Frame, FrameData, Framerate, Renderer,
-    RendererOptions, RenderingMode, WgpuComponents, YuvPlanes,
+    create_wgpu_ctx, Frame, FrameData, Framerate, Renderer, RendererOptions, RenderingMode,
+    WgpuComponents, YuvPlanes,
 };
 use crossbeam_channel::bounded;
 use tracing::error;
@@ -69,8 +69,9 @@ fn get_wgpu_ctx() -> WgpuComponents {
 
 pub(super) fn create_renderer() -> Renderer {
     let wgpu_ctx = get_wgpu_ctx();
-    let (renderer, _event_loop) = Renderer::new(RendererOptions {
-        web_renderer: WebRendererInitOptions::Disable,
+
+    Renderer::new(RendererOptions {
+        chromium_context: None,
         framerate: Framerate { num: 30, den: 1 },
         stream_fallback_timeout: Duration::from_secs(3),
         load_system_fonts: false,
@@ -78,8 +79,7 @@ pub(super) fn create_renderer() -> Renderer {
         device: wgpu_ctx.device,
         queue: wgpu_ctx.queue,
     })
-    .unwrap();
-    renderer
+    .unwrap()
 }
 
 fn read_rgba_texture(texture: &wgpu::Texture) -> bytes::Bytes {

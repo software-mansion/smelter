@@ -59,6 +59,17 @@ fn resolve_video_options(
             pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         }),
+        #[cfg(feature = "vk-video")]
+        VideoEncoderOptions::VulkanH264 { bitrate } => {
+            pipeline::VideoEncoderOptions::VulkanH264(pipeline::VulkanH264EncoderOptions {
+                resolution: options.resolution.into(),
+                bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
+            })
+        }
+        #[cfg(not(feature = "vk-video"))]
+        VideoEncoderOptions::VulkanH264 { .. } => {
+            return Err(TypeError::new(super::NO_VULKAN_VIDEO));
+        }
         VideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
             pipeline::VideoEncoderOptions::FfmpegVp8(pipeline::FfmpegVp8EncoderOptions {
                 resolution: options.resolution.into(),

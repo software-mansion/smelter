@@ -5,6 +5,7 @@ use std::{
 
 use axum::http::HeaderMap;
 use compositor_render::OutputId;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::pipeline::webrtc::{
@@ -125,6 +126,30 @@ impl WhepOutputsState {
         match bearer_token {
             Some(token) => validate_token(&token, headers.get("Authorization")).await,
             None => Ok(()), // Bearer token not required, treat as validated
+        }
+    }
+
+    // called on drop (when output is unregistered)
+    pub fn ensure_output_closed(&self, output_id: &OutputId) {
+        let output = {
+            let mut guard = self.0.lock().unwrap();
+            guard.remove(output_id)
+        };
+
+        if let Some(output_state) = output {
+            for (session_id, pc) in output_state.sessions.into_iter() {
+                let output_id = output_id.clone();
+                tokio::spawn(async move {
+                    if let Err(err) = pc.close().await {
+                        error!(
+                            ?output_id,
+                            ?session_id,
+                            ?err,
+                            "Cannot close peer_connection for WHEP output"
+                        );
+                    }
+                });
+            }
         }
     }
 }

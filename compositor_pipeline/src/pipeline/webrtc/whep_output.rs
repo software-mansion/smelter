@@ -5,7 +5,7 @@ use crate::{
     pipeline::{
         encoder::{
             ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder,
-            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder,
+            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder, vulkan_h264::VulkanH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
         webrtc::whep_output::{
@@ -13,6 +13,7 @@ use crate::{
                 WhepAudioConnectionOptions, WhepOutputConnectionStateOptions,
                 WhepVideoConnectionOptions,
             },
+            state::WhepOutputsState,
             track_task_audio::{
                 WhepAudioTrackThread, WhepAudioTrackThreadHandle, WhepAudioTrackThreadOptions,
             },
@@ -39,6 +40,8 @@ pub(super) mod track_task_video;
 pub struct WhepOutput {
     video: Option<WhepVideoTrackThreadHandle>,
     audio: Option<WhepAudioTrackThreadHandle>,
+    output_id: OutputId,
+    outputs_state: WhepOutputsState,
 }
 
 impl WhepOutput {
@@ -77,6 +80,8 @@ impl WhepOutput {
         Ok(Self {
             audio: audio_options.map(|a| a.track_thread_handle),
             video: video_options.map(|v| v.track_thread_handle),
+            output_id,
+            outputs_state: state.outputs.clone(),
         })
     }
 
@@ -89,6 +94,16 @@ impl WhepOutput {
         let thread_handle = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 WhepVideoTrackThread::<FfmpegH264Encoder>::spawn(
+                    output_id.clone(),
+                    WhepVideoTrackThreadOptions {
+                        ctx: ctx.clone(),
+                        encoder_options: options.clone(),
+                        chunks_sender: sender,
+                    },
+                )?
+            }
+            VideoEncoderOptions::VulkanH264(options) => {
+                WhepVideoTrackThread::<VulkanH264Encoder>::spawn(
                     output_id.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
@@ -151,6 +166,12 @@ impl WhepOutput {
             receiver: receiver.into(),
             track_thread_handle: thread_handle,
         })
+    }
+}
+
+impl Drop for WhepOutput {
+    fn drop(&mut self) {
+        self.outputs_state.ensure_output_closed(&self.output_id);
     }
 }
 

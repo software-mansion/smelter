@@ -63,10 +63,19 @@ impl Mp4Input {
             return Err(Mp4InputError::NoTrack.into());
         }
 
+        let vulkan_supported = ctx.graphics_context.has_vulkan_support();
+        let h264_decoder = options.video_decoders.h264.unwrap_or({
+            if vulkan_supported {
+                VideoDecoderOptions::VulkanH264
+            } else {
+                VideoDecoderOptions::FfmpegH264
+            }
+        });
+
         let (video_handle, video_receiver, video_track) = match video {
             Some(track) => {
                 let (sender, receiver) = crossbeam_channel::bounded(10);
-                let handle = match (track.decoder_options(), options.video_decoders.h264) {
+                let handle = match (track.decoder_options(), h264_decoder) {
                     (DecoderOptions::H264(h264_config), VideoDecoderOptions::FfmpegH264) => {
                         VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
                             input_id.clone(),
@@ -79,6 +88,11 @@ impl Mp4Input {
                         )?
                     }
                     (DecoderOptions::H264(h264_config), VideoDecoderOptions::VulkanH264) => {
+                        if !vulkan_supported {
+                            return Err(InputInitError::DecoderError(
+                                DecoderInitError::VulkanContextRequiredForVulkanDecoder,
+                            ));
+                        }
                         VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
                             input_id.clone(),
                             VideoDecoderThreadOptions {

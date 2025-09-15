@@ -1,12 +1,7 @@
 use itertools::Itertools;
-use tracing::warn;
 
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
-
-const ENCODER_DEPRECATION_MSG: &str = "Field 'encoder' is deprecated. The codec will now be set automatically based on WHIP negotiation; manual specification is no longer needed.";
-
-const CHANNEL_DEPRECATION_MSG: &str = "The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.";
 
 impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
     type Error = TypeError;
@@ -25,22 +20,6 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
             ));
         }
 
-        if let Some(OutputWhipVideoOptions {
-            encoder: Some(_encoder),
-            ..
-        }) = &video
-        {
-            warn!(ENCODER_DEPRECATION_MSG)
-        }
-
-        if let Some(OutputWhipAudioOptions {
-            encoder: Some(_encoder),
-            ..
-        }) = &audio
-        {
-            warn!(ENCODER_DEPRECATION_MSG)
-        }
-
         let (output_video_options, video_whip_options) = if let Some(options) = video {
             let output_options = pipeline::RegisterOutputVideoOptions {
                 initial: options.initial.try_into()?,
@@ -51,81 +30,103 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                 Some(v) => v.to_vec(),
             };
 
-            let encoder_preferences: Vec<pipeline::VideoEncoderOptions> = encoder_preferences
+            let encoder_preferences: Vec<Vec<pipeline::VideoEncoderOptions>> = encoder_preferences
                 .into_iter()
-                .flat_map(|codec| match codec {
-                    WhipVideoEncoderOptions::FfmpegH264 {
-                        preset,
-                        pixel_format,
-                        ffmpeg_options,
-                    } => {
-                        vec![pipeline::VideoEncoderOptions::FfmpegH264(
-                            pipeline::FfmpegH264EncoderOptions {
-                                preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
-                                resolution: options.resolution.clone().into(),
-                                pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
-                                raw_options: ffmpeg_options
-                                    .unwrap_or_default()
-                                    .into_iter()
-                                    .collect(),
-                            },
-                        )]
-                    }
-                    WhipVideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
-                        vec![pipeline::VideoEncoderOptions::FfmpegVp8(
-                            pipeline::FfmpegVp8EncoderOptions {
-                                resolution: options.resolution.clone().into(),
-                                raw_options: ffmpeg_options
-                                    .unwrap_or_default()
-                                    .into_iter()
-                                    .collect(),
-                            },
-                        )]
-                    }
-                    WhipVideoEncoderOptions::FfmpegVp9 {
-                        pixel_format,
-                        ffmpeg_options,
-                    } => {
-                        vec![pipeline::VideoEncoderOptions::FfmpegVp9(
-                            pipeline::FfmpegVp9EncoderOptions {
-                                resolution: options.resolution.clone().into(),
-                                pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
-                                raw_options: ffmpeg_options
-                                    .unwrap_or_default()
-                                    .into_iter()
-                                    .collect(),
-                            },
-                        )]
-                    }
-                    WhipVideoEncoderOptions::Any => {
-                        vec![
-                            pipeline::VideoEncoderOptions::FfmpegVp9(
-                                pipeline::FfmpegVp9EncoderOptions {
+                .map(|codec| {
+                    let encoder_options = match codec {
+                        WhipVideoEncoderOptions::FfmpegH264 {
+                            preset,
+                            pixel_format,
+                            ffmpeg_options,
+                        } => {
+                            vec![pipeline::VideoEncoderOptions::FfmpegH264(
+                                pipeline::FfmpegH264EncoderOptions {
+                                    preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                                     resolution: options.resolution.clone().into(),
-                                    pixel_format: pipeline::OutputPixelFormat::YUV420P,
-                                    raw_options: Vec::new(),
+                                    pixel_format: pixel_format
+                                        .unwrap_or(PixelFormat::Yuv420p)
+                                        .into(),
+                                    raw_options: ffmpeg_options
+                                        .unwrap_or_default()
+                                        .into_iter()
+                                        .collect(),
                                 },
-                            ),
-                            pipeline::VideoEncoderOptions::FfmpegVp8(
+                            )]
+                        }
+                        #[cfg(feature = "vk-video")]
+                        WhipVideoEncoderOptions::VulkanH264 { bitrate } => {
+                            vec![pipeline::VideoEncoderOptions::VulkanH264(
+                                pipeline::VulkanH264EncoderOptions {
+                                    resolution: options.resolution.clone().into(),
+                                    bitrate: bitrate
+                                        .map(|bitrate| bitrate.try_into())
+                                        .transpose()?,
+                                },
+                            )]
+                        }
+                        #[cfg(not(feature = "vk-video"))]
+                        WhipVideoEncoderOptions::VulkanH264 { .. } => {
+                            return Err(TypeError::new(super::NO_VULKAN_VIDEO));
+                        }
+                        WhipVideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
+                            vec![pipeline::VideoEncoderOptions::FfmpegVp8(
                                 pipeline::FfmpegVp8EncoderOptions {
                                     resolution: options.resolution.clone().into(),
-                                    raw_options: Vec::new(),
+                                    raw_options: ffmpeg_options
+                                        .unwrap_or_default()
+                                        .into_iter()
+                                        .collect(),
                                 },
-                            ),
-                            pipeline::VideoEncoderOptions::FfmpegH264(
-                                pipeline::FfmpegH264EncoderOptions {
-                                    preset: H264EncoderPreset::Fast.into(),
+                            )]
+                        }
+                        WhipVideoEncoderOptions::FfmpegVp9 {
+                            pixel_format,
+                            ffmpeg_options,
+                        } => {
+                            vec![pipeline::VideoEncoderOptions::FfmpegVp9(
+                                pipeline::FfmpegVp9EncoderOptions {
                                     resolution: options.resolution.clone().into(),
-                                    pixel_format: pipeline::OutputPixelFormat::YUV420P,
-                                    raw_options: Vec::new(),
+                                    pixel_format: pixel_format
+                                        .unwrap_or(PixelFormat::Yuv420p)
+                                        .into(),
+                                    raw_options: ffmpeg_options
+                                        .unwrap_or_default()
+                                        .into_iter()
+                                        .collect(),
                                 },
-                            ),
-                        ]
-                    }
+                            )]
+                        }
+                        WhipVideoEncoderOptions::Any => {
+                            vec![
+                                pipeline::VideoEncoderOptions::FfmpegVp9(
+                                    pipeline::FfmpegVp9EncoderOptions {
+                                        resolution: options.resolution.clone().into(),
+                                        pixel_format: pipeline::OutputPixelFormat::YUV420P,
+                                        raw_options: Vec::new(),
+                                    },
+                                ),
+                                pipeline::VideoEncoderOptions::FfmpegVp8(
+                                    pipeline::FfmpegVp8EncoderOptions {
+                                        resolution: options.resolution.clone().into(),
+                                        raw_options: Vec::new(),
+                                    },
+                                ),
+                                pipeline::VideoEncoderOptions::FfmpegH264(
+                                    pipeline::FfmpegH264EncoderOptions {
+                                        preset: H264EncoderPreset::Fast.into(),
+                                        resolution: options.resolution.clone().into(),
+                                        pixel_format: pipeline::OutputPixelFormat::YUV420P,
+                                        raw_options: Vec::new(),
+                                    },
+                                ),
+                            ]
+                        }
+                    };
+                    Ok(encoder_options)
                 })
-                .unique()
-                .collect();
+                .try_collect()?;
 
+            let encoder_preferences = encoder_preferences.into_iter().flatten().unique().collect();
             let video_whip_options = pipeline::VideoWhipOptions {
                 encoder_preferences,
             };
@@ -138,25 +139,11 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
             Some(OutputWhipAudioOptions {
                 mixing_strategy,
                 send_eos_when,
-                encoder,
                 channels,
                 encoder_preferences,
                 initial,
             }) => {
-                let resolved_channels = match encoder {
-                    Some(WhipAudioEncoderOptions::Opus {
-                        channels: channels_deprecated,
-                        ..
-                    }) => {
-                        if channels_deprecated.is_some() {
-                            warn!(CHANNEL_DEPRECATION_MSG);
-                        }
-                        channels
-                            .or(channels_deprecated)
-                            .unwrap_or(AudioChannels::Stereo)
-                    }
-                    _ => channels.unwrap_or(AudioChannels::Stereo),
-                };
+                let resolved_channels = channels.unwrap_or(AudioChannels::Stereo);
                 let output_audio_options = pipeline::RegisterOutputAudioOptions {
                     initial: initial.try_into()?,
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,

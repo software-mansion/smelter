@@ -1,5 +1,3 @@
-use tracing::warn;
-
 use crate::common_pipeline::prelude as pipeline;
 use crate::*;
 
@@ -25,16 +23,8 @@ impl TryFrom<RtmpOutput> for pipeline::RegisterOutputOptions {
                 initial,
             }) => {
                 let (audio_encoder_options, resolved_channels) = match encoder {
-                    RtmpClientAudioEncoderOptions::Aac {
-                        sample_rate,
-                        channels: channels_deprecated,
-                    } => {
-                        if channels_deprecated.is_some() {
-                            warn!("The 'channels' field within the encoder options is deprecated and will be removed in future releases. Please use the 'channels' field in the audio options for setting the audio channels.");
-                        }
-                        let resolved_channels = channels
-                            .or(channels_deprecated)
-                            .unwrap_or(AudioChannels::Stereo);
+                    RtmpClientAudioEncoderOptions::Aac { sample_rate } => {
+                        let resolved_channels = channels.unwrap_or(AudioChannels::Stereo);
                         (
                             pipeline::AudioEncoderOptions::FdkAac(pipeline::FdkAacEncoderOptions {
                                 channels: resolved_channels.clone().into(),
@@ -96,6 +86,17 @@ fn maybe_video_options_h264_only(
             pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         }),
+        #[cfg(feature = "vk-video")]
+        VideoEncoderOptions::VulkanH264 { bitrate } => {
+            pipeline::VideoEncoderOptions::VulkanH264(pipeline::VulkanH264EncoderOptions {
+                resolution: options.resolution.into(),
+                bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
+            })
+        }
+        #[cfg(not(feature = "vk-video"))]
+        VideoEncoderOptions::VulkanH264 { .. } => {
+            return Err(TypeError::new(super::NO_VULKAN_VIDEO));
+        }
         VideoEncoderOptions::FfmpegVp8 { .. } => {
             return Err(TypeError::new(
                 "VP8 output not supported for given protocol",

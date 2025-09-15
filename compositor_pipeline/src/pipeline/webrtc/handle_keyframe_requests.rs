@@ -25,11 +25,13 @@ pub(crate) fn handle_keyframe_requests(
                         info!("Request keyframe");
                         if let Err(err) = keyframe_sender.send(()) {
                             warn!(%err, "Failed to send keyframe request to the encoder.");
+                            return;
                         };
                     }
                 }
             } else {
                 debug!("Failed to read RTCP packets from the sender.");
+                return;
             }
         }
     });
