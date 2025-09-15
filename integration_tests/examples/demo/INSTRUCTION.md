@@ -27,7 +27,7 @@ Path to file that will be used as source of `RTP` stream.
 
 ### `WHIP_INPUT_BEARER_TOKEN`
 
-Bearer token required that shall be used to connect to `WHIP` server provided by Smelter.
+Sets the bearer token to be used when connecting to the `WHIP` server provided by Smelter.
 
 ### `WHIP_OUTPUT_BEARER_TOKEN`
 
@@ -39,7 +39,7 @@ URL of the `WHIP` server that Smelter should connect to.
 
 ### `WHEP_OUTPUT_BEARER_TOKEN`
 
-Bearer token required that shall be used to connect to `WHEP` server provided by Smelter.
+Sets the bearer token to be used when connecting to the `WHEP` server provided by Smelter.
 
 ### `DEMO_JSON`
 
