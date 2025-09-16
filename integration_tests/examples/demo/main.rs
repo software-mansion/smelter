@@ -21,6 +21,9 @@ const JSON_ENV: &str = "DEMO_JSON";
 
 #[derive(Debug, EnumIter, Display, Clone, PartialEq)]
 pub enum Action {
+    #[strum(to_string = "Start")]
+    Start,
+
     #[strum(to_string = "Add input")]
     AddInput,
 
@@ -38,9 +41,6 @@ pub enum Action {
 
     #[strum(to_string = "Reset")]
     Reset,
-
-    #[strum(to_string = "Start")]
-    Start,
 
     #[strum(to_string = "JSON dump")]
     JsonDump,
@@ -108,7 +108,7 @@ fn run_demo() {
             Action::Reset => match examples::post("reset", &json!({})) {
                 Ok(_) => {
                     if !options.contains(&Action::Start) {
-                        options.push(Action::Start);
+                        options.insert(0, Action::Start);
                     }
                     state = SmelterState::new();
                     Ok(())

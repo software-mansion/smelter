@@ -310,7 +310,7 @@ pub struct RtpOutputBuilder {
     port: u16,
     video: Option<RtpOutputVideoOptions>,
     audio: Option<RtpOutputAudioOptions>,
-    transport_protocol: Option<TransportProtocol>,
+    transport_protocol: TransportProtocol,
     player: OutputPlayer,
 }
 
@@ -323,28 +323,16 @@ impl RtpOutputBuilder {
             port,
             video: None,
             audio: None,
-            transport_protocol: None,
+            transport_protocol: TransportProtocol::Udp,
             player: OutputPlayer::Manual,
         }
     }
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
-        let audio_options = vec![RtpRegisterOptions::SetAudioStream, RtpRegisterOptions::Skip];
 
         loop {
-            builder = builder.prompt_video()?;
-
-            let audio_selection =
-                Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
-
-            builder = match audio_selection {
-                Some(RtpRegisterOptions::SetAudioStream) => {
-                    builder.with_audio(RtpOutputAudioOptions::default())
-                }
-                Some(RtpRegisterOptions::Skip) | None => builder,
-                _ => unreachable!(),
-            };
+            builder = builder.prompt_video()?.prompt_audio()?;
 
             if builder.video.is_none() && builder.audio.is_none() {
                 error!("At least one video or one audio stream has to be specified!");
@@ -353,18 +341,7 @@ impl RtpOutputBuilder {
             }
         }
 
-        let transport_options = TransportProtocol::iter().collect();
-        let transport_selection =
-            Select::new("Select transport protocol?", transport_options).prompt_skippable()?;
-
-        builder = match transport_selection {
-            Some(prot) => builder.with_transport_protocol(prot),
-            None => builder,
-        };
-
-        builder = builder.prompt_player()?;
-
-        Ok(builder)
+        builder.prompt_transport_protocol()?.prompt_player()
     }
 
     fn prompt_video(self) -> Result<Self> {
@@ -391,22 +368,61 @@ impl RtpOutputBuilder {
         }
     }
 
+    fn prompt_audio(self) -> Result<Self> {
+        let audio_options = vec![RtpRegisterOptions::SetAudioStream, RtpRegisterOptions::Skip];
+        let audio_selection =
+            Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
+
+        match audio_selection {
+            Some(RtpRegisterOptions::SetAudioStream) => {
+                Ok(self.with_audio(RtpOutputAudioOptions::default()))
+            }
+            Some(RtpRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
+    }
+
+    fn prompt_transport_protocol(self) -> Result<Self> {
+        let transport_options = TransportProtocol::iter().collect();
+        let transport_selection =
+            Select::new("Select transport protocol (ESC for UDP)", transport_options)
+                .prompt_skippable()?;
+
+        match transport_selection {
+            Some(prot) => Ok(self.with_transport_protocol(prot)),
+            None => Ok(self),
+        }
+    }
+
     fn prompt_player(self) -> Result<Self> {
         match self.transport_protocol {
-            Some(TransportProtocol::Udp) | None => {
-                let player_options = match (&self.video, &self.audio) {
-                    (Some(_), Some(_)) => {
-                        vec![OutputPlayer::Manual]
-                    }
-                    _ => OutputPlayer::iter().collect(),
+            TransportProtocol::Udp => {
+                let (player_options, default_player) = match (&self.video, &self.audio) {
+                    (Some(_), Some(_)) => (vec![OutputPlayer::Manual], OutputPlayer::Manual),
+                    _ => (
+                        OutputPlayer::iter().collect(),
+                        OutputPlayer::GstreamerReceiver,
+                    ),
                 };
-                let player_choice = Select::new("Select player:", player_options).prompt()?;
-                Ok(self.with_player(player_choice))
+                let player_selection = Select::new(
+                    &format!("Select player (ESC for {default_player}):"),
+                    player_options,
+                )
+                .prompt_skippable()?;
+                match player_selection {
+                    Some(player) => Ok(self.with_player(player)),
+                    None => Ok(self.with_player(default_player)),
+                }
             }
-            Some(TransportProtocol::TcpServer) => {
+            TransportProtocol::TcpServer => {
                 let player_options = vec![OutputPlayer::GstreamerReceiver, OutputPlayer::Manual];
-                let player_choice = Select::new("Select player:", player_options).prompt()?;
-                Ok(self.with_player(player_choice))
+                let player_selection =
+                    Select::new("Select player (ESC for GStreamer):", player_options)
+                        .prompt_skippable()?;
+                match player_selection {
+                    Some(player) => Ok(self.with_player(player)),
+                    None => Ok(self.with_player(OutputPlayer::GstreamerReceiver)),
+                }
             }
         }
     }
@@ -430,7 +446,7 @@ impl RtpOutputBuilder {
                 self.name = format!("output_rtp_tcp_{}", self.port);
             }
         }
-        self.transport_protocol = Some(transport_protocol);
+        self.transport_protocol = transport_protocol;
         self
     }
 
@@ -445,7 +461,7 @@ impl RtpOutputBuilder {
             port: self.port,
             video: self.video,
             audio: self.audio,
-            transport_protocol: self.transport_protocol.unwrap_or(TransportProtocol::Udp),
+            transport_protocol: self.transport_protocol,
             stream_handles: vec![],
             player: self.player,
         }

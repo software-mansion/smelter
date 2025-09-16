@@ -11,10 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info};
 
-use crate::{
-    autocompletion::FilePathCompleter, inputs::InputHandler, players::InputPlayer,
-    utils::resolve_path,
-};
+use crate::{autocompletion::FilePathCompleter, inputs::InputHandler, utils::resolve_path};
 
 const MP4_INPUT_SOURCE: &str = "MP4_INPUT_SOURCE";
 
@@ -25,7 +22,6 @@ pub struct Mp4Input {
 
     #[serde(rename = "loop")]
     input_loop: bool,
-    player: InputPlayer,
 }
 
 #[typetag::serde]
@@ -91,20 +87,10 @@ impl Mp4InputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        let mut builder = self;
-
-        builder = builder.prompt_source()?;
-
-        let loop_selection = Confirm::new("Loop input [y/n]:").prompt_skippable()?;
-        builder = match loop_selection {
-            Some(input_loop) => builder.with_loop(input_loop),
-            None => builder,
-        };
-
-        Ok(builder)
+        self.prompt_source()?.prompt_loop()
     }
 
-    pub fn prompt_source(self) -> Result<Self> {
+    fn prompt_source(self) -> Result<Self> {
         let env_source = env::var(MP4_INPUT_SOURCE).unwrap_or_default();
         let default_path = examples_root_dir().join(BUNNY_H264_PATH);
 
@@ -145,6 +131,14 @@ impl Mp4InputBuilder {
         }
     }
 
+    fn prompt_loop(self) -> Result<Self> {
+        let loop_selection = Confirm::new("Loop input [y/n]:").prompt_skippable()?;
+        match loop_selection {
+            Some(r#loop) => Ok(self.with_loop(r#loop)),
+            None => Ok(self),
+        }
+    }
+
     pub fn with_source(mut self, source: Mp4InputSource) -> Self {
         self.source = Some(source);
         self
@@ -160,7 +154,6 @@ impl Mp4InputBuilder {
             name: self.name,
             source: self.source.unwrap(),
             input_loop: self.input_loop,
-            player: InputPlayer::Manual,
         }
     }
 }
