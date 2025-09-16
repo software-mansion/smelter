@@ -41,8 +41,15 @@ pub enum RunningState {
     Idle,
 }
 
+impl Default for RunningState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SmelterState {
+    #[serde(skip)]
     running_state: RunningState,
     inputs: Vec<Box<dyn InputHandle>>,
     outputs: Vec<Box<dyn OutputHandle>>,
@@ -59,6 +66,7 @@ impl SmelterState {
 
     pub fn from_json(json: serde_json::Value) -> Result<Self> {
         let mut state: Self = serde_json::from_value(json)?;
+        state.start()?;
 
         for input in &mut state.inputs {
             examples::post(
