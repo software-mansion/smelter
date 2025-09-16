@@ -9,6 +9,7 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::debug;
 
+use crate::inputs::hls::HlsInputBuilder;
 use crate::inputs::mp4::Mp4InputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
 use crate::inputs::InputHandler;

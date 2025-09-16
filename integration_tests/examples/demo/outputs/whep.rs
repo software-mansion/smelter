@@ -14,7 +14,6 @@ use tracing::error;
 use crate::{
     inputs::{filter_video_inputs, InputHandler},
     outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
-    players::OutputPlayer,
 };
 
 const WHEP_TOKEN_ENV: &str = "WHEP_OUTPUT_BEARER_TOKEN";

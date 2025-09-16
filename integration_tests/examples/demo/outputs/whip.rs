@@ -11,7 +11,6 @@ use tracing::error;
 use crate::{
     inputs::{filter_video_inputs, InputHandler},
     outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
-    players::OutputPlayer,
 };
 
 const WHIP_TOKEN_ENV: &str = "WHIP_OUTPUT_BEARER_TOKEN";

@@ -9,10 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
 
-use crate::{
-    inputs::{InputHandler, VideoDecoder},
-    players::InputPlayer,
-};
+use crate::inputs::{InputHandler, VideoDecoder};
 
 const WHIP_TOKEN_ENV: &str = "WHIP_INPUT_BEARER_TOKEN";
 

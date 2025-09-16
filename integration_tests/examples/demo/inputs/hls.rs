@@ -6,17 +6,17 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::inputs::{InputHandler, InputProtocol};
+use crate::inputs::InputHandler;
 
 const HLS_INPUT_URL: &str = "HLS_INPUT_URL";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HlsInput {
-    r#type: InputProtocol,
     name: String,
     url: String,
 }
 
+#[typetag::serde]
 impl InputHandler for HlsInput {
     fn name(&self) -> &str {
         &self.name
@@ -27,10 +27,6 @@ impl InputHandler for HlsInput {
             "type": "hls",
             "url": self.url,
         })
-    }
-
-    fn json_dump(&self) -> Result<serde_json::Value> {
-        Ok(serde_json::to_value(self)?)
     }
 }
 
@@ -70,7 +66,6 @@ impl HlsInputBuilder {
 
     pub fn build(self) -> HlsInput {
         HlsInput {
-            r#type: InputProtocol::Hls,
             name: self.name,
             url: self.url.unwrap(),
         }

@@ -13,7 +13,6 @@ use crate::{
     autocompletion::FilePathCompleter,
     inputs::{filter_video_inputs, InputHandler},
     outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
-    players::OutputPlayer,
     utils::resolve_path,
 };
 const MP4_OUTPUT_PATH: &str = "MP4_OUTPUT_PATH";
