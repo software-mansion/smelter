@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 use webrtc::{
     rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication,
     rtp_transceiver::rtp_sender::RTCRtpSender,
@@ -22,7 +22,7 @@ pub(crate) fn handle_keyframe_requests(
                         .downcast_ref::<PictureLossIndication>()
                         .is_some()
                     {
-                        info!("Request keyframe");
+                        debug!("Request keyframe");
                         if let Err(err) = keyframe_sender.send(()) {
                             warn!(%err, "Failed to send keyframe request to the encoder.");
                             return;

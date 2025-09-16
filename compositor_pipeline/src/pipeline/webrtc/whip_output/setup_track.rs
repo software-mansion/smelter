@@ -286,6 +286,7 @@ fn handle_packet_loss_requests(
             loop {
                 if let Err(e) = rtc_sender.read_rtcp().await {
                     debug!(%e, "Error while reading rtcp.");
+                    return;
                 }
             }
         }
@@ -337,6 +338,7 @@ fn handle_packet_loss_requests(
                 );
                 if packet_loss_sender.send(packet_loss_percentage).is_err() {
                     debug!("Packet loss channel closed.");
+                    return;
                 }
                 cumulative_packets_sent = packets_sent;
                 cumulative_packets_lost = packets_lost;
