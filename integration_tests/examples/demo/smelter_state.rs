@@ -12,15 +12,16 @@ use tracing::debug;
 use crate::inputs::hls::HlsInputBuilder;
 use crate::inputs::mp4::Mp4InputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
-use crate::inputs::InputHandler;
+use crate::inputs::InputHandle;
 
+use crate::outputs::hls::HlsOutputBuilder;
 use crate::outputs::mp4::Mp4OutputBuilder;
 use crate::outputs::whep::WhepOutputBuilder;
 use crate::outputs::whip::WhipOutputBuilder;
 use crate::utils::rename_old_dump;
 use crate::{
     inputs::{rtp::RtpInputBuilder, InputProtocol},
-    outputs::{rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder, OutputHandler, OutputProtocol},
+    outputs::{rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder, OutputHandle, OutputProtocol},
 };
 
 pub const JSON_BASE: &str = "demo_json.json";
@@ -34,10 +35,24 @@ pub enum TransportProtocol {
     TcpServer,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum RunningState {
+    Running,
+    Idle,
+}
+
+impl Default for RunningState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SmelterState {
-    inputs: Vec<Box<dyn InputHandler>>,
-    outputs: Vec<Box<dyn OutputHandler>>,
+    #[serde(skip)]
+    running_state: RunningState,
+    inputs: Vec<Box<dyn InputHandle>>,
+    outputs: Vec<Box<dyn OutputHandle>>,
 }
 
 impl SmelterState {
@@ -45,11 +60,13 @@ impl SmelterState {
         Self {
             inputs: vec![],
             outputs: vec![],
+            running_state: RunningState::Idle,
         }
     }
 
     pub fn from_json(json: serde_json::Value) -> Result<Self> {
         let mut state: Self = serde_json::from_value(json)?;
+        state.start()?;
 
         for input in &mut state.inputs {
             examples::post(
@@ -73,12 +90,18 @@ impl SmelterState {
         Ok(state)
     }
 
+    pub fn start(&mut self) -> Result<()> {
+        examples::post("start", &json!({}))?;
+        self.running_state = RunningState::Running;
+        Ok(())
+    }
+
     pub fn register_input(&mut self) -> Result<()> {
         let prot_opts = InputProtocol::iter().collect();
 
         let protocol = Select::new("Select input protocol:", prot_opts).prompt()?;
 
-        let (mut input_handler, input_json): (Box<dyn InputHandler>, serde_json::Value) =
+        let (mut input_handler, input_json): (Box<dyn InputHandle>, serde_json::Value) =
             match protocol {
                 InputProtocol::Rtp => {
                     let rtp_input = RtpInputBuilder::new().prompt()?.build();
@@ -130,7 +153,7 @@ impl SmelterState {
         let protocol = Select::new("Select output protocol:", prot_opts).prompt()?;
 
         let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
-        let (mut output_handler, output_json): (Box<dyn OutputHandler>, serde_json::Value) =
+        let (mut output_handler, output_json): (Box<dyn OutputHandle>, serde_json::Value) =
             match protocol {
                 OutputProtocol::Rtp => {
                     let rtp_output = RtpOutputBuilder::new().prompt()?.build();
@@ -156,6 +179,11 @@ impl SmelterState {
                     let whep_output = WhepOutputBuilder::new().prompt()?.build();
                     let register_request = whep_output.serialize_register(&inputs);
                     (Box::new(whep_output), register_request)
+                }
+                OutputProtocol::Hls => {
+                    let hls_output = HlsOutputBuilder::new().prompt(self.running_state)?.build();
+                    let register_request = hls_output.serialize_register(&inputs);
+                    (Box::new(hls_output), register_request)
                 }
             };
 

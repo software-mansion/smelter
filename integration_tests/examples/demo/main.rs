@@ -52,36 +52,32 @@ fn run_demo() {
         thread::sleep(Duration::from_secs(3));
     }
 
-    let (mut state, autostart) = match env::var(JSON_ENV) {
+    let mut options = Action::iter().collect::<Vec<_>>();
+    let mut state = match env::var(JSON_ENV) {
         Ok(json_path) => {
             let json_val = parse_json(json_path.into());
             match json_val {
                 Ok(json) => {
                     debug!("{json:#?}");
                     match SmelterState::from_json(json) {
-                        Ok(state) => (state, true),
+                        Ok(state) => {
+                            options.retain(|a| *a != Action::Start);
+                            state
+                        }
                         Err(e) => {
                             error!("Failed to create state from provided JSON dump: {e}");
-                            (SmelterState::new(), false)
+                            SmelterState::new()
                         }
                     }
                 }
                 Err(e) => {
                     error!("Failed to parse JSON: {e}");
-                    (SmelterState::new(), false)
+                    SmelterState::new()
                 }
             }
         }
-        Err(_) => (SmelterState::new(), false),
+        Err(_) => SmelterState::new(),
     };
-
-    let mut options = Action::iter().collect::<Vec<_>>();
-    if autostart {
-        match examples::post("start", &json!({})) {
-            Ok(_) => options.retain(|a| *a != Action::Start),
-            Err(e) => error!("Start request failed: {e}"),
-        }
-    }
 
     loop {
         let action = Select::new("Select option:", options.clone()).prompt();
@@ -117,7 +113,7 @@ fn run_demo() {
             },
             Action::Start => {
                 debug!("{state:#?}");
-                match examples::post("start", &json!({})) {
+                match state.start() {
                     Ok(_) => {
                         options.retain(|a| *a != Action::Start);
                         Ok(())

@@ -16,8 +16,8 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
-    inputs::{filter_video_inputs, InputHandler},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    inputs::{filter_video_inputs, InputHandle},
+    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
     players::OutputPlayer,
     IP,
 };
@@ -167,12 +167,12 @@ impl RtpOutput {
 }
 
 #[typetag::serde]
-impl OutputHandler for RtpOutput {
+impl OutputHandle for RtpOutput {
     fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let ip = match self.transport_protocol {
             TransportProtocol::Udp => Some(IP),
             TransportProtocol::TcpServer => None,
@@ -187,7 +187,7 @@ impl OutputHandler for RtpOutput {
         })
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         json!({
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
@@ -197,8 +197,8 @@ impl OutputHandler for RtpOutput {
     fn on_before_registration(&mut self) -> Result<()> {
         match self.transport_protocol {
             TransportProtocol::Udp => match self.player {
-                OutputPlayer::FfmpegReceiver => self.start_ffmpeg_receiver(),
-                OutputPlayer::GstreamerReceiver => self.start_gst_recv_udp(),
+                OutputPlayer::Ffmpeg => self.start_ffmpeg_receiver(),
+                OutputPlayer::Gstreamer => self.start_gst_recv_udp(),
                 OutputPlayer::Manual => {
                     let cmd_base = [
                         "gst-launch-1.0 -v ",
@@ -250,7 +250,7 @@ impl OutputHandler for RtpOutput {
     fn on_after_registration(&mut self) -> Result<()> {
         match self.transport_protocol {
             TransportProtocol::TcpServer => match self.player {
-                OutputPlayer::GstreamerReceiver => self.start_gst_recv_tcp(),
+                OutputPlayer::Gstreamer => self.start_gst_recv_tcp(),
                 OutputPlayer::Manual => {
                     let cmd_base = [
                         "gst-launch-1.0 -v ",
@@ -399,10 +399,7 @@ impl RtpOutputBuilder {
             TransportProtocol::Udp => {
                 let (player_options, default_player) = match (&self.video, &self.audio) {
                     (Some(_), Some(_)) => (vec![OutputPlayer::Manual], OutputPlayer::Manual),
-                    _ => (
-                        OutputPlayer::iter().collect(),
-                        OutputPlayer::GstreamerReceiver,
-                    ),
+                    _ => (OutputPlayer::iter().collect(), OutputPlayer::Gstreamer),
                 };
                 let player_selection = Select::new(
                     &format!("Select player (ESC for {default_player}):"),
@@ -415,13 +412,13 @@ impl RtpOutputBuilder {
                 }
             }
             TransportProtocol::TcpServer => {
-                let player_options = vec![OutputPlayer::GstreamerReceiver, OutputPlayer::Manual];
+                let player_options = vec![OutputPlayer::Gstreamer, OutputPlayer::Manual];
                 let player_selection =
                     Select::new("Select player (ESC for GStreamer):", player_options)
                         .prompt_skippable()?;
                 match player_selection {
                     Some(player) => Ok(self.with_player(player)),
-                    None => Ok(self.with_player(OutputPlayer::GstreamerReceiver)),
+                    None => Ok(self.with_player(OutputPlayer::Gstreamer)),
                 }
             }
         }
@@ -477,7 +474,7 @@ pub struct RtpOutputVideoOptions {
 }
 
 impl RtpOutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
 
         json!({
@@ -491,7 +488,7 @@ impl RtpOutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
 
         json!({
@@ -522,7 +519,7 @@ pub struct RtpOutputAudioOptions {
 }
 
 impl RtpOutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {
@@ -546,7 +543,7 @@ impl RtpOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {

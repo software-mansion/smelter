@@ -9,8 +9,8 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
-    inputs::{filter_video_inputs, InputHandler},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    inputs::{filter_video_inputs, InputHandle},
+    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
 };
 
 const WHIP_TOKEN_ENV: &str = "WHIP_OUTPUT_BEARER_TOKEN";
@@ -38,12 +38,12 @@ pub struct WhipOutput {
 }
 
 #[typetag::serde]
-impl OutputHandler for WhipOutput {
+impl OutputHandle for WhipOutput {
     fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         json!({
             "type": "whip_client",
             "endpoint_url": self.endpoint_url,
@@ -70,7 +70,7 @@ impl OutputHandler for WhipOutput {
         }
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         json!({
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
@@ -238,7 +238,7 @@ pub struct WhipOutputVideoOptions {
 }
 
 impl WhipOutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
@@ -253,7 +253,7 @@ impl WhipOutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
@@ -283,7 +283,7 @@ pub struct WhipOutputAudioOptions {
 }
 
 impl WhipOutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {
@@ -309,7 +309,7 @@ impl WhipOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {

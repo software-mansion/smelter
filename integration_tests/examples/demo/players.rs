@@ -4,10 +4,10 @@ use strum::{Display, EnumIter};
 #[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum OutputPlayer {
     #[strum(to_string = "FFmpeg")]
-    FfmpegReceiver,
+    Ffmpeg,
 
     #[strum(to_string = "GStreamer")]
-    GstreamerReceiver,
+    Gstreamer,
 
     #[strum(to_string = "Manual")]
     Manual,
@@ -16,10 +16,10 @@ pub enum OutputPlayer {
 #[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum InputPlayer {
     #[strum(to_string = "FFmpeg")]
-    FfmpegTransmitter,
+    Ffmpeg,
 
     #[strum(to_string = "GStreamer")]
-    GstreamerTransmitter,
+    Gstreamer,
 
     #[strum(to_string = "Manual")]
     Manual,

@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter};
 
-use crate::inputs::InputHandler;
+use crate::inputs::InputHandle;
 
+pub mod hls;
 pub mod mp4;
 pub mod rtmp;
 pub mod rtp;
@@ -16,10 +17,10 @@ pub mod whip;
 pub mod scene;
 
 #[typetag::serde(tag = "type")]
-pub trait OutputHandler: Debug {
+pub trait OutputHandle: Debug {
     fn name(&self) -> &str;
-    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value;
-    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value;
+    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value;
+    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value;
 
     fn on_before_registration(&mut self) -> Result<()> {
         Ok(())
@@ -30,7 +31,7 @@ pub trait OutputHandler: Debug {
     }
 }
 
-impl std::fmt::Display for dyn OutputHandler {
+impl std::fmt::Display for dyn OutputHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
@@ -52,6 +53,9 @@ pub enum OutputProtocol {
 
     #[strum(to_string = "mp4")]
     Mp4,
+
+    #[strum(to_string = "hls")]
+    Hls,
 }
 
 #[derive(Debug, EnumIter, Display, Clone)]

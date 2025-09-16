@@ -25,7 +25,7 @@ use tracing::error;
 
 use crate::{
     autocompletion::FilePathCompleter,
-    inputs::{AudioDecoder, InputHandler, VideoDecoder},
+    inputs::{AudioDecoder, InputHandle, VideoDecoder},
     players::InputPlayer,
     smelter_state::TransportProtocol,
     utils::resolve_path,
@@ -222,8 +222,8 @@ impl RtpInput {
 
     fn on_after_registration_udp(&mut self) -> Result<()> {
         match self.player {
-            InputPlayer::FfmpegTransmitter => self.ffmpeg_transmit(),
-            InputPlayer::GstreamerTransmitter => self.gstreamer_transmit_udp(),
+            InputPlayer::Ffmpeg => self.ffmpeg_transmit(),
+            InputPlayer::Gstreamer => self.gstreamer_transmit_udp(),
             InputPlayer::Manual => {
                 let video_codec = self.video.as_ref().map(|opts| opts.decoder);
                 let has_audio = self.audio.is_some();
@@ -261,7 +261,7 @@ impl RtpInput {
 
     fn on_after_registration_tcp(&mut self) -> Result<()> {
         match self.player {
-            InputPlayer::GstreamerTransmitter => self.gstreamer_transmit_tcp(),
+            InputPlayer::Gstreamer => self.gstreamer_transmit_tcp(),
             InputPlayer::Manual => {
                 let video_codec = self.video.as_ref().map(|opts| opts.decoder);
                 let has_audio = self.audio.is_some();
@@ -300,7 +300,7 @@ impl RtpInput {
 }
 
 #[typetag::serde]
-impl InputHandler for RtpInput {
+impl InputHandle for RtpInput {
     fn name(&self) -> &str {
         &self.name
     }
@@ -470,7 +470,7 @@ impl RtpInputBuilder {
             Some(TransportProtocol::Udp) | None => {
                 let player_options = match (&self.video, &self.audio) {
                     (Some(_), Some(_)) => {
-                        vec![InputPlayer::GstreamerTransmitter, InputPlayer::Manual]
+                        vec![InputPlayer::Gstreamer, InputPlayer::Manual]
                     }
                     _ => InputPlayer::iter().collect(),
                 };
@@ -480,17 +480,25 @@ impl RtpInputBuilder {
                         .prompt_skippable()?;
                 match player_selection {
                     Some(player) => Ok(self.with_player(player)),
-                    None => Ok(self.with_player(InputPlayer::GstreamerTransmitter)),
+                    None => Ok(self.with_player(InputPlayer::Gstreamer)),
                 }
             }
             Some(TransportProtocol::TcpServer) => {
-                let player_options = vec![InputPlayer::Manual];
-                let player_selection =
-                    Select::new("Select player (ESC for Manual):", player_options)
-                        .prompt_skippable()?;
+                let (player_options, default_player) = match (&self.video, &self.audio) {
+                    (Some(_), Some(_)) => (vec![InputPlayer::Manual], InputPlayer::Manual),
+                    _ => (
+                        vec![InputPlayer::Gstreamer, InputPlayer::Manual],
+                        InputPlayer::Gstreamer,
+                    ),
+                };
+                let player_selection = Select::new(
+                    &format!("Select player (ESC for {default_player}):"),
+                    player_options,
+                )
+                .prompt_skippable()?;
                 match player_selection {
                     Some(player) => Ok(self.with_player(player)),
-                    None => Ok(self.with_player(InputPlayer::Manual)),
+                    None => Ok(self.with_player(default_player)),
                 }
             }
         }

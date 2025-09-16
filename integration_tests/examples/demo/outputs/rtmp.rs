@@ -9,8 +9,8 @@ use strum::{Display, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
-    inputs::{filter_video_inputs, InputHandler},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    inputs::{filter_video_inputs, InputHandle},
+    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
     players::OutputPlayer,
 };
 
@@ -84,12 +84,12 @@ impl RtmpOutput {
 }
 
 #[typetag::serde]
-impl OutputHandler for RtmpOutput {
+impl OutputHandle for RtmpOutput {
     fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         json!({
             "type": "rtmp_client",
             "url": self.url,
@@ -98,7 +98,7 @@ impl OutputHandler for RtmpOutput {
         })
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         json!({
             "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
@@ -107,7 +107,7 @@ impl OutputHandler for RtmpOutput {
 
     fn on_before_registration(&mut self) -> Result<()> {
         match self.player {
-            OutputPlayer::FfmpegReceiver => self.start_ffmpeg_recv(),
+            OutputPlayer::Ffmpeg => self.start_ffmpeg_recv(),
             OutputPlayer::Manual => {
                 let cmd = format!("ffmpeg -f flv -listen 1 -i 'rtmp://0.0.0.0:{}' -vcodec copy -f flv - | ffplay -autoexit -f flv -i -", self.port);
 
@@ -219,12 +219,12 @@ impl RtmpOutputBuilder {
     }
 
     fn prompt_player(self) -> Result<Self> {
-        let player_options = vec![OutputPlayer::FfmpegReceiver, OutputPlayer::Manual];
+        let player_options = vec![OutputPlayer::Ffmpeg, OutputPlayer::Manual];
         let player_choice =
             Select::new("Select player (ESC for FFmpeg):", player_options).prompt_skippable()?;
         match player_choice {
             Some(player) => Ok(self.with_player(player)),
-            None => Ok(self.with_player(OutputPlayer::FfmpegReceiver)),
+            None => Ok(self.with_player(OutputPlayer::Ffmpeg)),
         }
     }
 
@@ -265,7 +265,7 @@ pub struct RtmpOutputVideoOptions {
 }
 
 impl RtmpOutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
 
         json!({
@@ -279,7 +279,7 @@ impl RtmpOutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
 
         json!({
@@ -310,7 +310,7 @@ pub struct RtmpOutputAudioOptions {
 }
 
 impl RtmpOutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let input_json = inputs
             .iter()
             .filter_map(|input| {
@@ -334,7 +334,7 @@ impl RtmpOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let input_json = inputs
             .iter()
             .filter_map(|input| {
