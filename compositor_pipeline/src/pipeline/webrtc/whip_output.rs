@@ -1,6 +1,7 @@
 use compositor_render::OutputId;
 use establish_peer_connection::exchange_sdp_offers;
 
+use itertools::Itertools;
 use peer_connection::PeerConnection;
 use setup_track::{setup_audio_track, setup_video_track};
 use std::{
@@ -52,7 +53,7 @@ impl WhipOutput {
 
         let span = span!(
             Level::INFO,
-            "WHIP sender task",
+            "WHIP client task",
             output_id = output_id.to_string()
         );
         let rt = ctx.tokio_rt.clone();
@@ -74,7 +75,7 @@ impl WhipOutput {
     }
 }
 
-struct WhipSenderTrack {
+struct WhipClientTrack {
     receiver: mpsc::Receiver<RtpPacket>,
     track: Arc<TrackLocalStaticRTP>,
 }
@@ -84,8 +85,8 @@ struct WhipClientTask {
     ctx: Arc<PipelineCtx>,
     client: Arc<WhipHttpClient>,
     output_id: OutputId,
-    video_track: Option<WhipSenderTrack>,
-    audio_track: Option<WhipSenderTrack>,
+    video_track: Option<WhipClientTrack>,
+    audio_track: Option<WhipClientTrack>,
 }
 
 impl WhipClientTask {
@@ -94,8 +95,26 @@ impl WhipClientTask {
         output_id: OutputId,
         options: WhipOutputOptions,
     ) -> Result<(Self, WhipOutput), WhipOutputError> {
+        let video_encoder_preferences = resolve_video_preferences(
+            options
+                .clone()
+                .video
+                .map(|v| v.encoder_preferences)
+                .unwrap_or_default(),
+            &ctx,
+        )?;
+
+        let audio_encoder_preferences = resolve_audio_preferences(
+            options
+                .clone()
+                .audio
+                .map(|a| a.encoder_preferences)
+                .unwrap_or_default(),
+        );
+
         let client = WhipHttpClient::new(&options)?;
-        let pc = PeerConnection::new(&ctx, &options).await?;
+        let pc = PeerConnection::new(&ctx, &video_encoder_preferences, &audio_encoder_preferences)
+            .await?;
 
         let video_rtc_sender = pc.new_video_track().await?;
         let audio_rtc_sender = pc.new_audio_track().await?;
@@ -105,18 +124,29 @@ impl WhipClientTask {
         pc.set_remote_description(answer).await?;
 
         let (video_thread_handle, video_track) = match &options.video {
-            Some(opts) => {
-                let (video_thread_handle, video) =
-                    setup_video_track(&ctx, &output_id, video_rtc_sender, opts).await?;
+            Some(_) => {
+                let (video_thread_handle, video) = setup_video_track(
+                    &ctx,
+                    &output_id,
+                    video_rtc_sender,
+                    video_encoder_preferences,
+                )
+                .await?;
                 (Some(video_thread_handle), Some(video))
             }
             None => (None, None),
         };
 
         let (audio_thread_handle, audio_track) = match &options.audio {
-            Some(opts) => {
-                let (audio_thread_handle, audio) =
-                    setup_audio_track(&ctx, &output_id, audio_rtc_sender, pc.clone(), opts).await?;
+            Some(_) => {
+                let (audio_thread_handle, audio) = setup_audio_track(
+                    &ctx,
+                    &output_id,
+                    audio_rtc_sender,
+                    pc.clone(),
+                    audio_encoder_preferences,
+                )
+                .await?;
                 (Some(audio_thread_handle), Some(audio))
             }
             None => (None, None),
@@ -140,12 +170,12 @@ impl WhipClientTask {
 
     async fn run(self) {
         let (mut audio_receiver, audio_track) = match self.audio_track {
-            Some(WhipSenderTrack { receiver, track }) => (Some(receiver), Some(track)),
+            Some(WhipClientTrack { receiver, track }) => (Some(receiver), Some(track)),
             None => (None, None),
         };
 
         let (mut video_receiver, video_track) = match self.video_track {
-            Some(WhipSenderTrack { receiver, track }) => (Some(receiver), Some(track)),
+            Some(WhipClientTrack { receiver, track }) => (Some(receiver), Some(track)),
             None => (None, None),
         };
         let mut next_video_packet = None;
@@ -299,4 +329,87 @@ fn wait_with_deadline<T>(
     }
     result_receiver.close();
     Err(OutputInitError::WhipInitTimeout)
+}
+
+fn resolve_video_preferences(
+    video_preferences: Vec<WhipVideoEncoderOptions>,
+    ctx: &Arc<PipelineCtx>,
+) -> Result<Vec<VideoEncoderOptions>, WhipOutputError> {
+    let vulkan_supported = ctx.graphics_context.has_vulkan_support();
+    let video_preferences: Vec<VideoEncoderOptions> = video_preferences
+        .into_iter()
+        .flat_map(|preference| match preference {
+            WhipVideoEncoderOptions::FfmpegH264(opts) => {
+                vec![VideoEncoderOptions::FfmpegH264(opts)]
+            }
+            WhipVideoEncoderOptions::VulkanH264(opts) => {
+                if vulkan_supported {
+                    vec![VideoEncoderOptions::VulkanH264(opts)]
+                } else {
+                    warn!("Vulkan is not supported, skipping \"vulkan_h264\" preference");
+                    vec![]
+                }
+            }
+            WhipVideoEncoderOptions::FfmpegVp8(opts) => vec![VideoEncoderOptions::FfmpegVp8(opts)],
+            WhipVideoEncoderOptions::FfmpegVp9(opts) => vec![VideoEncoderOptions::FfmpegVp9(opts)],
+            WhipVideoEncoderOptions::Any(resolution) => {
+                vec![
+                    VideoEncoderOptions::FfmpegVp9(FfmpegVp9EncoderOptions {
+                        resolution,
+                        pixel_format: OutputPixelFormat::YUV420P,
+                        raw_options: Vec::new(),
+                    }),
+                    VideoEncoderOptions::FfmpegVp8(FfmpegVp8EncoderOptions {
+                        resolution,
+                        raw_options: Vec::new(),
+                    }),
+                    if vulkan_supported {
+                        VideoEncoderOptions::VulkanH264(VulkanH264EncoderOptions {
+                            resolution,
+                            bitrate: None,
+                        })
+                    } else {
+                        VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
+                            preset: FfmpegH264EncoderPreset::Fast,
+                            resolution,
+                            pixel_format: OutputPixelFormat::YUV420P,
+                            raw_options: Vec::new(),
+                        })
+                    },
+                ]
+            }
+        })
+        .unique()
+        .collect();
+
+    if video_preferences.is_empty() {
+        return Err(WhipOutputError::EncoderInitError(
+            EncoderInitError::VulkanContextRequiredForVulkanEncoder,
+        ));
+    }
+
+    Ok(video_preferences)
+}
+
+fn resolve_audio_preferences(
+    audio_preferences: Vec<WhipAudioEncoderOptions>,
+) -> Vec<AudioEncoderOptions> {
+    audio_preferences
+        .into_iter()
+        .flat_map(|preference| match preference {
+            WhipAudioEncoderOptions::Opus(opts) => {
+                vec![AudioEncoderOptions::Opus(opts)]
+            }
+            WhipAudioEncoderOptions::Any(channels) => {
+                vec![AudioEncoderOptions::Opus(OpusEncoderOptions {
+                    channels,
+                    preset: OpusEncoderPreset::Voip,
+                    sample_rate: 48000,
+                    forward_error_correction: true,
+                    packet_loss: 0,
+                })]
+            }
+        })
+        .unique()
+        .collect()
 }
