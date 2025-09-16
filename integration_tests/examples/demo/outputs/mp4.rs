@@ -4,6 +4,7 @@ use anyhow::Result;
 use inquire::{Select, Text};
 use integration_tests::examples::examples_root_dir;
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, IntoEnumIterator};
 use tracing::error;
@@ -29,16 +30,28 @@ pub enum Mp4RegisterOptions {
     Skip,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Mp4Output {
     name: String,
+    path: PathBuf,
     video: Option<Mp4OutputVideoOptions>,
     audio: Option<Mp4OutputAudioOptions>,
+    player: OutputPlayer,
 }
 
+#[typetag::serde]
 impl OutputHandler for Mp4Output {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+        json!({
+            "type": "mp4",
+            "path": self.path,
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
     }
 
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
@@ -165,32 +178,18 @@ impl Mp4OutputBuilder {
         self
     }
 
-    fn serialize(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
-        json!({
-            "type": "mp4",
-            "path": self.path.as_ref().unwrap(),
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
-        })
-    }
-
-    pub fn build(
-        self,
-        inputs: &[&dyn InputHandler],
-    ) -> (Mp4Output, serde_json::Value, OutputPlayer) {
-        let register_request = self.serialize(inputs);
-
-        let mp4_output = Mp4Output {
+    pub fn build(self) -> Mp4Output {
+        Mp4Output {
             name: self.name,
+            path: self.path.unwrap(),
             video: self.video,
             audio: self.audio,
-        };
-
-        (mp4_output, register_request, OutputPlayer::Manual)
+            player: OutputPlayer::Manual,
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Mp4OutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
@@ -236,7 +235,7 @@ impl Default for Mp4OutputVideoOptions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Mp4OutputAudioOptions {
     encoder: AudioEncoder,
 }

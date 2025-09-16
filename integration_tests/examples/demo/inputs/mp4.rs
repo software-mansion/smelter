@@ -7,6 +7,7 @@ use integration_tests::{
     examples::{download_asset, examples_root_dir, AssetData},
 };
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info};
 
@@ -17,17 +18,33 @@ use crate::{
 
 const MP4_INPUT_SOURCE: &str = "MP4_INPUT_SOURCE";
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Mp4Input {
     name: String,
+    source: Mp4InputSource,
+
+    #[serde(rename = "loop")]
+    input_loop: bool,
+    player: InputPlayer,
 }
 
+#[typetag::serde]
 impl InputHandler for Mp4Input {
     fn name(&self) -> &str {
         &self.name
     }
+
+    fn serialize_register(&self) -> serde_json::Value {
+        let (source_key, source_val) = self.source.serialize();
+        json!({
+            "type": "mp4",
+            source_key: source_val,
+            "loop": self.input_loop,
+        })
+    }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Mp4InputSource {
     Path(PathBuf),
     Url(String),
@@ -59,7 +76,7 @@ impl FromStr for Mp4InputSource {
 pub struct Mp4InputBuilder {
     name: String,
     source: Option<Mp4InputSource>,
-    r#loop: bool,
+    input_loop: bool,
 }
 
 impl Mp4InputBuilder {
@@ -69,7 +86,7 @@ impl Mp4InputBuilder {
         Self {
             name,
             source: None,
-            r#loop: false,
+            input_loop: false,
         }
     }
 
@@ -80,7 +97,7 @@ impl Mp4InputBuilder {
 
         let loop_selection = Confirm::new("Loop input [y/n]:").prompt_skippable()?;
         builder = match loop_selection {
-            Some(r#loop) => builder.with_loop(r#loop),
+            Some(input_loop) => builder.with_loop(input_loop),
             None => builder,
         };
 
@@ -134,25 +151,16 @@ impl Mp4InputBuilder {
     }
 
     pub fn with_loop(mut self, r#loop: bool) -> Self {
-        self.r#loop = r#loop;
+        self.input_loop = r#loop;
         self
     }
 
-    fn serialize(&self) -> serde_json::Value {
-        let source = self.source.as_ref().unwrap();
-        let (source_key, source_val) = source.serialize();
-        json!({
-            "type": "mp4",
-            source_key: source_val,
-            "loop": self.r#loop,
-        })
-    }
-
-    pub fn build(self) -> (Mp4Input, serde_json::Value, InputPlayer) {
-        let register_request = self.serialize();
-
-        let mp4_input = Mp4Input { name: self.name };
-
-        (mp4_input, register_request, InputPlayer::Manual)
+    pub fn build(self) -> Mp4Input {
+        Mp4Input {
+            name: self.name,
+            source: self.source.unwrap(),
+            input_loop: self.input_loop,
+            player: InputPlayer::Manual,
+        }
     }
 }
