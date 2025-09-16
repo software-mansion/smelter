@@ -31,7 +31,7 @@ Sets the bearer token to be used when connecting to the `WHIP` server provided b
 
 ### `WHIP_OUTPUT_BEARER_TOKEN`
 
-Bearer token required to connect to the `WHIP` server that Smelter streams to.
+Bearer token used to connect to the `WHIP` server that Smelter streams to.
 
 ### `WHIP_OUTPUT_URL`
 
@@ -43,4 +43,4 @@ Sets the bearer token to be used when connecting to the `WHEP` server provided b
 
 ### `DEMO_JSON`
 
-Path to `JSON` file that contains dump with the state demo should start from.
+Path to `JSON` file that contains dump with the demo state.
