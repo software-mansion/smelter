@@ -49,9 +49,12 @@ pub enum RtpRegisterOptions {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(from = "RtpInputSerialize")]
+#[serde(from = "RtpInputDeserialize")]
 pub struct RtpInput {
+    #[serde(skip_serializing)]
     name: String,
+
+    #[serde(skip_serializing)]
     port: u16,
     video: Option<RtpInputVideoOptions>,
     audio: Option<RtpInputAudioOptions>,
@@ -63,8 +66,8 @@ pub struct RtpInput {
     player: InputPlayer,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RtpInputSerialize {
+#[derive(Debug, Deserialize)]
+pub struct RtpInputDeserialize {
     video: Option<RtpInputVideoOptions>,
     audio: Option<RtpInputAudioOptions>,
     transport_protocol: TransportProtocol,
@@ -72,8 +75,8 @@ pub struct RtpInputSerialize {
     player: InputPlayer,
 }
 
-impl From<RtpInputSerialize> for RtpInput {
-    fn from(value: RtpInputSerialize) -> Self {
+impl From<RtpInputDeserialize> for RtpInput {
+    fn from(value: RtpInputDeserialize) -> Self {
         let port = get_free_port();
         let name = format!("rtp_input_{}_{port}", value.transport_protocol);
         Self {
@@ -84,18 +87,6 @@ impl From<RtpInputSerialize> for RtpInput {
             transport_protocol: value.transport_protocol,
             path: value.path,
             stream_handles: vec![],
-            player: value.player,
-        }
-    }
-}
-
-impl From<&RtpInput> for RtpInputSerialize {
-    fn from(value: &RtpInput) -> Self {
-        Self {
-            video: value.video.clone(),
-            audio: value.audio.clone(),
-            transport_protocol: value.transport_protocol,
-            path: value.path.clone(),
             player: value.player,
         }
     }
@@ -322,11 +313,6 @@ impl InputHandler for RtpInput {
             "video": self.video.as_ref().map(|v| v.serialize()),
             "audio": self.audio.as_ref().map(|a| a.serialize()),
         })
-    }
-
-    fn json_dump(&self) -> Result<serde_json::Value> {
-        let rtp_input_serde: RtpInputSerialize = self.into();
-        Ok(serde_json::to_value(rtp_input_serde)?)
     }
 
     fn has_video(&self) -> bool {

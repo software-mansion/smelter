@@ -55,10 +55,6 @@ impl OutputHandler for WhepOutput {
         })
     }
 
-    fn json_dump(&self) -> Result<serde_json::Value> {
-        Ok(serde_json::to_value(self)?)
-    }
-
     fn on_after_registration(&mut self) -> Result<()> {
         match self.player {
             OutputPlayer::Manual => {

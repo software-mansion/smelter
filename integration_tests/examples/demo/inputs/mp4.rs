@@ -42,10 +42,6 @@ impl InputHandler for Mp4Input {
             "loop": self.input_loop,
         })
     }
-
-    fn json_dump(&self) -> Result<serde_json::Value> {
-        Ok(serde_json::to_value(self)?)
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

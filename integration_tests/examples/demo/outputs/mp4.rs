@@ -54,10 +54,6 @@ impl OutputHandler for Mp4Output {
         })
     }
 
-    fn json_dump(&self) -> Result<serde_json::Value> {
-        Ok(serde_json::to_value(self)?)
-    }
-
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
         json!({
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),

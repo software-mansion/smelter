@@ -11,7 +11,6 @@ pub mod whip;
 #[typetag::serde(tag = "type")]
 pub trait InputHandler: Debug {
     fn name(&self) -> &str;
-    fn json_dump(&self) -> Result<serde_json::Value>;
     fn serialize_register(&self) -> serde_json::Value;
 
     fn has_video(&self) -> bool {
@@ -33,7 +32,7 @@ impl std::fmt::Display for dyn InputHandler {
     }
 }
 
-#[derive(Debug, EnumIter, Display, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, EnumIter, Display, Clone, Copy)]
 pub enum InputProtocol {
     #[strum(to_string = "rtp_stream")]
     Rtp,

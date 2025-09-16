@@ -38,9 +38,12 @@ pub enum RtpRegisterOptions {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(from = "RtpOutputSerialize")]
+#[serde(from = "RtpOutputDeserialize")]
 pub struct RtpOutput {
+    #[serde(skip_serializing)]
     name: String,
+
+    #[serde(skip_serializing)]
     port: u16,
     video: Option<RtpOutputVideoOptions>,
     audio: Option<RtpOutputAudioOptions>,
@@ -51,16 +54,16 @@ pub struct RtpOutput {
     player: OutputPlayer,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RtpOutputSerialize {
+#[derive(Debug, Deserialize)]
+pub struct RtpOutputDeserialize {
     video: Option<RtpOutputVideoOptions>,
     audio: Option<RtpOutputAudioOptions>,
     transport_protocol: TransportProtocol,
     player: OutputPlayer,
 }
 
-impl From<RtpOutputSerialize> for RtpOutput {
-    fn from(value: RtpOutputSerialize) -> Self {
+impl From<RtpOutputDeserialize> for RtpOutput {
+    fn from(value: RtpOutputDeserialize) -> Self {
         let port = get_free_port();
         let name = format!("output_rtp_{}_{port}", value.transport_protocol);
         Self {
@@ -70,17 +73,6 @@ impl From<RtpOutputSerialize> for RtpOutput {
             audio: value.audio,
             transport_protocol: value.transport_protocol,
             stream_handles: vec![],
-            player: value.player,
-        }
-    }
-}
-
-impl From<&RtpOutput> for RtpOutputSerialize {
-    fn from(value: &RtpOutput) -> Self {
-        Self {
-            video: value.video.clone(),
-            audio: value.audio.clone(),
-            transport_protocol: value.transport_protocol,
             player: value.player,
         }
     }
@@ -200,11 +192,6 @@ impl OutputHandler for RtpOutput {
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
-    }
-
-    fn json_dump(&self) -> Result<serde_json::Value> {
-        let rtp_output_serde: RtpOutputSerialize = self.into();
-        Ok(serde_json::to_value(rtp_output_serde)?)
     }
 
     fn on_before_registration(&mut self) -> Result<()> {

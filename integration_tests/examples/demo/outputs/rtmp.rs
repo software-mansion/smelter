@@ -31,8 +31,13 @@ pub enum RtmpRegisterOptions {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(from = "RtmpOutputSerialize")]
 pub struct RtmpOutput {
+    #[serde(skip_serializing)]
     name: String,
+
+    #[serde(skip_serializing)]
     url: String,
+
+    #[serde(skip_serializing)]
     port: u16,
     video: Option<RtmpOutputVideoOptions>,
     audio: Option<RtmpOutputAudioOptions>,
@@ -46,7 +51,7 @@ pub struct RtmpOutput {
 // dynamically to avoid situation in which ports collide. This struct is required to make it
 // possible for name and URL fields to read the port value. JSON is deserialized to this struct and
 // remaining fields are determined during conversion
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct RtmpOutputSerialize {
     video: Option<RtmpOutputVideoOptions>,
     audio: Option<RtmpOutputAudioOptions>,
@@ -65,16 +70,6 @@ impl From<RtmpOutputSerialize> for RtmpOutput {
             video: value.video,
             audio: value.audio,
             stream_handles: vec![],
-            player: value.player,
-        }
-    }
-}
-
-impl From<&RtmpOutput> for RtmpOutputSerialize {
-    fn from(value: &RtmpOutput) -> Self {
-        Self {
-            video: value.video.clone(),
-            audio: value.audio.clone(),
             player: value.player,
         }
     }
@@ -101,11 +96,6 @@ impl OutputHandler for RtmpOutput {
             "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
-    }
-
-    fn json_dump(&self) -> Result<serde_json::Value> {
-        let rtmp_output_serde: RtmpOutputSerialize = self.into();
-        Ok(serde_json::to_value(rtmp_output_serde)?)
     }
 
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {

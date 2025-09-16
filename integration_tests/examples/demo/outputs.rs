@@ -20,7 +20,6 @@ pub trait OutputHandler: Debug {
     fn name(&self) -> &str;
     fn serialize_register(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value;
     fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value;
-    fn json_dump(&self) -> Result<serde_json::Value>;
 
     fn on_before_registration(&mut self) -> Result<()> {
         Ok(())
@@ -37,7 +36,7 @@ impl std::fmt::Display for dyn OutputHandler {
     }
 }
 
-#[derive(Debug, Display, EnumIter, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Display, EnumIter, Clone, Copy)]
 pub enum OutputProtocol {
     #[strum(to_string = "rtp_stream")]
     Rtp,
