@@ -484,13 +484,21 @@ impl RtpInputBuilder {
                 }
             }
             Some(TransportProtocol::TcpServer) => {
-                let player_options = vec![InputPlayer::Manual];
-                let player_selection =
-                    Select::new("Select player (ESC for Manual):", player_options)
-                        .prompt_skippable()?;
+                let (player_options, default_player) = match (&self.video, &self.audio) {
+                    (Some(_), Some(_)) => (vec![InputPlayer::Manual], InputPlayer::Manual),
+                    _ => (
+                        vec![InputPlayer::Gstreamer, InputPlayer::Manual],
+                        InputPlayer::Gstreamer,
+                    ),
+                };
+                let player_selection = Select::new(
+                    &format!("Select player (ESC for {default_player}):"),
+                    player_options,
+                )
+                .prompt_skippable()?;
                 match player_selection {
                     Some(player) => Ok(self.with_player(player)),
-                    None => Ok(self.with_player(InputPlayer::Manual)),
+                    None => Ok(self.with_player(default_player)),
                 }
             }
         }
