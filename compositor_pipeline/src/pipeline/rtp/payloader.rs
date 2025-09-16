@@ -147,5 +147,5 @@ pub enum PayloadingError {
     RtpLibError(#[from] rtp::Error),
 
     #[error(transparent)]
-    MarshalError(#[from] webrtc_util::Error),
+    MarshalError(#[from] webrtc::util::Error),
 }

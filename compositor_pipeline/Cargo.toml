@@ -20,7 +20,6 @@ thiserror = { workspace = true }
 log = { workspace = true }
 ffmpeg-next = { workspace = true }
 webrtc = { workspace = true }
-webrtc-util = { workspace = true }
 socket2 = { workspace = true }
 opus = { workspace = true }
 rand = { workspace = true }

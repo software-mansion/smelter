@@ -102,6 +102,15 @@ impl WhipClientTask {
 
         let (session_url, answer) = exchange_sdp_offers(&pc, &client).await?;
 
+        // disable tracks before set remote description
+        video_rtc_sender.replace_track(None).await?;
+        let rtc_sender_params = video_rtc_sender.get_parameters().await;
+        debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
+
+        audio_rtc_sender.replace_track(None).await?;
+        let rtc_sender_params = audio_rtc_sender.get_parameters().await;
+        debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
+
         pc.set_remote_description(answer).await?;
 
         let (video_thread_handle, video_track) = match &options.video {

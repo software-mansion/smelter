@@ -31,7 +31,6 @@ compositor_render = { workspace = true }
 socket2 = { workspace = true }
 bytes = { workspace = true }
 webrtc = {workspace = true }
-webrtc-util = { workspace = true }
 crossbeam-channel = { workspace = true }
 tracing = { workspace = true }
 opus = { workspace = true }
