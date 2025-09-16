@@ -17,7 +17,7 @@ use tracing::error;
 
 use crate::{
     inputs::{filter_video_inputs, InputHandle},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
     players::OutputPlayer,
     IP,
 };

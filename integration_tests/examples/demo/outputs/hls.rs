@@ -11,9 +11,7 @@ use tracing::error;
 
 use crate::{
     inputs::{filter_video_inputs, InputHandle},
-    outputs::{
-        scene::Scene, AudioEncoder, OutputHandle, OutputProtocol, VideoEncoder, VideoResolution,
-    },
+    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
     players::OutputPlayer,
     smelter_state::RunningState,
 };
@@ -32,7 +30,6 @@ pub enum HlsRegisterOptions {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HlsOutput {
-    r#type: OutputProtocol,
     name: String,
     path: PathBuf,
     video: Option<HlsOutputVideoOptions>,
@@ -51,6 +48,7 @@ impl HlsOutput {
     }
 }
 
+#[typetag::serde]
 impl OutputHandle for HlsOutput {
     fn name(&self) -> &str {
         &self.name
@@ -70,10 +68,6 @@ impl OutputHandle for HlsOutput {
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
-    }
-
-    fn json_dump(&self) -> Result<serde_json::Value> {
-        Ok(serde_json::to_value(self)?)
     }
 
     fn on_before_registration(&mut self) -> Result<()> {
@@ -219,7 +213,6 @@ impl HlsOutputBuilder {
     pub fn build(self) -> HlsOutput {
         let path = examples_root_dir().join(&self.name).join("index.m3u8");
         HlsOutput {
-            r#type: OutputProtocol::Hls,
             name: self.name,
             path,
             video: self.video,

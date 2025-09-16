@@ -12,7 +12,7 @@ use tracing::error;
 use crate::{
     autocompletion::FilePathCompleter,
     inputs::{filter_video_inputs, InputHandle},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
     utils::resolve_path,
 };
 const MP4_OUTPUT_PATH: &str = "MP4_OUTPUT_PATH";
@@ -52,7 +52,7 @@ impl OutputHandle for Mp4Output {
         })
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         json!({
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),

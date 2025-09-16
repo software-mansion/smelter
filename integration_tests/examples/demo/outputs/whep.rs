@@ -13,7 +13,7 @@ use tracing::error;
 
 use crate::{
     inputs::{filter_video_inputs, InputHandle},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
 };
 
 const WHEP_TOKEN_ENV: &str = "WHEP_OUTPUT_BEARER_TOKEN";

@@ -1,6 +1,5 @@
 use std::ops::Deref;
-use std::time::Duration;
-use std::{fs, mem, thread};
+use std::{fs, mem};
 
 use anyhow::{Context, Result};
 use inquire::Select;
@@ -13,8 +12,9 @@ use tracing::debug;
 use crate::inputs::hls::HlsInputBuilder;
 use crate::inputs::mp4::Mp4InputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
-use crate::inputs::InputHandler;
+use crate::inputs::InputHandle;
 
+use crate::outputs::hls::HlsOutputBuilder;
 use crate::outputs::mp4::Mp4OutputBuilder;
 use crate::outputs::whep::WhepOutputBuilder;
 use crate::outputs::whip::WhipOutputBuilder;
@@ -35,7 +35,7 @@ pub enum TransportProtocol {
     TcpServer,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum RunningState {
     Running,
     Idle,

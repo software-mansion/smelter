@@ -10,7 +10,7 @@ use tracing::error;
 
 use crate::{
     inputs::{filter_video_inputs, InputHandle},
-    outputs::{scene::Scene, AudioEncoder, OutputHandler, VideoEncoder, VideoResolution},
+    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
     players::OutputPlayer,
 };
 
@@ -98,7 +98,7 @@ impl OutputHandle for RtmpOutput {
         })
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandler]) -> serde_json::Value {
+    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         json!({
             "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
