@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde_json::json;
+use std::{path::PathBuf, thread, time::Duration};
 
 use crate::{
     audio::{self, AudioAnalyzeTolerance, AudioValidationConfig},
@@ -201,6 +202,118 @@ pub fn audio_mixing_no_offset() -> Result<()> {
         &new_output_dump,
         audio::ValidationMode::Artificial,
         audio_validation_config,
+    )?;
+
+    Ok(())
+}
+
+/// Two audio input streams mixed together with the same volume after update request.
+/// Second one joins after 10 seconds of `thread::sleep`.
+///
+/// Play audio for 20 seconds.
+#[test]
+pub fn audio_mixing_track_insertion_with_offset() -> Result<()> {
+    const OUTPUT_DUMP_FILE: &str = "audio_mixing_addition_with_offset_output.rtp";
+    let instance = CompositorInstance::start(None);
+    let input_1_port = instance.get_port();
+    let input_2_port = instance.get_port();
+    let output_port = instance.get_port();
+
+    instance.send_request(
+        "output/output_1/register",
+        json!({
+            "type": "rtp_stream",
+            "transport_protocol": "tcp_server",
+            "port": output_port,
+            "audio": {
+                "initial": {
+                    "inputs": [
+                        {
+                            "input_id": "input_1",
+                            "volume": 0.5,
+                        },
+                    ]
+                },
+                "channels": "stereo",
+                "encoder": {
+                    "type": "opus",
+                }
+            },
+        }),
+    )?;
+
+    let output_receiver = OutputReceiver::start(output_port, CommunicationProtocol::Tcp)?;
+
+    instance.send_request(
+        "output/output_1/unregister",
+        json!({
+            "schedule_time_ms": 20000,
+        }),
+    )?;
+
+    instance.send_request(
+        "input/input_1/register",
+        json!({
+            "type": "rtp_stream",
+            "transport_protocol": "tcp_server",
+            "port": input_1_port,
+            "audio": {
+                "decoder": "opus"
+            },
+            "offset_ms": 0,
+        }),
+    )?;
+
+    instance.send_request(
+        "input/input_2/register",
+        json!({
+            "type": "rtp_stream",
+            "transport_protocol": "tcp_server",
+            "port": input_2_port,
+            "audio": {
+                "decoder": "opus"
+            },
+            "offset_ms": 0,
+        }),
+    )?;
+
+    let audio_input_1 = input_dump_from_disk("a_opus_audio.rtp")?;
+    let audio_input_2 = input_dump_from_disk("c_sharp_opus_audio.rtp")?;
+    let audio_1_sender = PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?;
+    let audio_2_sender = PacketSender::new(CommunicationProtocol::Tcp, input_2_port)?;
+
+    let audio_1_handle = audio_1_sender.send_non_blocking(audio_input_1);
+    let audio_2_handle = audio_2_sender.send_non_blocking(audio_input_2);
+
+    instance.send_request("start", json!({}))?;
+    thread::sleep(Duration::from_secs(10));
+    instance.send_request(
+        "output/output_1/update",
+        json!({
+            "audio": {
+                "inputs": [
+                    {
+                        "input_id": "input_1",
+                        "volume": 0.5,
+                    },
+                    {
+                        "input_id": "input_2",
+                        "volume": 0.5,
+                    },
+                ]
+           },
+        }),
+    )?;
+
+    audio_1_handle.join().unwrap();
+    audio_2_handle.join().unwrap();
+    let new_output_dump = output_receiver.wait_for_output()?;
+
+    compare_audio_dumps(
+        OUTPUT_DUMP_FILE,
+        &new_output_dump,
+        audio::ValidationMode::Artificial,
+        AudioValidationConfig::default(),
     )?;
 
     Ok(())
