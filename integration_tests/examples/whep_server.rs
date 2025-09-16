@@ -55,15 +55,15 @@ fn client_code() -> Result<()> {
                     }
                 }
             },
-            "audio": {
-                "channels": "stereo",
-                "encoder": { "type": "opus", "preset": "quality" },
-                "initial": {
-                    "inputs": [
-                        {"input_id": "input_1"}
-                    ]
-                }
-            }
+           // "audio": {
+           //     "channels": "stereo",
+           //     "encoder": { "type": "opus", "preset": "quality" },
+           //     "initial": {
+           //         "inputs": [
+           //             {"input_id": "input_1"}
+           //         ]
+           //     }
+           // }
         }),
     )?;
 

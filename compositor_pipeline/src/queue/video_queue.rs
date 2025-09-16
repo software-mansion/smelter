@@ -1,5 +1,5 @@
 use crossbeam_channel::{Receiver, TryRecvError};
-use tracing::debug;
+use tracing::{debug, trace};
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -323,6 +323,7 @@ impl VideoQueueInput {
             match self.receiver.try_recv()? {
                 PipelineEvent::Data(frame) => {
                     let _ = self.shared_state.get_or_init_first_pts(frame.pts);
+                    trace!(?frame, pending_len = self.receiver.len(), "Enqueue frame");
                     self.queue.push_back(frame);
                 }
                 PipelineEvent::EOS => self.eos_received = true,
@@ -337,6 +338,7 @@ impl VideoQueueInput {
                 PipelineEvent::Data(mut frame) => {
                     let first_pts = self.shared_state.get_or_init_first_pts(frame.pts);
                     frame.pts = offset_pts + frame.pts - first_pts;
+                    trace!(?frame, pending_len = self.receiver.len(), "Enqueue frame");
                     self.queue.push_back(frame);
                 }
                 PipelineEvent::EOS => self.eos_received = true,

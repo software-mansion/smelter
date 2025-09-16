@@ -133,7 +133,8 @@ impl WhipInputVideoOptions {
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "decoder_preferences": [
-                self.decoder.to_string(),
+ //               self.decoder.to_string(),
+                "ffmpeg_h264"
             ],
         })
     }

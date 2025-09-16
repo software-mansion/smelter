@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use tokio::sync::broadcast;
+use tracing::{debug, info};
 
 use crate::{
     pipeline::{
@@ -50,6 +51,7 @@ impl WhepOutput {
         output_id: OutputId,
         options: WhepOutputOptions,
     ) -> Result<Self, OutputInitError> {
+        info!(?options);
         let state_clone = ctx.whip_whep_state.clone();
         let Some(state) = state_clone else {
             return Err(OutputInitError::WhipWhepServerNotRunning);

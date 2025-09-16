@@ -65,7 +65,7 @@
             console.log('New audio track');
             audioTrack = ev.track;
           }
-          if (videoTrack && audioTrack) {
+          if (videoTrack) {
             res({video: videoTrack, audio: audioTrack});
           }
         };
@@ -82,7 +82,7 @@
 
       const stream = new MediaStream();
       stream.addTrack(tracks.video);
-      stream.addTrack(tracks.audio);
+    //  stream.addTrack(tracks.audio);
       return stream;
     }
 

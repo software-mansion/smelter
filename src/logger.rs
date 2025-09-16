@@ -87,7 +87,8 @@ pub fn init_logger(opts: LoggerConfig) {
         let filter = tracing_subscriber::EnvFilter::new(opts.file_level.clone());
         Some(
             fmt::Layer::default()
-                .json()
+                .compact()
+                .with_ansi(false)
                 .with_writer(writer)
                 .with_filter(filter),
         )

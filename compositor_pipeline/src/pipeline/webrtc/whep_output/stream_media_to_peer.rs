@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use compositor_render::error::ErrorStack;
 use tokio::sync::broadcast;
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, trace, warn};
 use webrtc::track::track_local::{track_local_static_rtp::TrackLocalStaticRTP, TrackLocalWriter};
 
 use crate::event::Event;
@@ -26,6 +26,11 @@ pub async fn stream_media_to_peer(
     let mut next_audio_event = None;
 
     loop {
+        warn!(
+            video_len=?video_stream.as_mut().map(|s| s.receiver.len()),
+            audio_len=?audio_stream.as_mut().map(|s| s.receiver.len()),
+            "Queue len"
+        );
         match (
             &next_video_event,
             &next_audio_event,
