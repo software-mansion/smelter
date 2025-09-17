@@ -1,3 +1,5 @@
+import type { Outputs } from '@swmansion/smelter';
+
 type Config = {
   logger: {
     level: 'info' | 'warn';
@@ -7,6 +9,7 @@ type Config = {
   };
   whepBaseUrl: string;
   h264Decoder: 'ffmpeg_h264' | 'vulkan_h264';
+  h264Encoder: Outputs.WhepVideoEncoderOptions;
 };
 
 export const config: Config =
@@ -17,6 +20,7 @@ export const config: Config =
         },
         whepBaseUrl: 'https://puffer.fishjam.io/smelter-demo-whep/whep',
         h264Decoder: 'vulkan_h264',
+        h264Encoder: { type: 'vulkan_h264' },
       }
     : {
         logger: {
@@ -27,4 +31,11 @@ export const config: Config =
         },
         whepBaseUrl: 'http://127.0.0.1:9000/whep',
         h264Decoder: 'ffmpeg_h264',
+        h264Encoder: {
+          type: 'ffmpeg_h264',
+          preset: 'ultrafast',
+          ffmpegOptions: {
+            tune: 'zerolatency',
+          },
+        },
       };
