@@ -69,9 +69,11 @@ export class RoomState {
     this.creationTimestamp = Date.now();
 
     setTimeout(async () => {
-      const maybeFirstInput = this.inputs[0];
-      if (maybeFirstInput) {
-        await this.connectInput(maybeFirstInput.inputId);
+      for (let i = 0; i < this.inputs.length; i++) {
+        const maybeInput = this.inputs[i];
+        if (maybeInput) {
+          await this.connectInput(maybeInput.inputId);
+        }
       }
     }, 0);
   }
@@ -80,22 +82,24 @@ export class RoomState {
     const inputs: RoomInputState[] = [];
 
     if (this.mp4Files.length > 0) {
-      // Pick a random mp4 file
       const randomIndex = Math.floor(Math.random() * this.mp4Files.length);
-      const randomMp4 = this.mp4Files[randomIndex];
-      const mp4FilePath = path.join(this.mp4sDir, randomMp4);
+      for (let i = 0; i < 2; i++) {
+        const randomMp4 = this.mp4Files[(randomIndex + i) % this.mp4Files.length];
+        console.log(randomMp4);
+        const mp4FilePath = path.join(this.mp4sDir, randomMp4);
 
-      inputs.push({
-        inputId: `${idPrefix}::local::sample_streamer`,
-        type: 'local-mp4',
-        status: 'disconnected',
-        metadata: {
-          title: `[MP4] ${formatMp4Name(randomMp4)}`,
-          description: '[Static source] AI Generated',
-        },
-        mp4FilePath,
-        volume: 0,
-      });
+        inputs.push({
+          inputId: `${idPrefix}::local::sample_streamer::${i}`,
+          type: 'local-mp4',
+          status: 'disconnected',
+          metadata: {
+            title: `[MP4] ${formatMp4Name(randomMp4)}`,
+            description: '[Static source] AI Generated',
+          },
+          mp4FilePath,
+          volume: 0,
+        });
+      }
     }
     return inputs;
   }
