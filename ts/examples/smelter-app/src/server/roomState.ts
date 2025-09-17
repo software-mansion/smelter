@@ -34,6 +34,10 @@ export type RegisterInputOptions =
   | {
       type: 'kick-channel';
       kickChannelId: string;
+    }
+  | {
+      type: 'local-mp4';
+      mp4Url: string;
     };
 
 export class RoomState {
@@ -110,6 +114,51 @@ export class RoomState {
       return inputId;
     } else if (opts.type === 'kick-channel') {
       throw new Error('Add kick support');
+    } else if (opts.type === 'local-mp4') {
+      console.log('Adding local mp4');
+      let mp4Path = path.join(process.cwd(), 'mp4s', opts.mp4Url);
+      let mp4Name = opts.mp4Url;
+      if (opts.mp4Url === 'random') {
+        const mp4sDir = path.join(process.cwd(), 'mp4s');
+        let files: string[] = [];
+        try {
+          files = fs.readdirSync(mp4sDir);
+        } catch {
+          throw new Error('Failed to read mp4s directory');
+        }
+        const mp4Files = files.filter(f => f.toLowerCase().endsWith('.mp4'));
+        if (mp4Files.length === 0) {
+          throw new Error('No mp4 files found in mp4s directory');
+        }
+        // Pick a random mp4 file
+        const randomIndex = Math.floor(Math.random() * mp4Files.length);
+
+        mp4Name = mp4Files[randomIndex];
+        mp4Path = path.join(mp4sDir, mp4Name);
+      }
+      const inputId = `${this.idPrefix}::local::sample_streamer::${Date.now()}`;
+
+      const fileNameWithoutExt = mp4Name.replace(/\.mp4$/i, '');
+      const formattedName = fileNameWithoutExt
+        .split(/[_\- ]+/)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+
+      if (fs.existsSync(mp4Path)) {
+        this.inputs.push({
+          inputId,
+          type: 'local-mp4',
+          status: 'disconnected',
+          metadata: {
+            title: `[MP4] ${formattedName}`,
+            description: '[Static source] AI Generated',
+          },
+          mp4FilePath: mp4Path,
+          volume: 0,
+        });
+      }
+
+      return inputId;
     }
   }
 
@@ -256,32 +305,37 @@ function inputIdForTwitchInput(idPrefix: string, twitchChannelId: string): strin
 
 function getInitialInputState(idPrefix: string): RoomInputState[] {
   const inputs: RoomInputState[] = [];
-  const fc25filePath = path.join(process.cwd(), `fc_25_gameplay.mp4`);
-  if (fs.existsSync(fc25filePath)) {
-    inputs.push({
-      inputId: `${idPrefix}::local::fc_25_gameplay`,
-      type: 'local-mp4',
-      status: 'disconnected',
-      metadata: {
-        title: '[MP4] FC 25 Gameplay',
-        description: '[Static source] EA Sports FC 25 Gameplay',
-      },
-      mp4FilePath: fc25filePath,
-      volume: 0,
-    });
+  const mp4sDir = path.join(process.cwd(), 'mp4s');
+  let files: string[] = [];
+  try {
+    files = fs.readdirSync(mp4sDir);
+  } catch (err) {
+    // Directory does not exist or cannot be read
+    return inputs;
   }
+  const mp4Files = files.filter(f => f.toLowerCase().endsWith('.mp4'));
+  if (mp4Files.length > 0) {
+    // Pick a random mp4 file
+    const randomIndex = Math.floor(Math.random() * mp4Files.length);
+    const randomMp4 = mp4Files[randomIndex];
+    const mp4FilePath = path.join(mp4sDir, randomMp4);
 
-  const nbaFilePath = path.join(process.cwd(), `nba_gameplay.mp4`);
-  if (fs.existsSync(path.join(process.cwd(), `nba_gameplay.mp4`))) {
+    // Convert filename (without extension) from snake_case to Separated Capitalized Words
+    const fileNameWithoutExt = randomMp4.replace(/\.mp4$/i, '');
+    const formattedName = fileNameWithoutExt
+      .split(/[_\- ]+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+
     inputs.push({
-      inputId: `${idPrefix}::local::nba_gameplay`,
+      inputId: `${idPrefix}::local::sample_streamer`,
       type: 'local-mp4',
       status: 'disconnected',
       metadata: {
-        title: '[MP4] NBA 2K25 Gameplay',
-        description: '[Static source] NBA 2K25 Gameplay',
+        title: `[MP4] ${formattedName}`,
+        description: '[Static source] AI Generated',
       },
-      mp4FilePath: nbaFilePath,
+      mp4FilePath,
       volume: 0,
     });
   }

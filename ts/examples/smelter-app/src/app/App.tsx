@@ -28,7 +28,7 @@ function OutputScene() {
   const layout = useStore(store, state => state.layout);
 
   return (
-    <View style={{ backgroundColor: '#161127', padding: 50 }}>
+    <View style={{ backgroundColor: '#161127', padding: 0 }}>
       {layout === 'grid' ? (
         <GridLayout />
       ) : layout === 'primary-on-top' ? (

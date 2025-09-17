@@ -6,6 +6,8 @@ import { state } from './serverState';
 import { TwitchChannelSuggestions } from '../twitch/ChannelMonitor';
 import type { RoomInputState } from './roomState';
 import { config } from '../config';
+import fs from 'fs';
+import path from 'path';
 
 type RoomIdParams = { Params: { roomId: string } };
 type RoomAndInputIdParams = { Params: { roomId: string; inputId: string } };
@@ -24,6 +26,19 @@ type InputState = {
 export const routes = Fastify({
   logger: config.logger,
 }).withTypeProvider<TypeBoxTypeProvider>();
+
+routes.get('/resources/mp4s', async (_req, res) => {
+  const mp4sDir = path.resolve(process.cwd(), 'mp4s');
+  let files: string[] = [];
+  try {
+    files = await fs.promises.readdir(mp4sDir);
+  } catch (err) {
+    res.status(500).send({ error: 'Failed to read mp4s directory' });
+    return;
+  }
+  const mp4Files = files.filter(f => f.toLowerCase().endsWith('.mp4'));
+  res.status(200).send({ mp4s: mp4Files });
+});
 
 routes.post('/room', async (_req, res) => {
   console.log('[request] Create new room');
@@ -84,6 +99,10 @@ const AddInputSchema = Type.Union([
     type: Type.Literal('kick-channel'),
     kickChannelId: Type.String(),
   }),
+  Type.Object({
+    type: Type.Literal('local-mp4'),
+    mp4Url: Type.String(),
+  }),
 ]);
 
 routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
@@ -92,10 +111,12 @@ routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
   async (req, res) => {
     const roomId = req.params.roomId;
     console.log('[request] Create input', { body: req.body, roomId });
-
     const room = state.getRoom(roomId);
     const inputId = await room.addNewInput(req.body);
-
+    console.log('[info] Added input', { inputId });
+    if (inputId) {
+      await room.connectInput(inputId);
+    }
     res.status(200).send({ inputId });
   }
 );
