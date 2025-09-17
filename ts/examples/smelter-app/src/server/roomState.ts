@@ -1,10 +1,11 @@
-import fs from 'node:fs';
+import fs from 'fs-extra';
 import path from 'node:path';
 import { SmelterInstance, type RegisterSmelterInputOptions, type SmelterOutput } from '../smelter';
 import { hlsUrlForTwitchChannel } from '../streamlink';
 import { TwitchChannelMonitor } from '../twitch/ChannelMonitor';
 import { sleep } from '../utils';
 import type { InputConfig, Layout } from '../app/store';
+import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 
 export type RoomInputState = {
   inputId: string;
@@ -34,6 +35,13 @@ export type RegisterInputOptions =
   | {
       type: 'kick-channel';
       kickChannelId: string;
+    }
+  | {
+      type: 'local-mp4';
+      source: {
+        fileName?: string;
+        url?: string;
+      };
     };
 
 export class RoomState {
@@ -41,6 +49,8 @@ export class RoomState {
   private layout: Layout = 'grid';
   private idPrefix: string;
 
+  private mp4sDir: string;
+  private mp4Files: string[];
   private output: SmelterOutput;
 
   public lastReadTimestamp: number;
@@ -49,7 +59,9 @@ export class RoomState {
   public pendingDelete?: boolean;
 
   public constructor(idPrefix: string, output: SmelterOutput) {
-    this.inputs = getInitialInputState(idPrefix);
+    this.mp4sDir = path.join(process.cwd(), 'mp4s');
+    this.mp4Files = mp4SuggestionsMonitor.mp4Files;
+    this.inputs = this.getInitialInputState(idPrefix);
     this.idPrefix = idPrefix;
     this.output = output;
 
@@ -62,6 +74,30 @@ export class RoomState {
         await this.connectInput(maybeFirstInput.inputId);
       }
     }, 0);
+  }
+
+  private getInitialInputState(idPrefix: string): RoomInputState[] {
+    const inputs: RoomInputState[] = [];
+
+    if (this.mp4Files.length > 0) {
+      // Pick a random mp4 file
+      const randomIndex = Math.floor(Math.random() * this.mp4Files.length);
+      const randomMp4 = this.mp4Files[randomIndex];
+      const mp4FilePath = path.join(this.mp4sDir, randomMp4);
+
+      inputs.push({
+        inputId: `${idPrefix}::local::sample_streamer`,
+        type: 'local-mp4',
+        status: 'disconnected',
+        metadata: {
+          title: `[MP4] ${formatMp4Name(randomMp4)}`,
+          description: '[Static source] AI Generated',
+        },
+        mp4FilePath,
+        volume: 0,
+      });
+    }
+    return inputs;
   }
 
   public getWhepUrl(): string {
@@ -110,6 +146,27 @@ export class RoomState {
       return inputId;
     } else if (opts.type === 'kick-channel') {
       throw new Error('Add kick support');
+    } else if (opts.type === 'local-mp4' && opts.source.fileName) {
+      console.log('Adding local mp4');
+      let mp4Path = path.join(process.cwd(), 'mp4s', opts.source.fileName);
+      let mp4Name = opts.source.fileName;
+      const inputId = `${this.idPrefix}::local::sample_streamer::${Date.now()}`;
+
+      if (await fs.exists(mp4Path)) {
+        this.inputs.push({
+          inputId,
+          type: 'local-mp4',
+          status: 'disconnected',
+          metadata: {
+            title: `[MP4] ${formatMp4Name(mp4Name)}`,
+            description: '[Static source] AI Generated',
+          },
+          mp4FilePath: mp4Path,
+          volume: 0,
+        });
+      }
+
+      return inputId;
     }
   }
 
@@ -254,36 +311,10 @@ function inputIdForTwitchInput(idPrefix: string, twitchChannelId: string): strin
   return `${idPrefix}::twitch::${twitchChannelId}`;
 }
 
-function getInitialInputState(idPrefix: string): RoomInputState[] {
-  const inputs: RoomInputState[] = [];
-  const fc25filePath = path.join(process.cwd(), `fc_25_gameplay.mp4`);
-  if (fs.existsSync(fc25filePath)) {
-    inputs.push({
-      inputId: `${idPrefix}::local::fc_25_gameplay`,
-      type: 'local-mp4',
-      status: 'disconnected',
-      metadata: {
-        title: '[MP4] FC 25 Gameplay',
-        description: '[Static source] EA Sports FC 25 Gameplay',
-      },
-      mp4FilePath: fc25filePath,
-      volume: 0,
-    });
-  }
-
-  const nbaFilePath = path.join(process.cwd(), `nba_gameplay.mp4`);
-  if (fs.existsSync(path.join(process.cwd(), `nba_gameplay.mp4`))) {
-    inputs.push({
-      inputId: `${idPrefix}::local::nba_gameplay`,
-      type: 'local-mp4',
-      status: 'disconnected',
-      metadata: {
-        title: '[MP4] NBA 2K25 Gameplay',
-        description: '[Static source] NBA 2K25 Gameplay',
-      },
-      mp4FilePath: nbaFilePath,
-      volume: 0,
-    });
-  }
-  return inputs;
+function formatMp4Name(fileName: string): string {
+  const fileNameWithoutExt = fileName.replace(/\.mp4$/i, '');
+  return fileNameWithoutExt
+    .split(/[_\- ]+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 }
