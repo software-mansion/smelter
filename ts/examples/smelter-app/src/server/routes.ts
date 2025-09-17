@@ -6,6 +6,7 @@ import { state } from './serverState';
 import { TwitchChannelSuggestions } from '../twitch/ChannelMonitor';
 import type { RoomInputState } from './roomState';
 import { config } from '../config';
+import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 
 type RoomIdParams = { Params: { roomId: string } };
 type RoomAndInputIdParams = { Params: { roomId: string; inputId: string } };
@@ -24,6 +25,19 @@ type InputState = {
 export const routes = Fastify({
   logger: config.logger,
 }).withTypeProvider<TypeBoxTypeProvider>();
+
+routes.get('/suggestions/mp4s', async (_req, res) => {
+  res.status(200).send({ mp4s: mp4SuggestionsMonitor.mp4Files });
+});
+
+routes.get('/suggestions/twitch', async (_req, res) => {
+  res.status(200).send({ twitch: TwitchChannelSuggestions.getTopStreams() });
+});
+
+//TODO: Remove this later
+routes.get('/suggestions', async (_req, res) => {
+  res.status(200).send({ twitch: TwitchChannelSuggestions.getTopStreams() });
+});
 
 routes.post('/room', async (_req, res) => {
   console.log('[request] Create new room');
@@ -84,6 +98,17 @@ const AddInputSchema = Type.Union([
     type: Type.Literal('kick-channel'),
     kickChannelId: Type.String(),
   }),
+  Type.Object({
+    type: Type.Literal('local-mp4'),
+    source: Type.Union([
+      Type.Object({
+        fileName: Type.String(),
+      }),
+      Type.Object({
+        url: Type.String(),
+      }),
+    ]),
+  }),
 ]);
 
 routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
@@ -92,10 +117,12 @@ routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
   async (req, res) => {
     const roomId = req.params.roomId;
     console.log('[request] Create input', { body: req.body, roomId });
-
     const room = state.getRoom(roomId);
     const inputId = await room.addNewInput(req.body);
-
+    console.log('[info] Added input', { inputId });
+    if (inputId) {
+      await room.connectInput(inputId);
+    }
     res.status(200).send({ inputId });
   }
 );
@@ -143,10 +170,6 @@ routes.delete<RoomAndInputIdParams>('/room/:roomId/input/:inputId', async (req, 
   await room.removeInput(inputId);
 
   res.status(200).send({ status: 'ok' });
-});
-
-routes.get('/suggestions', async (_req, res) => {
-  res.status(200).send({ twitch: TwitchChannelSuggestions.getTopStreams() });
 });
 
 function publicInputState(input: RoomInputState): InputState {
