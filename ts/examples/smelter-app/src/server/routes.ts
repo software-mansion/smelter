@@ -6,8 +6,7 @@ import { state } from './serverState';
 import { TwitchChannelSuggestions } from '../twitch/ChannelMonitor';
 import type { RoomInputState } from './roomState';
 import { config } from '../config';
-import fs from 'fs';
-import path from 'path';
+import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 
 type RoomIdParams = { Params: { roomId: string } };
 type RoomAndInputIdParams = { Params: { roomId: string; inputId: string } };
@@ -28,19 +27,15 @@ export const routes = Fastify({
 }).withTypeProvider<TypeBoxTypeProvider>();
 
 routes.get('/suggestions/mp4s', async (_req, res) => {
-  const mp4sDir = path.resolve(process.cwd(), 'mp4s');
-  let files: string[] = [];
-  try {
-    files = await fs.promises.readdir(mp4sDir);
-  } catch {
-    res.status(500).send({ error: 'Failed to read mp4s directory' });
-    return;
-  }
-  const mp4Files = files.filter(f => f.toLowerCase().endsWith('.mp4'));
-  res.status(200).send({ mp4s: mp4Files });
+  res.status(200).send({ mp4s: mp4SuggestionsMonitor.mp4Files });
 });
 
 routes.get('/suggestions/twitch', async (_req, res) => {
+  res.status(200).send({ twitch: TwitchChannelSuggestions.getTopStreams() });
+});
+
+//TODO: Remove this later
+routes.get('/suggestions', async (_req, res) => {
   res.status(200).send({ twitch: TwitchChannelSuggestions.getTopStreams() });
 });
 
@@ -105,7 +100,10 @@ const AddInputSchema = Type.Union([
   }),
   Type.Object({
     type: Type.Literal('local-mp4'),
-    mp4Url: Type.String(),
+    source: Type.Object({
+      fileName: Type.String(),
+      url: Type.String(),
+    }),
   }),
 ]);
 

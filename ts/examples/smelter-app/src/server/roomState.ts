@@ -1,10 +1,11 @@
-import fs from 'node:fs';
+import fs from 'fs-extra';
 import path from 'node:path';
 import { SmelterInstance, type RegisterSmelterInputOptions, type SmelterOutput } from '../smelter';
 import { hlsUrlForTwitchChannel } from '../streamlink';
 import { TwitchChannelMonitor } from '../twitch/ChannelMonitor';
 import { sleep } from '../utils';
 import type { InputConfig, Layout } from '../app/store';
+import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 
 export type RoomInputState = {
   inputId: string;
@@ -37,7 +38,10 @@ export type RegisterInputOptions =
     }
   | {
       type: 'local-mp4';
-      mp4Url: string;
+      source: {
+        fileName: string;
+        url: string;
+      };
     };
 
 export class RoomState {
@@ -45,6 +49,8 @@ export class RoomState {
   private layout: Layout = 'grid';
   private idPrefix: string;
 
+  private mp4sDir: string;
+  private mp4Files: string[];
   private output: SmelterOutput;
 
   public lastReadTimestamp: number;
@@ -53,7 +59,9 @@ export class RoomState {
   public pendingDelete?: boolean;
 
   public constructor(idPrefix: string, output: SmelterOutput) {
-    this.inputs = getInitialInputState(idPrefix);
+    this.mp4sDir = path.join(process.cwd(), 'mp4s');
+    this.mp4Files = mp4SuggestionsMonitor.mp4Files;
+    this.inputs = this.getInitialInputState(idPrefix);
     this.idPrefix = idPrefix;
     this.output = output;
 
@@ -66,6 +74,30 @@ export class RoomState {
         await this.connectInput(maybeFirstInput.inputId);
       }
     }, 0);
+  }
+
+  private getInitialInputState(idPrefix: string): RoomInputState[] {
+    const inputs: RoomInputState[] = [];
+
+    if (this.mp4Files.length > 0) {
+      // Pick a random mp4 file
+      const randomIndex = Math.floor(Math.random() * this.mp4Files.length);
+      const randomMp4 = this.mp4Files[randomIndex];
+      const mp4FilePath = path.join(this.mp4sDir, randomMp4);
+
+      inputs.push({
+        inputId: `${idPrefix}::local::sample_streamer`,
+        type: 'local-mp4',
+        status: 'disconnected',
+        metadata: {
+          title: `[MP4] ${formatMp4Name(randomMp4)}`,
+          description: '[Static source] AI Generated',
+        },
+        mp4FilePath,
+        volume: 0,
+      });
+    }
+    return inputs;
   }
 
   public getWhepUrl(): string {
@@ -116,41 +148,17 @@ export class RoomState {
       throw new Error('Add kick support');
     } else if (opts.type === 'local-mp4') {
       console.log('Adding local mp4');
-      let mp4Path = path.join(process.cwd(), 'mp4s', opts.mp4Url);
-      let mp4Name = opts.mp4Url;
-      if (opts.mp4Url === 'random') {
-        const mp4sDir = path.join(process.cwd(), 'mp4s');
-        let files: string[] = [];
-        try {
-          files = fs.readdirSync(mp4sDir);
-        } catch {
-          throw new Error('Failed to read mp4s directory');
-        }
-        const mp4Files = files.filter(f => f.toLowerCase().endsWith('.mp4'));
-        if (mp4Files.length === 0) {
-          throw new Error('No mp4 files found in mp4s directory');
-        }
-        // Pick a random mp4 file
-        const randomIndex = Math.floor(Math.random() * mp4Files.length);
-
-        mp4Name = mp4Files[randomIndex];
-        mp4Path = path.join(mp4sDir, mp4Name);
-      }
+      let mp4Path = path.join(process.cwd(), 'mp4s', opts.source.fileName);
+      let mp4Name = opts.source.fileName;
       const inputId = `${this.idPrefix}::local::sample_streamer::${Date.now()}`;
 
-      const fileNameWithoutExt = mp4Name.replace(/\.mp4$/i, '');
-      const formattedName = fileNameWithoutExt
-        .split(/[_\- ]+/)
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
-
-      if (fs.existsSync(mp4Path)) {
+      if (await fs.exists(mp4Path)) {
         this.inputs.push({
           inputId,
           type: 'local-mp4',
           status: 'disconnected',
           metadata: {
-            title: `[MP4] ${formattedName}`,
+            title: `[MP4] ${formatMp4Name(mp4Name)}`,
             description: '[Static source] AI Generated',
           },
           mp4FilePath: mp4Path,
@@ -303,40 +311,10 @@ function inputIdForTwitchInput(idPrefix: string, twitchChannelId: string): strin
   return `${idPrefix}::twitch::${twitchChannelId}`;
 }
 
-function getInitialInputState(idPrefix: string): RoomInputState[] {
-  const inputs: RoomInputState[] = [];
-  const mp4sDir = path.join(process.cwd(), 'mp4s');
-  let files: string[] = [];
-  try {
-    files = fs.readdirSync(mp4sDir);
-  } catch {
-    return inputs;
-  }
-  const mp4Files = files.filter(f => f.toLowerCase().endsWith('.mp4'));
-  if (mp4Files.length > 0) {
-    // Pick a random mp4 file
-    const randomIndex = Math.floor(Math.random() * mp4Files.length);
-    const randomMp4 = mp4Files[randomIndex];
-    const mp4FilePath = path.join(mp4sDir, randomMp4);
-
-    // Convert filename (without extension) from snake_case to Separated Capitalized Words
-    const fileNameWithoutExt = randomMp4.replace(/\.mp4$/i, '');
-    const formattedName = fileNameWithoutExt
-      .split(/[_\- ]+/)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-
-    inputs.push({
-      inputId: `${idPrefix}::local::sample_streamer`,
-      type: 'local-mp4',
-      status: 'disconnected',
-      metadata: {
-        title: `[MP4] ${formattedName}`,
-        description: '[Static source] AI Generated',
-      },
-      mp4FilePath,
-      volume: 0,
-    });
-  }
-  return inputs;
+function formatMp4Name(fileName: string): string {
+  const fileNameWithoutExt = fileName.replace(/\.mp4$/i, '');
+  return fileNameWithoutExt
+    .split(/[_\- ]+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 }
