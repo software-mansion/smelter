@@ -100,10 +100,14 @@ const AddInputSchema = Type.Union([
   }),
   Type.Object({
     type: Type.Literal('local-mp4'),
-    source: Type.Object({
-      fileName: Type.String(),
-      url: Type.String(),
-    }),
+    source: Type.Union([
+      Type.Object({
+        fileName: Type.String(),
+      }),
+      Type.Object({
+        url: Type.String(),
+      }),
+    ]),
   }),
 ]);
 

@@ -39,8 +39,8 @@ export type RegisterInputOptions =
   | {
       type: 'local-mp4';
       source: {
-        fileName: string;
-        url: string;
+        fileName?: string;
+        url?: string;
       };
     };
 
@@ -146,7 +146,7 @@ export class RoomState {
       return inputId;
     } else if (opts.type === 'kick-channel') {
       throw new Error('Add kick support');
-    } else if (opts.type === 'local-mp4') {
+    } else if (opts.type === 'local-mp4' && opts.source.fileName) {
       console.log('Adding local mp4');
       let mp4Path = path.join(process.cwd(), 'mp4s', opts.source.fileName);
       let mp4Name = opts.source.fileName;
