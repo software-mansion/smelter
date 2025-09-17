@@ -27,7 +27,7 @@ export const routes = Fastify({
   logger: config.logger,
 }).withTypeProvider<TypeBoxTypeProvider>();
 
-routes.get('/resources/mp4s', async (_req, res) => {
+routes.get('/suggestions/mp4s', async (_req, res) => {
   const mp4sDir = path.resolve(process.cwd(), 'mp4s');
   let files: string[] = [];
   try {
@@ -38,6 +38,10 @@ routes.get('/resources/mp4s', async (_req, res) => {
   }
   const mp4Files = files.filter(f => f.toLowerCase().endsWith('.mp4'));
   res.status(200).send({ mp4s: mp4Files });
+});
+
+routes.get('/suggestions/twitch', async (_req, res) => {
+  res.status(200).send({ twitch: TwitchChannelSuggestions.getTopStreams() });
 });
 
 routes.post('/room', async (_req, res) => {
@@ -164,10 +168,6 @@ routes.delete<RoomAndInputIdParams>('/room/:roomId/input/:inputId', async (req, 
   await room.removeInput(inputId);
 
   res.status(200).send({ status: 'ok' });
-});
-
-routes.get('/suggestions', async (_req, res) => {
-  res.status(200).send({ twitch: TwitchChannelSuggestions.getTopStreams() });
 });
 
 function publicInputState(input: RoomInputState): InputState {

@@ -22,6 +22,8 @@ target/
 .idea
 
 # Assets
+**/*.mp4
+!ts/examples/smelter-app/mp4s/**/*.mp4
 **/*.webm
 **/*.done
 **/*.yuv
@@ -29,7 +31,6 @@ target/
 
 # Generated MP4s
 **/*.mp4\.old\.*
-integration_tests/examples/assets/*.mp4
 
 # MacOS
 **/.DS_Store
