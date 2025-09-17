@@ -20,6 +20,7 @@ target/
 
 # Assets
 **/*.mp4
+!ts/examples/smelter-app/mp4s/**/*.mp4
 **/*.webm
 **/*.done
 **/*.yuv
