@@ -53,13 +53,7 @@ export class SmelterManager {
     await this.instance.registerOutput(roomId, <App store={store} />, {
       type: 'whep_server',
       video: {
-        encoder: {
-          type: 'ffmpeg_h264',
-          preset: 'ultrafast',
-          ffmpegOptions: {
-            tune: 'zerolatency',
-          },
-        },
+        encoder: config.h264Encoder,
         resolution: {
           width: 1920,
           height: 1080,
