@@ -84,8 +84,7 @@ export class RoomState {
     if (this.mp4Files.length > 0) {
       const randomIndex = Math.floor(Math.random() * this.mp4Files.length);
       for (let i = 0; i < 2; i++) {
-        const randomMp4 = this.mp4Files[(randomIndex + i) % this.mp4Files.length];
-        console.log(randomMp4);
+        const randomMp4 = this.mp4Files[(randomIndex + i) % this.mp4sDir.length];
         const mp4FilePath = path.join(this.mp4sDir, randomMp4);
 
         inputs.push({
