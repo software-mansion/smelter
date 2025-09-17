@@ -78,7 +78,7 @@ export async function handleRegisterWhepInput(
 
   pc.ontrack = event => {
     const track = event.track;
-    ctx.logger.debug('Received track:', track.kind);
+    ctx.logger.debug(`Received track:  ${track.kind}`);
     inputStream.addTrack(track);
     receivedTracks.push(track);
   };
