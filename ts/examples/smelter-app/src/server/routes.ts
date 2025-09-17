@@ -32,7 +32,7 @@ routes.get('/resources/mp4s', async (_req, res) => {
   let files: string[] = [];
   try {
     files = await fs.promises.readdir(mp4sDir);
-  } catch (err) {
+  } catch {
     res.status(500).send({ error: 'Failed to read mp4s directory' });
     return;
   }

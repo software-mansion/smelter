@@ -309,8 +309,7 @@ function getInitialInputState(idPrefix: string): RoomInputState[] {
   let files: string[] = [];
   try {
     files = fs.readdirSync(mp4sDir);
-  } catch (err) {
-    // Directory does not exist or cannot be read
+  } catch {
     return inputs;
   }
   const mp4Files = files.filter(f => f.toLowerCase().endsWith('.mp4'));
