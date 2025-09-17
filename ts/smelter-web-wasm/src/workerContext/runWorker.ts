@@ -54,7 +54,7 @@ registerWorkerEntrypoint<WorkerMessage, WorkerResponse>(
     } else if (request.type === 'terminate') {
       return await instance.terminate();
     } else {
-      onMessageLogger.warn(request, 'Web worker received unknown message.');
+      onMessageLogger.warn(`${request} Web worker received unknown message.`);
     }
   }
 );
