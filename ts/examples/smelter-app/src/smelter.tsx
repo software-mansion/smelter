@@ -95,6 +95,7 @@ export class SmelterManager {
           type: 'mp4',
           serverPath: opts.filePath,
           decoderMap: DECODER_MAP,
+          loop: true,
         });
       } else if (opts.type === 'hls') {
         await this.instance.registerInput(inputId, {
