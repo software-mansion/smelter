@@ -112,7 +112,7 @@ jobs:
 
           - name: 🔨 Build Smelter image
             run: |
-              docker buildx build --platform linux/amd64 -t ghcr.io/software-mansion/smelter:${{ github.sha }} -f build_tools/docker/slim.Dockerfile .
+              docker buildx build --platform linux/amd64 -t ghcr.io/software-mansion/smelter:${{ github.sha }} -f tools/docker/slim.Dockerfile .
 
           - name: 📤  Upload image
             run: docker push ghcr.io/software-mansion/smelter:${{ github.sha }}
@@ -135,7 +135,7 @@ jobs:
 
           - name: 🔨 Build Smelter ARM64 image
             run: |
-              docker buildx build --platform linux/arm64 -t ghcr.io/software-mansion/smelter:${{ github.sha }} -f build_tools/docker/slim.Dockerfile .
+              docker buildx build --platform linux/arm64 -t ghcr.io/software-mansion/smelter:${{ github.sha }} -f tools/docker/slim.Dockerfile .
 
           - name: ⏩ Push ARM64 image
             run: |
@@ -163,7 +163,7 @@ jobs:
 
           - name: 🔨 Build Smelter with Web Renderer image
             run: |
-              docker buildx build --platform linux/amd64 -t ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer -f build_tools/docker/full.Dockerfile .
+              docker buildx build --platform linux/amd64 -t ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer -f tools/docker/full.Dockerfile .
 
           - name: 📤  Upload image
             run: docker push ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer
@@ -186,7 +186,7 @@ jobs:
 
           - name: 🔨 Build Smelter ARM64 image
             run: |
-              docker buildx build --platform linux/arm64 -t ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer -f build_tools/docker/full.Dockerfile .
+              docker buildx build --platform linux/arm64 -t ghcr.io/software-mansion/smelter:${{ github.sha }}-web-renderer -f tools/docker/full.Dockerfile .
 
           - name: ⏩ Push ARM64 image
             run: |
