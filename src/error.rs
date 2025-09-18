@@ -1,12 +1,12 @@
 use std::fmt::Display;
 
 use axum::{http::StatusCode, response::IntoResponse};
-use compositor_pipeline::error::{
+use serde::Serialize;
+use smelter_api::TypeError;
+use smelter_core::error::{
     ErrorType, InitPipelineError, PipelineErrorInfo, RegisterInputError, RegisterOutputError,
     UnregisterInputError, UnregisterOutputError,
 };
-use serde::Serialize;
-use smelter_api::TypeError;
 use smelter_render::error::{
     ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
     UpdateSceneError,

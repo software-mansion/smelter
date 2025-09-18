@@ -9,8 +9,8 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use compositor_pipeline::Pipeline;
 use serde_json::{json, Value};
+use smelter_core::Pipeline;
 use tower_http::cors::CorsLayer;
 
 use crate::{

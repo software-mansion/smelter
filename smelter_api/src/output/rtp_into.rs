@@ -1,7 +1,7 @@
-use crate::common_pipeline::prelude as pipeline;
+use crate::common_core::prelude as core;
 use crate::*;
 
-impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions {
+impl TryFrom<RtpOutput> for core::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(request: RtpOutput) -> Result<Self, Self::Error> {
@@ -48,7 +48,7 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions {
                         };
 
                         (
-                            pipeline::AudioEncoderOptions::Opus(pipeline::OpusEncoderOptions {
+                            core::AudioEncoderOptions::Opus(core::OpusEncoderOptions {
                                 channels: resolved_channels.clone().into(),
                                 preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
                                 sample_rate: sample_rate.unwrap_or(48000),
@@ -59,7 +59,7 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions {
                         )
                     }
                 };
-                let output_audio_options = pipeline::RegisterOutputAudioOptions {
+                let output_audio_options = core::RegisterOutputAudioOptions {
                     initial: initial.try_into()?,
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,
                     mixing_strategy: mixing_strategy
@@ -75,7 +75,7 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions {
 
         let connection_options = match transport_protocol.unwrap_or(TransportProtocol::Udp) {
             TransportProtocol::Udp => {
-                let pipeline::PortOrRange::Exact(port) = port.try_into()? else {
+                let core::PortOrRange::Exact(port) = port.try_into()? else {
                     return Err(TypeError::new(
                         "Port range can not be used with UDP output stream (transport_protocol=\"udp\").",
                     ));
@@ -85,8 +85,8 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions {
                         "\"ip\" field is required when registering output UDP stream (transport_protocol=\"udp\").",
                     ));
                 };
-                pipeline::RtpOutputConnectionOptions::Udp {
-                    port: pipeline::Port(port),
+                core::RtpOutputConnectionOptions::Udp {
+                    port: core::Port(port),
                     ip,
                 }
             }
@@ -97,13 +97,13 @@ impl TryFrom<RtpOutput> for pipeline::RegisterOutputOptions {
                     ));
                 }
 
-                pipeline::RtpOutputConnectionOptions::TcpServer {
+                core::RtpOutputConnectionOptions::TcpServer {
                     port: port.try_into()?,
                 }
             }
         };
 
-        let output_options = pipeline::ProtocolOutputOptions::Rtp(pipeline::RtpOutputOptions {
+        let output_options = core::ProtocolOutputOptions::Rtp(core::RtpOutputOptions {
             connection_options,
             video: video_encoder_options,
             audio: audio_encoder_options,
@@ -121,8 +121,8 @@ fn maybe_video_options(
     options: Option<OutputVideoOptions>,
 ) -> Result<
     (
-        Option<pipeline::VideoEncoderOptions>,
-        Option<pipeline::RegisterOutputVideoOptions>,
+        Option<core::VideoEncoderOptions>,
+        Option<core::RegisterOutputVideoOptions>,
     ),
     TypeError,
 > {
@@ -135,7 +135,7 @@ fn maybe_video_options(
             preset,
             pixel_format,
             ffmpeg_options,
-        } => pipeline::VideoEncoderOptions::FfmpegH264(pipeline::FfmpegH264EncoderOptions {
+        } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
             preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
             resolution: options.resolution.into(),
             pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
@@ -143,7 +143,7 @@ fn maybe_video_options(
         }),
         #[cfg(feature = "vk-video")]
         VideoEncoderOptions::VulkanH264 { bitrate } => {
-            pipeline::VideoEncoderOptions::VulkanH264(pipeline::VulkanH264EncoderOptions {
+            core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
                 resolution: options.resolution.into(),
                 bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
             })
@@ -153,7 +153,7 @@ fn maybe_video_options(
             return Err(TypeError::new(super::NO_VULKAN_VIDEO));
         }
         VideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
-            pipeline::VideoEncoderOptions::FfmpegVp8(pipeline::FfmpegVp8EncoderOptions {
+            core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
                 resolution: options.resolution.into(),
                 raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
             })
@@ -161,14 +161,14 @@ fn maybe_video_options(
         VideoEncoderOptions::FfmpegVp9 {
             pixel_format,
             ffmpeg_options,
-        } => pipeline::VideoEncoderOptions::FfmpegVp9(pipeline::FfmpegVp9EncoderOptions {
+        } => core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
             resolution: options.resolution.into(),
             pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         }),
     };
 
-    let output_options = pipeline::RegisterOutputVideoOptions {
+    let output_options = core::RegisterOutputVideoOptions {
         initial: options.initial.try_into()?,
         end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
     };

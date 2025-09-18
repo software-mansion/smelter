@@ -1,9 +1,9 @@
 use core::panic;
 use std::{fs::File, io::Write, path::PathBuf, sync::Arc, time::Duration};
 
-use compositor_pipeline::{codecs::*, protocols::*, *};
 use integration_tests::examples::download_file;
 use smelter::{config::read_config, logger, state::ApiState};
+use smelter_core::{codecs::*, protocols::*, *};
 use smelter_render::{
     error::ErrorStack,
     scene::{Component, InputStreamComponent},

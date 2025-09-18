@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::common_pipeline::prelude as pipeline;
+use crate::common_core::prelude as core;
 use crate::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -37,7 +37,7 @@ pub enum AudioChannels {
     Stereo,
 }
 
-impl TryFrom<AudioScene> for pipeline::AudioMixerConfig {
+impl TryFrom<AudioScene> for core::AudioMixerConfig {
     type Error = TypeError;
 
     fn try_from(value: AudioScene) -> Result<Self, Self::Error> {
@@ -50,7 +50,7 @@ impl TryFrom<AudioScene> for pipeline::AudioMixerConfig {
     }
 }
 
-impl TryFrom<AudioSceneInput> for pipeline::AudioMixerInputConfig {
+impl TryFrom<AudioSceneInput> for core::AudioMixerInputConfig {
     type Error = TypeError;
 
     fn try_from(value: AudioSceneInput) -> Result<Self, Self::Error> {
@@ -66,20 +66,20 @@ impl TryFrom<AudioSceneInput> for pipeline::AudioMixerInputConfig {
     }
 }
 
-impl From<AudioMixingStrategy> for pipeline::AudioMixingStrategy {
+impl From<AudioMixingStrategy> for core::AudioMixingStrategy {
     fn from(value: AudioMixingStrategy) -> Self {
         match value {
-            AudioMixingStrategy::SumClip => pipeline::AudioMixingStrategy::SumClip,
-            AudioMixingStrategy::SumScale => pipeline::AudioMixingStrategy::SumScale,
+            AudioMixingStrategy::SumClip => core::AudioMixingStrategy::SumClip,
+            AudioMixingStrategy::SumScale => core::AudioMixingStrategy::SumScale,
         }
     }
 }
 
-impl From<AudioChannels> for compositor_pipeline::AudioChannels {
+impl From<AudioChannels> for smelter_core::AudioChannels {
     fn from(value: AudioChannels) -> Self {
         match value {
-            AudioChannels::Mono => compositor_pipeline::AudioChannels::Mono,
-            AudioChannels::Stereo => compositor_pipeline::AudioChannels::Stereo,
+            AudioChannels::Mono => smelter_core::AudioChannels::Mono,
+            AudioChannels::Stereo => smelter_core::AudioChannels::Stereo,
         }
     }
 }

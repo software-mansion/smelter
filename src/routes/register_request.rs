@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use axum::extract::{Path, State};
-use compositor_pipeline::{protocols::Port, InputInitInfo, Pipeline};
 use glyphon::fontdb::Source;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use smelter_core::{protocols::Port, InputInitInfo, Pipeline};
 
 use crate::{
     error::ApiError,

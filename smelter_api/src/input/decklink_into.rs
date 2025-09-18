@@ -1,7 +1,7 @@
-use crate::common_pipeline::prelude as pipeline;
+use crate::common_core::prelude as core;
 use crate::*;
 
-impl TryFrom<DeckLink> for pipeline::RegisterInputOptions {
+impl TryFrom<DeckLink> for core::RegisterInputOptions {
     type Error = TypeError;
 
     #[cfg(feature = "decklink")]
@@ -19,17 +19,15 @@ impl TryFrom<DeckLink> for pipeline::RegisterInputOptions {
             None => None,
         };
 
-        Ok(pipeline::RegisterInputOptions {
-            input_options: pipeline::ProtocolInputOptions::DeckLink(
-                pipeline::DeckLinkInputOptions {
-                    subdevice_index: value.subdevice_index,
-                    display_name: value.display_name,
-                    persistent_id,
-                    enable_audio: value.enable_audio.unwrap_or(true),
-                    pixel_format: Some(pipeline::DeckLinkPixelFormat::Format8BitYUV),
-                },
-            ),
-            queue_options: pipeline::QueueInputOptions {
+        Ok(core::RegisterInputOptions {
+            input_options: core::ProtocolInputOptions::DeckLink(core::DeckLinkInputOptions {
+                subdevice_index: value.subdevice_index,
+                display_name: value.display_name,
+                persistent_id,
+                enable_audio: value.enable_audio.unwrap_or(true),
+                pixel_format: Some(core::DeckLinkPixelFormat::Format8BitYUV),
+            }),
+            queue_options: core::QueueInputOptions {
                 required: value.required.unwrap_or(false),
                 offset: None,
             },

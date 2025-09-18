@@ -8,9 +8,6 @@ use std::{
     time::Duration,
 };
 
-use compositor_pipeline::{
-    codecs::VideoDecoderOptions, graphics_context::GraphicsContext, protocols::*, *,
-};
 use crossbeam_channel::bounded;
 use image::{codecs::png::PngEncoder, ColorType, ImageEncoder};
 use integration_tests::{examples::download_file, read_rgba_texture};
@@ -18,6 +15,9 @@ use smelter::{
     config::read_config,
     logger::{self},
     state::pipeline_options_from_config,
+};
+use smelter_core::{
+    codecs::VideoDecoderOptions, graphics_context::GraphicsContext, protocols::*, *,
 };
 use smelter_render::{
     error::ErrorStack,

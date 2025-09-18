@@ -3,10 +3,10 @@ use std::time::Duration;
 
 use bytes::Bytes;
 
-use crate::common_pipeline::prelude as pipeline;
+use crate::common_core::prelude as core;
 use crate::*;
 
-impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
+impl TryFrom<RtpInput> for core::RegisterInputOptions {
     type Error = TypeError;
 
     fn try_from(value: RtpInput) -> Result<Self, Self::Error> {
@@ -26,24 +26,16 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
             return Err(TypeError::new(NO_VIDEO_AUDIO_SPEC));
         }
 
-        let input_options = pipeline::ProtocolInputOptions::Rtp(pipeline::RtpInputOptions {
+        let input_options = core::ProtocolInputOptions::Rtp(core::RtpInputOptions {
             port: port.try_into()?,
             video: video
                 .as_ref()
                 .map(|video| {
                     let options = match video.decoder {
-                        RtpVideoDecoderOptions::FfmpegH264 => {
-                            pipeline::VideoDecoderOptions::FfmpegH264
-                        }
-                        RtpVideoDecoderOptions::FfmpegVp8 => {
-                            pipeline::VideoDecoderOptions::FfmpegVp8
-                        }
-                        RtpVideoDecoderOptions::FfmpegVp9 => {
-                            pipeline::VideoDecoderOptions::FfmpegVp9
-                        }
-                        RtpVideoDecoderOptions::VulkanH264 => {
-                            pipeline::VideoDecoderOptions::VulkanH264
-                        }
+                        RtpVideoDecoderOptions::FfmpegH264 => core::VideoDecoderOptions::FfmpegH264,
+                        RtpVideoDecoderOptions::FfmpegVp8 => core::VideoDecoderOptions::FfmpegVp8,
+                        RtpVideoDecoderOptions::FfmpegVp9 => core::VideoDecoderOptions::FfmpegVp9,
+                        RtpVideoDecoderOptions::VulkanH264 => core::VideoDecoderOptions::VulkanH264,
                     };
                     Ok(options)
                 })
@@ -53,32 +45,32 @@ impl TryFrom<RtpInput> for pipeline::RegisterInputOptions {
             buffer_duration: None,
         });
 
-        let queue_options = compositor_pipeline::QueueInputOptions {
+        let queue_options = smelter_core::QueueInputOptions {
             required: required.unwrap_or(false),
             offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
         };
 
-        Ok(pipeline::RegisterInputOptions {
+        Ok(core::RegisterInputOptions {
             input_options,
             queue_options,
         })
     }
 }
 
-impl TryFrom<InputRtpAudioOptions> for pipeline::RtpAudioOptions {
+impl TryFrom<InputRtpAudioOptions> for core::RtpAudioOptions {
     type Error = TypeError;
 
     fn try_from(audio: InputRtpAudioOptions) -> Result<Self, Self::Error> {
         match audio {
-            InputRtpAudioOptions::Opus => Ok(pipeline::RtpAudioOptions::Opus),
+            InputRtpAudioOptions::Opus => Ok(core::RtpAudioOptions::Opus),
             InputRtpAudioOptions::Aac {
                 audio_specific_config,
                 rtp_mode,
             } => {
                 let depayloader_mode = match rtp_mode {
-                    Some(AacRtpMode::LowBitrate) => pipeline::RtpAacDepayloaderMode::LowBitrate,
+                    Some(AacRtpMode::LowBitrate) => core::RtpAacDepayloaderMode::LowBitrate,
                     Some(AacRtpMode::HighBitrate) | None => {
-                        pipeline::RtpAacDepayloaderMode::HighBitrate
+                        core::RtpAacDepayloaderMode::HighBitrate
                     }
                 };
 
@@ -89,10 +81,10 @@ impl TryFrom<InputRtpAudioOptions> for pipeline::RtpAudioOptions {
                     return Err(TypeError::new(EMPTY_ASC));
                 }
 
-                let asc = pipeline::AacAudioSpecificConfig::parse_from(&raw_asc)
+                let asc = core::AacAudioSpecificConfig::parse_from(&raw_asc)
                     .map_err(|err| TypeError::new(ErrorStack::new(&err).into_string()))?;
 
-                Ok(pipeline::RtpAudioOptions::FdkAac {
+                Ok(core::RtpAudioOptions::FdkAac {
                     depayloader_mode,
                     raw_asc,
                     asc,

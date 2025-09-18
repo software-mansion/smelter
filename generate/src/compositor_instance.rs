@@ -1,9 +1,4 @@
 use anyhow::{anyhow, Result};
-use compositor_pipeline::{
-    event::Event,
-    graphics_context::{GraphicsContext, GraphicsContextOptions},
-    Pipeline, PipelineWgpuOptions, PipelineWhipWhepServerOptions,
-};
 use crossbeam_channel::{Receiver, Sender};
 use reqwest::StatusCode;
 use smelter::{
@@ -11,6 +6,11 @@ use smelter::{
     logger,
     server::run_api,
     state::{pipeline_options_from_config, ApiState},
+};
+use smelter_core::{
+    event::Event,
+    graphics_context::{GraphicsContext, GraphicsContextOptions},
+    Pipeline, PipelineWgpuOptions, PipelineWhipWhepServerOptions,
 };
 use smelter_render::WgpuFeatures;
 use std::{
@@ -29,7 +29,7 @@ pub struct CompositorInstance {
     pub api_port: u16,
     pub http_client: reqwest::blocking::Client,
     pub should_close_sender: Sender<()>,
-    pub events: Receiver<compositor_pipeline::event::Event>,
+    pub events: Receiver<smelter_core::event::Event>,
 }
 
 impl Drop for CompositorInstance {

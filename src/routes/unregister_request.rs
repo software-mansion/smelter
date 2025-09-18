@@ -1,9 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
 use axum::extract::{Path, State};
-use compositor_pipeline::Pipeline;
 use log::error;
 use serde::{Deserialize, Serialize};
+use smelter_core::Pipeline;
 use smelter_render::{error::ErrorStack, RegistryType};
 
 use crate::{

@@ -1,9 +1,9 @@
 use std::{path::Path, sync::Arc};
 
 use axum::{extract::State, response::IntoResponse};
-use compositor_pipeline::{InputProtocolKind, OutputProtocolKind};
 use serde::Serialize;
 use serde_json::json;
+use smelter_core::{InputProtocolKind, OutputProtocolKind};
 use smelter_render::RenderingMode;
 
 use crate::error::ApiError;

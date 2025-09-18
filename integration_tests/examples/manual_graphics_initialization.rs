@@ -3,8 +3,8 @@
 
 #[cfg(target_os = "linux")]
 fn main() {
-    use compositor_pipeline::{graphics_context::GraphicsContext, Pipeline, PipelineWgpuOptions};
     use smelter::{config::read_config, state::pipeline_options_from_config};
+    use smelter_core::{graphics_context::GraphicsContext, Pipeline, PipelineWgpuOptions};
     use std::sync::Arc;
     use tokio::runtime::Runtime;
 

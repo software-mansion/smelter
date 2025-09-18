@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::common_pipeline::prelude as pipeline;
+use crate::common_core::prelude as core;
 use crate::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -13,11 +13,11 @@ pub enum TransportProtocol {
     TcpServer,
 }
 
-impl From<TransportProtocol> for pipeline::RtpInputTransportProtocol {
+impl From<TransportProtocol> for core::RtpInputTransportProtocol {
     fn from(value: TransportProtocol) -> Self {
         match value {
-            TransportProtocol::Udp => pipeline::RtpInputTransportProtocol::Udp,
-            TransportProtocol::TcpServer => pipeline::RtpInputTransportProtocol::TcpServer,
+            TransportProtocol::Udp => core::RtpInputTransportProtocol::Udp,
+            TransportProtocol::TcpServer => core::RtpInputTransportProtocol::TcpServer,
         }
     }
 }
@@ -29,14 +29,14 @@ pub enum PortOrPortRange {
     U16(u16),
 }
 
-impl TryFrom<PortOrPortRange> for pipeline::PortOrRange {
+impl TryFrom<PortOrPortRange> for core::PortOrRange {
     type Error = TypeError;
 
     fn try_from(value: PortOrPortRange) -> Result<Self, Self::Error> {
         const PORT_CONVERSION_ERROR_MESSAGE: &str = "Port needs to be a number between 1 and 65535 or a string in the \"START:END\" format, where START and END represent a range of ports.";
         match value {
             PortOrPortRange::U16(0) => Err(TypeError::new(PORT_CONVERSION_ERROR_MESSAGE)),
-            PortOrPortRange::U16(v) => Ok(pipeline::PortOrRange::Exact(v)),
+            PortOrPortRange::U16(v) => Ok(core::PortOrRange::Exact(v)),
             PortOrPortRange::String(s) => {
                 let (start, end) = s
                     .split_once(':')
@@ -57,7 +57,7 @@ impl TryFrom<PortOrPortRange> for pipeline::PortOrRange {
                     return Err(TypeError::new(PORT_CONVERSION_ERROR_MESSAGE));
                 }
 
-                Ok(pipeline::PortOrRange::Range((start, end)))
+                Ok(core::PortOrRange::Range((start, end)))
             }
         }
     }

@@ -6,13 +6,13 @@ license-file = "./LICENSE"
 
 [workspace]
 members = [
-    "smelter_render",
-    "compositor_pipeline",
     "compositor_chromium",
     "integration_tests",
     "generate",
     "decklink",
     "smelter_api",
+    "smelter_core",
+    "smelter_render",
     "smelter_render_wasm",
     "vk-video",
 ]
@@ -27,7 +27,7 @@ web_renderer = ["dep:compositor_chromium", "smelter_api/web_renderer"]
 [workspace.dependencies]
 smelter = { path = ".", default-features = false }
 smelter_api = { path = "smelter_api" }
-compositor_pipeline = { path = "compositor_pipeline" }
+smelter_core = { path = "smelter_core" }
 compositor_chromium = { path = "compositor_chromium" }
 smelter_render = { path = "smelter_render" }
 vk-video = { path = "vk-video" }
@@ -71,7 +71,7 @@ tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
 [dependencies]
 smelter_api = { workspace = true }
 smelter_render = { workspace = true }
-compositor_pipeline = { workspace = true }
+smelter_core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
@@ -107,7 +107,7 @@ compositor_chromium = { workspace = true, optional = true }
 # platforms that support vulkan are: windows and all non-apple unixes. emscripten is a web-based platform, where vulkan is not available either
 [target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies]
 smelter_api = { workspace = true, features = ["vk-video"] }
-compositor_pipeline = { workspace = true, features = ["vk-video"] }
+smelter_core = { workspace = true, features = ["vk-video"] }
 
 [[bin]]
 name = "process_helper"
