@@ -12,8 +12,8 @@ fn client_code() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 fn client_code() -> Result<()> {
-    use compositor_api::Resolution;
     use serde_json::json;
+    use smelter_api::Resolution;
 
     use integration_tests::{
         examples::{self, TestSample},

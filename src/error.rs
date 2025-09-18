@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use axum::{http::StatusCode, response::IntoResponse};
-use compositor_api::TypeError;
 use compositor_pipeline::error::{
     ErrorType, InitPipelineError, PipelineErrorInfo, RegisterInputError, RegisterOutputError,
     UnregisterInputError, UnregisterOutputError,
@@ -11,6 +10,7 @@ use compositor_render::error::{
     UpdateSceneError,
 };
 use serde::Serialize;
+use smelter_api::TypeError;
 
 #[derive(Debug)]
 pub struct ApiError {

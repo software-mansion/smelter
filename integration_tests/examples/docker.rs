@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
-use compositor_api::Resolution;
 use log::{error, info, warn};
 use serde_json::json;
 use signal_hook::{consts, iterator::Signals};
 use smelter::config::read_config;
+use smelter_api::Resolution;
 use std::{env, process::Command, thread, time::Duration};
 
 use integration_tests::{
