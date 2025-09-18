@@ -1,11 +1,11 @@
 use anyhow::Result;
 use serde_json::json;
-use std::path::PathBuf;
 
 use crate::{
     audio::{self, AudioAnalyzeTolerance, AudioValidationConfig},
-    compare_audio_dumps, input_dump_from_disk, CommunicationProtocol, CompositorInstance,
-    OutputReceiver, PacketSender,
+    compare_audio_dumps, input_dump_from_disk,
+    paths::submodule_root_path,
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
 };
 
 /// Two audio input streams mixed together with different volumes.
@@ -401,11 +401,7 @@ pub fn single_input_aac_mp4() -> Result<()> {
         }),
     )?;
 
-    let input_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("snapshot_tests")
-        .join("snapshots")
+    let input_path = submodule_root_path()
         .join("rtp_packet_dumps")
         .join("inputs")
         .join("a_aac.mp4");

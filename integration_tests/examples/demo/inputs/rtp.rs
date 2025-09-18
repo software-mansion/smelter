@@ -11,12 +11,13 @@ use integration_tests::{
         BUNNY_H264_PATH, BUNNY_H264_URL, BUNNY_VP8_PATH, BUNNY_VP8_URL, BUNNY_VP9_PATH,
         BUNNY_VP9_URL,
     },
-    examples::{download_asset, examples_root_dir, AssetData, TestSample},
+    examples::{download_asset, AssetData, TestSample},
     ffmpeg::{start_ffmpeg_send, start_ffmpeg_send_from_file},
     gstreamer::{
         start_gst_send_from_file_tcp, start_gst_send_from_file_udp, start_gst_send_tcp,
         start_gst_send_udp,
     },
+    paths::integration_tests_root,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -116,19 +117,19 @@ impl RtpInput {
             })
             | None => AssetData {
                 url: BUNNY_H264_URL.to_string(),
-                path: examples_root_dir().join(BUNNY_H264_PATH),
+                path: integration_tests_root().join(BUNNY_H264_PATH),
             },
             Some(RtpInputVideoOptions {
                 decoder: VideoDecoder::FfmpegVp8,
             }) => AssetData {
                 url: BUNNY_VP8_URL.to_string(),
-                path: examples_root_dir().join(BUNNY_VP8_PATH),
+                path: integration_tests_root().join(BUNNY_VP8_PATH),
             },
             Some(RtpInputVideoOptions {
                 decoder: VideoDecoder::FfmpegVp9,
             }) => AssetData {
                 url: BUNNY_VP9_URL.to_string(),
-                path: examples_root_dir().join(BUNNY_VP9_PATH),
+                path: integration_tests_root().join(BUNNY_VP9_PATH),
             },
             _ => unreachable!(),
         };
@@ -229,7 +230,7 @@ impl RtpInput {
                 let has_audio = self.audio.is_some();
                 let file_path = match &self.path {
                     Some(p) => p,
-                    None => &examples_root_dir().join(match video_codec {
+                    None => &integration_tests_root().join(match video_codec {
                         Some(VideoDecoder::FfmpegVp9) => BUNNY_VP9_PATH,
                         Some(VideoDecoder::FfmpegVp8) => BUNNY_VP8_PATH,
                         _ => BUNNY_H264_PATH,
@@ -267,7 +268,7 @@ impl RtpInput {
                 let has_audio = self.audio.is_some();
                 let file_path = match &self.path {
                     Some(p) => p,
-                    None => &examples_root_dir().join(match video_codec {
+                    None => &integration_tests_root().join(match video_codec {
                         Some(VideoDecoder::FfmpegVp9) => BUNNY_VP9_PATH,
                         Some(VideoDecoder::FfmpegVp8) => BUNNY_VP8_PATH,
                         _ => BUNNY_H264_PATH,
@@ -387,7 +388,7 @@ impl RtpInputBuilder {
 
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(RTP_INPUT_PATH).unwrap_or_default();
-        let default_path = examples_root_dir().join(BUNNY_H264_PATH);
+        let default_path = integration_tests_root().join(BUNNY_H264_PATH);
 
         loop {
             let path_input = Text::new(&format!(

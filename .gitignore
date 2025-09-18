@@ -36,7 +36,6 @@ target/
 
 # Generated during runtime
 /shmem
-/failed_snapshot_tests
 
 /smelter.app
 /smelter

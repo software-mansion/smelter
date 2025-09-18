@@ -2,7 +2,6 @@ use std::{env, path::PathBuf};
 
 use anyhow::Result;
 use inquire::{Select, Text};
-use integration_tests::examples::examples_root_dir;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -100,9 +99,7 @@ impl Mp4OutputBuilder {
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
 
-        let default_path = env::current_dir()
-            .unwrap_or(examples_root_dir())
-            .join("example_output.mp4");
+        let default_path = env::current_dir().unwrap().join("example_output.mp4");
 
         loop {
             let path_output = Text::new("Output path (ESC for default):")

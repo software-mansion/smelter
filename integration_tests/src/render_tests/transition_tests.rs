@@ -1,14 +1,15 @@
 use std::time::Duration;
 
+use crate::paths::render_snapshots_dir_path;
+
 use super::{
-    snapshots_path,
     test_case::{Step, TestCase},
     TestRunner,
 };
 
 #[test]
 fn transitions_tests() {
-    let mut runner = TestRunner::new(snapshots_path().join("transition"));
+    let mut runner = TestRunner::new(render_snapshots_dir_path().join("transition"));
     let render_timestamps = vec![
         Step::RenderWithSnapshot(Duration::from_millis(0)),
         Step::RenderWithSnapshot(Duration::from_millis(2500)),
@@ -23,13 +24,13 @@ fn transitions_tests() {
         steps: [
             [
                 Step::UpdateSceneJson(include_str!(
-                    "../../snapshot_tests/transition/change_rescaler_absolute_start.scene.json"
+                    "./transition/change_rescaler_absolute_start.scene.json"
                 )),
                 Step::UpdateSceneJson(include_str!(
-                    "../../snapshot_tests/transition/change_rescaler_absolute_end.scene.json"
+                    "./transition/change_rescaler_absolute_end.scene.json"
                 )),
                 Step::UpdateSceneJson(include_str!(
-                    "../../snapshot_tests/transition/change_rescaler_absolute_after_end.scene.json"
+                    "./transition/change_rescaler_absolute_after_end.scene.json"
                 )),
             ]
             .as_slice(),
@@ -42,10 +43,17 @@ fn transitions_tests() {
         name: "transition/change_view_width_and_send_abort_transition",
         steps: [
             [
-                Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_start.scene.json")),
-                Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_end.scene.json")),
-                Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_after_end_without_id.scene.json")),
-            ].as_slice(),
+                Step::UpdateSceneJson(include_str!(
+                    "./transition/change_view_width_start.scene.json"
+                )),
+                Step::UpdateSceneJson(include_str!(
+                    "./transition/change_view_width_end.scene.json"
+                )),
+                Step::UpdateSceneJson(include_str!(
+                    "./transition/change_view_width_after_end_without_id.scene.json"
+                )),
+            ]
+            .as_slice(),
             &render_timestamps,
         ]
         .concat(),
@@ -56,13 +64,13 @@ fn transitions_tests() {
         steps: [
             [
                 Step::UpdateSceneJson(include_str!(
-                    "../../snapshot_tests/transition/change_view_width_start.scene.json"
+                    "./transition/change_view_width_start.scene.json"
                 )),
                 Step::UpdateSceneJson(include_str!(
-                    "../../snapshot_tests/transition/change_view_width_end.scene.json"
+                    "./transition/change_view_width_end.scene.json"
                 )),
                 Step::UpdateSceneJson(include_str!(
-                    "../../snapshot_tests/transition/change_view_width_after_end.scene.json"
+                    "./transition/change_view_width_after_end.scene.json"
                 )),
             ]
             .as_slice(),
@@ -76,10 +84,10 @@ fn transitions_tests() {
         steps: [
             [
                 Step::UpdateSceneJson(include_str!(
-                    "../../snapshot_tests/transition/change_view_width_start.scene.json"
+                    "./transition/change_view_width_start.scene.json"
                 )),
                 Step::UpdateSceneJson(include_str!(
-                    "../../snapshot_tests/transition/change_view_width_end.scene.json"
+                    "./transition/change_view_width_end.scene.json"
                 )),
             ]
             .as_slice(),
@@ -93,10 +101,10 @@ fn transitions_tests() {
         steps: [
             [
                 Step::UpdateSceneJson(include_str!(
-                    "../../snapshot_tests/transition/change_view_height_start.scene.json"
+                    "./transition/change_view_height_start.scene.json"
                 )),
                 Step::UpdateSceneJson(include_str!(
-                    "../../snapshot_tests/transition/change_view_height_end.scene.json"
+                    "./transition/change_view_height_end.scene.json"
                 )),
             ]
             .as_slice(),
@@ -110,10 +118,10 @@ fn transitions_tests() {
         steps: [
             [
                 Step::UpdateSceneJson(include_str!(
-                    "../../snapshot_tests/transition/change_view_absolute_start.scene.json"
+                    "./transition/change_view_absolute_start.scene.json"
                 )),
                 Step::UpdateSceneJson(include_str!(
-                    "../../snapshot_tests/transition/change_view_absolute_end.scene.json"
+                    "./transition/change_view_absolute_end.scene.json"
                 )),
             ]
             .as_slice(),
@@ -126,21 +134,32 @@ fn transitions_tests() {
         name: "transition/change_view_absolute_cubic_bezier",
         steps: [
             [
-                Step::UpdateSceneJson( include_str!("../../snapshot_tests/transition/change_view_absolute_cubic_bezier_start.scene.json")),
-                Step::UpdateSceneJson( include_str!("../../snapshot_tests/transition/change_view_absolute_cubic_bezier_end.scene.json")),
-            ].as_slice(),
+                Step::UpdateSceneJson(include_str!(
+                    "./transition/change_view_absolute_cubic_bezier_start.scene.json"
+                )),
+                Step::UpdateSceneJson(include_str!(
+                    "./transition/change_view_absolute_cubic_bezier_end.scene.json"
+                )),
+            ]
+            .as_slice(),
             &render_timestamps,
-        ].concat(),
+        ]
+        .concat(),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "transition/change_view_absolute_cubic_bezier_linear_like",
         steps: [
             [
-                Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_absolute_cubic_bezier_linear_like_start.scene.json")),
-                Step::UpdateSceneJson( include_str!("../../snapshot_tests/transition/change_view_absolute_cubic_bezier_linear_like_end.scene.json")),
-            ].as_slice(),
-            &render_timestamps
+                Step::UpdateSceneJson(include_str!(
+                    "./transition/change_view_absolute_cubic_bezier_linear_like_start.scene.json"
+                )),
+                Step::UpdateSceneJson(include_str!(
+                    "./transition/change_view_absolute_cubic_bezier_linear_like_end.scene.json"
+                )),
+            ]
+            .as_slice(),
+            &render_timestamps,
         ]
         .concat(),
         ..Default::default()
@@ -148,13 +167,17 @@ fn transitions_tests() {
     runner.add(TestCase {
         name: "transition/update_scene_with_transition_interrupt",
         steps: vec![
-            Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_transition_interrupt_start.scene.json")),
+            Step::UpdateSceneJson(include_str!(
+                "./transition/change_view_width_transition_interrupt_start.scene.json"
+            )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_transition_interrupt_end_variant1.scene.json")),
-
+            Step::UpdateSceneJson(include_str!(
+                "./transition/change_view_width_transition_interrupt_end_variant1.scene.json"
+            )),
             Step::RenderWithSnapshot(Duration::from_millis(5000)),
-            Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_transition_interrupt_end_variant1.scene.json")),
-
+            Step::UpdateSceneJson(include_str!(
+                "./transition/change_view_width_transition_interrupt_end_variant1.scene.json"
+            )),
             Step::RenderWithSnapshot(Duration::from_millis(7500)),
         ],
         ..Default::default()
@@ -162,13 +185,17 @@ fn transitions_tests() {
     runner.add(TestCase {
         name: "transition/update_scene_with_transition_interrupt_and_changing_props",
         steps: vec![
-            Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_transition_interrupt_start.scene.json")),
+            Step::UpdateSceneJson(include_str!(
+                "./transition/change_view_width_transition_interrupt_start.scene.json"
+            )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_transition_interrupt_end_variant1.scene.json")),
-
+            Step::UpdateSceneJson(include_str!(
+                "./transition/change_view_width_transition_interrupt_end_variant1.scene.json"
+            )),
             Step::RenderWithSnapshot(Duration::from_millis(5000)),
-            Step::UpdateSceneJson(include_str!("../../snapshot_tests/transition/change_view_width_transition_interrupt_end_variant2.scene.json")),
-
+            Step::UpdateSceneJson(include_str!(
+                "./transition/change_view_width_transition_interrupt_end_variant2.scene.json"
+            )),
             Step::RenderWithSnapshot(Duration::from_millis(7500)),
         ],
         ..Default::default()

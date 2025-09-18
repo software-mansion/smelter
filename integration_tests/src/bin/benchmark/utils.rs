@@ -1,4 +1,5 @@
 use anyhow::Result;
+use integration_tests::paths::integration_tests_root;
 use smelter_core::{
     graphics_context::GraphicsContext, PipelineOptions, PipelineWgpuOptions,
     PipelineWhipWhepServerOptions, DEFAULT_BUFFER_DURATION,
@@ -151,37 +152,32 @@ const BBB_1080P_60FPS: &str = "https://github.com/membraneframework-labs/video_c
 const BBB_2160P_30FPS: &str = "https://github.com/membraneframework-labs/video_compositor_snapshot_tests/raw/refs/heads/main/assets/BigBuckBunny2160p30fps30s.mp4";
 
 pub fn ensure_bunny_480p24fps() -> Result<PathBuf> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("./examples/assets/BigBuckBunny480p24fps30s.mp4");
+    let path = integration_tests_root().join("./examples/assets/BigBuckBunny480p24fps30s.mp4");
     ensure_file(path, BBB_480P_24FPS)
 }
 
 pub fn ensure_bunny_720p24fps() -> Result<PathBuf> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("./examples/assets/BigBuckBunny720p24fps30s.mp4");
+    let path = integration_tests_root().join("./examples/assets/BigBuckBunny720p24fps30s.mp4");
     ensure_file(path, BBB_720P_24FPS)
 }
 
 pub fn ensure_bunny_1080p30fps() -> Result<PathBuf> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("./examples/assets/BigBuckBunny1080p30fps30s.mp4");
+    let path = integration_tests_root().join("./examples/assets/BigBuckBunny1080p30fps30s.mp4");
     ensure_file(path, BBB_1080P_30FPS)
 }
 
 pub fn ensure_bunny_1080p60fps() -> Result<PathBuf> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("./examples/assets/BigBuckBunny1080p60fps30s.mp4");
+    let path = integration_tests_root().join("./examples/assets/BigBuckBunny1080p60fps30s.mp4");
     ensure_file(path, BBB_1080P_60FPS)
 }
 
 pub fn ensure_bunny_2160p30fps() -> Result<PathBuf> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("./examples/assets/BigBuckBunny2160p30fps30s.mp4");
+    let path = integration_tests_root().join("./examples/assets/BigBuckBunny2160p30fps30s.mp4");
     ensure_file(path, BBB_2160P_30FPS)
 }
 
 pub fn ensure_default_mp4() -> Result<PathBuf> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("./examples/assets/BigBuckBunny.mp4");
+    let path = integration_tests_root().join("./examples/assets/BigBuckBunny.mp4");
     ensure_file(path, DEFAULT_MP4_URL)
 }
 
@@ -197,7 +193,7 @@ fn ensure_file(path: PathBuf, url: &str) -> Result<PathBuf> {
 }
 
 pub fn example_image_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("./examples/assets/image.png")
+    integration_tests_root().join("./examples/assets/image.png")
 }
 
 pub fn generate_png_from_video(source: &PathBuf) {

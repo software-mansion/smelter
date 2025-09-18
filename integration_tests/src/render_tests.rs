@@ -7,7 +7,8 @@ use std::{
 
 use smelter_render::Resolution;
 use test_case::{Step, TestCase, TestResult, OUTPUT_ID};
-use utils::SNAPSHOTS_DIR_NAME;
+
+use crate::paths::render_snapshots_dir_path;
 
 mod input;
 mod snapshot;
@@ -98,13 +99,9 @@ fn check_test_names_uniqueness(tests: &[TestCase]) {
     }
 }
 
-fn snapshots_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(SNAPSHOTS_DIR_NAME)
-}
-
 fn snapshot_save_path(test_name: &str, pts: &Duration) -> PathBuf {
     let out_file_name = format!("{}_{}_{}.png", test_name, pts.as_millis(), OUTPUT_ID);
-    snapshots_path().join(out_file_name)
+    render_snapshots_dir_path().join(out_file_name)
 }
 
 fn check_unused_snapshots(tests: &[TestCase], snapshot_dir: &Path) {

@@ -9,8 +9,6 @@ use smelter_render::{
 };
 use tracing::error;
 
-pub const SNAPSHOTS_DIR_NAME: &str = "snapshot_tests/snapshots/render_snapshots";
-
 pub(super) fn frame_to_rgba(frame: &Frame) -> Vec<u8> {
     match &frame.data {
         FrameData::PlanarYuv420(planes) => yuv_frame_to_rgba(frame, planes),

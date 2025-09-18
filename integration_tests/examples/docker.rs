@@ -7,8 +7,9 @@ use smelter_api::Resolution;
 use std::{env, process::Command, thread, time::Duration};
 
 use integration_tests::{
-    examples::{self, examples_root_dir, start_server_msg_listener, TestSample},
+    examples::{self, start_server_msg_listener, TestSample},
     ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
+    paths::integration_tests_root,
 };
 const VIDEO_RESOLUTION: Resolution = Resolution {
     width: 1920,
@@ -18,10 +19,6 @@ const VIDEO_RESOLUTION: Resolution = Resolution {
 const IP: &str = "127.0.0.1";
 const INPUT_PORT: u16 = 8002;
 const OUTPUT_PORT: u16 = 8004;
-const DOCKER_FILE_PATH: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../build_tools/docker/slim.Dockerfile"
-);
 
 fn main() {
     let Ok(host_ip) = env::var("DOCKER_HOST_IP") else {
@@ -58,12 +55,17 @@ fn build_and_start_docker(skip_build: bool) -> Result<()> {
             .args([
                 "build",
                 "-f",
-                DOCKER_FILE_PATH,
+                integration_tests_root()
+                    .parent()
+                    .unwrap()
+                    .join("build_tools/docker/slim.Dockerfile")
+                    .to_str()
+                    .unwrap(),
                 "-t",
                 "video-compositor",
                 ".",
             ])
-            .current_dir(examples_root_dir().parent().unwrap())
+            .current_dir(integration_tests_root().parent().unwrap())
             .spawn()?;
         let exit_code = process.wait()?;
         if Some(0) != exit_code.code() {

@@ -1,7 +1,7 @@
 use core::panic;
-use std::{fs::File, io::Write, path::PathBuf, sync::Arc, time::Duration};
+use std::{fs::File, io::Write, sync::Arc, time::Duration};
 
-use integration_tests::examples::download_file;
+use integration_tests::{examples::download_file, paths::integration_tests_root};
 use smelter::{config::read_config, logger, state::ApiState};
 use smelter_core::{codecs::*, protocols::*, *};
 use smelter_render::{
@@ -22,7 +22,7 @@ fn main() {
     ffmpeg_next::format::network::init();
     let mut config = read_config();
     logger::init_logger(config.logger.clone());
-    let root_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root_dir = integration_tests_root();
     config.ahead_of_time_processing = true;
     // no chromium support, so we can ignore _event_loop
     let runtime = Arc::new(Runtime::new().unwrap());

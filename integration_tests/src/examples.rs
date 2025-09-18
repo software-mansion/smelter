@@ -16,11 +16,14 @@ use tracing::{error, info, warn};
 
 use serde::Serialize;
 
-use crate::assets::{
-    BUNNY_H264_PATH, BUNNY_H264_URL, BUNNY_VP8_PATH, BUNNY_VP8_URL, BUNNY_VP9_PATH, BUNNY_VP9_URL,
-    ELEPHANT_H264_PATH, ELEPHANT_H264_URL, ELEPHANT_VP8_PATH, ELEPHANT_VP8_URL, ELEPHANT_VP9_PATH,
-    ELEPHANT_VP9_URL, OCEAN_H264_PATH, OCEAN_H264_URL, OCEAN_VP8_PATH, OCEAN_VP8_URL,
-    OCEAN_VP9_PATH, OCEAN_VP9_URL,
+use crate::{
+    assets::{
+        BUNNY_H264_PATH, BUNNY_H264_URL, BUNNY_VP8_PATH, BUNNY_VP8_URL, BUNNY_VP9_PATH,
+        BUNNY_VP9_URL, ELEPHANT_H264_PATH, ELEPHANT_H264_URL, ELEPHANT_VP8_PATH, ELEPHANT_VP8_URL,
+        ELEPHANT_VP9_PATH, ELEPHANT_VP9_URL, OCEAN_H264_PATH, OCEAN_H264_URL, OCEAN_VP8_PATH,
+        OCEAN_VP8_URL, OCEAN_VP9_PATH, OCEAN_VP9_URL,
+    },
+    paths::integration_tests_root,
 };
 
 pub fn post<T: Serialize + ?Sized>(route: &str, json: &T) -> Result<Response> {
@@ -247,39 +250,39 @@ pub fn download_all_assets() -> Result<()> {
     let assets = [
         AssetData {
             url: String::from(BUNNY_H264_URL),
-            path: examples_root_dir().join(BUNNY_H264_PATH),
+            path: integration_tests_root().join(BUNNY_H264_PATH),
         },
         AssetData {
             url: String::from(ELEPHANT_H264_URL),
-            path: examples_root_dir().join(ELEPHANT_H264_PATH),
+            path: integration_tests_root().join(ELEPHANT_H264_PATH),
         },
         AssetData {
             url: String::from(OCEAN_H264_URL),
-            path: examples_root_dir().join(OCEAN_H264_PATH),
+            path: integration_tests_root().join(OCEAN_H264_PATH),
         },
         AssetData {
             url: String::from(BUNNY_VP8_URL),
-            path: examples_root_dir().join(BUNNY_VP8_PATH),
+            path: integration_tests_root().join(BUNNY_VP8_PATH),
         },
         AssetData {
             url: String::from(BUNNY_VP9_URL),
-            path: examples_root_dir().join(BUNNY_VP9_PATH),
+            path: integration_tests_root().join(BUNNY_VP9_PATH),
         },
         AssetData {
             url: String::from(ELEPHANT_VP8_URL),
-            path: examples_root_dir().join(ELEPHANT_VP8_PATH),
+            path: integration_tests_root().join(ELEPHANT_VP8_PATH),
         },
         AssetData {
             url: String::from(ELEPHANT_VP9_URL),
-            path: examples_root_dir().join(ELEPHANT_VP9_PATH),
+            path: integration_tests_root().join(ELEPHANT_VP9_PATH),
         },
         AssetData {
             url: String::from(OCEAN_VP8_URL),
-            path: examples_root_dir().join(OCEAN_VP8_PATH),
+            path: integration_tests_root().join(OCEAN_VP8_PATH),
         },
         AssetData {
             url: String::from(OCEAN_VP9_URL),
-            path: examples_root_dir().join(OCEAN_VP9_PATH),
+            path: integration_tests_root().join(OCEAN_VP9_PATH),
         },
     ];
 
@@ -295,31 +298,31 @@ pub fn download_all_assets() -> Result<()> {
 fn map_asset_to_path(asset: &TestSample) -> Option<PathBuf> {
     match asset {
         TestSample::BigBuckBunnyH264Opus | TestSample::BigBuckBunnyH264AAC => {
-            Some(examples_root_dir().join("examples/assets/BigBuckBunny720p24fps597s.mp4"))
+            Some(integration_tests_root().join("examples/assets/BigBuckBunny720p24fps597s.mp4"))
         }
         TestSample::BigBuckBunnyVP8Opus => {
-            Some(examples_root_dir().join("examples/assets/BigBuckBunny720p24fps60s.vp8.webm"))
+            Some(integration_tests_root().join("examples/assets/BigBuckBunny720p24fps60s.vp8.webm"))
         }
         TestSample::BigBuckBunnyVP9Opus => {
-            Some(examples_root_dir().join("examples/assets/BigBuckBunny720p24fps60s.vp9.webm"))
+            Some(integration_tests_root().join("examples/assets/BigBuckBunny720p24fps60s.vp9.webm"))
         }
         TestSample::ElephantsDreamH264Opus => {
-            Some(examples_root_dir().join("examples/assets/ElephantsDream720p24fps654s.mp4"))
+            Some(integration_tests_root().join("examples/assets/ElephantsDream720p24fps654s.mp4"))
         }
-        TestSample::ElephantsDreamVP8Opus => {
-            Some(examples_root_dir().join("examples/assets/ElephantsDream720p24fps60s.vp8.webm"))
-        }
-        TestSample::ElephantsDreamVP9Opus => {
-            Some(examples_root_dir().join("examples/assets/ElephantsDream720p24fps60s.vp9.webm"))
-        }
+        TestSample::ElephantsDreamVP8Opus => Some(
+            integration_tests_root().join("examples/assets/ElephantsDream720p24fps60s.vp8.webm"),
+        ),
+        TestSample::ElephantsDreamVP9Opus => Some(
+            integration_tests_root().join("examples/assets/ElephantsDream720p24fps60s.vp9.webm"),
+        ),
         TestSample::SampleH264 | TestSample::SampleLoopH264 => {
-            Some(examples_root_dir().join("examples/assets/OceanSample720p24fps28s.mp4"))
+            Some(integration_tests_root().join("examples/assets/OceanSample720p24fps28s.mp4"))
         }
         TestSample::SampleVP8 => {
-            Some(examples_root_dir().join("examples/assets/OceanSample720p24fps28s.vp8.webm"))
+            Some(integration_tests_root().join("examples/assets/OceanSample720p24fps28s.vp8.webm"))
         }
         TestSample::SampleVP9 => {
-            Some(examples_root_dir().join("examples/assets/OceanSample720p24fps28s.vp9.webm"))
+            Some(integration_tests_root().join("examples/assets/OceanSample720p24fps28s.vp9.webm"))
         }
         TestSample::TestPatternH264 | TestSample::TestPatternVP8 | TestSample::TestPatternVP9 => {
             None
@@ -343,10 +346,6 @@ fn ensure_asset_available(asset_path: &PathBuf) -> Result<()> {
         ));
     }
     Ok(())
-}
-
-pub fn examples_root_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
 pub fn download_file(url: &str, path: &str) -> Result<PathBuf> {

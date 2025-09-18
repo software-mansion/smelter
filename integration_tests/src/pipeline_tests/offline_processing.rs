@@ -11,7 +11,7 @@ use serde_json::json;
 use smelter::config::read_config;
 use tokio_tungstenite::tungstenite;
 
-use crate::{tests::start_server_msg_listener, CompositorInstance};
+use crate::{pipeline_tests::start_server_msg_listener, CompositorInstance};
 
 const BUNNY_URL: &str =
     "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";

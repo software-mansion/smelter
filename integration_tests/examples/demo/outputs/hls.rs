@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf, process::Child};
 
 use anyhow::Result;
 use inquire::Select;
-use integration_tests::{examples::examples_root_dir, ffmpeg::start_ffmpeg_receive_hls};
+use integration_tests::{ffmpeg::start_ffmpeg_receive_hls, paths::integration_tests_root};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -211,7 +211,7 @@ impl HlsOutputBuilder {
     }
 
     pub fn build(self) -> HlsOutput {
-        let path = examples_root_dir().join(&self.name).join("index.m3u8");
+        let path = integration_tests_root().join(&self.name).join("index.m3u8");
         HlsOutput {
             name: self.name,
             path,
