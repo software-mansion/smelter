@@ -6,15 +6,20 @@ license-file = "./LICENSE"
 
 [workspace]
 members = [
-    "compositor_chromium",
-    "integration_tests",
-    "generate",
-    "decklink",
+    # Core crates
     "smelter_api",
     "smelter_core",
     "smelter_render",
     "smelter_render_wasm",
+    "compositor_chromium",
+
+    # Libraries
+    "decklink",
     "vk-video",
+
+    # Tools/utils/tests
+    "integration_tests",
+    "tools/generate",
 ]
 resolver = "2"
 
