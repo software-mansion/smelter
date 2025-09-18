@@ -4,7 +4,10 @@ use reqwest::{Method, StatusCode};
 use url::{ParseError, Url};
 
 use crate::{
-    codecs::{AudioEncoderOptions, VideoEncoderOptions, WhipVideoDecoderOptions},
+    codecs::{
+        AudioDecoderOptions, AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions,
+        WhipVideoDecoderOptions,
+    },
     error::EncoderInitError,
 };
 
@@ -13,6 +16,14 @@ pub struct WhipInputOptions {
     pub video_preferences: Vec<WhipVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_override: Option<Arc<str>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WhepInputOptions {
+    pub endpoint_url: Arc<str>,
+    pub bearer_token: Option<Arc<str>>,
+    pub video: Option<VideoDecoderOptions>,
+    pub audio: Option<AudioDecoderOptions>,
 }
 
 #[derive(Debug, Clone)]
@@ -132,6 +143,62 @@ pub enum WhepOutputError {
 
     // #[error("Trickle ICE not supported")]
     // TrickleIceNotSupported,
+    #[error("Entity Tag missing")]
+    EntityTagMissing,
+
+    #[error("Entity Tag non-matching")]
+    EntityTagNonMatching,
+
+    #[error("No video codec was negotiated")]
+    NoVideoCodecNegotiated,
+
+    #[error("No audio codec was negotiated")]
+    NoAudioCodecNegotiated,
+
+    #[error("Codec not supported: {0}")]
+    UnsupportedCodec(&'static str),
+
+    #[error("Failed to initialize the encoder")]
+    EncoderInitError(#[from] EncoderInitError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum WhepInputError {
+    #[error("Bad status in WHEP response Status: {0} Body:\n{1}")]
+    BadStatus(StatusCode, String),
+
+    #[error("WHEP request failed! Method: {0} URL: {1}")]
+    RequestFailed(Method, Url),
+
+    #[error(
+        "Unable to get location endpoint, check correctness of WHEP endpoint and your Bearer token"
+    )]
+    MissingLocationHeader,
+
+    #[error("Invalid endpoint URL: {1}")]
+    InvalidEndpointUrl(#[source] ParseError, String),
+
+    #[error("Failed to create RTC session description: {0}")]
+    RTCSessionDescriptionError(webrtc::Error),
+
+    #[error("Failed to set local description: {0}")]
+    LocalDescriptionError(webrtc::Error),
+
+    #[error("Failed to set remote description: {0}")]
+    RemoteDescriptionError(webrtc::Error),
+
+    #[error("Failed to parse {0} response body: {1}")]
+    BodyParsingError(&'static str, reqwest::Error),
+
+    #[error("Failed to create offer: {0}")]
+    OfferCreationError(webrtc::Error),
+
+    #[error(transparent)]
+    PeerConnectionInitError(#[from] webrtc::Error),
+
+    #[error("Trickle ICE not supported")]
+    TrickleIceNotSupported,
+
     #[error("Entity Tag missing")]
     EntityTagMissing,
 

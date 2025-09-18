@@ -7,26 +7,26 @@ use webrtc::{
 use crate::codecs::VideoDecoderOptions;
 
 #[derive(Debug, Clone)]
-pub(super) struct NegotiatedVideoCodecsInfo {
+pub struct NegotiatedVideoCodecsInfo {
     pub h264: Option<VideoCodecInfo>,
     pub vp8: Option<VideoCodecInfo>,
     pub vp9: Option<VideoCodecInfo>,
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct NegotiatedAudioCodecsInfo {
+pub struct NegotiatedAudioCodecsInfo {
     #[allow(dead_code)]
     pub opus: Option<AudioCodecInfo>,
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct VideoCodecInfo {
+pub struct VideoCodecInfo {
     pub payload_types: Vec<PayloadType>,
     pub preferred_decoder: VideoDecoderOptions,
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct AudioCodecInfo {
+pub struct AudioCodecInfo {
     #[allow(dead_code)]
     pub payload_types: Vec<PayloadType>,
 }

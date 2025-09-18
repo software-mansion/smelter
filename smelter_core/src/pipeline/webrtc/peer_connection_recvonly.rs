@@ -35,7 +35,7 @@ use crate::{
             },
         },
         PipelineCtx,
-    },
+    }, prelude::WhepInputError,
 };
 
 #[derive(Debug, Clone)]
@@ -136,6 +136,10 @@ impl RecvonlyPeerConnection {
         offer: RTCSessionDescription,
     ) -> Result<(), WhipWhepServerError> {
         Ok(self.pc.set_local_description(offer).await?)
+    }
+
+    pub async fn create_offer(&self) -> Result<RTCSessionDescription, WhepInputError> {
+        Ok(self.pc.create_offer(None).await?)
     }
 
     pub async fn create_answer(&self) -> Result<RTCSessionDescription, WhipWhepServerError> {
