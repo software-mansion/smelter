@@ -63,7 +63,7 @@ impl Mp4Input {
             return Err(Mp4InputError::NoTrack.into());
         }
 
-        let vulkan_supported = ctx.graphics_context.has_vulkan_support();
+        let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
         let h264_decoder = options.video_decoders.h264.unwrap_or({
             if vulkan_supported {
                 VideoDecoderOptions::VulkanH264
