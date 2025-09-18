@@ -9,6 +9,12 @@ use smelter::routes;
 
 const ROOT_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
+fn main() {
+    tracing_subscriber::fmt().init();
+    let check_flag = std::env::args().any(|arg| &arg == "--check");
+    generate_json_schema(check_flag);
+}
+
 /// This enum is used to generate JSON schema for all API types.
 /// This prevents repeating types in generated schema.
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]

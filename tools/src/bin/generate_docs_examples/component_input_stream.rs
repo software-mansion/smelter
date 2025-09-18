@@ -1,8 +1,8 @@
 use std::{fs, path::Path};
 
 use anyhow::Result;
-use generate::compositor_instance::CompositorInstance;
 use serde_json::json;
+use tools::compositor_instance::CompositorInstance;
 
 use crate::workingdir;
 

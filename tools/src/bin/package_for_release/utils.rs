@@ -1,9 +1,24 @@
 use anyhow::{anyhow, Result};
 use log::{info, warn};
 use std::{fs, path::PathBuf, process::Command, str::from_utf8};
+use tools::paths::git_root;
 
-pub fn cargo_build(
-    bin: &'static str,
+pub enum SmelterBin {
+    MainProcess,
+    ChromiumHelper,
+}
+
+impl SmelterBin {
+    fn bin_name(&self) -> &'static str {
+        match self {
+            SmelterBin::MainProcess => "main_process",
+            SmelterBin::ChromiumHelper => "process_helper",
+        }
+    }
+}
+
+pub fn compile_smelter(
+    bin: SmelterBin,
     target: &'static str,
     disable_default_features: bool,
 ) -> Result<()> {
@@ -14,7 +29,7 @@ pub fn cargo_build(
         target,
         "--locked",
         "--bin",
-        bin,
+        bin.bin_name(),
     ];
     if disable_default_features {
         args.extend(["--no-default-features"]);
@@ -23,6 +38,7 @@ pub fn cargo_build(
     info!("Running command \"cargo {}\"", args.join(" "));
     let output = Command::new("cargo")
         .args(args)
+        .current_dir(git_root())
         .spawn()?
         .wait_with_output()?;
     if !output.status.success() {
@@ -33,7 +49,7 @@ pub fn cargo_build(
     Ok(())
 }
 
-pub fn setup_bundle_dir(dir: &PathBuf) -> Result<()> {
+pub fn ensure_empty_dir(dir: &PathBuf) -> Result<()> {
     if dir.exists() {
         if !dir.is_dir() {
             return Err(anyhow!("Expected directory path"));

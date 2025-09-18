@@ -5,5 +5,4 @@
 # tmp files create by release.sh
 /release_tmp
 /smelter_*.tar.gz
-
-
+/build

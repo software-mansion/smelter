@@ -1710,32 +1710,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "generate"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytes",
- "crossbeam-channel",
- "ffmpeg-next",
- "opus",
- "pitch-detection",
- "rand",
- "reqwest",
- "schemars",
- "serde",
- "serde_json",
- "smelter",
- "smelter_api",
- "smelter_core",
- "smelter_render",
- "socket2",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "webrtc-util",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5151,6 +5125,35 @@ dependencies = [
  "indexmap 2.7.1",
  "toml_datetime",
  "winnow",
+]
+
+[[package]]
+name = "tools"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "compositor_chromium",
+ "crossbeam-channel",
+ "ffmpeg-next",
+ "fs_extra",
+ "log",
+ "opus",
+ "pitch-detection",
+ "rand",
+ "reqwest",
+ "schemars",
+ "serde",
+ "serde_json",
+ "smelter",
+ "smelter_api",
+ "smelter_core",
+ "smelter_render",
+ "socket2",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "webrtc-util",
 ]
 
 [[package]]

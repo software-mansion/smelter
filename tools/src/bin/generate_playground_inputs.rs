@@ -1,9 +1,9 @@
 use std::{fs, path::PathBuf, process::Command, thread};
 
 use anyhow::Result;
-use generate::compositor_instance::CompositorInstance;
 use serde_json::json;
 use smelter_render::Resolution;
+use tools::compositor_instance::CompositorInstance;
 
 fn main() {
     let _ = fs::remove_dir_all(workingdir());

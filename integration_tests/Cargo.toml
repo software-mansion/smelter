@@ -21,13 +21,13 @@ clap = { version = "4.5", features = ["derive"] }
 smelter = { workspace = true }
 smelter_api = { workspace = true }
 smelter_core = { workspace = true }
+smelter_render = { workspace = true }
 compositor_chromium = { workspace = true, optional = true }
 reqwest = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ffmpeg-next = { workspace = true }
-smelter_render = { workspace = true }
 socket2 = { workspace = true }
 bytes = { workspace = true }
 webrtc = {workspace = true }

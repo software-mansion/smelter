@@ -1,8 +1,8 @@
 use std::{fs, path::PathBuf, time::Duration};
 
 use anyhow::Result;
-use generate::compositor_instance::CompositorInstance;
 use serde_json::json;
+use tools::compositor_instance::CompositorInstance;
 
 fn main() {
     let _ = fs::remove_dir_all(workingdir());

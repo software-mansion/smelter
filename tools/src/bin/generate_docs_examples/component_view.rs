@@ -1,25 +1,14 @@
 use std::{fs, path::Path, process::Command};
 
 use anyhow::Result;
-use generate::compositor_instance::CompositorInstance;
 use serde_json::json;
+use tools::compositor_instance::CompositorInstance;
 
-use crate::examples_root;
-
-pub(super) fn generate_image_component_example(root_dir: &Path) -> Result<()> {
+pub(super) fn generate_view_component_example(root_dir: &Path) -> Result<()> {
     let instance = CompositorInstance::start();
-    let mp4_path = root_dir.join("guides/component-image-example.mp4");
-    let webp_path = root_dir.join("guides/component-image-example.webp");
+    let mp4_path = root_dir.join("guides/component-view-example.mp4");
+    let webp_path = root_dir.join("guides/component-view-example.webp");
     let _ = fs::remove_file(&mp4_path);
-
-    instance.send_request(
-        "image/image/register",
-        json!({
-            "asset_type": "svg",
-            "path": examples_root().join("./src/bin/generate_docs_examples/image.svg"),
-            "resolution": { "width": 915, "height": 720 }
-        }),
-    )?;
 
     instance.send_request(
         "output/output_1/register",
@@ -60,7 +49,6 @@ pub(super) fn generate_image_component_example(root_dir: &Path) -> Result<()> {
         ])
         .status()
         .unwrap();
-
     let _ = fs::remove_file(&mp4_path);
 
     Ok(())
@@ -70,12 +58,16 @@ fn scene() -> serde_json::Value {
     json!({
         "root": {
             "type": "view",
-            "background_color": "#52505b",
             "children": [
                 {
-                    "type": "image",
-                    "image_id": "image",
-                }
+                    "type": "view",
+                    "direction": "column",
+                    "children": [
+                        { "type": "view", "background_color": "red", "height": 200 },
+                        { "type": "view", "background_color": "blue" }
+                    ],
+                },
+                { "type": "view", "background_color": "green" }
             ]
         }
     })

@@ -1,14 +1,25 @@
 use std::{fs, path::Path, process::Command};
 
 use anyhow::Result;
-use generate::compositor_instance::CompositorInstance;
 use serde_json::json;
+use tools::compositor_instance::CompositorInstance;
 
-pub(super) fn generate_text_component_example(root_dir: &Path) -> Result<()> {
+use crate::examples_root;
+
+pub(super) fn generate_rescaler_component_example(root_dir: &Path) -> Result<()> {
     let instance = CompositorInstance::start();
-    let mp4_path = root_dir.join("guides/component-text-example.mp4");
-    let webp_path = root_dir.join("guides/component-text-example.webp");
+    let mp4_path = root_dir.join("guides/component-rescaler-example.mp4");
+    let webp_path = root_dir.join("guides/component-rescaler-example.webp");
     let _ = fs::remove_file(&mp4_path);
+
+    instance.send_request(
+        "image/image/register",
+        json!({
+            "asset_type": "svg",
+            "path": examples_root().join("./src/bin/generate_docs_examples/image.svg"),
+            "resolution": { "width": 665*2, "height": 524*2 }
+        }),
+    )?;
 
     instance.send_request(
         "output/output_1/register",
@@ -59,28 +70,15 @@ fn scene() -> serde_json::Value {
         "root": {
             "type": "view",
             "background_color": "#52505b",
-            "padding": 100,
-            "direction": "column",
             "children": [
                 {
-                    "type": "text",
-                    "font_size": 72,
-                    "color": "#a5baf0",
-                    "weight": "bold",
-                    "text": "Example text"
+                    "type": "rescaler",
+                    "child": { "type": "image", "image_id": "image" },
                 },
                 {
-                    "type": "view",
-                    "height": 30,
-                },
-                {
-                    "type": "text",
-                    "font_size": 30,
-                    "line_height": 44,
-                    "wrap": "word",
-                    "width": 1000,
-                    "color": "#a5baf0",
-                    "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam consequat lorem a quam bibendum, non gravida tortor ornare. Cras blandit facilisis erat. Integer porta ullamcorper mauris ac maximus. Donec sapien diam, porttitor nec interdum sit amet, eleifend at lectus."
+                    "type": "rescaler",
+                    "mode": "fill",
+                    "child": { "type": "image", "image_id": "image" },
                 },
             ]
         }

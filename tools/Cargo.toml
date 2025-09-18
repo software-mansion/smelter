@@ -1,5 +1,5 @@
 [package]
-name = "generate"
+name = "tools" 
 version = "0.1.0"
 edition = "2021"
 license-file = "../LICENSE"
@@ -9,19 +9,26 @@ license-file = "../LICENSE"
 [features]
 default = ["web_renderer"]
 decklink = ["smelter/decklink"]
-web_renderer = ["smelter/web_renderer"]
+web_renderer = [
+    "dep:compositor_chromium",
+    "smelter_render/web_renderer",
+    "smelter/web_renderer"
+]
 
 [dependencies]
 smelter = { workspace = true }
 smelter_api = { workspace = true }
 smelter_core = { workspace = true }
+smelter_render = { workspace = true }
+compositor_chromium = { workspace = true, optional = true }
 reqwest = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ffmpeg-next = { workspace = true }
-smelter_render = { workspace = true }
+fs_extra = { workspace = true }
 socket2 = { workspace = true }
+log = { workspace = true }
 bytes = { workspace = true }
 webrtc-util = { workspace = true }
 crossbeam-channel = { workspace = true }

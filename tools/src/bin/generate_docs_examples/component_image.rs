@@ -1,15 +1,15 @@
 use std::{fs, path::Path, process::Command};
 
 use anyhow::Result;
-use generate::compositor_instance::CompositorInstance;
 use serde_json::json;
+use tools::compositor_instance::CompositorInstance;
 
 use crate::examples_root;
 
-pub(super) fn generate_rescaler_component_example(root_dir: &Path) -> Result<()> {
+pub(super) fn generate_image_component_example(root_dir: &Path) -> Result<()> {
     let instance = CompositorInstance::start();
-    let mp4_path = root_dir.join("guides/component-rescaler-example.mp4");
-    let webp_path = root_dir.join("guides/component-rescaler-example.webp");
+    let mp4_path = root_dir.join("guides/component-image-example.mp4");
+    let webp_path = root_dir.join("guides/component-image-example.webp");
     let _ = fs::remove_file(&mp4_path);
 
     instance.send_request(
@@ -17,7 +17,7 @@ pub(super) fn generate_rescaler_component_example(root_dir: &Path) -> Result<()>
         json!({
             "asset_type": "svg",
             "path": examples_root().join("./src/bin/generate_docs_examples/image.svg"),
-            "resolution": { "width": 665*2, "height": 524*2 }
+            "resolution": { "width": 915, "height": 720 }
         }),
     )?;
 
@@ -60,6 +60,7 @@ pub(super) fn generate_rescaler_component_example(root_dir: &Path) -> Result<()>
         ])
         .status()
         .unwrap();
+
     let _ = fs::remove_file(&mp4_path);
 
     Ok(())
@@ -72,14 +73,9 @@ fn scene() -> serde_json::Value {
             "background_color": "#52505b",
             "children": [
                 {
-                    "type": "rescaler",
-                    "child": { "type": "image", "image_id": "image" },
-                },
-                {
-                    "type": "rescaler",
-                    "mode": "fill",
-                    "child": { "type": "image", "image_id": "image" },
-                },
+                    "type": "image",
+                    "image_id": "image",
+                }
             ]
         }
     })

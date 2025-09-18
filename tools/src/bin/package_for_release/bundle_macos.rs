@@ -1,12 +1,12 @@
-use std::env;
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
+use tools::paths::{git_root, tools_root};
 
 use anyhow::{anyhow, Result};
 use log::info;
 
 use crate::utils;
+use crate::utils::SmelterBin;
 
 const ARM_MAC_TARGET: &str = "aarch64-apple-darwin";
 const ARM_OUTPUT_FILE: &str = "smelter_darwin_aarch64.tar.gz";
@@ -33,19 +33,18 @@ pub fn bundle_macos_app() -> Result<()> {
 
 fn bundle_app(target: &'static str, output_name: &str, enable_web_rendering: bool) -> Result<()> {
     if enable_web_rendering {
-        info!("Bundling smelter with web rendering");
+        info!("Bundling smelter with web rendering.");
     } else {
-        info!("Bundling smelter without web rendering");
+        info!("Bundling smelter without web rendering.");
     }
 
-    let root_dir_str = env!("CARGO_MANIFEST_DIR");
-    let root_dir: PathBuf = root_dir_str.into();
-    let build_dir = root_dir.join(format!("target/{target}/release"));
-    let tmp_dir = root_dir.join("smelter");
-    utils::setup_bundle_dir(&tmp_dir)?;
+    let cargo_build_dir = git_root().join("target").join(target).join("release");
+    let workdir = tools_root().join("build");
+    utils::ensure_empty_dir(&workdir)?;
+    fs::create_dir_all(workdir.join("smelter"))?;
 
     info!("Build main_process binary.");
-    utils::cargo_build("main_process", target, !enable_web_rendering)?;
+    utils::compile_smelter(SmelterBin::MainProcess, target, !enable_web_rendering)?;
 
     info!("Create macOS bundle.");
     #[cfg(feature = "web_renderer")]
@@ -53,15 +52,19 @@ fn bundle_app(target: &'static str, output_name: &str, enable_web_rendering: boo
         use compositor_chromium::cef;
 
         info!("Build process_helper binary.");
-        utils::cargo_build("process_helper", target, false)?;
-        cef::bundle_app(&build_dir, &tmp_dir.join("smelter.app"))?;
+        utils::compile_smelter(SmelterBin::ChromiumHelper, target, false)?;
+        cef::bundle_app(&cargo_build_dir, &workdir.join("smelter/smelter.app"))?;
     }
 
-    fs::copy(build_dir.join("main_process"), tmp_dir.join("smelter"))?;
+    fs::copy(
+        cargo_build_dir.join("main_process"),
+        workdir.join("smelter/smelter"),
+    )?;
 
     info!("Create tar.gz archive.");
     let exit_code = Command::new("tar")
-        .args(["-C", root_dir_str, "-czvf", output_name, "smelter"])
+        .args(["-czvf", output_name, "smelter"])
+        .current_dir(workdir)
         .spawn()?
         .wait()?
         .code();
