@@ -12,7 +12,7 @@ update_snapshots = []
 decklink = ["smelter/decklink"]
 web_renderer = [
     "dep:compositor_chromium",
-    "compositor_render/web_renderer",
+    "smelter_render/web_renderer",
     "smelter/web_renderer",
 ]
 
@@ -27,7 +27,7 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ffmpeg-next = { workspace = true }
-compositor_render = { workspace = true }
+smelter_render = { workspace = true }
 socket2 = { workspace = true }
 bytes = { workspace = true }
 webrtc = {workspace = true }

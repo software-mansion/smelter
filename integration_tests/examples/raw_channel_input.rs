@@ -11,16 +11,16 @@ use compositor_pipeline::{
     protocols::*,
     *,
 };
-use compositor_render::{
-    error::ErrorStack,
-    scene::{Component, InputStreamComponent},
-    Frame, FrameData, InputId, OutputId, Resolution,
-};
 use integration_tests::{gstreamer::start_gst_receive_tcp_h264, test_input::TestInput};
 use smelter::{
     config::read_config,
     logger::{self},
     state::pipeline_options_from_config,
+};
+use smelter_render::{
+    error::ErrorStack,
+    scene::{Component, InputStreamComponent},
+    Frame, FrameData, InputId, OutputId, Resolution,
 };
 use tokio::runtime::Runtime;
 

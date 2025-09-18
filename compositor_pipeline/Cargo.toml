@@ -8,11 +8,11 @@ license-file = "../LICENSE"
 [features]
 default = []
 decklink = ["dep:decklink"]
-web_renderer = ["compositor_render/web_renderer"]
+web_renderer = ["smelter_render/web_renderer"]
 vk-video = ["dep:vk-video"]
 
 [dependencies]
-compositor_render = { workspace = true }
+smelter_render = { workspace = true }
 bytes = { workspace = true }
 crossbeam-channel = { workspace = true }
 anyhow = { workspace = true }

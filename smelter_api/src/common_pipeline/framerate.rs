@@ -10,7 +10,7 @@ pub enum Framerate {
     U32(u32),
 }
 
-impl TryFrom<Framerate> for compositor_render::Framerate {
+impl TryFrom<Framerate> for smelter_render::Framerate {
     type Error = TypeError;
 
     fn try_from(framerate: Framerate) -> Result<Self, Self::Error> {
@@ -26,9 +26,9 @@ impl TryFrom<Framerate> for compositor_render::Framerate {
                 let den = den_str
                     .parse::<u32>()
                     .or(Err(TypeError::new(ERROR_MESSAGE)))?;
-                Ok(compositor_render::Framerate { num, den })
+                Ok(smelter_render::Framerate { num, den })
             }
-            Framerate::U32(num) => Ok(compositor_render::Framerate { num, den: 1 }),
+            Framerate::U32(num) => Ok(smelter_render::Framerate { num, den: 1 }),
         }
     }
 }

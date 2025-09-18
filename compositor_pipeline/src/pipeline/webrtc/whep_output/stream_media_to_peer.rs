@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use compositor_render::error::ErrorStack;
+use smelter_render::error::ErrorStack;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info};
 use webrtc::track::track_local::{track_local_static_rtp::TrackLocalStaticRTP, TrackLocalWriter};

@@ -1,4 +1,4 @@
-use compositor_render::error::ErrorStack;
+use smelter_render::error::ErrorStack;
 use tracing::warn;
 
 use crate::pipeline::resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch};

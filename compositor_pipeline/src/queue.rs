@@ -13,8 +13,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use compositor_render::{Frame, FrameSet, Framerate, InputId};
 use crossbeam_channel::{bounded, Receiver, Sender};
+use smelter_render::{Frame, FrameSet, Framerate, InputId};
 
 use crate::audio_mixer::InputSamplesSet;
 

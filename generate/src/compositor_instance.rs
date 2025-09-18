@@ -4,7 +4,6 @@ use compositor_pipeline::{
     graphics_context::{GraphicsContext, GraphicsContextOptions},
     Pipeline, PipelineWgpuOptions, PipelineWhipWhepServerOptions,
 };
-use compositor_render::WgpuFeatures;
 use crossbeam_channel::{Receiver, Sender};
 use reqwest::StatusCode;
 use smelter::{
@@ -13,6 +12,7 @@ use smelter::{
     server::run_api,
     state::{pipeline_options_from_config, ApiState},
 };
+use smelter_render::WgpuFeatures;
 use std::{
     env,
     sync::{

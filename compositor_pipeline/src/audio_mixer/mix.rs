@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use compositor_render::InputId;
+use smelter_render::InputId;
 
 use crate::{audio_mixer::AudioOutputInfo, prelude::*};
 

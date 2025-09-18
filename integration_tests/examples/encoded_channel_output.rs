@@ -2,13 +2,13 @@ use core::panic;
 use std::{fs::File, io::Write, path::PathBuf, sync::Arc, time::Duration};
 
 use compositor_pipeline::{codecs::*, protocols::*, *};
-use compositor_render::{
+use integration_tests::examples::download_file;
+use smelter::{config::read_config, logger, state::ApiState};
+use smelter_render::{
     error::ErrorStack,
     scene::{Component, InputStreamComponent},
     InputId, OutputId, Resolution,
 };
-use integration_tests::examples::download_file;
-use smelter::{config::read_config, logger, state::ApiState};
 use tokio::runtime::Runtime;
 
 const BUNNY_FILE_URL: &str =

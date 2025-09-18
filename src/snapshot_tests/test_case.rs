@@ -10,7 +10,7 @@ use super::{
 };
 
 use anyhow::Result;
-use compositor_render::{
+use smelter_render::{
     scene::Component, Frame, FrameSet, InputId, OutputFrameFormat, OutputId, Renderer, RendererId,
     RendererSpec, Resolution,
 };

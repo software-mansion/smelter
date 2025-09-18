@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use compositor_render::{
+use smelter_render::{
     image::{ImageSource, ImageSpec, ImageType},
     scene::{
         Component, ImageComponent, InputStreamComponent, RGBAColor, RescalerComponent,

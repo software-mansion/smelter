@@ -4,9 +4,9 @@ use axum::{
     routing::{delete, get, patch, post},
     Router,
 };
-use compositor_render::error::ErrorStack;
 use reqwest::StatusCode;
 use serde_json::json;
+use smelter_render::error::ErrorStack;
 use tokio::{net::TcpListener, sync::oneshot};
 use tower_http::cors::CorsLayer;
 use tracing::{error, info, warn};

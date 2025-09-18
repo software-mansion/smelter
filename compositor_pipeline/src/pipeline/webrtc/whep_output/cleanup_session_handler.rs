@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use compositor_render::OutputId;
+use smelter_render::OutputId;
 use tracing::warn;
 
 use crate::pipeline::webrtc::whep_output::state::WhepOutputsState;

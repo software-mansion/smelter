@@ -1,7 +1,7 @@
 use anyhow::Result;
 use bytes::Bytes;
-use compositor_render::{Frame, FrameData};
 use core::panic;
+use smelter_render::{Frame, FrameData};
 use std::{ops::Range, time::Duration};
 use tracing::warn;
 

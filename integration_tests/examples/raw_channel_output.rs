@@ -11,11 +11,6 @@ use std::{
 use compositor_pipeline::{
     codecs::VideoDecoderOptions, graphics_context::GraphicsContext, protocols::*, *,
 };
-use compositor_render::{
-    error::ErrorStack,
-    scene::{Component, InputStreamComponent},
-    Frame, FrameData, InputId, OutputId, Resolution,
-};
 use crossbeam_channel::bounded;
 use image::{codecs::png::PngEncoder, ColorType, ImageEncoder};
 use integration_tests::{examples::download_file, read_rgba_texture};
@@ -23,6 +18,11 @@ use smelter::{
     config::read_config,
     logger::{self},
     state::pipeline_options_from_config,
+};
+use smelter_render::{
+    error::ErrorStack,
+    scene::{Component, InputStreamComponent},
+    Frame, FrameData, InputId, OutputId, Resolution,
 };
 use tokio::runtime::Runtime;
 

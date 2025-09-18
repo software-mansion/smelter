@@ -5,12 +5,12 @@ use compositor_pipeline::error::{
     ErrorType, InitPipelineError, PipelineErrorInfo, RegisterInputError, RegisterOutputError,
     UnregisterInputError, UnregisterOutputError,
 };
-use compositor_render::error::{
+use serde::Serialize;
+use smelter_api::TypeError;
+use smelter_render::error::{
     ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
     UpdateSceneError,
 };
-use serde::Serialize;
-use smelter_api::TypeError;
 
 #[derive(Debug)]
 pub struct ApiError {

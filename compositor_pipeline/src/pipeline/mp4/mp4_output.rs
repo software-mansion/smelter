@@ -1,9 +1,9 @@
 use std::{fs, path::PathBuf, ptr, sync::Arc, time::Duration};
 
-use compositor_render::OutputId;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
 use log::error;
+use smelter_render::OutputId;
 use tracing::{debug, warn};
 
 use crate::{

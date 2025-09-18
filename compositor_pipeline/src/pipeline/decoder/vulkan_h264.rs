@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use compositor_render::{Frame, FrameData, Resolution};
+use smelter_render::{Frame, FrameData, Resolution};
 use tracing::{info, warn};
 use vk_video::WgpuTexturesDecoder;
 

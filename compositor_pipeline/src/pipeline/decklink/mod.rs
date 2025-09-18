@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use compositor_render::InputId;
+use smelter_render::InputId;
 use tracing::{error, span, Level};
 
 use crate::prelude::*;

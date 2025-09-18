@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use compositor_render::error::ErrorStack;
+use smelter_render::error::ErrorStack;
 use tokio::sync::{mpsc, watch};
 use tracing::warn;
 

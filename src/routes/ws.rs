@@ -1,8 +1,8 @@
 use std::thread;
 
 use axum::extract::ws::{Message, WebSocket};
-use compositor_render::event_handler::{subscribe, Event};
 use futures_util::{SinkExt, StreamExt};
+use smelter_render::event_handler::{subscribe, Event};
 use tokio::sync::mpsc::channel;
 use tracing::debug;
 

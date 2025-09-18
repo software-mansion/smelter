@@ -1,9 +1,9 @@
-use compositor_render::OutputId;
 use crossbeam_channel::{bounded, Sender};
 use packet_stream::RtpBinaryPacketStream;
 use rand::Rng;
 use rtp_audio_thread::RtpAudioTrackThreadHandle;
 use rtp_video_thread::RtpVideoTrackThreadHandle;
+use smelter_render::OutputId;
 use std::sync::{atomic::AtomicBool, Arc};
 use tracing::{debug, span, Level};
 use webrtc::rtcp;

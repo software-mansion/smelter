@@ -1,8 +1,8 @@
-use compositor_render::{
-    InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RendererOptions, RendererSpec,
-};
 use glyphon::fontdb::Source;
 use smelter_api as api;
+use smelter_render::{
+    InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RendererOptions, RendererSpec,
+};
 use wasm_bindgen::JsValue;
 
 use super::{
@@ -13,7 +13,7 @@ use super::{
 };
 
 pub(super) struct Renderer {
-    renderer: compositor_render::Renderer,
+    renderer: smelter_render::Renderer,
     inputs: RendererInputs,
     outputs: RendererOutputs,
 }
@@ -23,7 +23,7 @@ impl Renderer {
         upload_frames_with_copy_external: bool,
         options: RendererOptions,
     ) -> Result<Self, JsValue> {
-        let renderer = compositor_render::Renderer::new(options).map_err(types::to_js_error)?;
+        let renderer = smelter_render::Renderer::new(options).map_err(types::to_js_error)?;
         let inputs = RendererInputs::new(upload_frames_with_copy_external);
         let outputs = RendererOutputs::default();
 

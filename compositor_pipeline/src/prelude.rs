@@ -9,4 +9,4 @@ pub use crate::output::*;
 
 pub use crate::types::*;
 
-pub use compositor_render::{Frame, InputId, OutputId, Resolution};
+pub use smelter_render::{Frame, InputId, OutputId, Resolution};

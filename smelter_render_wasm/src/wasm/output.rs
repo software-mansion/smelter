@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use compositor_render::{Frame, FrameData, FrameSet, OutputId, Resolution};
+use smelter_render::{Frame, FrameData, FrameSet, OutputId, Resolution};
 use tracing::error;
 use wasm_bindgen::JsValue;
 

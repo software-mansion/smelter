@@ -5,7 +5,7 @@ use compositor_pipeline::{
     error::InitPipelineError, Pipeline, PipelineOptions, PipelineWgpuOptions,
     PipelineWhipWhepServerOptions,
 };
-use compositor_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
+use smelter_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
 
 use reqwest::StatusCode;
 use serde::Serialize;

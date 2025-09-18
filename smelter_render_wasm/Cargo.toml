@@ -8,7 +8,7 @@ license-file = "../LICENSE"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-compositor_render = { workspace = true }
+smelter_render = { workspace = true }
 smelter_api = { workspace = true }
 console_error_panic_hook = "0.1.7"
 tracing-wasm = "0.2.1"

@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use compositor_render::error::ErrorStack;
+use smelter_render::error::ErrorStack;
 use tracing::warn;
 
 use crate::pipeline::{

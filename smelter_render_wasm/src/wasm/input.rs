@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use compositor_render::{Frame, FrameData, FrameSet, InputId};
 use futures::future::join_all;
 use js_sys::Object;
+use smelter_render::{Frame, FrameData, FrameSet, InputId};
 use tracing::error;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;

@@ -1,4 +1,4 @@
-use compositor_render::{scene::RGBColor, FrameData, Resolution, YuvPlanes};
+use smelter_render::{scene::RGBColor, FrameData, Resolution, YuvPlanes};
 
 #[derive(Debug, Clone)]
 pub(super) struct TestInput {

@@ -1,4 +1,4 @@
-use compositor_render::Resolution;
+use smelter_render::Resolution;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FfmpegVp8EncoderOptions {

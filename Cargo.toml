@@ -6,7 +6,7 @@ license-file = "./LICENSE"
 
 [workspace]
 members = [
-    "compositor_render",
+    "smelter_render",
     "compositor_pipeline",
     "compositor_chromium",
     "integration_tests",
@@ -29,7 +29,7 @@ smelter = { path = ".", default-features = false }
 smelter_api = { path = "smelter_api" }
 compositor_pipeline = { path = "compositor_pipeline" }
 compositor_chromium = { path = "compositor_chromium" }
-compositor_render = { path = "compositor_render" }
+smelter_render = { path = "smelter_render" }
 vk-video = { path = "vk-video" }
 bytes = "1.4.0"
 serde_json = { version = "1.0.99", features = ["preserve_order"] }
@@ -70,7 +70,7 @@ tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
 
 [dependencies]
 smelter_api = { workspace = true }
-compositor_render = { workspace = true }
+smelter_render = { workspace = true }
 compositor_pipeline = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

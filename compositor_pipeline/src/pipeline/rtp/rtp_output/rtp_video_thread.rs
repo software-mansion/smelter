@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use compositor_render::Frame;
 use crossbeam_channel::Sender;
+use smelter_render::Frame;
 use tracing::warn;
 use webrtc::rtcp;
 

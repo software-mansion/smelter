@@ -2,7 +2,7 @@ use core::slice;
 use ffmpeg_next::{format::Pixel, frame};
 use std::time::Duration;
 
-use compositor_render::FrameData;
+use smelter_render::FrameData;
 
 use crate::prelude::*;
 

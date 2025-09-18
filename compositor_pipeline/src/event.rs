@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 
-use compositor_render::{
+use crossbeam_channel::Receiver;
+use smelter_render::{
     event_handler::{self, emit_event, Emitter},
     InputId, OutputId,
 };
-use crossbeam_channel::Receiver;
 
 #[derive(Debug, Clone)]
 pub enum Event {

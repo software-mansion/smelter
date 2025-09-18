@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use compositor_render::{
+use glyphon::fontdb::Source;
+use smelter_api::{Component, ImageSpec, Resolution, ShaderSpec};
+use smelter_render::{
     image::{ImageSource, ImageType},
     RegistryType, RendererSpec,
 };
-use glyphon::fontdb::Source;
-use smelter_api::{Component, ImageSpec, Resolution, ShaderSpec};
 use tokio::sync::Mutex;
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 use tracing_wasm::WASMLayer;
@@ -103,7 +103,7 @@ impl SmelterRenderer {
         };
 
         let bytes = download(&url).await?;
-        let image_spec = compositor_render::image::ImageSpec {
+        let image_spec = smelter_render::image::ImageSpec {
             src: ImageSource::Bytes { bytes },
             image_type,
         };

@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use compositor_render::Resolution;
+use smelter_render::Resolution;
 
 use super::snapshot_save_path;
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use compositor_render::Frame;
+use smelter_render::Frame;
 use tracing::error;
 
 use crate::pipeline::decoder::{VideoDecoder, VideoDecoderInstance};

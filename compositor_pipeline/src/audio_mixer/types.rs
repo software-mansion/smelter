@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, time::Duration};
 
-use compositor_render::{InputId, OutputId};
+use smelter_render::{InputId, OutputId};
 
 use crate::prelude::*;
 

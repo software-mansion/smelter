@@ -1,7 +1,7 @@
 use core::panic;
 use std::{sync::Arc, time::Duration};
 
-use compositor_render::{
+use smelter_render::{
     scene::{
         BorderRadius, Component, Overflow, Position, RGBAColor, ShaderComponent, Size,
         ViewChildrenDirection, ViewComponent,

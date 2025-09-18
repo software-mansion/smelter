@@ -4,7 +4,7 @@ use compositor_pipeline::{
     codecs::{FfmpegH264EncoderPreset, VideoDecoderOptions},
     graphics_context::GraphicsContext,
 };
-use compositor_render::RenderingMode;
+use smelter_render::RenderingMode;
 
 use crate::{
     args::{Resolution, ResolutionPreset},

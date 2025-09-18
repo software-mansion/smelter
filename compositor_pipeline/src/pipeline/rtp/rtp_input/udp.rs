@@ -4,8 +4,8 @@ use std::{
 };
 
 use bytes::{Bytes, BytesMut};
-use compositor_render::InputId;
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use smelter_render::InputId;
 use tracing::{debug, span, warn, Level};
 
 use crate::pipeline::{rtp::util::bind_to_requested_port, Port};

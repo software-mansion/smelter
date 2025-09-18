@@ -1,4 +1,4 @@
-use compositor_render::scene::Component;
+use smelter_render::scene::Component;
 
 use crate::prelude::*;
 

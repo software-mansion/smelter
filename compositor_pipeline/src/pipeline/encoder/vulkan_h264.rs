@@ -1,6 +1,6 @@
 use std::{num::NonZero, ops::Deref, sync::Arc};
 
-use compositor_render::{FrameData, OutputFrameFormat};
+use smelter_render::{FrameData, OutputFrameFormat};
 use tracing::{error, info};
 use vk_video::{RateControl, Rational, VideoParameters, WgpuTexturesEncoder};
 
