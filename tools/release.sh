@@ -35,8 +35,8 @@ fi
 
 set -u
 
-mkdir -p "$ROOT_DIR/release_tmp"
-cd "$ROOT_DIR/release_tmp"
+mkdir -p "$ROOT_DIR/tools/release_tmp"
+cd "$ROOT_DIR/tools/release_tmp"
 
 gh run download "$WORKFLOW_RUN_ID" -n smelter_linux_x86_64.tar.gz
 gh run download "$WORKFLOW_RUN_ID" -n smelter_linux_aarch64.tar.gz
@@ -60,4 +60,4 @@ gh release upload "$RELEASE_TAG" smelter_with_web_renderer_linux_x86_64.tar.gz
 gh release upload "$RELEASE_TAG" smelter_with_web_renderer_darwin_x86_64.tar.gz
 gh release upload "$RELEASE_TAG" smelter_with_web_renderer_darwin_aarch64.tar.gz
 
-rm -rf "$ROOT_DIR/release_tmp"
+rm -rf "$ROOT_DIR/tools/release_tmp"

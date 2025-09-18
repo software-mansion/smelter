@@ -34,12 +34,5 @@ target/
 # Generated during runtime
 /shmem
 
-/smelter.app
-/smelter/
-/smelter_linux_x86_64.tar.gz
-/smelter_linux_aarch64.tar.gz
-/smelter_darwin_x86_64.tar.gz
-/smelter_darwin_aarch64.tar.gz
-
 .direnv
 /result
