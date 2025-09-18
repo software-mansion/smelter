@@ -898,33 +898,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "compositor_web"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "compositor_api",
- "compositor_render",
- "console_error_panic_hook",
- "crossbeam-channel",
- "futures",
- "getrandom 0.2.15",
- "glyphon",
- "js-sys",
- "log",
- "reqwest",
- "serde",
- "serde-wasm-bindgen",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "tracing-wasm",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
-]
-
-[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4554,6 +4527,33 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "webrtc-util",
+ "wgpu",
+]
+
+[[package]]
+name = "smelter_render_wasm"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "compositor_api",
+ "compositor_render",
+ "console_error_panic_hook",
+ "crossbeam-channel",
+ "futures",
+ "getrandom 0.2.15",
+ "glyphon",
+ "js-sys",
+ "log",
+ "reqwest",
+ "serde",
+ "serde-wasm-bindgen",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-wasm",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "wgpu",
 ]
 

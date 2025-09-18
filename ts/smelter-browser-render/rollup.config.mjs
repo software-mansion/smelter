@@ -11,11 +11,11 @@ export default [
     },
     plugins: [
       typescript(),
-      removeCompositorWebOccurences(),
+      removeSmelterFallbackUrlOccurrences(),
       copy({
         targets: [
           {
-            src: 'src/generated/smelter/compositor_web_bg.wasm',
+            src: 'src/generated/smelter/smelter_bg.wasm',
             dest: 'dist',
             rename: 'smelter.wasm',
           },
@@ -38,18 +38,18 @@ export default [
   },
 ];
 
-function removeCompositorWebOccurences() {
+function removeSmelterFallbackUrlOccurrences() {
   return {
-    name: 'remove-compositor-web-bg-occurences',
+    name: 'remove-smelter-url-fallback-occurrences',
     transform(code, id) {
-      if (id.includes('compositor_web.js')) {
+      if (id.includes('smelter.js')) {
         const new_code = code.replace(
-          "module_or_path = new URL('compositor_web_bg.wasm', import.meta.url)",
+          "module_or_path = new URL('smelter_bg.wasm', import.meta.url)",
           'throw new Error("WASM module path not provided")'
         );
 
         if (new_code === code) {
-          this.error('Failed to remove \'compositor_web_bg.wasm\' path');
+          this.error('Failed to remove \'smelter_bg.wasm\' path');
           return null;
         }
 

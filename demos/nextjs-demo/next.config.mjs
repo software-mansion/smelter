@@ -22,7 +22,7 @@ const nextConfig =  {
     );
     config.resolve.fallback = {
       ...config.resolve.fallback,
-      "compositor_web_bg.wasm": false,
+      "smelter_render_wasm_bg.wasm": false,
     };
 
     if (isServer) {

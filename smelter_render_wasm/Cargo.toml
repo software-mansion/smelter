@@ -1,5 +1,5 @@
 [package]
-name = "compositor_web"
+name = "smelter_render_wasm"
 version = "0.1.0"
 edition = "2021"
 license-file = "../LICENSE"
@@ -43,4 +43,4 @@ tokio = { version = "1", features = ["sync"] }
 getrandom = { version = "0.2", features = ["js"] }
 
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = true
+wasm-opt = false
