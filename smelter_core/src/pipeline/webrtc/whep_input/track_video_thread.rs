@@ -1,10 +1,11 @@
 use std::{iter, sync::Arc};
 
+use compositor_render::{error::ErrorStack, Frame};
 use crossbeam_channel::Sender;
-use smelter_render::{error::ErrorStack, Frame};
 use tokio::sync::oneshot;
 use tracing::{debug, error, trace, warn};
 use webrtc::{
+    rtcp::{packet::Packet, payload_feedbacks::picture_loss_indication::PictureLossIndication},
     rtp,
     rtp_transceiver::{PayloadType, RTCRtpTransceiver},
     track::track_remote::TrackRemote,
@@ -22,10 +23,8 @@ use crate::{
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
         },
         webrtc::{
-            error::WhipWhepServerError, listen_for_rtcp::listen_for_rtcp, whip_input::{
-                negotiated_codecs::NegotiatedVideoCodecsInfo,
-                AsyncReceiverIter,
-            }, WhipWhepServerState
+            error::WhipWhepServerError, // TODO delete
+            listen_for_rtcp::listen_for_rtcp, whip_input::negotiated_codecs::NegotiatedVideoCodecsInfo, 
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},
@@ -34,16 +33,15 @@ use crate::{
 use crate::prelude::*;
 
 pub async fn process_video_track(
+    ctx: Arc<PipelineCtx>,
     sync_point: Arc<RtpNtpSyncPoint>,
-    state: WhipWhepServerState,
-    endpoint_id: Arc<str>,
+    frame_sender: Sender<PipelineEvent<Frame>>,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
-    video_preferences: Vec<VideoDecoderOptions>,
 ) -> Result<(), WhipWhepServerError> {
     let rtc_receiver = transceiver.receiver().await;
     let Some(negotiated_codecs) =
-        NegotiatedVideoCodecsInfo::new(transceiver, &video_preferences).await
+        NegotiatedVideoCodecsInfo::new(transceiver, &vec![VideoDecoderOptions::FfmpegH264]).await
     else {
         warn!("Skipping video track, no valid codec negotiated");
         return Err(WhipWhepServerError::InternalError(
@@ -51,10 +49,19 @@ pub async fn process_video_track(
         ));
     };
 
-    let WhipWhepServerState { inputs, ctx, .. } = state;
-    let frame_sender = inputs.get_with(&endpoint_id, |input| Ok(input.frame_sender.clone()))?;
-    let handle =
-        VideoTrackThread::spawn(&endpoint_id, (ctx.clone(), negotiated_codecs, frame_sender))?;
+    let ssrc = track.ssrc();
+    let pli = PictureLossIndication {
+        sender_ssrc: 0,
+        media_ssrc: ssrc,
+    };
+
+    let rtcp_packets: Vec<Box<dyn Packet + Send + Sync>> = vec![Box::new(pli)];
+    rtc_receiver.transport().write_rtcp(&rtcp_packets).await?;
+
+    let handle = VideoTrackThread::spawn(
+        "whep video input",
+        (ctx.clone(), negotiated_codecs, frame_sender),
+    )?;
 
     let mut timestamp_sync =
         RtpTimestampSync::new(&sync_point, 90_000, ctx.default_buffer_duration);
@@ -79,6 +86,18 @@ pub async fn process_video_track(
         }
     }
     Ok(())
+}
+
+struct AsyncReceiverIter<T> {
+    pub receiver: tokio::sync::mpsc::Receiver<T>,
+}
+
+impl<T> Iterator for AsyncReceiverIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.receiver.blocking_recv()
+    }
 }
 
 pub(crate) struct VideoTrackThreadHandle {
