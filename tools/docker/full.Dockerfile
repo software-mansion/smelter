@@ -56,6 +56,6 @@ WORKDIR /home/$USERNAME/smelter
 COPY --from=builder --chown=$USERNAME:$USERNAME /root/project/target/release/main_process /home/$USERNAME/smelter/main_process
 COPY --from=builder --chown=$USERNAME:$USERNAME /root/project/target/release/process_helper /home/$USERNAME/smelter/process_helper
 COPY --from=builder --chown=$USERNAME:$USERNAME /root/project/target/release/lib /home/$USERNAME/smelter/lib
-COPY --from=builder --chown=$USERNAME:$USERNAME /root/project/docker/entrypoint.sh /home/$USERNAME/smelter/entrypoint.sh
+COPY --from=builder --chown=$USERNAME:$USERNAME /root/project/tools/docker/entrypoint.sh /home/$USERNAME/smelter/entrypoint.sh
 
 ENTRYPOINT ["./entrypoint.sh"]
