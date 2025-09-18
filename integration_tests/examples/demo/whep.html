@@ -101,20 +101,23 @@
 
       const videoPlayer = document.getElementById("video-player");
       videoPlayer.srcObject = stream;
+      return stream;
     }
-    run();
+    run().then((pc) => {
+      window.onbeforeunload = () => pc.close();
+    });
 
-    const rerun = async () => {
+    const rerun = () => {
       const urlInput = document.getElementById("url-input");
       const tokenInput = document.getElementById("token-input");
+
+      const baseUrl = 'file://' + window.location.pathname;
 
       const endpointUrl = urlInput.value;
       const bearerToken = tokenInput.value;
 
-      const stream = await connect(endpointUrl, bearerToken);
-
-      const videoPlayer = document.getElementById("video-player");
-      videoPlayer.srcObject = stream;
+      const newUrl = `${baseUrl}?url=${endpointUrl}&token=${bearerToken}`;
+      window.location.href = newUrl;
     }
 
     async function connect(endpointUrl, token) {
