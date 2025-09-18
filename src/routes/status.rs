@@ -2,9 +2,9 @@ use std::{path::Path, sync::Arc};
 
 use axum::{extract::State, response::IntoResponse};
 use compositor_pipeline::{InputProtocolKind, OutputProtocolKind};
-use compositor_render::RenderingMode;
 use serde::Serialize;
 use serde_json::json;
+use smelter_render::RenderingMode;
 
 use crate::error::ApiError;
 

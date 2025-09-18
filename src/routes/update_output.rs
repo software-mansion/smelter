@@ -2,9 +2,9 @@ use std::{sync::Arc, time::Duration};
 
 use axum::extract::{Path, State};
 use compositor_pipeline::Pipeline;
-use compositor_render::error::ErrorStack;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use smelter_render::error::ErrorStack;
 use tracing::error;
 
 use crate::{

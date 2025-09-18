@@ -14,10 +14,10 @@ use compositor_pipeline::{
     protocols::*,
     *,
 };
-use compositor_render::{
+use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use smelter_render::{
     scene::Component, Frame, InputId, OutputId, RendererId, RendererSpec, RenderingMode, YuvPlanes,
 };
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use tracing::debug;
 
 use crate::{
@@ -195,7 +195,7 @@ impl SingleBenchmarkPass {
                     audio: None,
                     video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                         preset,
-                        resolution: compositor_render::Resolution {
+                        resolution: smelter_render::Resolution {
                             width: self.output_resolution.width,
                             height: self.output_resolution.height,
                         },
@@ -227,7 +227,7 @@ impl SingleBenchmarkPass {
                 output_options: EncodedDataOutputOptions {
                     audio: None,
                     video: Some(VideoEncoderOptions::VulkanH264(VulkanH264EncoderOptions {
-                        resolution: compositor_render::Resolution {
+                        resolution: smelter_render::Resolution {
                             width: self.output_resolution.width,
                             height: self.output_resolution.height,
                         },
@@ -257,7 +257,7 @@ impl SingleBenchmarkPass {
                 output_options: RawDataOutputOptions {
                     audio: None,
                     video: Some(RawDataOutputVideoOptions {
-                        resolution: compositor_render::Resolution {
+                        resolution: smelter_render::Resolution {
                             width: self.output_resolution.width,
                             height: self.output_resolution.height,
                         },
@@ -405,8 +405,8 @@ fn raw_data_sender(senders: Vec<Sender<PipelineEvent<Frame>>>, input: RawInputFi
     loop {
         for yuv_planes in input.frames.iter() {
             let frame = Frame {
-                data: compositor_render::FrameData::PlanarYuv420(yuv_planes.clone()),
-                resolution: compositor_render::Resolution {
+                data: smelter_render::FrameData::PlanarYuv420(yuv_planes.clone()),
+                resolution: smelter_render::Resolution {
                     width: input.resolution.width,
                     height: input.resolution.height,
                 },

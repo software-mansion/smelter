@@ -10,7 +10,7 @@ use glyphon::fontdb;
 use tokio::runtime::Runtime;
 use tracing::{error, info, trace, warn};
 
-use compositor_render::{
+use smelter_render::{
     error::{
         ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
         UpdateSceneError,

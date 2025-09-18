@@ -830,7 +830,6 @@ dependencies = [
  "anyhow",
  "axum",
  "bytes",
- "compositor_render",
  "crossbeam-channel",
  "decklink",
  "fdk-aac-sys",
@@ -845,6 +844,7 @@ dependencies = [
  "rubato",
  "serde",
  "serde_json",
+ "smelter_render",
  "socket2",
  "thiserror 1.0.69",
  "tokio",
@@ -857,30 +857,6 @@ dependencies = [
  "vk-video",
  "webrtc",
  "webrtc-util",
- "wgpu",
-]
-
-[[package]]
-name = "compositor_render"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "bytes",
- "compositor_chromium",
- "crossbeam-channel",
- "glyphon",
- "image",
- "log",
- "naga",
- "nalgebra-glm",
- "pollster",
- "rand",
- "reqwest",
- "resvg",
- "shared_memory",
- "sys-locale",
- "thiserror 1.0.69",
- "tracing",
  "wgpu",
 ]
 
@@ -1777,7 +1753,6 @@ dependencies = [
  "anyhow",
  "bytes",
  "compositor_pipeline",
- "compositor_render",
  "crossbeam-channel",
  "ffmpeg-next",
  "opus",
@@ -1789,6 +1764,7 @@ dependencies = [
  "serde_json",
  "smelter",
  "smelter_api",
+ "smelter_render",
  "socket2",
  "tokio",
  "tracing",
@@ -2463,7 +2439,6 @@ dependencies = [
  "clap",
  "compositor_chromium",
  "compositor_pipeline",
- "compositor_render",
  "crossbeam-channel",
  "ffmpeg-next",
  "futures-util",
@@ -2480,6 +2455,7 @@ dependencies = [
  "signal-hook",
  "smelter",
  "smelter_api",
+ "smelter_render",
  "socket2",
  "spectrum-analyzer",
  "strum 0.27.2",
@@ -4488,7 +4464,6 @@ dependencies = [
  "bytes",
  "compositor_chromium",
  "compositor_pipeline",
- "compositor_render",
  "crossbeam-channel",
  "ffmpeg-next",
  "fs_extra",
@@ -4507,6 +4482,7 @@ dependencies = [
  "shared_memory",
  "signal-hook",
  "smelter_api",
+ "smelter_render",
  "thiserror 1.0.69",
  "tiny_http",
  "tokio",
@@ -4523,11 +4499,35 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "compositor_pipeline",
- "compositor_render",
  "itertools 0.14.0",
  "schemars",
  "serde",
+ "smelter_render",
  "tracing",
+]
+
+[[package]]
+name = "smelter_render"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytes",
+ "compositor_chromium",
+ "crossbeam-channel",
+ "glyphon",
+ "image",
+ "log",
+ "naga",
+ "nalgebra-glm",
+ "pollster",
+ "rand",
+ "reqwest",
+ "resvg",
+ "shared_memory",
+ "sys-locale",
+ "thiserror 1.0.69",
+ "tracing",
+ "wgpu",
 ]
 
 [[package]]
@@ -4535,7 +4535,6 @@ name = "smelter_render_wasm"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "compositor_render",
  "console_error_panic_hook",
  "crossbeam-channel",
  "futures",
@@ -4547,6 +4546,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "smelter_api",
+ "smelter_render",
  "tokio",
  "tracing",
  "tracing-subscriber",

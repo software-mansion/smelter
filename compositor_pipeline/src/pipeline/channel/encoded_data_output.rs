@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use compositor_render::OutputId;
 use crossbeam_channel::{bounded, Receiver};
+use smelter_render::OutputId;
 
 use crate::{
     pipeline::{

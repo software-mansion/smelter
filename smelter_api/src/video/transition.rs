@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use compositor_render::scene;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use smelter_render::scene;
 
 use crate::*;
 

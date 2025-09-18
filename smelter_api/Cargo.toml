@@ -11,7 +11,7 @@ web_renderer = ["compositor_pipeline/web_renderer"]
 vk-video = ["compositor_pipeline/vk-video"]
 
 [dependencies]
-compositor_render = { workspace = true }
+smelter_render = { workspace = true }
 serde = { workspace = true }
 schemars = { workspace = true }
 bytes = { workspace = true }

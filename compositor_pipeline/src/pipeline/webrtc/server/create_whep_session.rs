@@ -14,7 +14,7 @@ use axum::{
     extract::{Path, State},
     http::{HeaderMap, Response, StatusCode},
 };
-use compositor_render::OutputId;
+use smelter_render::OutputId;
 use std::sync::Arc;
 use tracing::trace;
 

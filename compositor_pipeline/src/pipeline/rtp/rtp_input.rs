@@ -3,8 +3,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use compositor_render::{Frame, InputId};
 use crossbeam_channel::{bounded, Receiver};
+use smelter_render::{Frame, InputId};
 use tracing::{debug, span, trace, warn, Level};
 use webrtc::{
     rtcp::{self, header::PacketType, sender_report::SenderReport},

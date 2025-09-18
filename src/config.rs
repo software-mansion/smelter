@@ -7,8 +7,8 @@ use std::{
 };
 
 use compositor_pipeline::DEFAULT_BUFFER_DURATION;
-use compositor_render::{Framerate, RenderingMode, WgpuFeatures};
 use rand::Rng;
+use smelter_render::{Framerate, RenderingMode, WgpuFeatures};
 use tracing::error;
 
 use crate::logger::FfmpegLogLevel;
@@ -295,9 +295,9 @@ fn framerate_from_str(s: &str) -> Result<Framerate, &'static str> {
         };
         let num = num_str.parse::<u32>().map_err(|_| ERROR_MESSAGE)?;
         let den = den_str.parse::<u32>().map_err(|_| ERROR_MESSAGE)?;
-        Ok(compositor_render::Framerate { num, den })
+        Ok(smelter_render::Framerate { num, den })
     } else {
-        Ok(compositor_render::Framerate {
+        Ok(smelter_render::Framerate {
             num: s.parse::<u32>().map_err(|_| ERROR_MESSAGE)?,
             den: 1,
         })

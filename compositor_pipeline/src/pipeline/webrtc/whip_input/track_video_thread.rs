@@ -1,7 +1,7 @@
 use std::{iter, sync::Arc};
 
-use compositor_render::{error::ErrorStack, Frame};
 use crossbeam_channel::Sender;
+use smelter_render::{error::ErrorStack, Frame};
 use tokio::sync::oneshot;
 use tracing::{debug, error, trace, warn};
 use webrtc::{

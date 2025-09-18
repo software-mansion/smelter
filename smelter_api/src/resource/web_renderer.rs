@@ -1,6 +1,6 @@
-use compositor_render::web_renderer;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use smelter_render::web_renderer;
 
 use crate::*;
 
@@ -31,7 +31,7 @@ pub enum WebEmbeddingMethod {
     NativeEmbeddingUnderContent,
 }
 
-impl TryFrom<WebRendererSpec> for compositor_render::RendererSpec {
+impl TryFrom<WebRendererSpec> for smelter_render::RendererSpec {
     type Error = TypeError;
 
     fn try_from(spec: WebRendererSpec) -> Result<Self, Self::Error> {

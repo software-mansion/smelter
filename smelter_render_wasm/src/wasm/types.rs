@@ -1,5 +1,5 @@
-use compositor_render::{error::ErrorStack, InputId, OutputId, Resolution};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use smelter_render::{error::ErrorStack, InputId, OutputId, Resolution};
 use std::{sync::Arc, time::Duration};
 use wasm_bindgen::prelude::*;
 
@@ -75,11 +75,11 @@ pub enum FrameFormat {
     YuvBytes,
 }
 
-impl From<FrameFormat> for compositor_render::OutputFrameFormat {
+impl From<FrameFormat> for smelter_render::OutputFrameFormat {
     fn from(value: FrameFormat) -> Self {
         match value {
-            FrameFormat::RgbaBytes => compositor_render::OutputFrameFormat::RgbaWgpuTexture,
-            FrameFormat::YuvBytes => compositor_render::OutputFrameFormat::PlanarYuv420Bytes,
+            FrameFormat::RgbaBytes => smelter_render::OutputFrameFormat::RgbaWgpuTexture,
+            FrameFormat::YuvBytes => smelter_render::OutputFrameFormat::PlanarYuv420Bytes,
         }
     }
 }
@@ -88,14 +88,14 @@ pub fn new_render_options(
     value: RendererOptions,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
-) -> compositor_render::RendererOptions {
-    compositor_render::RendererOptions {
+) -> smelter_render::RendererOptions {
+    smelter_render::RendererOptions {
         chromium_context: None,
         // Framerate is only required by web renderer which is not used
-        framerate: compositor_render::Framerate { num: 30, den: 1 },
+        framerate: smelter_render::Framerate { num: 30, den: 1 },
         stream_fallback_timeout: Duration::from_millis(value.stream_fallback_timeout_ms),
         load_system_fonts: true,
-        rendering_mode: compositor_render::RenderingMode::WebGl,
+        rendering_mode: smelter_render::RenderingMode::WebGl,
 
         device,
         queue,

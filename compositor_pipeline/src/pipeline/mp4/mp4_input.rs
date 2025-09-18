@@ -9,8 +9,8 @@ use std::{
     time::Duration,
 };
 
-use compositor_render::InputId;
 use crossbeam_channel::bounded;
+use smelter_render::InputId;
 use tracing::{debug, error, span, trace, Level, Span};
 
 use crate::{

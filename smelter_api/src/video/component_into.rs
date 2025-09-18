@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use compositor_render::scene;
-use compositor_render::scene::BorderRadius;
-use compositor_render::scene::Position;
-use compositor_render::MAX_NODE_RESOLUTION;
+use smelter_render::scene;
+use smelter_render::scene::BorderRadius;
+use smelter_render::scene::Position;
+use smelter_render::MAX_NODE_RESOLUTION;
 
 use crate::*;
 

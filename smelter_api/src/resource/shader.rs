@@ -1,6 +1,6 @@
-use compositor_render::shader;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use smelter_render::shader;
 
 use crate::*;
 
@@ -11,7 +11,7 @@ pub struct ShaderSpec {
     pub source: String,
 }
 
-impl TryFrom<ShaderSpec> for compositor_render::RendererSpec {
+impl TryFrom<ShaderSpec> for smelter_render::RendererSpec {
     type Error = TypeError;
 
     fn try_from(spec: ShaderSpec) -> Result<Self, Self::Error> {

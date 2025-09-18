@@ -1,7 +1,7 @@
 use std::mem;
 
 use bytes::Bytes;
-use compositor_render::error::ErrorStack;
+use smelter_render::error::ErrorStack;
 use tracing::{info, trace, warn};
 use webrtc::rtp::{
     self,

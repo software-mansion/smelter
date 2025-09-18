@@ -20,7 +20,7 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ffmpeg-next = { workspace = true }
-compositor_render = { workspace = true }
+smelter_render = { workspace = true }
 socket2 = { workspace = true }
 bytes = { workspace = true }
 webrtc-util = { workspace = true }

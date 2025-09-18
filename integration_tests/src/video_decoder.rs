@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use bytes::BytesMut;
-use compositor_render::{Frame, FrameData, Resolution, YuvPlanes};
 use ffmpeg_next::{
     codec::{Context as FfmpegContext, Id},
     decoder,
@@ -11,6 +10,7 @@ use ffmpeg_next::{
     media::Type,
     Rational,
 };
+use smelter_render::{Frame, FrameData, Resolution, YuvPlanes};
 use webrtc::rtp::{self, codecs::h264::H264Packet, packetizer::Depacketizer};
 
 pub struct VideoDecoder {

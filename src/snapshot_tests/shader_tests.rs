@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use compositor_render::{
+use smelter_render::{
     scene::{
         Component, InputStreamComponent, ShaderComponent, ShaderParam, ShaderParamStructField,
     },

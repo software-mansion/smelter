@@ -3,8 +3,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use compositor_render::OutputFrameFormat;
 use crossbeam_channel::Sender;
+use smelter_render::OutputFrameFormat;
 use tracing::{info, warn};
 
 use crate::pipeline::{

@@ -9,7 +9,6 @@ use std::{
 };
 
 use bytes::Bytes;
-use compositor_render::InputId;
 use crossbeam_channel::{bounded, Receiver};
 use ffmpeg_next::{
     ffi::{
@@ -21,6 +20,7 @@ use ffmpeg_next::{
     util::interrupt,
     Dictionary, Packet, Stream,
 };
+use smelter_render::InputId;
 use tracing::{debug, error, span, trace, warn, Level};
 
 use crate::{

@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use compositor_render::{error::ErrorStack, Frame};
 use crossbeam_channel::Sender;
+use smelter_render::{error::ErrorStack, Frame};
 use tokio::sync::mpsc;
 use tracing::warn;
 

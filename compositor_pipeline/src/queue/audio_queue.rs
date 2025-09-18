@@ -12,8 +12,8 @@ use crate::{
 use crate::prelude::*;
 
 use super::QueueAudioOutput;
-use compositor_render::InputId;
 use crossbeam_channel::{Receiver, TryRecvError};
+use smelter_render::InputId;
 use tracing::debug;
 
 pub struct AudioQueue {

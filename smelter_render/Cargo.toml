@@ -1,5 +1,5 @@
 [package]
-name = "compositor_render"
+name = "smelter_render"
 version = "0.1.0"
 edition = "2021"
 license-file = "../LICENSE"

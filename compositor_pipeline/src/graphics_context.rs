@@ -1,5 +1,5 @@
 use crate::error::InitPipelineError;
-use compositor_render::{create_wgpu_ctx, error::InitRendererEngineError, WgpuComponents};
+use smelter_render::{create_wgpu_ctx, error::InitRendererEngineError, WgpuComponents};
 use std::sync::Arc;
 
 #[cfg(feature = "vk-video")]
@@ -32,7 +32,7 @@ pub struct GraphicsContextOptions<'a> {
 impl GraphicsContext {
     #[cfg(feature = "vk-video")]
     pub fn new(opts: GraphicsContextOptions) -> Result<Self, InitPipelineError> {
-        use compositor_render::{required_wgpu_features, set_required_wgpu_limits};
+        use smelter_render::{required_wgpu_features, set_required_wgpu_limits};
         use tracing::warn;
         use vk_video::VulkanInitError;
 

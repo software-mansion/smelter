@@ -1,4 +1,4 @@
-use compositor_render::{
+use smelter_render::{
     error::{
         InitRendererEngineError, RegisterError, RegisterRendererError, RequestKeyframeError,
         UnregisterRendererError, UpdateSceneError, WgpuError,

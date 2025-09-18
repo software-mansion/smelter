@@ -1,11 +1,11 @@
 use std::{iter, sync::Arc};
 
-use compositor_render::{Frame, OutputFrameFormat};
 use ffmpeg_next::{
     codec::{Context, Id},
     format::Pixel,
     Dictionary, Rational,
 };
+use smelter_render::{Frame, OutputFrameFormat};
 use tracing::{error, info, trace, warn};
 
 use crate::pipeline::{

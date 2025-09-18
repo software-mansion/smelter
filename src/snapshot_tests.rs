@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use compositor_render::Resolution;
+use smelter_render::Resolution;
 use test_case::{Step, TestCase, TestResult, OUTPUT_ID};
 use utils::SNAPSHOTS_DIR_NAME;
 

@@ -4,7 +4,7 @@ use std::{
 };
 
 use axum::http::HeaderMap;
-use compositor_render::OutputId;
+use smelter_render::OutputId;
 use tracing::error;
 use uuid::Uuid;
 

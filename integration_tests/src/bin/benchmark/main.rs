@@ -5,12 +5,12 @@ use benchmark_pass::{InputFile, SingleBenchmarkPass};
 use clap::Parser;
 use compositor_pipeline::graphics_context::{GraphicsContext, GraphicsContextOptions};
 
-use compositor_render::RenderingMode;
 use scenes::simple_tiles_with_all_inputs;
 use smelter::{
     config::{read_config, LoggerConfig},
     logger,
 };
+use smelter_render::RenderingMode;
 use suite::{cpu_optimized_benchmark_suite, full_benchmark_suite, minimal_benchmark_suite};
 use tracing::{info, warn};
 

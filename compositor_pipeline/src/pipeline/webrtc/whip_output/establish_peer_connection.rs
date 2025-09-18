@@ -1,4 +1,4 @@
-use compositor_render::error::ErrorStack;
+use smelter_render::error::ErrorStack;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,

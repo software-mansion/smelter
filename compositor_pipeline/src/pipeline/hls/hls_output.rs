@@ -1,9 +1,9 @@
 use std::{ptr, sync::Arc, time::Duration};
 
-use compositor_render::{Framerate, OutputId};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use ffmpeg_next::{self as ffmpeg, Dictionary, Rational, Rescale};
 use log::error;
+use smelter_render::{Framerate, OutputId};
 use tracing::debug;
 
 use crate::{

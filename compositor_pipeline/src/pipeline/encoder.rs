@@ -1,6 +1,6 @@
 use std::{iter, sync::Arc};
 
-use compositor_render::{Frame, OutputFrameFormat, Resolution};
+use smelter_render::{Frame, OutputFrameFormat, Resolution};
 use tokio::sync::watch;
 
 use crate::prelude::*;

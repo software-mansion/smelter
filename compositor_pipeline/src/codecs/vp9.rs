@@ -1,4 +1,4 @@
-use compositor_render::Resolution;
+use smelter_render::Resolution;
 
 use crate::codecs::OutputPixelFormat;
 

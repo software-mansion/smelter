@@ -1,11 +1,11 @@
-use compositor_render::error::ErrorStack;
+use smelter_render::error::ErrorStack;
 use std::iter;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::warn;
 
-use compositor_render::Frame;
 use crossbeam_channel::Sender;
+use smelter_render::Frame;
 
 use crate::prelude::*;
 

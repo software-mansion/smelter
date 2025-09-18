@@ -1,4 +1,4 @@
-use compositor_render::{scene::RGBColor, Resolution};
+use smelter_render::{scene::RGBColor, Resolution};
 
 #[derive(Debug, Clone)]
 pub struct TestInput {

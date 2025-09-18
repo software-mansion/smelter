@@ -3,13 +3,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-use compositor_render::{error::ErrorStack, Frame, FrameData, Resolution};
 use crossbeam_channel::{bounded, Receiver, Sender, TrySendError};
 use decklink::{
     AudioInputPacket, DetectedVideoInputFormatFlags, DisplayMode, DisplayModeType, InputCallback,
     InputCallbackResult, PixelFormat, VideoInputFlags, VideoInputFormatChangedEvents,
     VideoInputFrame,
 };
+use smelter_render::{error::ErrorStack, Frame, FrameData, Resolution};
 use tracing::{debug, info, trace, warn, Span};
 
 use crate::pipeline::resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch};

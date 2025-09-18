@@ -1,4 +1,4 @@
-use compositor_render::Resolution;
+use smelter_render::Resolution;
 
 use super::{
     input::TestInput, snapshots_path, test_case::TestCase, test_steps_from_scene, TestRunner,

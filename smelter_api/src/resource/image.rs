@@ -1,6 +1,6 @@
-use compositor_render::image;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use smelter_render::image;
 
 use crate::*;
 
@@ -30,7 +30,7 @@ pub enum ImageSpec {
     },
 }
 
-impl TryFrom<ImageSpec> for compositor_render::RendererSpec {
+impl TryFrom<ImageSpec> for smelter_render::RendererSpec {
     type Error = TypeError;
 
     fn try_from(spec: ImageSpec) -> Result<Self, Self::Error> {

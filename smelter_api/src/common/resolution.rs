@@ -1,6 +1,6 @@
-use compositor_render::scene;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use smelter_render::scene;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 pub struct Resolution {
@@ -10,7 +10,7 @@ pub struct Resolution {
     pub height: usize,
 }
 
-impl From<Resolution> for compositor_render::Resolution {
+impl From<Resolution> for smelter_render::Resolution {
     fn from(resolution: Resolution) -> Self {
         Self {
             width: resolution.width,

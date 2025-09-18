@@ -2,11 +2,11 @@ use core::panic;
 use std::{io::Write, sync::OnceLock, time::Duration};
 
 use bytes::BufMut;
-use compositor_render::{
+use crossbeam_channel::bounded;
+use smelter_render::{
     create_wgpu_ctx, Frame, FrameData, Framerate, Renderer, RendererOptions, RenderingMode,
     WgpuComponents, YuvPlanes,
 };
-use crossbeam_channel::bounded;
 use tracing::error;
 
 pub const SNAPSHOTS_DIR_NAME: &str = "snapshot_tests/snapshots/render_snapshots";

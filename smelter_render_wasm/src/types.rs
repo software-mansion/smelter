@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use compositor_render::InputId;
+use smelter_render::InputId;
 use tracing::error;
 use wasm_bindgen::prelude::*;
 

@@ -1,5 +1,5 @@
-use compositor_render::OutputId;
 use establish_peer_connection::exchange_sdp_offers;
+use smelter_render::OutputId;
 
 use peer_connection::PeerConnection;
 use setup_track::{setup_audio_track, setup_video_track};

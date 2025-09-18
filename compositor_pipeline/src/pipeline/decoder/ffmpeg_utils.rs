@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use compositor_render::{Frame, FrameData, Resolution, YuvPlanes};
 use ffmpeg_next::format::Pixel;
+use smelter_render::{Frame, FrameData, Resolution, YuvPlanes};
 use tracing::error;
 
 use crate::prelude::*;

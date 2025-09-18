@@ -6,12 +6,12 @@ use crate::pipeline::decoder::{
 };
 use crate::prelude::*;
 
-use compositor_render::Frame;
 use ffmpeg_next::{
     codec::{Context, Id},
     media::Type,
     Rational,
 };
+use smelter_render::Frame;
 use tracing::{error, info, trace, warn};
 
 const TIME_BASE: i32 = 1_000_000;

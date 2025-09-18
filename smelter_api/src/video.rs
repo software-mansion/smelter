@@ -1,4 +1,4 @@
-use compositor_render::scene;
+use smelter_render::scene;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

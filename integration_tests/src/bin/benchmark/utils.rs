@@ -12,7 +12,7 @@ use std::{
 };
 use tracing::warn;
 
-use compositor_render::{Framerate, RenderingMode, YuvPlanes};
+use smelter_render::{Framerate, RenderingMode, YuvPlanes};
 
 use crate::{args::Resolution, benchmark_pass::RawInputFile};
 

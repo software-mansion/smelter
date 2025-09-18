@@ -1,4 +1,4 @@
-use compositor_render::Resolution;
+use smelter_render::Resolution;
 
 mod aac;
 mod h264;

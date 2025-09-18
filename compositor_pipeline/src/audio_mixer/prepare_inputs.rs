@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
-use compositor_render::InputId;
+use smelter_render::InputId;
 use tracing::warn;
 
 use super::InputSamplesSet;
