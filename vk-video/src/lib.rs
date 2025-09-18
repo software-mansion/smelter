@@ -64,9 +64,9 @@
 //! </a>
 //! <a href="https://smelter.dev" style="margin: 20px">
 //!   <picture>
-//!     <source media="(prefers-color-scheme: dark)" srcset="https:///github.com/software-mansion/smelter/raw/master/assets/smelter-logo-transparent.svg">
-//!     <source media="(prefers-color-scheme: light)" srcset="https:///github.com/software-mansion/smelter/raw/master/assets/smelter-logo-background.svg">
-//!     <img height="60" alt="Smelter" src="https:///github.com/software-mansion/smelter/raw/master/assets/smelter-logo-background.svg">
+//!     <source media="(prefers-color-scheme: dark)" srcset="https:///github.com/software-mansion/smelter/raw/master/tools/assets/smelter-logo-transparent.svg">
+//!     <source media="(prefers-color-scheme: light)" srcset="https:///github.com/software-mansion/smelter/raw/master/tools/assets/smelter-logo-background.svg">
+//!     <img height="60" alt="Smelter" src="https:///github.com/software-mansion/smelter/raw/master/tools/assets/smelter-logo-background.svg">
 //!   </picture>
 //! </a>
 //!
