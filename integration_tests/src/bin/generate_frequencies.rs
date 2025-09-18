@@ -1,4 +1,6 @@
-use std::{path::PathBuf, process::Command};
+use std::process::Command;
+
+use integration_tests::paths::submodule_root_path;
 
 enum Encoder {
     Aac,
@@ -25,11 +27,7 @@ fn main() {
     let encoders = vec![Encoder::Aac, Encoder::Opus];
     let notes = vec![("a", 440.0), ("c_sharp", 554.37), ("e", 659.26)];
 
-    let cmd_wd = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("snapshot_tests")
-        .join("snapshots")
+    let cmd_wd = submodule_root_path()
         .join("rtp_packet_dumps")
         .join("inputs");
 

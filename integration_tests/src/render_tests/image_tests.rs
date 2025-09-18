@@ -5,14 +5,16 @@ use smelter_render::{
     RendererId, RendererSpec,
 };
 
+use crate::paths::{integration_tests_root, render_snapshots_dir_path, submodule_root_path};
+
 use super::{
-    input::TestInput, snapshots_path, test_case::TestCase, test_steps_from_scene,
-    test_steps_from_scenes, Step, TestRunner,
+    input::TestInput, test_case::TestCase, test_steps_from_scene, test_steps_from_scenes, Step,
+    TestRunner,
 };
 
 #[test]
 fn image_tests() {
-    let mut runner = TestRunner::new(snapshots_path().join("image"));
+    let mut runner = TestRunner::new(render_snapshots_dir_path().join("image"));
 
     let jpeg = (
         RendererId("image_jpeg".into()),
@@ -27,10 +29,10 @@ fn image_tests() {
         RendererId("image_svg".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
-                path: format!(
-                    "{}/integration_tests/assets/image.svg",
-                    env!("CARGO_MANIFEST_DIR")
-                ),
+                path: integration_tests_root()
+                    .join("assets/image.svg")
+                    .to_string_lossy()
+                    .to_string(),
             },
             image_type: ImageType::Svg,
         }),
@@ -39,10 +41,10 @@ fn image_tests() {
         RendererId("image_gif1".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
-                path: format!(
-                    "{}/snapshot_tests/snapshots/demo_assets/donate.gif",
-                    env!("CARGO_MANIFEST_DIR")
-                ),
+                path: submodule_root_path()
+                    .join("demo_assets/donate.gif")
+                    .to_string_lossy()
+                    .to_string(),
             },
             image_type: ImageType::Gif,
         }),
@@ -51,10 +53,10 @@ fn image_tests() {
         RendererId("image_gif2".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
-                path: format!(
-                    "{}/snapshot_tests/snapshots/assets/progress-bar.gif",
-                    env!("CARGO_MANIFEST_DIR")
-                ),
+                path: submodule_root_path()
+                    .join("assets/progress-bar.gif")
+                    .to_string_lossy()
+                    .to_string(),
             },
             image_type: ImageType::Gif,
         }),
@@ -62,27 +64,21 @@ fn image_tests() {
 
     runner.add(TestCase {
         name: "image/jpeg_as_root",
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/image/jpeg_as_root.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./image/jpeg_as_root.scene.json")),
         renderers: vec![jpeg.clone()],
         inputs: vec![TestInput::new(1)],
         ..Default::default()
     });
     runner.add(TestCase {
         name: "image/jpeg_in_view",
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/image/jpeg_in_view.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./image/jpeg_in_view.scene.json")),
         renderers: vec![jpeg.clone()],
         inputs: vec![TestInput::new(1)],
         ..Default::default()
     });
     runner.add(TestCase {
         name: "image/jpeg_in_view_overflow_fit",
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/image/jpeg_in_view_overflow_fit.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./image/jpeg_in_view_overflow_fit.scene.json")),
         renderers: vec![jpeg.clone()],
         inputs: vec![TestInput::new(1)],
         ..Default::default()
@@ -91,8 +87,8 @@ fn image_tests() {
         // Test if removing image from scene works
         name: "image/remove_jpeg_as_root",
         steps: test_steps_from_scenes(&[
-            include_str!("../../snapshot_tests/image/jpeg_as_root.scene.json"),
-            include_str!("../../snapshot_tests/view/empty_view.scene.json"),
+            include_str!("./image/jpeg_as_root.scene.json"),
+            include_str!("./view/empty_view.scene.json"),
         ]),
         renderers: vec![jpeg.clone()],
         inputs: vec![TestInput::new(1)],
@@ -102,8 +98,8 @@ fn image_tests() {
         // Test if removing image from scene works
         name: "image/remove_jpeg_in_view",
         steps: test_steps_from_scenes(&[
-            include_str!("../../snapshot_tests/image/jpeg_in_view.scene.json"),
-            include_str!("../../snapshot_tests/view/empty_view.scene.json"),
+            include_str!("./image/jpeg_in_view.scene.json"),
+            include_str!("./view/empty_view.scene.json"),
         ]),
         renderers: vec![jpeg.clone()],
         inputs: vec![TestInput::new(1)],
@@ -112,18 +108,14 @@ fn image_tests() {
 
     runner.add(TestCase {
         name: "image/svg_as_root",
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/image/svg_as_root.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./image/svg_as_root.scene.json")),
         renderers: vec![svg.clone()],
         inputs: vec![],
         ..Default::default()
     });
     runner.add(TestCase {
         name: "image/svg_in_view",
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/image/svg_in_view.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./image/svg_in_view.scene.json")),
         renderers: vec![svg.clone()],
         inputs: vec![],
         ..Default::default()
@@ -131,19 +123,13 @@ fn image_tests() {
     runner.add(TestCase {
         name: "image/gif_progress_between_updates",
         steps: vec![
-            Step::UpdateSceneJson(include_str!(
-                "../../snapshot_tests/image/gif_as_root_variant1.scene.json"
-            )),
+            Step::UpdateSceneJson(include_str!("./image/gif_as_root_variant1.scene.json")),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
             // Update should not reset gif progress
-            Step::UpdateSceneJson(include_str!(
-                "../../snapshot_tests/image/gif_as_root_variant1.scene.json"
-            )),
+            Step::UpdateSceneJson(include_str!("./image/gif_as_root_variant1.scene.json")),
             Step::RenderWithSnapshot(Duration::from_millis(1000)),
             // Image params changed, the progress should be restarted
-            Step::UpdateSceneJson(include_str!(
-                "../../snapshot_tests/image/gif_as_root_variant2.scene.json"
-            )),
+            Step::UpdateSceneJson(include_str!("./image/gif_as_root_variant2.scene.json")),
             Step::RenderWithSnapshot(Duration::from_millis(1001)),
         ],
         renderers: vec![gif1, gif2],

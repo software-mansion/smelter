@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Result;
 use inquire::{Select, Text};
-use integration_tests::examples::examples_root_dir;
+use integration_tests::paths::integration_tests_root;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -54,10 +54,7 @@ impl OutputHandle for WhepOutput {
     }
 
     fn on_after_registration(&mut self) -> Result<()> {
-        let html_path = examples_root_dir()
-            .join("examples")
-            .join("demo")
-            .join("whep.html");
+        let html_path = integration_tests_root().join("examples/demo/whep.html");
 
         let url = format!(
             "file://{}?url=http://127.0.0.1:9000/whep/{}&token={}",

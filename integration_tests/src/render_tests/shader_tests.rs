@@ -8,13 +8,16 @@ use smelter_render::{
     InputId, RendererId, RendererSpec,
 };
 
-use super::{test_steps_from_scene, Step, DEFAULT_RESOLUTION};
+use crate::paths::render_snapshots_dir_path;
 
-use super::{input::TestInput, snapshots_path, test_case::TestCase, TestRunner};
+use super::{
+    input::TestInput, test_case::TestCase, test_steps_from_scene, Step, TestRunner,
+    DEFAULT_RESOLUTION,
+};
 
 #[test]
 fn shader_tests() {
-    let mut runner = TestRunner::new(snapshots_path().join("shader"));
+    let mut runner = TestRunner::new(render_snapshots_dir_path().join("shader"));
 
     let input1 = TestInput::new(1);
     let input2 = TestInput::new(2);
@@ -25,31 +28,28 @@ fn shader_tests() {
     let plane_id_shader = (
         RendererId("base_params_plane_id".into()),
         RendererSpec::Shader(ShaderSpec {
-            source: include_str!("../../snapshot_tests/shader/layout_planes.wgsl").into(),
+            source: include_str!("./shader/layout_planes.wgsl").into(),
         }),
     );
 
     let time_shader = (
         RendererId("base_params_time".into()),
         RendererSpec::Shader(ShaderSpec {
-            source: include_str!("../../snapshot_tests/shader/fade_to_ball.wgsl").into(),
+            source: include_str!("./shader/fade_to_ball.wgsl").into(),
         }),
     );
 
     let texture_count_shader = (
         RendererId("base_params_texture_count".into()),
         RendererSpec::Shader(ShaderSpec {
-            source: include_str!(
-                "../../snapshot_tests/shader/color_output_with_texture_count.wgsl"
-            )
-            .into(),
+            source: include_str!("./shader/color_output_with_texture_count.wgsl").into(),
         }),
     );
 
     let output_resolution_shader = (
         RendererId("base_params_output_resolution".into()),
         RendererSpec::Shader(ShaderSpec {
-            source: include_str!("../../snapshot_tests/shader/red_border.wgsl").into(),
+            source: include_str!("./shader/red_border.wgsl").into(),
         }),
     );
 
@@ -57,7 +57,7 @@ fn shader_tests() {
         name: "shader/base_params_plane_id_no_inputs",
         renderers: vec![plane_id_shader.clone()],
         steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/shader/base_params_plane_id_no_inputs.scene.json"
+            "./shader/base_params_plane_id_no_inputs.scene.json"
         )),
         ..Default::default()
     });
@@ -72,16 +72,14 @@ fn shader_tests() {
             input5.clone(),
         ],
         steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/shader/base_params_plane_id_5_inputs.scene.json"
+            "./shader/base_params_plane_id_5_inputs.scene.json"
         )),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "shader/base_params_time",
         steps: vec![
-            Step::UpdateSceneJson(include_str!(
-                "../../snapshot_tests/shader/base_params_time.scene.json"
-            )),
+            Step::UpdateSceneJson(include_str!("./shader/base_params_time.scene.json")),
             Step::RenderWithSnapshot(Duration::from_secs(0)),
             Step::RenderWithSnapshot(Duration::from_secs(1)),
             Step::RenderWithSnapshot(Duration::from_secs(2)),
@@ -95,7 +93,7 @@ fn shader_tests() {
         renderers: vec![output_resolution_shader.clone()],
         inputs: vec![input1.clone()],
         steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/shader/base_params_output_resolution.scene.json"
+            "./shader/base_params_output_resolution.scene.json"
         )),
         ..Default::default()
     });
@@ -103,7 +101,7 @@ fn shader_tests() {
         name: "shader/base_params_texture_count_no_inputs",
         renderers: vec![texture_count_shader.clone()],
         steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/shader/base_params_texture_count_no_inputs.scene.json"
+            "./shader/base_params_texture_count_no_inputs.scene.json"
         )),
         ..Default::default()
     });
@@ -112,7 +110,7 @@ fn shader_tests() {
         renderers: vec![texture_count_shader.clone()],
         inputs: vec![input1.clone()],
         steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/shader/base_params_texture_count_1_input.scene.json"
+            "./shader/base_params_texture_count_1_input.scene.json"
         )),
         ..Default::default()
     });
@@ -121,7 +119,7 @@ fn shader_tests() {
         renderers: vec![texture_count_shader.clone()],
         inputs: vec![input1.clone(), input2.clone()],
         steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/shader/base_params_texture_count_2_inputs.scene.json"
+            "./shader/base_params_texture_count_2_inputs.scene.json"
         )),
         ..Default::default()
     });
@@ -252,7 +250,7 @@ fn user_params_snapshot_tests(runner: &mut TestRunner) {
         renderers: vec![(
             shader_id.clone(),
             RendererSpec::Shader(ShaderSpec {
-                source: include_str!("../../snapshot_tests/shader/circle_layout.wgsl").into(),
+                source: include_str!("./shader/circle_layout.wgsl").into(),
             }),
         )],
         inputs: vec![input1, input2, input3, input4],

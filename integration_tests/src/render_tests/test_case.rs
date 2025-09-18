@@ -1,7 +1,5 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use crate::routes::UpdateOutputRequest;
-
 use super::{
     input::TestInput,
     snapshot::Snapshot,
@@ -10,6 +8,7 @@ use super::{
 };
 
 use anyhow::Result;
+use smelter::routes::UpdateOutputRequest;
 use smelter_render::{
     scene::Component, Frame, FrameSet, InputId, OutputFrameFormat, OutputId, Renderer, RendererId,
     RendererSpec, Resolution,

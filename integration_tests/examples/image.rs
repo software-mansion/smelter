@@ -1,11 +1,11 @@
 use anyhow::Result;
 use serde_json::json;
 use smelter_api::Resolution;
-use std::{env, path::PathBuf};
 
 use integration_tests::{
     examples::{self, run_example},
     ffmpeg::start_ffmpeg_receive_h264,
+    paths::integration_tests_root,
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -40,7 +40,7 @@ fn client_code() -> Result<()> {
         "image/example_svg/register",
         &json!({
             "asset_type": "auto",
-            "path": PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/assets/rust.svg"),
+            "path": integration_tests_root().join("examples/assets/rust.svg"),
         }),
     )?;
     examples::post(

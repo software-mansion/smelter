@@ -11,10 +11,14 @@ pub mod assets;
 pub mod examples;
 pub mod ffmpeg;
 pub mod gstreamer;
+pub mod paths;
 pub mod test_input;
 
 #[cfg(test)]
-mod tests;
+mod pipeline_tests;
+
+#[cfg(test)]
+mod render_tests;
 
 pub use common::*;
 pub use compositor_instance::*;

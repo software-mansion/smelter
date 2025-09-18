@@ -4,7 +4,8 @@ use anyhow::Result;
 use inquire::{Confirm, Text};
 use integration_tests::{
     assets::{BUNNY_H264_PATH, BUNNY_H264_URL},
-    examples::{download_asset, examples_root_dir, AssetData},
+    examples::{download_asset, AssetData},
+    paths::integration_tests_root,
 };
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -92,7 +93,7 @@ impl Mp4InputBuilder {
 
     fn prompt_source(self) -> Result<Self> {
         let env_source = env::var(MP4_INPUT_SOURCE).unwrap_or_default();
-        let default_path = examples_root_dir().join(BUNNY_H264_PATH);
+        let default_path = integration_tests_root().join(BUNNY_H264_PATH);
 
         loop {
             let source_input = Text::new(&format!(

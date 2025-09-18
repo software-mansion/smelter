@@ -42,8 +42,8 @@ jobs:
             - name: 🧩 Git submodules update
               run: |
                   cat > .gitmodules << EOF
-                  [submodule "snapshot_tests/snapshots"]
-                          path = snapshot_tests/snapshots
+                  [submodule "snapshots"]
+                          path = integration_tests/snapshots
                           url = https://github.com/membraneframework-labs/video_compositor_snapshot_tests.git
                   EOF
                   git submodule update --init
@@ -70,7 +70,7 @@ jobs:
               uses: actions/upload-artifact@v4
               with:
                   name: failed_snapshot_tests
-                  path: failed_snapshot_tests
+                  path: integration_tests/failed_snapshot_tests
                   retention-days: 2
 
             - name: 📚 Run doctests

@@ -1,8 +1,9 @@
 use std::{thread, time::Duration};
 
 use crate::{
-    compare_video_dumps, input_dump_from_disk, video::VideoValidationConfig, CommunicationProtocol,
-    CompositorInstance, OutputReceiver, PacketSender,
+    compare_video_dumps, input_dump_from_disk, paths::integration_tests_root,
+    video::VideoValidationConfig, CommunicationProtocol, CompositorInstance, OutputReceiver,
+    PacketSender,
 };
 use anyhow::Result;
 use serde_json::json;
@@ -26,7 +27,7 @@ pub fn unregistering_flaky() -> Result<()> {
         "image/image_1/register",
         json!({
             "asset_type": "svg",
-            "path": format!("{}/assets/image.svg", env!("CARGO_MANIFEST_DIR"))
+            "path": integration_tests_root().join("assets/image.svg").to_string_lossy().to_string()
         }),
     )?;
 

@@ -1,12 +1,10 @@
 use anyhow::{Context, Result};
 use bytes::Bytes;
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::{fs, path::Path, time::Duration};
 use webrtc::rtp;
 use webrtc_util::Unmarshal;
+
+use crate::paths::{failed_snapshots_dir_path, submodule_root_path};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommunicationProtocol {
@@ -15,11 +13,7 @@ pub enum CommunicationProtocol {
 }
 
 pub fn input_dump_from_disk<P: AsRef<Path>>(path: P) -> Result<Bytes> {
-    let input_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("snapshot_tests")
-        .join("snapshots")
+    let input_path = submodule_root_path()
         .join("rtp_packet_dumps")
         .join("inputs")
         .join(path);
@@ -29,11 +23,7 @@ pub fn input_dump_from_disk<P: AsRef<Path>>(path: P) -> Result<Bytes> {
 }
 
 pub fn output_dump_from_disk<P: AsRef<Path>>(path: P) -> Result<Bytes> {
-    let output_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("snapshot_tests")
-        .join("snapshots")
+    let output_path = submodule_root_path()
         .join("rtp_packet_dumps")
         .join("outputs")
         .join(path);
@@ -43,11 +33,7 @@ pub fn output_dump_from_disk<P: AsRef<Path>>(path: P) -> Result<Bytes> {
 }
 
 pub fn update_dump_on_disk<P: AsRef<Path>>(path: P, content: &Bytes) -> Result<()> {
-    let output_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("snapshot_tests")
-        .join("snapshots")
+    let output_path = submodule_root_path()
         .join("rtp_packet_dumps")
         .join("outputs")
         .join(path);
@@ -90,10 +76,7 @@ pub fn save_failed_test_dumps<P: AsRef<Path>>(
     actual_dump: &Bytes,
     snapshot_filename: P,
 ) {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("failed_snapshot_tests");
+    let path = failed_snapshots_dir_path();
 
     let _ = fs::create_dir_all(&path);
 

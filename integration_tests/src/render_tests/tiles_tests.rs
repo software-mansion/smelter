@@ -1,12 +1,12 @@
 use smelter_render::Resolution;
 
-use super::{
-    input::TestInput, snapshots_path, test_case::TestCase, test_steps_from_scene, TestRunner,
-};
+use crate::paths::render_snapshots_dir_path;
+
+use super::{input::TestInput, test_case::TestCase, test_steps_from_scene, TestRunner};
 
 #[test]
 fn tiles_tests() {
-    let mut runner = TestRunner::new(snapshots_path().join("tiles"));
+    let mut runner = TestRunner::new(render_snapshots_dir_path().join("tiles"));
 
     let input1 = TestInput::new(1);
     let input2 = TestInput::new(2);
@@ -46,25 +46,19 @@ fn tiles_tests() {
     runner.add(TestCase {
         name: "tiles/01_inputs",
         inputs: vec![input1.clone()],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/01_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/01_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "tiles/02_inputs",
         inputs: vec![input1.clone(), input2.clone()],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/02_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/02_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "tiles/03_inputs",
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/03_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/03_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
@@ -75,9 +69,7 @@ fn tiles_tests() {
             input3.clone(),
             input4.clone(),
         ],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/04_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/04_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
@@ -89,9 +81,7 @@ fn tiles_tests() {
             input4.clone(),
             input5.clone(),
         ],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/05_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/05_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
@@ -113,25 +103,19 @@ fn tiles_tests() {
             input14.clone(),
             input15.clone(),
         ],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/15_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/15_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "tiles/01_portrait_inputs",
         inputs: vec![portrait_input1.clone()],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/01_portrait_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/01_portrait_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "tiles/02_portrait_inputs",
         inputs: vec![portrait_input1.clone(), portrait_input2.clone()],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/02_portrait_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/02_portrait_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
@@ -141,9 +125,7 @@ fn tiles_tests() {
             portrait_input2.clone(),
             portrait_input3.clone(),
         ],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/03_portrait_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/03_portrait_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
@@ -155,9 +137,7 @@ fn tiles_tests() {
             portrait_input4.clone(),
             portrait_input5.clone(),
         ],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/05_portrait_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/05_portrait_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
@@ -179,18 +159,14 @@ fn tiles_tests() {
             portrait_input14.clone(),
             portrait_input15.clone(),
         ],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/15_portrait_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/15_portrait_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "tiles/01_portrait_inputs_on_portrait_output",
         resolution: portrait_resolution,
         inputs: vec![portrait_input1.clone()],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/01_portrait_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/01_portrait_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
@@ -201,18 +177,14 @@ fn tiles_tests() {
             portrait_input2.clone(),
             portrait_input3.clone(),
         ],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/03_portrait_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/03_portrait_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "tiles/03_inputs_on_portrait_output",
         resolution: portrait_resolution,
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/03_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/03_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
@@ -225,9 +197,7 @@ fn tiles_tests() {
             portrait_input4.clone(),
             portrait_input5.clone(),
         ],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/05_portrait_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/05_portrait_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
@@ -250,16 +220,14 @@ fn tiles_tests() {
             portrait_input14.clone(),
             portrait_input15.clone(),
         ],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/15_portrait_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/15_portrait_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "tiles/align_center_with_03_inputs",
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
         steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/align_center_with_03_inputs.scene.json"
+            "./tiles/align_center_with_03_inputs.scene.json"
         )),
         ..Default::default()
     });
@@ -267,7 +235,7 @@ fn tiles_tests() {
         name: "tiles/align_top_left_with_03_inputs",
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
         steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/align_top_left_with_03_inputs.scene.json"
+            "./tiles/align_top_left_with_03_inputs.scene.json"
         )),
         ..Default::default()
     });
@@ -275,32 +243,28 @@ fn tiles_tests() {
         name: "tiles/align_with_margin_and_padding_with_03_inputs",
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
         steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/align_with_margin_and_padding_with_03_inputs.scene.json"
+            "./tiles/align_with_margin_and_padding_with_03_inputs.scene.json"
         )),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "tiles/margin_with_03_inputs",
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/margin_with_03_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/margin_with_03_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "tiles/margin_and_padding_with_03_inputs",
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
         steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/margin_and_padding_with_03_inputs.scene.json"
+            "./tiles/margin_and_padding_with_03_inputs.scene.json"
         )),
         ..Default::default()
     });
     runner.add(TestCase {
         name: "tiles/padding_with_03_inputs",
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/padding_with_03_inputs.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/padding_with_03_inputs.scene.json")),
         ..Default::default()
     });
     runner.add(TestCase {
@@ -310,9 +274,7 @@ fn tiles_tests() {
             portrait_input2.clone(),
             portrait_input3.clone(),
         ],
-        steps: test_steps_from_scene(include_str!(
-            "../../snapshot_tests/tiles/video_call_with_labels.scene.json"
-        )),
+        steps: test_steps_from_scene(include_str!("./tiles/video_call_with_labels.scene.json")),
         ..Default::default()
     });
 

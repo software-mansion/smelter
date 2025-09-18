@@ -2,7 +2,6 @@ use core::panic;
 use std::{
     fs::File,
     io::Write,
-    path::PathBuf,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -10,7 +9,9 @@ use std::{
 
 use crossbeam_channel::bounded;
 use image::{codecs::png::PngEncoder, ColorType, ImageEncoder};
-use integration_tests::{examples::download_file, read_rgba_texture};
+use integration_tests::{
+    examples::download_file, paths::integration_tests_root, read_rgba_texture,
+};
 use smelter::{
     config::read_config,
     logger::{self},
@@ -29,10 +30,6 @@ use tokio::runtime::Runtime;
 const BUNNY_FILE_URL: &str =
     "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 const BUNNY_FILE_PATH: &str = "examples/assets/BigBuckBunny.mp4";
-
-fn root_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 // Start simple pipeline with output that sends PCM audio and wgpu::Textures via Rust channel.
 //
@@ -95,7 +92,7 @@ fn main() {
 
     let input_options = RegisterInputOptions {
         input_options: ProtocolInputOptions::Mp4(Mp4InputOptions {
-            source: Mp4InputSource::File(root_dir().join(BUNNY_FILE_PATH).into()),
+            source: Mp4InputSource::File(integration_tests_root().join(BUNNY_FILE_PATH).into()),
             should_loop: false,
             video_decoders: Mp4InputVideoDecoders {
                 h264: Some(VideoDecoderOptions::FfmpegH264),
@@ -131,7 +128,8 @@ fn main() {
         .unwrap();
 
     let mut audio_dump =
-        File::create(root_dir().join("examples/raw_channel_output_audio_dump.debug")).unwrap();
+        File::create(integration_tests_root().join("examples/raw_channel_output_audio_dump.debug"))
+            .unwrap();
 
     thread::Builder::new()
         .spawn(move || {
@@ -168,7 +166,7 @@ fn write_frame(
     let size = texture.size();
     let frame_data = read_rgba_texture(device, queue, &texture);
 
-    let filepath = root_dir().join(format!(
+    let filepath = integration_tests_root().join(format!(
         "examples/raw_channel_output_video_frame_{index}.png"
     ));
     let file = File::create(filepath).unwrap();
