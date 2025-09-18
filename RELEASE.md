@@ -8,11 +8,11 @@ To release a new compositor version:
 - Run
 
   ```bash
-  WORKFLOW_RUN_ID={WORKFLOW_RUN_ID} RELEASE_TAG={VERSION} ./scripts/release.sh
+  WORKFLOW_RUN_ID={WORKFLOW_RUN_ID} RELEASE_TAG={VERSION} COMMIT_HASH={COMMIT_HASH} ./scripts/release.sh
   ```
 
   e.g.
 
   ```bash
-  WORKFLOW_RUN_ID=6302155380 RELEASE_TAG=v1.2.3 ./scripts/release.sh `
+  WORKFLOW_RUN_ID=6302155380 RELEASE_TAG=v1.2.3 COMMIT_HASH=8734dd57169ca302d8b19e1def657f78e883a6ca ./scripts/release.sh `
   ```
