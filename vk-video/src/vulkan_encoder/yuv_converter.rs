@@ -4,6 +4,7 @@ use ash::vk;
 use wgpu::hal::{vulkan::Api as VkApi, CommandEncoder, Device, Queue};
 
 use crate::{
+    device::EncodingDevice,
     wrappers::{
         DescriptorPool, DescriptorSetLayout, Framebuffer, Image, ImageView, Pipeline,
         PipelineLayout, RenderPass, Sampler, ShaderModule,
@@ -31,7 +32,7 @@ pub(crate) struct Converter {
 
 impl Converter {
     pub(crate) fn new(
-        device: Arc<VulkanDevice>,
+        device: Arc<EncodingDevice>,
         width: u32,
         height: u32,
         profile: &H264EncodeProfileInfo,
@@ -67,7 +68,7 @@ impl Converter {
             .profiles(std::slice::from_ref(&profile.profile_info));
 
         let queue_indices =
-            [device.queues.h264_encode.idx, device.queues.wgpu.idx].map(|i| i as u32);
+            [device.h264_encode_queue.idx, device.queues.wgpu.idx].map(|i| i as u32);
 
         let create_info = vk::ImageCreateInfo::default()
             .flags(vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE)
@@ -145,10 +146,10 @@ impl Converter {
         )
         .unwrap();
 
-        let common_state = Arc::new(CommonState::new(device.clone())?);
+        let common_state = Arc::new(CommonState::new(device.vulkan_device.clone())?);
 
         let pipeline_y = ConvertingPipeline::new(
-            device.clone(),
+            device.vulkan_device.clone(),
             ShaderInfo {
                 entry_point: c"vs_main",
                 compiled_shader: compiled_vertex.clone(),
@@ -163,7 +164,7 @@ impl Converter {
         )?;
 
         let pipeline_uv = ConvertingPipeline::new(
-            device.clone(),
+            device.vulkan_device.clone(),
             ShaderInfo {
                 entry_point: c"vs_main",
                 compiled_shader: compiled_vertex.clone(),
@@ -201,7 +202,7 @@ impl Converter {
         }
 
         Ok(Self {
-            device,
+            device: device.vulkan_device.clone(),
             image,
             pipeline_y,
             pipeline_uv,

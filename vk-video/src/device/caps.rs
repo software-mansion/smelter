@@ -148,6 +148,16 @@ impl NativeEncodeCapabilities {
             H264Profile::High => self.high.as_ref(),
         }
     }
+
+    pub(crate) fn max_profile(&self) -> H264Profile {
+        if self.high.is_some() {
+            H264Profile::High
+        } else if self.main.is_some() {
+            H264Profile::Main
+        } else {
+            H264Profile::Baseline
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

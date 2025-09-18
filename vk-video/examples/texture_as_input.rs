@@ -21,14 +21,14 @@ fn main() {
     let frame_count = args[3].parse::<u32>().expect("parse frame count");
 
     let vulkan_instance = VulkanInstance::new().unwrap();
-    let vulkan_device = vulkan_instance
+    let vulkan_adapter = vulkan_instance.create_adapter(None).unwrap();
+    let vulkan_device = vulkan_adapter
         .create_device(
             wgpu::Features::PUSH_CONSTANTS,
             wgpu::Limits {
                 max_push_constant_size: 4,
                 ..Default::default()
             },
-            None,
         )
         .unwrap();
 
@@ -40,20 +40,24 @@ fn main() {
     );
 
     let mut encoder = vulkan_device
-        .create_wgpu_textures_encoder(vulkan_device.encoder_parameters_high_quality(
-            VideoParameters {
-                width,
-                height,
-                target_framerate: Rational {
-                    numerator: 30,
-                    denominator: NonZeroU32::new(1).unwrap(),
-                },
-            },
-            RateControl::Vbr {
-                average_bitrate: 500_000,
-                max_bitrate: 2_000_000,
-            },
-        ))
+        .create_wgpu_textures_encoder(
+            vulkan_device
+                .encoder_parameters_high_quality(
+                    VideoParameters {
+                        width,
+                        height,
+                        target_framerate: Rational {
+                            numerator: 30,
+                            denominator: NonZeroU32::new(1).unwrap(),
+                        },
+                    },
+                    RateControl::Vbr {
+                        average_bitrate: 500_000,
+                        max_bitrate: 2_000_000,
+                    },
+                )
+                .unwrap(),
+        )
         .unwrap();
 
     let mut output_file = std::fs::File::create("output.h264").unwrap();
