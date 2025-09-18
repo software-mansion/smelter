@@ -8,7 +8,7 @@ use crate::pipeline::rtp::{RtpNtpSyncPoint, RtpTimestampSync};
 const POW_2_32: u64 = 1u64 << 32;
 
 // Allowed error that can be cause by speed of the runtime execution e.g. sleep precision
-const PREC_RUNTIME: Duration = Duration::from_millis(1);
+const PREC_RUNTIME: Duration = Duration::from_millis(5);
 
 // Represents 09/09/2025, 1:00:21 PM
 const REFERENCE_NTP_TIME: u64 = 3966409461 * POW_2_32;
