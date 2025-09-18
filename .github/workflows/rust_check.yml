@@ -105,6 +105,9 @@ jobs:
             - name: 📎 Run clippy
               run: cargo clippy --workspace --all-targets -- -D clippy::todo -D warnings
 
+            - name: 📎 Run clippy (no-default-features)
+              run: cargo clippy --workspace --all-targets --no-default-features -- -D clippy::todo -D warnings
+
     lint:
         runs-on: ubuntu-24.04
         steps:
@@ -140,8 +143,11 @@ jobs:
             - name: 📖 Check formatting
               run: cargo fmt --all --check
 
-            - name: 📎 Run clippy
+            - name: 📎 Run clippy (all-features)
               run: cargo clippy --workspace --all-targets --all-features -- -D clippy::todo -D warnings
+
+            - name: 📎 Run clippy (no-default-features)
+              run: cargo clippy --workspace --all-targets --no-default-features -- -D clippy::todo -D warnings
 
             - name: 📄 Generate JSON schema
               working-directory: ./generate
