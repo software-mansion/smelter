@@ -38,7 +38,7 @@ To run binary from specific create you need to run the command from that crate d
 
 #### `integration_tests` crate
 
-- `play_rtp_dump` - helper to play RTP dumps generated in tests from **`./integration_tests/src/tests`**.
+- `play_rtp_dump` - helper to play RTP dumps generated in tests from **`./integration_tests/src/pipeline_tests`**.
   Useful to verify if new tests generated correctly or to see what is wrong when test is failing.
 - `generate_rtp_from_file` - helper to generate new input files that can be used for new tests in
   **`./integration_tests/src/tests`**.
@@ -63,17 +63,16 @@ TODO
 We have 3 main types of test:
 - Small amount of regular unit tests spread over codebase.
 - Snapshot tests that render specific image and save them as PNG.
-  - Generated images are located in **`./snapshot_tests/snapshots/render_snapshots`** directory.
-  - JSON files representing tested scenes are in **`./snapshot_tests`** directory
-  - Actual Rust tests are in **`./src/snapshot_tests`**.
+  - Generated images are located in **`./integration_tests/snapshots/render_snapshots`** directory.
+  - Tests and JSON files representing tested scenes are in **`./integration_tests/src/render_tests`** directory
   - For example:
-    - Test is located in **`./src/snapshot_tests/view_tests.rs`**
-    - Test is rendering scene described by **`./snapshot_tests/view/border_radius.scene.json`**
+    - Test is located in **`./integration_tests/src/render_tests/view_tests.rs`**
+    - Test is rendering scene described by **`./integration_tests/src/render_tests/view/border_radius.scene.json`**
     - Test is rendering output (or comparing with the old version) to
-      **`./snapshot_tests/snapshots/render_snapshots/view/border_radius_0_output_1.png`**
-- End-to-end tests that are basically snapshot tests, but compare entire videos.
-  - Generated stream dumps are located in **`./snapshot_tests/snapshots/rtp_packet_dumps`** directory.
-  - Tests are implemented in **`./integration_tests/src/tests`** directory.
+      **`./integration_tests/snapshots/render_snapshots/view/border_radius_0_output_1.png`**
+- Pipeline tests that are basically snapshot tests, but compare entire videos.
+  - Generated stream dumps are located in **`./integration_tests/snapshots/rtp_packet_dumps`** directory.
+  - Tests are implemented in **`./integration_tests/src/pipeline_tests`** directory.
   - Some of the test here might be fragile if running along a lot of CPU intensive
     tasks. That is why **`./.config/nextest.toml`** is limiting concurrency of some tests on CI.
 
@@ -106,7 +105,7 @@ e.g.
 cargo nextest run --workspace audio_mixing_with_offset
 ```
 
-will run a test from **`./integration_tests/src/tests/audio_only.rs`**
+will run a test from **`./integration_tests/src/pipeline_tests/audio_only.rs`**
 
 #### Updating snapshots
 
@@ -115,7 +114,7 @@ to repo. If version in repo is different or missing then tests will fail.
 
 To generate snapshots for new tests, or update those that should change you need to enable
 `update_snapshots` feature when running tests. It is recommended to only run that command
-for specific tests, especially **`./integration_tests/src/tests`**
+for specific tests, especially **`./integration_tests/src/pipeline_tests`**
 
 e.g.
 
@@ -123,7 +122,7 @@ e.g.
 cargo nextest run --workspace --features update_snapshots audio_mixing_with_offset
 ```
 
-will run a test from **./integration_tests/src/tests/audio_only.rs** and if output changed the update the snapshot.
+will run a test from **./integration_tests/src/pipeline_tests/audio_only.rs** and if output changed the update the snapshot.
 
 If you made changes that modify the snapshot:
 - Create PR in https://github.com/membraneframework-labs/video_compositor_snapshot_tests repo.
