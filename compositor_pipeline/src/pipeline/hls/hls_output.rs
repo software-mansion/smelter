@@ -74,7 +74,9 @@ impl HlsOutput {
             ("segment_format", "mpegts"),
             ("segment_list_type", "m3u8"),
             ("segment_list_flags", "cache+live"),
-            ("hls_flags", "delete_segments"),
+            ("hls_flags", "delete_segments+temp_file"),
+            ("fflags", "flush_packets"),
+            ("hls_allow_cache", "1"),
             (
                 "hls_list_size",
                 // 0 means no list size limit
