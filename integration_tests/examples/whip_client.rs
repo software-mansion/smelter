@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
-use compositor_api::Resolution;
 use serde_json::json;
+use smelter_api::Resolution;
 use std::{env, time::Duration};
 
 use integration_tests::examples::{self, run_example};

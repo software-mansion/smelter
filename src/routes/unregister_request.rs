@@ -11,7 +11,7 @@ use crate::{
     state::{ApiState, Response},
 };
 
-use compositor_api::{InputId, OutputId, RendererId};
+use smelter_api::{InputId, OutputId, RendererId};
 
 use super::Json;
 

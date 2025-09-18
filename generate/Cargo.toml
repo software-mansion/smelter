@@ -13,7 +13,7 @@ web_renderer = ["smelter/web_renderer"]
 
 [dependencies]
 smelter = { workspace = true }
-compositor_api = { workspace = true }
+smelter_api = { workspace = true }
 compositor_pipeline = { workspace = true }
 reqwest = { workspace = true }
 anyhow = { workspace = true }

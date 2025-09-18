@@ -11,7 +11,7 @@ use crate::{
     routes::{Json, Multipart},
     state::Response,
 };
-use compositor_api::{
+use smelter_api::{
     DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId,
     RtmpOutput, RtpInput, RtpOutput, ShaderSpec, WebRendererSpec, WhepOutput, WhipInput,
     WhipOutput,

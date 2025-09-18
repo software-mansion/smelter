@@ -12,7 +12,7 @@ use crate::{
     state::{ApiState, Response},
 };
 
-use compositor_api::{AudioScene, OutputId, VideoScene};
+use smelter_api::{AudioScene, OutputId, VideoScene};
 
 use super::Json;
 

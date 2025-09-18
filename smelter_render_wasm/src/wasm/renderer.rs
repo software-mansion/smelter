@@ -1,8 +1,8 @@
-use compositor_api as api;
 use compositor_render::{
     InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RendererOptions, RendererSpec,
 };
 use glyphon::fontdb::Source;
+use smelter_api as api;
 use wasm_bindgen::JsValue;
 
 use super::{

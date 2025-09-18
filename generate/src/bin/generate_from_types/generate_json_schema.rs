@@ -17,9 +17,9 @@ const ROOT_DIR: &str = env!("CARGO_MANIFEST_DIR");
 enum ApiTypes {
     RegisterInput(routes::RegisterInput),
     RegisterOutput(Box<routes::RegisterOutput>),
-    RegisterImage(compositor_api::ImageSpec),
-    RegisterWebRenderer(compositor_api::WebRendererSpec),
-    RegisterShader(compositor_api::ShaderSpec),
+    RegisterImage(smelter_api::ImageSpec),
+    RegisterWebRenderer(smelter_api::WebRendererSpec),
+    RegisterShader(smelter_api::ShaderSpec),
     UpdateOutput(Box<routes::UpdateOutputRequest>),
 }
 

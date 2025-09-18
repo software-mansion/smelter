@@ -1,7 +1,7 @@
 use anyhow::Result;
-use compositor_api::Resolution;
 use serde::Deserialize;
 use serde_json::json;
+use smelter_api::Resolution;
 
 use integration_tests::{
     examples::{self, run_example, TestSample},

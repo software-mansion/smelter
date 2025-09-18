@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 compositor_render = { workspace = true }
-compositor_api = { workspace = true }
+smelter_api = { workspace = true }
 console_error_panic_hook = "0.1.7"
 tracing-wasm = "0.2.1"
 tracing = { workspace = true }

@@ -49,7 +49,7 @@ This is crate when we keep most of our utils that generate something in repo:
 
 - `generate_docs_examples` - generates WEBP files with examples for documentation.
 - `generate_docs_example_inputs` - helper for `generate_docs_examples` (generates inputs for that binary).
-- `generate_from_types` - generate JSON schema from `compositor_api` types. It needs to be called every
+- `generate_from_types` - generate JSON schema from `smelter_api` types. It needs to be called every
   time API is changed and regenerated file needs to be committed. (It also generates Markdown docs, but
   this will be soon removed)
 - `generate_playground_inputs` - TODO

@@ -812,19 +812,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "compositor_api"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "compositor_pipeline",
- "compositor_render",
- "itertools 0.14.0",
- "schemars",
- "serde",
- "tracing",
-]
-
-[[package]]
 name = "compositor_chromium"
 version = "0.1.0"
 dependencies = [
@@ -1789,7 +1776,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
- "compositor_api",
  "compositor_pipeline",
  "compositor_render",
  "crossbeam-channel",
@@ -1802,6 +1788,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smelter",
+ "smelter_api",
  "socket2",
  "tokio",
  "tracing",
@@ -2474,7 +2461,6 @@ dependencies = [
  "anyhow",
  "bytes",
  "clap",
- "compositor_api",
  "compositor_chromium",
  "compositor_pipeline",
  "compositor_render",
@@ -2493,6 +2479,7 @@ dependencies = [
  "serde_json",
  "signal-hook",
  "smelter",
+ "smelter_api",
  "socket2",
  "spectrum-analyzer",
  "strum 0.27.2",
@@ -4499,7 +4486,6 @@ dependencies = [
  "anyhow",
  "axum",
  "bytes",
- "compositor_api",
  "compositor_chromium",
  "compositor_pipeline",
  "compositor_render",
@@ -4520,6 +4506,7 @@ dependencies = [
  "serde_json",
  "shared_memory",
  "signal-hook",
+ "smelter_api",
  "thiserror 1.0.69",
  "tiny_http",
  "tokio",
@@ -4531,11 +4518,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "smelter_api"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "compositor_pipeline",
+ "compositor_render",
+ "itertools 0.14.0",
+ "schemars",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "smelter_render_wasm"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "compositor_api",
  "compositor_render",
  "console_error_panic_hook",
  "crossbeam-channel",
@@ -4547,6 +4546,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde-wasm-bindgen",
+ "smelter_api",
  "tokio",
  "tracing",
  "tracing-subscriber",
