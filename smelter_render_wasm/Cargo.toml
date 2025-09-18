@@ -1,5 +1,5 @@
 [package]
-name = "compositor_web"
+name = "smelter_render_wasm"
 version = "0.1.0"
 edition = "2021"
 license-file = "../LICENSE"

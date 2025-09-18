@@ -3,9 +3,9 @@ import { spawn as nodeSpawn } from 'node:child_process';
 
 async function build() {
   const dirName = import.meta.dirname;
-  const compositorWebPath = path.resolve(dirName, '../../../compositor_web');
+  const smelterWasmCratePath = path.resolve(dirName, '../../../smelter_render_wasm');
   const outputPath = path.resolve(dirName, '../src/generated/smelter');
-  const args = ['build', '--target', 'web', '--release', '-d', outputPath, compositorWebPath];
+  const args = ['build', '--out-name', 'smelter', '--target', 'web', '--release', '-d', outputPath, smelterWasmCratePath];
 
   return await spawn('wasm-pack', args);
 }

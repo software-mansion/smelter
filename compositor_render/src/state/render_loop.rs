@@ -79,9 +79,22 @@ pub(super) fn read_outputs(
                     });
                 }
                 OutputTexture::Rgba8UnormWgpuTexture { .. } => {
-                    let texture = node
-                        .texture()
-                        .clone_texture(ctx.wgpu_ctx, &[wgpu::TextureFormat::Rgba8Unorm]);
+                    let texture = match ctx.wgpu_ctx.mode {
+                        RenderingMode::GpuOptimized => node.texture().clone_texture(
+                            ctx.wgpu_ctx,
+                            &[
+                                // Vulkan encoder needs texture with non srgb view
+                                wgpu::TextureFormat::Rgba8Unorm,
+                                wgpu::TextureFormat::Rgba8UnormSrgb,
+                            ],
+                        ),
+                        RenderingMode::CpuOptimized => node
+                            .texture()
+                            .clone_texture(ctx.wgpu_ctx, &[wgpu::TextureFormat::Rgba8Unorm]),
+                        RenderingMode::WebGl => node
+                            .texture()
+                            .clone_texture(ctx.wgpu_ctx, &[wgpu::TextureFormat::Rgba8UnormSrgb]),
+                    };
                     let frame = Frame {
                         resolution: texture.size().into(),
                         data: FrameData::Rgba8UnormWgpuTexture(texture.into()),

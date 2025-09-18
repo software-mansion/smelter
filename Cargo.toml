@@ -13,7 +13,7 @@ members = [
     "generate",
     "decklink",
     "compositor_api",
-    "compositor_web",
+    "smelter_render_wasm",
     "vk-video",
 ]
 resolver = "2"

@@ -1,4 +1,4 @@
-import init, * as wasm from './generated/smelter/compositor_web';
+import init, * as wasm from './generated/smelter/smelter';
 
 /**
  * Loads and initializes wasm module required for the smelter to work.
