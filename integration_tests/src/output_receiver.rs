@@ -10,8 +10,7 @@ use anyhow::{Context, Result};
 use bytes::{Bytes, BytesMut};
 use crossbeam_channel::Receiver;
 use tracing::error;
-use webrtc::{rtcp, rtp};
-use webrtc_util::Unmarshal;
+use webrtc::{rtcp, rtp, util::Unmarshal};
 
 pub struct OutputReceiver {
     receiver: Receiver<Bytes>,

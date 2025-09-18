@@ -17,10 +17,10 @@ use webrtc::{
     rtp_transceiver::{
         rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
         rtp_sender::RTCRtpSender,
-        rtp_transceiver_direction::RTCRtpTransceiverDirection,
-        RTCPFeedback, RTCRtpTransceiverInit,
+        RTCPFeedback,
     },
     stats::StatsReport,
+    track::track_local::track_local_static_rtp::TrackLocalStaticRTP,
 };
 
 use std::sync::Arc;
@@ -67,36 +67,46 @@ impl PeerConnection {
     }
 
     pub async fn new_video_track(&self) -> Result<Arc<RTCRtpSender>, WhipOutputError> {
-        let transceiver = self
+        let track = Arc::new(TrackLocalStaticRTP::new(
+            RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_VP8.to_owned(),
+                clock_rate: 90000,
+                channels: 0,
+                sdp_fmtp_line: "".to_owned(),
+                rtcp_feedback: vec![],
+            },
+            "video".to_string(),
+            "webrtc".to_string(),
+        ));
+        let sender = self
             .pc
-            .add_transceiver_from_kind(
-                RTPCodecType::Video,
-                Some(RTCRtpTransceiverInit {
-                    direction: RTCRtpTransceiverDirection::Sendonly,
-                    send_encodings: vec![],
-                }),
-            )
+            .add_track(track)
             .await
             .map_err(WhipOutputError::PeerConnectionInitError)?;
-        let sender = transceiver.sender().await;
+
         let rtc_sender_params = sender.get_parameters().await;
         debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
         Ok(sender)
     }
 
     pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpSender>, WhipOutputError> {
-        let transceiver = self
+        let track = Arc::new(TrackLocalStaticRTP::new(
+            RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_OPUS.to_owned(),
+                clock_rate: 48000,
+                channels: 0,
+                sdp_fmtp_line: "".to_owned(),
+                rtcp_feedback: vec![],
+            },
+            "audio".to_string(),
+            "webrtc".to_string(),
+        ));
+        let sender = self
             .pc
-            .add_transceiver_from_kind(
-                RTPCodecType::Audio,
-                Some(RTCRtpTransceiverInit {
-                    direction: RTCRtpTransceiverDirection::Sendonly,
-                    send_encodings: vec![],
-                }),
-            )
+            .add_track(track)
             .await
             .map_err(WhipOutputError::PeerConnectionInitError)?;
-        let sender = transceiver.sender().await;
+
         let rtc_sender_params = sender.get_parameters().await;
         debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
         Ok(sender)
