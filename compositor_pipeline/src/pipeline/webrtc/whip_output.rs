@@ -100,7 +100,21 @@ impl WhipClientTask {
         let video_rtc_sender = pc.new_video_track().await?;
         let audio_rtc_sender = pc.new_audio_track().await?;
 
-        let (session_url, answer) = exchange_sdp_offers(&pc, &client).await?;
+        let (session_url, offer, answer) = exchange_sdp_offers(&pc, &client).await?;
+
+        pc.set_local_description(offer).await?;
+
+        let video_sender_params = video_rtc_sender.get_parameters().await;
+        debug!(
+            "RTCRtpSender after set local video track params: {:#?}",
+            video_sender_params
+        );
+
+        let audio_sender_params = audio_rtc_sender.get_parameters().await;
+        debug!(
+            "RTCRtpSender after set local video track params: {:#?}",
+            audio_sender_params
+        );
 
         pc.set_remote_description(answer).await?;
 

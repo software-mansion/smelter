@@ -19,7 +19,7 @@ use crate::prelude::*;
 pub async fn exchange_sdp_offers(
     pc: &PeerConnection,
     client: &Arc<WhipHttpClient>,
-) -> Result<(Url, RTCSessionDescription), WhipOutputError> {
+) -> Result<(Url, RTCSessionDescription, RTCSessionDescription), WhipOutputError> {
     let offer = pc.create_offer().await?;
     debug!("SDP offer: {}", offer.sdp);
 
@@ -29,11 +29,9 @@ pub async fn exchange_sdp_offers(
     } = client.send_offer(&offer).await?;
     debug!("SDP answer: {}", answer.sdp);
 
-    pc.set_local_description(offer).await?;
+    //listen_for_trickle_candidates(pc, client, location.clone());
 
-    listen_for_trickle_candidates(pc, client, location.clone());
-
-    Ok((location, answer))
+    Ok((location, offer, answer))
 }
 
 fn listen_for_trickle_candidates(pc: &PeerConnection, client: &Arc<WhipHttpClient>, location: Url) {
