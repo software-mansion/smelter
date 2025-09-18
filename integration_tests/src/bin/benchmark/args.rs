@@ -1,6 +1,6 @@
 use std::{path::PathBuf, str::FromStr};
 
-use compositor_pipeline::codecs::{FfmpegH264EncoderPreset, VideoDecoderOptions};
+use smelter_core::codecs::{FfmpegH264EncoderPreset, VideoDecoderOptions};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericArgument {

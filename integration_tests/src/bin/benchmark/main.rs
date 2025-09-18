@@ -3,7 +3,7 @@ use std::{fs, sync::Arc, time::Duration};
 use benchmark::{Benchmark, EncoderOptions};
 use benchmark_pass::{InputFile, SingleBenchmarkPass};
 use clap::Parser;
-use compositor_pipeline::graphics_context::{GraphicsContext, GraphicsContextOptions};
+use smelter_core::graphics_context::{GraphicsContext, GraphicsContextOptions};
 
 use scenes::simple_tiles_with_all_inputs;
 use smelter::{
@@ -32,7 +32,7 @@ fn main() {
     let config = read_config();
     ffmpeg_next::format::network::init();
     let logger_config = LoggerConfig {
-        stdio_level: "compositor_pipeline=error,vk-video=info,benchmark=info".into(),
+        stdio_level: "smelter_core=error,vk-video=info,benchmark=info".into(),
         ..config.logger
     };
     logger::init_logger(logger_config);

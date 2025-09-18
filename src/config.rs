@@ -6,8 +6,8 @@ use std::{
     time::Duration,
 };
 
-use compositor_pipeline::DEFAULT_BUFFER_DURATION;
 use rand::Rng;
+use smelter_core::DEFAULT_BUFFER_DURATION;
 use smelter_render::{Framerate, RenderingMode, WgpuFeatures};
 use tracing::error;
 

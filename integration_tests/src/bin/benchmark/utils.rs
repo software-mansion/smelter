@@ -1,5 +1,5 @@
 use anyhow::Result;
-use compositor_pipeline::{
+use smelter_core::{
     graphics_context::GraphicsContext, PipelineOptions, PipelineWgpuOptions,
     PipelineWhipWhepServerOptions, DEFAULT_BUFFER_DURATION,
 };

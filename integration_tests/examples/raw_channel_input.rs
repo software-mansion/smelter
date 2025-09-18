@@ -5,17 +5,17 @@ use std::{
     time::Duration,
 };
 
-use compositor_pipeline::{
-    codecs::*,
-    graphics_context::{GraphicsContext, GraphicsContextOptions},
-    protocols::*,
-    *,
-};
 use integration_tests::{gstreamer::start_gst_receive_tcp_h264, test_input::TestInput};
 use smelter::{
     config::read_config,
     logger::{self},
     state::pipeline_options_from_config,
+};
+use smelter_core::{
+    codecs::*,
+    graphics_context::{GraphicsContext, GraphicsContextOptions},
+    protocols::*,
+    *,
 };
 use smelter_render::{
     error::ErrorStack,

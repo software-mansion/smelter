@@ -20,7 +20,7 @@ web_renderer = [
 clap = { version = "4.5", features = ["derive"] }
 smelter = { workspace = true }
 smelter_api = { workspace = true }
-compositor_pipeline = { workspace = true }
+smelter_core = { workspace = true }
 compositor_chromium = { workspace = true, optional = true }
 reqwest = { workspace = true }
 anyhow = { workspace = true }

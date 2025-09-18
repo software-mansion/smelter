@@ -1,9 +1,9 @@
 use itertools::Itertools;
 
-use crate::common_pipeline::prelude as pipeline;
+use crate::common_core::prelude as core;
 use crate::*;
 
-impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
+impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(request: WhipOutput) -> Result<Self, Self::Error> {
@@ -21,7 +21,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
         }
 
         let (output_video_options, video_whip_options) = if let Some(options) = video {
-            let output_options = pipeline::RegisterOutputVideoOptions {
+            let output_options = core::RegisterOutputVideoOptions {
                 initial: options.initial.try_into()?,
                 end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
             };
@@ -30,7 +30,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                 Some(v) => v.to_vec(),
             };
 
-            let encoder_preferences: Vec<Vec<pipeline::VideoEncoderOptions>> = encoder_preferences
+            let encoder_preferences: Vec<Vec<core::VideoEncoderOptions>> = encoder_preferences
                 .into_iter()
                 .map(|codec| {
                     let encoder_options = match codec {
@@ -39,8 +39,8 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                             pixel_format,
                             ffmpeg_options,
                         } => {
-                            vec![pipeline::VideoEncoderOptions::FfmpegH264(
-                                pipeline::FfmpegH264EncoderOptions {
+                            vec![core::VideoEncoderOptions::FfmpegH264(
+                                core::FfmpegH264EncoderOptions {
                                     preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                                     resolution: options.resolution.clone().into(),
                                     pixel_format: pixel_format
@@ -55,8 +55,8 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                         }
                         #[cfg(feature = "vk-video")]
                         WhipVideoEncoderOptions::VulkanH264 { bitrate } => {
-                            vec![pipeline::VideoEncoderOptions::VulkanH264(
-                                pipeline::VulkanH264EncoderOptions {
+                            vec![core::VideoEncoderOptions::VulkanH264(
+                                core::VulkanH264EncoderOptions {
                                     resolution: options.resolution.clone().into(),
                                     bitrate: bitrate
                                         .map(|bitrate| bitrate.try_into())
@@ -69,8 +69,8 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                             return Err(TypeError::new(super::NO_VULKAN_VIDEO));
                         }
                         WhipVideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
-                            vec![pipeline::VideoEncoderOptions::FfmpegVp8(
-                                pipeline::FfmpegVp8EncoderOptions {
+                            vec![core::VideoEncoderOptions::FfmpegVp8(
+                                core::FfmpegVp8EncoderOptions {
                                     resolution: options.resolution.clone().into(),
                                     raw_options: ffmpeg_options
                                         .unwrap_or_default()
@@ -83,8 +83,8 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                             pixel_format,
                             ffmpeg_options,
                         } => {
-                            vec![pipeline::VideoEncoderOptions::FfmpegVp9(
-                                pipeline::FfmpegVp9EncoderOptions {
+                            vec![core::VideoEncoderOptions::FfmpegVp9(
+                                core::FfmpegVp9EncoderOptions {
                                     resolution: options.resolution.clone().into(),
                                     pixel_format: pixel_format
                                         .unwrap_or(PixelFormat::Yuv420p)
@@ -98,24 +98,24 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                         }
                         WhipVideoEncoderOptions::Any => {
                             vec![
-                                pipeline::VideoEncoderOptions::FfmpegVp9(
-                                    pipeline::FfmpegVp9EncoderOptions {
+                                core::VideoEncoderOptions::FfmpegVp9(
+                                    core::FfmpegVp9EncoderOptions {
                                         resolution: options.resolution.clone().into(),
-                                        pixel_format: pipeline::OutputPixelFormat::YUV420P,
+                                        pixel_format: core::OutputPixelFormat::YUV420P,
                                         raw_options: Vec::new(),
                                     },
                                 ),
-                                pipeline::VideoEncoderOptions::FfmpegVp8(
-                                    pipeline::FfmpegVp8EncoderOptions {
+                                core::VideoEncoderOptions::FfmpegVp8(
+                                    core::FfmpegVp8EncoderOptions {
                                         resolution: options.resolution.clone().into(),
                                         raw_options: Vec::new(),
                                     },
                                 ),
-                                pipeline::VideoEncoderOptions::FfmpegH264(
-                                    pipeline::FfmpegH264EncoderOptions {
+                                core::VideoEncoderOptions::FfmpegH264(
+                                    core::FfmpegH264EncoderOptions {
                                         preset: H264EncoderPreset::Fast.into(),
                                         resolution: options.resolution.clone().into(),
-                                        pixel_format: pipeline::OutputPixelFormat::YUV420P,
+                                        pixel_format: core::OutputPixelFormat::YUV420P,
                                         raw_options: Vec::new(),
                                     },
                                 ),
@@ -127,7 +127,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                 .try_collect()?;
 
             let encoder_preferences = encoder_preferences.into_iter().flatten().unique().collect();
-            let video_whip_options = pipeline::VideoWhipOptions {
+            let video_whip_options = core::VideoWhipOptions {
                 encoder_preferences,
             };
             (Some(output_options), Some(video_whip_options))
@@ -144,7 +144,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                 initial,
             }) => {
                 let resolved_channels = channels.unwrap_or(AudioChannels::Stereo);
-                let output_audio_options = pipeline::RegisterOutputAudioOptions {
+                let output_audio_options = core::RegisterOutputAudioOptions {
                     initial: initial.try_into()?,
                     end_condition: send_eos_when.unwrap_or_default().try_into()?,
                     mixing_strategy: mixing_strategy
@@ -158,7 +158,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                     Some(v) => v.to_vec(),
                 };
 
-                let encoder_preferences: Vec<pipeline::AudioEncoderOptions> = encoder_preferences
+                let encoder_preferences: Vec<core::AudioEncoderOptions> = encoder_preferences
                     .into_iter()
                     .flat_map(|codec| match codec {
                         WhipAudioEncoderOptions::Opus {
@@ -167,33 +167,28 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
                             forward_error_correction,
                             ..
                         } => {
-                            vec![pipeline::AudioEncoderOptions::Opus(
-                                pipeline::OpusEncoderOptions {
-                                    channels: resolved_channels.clone().into(),
-                                    preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
-                                    sample_rate: sample_rate.unwrap_or(48000),
-                                    forward_error_correction: forward_error_correction
-                                        .unwrap_or(true),
-                                    packet_loss: 0,
-                                },
-                            )]
+                            vec![core::AudioEncoderOptions::Opus(core::OpusEncoderOptions {
+                                channels: resolved_channels.clone().into(),
+                                preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
+                                sample_rate: sample_rate.unwrap_or(48000),
+                                forward_error_correction: forward_error_correction.unwrap_or(true),
+                                packet_loss: 0,
+                            })]
                         }
                         WhipAudioEncoderOptions::Any => {
-                            vec![pipeline::AudioEncoderOptions::Opus(
-                                pipeline::OpusEncoderOptions {
-                                    channels: resolved_channels.clone().into(),
-                                    preset: OpusEncoderPreset::Voip.into(),
-                                    sample_rate: 48000,
-                                    forward_error_correction: true,
-                                    packet_loss: 0,
-                                },
-                            )]
+                            vec![core::AudioEncoderOptions::Opus(core::OpusEncoderOptions {
+                                channels: resolved_channels.clone().into(),
+                                preset: OpusEncoderPreset::Voip.into(),
+                                sample_rate: 48000,
+                                forward_error_correction: true,
+                                packet_loss: 0,
+                            })]
                         }
                     })
                     .unique()
                     .collect();
 
-                let audio_whip_options = pipeline::AudioWhipOptions {
+                let audio_whip_options = core::AudioWhipOptions {
                     encoder_preferences,
                 };
                 (Some(output_audio_options), Some(audio_whip_options))
@@ -201,7 +196,7 @@ impl TryFrom<WhipOutput> for pipeline::RegisterOutputOptions {
             None => (None, None),
         };
 
-        let output_options = pipeline::ProtocolOutputOptions::Whip(pipeline::WhipOutputOptions {
+        let output_options = core::ProtocolOutputOptions::Whip(core::WhipOutputOptions {
             endpoint_url,
             bearer_token,
             video: video_whip_options,

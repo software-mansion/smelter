@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use axum::response::IntoResponse;
-use compositor_pipeline::{
+use smelter_core::{
     error::InitPipelineError, Pipeline, PipelineOptions, PipelineWgpuOptions,
     PipelineWhipWhepServerOptions,
 };

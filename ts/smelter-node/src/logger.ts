@@ -52,8 +52,8 @@ export function smelterInstanceLoggerOptions(): {
     };
   } else if (loggerLevel === LoggerLevel.DEBUG) {
     return {
-      // hide scene update request with "compositor_pipeline::pipeline=warn"
-      level: 'info,wgpu_hal=warn,wgpu_core=warn,compositor_pipeline::pipeline=warn',
+      // hide scene update request with "smelter_core::pipeline=warn"
+      level: 'info,wgpu_hal=warn,wgpu_core=warn,smelter_core::pipeline=warn',
       format,
     };
   } else if (loggerLevel === LoggerLevel.TRACE) {

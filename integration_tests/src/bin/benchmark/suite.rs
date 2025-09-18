@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use compositor_pipeline::{
+use smelter_core::{
     codecs::{FfmpegH264EncoderPreset, VideoDecoderOptions},
     graphics_context::GraphicsContext,
 };

@@ -1,7 +1,7 @@
-use crate::common_pipeline::prelude as pipeline;
+use crate::common_core::prelude as core;
 use crate::*;
 
-impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
+impl TryFrom<WhepOutput> for core::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(request: WhepOutput) -> Result<Self, Self::Error> {
@@ -28,7 +28,7 @@ impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
             .map_or((None, None), |(enc, out)| (Some(enc), Some(out)));
 
         Ok(Self {
-            output_options: pipeline::ProtocolOutputOptions::Whep(pipeline::WhepOutputOptions {
+            output_options: core::ProtocolOutputOptions::Whep(core::WhepOutputOptions {
                 bearer_token,
                 video: video_encoder_options,
                 audio: audio_encoder_options,
@@ -41,19 +41,13 @@ impl TryFrom<WhepOutput> for pipeline::RegisterOutputOptions {
 
 fn resolve_video_options(
     options: OutputVideoOptions,
-) -> Result<
-    (
-        pipeline::VideoEncoderOptions,
-        pipeline::RegisterOutputVideoOptions,
-    ),
-    TypeError,
-> {
+) -> Result<(core::VideoEncoderOptions, core::RegisterOutputVideoOptions), TypeError> {
     let encoder_options = match options.encoder {
         VideoEncoderOptions::FfmpegH264 {
             preset,
             pixel_format,
             ffmpeg_options,
-        } => pipeline::VideoEncoderOptions::FfmpegH264(pipeline::FfmpegH264EncoderOptions {
+        } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
             preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
             resolution: options.resolution.into(),
             pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
@@ -61,7 +55,7 @@ fn resolve_video_options(
         }),
         #[cfg(feature = "vk-video")]
         VideoEncoderOptions::VulkanH264 { bitrate } => {
-            pipeline::VideoEncoderOptions::VulkanH264(pipeline::VulkanH264EncoderOptions {
+            core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
                 resolution: options.resolution.into(),
                 bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
             })
@@ -71,7 +65,7 @@ fn resolve_video_options(
             return Err(TypeError::new(super::NO_VULKAN_VIDEO));
         }
         VideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
-            pipeline::VideoEncoderOptions::FfmpegVp8(pipeline::FfmpegVp8EncoderOptions {
+            core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
                 resolution: options.resolution.into(),
                 raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
             })
@@ -79,14 +73,14 @@ fn resolve_video_options(
         VideoEncoderOptions::FfmpegVp9 {
             pixel_format,
             ffmpeg_options,
-        } => pipeline::VideoEncoderOptions::FfmpegVp9(pipeline::FfmpegVp9EncoderOptions {
+        } => core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
             resolution: options.resolution.into(),
             pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
             raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         }),
     };
 
-    let output_options = pipeline::RegisterOutputVideoOptions {
+    let output_options = core::RegisterOutputVideoOptions {
         initial: options.initial.try_into()?,
         end_condition: options.send_eos_when.unwrap_or_default().try_into()?,
     };
@@ -96,13 +90,7 @@ fn resolve_video_options(
 
 fn resolve_audio_options(
     options: OutputWhepAudioOptions,
-) -> Result<
-    (
-        pipeline::AudioEncoderOptions,
-        pipeline::RegisterOutputAudioOptions,
-    ),
-    TypeError,
-> {
+) -> Result<(core::AudioEncoderOptions, core::RegisterOutputAudioOptions), TypeError> {
     let OutputWhepAudioOptions {
         mixing_strategy,
         send_eos_when,
@@ -130,7 +118,7 @@ fn resolve_audio_options(
             };
 
             (
-                pipeline::AudioEncoderOptions::Opus(pipeline::OpusEncoderOptions {
+                core::AudioEncoderOptions::Opus(core::OpusEncoderOptions {
                     channels: channels.clone().into(),
                     preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
                     sample_rate: sample_rate.unwrap_or(48_000),
@@ -142,7 +130,7 @@ fn resolve_audio_options(
         }
     };
 
-    let output_audio_options = pipeline::RegisterOutputAudioOptions {
+    let output_audio_options = core::RegisterOutputAudioOptions {
         initial: initial.try_into()?,
         end_condition: send_eos_when.unwrap_or_default().try_into()?,
         mixing_strategy: mixing_strategy

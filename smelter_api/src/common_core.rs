@@ -5,5 +5,5 @@ pub use framerate::*;
 pub use protocol::*;
 
 // for internal use to easily prefix all types from
-// from compositor_pipeline
+// from smelter_core
 pub(crate) mod prelude;

@@ -7,14 +7,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use compositor_pipeline::{
+use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use smelter_core::{
     codecs::*,
     error::{RegisterInputError, RegisterOutputError},
     graphics_context::GraphicsContext,
     protocols::*,
     *,
 };
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use smelter_render::{
     scene::Component, Frame, InputId, OutputId, RendererId, RendererSpec, RenderingMode, YuvPlanes,
 };
