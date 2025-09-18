@@ -71,9 +71,6 @@ pub enum CreateWebRendererError {
     WebRenderingNotAvailable,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum RenderWebsiteError {}
-
 #[derive(Debug)]
 pub struct ChromiumContext {
     _internal: (),
