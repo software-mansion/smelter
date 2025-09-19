@@ -100,7 +100,7 @@ impl RescalerComponentParam {
             HorizontalAlign::Left => 0.0,
             HorizontalAlign::Right => child
                 .width(pts)
-                .map(|width| (max_size.width - (width * scale)))
+                .map(|width| max_size.width - (width * scale))
                 .unwrap_or(0.0),
             HorizontalAlign::Center | HorizontalAlign::Justified => child
                 .width(pts)

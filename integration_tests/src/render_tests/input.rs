@@ -69,7 +69,7 @@ impl TestInput {
                 x <= BORDER_SIZE || (x <= resolution.width && x >= resolution.width - BORDER_SIZE);
             let is_border_in_y: bool = y <= BORDER_SIZE
                 || (y <= resolution.height && y >= resolution.height - BORDER_SIZE);
-            let is_on_grid = (x / GRID_SIZE + y / GRID_SIZE) % 2 == 0;
+            let is_on_grid = (x / GRID_SIZE + y / GRID_SIZE).is_multiple_of(2);
 
             let mut y = color.0;
             if is_border_in_x || is_border_in_y || is_on_grid {

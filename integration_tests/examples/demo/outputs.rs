@@ -58,6 +58,7 @@ pub enum OutputProtocol {
     Hls,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, EnumIter, Display, Clone)]
 pub enum VideoSetupOptions {
     #[strum(to_string = "Resolution (default: 1920x1080)")]
@@ -88,6 +89,7 @@ impl std::fmt::Display for VideoResolution {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Display, EnumIter)]
 pub enum VideoResolutionOptions {
     #[strum(to_string = "2560x1440")]

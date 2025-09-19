@@ -60,7 +60,7 @@ impl SampleMixer {
 
         match output_info.channels {
             AudioChannels::Mono => {
-                AudioSamples::Mono(mixed.into_iter().map(|(l, r)| ((l + r) / 2.0)).collect())
+                AudioSamples::Mono(mixed.into_iter().map(|(l, r)| (l + r) / 2.0).collect())
             }
             AudioChannels::Stereo => AudioSamples::Stereo(mixed),
         }
