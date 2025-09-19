@@ -1,7 +1,7 @@
 use std::{iter, sync::Arc};
 
-use compositor_render::{error::ErrorStack, Frame};
 use crossbeam_channel::Sender;
+use smelter_render::{error::ErrorStack, Frame};
 use tokio::sync::oneshot;
 use tracing::{debug, error, trace, warn};
 use webrtc::{
@@ -23,8 +23,8 @@ use crate::{
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
         },
         webrtc::{
-            error::WhipWhepServerError, // TODO delete
-            listen_for_rtcp::listen_for_rtcp, whip_input::negotiated_codecs::NegotiatedVideoCodecsInfo, 
+            listen_for_rtcp::listen_for_rtcp,
+            whip_input::negotiated_codecs::NegotiatedVideoCodecsInfo, // TODO make this code common for whep/whip input
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},
@@ -38,15 +38,14 @@ pub async fn process_video_track(
     frame_sender: Sender<PipelineEvent<Frame>>,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
-) -> Result<(), WhipWhepServerError> {
+    video_preferences: Vec<VideoDecoderOptions>,
+) -> Result<(), WhepInputError> {
     let rtc_receiver = transceiver.receiver().await;
     let Some(negotiated_codecs) =
-        NegotiatedVideoCodecsInfo::new(transceiver, &vec![VideoDecoderOptions::FfmpegH264]).await
+        NegotiatedVideoCodecsInfo::new(transceiver, &video_preferences).await
     else {
         warn!("Skipping video track, no valid codec negotiated");
-        return Err(WhipWhepServerError::InternalError(
-            "No video codecs negotiated".to_string(),
-        ));
+        return Err(WhepInputError::NoVideoCodecNegotiated);
     };
 
     let ssrc = track.ssrc();
