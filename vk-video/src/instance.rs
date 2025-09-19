@@ -113,6 +113,7 @@ impl VulkanInstance {
                 None,
                 extensions,
                 wgpu::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER,
+                wgpu::MemoryBudgetThresholds::default(),
                 false,
                 Some(Box::new(move || {
                     drop(instance_clone);

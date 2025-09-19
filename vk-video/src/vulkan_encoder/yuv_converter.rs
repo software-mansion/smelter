@@ -39,18 +39,17 @@ impl Converter {
         let mut fence = unsafe {
             device
                 .wgpu_device()
-                .as_hal::<VkApi, _, _>(|d| d.unwrap().create_fence())?
+                .as_hal::<VkApi>()
+                .unwrap()
+                .create_fence()?
         };
 
         let mut command_encoder = unsafe {
-            device.wgpu_device().as_hal::<VkApi, _, _>(|d| {
-                device.wgpu_queue().as_hal::<VkApi, _, _>(|q| {
-                    d.unwrap()
-                        .create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
-                            label: Some("YUV converter init command encoder"),
-                            queue: q.unwrap(),
-                        })
-                })
+            let hal_device = device.wgpu_device().as_hal::<VkApi>().unwrap();
+            let hal_queue = device.wgpu_queue().as_hal::<VkApi>().unwrap();
+            hal_device.create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
+                label: Some("YUV converter init command encoder"),
+                queue: &hal_queue,
             })?
         };
 
@@ -180,9 +179,11 @@ impl Converter {
         let command_buffer = unsafe { command_encoder.end_encoding()? };
 
         unsafe {
-            device.wgpu_queue().as_hal::<VkApi, _, _>(|q| {
-                q.unwrap().submit(&[&command_buffer], &[], (&mut fence, 1))
-            })?
+            device.wgpu_queue().as_hal::<VkApi>().unwrap().submit(
+                &[&command_buffer],
+                &[],
+                (&mut fence, 1),
+            )?
         };
 
         let mut done = false;
@@ -190,14 +191,18 @@ impl Converter {
             done = unsafe {
                 device
                     .wgpu_device()
-                    .as_hal::<VkApi, _, _>(|d| d.unwrap().wait(&fence, 1, u32::MAX))?
+                    .as_hal::<VkApi>()
+                    .unwrap()
+                    .wait(&fence, 1, u32::MAX)?
             }
         }
 
         unsafe {
             device
                 .wgpu_device()
-                .as_hal::<VkApi, _, _>(|d| d.unwrap().destroy_fence(fence));
+                .as_hal::<VkApi>()
+                .unwrap()
+                .destroy_fence(fence);
         }
 
         Ok(Self {
@@ -222,12 +227,7 @@ impl Converter {
             .wgpu_device()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-        let image = unsafe {
-            texture.as_hal::<VkApi, _, _>(|t| {
-                let t = t.unwrap();
-                t.raw_handle()
-            })
-        };
+        let image = unsafe { texture.as_hal::<VkApi>().unwrap().raw_handle() };
 
         let view_create_info = vk::ImageViewCreateInfo::default()
             .image(image)
@@ -269,14 +269,17 @@ impl Converter {
         let mut fence = unsafe {
             self.device
                 .wgpu_device()
-                .as_hal::<VkApi, _, _>(|d| d.unwrap().create_fence())?
+                .as_hal::<VkApi>()
+                .unwrap()
+                .create_fence()?
         };
 
         unsafe {
-            self.device.wgpu_queue().as_hal::<VkApi, _, _>(|q| {
-                q.unwrap()
-                    .submit(&[&wgpu_command_buffer], &[], (&mut fence, 1))
-            })?;
+            self.device.wgpu_queue().as_hal::<VkApi>().unwrap().submit(
+                &[&wgpu_command_buffer],
+                &[],
+                (&mut fence, 1),
+            )?;
         }
 
         Ok(ConvertState {

@@ -333,6 +333,7 @@ impl<'a> Renderer<'a> {
                         load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
                         store: wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 ..Default::default()
             });

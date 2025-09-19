@@ -78,6 +78,7 @@ impl PremultiplyAlphaPipeline {
                     },
                     view: dst_view,
                     resolve_target: None,
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
