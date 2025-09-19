@@ -58,16 +58,6 @@ pub enum OutputProtocol {
     Hls,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, EnumIter, Display, Clone)]
-pub enum VideoSetupOptions {
-    #[strum(to_string = "Resolution (default: 1920x1080)")]
-    Resolution,
-
-    #[strum(to_string = "Done")]
-    Done,
-}
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct VideoResolution {
     pub width: u16,
@@ -87,19 +77,6 @@ impl std::fmt::Display for VideoResolution {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}x{}", self.width, self.height)
     }
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Display, EnumIter)]
-pub enum VideoResolutionOptions {
-    #[strum(to_string = "2560x1440")]
-    Qhd,
-
-    #[strum(to_string = "1920x1080")]
-    Fhd,
-
-    #[strum(to_string = "1280x720")]
-    Hd,
 }
 
 #[derive(Debug, Display, EnumIter, PartialEq, Serialize, Deserialize, Clone, Copy)]
