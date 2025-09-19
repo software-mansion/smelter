@@ -4,26 +4,22 @@ use reqwest::{Method, StatusCode};
 use url::{ParseError, Url};
 
 use crate::{
-    codecs::{
-        AudioDecoderOptions, AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions,
-        WhipVideoDecoderOptions,
-    },
-    error::EncoderInitError,
+    codecs::{AudioEncoderOptions, VideoEncoderOptions, WebrtcVideoDecoderOptions},
+    error::{DecoderInitError, EncoderInitError},
 };
 
 #[derive(Debug, Clone)]
 pub struct WhipInputOptions {
-    pub video_preferences: Vec<WhipVideoDecoderOptions>,
+    pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_override: Option<Arc<str>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct WhepInputOptions {
-    pub endpoint_url: Arc<str>,
+    pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
-    pub video: Option<VideoDecoderOptions>,
-    pub audio: Option<AudioDecoderOptions>,
+    pub endpoint_url: Arc<str>,
 }
 
 #[derive(Debug, Clone)]
@@ -214,6 +210,6 @@ pub enum WhepInputError {
     #[error("Codec not supported: {0}")]
     UnsupportedCodec(&'static str),
 
-    #[error("Failed to initialize the encoder")]
-    EncoderInitError(#[from] EncoderInitError),
+    #[error("Failed to initialize the decoder")]
+    DecoderInitError(#[from] DecoderInitError),
 }

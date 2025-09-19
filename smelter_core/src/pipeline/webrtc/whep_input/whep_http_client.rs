@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::http::{HeaderMap, HeaderValue};
 use reqwest::{Method, StatusCode};
-use tracing::{error, info};
+use tracing::error;
 use url::{ParseError, Url};
 use webrtc::{
     ice_transport::ice_candidate::RTCIceCandidateInit,
@@ -19,7 +19,7 @@ pub(super) struct WhepHttpClient {
 }
 
 pub(super) struct SdpAnswer {
-    // pub session_url: Url,
+    pub session_url: Url,
     pub answer: RTCSessionDescription,
 }
 
@@ -40,7 +40,6 @@ impl WhepHttpClient {
         offer: &RTCSessionDescription,
     ) -> Result<SdpAnswer, WhepInputError> {
         let headers = self.header_map(HeaderValue::from_static("application/sdp"));
-        info!("before response");
         let response = self
             .http_client
             .post(self.endpoint_url.clone())
@@ -50,23 +49,19 @@ impl WhepHttpClient {
             .await
             .map_err(|_| WhepInputError::RequestFailed(Method::POST, self.endpoint_url.clone()))?;
 
-        info!("response");
-
         let response = map_response_err(response).await?;
-        // let session_url = self.get_location_from_headers(&response).await?;
+        let session_url = self.get_location_from_headers(&response).await?;
 
         let answer = response
             .text()
             .await
             .map_err(|e| WhepInputError::BodyParsingError("sdp answer", e))?;
 
-        info!(answer);
-
         let answer = RTCSessionDescription::answer(answer)
             .map_err(WhepInputError::RTCSessionDescriptionError)?;
 
         Ok(SdpAnswer {
-            // session_url,
+            session_url,
             answer,
         })
     }
@@ -107,13 +102,13 @@ impl WhepHttpClient {
         Ok(())
     }
 
-    pub async fn delete_session(&self, session_url: Url) {
-        // Endpoint is required, but some platforms e.g. Twitch do not implement it
-        // so we are silently ignoring
-        if let Err(err) = self.http_client.delete(session_url).send().await {
-            error!("Error while sending delete whep session request: {}", err);
-        }
-    }
+    // pub async fn delete_session(&self, session_url: Url) {
+    //     // Endpoint is required, but some platforms e.g. Twitch do not implement it
+    //     // so we are silently ignoring
+    //     if let Err(err) = self.http_client.delete(session_url).send().await {
+    //         error!("Error while sending delete whep session request: {}", err);
+    //     }
+    // }
 
     fn header_map(&self, content_type: HeaderValue) -> HeaderMap {
         let mut header_map = HeaderMap::new();

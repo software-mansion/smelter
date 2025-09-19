@@ -12,8 +12,6 @@ pub struct WhepInput {
     pub bearer_token: Option<Arc<str>>,
     /// Parameters of a video source included in the RTP stream.
     pub video: Option<InputWhepVideoOptions>,
-    /// Parameters of an audio source included in the RTP stream.
-    pub audio: Option<InputWhepAudioOptions>,
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,
@@ -21,26 +19,13 @@ pub struct WhepInput {
     pub offset_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum AacRtpMode {
-    LowBitrate,
-    HighBitrate,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-#[serde(tag = "decoder", rename_all = "snake_case", deny_unknown_fields)]
-pub enum InputWhepAudioOptions {
-    Opus,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct InputWhepVideoOptions {
-    pub decoder: WhepVideoDecoderOptions,
+    pub decoder_preferences: Option<Vec<WhepVideoDecoderOptions>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum WhepVideoDecoderOptions {
     /// Use the software h264 decoder based on ffmpeg.
@@ -61,4 +46,6 @@ pub enum WhepVideoDecoderOptions {
     /// to be compiled with the `vk-video` feature enabled (enabled by default on platforms which
     /// support Vulkan, i.e. non-Apple operating systems and not the web).
     VulkanH264,
+
+    Any,
 }

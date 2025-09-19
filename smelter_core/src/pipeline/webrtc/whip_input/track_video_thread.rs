@@ -22,10 +22,10 @@ use crate::{
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
         },
         webrtc::{
-            error::WhipWhepServerError, listen_for_rtcp::listen_for_rtcp, whip_input::{
-                negotiated_codecs::NegotiatedVideoCodecsInfo,
-                AsyncReceiverIter,
-            }, WhipWhepServerState
+            error::WhipWhepServerError,
+            listen_for_rtcp::listen_for_rtcp,
+            whip_input::{negotiated_codecs::NegotiatedVideoCodecsInfo, AsyncReceiverIter},
+            WhipWhepServerState,
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},
