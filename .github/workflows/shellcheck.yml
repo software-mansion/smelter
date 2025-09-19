@@ -5,13 +5,13 @@ on:
         branches: [master]
         paths:
             - tools/release.sh
-            - src/bin/package_for_release/linux_runtime_wrapper.sh
+            - tools/src/bin/package_for_release/linux_runtime_wrapper.sh
             - .github/workflows/shellcheck.yml
     pull_request:
         types: [opened, synchronize]
         paths:
             - tools/release.sh
-            - src/bin/package_for_release/linux_runtime_wrapper.sh
+            - tools/src/bin/package_for_release/linux_runtime_wrapper.sh
             - .github/workflows/shellcheck.yml
 
 concurrency:
@@ -28,4 +28,4 @@ jobs:
 
             - name: shellcheck
               run: |
-                shellcheck ./tools/release.sh ./src/bin/package_for_release/linux_runtime_wrapper.sh
+                shellcheck ./tools/release.sh ./tools/src/bin/package_for_release/linux_runtime_wrapper.sh
