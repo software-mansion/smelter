@@ -36,12 +36,12 @@ pub fn generate_json_schema(check_flag: bool) {
     };
     generate_schema(
         schema_for!(routes::UpdateOutputRequest),
-        "../schemas/scene.schema.json",
+        "./schemas/scene.schema.json",
         scene_schema_action,
     );
     generate_schema(
         schema_for!(ApiTypes),
-        "../schemas/api_types.schema.json",
+        "./schemas/api_types.schema.json",
         api_schema_action,
     );
 }

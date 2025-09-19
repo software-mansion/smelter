@@ -49,7 +49,7 @@ This is crate when we keep most of our utils that generate something in repo:
 
 - `generate_docs_examples` - generates WEBP files with examples for documentation.
 - `generate_docs_example_inputs` - helper for `generate_docs_examples` (generates inputs for that binary).
-- `generate_from_types` - generate JSON schema from `smelter_api` types. It needs to be called every
+- `generate_json_schema` - generate JSON schema from `smelter_api` types. It needs to be called every
   time API is changed and regenerated file needs to be committed. (It also generates Markdown docs, but
   this will be soon removed)
 - `generate_playground_inputs` - TODO
@@ -191,7 +191,7 @@ If Rust code changes you need to rebuild WASM with `pnpm run build-wasm`.
 Everything in the same PR.
 
 - Update Rust code.
-- Run `cargo run -p tools --bin generate_from_types` that will generate **`./tools/schemas/scene.schema.json`** and **`./tools/schemas/api_types.schema.json`**.
+- Run `cargo run -p tools --bin generate_json_schema` that will generate **`./tools/schemas/scene.schema.json`** and **`./tools/schemas/api_types.schema.json`**.
 - Run `pnpm run generate-types` in **`./ts`** that will generate **`./ts/smelter/src/api.generated.ts`**.
 - Update TypeScript code to support new changes.
 - Update CHANGELOG

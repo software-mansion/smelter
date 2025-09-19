@@ -4,7 +4,7 @@
             "fileMatch": [
                 "*.scene.json"
             ],
-            "url": "./schemas/scene.schema.json"
+            "url": "./tools/schemas/scene.schema.json"
         }
     ],
     "eslint.workingDirectories": [
