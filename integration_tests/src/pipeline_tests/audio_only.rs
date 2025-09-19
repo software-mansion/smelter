@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde_json::json;
-use std::{path::PathBuf, thread, time::Duration};
+use std::{thread, time::Duration};
 
 use crate::{
     audio::{self, AudioAnalyzeTolerance, AudioValidationConfig},
