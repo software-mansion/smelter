@@ -187,7 +187,7 @@ fn check_frame_samples(
 ) {
     let samples_count_times_1e9 =
         end_pts.saturating_sub(start_pts).as_nanos() * sample_rate as u128;
-    if samples_count_times_1e9 % 1_000_000_000 != 0 {
+    if !samples_count_times_1e9.is_multiple_of(1_000_000_000) {
         warn!(
             "Duration {:?} is not divisible by sample duration (sample rate: {}).",
             end_pts.saturating_sub(start_pts),

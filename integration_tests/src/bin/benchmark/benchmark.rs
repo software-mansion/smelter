@@ -17,7 +17,7 @@ pub enum EncoderOptions {
     Disabled,
 }
 
-type BenchPassBuilder = Box<dyn (Fn(u64) -> SingleBenchmarkPass)>;
+type BenchPassBuilder = Box<dyn Fn(u64) -> SingleBenchmarkPass>;
 
 #[derive(Clone)]
 pub struct Benchmark {
