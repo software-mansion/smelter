@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::Path;
 use std::process::Command;
 use tools::paths::{git_root, tools_root};
 
@@ -19,19 +20,37 @@ const INTEL_WITH_WEB_RENDERER_OUTPUT_FILE: &str = "smelter_with_web_renderer_dar
 pub fn bundle_macos_app() -> Result<()> {
     tracing_subscriber::fmt().init();
 
+    let workdir = tools_root().join("build");
+    utils::ensure_empty_dir(&workdir)?;
+
     if cfg!(target_arch = "x86_64") {
-        bundle_app(INTEL_MAC_TARGET, INTEL_OUTPUT_FILE, false)?;
-        bundle_app(INTEL_MAC_TARGET, INTEL_WITH_WEB_RENDERER_OUTPUT_FILE, true)?;
+        bundle_app(&workdir, INTEL_MAC_TARGET, INTEL_OUTPUT_FILE, false)?;
+        bundle_app(
+            &workdir,
+            INTEL_MAC_TARGET,
+            INTEL_WITH_WEB_RENDERER_OUTPUT_FILE,
+            true,
+        )?;
     } else if cfg!(target_arch = "aarch64") {
-        bundle_app(ARM_MAC_TARGET, ARM_OUTPUT_FILE, false)?;
-        bundle_app(ARM_MAC_TARGET, ARM_WITH_WEB_RENDERER_OUTPUT_FILE, true)?;
+        bundle_app(&workdir, ARM_MAC_TARGET, ARM_OUTPUT_FILE, false)?;
+        bundle_app(
+            &workdir,
+            ARM_MAC_TARGET,
+            ARM_WITH_WEB_RENDERER_OUTPUT_FILE,
+            true,
+        )?;
     } else {
         panic!("Unknown architecture")
     }
     Ok(())
 }
 
-fn bundle_app(target: &'static str, output_name: &str, enable_web_rendering: bool) -> Result<()> {
+fn bundle_app(
+    workdir: &Path,
+    target: &'static str,
+    output_name: &str,
+    enable_web_rendering: bool,
+) -> Result<()> {
     if enable_web_rendering {
         info!("Bundling smelter with web rendering.");
     } else {
@@ -39,9 +58,7 @@ fn bundle_app(target: &'static str, output_name: &str, enable_web_rendering: boo
     }
 
     let cargo_build_dir = git_root().join("target").join(target).join("release");
-    let workdir = tools_root().join("build");
-    utils::ensure_empty_dir(&workdir)?;
-    fs::create_dir_all(workdir.join("smelter"))?;
+    utils::ensure_empty_dir(&workdir.join("smelter"))?;
 
     info!("Build main_process binary.");
     utils::compile_smelter(SmelterBin::MainProcess, target, !enable_web_rendering)?;

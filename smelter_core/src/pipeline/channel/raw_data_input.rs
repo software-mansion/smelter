@@ -58,8 +58,7 @@ fn spawn_video_repacking_thread(
 
     thread::Builder::new()
         .name(format!(
-            "Raw channel video synchronization thread for input {}",
-            input_id
+            "Raw channel video synchronization thread for input {input_id}"
         ))
         .spawn(move || {
             let mut start_pts = None;
@@ -100,8 +99,7 @@ fn spawn_audio_repacking_thread(
 
     thread::Builder::new()
         .name(format!(
-            "Raw channel audio synchronization thread for input {}",
-            input_id
+            "Raw channel audio synchronization thread for input {input_id}"
         ))
         .spawn(move || {
             let mut start_pts = None;

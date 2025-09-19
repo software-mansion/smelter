@@ -34,9 +34,5 @@ target/
 # Generated during runtime
 /shmem
 
-/smelter.app
-/smelter/
-/smelter_*.tar.gz
-
 .direnv
 /result
