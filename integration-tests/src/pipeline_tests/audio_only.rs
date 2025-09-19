@@ -213,7 +213,7 @@ pub fn audio_mixing_no_offset() -> Result<()> {
 /// Play audio for 20 seconds.
 #[test]
 pub fn audio_mixing_track_insertion_with_offset() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "audio_mixing_addition_with_offset_output.rtp";
+    const OUTPUT_DUMP_FILE: &str = "audio_mixing_track_insertion_with_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let input_2_port = instance.get_port();
