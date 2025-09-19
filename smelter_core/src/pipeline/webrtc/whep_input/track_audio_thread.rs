@@ -14,7 +14,8 @@ use crate::{
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
         },
         webrtc::{
-            error::WhipWhepServerError, listen_for_rtcp::listen_for_rtcp, whip_input::negotiated_codecs::NegotiatedAudioCodecsInfo
+            error::WhipWhepServerError, listen_for_rtcp::listen_for_rtcp,
+            whip_input::negotiated_codecs::NegotiatedAudioCodecsInfo,
         },
         PipelineCtx,
     },
@@ -38,7 +39,7 @@ pub async fn process_audio_track(
         ));
     };
 
-    let handle = AudioTrackThread::spawn(&"whep audio", (ctx.clone(), samples_sender))?;
+    let handle = AudioTrackThread::spawn("WHEP input audio", (ctx.clone(), samples_sender))?;
 
     let mut timestamp_sync =
         RtpTimestampSync::new(&sync_point, 48_000, ctx.default_buffer_duration);

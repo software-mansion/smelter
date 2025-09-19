@@ -1,7 +1,7 @@
-use anyhow::Result;
-use compositor_api::Resolution;
+use anyhow::{anyhow, Result};
 use serde_json::json;
-use std::{thread::sleep, time::Duration};
+use smelter_api::Resolution;
+use std::{env, thread::sleep, time::Duration};
 
 use integration_tests::{
     examples::{self, run_example},
@@ -23,14 +23,17 @@ fn client_code() -> Result<()> {
     start_ffmpeg_rtmp_receive(OUTPUT_PORT)?;
     std::thread::sleep(Duration::from_millis(2000));
 
+    let endpoint_url = env::var("INPUT_URL").map_err(|err| anyhow!("Couldn't read INPUT_URL environmental variable. You must provide it in order to run `whep_client` example. Read env error: {}", err))?;
+    let token = env::var("WHEP_TOKEN").map_err(|err| anyhow!("Couldn't read WHEP_TOKEN environmental variable. You must provide it in order to run `whep_client` example. Read env error: {}", err))?;
+
     examples::post(
         "input/input/register",
         &json!({
             "type": "whep_client",
-            "endpoint_url": "https://whep.vdo.ninja/example",//"https://b.siobud.com/api/whep", //"https://whep.vdo.ninja/example",
-            "bearer_token": "example",
+            "endpoint_url": endpoint_url,
+            "bearer_token": token,
             "video": {
-                "decoder": "ffmpeg_h264"
+                "decoder_preferences": ["ffmpeg_h264"]
             }
         }),
     )?
