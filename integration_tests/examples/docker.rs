@@ -58,7 +58,7 @@ fn build_and_start_docker(skip_build: bool) -> Result<()> {
                 integration_tests_root()
                     .parent()
                     .unwrap()
-                    .join("build_tools/docker/slim.Dockerfile")
+                    .join("tools/docker/slim.Dockerfile")
                     .to_str()
                     .unwrap(),
                 "-t",

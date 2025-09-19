@@ -28,14 +28,14 @@ jobs:
 
             - uses: hadolint/hadolint-action@v3.1.0
               with:
-                dockerfile: build_tools/docker/slim.Dockerfile
+                dockerfile: tools/docker/slim.Dockerfile
 
             - uses: hadolint/hadolint-action@v3.1.0
               with:
-                dockerfile: build_tools/docker/full.Dockerfile
+                dockerfile: tools/docker/full.Dockerfile
 
             - name: Build image - slim
-              run: docker build -f build_tools/docker/slim.Dockerfile -t video-compositor .
+              run: docker build -f tools/docker/slim.Dockerfile -t smelter .
 
             - name: Build image - full
-              run: docker build -f build_tools/docker/full.Dockerfile -t video-compositor .
+              run: docker build -f tools/docker/full.Dockerfile -t smelter .

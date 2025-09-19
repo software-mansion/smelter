@@ -1,0 +1,8 @@
+# Schemas generated for TypeScript demos
+/schemas/api_types.schema.json
+
+
+# tmp files create by release.sh
+/release_tmp
+/smelter_*.tar.gz
+/build

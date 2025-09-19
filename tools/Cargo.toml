@@ -1,51 +1,32 @@
 [package]
-name = "integration_tests"
+name = "tools" 
 version = "0.1.0"
 edition = "2021"
 license-file = "../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-default = ["web_renderer"]
-update_snapshots = []
-decklink = ["smelter/decklink"]
-web_renderer = [
-    "dep:compositor_chromium",
-    "smelter_render/web_renderer",
-    "smelter/web_renderer",
-]
-
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
 smelter = { workspace = true }
 smelter_api = { workspace = true }
 smelter_core = { workspace = true }
 smelter_render = { workspace = true }
-compositor_chromium = { workspace = true, optional = true }
+compositor_chromium = { workspace = true }
 reqwest = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ffmpeg-next = { workspace = true }
+fs_extra = { workspace = true }
 socket2 = { workspace = true }
+log = { workspace = true }
 bytes = { workspace = true }
-webrtc = {workspace = true }
 webrtc-util = { workspace = true }
 crossbeam-channel = { workspace = true }
 tracing = { workspace = true }
 opus = { workspace = true }
-spectrum-analyzer = "1.7.0"
+pitch-detection = "0.3.0"
 rand = { workspace = true }
-futures-util = { workspace = true }
-log = { workspace = true }
+schemars = { workspace = true}
+tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
 tokio = { workspace = true }
-signal-hook = { workspace = true }
-tokio-tungstenite = "0.21.0"
-wgpu = { workspace = true }
-image = { workspace = true }
-regex = "1.10.6"
-inquire = "0.7.5"
-strum = { version = "0.27", features = ["derive"] }
-fuzzy-matcher = "0.3.7"
-typetag = "0.2.20"

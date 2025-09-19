@@ -150,6 +150,5 @@ jobs:
               run: cargo clippy --workspace --all-targets --no-default-features -- -D clippy::todo -D warnings
 
             - name: 📄 Generate JSON schema
-              working-directory: ./generate
               run: |
-                  cargo run --bin generate_from_types -- --check
+                  cargo run -p tools --bin generate_json_schema -- --check

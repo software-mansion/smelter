@@ -356,7 +356,7 @@ pub struct RtpInputBuilder {
 impl RtpInputBuilder {
     pub fn new() -> Self {
         let port = get_free_port();
-        let name = format!("input_rtp_udp_{}", port);
+        let name = format!("input_rtp_udp_{port}");
         Self {
             name,
             port,
