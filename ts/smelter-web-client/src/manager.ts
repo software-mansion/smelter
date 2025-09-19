@@ -56,6 +56,18 @@ class RemoteInstanceManager implements SmelterManager {
       }
       return smelterStatus;
     }, 10);
+
+    try {
+      await this.sendRequest({
+        method: 'POST',
+        route: '/api/reset',
+        body: {},
+      });
+      opts.logger.info('Sent reset request to existing Smelter instance.');
+    } catch (err) {
+      opts.logger.warn({ err }, 'Failed to reset existing Smelter instance.');
+    }
+
     await this.wsConnection.connect(opts.logger);
   }
 
