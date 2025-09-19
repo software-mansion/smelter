@@ -22,7 +22,7 @@ mod rgba_texture;
 mod convert_linear_to_srgb;
 
 enum InputTextureState {
-    PlanarYuvTextures(PlanarYuvInput),
+    PlanarYuvTextures(Box<PlanarYuvInput>),
     InterleavedYuv422Texture(InterleavedYuv422Input),
     Nv12WgpuTexture(NV12TextureInput),
     /// Depending on rendering mode
@@ -64,7 +64,7 @@ impl InputTexture {
                     state => {
                         let mut input = PlanarYuvInput::new(ctx, PlanarYuvVariant::YUV420);
                         input.upload(ctx, planes, PlanarYuvVariant::YUV420, frame.resolution);
-                        *state = Some(InputTextureState::PlanarYuvTextures(input));
+                        *state = Some(InputTextureState::PlanarYuvTextures(Box::new(input)));
                     }
                 };
             }
@@ -76,7 +76,7 @@ impl InputTexture {
                     state => {
                         let mut input = PlanarYuvInput::new(ctx, PlanarYuvVariant::YUV422);
                         input.upload(ctx, planes, PlanarYuvVariant::YUV422, frame.resolution);
-                        *state = Some(InputTextureState::PlanarYuvTextures(input));
+                        *state = Some(InputTextureState::PlanarYuvTextures(Box::new(input)));
                     }
                 };
             }
@@ -88,7 +88,7 @@ impl InputTexture {
                     state => {
                         let mut input = PlanarYuvInput::new(ctx, PlanarYuvVariant::YUV444);
                         input.upload(ctx, planes, PlanarYuvVariant::YUV444, frame.resolution);
-                        *state = Some(InputTextureState::PlanarYuvTextures(input));
+                        *state = Some(InputTextureState::PlanarYuvTextures(Box::new(input)));
                     }
                 };
             }
@@ -100,7 +100,7 @@ impl InputTexture {
                     state => {
                         let mut input = PlanarYuvInput::new(ctx, PlanarYuvVariant::YUVJ420);
                         input.upload(ctx, planes, PlanarYuvVariant::YUVJ420, frame.resolution);
-                        *state = Some(InputTextureState::PlanarYuvTextures(input));
+                        *state = Some(InputTextureState::PlanarYuvTextures(Box::new(input)));
                     }
                 };
             }

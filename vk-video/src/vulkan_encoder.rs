@@ -1028,9 +1028,9 @@ impl VulkanEncoder<'_> {
         unsafe {
             self.device
                 .wgpu_device()
-                .as_hal::<wgpu::hal::vulkan::Api, _, _>(|d| {
-                    d.unwrap().destroy_fence(convert_state.fence)
-                })
+                .as_hal::<wgpu::hal::vulkan::Api>()
+                .unwrap()
+                .destroy_fence(convert_state.fence)
         }
 
         Ok(EncodedOutputChunk {

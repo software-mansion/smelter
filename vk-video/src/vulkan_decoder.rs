@@ -688,29 +688,33 @@ impl VulkanDecoder<'_> {
         let image_clone = image.clone();
 
         let hal_texture = unsafe {
-            wgpu::hal::vulkan::Device::texture_from_raw(
-                **image,
-                &wgpu::hal::TextureDescriptor {
-                    label: Some("vulkan video output texture"),
-                    usage: wgpu::TextureUses::RESOURCE
-                        | wgpu::TextureUses::COPY_DST
-                        | wgpu::TextureUses::COPY_SRC,
-                    memory_flags: wgpu::hal::MemoryFlags::empty(),
-                    size: wgpu::Extent3d {
-                        width: copy_extent.width,
-                        height: copy_extent.height,
-                        depth_or_array_layers: copy_extent.depth,
+            self.vulkan_device
+                .wgpu_device
+                .as_hal::<wgpu::hal::vulkan::Api>()
+                .unwrap()
+                .texture_from_raw(
+                    **image,
+                    &wgpu::hal::TextureDescriptor {
+                        label: Some("vulkan video output texture"),
+                        usage: wgpu::TextureUses::RESOURCE
+                            | wgpu::TextureUses::COPY_DST
+                            | wgpu::TextureUses::COPY_SRC,
+                        memory_flags: wgpu::hal::MemoryFlags::empty(),
+                        size: wgpu::Extent3d {
+                            width: copy_extent.width,
+                            height: copy_extent.height,
+                            depth_or_array_layers: copy_extent.depth,
+                        },
+                        dimension: wgpu::TextureDimension::D2,
+                        sample_count: 1,
+                        view_formats: Vec::new(),
+                        format: wgpu::TextureFormat::NV12,
+                        mip_level_count: 1,
                     },
-                    dimension: wgpu::TextureDimension::D2,
-                    sample_count: 1,
-                    view_formats: Vec::new(),
-                    format: wgpu::TextureFormat::NV12,
-                    mip_level_count: 1,
-                },
-                Some(Box::new(move || {
-                    drop(image_clone);
-                })),
-            )
+                    Some(Box::new(move || {
+                        drop(image_clone);
+                    })),
+                )
         };
 
         let wgpu_texture = unsafe {

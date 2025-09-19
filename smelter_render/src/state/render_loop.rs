@@ -145,7 +145,7 @@ pub(super) fn read_outputs(
         };
     }
 
-    while let Err(wgpu::PollError::Timeout) = ctx.wgpu_ctx.device.poll(wgpu::MaintainBase::Wait) {
+    while let Err(wgpu::PollError::Timeout) = ctx.wgpu_ctx.device.poll(wgpu::PollType::Wait) {
         warn!("Device poll failed.")
     }
 

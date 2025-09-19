@@ -109,6 +109,7 @@ impl LayoutShader {
                     },
                     view: target.view(),
                     resolve_target: None,
+                    depth_slice: None,
                 })],
                 // TODO: depth stencil attachments
                 depth_stencil_attachment: None,

@@ -98,6 +98,7 @@ impl RgbaToYuvConverter {
                     },
                     view: dst.plane_view(plane),
                     resolve_target: None,
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,

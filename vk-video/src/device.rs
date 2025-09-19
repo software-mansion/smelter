@@ -571,9 +571,9 @@ pub(crate) fn find_device<'a>(
 
         if let Some(surface) = compatible_surface {
             let surface_capabilities = unsafe {
-                (*surface).as_hal::<wgpu::hal::vulkan::Api, _, _>(|surface| {
-                    surface.and_then(|surface| wgpu_adapter.adapter.surface_capabilities(surface))
-                })
+                (*surface)
+                    .as_hal::<wgpu::hal::vulkan::Api>()
+                    .and_then(|surface| wgpu_adapter.adapter.surface_capabilities(&surface))
             };
 
             if surface_capabilities.is_none() {

@@ -73,6 +73,7 @@ impl R8FillWithValue {
                     },
                     view: dst,
                     resolve_target: None,
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,

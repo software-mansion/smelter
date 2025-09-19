@@ -22,13 +22,13 @@ memchr = "2.7.4"
 thiserror = "1.0.59"
 tracing = "0.1.40"
 vk-mem = "0.4.0"
-wgpu =  "25.0.2"
+wgpu =  "26.0.1"
 
 [dev-dependencies]
 bytemuck = { version = "1.19.0", features = ["derive"] }
 clap = { version = "4.5.20", features = ["derive"] }
 tracing-subscriber = "0.3.20"
-wgpu = { version = "25.0.2", features = ["noop"] }
+wgpu = { version = "26.0.1", features = ["noop"] }
 winit = "0.29"
 
 [build-dependencies]

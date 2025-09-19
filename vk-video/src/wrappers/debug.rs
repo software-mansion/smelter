@@ -68,6 +68,13 @@ unsafe extern "system" fn debug_messenger_callback(
         .unwrap_or(c"")
         .to_str()
         .unwrap();
+
+    // TODO: Remove it once https://github.com/gfx-rs/wgpu/issues/7696 is fixed
+    const VUID_STANDALONESPIRV_NONE_10684: i32 = 0xb210f7c2_u32 as i32;
+    if callback_data.message_id_number == VUID_STANDALONESPIRV_NONE_10684 {
+        return vk::FALSE;
+    }
+
     let t = format!("{message_types:?}");
     match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => {
