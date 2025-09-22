@@ -81,7 +81,7 @@ export class TwitchChannelMonitor {
           this.isStreamLive = false;
           return;
         }
-        await sleep(10_000);
+        await sleep(20_000);
       } catch (err) {
         console.log('Failed to refresh Twitch channel information', err);
       }
@@ -90,6 +90,8 @@ export class TwitchChannelMonitor {
 }
 
 async function getTopStreams(categoryId: string): Promise<TwitchStreamInfo[]> {
+  console.log('[twitch] Got Twitch top streams');
+
   const streamIds = await getTopStreamsFromCategory(categoryId, STREAMS_PER_CATEGORY);
   return await Promise.all(
     streamIds

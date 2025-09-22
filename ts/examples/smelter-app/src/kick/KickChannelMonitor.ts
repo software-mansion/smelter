@@ -81,7 +81,7 @@ export class KickChannelMonitor {
           this.isStreamLive = false;
           return;
         }
-        await sleep(10_000);
+        await sleep(20_000);
       } catch (err) {
         console.log('[kick] Failed to refresh Kick channel information', err);
       }
@@ -93,7 +93,6 @@ async function getKickTopStreams(categoryId: string): Promise<KickStreamInfo[]> 
   const topStreams = await getKickTopStreamsFromCategory(categoryId, KICK_STREAMS_PER_CATEGORY);
   console.log('[kick] Got Kick top streams');
 
-  console.log('[kick] Top streams', topStreams);
   return topStreams.map(stream => ({
     streamId: `${stream.slug}`,
     displayName: stream.stream_title,
