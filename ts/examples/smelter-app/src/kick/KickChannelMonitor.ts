@@ -2,8 +2,8 @@ import type { KickStreamInfo } from '../kick/KickApi';
 import { getKickStreamInfo, getKickTopStreamsFromCategory } from '../kick/KickApi';
 import { sleep } from '../utils';
 
-const CHOOSEN_KICK_CATEGORY = '64'; // NBA 2k26
-const KICK_CATEGORIES = [CHOOSEN_KICK_CATEGORY];
+const CHOSEN_KICK_CATEGORY = '64'; // NBA 2k26
+const KICK_CATEGORIES = [CHOSEN_KICK_CATEGORY];
 const KICK_STREAMS_PER_CATEGORY = 5;
 
 class KickChannelSuggestionsMonitor {
