@@ -110,7 +110,12 @@ impl SingleBenchmarkPass {
             .map(|i| InputId(format!("input_{i}").into()))
             .collect();
         let outputs: Vec<_> = (0..self.output_count)
-            .map(|i| OutputId(format!("output_{i}").into()))
+            .map(|i| {
+                (
+                    OutputId(format!("output_{i}").into()),
+                    self.output_resolution,
+                )
+            })
             .collect();
 
         match self.input_file.clone() {
@@ -138,7 +143,7 @@ impl SingleBenchmarkPass {
         }
         let receivers = outputs
             .iter()
-            .map(|output_id| {
+            .map(|(output_id, _)| {
                 let root = (self.scene_builder)(&scene_ctx, output_id);
                 let receiver: Box<dyn DurationReceiver + Send> = match self.encoder {
                     EncoderOptions::Disabled => {
@@ -149,7 +154,6 @@ impl SingleBenchmarkPass {
                             &pipeline, output_id, root, preset,
                         )?,
 
-                    #[cfg(not(target_os = "macos"))]
                     EncoderOptions::VulkanH264 => {
                         self.register_pipeline_encoded_output_vulkan(&pipeline, output_id, root)?
                     }
@@ -208,7 +212,6 @@ impl SingleBenchmarkPass {
         Ok(Box::new(result))
     }
 
-    #[cfg(not(target_os = "macos"))]
     fn register_pipeline_encoded_output_vulkan(
         &self,
         pipeline: &Arc<Mutex<Pipeline>>,

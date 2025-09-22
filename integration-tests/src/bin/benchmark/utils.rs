@@ -145,16 +145,10 @@ fn read_frames(path: &PathBuf, count: usize, resolution: Resolution) -> Vec<YuvP
 const DEFAULT_MP4_URL: &str =
     "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
-const BBB_480P_24FPS: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny480p24fps30s.mp4";
 const BBB_720P_24FPS: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny720p24fps30s.mp4";
 const BBB_1080P_30FPS: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny1080p30fps30s.mp4";
 const BBB_1080P_60FPS: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny1080p60fps30s.mp4";
 const BBB_2160P_30FPS: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny2160p30fps30s.mp4";
-
-pub fn ensure_bunny_480p24fps() -> Result<PathBuf> {
-    let path = integration_tests_root().join("./examples/assets/BigBuckBunny480p24fps30s.mp4");
-    ensure_file(path, BBB_480P_24FPS)
-}
 
 pub fn ensure_bunny_720p24fps() -> Result<PathBuf> {
     let path = integration_tests_root().join("./examples/assets/BigBuckBunny720p24fps30s.mp4");

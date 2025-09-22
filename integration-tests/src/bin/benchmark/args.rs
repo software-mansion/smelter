@@ -27,7 +27,7 @@ pub enum BenchmarkSuite {
     Full,
     Minimal,
     CpuOptimized,
-    EncodersOnly,
+    Res4K,
     None,
 }
 
@@ -39,7 +39,7 @@ impl std::str::FromStr for BenchmarkSuite {
             "full" => Ok(BenchmarkSuite::Full),
             "minimal" => Ok(BenchmarkSuite::Minimal),
             "cpu" => Ok(BenchmarkSuite::CpuOptimized),
-            "encoders" => Ok(BenchmarkSuite::EncodersOnly),
+            "4K" => Ok(BenchmarkSuite::Res4K),
             "none" => Ok(BenchmarkSuite::None),
             _ => Err("invalid suite name".to_string()),
         }

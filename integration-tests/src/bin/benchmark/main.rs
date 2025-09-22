@@ -25,7 +25,7 @@ mod utils;
 use args::{Args, BenchmarkSuite, NumericArgument, Resolution, ResolutionArgument, VideoEncoder};
 use utils::{ensure_default_mp4, generate_yuv_from_mp4};
 
-use crate::suite::encoders_only_benchmark_suite;
+use crate::suite::high_resolution_benchmark_suite;
 
 fn main() {
     let args = Args::parse();
@@ -53,7 +53,7 @@ fn main() {
         BenchmarkSuite::Full => full_benchmark_suite(&ctx),
         BenchmarkSuite::CpuOptimized => cpu_optimized_benchmark_suite(&ctx),
         BenchmarkSuite::Minimal => minimal_benchmark_suite(&ctx),
-        BenchmarkSuite::EncodersOnly => encoders_only_benchmark_suite(&ctx),
+        BenchmarkSuite::Res4K => high_resolution_benchmark_suite(&ctx),
         BenchmarkSuite::None => benchmark_from_args(args.clone()),
     };
 

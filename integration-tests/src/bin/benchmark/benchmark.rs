@@ -12,7 +12,6 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 pub enum EncoderOptions {
     FfmpegH264(FfmpegH264EncoderPreset),
-    #[cfg(not(target_os = "macos"))]
     VulkanH264,
     Disabled,
 }
