@@ -4,6 +4,7 @@ use reqwest::{Method, StatusCode};
 use url::{ParseError, Url};
 
 use crate::{
+    InputBufferOptions,
     codecs::{AudioEncoderOptions, VideoEncoderOptions, WhipVideoDecoderOptions},
     error::EncoderInitError,
 };
@@ -13,6 +14,7 @@ pub struct WhipInputOptions {
     pub video_preferences: Vec<WhipVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_override: Option<Arc<str>>,
+    pub buffer: InputBufferOptions,
 }
 
 #[derive(Debug, Clone)]

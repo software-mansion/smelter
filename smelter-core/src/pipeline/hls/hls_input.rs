@@ -34,6 +34,7 @@ use crate::{
             vulkan_h264,
         },
         input::Input,
+        utils::input_buffer::InputBuffer,
     },
     queue::QueueDataReceiver,
     thread_utils::InitializableThread,
@@ -52,24 +53,19 @@ struct Track {
 }
 
 impl HlsInput {
-    const PREFERABLE_BUFFER_SIZE: usize = 30;
-    const MIN_BUFFER_SIZE: usize = Self::PREFERABLE_BUFFER_SIZE / 2;
-
     pub fn new_input(
         ctx: Arc<PipelineCtx>,
         input_id: InputId,
         opts: HlsInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
-        let buffer_duration = opts
-            .buffer_duration
-            .unwrap_or(Duration::from_secs_f64(10.0));
+        let buffer = InputBuffer::new(&ctx, opts.buffer);
 
         let input_ctx = FfmpegInputContext::new(&opts.url, should_close.clone())?;
         let (audio, samples_receiver) = match input_ctx.audio_stream() {
             Some(stream) => {
                 let (track, receiver) =
-                    Self::handle_audio_track(&ctx, &input_id, &stream, buffer_duration)?;
+                    Self::handle_audio_track(&ctx, &input_id, &stream, buffer.clone())?;
                 (Some(track), Some(receiver))
             }
             None => (None, None),
@@ -81,7 +77,7 @@ impl HlsInput {
                     &input_id,
                     &stream,
                     opts.video_decoders,
-                    buffer_duration,
+                    buffer,
                 )?;
                 (Some(track), Some(receiver))
             }
@@ -106,13 +102,13 @@ impl HlsInput {
         ctx: &Arc<PipelineCtx>,
         input_id: &InputId,
         stream: &Stream<'_>,
-        buffer_duration: Duration,
+        buffer: InputBuffer,
     ) -> Result<(Track, Receiver<PipelineEvent<InputAudioSamples>>), InputInitError> {
         // not tested it was always null, but audio is in ADTS, so config is not
         // necessary
         let asc = read_extra_data(stream);
         let (samples_sender, samples_receiver) = bounded(5);
-        let state = StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer_duration);
+        let state = StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer);
         let handle = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
             input_id.clone(),
             AudioDecoderThreadOptions {
@@ -138,10 +134,10 @@ impl HlsInput {
         input_id: &InputId,
         stream: &Stream<'_>,
         video_decoders: HlsInputVideoDecoders,
-        buffer_duration: Duration,
+        buffer: InputBuffer,
     ) -> Result<(Track, Receiver<PipelineEvent<Frame>>), InputInitError> {
         let (frame_sender, frame_receiver) = bounded(5);
-        let state = StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer_duration);
+        let state = StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer);
 
         let extra_data = read_extra_data(stream);
         let h264_config = extra_data
@@ -227,8 +223,6 @@ impl HlsInput {
         mut audio: Option<Track>,
         mut video: Option<Track>,
     ) {
-        let mut pts_offset = Duration::ZERO;
-        let start_time = Instant::now();
         loop {
             let packet = match input_ctx.read_packet() {
                 Ok(packet) => packet,
@@ -251,21 +245,7 @@ impl HlsInput {
             if let Some(track) = &mut video
                 && packet.stream() == track.index
             {
-                let (pts, dts, is_discontinuity) = track.state.pts_dts_from_packet(&packet);
-
-                // Some streams give us packets "from the past", which get dropped by the queue
-                // resulting in no video or blinking. This heuristic moves the next packets forward in
-                // time. We only care about video buffer, audio uses the same offset as video
-                // to avoid audio sync issues.
-                if is_discontinuity {
-                    pts_offset = Duration::ZERO;
-                } else if track.handle.chunk_sender.len() < HlsInput::MIN_BUFFER_SIZE
-                    && start_time.elapsed() > Duration::from_secs(10)
-                {
-                    pts_offset += Duration::from_secs_f64(0.1);
-                    warn!(?pts_offset, "Increasing offset");
-                }
-                let pts = pts + pts_offset;
+                let (pts, dts) = track.state.pts_dts_from_packet(&packet);
 
                 let chunk = EncodedInputChunk {
                     data: Bytes::copy_from_slice(packet.data().unwrap()),
@@ -275,7 +255,7 @@ impl HlsInput {
                 };
 
                 let sender = &track.handle.chunk_sender;
-                trace!(?chunk, "Sending video chunk");
+                trace!(?chunk, buffer = sender.len(), "Sending video chunk");
                 if sender.is_empty() {
                     debug!("HLS input video channel was drained");
                 }
@@ -287,8 +267,7 @@ impl HlsInput {
             if let Some(track) = &mut audio
                 && packet.stream() == track.index
             {
-                let (pts, dts, _) = track.state.pts_dts_from_packet(&packet);
-                let pts = pts + pts_offset;
+                let (pts, dts) = track.state.pts_dts_from_packet(&packet);
 
                 let chunk = EncodedInputChunk {
                     data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
@@ -298,7 +277,7 @@ impl HlsInput {
                 };
 
                 let sender = &track.handle.chunk_sender;
-                trace!(?chunk, "Sending audio chunk");
+                trace!(?chunk, buffer = sender.len(), "Sending audio chunk");
                 if sender.is_empty() {
                     debug!("HLS input audio channel was drained");
                 }
@@ -331,7 +310,7 @@ impl Drop for HlsInput {
 
 struct StreamState {
     queue_start_time: Instant,
-    buffer_duration: Duration,
+    buffer: InputBuffer,
     time_base: ffmpeg_next::Rational,
 
     reference_pts_and_timestamp: Option<(Duration, f64)>,
@@ -344,12 +323,12 @@ impl StreamState {
     fn new(
         queue_start_time: Instant,
         time_base: ffmpeg_next::Rational,
-        buffer_duration: Duration,
+        buffer: InputBuffer,
     ) -> Self {
         Self {
             queue_start_time,
             time_base,
-            buffer_duration,
+            buffer,
 
             reference_pts_and_timestamp: None,
             pts_discontinuity: DiscontinuityState::new(false, time_base),
@@ -357,18 +336,17 @@ impl StreamState {
         }
     }
 
-    fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>, bool) {
+    fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>) {
         let pts_timestamp = packet.pts().unwrap_or(0) as f64;
         let dts_timestamp = packet.dts().map(|dts| dts as f64);
         let packet_duration = packet.duration() as f64;
 
-        let is_pts_discontinuity = self
-            .pts_discontinuity
+        self.pts_discontinuity
             .detect_discontinuity(pts_timestamp, packet_duration);
-        let is_dts_discontinuity = dts_timestamp.is_some_and(|dts| {
+        if let Some(dts) = dts_timestamp {
             self.dts_discontinuity
-                .detect_discontinuity(dts, packet_duration)
-        });
+                .detect_discontinuity(dts, packet_duration);
+        }
 
         let pts_timestamp = pts_timestamp + self.pts_discontinuity.offset;
         let dts_timestamp = dts_timestamp.map(|dts| dts + self.dts_discontinuity.offset);
@@ -385,11 +363,7 @@ impl StreamState {
             Duration::from_secs_f64(f64::max(timestamp_to_secs(dts, self.time_base), 0.0))
         });
 
-        (
-            pts + self.buffer_duration,
-            dts.map(|dts| dts + self.buffer_duration),
-            is_pts_discontinuity || is_dts_discontinuity,
-        )
+        (self.buffer.pts_with_buffer(pts), dts)
     }
 }
 
@@ -415,31 +389,28 @@ impl DiscontinuityState {
         }
     }
 
-    fn detect_discontinuity(&mut self, timestamp: f64, packet_duration: f64) -> bool {
+    fn detect_discontinuity(&mut self, timestamp: f64, packet_duration: f64) {
         let (Some(prev_timestamp), Some(next_timestamp)) =
             (self.prev_timestamp, self.next_predicted_timestamp)
         else {
             self.prev_timestamp = Some(timestamp);
             self.next_predicted_timestamp = Some(timestamp + packet_duration);
-            return false;
+            return;
         };
 
         // Detect discontinuity
         let timestamp_delta =
             timestamp_to_secs(f64::abs(next_timestamp - timestamp), self.time_base);
 
-        let mut is_discontinuity = timestamp_delta >= Self::DISCONTINUITY_THRESHOLD
+        let is_discontinuity = timestamp_delta >= Self::DISCONTINUITY_THRESHOLD
             || (self.check_timestamp_monotonicity && prev_timestamp > timestamp);
         if is_discontinuity {
             debug!("Discontinuity detected: {prev_timestamp} -> {timestamp}");
             self.offset += next_timestamp - timestamp;
-            is_discontinuity = true;
         }
 
         self.prev_timestamp = Some(timestamp);
         self.next_predicted_timestamp = Some(timestamp + packet_duration);
-
-        is_discontinuity
     }
 }
 

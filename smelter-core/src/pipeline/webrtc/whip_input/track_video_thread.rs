@@ -21,6 +21,7 @@ use crate::{
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
             depayloader::{Depayloader, DepayloaderOptions, DepayloadingError, new_depayloader},
         },
+        utils::input_buffer::InputBuffer,
         webrtc::{
             WhipWhepServerState,
             error::WhipWhepServerError,
@@ -37,6 +38,7 @@ use crate::prelude::*;
 
 pub async fn process_video_track(
     sync_point: Arc<RtpNtpSyncPoint>,
+    buffer: InputBuffer,
     state: WhipWhepServerState,
     endpoint_id: Arc<str>,
     track: Arc<TrackRemote>,
@@ -69,6 +71,7 @@ pub async fn process_video_track(
             timestamp_sync.on_sender_report(report.ntp_time, report.rtp_time);
         }
         let timestamp = timestamp_sync.pts_from_timestamp(packet.header.timestamp);
+        let timestamp = buffer.pts_with_buffer(timestamp);
 
         let packet = RtpPacket { packet, timestamp };
         trace!(?packet, "Sending RTP packet");
