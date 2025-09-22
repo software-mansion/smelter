@@ -41,12 +41,20 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
             .transpose()?;
 
         let video_decoders = core::Mp4InputVideoDecoders { h264 };
+        let buffer = match &queue_options {
+            core::QueueInputOptions {
+                required: false,
+                offset: None,
+            } => core::InputBufferOptions::Const(None),
+            _ => core::InputBufferOptions::None,
+        };
 
         Ok(core::RegisterInputOptions {
             input_options: core::ProtocolInputOptions::Mp4(core::Mp4InputOptions {
                 source,
                 should_loop: should_loop.unwrap_or(false),
                 video_decoders,
+                buffer,
             }),
             queue_options,
         })

@@ -97,6 +97,7 @@ fn main() {
             video_decoders: Mp4InputVideoDecoders {
                 h264: Some(VideoDecoderOptions::FfmpegH264),
             },
+            buffer: InputBufferOptions::Const(None),
         }),
         queue_options: QueueInputOptions {
             required: true,

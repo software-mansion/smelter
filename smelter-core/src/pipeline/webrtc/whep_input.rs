@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::pipeline::utils::input_buffer::InputBuffer;
 use crate::pipeline::webrtc::whep_input::process_tracks::setup_track_processing;
 use crate::pipeline::{
     input::Input,
@@ -129,9 +130,11 @@ async fn init_whep_client(
 
     pc.set_remote_description(answer).await?;
 
+    let buffer = InputBuffer::new(&ctx, options.buffer);
     setup_track_processing(
         &pc,
         &ctx,
+        buffer,
         input_samples_sender,
         frame_sender,
         video_preferences,

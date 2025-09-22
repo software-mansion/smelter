@@ -15,6 +15,19 @@ impl TryFrom<WhepInput> for core::RegisterInputOptions {
             offset_ms,
         } = value;
 
+        let queue_options = smelter_core::QueueInputOptions {
+            required: required.unwrap_or(false),
+            offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
+        };
+
+        let buffer = match &queue_options {
+            smelter_core::QueueInputOptions {
+                required: false,
+                offset: None,
+            } => core::InputBufferOptions::LatencyOptimized,
+            _ => core::InputBufferOptions::None,
+        };
+
         let video_preferences = match video {
             Some(options) => match options.decoder_preferences.as_deref() {
                 Some([]) | None => vec![core::WebrtcVideoDecoderOptions::Any],
@@ -27,14 +40,10 @@ impl TryFrom<WhepInput> for core::RegisterInputOptions {
             video_preferences,
             endpoint_url,
             bearer_token,
+            buffer,
         };
 
         let input_options = core::ProtocolInputOptions::Whep(whep_options);
-
-        let queue_options = smelter_core::QueueInputOptions {
-            required: required.unwrap_or(false),
-            offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
-        };
 
         Ok(core::RegisterInputOptions {
             input_options,

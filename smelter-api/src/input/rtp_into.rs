@@ -26,6 +26,18 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
             return Err(TypeError::new(NO_VIDEO_AUDIO_SPEC));
         }
 
+        let queue_options = smelter_core::QueueInputOptions {
+            required: required.unwrap_or(false),
+            offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
+        };
+        let buffer = match &queue_options {
+            core::QueueInputOptions {
+                required: false,
+                offset: None,
+            } => core::InputBufferOptions::Const(None),
+            _ => core::InputBufferOptions::None,
+        };
+
         let input_options = core::ProtocolInputOptions::Rtp(core::RtpInputOptions {
             port: port.try_into()?,
             video: video
@@ -42,13 +54,8 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
                 .transpose()?,
             audio: audio.map(TryFrom::try_from).transpose()?,
             transport_protocol: transport_protocol.unwrap_or(TransportProtocol::Udp).into(),
-            buffer_duration: None,
+            buffer,
         });
-
-        let queue_options = smelter_core::QueueInputOptions {
-            required: required.unwrap_or(false),
-            offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
-        };
 
         Ok(core::RegisterInputOptions {
             input_options,

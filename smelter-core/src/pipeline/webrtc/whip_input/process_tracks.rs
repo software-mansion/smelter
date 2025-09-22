@@ -10,23 +10,18 @@ use webrtc::{
 use crate::{
     codecs::VideoDecoderOptions,
     pipeline::{
-        decoder::VideoDecoderMapping,
-        rtp::{RtpNtpSyncPoint, depayloader::VideoPayloadTypeMapping},
-        webrtc::{
-            WhipWhepServerState,
-            audio_input_processing_loop::{AudioInputLoop, AudioTrackThread},
-            error::WhipWhepServerError,
-            negotiated_codecs::{
-                WebrtcVideoDecoderMapping, WebrtcVideoPayloadTypeMapping, audio_codec_negotiated,
-            },
-            video_input_processing_loop::{VideoInputLoop, VideoTrackThread},
-        },
+        decoder::VideoDecoderMapping, rtp::{depayloader::VideoPayloadTypeMapping, RtpNtpSyncPoint}, utils::input_buffer::InputBuffer, webrtc::{
+            audio_input_processing_loop::{AudioInputLoop, AudioTrackThread}, error::WhipWhepServerError, negotiated_codecs::{
+                audio_codec_negotiated, WebrtcVideoDecoderMapping, WebrtcVideoPayloadTypeMapping
+            }, video_input_processing_loop::{VideoInputLoop, VideoTrackThread}, WhipWhepServerState
+        }
     },
     thread_utils::InitializableThread,
 };
 
 pub async fn process_audio_track(
     sync_point: Arc<RtpNtpSyncPoint>,
+    buffer: InputBuffer,
     state: WhipWhepServerState,
     endpoint_id: Arc<str>,
     track: Arc<TrackRemote>,
@@ -54,6 +49,7 @@ pub async fn process_audio_track(
         track,
         rtc_receiver,
         handle,
+        buffer,
     };
 
     audio_input_loop.run(ctx).await?;
@@ -63,6 +59,7 @@ pub async fn process_audio_track(
 
 pub async fn process_video_track(
     sync_point: Arc<RtpNtpSyncPoint>,
+    buffer: InputBuffer,
     state: WhipWhepServerState,
     endpoint_id: Arc<str>,
     track: Arc<TrackRemote>,
@@ -118,6 +115,7 @@ pub async fn process_video_track(
         track,
         rtc_receiver,
         handle,
+        buffer,
     };
 
     video_input_loop.run(ctx).await?;

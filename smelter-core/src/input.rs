@@ -56,3 +56,11 @@ pub enum InputProtocolKind {
     DeckLink,
     RawDataChannel,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum InputBufferOptions {
+    None,
+    Const(Option<Duration>),
+    LatencyOptimized,
+    Adaptive,
+}

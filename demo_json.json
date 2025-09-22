@@ -1,0 +1,1 @@
+{"inputs":[{"type":"WhipInput","name":"input_whip_0","bearer_token":"example","video":{"decoder_preferences":["FfmpegH264"]}}],"outputs":[{"type":"RtmpOutput","video":{"root_id":"root","resolution":{"width":1920,"height":1080},"encoder":"FfmpegH264","scene":"Tiles"},"audio":{"encoder":"Aac"},"player":"Ffmpeg"}]}
