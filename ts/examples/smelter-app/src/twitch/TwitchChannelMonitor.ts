@@ -1,21 +1,15 @@
 import type { TwitchStreamInfo } from './TwitchApi';
-import { getStreamInfo, getTopStreamsFromCategory } from './TwitchApi';
+import { getTwitchStreamInfo, getTopStreamsFromCategory } from './TwitchApi';
 import { sleep } from '../utils';
 
-const CATEGORY_ID_EA_SPORTS_FC_25 = '2011938005';
-// const CATEGORY_ID_ANIMALS = '272263131';
-//const categoryIdMap = {
-//  'NBA 2K25': '2068583461',
-//  'F1 25': '93798731',
-//  'EA Sports UFC 5': '1628434805',
-//  'TEKKEN 8': '538054672',
-//  Chess: '743',
-//  Sports: '518203',
-//} as const;
 
+// --- TWITCH constants ---
+const CATEGORY_ID_EA_SPORTS_FC_25 = '2011938005';
 const CATEGORIES = [CATEGORY_ID_EA_SPORTS_FC_25];
 const STREAMS_PER_CATEGORY = 5;
 
+
+// --- TWITCH SUGGESTIONS ---
 class TwitchChannelSuggestionsMonitor {
   private topStreams: TwitchStreamInfo[] = [];
 
@@ -44,6 +38,9 @@ class TwitchChannelSuggestionsMonitor {
   }
 }
 
+
+
+// --- TWITCH MONITOR ---
 export class TwitchChannelMonitor {
   private channelId: string;
   private streamInfo: TwitchStreamInfo;
@@ -58,7 +55,7 @@ export class TwitchChannelMonitor {
   }
 
   public static async startMonitor(channelId: string): Promise<TwitchChannelMonitor> {
-    const streamInfo = await getStreamInfo(channelId);
+    const streamInfo = await getTwitchStreamInfo(channelId);
     if (!streamInfo) {
       throw new Error(`Unable to find live streams for ${channelId}`);
     }
@@ -82,7 +79,7 @@ export class TwitchChannelMonitor {
     while (!this.shouldStop) {
       console.log(`[twitch] Check stream state ${this.channelId}`);
       try {
-        const streamInfo = await getStreamInfo(this.channelId);
+        const streamInfo = await getTwitchStreamInfo(this.channelId);
         if (streamInfo) {
           this.streamInfo = streamInfo;
           this.isStreamLive = true;
@@ -99,15 +96,19 @@ export class TwitchChannelMonitor {
   }
 }
 
+// --- TWITCH getTopStreams ---
 async function getTopStreams(categoryId: string): Promise<TwitchStreamInfo[]> {
   const streamIds = await getTopStreamsFromCategory(categoryId, STREAMS_PER_CATEGORY);
   return await Promise.all(
     streamIds
       .map(async streamId => {
-        return (await getStreamInfo(streamId))!;
+        return (await getTwitchStreamInfo(streamId))!;
       })
       .filter(stream => !!stream)
   );
 }
 
+
+// --- EXPORTS ---
 export const TwitchChannelSuggestions = new TwitchChannelSuggestionsMonitor();
+

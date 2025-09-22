@@ -40,7 +40,7 @@ export async function getTopStreamsFromCategory(
   return top5UsersLogins;
 }
 
-export async function getStreamInfo(
+export async function getTwitchStreamInfo(
   twitchChannelId: string
 ): Promise<TwitchStreamInfo | undefined> {
   const credentials = await getTwitchAccessToken();

@@ -1,11 +1,12 @@
 import fs from 'fs-extra';
 import path from 'node:path';
 import { SmelterInstance, type RegisterSmelterInputOptions, type SmelterOutput } from '../smelter';
-import { hlsUrlForTwitchChannel } from '../streamlink';
-import { TwitchChannelMonitor } from '../twitch/ChannelMonitor';
+import { hlsUrlForKickChannel, hlsUrlForTwitchChannel } from '../streamlink';
+import { TwitchChannelMonitor } from '../twitch/TwitchChannelMonitor';
 import { sleep } from '../utils';
 import type { InputConfig, Layout } from '../app/store';
 import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
+import { KickChannelMonitor } from '../kick/KickChannelMonitor';
 
 export type RoomInputState = {
   inputId: string;
@@ -21,7 +22,7 @@ export type RoomInputState = {
 type TypeSpecificState =
   | { type: 'local-mp4'; mp4FilePath: string }
   | { type: 'twitch-channel'; channelId: string; hlsUrl: string; monitor: TwitchChannelMonitor }
-  | { type: 'kick-channel'; channelId: string; hlsUrl: string };
+  | { type: 'kick-channel'; channelId: string; hlsUrl: string; monitor: KickChannelMonitor };
 
 type UpdateInputOptions = {
   volume: number;
@@ -84,7 +85,7 @@ export class RoomState {
     if (this.mp4Files.length > 0) {
       const randomIndex = Math.floor(Math.random() * this.mp4Files.length);
       for (let i = 0; i < 2; i++) {
-        const randomMp4 = this.mp4Files[(randomIndex + i) % this.mp4sDir.length];
+        const randomMp4 = this.mp4Files[(randomIndex + i) % this.mp4Files.length];
         const mp4FilePath = path.join(this.mp4sDir, randomMp4);
 
         inputs.push({
@@ -148,7 +149,39 @@ export class RoomState {
       this.inputs.push(inputState);
       return inputId;
     } else if (opts.type === 'kick-channel') {
-      throw new Error('Add kick support');
+      const inputId = inputIdForKickInput(this.idPrefix, opts.kickChannelId);
+      if (this.inputs.find(input => input.inputId === inputId)) {
+        throw new Error(`Input for Kick channel ${opts.kickChannelId} already exists.`);
+      }
+
+      const hlsUrl = await hlsUrlForKickChannel(opts.kickChannelId);
+      const monitor = await KickChannelMonitor.startMonitor(opts.kickChannelId);
+
+      const inputState: RoomInputState = {
+        inputId,
+        type: `kick-channel`,
+        status: 'disconnected',
+        metadata: {
+          title: '', // will be populated on update
+          description: '',
+        },
+        volume: 0,
+        channelId: opts.kickChannelId,
+        hlsUrl,
+        monitor,
+      };
+
+      monitor.onUpdate((streamInfo, _isLive) => {
+        inputState.metadata.title = `[Kick.com] ${streamInfo.displayName}`;
+        inputState.metadata.description = streamInfo.title;
+        this.updateStoreWithState();
+      });
+
+      this.inputs.push(inputState);
+      return inputId;
+      
+
+
     } else if (opts.type === 'local-mp4' && opts.source.fileName) {
       console.log('Adding local mp4');
       let mp4Path = path.join(process.cwd(), 'mp4s', opts.source.fileName);
@@ -170,7 +203,7 @@ export class RoomState {
       }
 
       return inputId;
-    }
+    } 
   }
 
   public async removeInput(inputId: string): Promise<void> {
@@ -312,6 +345,10 @@ function registerOptionsFromInput(input: RoomInputState): RegisterSmelterInputOp
 
 function inputIdForTwitchInput(idPrefix: string, twitchChannelId: string): string {
   return `${idPrefix}::twitch::${twitchChannelId}`;
+}
+
+function inputIdForKickInput(idPrefix: string, kickChannelId: string): string {
+  return `${idPrefix}::twitch::${kickChannelId}`;
 }
 
 function formatMp4Name(fileName: string): string {
