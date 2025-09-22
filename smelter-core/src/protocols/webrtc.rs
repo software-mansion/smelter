@@ -5,7 +5,7 @@ use url::{ParseError, Url};
 
 use crate::{
     codecs::{AudioEncoderOptions, VideoEncoderOptions, WhipVideoDecoderOptions},
-    error::EncoderInitError,
+    error::EncoderInitError, InputBufferOptions,
 };
 
 #[derive(Debug, Clone)]
@@ -13,6 +13,7 @@ pub struct WhipInputOptions {
     pub video_preferences: Vec<WhipVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_override: Option<Arc<str>>,
+    pub buffer: InputBufferOptions,
 }
 
 #[derive(Debug, Clone)]
