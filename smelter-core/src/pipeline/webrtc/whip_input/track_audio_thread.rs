@@ -13,6 +13,7 @@ use crate::{
             depayloader::{DepayloaderOptions, DepayloaderStream},
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
         },
+        utils::input_buffer::InputBuffer,
         webrtc::{
             error::WhipWhepServerError,
             whip_input::{
@@ -30,6 +31,7 @@ use crate::prelude::*;
 
 pub async fn process_audio_track(
     sync_point: Arc<RtpNtpSyncPoint>,
+    buffer: InputBuffer,
     state: WhipWhepServerState,
     endpoint_id: Arc<str>,
     track: Arc<TrackRemote>,
@@ -59,6 +61,7 @@ pub async fn process_audio_track(
             timestamp_sync.on_sender_report(report.ntp_time, report.rtp_time);
         }
         let timestamp = timestamp_sync.pts_from_timestamp(packet.header.timestamp);
+        let timestamp = buffer.pts_with_buffer(timestamp);
 
         let packet = RtpPacket { packet, timestamp };
         trace!(?packet, "Sending RTP packet");
