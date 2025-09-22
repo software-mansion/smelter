@@ -21,6 +21,7 @@ type InputState = {
   volume: number;
 
   twitchChannelId?: string;
+  kickChannelId?: string;
 };
 
 export const routes = Fastify({
@@ -206,6 +207,7 @@ function publicInputState(input: RoomInputState): InputState {
       sourceState: input.monitor.isLive() ? 'live' : 'offline',
       status: input.status,
       volume: input.volume,
+      kickChannelId: input.channelId,
     };
   }
   throw new Error('Unknown input state');
