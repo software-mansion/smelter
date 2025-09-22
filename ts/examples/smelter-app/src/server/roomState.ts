@@ -179,9 +179,6 @@ export class RoomState {
 
       this.inputs.push(inputState);
       return inputId;
-      
-
-
     } else if (opts.type === 'local-mp4' && opts.source.fileName) {
       console.log('Adding local mp4');
       let mp4Path = path.join(process.cwd(), 'mp4s', opts.source.fileName);
@@ -203,7 +200,7 @@ export class RoomState {
       }
 
       return inputId;
-    } 
+    }
   }
 
   public async removeInput(inputId: string): Promise<void> {
@@ -348,7 +345,7 @@ function inputIdForTwitchInput(idPrefix: string, twitchChannelId: string): strin
 }
 
 function inputIdForKickInput(idPrefix: string, kickChannelId: string): string {
-  return `${idPrefix}::twitch::${kickChannelId}`;
+  return `${idPrefix}::kick::${kickChannelId}`;
 }
 
 function formatMp4Name(fileName: string): string {

@@ -2,14 +2,10 @@ import type { TwitchStreamInfo } from './TwitchApi';
 import { getTwitchStreamInfo, getTopStreamsFromCategory } from './TwitchApi';
 import { sleep } from '../utils';
 
-
-// --- TWITCH constants ---
 const CATEGORY_ID_EA_SPORTS_FC_25 = '2011938005';
 const CATEGORIES = [CATEGORY_ID_EA_SPORTS_FC_25];
 const STREAMS_PER_CATEGORY = 5;
 
-
-// --- TWITCH SUGGESTIONS ---
 class TwitchChannelSuggestionsMonitor {
   private topStreams: TwitchStreamInfo[] = [];
 
@@ -38,9 +34,6 @@ class TwitchChannelSuggestionsMonitor {
   }
 }
 
-
-
-// --- TWITCH MONITOR ---
 export class TwitchChannelMonitor {
   private channelId: string;
   private streamInfo: TwitchStreamInfo;
@@ -96,7 +89,6 @@ export class TwitchChannelMonitor {
   }
 }
 
-// --- TWITCH getTopStreams ---
 async function getTopStreams(categoryId: string): Promise<TwitchStreamInfo[]> {
   const streamIds = await getTopStreamsFromCategory(categoryId, STREAMS_PER_CATEGORY);
   return await Promise.all(
@@ -108,7 +100,4 @@ async function getTopStreams(categoryId: string): Promise<TwitchStreamInfo[]> {
   );
 }
 
-
-// --- EXPORTS ---
 export const TwitchChannelSuggestions = new TwitchChannelSuggestionsMonitor();
-

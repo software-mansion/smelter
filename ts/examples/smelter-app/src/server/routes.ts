@@ -203,7 +203,7 @@ function publicInputState(input: RoomInputState): InputState {
       inputId: input.inputId,
       title: input.metadata.title,
       description: input.metadata.description,
-      sourceState: 'unknown',
+      sourceState: input.monitor.isLive() ? 'live' : 'offline',
       status: input.status,
       volume: input.volume,
     };

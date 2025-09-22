@@ -1,8 +1,8 @@
 import { URLSearchParams } from 'url';
 
 function getConfig(): { clientId: string; clientSecret: string } | null {
-  const clientId = '01K5CDC36DNFYCKVSK8GC87F27';
-  const clientSecret = 'f341951b26e1d1c4326d24754f4622eaa39a501239a06fcffd58997394f85ffc';
+  const clientId = process.env.KICK_CLIENT_ID;
+  const clientSecret = process.env.KICK_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
     console.warn('Missing Kick credentials');
     return null;
@@ -59,15 +59,14 @@ export async function getKickStreamInfo(
   const data = await response.json();
 
   const stream = data.data ? data.data[0] : null;
-  console.log(stream);
   return {
-        streamId: kickChannelSlug,
-        displayName: stream?.stream_title || '',
-        title: stream?.stream_title || '',
-        category: stream?.category.name || '',
-      }
+    streamId: kickChannelSlug,
+    displayName: stream?.stream_title || '',
+    title: stream?.stream_title || '',
+    category: stream?.category.name || '',
+  };
 }
-    
+
 async function getKickAccessToken(): Promise<{ token: string; clientId: string } | null> {
   const config = getConfig();
   if (!config) {
