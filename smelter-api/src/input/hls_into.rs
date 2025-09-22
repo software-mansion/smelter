@@ -29,10 +29,18 @@ impl TryFrom<HlsInput> for core::RegisterInputOptions {
 
         let video_decoders = core::HlsInputVideoDecoders { h264 };
 
+        let buffer = match &queue_options {
+            core::QueueInputOptions {
+                required: false,
+                offset: None,
+            } => core::InputBufferOptions::Adaptive,
+            _ => core::InputBufferOptions::None,
+        };
+
         let input_options = core::HlsInputOptions {
             url,
             video_decoders,
-            buffer_duration: None,
+            buffer,
         };
 
         Ok(core::RegisterInputOptions {

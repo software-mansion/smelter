@@ -284,6 +284,7 @@ impl SingleBenchmarkPass {
                         h264: Some(self.decoder),
                     },
                     source: Mp4InputSource::File(path.to_path_buf().into()),
+                    buffer: InputBufferOptions::Const(None),
                 }),
                 queue_options: QueueInputOptions {
                     offset: None,

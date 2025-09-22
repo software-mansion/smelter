@@ -1,5 +1,6 @@
 use crate::pipeline::{
     rtp::RtpNtpSyncPoint,
+    utils::input_buffer::InputBuffer,
     webrtc::{
         WhipWhepServerState,
         error::WhipWhepServerError,
@@ -34,8 +35,9 @@ pub async fn handle_create_whip_session(
     validate_sdp_content_type(&headers)?;
     inputs.validate_token(&endpoint_id, &headers).await?;
 
-    let video_preferences =
-        inputs.get_with(&endpoint_id, |input| Ok(input.video_preferences.clone()))?;
+    let (video_preferences, buffer_options) = inputs.get_with(&endpoint_id, |input| {
+        Ok((input.video_preferences.clone(), input.buffer_options))
+    })?;
 
     let video_codecs = inputs.get_with(&endpoint_id, |input| Ok(input.video_codecs.clone()))?;
 
@@ -64,6 +66,7 @@ pub async fn handle_create_whip_session(
     {
         let endpoint_id = endpoint_id.clone();
         let sync_point = RtpNtpSyncPoint::new(state.ctx.queue_sync_point);
+        let buffer = InputBuffer::new(&state.ctx, buffer_options);
         peer_connection.on_track(Box::new(move |track, _, transceiver| {
             debug!(
                 ?endpoint_id,
@@ -78,6 +81,7 @@ pub async fn handle_create_whip_session(
                     tokio::spawn(
                         process_audio_track(
                             sync_point.clone(),
+                            buffer.clone(),
                             state.clone(),
                             endpoint_id.clone(),
                             track,
@@ -90,6 +94,7 @@ pub async fn handle_create_whip_session(
                     tokio::spawn(
                         process_video_track(
                             sync_point.clone(),
+                            buffer.clone(),
                             state.clone(),
                             endpoint_id.clone(),
                             track,
