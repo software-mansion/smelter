@@ -3,7 +3,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::pipeline::rtp::{RtpNtpSyncPoint, RtpTimestampSync};
+use crate::pipeline::{
+    rtp::{RtpNtpSyncPoint, RtpTimestampSync},
+    utils::input_buffer::InputBuffer,
+};
 
 const POW_2_32: u64 = 1u64 << 32;
 
@@ -17,8 +20,8 @@ const REFERENCE_NTP_TIME: u64 = 3966409461 * POW_2_32;
 fn test_rtcp_sync_pts_from_zero() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
-    let mut stream_2 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
+    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
+    let mut stream_2 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
 
     let stream_1_first_pts = stream_1.pts_from_timestamp(0);
     thread::sleep(Duration::from_millis(100));
@@ -72,8 +75,8 @@ fn test_rtcp_sync_pts_from_zero() {
 fn test_rtcp_sync_pts_from_non_zero() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
-    let mut stream_2 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
+    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
+    let mut stream_2 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
 
     let stream_1_first_pts = stream_1.pts_from_timestamp(60_000);
     thread::sleep(Duration::from_millis(100));
@@ -131,8 +134,8 @@ fn test_rtcp_sync_pts_from_non_zero() {
 fn test_rtcp_sync_pts_from_non_zero_different_clocks() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
-    let mut stream_2 = RtpTimestampSync::new(&sync_point, 3_000, Duration::ZERO);
+    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
+    let mut stream_2 = RtpTimestampSync::new(&sync_point, 3_000, InputBuffer::None);
 
     let stream_1_first_pts = stream_1.pts_from_timestamp(60_000);
     thread::sleep(Duration::from_millis(100));
@@ -190,8 +193,8 @@ fn test_rtcp_sync_pts_from_non_zero_different_clocks() {
 fn test_rtcp_sync_pts_with_rollover_before_sender_report_first_stream() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
-    let mut stream_2 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
+    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
+    let mut stream_2 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
 
     let stream_1_first_rtp_timestamp = u32::MAX - 5_000 + 1;
     let stream_2_first_rtp_timestamp = 100_000;
@@ -255,8 +258,8 @@ fn test_rtcp_sync_pts_with_rollover_before_sender_report_first_stream() {
 fn test_rtcp_sync_pts_with_rollover_before_sender_report_second_stream() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
-    let mut stream_2 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
+    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
+    let mut stream_2 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
 
     let stream_1_first_rtp_timestamp = 100_000;
     let stream_2_first_rtp_timestamp = u32::MAX - 5_000 + 1;
@@ -320,8 +323,8 @@ fn test_rtcp_sync_pts_with_rollover_before_sender_report_second_stream() {
 fn test_rtcp_sync_pts_with_rollover_after_sender_report_first_stream() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
-    let mut stream_2 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
+    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
+    let mut stream_2 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
 
     let stream_1_first_rtp_timestamp = 5_000;
     let stream_2_first_rtp_timestamp = 100_000;
@@ -385,8 +388,8 @@ fn test_rtcp_sync_pts_with_rollover_after_sender_report_first_stream() {
 fn test_rtcp_sync_pts_with_rollover_after_sender_report_second_stream() {
     let sync_point = RtpNtpSyncPoint::new(Instant::now());
 
-    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
-    let mut stream_2 = RtpTimestampSync::new(&sync_point, 1_000, Duration::ZERO);
+    let mut stream_1 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
+    let mut stream_2 = RtpTimestampSync::new(&sync_point, 1_000, InputBuffer::None);
 
     let stream_1_first_rtp_timestamp = 100_000;
     let stream_2_first_rtp_timestamp = 5_000;

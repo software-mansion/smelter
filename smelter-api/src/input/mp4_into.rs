@@ -18,17 +18,25 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
 
         const BAD_URL_PATH_SPEC: &str = "Exactly one of `url` or `path` has to be specified in a register request for an mp4 input.";
 
+        let queue_options = smelter_core::QueueInputOptions {
+            required: required.unwrap_or(false),
+            offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
+        };
+
+        let buffer = match &queue_options {
+            core::QueueInputOptions {
+                required: false,
+                offset: None,
+            } => core::InputBufferOptions::Const(None),
+            _ => core::InputBufferOptions::None,
+        };
+
         let source = match (url, path) {
             (Some(_), Some(_)) | (None, None) => {
                 return Err(TypeError::new(BAD_URL_PATH_SPEC));
             }
             (Some(url), None) => core::Mp4InputSource::Url(url),
             (None, Some(path)) => core::Mp4InputSource::File(path),
-        };
-
-        let queue_options = smelter_core::QueueInputOptions {
-            required: required.unwrap_or(false),
-            offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
         };
 
         let h264 = decoder_map
@@ -47,6 +55,7 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
                 source,
                 should_loop: should_loop.unwrap_or(false),
                 video_decoders,
+                buffer,
             }),
             queue_options,
         })

@@ -1,6 +1,6 @@
 use std::{
     sync::{Arc, atomic::AtomicBool},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use crossbeam_channel::{Receiver, bounded};
@@ -33,6 +33,7 @@ use crate::{
             },
             util::BindToPortError,
         },
+        utils::input_buffer::InputBuffer,
     },
     prelude::*,
     queue::QueueDataReceiver,
@@ -78,7 +79,7 @@ impl RtpInput {
         Self::start_rtp_demuxer_thread(
             &input_id,
             ctx.queue_sync_point,
-            opts.buffer_duration.unwrap_or(ctx.default_buffer_duration),
+            InputBuffer::new(&ctx, opts.buffer),
             raw_packets_receiver,
             audio_handle,
             video_handle,
@@ -97,7 +98,7 @@ impl RtpInput {
     fn start_rtp_demuxer_thread(
         input_id: &InputId,
         sync_point: Instant,
-        buffer_duration: Duration,
+        input_buffer: InputBuffer,
         receiver: Receiver<bytes::Bytes>,
         audio: Option<RtpAudioTrackThreadHandle>,
         video: Option<RtpVideoTrackThreadHandle>,
@@ -108,7 +109,7 @@ impl RtpInput {
             .spawn(move || {
                 let _span =
                     span!(Level::INFO, "RTP demuxer", input_id = input_id.to_string()).entered();
-                run_rtp_demuxer_thread(sync_point, buffer_duration, receiver, video, audio)
+                run_rtp_demuxer_thread(sync_point, input_buffer, receiver, video, audio)
             })
             .unwrap();
     }
@@ -212,7 +213,7 @@ impl Drop for RtpInput {
 
 fn run_rtp_demuxer_thread(
     sync_point: Instant,
-    buffer_duration: Duration,
+    input_buffer: InputBuffer,
     receiver: Receiver<bytes::Bytes>,
     video_handle: Option<RtpVideoTrackThreadHandle>,
     audio_handle: Option<RtpAudioTrackThreadHandle>,
@@ -226,12 +227,12 @@ fn run_rtp_demuxer_thread(
     let sync_point = RtpNtpSyncPoint::new(sync_point);
 
     let mut audio = audio_handle.map(|handle| TrackState {
-        time_sync: RtpTimestampSync::new(&sync_point, handle.sample_rate, buffer_duration),
+        time_sync: RtpTimestampSync::new(&sync_point, handle.sample_rate, input_buffer.clone()),
         handle,
         eos_received: false,
     });
     let mut video = video_handle.map(|handle| TrackState {
-        time_sync: RtpTimestampSync::new(&sync_point, 90_000, buffer_duration),
+        time_sync: RtpTimestampSync::new(&sync_point, 90_000, input_buffer),
         handle,
         eos_received: false,
     });
