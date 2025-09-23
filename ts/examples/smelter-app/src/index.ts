@@ -1,10 +1,12 @@
 import { SmelterInstance } from './smelter';
 import { routes } from './server/routes';
-import { TwitchChannelSuggestions } from './twitch/ChannelMonitor';
+import { TwitchChannelSuggestions } from './twitch/TwitchChannelMonitor';
+import { KickChannelSuggestions } from './kick/KickChannelMonitor';
 
 async function run() {
   console.log('Start monitoring Twitch categories.');
   void TwitchChannelSuggestions.monitor();
+  void KickChannelSuggestions.monitor();
   console.log('Start Smelter instance');
   await SmelterInstance.init();
 
