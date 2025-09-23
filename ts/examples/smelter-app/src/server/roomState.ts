@@ -123,7 +123,6 @@ export class RoomState {
       const hlsUrl = await hlsUrlForTwitchChannel(opts.twitchChannelId);
       const monitor = await TwitchChannelMonitor.startMonitor(opts.twitchChannelId);
 
-
       const inputState: RoomInputState = {
         inputId,
         type: `twitch-channel`,

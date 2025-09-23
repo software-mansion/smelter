@@ -1,13 +1,11 @@
 import { URLSearchParams } from 'url';
 
-// Object to keep the token and clientId
 const twitchAuth = {
   token: null as string | null,
   clientId: null as string | null,
   tokenPromise: null as Promise<void> | null,
 };
 
-// Helper to get config from env
 function getConfig(): { clientId: string; clientSecret: string } | null {
   const clientId = process.env.TWITCH_CLIENT_ID;
   const clientSecret = process.env.TWITCH_CLIENT_SECRET;
@@ -21,17 +19,14 @@ function getConfig(): { clientId: string; clientSecret: string } | null {
   };
 }
 
-// Wrapper around fetch that handles token refresh on 401
 async function twitchFetch(
   input: RequestInfo,
   init: RequestInit = {},
   retry = true
 ): Promise<Response> {
-  // Ensure we have a token
   if (!twitchAuth.token) {
     await refreshTwitchToken();
   }
-  // Attach Authorization header
   const headers = new Headers(init.headers || {});
   if (twitchAuth.token && twitchAuth.clientId) {
     headers.set('Client-ID', twitchAuth.clientId);
@@ -39,7 +34,6 @@ async function twitchFetch(
   }
   let response = await fetch(input, { ...init, headers });
   if (response.status === 401 && retry) {
-    // Token expired or invalid, refresh and retry once
     await refreshTwitchToken(true);
     if (twitchAuth.token && twitchAuth.clientId) {
       headers.set('Client-ID', twitchAuth.clientId);
@@ -50,9 +44,7 @@ async function twitchFetch(
   return response;
 }
 
-// Refresh the token and update twitchAuth
 async function refreshTwitchToken(force = false): Promise<void> {
-  // Prevent concurrent refreshes
   if (twitchAuth.tokenPromise && !force) {
     await twitchAuth.tokenPromise;
     return;
