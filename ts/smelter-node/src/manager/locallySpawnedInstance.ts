@@ -14,7 +14,7 @@ import type {
 import { download, sendRequest, sendMultipartRequest } from '../fetch';
 import { retry, sleep } from '../utils';
 import type { SpawnPromise } from '../spawn';
-import { killProcess, spawn } from '../spawn';
+import { killProcess, spawn, spawn_ffmpeg } from '../spawn';
 import { WebSocketConnection } from '../ws';
 import { smelterInstanceLoggerOptions } from '../logger';
 import { getSmelterStatus } from '../getSmelterStatus';
@@ -140,6 +140,9 @@ class LocallySpawnedInstanceManager implements SmelterManager {
 }
 
 async function prepareExecutable(enableWebRenderer?: boolean): Promise<string> {
+  const { version: ffmpegVersion, linkDirectories } = await checkFFmpeg();
+  console.log(ffmpegVersion);
+  console.log(linkDirectories);
   const version = enableWebRenderer ? `${VERSION}-web` : VERSION;
   const downloadDir = path.join(os.homedir(), '.smelter', version, architecture());
   const readyFilePath = path.join(downloadDir, '.ready');
@@ -183,7 +186,64 @@ function architecture(): 'linux_aarch64' | 'linux_x86_64' | 'darwin_x86_64' | 'd
 function smelterTarGzUrl(withWebRenderer?: boolean): string {
   const archiveNameSuffix = withWebRenderer ? '_with_web_renderer' : '';
   const archiveName = `smelter${archiveNameSuffix}_${architecture()}.tar.gz`;
+
+  // TODO: This will have to be set to new URL for that takes multiple releases
+  // for different FFmpeg versions into account
   return `https://github.com/software-mansion/smelter/releases/download/${VERSION}/${archiveName}`;
+}
+
+async function checkFFmpeg(): Promise<{ version: string; linkDirectories: string[] }> {
+  const arch = architecture();
+  // Empty for linux at the moment
+  const env = arch.includes('darwin') ? { DYLD_PRINT_LIBRARIES: '1' } : {};
+  const re = /^ffmpeg version (\d+)\.\S+/;
+  try {
+    const { stdout, stderr } = await spawn_ffmpeg({
+      env: { ...process.env, ...env },
+    });
+    const matches = stdout?.match(re);
+    const version = matches?.at(1);
+    if (!version) {
+      throw new Error('Could not parse FFmpeg version');
+    }
+
+    const linkDirectories = parseFFmpegDependenciesDarwin(stderr ?? '');
+    return { version, linkDirectories };
+  } catch {
+    throw new Error('FFmpeg not installed or unavailable');
+  }
+}
+
+function parseFFmpegDependenciesDarwin(libraries: string): string[] {
+  const ffmpegDeps = [
+    'libavutil',
+    'libavcodec',
+    'libavformat',
+    'libavdevice',
+    'libavfilter',
+    'libswscale',
+    'libswresample',
+  ];
+
+  const librariesLines = libraries.split('\n');
+
+  const depCheck = (line: string) => {
+    const truncLine = line.slice(line.indexOf('/'));
+    return ffmpegDeps.some((dep: string) => truncLine.includes(dep));
+  };
+  const depLibraries = librariesLines
+    .filter(depCheck)
+    .map((line: string) => line.slice(line.indexOf('/')))
+    .filter((line: string) => line.length > 0);
+
+  const depDirectories: string[] = [];
+  for (const libPath of depLibraries) {
+    const dir = path.dirname(libPath);
+    if (!depDirectories.includes(dir)) {
+      depDirectories.push(dir);
+    }
+  }
+  return depDirectories;
 }
 
 export default LocallySpawnedInstanceManager;

@@ -46,6 +46,37 @@ export function spawn(command: string, args: string[], options: SpawnOptions): S
   return promise;
 }
 
+export function spawn_ffmpeg(options: SpawnOptions): Promise<{ stdout?: string; stderr?: string }> {
+  const child = nodeSpawn('ffmpeg', ['-version'], {
+    stdio: 'pipe',
+    ...options,
+  });
+  let stdout: string = '';
+  let stderr: string = '';
+  const promise = new Promise((res, rej) => {
+    child.on('error', err => {
+      rej(err);
+    });
+    child.on('exit', code => {
+      if (code === 0) {
+        res({ stdout, stderr });
+      } else {
+        let err = new Error(`FFmpeg failed with exit code ${code}.`);
+        (err as any).stdout = stdout;
+        (err as any).stderr = stderr;
+        rej(err);
+      }
+    });
+    child.stdout?.on('data', chunk => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on('data', chunk => {
+      stderr += chunk.toString();
+    });
+  }) as Promise<{ stdout?: string; stderr?: string }>;
+  return promise;
+}
+
 export async function killProcess(spawnPromise: SpawnPromise): Promise<void> {
   spawnPromise.child.kill('SIGINT');
   const start = Date.now();
