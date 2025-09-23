@@ -123,10 +123,6 @@ export class RoomState {
       const hlsUrl = await hlsUrlForTwitchChannel(opts.twitchChannelId);
       const monitor = await TwitchChannelMonitor.startMonitor(opts.twitchChannelId);
 
-      if (this.inputs.find(input => input.inputId === inputId)) {
-        monitor.stop();
-        throw new Error(`Input for Twitch channel ${opts.twitchChannelId} already exists.`);
-      }
 
       const inputState: RoomInputState = {
         inputId,
@@ -207,7 +203,7 @@ export class RoomState {
     const input = this.getInput(inputId);
     this.inputs = this.inputs.filter(input => input.inputId !== inputId);
     this.updateStoreWithState();
-    if (input.type === 'twitch-channel') {
+    if (input.type === 'twitch-channel' || input.type === 'kick-channel') {
       input.monitor.stop();
     }
 
@@ -292,7 +288,7 @@ export class RoomState {
     const inputs = this.inputs;
     this.inputs = [];
     for (const input of inputs) {
-      if (input.type === 'twitch-channel') {
+      if (input.type === 'twitch-channel' || input.type === 'kick-channel') {
         input.monitor.stop();
       }
       try {
