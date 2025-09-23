@@ -30,8 +30,9 @@ use crate::{
         webrtc::{
             error::WhipWhepServerError,
             supported_video_codec_parameters::{
-                get_video_h264_codecs_for_codec_preferences,
-                get_video_h264_codecs_for_media_engine, get_video_vp8_codecs, get_video_vp9_codecs,
+                get_video_h264_codec, get_video_h264_codec_with_default_payload_type,
+                get_video_vp8_codec, get_video_vp8_codec_with_default_payload_type,
+                get_video_vp9_codec, get_video_vp9_codec_with_default_payload_type,
             },
         },
         PipelineCtx,
@@ -228,22 +229,22 @@ fn media_engine_with_codecs(
     for video_decoder in video_preferences {
         match video_decoder {
             VideoDecoderOptions::FfmpegH264 => {
-                for codec in get_video_h264_codecs_for_media_engine() {
+                for codec in get_video_h264_codec() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
             VideoDecoderOptions::VulkanH264 => {
-                for codec in get_video_h264_codecs_for_media_engine() {
+                for codec in get_video_h264_codec() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
             VideoDecoderOptions::FfmpegVp8 => {
-                for codec in get_video_vp8_codecs() {
+                for codec in get_video_vp8_codec() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
             VideoDecoderOptions::FfmpegVp9 => {
-                for codec in get_video_vp9_codecs() {
+                for codec in get_video_vp9_codec() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
@@ -256,9 +257,9 @@ fn media_engine_with_codecs(
 fn map_video_decoder_to_rtp_codec_parameters(
     video_preferences: &Vec<VideoDecoderOptions>,
 ) -> Vec<RTCRtpCodecParameters> {
-    let video_vp8_codec = get_video_vp8_codecs();
-    let video_vp9_codec = get_video_vp9_codecs();
-    let video_h264_codecs = get_video_h264_codecs_for_codec_preferences();
+    let video_vp8_codec = get_video_vp8_codec_with_default_payload_type();
+    let video_vp9_codec = get_video_vp9_codec_with_default_payload_type();
+    let video_h264_codecs = get_video_h264_codec_with_default_payload_type();
 
     let mut codec_list = Vec::new();
 

@@ -20,7 +20,9 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtp_transceiver::rtp_codec::{RTCRtpCodecParameters, RTPCodecType};
 
 use crate::pipeline::webrtc::supported_video_codec_parameters::{
-    get_video_h264_codecs_for_media_engine, get_video_vp8_codecs, get_video_vp9_codecs,
+    get_video_h264_codec, get_video_h264_codec_with_default_payload_type, get_video_vp8_codec,
+    get_video_vp8_codec_with_default_payload_type, get_video_vp9_codec,
+    get_video_vp9_codec_with_default_payload_type,
 };
 use crate::prelude::*;
 
@@ -113,15 +115,14 @@ impl WhepClientTask {
         frame_sender: Sender<PipelineEvent<Frame>>,
     ) -> Result<Self, WhepInputError> {
         let client = WhepHttpClient::new(&options)?;
-        let (video_preferences, video_codecs_to_register) =
+        let (video_preferences, video_codecs_to_register, video_pref) =
             resolve_video_preferences(&ctx, options.video_preferences)?;
         let pc = PeerConnection::new(&ctx, &video_codecs_to_register).await?;
 
-        let _video_transceiver = pc.new_video_track(&video_codecs_to_register).await?;
+        let _video_transceiver = pc.new_video_track(&video_pref).await?;
         let _audio_transceiver = pc.new_audio_track().await?;
 
         let (_session_url, answer) = exchange_sdp_offers(&pc, &client).await?;
-
         pc.set_remote_description(answer).await?;
         {
             let sync_point = RtpNtpSyncPoint::new(ctx.queue_sync_point);
@@ -131,7 +132,7 @@ impl WhepClientTask {
                     "on_track called"
                 );
 
-                let span = span!(Level::INFO, "WHEP input track", track_type =? track.kind());
+                let span = span!(Level::INFO, "WHEP input track", track_type=?track.kind());
 
                 match track.kind() {
                     RTPCodecType::Audio => {
@@ -241,11 +242,28 @@ async fn handle_trickle_candidate(
     };
 }
 
+#[allow(clippy::type_complexity)] //TODO
 fn resolve_video_preferences(
     ctx: &Arc<PipelineCtx>,
     video_preferences: Vec<WebrtcVideoDecoderOptions>,
-) -> Result<(Vec<VideoDecoderOptions>, Vec<RTCRtpCodecParameters>), WhepInputError> {
+) -> Result<
+    (
+        Vec<VideoDecoderOptions>,
+        Vec<RTCRtpCodecParameters>,
+        Vec<RTCRtpCodecParameters>,
+    ),
+    WhepInputError,
+> {
     let vulkan_supported = ctx.graphics_context.has_vulkan_support();
+    let only_vulkan_in_preferences = video_preferences
+        .iter()
+        .all(|pref| matches!(pref, WebrtcVideoDecoderOptions::VulkanH264));
+    if !vulkan_supported && only_vulkan_in_preferences {
+        return Err(WhepInputError::DecoderInitError(
+            DecoderInitError::VulkanContextRequiredForVulkanDecoder,
+        ));
+    };
+
     let video_preferences: Vec<VideoDecoderOptions> = video_preferences
         .into_iter()
         .flat_map(|preference| match preference {
@@ -275,23 +293,22 @@ fn resolve_video_preferences(
         .unique()
         .collect();
 
-    if video_preferences.is_empty() {
-        return Err(WhepInputError::DecoderInitError(
-            DecoderInitError::VulkanContextRequiredForVulkanDecoder,
-        ));
-    }
-
+    // both necessary to work properly
     let mut video_codecs: Vec<RTCRtpCodecParameters> = Vec::new();
+    let mut video_pref: Vec<RTCRtpCodecParameters> = Vec::new();
     for pref in &video_preferences {
         match pref {
             VideoDecoderOptions::FfmpegH264 | VideoDecoderOptions::VulkanH264 => {
-                video_codecs.extend(get_video_h264_codecs_for_media_engine()); //assume that for preferences and media engine can be codecs with explicit payload types in WHEP input
+                video_codecs.extend(get_video_h264_codec());
+                video_pref.extend(get_video_h264_codec_with_default_payload_type());
             }
             VideoDecoderOptions::FfmpegVp8 => {
-                video_codecs.extend(get_video_vp8_codecs());
+                video_codecs.extend(get_video_vp8_codec());
+                video_pref.extend(get_video_vp8_codec_with_default_payload_type());
             }
             VideoDecoderOptions::FfmpegVp9 => {
-                video_codecs.extend(get_video_vp9_codecs());
+                video_codecs.extend(get_video_vp9_codec());
+                video_pref.extend(get_video_vp9_codec_with_default_payload_type());
             }
         }
     }
@@ -305,5 +322,14 @@ fn resolve_video_preferences(
             )
         })
         .collect();
-    Ok((video_preferences, video_codecs))
+    let video_pref = video_pref
+        .into_iter()
+        .unique_by(|c| {
+            (
+                c.capability.mime_type.clone(),
+                c.capability.sdp_fmtp_line.clone(),
+            )
+        })
+        .collect();
+    Ok((video_preferences, video_codecs, video_pref))
 }
