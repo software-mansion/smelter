@@ -1,10 +1,11 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tools::paths::{git_root, tools_root};
 
-use anyhow::{anyhow, Result};
-use log::info;
+use anyhow::{bail, Result};
+use regex::Regex;
+use tracing::info;
 
 use crate::utils;
 use crate::utils::SmelterBin;
@@ -75,6 +76,42 @@ fn bundle_app(
         cargo_build_dir.join("main_process"),
         workdir.join("smelter/smelter"),
     )?;
+    info!("Changing dependency paths to @rpath dependent");
+    let output = Command::new("otool")
+        .arg("-L")
+        .arg(workdir.join("smelter/smelter").to_str().unwrap())
+        .output()?;
+
+    let output = String::from_utf8(output.stdout)?;
+    let brew_prefix_output = Command::new("brew").arg("--prefix").output()?;
+    let brew_prefix = regex::escape(String::from_utf8(brew_prefix_output.stdout)?.trim());
+
+    let re = Regex::new(&format!("(?m)({brew_prefix}\\S+)"))?;
+    for (_, [path]) in re.captures_iter(&output).map(|c| c.extract()) {
+        let path_buf = PathBuf::from(path);
+        let basename = path_buf.file_name().unwrap().to_str().unwrap();
+        let exit_code = Command::new("install_name_tool")
+            .args([
+                "-change",
+                path,
+                &format!("@rpath/{basename}"),
+                workdir.join("smelter/smelter").to_str().unwrap(),
+            ])
+            .spawn()?
+            .wait()?
+            .code();
+        if exit_code != Some(0) {
+            bail!("Command \"install_name_tool\" failed with exit code: {exit_code:?}");
+        }
+    }
+
+    let changed_deps_output = Command::new("otool")
+        .arg("-L")
+        .arg(workdir.join("smelter/smelter").to_str().unwrap())
+        .output()?;
+    let changed_deps = String::from_utf8(changed_deps_output.stdout)?;
+
+    info!(smelter_otool_output = %changed_deps);
 
     info!("Create tar.gz archive.");
     let exit_code = Command::new("tar")
@@ -84,7 +121,7 @@ fn bundle_app(
         .wait()?
         .code();
     if exit_code != Some(0) {
-        return Err(anyhow!("Command tar failed with exit code {:?}", exit_code));
+        bail!("Command \"tar\" failed with exit code {exit_code:?}")
     }
 
     Ok(())
