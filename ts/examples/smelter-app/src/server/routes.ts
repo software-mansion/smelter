@@ -3,10 +3,11 @@ import { Type } from '@sinclair/typebox';
 import type { Static, TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 
 import { state } from './serverState';
-import { TwitchChannelSuggestions } from '../twitch/ChannelMonitor';
+import { TwitchChannelSuggestions } from '../twitch/TwitchChannelMonitor';
 import type { RoomInputState } from './roomState';
 import { config } from '../config';
 import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
+import { KickChannelSuggestions } from '../kick/KickChannelMonitor';
 
 type RoomIdParams = { Params: { roomId: string } };
 type RoomAndInputIdParams = { Params: { roomId: string; inputId: string } };
@@ -20,6 +21,7 @@ type InputState = {
   volume: number;
 
   twitchChannelId?: string;
+  kickChannelId?: string;
 };
 
 export const routes = Fastify({
@@ -32,6 +34,11 @@ routes.get('/suggestions/mp4s', async (_req, res) => {
 
 routes.get('/suggestions/twitch', async (_req, res) => {
   res.status(200).send({ twitch: TwitchChannelSuggestions.getTopStreams() });
+});
+
+routes.get('/suggestions/kick', async (_req, res) => {
+  console.log('[request] Get kick suggestions');
+  res.status(200).send({ kick: KickChannelSuggestions.getTopStreams() });
 });
 
 //TODO: Remove this later
@@ -197,9 +204,10 @@ function publicInputState(input: RoomInputState): InputState {
       inputId: input.inputId,
       title: input.metadata.title,
       description: input.metadata.description,
-      sourceState: 'unknown',
+      sourceState: input.monitor.isLive() ? 'live' : 'offline',
       status: input.status,
       volume: input.volume,
+      kickChannelId: input.channelId,
     };
   }
   throw new Error('Unknown input state');
