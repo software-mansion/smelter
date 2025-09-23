@@ -27,7 +27,21 @@ fn get_video_rtcp_feedback() -> Vec<RTCPFeedback> {
     ]
 }
 
-pub fn get_video_vp8_codecs() -> Vec<RTCRtpCodecParameters> {
+pub fn get_video_vp8_codec() -> Vec<RTCRtpCodecParameters> {
+    vec![RTCRtpCodecParameters {
+        capability: RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP8.to_owned(),
+            clock_rate: 90000,
+            channels: 0,
+            sdp_fmtp_line: "".to_owned(),
+            rtcp_feedback: get_video_rtcp_feedback(),
+        },
+        payload_type: 96,
+        ..Default::default()
+    }]
+}
+
+pub fn get_video_vp8_codec_with_default_payload_type() -> Vec<RTCRtpCodecParameters> {
     vec![RTCRtpCodecParameters {
         capability: RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP8.to_owned(),
@@ -40,7 +54,21 @@ pub fn get_video_vp8_codecs() -> Vec<RTCRtpCodecParameters> {
     }]
 }
 
-pub fn get_video_vp9_codecs() -> Vec<RTCRtpCodecParameters> {
+pub fn get_video_vp9_codec() -> Vec<RTCRtpCodecParameters> {
+    vec![RTCRtpCodecParameters {
+        capability: RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_VP9.to_owned(),
+            clock_rate: 90000,
+            channels: 0,
+            sdp_fmtp_line: "".to_owned(),
+            rtcp_feedback: get_video_rtcp_feedback(),
+        },
+        payload_type: 98,
+        ..Default::default()
+    }]
+}
+
+pub fn get_video_vp9_codec_with_default_payload_type() -> Vec<RTCRtpCodecParameters> {
     vec![RTCRtpCodecParameters {
         capability: RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP9.to_owned(),
@@ -53,7 +81,7 @@ pub fn get_video_vp9_codecs() -> Vec<RTCRtpCodecParameters> {
     }]
 }
 
-pub fn get_video_h264_codecs_for_media_engine() -> Vec<RTCRtpCodecParameters> {
+pub fn get_video_h264_codec() -> Vec<RTCRtpCodecParameters> {
     let codec_configs = [
         (
             "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
@@ -94,7 +122,7 @@ pub fn get_video_h264_codecs_for_media_engine() -> Vec<RTCRtpCodecParameters> {
 }
 
 // When setting codec preferences, payload types should be compatible with those in the offer. Simplest way to achieve that is by setting defaults.
-pub fn get_video_h264_codecs_for_codec_preferences() -> Vec<RTCRtpCodecParameters> {
+pub fn get_video_h264_codec_with_default_payload_type() -> Vec<RTCRtpCodecParameters> {
     let codec_configs = [
         "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
         "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f",

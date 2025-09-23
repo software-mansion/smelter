@@ -33,7 +33,11 @@ fn client_code() -> Result<()> {
             "endpoint_url": endpoint_url,
             "bearer_token": token,
             "video": {
-                "decoder_preferences": ["ffmpeg_h264"]
+                "decoder_preferences": [
+                    "ffmpeg_vp9",
+                    "ffmpeg_vp8",
+                    "ffmpeg_h264",
+                ]
             }
         }),
     )?
@@ -65,7 +69,6 @@ fn client_code() -> Result<()> {
                         ]
                     }
                 },
-
             },
             "audio": {
                 "channels": "stereo",
