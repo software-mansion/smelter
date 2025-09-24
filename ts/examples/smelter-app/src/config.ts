@@ -36,6 +36,7 @@ export const config: Config =
           preset: 'ultrafast',
           ffmpegOptions: {
             tune: 'zerolatency',
+            thread_type: 'slice',
           },
         },
       };
