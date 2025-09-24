@@ -1,0 +1,290 @@
+use anyhow::{bail, Context, Result};
+use regex::Regex;
+use reqwest::blocking::get;
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
+use tracing::{error, info, warn};
+
+const FFMPEG_LIB_DIR: &str = "ffmpeg_lib";
+const FFMPEG_DOWNLOAD_DIR: &str = "ffmpeg_download";
+
+#[cfg(target_os = "macos")]
+const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.gz";
+
+#[cfg(target_os = "linux")]
+const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.xz";
+
+fn main() -> Result<()> {
+    tracing_subscriber::fmt().init();
+
+    #[allow(clippy::option_env_unwrap)]
+    let (required_ffmpeg_version, ffmpeg_url) = (
+        option_env!("FFMPEG_VERSION").unwrap(),
+        option_env!("FFMPEG_URL").unwrap(),
+    );
+
+    let executable_path =
+        env::current_exe().with_context(|| "Failed to get current executable directory.")?;
+    let executable_dir = executable_path.parent();
+    let executable_dir = match executable_dir {
+        Some(path) => path.to_path_buf(),
+        None => bail!("Failed to get current executable directory."),
+    };
+
+    let lib_exists = fs::exists(executable_dir.join(FFMPEG_LIB_DIR))
+        .with_context(|| "Failed to check if local ffmpeg lib directory exists.")?;
+    if lib_exists {
+        return Ok(());
+    }
+
+    let ffmpeg_installed = check_ffmpeg(required_ffmpeg_version);
+    let fetch_result = match ffmpeg_installed {
+        Ok(true) => Ok(()),
+        Ok(false) => {
+            info!("Downloading dependencies...");
+            prepare_dependencies(&executable_dir, ffmpeg_url)
+                .with_context(|| "Failed to fetch dependencies.")
+        }
+        Err(error) => {
+            error!(%error);
+            info!("Downloading dependencies...");
+            prepare_dependencies(&executable_dir, ffmpeg_url)
+                .with_context(|| "Failed to fetch dependencies.")
+        }
+    };
+    cleanup(&executable_dir);
+
+    fetch_result
+}
+
+fn cleanup(executable_dir: &Path) {
+    let ffmpeg_archive = executable_dir.join(FFMPEG_ARCHIVE_NAME);
+    let ffmpeg_download_dir = executable_dir.join(FFMPEG_DOWNLOAD_DIR);
+    if let Err(error) = fs::remove_file(executable_dir.join(FFMPEG_ARCHIVE_NAME)) {
+        error!(%error, "Failed to delete downloaded archive at {ffmpeg_archive:?}.");
+    }
+    if let Err(error) = fs::remove_dir_all(executable_dir.join(FFMPEG_DOWNLOAD_DIR)) {
+        error!(%error, "Failed to delete downloaded archive at {ffmpeg_download_dir:?}.");
+    }
+}
+
+fn prepare_dependencies(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
+    download_ffmpeg(executable_dir, ffmpeg_url).with_context(|| "FFmpeg download failed.")?;
+
+    let ffmpeg_archive_path = executable_dir.join(FFMPEG_ARCHIVE_NAME);
+    let ffmpeg_download_dir = executable_dir.join(FFMPEG_DOWNLOAD_DIR);
+
+    let tar_compression = if cfg!(target_os = "macos") {
+        "--gzip"
+    } else if cfg!(target_os = "linux") {
+        "--xz"
+    } else {
+        panic!("Unknown platform");
+    };
+
+    fs::create_dir(&ffmpeg_download_dir)
+        .with_context(|| format!("Failed to create directory {ffmpeg_download_dir:?}",))?;
+
+    let tar_code = Command::new("tar")
+        .args([
+            tar_compression,
+            "-xf",
+            ffmpeg_archive_path.to_str().unwrap_or(FFMPEG_ARCHIVE_NAME),
+            "-C",
+            ffmpeg_download_dir
+                .to_str()
+                .expect("Failed to convert directory path to string"),
+        ])
+        .spawn()
+        .with_context(|| "Failed to spawn `tar` process")?
+        .wait()
+        .with_context(|| "`tar` process failed")?
+        .code();
+    match tar_code {
+        Some(0) => {}
+        Some(code) => bail!("`tar` command failed with code: {code}."),
+        None => bail!("`tar` command failed."),
+    }
+    if tar_code != Some(0) {
+        bail!("`tar` command failed with code: {tar_code:?}.");
+    }
+
+    let re = if cfg!(target_os = "linux") {
+        Regex::new(r"^lib[a-zA-Z]+\.so\.\d+$")?
+    } else if cfg!(target_os = "macos") {
+        Regex::new(r"^lib[a-zA-Z]+\.\d+\.dylib$")?
+    } else {
+        panic!("Unknown platform");
+    };
+
+    let ffmpeg_libs_paths = find_ffmpeg_libs(executable_dir.join(FFMPEG_DOWNLOAD_DIR), &re)
+        .with_context(|| "Failed to extract FFmpeg libraries from downloaded archive.")?;
+    fs::create_dir(executable_dir.join(FFMPEG_LIB_DIR))?;
+    for lib in ffmpeg_libs_paths {
+        let libname = match lib.file_name() {
+            Some(name) => name.to_owned(),
+            None => {
+                error!("Unable to get library filename");
+                continue;
+            }
+        };
+        fs::rename(lib, executable_dir.join(FFMPEG_LIB_DIR).join(libname))?;
+    }
+
+    Ok(())
+}
+
+fn find_ffmpeg_libs(dirpath: PathBuf, re: &Regex) -> Result<Vec<PathBuf>> {
+    let mut libraries: Vec<PathBuf> = vec![];
+    for file in fs::read_dir(dirpath)?.flatten() {
+        if file.file_type()?.is_dir() {
+            let path = file.path();
+            libraries.extend(find_ffmpeg_libs(path, re)?);
+        } else if file.file_type()?.is_symlink() {
+            let path = file.path();
+            let filename = path
+                .file_name()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or_default();
+            if re.is_match(filename) {
+                let target_file_path =
+                    fs::read_link(&path).with_context(|| "Failed to read symlink")?;
+                let target_file_path = if target_file_path.is_absolute() {
+                    target_file_path
+                } else {
+                    let dir = match path.parent() {
+                        Some(p) => p,
+                        None => bail!("Failed to find parent directory of {path:?}"),
+                    };
+                    dir.join(target_file_path)
+                };
+                fs::remove_file(&path).with_context(|| "Symlink removal failed")?;
+                fs::rename(target_file_path, &path).with_context(|| "Failed to rename file")?;
+                libraries.push(path);
+            }
+        } else if file.file_type()?.is_file() {
+            let path = file.path();
+            let filename = path
+                .file_name()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or_default();
+            if re.is_match(filename) {
+                libraries.push(path);
+            }
+        } else {
+            unreachable!();
+        }
+    }
+    Ok(libraries)
+}
+
+fn download_ffmpeg(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
+    let response = get(ffmpeg_url)
+        .with_context(|| format!("Failed to download FFmpeg libraries. URL: {ffmpeg_url}"))?;
+    let content = response.bytes()?;
+
+    fs::write(executable_dir.join(FFMPEG_ARCHIVE_NAME), &content)
+        .with_context(|| "Failed to save downloaded FFmpeg libraries to file")?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
+    check_ffmpeg_command(required_ffmpeg_version)
+}
+
+#[cfg(target_os = "macos")]
+fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
+    let command_result = check_ffmpeg_command(required_ffmpeg_version)?;
+    if !command_result {
+        info!("Checking if ffmpeg is installed as homebrew keg-only");
+        return check_ffmpeg_homebrew(required_ffmpeg_version);
+    }
+    Ok(command_result)
+}
+
+fn check_ffmpeg_command(required_ffmpeg_version: &str) -> Result<bool> {
+    let ffmpeg_result = Command::new("ffmpeg").arg("-version").output();
+    match ffmpeg_result {
+        Ok(ffmpeg_output) => {
+            let ffmpeg_output = String::from_utf8(ffmpeg_output.stdout)?.trim().to_string();
+            match match_ffmpeg_version(&ffmpeg_output) {
+                Some(version) if version == required_ffmpeg_version => Ok(true),
+                Some(version) => {
+                    warn!(
+                        installed_ffmpeg_version = version,
+                        required_ffmpeg_version,
+                        "Inatelled version doesn't match the required version."
+                    );
+                    Ok(false)
+                }
+                None => {
+                    warn!("Failed to parse FFmpeg version.");
+                    Ok(false)
+                }
+            }
+        }
+        Err(_) => {
+            warn!("Failed to run FFmpeg.");
+            Ok(false)
+        }
+    }
+}
+
+fn match_ffmpeg_version(ffmpeg_output: &str) -> Option<&str> {
+    let re = Regex::new(r"(?m)^ffmpeg version \D*(\d+\.\d+)")
+        .expect("Failed to compile regular expression");
+    let caps = re.captures(ffmpeg_output);
+    match caps {
+        Some(caps) => caps.get(1).map(|cap| cap.as_str()),
+        None => {
+            warn!("Failed to parse FFmpeg version.");
+            None
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn check_ffmpeg_homebrew(required_ffmpeg_version: &str) -> Result<bool> {
+    let required_ffmpeg_version_brew =
+        &required_ffmpeg_version[..required_ffmpeg_version.find(".").unwrap_or(1)];
+    let brew_output = Command::new("brew").arg("list").output()?;
+    let brew_output = String::from_utf8(brew_output.stdout)?.trim().to_string();
+
+    let ffmpeg_string = format!("ffmpeg@{required_ffmpeg_version_brew}");
+
+    let re = Regex::new(&format!("(?m){ffmpeg_string}"))?;
+    if re.is_match(&brew_output) {
+        Ok(true)
+    } else {
+        warn!("FFmpeg installation not found in homebrew");
+        Ok(false)
+    }
+}
+
+#[cfg(test)]
+mod dependency_check_test {
+    use super::*;
+
+    #[test]
+    fn ffmpeg_regex_test() {
+        const FFMPEG_OUTPUT_MAC: &str =
+            "ffmpeg version 8.0 Copyright (c) 2000-2025 the FFmpeg developers
+built with Apple clang version 17.0.0 (clang-1700.0.13.3)";
+
+        let actual_version_mac = match_ffmpeg_version(FFMPEG_OUTPUT_MAC).unwrap();
+        assert_eq!(actual_version_mac, "8.0");
+
+        const FFMPEG_OUTPUT_LINUX: &str =
+            "ffmpeg version n7.1.1 Copyright (c) 2000-2025 the FFmpeg developers
+built with gcc 15.1.1 (GCC) 20250425";
+
+        let actual_version_linux = match_ffmpeg_version(FFMPEG_OUTPUT_LINUX).unwrap();
+        assert_eq!(actual_version_linux, "7.1");
+    }
+}
