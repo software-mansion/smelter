@@ -62,7 +62,8 @@ ENV NODE_VERSION=24.6.0
 
 RUN apt-get update -y -qq && \
   apt-get install -y \
-    sudo build-essential curl adduser ffmpeg streamlink && \
+    sudo build-essential curl adduser ffmpeg pipx \
+    libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev mesa-vulkan-drivers && \
   rm -rf /var/lib/apt/lists/*
 
 RUN ARCH= && dpkgArch="$(dpkg --print-architecture)" \
@@ -88,12 +89,15 @@ USER $USERNAME
 RUN mkdir -p /home/$USERNAME/smelter
 WORKDIR /home/$USERNAME/smelter
 
+RUN pipx install streamlink
+
 COPY --from=builder --chown=$USERNAME:$USERNAME /root/project/target/release/main_process /home/$USERNAME/smelter/main_process
 COPY --from=builder --chown=$USERNAME:$USERNAME /root/project/ts /home/$USERNAME/smelter/ts
 
 ENV SMELTER_WEB_RENDERER_ENABLE=0
 ENV SMELTER_WEB_RENDERER_GPU_ENABLE=0
 ENV SMELTER_PATH=/home/smelter/smelter/main_process
+ENV PATH=/home/smelter/.local/bin:$PATH
 
 WORKDIR /home/$USERNAME/smelter/ts/examples/smelter-app
 
