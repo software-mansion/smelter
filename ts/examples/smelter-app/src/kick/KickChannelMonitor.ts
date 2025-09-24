@@ -14,10 +14,10 @@ class KickChannelSuggestionsMonitor {
       try {
         console.log(`[kick] Refresh category info.`);
         await this.refreshCategoryInfo(KICK_CATEGORIES);
-        await sleep(60_000);
       } catch (err) {
         console.log('[kick] Failed to refresh channel information', err);
       }
+      await sleep(60_000);
     }
   }
 
