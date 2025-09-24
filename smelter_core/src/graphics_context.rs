@@ -54,8 +54,8 @@ impl GraphicsContext {
                 Some(path) => vk_video::VulkanInstance::new_from(path),
                 None => vk_video::VulkanInstance::new(),
             }?;
-            let device =
-                instance.create_device(vulkan_features, limits.clone(), compatible_surface)?;
+            let adapter = instance.create_adapter(compatible_surface)?;
+            let device = adapter.create_device(vulkan_features, limits.clone())?;
             Ok((instance, device))
         };
 

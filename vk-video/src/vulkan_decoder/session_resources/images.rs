@@ -3,9 +3,10 @@ use std::sync::{Arc, Mutex};
 use ash::vk;
 
 use crate::{
+    device::DecodingDevice,
     vulkan_decoder::Image,
     wrappers::{CodingImageBundle, CommandBuffer, DecodedPicturesBuffer, H264DecodeProfileInfo},
-    VulkanDecoderError, VulkanDevice,
+    VulkanDecoderError,
 };
 
 pub(crate) struct DecodingImages<'a> {
@@ -41,7 +42,7 @@ impl<'a> DecodingImages<'a> {
     }
 
     pub(crate) fn new(
-        vulkan_ctx: &VulkanDevice,
+        decoding_device: &DecodingDevice,
         command_buffer: &CommandBuffer,
         profile: &H264DecodeProfileInfo,
         dpb_format: &vk::VideoFormatPropertiesKHR<'a>,
@@ -59,12 +60,12 @@ impl<'a> DecodingImages<'a> {
         };
 
         let queue_indices = [
-            vulkan_ctx.queues.transfer.idx as u32,
-            vulkan_ctx.queues.h264_decode.idx as u32,
+            decoding_device.queues.transfer.idx as u32,
+            decoding_device.h264_decode_queue.idx as u32,
         ];
 
         let dpb = DecodedPicturesBuffer::new(
-            vulkan_ctx,
+            decoding_device,
             command_buffer,
             false,
             &profile.profile_info,
@@ -86,7 +87,7 @@ impl<'a> DecodingImages<'a> {
                     & (vk::ImageUsageFlags::VIDEO_DECODE_DST_KHR
                         | vk::ImageUsageFlags::TRANSFER_SRC);
                 CodingImageBundle::new(
-                    vulkan_ctx,
+                    decoding_device,
                     command_buffer,
                     &dst_format,
                     dimensions,

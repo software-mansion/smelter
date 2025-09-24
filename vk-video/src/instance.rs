@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ash::{vk, Entry};
 
-use crate::{device::VulkanDevice, wrappers::*, VulkanInitError};
+use crate::{adapter::VulkanAdapter, wrappers::*, VulkanInitError};
 
 /// Context for all encoders, decoders. Also contains a [`wgpu::Instance`].
 pub struct VulkanInstance {
@@ -132,13 +132,24 @@ impl VulkanInstance {
         .into())
     }
 
-    pub fn create_device(
-        &self,
-        wgpu_features: wgpu::Features,
-        wgpu_limits: wgpu::Limits,
-        compatible_surface: Option<&wgpu::Surface<'_>>,
-    ) -> Result<Arc<VulkanDevice>, VulkanInitError> {
-        Ok(VulkanDevice::new(self, wgpu_features, wgpu_limits, compatible_surface)?.into())
+    /// Creates adapter that supports both decoding and encoding.
+    ///
+    /// If your hardware supports only decoding or encoding, use [`VulkanInstance::iter_adapters`] and choose adapter manually.
+    pub fn create_adapter<'a>(
+        &'a self,
+        compatible_surface: Option<&'a wgpu::Surface<'_>>,
+    ) -> Result<VulkanAdapter<'a>, VulkanInitError> {
+        self.iter_adapters(compatible_surface)?
+            .find(|a| a.supports_decoding() && a.supports_encoding())
+            .ok_or(VulkanInitError::NoDevice)
+    }
+
+    /// Iterator over all available [`VulkanAdapter`]s that support at least decoding or encoding.
+    pub fn iter_adapters<'a>(
+        &'a self,
+        compatible_surface: Option<&'a wgpu::Surface<'_>>,
+    ) -> Result<impl Iterator<Item = VulkanAdapter<'a>> + 'a, VulkanInitError> {
+        crate::adapter::iter_adapters(self, compatible_surface)
     }
 }
 

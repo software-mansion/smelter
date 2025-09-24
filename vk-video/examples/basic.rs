@@ -19,7 +19,8 @@ fn main() {
     let h264_bytestream = std::fs::read(&args[1]).unwrap_or_else(|_| panic!("read {}", args[1]));
 
     let vulkan_instance = VulkanInstance::new().unwrap();
-    let vulkan_device = vulkan_instance
+    let vulkan_adapter = vulkan_instance.create_adapter(None).unwrap();
+    let vulkan_device = vulkan_adapter
         .create_device(
             wgpu::Features::empty(),
             wgpu::Limits {
@@ -27,7 +28,6 @@ fn main() {
                 max_push_constant_size: 128,
                 ..Default::default()
             },
-            None,
         )
         .unwrap();
 
