@@ -144,7 +144,7 @@ impl RtpInput {
                 (ctx.clone(), DepayloaderOptions::Vp9, sender),
             )?,
             VideoDecoderOptions::VulkanH264 => {
-                if !ctx.graphics_context.has_vulkan_support() {
+                if !ctx.graphics_context.has_vulkan_decoder_support() {
                     return Err(DecoderInitError::VulkanContextRequiredForVulkanDecoder);
                 }
                 RtpVideoThread::<VulkanH264Decoder>::spawn(
