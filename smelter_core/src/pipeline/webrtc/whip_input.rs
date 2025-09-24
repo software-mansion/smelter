@@ -97,7 +97,7 @@ fn resolve_video_preferences(
     video_preferences: Vec<WhipVideoDecoderOptions>,
     ctx: &Arc<PipelineCtx>,
 ) -> Result<Vec<VideoDecoderOptions>, InputInitError> {
-    let vulkan_supported = ctx.graphics_context.has_vulkan_support();
+    let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
     let video_preferences: Vec<VideoDecoderOptions> = video_preferences
         .into_iter()
         .flat_map(|preference| match preference {

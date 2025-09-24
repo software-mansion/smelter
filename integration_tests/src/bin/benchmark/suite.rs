@@ -491,7 +491,7 @@ fn benchmark_set_encoder_only(ctx: &'static BenchmarkSuiteContext) -> Vec<Benchm
 
 #[cfg(not(target_os = "macos"))]
 fn supported_decoders(ctx: &BenchmarkSuiteContext) -> Vec<VideoDecoderOptions> {
-    match ctx.wgpu_ctx.vulkan_ctx.is_some() {
+    match ctx.wgpu_ctx.has_vulkan_decoder_support() {
         true => vec![
             VideoDecoderOptions::VulkanH264,
             VideoDecoderOptions::FfmpegH264,
@@ -507,7 +507,7 @@ fn supported_decoders(_ctx: &BenchmarkSuiteContext) -> Vec<VideoDecoderOptions> 
 
 #[cfg(not(target_os = "macos"))]
 fn supported_encoders(ctx: &BenchmarkSuiteContext) -> Vec<EncoderOptions> {
-    match ctx.wgpu_ctx.vulkan_ctx.is_some() {
+    match ctx.wgpu_ctx.has_vulkan_encoder_support() {
         true => vec![
             EncoderOptions::VulkanH264,
             EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Fast),

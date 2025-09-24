@@ -32,6 +32,7 @@ pub struct GraphicsContextOptions<'a> {
 impl GraphicsContext {
     #[cfg(feature = "vk-video")]
     pub fn new(opts: GraphicsContextOptions) -> Result<Self, InitPipelineError> {
+        use itertools::Itertools;
         use smelter_render::{required_wgpu_features, set_required_wgpu_limits};
         use tracing::warn;
         use vk_video::VulkanInitError;
@@ -54,7 +55,15 @@ impl GraphicsContext {
                 Some(path) => vk_video::VulkanInstance::new_from(path),
                 None => vk_video::VulkanInstance::new(),
             }?;
-            let adapter = instance.create_adapter(compatible_surface)?;
+            let adapter = instance
+                .iter_adapters(compatible_surface)?
+                .sorted_by_key(|a| match (a.supports_decoding(), a.supports_encoding()) {
+                    (true, true) => 0,
+                    (true, false) | (false, true) => 1,
+                    (false, false) => 2,
+                })
+                .next()
+                .ok_or(VulkanInitError::NoDevice)?;
             let device = adapter.create_device(vulkan_features, limits.clone())?;
             Ok((instance, device))
         };
@@ -116,11 +125,26 @@ impl GraphicsContext {
     }
 
     #[cfg(feature = "vk-video")]
-    pub fn has_vulkan_support(&self) -> bool {
-        self.vulkan_ctx.is_some()
+    pub fn has_vulkan_decoder_support(&self) -> bool {
+        self.vulkan_ctx
+            .as_ref()
+            .map(|ctx| ctx.device.supports_decoding())
+            .unwrap_or(false)
     }
     #[cfg(not(feature = "vk-video"))]
-    pub fn has_vulkan_support(&self) -> bool {
+    pub fn has_vulkan_decoder_support(&self) -> bool {
+        false
+    }
+
+    #[cfg(feature = "vk-video")]
+    pub fn has_vulkan_encoder_support(&self) -> bool {
+        self.vulkan_ctx
+            .as_ref()
+            .map(|ctx| ctx.device.supports_encoding())
+            .unwrap_or(false)
+    }
+    #[cfg(not(feature = "vk-video"))]
+    pub fn has_vulkan_encoder_support(&self) -> bool {
         false
     }
 }

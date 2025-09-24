@@ -161,7 +161,7 @@ impl HlsInput {
             input_buffer_size: 2000,
         };
 
-        let vulkan_supported = ctx.graphics_context.has_vulkan_support();
+        let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
         let h264_decoder = video_decoders.h264.unwrap_or({
             match vulkan_supported {
                 true => VideoDecoderOptions::VulkanH264,
