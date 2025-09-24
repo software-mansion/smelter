@@ -9,14 +9,14 @@ fn main() {
     tracing::subscriber::set_global_default(subscriber).expect("Failed to initialize tracing");
 
     let vulkan_instance = VulkanInstance::new().unwrap();
-    let vulkan_device = vulkan_instance
+    let vulkan_adapter = vulkan_instance.create_adapter(None).unwrap();
+    let vulkan_device = vulkan_adapter
         .create_device(
             wgpu::Features::empty(),
             wgpu::Limits {
                 max_push_constant_size: 128,
                 ..Default::default()
             },
-            None,
         )
         .unwrap();
 
