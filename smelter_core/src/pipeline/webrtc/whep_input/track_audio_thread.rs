@@ -14,10 +14,8 @@ use crate::{
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
         },
         webrtc::{
-            error::WhipWhepServerError,
-            listen_for_rtcp::listen_for_rtcp,
-            whip_input::{negotiated_codecs::NegotiatedAudioCodecsInfo, AsyncReceiverIter},
-            WhipWhepServerState,
+            error::WhipWhepServerError, listen_for_rtcp::listen_for_rtcp,
+            whip_input::negotiated_codecs::NegotiatedAudioCodecsInfo,
         },
         PipelineCtx,
     },
@@ -27,9 +25,9 @@ use crate::{
 use crate::prelude::*;
 
 pub async fn process_audio_track(
+    ctx: Arc<PipelineCtx>,
     sync_point: Arc<RtpNtpSyncPoint>,
-    state: WhipWhepServerState,
-    endpoint_id: Arc<str>,
+    samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
 ) -> Result<(), WhipWhepServerError> {
@@ -41,10 +39,7 @@ pub async fn process_audio_track(
         ));
     };
 
-    let WhipWhepServerState { inputs, ctx, .. } = state;
-    let samples_sender =
-        inputs.get_with(&endpoint_id, |input| Ok(input.input_samples_sender.clone()))?;
-    let handle = AudioTrackThread::spawn(&endpoint_id, (ctx.clone(), samples_sender))?;
+    let handle = AudioTrackThread::spawn("WHEP input audio", (ctx.clone(), samples_sender))?;
 
     let mut timestamp_sync =
         RtpTimestampSync::new(&sync_point, 48_000, ctx.default_buffer_duration);
@@ -69,6 +64,18 @@ pub async fn process_audio_track(
         }
     }
     Ok(())
+}
+
+struct AsyncReceiverIter<T> {
+    pub receiver: tokio::sync::mpsc::Receiver<T>,
+}
+
+impl<T> Iterator for AsyncReceiverIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.receiver.blocking_recv()
+    }
 }
 
 pub(super) struct AudioTrackThreadHandle {
@@ -112,7 +119,7 @@ impl InitializableThread for AudioTrackThread {
                 // TODO: maybe queue should be able to handle packets after EOS
                 PipelineEvent::EOS => None,
             })
-            .inspect(|batch| trace!(?batch, "WHIP input produced a sample batch"));
+            .inspect(|batch| trace!(?batch, "WHEP input produced a sample batch"));
 
         let state = Self {
             stream: Box::new(result_stream),
