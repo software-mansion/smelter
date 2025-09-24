@@ -51,8 +51,7 @@ struct Track {
 }
 
 impl HlsInput {
-    const PREFERABLE_BUFFER_SIZE: usize = 30;
-    const MIN_BUFFER_SIZE: usize = Self::PREFERABLE_BUFFER_SIZE / 2;
+    const MIN_BUFFER_SIZE: Duration = Duration::from_secs(1);
 
     pub fn new_input(
         ctx: Arc<PipelineCtx>,
@@ -60,9 +59,7 @@ impl HlsInput {
         opts: HlsInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
-        let buffer_duration = opts
-            .buffer_duration
-            .unwrap_or(Duration::from_secs_f64(10.0));
+        let buffer_duration = opts.buffer_duration.unwrap_or(Duration::from_secs(2));
 
         let input_ctx = FfmpegInputContext::new(&opts.url, should_close.clone())?;
         let (audio, samples_receiver) = match input_ctx.audio_stream() {
@@ -227,7 +224,6 @@ impl HlsInput {
         mut video: Option<Track>,
     ) {
         let mut pts_offset = Duration::ZERO;
-        let start_time = Instant::now();
         loop {
             let packet = match input_ctx.read_packet() {
                 Ok(packet) => packet,
@@ -255,11 +251,11 @@ impl HlsInput {
                     // resulting in no video or blinking. This heuristic moves the next packets forward in
                     // time. We only care about video buffer, audio uses the same offset as video
                     // to avoid audio sync issues.
+                    let min_pts =
+                        track.state.queue_start_time.elapsed() + HlsInput::MIN_BUFFER_SIZE;
                     if is_discontinuity {
                         pts_offset = Duration::ZERO;
-                    } else if track.handle.chunk_sender.len() < HlsInput::MIN_BUFFER_SIZE
-                        && start_time.elapsed() > Duration::from_secs(10)
-                    {
+                    } else if min_pts > pts + pts_offset {
                         pts_offset += Duration::from_secs_f64(0.1);
                         warn!(?pts_offset, "Increasing offset");
                     }
