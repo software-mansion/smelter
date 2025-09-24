@@ -43,7 +43,7 @@ signal-hook = { workspace = true }
 tokio-tungstenite = "0.21.0"
 wgpu = { workspace = true }
 image = { workspace = true }
-regex = "1.10.6"
+regex = { workspace = true }
 inquire = "0.7.5"
 strum = { version = "0.27", features = ["derive"] }
 fuzzy-matcher = "0.3.7"
