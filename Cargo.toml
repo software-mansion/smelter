@@ -73,6 +73,7 @@ wgpu = { version = "25.0.2", default-features = false, features = [
 tower-http = { version = "0.6.1", features = ["cors"] }
 tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
 pollster = "0.3.0"
+regex = "1.11.2"
 
 [dependencies]
 smelter-api = { workspace = true }
@@ -104,6 +105,7 @@ wgpu = { workspace = true }
 glyphon = { workspace = true }
 http-body-util = "0.1.2"
 tower-http = { workspace = true }
+regex = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 shared_memory = { workspace = true }
