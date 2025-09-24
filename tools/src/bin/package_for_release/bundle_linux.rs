@@ -5,7 +5,7 @@ use std::process::Command;
 use std::{fs, path::Path};
 use tools::paths::{git_root, tools_root};
 
-use crate::utils::{self, SmelterBin};
+use crate::utils::{self, ffmpeg_url, ffmpeg_version, SmelterBin};
 
 const X86_TARGET: &str = "x86_64-unknown-linux-gnu";
 const X86_OUTPUT_FILE: &str = "smelter_linux_x86_64.tar.gz";
@@ -46,15 +46,42 @@ fn bundle_app(
         info!("Bundling smelter without web rendering");
     }
 
+    let ffmpeg_version = ffmpeg_version()?;
+    let ffmpeg_url = ffmpeg_url(&ffmpeg_version)?;
+
+    let rustc_envs = vec![
+        ("FFMPEG_VERSION", ffmpeg_version),
+        ("FFMPEG_URL", ffmpeg_url),
+    ];
+
     let cargo_build_dir = git_root().join("target").join(target_name).join("release");
     utils::ensure_empty_dir(&workdir.join("smelter"))?;
 
     info!("Build main_process binary.");
-    utils::compile_smelter(SmelterBin::MainProcess, target_name, !enable_web_rendering)?;
+    utils::compile_smelter(
+        SmelterBin::MainProcess,
+        target_name,
+        !enable_web_rendering,
+        None,
+        None,
+    )?;
+
+    info!("Build dependency_check binary.");
+    utils::compile_smelter(
+        SmelterBin::DependencyCheck,
+        target_name,
+        false,
+        None,
+        Some(rustc_envs),
+    )?;
+    fs::copy(
+        cargo_build_dir.join("dependency_check"),
+        workdir.join("smelter/dependency_check"),
+    )?;
 
     if enable_web_rendering {
         info!("Build process_helper binary.");
-        utils::compile_smelter(SmelterBin::ChromiumHelper, target_name, false)?;
+        utils::compile_smelter(SmelterBin::ChromiumHelper, target_name, false, None, None)?;
 
         info!("Copy main_process binary.");
         fs::copy(
@@ -70,7 +97,7 @@ fn bundle_app(
 
         info!("Copy wrapper script.");
         fs::copy(
-            tools_root().join("src/bin/package_for_release/linux_runtime_wrapper.sh"),
+            tools_root().join("src/bin/package_for_release/linux_runtime_wrapper_cef.sh"),
             workdir.join("smelter/smelter"),
         )?;
 
@@ -89,6 +116,16 @@ fn bundle_app(
         info!("Copy main_process binary.");
         fs::copy(
             cargo_build_dir.join("main_process"),
+            workdir.join("smelter/smelter_main"),
+        )?;
+        info!("Copy dependency_check binary.");
+        fs::copy(
+            cargo_build_dir.join("dependency_check"),
+            workdir.join("smelter/smelter"),
+        )?;
+        info!("Copy wrapper script.");
+        fs::copy(
+            tools_root().join("src/bin/package_for_release/linux_runtime_wrapper_no_cef.sh"),
             workdir.join("smelter/smelter"),
         )?;
     }
