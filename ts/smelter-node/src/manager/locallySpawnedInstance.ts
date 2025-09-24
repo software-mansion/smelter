@@ -25,7 +25,6 @@ type ManagedInstanceOptions = {
   port: number;
   workingdir?: string;
   executablePath?: string;
-  linkDirectories?: string[];
   enableWebRenderer?: boolean;
 };
 
@@ -36,7 +35,6 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   private port: number;
   private workingdir: string;
   private executablePath?: string;
-  private linkDirectories?: string[];
   private wsConnection: WebSocketConnection;
   private enableWebRenderer?: boolean;
   private childSpawnPromise?: SpawnPromise;
@@ -45,7 +43,6 @@ class LocallySpawnedInstanceManager implements SmelterManager {
     this.port = opts.port;
     this.workingdir = opts.workingdir ?? path.join(os.tmpdir(), `smelter-${uuidv4()}`);
     this.executablePath = opts.executablePath;
-    this.linkDirectories = opts.linkDirectories;
     this.enableWebRenderer = opts.enableWebRenderer;
     this.wsConnection = new WebSocketConnection(`ws://127.0.0.1:${this.port}/ws`);
   }
@@ -59,27 +56,11 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   }
 
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
-    // TODO: (@jbrs) Handle this nicer so linkDirectories don't depend solely on set executablePath
-    const { executablePath, linkDirectories } = this.executablePath
-      ? { executablePath: this.executablePath, linkDirectories: this.linkDirectories }
-      : await prepareExecutable(this.enableWebRenderer);
+    const executablePath = this.executablePath ?? (await prepareExecutable(this.enableWebRenderer));
 
     const { level, format } = smelterInstanceLoggerOptions();
 
     let downloadDir = path.join(this.workingdir, 'download');
-
-    const arch = architecture();
-    const ldEnvMac = () => {
-      return {
-        DYLD_LIBRARY_PATH: linkDirectories?.join(':'),
-      };
-    };
-    const ldEnvLinux = () => {
-      return { LD_LIBRARY_PATH: linkDirectories?.join(':') };
-    };
-
-    const ldPath = arch.includes('darwin') ? ldEnvMac() : ldEnvLinux();
-    console.log(ldPath);
 
     const env = {
       SMELTER_DOWNLOAD_DIR: downloadDir,
@@ -89,6 +70,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       ...process.env,
       SMELTER_LOGGER_FORMAT: format,
       SMELTER_LOGGER_LEVEL: level,
+      DYLD_LIBRARY_PATH: '/usr/local/lib',
     };
     this.childSpawnPromise = spawn(executablePath, [], { env, stdio: 'inherit' });
     this.childSpawnPromise.catch(err => {
@@ -158,19 +140,16 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   }
 }
 
-async function prepareExecutable(
-  enableWebRenderer?: boolean
-): Promise<{ executablePath: string; linkDirectories: string[] }> {
-  const { version: ffmpegVersion, linkDirectories } = await checkFFmpeg();
+async function prepareExecutable(enableWebRenderer?: boolean): Promise<string> {
+  const ffmpegVersion = await checkFFmpeg();
   console.log(ffmpegVersion);
-  console.log(linkDirectories);
   const version = enableWebRenderer ? `${VERSION}-web` : VERSION;
   const downloadDir = path.join(os.homedir(), '.smelter', version, architecture());
   const readyFilePath = path.join(downloadDir, '.ready');
   const executablePath = path.join(downloadDir, 'smelter/smelter');
 
   if (await fs.pathExists(readyFilePath)) {
-    return { executablePath, linkDirectories };
+    return executablePath;
   }
   await fs.mkdirp(downloadDir);
 
@@ -187,7 +166,7 @@ async function prepareExecutable(
   await fs.remove(tarGzPath);
 
   await fs.writeFile(readyFilePath, '\n', 'utf-8');
-  return { executablePath, linkDirectories };
+  return executablePath;
 }
 
 function architecture(): 'linux_aarch64' | 'linux_x86_64' | 'darwin_x86_64' | 'darwin_aarch64' {
@@ -213,7 +192,7 @@ function smelterTarGzUrl(withWebRenderer?: boolean): string {
   return `https://github.com/software-mansion/smelter/releases/download/${VERSION}/${archiveName}`;
 }
 
-async function checkFFmpeg(): Promise<{ version: string; linkDirectories: string[] }> {
+async function checkFFmpeg(): Promise<string> {
   const arch = architecture();
   // Empty for linux at the moment
   const env = arch.includes('darwin') ? { DYLD_PRINT_LIBRARIES: '1' } : {};
@@ -222,49 +201,17 @@ async function checkFFmpeg(): Promise<{ version: string; linkDirectories: string
     const { stdout, stderr } = await spawn_ffmpeg({
       env: { ...process.env, ...env },
     });
-    const matches = stdout?.match(re);
+    const output = (stdout ?? '') + (stderr ?? '');
+    const matches = output?.match(re);
     const version = matches?.at(1);
     if (!version) {
       throw new Error('Could not parse FFmpeg version');
     }
 
-    const linkDirectories = parseFFmpegDependenciesDarwin(stderr ?? '');
-    return { version, linkDirectories };
+    return version;
   } catch {
     throw new Error('FFmpeg not installed or unavailable');
   }
-}
-
-function parseFFmpegDependenciesDarwin(libraries: string): string[] {
-  const ffmpegDeps = [
-    'libavutil',
-    'libavcodec',
-    'libavformat',
-    'libavdevice',
-    'libavfilter',
-    'libswscale',
-    'libswresample',
-  ];
-
-  const librariesLines = libraries.split('\n');
-
-  const depCheck = (line: string) => {
-    const truncLine = line.slice(line.indexOf('/'));
-    return ffmpegDeps.some((dep: string) => truncLine.includes(dep));
-  };
-  const depLibraries = librariesLines
-    .filter(depCheck)
-    .map((line: string) => line.slice(line.indexOf('/')))
-    .filter((line: string) => line.length > 0);
-
-  const depDirectories: string[] = [];
-  for (const libPath of depLibraries) {
-    const dir = path.dirname(libPath);
-    if (!depDirectories.includes(dir)) {
-      depDirectories.push(dir);
-    }
-  }
-  return depDirectories;
 }
 
 export default LocallySpawnedInstanceManager;
