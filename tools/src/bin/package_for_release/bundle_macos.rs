@@ -1,9 +1,10 @@
+use regex::Regex;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tools::paths::{git_root, tools_root};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use log::info;
 
 use crate::utils;
@@ -58,7 +59,7 @@ fn bundle_app(
         info!("Bundling smelter without web rendering.");
     }
 
-    let cargo_build_dir = git_root().join("target").join(target).join("release");
+    let cargo_build_dir = git_root().join("target").join(target).join("debug"); // XXX:
     utils::ensure_empty_dir(&workdir.join("smelter"))?;
 
     info!("Build main_process binary.");
@@ -75,6 +76,35 @@ fn bundle_app(
         cargo_build_dir.join("main_process"),
         workdir.join("smelter/smelter"),
     )?;
+    let smelter_bin_path = workdir.join("smelter/smelter");
+
+    let otool_output_bytes = Command::new("otool")
+        .arg("-L")
+        .arg(&smelter_bin_path)
+        .output()?;
+    let otool_output = String::from_utf8(otool_output_bytes.stdout)?;
+
+    let brew_prefix_bytes = Command::new("brew").arg("--prefix").output()?;
+    let brew_prefix = regex::escape(String::from_utf8(brew_prefix_bytes.stdout)?.trim());
+
+    let re = Regex::new(&format!("(?m)({brew_prefix}\\S+|@loader_path\\S+)"))?;
+    for (_, [path]) in re.captures_iter(&otool_output).map(|c| c.extract()) {
+        let path_buf = PathBuf::from(path);
+        let basename = path_buf.file_name().unwrap().to_str().unwrap();
+        let exit_code = Command::new("install_name_tool")
+            .args([
+                "-change",
+                path,
+                &format!("@rpath/{basename}"),
+                workdir.join("smelter/smelter").to_str().unwrap(),
+            ])
+            .spawn()?
+            .wait()?
+            .code();
+        if exit_code != Some(0) {
+            bail!("Command \"install_name_tool\" failed with exit code: {exit_code:?}");
+        }
+    }
 
     info!("Create tar.gz archive.");
     let exit_code = Command::new("tar")
@@ -84,7 +114,10 @@ fn bundle_app(
         .wait()?
         .code();
     if exit_code != Some(0) {
-        return Err(anyhow!("Command tar failed with exit code {:?}", exit_code));
+        return Err(anyhow!(
+            "Command \"tar\" failed with exit code {:?}",
+            exit_code
+        ));
     }
 
     Ok(())

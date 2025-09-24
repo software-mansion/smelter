@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use log::{info, warn};
 use std::{fs, path::PathBuf, process::Command, str::from_utf8};
 use tools::paths::git_root;
@@ -23,7 +23,7 @@ pub fn compile_smelter(
     disable_default_features: bool,
 ) -> Result<()> {
     let mut args = vec![
-        "build",
+        "rustc",
         "--release",
         "--target",
         target,
@@ -35,9 +35,21 @@ pub fn compile_smelter(
         args.extend(["--no-default-features"]);
     }
 
+    let rustc_args = if cfg!(target_os = "macos") {
+        "-Clink-args=-Wl,-rpath,/opt/homebrew/opt/ffmpeg/lib -Wl,-rpath,/usr/local/lib -Wl,-rpath,@executable_path/ffmpeg_lib"
+    } else if cfg!(target_os = "linux") {
+        // TODO: (@jbrs) Add appropriate linker args for linux
+        ""
+    } else {
+        bail!("Invalid platform");
+    };
+    println!("{rustc_args}");
+
     info!("Running command \"cargo {}\"", args.join(" "));
     let output = Command::new("cargo")
         .args(args)
+        .arg("--")
+        .arg(rustc_args)
         .current_dir(git_root())
         .spawn()?
         .wait_with_output()?;

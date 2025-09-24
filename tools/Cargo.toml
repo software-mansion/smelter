@@ -30,3 +30,4 @@ rand = { workspace = true }
 schemars = { workspace = true}
 tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
 tokio = { workspace = true }
+regex = "1.11.2"
