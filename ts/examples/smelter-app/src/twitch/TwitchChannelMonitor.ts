@@ -14,10 +14,10 @@ class TwitchChannelSuggestionsMonitor {
       try {
         console.log(`[twitch] Refresh category info.`);
         await this.refreshCategoryInfo(CATEGORIES);
-        await sleep(60_000);
       } catch (err) {
         console.log('Failed to refresh Twitch channel information', err);
       }
+      await sleep(60_000);
     }
   }
 
