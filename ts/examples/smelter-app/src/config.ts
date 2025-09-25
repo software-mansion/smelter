@@ -20,7 +20,7 @@ export const config: Config =
         },
         whepBaseUrl: 'https://puffer.fishjam.io/smelter-demo-whep/whep',
         h264Decoder: 'vulkan_h264',
-        h264Encoder: { type: 'vulkan_h264' },
+        h264Encoder: { type: 'vulkan_h264', bitrate: 20_000_000 },
       }
     : {
         logger: {
