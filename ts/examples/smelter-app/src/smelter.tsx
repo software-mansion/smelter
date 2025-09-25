@@ -55,8 +55,8 @@ export class SmelterManager {
       video: {
         encoder: config.h264Encoder,
         resolution: {
-          width: 1920,
-          height: 1080,
+          width: 2560,
+          height: 1440,
         },
       },
       audio: {
