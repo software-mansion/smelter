@@ -7,7 +7,7 @@ import { sleep } from '../utils';
 import type { InputConfig, Layout } from '../app/store';
 import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 import { KickChannelMonitor } from '../kick/KickChannelMonitor';
-import { ShaderConfig } from '../shaders/shaders';
+import type { ShaderConfig } from '../shaders/shaders';
 
 export type RoomInputState = {
   inputId: string;

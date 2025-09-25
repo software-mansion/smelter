@@ -1,7 +1,6 @@
 import type { StoreApi } from 'zustand';
 import { createStore } from 'zustand';
-import { ShaderConfig } from '../shaders/shaders';
-
+import type { ShaderConfig } from '../shaders/shaders';
 
 export type InputConfig = {
   inputId: string;

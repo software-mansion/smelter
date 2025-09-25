@@ -1,16 +1,15 @@
-import { useState } from "react";
-import { InputConfig } from "../app/store";
+import type { InputConfig } from '../app/store';
 import {
-    Text,
-    View,
-    InputStream,
-    Image,
-    Rescaler,
-    useInputStreams,
-    Shader,
+  Text,
+  View,
+  InputStream,
+  Image,
+  Rescaler,
+  useInputStreams,
+  Shader,
 } from '@swmansion/smelter';
 
-import type { ReactElement } from "react";
+import type { ReactElement } from 'react';
 
 type Resolution = { width: number; height: number };
 
@@ -42,8 +41,7 @@ function wrapWithShaders(
               value: shaderParams,
             }
           : undefined
-      }
-    >
+      }>
       {wrapWithShaders(component, shaders, resolution, index + 1)}
     </Shader>
   );
@@ -128,7 +126,11 @@ export function SmallInput({
   );
 
   if (activeShaders.length) {
-    return <Rescaler>{wrapWithShaders(smallInputComponent as ReactElement, activeShaders, resolution, 0)}</Rescaler>;
+    return (
+      <Rescaler>
+        {wrapWithShaders(smallInputComponent as ReactElement, activeShaders, resolution, 0)}
+      </Rescaler>
+    );
   }
   return <Rescaler>{smallInputComponent}</Rescaler>;
 }

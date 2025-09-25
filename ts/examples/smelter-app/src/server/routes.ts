@@ -8,9 +8,9 @@ import type { RoomInputState } from './roomState';
 import { config } from '../config';
 import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 import { KickChannelSuggestions } from '../kick/KickChannelMonitor';
-import  shadersController, { ShaderConfig } from '../shaders/shaders';
+import type { ShaderConfig } from '../shaders/shaders';
+import shadersController from '../shaders/shaders';
 
-// --- Types ---
 type RoomIdParams = { Params: { roomId: string } };
 type RoomAndInputIdParams = { Params: { roomId: string; inputId: string } };
 
@@ -26,12 +26,10 @@ type InputState = {
   kickChannelId?: string;
 };
 
-// --- Fastify Instance ---
 export const routes = Fastify({
   logger: config.logger,
 }).withTypeProvider<TypeBoxTypeProvider>();
 
-// --- Suggestions Endpoints ---
 routes.get('/suggestions/mp4s', async (_req, res) => {
   res.status(200).send({ mp4s: mp4SuggestionsMonitor.mp4Files });
 });
@@ -45,12 +43,11 @@ routes.get('/suggestions/kick', async (_req, res) => {
   res.status(200).send({ kick: KickChannelSuggestions.getTopStreams() });
 });
 
-// TODO: Remove this legacy endpoint later
+// TODO: Remove this later
 routes.get('/suggestions', async (_req, res) => {
   res.status(200).send({ twitch: TwitchChannelSuggestions.getTopStreams() });
 });
 
-// --- Room Endpoints ---
 routes.post('/room', async (_req, res) => {
   console.log('[request] Create new room');
   const { roomId, room } = await state.createRoom();
@@ -105,7 +102,6 @@ routes.post<RoomIdParams & { Body: Static<typeof UpdateRoomSchema> }>(
   }
 );
 
-// --- Input Endpoints ---
 const AddInputSchema = Type.Union([
   Type.Object({
     type: Type.Literal('twitch-channel'),
@@ -140,39 +136,39 @@ routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
   }
 );
 
-routes.post<RoomAndInputIdParams>(
-  '/room/:roomId/input/:inputId/connect',
-  async (req, res) => {
-    const { roomId, inputId } = req.params;
-    console.log('[request] Connect input', { roomId, inputId });
-    const room = state.getRoom(roomId);
-    await room.connectInput(inputId);
-    res.status(200).send({ status: 'ok' });
-  }
-);
+routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/connect', async (req, res) => {
+  const { roomId, inputId } = req.params;
+  console.log('[request] Connect input', { roomId, inputId });
+  const room = state.getRoom(roomId);
+  await room.connectInput(inputId);
+  res.status(200).send({ status: 'ok' });
+});
 
-routes.post<RoomAndInputIdParams>(
-  '/room/:roomId/input/:inputId/disconnect',
-  async (req, res) => {
-    const { roomId, inputId } = req.params;
-    console.log('[request] Disconnect input', { roomId, inputId });
-    const room = state.getRoom(roomId);
-    await room.disconnectInput(inputId);
-    res.status(200).send({ status: 'ok' });
-  }
-);
+routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/disconnect', async (req, res) => {
+  const { roomId, inputId } = req.params;
+  console.log('[request] Disconnect input', { roomId, inputId });
+  const room = state.getRoom(roomId);
+  await room.disconnectInput(inputId);
+  res.status(200).send({ status: 'ok' });
+});
 
 const UpdateInputSchema = Type.Object({
   volume: Type.Number({ maximum: 1, minimum: 0 }),
-  shaders: Type.Optional(Type.Array(Type.Object({
-    shaderName: Type.String(),
-    shaderId: Type.String(),
-    enabled: Type.Boolean(),
-    params: Type.Array(Type.Object({
-      paramName: Type.String(),
-      paramValue: Type.Number(),
-    })),
-  }))),
+  shaders: Type.Optional(
+    Type.Array(
+      Type.Object({
+        shaderName: Type.String(),
+        shaderId: Type.String(),
+        enabled: Type.Boolean(),
+        params: Type.Array(
+          Type.Object({
+            paramName: Type.String(),
+            paramValue: Type.Number(),
+          })
+        ),
+      })
+    )
+  ),
 });
 
 routes.post<RoomAndInputIdParams & { Body: Static<typeof UpdateInputSchema> }>(
@@ -187,18 +183,14 @@ routes.post<RoomAndInputIdParams & { Body: Static<typeof UpdateInputSchema> }>(
   }
 );
 
-routes.delete<RoomAndInputIdParams>(
-  '/room/:roomId/input/:inputId',
-  async (req, res) => {
-    const { roomId, inputId } = req.params;
-    console.log('[request] Remove input', { roomId, inputId });
-    const room = state.getRoom(roomId);
-    await room.removeInput(inputId);
-    res.status(200).send({ status: 'ok' });
-  }
-);
+routes.delete<RoomAndInputIdParams>('/room/:roomId/input/:inputId', async (req, res) => {
+  const { roomId, inputId } = req.params;
+  console.log('[request] Remove input', { roomId, inputId });
+  const room = state.getRoom(roomId);
+  await room.removeInput(inputId);
+  res.status(200).send({ status: 'ok' });
+});
 
-// --- Utility ---
 function publicInputState(input: RoomInputState): InputState {
   switch (input.type) {
     case 'local-mp4':

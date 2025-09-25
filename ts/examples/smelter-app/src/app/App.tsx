@@ -1,15 +1,10 @@
-import {
-  View,
-  Tiles,
-  Rescaler,
-} from '@swmansion/smelter';
+import { View, Tiles, Rescaler } from '@swmansion/smelter';
 
-import { createRoomStore, type InputConfig, type RoomStore } from './store';
+import { createRoomStore, type RoomStore } from './store';
 import type { StoreApi } from 'zustand';
 import { useStore } from 'zustand';
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext } from 'react';
 import { Input, SmallInput } from '../inputs/inputs';
-
 
 export const StoreContext = createContext<StoreApi<RoomStore>>(createRoomStore());
 
@@ -39,7 +34,6 @@ function OutputScene() {
     </View>
   );
 }
-
 
 function GridLayout() {
   const store = useContext(StoreContext);
