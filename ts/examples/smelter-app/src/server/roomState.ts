@@ -7,12 +7,14 @@ import { sleep } from '../utils';
 import type { InputConfig, Layout } from '../app/store';
 import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 import { KickChannelMonitor } from '../kick/KickChannelMonitor';
+import { ShaderConfig } from '../shaders/shaders';
 
 export type RoomInputState = {
   inputId: string;
   type: 'local-mp4' | 'twitch-channel' | 'kick-channel';
   status: 'disconnected' | 'pending' | 'connected';
   volume: number;
+  shaders: ShaderConfig[];
   metadata: {
     title: string;
     description: string;
@@ -26,6 +28,7 @@ type TypeSpecificState =
 
 type UpdateInputOptions = {
   volume: number;
+  shaders: ShaderConfig[];
 };
 
 export type RegisterInputOptions =
@@ -92,6 +95,7 @@ export class RoomState {
           inputId: `${idPrefix}::local::sample_streamer::${i}`,
           type: 'local-mp4',
           status: 'disconnected',
+          shaders: [],
           metadata: {
             title: `[MP4] ${formatMp4Name(randomMp4)}`,
             description: '[Static source] AI Generated',
@@ -127,6 +131,7 @@ export class RoomState {
         inputId,
         type: `twitch-channel`,
         status: 'disconnected',
+        shaders: [],
         metadata: {
           title: '', // will be populated on update
           description: '',
@@ -160,6 +165,7 @@ export class RoomState {
           title: '', // will be populated on update
           description: '',
         },
+        shaders: [],
         volume: 0,
         channelId: opts.kickChannelId,
         hlsUrl,
@@ -185,6 +191,7 @@ export class RoomState {
           inputId,
           type: 'local-mp4',
           status: 'disconnected',
+          shaders: [],
           metadata: {
             title: `[MP4] ${formatMp4Name(mp4Name)}`,
             description: '[Static source] AI Generated',
@@ -254,6 +261,7 @@ export class RoomState {
   public async updateInput(inputId: string, options: Partial<UpdateInputOptions>) {
     const input = this.getInput(inputId);
     input.volume = options.volume ?? input.volume;
+    input.shaders = options.shaders ?? input.shaders;
     this.updateStoreWithState();
   }
 
@@ -312,6 +320,7 @@ export class RoomState {
         title: input.metadata.title,
         description: input.metadata.description,
         volume: input.volume,
+        shaders: input.shaders,
       }));
     this.output.store.getState().updateState(inputs, this.layout);
   }

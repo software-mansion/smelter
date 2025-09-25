@@ -1,11 +1,14 @@
 import type { StoreApi } from 'zustand';
 import { createStore } from 'zustand';
+import { ShaderConfig } from '../shaders/shaders';
+
 
 export type InputConfig = {
   inputId: string;
   volume: number;
   title: string;
   description: string;
+  shaders: ShaderConfig[];
 };
 
 export const LayoutValues = [
