@@ -7,15 +7,17 @@ import {
   Rescaler,
   useInputStreams,
   Shader,
+  ShaderParamStructField,
 } from '@swmansion/smelter';
 
 import type { ReactElement } from 'react';
+import { ShaderConfig, ShaderParamConfig } from '../shaders/shaders';
 
 type Resolution = { width: number; height: number };
 
 function wrapWithShaders(
   component: ReactElement,
-  shaders: any[] | undefined,
+  shaders: ShaderConfig[] | undefined,
   resolution: Resolution,
   index: number = 0
 ): ReactElement {
@@ -24,11 +26,11 @@ function wrapWithShaders(
   }
   const shader = shaders[index];
   const shaderParams = Array.isArray(shader.params)
-    ? shader.params.map((param: any) => ({
-        type: param.type || 'f32',
+    ? shader.params.map((param: ShaderParamConfig) => ({
+        type: 'f32',
         fieldName: param.paramName,
         value: param.paramValue,
-      }))
+      }) as ShaderParamStructField)
     : [];
   return (
     <Shader
@@ -93,7 +95,7 @@ export function Input({ input }: { input: InputConfig }) {
   const activeShaders = input.shaders.filter(shader => shader.enabled);
 
   if (activeShaders.length) {
-    return wrapWithShaders(inputComponent as ReactElement, activeShaders, resolution, 0);
+    return wrapWithShaders(inputComponent, activeShaders, resolution, 0);
   }
   return inputComponent;
 }
@@ -128,7 +130,7 @@ export function SmallInput({
   if (activeShaders.length) {
     return (
       <Rescaler>
-        {wrapWithShaders(smallInputComponent as ReactElement, activeShaders, resolution, 0)}
+        {wrapWithShaders(smallInputComponent, activeShaders, resolution, 0)}
       </Rescaler>
     );
   }

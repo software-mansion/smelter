@@ -46,7 +46,7 @@ export class SmelterManager {
     });
 
     for (const shader of shadersController.shaders) {
-      await registerShaderFromFile(
+      await this.registerShaderFromFile(
         SmelterInstance['instance'],
         shader.id,
         path.join(__dirname, `../shaders/${shader.shaderFile}`)
@@ -138,14 +138,16 @@ export class SmelterManager {
       throw err;
     }
   }
+
+  private async registerShaderFromFile(smelter: Smelter, shaderId: string, file: string) {
+    const source = await fs.readFile(file, { encoding: 'utf-8' });
+  
+    await smelter.registerShader(shaderId, {
+      source,
+    });
+  }
 }
 
-async function registerShaderFromFile(smelter: Smelter, shaderId: string, file: string) {
-  const source = await fs.readFile(file, { encoding: 'utf-8' });
 
-  await smelter.registerShader(shaderId, {
-    source,
-  });
-}
 
 export const SmelterInstance = new SmelterManager();
