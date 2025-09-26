@@ -5,7 +5,7 @@ use std::process::Command;
 use std::{fs, path::Path};
 use tools::paths::{git_root, tools_root};
 
-use crate::utils::{self, ffmpeg_version, SmelterBin};
+use crate::utils::{self, ffmpeg_url, ffmpeg_version, SmelterBin};
 
 const X86_TARGET: &str = "x86_64-unknown-linux-gnu";
 const X86_OUTPUT_FILE: &str = "smelter_linux_x86_64.tar.gz";
@@ -47,7 +47,12 @@ fn bundle_app(
     }
 
     let ffmpeg_version = ffmpeg_version()?;
-    let rustc_envs = vec![("FFMPEG_VERSION", ffmpeg_version)];
+    let ffmpeg_url = ffmpeg_url(&ffmpeg_version)?;
+
+    let rustc_envs = vec![
+        ("FFMPEG_VERSION", ffmpeg_version),
+        ("FFMPEG_URL", ffmpeg_url),
+    ];
 
     let cargo_build_dir = git_root().join("target").join(target_name).join("release");
     utils::ensure_empty_dir(&workdir.join("smelter"))?;

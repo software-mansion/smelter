@@ -7,8 +7,8 @@ use tools::paths::{git_root, tools_root};
 use anyhow::{anyhow, bail, Result};
 use log::info;
 
-use crate::utils::SmelterBin;
 use crate::utils::{self, ffmpeg_version};
+use crate::utils::{ffmpeg_url, SmelterBin};
 use compositor_chromium::cef;
 
 const ARM_MAC_TARGET: &str = "aarch64-apple-darwin";
@@ -60,6 +60,7 @@ fn bundle_app(
     }
 
     let ffmpeg_version = ffmpeg_version()?;
+    let ffmpeg_url = ffmpeg_url(&ffmpeg_version)?;
 
     let rustc_args = [
         "-Clink-arg=-Wl,-rpath,/opt/homebrew/opt/ffmpeg/lib".to_string(),
@@ -69,7 +70,10 @@ fn bundle_app(
         "-Clink-arg=-Wl,-rpath,/opt/homebrew/lib".to_string(),
     ];
 
-    let rustc_envs = vec![("FFMPEG_VERSION", ffmpeg_version)];
+    let rustc_envs = vec![
+        ("FFMPEG_VERSION", ffmpeg_version),
+        ("FFMPEG_URL", ffmpeg_url),
+    ];
 
     let cargo_build_dir = git_root().join("target").join(target).join("release");
     utils::ensure_empty_dir(&workdir.join("smelter"))?;

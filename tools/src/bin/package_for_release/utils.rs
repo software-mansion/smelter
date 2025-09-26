@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use log::{info, warn};
 use regex::Regex;
 use std::{fs, path::PathBuf, process::Command, str::from_utf8};
@@ -85,4 +85,68 @@ pub fn ffmpeg_version() -> Result<String> {
     let caps = re.captures(&ffmpeg_output).unwrap();
     let version = caps.get(1).unwrap().as_str();
     Ok(version.into())
+}
+
+pub fn ffmpeg_url(ffmpeg_version: &str) -> Result<String> {
+    #[cfg(target_os = "linux")]
+    const FFMPEG_URL_PREFIX: &str = "https://github.com/BtbN/FFmpeg-Builds/releases/download/";
+
+    #[cfg(target_os = "macos")]
+    // XXX: This is just for testing and MUST NOT be merged to master
+    const FFMPEG_URL_PREFIX: &str =
+        "https://github.com/membraneframework-precompiled/precompiled_ffmpeg/releases/download/";
+
+    let ffmpeg_url_suffix = if cfg!(target_os = "linux") {
+        let os_arch = if cfg!(target_arch = "x86_64") {
+            "linux64"
+        } else if cfg!(target_arch = "aarch64") {
+            "linuxarm64"
+        } else {
+            bail!("Invalid architecture");
+        };
+
+        match ffmpeg_version {
+            "6.0" => {
+                format!("autobuild-2023-11-30-12-55/ffmpeg-n6.0.1-{os_arch}-lgpl-shared-6.0.tar.xz")
+            }
+            "6.1" => {
+                format!("autobuild-2025-08-31-13-00/ffmpeg-n6.1.3-{os_arch}-lgpl-shared-6.1.tar.xz")
+            }
+            "7.0" => {
+                format!("autobuild-2024-08-31-12-50/ffmpeg-n7.0.2-6-g7e69129d2f-{os_arch}-lgpl-shared-7.0.tar.xz")
+            }
+            "7.1" => {
+                format!("autobuild-2025-09-25-15-12/ffmpeg-n7.1.2-4-g8320e6b415-{os_arch}-lgpl-shared-7.1.tar.xz")
+            }
+            "8.0" => {
+                format!("autobuild-2025-09-25-15-12/ffmpeg-n8.0-16-gd8605a6b55-{os_arch}-lgpl-shared-8.0.tar.xz")
+            }
+            _ => bail!("Unsupported FFmpeg version"),
+        }
+    } else if cfg!(target_os = "macos") {
+        // NOTE: Currently it is done to work with membrane precompiled. This must be changed
+        // before merging.
+
+        let os_arch = if cfg!(target_arch = "x86_64") {
+            bail!("Download not available for macos with amd64 architecture");
+        } else if cfg!(target_arch = "aarch64") {
+            "macos_arm"
+        } else {
+            bail!("Invalid architecture");
+        };
+
+        match ffmpeg_version {
+            "6.0" => {
+                format!("v6.0_1/ffmpeg_{os_arch}.tar.gz")
+            }
+            "8.0" => {
+                format!("v8.0/ffmpeg_{os_arch}.tar.gz")
+            }
+            _ => bail!("Unsupported FFmpeg version"),
+        }
+    } else {
+        bail!("Invalid platform");
+    };
+
+    Ok(FFMPEG_URL_PREFIX.to_string() + &ffmpeg_url_suffix)
 }
