@@ -1,6 +1,2 @@
 [build]
 rustflags = "--cfg web_sys_unstable_apis"
-
-[env]
-FFMPEG_VERSION = "1.0"
-FFMPEG_URL = "https://swmansion.com"

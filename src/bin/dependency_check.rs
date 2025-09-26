@@ -6,8 +6,6 @@ use tracing::{error, info, warn};
 
 const FFMPEG_LIB_DIR: &str = "ffmpeg_lib";
 const FFMPEG_DOWNLOAD_DIR: &str = "ffmpeg_download";
-const FFMPEG_REQUIRED_VERSION: &str = env!("FFMPEG_VERSION");
-const FFMPEG_URL: &str = env!("FFMPEG_URL");
 
 #[cfg(target_os = "macos")]
 const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.gz";
@@ -17,6 +15,12 @@ const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.xz";
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt().init();
+
+    #[allow(clippy::option_env_unwrap)]
+    let (required_ffmpeg_version, ffmpeg_url) = (
+        option_env!("FFMPEG_VERSION").unwrap(),
+        option_env!("FFMPEG_URL").unwrap(),
+    );
 
     let executable_path =
         env::current_exe().with_context(|| "Failed to get current executable directory.")?;
@@ -32,17 +36,19 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let ffmpeg_installed = check_ffmpeg(FFMPEG_REQUIRED_VERSION);
+    let ffmpeg_installed = check_ffmpeg(required_ffmpeg_version);
     let fetch_result = match ffmpeg_installed {
         Ok(true) => Ok(()),
         Ok(false) => {
             info!("Downloading dependencies...");
-            prepare_dependencies(&executable_dir).with_context(|| "Failed to fetch dependencies.")
+            prepare_dependencies(&executable_dir, ffmpeg_url)
+                .with_context(|| "Failed to fetch dependencies.")
         }
         Err(error) => {
             error!(%error);
             info!("Downloading dependencies...");
-            prepare_dependencies(&executable_dir).with_context(|| "Failed to fetch dependencies.")
+            prepare_dependencies(&executable_dir, ffmpeg_url)
+                .with_context(|| "Failed to fetch dependencies.")
         }
     };
     if let Err(e) = cleanup(&executable_dir) {
@@ -60,8 +66,8 @@ fn cleanup(executable_dir: &Path) -> std::io::Result<()> {
     fs::remove_dir_all(executable_dir.join(FFMPEG_DOWNLOAD_DIR))
 }
 
-fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
-    download_ffmpeg(executable_dir)?;
+fn prepare_dependencies(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
+    download_ffmpeg(executable_dir, ffmpeg_url)?;
 
     let ffmpeg_archive_path = executable_dir.join(FFMPEG_ARCHIVE_NAME);
 
@@ -116,8 +122,8 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn download_ffmpeg(executable_dir: &Path) -> Result<()> {
-    let response = get(FFMPEG_URL)?;
+fn download_ffmpeg(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
+    let response = get(ffmpeg_url)?;
     let content = response.bytes()?;
 
     fs::write(executable_dir.join(FFMPEG_ARCHIVE_NAME), &content)?;
