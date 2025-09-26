@@ -1,13 +1,7 @@
 use anyhow::{bail, Context, Result};
 use regex::Regex;
 use reqwest::blocking::get;
-use std::{
-    env,
-    fs::{self, File},
-    io::{ErrorKind, Write},
-    path::Path,
-    process::Command,
-};
+use std::{env, fs, io::ErrorKind, path::Path, process::Command};
 use tracing::{error, info, warn};
 
 const FFMPEG_LIB_DIR: &str = "ffmpeg_lib";
@@ -61,28 +55,9 @@ fn main() -> Result<()> {
     fetch_result
 }
 
-fn download_ffmpeg(executable_dir: &Path) -> Result<()> {
-    let response = get(FFMPEG_URL)?;
-    let content = response.bytes()?;
-
-    let mut downloaded_libs = File::create(executable_dir.join(FFMPEG_ARCHIVE_NAME))?;
-    downloaded_libs.write_all(&content)?;
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
-    check_ffmpeg_command(required_ffmpeg_version)
-}
-
-#[cfg(target_os = "macos")]
-fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
-    let command_result = check_ffmpeg_command(required_ffmpeg_version)?;
-    if !command_result {
-        info!("Checking if ffmpeg is installed as homebrew keg-only");
-        return check_ffmpeg_homebrew(required_ffmpeg_version);
-    }
-    Ok(command_result)
+fn cleanup(executable_dir: &Path) -> std::io::Result<()> {
+    fs::remove_file(executable_dir.join(FFMPEG_ARCHIVE_NAME))?;
+    fs::remove_dir_all(executable_dir.join(FFMPEG_DOWNLOAD_DIR))
 }
 
 fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
@@ -141,6 +116,29 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+fn download_ffmpeg(executable_dir: &Path) -> Result<()> {
+    let response = get(FFMPEG_URL)?;
+    let content = response.bytes()?;
+
+    fs::write(executable_dir.join(FFMPEG_ARCHIVE_NAME), &content)?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
+    check_ffmpeg_command(required_ffmpeg_version)
+}
+
+#[cfg(target_os = "macos")]
+fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
+    let command_result = check_ffmpeg_command(required_ffmpeg_version)?;
+    if !command_result {
+        info!("Checking if ffmpeg is installed as homebrew keg-only");
+        return check_ffmpeg_homebrew(required_ffmpeg_version);
+    }
+    Ok(command_result)
+}
+
 fn check_ffmpeg_command(required_ffmpeg_version: &str) -> Result<bool> {
     let ffmpeg_result = Command::new("ffmpeg").arg("-version").output();
     match ffmpeg_result {
@@ -191,9 +189,4 @@ fn check_ffmpeg_homebrew(required_ffmpeg_version: &str) -> Result<bool> {
         warn!("FFmpeg installation not found in homebrew");
         Ok(false)
     }
-}
-
-fn cleanup(executable_dir: &Path) -> std::io::Result<()> {
-    fs::remove_file(executable_dir.join(FFMPEG_ARCHIVE_NAME))?;
-    fs::remove_dir_all(executable_dir.join(FFMPEG_DOWNLOAD_DIR))
 }
