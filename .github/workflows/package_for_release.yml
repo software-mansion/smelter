@@ -50,30 +50,30 @@ jobs:
                 name: smelter_linux_aarch64.tar.gz
                 path: tools/build/smelter_linux_aarch64.tar.gz
 
-    binaries-macos-x86_64:
-        runs-on: macos-13
-        steps:
-            - name: 🛠 Install system dependencies
-              run: brew install ffmpeg
-
-            - name: 🔧 Install the rust toolchain
-              uses: dtolnay/rust-toolchain@stable
-
-            - name: 📥 Checkout repo
-              uses: actions/checkout@v4
-
-            - name: 📦 Package
-              run: cargo run -p tools --bin package_for_release
-
-            - uses: actions/upload-artifact@v4
-              with:
-                name: smelter_darwin_x86_64.tar.gz
-                path: tools/build/smelter_darwin_x86_64.tar.gz
-
-            - uses: actions/upload-artifact@v4
-              with:
-                name: smelter_with_web_renderer_darwin_x86_64.tar.gz
-                path: tools/build/smelter_with_web_renderer_darwin_x86_64.tar.gz
+    # binaries-macos-x86_64:
+    #     runs-on: macos-13
+    #     steps:
+    #         - name: 🛠 Install system dependencies
+    #           run: brew install ffmpeg
+    #
+    #         - name: 🔧 Install the rust toolchain
+    #           uses: dtolnay/rust-toolchain@stable
+    #
+    #         - name: 📥 Checkout repo
+    #           uses: actions/checkout@v4
+    #
+    #         - name: 📦 Package
+    #           run: cargo run -p tools --bin package_for_release
+    #
+    #         - uses: actions/upload-artifact@v4
+    #           with:
+    #             name: smelter_darwin_x86_64.tar.gz
+    #             path: tools/build/smelter_darwin_x86_64.tar.gz
+    #
+    #         - uses: actions/upload-artifact@v4
+    #           with:
+    #             name: smelter_with_web_renderer_darwin_x86_64.tar.gz
+    #             path: tools/build/smelter_with_web_renderer_darwin_x86_64.tar.gz
 
     binaries-macos-aarch64:
         runs-on: macos-14
