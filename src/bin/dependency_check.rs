@@ -150,21 +150,15 @@ fn check_ffmpeg_command(required_ffmpeg_version: &str) -> Result<bool> {
     match ffmpeg_result {
         Ok(ffmpeg_output) => {
             let ffmpeg_output = String::from_utf8(ffmpeg_output.stdout)?.trim().to_string();
-            let re = Regex::new(r"(?m)^ffmpeg version \D*(\d+\.\d+)")?;
-            let caps = re.captures(&ffmpeg_output);
-            match caps {
-                Some(caps) => {
-                    let version = caps.get(1).unwrap().as_str();
-                    if version == required_ffmpeg_version {
-                        Ok(true)
-                    } else {
-                        warn!(
-                            installed_ffmpeg_version = version,
-                            required_ffmpeg_version,
-                            "Inatelled version doesn't match the required version."
-                        );
-                        Ok(false)
-                    }
+            match match_ffmpeg_version(&ffmpeg_output) {
+                Some(version) if version == required_ffmpeg_version => Ok(true),
+                Some(version) => {
+                    warn!(
+                        installed_ffmpeg_version = version,
+                        required_ffmpeg_version,
+                        "Inatelled version doesn't match the required version."
+                    );
+                    Ok(false)
                 }
                 None => {
                     warn!("Failed to parse FFmpeg version.");
@@ -175,6 +169,19 @@ fn check_ffmpeg_command(required_ffmpeg_version: &str) -> Result<bool> {
         Err(_) => {
             warn!("Failed to run FFmpeg.");
             Ok(false)
+        }
+    }
+}
+
+fn match_ffmpeg_version(ffmpeg_output: &str) -> Option<&str> {
+    let re = Regex::new(r"(?m)^ffmpeg version \D*(\d+\.\d+)")
+        .expect("Failed to compile regular expression");
+    let caps = re.captures(&ffmpeg_output);
+    match caps {
+        Some(caps) => caps.get(1).map(|cap| cap.as_str()),
+        None => {
+            warn!("Failed to parse FFmpeg version.");
+            None
         }
     }
 }
@@ -194,5 +201,23 @@ fn check_ffmpeg_homebrew(required_ffmpeg_version: &str) -> Result<bool> {
     } else {
         warn!("FFmpeg installation not found in homebrew");
         Ok(false)
+    }
+}
+
+#[cfg(test)]
+mod dependency_check_test {
+    use super::*;
+    use std::{fs, path::PathBuf};
+
+    // TODO: (@jbrs) test for linux output
+    #[test]
+    fn ffmpeg_macos_regex_test() {
+        let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let ffmpeg_output =
+            fs::read_to_string(crate_root.join("src/bin/ffmpeg_output_macos.txt")).unwrap();
+
+        let actual_version = match_ffmpeg_version(&ffmpeg_output).unwrap();
+
+        assert_eq!(actual_version, "8.0");
     }
 }
