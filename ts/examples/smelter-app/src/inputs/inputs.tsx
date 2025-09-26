@@ -1,4 +1,5 @@
 import type { InputConfig } from '../app/store';
+import type { ShaderParamStructField } from '@swmansion/smelter';
 import {
   Text,
   View,
@@ -7,7 +8,6 @@ import {
   Rescaler,
   useInputStreams,
   Shader,
-  ShaderParamStructField,
 } from '@swmansion/smelter';
 
 import type { ReactElement } from 'react';
@@ -26,11 +26,14 @@ function wrapWithShaders(
   }
   const shader = shaders[index];
   const shaderParams = Array.isArray(shader.params)
-    ? shader.params.map((param: ShaderParamConfig) => ({
-        type: 'f32',
-        fieldName: param.paramName,
-        value: param.paramValue,
-      }) as ShaderParamStructField)
+    ? shader.params.map(
+        (param: ShaderParamConfig) =>
+          ({
+            type: 'f32',
+            fieldName: param.paramName,
+            value: param.paramValue,
+          }) as ShaderParamStructField
+      )
     : [];
   return (
     <Shader
@@ -129,9 +132,7 @@ export function SmallInput({
 
   if (activeShaders.length) {
     return (
-      <Rescaler>
-        {wrapWithShaders(smallInputComponent, activeShaders, resolution, 0)}
-      </Rescaler>
+      <Rescaler>{wrapWithShaders(smallInputComponent, activeShaders, resolution, 0)}</Rescaler>
     );
   }
   return <Rescaler>{smallInputComponent}</Rescaler>;

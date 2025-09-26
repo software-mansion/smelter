@@ -141,13 +141,11 @@ export class SmelterManager {
 
   private async registerShaderFromFile(smelter: Smelter, shaderId: string, file: string) {
     const source = await fs.readFile(file, { encoding: 'utf-8' });
-  
+
     await smelter.registerShader(shaderId, {
       source,
     });
   }
 }
-
-
 
 export const SmelterInstance = new SmelterManager();
