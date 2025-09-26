@@ -114,7 +114,7 @@ fn bundle_app(
     let smelter_bin_path = workdir.join("smelter/smelter_main");
 
     fs::copy(
-        tools_root().join("src/bin/package_for_release/linux_runtime_wrapper.sh"),
+        tools_root().join("src/bin/package_for_release/macos_runtime_wrapper.sh"),
         workdir.join("smelter/smelter"),
     )?;
 
