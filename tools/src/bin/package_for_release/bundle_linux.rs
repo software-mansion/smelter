@@ -97,7 +97,7 @@ fn bundle_app(
 
         info!("Copy wrapper script.");
         fs::copy(
-            tools_root().join("src/bin/package_for_release/linux_runtime_wrapper.sh"),
+            tools_root().join("src/bin/package_for_release/linux_runtime_wrapper_cef.sh"),
             workdir.join("smelter/smelter"),
         )?;
 
@@ -116,6 +116,16 @@ fn bundle_app(
         info!("Copy main_process binary.");
         fs::copy(
             cargo_build_dir.join("main_process"),
+            workdir.join("smelter/smelter_main"),
+        )?;
+        info!("Copy dependency_check binary.");
+        fs::copy(
+            cargo_build_dir.join("dependency_check"),
+            workdir.join("smelter/smelter"),
+        )?;
+        info!("Copy wrapper script.");
+        fs::copy(
+            tools_root().join("src/bin/package_for_release/linux_runtime_wrapper_no_cef.sh"),
             workdir.join("smelter/smelter"),
         )?;
     }
