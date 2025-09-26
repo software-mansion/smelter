@@ -60,11 +60,12 @@ fn bundle_app(
     }
 
     let ffmpeg_version = ffmpeg_version()?;
+    let ffmpeg_version_homebrew = &ffmpeg_version[..ffmpeg_version.find(".").unwrap_or(1)];
     let ffmpeg_url = ffmpeg_url(&ffmpeg_version)?;
 
     let rustc_args = [
         "-Clink-arg=-Wl,-rpath,/opt/homebrew/opt/ffmpeg/lib".to_string(),
-        format!("-Clink-arg=-Wl,-rpath,/opt/homebrew/opt/ffmpeg@{ffmpeg_version}/lib"),
+        format!("-Clink-arg=-Wl,-rpath,/opt/homebrew/opt/ffmpeg@{ffmpeg_version_homebrew}/lib"),
         "-Clink-arg=-Wl,-rpath,/usr/local/lib".to_string(),
         "-Clink-arg=-Wl,-rpath,@executable_path/ffmpeg_lib".to_string(),
         "-Clink-arg=-Wl,-rpath,/opt/homebrew/lib".to_string(),
