@@ -65,7 +65,7 @@ fn bundle_app(
         "-Clink-arg=-Wl,-rpath,/opt/homebrew/opt/ffmpeg/lib".to_string(),
         format!("-Clink-arg=-Wl,-rpath,/opt/homebrew/opt/ffmpeg@{ffmpeg_version}/lib"),
         "-Clink-arg=-Wl,-rpath,/usr/local/lib".to_string(),
-        "-Clink-arg=-Wl,-rpath,@executable_path/lib".to_string(),
+        "-Clink-arg=-Wl,-rpath,@executable_path/ffmpeg_lib".to_string(),
         "-Clink-arg=-Wl,-rpath,/opt/homebrew/lib".to_string(),
     ];
 
