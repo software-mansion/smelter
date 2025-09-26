@@ -69,7 +69,7 @@ fn bundle_app(
         "-Clink-arg=-Wl,-rpath,/opt/homebrew/lib".to_string(),
     ];
 
-    let rustc_envs = vec![("FFMPEG_VERSION", ffmpeg_version.to_string())];
+    let rustc_envs = vec![("FFMPEG_VERSION", ffmpeg_version)];
 
     let cargo_build_dir = git_root().join("target").join(target).join("release");
     utils::ensure_empty_dir(&workdir.join("smelter"))?;

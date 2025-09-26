@@ -47,7 +47,7 @@ fn bundle_app(
     }
 
     let ffmpeg_version = ffmpeg_version()?;
-    let rustc_envs = vec![("FFMPEG_VERSION", ffmpeg_version.to_string())];
+    let rustc_envs = vec![("FFMPEG_VERSION", ffmpeg_version)];
 
     let cargo_build_dir = git_root().join("target").join(target_name).join("release");
     utils::ensure_empty_dir(&workdir.join("smelter"))?;

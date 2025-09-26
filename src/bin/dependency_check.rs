@@ -28,10 +28,7 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt().init();
 
     #[allow(clippy::option_env_unwrap)]
-    let required_ffmpeg_version = option_env!("FFMPEG_VERSION")
-        .unwrap()
-        .parse::<u8>()
-        .expect("Failed to parse FFmpeg version");
+    let required_ffmpeg_version = option_env!("FFMPEG_VERSION").unwrap();
 
     let executable_path =
         env::current_exe().with_context(|| "Failed to get current executable directory.")?;
@@ -76,12 +73,12 @@ fn download_ffmpeg(executable_dir: &Path) -> Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn check_ffmpeg(required_ffmpeg_version: u8) -> Result<bool> {
+fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
     check_ffmpeg_command(required_ffmpeg_version)
 }
 
 #[cfg(target_os = "macos")]
-fn check_ffmpeg(required_ffmpeg_version: u8) -> Result<bool> {
+fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
     let command_result = check_ffmpeg_command(required_ffmpeg_version)?;
     if !command_result {
         info!("Checking if ffmpeg is installed as homebrew keg-only");
@@ -103,11 +100,16 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
         bail!("Invalid platform");
     };
 
+    fs::create_dir(executable_dir.join("ffmpeg_download"))
+        .with_context(|| "Failed to create directory")?;
+
     let tar_code = Command::new("tar")
         .args([
             tar_compression,
             "-xf",
             ffmpeg_archive_path.to_str().unwrap_or(FFMPEG_ARCHIVE_NAME),
+            "-C",
+            executable_dir.join("ffmpeg_download").to_str().unwrap(),
         ])
         .spawn()?
         .wait()?
@@ -120,7 +122,7 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
         .with_context(|| "Failed to remove tar archive")?;
 
     let re = Regex::new(r"^ffmpeg.*")?;
-    for file in fs::read_dir(executable_dir)?.flatten() {
+    for file in fs::read_dir(executable_dir.join("ffmpeg_download"))?.flatten() {
         if file.file_type()?.is_dir() {
             let filename = file.file_name().into_string();
             let filename = match filename {
@@ -132,41 +134,39 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
             };
             if re.is_match(&filename) {
                 fs::rename(
-                    executable_dir.join(format!("{filename}/lib")),
+                    executable_dir.join(format!("ffmpeg_download/{filename}/lib")),
                     executable_dir.join(FFMPEG_LIB_DIR),
                 )
                 .with_context(|| "Failed to move libraries to executable path")?;
-                fs::remove_dir_all(executable_dir.join(filename))
-                    .with_context(|| "Failed to remove unnecessary files")?;
                 break;
             }
         }
     }
+    fs::remove_dir_all(executable_dir.join("ffmpeg_download"))
+        .with_context(|| "Failed to remove unnecessary files")?;
 
     Ok(())
 }
 
-fn check_ffmpeg_command(required_ffmpeg_version: u8) -> Result<bool> {
+fn check_ffmpeg_command(required_ffmpeg_version: &str) -> Result<bool> {
     let ffmpeg_result = Command::new("ffmpeg").arg("-version").output();
     match ffmpeg_result {
         Ok(ffmpeg_output) => {
             let ffmpeg_output = String::from_utf8(ffmpeg_output.stdout)?.trim().to_string();
-            let re = Regex::new(r"(?m)^ffmpeg version \D*(\d+)\.\S+")?;
+            let re = Regex::new(r"(?m)^ffmpeg version \D*(\d+\.\d+)")?;
             let caps = re.captures(&ffmpeg_output);
             match caps {
                 Some(caps) => {
-                    let version_str = caps.get(1).unwrap().as_str();
-                    let version = version_str.parse::<u8>();
-                    match version {
-                        Ok(version) if version == required_ffmpeg_version => Ok(true),
-                        Ok(version) => {
-                            warn!("Installed FFmpeg version - {version} - does not match required version - {required_ffmpeg_version}.");
-                            Ok(false)
-                        }
-                        Err(error) => {
-                            warn!(%error, "Unable to parse FFmpeg version.");
-                            Ok(false)
-                        }
+                    let version = caps.get(1).unwrap().as_str();
+                    if version == required_ffmpeg_version {
+                        Ok(true)
+                    } else {
+                        warn!(
+                            installed_ffmpeg_version = version,
+                            required_ffmpeg_version,
+                            "Inatelled version doesn't match the required version."
+                        );
+                        Ok(false)
                     }
                 }
                 None => {
@@ -183,12 +183,19 @@ fn check_ffmpeg_command(required_ffmpeg_version: u8) -> Result<bool> {
 }
 
 #[cfg(target_os = "macos")]
-fn check_ffmpeg_homebrew(required_ffmpeg_version: u8) -> Result<bool> {
+fn check_ffmpeg_homebrew(required_ffmpeg_version: &str) -> Result<bool> {
+    let required_ffmpeg_version_brew =
+        &required_ffmpeg_version[..required_ffmpeg_version.find(".").unwrap_or(1)];
     let brew_output = Command::new("brew").arg("list").output()?;
     let brew_output = String::from_utf8(brew_output.stdout)?.trim().to_string();
 
-    let ffmpeg_string = format!("ffmpeg@{required_ffmpeg_version}");
+    let ffmpeg_string = format!("ffmpeg@{required_ffmpeg_version_brew}");
 
     let re = Regex::new(&format!("(?m){ffmpeg_string}"))?;
-    Ok(re.is_match(&brew_output))
+    if re.is_match(&brew_output) {
+        Ok(true)
+    } else {
+        warn!("FFmpeg installation not found in homebrew");
+        Ok(false)
+    }
 }

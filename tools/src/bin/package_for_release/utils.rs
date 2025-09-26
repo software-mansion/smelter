@@ -76,14 +76,13 @@ pub fn ensure_empty_dir(dir: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub fn ffmpeg_version() -> Result<u8> {
+pub fn ffmpeg_version() -> Result<String> {
     let ffmpeg_output = Command::new("ffmpeg").arg("-version").output()?;
     let ffmpeg_output = String::from_utf8(ffmpeg_output.stdout)?.trim().to_string();
 
-    let re = Regex::new(r"(?m)^ffmpeg version \D*(\d+).\S+")?;
+    let re = Regex::new(r"(?m)^ffmpeg version \D*(\d+\.\d+)")?;
 
     let caps = re.captures(&ffmpeg_output).unwrap();
-    let version_str = caps.get(1).unwrap().as_str();
-    let version = version_str.parse::<u8>()?;
-    Ok(version)
+    let version = caps.get(1).unwrap().as_str();
+    Ok(version.into())
 }
