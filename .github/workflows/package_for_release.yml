@@ -3,52 +3,52 @@ on:
     workflow_dispatch: {}
 
 jobs:
-    binaries-linux-x86_64:
-        runs-on: ubuntu-24.04
-        steps:
-            - name: 🛠 Install system dependencies
-              run: |
-                  sudo apt-get update -y -qq
-                  sudo apt-get install -y libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
-            - name: 🔧 Install the rust toolchain
-              uses: dtolnay/rust-toolchain@stable
-
-            - name: 📥 Checkout repo
-              uses: actions/checkout@v4
-
-            - name: 📦 Package
-              run: cargo run -p tools --bin package_for_release
-
-            - uses: actions/upload-artifact@v4
-              with:
-                name: smelter_linux_x86_64.tar.gz
-                path: tools/build/smelter_linux_x86_64.tar.gz
-
-            - uses: actions/upload-artifact@v4
-              with:
-                name: smelter_with_web_renderer_linux_x86_64.tar.gz
-                path: tools/build/smelter_with_web_renderer_linux_x86_64.tar.gz
-
-    binaries-linux-aarch64:
-        runs-on: ubuntu-24.04-arm
-        steps:
-            - name: 🛠 Install system dependencies
-              run: |
-                  sudo apt-get update -y -qq
-                  sudo apt-get install -y libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev curl git build-essential libssl-dev pkg-config libclang-dev
-            - name: 🔧 Install the rust toolchain
-              uses: dtolnay/rust-toolchain@stable
-
-            - name: 📥 Checkout repo
-              uses: actions/checkout@v4
-
-            - name: 📦 Package
-              run: cargo run -p tools --bin package_for_release
-
-            - uses: actions/upload-artifact@v4
-              with:
-                name: smelter_linux_aarch64.tar.gz
-                path: tools/build/smelter_linux_aarch64.tar.gz
+    # binaries-linux-x86_64:
+    #     runs-on: ubuntu-24.04
+    #     steps:
+    #         - name: 🛠 Install system dependencies
+    #           run: |
+    #               sudo apt-get update -y -qq
+    #               sudo apt-get install -y libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev
+    #         - name: 🔧 Install the rust toolchain
+    #           uses: dtolnay/rust-toolchain@stable
+    #
+    #         - name: 📥 Checkout repo
+    #           uses: actions/checkout@v4
+    #
+    #         - name: 📦 Package
+    #           run: cargo run -p tools --bin package_for_release
+    #
+    #         - uses: actions/upload-artifact@v4
+    #           with:
+    #             name: smelter_linux_x86_64.tar.gz
+    #             path: tools/build/smelter_linux_x86_64.tar.gz
+    #
+    #         - uses: actions/upload-artifact@v4
+    #           with:
+    #             name: smelter_with_web_renderer_linux_x86_64.tar.gz
+    #             path: tools/build/smelter_with_web_renderer_linux_x86_64.tar.gz
+    #
+    # binaries-linux-aarch64:
+    #     runs-on: ubuntu-24.04-arm
+    #     steps:
+    #         - name: 🛠 Install system dependencies
+    #           run: |
+    #               sudo apt-get update -y -qq
+    #               sudo apt-get install -y libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libopus-dev curl git build-essential libssl-dev pkg-config libclang-dev
+    #         - name: 🔧 Install the rust toolchain
+    #           uses: dtolnay/rust-toolchain@stable
+    #
+    #         - name: 📥 Checkout repo
+    #           uses: actions/checkout@v4
+    #
+    #         - name: 📦 Package
+    #           run: cargo run -p tools --bin package_for_release
+    #
+    #         - uses: actions/upload-artifact@v4
+    #           with:
+    #             name: smelter_linux_aarch64.tar.gz
+    #             path: tools/build/smelter_linux_aarch64.tar.gz
 
     binaries-macos-x86_64:
         runs-on: macos-13

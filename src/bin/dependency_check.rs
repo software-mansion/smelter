@@ -4,19 +4,16 @@ use reqwest::blocking::get;
 use std::{
     env,
     fs::{self, File},
-    io::Write,
+    io::{ErrorKind, Write},
     path::Path,
     process::Command,
 };
 use tracing::{error, info, warn};
 
 const FFMPEG_LIB_DIR: &str = "ffmpeg_lib";
-
-#[cfg(target_os = "macos")]
-const FFMPEG_URL: &str = "https://github.com/membraneframework-precompiled/precompiled_ffmpeg/releases/download/v8.0/ffmpeg_macos_arm.tar.gz";
-
-#[cfg(target_os = "linux")]
-const FFMPEG_URL: &str = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-lgpl-shared-7.1.tar.xz";
+const FFMPEG_DOWNLOAD_DIR: &str = "ffmpeg_download";
+const FFMPEG_REQUIRED_VERSION: &str = env!("FFMPEG_VERSION");
+const FFMPEG_URL: &str = env!("FFMPEG_URL");
 
 #[cfg(target_os = "macos")]
 const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.gz";
@@ -26,9 +23,6 @@ const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.xz";
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt().init();
-
-    #[allow(clippy::option_env_unwrap)]
-    let required_ffmpeg_version = option_env!("FFMPEG_VERSION").unwrap();
 
     let executable_path =
         env::current_exe().with_context(|| "Failed to get current executable directory.")?;
@@ -44,23 +38,27 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let ffmpeg_installed = check_ffmpeg(required_ffmpeg_version);
-    match ffmpeg_installed {
-        Ok(true) => {}
+    let ffmpeg_installed = check_ffmpeg(FFMPEG_REQUIRED_VERSION);
+    let fetch_result = match ffmpeg_installed {
+        Ok(true) => Ok(()),
         Ok(false) => {
             info!("Downloading dependencies...");
-            prepare_dependencies(&executable_dir)
-                .with_context(|| "Failed to fetch dependencies.")?;
+            prepare_dependencies(&executable_dir).with_context(|| "Failed to fetch dependencies.")
         }
         Err(error) => {
             error!(%error);
             info!("Downloading dependencies...");
-            prepare_dependencies(&executable_dir)
-                .with_context(|| "Failed to fetch dependencies.")?;
+            prepare_dependencies(&executable_dir).with_context(|| "Failed to fetch dependencies.")
+        }
+    };
+    if let Err(e) = cleanup(&executable_dir) {
+        if e.kind() != ErrorKind::NotFound {
+            error!(error = %e, "Failed to remove unnecessary files");
+            return Err(e.into());
         }
     }
 
-    Ok(())
+    fetch_result
 }
 
 fn download_ffmpeg(executable_dir: &Path) -> Result<()> {
@@ -100,7 +98,7 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
         bail!("Invalid platform");
     };
 
-    fs::create_dir(executable_dir.join("ffmpeg_download"))
+    fs::create_dir(executable_dir.join(FFMPEG_DOWNLOAD_DIR))
         .with_context(|| "Failed to create directory")?;
 
     let tar_code = Command::new("tar")
@@ -109,7 +107,7 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
             "-xf",
             ffmpeg_archive_path.to_str().unwrap_or(FFMPEG_ARCHIVE_NAME),
             "-C",
-            executable_dir.join("ffmpeg_download").to_str().unwrap(),
+            executable_dir.join(FFMPEG_DOWNLOAD_DIR).to_str().unwrap(),
         ])
         .spawn()?
         .wait()?
@@ -118,11 +116,8 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
         bail!("\"tar\" command failed with code: {tar_code:?}");
     }
 
-    fs::remove_file(executable_dir.join(FFMPEG_ARCHIVE_NAME))
-        .with_context(|| "Failed to remove tar archive")?;
-
     let re = Regex::new(r"^ffmpeg.*")?;
-    for file in fs::read_dir(executable_dir.join("ffmpeg_download"))?.flatten() {
+    for file in fs::read_dir(executable_dir.join(FFMPEG_DOWNLOAD_DIR))?.flatten() {
         if file.file_type()?.is_dir() {
             let filename = file.file_name().into_string();
             let filename = match filename {
@@ -134,7 +129,7 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
             };
             if re.is_match(&filename) {
                 fs::rename(
-                    executable_dir.join(format!("ffmpeg_download/{filename}/lib")),
+                    executable_dir.join(format!("{FFMPEG_DOWNLOAD_DIR}/{filename}/lib")),
                     executable_dir.join(FFMPEG_LIB_DIR),
                 )
                 .with_context(|| "Failed to move libraries to executable path")?;
@@ -142,8 +137,6 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
             }
         }
     }
-    fs::remove_dir_all(executable_dir.join("ffmpeg_download"))
-        .with_context(|| "Failed to remove unnecessary files")?;
 
     Ok(())
 }
@@ -198,4 +191,9 @@ fn check_ffmpeg_homebrew(required_ffmpeg_version: &str) -> Result<bool> {
         warn!("FFmpeg installation not found in homebrew");
         Ok(false)
     }
+}
+
+fn cleanup(executable_dir: &Path) -> std::io::Result<()> {
+    fs::remove_file(executable_dir.join(FFMPEG_ARCHIVE_NAME))?;
+    fs::remove_dir_all(executable_dir.join(FFMPEG_DOWNLOAD_DIR))
 }
