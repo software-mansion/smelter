@@ -11,7 +11,7 @@ import {
 } from '@swmansion/smelter';
 
 import type { ReactElement } from 'react';
-import { ShaderConfig, ShaderParamConfig } from '../shaders/shaders';
+import type { ShaderConfig, ShaderParamConfig } from '../shaders/shaders';
 
 type Resolution = { width: number; height: number };
 
