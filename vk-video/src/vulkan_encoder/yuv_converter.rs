@@ -218,10 +218,17 @@ impl Converter {
         &self,
         texture: wgpu::Texture,
     ) -> Result<ConvertState, YuvConverterError> {
-        let mut command_encoder = self
-            .device
-            .wgpu_device()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let mut command_encoder = unsafe {
+            self.device.wgpu_device().as_hal::<VkApi, _, _>(|d| {
+                self.device.wgpu_queue().as_hal::<VkApi, _, _>(|q| {
+                    d.unwrap()
+                        .create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
+                            label: None,
+                            queue: q.unwrap(),
+                        })
+                })
+            })?
+        };
 
         let image = unsafe {
             texture.as_hal::<VkApi, _, _>(|t| {
@@ -249,23 +256,13 @@ impl Converter {
             &view_create_info,
         )?;
 
-        let command_buffer = unsafe {
-            command_encoder
-                .as_hal_mut::<wgpu::hal::vulkan::Api, _, _>(|enc| enc.unwrap().raw_handle())
-        };
+        unsafe { command_encoder.begin_encoding(None)? };
+        let command_buffer = unsafe { command_encoder.raw_handle() };
 
         self.pipeline_y.convert(command_buffer, &view);
         self.pipeline_uv.convert(command_buffer, &view);
 
-        let wgpu_command_buffer = unsafe {
-            command_encoder.as_hal_mut::<VkApi, _, _>(|enc| enc.unwrap().end_encoding())?
-        };
-
-        unsafe {
-            command_encoder.as_hal_mut::<VkApi, _, _>(|enc| {
-                enc.unwrap().begin_encoding(Some("throwaway empty buffer"))
-            })?;
-        }
+        let wgpu_command_buffer = unsafe { command_encoder.end_encoding()? };
 
         let mut fence = unsafe {
             self.device
@@ -283,16 +280,16 @@ impl Converter {
         Ok(ConvertState {
             image: self.image.clone(),
             _view: view,
-            _encoder: command_encoder,
             fence,
+            _encoder: command_encoder,
             _buffer: wgpu_command_buffer,
         })
     }
 }
 
 pub(crate) struct ConvertState {
+    _encoder: wgpu::hal::vulkan::CommandEncoder,
     _buffer: wgpu::hal::vulkan::CommandBuffer,
-    _encoder: wgpu::CommandEncoder,
     pub(crate) fence: wgpu::hal::vulkan::Fence,
     pub(crate) image: Arc<Mutex<Image>>,
     pub(crate) _view: ImageView,
