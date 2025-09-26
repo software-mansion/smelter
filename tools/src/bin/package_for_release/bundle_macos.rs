@@ -105,9 +105,14 @@ fn bundle_app(
 
     fs::copy(
         cargo_build_dir.join("main_process"),
+        workdir.join("smelter/smelter_main"),
+    )?;
+    let smelter_bin_path = workdir.join("smelter/smelter_main");
+
+    fs::copy(
+        tools_root().join("src/bin/package_for_release/linux_runtime_wrapper.sh"),
         workdir.join("smelter/smelter"),
     )?;
-    let smelter_bin_path = workdir.join("smelter/smelter");
 
     let otool_output_bytes = Command::new("otool")
         .arg("-L")
@@ -127,7 +132,7 @@ fn bundle_app(
                 "-change",
                 path,
                 &format!("@rpath/{basename}"),
-                workdir.join("smelter/smelter").to_str().unwrap(),
+                smelter_bin_path.to_str().unwrap(),
             ])
             .spawn()?
             .wait()?
