@@ -89,7 +89,18 @@ export class RoomState {
 
   // Now async to allow kick suggestions
   private async getInitialInputState(idPrefix: string, initType: RoomInitType): Promise<void> {
-    if (initType === 'mp4') {
+    if (initType === 'kick') {
+      // Get top streams from KickChannelSuggestions
+      const topStreams = KickChannelSuggestions.getTopStreams();
+      for (let i = 0; i < Math.min(2, topStreams.length); i++) {
+        const stream = topStreams[i];
+        // Use addNewInput to add the input, but since addNewInput is async, we must await it
+        await this.addNewInput({
+          type: 'kick-channel',
+          kickChannelId: stream.streamId,
+        });
+      }
+    } else {
       if (this.mp4Files.length > 0) {
         const randomIndex = Math.floor(Math.random() * this.mp4Files.length);
         for (let i = 0; i < 2; i++) {
@@ -109,17 +120,6 @@ export class RoomState {
             volume: 0,
           });
         }
-      }
-    } else if (initType === 'kick') {
-      // Get top streams from KickChannelSuggestions
-      const topStreams = KickChannelSuggestions.getTopStreams();
-      for (let i = 0; i < Math.min(2, topStreams.length); i++) {
-        const stream = topStreams[i];
-        // Use addNewInput to add the input, but since addNewInput is async, we must await it
-        await this.addNewInput({
-          type: 'kick-channel',
-          kickChannelId: stream.streamId,
-        });
       }
     }
     // For other initTypes, do nothing
