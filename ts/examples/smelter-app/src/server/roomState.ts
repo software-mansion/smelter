@@ -7,12 +7,17 @@ import { sleep } from '../utils';
 import type { InputConfig, Layout } from '../app/store';
 import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 import { KickChannelMonitor } from '../kick/KickChannelMonitor';
+import type { ShaderConfig } from '../shaders/shaders';
+import { KickChannelSuggestions } from '../kick/KickChannelMonitor'; // Import KickChannelSuggestions
+
+export type RoomInitType = 'twitch' | 'kick' | 'mp4';
 
 export type RoomInputState = {
   inputId: string;
   type: 'local-mp4' | 'twitch-channel' | 'kick-channel';
   status: 'disconnected' | 'pending' | 'connected';
   volume: number;
+  shaders: ShaderConfig[];
   metadata: {
     title: string;
     description: string;
@@ -26,6 +31,7 @@ type TypeSpecificState =
 
 type UpdateInputOptions = {
   volume: number;
+  shaders: ShaderConfig[];
 };
 
 export type RegisterInputOptions =
@@ -59,49 +65,64 @@ export class RoomState {
   // if room is marked for deletion
   public pendingDelete?: boolean;
 
-  public constructor(idPrefix: string, output: SmelterOutput) {
+  public constructor(idPrefix: string, output: SmelterOutput, initType: RoomInitType) {
     this.mp4sDir = path.join(process.cwd(), 'mp4s');
     this.mp4Files = mp4SuggestionsMonitor.mp4Files;
-    this.inputs = this.getInitialInputState(idPrefix);
+    this.inputs = [];
     this.idPrefix = idPrefix;
     this.output = output;
 
     this.lastReadTimestamp = Date.now();
     this.creationTimestamp = Date.now();
-
-    setTimeout(async () => {
-      for (let i = 0; i < this.inputs.length; i++) {
-        const maybeInput = this.inputs[i];
+    const realThis = this;
+    // Use an IIFE to allow async/await in constructor for kick initType
+    (async () => {
+      await this.getInitialInputState(idPrefix, initType);
+      for (let i = 0; i < realThis.inputs.length; i++) {
+        const maybeInput = realThis.inputs[i];
         if (maybeInput) {
           await this.connectInput(maybeInput.inputId);
         }
       }
-    }, 0);
+    })();
   }
 
-  private getInitialInputState(idPrefix: string): RoomInputState[] {
-    const inputs: RoomInputState[] = [];
-
-    if (this.mp4Files.length > 0) {
-      const randomIndex = Math.floor(Math.random() * this.mp4Files.length);
-      for (let i = 0; i < 2; i++) {
-        const randomMp4 = this.mp4Files[(randomIndex + i) % this.mp4Files.length];
-        const mp4FilePath = path.join(this.mp4sDir, randomMp4);
-
-        inputs.push({
-          inputId: `${idPrefix}::local::sample_streamer::${i}`,
-          type: 'local-mp4',
-          status: 'disconnected',
-          metadata: {
-            title: `[MP4] ${formatMp4Name(randomMp4)}`,
-            description: '[Static source] AI Generated',
-          },
-          mp4FilePath,
-          volume: 0,
+  // Now async to allow kick suggestions
+  private async getInitialInputState(idPrefix: string, initType: RoomInitType): Promise<void> {
+    if (initType === 'kick') {
+      // Get top streams from KickChannelSuggestions
+      const topStreams = KickChannelSuggestions.getTopStreams();
+      for (let i = 0; i < Math.min(2, topStreams.length); i++) {
+        const stream = topStreams[i];
+        // Use addNewInput to add the input, but since addNewInput is async, we must await it
+        await this.addNewInput({
+          type: 'kick-channel',
+          kickChannelId: stream.streamId,
         });
       }
+    } else {
+      if (this.mp4Files.length > 0) {
+        const randomIndex = Math.floor(Math.random() * this.mp4Files.length);
+        for (let i = 0; i < 2; i++) {
+          const randomMp4 = this.mp4Files[(randomIndex + i) % this.mp4Files.length];
+          const mp4FilePath = path.join(this.mp4sDir, randomMp4);
+
+          this.inputs.push({
+            inputId: `${idPrefix}::local::sample_streamer::${i}`,
+            type: 'local-mp4',
+            status: 'disconnected',
+            shaders: [],
+            metadata: {
+              title: `[MP4] ${formatMp4Name(randomMp4)}`,
+              description: '[Static source] AI Generated',
+            },
+            mp4FilePath,
+            volume: 0,
+          });
+        }
+      }
     }
-    return inputs;
+    // For other initTypes, do nothing
   }
 
   public getWhepUrl(): string {
@@ -111,6 +132,9 @@ export class RoomState {
   public getState(): [RoomInputState[], Layout] {
     this.lastReadTimestamp = Date.now();
     return [this.inputs, this.layout];
+  }
+  public getInputs(): RoomInputState[] {
+    return this.inputs;
   }
 
   public async addNewInput(opts: RegisterInputOptions) {
@@ -127,6 +151,7 @@ export class RoomState {
         inputId,
         type: `twitch-channel`,
         status: 'disconnected',
+        shaders: [],
         metadata: {
           title: '', // will be populated on update
           description: '',
@@ -160,6 +185,7 @@ export class RoomState {
           title: '', // will be populated on update
           description: '',
         },
+        shaders: [],
         volume: 0,
         channelId: opts.kickChannelId,
         hlsUrl,
@@ -185,6 +211,7 @@ export class RoomState {
           inputId,
           type: 'local-mp4',
           status: 'disconnected',
+          shaders: [],
           metadata: {
             title: `[MP4] ${formatMp4Name(mp4Name)}`,
             description: '[Static source] AI Generated',
@@ -254,6 +281,7 @@ export class RoomState {
   public async updateInput(inputId: string, options: Partial<UpdateInputOptions>) {
     const input = this.getInput(inputId);
     input.volume = options.volume ?? input.volume;
+    input.shaders = options.shaders ?? input.shaders;
     this.updateStoreWithState();
   }
 
@@ -312,6 +340,7 @@ export class RoomState {
         title: input.metadata.title,
         description: input.metadata.description,
         volume: input.volume,
+        shaders: input.shaders,
       }));
     this.output.store.getState().updateState(inputs, this.layout);
   }

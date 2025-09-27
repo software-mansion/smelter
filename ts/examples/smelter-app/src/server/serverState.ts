@@ -1,3 +1,4 @@
+import type { RoomInitType } from './roomState';
 import { RoomState } from './roomState';
 import { v4 as uuidv4 } from 'uuid';
 import { errorCodes } from 'fastify';
@@ -13,6 +14,15 @@ const ROOM_COUNT_HARD_LIMIT = 5;
 
 class ServerState {
   private rooms: Record<string, RoomState> = {};
+  private getRooms(): RoomState[] {
+    return Object.values(this.rooms);
+  }
+
+  public isChannelIdUsed(channelId: string): boolean {
+    return this.getRooms().some(room =>
+      room.getInputs().some(input => input.type === 'kick-channel' && input.channelId === channelId)
+    );
+  }
 
   constructor() {
     setInterval(async () => {
@@ -20,10 +30,10 @@ class ServerState {
     }, 1000);
   }
 
-  public async createRoom(): Promise<CreateRoomResult> {
+  public async createRoom(initType: RoomInitType): Promise<CreateRoomResult> {
     const roomId = uuidv4();
     const smelterOutput = await SmelterInstance.registerOutput(roomId);
-    const room = new RoomState(roomId, smelterOutput);
+    const room = new RoomState(roomId, smelterOutput, initType);
     this.rooms[roomId] = room;
     return { roomId, room };
   }

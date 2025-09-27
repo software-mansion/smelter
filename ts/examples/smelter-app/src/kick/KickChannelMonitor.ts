@@ -1,10 +1,11 @@
 import type { KickStreamInfo } from '../kick/KickApi';
 import { getKickStreamInfo, getKickTopStreamsFromCategory } from '../kick/KickApi';
 import { sleep } from '../utils';
+import { state } from '../server/serverState';
 
-const CHOSEN_KICK_CATEGORY = '64'; // NBA 2k26
+const CHOSEN_KICK_CATEGORY = '5';
 const KICK_CATEGORIES = [CHOSEN_KICK_CATEGORY];
-const KICK_STREAMS_PER_CATEGORY = 5;
+const KICK_STREAMS_PER_CATEGORY = 10;
 
 class KickChannelSuggestionsMonitor {
   private topStreams: KickStreamInfo[] = [];
@@ -12,7 +13,7 @@ class KickChannelSuggestionsMonitor {
   public async monitor() {
     while (true) {
       try {
-        console.log(`[kick] Refresh category info.`);
+        console.log('[kick] Refresh category info.');
         await this.refreshCategoryInfo(KICK_CATEGORIES);
       } catch (err) {
         console.log('[kick] Failed to refresh channel information', err);
@@ -70,6 +71,12 @@ export class KickChannelMonitor {
 
   private async monitor() {
     while (!this.shouldStop) {
+      // Check if this channelId is still used, if not, stop monitoring
+      if (state.isChannelIdUsed(this.channelId)) {
+        console.log(`[kick] Stopping monitor for ${this.channelId} as it is no longer used.`);
+        this.shouldStop = true;
+        break;
+      }
       console.log(`[kick] Check stream state ${this.channelId}`);
       try {
         const streamInfo = await getKickStreamInfo(this.channelId);
