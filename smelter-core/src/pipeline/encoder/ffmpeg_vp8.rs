@@ -3,13 +3,13 @@ use std::{iter, sync::Arc};
 use ffmpeg_next::{
     codec::{Context, Id},
     format::Pixel,
-    Dictionary, Rational,
+    Rational,
 };
 use smelter_render::{Frame, OutputFrameFormat};
 use tracing::{error, info, trace, warn};
 
 use crate::pipeline::encoder::ffmpeg_utils::{
-    create_av_frame, encoded_chunk_from_av_packet, merge_options_with_defaults,
+    create_av_frame, encoded_chunk_from_av_packet, FfmpegOptions,
 };
 use crate::prelude::*;
 
@@ -52,7 +52,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
             (*encoder).color_trc = ffi::AVColorTransferCharacteristic::AVCOL_TRC_BT709;
         }
 
-        let defaults = [
+        let mut ffmpeg_options = FfmpegOptions::from(&[
             // Quality/Speed ratio modifier
             ("cpu-used", "0"),
             // Time to spend encoding.
@@ -61,10 +61,10 @@ impl VideoEncoder for FfmpegVp8Encoder {
             ("threads", "0"),
             // Zero-latency. Disables frame reordering.
             ("lag-in-frames", "0"),
-        ];
+        ]);
+        ffmpeg_options.append(&options.raw_options);
 
-        let encoder_opts_iter = merge_options_with_defaults(&defaults, &options.raw_options);
-        let encoder = encoder.open_as_with(codec, Dictionary::from_iter(encoder_opts_iter))?;
+        let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
 
         Ok((
             Self {
