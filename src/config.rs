@@ -34,6 +34,7 @@ pub struct Config {
     pub rendering_mode: RenderingMode,
     pub wgpu_force_gpu: bool,
     pub wgpu_required_features: WgpuFeatures,
+    pub gpu_device_id: Option<u32>,
 
     pub web_renderer_enable: bool,
     pub web_renderer_gpu_enable: bool,
@@ -116,6 +117,14 @@ fn try_read_config() -> Result<Config, String> {
     let wgpu_force_gpu = match env::var("SMELTER_FORCE_GPU") {
         Ok(enable) => bool_env_from_str(&enable).unwrap_or(false),
         Err(_) => false,
+    };
+
+    let gpu_device_id = match env::var("SMELTER_GPU_DEVICE_ID") {
+        Ok(id) => Some(
+            id.parse::<u32>()
+                .map_err(|_| "SMELTER_GPU_DEVICE_ID has to be a valid number")?,
+        ),
+        Err(_) => None,
     };
 
     const DEFAULT_STREAM_FALLBACK_TIMEOUT: Duration = Duration::from_millis(500);
@@ -279,6 +288,7 @@ fn try_read_config() -> Result<Config, String> {
         whip_whep_stun_servers: stun_servers,
         wgpu_force_gpu,
         wgpu_required_features,
+        gpu_device_id,
         load_system_fonts,
         whip_whep_server_port,
         whip_whep_enable,

@@ -133,6 +133,7 @@ pub struct WgpuComponents {
 }
 
 pub fn create_wgpu_ctx(
+    device_id: Option<u32>,
     force_gpu: bool,
     features: wgpu::Features,
     limits: wgpu::Limits,
@@ -143,15 +144,7 @@ pub fn create_wgpu_ctx(
         ..Default::default()
     });
 
-    #[cfg(not(target_arch = "wasm32"))]
-    log_available_adapters(&instance);
-
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptionsBase {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        force_fallback_adapter: false,
-        compatible_surface,
-    }))?;
-
+    let adapter = request_adapter(device_id, compatible_surface, &instance)?;
     let adapter_info = adapter.get_info();
     info!(
         "Using {} adapter with {:?} backend",
@@ -183,6 +176,42 @@ pub fn create_wgpu_ctx(
         device: device.into(),
         queue: queue.into(),
     })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn request_adapter(
+    device_id: Option<u32>,
+    compatible_surface: Option<&wgpu::Surface<'_>>,
+    instance: &wgpu::Instance,
+) -> Result<wgpu::Adapter, CreateWgpuCtxError> {
+    log_available_adapters(instance);
+    match device_id {
+        Some(device_id) => instance
+            .enumerate_adapters(wgpu::Backends::all())
+            .into_iter()
+            .find(|adapter| adapter.get_info().device == device_id)
+            .ok_or(CreateWgpuCtxError::NoAdapter),
+        None => pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptionsBase {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            force_fallback_adapter: false,
+            compatible_surface,
+        }))
+        .map_err(Into::into),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn request_adapter(
+    _device_id: Option<u32>,
+    compatible_surface: Option<&wgpu::Surface<'_>>,
+    instance: &wgpu::Instance,
+) -> Result<wgpu::Adapter, CreateWgpuCtxError> {
+    pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptionsBase {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        force_fallback_adapter: false,
+        compatible_surface,
+    }))
+    .map_err(Into::into)
 }
 
 fn uniform_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {

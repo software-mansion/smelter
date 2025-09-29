@@ -117,6 +117,7 @@ pub fn pipeline_options_from_config(
 
         chromium_context: chromium_context.clone(),
         wgpu_options: PipelineWgpuOptions::Options {
+            device_id: opt.gpu_device_id,
             features: opt.wgpu_required_features,
             force_gpu: opt.wgpu_force_gpu,
         },
