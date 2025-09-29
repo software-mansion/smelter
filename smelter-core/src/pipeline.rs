@@ -67,6 +67,8 @@ pub struct PipelineOptions {
 pub enum PipelineWgpuOptions {
     Context(GraphicsContext),
     Options {
+        device_id: Option<u32>,
+        driver_name: Option<String>,
         features: WgpuFeatures,
         force_gpu: bool,
     },
