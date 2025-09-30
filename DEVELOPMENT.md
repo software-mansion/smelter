@@ -2,23 +2,95 @@
 
 ## Rust
 
+### Crates
+
+#### `smelter` (root crate)
+
+Implements smelter server.
+
+Actual create implements:
+- HTTP API
+- parsing configuration options
+- configures logging
+- runs main event loop.
+
+However, most calls are just proxied to `Pipeline` instance from `smelter_core`. JSON parsing
+is handled by `smelter_api` crate.
+
+#### `smelter_api`
+
+Crate includes:
+- HTTP type definition (with JSON serialization and deserialization logic)
+- Type conversion from `smelter_api` types to `smelter_core` and `smelter_render`.
+  In some cases this conversion also applies default values.
+
+It is used by:
+- `smelter` (root crate) to parse HTTP request
+- `smelter_render_wasm` to parse JSON object in WASM implementation
+
+#### `smelter_core`
+
+Smelter as a library, main entrypoint if you want to use smelter from Rust directly.
+
+Crate implements:
+- Queue logic
+- Encoding and decoding
+- Muxing/demuxing and transport protocols
+- Audio mixing
+
+It is using `smelter_render` to:
+- Compose set of frames produced by queue (one frame per input) into set of composed frames (one frame per output)
+- All scene updates for video are proxied to this crate
+
+#### `smelter_render`
+
+Implements rendering for smelter.
+
+Renderer receive set of frames (one per input) and is producing set of composed frames (one per output).
+It is responsible for:
+- If input frame is provided as bytes, then it creates GPU texture from them.
+- if output frame needs to returned as bytes, then download it from GPU texture.
+- Converting YUV/NV12 to RGBA on input, and reverse on output.
+- Actual composition/layouts based on scene updates.
+- State responsible for animations/transitions.
+
+Users of this crate are responsible for handling decoding/encoding/protocols/queuing and triggering render.
+
+The 2 core entrypoints of this library are:
+- `Renderer::render` method that takes set of input frames and produces set of output frames.
+- `Renderer::update_scene` that changes layout that `render` method will use for inputs.
+
+#### `smelter_render_wasm`
+
+Wraps `smelter_render` crate with WASM api.
+
+It is used in TypeScript SDK:
+- `./ts/smelter-browser-render` - to build WASM binary and expose rendering API as JS library.
+- (in directly) `./ts/smelter-web-wasm` - to run Smelter in the browser
+
+#### `tools`
+
+Internal utils, release scripts
+
+#### `integration_tests`
+
+Integration tests:
+- Rendering snapshot tests that render single frame and compare with snapshot version.
+- Pipeline snapshot tests that generate entire video/audio and compare with snapshot version.
+
 ### Binaries
 
-Directory **`src/bin`** in Rust crate have a special meaning. Each **`*.rs`** file or directory
+Directory **`src/bin`** in a Rust crate has a special meaning. Each **`*.rs`** file or directory
 (with **`main.rs`**) is a binary that can be executed with:
 
-```
+```bash
+# from current crate
 cargo run --bin <binary_name>
+# from a different crate in workspace
+cargo run -p <crate_name> --bin <binary_name>
 ```
 
 For example:
-
-```
-cargo run --bin package_for_relase
-```
-to run **`./src/bin/package_for_release/main.rs`**.
-
-or
 
 ```
 cargo run --bin main_process
@@ -26,12 +98,16 @@ cargo run --bin main_process
 
 to run **`./src/bin/main_process.rs`**
 
+or
 
-To run binary from specific create you need to run the command from that crate directory.
+```
+cargo run -p tools --bin package_for_relase
+```
+
+to run **`./tools/src/bin/package_for_release/main.rs`**.
 
 #### `smelter` create (root)
 
-- `package_for_relase` - builds release binaries that can be uploaded to GitHub Releases
 - `main_process` - main binary to start standalone compositor
 - `process_helper` - starts secondary processes that communicate with `main_process`
   to enable web rendering with Chromium
@@ -43,25 +119,41 @@ To run binary from specific create you need to run the command from that crate d
 - `generate_rtp_from_file` - helper to generate new input files that can be used for new tests in
   **`./integration_tests/src/tests`**.
 
-#### `generate` create
+#### `tools` create
 
-This is crate when we keep most of our utils that generate something in repo:
+This is crate when we keep most of our internal tools and build scripts.
 
+- `package_for_relase` - builds release binaries that can be uploaded to GitHub Releases
 - `generate_docs_examples` - generates WEBP files with examples for documentation.
 - `generate_docs_example_inputs` - helper for `generate_docs_examples` (generates inputs for that binary).
 - `generate_json_schema` - generate JSON schema from `smelter_api` types. It needs to be called every
   time API is changed and regenerated file needs to be committed. (It also generates Markdown docs, but
   this will be soon removed)
-- `generate_playground_inputs` - TODO
 
 ### Examples
 
-TODO
+Similar to bins, examples have a specific directory in the Rust crate structure. Examples are placed
+in the **`examples`** directory and can be run with:
+
+```bash
+# from current crate
+cargo run --example <example_name>
+# from a different crate in workspace
+cargo run -p <crate_name> --example <example_name>
+```
+
+For example,
+
+```
+cargo run -p integration_tests --example simple
+```
+
+will run **`./integration_tests/examples/simple.rs`**.
 
 ### Tests
 
 We have 3 main types of test:
-- Small amount of regular unit tests spread over codebase.
+- Small amount of regular unit tests spread over the codebase.
 - Snapshot tests that render specific image and save them as PNG.
   - Generated images are located in **`./integration_tests/snapshots/render_snapshots`** directory.
   - Tests and JSON files representing tested scenes are in **`./integration_tests/src/render_tests`** directory
@@ -142,8 +234,6 @@ If you made changes that modify the snapshot:
   - Run `pnpm run build` to build JS code (WASM has to be build earlier, or use `build:all` in root directory to build everything)
 
 ### API compatibility
-
-> WARNING this is the goal, it is currently not true.
 
 SDK should be always compatible with version of code from the repo. If you are changing API the changes to SDK should land in the same PR.
 
