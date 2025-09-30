@@ -153,16 +153,24 @@ impl WhepOutputBuilder {
 
         match video_selection {
             Some(WhepRegisterOptions::SetVideoStream) => {
+                let mut video = WhepOutputVideoOptions::default();
+                let encoder_options = VideoEncoder::iter()
+                    .filter(|enc| *enc != VideoEncoder::Any)
+                    .collect();
+
+                let encoder_selection =
+                    Select::new("Select encoder (ESC for ffmpeg_h264)", encoder_options)
+                        .prompt_skippable()?;
+                if let Some(encoder) = encoder_selection {
+                    video.encoder = encoder;
+                }
+
                 let scene_options = Scene::iter().collect();
                 let scene_choice =
                     Select::new("Select scene:", scene_options).prompt_skippable()?;
-                let video = match scene_choice {
-                    Some(scene) => WhepOutputVideoOptions {
-                        scene,
-                        ..Default::default()
-                    },
-                    None => WhepOutputVideoOptions::default(),
-                };
+                if let Some(scene) = scene_choice {
+                    video.scene = scene;
+                }
                 Ok(self.with_video(video))
             }
             Some(WhepRegisterOptions::Skip) | None => Ok(self),
