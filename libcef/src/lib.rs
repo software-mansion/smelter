@@ -116,4 +116,17 @@ mod v8;
 mod validated;
 mod window_info;
 
-pub mod cef;
+pub use app::*;
+pub use browser::*;
+pub use client::*;
+pub use command_line::*;
+pub use context::*;
+pub use frame::*;
+pub use process_message::*;
+pub use render_handler::*;
+pub use render_process_handler::*;
+pub use settings::*;
+pub use task::*;
+pub use utils::*;
+pub use v8::*;
+pub use window_info::*;

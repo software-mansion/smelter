@@ -1,10 +1,9 @@
 use log::warn;
 
-use crate::cef::V8Global;
-use crate::cef::V8Value;
 use crate::cef_ref::{CefRc, CefRefCountable};
 use crate::cef_string::CefString;
 use crate::validated::{Validatable, ValidatedError};
+use crate::{V8Global, V8Value};
 
 use super::V8Object;
 

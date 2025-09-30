@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use libcef::cef::{self, V8ObjectError};
+use libcef::V8ObjectError;
 use log::error;
 
 use crate::error::ErrorStack;
@@ -16,22 +16,22 @@ pub struct RenderProcessHandler {
     state: Arc<Mutex<State>>,
 }
 
-impl cef::RenderProcessHandler for RenderProcessHandler {
+impl libcef::RenderProcessHandler for RenderProcessHandler {
     fn on_context_created(
         &mut self,
-        _browser: &cef::Browser,
-        _frame: &cef::Frame,
-        context: &cef::V8Context,
+        _browser: &libcef::Browser,
+        _frame: &libcef::Frame,
+        context: &libcef::V8Context,
     ) {
         context.eval(include_str!("render_frame.js")).unwrap();
     }
 
     fn on_process_message_received(
         &mut self,
-        _browser: &cef::Browser,
-        frame: &cef::Frame,
-        _source_process: cef::ProcessId,
-        message: &cef::ProcessMessage,
+        _browser: &libcef::Browser,
+        frame: &libcef::Frame,
+        _source_process: libcef::ProcessId,
+        message: &libcef::ProcessMessage,
     ) -> bool {
         let result = match message.name().as_str() {
             EMBED_SOURCE_FRAMES_MESSAGE => self.embed_sources(message, frame),
@@ -64,8 +64,8 @@ impl RenderProcessHandler {
 
     fn embed_sources(
         &self,
-        msg: &cef::ProcessMessage,
-        surface: &cef::Frame,
+        msg: &libcef::ProcessMessage,
+        surface: &libcef::Frame,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let ctx = surface.v8_context()?;
         let ctx_entered = ctx.enter()?;
@@ -98,8 +98,8 @@ impl RenderProcessHandler {
     fn render_frame(
         &self,
         frame_info: FrameInfo,
-        global: &mut cef::V8Global,
-        ctx_entered: &cef::V8ContextEntered,
+        global: &mut libcef::V8Global,
+        ctx_entered: &libcef::V8ContextEntered,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut state = self.state.lock().unwrap();
         let source = match state.source(&frame_info.shmem_path) {
@@ -125,7 +125,10 @@ impl RenderProcessHandler {
         Ok(())
     }
 
-    fn unembed_source(&self, msg: &cef::ProcessMessage) -> Result<(), Box<dyn std::error::Error>> {
+    fn unembed_source(
+        &self,
+        msg: &libcef::ProcessMessage,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut state = self.state.lock().unwrap();
         let shmem_path = msg.read_string(0)?;
         let shmem_path = PathBuf::from(shmem_path);
@@ -136,15 +139,15 @@ impl RenderProcessHandler {
 
     fn send_frame_positions(
         &self,
-        msg: &cef::ProcessMessage,
-        surface: &cef::Frame,
+        msg: &libcef::ProcessMessage,
+        surface: &libcef::Frame,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let ctx = surface.v8_context()?;
         let ctx_entered = ctx.enter()?;
         let global = ctx.global()?;
         let document = global.document()?;
 
-        let mut response = cef::ProcessMessageBuilder::new(GET_FRAME_POSITIONS_MESSAGE);
+        let mut response = libcef::ProcessMessageBuilder::new(GET_FRAME_POSITIONS_MESSAGE);
         for read_idx in 0..msg.size() {
             let id_attribute = msg.read_string(read_idx)?;
             let element = match document.element_by_id(&id_attribute, &ctx_entered) {
@@ -161,7 +164,7 @@ impl RenderProcessHandler {
             response.write_double(rect.height)?;
         }
 
-        surface.send_process_message(cef::ProcessId::Browser, response.build())?;
+        surface.send_process_message(libcef::ProcessId::Browser, response.build())?;
 
         Ok(())
     }

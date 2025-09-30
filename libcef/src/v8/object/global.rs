@@ -1,5 +1,5 @@
-use crate::cef::{V8Document, V8Object, V8ObjectError, V8Value};
 use crate::v8::{V8ContextEntered, V8PropertyAttribute};
+use crate::{V8Document, V8Object, V8ObjectError, V8Value};
 
 pub struct V8Global(pub V8Object);
 

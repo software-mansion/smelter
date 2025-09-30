@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use libcef::cef::{self, V8ArrayBufferError};
+use libcef::V8ArrayBufferError;
 use shared_memory::{Shmem, ShmemConf, ShmemError};
 
 pub struct State {
@@ -22,7 +22,7 @@ impl State {
     pub fn create_source(
         &mut self,
         frame_info: FrameInfo,
-        ctx_entered: &cef::V8ContextEntered,
+        ctx_entered: &libcef::V8ContextEntered,
     ) -> Result<&mut Source, ShmemError> {
         let shmem_path = frame_info.shmem_path.clone();
         let source = Source::new(frame_info, ctx_entered)?;
@@ -38,24 +38,24 @@ impl State {
 
 pub struct Source {
     pub shmem: Shmem,
-    pub array_buffer: cef::V8Value,
-    pub id_attribute_value: cef::V8Value,
-    pub width: cef::V8Value,
-    pub height: cef::V8Value,
+    pub array_buffer: libcef::V8Value,
+    pub id_attribute_value: libcef::V8Value,
+    pub width: libcef::V8Value,
+    pub height: libcef::V8Value,
     pub frame_info: FrameInfo,
 }
 
 impl Source {
     pub fn new(
         frame_info: FrameInfo,
-        ctx_entered: &cef::V8ContextEntered,
+        ctx_entered: &libcef::V8ContextEntered,
     ) -> Result<Self, ShmemError> {
         let shmem = ShmemConf::new().flink(&frame_info.shmem_path).open()?;
-        let id_attribute_value = cef::V8String::new(&frame_info.id_attribute).into();
-        let width = cef::V8Uint::new(frame_info.width).into();
-        let height = cef::V8Uint::new(frame_info.height).into();
+        let id_attribute_value = libcef::V8String::new(&frame_info.id_attribute).into();
+        let width = libcef::V8Uint::new(frame_info.width).into();
+        let height = libcef::V8Uint::new(frame_info.height).into();
         let array_buffer = unsafe {
-            cef::V8ArrayBuffer::from_ptr_with_copy(
+            libcef::V8ArrayBuffer::from_ptr_with_copy(
                 shmem.as_ptr(),
                 (4 * frame_info.width * frame_info.height) as usize,
                 ctx_entered,
@@ -78,7 +78,7 @@ impl Source {
     pub fn ensure_v8_values(
         &mut self,
         frame_info: &FrameInfo,
-        ctx_entered: &cef::V8ContextEntered,
+        ctx_entered: &libcef::V8ContextEntered,
     ) -> Result<(), ShmemError> {
         if self.frame_info != *frame_info {
             *self = Self::new(frame_info.clone(), ctx_entered)?;
@@ -89,9 +89,9 @@ impl Source {
 
     pub fn update_buffer(
         &self,
-        ctx_entered: &cef::V8ContextEntered,
+        ctx_entered: &libcef::V8ContextEntered,
     ) -> Result<(), V8ArrayBufferError> {
-        let cef::V8Value::ArrayBuffer(buffer) = &self.array_buffer else {
+        let libcef::V8Value::ArrayBuffer(buffer) = &self.array_buffer else {
             unreachable!()
         };
 

@@ -5,7 +5,6 @@ use std::{
 };
 
 use crossbeam_channel::{Receiver, Sender};
-use libcef::cef;
 use log::error;
 
 use crate::error::ErrorStack;
@@ -101,7 +100,7 @@ impl ChromiumSenderThread {
         resolutions: Vec<Option<Resolution>>,
         children_ids: Vec<ComponentId>,
     ) -> Result<(), ChromiumSenderThreadError> {
-        let mut process_message = cef::ProcessMessageBuilder::new(EMBED_SOURCE_FRAMES_MESSAGE);
+        let mut process_message = libcef::ProcessMessageBuilder::new(EMBED_SOURCE_FRAMES_MESSAGE);
 
         // IPC message to chromium renderer subprocess consists of:
         // - shared memory path
@@ -121,7 +120,7 @@ impl ChromiumSenderThread {
         }
 
         let frame = state.browser.main_frame()?;
-        frame.send_process_message(cef::ProcessId::Renderer, process_message.build())?;
+        frame.send_process_message(libcef::ProcessId::Renderer, process_message.build())?;
 
         Ok(())
     }
@@ -148,9 +147,10 @@ impl ChromiumSenderThread {
             // This avoids some crashes caused by the lack of resize synchronization.
             if shmem.len() < size {
                 // TODO: This should be synchronised
-                let mut process_message = cef::ProcessMessage::new(UNEMBED_SOURCE_FRAMES_MESSAGE);
+                let mut process_message =
+                    libcef::ProcessMessage::new(UNEMBED_SOURCE_FRAMES_MESSAGE);
                 process_message.write_string(0, shmem.to_path_string())?;
-                frame.send_process_message(cef::ProcessId::Renderer, process_message)?;
+                frame.send_process_message(libcef::ProcessId::Renderer, process_message)?;
                 // -----
 
                 shmem.resize(size)?;
@@ -201,20 +201,20 @@ impl ChromiumSenderThread {
         state: &ThreadState,
         children_ids: Vec<ComponentId>,
     ) -> Result<(), ChromiumSenderThreadError> {
-        let mut message = cef::ProcessMessage::new(GET_FRAME_POSITIONS_MESSAGE);
+        let mut message = libcef::ProcessMessage::new(GET_FRAME_POSITIONS_MESSAGE);
         for (index, id) in children_ids.into_iter().enumerate() {
             message.write_string(index, id.to_string())?;
         }
 
         let frame = state.browser.main_frame()?;
-        frame.send_process_message(cef::ProcessId::Renderer, message)?;
+        frame.send_process_message(libcef::ProcessId::Renderer, message)?;
 
         Ok(())
     }
 }
 
 struct ThreadState {
-    browser: cef::Browser,
+    browser: libcef::Browser,
     shared_memory: Vec<SharedMemory>,
     shared_memory_root_path: PathBuf,
 }
@@ -228,7 +228,7 @@ impl Drop for ThreadState {
 }
 
 impl ThreadState {
-    fn new(browser: cef::Browser, compositor_id: &str, web_renderer_id: &RendererId) -> Self {
+    fn new(browser: libcef::Browser, compositor_id: &str, web_renderer_id: &RendererId) -> Self {
         let shared_memory_root_path =
             utils::get_smelter_instance_tmp_path(compositor_id).join(web_renderer_id.to_string());
         let shared_memory = Vec::new();
@@ -253,10 +253,10 @@ impl ThreadState {
 #[derive(Debug, thiserror::Error)]
 enum ChromiumSenderThreadError {
     #[error("Browser is no longer alive")]
-    BrowserNotAlive(#[from] cef::BrowserError),
+    BrowserNotAlive(#[from] libcef::BrowserError),
 
     #[error("Browser frame is no longer alive")]
-    FrameNotAlive(#[from] cef::FrameError),
+    FrameNotAlive(#[from] libcef::FrameError),
 
     #[error(transparent)]
     SharedMemoryError(#[from] SharedMemoryError),
@@ -265,5 +265,5 @@ enum ChromiumSenderThreadError {
     SharedMemoryNotAllocated { source_idx: usize },
 
     #[error(transparent)]
-    ProcessMessageError(#[from] cef::ProcessMessageError),
+    ProcessMessageError(#[from] libcef::ProcessMessageError),
 }

@@ -5,13 +5,12 @@ use std::sync::Arc;
 
 use crate::{transformations::web_renderer::utils, types::Framerate};
 use crossbeam_channel::RecvError;
-use libcef::cef;
 use log::info;
 
 pub struct ChromiumContext {
     instance_id: String,
     framerate: Framerate,
-    context: cef::Context,
+    context: libcef::Context,
 }
 
 impl ChromiumContext {
@@ -26,15 +25,15 @@ impl ChromiumContext {
             show_fps: false,
             enable_gpu,
         };
-        let settings = cef::Settings {
+        let settings = libcef::Settings {
             root_cache_path: utils::get_smelter_instance_tmp_path(&instance_id).join("cef_cache"),
             windowless_rendering_enabled: true,
-            log_severity: cef::LogSeverity::Info,
+            log_severity: libcef::LogSeverity::Info,
             ..Default::default()
         };
 
-        let context =
-            cef::Context::new(app, settings).map_err(ChromiumContextInitError::ContextFailure)?;
+        let context = libcef::Context::new(app, settings)
+            .map_err(ChromiumContextInitError::ContextFailure)?;
         Ok(Arc::new(Self {
             instance_id,
             framerate,
@@ -46,29 +45,29 @@ impl ChromiumContext {
         &self,
         url: &str,
         state: super::browser_client::BrowserClient,
-    ) -> Result<cef::Browser, ChromiumContextInitError> {
-        let window_info = cef::WindowInfo {
+    ) -> Result<libcef::Browser, ChromiumContextInitError> {
+        let window_info = libcef::WindowInfo {
             windowless_rendering_enabled: true,
         };
-        let settings = cef::BrowserSettings {
+        let settings = libcef::BrowserSettings {
             windowless_frame_rate: (self.framerate.num as i32) / (self.framerate.den as i32),
             background_color: 0,
         };
 
         let (tx, rx) = crossbeam_channel::bounded(1);
-        let task = cef::Task::new(move || {
+        let task = libcef::Task::new(move || {
             let result = self
                 .context
                 .start_browser(state, window_info, settings, url);
             tx.send(result).unwrap();
         });
 
-        task.run(cef::ThreadId::UI);
+        task.run(libcef::ThreadId::UI);
         rx.recv()?.map_err(ChromiumContextInitError::ContextFailure)
     }
 
     pub fn run_event_loop(&self) -> Result<(), ChromiumEventLoopError> {
-        if !self.context.currently_on_thread(cef::ThreadId::UI) {
+        if !self.context.currently_on_thread(libcef::ThreadId::UI) {
             return Err(ChromiumEventLoopError::WrongThread);
         }
 
@@ -77,7 +76,7 @@ impl ChromiumContext {
     }
 
     pub fn run_event_loop_single_iter(&self) -> Result<(), ChromiumEventLoopError> {
-        if !self.context.currently_on_thread(cef::ThreadId::UI) {
+        if !self.context.currently_on_thread(libcef::ThreadId::UI) {
             return Err(ChromiumEventLoopError::WrongThread);
         }
 
@@ -93,7 +92,7 @@ impl ChromiumContext {
 #[derive(Debug, thiserror::Error)]
 pub enum ChromiumContextInitError {
     #[error("Chromium context failed: {0}")]
-    ContextFailure(#[from] cef::ContextError),
+    ContextFailure(#[from] libcef::ContextError),
 
     #[error("Thread communication failed.")]
     ThreadNoResponse(#[from] RecvError),
@@ -110,13 +109,13 @@ struct ChromiumApp {
     enable_gpu: bool,
 }
 
-impl cef::App for ChromiumApp {
+impl libcef::App for ChromiumApp {
     type RenderProcessHandlerType = ();
 
     fn on_before_command_line_processing(
         &mut self,
         process_type: String,
-        command_line: &mut cef::CommandLine,
+        command_line: &mut libcef::CommandLine,
     ) {
         // Execute only on the main process
         if !process_type.is_empty() {

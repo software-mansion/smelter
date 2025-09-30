@@ -1,8 +1,8 @@
 use crate::{
-    cef::{RenderProcessHandler, RenderProcessHandlerWrapper},
     cef_ref::{CefRc, CefRefData, CefStruct},
     cef_string::CefString,
     command_line::CommandLine,
+    RenderProcessHandler, RenderProcessHandlerWrapper,
 };
 
 /// [`App`] is used during process initialization.

@@ -1,8 +1,8 @@
 use std::os::raw::c_int;
 
 use crate::{
-    cef::{Browser, Frame, ProcessId, ProcessMessage, V8Context},
     cef_ref::{CefRc, CefRefCountable, CefRefData, CefStruct},
+    Browser, Frame, ProcessId, ProcessMessage, V8Context,
 };
 
 /// Handles renderer process callbacks.

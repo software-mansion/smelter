@@ -2,7 +2,6 @@ use std::sync::{Arc, Mutex};
 
 use crate::Resolution;
 use bytes::Bytes;
-use libcef::cef;
 use log::error;
 
 use crate::transformations::web_renderer::{FrameData, SourceTransforms};
@@ -19,7 +18,7 @@ pub(super) struct BrowserClient {
     resolution: Resolution,
 }
 
-impl cef::Client for BrowserClient {
+impl libcef::Client for BrowserClient {
     type RenderHandlerType = RenderHandler;
 
     fn render_handler(&self) -> Option<Self::RenderHandlerType> {
@@ -28,10 +27,10 @@ impl cef::Client for BrowserClient {
 
     fn on_process_message_received(
         &mut self,
-        _browser: &cef::Browser,
-        _frame: &cef::Frame,
-        _source_process: cef::ProcessId,
-        message: &cef::ProcessMessage,
+        _browser: &libcef::Browser,
+        _frame: &libcef::Frame,
+        _source_process: libcef::ProcessId,
+        message: &libcef::ProcessMessage,
     ) -> bool {
         match message.name().as_str() {
             GET_FRAME_POSITIONS_MESSAGE => {
@@ -76,9 +75,9 @@ impl BrowserClient {
     }
 
     fn read_frame_position(
-        msg: &cef::ProcessMessage,
+        msg: &libcef::ProcessMessage,
         index: usize,
-    ) -> Result<Position, cef::ProcessMessageError> {
+    ) -> Result<Position, libcef::ProcessMessageError> {
         let x = msg.read_double(index)?;
         let y = msg.read_double(index + 1)?;
         let width = msg.read_double(index + 2)?;
@@ -99,15 +98,15 @@ pub(super) struct RenderHandler {
     resolution: Resolution,
 }
 
-impl cef::RenderHandler for RenderHandler {
-    fn resolution(&self, _browser: &cef::Browser) -> cef::Resolution {
-        cef::Resolution {
+impl libcef::RenderHandler for RenderHandler {
+    fn resolution(&self, _browser: &libcef::Browser) -> libcef::Resolution {
+        libcef::Resolution {
             width: self.resolution.width,
             height: self.resolution.height,
         }
     }
 
-    fn on_paint(&self, _browser: &cef::Browser, buffer: &[u8], _resolution: cef::Resolution) {
+    fn on_paint(&self, _browser: &libcef::Browser, buffer: &[u8], _resolution: libcef::Resolution) {
         let mut frame_data = self.frame_data.lock().unwrap();
         *frame_data = Bytes::copy_from_slice(buffer);
     }

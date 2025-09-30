@@ -1,11 +1,11 @@
 use std::{fs, path::Path, process::Stdio};
 
-use libcef::cef::{self, Resolution};
+use libcef::Resolution;
 
 fn bgra_to_png(
     input_file: impl AsRef<Path>,
     output_file: impl AsRef<Path>,
-    resolution: Resolution,
+    resolution: libcef::Resolution,
 ) {
     std::process::Command::new("ffmpeg")
         .arg("-f")
@@ -28,13 +28,13 @@ fn bgra_to_png(
 
 struct App;
 
-impl cef::App for App {
+impl libcef::App for App {
     type RenderProcessHandlerType = ();
 
     fn on_before_command_line_processing(
         &mut self,
         process_type: String,
-        command_line: &mut cef::CommandLine,
+        command_line: &mut libcef::CommandLine,
     ) {
         // Check if main process
         if !process_type.is_empty() {
@@ -51,7 +51,7 @@ impl cef::App for App {
 
 struct Client;
 
-impl cef::Client for Client {
+impl libcef::Client for Client {
     type RenderHandlerType = RenderHandler;
 
     fn render_handler(&self) -> Option<Self::RenderHandlerType> {
@@ -61,15 +61,15 @@ impl cef::Client for Client {
 
 struct RenderHandler;
 
-impl cef::RenderHandler for RenderHandler {
-    fn resolution(&self, _browser: &cef::Browser) -> Resolution {
+impl libcef::RenderHandler for RenderHandler {
+    fn resolution(&self, _browser: &libcef::Browser) -> Resolution {
         Resolution {
             width: 1920,
             height: 1080,
         }
     }
 
-    fn on_paint(&self, browser: &cef::Browser, buffer: &[u8], resolution: Resolution) {
+    fn on_paint(&self, browser: &libcef::Browser, buffer: &[u8], resolution: Resolution) {
         if !browser.is_loading().expect("valid browser") {
             fs::write("out.raw", buffer).expect("save image buffer");
             bgra_to_png("out.raw", "out.png", resolution);
@@ -85,24 +85,24 @@ fn main() {
         .unwrap()
         .join("..");
 
-    if cef::bundle_for_development(target_path).is_err() {
+    if libcef::bundle_for_development(target_path).is_err() {
         panic!("Build process helper first. For release profile use: cargo build -r --bin process_helper");
     }
 
     let app = App;
-    let settings = cef::Settings {
+    let settings = libcef::Settings {
         windowless_rendering_enabled: true,
-        log_severity: cef::LogSeverity::Info,
+        log_severity: libcef::LogSeverity::Info,
         ..Default::default()
     };
 
-    let ctx = cef::Context::new(app, settings).expect("create browser");
+    let ctx = libcef::Context::new(app, settings).expect("create browser");
 
     let client = Client;
-    let window_info = cef::WindowInfo {
+    let window_info = libcef::WindowInfo {
         windowless_rendering_enabled: true,
     };
-    let browser_settings = cef::BrowserSettings {
+    let browser_settings = libcef::BrowserSettings {
         windowless_frame_rate: 60,
         background_color: 0xfff,
     };

@@ -1,4 +1,4 @@
-use crate::cef::{DOMRect, V8ContextEntered, V8Object, V8ObjectError, V8Value};
+use crate::{DOMRect, V8ContextEntered, V8Object, V8ObjectError, V8Value};
 
 pub struct V8Element(pub V8Object);
 

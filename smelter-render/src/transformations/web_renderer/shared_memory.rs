@@ -1,4 +1,3 @@
-use libcef::cef;
 use log::error;
 use shared_memory::{Shmem, ShmemConf, ShmemError};
 use std::path::{Path, PathBuf};
@@ -90,7 +89,7 @@ pub enum SharedMemoryError {
     },
 
     #[error("Browser frame is no longer alive")]
-    FrameNotAlive(#[from] cef::FrameError),
+    FrameNotAlive(#[from] libcef::FrameError),
 
     #[error("Failed to create folder for shared memory")]
     CreateShmemFolderFailed(#[source] io::Error),

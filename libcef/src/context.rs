@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::{cef::*, cef_ref::CefRefData, cef_string::CefString, main_args::MainArgs};
+use crate::{cef_ref::CefRefData, cef_string::CefString, main_args::MainArgs, *};
 
 /// Handles CEF initialization and deinitialization.
 /// Used for interacting with CEF functions
