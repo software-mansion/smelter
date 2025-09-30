@@ -4,8 +4,8 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use compositor_chromium::cef;
 use crossbeam_channel::{Receiver, Sender};
+use libcef::cef;
 use log::error;
 
 use crate::error::ErrorStack;

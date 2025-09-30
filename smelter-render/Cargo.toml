@@ -6,13 +6,13 @@ license-file = "../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
-web_renderer = ["dep:compositor-chromium", "dep:shared_memory"]
+web_renderer = ["dep:libcef", "dep:shared_memory"]
 
 [dependencies]
 pollster = "0.3.0"
 thiserror = { workspace = true }
 wgpu = { workspace = true }
-compositor-chromium = { workspace = true, optional = true }
+libcef = { workspace = true, optional = true }
 image = { workspace = true }
 reqwest = { workspace = true }
 bytes = { workspace = true }

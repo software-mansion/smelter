@@ -11,7 +11,7 @@ smelter = { workspace = true }
 smelter-api = { workspace = true }
 smelter-core = { workspace = true }
 smelter-render = { workspace = true }
-compositor-chromium = { workspace = true }
+libcef = { workspace = true }
 reqwest = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }

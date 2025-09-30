@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use app::App;
-use compositor_chromium::cef;
+use libcef::cef;
 
 mod app;
 mod handler;

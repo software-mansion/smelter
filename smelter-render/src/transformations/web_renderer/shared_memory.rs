@@ -1,4 +1,4 @@
-use compositor_chromium::cef;
+use libcef::cef;
 use log::error;
 use shared_memory::{Shmem, ShmemConf, ShmemError};
 use std::path::{Path, PathBuf};

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use compositor_chromium::cef;
+use libcef::cef;
 use log::info;
 
 use super::{handler::RenderProcessHandler, state::State};

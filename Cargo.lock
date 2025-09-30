@@ -681,18 +681,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
-name = "chromium_sys"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bindgen 0.66.1",
- "cmake",
- "dirs",
- "fs_extra",
- "reqwest",
-]
-
-[[package]]
 name = "chunked_transfer"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -809,18 +797,6 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
-]
-
-[[package]]
-name = "compositor-chromium"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chromium_sys",
- "fs_extra",
- "log",
- "thiserror 1.0.69",
- "widestring",
 ]
 
 [[package]]
@@ -2374,13 +2350,13 @@ dependencies = [
  "anyhow",
  "bytes",
  "clap",
- "compositor-chromium",
  "crossbeam-channel",
  "ffmpeg-next",
  "futures-util",
  "fuzzy-matcher",
  "image",
  "inquire",
+ "libcef",
  "log",
  "opus",
  "rand",
@@ -2569,6 +2545,30 @@ name = "libc"
 version = "0.2.169"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5aba8db14291edd000dfcc4d620c7ebfb122c613afb886ca8803fa4e128a20a"
+
+[[package]]
+name = "libcef"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fs_extra",
+ "libcef-sys",
+ "log",
+ "thiserror 1.0.69",
+ "widestring",
+]
+
+[[package]]
+name = "libcef-sys"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bindgen 0.66.1",
+ "cmake",
+ "dirs",
+ "fs_extra",
+ "reqwest",
+]
 
 [[package]]
 name = "libloading"
@@ -4399,7 +4399,6 @@ dependencies = [
  "anyhow",
  "axum",
  "bytes",
- "compositor-chromium",
  "crossbeam-channel",
  "ffmpeg-next",
  "fs_extra",
@@ -4408,6 +4407,7 @@ dependencies = [
  "http-body-util",
  "image",
  "libc",
+ "libcef",
  "log",
  "rand",
  "reqwest",
@@ -4486,10 +4486,10 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "bytes",
- "compositor-chromium",
  "crossbeam-channel",
  "glyphon",
  "image",
+ "libcef",
  "log",
  "naga",
  "nalgebra-glm",
@@ -5133,10 +5133,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
- "compositor-chromium",
  "crossbeam-channel",
  "ffmpeg-next",
  "fs_extra",
+ "libcef",
  "log",
  "opus",
  "pitch-detection",

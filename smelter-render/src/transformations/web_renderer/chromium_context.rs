@@ -4,8 +4,8 @@ use rand::{thread_rng, Rng};
 use std::sync::Arc;
 
 use crate::{transformations::web_renderer::utils, types::Framerate};
-use compositor_chromium::cef;
 use crossbeam_channel::RecvError;
+use libcef::cef;
 use log::info;
 
 pub struct ChromiumContext {

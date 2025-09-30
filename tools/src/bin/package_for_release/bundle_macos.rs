@@ -8,7 +8,7 @@ use log::info;
 
 use crate::utils;
 use crate::utils::SmelterBin;
-use compositor_chromium::cef;
+use libcef::cef;
 
 const ARM_MAC_TARGET: &str = "aarch64-apple-darwin";
 const ARM_OUTPUT_FILE: &str = "smelter_darwin_aarch64.tar.gz";

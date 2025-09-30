@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::Resolution;
 use bytes::Bytes;
-use compositor_chromium::cef;
+use libcef::cef;
 use log::error;
 
 use crate::transformations::web_renderer::{FrameData, SourceTransforms};

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use compositor_chromium::cef::{self, V8ObjectError};
+use libcef::cef::{self, V8ObjectError};
 use log::error;
 
 use crate::error::ErrorStack;

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use compositor_chromium::cef::{self, V8ArrayBufferError};
+use libcef::cef::{self, V8ArrayBufferError};
 use shared_memory::{Shmem, ShmemConf, ShmemError};
 
 pub struct State {
