@@ -9,7 +9,7 @@ use webrtc::{
     peer_connection::sdp::session_description::RTCSessionDescription,
 };
 
-use super::{WhepInputError, WhepInputOptions};
+use super::{WebrtcClientError, WhepInputOptions};
 
 #[derive(Debug)]
 pub(super) struct WhepHttpClient {
@@ -24,9 +24,10 @@ pub(super) struct SdpAnswer {
 }
 
 impl WhepHttpClient {
-    pub fn new(options: &WhepInputOptions) -> Result<Arc<Self>, WhepInputError> {
-        let endpoint_url = Url::parse(&options.endpoint_url)
-            .map_err(|e| WhepInputError::InvalidEndpointUrl(e, options.endpoint_url.to_string()))?;
+    pub fn new(options: &WhepInputOptions) -> Result<Arc<Self>, WebrtcClientError> {
+        let endpoint_url = Url::parse(&options.endpoint_url).map_err(|e| {
+            WebrtcClientError::InvalidEndpointUrl(e, options.endpoint_url.to_string())
+        })?;
 
         Ok(Arc::new(Self {
             http_client: reqwest::Client::new(),
@@ -38,7 +39,7 @@ impl WhepHttpClient {
     pub async fn send_offer(
         &self,
         offer: &RTCSessionDescription,
-    ) -> Result<SdpAnswer, WhepInputError> {
+    ) -> Result<SdpAnswer, WebrtcClientError> {
         let headers = self.header_map(HeaderValue::from_static("application/sdp"));
         let response = self
             .http_client
@@ -47,7 +48,9 @@ impl WhepHttpClient {
             .body(offer.sdp.clone())
             .send()
             .await
-            .map_err(|_| WhepInputError::RequestFailed(Method::POST, self.endpoint_url.clone()))?;
+            .map_err(|_| {
+                WebrtcClientError::RequestFailed(Method::POST, self.endpoint_url.clone())
+            })?;
 
         let response = map_response_err(response).await?;
         let session_url = self.get_location_from_headers(&response).await?;
@@ -55,10 +58,10 @@ impl WhepHttpClient {
         let answer = response
             .text()
             .await
-            .map_err(|e| WhepInputError::BodyParsingError("sdp answer", e))?;
+            .map_err(|e| WebrtcClientError::BodyParsingError("sdp answer", e))?;
 
         let answer = RTCSessionDescription::answer(answer)
-            .map_err(WhepInputError::RTCSessionDescriptionError)?;
+            .map_err(WebrtcClientError::RTCSessionDescriptionError)?;
 
         Ok(SdpAnswer {
             session_url,
@@ -70,7 +73,7 @@ impl WhepHttpClient {
         &self,
         session_url: &Url,
         ice_candidate: RTCIceCandidateInit,
-    ) -> Result<(), WhepInputError> {
+    ) -> Result<(), WebrtcClientError> {
         let headers = self.header_map(HeaderValue::from_static("application/trickle-ice-sdpfrag"));
         let response = self
             .http_client
@@ -79,22 +82,22 @@ impl WhepHttpClient {
             .body(sdp_from_candidate(ice_candidate))
             .send()
             .await
-            .map_err(|_| WhepInputError::RequestFailed(Method::PATCH, session_url.clone()))?;
+            .map_err(|_| WebrtcClientError::RequestFailed(Method::PATCH, session_url.clone()))?;
 
         let status = response.status();
         if status.is_server_error() || status.is_client_error() {
             let trickle_ice_error = match status {
                 StatusCode::UNPROCESSABLE_ENTITY | StatusCode::METHOD_NOT_ALLOWED => {
-                    WhepInputError::TrickleIceNotSupported
+                    WebrtcClientError::TrickleIceNotSupported
                 }
-                StatusCode::PRECONDITION_REQUIRED => WhepInputError::EntityTagMissing,
-                StatusCode::PRECONDITION_FAILED => WhepInputError::EntityTagNonMatching,
+                StatusCode::PRECONDITION_REQUIRED => WebrtcClientError::EntityTagMissing,
+                StatusCode::PRECONDITION_FAILED => WebrtcClientError::EntityTagNonMatching,
                 _ => {
                     let answer = &response
                         .text()
                         .await
-                        .map_err(|e| WhepInputError::BodyParsingError("ICE Candidate", e))?;
-                    WhepInputError::BadStatus(status, answer.to_string())
+                        .map_err(|e| WebrtcClientError::BodyParsingError("ICE Candidate", e))?;
+                    WebrtcClientError::BadStatus(status, answer.to_string())
                 }
             };
             return Err(trickle_ice_error);
@@ -130,12 +133,12 @@ impl WhepHttpClient {
     async fn get_location_from_headers(
         &self,
         response: &reqwest::Response,
-    ) -> Result<Url, WhepInputError> {
+    ) -> Result<Url, WebrtcClientError> {
         let location_url_str = response
             .headers()
             .get("location")
             .and_then(|url| url.to_str().ok())
-            .ok_or_else(|| WhepInputError::MissingLocationHeader)?;
+            .ok_or_else(|| WebrtcClientError::MissingLocationHeader)?;
 
         let location = match Url::parse(location_url_str) {
             Ok(url) => Ok(url),
@@ -145,7 +148,7 @@ impl WhepHttpClient {
                     location.set_path(location_url_str);
                     Ok(location)
                 }
-                _ => Err(WhepInputError::InvalidEndpointUrl(
+                _ => Err(WebrtcClientError::InvalidEndpointUrl(
                     err,
                     location_url_str.to_string(),
                 )),
@@ -158,14 +161,14 @@ impl WhepHttpClient {
 
 async fn map_response_err(
     response: reqwest::Response,
-) -> Result<reqwest::Response, WhepInputError> {
+) -> Result<reqwest::Response, WebrtcClientError> {
     let status = response.status();
     if status.is_client_error() || status.is_server_error() {
         let answer = &response
             .text()
             .await
-            .map_err(|e| WhepInputError::BodyParsingError("sdp offer", e))?;
-        Err(WhepInputError::BadStatus(status, answer.to_string()))
+            .map_err(|e| WebrtcClientError::BodyParsingError("sdp offer", e))?;
+        Err(WebrtcClientError::BadStatus(status, answer.to_string()))
     } else {
         Ok(response)
     }

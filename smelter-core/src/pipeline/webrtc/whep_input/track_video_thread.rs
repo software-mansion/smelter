@@ -39,13 +39,13 @@ pub async fn process_video_track(
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
     video_preferences: Vec<VideoDecoderOptions>,
-) -> Result<(), WhepInputError> {
+) -> Result<(), WebrtcClientError> {
     let rtc_receiver = transceiver.receiver().await;
     let Some(negotiated_codecs) =
         NegotiatedVideoCodecsInfo::new(transceiver, &video_preferences).await
     else {
         warn!("Skipping video track, no valid codec negotiated");
-        return Err(WhepInputError::NoVideoCodecNegotiated);
+        return Err(WebrtcClientError::NoVideoCodecNegotiated);
     };
 
     let ssrc = track.ssrc();

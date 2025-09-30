@@ -23,7 +23,7 @@ use webrtc::{
     },
 };
 
-use crate::{pipeline::PipelineCtx, prelude::WhepInputError};
+use crate::{pipeline::PipelineCtx, prelude::WebrtcClientError};
 
 #[derive(Debug, Clone)]
 pub(crate) struct PeerConnection {
@@ -33,9 +33,9 @@ pub(crate) struct PeerConnection {
 impl PeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
-        video_codecs_to_register: &Vec<RTCRtpCodecParameters>,
-    ) -> Result<Self, WhepInputError> {
-        let mut media_engine = media_engine_with_codecs(video_codecs_to_register)?;
+        video_codecs: &Vec<RTCRtpCodecParameters>,
+    ) -> Result<Self, WebrtcClientError> {
+        let mut media_engine = media_engine_with_codecs(video_codecs)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
         let api = APIBuilder::new()
@@ -65,18 +65,10 @@ impl PeerConnection {
         })
     }
 
-    // pub fn connection_state(&self) -> RTCPeerConnectionState {
-    //     self.pc.connection_state()
-    // }
-
-    // pub async fn close(&self) -> Result<(), WhepInputError> {
-    //     Ok(self.pc.close().await?)
-    // }
-
     pub async fn new_video_track(
         &self,
         video_codecs: &[RTCRtpCodecParameters],
-    ) -> Result<Arc<RTCRtpTransceiver>, WhepInputError> {
+    ) -> Result<Arc<RTCRtpTransceiver>, WebrtcClientError> {
         let transceiver = self
             .pc
             .add_transceiver_from_kind(
@@ -97,7 +89,7 @@ impl PeerConnection {
         Ok(transceiver)
     }
 
-    pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpTransceiver>, WhepInputError> {
+    pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpTransceiver>, WebrtcClientError> {
         let transceiver = self
             .pc
             .add_transceiver_from_kind(
@@ -114,29 +106,20 @@ impl PeerConnection {
     pub async fn set_remote_description(
         &self,
         answer: RTCSessionDescription,
-    ) -> Result<(), WhepInputError> {
+    ) -> Result<(), WebrtcClientError> {
         Ok(self.pc.set_remote_description(answer).await?)
     }
 
     pub async fn set_local_description(
         &self,
         offer: RTCSessionDescription,
-    ) -> Result<(), WhepInputError> {
+    ) -> Result<(), WebrtcClientError> {
         Ok(self.pc.set_local_description(offer).await?)
     }
 
-    pub async fn create_offer(&self) -> Result<RTCSessionDescription, WhepInputError> {
+    pub async fn create_offer(&self) -> Result<RTCSessionDescription, WebrtcClientError> {
         Ok(self.pc.create_offer(None).await?)
     }
-
-    // pub async fn local_description(&self) -> Result<RTCSessionDescription, WhepInputError> {
-    //     match self.pc.local_description().await {
-    //         Some(dsc) => Ok(dsc),
-    //         None => Err(WhepInputError::InternalError(
-    //             "Local description is not set, cannot read it".to_string(),
-    //         )),
-    //     }
-    // }
 
     pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
         self.pc.on_ice_candidate(f);
@@ -145,17 +128,10 @@ impl PeerConnection {
     pub fn on_track(&self, f: OnTrackHdlrFn) {
         self.pc.on_track(f);
     }
-
-    // pub async fn add_ice_candidate(
-    //     &self,
-    //     candidate: RTCIceCandidateInit,
-    // ) -> Result<(), WhepInputError> {
-    //     Ok(self.pc.add_ice_candidate(candidate).await?)
-    // }
 }
 
 fn media_engine_with_codecs(
-    video_codecs_to_register: &Vec<RTCRtpCodecParameters>,
+    video_codecs: &Vec<RTCRtpCodecParameters>,
 ) -> webrtc::error::Result<MediaEngine> {
     let mut media_engine = MediaEngine::default();
     media_engine.register_codec(
@@ -188,38 +164,9 @@ fn media_engine_with_codecs(
         RTPCodecType::Audio,
     )?;
 
-    for video_codec in video_codecs_to_register {
+    for video_codec in video_codecs {
         media_engine.register_codec(video_codec.clone(), RTPCodecType::Video)?;
     }
 
     Ok(media_engine)
 }
-
-// fn map_video_decoder_to_rtp_codec_parameters(
-//     video_preferences: &Vec<VideoDecoderOptions>,
-// ) -> Vec<RTCRtpCodecParameters> {
-//     let video_vp8_codec = get_video_vp8_codecs();
-//     let video_vp9_codec = get_video_vp9_codecs();
-//     let video_h264_codecs = get_video_h264_codecs_for_codec_preferences();
-
-//     let mut codec_list = Vec::new();
-
-//     for decoder in video_preferences {
-//         match decoder {
-//             VideoDecoderOptions::FfmpegH264 => {
-//                 codec_list.extend(video_h264_codecs.clone());
-//             }
-//             VideoDecoderOptions::VulkanH264 => {
-//                 codec_list.extend(video_h264_codecs.clone());
-//             }
-//             VideoDecoderOptions::FfmpegVp8 => {
-//                 codec_list.extend(video_vp8_codec.clone());
-//             }
-//             VideoDecoderOptions::FfmpegVp9 => {
-//                 codec_list.extend(video_vp9_codec.clone());
-//             }
-//         }
-//     }
-
-//     codec_list
-// }

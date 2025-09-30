@@ -47,7 +47,7 @@ pub enum WhipVideoDecoderOptions {
 
     /// Use hardware decoder based on Vulkan Video.
     ///
-    /// This should be faster and more scalable than teh ffmpeg decoder, if the hardware and OS
+    /// This should be faster and more scalable than the ffmpeg decoder, if the hardware and OS
     /// support it.
     ///
     /// This requires hardware that supports Vulkan Video. Another requirement is this program has

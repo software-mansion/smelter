@@ -19,7 +19,7 @@ use crate::prelude::*;
 pub async fn exchange_sdp_offers(
     pc: &PeerConnection,
     client: &Arc<WhipHttpClient>,
-) -> Result<(Url, RTCSessionDescription), WhipOutputError> {
+) -> Result<(Url, RTCSessionDescription), WebrtcClientError> {
     let offer = pc.create_offer().await?;
     debug!("SDP offer: {}", offer.sdp);
 
@@ -69,11 +69,11 @@ async fn handle_trickle_candidate(
     };
 
     match client.send_trickle_ice(&location, candidate).await {
-        Err(WhipOutputError::TrickleIceNotSupported) => {
+        Err(WebrtcClientError::TrickleIceNotSupported) => {
             info!("Trickle ICE is not supported by WHIP server");
             should_stop_trickle.store(true, Ordering::Relaxed);
         }
-        Err(WhipOutputError::EntityTagMissing) | Err(WhipOutputError::EntityTagNonMatching) => {
+        Err(WebrtcClientError::EntityTagMissing) | Err(WebrtcClientError::EntityTagNonMatching) => {
             info!("Entity tags not supported by WHIP output");
             should_stop_trickle.store(true, Ordering::Relaxed);
         }

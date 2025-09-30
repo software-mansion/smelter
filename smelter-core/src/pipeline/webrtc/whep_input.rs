@@ -4,10 +4,12 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::pipeline::rtp::RtpNtpSyncPoint;
-use crate::pipeline::webrtc::whep_input::peer_connection::PeerConnection;
-use crate::pipeline::webrtc::whep_input::track_audio_thread::process_audio_track;
-use crate::pipeline::webrtc::whep_input::track_video_thread::process_video_track;
-use crate::pipeline::webrtc::whep_input::whep_http_client::{SdpAnswer, WhepHttpClient};
+use crate::pipeline::webrtc::whep_input::{
+    peer_connection::PeerConnection,
+    track_audio_thread::process_audio_track,
+    track_video_thread::process_video_track,
+    whep_http_client::{SdpAnswer, WhepHttpClient},
+};
 use crate::{pipeline::input::Input, queue::QueueDataReceiver};
 use crossbeam_channel::{bounded, Sender};
 use itertools::Itertools;
@@ -20,9 +22,7 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtp_transceiver::rtp_codec::{RTCRtpCodecParameters, RTPCodecType};
 
 use crate::pipeline::webrtc::supported_video_codec_parameters::{
-    get_video_h264_codec, get_video_h264_codec_with_default_payload_type, get_video_vp8_codec,
-    get_video_vp8_codec_with_default_payload_type, get_video_vp9_codec,
-    get_video_vp9_codec_with_default_payload_type,
+    get_video_h264_codec, get_video_vp8_codec, get_video_vp9_codec,
 };
 use crate::prelude::*;
 
@@ -47,6 +47,9 @@ impl WhepInput {
         let (frame_sender, frame_receiver) = bounded(5);
         let (input_samples_sender, input_samples_receiver) = bounded(5);
 
+        // let (video_preferences, video_codecs_params) =
+        //     resolve_video_preferences(&ctx, options.video_preferences)?;
+
         let span = span!(
             Level::INFO,
             "WHEP client task",
@@ -56,7 +59,7 @@ impl WhepInput {
         rt.spawn(
             async {
                 let result =
-                    WhepClientTask::new(ctx, options, input_samples_sender, frame_sender).await;
+                    spawn_whep_client_task(ctx, options, input_samples_sender, frame_sender).await;
                 match result {
                     Ok(handle) => {
                         init_confirmation_sender.send(Ok(handle)).unwrap();
@@ -80,7 +83,7 @@ impl WhepInput {
 }
 
 fn wait_with_deadline<T>(
-    mut result_receiver: oneshot::Receiver<Result<T, WhepInputError>>,
+    mut result_receiver: oneshot::Receiver<Result<T, WebrtcClientError>>,
     timeout: Duration,
 ) -> Result<T, InputInitError> {
     let start_time = Instant::now();
@@ -104,79 +107,74 @@ fn wait_with_deadline<T>(
     Err(InputInitError::WhepInitTimeout)
 }
 
-#[derive(Debug)]
-struct WhepClientTask; //TODO refactor
+async fn spawn_whep_client_task(
+    ctx: Arc<PipelineCtx>,
+    options: WhepInputOptions,
+    input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    frame_sender: Sender<PipelineEvent<Frame>>,
+) -> Result<(), WebrtcClientError> {
+    let client = WhepHttpClient::new(&options)?;
+    let (video_preferences, video_codecs_params) =
+        resolve_video_preferences(&ctx, options.video_preferences)?;
+    let pc = PeerConnection::new(&ctx, &video_codecs_params).await?;
 
-impl WhepClientTask {
-    async fn new(
-        ctx: Arc<PipelineCtx>,
-        options: WhepInputOptions,
-        input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
-        frame_sender: Sender<PipelineEvent<Frame>>,
-    ) -> Result<Self, WhepInputError> {
-        let client = WhepHttpClient::new(&options)?;
-        let (video_preferences, video_codecs_to_register, video_pref) =
-            resolve_video_preferences(&ctx, options.video_preferences)?;
-        let pc = PeerConnection::new(&ctx, &video_codecs_to_register).await?;
+    let _video_transceiver = pc.new_video_track(&video_codecs_params).await?;
+    let _audio_transceiver = pc.new_audio_track().await?;
 
-        let _video_transceiver = pc.new_video_track(&video_pref).await?;
-        let _audio_transceiver = pc.new_audio_track().await?;
+    let (_session_url, answer) = exchange_sdp_offers(&pc, &client).await?;
+    pc.set_remote_description(answer).await?;
+    {
+        let sync_point = RtpNtpSyncPoint::new(ctx.queue_sync_point);
+        pc.on_track(Box::new(move |track, _, transceiver| {
+            debug!(
+                kind=?track.kind(),
+                "on_track called"
+            );
 
-        let (_session_url, answer) = exchange_sdp_offers(&pc, &client).await?;
-        pc.set_remote_description(answer).await?;
-        {
-            let sync_point = RtpNtpSyncPoint::new(ctx.queue_sync_point);
-            pc.on_track(Box::new(move |track, _, transceiver| {
-                debug!(
-                    kind=?track.kind(),
-                    "on_track called"
-                );
+            let span = span!(Level::INFO, "WHEP input track", track_type=?track.kind());
 
-                let span = span!(Level::INFO, "WHEP input track", track_type=?track.kind());
-
-                match track.kind() {
-                    RTPCodecType::Audio => {
-                        tokio::spawn(
-                            process_audio_track(
-                                ctx.clone(),
-                                sync_point.clone(),
-                                input_samples_sender.clone(),
-                                track,
-                                transceiver,
-                            )
-                            .instrument(span),
-                        );
-                    }
-                    RTPCodecType::Video => {
-                        tokio::spawn(
-                            process_video_track(
-                                ctx.clone(),
-                                sync_point.clone(),
-                                frame_sender.clone(),
-                                track,
-                                transceiver,
-                                video_preferences.clone(),
-                            )
-                            .instrument(span),
-                        );
-                    }
-                    RTPCodecType::Unspecified => {
-                        warn!("Unknown track kind")
-                    }
+            match track.kind() {
+                RTPCodecType::Audio => {
+                    tokio::spawn(
+                        process_audio_track(
+                            ctx.clone(),
+                            sync_point.clone(),
+                            input_samples_sender.clone(),
+                            track,
+                            transceiver,
+                        )
+                        .instrument(span),
+                    );
                 }
+                RTPCodecType::Video => {
+                    tokio::spawn(
+                        process_video_track(
+                            ctx.clone(),
+                            sync_point.clone(),
+                            frame_sender.clone(),
+                            track,
+                            transceiver,
+                            video_preferences.clone(),
+                        )
+                        .instrument(span),
+                    );
+                }
+                RTPCodecType::Unspecified => {
+                    warn!("Unknown track kind")
+                }
+            }
 
-                Box::pin(async {})
-            }))
-        };
+            Box::pin(async {})
+        }))
+    };
 
-        Ok(Self {})
-    }
+    Ok(())
 }
 
 async fn exchange_sdp_offers(
     pc: &PeerConnection,
     client: &Arc<WhepHttpClient>,
-) -> Result<(Url, RTCSessionDescription), WhepInputError> {
+) -> Result<(Url, RTCSessionDescription), WebrtcClientError> {
     let offer = pc.create_offer().await?;
     debug!("SDP offer: {}", offer.sdp);
 
@@ -226,11 +224,11 @@ async fn handle_trickle_candidate(
     };
 
     match client.send_trickle_ice(&location, candidate).await {
-        Err(WhepInputError::TrickleIceNotSupported) => {
+        Err(WebrtcClientError::TrickleIceNotSupported) => {
             info!("Trickle ICE is not supported by WHEP server");
             should_stop_trickle.store(true, Ordering::Relaxed);
         }
-        Err(WhepInputError::EntityTagMissing) | Err(WhepInputError::EntityTagNonMatching) => {
+        Err(WebrtcClientError::EntityTagMissing) | Err(WebrtcClientError::EntityTagNonMatching) => {
             info!("Entity tags not supported by WHEP input");
             should_stop_trickle.store(true, Ordering::Relaxed);
         }
@@ -242,24 +240,16 @@ async fn handle_trickle_candidate(
     };
 }
 
-#[allow(clippy::type_complexity)] //TODO
 fn resolve_video_preferences(
     ctx: &Arc<PipelineCtx>,
     video_preferences: Vec<WebrtcVideoDecoderOptions>,
-) -> Result<
-    (
-        Vec<VideoDecoderOptions>,
-        Vec<RTCRtpCodecParameters>,
-        Vec<RTCRtpCodecParameters>,
-    ),
-    WhepInputError,
-> {
-    let vulkan_supported = ctx.graphics_context.has_vulkan_support();
+) -> Result<(Vec<VideoDecoderOptions>, Vec<RTCRtpCodecParameters>), WebrtcClientError> {
+    let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
     let only_vulkan_in_preferences = video_preferences
         .iter()
         .all(|pref| matches!(pref, WebrtcVideoDecoderOptions::VulkanH264));
     if !vulkan_supported && only_vulkan_in_preferences {
-        return Err(WhepInputError::DecoderInitError(
+        return Err(WebrtcClientError::DecoderInitError(
             DecoderInitError::VulkanContextRequiredForVulkanDecoder,
         ));
     };
@@ -293,27 +283,22 @@ fn resolve_video_preferences(
         .unique()
         .collect();
 
-    // both necessary to work properly
-    let mut video_codecs: Vec<RTCRtpCodecParameters> = Vec::new();
-    let mut video_pref: Vec<RTCRtpCodecParameters> = Vec::new();
+    let mut video_codecs_params: Vec<RTCRtpCodecParameters> = Vec::new();
     for pref in &video_preferences {
         match pref {
             VideoDecoderOptions::FfmpegH264 | VideoDecoderOptions::VulkanH264 => {
-                video_codecs.extend(get_video_h264_codec());
-                video_pref.extend(get_video_h264_codec_with_default_payload_type());
+                video_codecs_params.extend(get_video_h264_codec());
             }
             VideoDecoderOptions::FfmpegVp8 => {
-                video_codecs.extend(get_video_vp8_codec());
-                video_pref.extend(get_video_vp8_codec_with_default_payload_type());
+                video_codecs_params.extend(get_video_vp8_codec());
             }
             VideoDecoderOptions::FfmpegVp9 => {
-                video_codecs.extend(get_video_vp9_codec());
-                video_pref.extend(get_video_vp9_codec_with_default_payload_type());
+                video_codecs_params.extend(get_video_vp9_codec());
             }
         }
     }
 
-    let video_codecs = video_codecs
+    let video_codecs_params = video_codecs_params
         .into_iter()
         .unique_by(|c| {
             (
@@ -322,14 +307,5 @@ fn resolve_video_preferences(
             )
         })
         .collect();
-    let video_pref = video_pref
-        .into_iter()
-        .unique_by(|c| {
-            (
-                c.capability.mime_type.clone(),
-                c.capability.sdp_fmtp_line.clone(),
-            )
-        })
-        .collect();
-    Ok((video_preferences, video_codecs, video_pref))
+    Ok((video_preferences, video_codecs_params))
 }

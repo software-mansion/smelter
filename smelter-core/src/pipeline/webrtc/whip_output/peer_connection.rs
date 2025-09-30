@@ -36,7 +36,7 @@ impl PeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
         options: &WhipOutputOptions,
-    ) -> Result<Self, WhipOutputError> {
+    ) -> Result<Self, WebrtcClientError> {
         let mut media_engine = media_engine_with_codecs(options)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
@@ -66,7 +66,7 @@ impl PeerConnection {
         })
     }
 
-    pub async fn new_video_track(&self) -> Result<Arc<RTCRtpSender>, WhipOutputError> {
+    pub async fn new_video_track(&self) -> Result<Arc<RTCRtpSender>, WebrtcClientError> {
         let transceiver = self
             .pc
             .add_transceiver_from_kind(
@@ -77,14 +77,14 @@ impl PeerConnection {
                 }),
             )
             .await
-            .map_err(WhipOutputError::PeerConnectionInitError)?;
+            .map_err(WebrtcClientError::PeerConnectionInitError)?;
         let sender = transceiver.sender().await;
         let rtc_sender_params = sender.get_parameters().await;
         debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
         Ok(sender)
     }
 
-    pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpSender>, WhipOutputError> {
+    pub async fn new_audio_track(&self) -> Result<Arc<RTCRtpSender>, WebrtcClientError> {
         let transceiver = self
             .pc
             .add_transceiver_from_kind(
@@ -95,7 +95,7 @@ impl PeerConnection {
                 }),
             )
             .await
-            .map_err(WhipOutputError::PeerConnectionInitError)?;
+            .map_err(WebrtcClientError::PeerConnectionInitError)?;
         let sender = transceiver.sender().await;
         let rtc_sender_params = sender.get_parameters().await;
         debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
@@ -105,28 +105,28 @@ impl PeerConnection {
     pub async fn set_remote_description(
         &self,
         answer: RTCSessionDescription,
-    ) -> Result<(), WhipOutputError> {
+    ) -> Result<(), WebrtcClientError> {
         self.pc
             .set_remote_description(answer)
             .await
-            .map_err(WhipOutputError::RemoteDescriptionError)
+            .map_err(WebrtcClientError::RemoteDescriptionError)
     }
 
     pub async fn set_local_description(
         &self,
         offer: RTCSessionDescription,
-    ) -> Result<(), WhipOutputError> {
+    ) -> Result<(), WebrtcClientError> {
         self.pc
             .set_local_description(offer)
             .await
-            .map_err(WhipOutputError::LocalDescriptionError)
+            .map_err(WebrtcClientError::LocalDescriptionError)
     }
 
-    pub async fn create_offer(&self) -> Result<RTCSessionDescription, WhipOutputError> {
+    pub async fn create_offer(&self) -> Result<RTCSessionDescription, WebrtcClientError> {
         self.pc
             .create_offer(None)
             .await
-            .map_err(WhipOutputError::OfferCreationError)
+            .map_err(WebrtcClientError::OfferCreationError)
     }
 
     pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
