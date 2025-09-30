@@ -133,7 +133,9 @@ impl Mp4InputBuilder {
     }
 
     fn prompt_loop(self) -> Result<Self> {
-        let loop_selection = Confirm::new("Loop input [y/n]:").prompt_skippable()?;
+        let loop_selection = Confirm::new("Loop input [y/N]:")
+            .with_default(false)
+            .prompt_skippable()?;
         match loop_selection {
             Some(r#loop) => Ok(self.with_loop(r#loop)),
             None => Ok(self),
