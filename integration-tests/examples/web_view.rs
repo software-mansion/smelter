@@ -29,7 +29,7 @@ fn main() {
             .parent()
             .unwrap()
             .join("..");
-        if let Err(err) = compositor_chromium::cef::bundle_for_development(target_path) {
+        if let Err(err) = libcef::bundle_for_development(target_path) {
             panic!("Build process helper first. For release profile use: cargo build -r --bin process_helper. {err:?}");
         }
     }

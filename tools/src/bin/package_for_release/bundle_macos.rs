@@ -8,7 +8,6 @@ use log::info;
 
 use crate::utils;
 use crate::utils::SmelterBin;
-use compositor_chromium::cef;
 
 const ARM_MAC_TARGET: &str = "aarch64-apple-darwin";
 const ARM_OUTPUT_FILE: &str = "smelter_darwin_aarch64.tar.gz";
@@ -68,7 +67,7 @@ fn bundle_app(
     if enable_web_rendering {
         info!("Build process_helper binary.");
         utils::compile_smelter(SmelterBin::ChromiumHelper, target, false)?;
-        cef::bundle_app(&cargo_build_dir, &workdir.join("smelter/smelter.app"))?;
+        libcef::bundle_app(&cargo_build_dir, &workdir.join("smelter/smelter.app"))?;
     }
 
     fs::copy(

@@ -11,7 +11,7 @@ pub mod state;
 fn main() {
     #[cfg(feature = "web_renderer")]
     {
-        use compositor_chromium::cef::bundle_for_development;
+        use libcef::bundle_for_development;
 
         let target_path = std::env::current_exe()
             .unwrap()

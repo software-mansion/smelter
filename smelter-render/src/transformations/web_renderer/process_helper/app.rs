@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use compositor_chromium::cef;
 use log::info;
 
 use super::{handler::RenderProcessHandler, state::State};
@@ -10,13 +9,13 @@ pub struct App {
     state: Arc<Mutex<State>>,
 }
 
-impl cef::App for App {
+impl libcef::App for App {
     type RenderProcessHandlerType = RenderProcessHandler;
 
     fn on_before_command_line_processing(
         &mut self,
         process_type: String,
-        _command_line: &mut cef::CommandLine,
+        _command_line: &mut libcef::CommandLine,
     ) {
         info!("Chromium {process_type} subprocess started");
     }

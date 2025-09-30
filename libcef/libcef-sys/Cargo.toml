@@ -1,0 +1,17 @@
+[package]
+name = "libcef-sys"
+version = "0.1.0"
+edition = "2021"
+license-file = "../../LICENSE"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[build-dependencies]
+anyhow = { workspace = true }
+bindgen = "0.66.1"
+cmake = "0.1.50"
+dirs = "5.0.1"
+fs_extra = "1.3.0"
+reqwest = { workspace = true }

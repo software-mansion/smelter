@@ -54,7 +54,7 @@ jobs:
                   shared-key: "linux-build"
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
-              run: cargo build --package compositor-chromium
+              run: cargo build --package libcef
 
             - name: 🛠 Cargo build
               run: |
@@ -97,7 +97,7 @@ jobs:
                   shared-key: "macos-build"
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
-              run: cargo build --package compositor-chromium
+              run: cargo build --package libcef
 
             - name: 📖 Check formatting
               run: cargo fmt --all --check
@@ -138,7 +138,7 @@ jobs:
                   shared-key: "linux-lint"
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
-              run: cargo build --package compositor-chromium
+              run: cargo build --package libcef
 
             - name: 📖 Check formatting
               run: cargo fmt --all --check

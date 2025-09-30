@@ -11,7 +11,7 @@ default = ["web_renderer"]
 update_snapshots = []
 decklink = ["smelter/decklink"]
 web_renderer = [
-    "dep:compositor-chromium",
+    "dep:libcef",
     "smelter-render/web_renderer",
     "smelter/web_renderer",
 ]
@@ -22,7 +22,7 @@ smelter = { workspace = true }
 smelter-api = { workspace = true }
 smelter-core = { workspace = true }
 smelter-render = { workspace = true }
-compositor-chromium = { workspace = true, optional = true }
+libcef = { workspace = true, optional = true }
 reqwest = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
