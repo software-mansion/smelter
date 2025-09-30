@@ -1,4 +1,4 @@
 [submodule "snapshots"]
-	path = integration_tests/snapshots
+	path = integration-tests/snapshots
 	url = git@github.com:membraneframework-labs/video_compositor_snapshot_tests.git
 	update = none

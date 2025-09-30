@@ -1,5 +1,5 @@
 [package]
-name = "smelter_render_wasm"
+name = "smelter-render-wasm"
 version = "0.1.0"
 edition = "2021"
 license-file = "../LICENSE"
@@ -8,8 +8,8 @@ license-file = "../LICENSE"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-smelter_render = { workspace = true }
-smelter_api = { workspace = true }
+smelter-render = { workspace = true }
+smelter-api = { workspace = true }
 console_error_panic_hook = "0.1.7"
 tracing-wasm = "0.2.1"
 tracing = { workspace = true }

@@ -1,5 +1,5 @@
 [package]
-name = "compositor_chromium"
+name = "compositor-chromium"
 version = "0.1.0"
 edition = "2021"
 license-file = "../LICENSE"

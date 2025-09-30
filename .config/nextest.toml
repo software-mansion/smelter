@@ -7,11 +7,11 @@ slow-timeout = "60s"
 fail-fast = false
 
 [[profile.ci.overrides]]
-filter = 'package(/^integration_tests/) and test(/_flaky$/)'
+filter = 'package(/^integration-tests/) and test(/_flaky$/)'
 threads-required = 6
 retries = 4
 
 [[profile.ci.overrides]]
-filter = 'package(/^integration_tests/)'
+filter = 'package(/^integration-tests/)'
 threads-required = 2
 retries = 2

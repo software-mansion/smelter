@@ -43,7 +43,7 @@ jobs:
               run: |
                   cat > .gitmodules << EOF
                   [submodule "snapshots"]
-                          path = integration_tests/snapshots
+                          path = integration-tests/snapshots
                           url = https://github.com/membraneframework-labs/video_compositor_snapshot_tests.git
                   EOF
                   git submodule update --init
@@ -54,7 +54,7 @@ jobs:
                   shared-key: "linux-build"
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
-              run: cargo build --package compositor_chromium
+              run: cargo build --package compositor-chromium
 
             - name: 🛠 Cargo build
               run: |
@@ -70,7 +70,7 @@ jobs:
               uses: actions/upload-artifact@v4
               with:
                   name: failed_snapshot_tests
-                  path: integration_tests/failed_snapshot_tests
+                  path: integration-tests/failed_snapshot_tests
                   retention-days: 2
 
             - name: 📚 Run doctests
@@ -97,7 +97,7 @@ jobs:
                   shared-key: "macos-build"
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
-              run: cargo build --package compositor_chromium
+              run: cargo build --package compositor-chromium
 
             - name: 📖 Check formatting
               run: cargo fmt --all --check
@@ -138,7 +138,7 @@ jobs:
                   shared-key: "linux-lint"
 
             - name: 🪢 Generate Chromium Embedded Framework bindings
-              run: cargo build --package compositor_chromium
+              run: cargo build --package compositor-chromium
 
             - name: 📖 Check formatting
               run: cargo fmt --all --check

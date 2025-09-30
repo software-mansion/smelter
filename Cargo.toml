@@ -7,18 +7,18 @@ license-file = "./LICENSE"
 [workspace]
 members = [
     # Core crates
-    "smelter_api",
-    "smelter_core",
-    "smelter_render",
-    "smelter_render_wasm",
-    "compositor_chromium",
+    "smelter-api",
+    "smelter-core",
+    "smelter-render",
+    "smelter-render-wasm",
+    "compositor-chromium",
 
     # Libraries
     "decklink",
     "vk-video",
 
     # Tools/utils/tests
-    "integration_tests",
+    "integration-tests",
     "tools",
 ]
 resolver = "2"
@@ -26,15 +26,15 @@ resolver = "2"
 [features]
 default = ["web_renderer"]
 update_snapshots = []
-decklink = ["smelter_api/decklink"]
-web_renderer = ["dep:compositor_chromium", "smelter_api/web_renderer"]
+decklink = ["smelter-api/decklink"]
+web_renderer = ["dep:compositor-chromium", "smelter-api/web_renderer"]
 
 [workspace.dependencies]
 smelter = { path = ".", default-features = false }
-smelter_api = { path = "smelter_api" }
-smelter_core = { path = "smelter_core" }
-compositor_chromium = { path = "compositor_chromium" }
-smelter_render = { path = "smelter_render" }
+smelter-api = { path = "smelter-api" }
+smelter-core = { path = "smelter-core" }
+compositor-chromium = { path = "compositor-chromium" }
+smelter-render = { path = "smelter-render" }
 vk-video = { path = "vk-video" }
 bytes = "1.4.0"
 serde_json = { version = "1.0.99", features = ["preserve_order"] }
@@ -75,9 +75,9 @@ tower-http = { version = "0.6.1", features = ["cors"] }
 tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
 
 [dependencies]
-smelter_api = { workspace = true }
-smelter_render = { workspace = true }
-smelter_core = { workspace = true }
+smelter-api = { workspace = true }
+smelter-render = { workspace = true }
+smelter-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
@@ -108,12 +108,12 @@ tower-http = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 shared_memory = { workspace = true }
-compositor_chromium = { workspace = true, optional = true }
+compositor-chromium = { workspace = true, optional = true }
 
 # platforms that support vulkan are: windows and all non-apple unixes. emscripten is a web-based platform, where vulkan is not available either
 [target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies]
-smelter_api = { workspace = true, features = ["vk-video"] }
-smelter_core = { workspace = true, features = ["vk-video"] }
+smelter-api = { workspace = true, features = ["vk-video"] }
+smelter-core = { workspace = true, features = ["vk-video"] }
 
 [[bin]]
 name = "process_helper"
