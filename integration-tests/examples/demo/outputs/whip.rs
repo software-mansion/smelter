@@ -5,7 +5,7 @@ use inquire::{Confirm, Select, Text};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use strum::{Display, EnumIter, IntoEnumIterator};
+use strum::IntoEnumIterator;
 use tracing::error;
 
 use crate::{
@@ -15,18 +15,6 @@ use crate::{
 
 const WHIP_TOKEN_ENV: &str = "WHIP_OUTPUT_BEARER_TOKEN";
 const WHIP_URL_ENV: &str = "WHIP_OUTPUT_URL";
-
-#[derive(Debug, Display, EnumIter, Clone)]
-pub enum WhipRegisterOptions {
-    #[strum(to_string = "Set video stream")]
-    SetVideoStream,
-
-    #[strum(to_string = "Set audio stream")]
-    SetAudioStream,
-
-    #[strum(to_string = "Skip")]
-    Skip,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WhipOutput {
@@ -102,23 +90,10 @@ impl WhipOutputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        let mut builder = self;
-
-        builder = builder.prompt_url()?.prompt_token()?;
-
-        loop {
-            builder = builder
-                .prompt_video()?
-                .with_audio(WhipOutputAudioOptions::default());
-
-            if builder.video.is_none() || builder.audio.is_none() {
-                error!("Both video and audio have to be specified for WHIP output.");
-            } else {
-                break;
-            }
-        }
-
-        Ok(builder)
+        self.prompt_url()?
+            .prompt_token()?
+            .prompt_video()?
+            .prompt_audio()
     }
 
     fn prompt_url(self) -> Result<Self> {
@@ -156,48 +131,66 @@ impl WhipOutputBuilder {
     }
 
     fn prompt_video(self) -> Result<Self> {
-        let video_options = vec![
-            WhipRegisterOptions::SetVideoStream,
-            WhipRegisterOptions::Skip,
-        ];
-        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
+        let mut video = WhipOutputVideoOptions::default();
 
-        match video_selection {
-            Some(WhipRegisterOptions::SetVideoStream) => {
-                let scene_options = Scene::iter().collect();
-                let scene_choice =
-                    Select::new("Select scene:", scene_options).prompt_skippable()?;
-                let video = match scene_choice {
-                    Some(scene) => WhipOutputVideoOptions {
-                        scene,
-                        ..Default::default()
-                    },
-                    None => WhipOutputVideoOptions::default(),
-                };
-                Ok(self.with_video(video))
+        let mut encoder_options = VideoEncoder::iter().collect::<Vec<_>>();
+        let mut encoder_preferences = vec![];
+        loop {
+            let encoder_selection = Select::new(
+                "Select encoder (ESC or Any to progress):",
+                encoder_options.clone(),
+            )
+            .prompt_skippable()?;
+
+            match encoder_selection {
+                Some(encoder) => {
+                    encoder_preferences.push(encoder);
+                    if encoder == VideoEncoder::Any {
+                        break;
+                    } else {
+                        encoder_options.retain(|enc| *enc != encoder);
+                    }
+                }
+                None => break,
             }
-            Some(WhipRegisterOptions::Skip) | None => Ok(self),
-            _ => unreachable!(),
         }
+        video.encoder_preferences = encoder_preferences;
+
+        let scene_options = Scene::iter().collect();
+        let scene_choice = Select::new("Select scene:", scene_options).prompt_skippable()?;
+        if let Some(scene) = scene_choice {
+            video.scene = scene;
+        }
+        Ok(self.with_video(video))
     }
 
-    // Currently unusable because video only streams don't work
-    fn _prompt_audio(self) -> Result<Self> {
-        let audio_options = vec![
-            WhipRegisterOptions::SetAudioStream,
-            WhipRegisterOptions::Skip,
-        ];
+    fn prompt_audio(self) -> Result<Self> {
+        let mut audio = WhipOutputAudioOptions::default();
 
-        let audio_selection =
-            Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
+        let mut encoder_options = vec![AudioEncoder::Opus, AudioEncoder::Any];
+        let mut encoder_preferences = vec![];
+        loop {
+            let encoder_selection = Select::new(
+                "Select encoder (ESC or Any to progress):",
+                encoder_options.clone(),
+            )
+            .prompt_skippable()?;
 
-        match audio_selection {
-            Some(WhipRegisterOptions::SetAudioStream) => {
-                Ok(self.with_audio(WhipOutputAudioOptions::default()))
+            match encoder_selection {
+                Some(encoder) => {
+                    encoder_preferences.push(encoder);
+                    if encoder == AudioEncoder::Any {
+                        break;
+                    } else {
+                        encoder_options.retain(|enc| *enc != encoder);
+                    }
+                }
+                None => break,
             }
-            Some(WhipRegisterOptions::Skip) | None => Ok(self),
-            _ => unreachable!(),
         }
+        audio.encoder_preferences = encoder_preferences;
+
+        Ok(self.with_audio(audio))
     }
 
     pub fn with_video(mut self, video: WhipOutputVideoOptions) -> Self {
@@ -234,21 +227,28 @@ impl WhipOutputBuilder {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WhipOutputVideoOptions {
     resolution: VideoResolution,
-    encoder: VideoEncoder,
+    encoder_preferences: Vec<VideoEncoder>,
     root_id: String,
     scene: Scene,
 }
 
 impl WhipOutputVideoOptions {
+    fn serialize_encoder_preferences(&self) -> Vec<serde_json::Value> {
+        self.encoder_preferences
+            .iter()
+            .map(|enc| {
+                json!({
+                    "type": enc.to_string(),
+                })
+            })
+            .collect()
+    }
+
     pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
-            "encoder_preferences": [
-                {
-                    "type": self.encoder.to_string(),
-                },
-            ],
+            "encoder_preferences": self.serialize_encoder_preferences(),
             "initial": {
                 "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
             },
@@ -272,19 +272,30 @@ impl Default for WhipOutputVideoOptions {
         let root_id = "root".to_string();
         Self {
             resolution,
-            encoder: VideoEncoder::Any,
+            encoder_preferences: vec![],
             root_id,
             scene: Scene::Tiles,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct WhipOutputAudioOptions {
-    encoder: AudioEncoder,
+    encoder_preferences: Vec<AudioEncoder>,
 }
 
 impl WhipOutputAudioOptions {
+    fn serialize_encoder_preferences(&self) -> Vec<serde_json::Value> {
+        self.encoder_preferences
+            .iter()
+            .map(|enc| {
+                json!({
+                    "type": enc.to_string(),
+                })
+            })
+            .collect()
+    }
+
     pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
@@ -300,11 +311,7 @@ impl WhipOutputAudioOptions {
             .collect::<Vec<_>>();
 
         json!({
-            "encoder_preferences": [
-                {
-                    "type": self.encoder.to_string(),
-                }
-            ],
+            "encoder_preferences": self.serialize_encoder_preferences(),
             "initial": {
                 "inputs": inputs_json,
         }
@@ -327,13 +334,5 @@ impl WhipOutputAudioOptions {
         json!({
             "inputs": inputs_json,
         })
-    }
-}
-
-impl Default for WhipOutputAudioOptions {
-    fn default() -> Self {
-        Self {
-            encoder: AudioEncoder::Any,
-        }
     }
 }

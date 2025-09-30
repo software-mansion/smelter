@@ -94,7 +94,7 @@ pub enum VideoEncoder {
     Any,
 }
 
-#[derive(Debug, Display, EnumIter, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Display, EnumIter, PartialEq, Serialize, Deserialize, Clone, Copy)]
 pub enum AudioEncoder {
     #[strum(to_string = "opus")]
     Opus,
