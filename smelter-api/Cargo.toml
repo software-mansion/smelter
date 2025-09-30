@@ -1,17 +1,17 @@
 [package]
-name = "smelter_api"
+name = "smelter-api"
 version = "0.1.0"
 edition = "2021"
 license-file = "../LICENSE"
 
 [features]
 default = []
-decklink = ["smelter_core/decklink"]
-web_renderer = ["smelter_core/web_renderer"]
-vk-video = ["smelter_core/vk-video"]
+decklink = ["smelter-core/decklink"]
+web_renderer = ["smelter-core/web_renderer"]
+vk-video = ["smelter-core/vk-video"]
 
 [dependencies]
-smelter_render = { workspace = true }
+smelter-render = { workspace = true }
 serde = { workspace = true }
 schemars = { workspace = true }
 bytes = { workspace = true }
@@ -19,5 +19,5 @@ tracing = { workspace = true }
 itertools = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-smelter_core = { workspace = true }
+smelter-core = { workspace = true }
 

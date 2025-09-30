@@ -812,7 +812,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "compositor_chromium"
+name = "compositor-chromium"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2368,13 +2368,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "integration_tests"
+name = "integration-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
  "clap",
- "compositor_chromium",
+ "compositor-chromium",
  "crossbeam-channel",
  "ffmpeg-next",
  "futures-util",
@@ -2390,9 +2390,9 @@ dependencies = [
  "serde_json",
  "signal-hook",
  "smelter",
- "smelter_api",
- "smelter_core",
- "smelter_render",
+ "smelter-api",
+ "smelter-core",
+ "smelter-render",
  "socket2",
  "spectrum-analyzer",
  "strum 0.27.2",
@@ -4399,7 +4399,7 @@ dependencies = [
  "anyhow",
  "axum",
  "bytes",
- "compositor_chromium",
+ "compositor-chromium",
  "crossbeam-channel",
  "ffmpeg-next",
  "fs_extra",
@@ -4417,9 +4417,9 @@ dependencies = [
  "serde_json",
  "shared_memory",
  "signal-hook",
- "smelter_api",
- "smelter_core",
- "smelter_render",
+ "smelter-api",
+ "smelter-core",
+ "smelter-render",
  "thiserror 1.0.69",
  "tiny_http",
  "tokio",
@@ -4431,20 +4431,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "smelter_api"
+name = "smelter-api"
 version = "0.1.0"
 dependencies = [
  "bytes",
  "itertools 0.14.0",
  "schemars",
  "serde",
- "smelter_core",
- "smelter_render",
+ "smelter-core",
+ "smelter-render",
  "tracing",
 ]
 
 [[package]]
-name = "smelter_core"
+name = "smelter-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -4464,7 +4464,7 @@ dependencies = [
  "rubato",
  "serde",
  "serde_json",
- "smelter_render",
+ "smelter-render",
  "socket2",
  "thiserror 1.0.69",
  "tokio",
@@ -4481,12 +4481,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "smelter_render"
+name = "smelter-render"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
  "bytes",
- "compositor_chromium",
+ "compositor-chromium",
  "crossbeam-channel",
  "glyphon",
  "image",
@@ -4505,7 +4505,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "smelter_render_wasm"
+name = "smelter-render-wasm"
 version = "0.1.0"
 dependencies = [
  "bytes",
@@ -4519,8 +4519,8 @@ dependencies = [
  "reqwest",
  "serde",
  "serde-wasm-bindgen",
- "smelter_api",
- "smelter_render",
+ "smelter-api",
+ "smelter-render",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -5133,7 +5133,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
- "compositor_chromium",
+ "compositor-chromium",
  "crossbeam-channel",
  "ffmpeg-next",
  "fs_extra",
@@ -5146,9 +5146,9 @@ dependencies = [
  "serde",
  "serde_json",
  "smelter",
- "smelter_api",
- "smelter_core",
- "smelter_render",
+ "smelter-api",
+ "smelter-core",
+ "smelter-render",
  "socket2",
  "tokio",
  "tracing",

@@ -8,10 +8,10 @@ license-file = "../LICENSE"
 
 [dependencies]
 smelter = { workspace = true }
-smelter_api = { workspace = true }
-smelter_core = { workspace = true }
-smelter_render = { workspace = true }
-compositor_chromium = { workspace = true }
+smelter-api = { workspace = true }
+smelter-core = { workspace = true }
+smelter-render = { workspace = true }
+compositor-chromium = { workspace = true }
 reqwest = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }

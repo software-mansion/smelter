@@ -1,5 +1,5 @@
 [package]
-name = "integration_tests"
+name = "integration-tests"
 version = "0.1.0"
 edition = "2021"
 license-file = "../LICENSE"
@@ -11,18 +11,18 @@ default = ["web_renderer"]
 update_snapshots = []
 decklink = ["smelter/decklink"]
 web_renderer = [
-    "dep:compositor_chromium",
-    "smelter_render/web_renderer",
+    "dep:compositor-chromium",
+    "smelter-render/web_renderer",
     "smelter/web_renderer",
 ]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 smelter = { workspace = true }
-smelter_api = { workspace = true }
-smelter_core = { workspace = true }
-smelter_render = { workspace = true }
-compositor_chromium = { workspace = true, optional = true }
+smelter-api = { workspace = true }
+smelter-core = { workspace = true }
+smelter-render = { workspace = true }
+compositor-chromium = { workspace = true, optional = true }
 reqwest = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }

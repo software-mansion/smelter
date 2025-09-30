@@ -1,18 +1,18 @@
 [package]
-name = "smelter_render"
+name = "smelter-render"
 version = "0.1.0"
 edition = "2021"
 license-file = "../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
-web_renderer = ["dep:compositor_chromium", "dep:shared_memory"]
+web_renderer = ["dep:compositor-chromium", "dep:shared_memory"]
 
 [dependencies]
 pollster = "0.3.0"
 thiserror = { workspace = true }
 wgpu = { workspace = true }
-compositor_chromium = { workspace = true, optional = true }
+compositor-chromium = { workspace = true, optional = true }
 image = { workspace = true }
 reqwest = { workspace = true }
 bytes = { workspace = true }

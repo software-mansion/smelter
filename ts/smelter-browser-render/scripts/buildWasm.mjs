@@ -3,7 +3,7 @@ import { spawn as nodeSpawn } from 'node:child_process';
 
 async function build() {
   const dirName = import.meta.dirname;
-  const smelterWasmCratePath = path.resolve(dirName, '../../../smelter_render_wasm');
+  const smelterWasmCratePath = path.resolve(dirName, '../../../smelter-render-wasm');
   const outputPath = path.resolve(dirName, '../src/generated/smelter');
   const args = ['build', '--out-name', 'smelter', '--target', 'web', '--release', '-d', outputPath, smelterWasmCratePath];
 
