@@ -4,9 +4,10 @@ use std::{
 };
 
 use anyhow::Result;
-use inquire::Text;
+use inquire::{Select, Text};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use strum::IntoEnumIterator;
 use tracing::info;
 
 use crate::inputs::{InputHandle, VideoDecoder};
@@ -71,10 +72,7 @@ impl WhipInputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        Ok(self
-            .prompt_name()?
-            .prompt_bearer_token()?
-            .with_video(WhipInputVideoOptions::default()))
+        self.prompt_name()?.prompt_bearer_token()?.prompt_video()
     }
 
     fn prompt_name(self) -> Result<Self> {
@@ -98,6 +96,35 @@ impl WhipInputBuilder {
                 Ok(self)
             }
         }
+    }
+
+    fn prompt_video(self) -> Result<Self> {
+        let mut video = WhipInputVideoOptions::default();
+
+        let mut decoder_options = VideoDecoder::iter().collect::<Vec<_>>();
+        let mut decoder_preferences = vec![];
+        loop {
+            let decoder_selection = Select::new(
+                "Select decoder (ESC or Any to progress):",
+                decoder_options.clone(),
+            )
+            .prompt_skippable()?;
+
+            match decoder_selection {
+                Some(decoder) => {
+                    decoder_preferences.push(decoder);
+                    if decoder == VideoDecoder::Any {
+                        break;
+                    } else {
+                        decoder_options.retain(|dec| *dec != decoder);
+                    }
+                }
+                None => break,
+            }
+        }
+        video.decoder_preferences = decoder_preferences;
+
+        Ok(self.with_video(video))
     }
 
     pub fn with_name(mut self, name: String) -> Self {
@@ -124,25 +151,15 @@ impl WhipInputBuilder {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct WhipInputVideoOptions {
-    decoder: VideoDecoder,
+    decoder_preferences: Vec<VideoDecoder>,
 }
 
 impl WhipInputVideoOptions {
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
-            "decoder_preferences": [
-                self.decoder.to_string(),
-            ],
+            "decoder_preferences": self.decoder_preferences.iter().map(|dec| dec.to_string()).collect::<Vec<_>>(),
         })
-    }
-}
-
-impl Default for WhipInputVideoOptions {
-    fn default() -> Self {
-        Self {
-            decoder: VideoDecoder::Any,
-        }
     }
 }
