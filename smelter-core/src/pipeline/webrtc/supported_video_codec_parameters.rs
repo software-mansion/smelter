@@ -1,5 +1,5 @@
 use webrtc::{
-    api::media_engine::{MIME_TYPE_H264, MIME_TYPE_VP8, MIME_TYPE_VP9},
+    api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
     rtp_transceiver::{
         rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters},
         RTCPFeedback,
@@ -141,6 +141,30 @@ pub fn get_video_h264_codec_with_default_payload_type() -> Vec<RTCRtpCodecParame
                 sdp_fmtp_line: fmtp.to_string(),
                 rtcp_feedback: get_video_rtcp_feedback(),
             },
+            ..Default::default()
+        })
+        .collect()
+}
+
+pub fn get_audio_opus_codec() -> Vec<RTCRtpCodecParameters> {
+    let codec_configs = [
+        ("minptime=10;useinbandfec=1", 111, 2),
+        ("minptime=10;useinbandfec=1", 112, 1),
+        ("minptime=10;useinbandfec=0", 109, 2),
+        ("minptime=10;useinbandfec=0", 110, 1),
+    ];
+
+    codec_configs
+        .iter()
+        .map(|(fmtp, payload_type, channels)| RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_OPUS.to_owned(),
+                clock_rate: 48000,
+                channels: *channels,
+                sdp_fmtp_line: fmtp.to_string(),
+                rtcp_feedback: vec![],
+            },
+            payload_type: *payload_type,
             ..Default::default()
         })
         .collect()

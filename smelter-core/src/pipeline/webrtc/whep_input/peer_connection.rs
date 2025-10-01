@@ -3,9 +3,7 @@ use std::sync::Arc;
 use tracing::{debug, warn};
 use webrtc::{
     api::{
-        interceptor_registry::register_default_interceptors,
-        media_engine::{MediaEngine, MIME_TYPE_OPUS},
-        APIBuilder,
+        interceptor_registry::register_default_interceptors, media_engine::MediaEngine, APIBuilder,
     },
     ice_transport::{
         ice_connection_state::RTCIceConnectionState, ice_gatherer::OnLocalCandidateHdlrFn,
@@ -17,13 +15,16 @@ use webrtc::{
         OnTrackHdlrFn, RTCPeerConnection,
     },
     rtp_transceiver::{
-        rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
+        rtp_codec::{RTCRtpCodecParameters, RTPCodecType},
         rtp_transceiver_direction::RTCRtpTransceiverDirection,
         RTCRtpTransceiver, RTCRtpTransceiverInit,
     },
 };
 
-use crate::{pipeline::PipelineCtx, prelude::WebrtcClientError};
+use crate::{
+    pipeline::{webrtc::supported_video_codec_parameters::get_audio_opus_codec, PipelineCtx},
+    prelude::WebrtcClientError,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct PeerConnection {
@@ -134,35 +135,10 @@ fn media_engine_with_codecs(
     video_codecs: &Vec<RTCRtpCodecParameters>,
 ) -> webrtc::error::Result<MediaEngine> {
     let mut media_engine = MediaEngine::default();
-    media_engine.register_codec(
-        RTCRtpCodecParameters {
-            capability: RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_OPUS.to_owned(),
-                clock_rate: 48000,
-                channels: 2,
-                sdp_fmtp_line: "minptime=10;useinbandfec=1".to_owned(),
-                rtcp_feedback: vec![],
-            },
-            payload_type: 111,
-            ..Default::default()
-        },
-        RTPCodecType::Audio,
-    )?;
 
-    media_engine.register_codec(
-        RTCRtpCodecParameters {
-            capability: RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_OPUS.to_owned(),
-                clock_rate: 48000,
-                channels: 1,
-                sdp_fmtp_line: "minptime=10;useinbandfec=1".to_owned(),
-                rtcp_feedback: vec![],
-            },
-            payload_type: 112,
-            ..Default::default()
-        },
-        RTPCodecType::Audio,
-    )?;
+    for audio_codec in get_audio_opus_codec() {
+        media_engine.register_codec(audio_codec.clone(), RTPCodecType::Audio)?;
+    }
 
     for video_codec in video_codecs {
         media_engine.register_codec(video_codec.clone(), RTPCodecType::Video)?;
