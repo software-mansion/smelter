@@ -18,6 +18,7 @@
 - [TypeScript SDK](#typescript-sdk)
   - [Packages](#packages)
   - [Examples](#examples)
+- [API compatibility](#api-compatibility)
 
 # Rust
 
@@ -45,7 +46,7 @@ Crate includes:
 
 It is used by:
 - `smelter` (root crate) to parse HTTP request
-- `smelter-render_wasm` to parse JSON object in WASM implementation
+- `smelter-render-wasm` to parse JSON object in WASM implementation
 
 ### `smelter-core`
 
@@ -79,7 +80,7 @@ The 2 core entrypoints of this library are:
 - `Renderer::render` method that takes set of input frames and produces set of output frames.
 - `Renderer::update_scene` that changes layout that `render` method will use for inputs.
 
-### `smelter-render_wasm`
+### `smelter-render-wasm`
 
 Wraps `smelter-render` crate with WASM api.
 
@@ -269,16 +270,14 @@ If you made changes that modify the snapshot:
   - Run `pnpm run build-wasm` to build WASM bundle from Rust code
   - Run `pnpm run build` to build JS code (WASM has to be build earlier, or use `build:all` in root directory to build everything)
 
-## API compatibility
-
-SDK should always be compatible with the version of code from the repo. If you are changing the API, the changes to the SDK should land in the same PR.
-
 ## Examples
 
 To bootstrap repo run:
 
-```
+```bash
 pnpm install && pnpm build:all
+# or if you only plan to use Node.js
+pnpm install && pnpm build:node-sdk
 ```
 
 After that, you can run only `pnpm run build` to rebuild if the Rust code did not change.
@@ -293,9 +292,10 @@ pnpm run ts-node ./src/simple.tsx
 
 > TODO: instructions below needs to be automated to build Rust automatically and point examples to this binary
 
-To run Node.js example against Rust code from the repo you need to in the root directory run:
+By default, SDK will download smelter binary from GitHub Releases into `~/.smelter/` and start the server with them.
+To run Node.js examples against Rust code from the repo you need to build it first. In the root directory run:
 
-```
+```bash
 cargo build -r --no-default-features
 export SMELTER_PATH=$(pwd)/target/release/main_process
 ```
@@ -311,6 +311,10 @@ pnpm run dev
 Open `localhost:5173` in the browser
 
 If Rust code changes you need to rebuild WASM with `pnpm run build-wasm`.
+
+# API compatibility
+
+TypeScript SDK should always be compatible with the version of code from the repo. If you are changing the API, the changes to the SDK should land in the same PR.
 
 ## Process for introducing API changes
 
