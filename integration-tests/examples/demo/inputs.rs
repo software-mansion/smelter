@@ -50,6 +50,9 @@ pub enum InputProtocol {
 
 #[derive(Debug, EnumIter, Display, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum VideoDecoder {
+    #[strum(to_string = "any")]
+    Any,
+
     #[strum(to_string = "ffmpeg_h264")]
     FfmpegH264,
 
@@ -58,9 +61,6 @@ pub enum VideoDecoder {
 
     #[strum(to_string = "ffmpeg_vp9")]
     FfmpegVp9,
-
-    #[strum(to_string = "any")]
-    Any,
 }
 
 impl From<VideoDecoder> for gstreamer::Video {

@@ -81,6 +81,9 @@ impl std::fmt::Display for VideoResolution {
 
 #[derive(Debug, Display, EnumIter, PartialEq, Serialize, Deserialize, Clone, Copy)]
 pub enum VideoEncoder {
+    #[strum(to_string = "any")]
+    Any,
+
     #[strum(to_string = "ffmpeg_h264")]
     FfmpegH264,
 
@@ -89,19 +92,16 @@ pub enum VideoEncoder {
 
     #[strum(to_string = "ffmpeg_vp9")]
     FfmpegVp9,
-
-    #[strum(to_string = "any")]
-    Any,
 }
 
-#[derive(Debug, Display, EnumIter, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Display, EnumIter, PartialEq, Serialize, Deserialize, Clone, Copy)]
 pub enum AudioEncoder {
+    #[strum(to_string = "any")]
+    Any,
+
     #[strum(to_string = "opus")]
     Opus,
 
     #[strum(to_string = "aac")]
     Aac,
-
-    #[strum(to_string = "any")]
-    Any,
 }

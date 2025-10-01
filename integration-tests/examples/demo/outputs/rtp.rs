@@ -236,7 +236,9 @@ impl OutputHandle for RtpOutput {
                     }
 
                     loop {
-                        let confirmation = Confirm::new("Is player running? [y/n]").prompt()?;
+                        let confirmation = Confirm::new("Is player running? [Y/n]")
+                            .with_default(true)
+                            .prompt()?;
                         if confirmation {
                             return Ok(());
                         }
