@@ -1,6 +1,6 @@
 use core::slice;
-use ffmpeg_next::{format::Pixel, frame};
-use std::time::Duration;
+use ffmpeg_next::{format::Pixel, frame, Dictionary};
+use std::{collections::HashMap, time::Duration};
 
 use smelter_render::FrameData;
 
@@ -83,24 +83,28 @@ fn write_plane_to_av_frame(frame: &mut frame::Video, plane: usize, data: &[u8]) 
         .for_each(|(data, target)| target[..width].copy_from_slice(data));
 }
 
-pub(super) fn merge_options_with_defaults<'a>(
-    defaults: &'a [(&str, &str)],
-    overrides: &'a [(String, String)],
-) -> impl Iterator<Item = (&'a str, &'a str)> {
-    defaults
-        .iter()
-        .copied()
-        .filter(|(key, _value)| {
-            // filter out any defaults that are in overrides
-            !overrides
-                .iter()
-                .any(|(override_key, _)| key == override_key)
-        })
-        .chain(
-            overrides
-                .iter()
-                .map(|(key, value)| (key.as_str(), value.as_str())),
-        )
+#[derive(Debug, Default)]
+pub(super) struct FfmpegOptions(HashMap<String, String>);
+
+impl FfmpegOptions {
+    pub fn append<T: AsRef<str>>(&mut self, options: &[(T, T)]) {
+        for (key, value) in options {
+            self.0
+                .insert(key.as_ref().to_string(), value.as_ref().to_string());
+        }
+    }
+
+    pub fn into_dictionary(self) -> Dictionary<'static> {
+        Dictionary::from_iter(self.0)
+    }
+}
+
+impl<T: AsRef<str>, const N: usize> From<&[(T, T); N]> for FfmpegOptions {
+    fn from(value: &[(T, T); N]) -> Self {
+        let mut options = FfmpegOptions::default();
+        options.append(value);
+        options
+    }
 }
 
 pub(super) fn read_extradata(encoder: &ffmpeg_next::codec::encoder::Video) -> Option<bytes::Bytes> {

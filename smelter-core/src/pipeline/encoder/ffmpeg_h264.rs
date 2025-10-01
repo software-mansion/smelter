@@ -1,15 +1,12 @@
 use std::{iter, sync::Arc};
 
-use ffmpeg_next::{
-    codec::{Context, Id},
-    format::Pixel,
-    Dictionary, Rational,
-};
+use ffmpeg_next::codec::Id;
+use ffmpeg_next::{codec::Context, format::Pixel, Rational};
 use smelter_render::{Frame, OutputFrameFormat};
 use tracing::{error, info, trace, warn};
 
 use crate::pipeline::encoder::ffmpeg_utils::{
-    create_av_frame, encoded_chunk_from_av_packet, merge_options_with_defaults, read_extradata,
+    create_av_frame, encoded_chunk_from_av_packet, read_extradata, FfmpegOptions,
 };
 use crate::prelude::*;
 
@@ -31,8 +28,9 @@ impl VideoEncoder for FfmpegH264Encoder {
         ctx: &Arc<PipelineCtx>,
         options: FfmpegH264EncoderOptions,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
-        info!(?options, "Initialize FFmpeg x264 encoder");
+        info!(?options, "Initialize FFmpeg H264 encoder");
         let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
+        let codec_name = codec.name();
 
         let mut encoder = Context::new().encoder().video()?;
 
@@ -52,41 +50,40 @@ impl VideoEncoder for FfmpegH264Encoder {
             (*encoder).color_trc = ffi::AVColorTransferCharacteristic::AVCOL_TRC_BT709;
         }
 
-        // TODO: audit settings below
-        // Those values are copied from somewhere, they have to be set because libx264
-        // is throwing an error if it detects default ffmpeg settings.
-        let defaults = [
+        let mut ffmpeg_options = FfmpegOptions::from(&[
             ("preset", preset_to_str(options.preset)),
-            // Quality-based VBR (0-51)
-            ("crf", "23"),
-            // Override ffmpeg defaults from https://github.com/mirror/x264/blob/eaa68fad9e5d201d42fde51665f2d137ae96baf0/encoder/encoder.c#L674
-            // QP curve compression - libx264 defaults to 0.6 (in case of tune=grain to 0.8)
-            ("qcomp", "0.6"),
-            //  Maximum motion vector search range - libx264 defaults to 16 (in case of placebo
-            //  or veryslow preset to 24)
-            ("me_range", "16"),
             // Auto number of threads
             ("threads", "0"),
-            // Max QP step - libx264 defaults to 4
-            ("qdiff", "4"),
-            // Min QP - libx264 defaults to 0
-            ("qmin", "0"),
-            // Max QP - libx264 defaults to QP_MAX = 69
-            ("qmax", "69"),
-            //  Maximum GOP (Group of Pictures) size - libx264 defaults to 250
-            ("g", "250"),
-            // QP factor between I and P frames - libx264 defaults to 1.4 (in case of tune=grain to 1.1)
-            ("i_qfactor", "1.4"),
-            // QP factor between P and B frames - libx264 defaults to 1.4 (in case of tune=grain to 1.1)
-            ("f_pb_factor", "1.3"),
-            // A comma-separated list of partitions to consider. Possible values: p8x8, p4x4, b8x8, i8x8, i4x4, none, all
-            ("partitions", default_partitions_for_preset(options.preset)),
-            // Subpixel motion estimation and mode decision (decision quality: 1=fast, 11=best)
-            ("subq", default_subq_mode_for_preset(options.preset)),
-        ];
+        ]);
+        if codec_name != "libopenh264" {
+            ffmpeg_options.append(&[
+                // Quality-based VBR (0-51)
+                ("crf", "23"),
+                // QP curve compression
+                ("qcomp", "0.6"),
+                //  Maximum motion vector search range
+                ("me_range", "16"),
+                // Max QP step
+                ("qdiff", "4"),
+                // Min QP
+                ("qmin", "0"),
+                // Max QP
+                ("qmax", "69"),
+                // Maximum GOP (Group of Pictures) size - number of frames between keyframe
+                ("g", "250"),
+                // QP factor between I and P frames
+                ("i_qfactor", "1.4"),
+                // QP factor between P and B frames
+                ("f_pb_factor", "1.3"),
+                // A comma-separated list of partitions to consider. Possible values: p8x8, p4x4, b8x8, i8x8, i4x4, none, all
+                ("partitions", default_partitions_for_preset(options.preset)),
+                // Subpixel motion estimation and mode decision (decision quality: 1=fast, 11=best)
+                ("subq", default_subq_mode_for_preset(options.preset)),
+            ]);
+        };
+        ffmpeg_options.append(&options.raw_options);
 
-        let encoder_opts_iter = merge_options_with_defaults(&defaults, &options.raw_options);
-        let encoder = encoder.open_as_with(codec, Dictionary::from_iter(encoder_opts_iter))?;
+        let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
         let extradata = read_extradata(&encoder);
 
         Ok((
