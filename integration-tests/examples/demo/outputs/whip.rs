@@ -167,7 +167,7 @@ impl WhipOutputBuilder {
     fn prompt_audio(self) -> Result<Self> {
         let mut audio = WhipOutputAudioOptions::default();
 
-        let mut encoder_options = vec![AudioEncoder::Opus, AudioEncoder::Any];
+        let mut encoder_options = vec![AudioEncoder::Any, AudioEncoder::Opus];
         let mut encoder_preferences = vec![];
         loop {
             let encoder_selection = Select::new(
