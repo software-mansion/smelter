@@ -3,12 +3,15 @@
 - [Rust](#rust)
   - [Crates](#crates)
     - [`smelter` (root crate)](#smelter-root-crate)
-    - [`smelter_api`](#smelter_api)
-    - [`smelter_core`](#smelter_core)
-    - [`smelter_render`](#smelter_render)
-    - [`smelter_render_wasm`](#smelter_render_wasm)
+    - [`smelter-api`](#smelter-api)
+    - [`smelter-core`](#smelter-core)
+    - [`smelter-render`](#smelter-render)
+    - [`smelter-render-wasm`](#smelter-render-wasm)
+    - [`vk-video`](#vk-video)
+    - [`libcef`](#libcef)
+    - [`decklink`](#decklink)
     - [`tools`](#tools)
-    - [`integration_tests`](#integration_tests)
+    - [`integration-tests`](#integration-tests)
   - [Binaries](#binaries)
   - [Examples](#examples)
   - [Tests](#tests)
@@ -30,21 +33,21 @@ Actual create implements:
 - configures logging
 - runs main event loop.
 
-However, most calls are just proxied to `Pipeline` instance from `smelter_core`. JSON parsing
-is handled by `smelter_api` crate.
+However, most calls are just proxied to `Pipeline` instance from `smelter-core`. JSON parsing
+is handled by `smelter-api` crate.
 
-### `smelter_api`
+### `smelter-api`
 
 Crate includes:
 - HTTP type definition (with JSON serialization and deserialization logic)
-- Type conversion from `smelter_api` types to `smelter_core` and `smelter_render`.
+- Type conversion from `smelter-api` types to `smelter-core` and `smelter-render`.
   In some cases this conversion also applies default values.
 
 It is used by:
 - `smelter` (root crate) to parse HTTP request
-- `smelter_render_wasm` to parse JSON object in WASM implementation
+- `smelter-render_wasm` to parse JSON object in WASM implementation
 
-### `smelter_core`
+### `smelter-core`
 
 Smelter as a library, main entrypoint if you want to use smelter from Rust directly.
 
@@ -54,11 +57,11 @@ Crate implements:
 - Muxing/demuxing and transport protocols
 - Audio mixing
 
-It is using `smelter_render` to:
+It is using `smelter-render` to:
 - Compose set of frames produced by queue (one frame per input) into set of composed frames (one frame per output)
 - All scene updates for video are proxied to this crate
 
-### `smelter_render`
+### `smelter-render`
 
 Implements rendering for smelter.
 
@@ -76,19 +79,37 @@ The 2 core entrypoints of this library are:
 - `Renderer::render` method that takes set of input frames and produces set of output frames.
 - `Renderer::update_scene` that changes layout that `render` method will use for inputs.
 
-### `smelter_render_wasm`
+### `smelter-render_wasm`
 
-Wraps `smelter_render` crate with WASM api.
+Wraps `smelter-render` crate with WASM api.
 
 It is used in TypeScript SDK:
 - `./ts/smelter-browser-render` - to build WASM binary and expose rendering API as JS library.
 - (in directly) `./ts/smelter-web-wasm` - to run Smelter in the browser
 
+### `vk-video`
+
+A library for hardware video decoding (and soon encoding) using Vulkan Video, with [wgpu] integration.
+
+Used by `smelter-core`
+
+### `libcef`
+
+Bindings for Chromium Embedded Framework.
+
+Used by `smelter-render` to implement rendering websites as part of composed output.
+
+### `decklink`
+
+Bindings for DeckLink SDK.
+
+Used by `smelter-core` to implement using DeckLink devices as pipeline inputs.
+
 ### `tools`
 
 Internal utils, release scripts
 
-### `integration_tests`
+### `integration-tests`
 
 Integration tests:
 - Rendering snapshot tests that render single frame and compare with snapshot version.
@@ -117,7 +138,7 @@ to run **`./src/bin/main_process.rs`**
 or
 
 ```
-cargo run -p tools --bin package_for_relase
+cargo run -p tools --bin package_for_release
 ```
 
 to run **`./tools/src/bin/package_for_release/main.rs`**.
@@ -128,23 +149,22 @@ to run **`./tools/src/bin/package_for_release/main.rs`**.
 - `process_helper` - starts secondary processes that communicate with `main_process`
   to enable web rendering with Chromium
 
-### `integration_tests` crate
+### `integration-tests` crate
 
-- `play_rtp_dump` - helper to play RTP dumps generated in tests from **`./integration_tests/src/pipeline_tests`**.
+- `play_rtp_dump` - helper to play RTP dumps generated in tests from **`./integration-tests/src/pipeline_tests`**.
   Useful to verify if new tests generated correctly or to see what is wrong when test is failing.
 - `generate_rtp_from_file` - helper to generate new input files that can be used for new tests in
-  **`./integration_tests/src/tests`**.
+  **`./integration-tests/src/tests`**.
 
 ### `tools` create
 
 This is crate when we keep most of our internal tools and build scripts.
 
-- `package_for_relase` - builds release binaries that can be uploaded to GitHub Releases
+- `package_for_release` - builds release binaries that can be uploaded to GitHub Releases
 - `generate_docs_examples` - generates WEBP files with examples for documentation.
 - `generate_docs_example_inputs` - helper for `generate_docs_examples` (generates inputs for that binary).
-- `generate_json_schema` - generate JSON schema from `smelter_api` types. It needs to be called every
-  time API is changed and regenerated file needs to be committed. (It also generates Markdown docs, but
-  this will be soon removed)
+- `generate_json_schema` - generate JSON schema from `smelter-api` types. It needs to be called every
+  time API is changed and regenerated file needs to be committed.
 
 ## Examples
 
@@ -161,26 +181,26 @@ cargo run -p <crate_name> --example <example_name>
 For example,
 
 ```
-cargo run -p integration_tests --example simple
+cargo run -p integration-tests --example simple
 ```
 
-will run **`./integration_tests/examples/simple.rs`**.
+will run **`./integration-tests/examples/simple.rs`**.
 
 ## Tests
 
 We have 3 main types of tests:
 - A small number of regular unit tests spread over the codebase.
 - Snapshot tests that render a specific image and save it as PNG.
-  - Generated images are located in **`./integration_tests/snapshots/render_snapshots`** directory.
-  - Tests and JSON files representing tested scenes are in **`./integration_tests/src/render_tests`** directory
+  - Generated images are located in **`./integration-tests/snapshots/render_snapshots`** directory.
+  - Tests and JSON files representing tested scenes are in **`./integration-tests/src/render_tests`** directory
   - For example:
-    - Test is located in **`./integration_tests/src/render_tests/view_tests.rs`**
-    - Test is rendering scene described by **`./integration_tests/src/render_tests/view/border_radius.scene.json`**
+    - Test is located in **`./integration-tests/src/render_tests/view_tests.rs`**
+    - Test is rendering scene described by **`./integration-tests/src/render_tests/view/border_radius.scene.json`**
     - Test is rendering output (or comparing with the old version) to
-      **`./integration_tests/snapshots/render_snapshots/view/border_radius_0_output_1.png`**
+      **`./integration-tests/snapshots/render_snapshots/view/border_radius_0_output_1.png`**
 - Pipeline tests that are basically snapshot tests, but compare entire videos.
-  - Generated stream dumps are located in **`./integration_tests/snapshots/rtp_packet_dumps`** directory.
-  - Tests are implemented in **`./integration_tests/src/pipeline_tests`** directory.
+  - Generated stream dumps are located in **`./integration-tests/snapshots/rtp_packet_dumps`** directory.
+  - Tests are implemented in **`./integration-tests/src/pipeline_tests`** directory.
   - Some of the tests here might be fragile if running along with a lot of CPU-intensive
     tasks. That is why **`./.config/nextest.toml`** is limiting the concurrency of some tests on CI.
 
@@ -213,7 +233,7 @@ e.g.
 cargo nextest run --workspace audio_mixing_with_offset
 ```
 
-will run a test from **`./integration_tests/src/pipeline_tests/audio_only.rs`**
+will run a test from **`./integration-tests/src/pipeline_tests/audio_only.rs`**
 
 #### Updating snapshots
 
@@ -222,7 +242,7 @@ to repo. If version in repo is different or missing, then tests will fail.
 
 To generate snapshots for new tests, or update those that should change, you need to enable
 `update_snapshots` feature when running tests. It is recommended to only run that command
-for specific tests, especially **`./integration_tests/src/pipeline_tests`**
+for specific tests, especially **`./integration-tests/src/pipeline_tests`**
 
 e.g.
 
@@ -230,7 +250,7 @@ e.g.
 cargo nextest run --workspace --features update_snapshots audio_mixing_with_offset
 ```
 
-will run a test from **./integration_tests/src/pipeline_tests/audio_only.rs** and if output changed the update the snapshot.
+will run a test from **./integration-tests/src/pipeline_tests/audio_only.rs** and if output changed the update the snapshot.
 
 If you made changes that modify the snapshot:
 - Create PR in https://github.com/membraneframework-labs/video_compositor_snapshot_tests repo.
