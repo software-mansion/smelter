@@ -541,7 +541,9 @@ pub fn single_input_aac_mp4() -> Result<()> {
     Ok(())
 }
 
-// TODO: (@jbrs) Doc comment describing test
+/// Single frequency input that changes after 5 seconds. Input starts streaming 2 seconds before
+/// start request with offset set to 2 seconds. This should result in 2 seconds of silence, 5
+/// seconds of lower frequency and higher frequency after that time.
 #[test]
 fn audio_offset_variable_frequency() -> Result<()> {
     const OUTPUT_DUMP_FILE: &str = "audio_offset_variable_frequency_output.rtp";
@@ -615,7 +617,9 @@ fn audio_offset_variable_frequency() -> Result<()> {
     Ok(())
 }
 
-// TODO: (@jbrs) Doc comment describing test
+/// Single frequency input that changes after 5 seconds. Input starts streaming 2 seconds before
+/// start request with no offset. This should result in approx. 3 seconds of lower frequency and
+/// higher frequency after that.
 #[test]
 fn audio_no_offset_variable_frequency() -> Result<()> {
     const OUTPUT_DUMP_FILE: &str = "audio_no_offset_variable_frequency_output.rtp";
