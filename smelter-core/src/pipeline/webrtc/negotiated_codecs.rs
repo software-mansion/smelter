@@ -13,6 +13,11 @@ use crate::{
     pipeline::{decoder::VideoDecoderMapping, rtp::depayloader::VideoPayloadTypeMapping},
 };
 
+pub(super) struct VideoCodecMappings {
+    pub(super) decoder_mapping: VideoDecoderMapping,
+    pub(super) payload_type_mapping: VideoPayloadTypeMapping,
+}
+
 pub trait WebrtcVideoDecoderMapping: Sized {
     async fn from_webrtc_transceiver(
         transceiver: Arc<RTCRtpTransceiver>,
@@ -106,7 +111,7 @@ impl WebrtcVideoPayloadTypeMapping for VideoPayloadTypeMapping {
 fn h264_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<PayloadType>> {
     let payload_types: Vec<PayloadType> = track_codecs
         .iter()
-        .filter(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP8.to_lowercase())
+        .filter(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_H264.to_lowercase())
         .map(|codec| codec.payload_type)
         .collect();
 

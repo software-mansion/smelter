@@ -1,11 +1,11 @@
 use std::{iter, sync::Arc};
 
-use smelter_render::{error::ErrorStack, Frame};
+use smelter_render::{Frame, error::ErrorStack};
 use tracing::error;
 
 use crate::pipeline::decoder::{
-    ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder,
-    vulkan_h264::VulkanH264Decoder, VideoDecoder, VideoDecoderInstance,
+    VideoDecoder, VideoDecoderInstance, ffmpeg_h264::FfmpegH264Decoder,
+    ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder, vulkan_h264::VulkanH264Decoder,
 };
 
 use crate::prelude::*;

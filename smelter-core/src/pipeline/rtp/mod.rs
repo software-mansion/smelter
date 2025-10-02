@@ -3,10 +3,8 @@ use std::time::Duration;
 pub(super) mod depayloader;
 pub(super) mod payloader;
 
-mod dynamic_stream;
 mod rtp_input;
 mod rtp_output;
-mod static_stream;
 mod util;
 
 pub(crate) use rtp_input::{
