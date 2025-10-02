@@ -1,32 +1,25 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::pipeline::rtp::RtpNtpSyncPoint;
 use crate::pipeline::webrtc::whep_input::{
-    peer_connection::PeerConnection,
-    track_audio_thread::process_audio_track,
-    track_video_thread::process_video_track,
-    whep_http_client::{SdpAnswer, WhepHttpClient},
+    establish_peer_connection::exchange_sdp_offers, peer_connection::PeerConnection,
+    resolve_video_preferences::resolve_video_preferences, track_audio_thread::process_audio_track,
+    track_video_thread::process_video_track, whep_http_client::WhepHttpClient,
 };
 use crate::{pipeline::input::Input, queue::QueueDataReceiver};
 use crossbeam_channel::{bounded, Sender};
-use itertools::Itertools;
-use smelter_render::error::ErrorStack;
 use tokio::sync::oneshot;
-use tracing::{debug, error, info, span, warn, Instrument, Level};
+use tracing::{debug, span, warn, Instrument, Level};
 use url::Url;
-use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
-use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::rtp_transceiver::rtp_codec::{RTCRtpCodecParameters, RTPCodecType};
+use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
 
-use crate::pipeline::webrtc::supported_video_codec_parameters::{
-    get_video_h264_codec, get_video_vp8_codec, get_video_vp9_codec,
-};
 use crate::prelude::*;
 
+mod establish_peer_connection;
 mod peer_connection;
+mod resolve_video_preferences;
 mod track_audio_thread;
 mod track_video_thread;
 mod whep_http_client;
@@ -34,7 +27,11 @@ mod whep_http_client;
 const WHEP_INIT_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug)]
-pub struct WhepInput;
+pub struct WhepInput {
+    ctx: Arc<PipelineCtx>,
+    session_url: Url,
+    client: Arc<WhepHttpClient>,
+}
 
 impl WhepInput {
     pub(crate) fn new_input(
@@ -47,19 +44,17 @@ impl WhepInput {
         let (frame_sender, frame_receiver) = bounded(5);
         let (input_samples_sender, input_samples_receiver) = bounded(5);
 
-        // let (video_preferences, video_codecs_params) =
-        //     resolve_video_preferences(&ctx, options.video_preferences)?;
-
         let span = span!(
             Level::INFO,
             "WHEP client task",
             input_id = input_id.to_string()
         );
         let rt = ctx.tokio_rt.clone();
+        let ctx_clone = ctx.clone();
         rt.spawn(
             async {
                 let result =
-                    spawn_whep_client_task(ctx, options, input_samples_sender, frame_sender).await;
+                    init_whep_client(ctx_clone, options, input_samples_sender, frame_sender).await;
                 match result {
                     Ok(handle) => {
                         init_confirmation_sender.send(Ok(handle)).unwrap();
@@ -70,9 +65,14 @@ impl WhepInput {
             .instrument(span),
         );
 
-        wait_with_deadline(init_confirmation_receiver, WHEP_INIT_TIMEOUT)?;
+        let (session_url, client) =
+            wait_with_deadline(init_confirmation_receiver, WHEP_INIT_TIMEOUT)?;
         Ok((
-            Input::Whep(Self),
+            Input::Whep(Self {
+                ctx,
+                session_url,
+                client,
+            }),
             InputInitInfo::Other,
             QueueDataReceiver {
                 video: Some(frame_receiver),
@@ -82,10 +82,20 @@ impl WhepInput {
     }
 }
 
-fn wait_with_deadline<T>(
-    mut result_receiver: oneshot::Receiver<Result<T, WebrtcClientError>>,
+impl Drop for WhepInput {
+    fn drop(&mut self) {
+        let session_url = self.session_url.clone();
+        let client = self.client.clone();
+        self.ctx.tokio_rt.spawn(async move {
+            client.delete_session(session_url).await;
+        });
+    }
+}
+
+fn wait_with_deadline(
+    mut result_receiver: oneshot::Receiver<Result<(Url, Arc<WhepHttpClient>), WebrtcClientError>>,
     timeout: Duration,
-) -> Result<T, InputInitError> {
+) -> Result<(Url, Arc<WhepHttpClient>), InputInitError> {
     let start_time = Instant::now();
     while start_time.elapsed() < timeout {
         thread::sleep(Duration::from_millis(500));
@@ -107,12 +117,12 @@ fn wait_with_deadline<T>(
     Err(InputInitError::WhepInitTimeout)
 }
 
-async fn spawn_whep_client_task(
+async fn init_whep_client(
     ctx: Arc<PipelineCtx>,
     options: WhepInputOptions,
     input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
-) -> Result<(), WebrtcClientError> {
+) -> Result<(Url, Arc<WhepHttpClient>), WebrtcClientError> {
     let client = WhepHttpClient::new(&options)?;
     let (video_preferences, video_codecs_params) =
         resolve_video_preferences(&ctx, options.video_preferences)?;
@@ -121,7 +131,7 @@ async fn spawn_whep_client_task(
     let _video_transceiver = pc.new_video_track(&video_codecs_params).await?;
     let _audio_transceiver = pc.new_audio_track().await?;
 
-    let (_session_url, answer) = exchange_sdp_offers(&pc, &client).await?;
+    let (session_url, answer) = exchange_sdp_offers(&pc, &client).await?;
     pc.set_remote_description(answer).await?;
     {
         let sync_point = RtpNtpSyncPoint::new(ctx.queue_sync_point);
@@ -168,144 +178,5 @@ async fn spawn_whep_client_task(
         }))
     };
 
-    Ok(())
-}
-
-async fn exchange_sdp_offers(
-    pc: &PeerConnection,
-    client: &Arc<WhepHttpClient>,
-) -> Result<(Url, RTCSessionDescription), WebrtcClientError> {
-    let offer = pc.create_offer().await?;
-    debug!("SDP offer: {}", offer.sdp);
-
-    let SdpAnswer {
-        session_url: location,
-        answer,
-    } = client.send_offer(&offer).await?;
-    debug!("SDP answer: {}", answer.sdp);
-
-    pc.set_local_description(offer).await?;
-
-    listen_for_trickle_candidates(pc, client, location.clone());
-
-    Ok((location, answer))
-}
-
-fn listen_for_trickle_candidates(pc: &PeerConnection, client: &Arc<WhepHttpClient>, location: Url) {
-    let should_stop_trickle = Arc::new(AtomicBool::new(false));
-    let location = location.clone();
-    let client = client.clone();
-    pc.on_ice_candidate(Box::new(move |candidate| {
-        Box::pin(handle_trickle_candidate(
-            client.clone(),
-            candidate,
-            location.clone(),
-            should_stop_trickle.clone(),
-        ))
-    }));
-}
-
-async fn handle_trickle_candidate(
-    client: Arc<WhepHttpClient>,
-    candidate: Option<RTCIceCandidate>,
-    location: Url,
-    should_stop_trickle: Arc<AtomicBool>,
-) {
-    if should_stop_trickle.load(Ordering::Relaxed) {
-        return;
-    }
-    let Some(candidate) = candidate else { return };
-    let candidate = match candidate.to_json() {
-        Ok(candidate) => candidate,
-        Err(err) => {
-            error!("Failed to process ICE candidate: {}", err);
-            return;
-        }
-    };
-
-    match client.send_trickle_ice(&location, candidate).await {
-        Err(WebrtcClientError::TrickleIceNotSupported) => {
-            info!("Trickle ICE is not supported by WHEP server");
-            should_stop_trickle.store(true, Ordering::Relaxed);
-        }
-        Err(WebrtcClientError::EntityTagMissing) | Err(WebrtcClientError::EntityTagNonMatching) => {
-            info!("Entity tags not supported by WHEP input");
-            should_stop_trickle.store(true, Ordering::Relaxed);
-        }
-        Err(err) => warn!(
-            "Trickle ICE request failed: {}",
-            ErrorStack::new(&err).into_string()
-        ),
-        Ok(_) => (),
-    };
-}
-
-fn resolve_video_preferences(
-    ctx: &Arc<PipelineCtx>,
-    video_preferences: Vec<WebrtcVideoDecoderOptions>,
-) -> Result<(Vec<VideoDecoderOptions>, Vec<RTCRtpCodecParameters>), WebrtcClientError> {
-    let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
-    let only_vulkan_in_preferences = video_preferences
-        .iter()
-        .all(|pref| matches!(pref, WebrtcVideoDecoderOptions::VulkanH264));
-    if !vulkan_supported && only_vulkan_in_preferences {
-        return Err(WebrtcClientError::DecoderInitError(
-            DecoderInitError::VulkanContextRequiredForVulkanDecoder,
-        ));
-    };
-
-    let video_preferences: Vec<VideoDecoderOptions> = video_preferences
-        .into_iter()
-        .flat_map(|preference| match preference {
-            WebrtcVideoDecoderOptions::FfmpegH264 => vec![VideoDecoderOptions::FfmpegH264],
-            WebrtcVideoDecoderOptions::VulkanH264 => {
-                if vulkan_supported {
-                    vec![VideoDecoderOptions::VulkanH264]
-                } else {
-                    warn!("Vulkan is not supported, skipping \"vulkan_h264\" preference");
-                    vec![]
-                }
-            }
-            WebrtcVideoDecoderOptions::FfmpegVp8 => vec![VideoDecoderOptions::FfmpegVp8],
-            WebrtcVideoDecoderOptions::FfmpegVp9 => vec![VideoDecoderOptions::FfmpegVp9],
-            WebrtcVideoDecoderOptions::Any => {
-                vec![
-                    VideoDecoderOptions::FfmpegVp9,
-                    VideoDecoderOptions::FfmpegVp8,
-                    if vulkan_supported {
-                        VideoDecoderOptions::VulkanH264
-                    } else {
-                        VideoDecoderOptions::FfmpegH264
-                    },
-                ]
-            }
-        })
-        .unique()
-        .collect();
-
-    let mut video_codecs_params: Vec<RTCRtpCodecParameters> = Vec::new();
-    for pref in &video_preferences {
-        match pref {
-            VideoDecoderOptions::FfmpegH264 | VideoDecoderOptions::VulkanH264 => {
-                video_codecs_params.extend(get_video_h264_codec());
-            }
-            VideoDecoderOptions::FfmpegVp8 => {
-                video_codecs_params.extend(get_video_vp8_codec());
-            }
-            VideoDecoderOptions::FfmpegVp9 => {
-                video_codecs_params.extend(get_video_vp9_codec());
-            }
-        }
-    }
-
-    let video_codecs_params = video_codecs_params
-        .into_iter()
-        .unique_by(|c| {
-            (
-                c.capability.mime_type.clone(),
-                c.capability.sdp_fmtp_line.clone(),
-            )
-        })
-        .collect();
-    Ok((video_preferences, video_codecs_params))
+    Ok((session_url, client))
 }

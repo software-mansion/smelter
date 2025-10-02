@@ -105,13 +105,13 @@ impl WhepHttpClient {
         Ok(())
     }
 
-    // pub async fn delete_session(&self, session_url: Url) {
-    //     // Endpoint is required, but some platforms e.g. Twitch do not implement it
-    //     // so we are silently ignoring
-    //     if let Err(err) = self.http_client.delete(session_url).send().await {
-    //         error!("Error while sending delete whep session request: {}", err);
-    //     }
-    // }
+    pub async fn delete_session(&self, session_url: Url) {
+        // Endpoint is required, but some platforms do not implement it
+        // so we are silently ignoring
+        if let Err(err) = self.http_client.delete(session_url).send().await {
+            error!("Error while sending delete whep session request: {}", err);
+        }
+    }
 
     fn header_map(&self, content_type: HeaderValue) -> HeaderMap {
         let mut header_map = HeaderMap::new();
