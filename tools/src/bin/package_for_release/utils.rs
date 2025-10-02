@@ -92,9 +92,9 @@ pub fn ffmpeg_url(ffmpeg_version: &str) -> Result<String> {
     const FFMPEG_URL_PREFIX: &str = "https://github.com/BtbN/FFmpeg-Builds/releases/download/";
 
     #[cfg(target_os = "macos")]
-    // XXX: This is just for testing and MUST NOT be merged to master
+    // XXX: Temporary link to private repo, change it after it gets pushed to official one.
     const FFMPEG_URL_PREFIX: &str =
-        "https://github.com/membraneframework-precompiled/precompiled_ffmpeg/releases/download/";
+        "https://github.com/JBRS307/FFmpeg_macos_build/releases/download/";
 
     let ffmpeg_url_suffix = if cfg!(target_os = "linux") {
         let os_arch = if cfg!(target_arch = "x86_64") {
@@ -124,9 +124,6 @@ pub fn ffmpeg_url(ffmpeg_version: &str) -> Result<String> {
             _ => bail!("Unsupported FFmpeg version"),
         }
     } else if cfg!(target_os = "macos") {
-        // NOTE: Currently it is done to work with membrane precompiled. This must be changed
-        // before merging.
-
         let os_arch = if cfg!(target_arch = "x86_64") {
             bail!("Download not available for macos with amd64 architecture");
         } else if cfg!(target_arch = "aarch64") {
@@ -136,11 +133,8 @@ pub fn ffmpeg_url(ffmpeg_version: &str) -> Result<String> {
         };
 
         match ffmpeg_version {
-            "6.0" => {
-                format!("v6.0_1/ffmpeg_{os_arch}.tar.gz")
-            }
             "8.0" => {
-                format!("v8.0/ffmpeg_{os_arch}.tar.gz")
+                format!("n8.0/ffmpeg_{os_arch}.tar.gz")
             }
             _ => bail!("Unsupported FFmpeg version"),
         }
