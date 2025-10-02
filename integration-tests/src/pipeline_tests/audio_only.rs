@@ -540,3 +540,77 @@ pub fn single_input_aac_mp4() -> Result<()> {
 
     Ok(())
 }
+
+// TODO: (@jbrs) Doc comment describing test
+#[test]
+fn audio_offset_variable_frequency() -> Result<()> {
+    const OUTPUT_DUMP_FILE: &str = "audio_offset_variable_frequency_output.rtp";
+    let instance = CompositorInstance::start(None);
+    let input_1_port = instance.get_port();
+    let output_port = instance.get_port();
+
+    instance.send_request(
+        "output/output_1/register",
+        json!({
+            "type": "rtp_stream",
+            "transport_protocol": "tcp_server",
+            "port": output_port,
+            "audio": {
+                "initial": {
+                    "inputs": [
+                        {
+                            "input_id": "input_1",
+                        },
+
+                    ]
+                },
+                "channels": "stereo",
+                "encoder": {
+                    "type": "opus",
+                }
+            },
+        }),
+    )?;
+
+    let output_receiver = OutputReceiver::start(output_port, CommunicationProtocol::Tcp)?;
+
+    instance.send_request(
+        "output/output_1/unregister",
+        json!({
+            "schedule_time_ms": 20000,
+        }),
+    )?;
+
+    instance.send_request(
+        "input/input_1/register",
+        json!({
+            "type": "rtp_stream",
+            "transport_protocol": "tcp_server",
+            "port": input_1_port,
+            "audio": {
+                "decoder": "opus"
+            },
+            "offset_ms": 2000,
+        }),
+    )?;
+
+    let audio_input_1 = input_dump_from_disk("variable_frequency_opus_audio.rtp")?;
+    let audio_sender = PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?;
+
+    let audio_handle = audio_sender.send_non_blocking(audio_input_1);
+    thread::sleep(Duration::from_secs(2));
+    instance.send_request("start", json!({}))?;
+
+    audio_handle.join().unwrap();
+
+    let new_output_dump = output_receiver.wait_for_output()?;
+
+    compare_audio_dumps(
+        OUTPUT_DUMP_FILE,
+        &new_output_dump,
+        audio::ValidationMode::Artificial,
+        AudioValidationConfig::default(),
+    )?;
+
+    Ok(())
+}
