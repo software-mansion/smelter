@@ -1,7 +1,12 @@
 use anyhow::{bail, Context, Result};
 use regex::Regex;
 use reqwest::blocking::get;
-use std::{env, fs, io::ErrorKind, path::Path, process::Command};
+use std::{
+    env, fs,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    process::Command,
+};
 use tracing::{error, info, warn};
 
 const FFMPEG_LIB_DIR: &str = "ffmpeg_lib";
@@ -97,29 +102,64 @@ fn prepare_dependencies(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
         bail!("\"tar\" command failed with code: {tar_code:?}");
     }
 
-    let re = Regex::new(r"^ffmpeg.*")?;
-    for file in fs::read_dir(executable_dir.join(FFMPEG_DOWNLOAD_DIR))?.flatten() {
-        if file.file_type()?.is_dir() {
-            let filename = file.file_name().into_string();
-            let filename = match filename {
-                Ok(f) => f,
-                Err(_) => {
-                    error!("Failed to parse ffmpeg directory name");
-                    continue;
-                }
-            };
-            if re.is_match(&filename) {
-                fs::rename(
-                    executable_dir.join(format!("{FFMPEG_DOWNLOAD_DIR}/{filename}/lib")),
-                    executable_dir.join(FFMPEG_LIB_DIR),
-                )
-                .with_context(|| "Failed to move libraries to executable path")?;
-                break;
+    let re = if cfg!(target_os = "linux") {
+        Regex::new(r"^lib[a-z]+\.so\.\d+$")?
+    } else if cfg!(target_os = "macos") {
+        Regex::new(r"^lib[a-z]+\.\d+\.dylib$")?
+    } else {
+        panic!("Unknown platform");
+    };
+
+    let ffmpeg_libs_paths = find_ffmpeg_libs(executable_dir.join(FFMPEG_DOWNLOAD_DIR), &re)?;
+    fs::create_dir(executable_dir.join(FFMPEG_LIB_DIR))?;
+    for lib in ffmpeg_libs_paths {
+        let libname = match lib.file_name() {
+            Some(name) => name.to_owned(),
+            None => {
+                error!("Unable to get library filename");
+                continue;
             }
-        }
+        };
+        fs::rename(lib, executable_dir.join(FFMPEG_LIB_DIR).join(libname))?;
     }
 
     Ok(())
+}
+
+fn find_ffmpeg_libs(dirpath: PathBuf, re: &Regex) -> Result<Vec<PathBuf>> {
+    let mut libraries: Vec<PathBuf> = vec![];
+    for file in fs::read_dir(dirpath)?.flatten() {
+        if file.file_type()?.is_dir() {
+            let path = file.path();
+            libraries.extend(find_ffmpeg_libs(path, re)?);
+        } else if file.file_type()?.is_symlink() {
+            let path = file.path();
+            let filename = path
+                .file_name()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or_default();
+            if re.is_match(filename) {
+                let target_file_path = fs::read_link(&path)?;
+                fs::remove_file(&path)?;
+                fs::rename(target_file_path, &path)?;
+                libraries.push(path);
+            }
+        } else if file.file_type()?.is_file() {
+            let path = file.path();
+            let filename = path
+                .file_name()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or_default();
+            if re.is_match(filename) {
+                libraries.push(path);
+            }
+        } else {
+            unreachable!();
+        }
+    }
+    Ok(libraries)
 }
 
 fn download_ffmpeg(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
