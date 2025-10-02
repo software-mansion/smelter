@@ -2806,7 +2806,7 @@ dependencies = [
 [[package]]
 name = "mp4"
 version = "0.14.0"
-source = "git+https://github.com/membraneframework-labs/mp4-rust.git?branch=preserve-asc#e0d3e9eb4b14b0ee127f3c44b578375d954c14d5"
+source = "git+https://github.com/smelter-labs/mp4-rust.git?branch=preserve-asc#e0d3e9eb4b14b0ee127f3c44b578375d954c14d5"
 dependencies = [
  "byteorder",
  "bytes",
