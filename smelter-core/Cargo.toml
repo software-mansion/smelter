@@ -8,7 +8,7 @@ license-file = "../LICENSE"
 [features]
 default = []
 decklink = ["dep:decklink"]
-web_renderer = ["smelter-render/web_renderer"]
+web-renderer = ["smelter-render/web-renderer"]
 vk-video = ["dep:vk-video"]
 
 [dependencies]

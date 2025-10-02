@@ -22,7 +22,7 @@ const OUTPUT_PORT: u16 = 8004;
 fn main() {
     env::set_var("SMELTER_WEB_RENDERER_ENABLE", "1");
 
-    #[cfg(feature = "web_renderer")]
+    #[cfg(feature = "web-renderer")]
     {
         let target_path = &std::env::current_exe()
             .unwrap()

@@ -6,7 +6,7 @@ license-file = "../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
-web_renderer = ["dep:libcef", "dep:shared_memory"]
+web-renderer = ["dep:libcef", "dep:shared_memory"]
 
 [dependencies]
 pollster = "0.3.0"

@@ -33,6 +33,6 @@ pub mod web_renderer {
         ChromiumContext, ChromiumContextInitError, WebEmbeddingMethod, WebRendererSpec,
     };
 
-    #[cfg(feature = "web_renderer")]
+    #[cfg(feature = "web-renderer")]
     pub use crate::transformations::web_renderer::process_helper;
 }

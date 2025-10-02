@@ -24,10 +24,10 @@ members = [
 resolver = "2"
 
 [features]
-default = ["web_renderer"]
+default = ["web-renderer"]
 update_snapshots = []
 decklink = ["smelter-api/decklink"]
-web_renderer = ["dep:libcef", "smelter-api/web_renderer"]
+web-renderer = ["dep:libcef", "smelter-api/web-renderer"]
 
 [workspace.dependencies]
 smelter = { path = ".", default-features = false }
@@ -118,4 +118,4 @@ smelter-core = { workspace = true, features = ["vk-video"] }
 [[bin]]
 name = "process_helper"
 path = "src/bin/process_helper.rs"
-required-features = ["web_renderer"]
+required-features = ["web-renderer"]

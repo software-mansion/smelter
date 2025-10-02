@@ -53,7 +53,7 @@ pub struct ApiState {
 
 impl ApiState {
     pub fn new(config: Config, runtime: Arc<Runtime>) -> Result<Arc<ApiState>, ApiStateInitError> {
-        let chromium_context = match config.web_renderer_enable && cfg!(feature = "web_renderer") {
+        let chromium_context = match config.web_renderer_enable && cfg!(feature = "web-renderer") {
             true => Some(ChromiumContext::new(
                 config.output_framerate,
                 config.web_renderer_gpu_enable,

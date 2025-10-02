@@ -7,14 +7,14 @@ mod rgba_multiview;
 mod rgba_srgb;
 pub mod utils;
 
-#[cfg(feature = "web_renderer")]
+#[cfg(feature = "web-renderer")]
 mod bgra_linear;
-#[cfg(feature = "web_renderer")]
+#[cfg(feature = "web-renderer")]
 mod bgra_srgb;
 
-#[cfg(feature = "web_renderer")]
+#[cfg(feature = "web-renderer")]
 pub type BgraLinearTexture = bgra_linear::BgraLinearTexture;
-#[cfg(feature = "web_renderer")]
+#[cfg(feature = "web-renderer")]
 pub type BgraSrgbTexture = bgra_srgb::BgraSrgbTexture;
 
 pub type RgbaMultiViewTexture = rgba_multiview::RgbaMultiViewTexture;
