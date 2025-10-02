@@ -9,7 +9,7 @@ pub mod server;
 pub mod state;
 
 fn main() {
-    #[cfg(feature = "web_renderer")]
+    #[cfg(feature = "web-renderer")]
     {
         use libcef::bundle_for_development;
 
