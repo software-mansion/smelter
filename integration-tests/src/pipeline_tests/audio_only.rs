@@ -546,8 +546,8 @@ pub fn single_input_aac_mp4() -> Result<()> {
 ///
 /// Play  2 seconds of silence, 5 seconds of lower frequency and higher frequency after that time.
 #[test]
-fn audio_offset_variable_frequency() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "audio_offset_variable_frequency_output.rtp";
+fn audio_early_streaming_with_offset() -> Result<()> {
+    const OUTPUT_DUMP_FILE: &str = "audio_early_streaming_with_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let output_port = instance.get_port();
@@ -624,8 +624,8 @@ fn audio_offset_variable_frequency() -> Result<()> {
 ///
 /// Play approx. 3 seconds of lower frequency and higher frequency after that.
 #[test]
-fn audio_no_offset_variable_frequency() -> Result<()> {
-    const OUTPUT_DUMP_FILE: &str = "audio_no_offset_variable_frequency_output.rtp";
+fn audio_early_streaming_no_offset() -> Result<()> {
+    const OUTPUT_DUMP_FILE: &str = "audio_early_streaming_no_offset_output.rtp";
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let output_port = instance.get_port();
