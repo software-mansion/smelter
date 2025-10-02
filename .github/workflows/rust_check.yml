@@ -44,7 +44,7 @@ jobs:
                   cat > .gitmodules << EOF
                   [submodule "snapshots"]
                           path = integration-tests/snapshots
-                          url = https://github.com/membraneframework-labs/video_compositor_snapshot_tests.git
+                          url = https://github.com/smelter-labs/smelter-snapshot-tests.git
                   EOF
                   git submodule update --init
 

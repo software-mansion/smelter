@@ -254,7 +254,7 @@ cargo nextest run --workspace --features update_snapshots audio_mixing_with_offs
 will run a test from **./integration-tests/src/pipeline_tests/audio_only.rs** and if output changed the update the snapshot.
 
 If you made changes that modify the snapshot:
-- Create PR in https://github.com/membraneframework-labs/video_compositor_snapshot_tests repo.
+- Create PR in https://github.com/smelter-labs/smelter-snapshot-tests repo.
 - Create PR in live compositor repo with link to the snapshot repo PR.
 - Merge them together.
 
