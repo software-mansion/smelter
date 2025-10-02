@@ -542,7 +542,7 @@ pub fn single_input_aac_mp4() -> Result<()> {
 }
 
 /// Single frequency input that changes after 5 seconds. Input starts streaming 2 seconds before
-/// start request with offset set to 2 seconds. 
+/// start request with offset set to 2 seconds.
 ///
 /// Play  2 seconds of silence, 5 seconds of lower frequency and higher frequency after that time.
 #[test]
@@ -551,6 +551,8 @@ fn audio_offset_variable_frequency() -> Result<()> {
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let output_port = instance.get_port();
+
+    let audio_input_1 = input_dump_from_disk("variable_frequency_opus_audio.rtp")?;
 
     instance.send_request(
         "output/output_1/register",
@@ -597,7 +599,6 @@ fn audio_offset_variable_frequency() -> Result<()> {
         }),
     )?;
 
-    let audio_input_1 = input_dump_from_disk("variable_frequency_opus_audio.rtp")?;
     let audio_sender = PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?;
 
     let audio_handle = audio_sender.send_non_blocking(audio_input_1);
@@ -619,7 +620,7 @@ fn audio_offset_variable_frequency() -> Result<()> {
 }
 
 /// Use input that changes frequency after 5 seconds. Input starts streaming 2 seconds before
-/// start request with no offset. 
+/// start request with no offset.
 ///
 /// Play approx. 3 seconds of lower frequency and higher frequency after that.
 #[test]
@@ -628,6 +629,8 @@ fn audio_no_offset_variable_frequency() -> Result<()> {
     let instance = CompositorInstance::start(None);
     let input_1_port = instance.get_port();
     let output_port = instance.get_port();
+
+    let audio_input_1 = input_dump_from_disk("variable_frequency_opus_audio.rtp")?;
 
     instance.send_request(
         "output/output_1/register",
@@ -673,7 +676,6 @@ fn audio_no_offset_variable_frequency() -> Result<()> {
         }),
     )?;
 
-    let audio_input_1 = input_dump_from_disk("variable_frequency_opus_audio.rtp")?;
     let audio_sender = PacketSender::new(CommunicationProtocol::Tcp, input_1_port)?;
 
     let audio_handle = audio_sender.send_non_blocking(audio_input_1);
