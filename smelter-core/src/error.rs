@@ -102,23 +102,20 @@ pub enum OutputInitError {
     #[error("Failed to register output. FFmpeg error: {0}.")]
     FfmpegError(ffmpeg_next::Error),
 
-    #[error("Unknown whip output error.")]
+    #[error("Unknown WHIP output error.")]
     UnknownWhipError,
 
-    #[error("Whip init timeout exceeded")]
+    #[error("WHIP init timeout exceeded")]
     WhipInitTimeout,
 
-    #[error("Failed to init whip output")]
-    WhipInitError(#[source] Box<WhipOutputError>),
+    #[error("Failed to init WHIP output")]
+    WhipInitError(#[source] Box<WebrtcClientError>),
 
     #[error("Unknown whep output error.")]
     UnknownWhepError,
 
     #[error("Whep init timeout exceeded")]
     WhepInitTimeout,
-
-    #[error("Failed to init whep output")]
-    WhepInitError(#[source] Box<WhepOutputError>),
 
     #[error("WHIP WHEP server is not running, cannot start WHEP output")]
     WhipWhepServerNotRunning,
@@ -159,6 +156,15 @@ pub enum InputInitError {
 
     #[error("WHIP WHEP server is not running, cannot start WHIP input")]
     WhipWhepServerNotRunning,
+
+    #[error("Unknown WHEP input error.")]
+    UnknownWhepError,
+
+    #[error("WHEP init timeout exceeded")]
+    WhepInitTimeout,
+
+    #[error("Failed to init WHEP input")]
+    WhepInitError(#[source] Box<WebrtcClientError>),
 
     #[cfg(feature = "decklink")]
     #[error(transparent)]

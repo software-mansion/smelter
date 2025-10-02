@@ -58,6 +58,7 @@ pub(super) async fn status_handler(
                 InputProtocolKind::Rtp => "rtp",
                 InputProtocolKind::Mp4 => "mp4",
                 InputProtocolKind::Whip => "whip",
+                InputProtocolKind::Whep => "whep",
                 InputProtocolKind::Hls => "hls",
                 InputProtocolKind::DeckLink => "decklink",
                 InputProtocolKind::RawDataChannel => "raw_data",

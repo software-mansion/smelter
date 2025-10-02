@@ -1,24 +1,21 @@
-use smelter_render::error::ErrorStack;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+use crate::pipeline::webrtc::whep_input::{
+    peer_connection::PeerConnection,
+    whep_http_client::{SdpAnswer, WhepHttpClient},
 };
+use smelter_render::error::ErrorStack;
 use tracing::{debug, error, info, warn};
 use url::Url;
-use webrtc::{
-    ice_transport::ice_candidate::RTCIceCandidate,
-    peer_connection::sdp::session_description::RTCSessionDescription,
-};
-
-use crate::pipeline::webrtc::whip_output::{
-    whip_http_client::SdpAnswer, PeerConnection, WhipHttpClient,
-};
+use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
 use crate::prelude::*;
 
-pub async fn exchange_sdp_offers(
+pub(crate) async fn exchange_sdp_offers(
     pc: &PeerConnection,
-    client: &Arc<WhipHttpClient>,
+    client: &Arc<WhepHttpClient>,
 ) -> Result<(Url, RTCSessionDescription), WebrtcClientError> {
     let offer = pc.create_offer().await?;
     debug!("SDP offer: {}", offer.sdp);
@@ -36,7 +33,7 @@ pub async fn exchange_sdp_offers(
     Ok((location, answer))
 }
 
-fn listen_for_trickle_candidates(pc: &PeerConnection, client: &Arc<WhipHttpClient>, location: Url) {
+fn listen_for_trickle_candidates(pc: &PeerConnection, client: &Arc<WhepHttpClient>, location: Url) {
     let should_stop_trickle = Arc::new(AtomicBool::new(false));
     let location = location.clone();
     let client = client.clone();
@@ -51,7 +48,7 @@ fn listen_for_trickle_candidates(pc: &PeerConnection, client: &Arc<WhipHttpClien
 }
 
 async fn handle_trickle_candidate(
-    client: Arc<WhipHttpClient>,
+    client: Arc<WhepHttpClient>,
     candidate: Option<RTCIceCandidate>,
     location: Url,
     should_stop_trickle: Arc<AtomicBool>,
@@ -70,11 +67,11 @@ async fn handle_trickle_candidate(
 
     match client.send_trickle_ice(&location, candidate).await {
         Err(WebrtcClientError::TrickleIceNotSupported) => {
-            info!("Trickle ICE is not supported by WHIP server");
+            info!("Trickle ICE is not supported by WHEP server");
             should_stop_trickle.store(true, Ordering::Relaxed);
         }
         Err(WebrtcClientError::EntityTagMissing) | Err(WebrtcClientError::EntityTagNonMatching) => {
-            info!("Entity tags not supported by WHIP output");
+            info!("Entity tags not supported by WHEP input");
             should_stop_trickle.store(true, Ordering::Relaxed);
         }
         Err(err) => warn!(

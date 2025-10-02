@@ -3,16 +3,16 @@ use std::time::Duration;
 use crate::common_core::prelude as core;
 use crate::*;
 
-impl TryFrom<WhipInput> for core::RegisterInputOptions {
+impl TryFrom<WhepInput> for core::RegisterInputOptions {
     type Error = TypeError;
 
-    fn try_from(value: WhipInput) -> Result<Self, Self::Error> {
-        let WhipInput {
+    fn try_from(value: WhepInput) -> Result<Self, Self::Error> {
+        let WhepInput {
+            endpoint_url,
+            bearer_token,
             video,
             required,
             offset_ms,
-            bearer_token,
-            endpoint_override,
         } = value;
 
         let video_preferences = match video {
@@ -23,13 +23,13 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
             None => vec![core::WebrtcVideoDecoderOptions::Any],
         };
 
-        let whip_options = core::WhipInputOptions {
+        let whep_options = core::WhepInputOptions {
             video_preferences,
+            endpoint_url,
             bearer_token,
-            endpoint_override,
         };
 
-        let input_options = core::ProtocolInputOptions::Whip(whip_options);
+        let input_options = core::ProtocolInputOptions::Whep(whep_options);
 
         let queue_options = smelter_core::QueueInputOptions {
             required: required.unwrap_or(false),
@@ -43,14 +43,14 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
     }
 }
 
-impl From<WhipVideoDecoderOptions> for core::WebrtcVideoDecoderOptions {
-    fn from(decoder: WhipVideoDecoderOptions) -> Self {
+impl From<WhepVideoDecoderOptions> for core::WebrtcVideoDecoderOptions {
+    fn from(decoder: WhepVideoDecoderOptions) -> Self {
         match decoder {
-            WhipVideoDecoderOptions::FfmpegH264 => core::WebrtcVideoDecoderOptions::FfmpegH264,
-            WhipVideoDecoderOptions::FfmpegVp8 => core::WebrtcVideoDecoderOptions::FfmpegVp8,
-            WhipVideoDecoderOptions::FfmpegVp9 => core::WebrtcVideoDecoderOptions::FfmpegVp9,
-            WhipVideoDecoderOptions::VulkanH264 => core::WebrtcVideoDecoderOptions::VulkanH264,
-            WhipVideoDecoderOptions::Any => core::WebrtcVideoDecoderOptions::Any,
+            WhepVideoDecoderOptions::FfmpegH264 => core::WebrtcVideoDecoderOptions::FfmpegH264,
+            WhepVideoDecoderOptions::FfmpegVp8 => core::WebrtcVideoDecoderOptions::FfmpegVp8,
+            WhepVideoDecoderOptions::FfmpegVp9 => core::WebrtcVideoDecoderOptions::FfmpegVp9,
+            WhepVideoDecoderOptions::VulkanH264 => core::WebrtcVideoDecoderOptions::VulkanH264,
+            WhepVideoDecoderOptions::Any => core::WebrtcVideoDecoderOptions::Any,
         }
     }
 }
