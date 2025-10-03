@@ -9,7 +9,7 @@ use webrtc::{
 
 use crate::PipelineCtx;
 
-pub(super) fn listen_for_rtcp(
+pub(crate) fn listen_for_rtcp(
     ctx: &Arc<PipelineCtx>,
     rtc_receiver: Arc<RTCRtpReceiver>,
     sender_report_sender: Sender<SenderReport>,
