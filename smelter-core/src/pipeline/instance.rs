@@ -490,9 +490,11 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
     let graphics_context = match opts.wgpu_options {
         PipelineWgpuOptions::Context(ctx) => ctx,
         PipelineWgpuOptions::Options {
+            device_id,
             features,
             force_gpu,
         } => GraphicsContext::new(GraphicsContextOptions {
+            device_id,
             force_gpu,
             features,
             ..Default::default()

@@ -1,5 +1,9 @@
 use ash::vk;
-use std::{ffi::CStr, sync::Arc};
+use std::{
+    ffi::CStr,
+    fmt::{self, Debug},
+    sync::Arc,
+};
 use tracing::{debug, warn};
 use wgpu::hal::DynAdapter;
 
@@ -189,10 +193,17 @@ impl<'a> VulkanAdapter<'a> {
             encode_capabilities,
         };
 
+        let device_name = properties
+            .device_name_as_c_str()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or("unknown".into())
+            .into_owned();
+
         Some(Self {
             instance: vulkan_instance,
             device_candidate,
             info: AdapterInfo {
+                name: device_name,
                 device_properties: properties,
                 supports_decoding: has_decode_extensions,
                 supports_encoding: has_encode_extensions,
@@ -222,9 +233,33 @@ impl<'a> VulkanAdapter<'a> {
 }
 
 pub struct AdapterInfo {
+    pub name: String,
     pub device_properties: vk::PhysicalDeviceProperties,
     pub supports_decoding: bool,
     pub supports_encoding: bool,
+}
+
+impl Debug for AdapterInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        let version = {
+            let version = self.device_properties.api_version;
+            let major = (version >> 22) & 0x7F;
+            let minor = (version >> 12) & 0x3FF;
+            let patch = version & 0xFFF;
+
+            format!("{major}.{minor}.{patch}")
+        };
+        f.debug_struct("AdapterInfo")
+            .field("name", &self.name)
+            .field("device_type", &self.device_properties.device_type)
+            .field("api_version", &version)
+            .field("driver_version", &self.device_properties.driver_version)
+            .field("vendor", &self.device_properties.vendor_id)
+            .field("device", &self.device_properties.device_id)
+            .field("supports_decoding", &self.supports_decoding)
+            .field("supports_encoding", &self.supports_encoding)
+            .finish()
+    }
 }
 
 pub(crate) struct DeviceCandidate {
