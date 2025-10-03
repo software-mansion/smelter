@@ -18,7 +18,6 @@ use crate::{
 use crate::prelude::*;
 
 pub(super) mod connection_state;
-pub(super) mod negotiated_codecs;
 pub(super) mod state;
 mod utils;
 
