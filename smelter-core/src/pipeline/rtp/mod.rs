@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 pub(super) mod depayloader;
+pub(super) mod dynamic_depayloader_stream;
 pub(super) mod payloader;
 
 mod rtp_input;
