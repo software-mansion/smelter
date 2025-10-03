@@ -35,9 +35,7 @@ use webrtc::{
 
 use crate::pipeline::webrtc::{
     error::WhipWhepServerError,
-    supported_video_codec_parameters::{
-        get_video_h264_codecs_for_media_engine, get_video_vp8_codecs, get_video_vp9_codecs,
-    },
+    supported_codec_parameters::{h264_codec_params, vp8_codec_params, vp9_codec_params},
     whep_output::cleanup_session_handler::OnCleanupSessionHdlr,
 };
 use crate::prelude::*;
@@ -267,17 +265,17 @@ fn register_codecs(
     if let Some(encoder) = video_encoder {
         match encoder {
             VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
-                for codec in get_video_h264_codecs_for_media_engine() {
+                for codec in h264_codec_params() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
             VideoEncoderOptions::FfmpegVp8(_) => {
-                for codec in get_video_vp8_codecs() {
+                for codec in vp8_codec_params() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }
             VideoEncoderOptions::FfmpegVp9(_) => {
-                for codec in get_video_vp9_codecs() {
+                for codec in vp9_codec_params() {
                     media_engine.register_codec(codec, RTPCodecType::Video)?;
                 }
             }

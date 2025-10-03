@@ -5,6 +5,7 @@ use smelter_render::Frame;
 use tracing::warn;
 use uuid::Uuid;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 
 use crate::pipeline::webrtc::error::WhipWhepServerError;
 use crate::prelude::*;
@@ -16,6 +17,7 @@ use crate::{
 pub(crate) struct WhipInputConnectionStateOptions {
     pub bearer_token: Arc<str>,
     pub video_preferences: Vec<VideoDecoderOptions>,
+    pub video_codecs: Vec<RTCRtpCodecParameters>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
 }
@@ -26,6 +28,7 @@ pub(crate) struct WhipInputConnectionState {
     pub peer_connection: Option<RecvonlyPeerConnection>,
     pub current_session_id: Option<Arc<str>>,
     pub video_preferences: Vec<VideoDecoderOptions>,
+    pub video_codecs: Vec<RTCRtpCodecParameters>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
 }
@@ -37,6 +40,7 @@ impl WhipInputConnectionState {
             peer_connection: None,
             current_session_id: None,
             video_preferences: options.video_preferences,
+            video_codecs: options.video_codecs,
             frame_sender: options.frame_sender,
             input_samples_sender: options.input_samples_sender,
         }

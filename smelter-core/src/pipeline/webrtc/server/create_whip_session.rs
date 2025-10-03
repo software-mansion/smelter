@@ -14,7 +14,7 @@ use axum::{
     http::{HeaderMap, Response, StatusCode},
 };
 use std::{sync::Arc, time::Duration};
-use tracing::{Instrument, Level, debug, span, trace, warn};
+use tracing::{Instrument, Level, debug, span, warn};
 use webrtc::{
     peer_connection::sdp::session_description::RTCSessionDescription,
     rtp_transceiver::rtp_codec::RTPCodecType,
@@ -28,7 +28,7 @@ pub async fn handle_create_whip_session(
     offer: String,
 ) -> Result<Response<Body>, WhipWhepServerError> {
     let endpoint_id = Arc::from(endpoint_id.clone());
-    trace!("SDP offer: {}", offer);
+    debug!("SDP offer: {}", offer);
     let inputs = state.inputs.clone();
 
     validate_sdp_content_type(&headers)?;
@@ -37,9 +37,11 @@ pub async fn handle_create_whip_session(
     let video_preferences =
         inputs.get_with(&endpoint_id, |input| Ok(input.video_preferences.clone()))?;
 
-    let peer_connection = RecvonlyPeerConnection::new(&state.ctx, &video_preferences).await?;
+    let video_codecs = inputs.get_with(&endpoint_id, |input| Ok(input.video_codecs.clone()))?;
 
-    let _video_transceiver = peer_connection.new_video_track(&video_preferences).await?;
+    let peer_connection = RecvonlyPeerConnection::new(&state.ctx, &video_codecs).await?;
+
+    let _video_transceiver = peer_connection.new_video_track(video_codecs).await?;
     let _audio_transceiver = peer_connection.new_audio_track().await?;
 
     let offer = RTCSessionDescription::offer(offer)?;
@@ -52,8 +54,12 @@ pub async fn handle_create_whip_session(
         .wait_for_ice_candidates(Duration::from_secs(1))
         .await?;
 
-    let sdp_answer = peer_connection.local_description().await?;
-    trace!("SDP answer: {}", sdp_answer.sdp);
+    let sdp_answer = peer_connection.local_description().await.ok_or_else(|| {
+        WhipWhepServerError::InternalError(
+            "Local description is not set, cannot read it".to_string(),
+        )
+    })?;
+    debug!("SDP answer: {}", sdp_answer.sdp);
 
     {
         let endpoint_id = endpoint_id.clone();
