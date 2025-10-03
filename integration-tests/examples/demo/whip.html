@@ -4,17 +4,64 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale-1.0">
-  <title>WHEP Video Client</title>
+  <title>WHIP Streamer</title>
   <style>
     body {
       font-family: 'Inter', sans-serif;
       background-color: black;
       display: flex;
       justify-content: center;
+      flex-direction: column;
     }
 
     video {
-      width: 90vw;
+      width: 80vw;
+    }
+
+    #inputs {
+      display: flex;
+      justify-content: center;
+      gap: 10vw;
+    }
+
+    #player-div {
+      display: flex;
+      justify-content: center;
+    }
+
+    input {
+      height: 50px;
+      width: 700px;
+      font-size: 28px;
+    }
+
+    .input-div {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .button-div {
+      display: flex;
+      gap: 5vw;
+      align-items: center;
+      justify-content: center;
+    }
+
+    label {
+      color: white;
+      font-size: 20px;
+    }
+
+    button {
+      height: 50px;
+      width: 300px;
+      font-size: 28px;
+      background-color: #ff1493;
+      box-shadow: 10px 5px 5px red;
+      align-self: center;
+      font-family: 'Comic Sans MS', 'Comic Sans';
     }
 
     /* Style for the video player's poster */
@@ -26,15 +73,41 @@
 
 <body>
 
-  <div>
-    <button id="screen-share">Start screen share</button>
-    <button id="camera">Start camera</button>
+  <div id="player-div">
     <video id="video-player" controls autoplay playsinline
       poster="https://placehold.co/1280x720/000000/333333?text=Start+screen+share+or+camera">
     </video>
   </div>
+  <div id="inputs">
+    <div class="input-div">
+      <input type="text" name="url" id="url-input" />
+      <label for="url">URL</label>
+    </div>
+    <div class="input-div">
+      <input type="text" name="token" id="token-input" />
+      <label for="token">Bearer token</label>
+    </div>
+  </div>
+  <div class="button-div">
+    <button id="screen-share">Start screen share</button>
+    <button id="camera">Start camera</button>
+    <button id="reconnect">Reconnect</button>
+  </div>
 
   <script>
+    const rerun = () => {
+      const urlInput = document.getElementById("url-input");
+      const tokenInput = document.getElementById("token-input");
+
+      const baseUrl = 'file://' + window.location.pathname;
+
+      const endpointUrl = urlInput.value;
+      const bearerToken = tokenInput.value;
+
+      const newUrl = `${baseUrl}?url=${endpointUrl}&token=${bearerToken}`;
+      window.location.href = newUrl;
+    };
+
     const run = async () => {
       const queryString = window.location.search;
       const urlParams = new URLSearchParams(queryString);
@@ -43,25 +116,54 @@
       const bearerToken = urlParams.get('token');
       const videoPlayer = document.getElementById("video-player");
 
+      const urlInput = document.getElementById("url-input");
+      const tokenInput = document.getElementById("token-input");
+
+      urlInput.value = endpointUrl;
+      tokenInput.value = bearerToken;
+
+      let screenShareStream = null;
       const screenShareBtn = document.getElementById("screen-share");
       screenShareBtn.onclick = async () => {
+        if (screenShareStream) {
+          screenShareStream.close();
+        }
         const stream = await navigator.mediaDevices.getDisplayMedia();
-        await connect(endpointUrl, bearerToken, stream);
+        screenShareStream = await connect(endpointUrl, bearerToken, stream);
         videoPlayer.srcObject = stream;
       };
+
+      let cameraStream = null;
       const cameraBtn = document.getElementById("camera");
       cameraBtn.onclick = async () => {
+        if (cameraStream) {
+          cameraStream.close();
+        }
         const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
-        await connect(endpointUrl, bearerToken, stream);
+        cameraStream = await connect(endpointUrl, bearerToken, stream);
         videoPlayer.srcObject = stream;
       };
+      const reconnectBtn = document.getElementById("reconnect");
+      reconnectBtn.onclick = rerun;
+      return [cameraStream, screenShareStream];
     }
-    run();
+    run().then((streams) => {
+      window.onbeforeunload = () => {
+        const [cameraStream, screenShareStream] = streams;
+        if (cameraStream) {
+          cameraStream.close();
+        }
+        if (screenShareStream) {
+          screenShareStream.close();
+        }
+      }
+    });
 
     async function screenShare() {
 
 
     }
+
 
     async function connect(endpointUrl, token, stream) {
       const pc = new RTCPeerConnection({
