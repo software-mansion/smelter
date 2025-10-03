@@ -103,9 +103,9 @@ fn prepare_dependencies(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
     }
 
     let re = if cfg!(target_os = "linux") {
-        Regex::new(r"^lib[a-z]+\.so\.\d+$")?
+        Regex::new(r"^lib[a-zA-Z]+\.so\.\d+$")?
     } else if cfg!(target_os = "macos") {
-        Regex::new(r"^lib[a-z]+\.\d+\.dylib$")?
+        Regex::new(r"^lib[a-zA-Z]+\.\d+\.dylib$")?
     } else {
         panic!("Unknown platform");
     };
