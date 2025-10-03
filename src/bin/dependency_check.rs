@@ -140,9 +140,19 @@ fn find_ffmpeg_libs(dirpath: PathBuf, re: &Regex) -> Result<Vec<PathBuf>> {
                 .to_str()
                 .unwrap_or_default();
             if re.is_match(filename) {
-                let target_file_path = fs::read_link(&path)?;
-                fs::remove_file(&path)?;
-                fs::rename(target_file_path, &path)?;
+                let target_file_path =
+                    fs::read_link(&path).with_context(|| "Failed to read symlink")?;
+                let target_file_path = if target_file_path.is_absolute() {
+                    target_file_path
+                } else {
+                    let dir = match path.parent() {
+                        Some(p) => p,
+                        None => bail!("Failed to find parent directory of {path:?}"),
+                    };
+                    dir.join(target_file_path)
+                };
+                fs::remove_file(&path).with_context(|| "Symlink removal failed")?;
+                fs::rename(target_file_path, &path).with_context(|| "Failed to rename file")?;
                 libraries.push(path);
             }
         } else if file.file_type()?.is_file() {
