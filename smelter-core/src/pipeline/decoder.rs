@@ -11,7 +11,9 @@ use crate::prelude::*;
 
 pub(super) mod decoder_thread_audio;
 pub(super) mod decoder_thread_video;
+pub(super) mod dynamic_video_decoder_stream;
 pub(super) mod h264_utils;
+pub(super) mod negotiated_codecs;
 
 mod ffmpeg_utils;
 
