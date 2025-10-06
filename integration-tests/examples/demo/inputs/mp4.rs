@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf, str::FromStr};
 
 use anyhow::Result;
-use inquire::{Confirm, Text};
+use inquire::{Confirm, Select, Text};
 use integration_tests::{
     assets::{BUNNY_H264_PATH, BUNNY_H264_URL},
     examples::{download_asset, AssetData},
@@ -12,7 +12,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info};
 
-use crate::{autocompletion::FilePathCompleter, inputs::InputHandle, utils::resolve_path};
+use crate::{
+    autocompletion::FilePathCompleter,
+    inputs::{InputHandle, VideoDecoder},
+    utils::resolve_path,
+};
 
 const MP4_INPUT_SOURCE: &str = "MP4_INPUT_SOURCE";
 
@@ -20,6 +24,7 @@ const MP4_INPUT_SOURCE: &str = "MP4_INPUT_SOURCE";
 pub struct Mp4Input {
     name: String,
     source: Mp4InputSource,
+    decoder: VideoDecoder,
 
     #[serde(rename = "loop")]
     input_loop: bool,
@@ -37,6 +42,9 @@ impl InputHandle for Mp4Input {
             "type": "mp4",
             source_key: source_val,
             "loop": self.input_loop,
+            "decoder_map": {
+                "h264": self.decoder.to_string(),
+            },
         })
     }
 }
@@ -73,6 +81,7 @@ impl FromStr for Mp4InputSource {
 pub struct Mp4InputBuilder {
     name: String,
     source: Option<Mp4InputSource>,
+    decoder: Option<VideoDecoder>,
     input_loop: bool,
 }
 
@@ -83,12 +92,13 @@ impl Mp4InputBuilder {
         Self {
             name,
             source: None,
+            decoder: None,
             input_loop: false,
         }
     }
 
     pub fn prompt(self) -> Result<Self> {
-        self.prompt_source()?.prompt_loop()
+        self.prompt_source()?.prompt_decoder()?.prompt_loop()
     }
 
     fn prompt_source(self) -> Result<Self> {
@@ -132,6 +142,18 @@ impl Mp4InputBuilder {
         }
     }
 
+    fn prompt_decoder(self) -> Result<Self> {
+        let decoder_options = vec![VideoDecoder::FfmpegH264, VideoDecoder::VulkanH264];
+        let decoder_selection =
+            Select::new("Select decoder: (ESC for ffmpeg_h264)", decoder_options)
+                .prompt_skippable()?;
+
+        match decoder_selection {
+            Some(decoder) => Ok(self.with_decoder(decoder)),
+            None => Ok(self.with_decoder(VideoDecoder::FfmpegH264)),
+        }
+    }
+
     fn prompt_loop(self) -> Result<Self> {
         let loop_selection = Confirm::new("Loop input [y/N]:")
             .with_default(false)
@@ -147,6 +169,11 @@ impl Mp4InputBuilder {
         self
     }
 
+    pub fn with_decoder(mut self, decoder: VideoDecoder) -> Self {
+        self.decoder = Some(decoder);
+        self
+    }
+
     pub fn with_loop(mut self, r#loop: bool) -> Self {
         self.input_loop = r#loop;
         self
@@ -156,6 +183,7 @@ impl Mp4InputBuilder {
         Mp4Input {
             name: self.name,
             source: self.source.unwrap(),
+            decoder: self.decoder.unwrap(),
             input_loop: self.input_loop,
         }
     }
