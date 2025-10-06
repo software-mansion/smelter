@@ -99,6 +99,9 @@ impl RtpInput {
             Some(RtpInputVideoOptions {
                 decoder: VideoDecoder::FfmpegH264,
             })
+            | Some(RtpInputVideoOptions {
+                decoder: VideoDecoder::VulkanH264,
+            })
             | None => TestSample::BigBuckBunnyH264Opus,
             Some(RtpInputVideoOptions {
                 decoder: VideoDecoder::FfmpegVp8,
@@ -114,6 +117,9 @@ impl RtpInput {
         let asset = match self.video {
             Some(RtpInputVideoOptions {
                 decoder: VideoDecoder::FfmpegH264,
+            })
+            | Some(RtpInputVideoOptions {
+                decoder: VideoDecoder::VulkanH264,
             })
             | None => AssetData {
                 url: BUNNY_H264_URL.to_string(),
