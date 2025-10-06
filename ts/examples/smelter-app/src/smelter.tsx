@@ -6,6 +6,8 @@ import App from './app/App';
 import type { RoomStore } from './app/store';
 import { createRoomStore } from './app/store';
 import { config } from './config';
+import fs from 'fs-extra';
+import shadersController from './shaders/shaders';
 
 export type SmelterOutput = {
   id: string;
@@ -42,6 +44,15 @@ export class SmelterManager {
       serverPath: path.join(__dirname, '../loading.gif'),
       assetType: 'gif',
     });
+
+    for (const shader of shadersController.shaders) {
+      await this.registerShaderFromFile(
+        SmelterInstance['instance'],
+        shader.id,
+        path.join(__dirname, `../shaders/${shader.shaderFile}`)
+      );
+    }
+
     setInterval(async () => {
       const smelterState = await SmelterInstance['instance'].status();
       console.log(JSON.stringify(smelterState, null, 2));
@@ -126,6 +137,14 @@ export class SmelterManager {
       console.log(err.body, err);
       throw err;
     }
+  }
+
+  private async registerShaderFromFile(smelter: Smelter, shaderId: string, file: string) {
+    const source = await fs.readFile(file, { encoding: 'utf-8' });
+
+    await smelter.registerShader(shaderId, {
+      source,
+    });
   }
 }
 
