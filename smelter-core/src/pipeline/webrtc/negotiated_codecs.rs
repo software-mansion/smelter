@@ -2,28 +2,28 @@ use std::sync::Arc;
 
 use webrtc::{
     api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
-    rtp_transceiver::{rtp_codec::RTCRtpCodecParameters, RTCRtpTransceiver},
+    rtp_transceiver::{
+        rtp_codec::RTCRtpCodecParameters, rtp_receiver::RTCRtpReceiver, PayloadType,
+        RTCRtpTransceiver,
+    },
 };
 
 use crate::{
     codecs::VideoDecoderOptions,
-    pipeline::decoder::negotiated_codecs::{
-        AudioCodecInfo, NegotiatedAudioCodecsInfo, NegotiatedVideoCodecsInfo, VideoCodecInfo,
+    pipeline::{
+        decoder::video_decoder_mapping::VideoDecoderMapping,
+        rtp::dynamic_depayloader::video_codec_mapping::VideoPayloadTypeMapping,
     },
 };
 
-pub trait WebrtcNegotiatedVideoCodecsInfo: Sized {
+pub trait WebrtcVideoDecoderMapping: Sized {
     async fn from_webrtc_transceiver(
         transceiver: Arc<RTCRtpTransceiver>,
         preferences: &[VideoDecoderOptions],
     ) -> Option<Self>;
 }
 
-pub trait WebrtcNegotiatedAudioCodecsInfo: Sized {
-    async fn from_webrtc_transceiver(transceiver: Arc<RTCRtpTransceiver>) -> Option<Self>;
-}
-
-impl WebrtcNegotiatedVideoCodecsInfo for NegotiatedVideoCodecsInfo {
+impl WebrtcVideoDecoderMapping for VideoDecoderMapping {
     async fn from_webrtc_transceiver(
         video_transceiver: Arc<RTCRtpTransceiver>,
         video_preferences: &[VideoDecoderOptions],
@@ -32,9 +32,9 @@ impl WebrtcNegotiatedVideoCodecsInfo for NegotiatedVideoCodecsInfo {
         let codecs = video_receiver.get_parameters().await.codecs;
 
         let info = Self {
-            h264: h264_info(&codecs, video_preferences),
-            vp8: vp8_info(&codecs, video_preferences),
-            vp9: vp9_info(&codecs, video_preferences),
+            h264: h264_decoder_info(&codecs, video_preferences),
+            vp8: vp8_decoder_info(&codecs, video_preferences),
+            vp9: vp9_decoder_info(&codecs, video_preferences),
         };
 
         if info.has_any_codec() {
@@ -45,20 +45,10 @@ impl WebrtcNegotiatedVideoCodecsInfo for NegotiatedVideoCodecsInfo {
     }
 }
 
-impl WebrtcNegotiatedAudioCodecsInfo for NegotiatedAudioCodecsInfo {
-    async fn from_webrtc_transceiver(audio_transceiver: Arc<RTCRtpTransceiver>) -> Option<Self> {
-        let audio_receiver = audio_transceiver.receiver().await;
-        let codecs = audio_receiver.get_parameters().await.codecs;
-
-        let opus = opus_info(&codecs);
-        opus.map(|opus| Self { opus: Some(opus) })
-    }
-}
-
-fn h264_info(
+fn h264_decoder_info(
     track_codecs: &[RTCRtpCodecParameters],
     video_preferences: &[VideoDecoderOptions],
-) -> Option<VideoCodecInfo> {
+) -> Option<VideoDecoderOptions> {
     const H264_OPTIONS: [VideoDecoderOptions; 2] = [
         VideoDecoderOptions::VulkanH264,
         VideoDecoderOptions::FfmpegH264,
@@ -66,78 +56,121 @@ fn h264_info(
     let preferred_decoder = *video_preferences
         .iter()
         .find(|option| H264_OPTIONS.contains(option))?;
-    let payload_types: Vec<_> = track_codecs
+    let h264_negotiated = track_codecs
+        .iter()
+        .any(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_H264.to_lowercase());
+
+    if h264_negotiated {
+        Some(preferred_decoder)
+    } else {
+        None
+    }
+}
+
+fn vp8_decoder_info(
+    track_codecs: &[RTCRtpCodecParameters],
+    video_preferences: &[VideoDecoderOptions],
+) -> Option<VideoDecoderOptions> {
+    let preferred_decoder = *video_preferences
+        .iter()
+        .find(|option| &&VideoDecoderOptions::FfmpegVp8 == option)?;
+    let vp8_negotiated = track_codecs
+        .iter()
+        .any(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP8.to_lowercase());
+
+    if vp8_negotiated {
+        Some(preferred_decoder)
+    } else {
+        None
+    }
+}
+
+fn vp9_decoder_info(
+    track_codecs: &[RTCRtpCodecParameters],
+    video_preferences: &[VideoDecoderOptions],
+) -> Option<VideoDecoderOptions> {
+    let preferred_decoder = *video_preferences
+        .iter()
+        .find(|option| &&VideoDecoderOptions::FfmpegVp9 == option)?;
+    let vp9_negotiated = track_codecs
+        .iter()
+        .any(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP9.to_lowercase());
+
+    if vp9_negotiated {
+        Some(preferred_decoder)
+    } else {
+        None
+    }
+}
+
+pub trait WebrtcVideoPayloadTypeMapping: Sized {
+    async fn from_webrtc_transceiver(transceiver: Arc<RTCRtpTransceiver>) -> Option<Self>;
+}
+
+impl WebrtcVideoPayloadTypeMapping for VideoPayloadTypeMapping {
+    async fn from_webrtc_transceiver(video_transceiver: Arc<RTCRtpTransceiver>) -> Option<Self> {
+        let video_receiver = video_transceiver.receiver().await;
+        let codecs = video_receiver.get_parameters().await.codecs;
+
+        let info = Self {
+            h264: h264_payload_type_info(&codecs),
+            vp8: vp8_payload_type_info(&codecs),
+            vp9: vp9_payload_type_info(&codecs),
+        };
+
+        if info.has_any_codec() {
+            Some(info)
+        } else {
+            None
+        }
+    }
+}
+
+fn h264_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<PayloadType>> {
+    let payload_types: Vec<PayloadType> = track_codecs
         .iter()
         .filter(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_H264.to_lowercase())
         .map(|codec| codec.payload_type)
         .collect();
 
     if !payload_types.is_empty() {
-        Some(VideoCodecInfo {
-            payload_types,
-            preferred_decoder,
-        })
+        Some(payload_types)
     } else {
         None
     }
 }
 
-fn vp8_info(
-    track_codecs: &[RTCRtpCodecParameters],
-    video_preferences: &[VideoDecoderOptions],
-) -> Option<VideoCodecInfo> {
-    let preferred_decoder = *video_preferences
-        .iter()
-        .find(|option| &&VideoDecoderOptions::FfmpegVp8 == option)?;
-    let payload_types: Vec<_> = track_codecs
+fn vp8_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<PayloadType>> {
+    let payload_types: Vec<PayloadType> = track_codecs
         .iter()
         .filter(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP8.to_lowercase())
         .map(|codec| codec.payload_type)
         .collect();
 
     if !payload_types.is_empty() {
-        Some(VideoCodecInfo {
-            payload_types,
-            preferred_decoder,
-        })
+        Some(payload_types)
     } else {
         None
     }
 }
 
-fn vp9_info(
-    track_codecs: &[RTCRtpCodecParameters],
-    video_preferences: &[VideoDecoderOptions],
-) -> Option<VideoCodecInfo> {
-    let preferred_decoder = *video_preferences
-        .iter()
-        .find(|option| &&VideoDecoderOptions::FfmpegVp9 == option)?;
-    let payload_types: Vec<_> = track_codecs
+fn vp9_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<PayloadType>> {
+    let payload_types: Vec<PayloadType> = track_codecs
         .iter()
         .filter(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP9.to_lowercase())
         .map(|codec| codec.payload_type)
         .collect();
 
     if !payload_types.is_empty() {
-        Some(VideoCodecInfo {
-            payload_types,
-            preferred_decoder,
-        })
+        Some(payload_types)
     } else {
         None
     }
 }
 
-fn opus_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<AudioCodecInfo> {
-    let payload_types: Vec<_> = track_codecs
+pub async fn audio_codec_negotiated(receiver: Arc<RTCRtpReceiver>) -> bool {
+    let track_codecs = receiver.get_parameters().await.codecs;
+    track_codecs
         .iter()
-        .filter(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_OPUS.to_lowercase())
-        .map(|codec| codec.payload_type)
-        .collect();
-
-    if !payload_types.is_empty() {
-        Some(AudioCodecInfo { payload_types })
-    } else {
-        None
-    }
+        .any(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_OPUS.to_lowercase())
 }

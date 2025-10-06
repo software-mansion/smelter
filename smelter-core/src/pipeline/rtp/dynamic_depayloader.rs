@@ -2,15 +2,15 @@ use smelter_render::error::ErrorStack;
 use tracing::{error, warn};
 use webrtc::{rtp, rtp_transceiver::PayloadType};
 
-use crate::pipeline::{
-    decoder::negotiated_codecs::NegotiatedVideoCodecsInfo,
-    rtp::{
-        depayloader::{new_depayloader, Depayloader, DepayloaderOptions, DepayloadingError},
-        RtpPacket,
-    },
+use crate::pipeline::rtp::{
+    depayloader::{new_depayloader, Depayloader, DepayloaderOptions, DepayloadingError},
+    dynamic_depayloader::video_codec_mapping::VideoPayloadTypeMapping,
+    RtpPacket,
 };
 
 use crate::prelude::*;
+
+pub mod video_codec_mapping;
 
 pub(crate) struct DynamicDepayloaderStream<Source>
 where
@@ -20,14 +20,14 @@ where
     last_payload_type: Option<PayloadType>,
     source: Source,
     eos_sent: bool,
-    codec_info: NegotiatedVideoCodecsInfo,
+    codec_info: VideoPayloadTypeMapping,
 }
 
 impl<Source> DynamicDepayloaderStream<Source>
 where
     Source: Iterator<Item = PipelineEvent<RtpPacket>>,
 {
-    pub(crate) fn new(codec_info: NegotiatedVideoCodecsInfo, source: Source) -> Self {
+    pub(crate) fn new(codec_info: VideoPayloadTypeMapping, source: Source) -> Self {
         Self {
             source,
             eos_sent: false,

@@ -9,17 +9,19 @@ use webrtc::{rtp_transceiver::RTCRtpTransceiver, track::track_remote::TrackRemot
 use crate::{
     pipeline::{
         decoder::{
-            dynamic_video_decoder_stream::DynamicVideoDecoderStream,
-            negotiated_codecs::NegotiatedVideoCodecsInfo,
+            dynamic_video_decoder::DynamicVideoDecoderStream,
+            video_decoder_mapping::VideoDecoderMapping,
         },
         rtp::{
-            dynamic_depayloader_stream::DynamicDepayloaderStream, RtpNtpSyncPoint, RtpPacket,
-            RtpTimestampSync,
+            dynamic_depayloader::{
+                video_codec_mapping::VideoPayloadTypeMapping, DynamicDepayloaderStream,
+            },
+            RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
         },
         webrtc::{
             WhipWhepServerState,
             error::WhipWhepServerError,
-            negotiated_codecs::WebrtcNegotiatedVideoCodecsInfo,
+            negotiated_codecs::{WebrtcVideoDecoderMapping, WebrtcVideoPayloadTypeMapping},
             whip_input::{utils::listen_for_rtcp, AsyncReceiverIter},
         },
     },
@@ -37,9 +39,10 @@ pub async fn process_video_track(
     video_preferences: Vec<VideoDecoderOptions>,
 ) -> Result<(), WhipWhepServerError> {
     let rtc_receiver = transceiver.receiver().await;
-    let Some(negotiated_codecs) =
-        NegotiatedVideoCodecsInfo::from_webrtc_transceiver(transceiver, &video_preferences).await
-    else {
+    let (Some(video_decoder_mapping), Some(video_payload_type_mapping)) = (
+        VideoDecoderMapping::from_webrtc_transceiver(transceiver.clone(), &video_preferences).await,
+        VideoPayloadTypeMapping::from_webrtc_transceiver(transceiver).await,
+    ) else {
         warn!("Skipping video track, no valid codec negotiated");
         return Err(WhipWhepServerError::InternalError(
             "No video codecs negotiated".to_string(),
@@ -48,8 +51,15 @@ pub async fn process_video_track(
 
     let WhipWhepServerState { inputs, ctx, .. } = state;
     let frame_sender = inputs.get_with(&endpoint_id, |input| Ok(input.frame_sender.clone()))?;
-    let handle =
-        VideoTrackThread::spawn(&endpoint_id, (ctx.clone(), negotiated_codecs, frame_sender))?;
+    let handle = VideoTrackThread::spawn(
+        &endpoint_id,
+        (
+            ctx.clone(),
+            video_decoder_mapping,
+            video_payload_type_mapping,
+            frame_sender,
+        ),
+    )?;
 
     let mut timestamp_sync =
         RtpTimestampSync::new(&sync_point, 90_000, ctx.default_buffer_duration);
@@ -88,7 +98,8 @@ pub(super) struct VideoTrackThread {
 impl InitializableThread for VideoTrackThread {
     type InitOptions = (
         Arc<PipelineCtx>,
-        NegotiatedVideoCodecsInfo,
+        VideoDecoderMapping,
+        VideoPayloadTypeMapping,
         Sender<PipelineEvent<Frame>>,
     );
 
@@ -96,7 +107,7 @@ impl InitializableThread for VideoTrackThread {
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, codec_info, frame_sender) = options;
+        let (ctx, video_decoder_mapping, video_payload_type_mapping, frame_sender) = options;
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
         let packet_stream = AsyncReceiverIter {
@@ -104,10 +115,11 @@ impl InitializableThread for VideoTrackThread {
         };
 
         let depayloader_stream =
-            DynamicDepayloaderStream::new(codec_info.clone(), packet_stream).flatten();
+            DynamicDepayloaderStream::new(video_payload_type_mapping, packet_stream).flatten();
 
         let decoder_stream =
-            DynamicVideoDecoderStream::new(ctx, codec_info, depayloader_stream).flatten();
+            DynamicVideoDecoderStream::new(ctx, video_decoder_mapping, depayloader_stream)
+                .flatten();
 
         let result_stream = decoder_stream
             .filter_map(|event| match event {
