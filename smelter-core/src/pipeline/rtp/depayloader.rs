@@ -1,8 +1,7 @@
 use std::mem;
 
 use bytes::Bytes;
-use smelter_render::error::ErrorStack;
-use tracing::{info, trace, warn};
+use tracing::{info, trace};
 use webrtc::rtp::{
     self,
     codecs::{h264::H264Packet, opus::OpusPacket, vp8::Vp8Packet, vp9::Vp9Packet},
@@ -16,9 +15,16 @@ use crate::{
     protocols::{AacDepayloadingError, RtpAacDepayloaderMode},
 };
 
+pub(crate) use crate::pipeline::rtp::depayloader::dynamic_stream::{
+    DynamicDepayloaderStream, VideoPayloadTypeMapping,
+};
+pub(crate) use crate::pipeline::rtp::depayloader::static_stream::DepayloaderStream;
+
 pub use aac_depayloader::AacDepayloader;
 
 mod aac_depayloader;
+mod dynamic_stream;
+mod static_stream;
 
 #[derive(Debug)]
 pub enum DepayloaderOptions {
@@ -137,55 +143,5 @@ impl<T: Depacketizer + Default + 'static> Depayloader for SimpleDepayloader<T> {
 
         trace!(?chunk, "RTP depayloader produced a new chunk");
         Ok(vec![chunk])
-    }
-}
-
-pub(crate) struct DepayloaderStream<Source>
-where
-    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
-{
-    depayloader: Box<dyn Depayloader>,
-    source: Source,
-    eos_sent: bool,
-}
-
-impl<Source> DepayloaderStream<Source>
-where
-    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
-{
-    pub fn new(options: DepayloaderOptions, source: Source) -> Self {
-        Self {
-            depayloader: new_depayloader(options),
-            source,
-            eos_sent: false,
-        }
-    }
-}
-
-impl<Source> Iterator for DepayloaderStream<Source>
-where
-    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
-{
-    type Item = Vec<PipelineEvent<EncodedInputChunk>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.source.next() {
-            Some(PipelineEvent::Data(packet)) => match self.depayloader.depayload(packet) {
-                Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
-                // TODO: Remove after updating webrc-rs
-                Err(DepayloadingError::Rtp(rtp::Error::ErrShortPacket)) => Some(vec![]),
-                Err(err) => {
-                    warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
-                    Some(vec![])
-                }
-            },
-            Some(PipelineEvent::EOS) | None => match self.eos_sent {
-                true => None,
-                false => {
-                    self.eos_sent = true;
-                    Some(vec![PipelineEvent::EOS])
-                }
-            },
-        }
     }
 }

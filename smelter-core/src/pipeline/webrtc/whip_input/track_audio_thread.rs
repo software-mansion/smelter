@@ -7,7 +7,7 @@ use webrtc::{rtp_transceiver::RTCRtpTransceiver, track::track_remote::TrackRemot
 
 use crate::{
     pipeline::{
-        decoder::{libopus::OpusDecoder, AudioDecoderStream},
+        decoder::{AudioDecoderStream, libopus::OpusDecoder},
         resampler::decoder_resampler::ResampledDecoderStream,
         rtp::{
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
@@ -17,7 +17,7 @@ use crate::{
             WhipWhepServerState,
             error::WhipWhepServerError,
             negotiated_codecs::audio_codec_negotiated,
-            whip_input::{utils::listen_for_rtcp, AsyncReceiverIter},
+            whip_input::{AsyncReceiverIter, utils::listen_for_rtcp},
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},

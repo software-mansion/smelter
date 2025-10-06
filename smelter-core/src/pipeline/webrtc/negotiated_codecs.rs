@@ -3,17 +3,14 @@ use std::sync::Arc;
 use webrtc::{
     api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
     rtp_transceiver::{
-        rtp_codec::RTCRtpCodecParameters, rtp_receiver::RTCRtpReceiver, PayloadType,
-        RTCRtpTransceiver,
+        PayloadType, RTCRtpTransceiver, rtp_codec::RTCRtpCodecParameters,
+        rtp_receiver::RTCRtpReceiver,
     },
 };
 
 use crate::{
     codecs::VideoDecoderOptions,
-    pipeline::{
-        decoder::video_decoder_mapping::VideoDecoderMapping,
-        rtp::dynamic_depayloader::video_codec_mapping::VideoPayloadTypeMapping,
-    },
+    pipeline::{decoder::VideoDecoderMapping, rtp::depayloader::VideoPayloadTypeMapping},
 };
 
 pub trait WebrtcVideoDecoderMapping: Sized {
@@ -37,11 +34,7 @@ impl WebrtcVideoDecoderMapping for VideoDecoderMapping {
             vp9: vp9_decoder_info(&codecs, video_preferences),
         };
 
-        if info.has_any_codec() {
-            Some(info)
-        } else {
-            None
-        }
+        info.has_any_codec().then_some(info)
     }
 }
 
@@ -60,11 +53,7 @@ fn h264_decoder_info(
         .iter()
         .any(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_H264.to_lowercase());
 
-    if h264_negotiated {
-        Some(preferred_decoder)
-    } else {
-        None
-    }
+    h264_negotiated.then_some(preferred_decoder)
 }
 
 fn vp8_decoder_info(
@@ -78,11 +67,7 @@ fn vp8_decoder_info(
         .iter()
         .any(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP8.to_lowercase());
 
-    if vp8_negotiated {
-        Some(preferred_decoder)
-    } else {
-        None
-    }
+    vp8_negotiated.then_some(preferred_decoder)
 }
 
 fn vp9_decoder_info(
@@ -96,11 +81,7 @@ fn vp9_decoder_info(
         .iter()
         .any(|codec| codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP9.to_lowercase());
 
-    if vp9_negotiated {
-        Some(preferred_decoder)
-    } else {
-        None
-    }
+    vp9_negotiated.then_some(preferred_decoder)
 }
 
 pub trait WebrtcVideoPayloadTypeMapping: Sized {
@@ -118,11 +99,7 @@ impl WebrtcVideoPayloadTypeMapping for VideoPayloadTypeMapping {
             vp9: vp9_payload_type_info(&codecs),
         };
 
-        if info.has_any_codec() {
-            Some(info)
-        } else {
-            None
-        }
+        info.has_any_codec().then_some(info)
     }
 }
 
@@ -133,11 +110,7 @@ fn h264_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<
         .map(|codec| codec.payload_type)
         .collect();
 
-    if !payload_types.is_empty() {
-        Some(payload_types)
-    } else {
-        None
-    }
+    (!payload_types.is_empty()).then_some(payload_types)
 }
 
 fn vp8_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<PayloadType>> {
@@ -147,11 +120,7 @@ fn vp8_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<P
         .map(|codec| codec.payload_type)
         .collect();
 
-    if !payload_types.is_empty() {
-        Some(payload_types)
-    } else {
-        None
-    }
+    (!payload_types.is_empty()).then_some(payload_types)
 }
 
 fn vp9_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<PayloadType>> {
@@ -161,11 +130,7 @@ fn vp9_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<P
         .map(|codec| codec.payload_type)
         .collect();
 
-    if !payload_types.is_empty() {
-        Some(payload_types)
-    } else {
-        None
-    }
+    (!payload_types.is_empty()).then_some(payload_types)
 }
 
 pub async fn audio_codec_negotiated(receiver: Arc<RTCRtpReceiver>) -> bool {
