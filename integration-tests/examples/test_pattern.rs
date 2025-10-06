@@ -4,7 +4,7 @@ use serde_json::json;
 use smelter_api::Resolution;
 
 use integration_tests::{
-    examples::{self, run_example, TestSample},
+    examples::{self, TestSample, run_example},
     ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
 };
 

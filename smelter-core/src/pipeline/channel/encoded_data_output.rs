@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crossbeam_channel::{bounded, Receiver};
+use crossbeam_channel::{Receiver, bounded};
 use smelter_render::OutputId;
 
 use crate::{

@@ -4,7 +4,7 @@ use axum::extract::{Path, State};
 use glyphon::fontdb::Source;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use smelter_core::{protocols::Port, InputInitInfo, Pipeline};
+use smelter_core::{InputInitInfo, Pipeline, protocols::Port};
 
 use crate::{
     error::ApiError,

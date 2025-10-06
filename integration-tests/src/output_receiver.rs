@@ -23,24 +23,26 @@ impl OutputReceiver {
         let mut output_dump = BytesMut::new();
         let (dump_sender, dump_receiver) = crossbeam_channel::bounded(1);
 
-        thread::spawn(move || loop {
-            let packet = match Self::read_packet(&mut socket, &protocol) {
-                Ok(packet) => packet,
-                Err(err) => {
-                    error!("Failed to read packet: {err:?}");
-                    break;
-                }
-            };
+        thread::spawn(move || {
+            loop {
+                let packet = match Self::read_packet(&mut socket, &protocol) {
+                    Ok(packet) => packet,
+                    Err(err) => {
+                        error!("Failed to read packet: {err:?}");
+                        break;
+                    }
+                };
 
-            match packet {
-                Packet::RtcpGoodbye => {
-                    dump_sender.send(output_dump.freeze()).unwrap();
-                    break;
-                }
-                Packet::Rtp(packet_bytes) => {
-                    let packet_len = packet_bytes.len() as u16;
-                    output_dump.extend(packet_len.to_be_bytes());
-                    output_dump.extend(&packet_bytes);
+                match packet {
+                    Packet::RtcpGoodbye => {
+                        dump_sender.send(output_dump.freeze()).unwrap();
+                        break;
+                    }
+                    Packet::Rtp(packet_bytes) => {
+                        let packet_len = packet_bytes.len() as u16;
+                        output_dump.extend(packet_len.to_be_bytes());
+                        output_dump.extend(&packet_bytes);
+                    }
                 }
             }
         });

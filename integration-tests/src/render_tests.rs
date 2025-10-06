@@ -6,7 +6,7 @@ use std::{
 };
 
 use smelter_render::Resolution;
-use test_case::{Step, TestCase, TestResult, OUTPUT_ID};
+use test_case::{OUTPUT_ID, Step, TestCase, TestResult};
 
 use crate::paths::render_snapshots_dir_path;
 

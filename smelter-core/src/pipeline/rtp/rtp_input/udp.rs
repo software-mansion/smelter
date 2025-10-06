@@ -1,14 +1,14 @@
 use std::{
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
     thread,
 };
 
 use bytes::{Bytes, BytesMut};
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use smelter_render::InputId;
-use tracing::{debug, span, warn, Level};
+use tracing::{Level, debug, span, warn};
 
-use crate::pipeline::{rtp::util::bind_to_requested_port, Port};
+use crate::pipeline::{Port, rtp::util::bind_to_requested_port};
 
 use super::{RtpInputError, RtpInputOptions};
 
@@ -32,7 +32,9 @@ pub(super) fn start_udp_reader_thread(
     {
         Ok(_) => {}
         Err(e) => {
-            warn!("Failed to set socket receive buffer size: {e} This may cause packet loss, especially on high-bitrate streams.");
+            warn!(
+                "Failed to set socket receive buffer size: {e} This may cause packet loss, especially on high-bitrate streams."
+            );
         }
     }
 

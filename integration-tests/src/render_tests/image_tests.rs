@@ -1,15 +1,15 @@
 use std::time::Duration;
 
 use smelter_render::{
-    image::{ImageSource, ImageSpec, ImageType},
     RendererId, RendererSpec,
+    image::{ImageSource, ImageSpec, ImageType},
 };
 
 use crate::paths::{integration_tests_root, render_snapshots_dir_path, submodule_root_path};
 
 use super::{
-    input::TestInput, test_case::TestCase, test_steps_from_scene, test_steps_from_scenes, Step,
-    TestRunner,
+    Step, TestRunner, input::TestInput, test_case::TestCase, test_steps_from_scene,
+    test_steps_from_scenes,
 };
 
 #[test]

@@ -3,14 +3,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::{bounded, Receiver, Sender, TrySendError};
+use crossbeam_channel::{Receiver, Sender, TrySendError, bounded};
 use decklink::{
     AudioInputPacket, DetectedVideoInputFormatFlags, DisplayMode, DisplayModeType, InputCallback,
     InputCallbackResult, PixelFormat, VideoInputFlags, VideoInputFormatChangedEvents,
     VideoInputFrame,
 };
-use smelter_render::{error::ErrorStack, Frame, FrameData, Resolution};
-use tracing::{debug, info, trace, warn, Span};
+use smelter_render::{Frame, FrameData, Resolution, error::ErrorStack};
+use tracing::{Span, debug, info, trace, warn};
 
 use crate::pipeline::resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch};
 use crate::prelude::*;

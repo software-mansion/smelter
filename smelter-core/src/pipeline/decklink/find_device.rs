@@ -1,5 +1,5 @@
 use decklink::{
-    get_decklinks, FlagAttributeId, IntegerAttributeId, StringAttributeId, VideoIOSupport,
+    FlagAttributeId, IntegerAttributeId, StringAttributeId, VideoIOSupport, get_decklinks,
 };
 
 use super::{DeckLinkDeviceInfo, DeckLinkInputError, DeckLinkInputOptions};

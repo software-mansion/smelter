@@ -5,10 +5,10 @@ use log::error;
 use crate::{
     error::ErrorStack,
     scene::ComponentId,
-    state::{node_texture::NodeTexture, RenderCtx},
+    state::{RenderCtx, node_texture::NodeTexture},
     wgpu::{
-        texture::{utils::pad_to_256, TextureExt},
         WgpuCtx,
+        texture::{TextureExt, utils::pad_to_256},
     },
 };
 

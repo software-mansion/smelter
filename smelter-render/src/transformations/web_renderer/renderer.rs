@@ -4,23 +4,23 @@ use bytes::Bytes;
 use log::info;
 
 use crate::{
-    state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
+    RendererId, RenderingMode, Resolution,
+    state::{RegisterCtx, RenderCtx, node_texture::NodeTexture},
     transformations::web_renderer::{
         browser_client::BrowserClient, chromium_sender::ChromiumSender,
     },
     wgpu::{
+        WgpuCtx,
         common_pipeline::CreateShaderError,
         texture::{BgraLinearTexture, BgraSrgbTexture},
-        WgpuCtx,
     },
-    RendererId, RenderingMode, Resolution,
 };
 
 use super::{
+    FrameData, SourceTransforms, WebEmbeddingMethod, WebRendererSpec,
     embedder::{EmbedError, EmbeddingHelper, RenderInfo},
     node::EmbeddingData,
     shader::WebRendererShader,
-    FrameData, SourceTransforms, WebEmbeddingMethod, WebRendererSpec,
 };
 
 #[derive(Debug)]

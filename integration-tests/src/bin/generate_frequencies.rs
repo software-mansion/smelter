@@ -38,7 +38,9 @@ fn main() {
 
             let file_name = format!("{name}_{file_suffix}.mp4");
 
-            let cmd = format!("ffmpeg -y -f lavfi -i \"sine=frequency={freq}:sample_rate=48000:duration=20\" -af \"volume=3\" -c:a {encoder_name} -b:a 192k -ac 2 -ar 48000 -vn {file_name}");
+            let cmd = format!(
+                "ffmpeg -y -f lavfi -i \"sine=frequency={freq}:sample_rate=48000:duration=20\" -af \"volume=3\" -c:a {encoder_name} -b:a 192k -ac 2 -ar 48000 -vn {file_name}"
+            );
 
             Command::new("bash")
                 .arg("-c")
@@ -90,7 +92,9 @@ fn main() {
 
         let file_name = format!("variable_frequency_{file_suffix}.mp4");
 
-        let cmd = format!("ffmpeg -y -i variable_frequency.wav -c:a {encoder_name} -ac 2 -ar 48000 -vn {file_name}");
+        let cmd = format!(
+            "ffmpeg -y -i variable_frequency.wav -c:a {encoder_name} -ac 2 -ar 48000 -vn {file_name}"
+        );
 
         Command::new("bash")
             .arg("-c")

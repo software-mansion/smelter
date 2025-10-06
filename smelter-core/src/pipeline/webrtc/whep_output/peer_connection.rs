@@ -321,9 +321,10 @@ fn handle_cleanup_on_disconnect(
     match state {
         RTCPeerConnectionState::Connected => {
             if let Ok(mut handle) = cleanup_task_handle.lock()
-                && let Some(task) = handle.take() {
-                    task.abort();
-                }
+                && let Some(task) = handle.take()
+            {
+                task.abort();
+            }
         }
         RTCPeerConnectionState::Failed | RTCPeerConnectionState::Disconnected => {
             if let Ok(handle @ None) = cleanup_task_handle.lock().as_deref_mut() {

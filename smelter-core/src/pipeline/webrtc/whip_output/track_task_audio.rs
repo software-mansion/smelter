@@ -10,8 +10,8 @@ use crate::{
         encoder::{AudioEncoder, AudioEncoderStream},
         resampler::encoder_resampler::ResampledForEncoderStream,
         rtp::{
-            payloader::{PayloaderOptions, PayloaderStream},
             RtpPacket,
+            payloader::{PayloaderOptions, PayloaderStream},
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},

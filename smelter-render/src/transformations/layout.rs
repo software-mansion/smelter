@@ -1,9 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    scene::{BorderRadius, BoxShadow, RGBAColor, Size},
-    state::{node_texture::NodeTexture, RenderCtx},
     Resolution,
+    scene::{BorderRadius, BoxShadow, RGBAColor, Size},
+    state::{RenderCtx, node_texture::NodeTexture},
 };
 
 mod flatten;

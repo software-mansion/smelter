@@ -22,7 +22,7 @@ impl SeqParameterSetExt for SeqParameterSet {
 
         let (SubWidthC, SubHeightC) = match self.chroma_info.chroma_format {
             h264_reader::nal::sps::ChromaFormat::Monochrome => {
-                return Err(VulkanDecoderError::MonochromeChromaFormatUnsupported)
+                return Err(VulkanDecoderError::MonochromeChromaFormatUnsupported);
             }
             h264_reader::nal::sps::ChromaFormat::YUV420 => (2, 2),
             h264_reader::nal::sps::ChromaFormat::YUV422 => (2, 1),
@@ -30,7 +30,7 @@ impl SeqParameterSetExt for SeqParameterSet {
             h264_reader::nal::sps::ChromaFormat::Invalid(x) => {
                 return Err(VulkanDecoderError::InvalidInputData(format!(
                     "Invalid chroma_format_idc: {x}"
-                )))
+                )));
             }
         };
 
@@ -534,7 +534,7 @@ impl H264DecodeProfileInfo<'_> {
                 return Err(VulkanDecoderError::InvalidInputData(format!(
                     "unsupported chroma format: {:?}",
                     sps.chroma_info.chroma_format
-                )))
+                )));
             }
         };
 

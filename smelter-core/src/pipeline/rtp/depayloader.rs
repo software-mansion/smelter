@@ -50,7 +50,7 @@ pub fn new_depayloader(options: DepayloaderOptions) -> Box<dyn Depayloader> {
 
 pub(crate) trait Depayloader {
     fn depayload(&mut self, packet: RtpPacket)
-        -> Result<Vec<EncodedInputChunk>, DepayloadingError>;
+    -> Result<Vec<EncodedInputChunk>, DepayloadingError>;
 }
 
 #[derive(Debug, thiserror::Error)]

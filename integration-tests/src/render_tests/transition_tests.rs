@@ -3,8 +3,8 @@ use std::time::Duration;
 use crate::paths::render_snapshots_dir_path;
 
 use super::{
-    test_case::{Step, TestCase},
     TestRunner,
+    test_case::{Step, TestCase},
 };
 
 #[test]

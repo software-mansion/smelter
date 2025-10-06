@@ -3,10 +3,10 @@ use serde_json::json;
 use std::time::Duration;
 
 use crate::{
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
     audio::{self, AudioAnalyzeTolerance, AudioValidationConfig, RealFrequencyTolerance},
     compare_audio_dumps, compare_video_dumps, input_dump_from_disk,
     video::VideoValidationConfig,
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
 };
 
 /// Input and output streams with muxed video and audio.

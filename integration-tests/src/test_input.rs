@@ -1,4 +1,4 @@
-use smelter_render::{scene::RGBColor, Resolution};
+use smelter_render::{Resolution, scene::RGBColor};
 
 #[derive(Debug, Clone)]
 pub struct TestInput {

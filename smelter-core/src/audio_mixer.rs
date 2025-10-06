@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use smelter_render::{error::UpdateSceneError, OutputId};
+use smelter_render::{OutputId, error::UpdateSceneError};
 use tracing::trace;
 
 mod mix;

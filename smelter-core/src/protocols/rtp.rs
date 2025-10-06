@@ -78,6 +78,8 @@ pub enum RtpInputError {
     #[error("Failed to register input. Port: {0} is already used or not available.")]
     PortAlreadyInUse(u16),
 
-    #[error("Failed to register input. All ports in range {lower_bound} to {upper_bound} are already used or not available.")]
+    #[error(
+        "Failed to register input. All ports in range {lower_bound} to {upper_bound} are already used or not available."
+    )]
     AllPortsAlreadyInUse { lower_bound: u16, upper_bound: u16 },
 }

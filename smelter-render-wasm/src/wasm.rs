@@ -4,11 +4,11 @@ use bytes::Bytes;
 use glyphon::fontdb::Source;
 use smelter_api::{Component, ImageSpec, Resolution, ShaderSpec};
 use smelter_render::{
-    image::{ImageSource, ImageType},
     RegistryType, RendererSpec,
+    image::{ImageSource, ImageType},
 };
 use tokio::sync::Mutex;
-use tracing_subscriber::{layer::SubscriberExt, Registry};
+use tracing_subscriber::{Registry, layer::SubscriberExt};
 use tracing_wasm::WASMLayer;
 use wasm_bindgen::prelude::*;
 use wgpu::create_wgpu_context;

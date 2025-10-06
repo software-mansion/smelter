@@ -1,13 +1,13 @@
 use tracing::error;
 use wgpu::{
-    util::{BufferInitDescriptor, DeviceExt},
     BindGroupLayoutDescriptor, BufferUsages,
+    util::{BufferInitDescriptor, DeviceExt},
 };
 
 use crate::{
-    scene::RGBAColor,
-    wgpu::{utils::convert_to_shader_color, WgpuCtx},
     Resolution,
+    scene::RGBAColor,
+    wgpu::{WgpuCtx, utils::convert_to_shader_color},
 };
 
 use super::{BorderRadius, RenderLayout};

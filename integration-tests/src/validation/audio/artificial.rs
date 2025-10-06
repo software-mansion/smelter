@@ -1,14 +1,14 @@
 use std::{cmp::Ordering, iter::zip};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use spectrum_analyzer::{
-    error::SpectrumAnalyzerError, samples_fft_to_spectrum, scaling::divide_by_N,
-    windows::hann_window, Frequency, FrequencyLimit, FrequencySpectrum, FrequencyValue,
+    Frequency, FrequencyLimit, FrequencySpectrum, FrequencyValue, error::SpectrumAnalyzerError,
+    samples_fft_to_spectrum, scaling::divide_by_N, windows::hann_window,
 };
 use tracing::error;
 
 use crate::audio::{
-    find_samples, split_samples, ArtificialFrequencyTolerance, Channel, SamplingInterval,
+    ArtificialFrequencyTolerance, Channel, SamplingInterval, find_samples, split_samples,
 };
 
 #[derive(Debug)]

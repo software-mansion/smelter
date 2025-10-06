@@ -1,12 +1,12 @@
 use std::{
     io::Read,
-    sync::{mpsc, Arc},
+    sync::{Arc, mpsc},
 };
 
 use h264_reader::{
-    nal::{pps::PicParameterSet, slice::SliceHeader, sps::SeqParameterSet, Nal, RefNal},
-    push::{AccumulatedNalHandler, NalInterest},
     Context,
+    nal::{Nal, RefNal, pps::PicParameterSet, slice::SliceHeader, sps::SeqParameterSet},
+    push::{AccumulatedNalHandler, NalInterest},
 };
 
 use super::ParserError;

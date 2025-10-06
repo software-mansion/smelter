@@ -220,7 +220,9 @@ pub enum ProcessMessageError {
     #[error("Failed to write {ty} at index {index} to process message.")]
     WriteFailed { ty: &'static str, index: usize },
 
-    #[error("The actual type at {index} is {actual_ty} but tried to read {expected_ty} from process message.")]
+    #[error(
+        "The actual type at {index} is {actual_ty} but tried to read {expected_ty} from process message."
+    )]
     ReadWrongType {
         expected_ty: &'static str,
         actual_ty: String,

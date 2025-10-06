@@ -41,7 +41,7 @@ impl TryFrom<RtpOutput> for core::RegisterOutputOptions {
                             Some(x) if x > 100 => {
                                 return Err(TypeError::new(
                                     "Expected packet loss value must be from [0, 100] range.",
-                                ))
+                                ));
                             }
                             Some(x) => x as i32,
                             None => 0,

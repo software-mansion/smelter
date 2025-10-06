@@ -4,7 +4,7 @@ use axum::extract::{Path, State};
 use log::error;
 use serde::{Deserialize, Serialize};
 use smelter_core::Pipeline;
-use smelter_render::{error::ErrorStack, RegistryType};
+use smelter_render::{RegistryType, error::ErrorStack};
 
 use crate::{
     error::ApiError,

@@ -1,4 +1,4 @@
-use ash::{prelude::VkResult, vk, RawPtr};
+use ash::{RawPtr, prelude::VkResult, vk};
 
 pub(crate) trait VideoQueueExt {
     unsafe fn cmd_begin_video_coding_khr(

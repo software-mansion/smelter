@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use smelter_render::MAX_NODE_RESOLUTION;
 use smelter_render::scene;
 use smelter_render::scene::BorderRadius;
 use smelter_render::scene::Position;
-use smelter_render::MAX_NODE_RESOLUTION;
 
 use crate::*;
 
@@ -37,8 +37,7 @@ impl TryFrom<View> for scene::ViewComponent {
     type Error = TypeError;
 
     fn try_from(view: View) -> Result<Self, Self::Error> {
-        const VERTICAL_REQUIRED_MSG: &str =
-            "\"View\" component with absolute positioning requires either \"top\" or \"bottom\" coordinate.";
+        const VERTICAL_REQUIRED_MSG: &str = "\"View\" component with absolute positioning requires either \"top\" or \"bottom\" coordinate.";
         const VERTICAL_ONLY_ONE_MSG: &str = "Fields \"top\" and \"bottom\" are mutually exclusive, you can only specify one on a \"View\" component.";
         const HORIZONTAL_REQUIRED_MSG: &str =
             "Non-static \"View\" component requires either \"left\" or \"right\" coordinate.";
@@ -149,8 +148,7 @@ impl TryFrom<Rescaler> for scene::RescalerComponent {
     type Error = TypeError;
 
     fn try_from(rescaler: Rescaler) -> Result<Self, Self::Error> {
-        const VERTICAL_REQUIRED_MSG: &str =
-            "\"Rescaler\" component with absolute positioning requires either \"top\" or \"bottom\" coordinate.";
+        const VERTICAL_REQUIRED_MSG: &str = "\"Rescaler\" component with absolute positioning requires either \"top\" or \"bottom\" coordinate.";
         const VERTICAL_ONLY_ONE_MSG: &str = "Fields \"top\" and \"bottom\" are mutually exclusive, you can only specify one on a \"Rescaler\" component.";
         const HORIZONTAL_REQUIRED_MSG: &str =
             "Non-static \"Rescaler\" component requires either \"left\" or \"right\" coordinate.";

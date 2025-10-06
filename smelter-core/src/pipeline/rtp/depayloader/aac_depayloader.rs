@@ -4,8 +4,8 @@ use bytes::{Buf, BytesMut};
 use tracing::trace;
 
 use crate::pipeline::rtp::{
-    depayloader::{AacAudioSpecificConfig, Depayloader, DepayloadingError},
     RtpPacket,
+    depayloader::{AacAudioSpecificConfig, Depayloader, DepayloadingError},
 };
 use crate::prelude::*;
 

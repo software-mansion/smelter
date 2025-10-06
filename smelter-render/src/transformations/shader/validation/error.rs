@@ -40,13 +40,17 @@ impl Display for ShaderParseError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ShaderValidationError {
-    #[error("A global \"{0}\" should be declared in the shader. Make sure to include the compositor header code inside your shader. Learn more: {HEADER_DOCS_URL}.")]
+    #[error(
+        "A global \"{0}\" should be declared in the shader. Make sure to include the compositor header code inside your shader. Learn more: {HEADER_DOCS_URL}."
+    )]
     GlobalNotFound(String),
 
     #[error("A global variable \"{1}\" has a wrong type. Learn more: {HEADER_DOCS_URL}.")]
     GlobalBadType(#[source] TypeEquivalenceError, String),
 
-    #[error("Could not find a vertex shader entrypoint. Expected \"fn {VERTEX_ENTRYPOINT_NAME}(input: VertexInput)\".")]
+    #[error(
+        "Could not find a vertex shader entrypoint. Expected \"fn {VERTEX_ENTRYPOINT_NAME}(input: VertexInput)\"."
+    )]
     VertexShaderNotFound,
 
     #[error("Wrong vertex shader argument amount: found {0}, expected 1.")]
@@ -60,7 +64,9 @@ pub enum ShaderValidationError {
     #[error("The vertex shader input has a wrong type. Learn more: {HEADER_DOCS_URL}.")]
     VertexShaderBadInput(#[source] TypeEquivalenceError),
 
-    #[error("User defined binding (group {USER_DEFINED_BUFFER_GROUP}, binding {USER_DEFINED_BUFFER_BINDING}) is not a uniform buffer. Is it defined as var<uniform>?")]
+    #[error(
+        "User defined binding (group {USER_DEFINED_BUFFER_GROUP}, binding {USER_DEFINED_BUFFER_BINDING}) is not a uniform buffer. Is it defined as var<uniform>?"
+    )]
     UserBindingNotUniform,
 }
 
@@ -72,7 +78,9 @@ pub enum TypeEquivalenceError {
     #[error("Type mismatch (expected: {expected}, actual: {actual}).")]
     TypeStructureMismatch { expected: String, actual: String },
 
-    #[error("Struct \"{struct_name}\" has an incorrect number of fields: expected: {expected_field_number}, found: {actual_field_number}")]
+    #[error(
+        "Struct \"{struct_name}\" has an incorrect number of fields: expected: {expected_field_number}, found: {actual_field_number}"
+    )]
     StructFieldNumberMismatch {
         struct_name: String,
         expected_field_number: usize,
@@ -87,14 +95,18 @@ pub enum TypeEquivalenceError {
         error: Box<TypeEquivalenceError>,
     },
 
-    #[error("Struct {struct_name} has mismatched field names: expected {expected_field_name}, found: {actual_field_name}.")]
+    #[error(
+        "Struct {struct_name} has mismatched field names: expected {expected_field_name}, found: {actual_field_name}."
+    )]
     StructFieldNameMismatch {
         struct_name: String,
         expected_field_name: String,
         actual_field_name: String,
     },
 
-    #[error("Field {field_name} in struct {struct_name} has an incorrect binding: expected \"{expected_binding} {field_name}\", found \"{actual_binding} {field_name}\".")]
+    #[error(
+        "Field {field_name} in struct {struct_name} has an incorrect binding: expected \"{expected_binding} {field_name}\", found \"{actual_binding} {field_name}\"."
+    )]
     StructFieldBindingMismatch {
         struct_name: String,
         field_name: String,
@@ -120,7 +132,9 @@ pub enum ConstArraySizeEvalError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ParametersValidationError {
-    #[error("No user-defined binding was found in the shader, even though parameters were provided in the request. Add \"@group(1) @binding(0) var<uniform> example_params: ExampleType;\" in your shader code.")]
+    #[error(
+        "No user-defined binding was found in the shader, even though parameters were provided in the request. Add \"@group(1) @binding(0) var<uniform> example_params: ExampleType;\" in your shader code."
+    )]
     NoBindingInShader,
 
     #[error("A type used in the shader cannot be provided at node registration: {0}.")]
@@ -138,14 +152,18 @@ pub enum ParametersValidationError {
     #[error("Error while evaluating array size")]
     ArraySizeEvalError(#[from] ConstArraySizeEvalError),
 
-    #[error("Struct \"{struct_name}\" has {expected} field(s), but {actual} were provided via shader parameters.")]
+    #[error(
+        "Struct \"{struct_name}\" has {expected} field(s), but {actual} were provided via shader parameters."
+    )]
     WrongShaderFieldsAmount {
         struct_name: String,
         expected: usize,
         actual: usize,
     },
 
-    #[error("The field at index {index} in struct \"{struct_name}\" is named \"{expected}\", but \"{actual}\" were provided via shader parameters.")]
+    #[error(
+        "The field at index {index} in struct \"{struct_name}\" is named \"{expected}\", but \"{actual}\" were provided via shader parameters."
+    )]
     WrongFieldName {
         index: usize,
         struct_name: String,

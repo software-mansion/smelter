@@ -119,7 +119,7 @@ impl WhepOutputsState {
             None => {
                 return Err(WhipWhepServerError::NotFound(format!(
                     "{output_id:?} not found"
-                )))
+                )));
             }
         };
 

@@ -3,12 +3,12 @@ use std::sync::Arc;
 use tracing::error;
 
 use crate::{
+    RenderingMode, Resolution,
     state::node_texture::NodeTextureState,
     wgpu::{
-        texture::{NV12Texture, NV12TextureViewCreateError},
         WgpuCtx,
+        texture::{NV12Texture, NV12TextureViewCreateError},
     },
-    RenderingMode, Resolution,
 };
 
 use super::convert_linear_to_srgb::RgbToSrgbConverter;

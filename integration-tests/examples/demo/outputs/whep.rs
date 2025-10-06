@@ -1,6 +1,6 @@
 use std::{
     env,
-    sync::{atomic::AtomicU32, OnceLock},
+    sync::{OnceLock, atomic::AtomicU32},
 };
 
 use anyhow::Result;
@@ -12,8 +12,8 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
-    inputs::{filter_video_inputs, InputHandle},
-    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
+    inputs::{InputHandle, filter_video_inputs},
+    outputs::{AudioEncoder, OutputHandle, VideoEncoder, VideoResolution, scene::Scene},
 };
 
 const WHEP_TOKEN_ENV: &str = "WHEP_OUTPUT_BEARER_TOKEN";

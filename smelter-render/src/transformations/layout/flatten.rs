@@ -1,6 +1,6 @@
 use std::{iter, mem};
 
-use crate::{scene::RGBAColor, Resolution};
+use crate::{Resolution, scene::RGBAColor};
 
 use super::{
     BoxShadow, Crop, LayoutContent, Mask, NestedLayout, RenderLayout, RenderLayoutContent,
@@ -146,9 +146,10 @@ impl NestedLayout {
                 // TODO: handle a case when only border is visible (currently impossible)
                 let size = input_resolutions.get(*index).copied().flatten();
                 if let Some(size) = size
-                    && (crop.left > size.width as f32 || crop.top > size.height as f32) {
-                        return false;
-                    }
+                    && (crop.left > size.width as f32 || crop.top > size.height as f32)
+                {
+                    return false;
+                }
                 if crop.top + crop.height < 0.0 || crop.left + crop.width < 0.0 {
                     return false;
                 }

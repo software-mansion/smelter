@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use crate::{
-    scene::ComponentId,
-    state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
     Framerate, RendererId, Resolution,
+    scene::ComponentId,
+    state::{RegisterCtx, RenderCtx, node_texture::NodeTexture},
 };
 
 #[derive(Debug, Clone)]

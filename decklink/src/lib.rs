@@ -29,11 +29,11 @@ mod lib {
     pub use enums::ffi::VideoInputFlags;
     pub use enums::ffi::VideoInputFormatChangedEvents;
 
+    pub use api::DeckLink;
+    pub use api::DisplayMode;
     pub use api::input::AudioInputPacket;
     pub use api::input::Input;
     pub use api::input::VideoInputFrame;
-    pub use api::DeckLink;
-    pub use api::DisplayMode;
     pub use input_callback::InputCallback;
     pub use input_callback::InputCallbackResult;
 

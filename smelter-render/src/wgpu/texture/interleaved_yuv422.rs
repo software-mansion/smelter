@@ -1,6 +1,6 @@
-use crate::{wgpu::WgpuCtx, Resolution};
+use crate::{Resolution, wgpu::WgpuCtx};
 
-use super::{base::new_texture, TextureExt};
+use super::{TextureExt, base::new_texture};
 
 #[derive(Debug)]
 pub struct InterleavedYuv422Texture {

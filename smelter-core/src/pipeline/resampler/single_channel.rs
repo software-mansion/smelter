@@ -36,7 +36,9 @@ impl ChannelResampler {
         if !(output_sample_rate as u128 * SAMPLE_BATCH_DURATION.as_nanos())
             .is_multiple_of(1_000_000_000)
         {
-            warn!("Resampler cannot produce exactly {SAMPLE_BATCH_DURATION:?} chunks at sample rate {output_sample_rate}.")
+            warn!(
+                "Resampler cannot produce exactly {SAMPLE_BATCH_DURATION:?} chunks at sample rate {output_sample_rate}."
+            )
         }
 
         let resampler = rubato::FftFixedOut::<f64>::new(

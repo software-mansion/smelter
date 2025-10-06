@@ -1,7 +1,7 @@
 use std::{iter, sync::Arc};
 
 use crossbeam_channel::Sender;
-use smelter_render::{error::ErrorStack, Frame};
+use smelter_render::{Frame, error::ErrorStack};
 use tokio::sync::oneshot;
 use tracing::{debug, error, trace, warn};
 use webrtc::{
@@ -13,21 +13,21 @@ use webrtc::{
 use crate::{
     pipeline::{
         decoder::{
-            ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder,
-            ffmpeg_vp9::FfmpegVp9Decoder, vulkan_h264::VulkanH264Decoder, VideoDecoder,
-            VideoDecoderInstance,
+            VideoDecoder, VideoDecoderInstance, ffmpeg_h264::FfmpegH264Decoder,
+            ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder,
+            vulkan_h264::VulkanH264Decoder,
         },
         rtp::{
-            depayloader::{new_depayloader, Depayloader, DepayloaderOptions, DepayloadingError},
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
+            depayloader::{Depayloader, DepayloaderOptions, DepayloadingError, new_depayloader},
         },
         webrtc::{
+            WhipWhepServerState,
             error::WhipWhepServerError,
             whip_input::{
-                negotiated_codecs::NegotiatedVideoCodecsInfo, utils::listen_for_rtcp,
-                AsyncReceiverIter,
+                AsyncReceiverIter, negotiated_codecs::NegotiatedVideoCodecsInfo,
+                utils::listen_for_rtcp,
             },
-            WhipWhepServerState,
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},

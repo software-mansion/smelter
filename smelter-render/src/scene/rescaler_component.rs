@@ -3,13 +3,13 @@ use std::{ops::Deref, time::Duration};
 use crate::transformations::layout::NestedLayout;
 
 use super::{
+    BorderRadius, BoxShadow, Component, ComponentId, HorizontalAlign, IntermediateNode, Position,
+    RGBAColor, RescaleMode, SceneError, Size, StatefulComponent, VerticalAlign,
     components::RescalerComponent,
     layout::StatefulLayoutComponent,
     scene_state::BuildStateTreeCtx,
     transition::{TransitionOptions, TransitionState},
     types::interpolation::ContinuousValue,
-    BorderRadius, BoxShadow, Component, ComponentId, HorizontalAlign, IntermediateNode, Position,
-    RGBAColor, RescaleMode, SceneError, Size, StatefulComponent, VerticalAlign,
 };
 
 mod interpolation;

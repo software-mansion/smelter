@@ -3,10 +3,10 @@ use serde_json::json;
 use std::{thread, time::Duration};
 
 use crate::{
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
     audio::{self, AudioAnalyzeTolerance, AudioValidationConfig},
     compare_audio_dumps, input_dump_from_disk,
     paths::submodule_root_path,
-    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender,
 };
 
 /// Two audio input streams mixed together with different volumes.

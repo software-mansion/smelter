@@ -1,6 +1,6 @@
 use tracing::error;
 
-use crate::wgpu::{texture::utils::pad_to_256, WgpuCtx};
+use crate::wgpu::{WgpuCtx, texture::utils::pad_to_256};
 
 pub struct ReinterpretToSrgb {
     buffer: wgpu::Buffer,

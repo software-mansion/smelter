@@ -29,11 +29,7 @@ impl AUSplitter {
                 None => Vec::new(),
             };
             self.buffered_nals.push((nalu, pts));
-            if !au.is_empty() {
-                Some(au)
-            } else {
-                None
-            }
+            if !au.is_empty() { Some(au) } else { None }
         } else {
             self.buffered_nals.push((nalu, pts));
             None

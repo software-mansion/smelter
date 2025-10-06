@@ -1,17 +1,17 @@
-use crate::state::node_texture::NodeTexture;
 use crate::state::RegisterCtx;
+use crate::state::node_texture::NodeTexture;
 use crate::transformations::web_renderer::chromium_sender::ChromiumSender;
-use crate::wgpu::texture::TextureExt;
 use crate::wgpu::WgpuCtx;
+use crate::wgpu::texture::TextureExt;
 use bytes::Bytes;
 use crossbeam_channel::bounded;
 use log::error;
 use nalgebra_glm::Mat4;
 use std::sync::Arc;
 
+use super::WebEmbeddingMethod;
 use super::chromium_sender::ChromiumSenderError;
 use super::node::EmbeddingData;
-use super::WebEmbeddingMethod;
 
 #[derive(Debug)]
 pub(super) struct EmbeddingHelper {

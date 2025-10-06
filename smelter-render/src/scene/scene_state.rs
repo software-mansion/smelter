@@ -3,11 +3,12 @@ use std::{collections::HashMap, time::Duration};
 use log::error;
 
 use crate::{
-    state::renderers::Renderers, transformations::text_renderer::TextRendererCtx, InputId,
-    OutputId, Resolution,
+    InputId, OutputId, Resolution, state::renderers::Renderers,
+    transformations::text_renderer::TextRendererCtx,
 };
 
 use super::{
+    ComponentId, Node, NodeParams, OutputScene, Position, SceneError, Size, StatefulComponent,
     image_component::StatefulImageComponent,
     input_stream_component::StatefulInputStreamComponent,
     layout::{LayoutNode, SizedLayoutComponent, StatefulLayoutComponent},
@@ -15,7 +16,6 @@ use super::{
     text_component::StatefulTextComponent,
     validation::validate_scene_update,
     web_view_component::StatefulWebViewComponent,
-    ComponentId, Node, NodeParams, OutputScene, Position, SceneError, Size, StatefulComponent,
 };
 
 pub(super) struct BuildStateTreeCtx<'a> {
@@ -218,7 +218,9 @@ impl IntermediateNode {
                     Err(SceneError::UnknownDimensionsForLayoutNodeRoot {
                         component: root.component_type(),
                         msg: match root.component_id() {
-                            Some(id) => format!("Please provide width and height values for component with id \"{id}\""),
+                            Some(id) => format!(
+                                "Please provide width and height values for component with id \"{id}\""
+                            ),
                             None => "Please provide width and height values.".to_string(),
                         },
                     })

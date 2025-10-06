@@ -9,10 +9,10 @@ use resvg::usvg;
 use tracing::debug;
 
 use crate::{
-    scene::image_component::ImageRenderParams,
-    state::{node_texture::NodeTexture, RegisterCtx, RenderCtx},
-    wgpu::WgpuCtx,
     Resolution,
+    scene::image_component::ImageRenderParams,
+    state::{RegisterCtx, RenderCtx, node_texture::NodeTexture},
+    wgpu::WgpuCtx,
 };
 
 pub use svg_image::{SvgAsset, SvgNodeState};

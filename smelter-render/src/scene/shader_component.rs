@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::transformations::shader::Shader;
 
 use super::{
-    scene_state::BuildStateTreeCtx, Component, ComponentId, IntermediateNode, SceneError,
-    ShaderComponent, ShaderParam, Size, StatefulComponent,
+    Component, ComponentId, IntermediateNode, SceneError, ShaderComponent, ShaderParam, Size,
+    StatefulComponent, scene_state::BuildStateTreeCtx,
 };
 
 #[derive(Debug, Clone)]

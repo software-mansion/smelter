@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use smelter_render::InputId;
-use tracing::{error, span, Level};
+use tracing::{Level, error, span};
 
 use crate::prelude::*;
 use crate::{pipeline::input::Input, queue::QueueDataReceiver};

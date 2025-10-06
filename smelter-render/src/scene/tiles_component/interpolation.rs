@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::scene::{
-    types::interpolation::{ContinuousValue, InterpolationState},
     ComponentId,
+    types::interpolation::{ContinuousValue, InterpolationState},
 };
 
 use super::tiles::Tile;

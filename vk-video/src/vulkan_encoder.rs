@@ -10,13 +10,13 @@ use wgpu::hal::Device as _;
 use yuv_converter::Converter;
 
 use crate::{
+    EncodedOutputChunk, Frame, H264Profile, RawFrameData, VulkanCommonError,
     device::{EncodingDevice, Rational},
     wrappers::{
         Buffer, CommandBuffer, CommandPool, DecodedPicturesBuffer, Device, Fence, Image, ImageView,
         ProfileInfo, QueryPool, Semaphore, VideoEncodeQueueExt, VideoQueueExt, VideoSession,
         VideoSessionParameters,
     },
-    EncodedOutputChunk, Frame, H264Profile, RawFrameData, VulkanCommonError,
 };
 
 mod encode_parameter_sets;
@@ -41,7 +41,9 @@ pub enum VulkanEncoderError {
     #[error("The device does not support vulkan h264 encoding")]
     VulkanEncoderUnsupported,
 
-    #[error("The byte length of the provided frame ({bytes}) is not the same as the picture size calculated from the dimensions ({size_from_resolution})")]
+    #[error(
+        "The byte length of the provided frame ({bytes}) is not the same as the picture size calculated from the dimensions ({size_from_resolution})"
+    )]
     InconsistentPictureDimensions {
         bytes: usize,
         size_from_resolution: usize,

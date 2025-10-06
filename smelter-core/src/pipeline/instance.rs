@@ -5,18 +5,18 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::{bounded, Receiver};
+use crossbeam_channel::{Receiver, bounded};
 use glyphon::fontdb;
 use tokio::runtime::Runtime;
 use tracing::{error, info, trace, warn};
 
 use smelter_render::{
+    FrameSet, InputId, OutputId, RegistryType, Renderer, RendererId, RendererOptions, RendererSpec,
     error::{
         ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
         UpdateSceneError,
     },
     scene::Component,
-    FrameSet, InputId, OutputId, RegistryType, Renderer, RendererId, RendererOptions, RendererSpec,
 };
 
 use crate::{
@@ -24,8 +24,8 @@ use crate::{
     event::{Event, EventEmitter},
     pipeline::{
         channel::{EncodedDataOutput, RawDataInput, RawDataOutput},
-        input::{new_external_input, register_pipeline_input, PipelineInput},
-        output::{new_external_output, register_pipeline_output, OutputSender, PipelineOutput},
+        input::{PipelineInput, new_external_input, register_pipeline_input},
+        output::{OutputSender, PipelineOutput, new_external_output, register_pipeline_output},
         webrtc::{WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle},
     },
     queue::{Queue, QueueAudioOutput, QueueOptions, QueueVideoOutput},
@@ -256,11 +256,12 @@ impl Pipeline {
             .ok_or_else(|| UpdateSceneError::OutputNotRegistered(output_id.clone()))?;
 
         if let Some(cond) = &output.video_end_condition
-            && cond.did_output_end() {
-                // Ignore updates after EOS
-                warn!("Received output update on a finished output");
-                return Ok(());
-            }
+            && cond.did_output_end()
+        {
+            // Ignore updates after EOS
+            warn!("Received output update on a finished output");
+            return Ok(());
+        }
 
         let Some(video_output) = output.output.video() else {
             return Err(UpdateSceneError::AudioVideoNotMatching(output_id));
@@ -287,11 +288,12 @@ impl Pipeline {
             .ok_or_else(|| UpdateSceneError::OutputNotRegistered(output_id.clone()))?;
 
         if let Some(cond) = &output.audio_end_condition
-            && cond.did_output_end() {
-                // Ignore updates after EOS
-                warn!("Received output update on a finished output");
-                return Ok(());
-            }
+            && cond.did_output_end()
+        {
+            // Ignore updates after EOS
+            warn!("Received output update on a finished output");
+            return Ok(());
+        }
 
         info!(?output_id, "Update audio mixer {:?}", audio);
         self.audio_mixer.update_output(output_id, audio)

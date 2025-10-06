@@ -3,8 +3,8 @@ use std::time::Duration;
 use crate::{DeckLinkError, InputCallback, InputCallbackResult};
 
 use super::{
-    ffi::{self, PixelFormat},
     DisplayMode, HResult,
+    ffi::{self, PixelFormat},
 };
 
 pub struct Input(pub(super) *mut ffi::IDeckLinkInput);

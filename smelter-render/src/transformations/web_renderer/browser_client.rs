@@ -7,8 +7,8 @@ use log::error;
 use crate::transformations::web_renderer::{FrameData, SourceTransforms};
 
 use super::{
-    transformation_matrices::{vertices_transformation_matrix, Position},
     GET_FRAME_POSITIONS_MESSAGE,
+    transformation_matrices::{Position, vertices_transformation_matrix},
 };
 
 #[derive(Clone)]

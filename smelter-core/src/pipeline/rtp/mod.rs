@@ -8,8 +8,8 @@ mod rtp_output;
 mod util;
 
 pub(crate) use rtp_input::{
-    rtcp_sync::{RtpNtpSyncPoint, RtpTimestampSync},
     RtpInput,
+    rtcp_sync::{RtpNtpSyncPoint, RtpTimestampSync},
 };
 pub(crate) use rtp_output::RtpOutput;
 use webrtc::rtp;

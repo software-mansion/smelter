@@ -1,5 +1,5 @@
 use core::slice;
-use ffmpeg_next::{format::Pixel, frame, Dictionary};
+use ffmpeg_next::{Dictionary, format::Pixel, frame};
 use std::{collections::HashMap, time::Duration};
 
 use smelter_render::FrameData;
@@ -30,7 +30,7 @@ pub(super) fn create_av_frame(
             return Err(FrameConversionError(format!(
                 "Unsupported pixel format {:?}",
                 frame.data
-            )))
+            )));
         }
     };
 
@@ -109,7 +109,7 @@ impl<T: AsRef<str>, const N: usize> From<&[(T, T); N]> for FfmpegOptions {
 
 pub(super) fn read_extradata(encoder: &ffmpeg_next::codec::encoder::Video) -> Option<bytes::Bytes> {
     unsafe {
-        let encoder_ptr = encoder.0 .0 .0.as_ptr();
+        let encoder_ptr = encoder.0.0.0.as_ptr();
         let size = (*encoder_ptr).extradata_size;
         if size > 0 {
             let extradata_slice = slice::from_raw_parts((*encoder_ptr).extradata, size as usize);

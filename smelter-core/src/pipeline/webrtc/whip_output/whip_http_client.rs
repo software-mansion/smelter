@@ -176,9 +176,10 @@ async fn map_response_err(
 fn sdp_from_candidate(candidate: RTCIceCandidateInit) -> String {
     let mut sdp = String::new();
     if let Some(mid) = candidate.sdp_mid
-        && !mid.is_empty() {
-            sdp.push_str(format!("a=mid:{mid}\n").as_str());
-        }
+        && !mid.is_empty()
+    {
+        sdp.push_str(format!("a=mid:{mid}\n").as_str());
+    }
     if let Some(ufrag) = candidate.username_fragment {
         sdp.push_str(format!("a=ice-ufrag:{ufrag}\n").as_str());
     }

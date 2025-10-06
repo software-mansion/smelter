@@ -11,13 +11,13 @@ use crate::{
     benchmark::{Benchmark, EncoderOptions},
     benchmark_pass::{InputFile, SingleBenchmarkPass},
     scenes::{
-        blank, example_image, example_shader, four_video_layout, image_with_shader,
+        SceneBuilderFn, blank, example_image, example_shader, four_video_layout, image_with_shader,
         simple_tiles_with_all_inputs, single_video_layout, single_video_pass_through, static_image,
-        two_video_layout, SceneBuilderFn,
+        two_video_layout,
     },
     utils::{
-        ensure_bunny_1080p30fps, ensure_bunny_1080p60fps, ensure_bunny_2160p30fps,
-        ensure_bunny_480p24fps, ensure_bunny_720p24fps, generate_png_from_video,
+        ensure_bunny_480p24fps, ensure_bunny_720p24fps, ensure_bunny_1080p30fps,
+        ensure_bunny_1080p60fps, ensure_bunny_2160p30fps, generate_png_from_video,
         generate_yuv_from_mp4,
     },
 };

@@ -1,4 +1,5 @@
 use crate::{
+    DeckLink, DeckLinkError, VideoIOSupport, VideoInputConversionMode,
     api::{device::DeckLinkConfiguration, profile::ProfileAttributes},
     enums::{
         self,
@@ -7,7 +8,6 @@ use crate::{
             StringAttributeId, StringConfigurationId,
         },
     },
-    DeckLink, DeckLinkError, VideoIOSupport, VideoInputConversionMode,
 };
 
 #[derive(Debug)]

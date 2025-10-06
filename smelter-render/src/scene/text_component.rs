@@ -1,8 +1,8 @@
 use crate::transformations::text_renderer::TextRenderParams;
 
 use super::{
-    scene_state::BuildStateTreeCtx, ComponentId, IntermediateNode, SceneError, Size,
-    StatefulComponent, TextComponent,
+    ComponentId, IntermediateNode, SceneError, Size, StatefulComponent, TextComponent,
+    scene_state::BuildStateTreeCtx,
 };
 
 #[derive(Debug, Clone)]

@@ -1,10 +1,10 @@
-use crate::{scene::RGBAColor, RenderingMode};
+use crate::{RenderingMode, scene::RGBAColor};
 
 use self::r8_fill_with_color::R8FillWithValue;
 use add_premultiplied_alpha::PremultiplyAlphaPipeline;
 use remove_premultiplied_alpha::RemovePremultipliedAlphaPipeline;
 
-use super::{format::TextureFormat, WgpuCtx};
+use super::{WgpuCtx, format::TextureFormat};
 
 mod add_premultiplied_alpha;
 mod r8_fill_with_color;

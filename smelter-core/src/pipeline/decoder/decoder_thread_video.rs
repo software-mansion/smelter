@@ -5,12 +5,12 @@ use smelter_render::Frame;
 use tracing::warn;
 
 use crate::{
+    PipelineCtx, PipelineEvent,
     error::DecoderInitError,
     pipeline::decoder::{
         BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, VideoDecoderStream,
     },
     thread_utils::{InitializableThread, ThreadMetadata},
-    PipelineCtx, PipelineEvent,
 };
 
 use super::VideoDecoder;

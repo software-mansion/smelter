@@ -4,7 +4,9 @@ use crate::RendererId;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RegisterError {
-    #[error("Failed to register a {item_type}, The \"{renderer_id}\" {item_type} was already registered.")]
+    #[error(
+        "Failed to register a {item_type}, The \"{renderer_id}\" {item_type} was already registered."
+    )]
     KeyTaken {
         item_type: &'static str,
         renderer_id: Arc<str>,

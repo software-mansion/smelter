@@ -2,8 +2,8 @@ use std::{
     fs::File,
     path::Path,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     thread::JoinHandle,
     time::Duration,
@@ -11,16 +11,17 @@ use std::{
 
 use crossbeam_channel::bounded;
 use smelter_render::InputId;
-use tracing::{debug, error, span, trace, Level, Span};
+use tracing::{Level, Span, debug, error, span, trace};
 
 use crate::{
     pipeline::{
         decoder::{
+            DecoderThreadHandle,
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac, ffmpeg_h264,
             h264_utils::AvccToAnnexBRepacker,
-            vulkan_h264, DecoderThreadHandle,
+            vulkan_h264,
         },
         input::Input,
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
@@ -106,7 +107,7 @@ impl Mp4Input {
                     _ => {
                         return Err(
                             Mp4InputError::Unknown("Non H264 decoder options returned.").into()
-                        )
+                        );
                     }
                 };
                 (Some(handle), Some(receiver), Some(track))
@@ -134,7 +135,7 @@ impl Mp4Input {
                     _ => {
                         return Err(
                             Mp4InputError::Unknown("Non AAC decoder options returned.").into()
-                        )
+                        );
                     }
                 };
                 (Some(handle), Some(receiver), Some(track))
@@ -435,8 +436,9 @@ struct SourceFile {
 impl Drop for SourceFile {
     fn drop(&mut self) {
         if self.remove_on_drop
-            && let Err(e) = std::fs::remove_file(&self.path) {
-                error!("Error while removing the downloaded mp4 file: {e}");
-            }
+            && let Err(e) = std::fs::remove_file(&self.path)
+        {
+            error!("Error while removing the downloaded mp4 file: {e}");
+        }
     }
 }

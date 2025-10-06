@@ -4,7 +4,7 @@ use smelter_api::Resolution;
 use std::time::Duration;
 
 use integration_tests::{
-    examples::{self, run_example, TestSample},
+    examples::{self, TestSample, run_example},
     ffmpeg::{start_ffmpeg_receive_vp8, start_ffmpeg_send},
     gstreamer::start_gst_send_udp,
 };

@@ -4,10 +4,10 @@ use ash::vk;
 use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 
 use crate::{
+    VulkanDecoderError, VulkanDevice,
     vulkan_decoder::{
         Device, VideoSessionParameters, VkPictureParameterSet, VkSequenceParameterSet,
     },
-    VulkanDecoderError, VulkanDevice,
 };
 
 use super::H264DecodeProfileInfo;

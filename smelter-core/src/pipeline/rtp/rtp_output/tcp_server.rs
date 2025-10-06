@@ -1,6 +1,6 @@
 use std::{
     io::{self, Write},
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
     thread,
     time::Duration,
 };
@@ -10,8 +10,8 @@ use tracing::{debug, trace, warn};
 use crate::{
     error::OutputInitError,
     pipeline::{
-        rtp::util::{bind_to_requested_port, BindToPortError},
         Port,
+        rtp::util::{BindToPortError, bind_to_requested_port},
     },
     protocols::PortOrRange,
 };

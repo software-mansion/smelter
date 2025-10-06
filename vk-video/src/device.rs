@@ -12,9 +12,9 @@ use crate::parser::Parser;
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 use crate::{
-    wrappers::*, BytesDecoder, BytesEncoder, DecoderError, H264Profile, RateControl, RawFrameData,
+    BytesDecoder, BytesEncoder, DecoderError, H264Profile, RateControl, RawFrameData,
     VulkanDecoderError, VulkanEncoderError, VulkanInitError, VulkanInstance, WgpuTexturesDecoder,
-    WgpuTexturesEncoder,
+    WgpuTexturesEncoder, wrappers::*,
 };
 
 pub(crate) mod caps;

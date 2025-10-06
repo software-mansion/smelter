@@ -1,7 +1,7 @@
 use crate::pipeline::webrtc::{
+    WhipWhepServerState,
     error::WhipWhepServerError,
     trickle_ice_utils::{ice_fragment_unmarshal, validate_content_type},
-    WhipWhepServerState,
 };
 use axum::{
     extract::{Path, State},

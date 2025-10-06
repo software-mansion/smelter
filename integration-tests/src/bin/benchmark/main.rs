@@ -7,7 +7,7 @@ use smelter_core::graphics_context::{GraphicsContext, GraphicsContextOptions};
 
 use scenes::simple_tiles_with_all_inputs;
 use smelter::{
-    config::{read_config, LoggerConfig},
+    config::{LoggerConfig, read_config},
     logger,
 };
 use smelter_render::RenderingMode;
@@ -44,7 +44,9 @@ fn main() {
     .unwrap();
 
     if cfg!(debug_assertions) {
-        warn!("This benchmark is running in debug mode. Make sure to run in release mode for reliable results.");
+        warn!(
+            "This benchmark is running in debug mode. Make sure to run in release mode for reliable results."
+        );
     }
 
     let benchmarks = match args.suite {

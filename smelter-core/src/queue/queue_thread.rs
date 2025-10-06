@@ -1,12 +1,12 @@
 use std::{
     collections::BTreeMap,
     ops::Add,
-    sync::{atomic::Ordering, Arc},
+    sync::{Arc, atomic::Ordering},
     thread::{self, JoinHandle},
     time::Duration,
 };
 
-use crossbeam_channel::{select, tick, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, select, tick};
 use tracing::{debug, info, info_span, trace, warn};
 
 use super::{Queue, QueueAudioOutput, QueueVideoOutput, ScheduledEvent};

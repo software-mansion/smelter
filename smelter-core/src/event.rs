@@ -2,8 +2,8 @@ use std::fmt::Debug;
 
 use crossbeam_channel::Receiver;
 use smelter_render::{
-    event_handler::{self, emit_event, Emitter},
     InputId, OutputId,
+    event_handler::{self, Emitter, emit_event},
 };
 
 #[derive(Debug, Clone)]

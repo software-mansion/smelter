@@ -157,7 +157,7 @@ impl WhepOutput {
                 },
             )?,
             AudioEncoderOptions::FdkAac(_options) => {
-                return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Aac))
+                return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Aac));
             }
         };
 

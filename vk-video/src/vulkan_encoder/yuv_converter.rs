@@ -1,15 +1,15 @@
 use std::sync::{Arc, Mutex};
 
 use ash::vk;
-use wgpu::hal::{vulkan::Api as VkApi, CommandEncoder, Device, Queue};
+use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
 
 use crate::{
+    VulkanCommonError, VulkanDevice,
     device::EncodingDevice,
     wrappers::{
         DescriptorPool, DescriptorSetLayout, Framebuffer, Image, ImageView, Pipeline,
         PipelineLayout, RenderPass, Sampler, ShaderModule,
     },
-    VulkanCommonError, VulkanDevice,
 };
 
 use super::H264EncodeProfileInfo;

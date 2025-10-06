@@ -7,7 +7,7 @@ pub(crate) mod texture;
 pub(crate) mod utils;
 
 pub(crate) use ctx::WgpuCtx;
-pub use ctx::{create_wgpu_ctx, required_wgpu_features, set_required_wgpu_limits, WgpuComponents};
+pub use ctx::{WgpuComponents, create_wgpu_ctx, required_wgpu_features, set_required_wgpu_limits};
 pub use wgpu::Features as WgpuFeatures;
 
 #[must_use]

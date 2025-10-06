@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use log::info;
 use smelter_api::Resolution;
 use std::process::Child;
 
-use super::examples::{get_asset_path, TestSample};
+use super::examples::{TestSample, get_asset_path};
 use std::{
     fs::File,
     io::Write,
@@ -57,7 +57,7 @@ pub fn start_ffmpeg_receive_h264(
         (None, None) => {
             return Err(anyhow!(
                 "At least one of: 'video_port', 'audio_port' has to be specified."
-            ))
+            ));
         }
     }?;
 
@@ -90,7 +90,7 @@ pub fn start_ffmpeg_receive_vp8(video_port: Option<u16>, audio_port: Option<u16>
         (None, None) => {
             return Err(anyhow!(
                 "At least one of: 'video_port', 'audio_port' has to be specified."
-            ))
+            ));
         }
     }?;
 
@@ -123,7 +123,7 @@ pub fn start_ffmpeg_receive_vp9(video_port: Option<u16>, audio_port: Option<u16>
         (None, None) => {
             return Err(anyhow!(
                 "At least one of: 'video_port', 'audio_port' has to be specified."
-            ))
+            ));
         }
     }?;
 

@@ -1,6 +1,6 @@
 use crate::{
-    enums::ffi::{DetectedVideoInputFormatFlags, VideoInputFormatChangedEvents},
     AudioInputPacket, DisplayMode, VideoInputFrame,
+    enums::ffi::{DetectedVideoInputFormatFlags, VideoInputFormatChangedEvents},
 };
 
 pub enum InputCallbackResult {

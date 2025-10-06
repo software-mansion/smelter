@@ -1,11 +1,11 @@
 use std::{
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::{bounded, Receiver};
+use crossbeam_channel::{Receiver, bounded};
 use smelter_render::{Frame, InputId};
-use tracing::{debug, span, trace, warn, Level};
+use tracing::{Level, debug, span, trace, warn};
 use webrtc::{
     rtcp::{self, header::PacketType, sender_report::SenderReport},
     rtp,
@@ -22,6 +22,7 @@ use crate::{
         },
         input::Input,
         rtp::{
+            RtpPacket,
             depayloader::DepayloaderOptions,
             rtp_input::{
                 rtcp_sync::{RtpNtpSyncPoint, RtpTimestampSync},
@@ -31,7 +32,6 @@ use crate::{
                 rtp_video_thread::{RtpVideoThread, RtpVideoTrackThreadHandle},
             },
             util::BindToPortError,
-            RtpPacket,
         },
     },
     prelude::*,
@@ -241,23 +241,25 @@ fn run_rtp_demuxer_thread(
 
     let maybe_send_video_eos = |video: &mut Option<TrackState<RtpVideoTrackThreadHandle>>| {
         if let Some(video) = video
-            && !video.eos_received {
-                video.eos_received = true;
-                let sender = &video.handle.rtp_packet_sender;
-                if sender.send(PipelineEvent::EOS).is_err() {
-                    debug!("Failed to send EOS from RTP video depayloader. Channel closed.");
-                }
+            && !video.eos_received
+        {
+            video.eos_received = true;
+            let sender = &video.handle.rtp_packet_sender;
+            if sender.send(PipelineEvent::EOS).is_err() {
+                debug!("Failed to send EOS from RTP video depayloader. Channel closed.");
             }
+        }
     };
     let maybe_send_audio_eos = |audio: &mut Option<TrackState<RtpAudioTrackThreadHandle>>| {
         if let Some(audio) = audio
-            && !audio.eos_received {
-                audio.eos_received = true;
-                let sender = &audio.handle.rtp_packet_sender;
-                if sender.send(PipelineEvent::EOS).is_err() {
-                    debug!("Failed to send EOS from RTP audio depayloader. Channel closed.");
-                }
+            && !audio.eos_received
+        {
+            audio.eos_received = true;
+            let sender = &audio.handle.rtp_packet_sender;
+            if sender.send(PipelineEvent::EOS).is_err() {
+                debug!("Failed to send EOS from RTP audio depayloader. Channel closed.");
             }
+        }
     };
     loop {
         let Ok(mut buffer) = receiver.recv() else {
@@ -316,20 +318,22 @@ fn run_rtp_demuxer_thread(
                                         .unwrap();
 
                                     if Some(sender_report.ssrc) == audio_ssrc
-                                        && let Some(audio) = &mut audio {
-                                            audio.time_sync.on_sender_report(
-                                                sender_report.ntp_time,
-                                                sender_report.rtp_time,
-                                            );
-                                        }
+                                        && let Some(audio) = &mut audio
+                                    {
+                                        audio.time_sync.on_sender_report(
+                                            sender_report.ntp_time,
+                                            sender_report.rtp_time,
+                                        );
+                                    }
 
                                     if Some(sender_report.ssrc) == video_ssrc
-                                        && let Some(video) = &mut video {
-                                            video.time_sync.on_sender_report(
-                                                sender_report.ntp_time,
-                                                sender_report.rtp_time,
-                                            );
-                                        }
+                                        && let Some(video) = &mut video
+                                    {
+                                        video.time_sync.on_sender_report(
+                                            sender_report.ntp_time,
+                                            sender_report.rtp_time,
+                                        );
+                                    }
                                 }
                                 PacketType::Goodbye => {
                                     for ssrc in rtcp_packet.destination_ssrc() {

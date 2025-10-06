@@ -1,4 +1,4 @@
-use nalgebra_glm::{rotate_z, scale, translate, vec3, Mat4, Vec3};
+use nalgebra_glm::{Mat4, Vec3, rotate_z, scale, translate, vec3};
 
 use crate::Resolution;
 

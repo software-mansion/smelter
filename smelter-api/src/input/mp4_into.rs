@@ -16,8 +16,7 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
             decoder_map,
         } = value;
 
-        const BAD_URL_PATH_SPEC: &str =
-            "Exactly one of `url` or `path` has to be specified in a register request for an mp4 input.";
+        const BAD_URL_PATH_SPEC: &str = "Exactly one of `url` or `path` has to be specified in a register request for an mp4 input.";
 
         let source = match (url, path) {
             (Some(_), Some(_)) | (None, None) => {

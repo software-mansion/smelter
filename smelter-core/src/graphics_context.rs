@@ -1,5 +1,5 @@
 use crate::error::InitPipelineError;
-use smelter_render::{create_wgpu_ctx, error::InitRendererEngineError, WgpuComponents};
+use smelter_render::{WgpuComponents, create_wgpu_ctx, error::InitRendererEngineError};
 use std::sync::Arc;
 
 #[cfg(feature = "vk-video")]
@@ -78,7 +78,9 @@ impl GraphicsContext {
             }),
 
             Err(err) => {
-                warn!("Cannot initialize vulkan video decoding context. Reason: {err}. Initializing without vulkan video support.");
+                warn!(
+                    "Cannot initialize vulkan video decoding context. Reason: {err}. Initializing without vulkan video support."
+                );
 
                 let WgpuComponents {
                     instance,

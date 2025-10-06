@@ -4,7 +4,7 @@ use std::{
     sync::{OnceLock, RwLock},
 };
 
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use log::trace;
 
 #[derive(Debug, Clone)]

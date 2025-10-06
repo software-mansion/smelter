@@ -1,6 +1,6 @@
 use std::{
     io::Read,
-    sync::{mpsc::SyncSender, Arc},
+    sync::{Arc, mpsc::SyncSender},
     time::Duration,
 };
 

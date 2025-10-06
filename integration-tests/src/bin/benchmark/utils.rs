@@ -1,8 +1,8 @@
 use anyhow::Result;
 use integration_tests::paths::integration_tests_root;
 use smelter_core::{
-    graphics_context::GraphicsContext, PipelineOptions, PipelineWgpuOptions,
-    PipelineWhipWhepServerOptions, DEFAULT_BUFFER_DURATION,
+    DEFAULT_BUFFER_DURATION, PipelineOptions, PipelineWgpuOptions, PipelineWhipWhepServerOptions,
+    graphics_context::GraphicsContext,
 };
 use std::{
     fs::{self, File},

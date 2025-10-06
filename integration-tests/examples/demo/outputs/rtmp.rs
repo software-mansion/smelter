@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use integration_tests::ffmpeg::start_ffmpeg_rtmp_receive;
 use serde::{Deserialize, Serialize};
 use std::process::Child;
@@ -9,8 +9,8 @@ use strum::{Display, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
-    inputs::{filter_video_inputs, InputHandle},
-    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
+    inputs::{InputHandle, filter_video_inputs},
+    outputs::{AudioEncoder, OutputHandle, VideoEncoder, VideoResolution, scene::Scene},
     players::OutputPlayer,
 };
 
@@ -109,7 +109,10 @@ impl OutputHandle for RtmpOutput {
         match self.player {
             OutputPlayer::Ffmpeg => self.start_ffmpeg_recv(),
             OutputPlayer::Manual => {
-                let cmd = format!("ffmpeg -f flv -listen 1 -i 'rtmp://0.0.0.0:{}' -vcodec copy -f flv - | ffplay -autoexit -f flv -i -", self.port);
+                let cmd = format!(
+                    "ffmpeg -f flv -listen 1 -i 'rtmp://0.0.0.0:{}' -vcodec copy -f flv - | ffplay -autoexit -f flv -i -",
+                    self.port
+                );
 
                 println!("Start player: {cmd}");
 

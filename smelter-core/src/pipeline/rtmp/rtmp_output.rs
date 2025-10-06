@@ -1,6 +1,6 @@
 use std::{ops::Deref, ptr, sync::Arc};
 
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
 use tracing::{debug, error};
 
@@ -152,10 +152,10 @@ impl RtmpClientOutput {
                 )?
             }
             VideoEncoderOptions::FfmpegVp8(_) => {
-                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp8))
+                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp8));
             }
             VideoEncoderOptions::FfmpegVp9(_) => {
-                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp9))
+                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp9));
             }
         };
 
@@ -207,7 +207,7 @@ impl RtmpClientOutput {
                 },
             )?,
             AudioEncoderOptions::Opus(_) => {
-                return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus))
+                return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus));
             }
         };
 
@@ -313,24 +313,24 @@ fn write_chunk(
     output_ctx: &mut ffmpeg::format::context::Output,
 ) {
     let (stream_id, time_base) = match chunk.kind {
-        MediaKind::Video(_) => {
-            match video_stream {
-                Some(Stream { index, time_base }) => (*index, *time_base),
-                None => {
-                    error!("Failed to create packet for video chunk. No video stream registered on init.");
-                    return;
-                }
+        MediaKind::Video(_) => match video_stream {
+            Some(Stream { index, time_base }) => (*index, *time_base),
+            None => {
+                error!(
+                    "Failed to create packet for video chunk. No video stream registered on init."
+                );
+                return;
             }
-        }
-        MediaKind::Audio(_) => {
-            match audio_stream {
-                Some(Stream { index, time_base }) => (*index, *time_base),
-                None => {
-                    error!("Failed to create packet for audio chunk. No audio stream registered on init.");
-                    return;
-                }
+        },
+        MediaKind::Audio(_) => match audio_stream {
+            Some(Stream { index, time_base }) => (*index, *time_base),
+            None => {
+                error!(
+                    "Failed to create packet for audio chunk. No audio stream registered on init."
+                );
+                return;
             }
-        }
+        },
     };
 
     const NS_TIME_BASE: Rational = Rational(1, 1_000_000_000);

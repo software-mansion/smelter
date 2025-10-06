@@ -1,9 +1,9 @@
 use tracing::error;
 
 use crate::{
-    state::node_texture::NodeTextureState,
-    wgpu::{texture::InterleavedYuv422Texture, WgpuCtx},
     RenderingMode, Resolution,
+    state::node_texture::NodeTextureState,
+    wgpu::{WgpuCtx, texture::InterleavedYuv422Texture},
 };
 
 use super::convert_linear_to_srgb::RgbToSrgbConverter;

@@ -3,12 +3,12 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use bytes::BytesMut;
 use ffmpeg_next::{
+    Rational,
     codec::{Context as FfmpegContext, Id},
     decoder,
     ffi::AV_CODEC_FLAG2_CHUNKS,
     frame,
     media::Type,
-    Rational,
 };
 use smelter_render::{Frame, FrameData, Resolution, YuvPlanes};
 use webrtc::rtp::{self, codecs::h264::H264Packet, packetizer::Depacketizer};

@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use ash::vk;
 
-use crate::{device::queues::Queue, VulkanCommonError, VulkanDevice};
+use crate::{VulkanCommonError, VulkanDevice, device::queues::Queue};
 
 use super::{CommandBuffer, Device, Image, ImageView, MemoryAllocation, VideoQueueExt};
 

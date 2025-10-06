@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use ash::{vk, Entry};
+use ash::{Entry, vk};
 
-use crate::{adapter::VulkanAdapter, wrappers::*, VulkanInitError};
+use crate::{VulkanInitError, adapter::VulkanAdapter, wrappers::*};
 
 /// Context for all encoders, decoders. Also contains a [`wgpu::Instance`].
 pub struct VulkanInstance {
