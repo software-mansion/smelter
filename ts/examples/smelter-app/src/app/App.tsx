@@ -1,17 +1,10 @@
-import {
-  Text,
-  View,
-  InputStream,
-  Image,
-  Tiles,
-  Rescaler,
-  useInputStreams,
-} from '@swmansion/smelter';
+import { View, Tiles, Rescaler } from '@swmansion/smelter';
 
-import { createRoomStore, type InputConfig as InputConfig, type RoomStore } from './store';
+import { createRoomStore, type RoomStore } from './store';
 import type { StoreApi } from 'zustand';
 import { useStore } from 'zustand';
 import { createContext, useContext } from 'react';
+import { Input, SmallInput } from '../inputs/inputs';
 
 export const StoreContext = createContext<StoreApi<RoomStore>>(createRoomStore());
 
@@ -39,70 +32,6 @@ function OutputScene() {
         <SecondaryInCornerLayout />
       ) : null}
     </View>
-  );
-}
-
-function Input({ input }: { input: InputConfig }) {
-  const streams = useInputStreams();
-  const streamState = streams[input.inputId]?.videoState ?? 'finished';
-  return (
-    <Rescaler style={{ width: 1920, height: 1210 }}>
-      <View style={{ width: 1920, height: 1210, direction: 'column' }}>
-        {streamState === 'playing' ? (
-          <Rescaler style={{ rescaleMode: 'fill' }}>
-            <InputStream inputId={input.inputId} volume={input.volume} />
-          </Rescaler>
-        ) : streamState === 'ready' ? (
-          <View style={{ padding: 300 }}>
-            <Rescaler style={{ rescaleMode: 'fit' }}>
-              <Image imageId="spinner" />
-            </Rescaler>
-          </View>
-        ) : streamState === 'finished' ? (
-          <View style={{ padding: 300 }}>
-            <Rescaler style={{ rescaleMode: 'fit' }}>
-              <Text style={{ fontSize: 600 }}>Stream offline</Text>
-            </Rescaler>
-          </View>
-        ) : (
-          <View />
-        )}
-        <View
-          style={{
-            backgroundColor: '#493880',
-            height: 90,
-            padding: 20,
-            borderRadius: 10,
-            direction: 'column',
-          }}>
-          <Text style={{ fontSize: 40, color: 'white' }}>{input?.title}</Text>
-          <View style={{ height: 10 }} />
-          <Text style={{ fontSize: 25, color: 'white' }}>{input?.description}</Text>
-        </View>
-      </View>
-    </Rescaler>
-  );
-}
-
-function SmallInput({ input }: { input: InputConfig }) {
-  return (
-    <Rescaler>
-      <View style={{ width: 640, height: 360, direction: 'column' }}>
-        <Rescaler style={{ rescaleMode: 'fill' }}>
-          <InputStream inputId={input.inputId} volume={input.volume} />
-        </Rescaler>
-        <View
-          style={{
-            backgroundColor: '#493880',
-            height: 40,
-            padding: 20,
-            borderRadius: 10,
-            direction: 'column',
-          }}>
-          <Text style={{ fontSize: 30, color: 'white' }}>{input.title}</Text>
-        </View>
-      </View>
-    </Rescaler>
   );
 }
 
