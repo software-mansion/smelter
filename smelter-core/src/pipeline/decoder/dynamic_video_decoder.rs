@@ -3,10 +3,10 @@ use std::{iter, sync::Arc};
 use smelter_render::{error::ErrorStack, Frame};
 use tracing::error;
 
+use crate::pipeline::decoder::video_decoder_mapping::VideoDecoderMapping;
 use crate::pipeline::decoder::{
     ffmpeg_h264::FfmpegH264Decoder, ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder,
-    negotiated_codecs::NegotiatedVideoCodecsInfo, vulkan_h264::VulkanH264Decoder, VideoDecoder,
-    VideoDecoderInstance,
+    vulkan_h264::VulkanH264Decoder, VideoDecoder, VideoDecoderInstance,
 };
 
 use crate::prelude::*;
@@ -20,7 +20,7 @@ where
     last_chunk_kind: Option<MediaKind>,
     source: Source,
     eos_sent: bool,
-    codec_info: NegotiatedVideoCodecsInfo,
+    decoders_info: VideoDecoderMapping,
 }
 
 impl<Source> DynamicVideoDecoderStream<Source>
@@ -29,7 +29,7 @@ where
 {
     pub(crate) fn new(
         ctx: Arc<PipelineCtx>,
-        codec_info: NegotiatedVideoCodecsInfo,
+        decoders_info: VideoDecoderMapping,
         source: Source,
     ) -> Self {
         Self {
@@ -38,7 +38,7 @@ where
             last_chunk_kind: None,
             source,
             eos_sent: false,
-            codec_info,
+            decoders_info,
         }
     }
 
@@ -48,21 +48,9 @@ where
         }
         self.last_chunk_kind = Some(chunk_kind);
         let preferred_decoder = match chunk_kind {
-            MediaKind::Video(VideoCodec::H264) => self
-                .codec_info
-                .h264
-                .as_ref()
-                .map(|info| info.preferred_decoder),
-            MediaKind::Video(VideoCodec::Vp8) => self
-                .codec_info
-                .vp8
-                .as_ref()
-                .map(|info| info.preferred_decoder),
-            MediaKind::Video(VideoCodec::Vp9) => self
-                .codec_info
-                .vp9
-                .as_ref()
-                .map(|info| info.preferred_decoder),
+            MediaKind::Video(VideoCodec::H264) => self.decoders_info.h264,
+            MediaKind::Video(VideoCodec::Vp8) => self.decoders_info.vp8,
+            MediaKind::Video(VideoCodec::Vp9) => self.decoders_info.vp9,
             MediaKind::Audio(_) => {
                 error!("Found audio packet in video stream.");
                 None
