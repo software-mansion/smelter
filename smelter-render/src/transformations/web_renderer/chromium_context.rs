@@ -1,6 +1,6 @@
 use core::fmt;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
+use rand::Rng;
+use rand::distr::Alphanumeric;
 use std::sync::Arc;
 
 use crate::{transformations::web_renderer::utils, types::Framerate};
@@ -151,7 +151,7 @@ impl fmt::Debug for ChromiumContext {
 }
 
 pub(crate) fn generate_random_id(length: usize) -> String {
-    thread_rng()
+    rand::rng()
         .sample_iter(&Alphanumeric)
         .take(length)
         .map(char::from)

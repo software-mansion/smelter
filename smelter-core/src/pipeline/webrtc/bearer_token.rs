@@ -1,7 +1,7 @@
 use std::{fmt::Write, sync::Arc, time::Duration};
 
 use axum::http::HeaderValue;
-use rand::{thread_rng, Rng, RngCore};
+use rand::{Rng, RngCore};
 use tokio::time::sleep;
 use tracing::error;
 
@@ -9,7 +9,7 @@ use crate::pipeline::webrtc::error::WhipWhepServerError;
 
 pub(super) fn generate_token() -> Arc<str> {
     let mut bytes = [0u8; 16];
-    thread_rng().fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let token = bytes.iter().fold(String::new(), |mut acc, byte| {
         if let Err(err) = write!(acc, "{byte:02X}") {
             error!("Cannot generate token: {err:?}")
@@ -33,7 +33,7 @@ pub(super) async fn validate_token(
                 if token_from_header == expected_token {
                     Ok(())
                 } else {
-                    let nanos = thread_rng().gen_range(0..1000);
+                    let nanos = rand::rng().random_range(0..1000);
                     sleep(Duration::from_nanos(nanos)).await;
                     Err(WhipWhepServerError::Unauthorized(
                         "Invalid or mismatched token provided".to_string(),

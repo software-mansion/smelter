@@ -4,7 +4,7 @@ use anyhow::Result;
 use inquire::{Confirm, Text};
 use integration_tests::{
     assets::{BUNNY_H264_PATH, BUNNY_H264_URL},
-    examples::{download_asset, AssetData},
+    examples::{AssetData, download_asset},
     paths::integration_tests_root,
 };
 use rand::RngCore;
@@ -78,7 +78,7 @@ pub struct Mp4InputBuilder {
 
 impl Mp4InputBuilder {
     pub fn new() -> Self {
-        let suffix = rand::thread_rng().next_u32();
+        let suffix = rand::rng().next_u32();
         let name = format!("mp4_input_{suffix}");
         Self {
             name,
@@ -112,7 +112,7 @@ impl Mp4InputBuilder {
                             error!("Path is not valid")
                         }
                         Mp4InputSource::Url(_) | Mp4InputSource::Path(_) => {
-                            break Ok(self.with_source(source))
+                            break Ok(self.with_source(source));
                         }
                     };
                 }

@@ -86,7 +86,7 @@ fn try_read_config() -> Result<Config, String> {
 
     let instance_id = match env::var("SMELTER_INSTANCE_ID") {
         Ok(instance_id) => instance_id,
-        Err(_) => format!("smelter_{}", rand::thread_rng().gen::<u32>()),
+        Err(_) => format!("smelter_{}", rand::rng().random::<u32>()),
     };
 
     const DEFAULT_FRAMERATE: Framerate = Framerate { num: 30, den: 1 };
@@ -123,7 +123,9 @@ fn try_read_config() -> Result<Config, String> {
         Ok(timeout_ms) => match timeout_ms.parse::<f64>() {
             Ok(timeout_ms) => Duration::from_secs_f64(timeout_ms / 1000.0),
             Err(_) => {
-                println!("CONFIG ERROR: Invalid value provided for \"SMELTER_STREAM_FALLBACK_TIMEOUT_MS\". Falling back to default value 500ms.");
+                println!(
+                    "CONFIG ERROR: Invalid value provided for \"SMELTER_STREAM_FALLBACK_TIMEOUT_MS\". Falling back to default value 500ms."
+                );
                 DEFAULT_STREAM_FALLBACK_TIMEOUT
             }
         },
@@ -205,7 +207,9 @@ fn try_read_config() -> Result<Config, String> {
         Ok(duration) => match duration.parse::<f64>() {
             Ok(duration) => Duration::from_secs_f64(duration / 1000.0),
             Err(_) => {
-                println!("CONFIG ERROR: Invalid value provided for \"SMELTER_INPUT_BUFFER_DURATION_MS\". Falling back to default value {DEFAULT_BUFFER_DURATION:?}.");
+                println!(
+                    "CONFIG ERROR: Invalid value provided for \"SMELTER_INPUT_BUFFER_DURATION_MS\". Falling back to default value {DEFAULT_BUFFER_DURATION:?}."
+                );
                 DEFAULT_BUFFER_DURATION
             }
         },

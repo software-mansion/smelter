@@ -52,7 +52,7 @@ impl Payloader {
             payloader,
             payload_type: options.payload_type,
             clock_rate: options.clock_rate,
-            next_sequence_number: rand::thread_rng().gen::<u16>(),
+            next_sequence_number: rand::rng().random::<u16>(),
         }
     }
 

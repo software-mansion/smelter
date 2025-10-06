@@ -12,9 +12,9 @@ use tokio::{
 use tracing::debug;
 use webrtc::{
     api::{
-        interceptor_registry::register_default_interceptors,
-        media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
         APIBuilder,
+        interceptor_registry::register_default_interceptors,
+        media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9, MediaEngine},
     },
     ice_transport::{
         ice_candidate::RTCIceCandidateInit, ice_gatherer_state::RTCIceGathererState,
@@ -22,8 +22,9 @@ use webrtc::{
     },
     interceptor::registry::Registry,
     peer_connection::{
-        configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState,
-        sdp::session_description::RTCSessionDescription, RTCPeerConnection,
+        RTCPeerConnection, configuration::RTCConfiguration,
+        peer_connection_state::RTCPeerConnectionState,
+        sdp::session_description::RTCSessionDescription,
     },
     rtp_transceiver::{
         rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
@@ -109,7 +110,7 @@ impl PeerConnection {
         let rtc_sender_params = sender.get_parameters().await;
         let ssrc = match rtc_sender_params.encodings.first() {
             Some(e) => e.ssrc,
-            None => rand::thread_rng().gen::<u32>(),
+            None => rand::rng().random::<u32>(),
         };
 
         Ok((track, sender, ssrc))
@@ -151,7 +152,7 @@ impl PeerConnection {
         let rtc_sender_params = sender.get_parameters().await;
         let (ssrc, payload_type) = match rtc_sender_params.encodings.first() {
             Some(e) => (e.ssrc, e.payload_type),
-            None => (rand::thread_rng().gen::<u32>(), 111),
+            None => (rand::rng().random::<u32>(), 111),
         };
 
         Ok((track, ssrc, payload_type))
