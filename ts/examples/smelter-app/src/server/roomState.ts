@@ -34,11 +34,11 @@ type UpdateInputOptions = {
 export type RegisterInputOptions =
   | {
       type: 'twitch-channel';
-      twitchChannelId: string;
+      channelId: string;
     }
   | {
       type: 'kick-channel';
-      kickChannelId: string;
+      channelId: string;
     }
   | {
       type: 'local-mp4';
@@ -130,13 +130,13 @@ export class RoomState {
 
   public async addNewInput(opts: RegisterInputOptions) {
     if (opts.type === 'twitch-channel') {
-      const inputId = inputIdForTwitchInput(this.idPrefix, opts.twitchChannelId);
+      const inputId = inputIdForTwitchInput(this.idPrefix, opts.channelId);
       if (this.inputs.find(input => input.inputId === inputId)) {
-        throw new Error(`Input for Twitch channel ${opts.twitchChannelId} already exists.`);
+        throw new Error(`Input for Twitch channel ${opts.channelId} already exists.`);
       }
 
-      const hlsUrl = await hlsUrlForTwitchChannel(opts.twitchChannelId);
-      const monitor = await TwitchChannelMonitor.startMonitor(opts.twitchChannelId);
+      const hlsUrl = await hlsUrlForTwitchChannel(opts.channelId);
+      const monitor = await TwitchChannelMonitor.startMonitor(opts.channelId);
 
       const inputState: RoomInputState = {
         inputId,
@@ -148,7 +148,7 @@ export class RoomState {
           description: '',
         },
         volume: 0,
-        channelId: opts.twitchChannelId,
+        channelId: opts.channelId,
         hlsUrl,
         monitor,
       };
@@ -160,13 +160,13 @@ export class RoomState {
       this.inputs.push(inputState);
       return inputId;
     } else if (opts.type === 'kick-channel') {
-      const inputId = inputIdForKickInput(this.idPrefix, opts.kickChannelId);
+      const inputId = inputIdForKickInput(this.idPrefix, opts.channelId);
       if (this.inputs.find(input => input.inputId === inputId)) {
-        throw new Error(`Input for Kick channel ${opts.kickChannelId} already exists.`);
+        throw new Error(`Input for Kick channel ${opts.channelId} already exists.`);
       }
 
-      const hlsUrl = await hlsUrlForKickChannel(opts.kickChannelId);
-      const monitor = await KickChannelMonitor.startMonitor(opts.kickChannelId);
+      const hlsUrl = await hlsUrlForKickChannel(opts.channelId);
+      const monitor = await KickChannelMonitor.startMonitor(opts.channelId);
 
       const inputState: RoomInputState = {
         inputId,
@@ -178,7 +178,7 @@ export class RoomState {
         },
         shaders: [],
         volume: 0,
-        channelId: opts.kickChannelId,
+        channelId: opts.channelId,
         hlsUrl,
         monitor,
       };
@@ -197,6 +197,7 @@ export class RoomState {
       let mp4Name = opts.source.fileName;
       const inputId = `${this.idPrefix}::local::sample_streamer::${Date.now()}`;
 
+      //@ts-ignore
       if (await fs.exists(mp4Path)) {
         this.inputs.push({
           inputId,

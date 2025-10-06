@@ -20,7 +20,13 @@ class ServerState {
 
   public isChannelIdUsed(channelId: string): boolean {
     return this.getRooms().some(room =>
-      room.getInputs().some(input => input.type === 'kick-channel' && input.channelId === channelId)
+      room
+        .getInputs()
+        .some(
+          input =>
+            (input.type === 'kick-channel' || input.type === 'twitch-channel') &&
+            input.channelId === channelId
+        )
     );
   }
 
