@@ -247,8 +247,8 @@ impl HlsInput {
                 continue;
             }
 
-            if let Some(track) = &mut video {
-                if packet.stream() == track.index {
+            if let Some(track) = &mut video
+                && packet.stream() == track.index {
                     let (pts, dts, is_discontinuity) = track.state.pts_dts_from_packet(&packet);
 
                     // Some streams give us packets "from the past", which get dropped by the queue
@@ -281,10 +281,9 @@ impl HlsInput {
                         debug!("Channel closed")
                     }
                 }
-            }
 
-            if let Some(track) = &mut audio {
-                if packet.stream() == track.index {
+            if let Some(track) = &mut audio
+                && packet.stream() == track.index {
                     let (pts, dts, _) = track.state.pts_dts_from_packet(&packet);
                     let pts = pts + pts_offset;
 
@@ -304,20 +303,17 @@ impl HlsInput {
                         debug!("Channel closed")
                     }
                 }
-            }
         }
 
-        if let Some(Track { handle, .. }) = &audio {
-            if handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
+        if let Some(Track { handle, .. }) = &audio
+            && handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
                 debug!("Channel closed. Failed to send audio EOS.")
             }
-        }
 
-        if let Some(Track { handle, .. }) = &video {
-            if handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
+        if let Some(Track { handle, .. }) = &video
+            && handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
                 debug!("Channel closed. Failed to send video EOS.")
             }
-        }
     }
 }
 

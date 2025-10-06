@@ -21,8 +21,8 @@ pub(super) fn listen_for_rtcp(
                 Ok((packets, _attr)) => {
                     for packet in packets {
                         debug!(?packet, "Received RTCP packet");
-                        if packet.header().packet_type == rtcp::header::PacketType::SenderReport {
-                            if let Some(sender) = sender.take() {
+                        if packet.header().packet_type == rtcp::header::PacketType::SenderReport
+                            && let Some(sender) = sender.take() {
                                 let result = sender.send(
                                     packet
                                         .as_any()
@@ -35,7 +35,6 @@ pub(super) fn listen_for_rtcp(
                                     return;
                                 }
                             }
-                        }
                     }
                 }
                 Err(webrtc::Error::ErrClosedPipe) => return,

@@ -55,10 +55,9 @@ pub struct WhipWhepServerHandle {
 impl Drop for WhipWhepServerHandle {
     fn drop(&mut self) {
         info!("Stopping WHIP/WHEP server");
-        if let Some(sender) = self.shutdown_sender.take() {
-            if sender.send(()).is_err() {
+        if let Some(sender) = self.shutdown_sender.take()
+            && sender.send(()).is_err() {
                 error!("Cannot send shutdown signal to WHIP/WHEP server")
             }
-        }
     }
 }

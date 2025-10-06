@@ -4,14 +4,14 @@ use std::{
     process::Command,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use log::info;
 use regex::Regex;
 use serde_json::json;
 use smelter::config::read_config;
 use tokio_tungstenite::tungstenite;
 
-use crate::{pipeline_tests::start_server_msg_listener, CompositorInstance};
+use crate::{CompositorInstance, pipeline_tests::start_server_msg_listener};
 
 const BUNNY_URL: &str =
     "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
@@ -97,11 +97,11 @@ pub fn offline_processing() -> Result<()> {
     instance.send_request("start", json!({}))?;
 
     for msg in msg_receiver.iter() {
-        if let tungstenite::Message::Text(msg) = msg {
-            if msg.contains("\"type\":\"OUTPUT_DONE\",\"output_id\":\"output_1\"") {
-                info!("breaking");
-                break;
-            }
+        if let tungstenite::Message::Text(msg) = msg
+            && msg.contains("\"type\":\"OUTPUT_DONE\",\"output_id\":\"output_1\"")
+        {
+            info!("breaking");
+            break;
         }
     }
 

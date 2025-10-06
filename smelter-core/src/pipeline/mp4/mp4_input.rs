@@ -434,10 +434,9 @@ struct SourceFile {
 
 impl Drop for SourceFile {
     fn drop(&mut self) {
-        if self.remove_on_drop {
-            if let Err(e) = std::fs::remove_file(&self.path) {
+        if self.remove_on_drop
+            && let Err(e) = std::fs::remove_file(&self.path) {
                 error!("Error while removing the downloaded mp4 file: {e}");
             }
-        }
     }
 }

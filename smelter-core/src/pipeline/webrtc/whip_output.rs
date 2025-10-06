@@ -205,38 +205,32 @@ impl WhipClientTask {
                     if audio.timestamp > video.timestamp {
                         if let (Some(packet), Some(track)) =
                             (next_video_packet.take(), &video_track)
-                        {
-                            if let Err(err) = track.write_rtp(&packet.packet).await {
+                            && let Err(err) = track.write_rtp(&packet.packet).await {
                                 warn!("RTP write error {}", err);
                                 break;
                             }
-                        }
                     } else if let (Some(packet), Some(track)) =
                         (next_audio_packet.take(), &audio_track)
-                    {
-                        if let Err(err) = track.write_rtp(&packet.packet).await {
+                        && let Err(err) = track.write_rtp(&packet.packet).await {
                             warn!("RTP write error {}", err);
                             break;
                         }
-                    }
                 }
                 // read audio if there is not way to get video packet
                 (None, Some(_)) if video_receiver.is_none() => {
-                    if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track) {
-                        if let Err(err) = track.write_rtp(&p.packet).await {
+                    if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track)
+                        && let Err(err) = track.write_rtp(&p.packet).await {
                             warn!("RTP write error {}", err);
                             break;
                         }
-                    }
                 }
                 // read video if there is not way to get audio packet
                 (Some(_), None) if audio_receiver.is_none() => {
-                    if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track) {
-                        if let Err(err) = track.write_rtp(&p.packet).await {
+                    if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track)
+                        && let Err(err) = track.write_rtp(&p.packet).await {
                             warn!("RTP write error {}", err);
                             break;
                         }
-                    }
                 }
                 (None, None) => break,
                 // we can't do anything here, but there are still receivers

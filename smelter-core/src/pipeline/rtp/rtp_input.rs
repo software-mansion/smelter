@@ -240,26 +240,24 @@ fn run_rtp_demuxer_thread(
     let mut video_ssrc = None;
 
     let maybe_send_video_eos = |video: &mut Option<TrackState<RtpVideoTrackThreadHandle>>| {
-        if let Some(video) = video {
-            if !video.eos_received {
+        if let Some(video) = video
+            && !video.eos_received {
                 video.eos_received = true;
                 let sender = &video.handle.rtp_packet_sender;
                 if sender.send(PipelineEvent::EOS).is_err() {
                     debug!("Failed to send EOS from RTP video depayloader. Channel closed.");
                 }
             }
-        }
     };
     let maybe_send_audio_eos = |audio: &mut Option<TrackState<RtpAudioTrackThreadHandle>>| {
-        if let Some(audio) = audio {
-            if !audio.eos_received {
+        if let Some(audio) = audio
+            && !audio.eos_received {
                 audio.eos_received = true;
                 let sender = &audio.handle.rtp_packet_sender;
                 if sender.send(PipelineEvent::EOS).is_err() {
                     debug!("Failed to send EOS from RTP audio depayloader. Channel closed.");
                 }
             }
-        }
     };
     loop {
         let Ok(mut buffer) = receiver.recv() else {
@@ -317,23 +315,21 @@ fn run_rtp_demuxer_thread(
                                         .downcast_ref::<SenderReport>()
                                         .unwrap();
 
-                                    if Some(sender_report.ssrc) == audio_ssrc {
-                                        if let Some(audio) = &mut audio {
+                                    if Some(sender_report.ssrc) == audio_ssrc
+                                        && let Some(audio) = &mut audio {
                                             audio.time_sync.on_sender_report(
                                                 sender_report.ntp_time,
                                                 sender_report.rtp_time,
                                             );
                                         }
-                                    }
 
-                                    if Some(sender_report.ssrc) == video_ssrc {
-                                        if let Some(video) = &mut video {
+                                    if Some(sender_report.ssrc) == video_ssrc
+                                        && let Some(video) = &mut video {
                                             video.time_sync.on_sender_report(
                                                 sender_report.ntp_time,
                                                 sender_report.rtp_time,
                                             );
                                         }
-                                    }
                                 }
                                 PacketType::Goodbye => {
                                     for ssrc in rtcp_packet.destination_ssrc() {

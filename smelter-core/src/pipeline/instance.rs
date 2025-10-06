@@ -255,13 +255,12 @@ impl Pipeline {
             .get(&output_id)
             .ok_or_else(|| UpdateSceneError::OutputNotRegistered(output_id.clone()))?;
 
-        if let Some(cond) = &output.video_end_condition {
-            if cond.did_output_end() {
+        if let Some(cond) = &output.video_end_condition
+            && cond.did_output_end() {
                 // Ignore updates after EOS
                 warn!("Received output update on a finished output");
                 return Ok(());
             }
-        }
 
         let Some(video_output) = output.output.video() else {
             return Err(UpdateSceneError::AudioVideoNotMatching(output_id));
@@ -287,13 +286,12 @@ impl Pipeline {
             .get(output_id)
             .ok_or_else(|| UpdateSceneError::OutputNotRegistered(output_id.clone()))?;
 
-        if let Some(cond) = &output.audio_end_condition {
-            if cond.did_output_end() {
+        if let Some(cond) = &output.audio_end_condition
+            && cond.did_output_end() {
                 // Ignore updates after EOS
                 warn!("Received output update on a finished output");
                 return Ok(());
             }
-        }
 
         info!(?output_id, "Update audio mixer {:?}", audio);
         self.audio_mixer.update_output(output_id, audio)
