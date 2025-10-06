@@ -1,7 +1,6 @@
 import type { KickStreamInfo } from '../kick/KickApi';
 import { getKickStreamInfo, getKickTopStreamsFromCategory } from '../kick/KickApi';
 import { sleep } from '../utils';
-import { state } from '../server/serverState';
 
 const CHOSEN_KICK_CATEGORY = '5';
 const KICK_CATEGORIES = [CHOSEN_KICK_CATEGORY];

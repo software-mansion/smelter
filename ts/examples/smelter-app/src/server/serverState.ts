@@ -1,4 +1,4 @@
-import type { RegisterInputOptions, RoomInitType } from './roomState';
+import type { RegisterInputOptions } from './roomState';
 import { RoomState } from './roomState';
 import { v4 as uuidv4 } from 'uuid';
 import { errorCodes } from 'fastify';

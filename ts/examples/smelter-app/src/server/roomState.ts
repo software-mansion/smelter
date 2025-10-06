@@ -9,8 +9,6 @@ import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 import { KickChannelMonitor } from '../kick/KickChannelMonitor';
 import type { ShaderConfig } from '../shaders/shaders';
 
-export type RoomInitType = 'twitch' | 'kick' | 'mp4';
-
 export type RoomInputState = {
   inputId: string;
   type: 'local-mp4' | 'twitch-channel' | 'kick-channel';
@@ -86,7 +84,10 @@ export class RoomState {
     })();
   }
 
-  private async getInitialInputState(idPrefix: string, initInputs: RegisterInputOptions[]): Promise<void> {
+  private async getInitialInputState(
+    idPrefix: string,
+    initInputs: RegisterInputOptions[]
+  ): Promise<void> {
     if (initInputs.length > 0) {
       for (const input of initInputs) {
         await this.addNewInput(input);

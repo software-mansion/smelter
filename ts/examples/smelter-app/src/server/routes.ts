@@ -3,7 +3,7 @@ import { Type } from '@sinclair/typebox';
 import type { Static, TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { state } from './serverState';
 import { TwitchChannelSuggestions } from '../twitch/TwitchChannelMonitor';
-import type { RoomInputState, RoomInitType, RegisterInputOptions } from './roomState';
+import type { RoomInputState, RegisterInputOptions } from './roomState';
 import { config } from '../config';
 import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 import { KickChannelSuggestions } from '../kick/KickChannelMonitor';
