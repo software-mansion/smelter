@@ -10,6 +10,7 @@ use crate::{
     pipeline::{
         decoder::{DynamicVideoDecoderStream, VideoDecoderMapping},
         rtp::{
+            depayloader::{DynamicDepayloaderStream, VideoPayloadTypeMapping},
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
             depayloader::{DynamicDepayloaderStream, VideoPayloadTypeMapping},
         },
