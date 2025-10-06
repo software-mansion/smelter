@@ -3,7 +3,7 @@ import { Type } from '@sinclair/typebox';
 import type { Static, TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { state } from './serverState';
 import { TwitchChannelSuggestions } from '../twitch/TwitchChannelMonitor';
-import type { RoomInputState, RoomInitType } from './roomState';
+import type { RoomInputState, RoomInitType, RegisterInputOptions } from './roomState';
 import { config } from '../config';
 import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 import { KickChannelSuggestions } from '../kick/KickChannelMonitor';
@@ -49,15 +49,10 @@ routes.get('/suggestions', async (_req, res) => {
 
 routes.post('/room', async (_req, res) => {
   console.log('[request] Create new room');
-  const body = _req.body as { initType?: string } | undefined;
-  let initType: RoomInitType = 'mp4';
-  if (body && typeof (body as any).initType === 'string') {
-    const candidate = (body as any).initType;
-    if (candidate === 'twitch' || candidate === 'kick' || candidate === 'mp4') {
-      initType = candidate as RoomInitType;
-    }
-  }
-  const { roomId, room } = await state.createRoom(initType);
+  const body = _req.body as { initInputs?: RegisterInputOptions[] } | undefined;
+  const initInputs = body?.initInputs || [];
+
+  const { roomId, room } = await state.createRoom(initInputs);
   res.status(200).send({ roomId, whepUrl: room.getWhepUrl() });
 });
 

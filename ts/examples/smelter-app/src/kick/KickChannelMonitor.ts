@@ -71,12 +71,6 @@ export class KickChannelMonitor {
 
   private async monitor() {
     while (!this.shouldStop) {
-      // Check if this channelId is still used, if not, stop monitoring
-      if (state.isChannelIdUsed(this.channelId)) {
-        console.log(`[kick] Stopping monitor for ${this.channelId} as it is no longer used.`);
-        this.shouldStop = true;
-        break;
-      }
       console.log(`[kick] Check stream state ${this.channelId}`);
       try {
         const streamInfo = await getKickStreamInfo(this.channelId);

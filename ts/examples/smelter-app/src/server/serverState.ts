@@ -1,4 +1,4 @@
-import type { RoomInitType } from './roomState';
+import type { RegisterInputOptions, RoomInitType } from './roomState';
 import { RoomState } from './roomState';
 import { v4 as uuidv4 } from 'uuid';
 import { errorCodes } from 'fastify';
@@ -30,10 +30,10 @@ class ServerState {
     }, 1000);
   }
 
-  public async createRoom(initType: RoomInitType): Promise<CreateRoomResult> {
+  public async createRoom(initInputs: RegisterInputOptions[]): Promise<CreateRoomResult> {
     const roomId = uuidv4();
     const smelterOutput = await SmelterInstance.registerOutput(roomId);
-    const room = new RoomState(roomId, smelterOutput, initType);
+    const room = new RoomState(roomId, smelterOutput, initInputs);
     this.rooms[roomId] = room;
     return { roomId, room };
   }

@@ -6,7 +6,7 @@ import { TwitchChannelMonitor } from '../twitch/TwitchChannelMonitor';
 import { sleep } from '../utils';
 import type { InputConfig, Layout } from '../app/store';
 import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
-import { KickChannelMonitor, KickChannelSuggestions } from '../kick/KickChannelMonitor';
+import { KickChannelMonitor } from '../kick/KickChannelMonitor';
 import type { ShaderConfig } from '../shaders/shaders';
 
 export type RoomInitType = 'twitch' | 'kick' | 'mp4';
@@ -64,7 +64,7 @@ export class RoomState {
 
   public pendingDelete?: boolean;
 
-  public constructor(idPrefix: string, output: SmelterOutput, initType: RoomInitType) {
+  public constructor(idPrefix: string, output: SmelterOutput, initInputs: RegisterInputOptions[]) {
     this.mp4sDir = path.join(process.cwd(), 'mp4s');
     this.mp4Files = mp4SuggestionsMonitor.mp4Files;
     this.inputs = [];
@@ -73,10 +73,10 @@ export class RoomState {
 
     this.lastReadTimestamp = Date.now();
     this.creationTimestamp = Date.now();
-    const realThis = this;
 
     void (async () => {
-      await this.getInitialInputState(idPrefix, initType);
+      await this.getInitialInputState(idPrefix, initInputs);
+      const realThis = this;
       for (let i = 0; i < realThis.inputs.length; i++) {
         const maybeInput = realThis.inputs[i];
         if (maybeInput) {
@@ -86,15 +86,10 @@ export class RoomState {
     })();
   }
 
-  private async getInitialInputState(idPrefix: string, initType: RoomInitType): Promise<void> {
-    if (initType === 'kick') {
-      const topStreams = KickChannelSuggestions.getTopStreams();
-      for (let i = 0; i < Math.min(2, topStreams.length); i++) {
-        const stream = topStreams[i];
-        await this.addNewInput({
-          type: 'kick-channel',
-          kickChannelId: stream.streamId,
-        });
+  private async getInitialInputState(idPrefix: string, initInputs: RegisterInputOptions[]): Promise<void> {
+    if (initInputs.length > 0) {
+      for (const input of initInputs) {
+        await this.addNewInput(input);
       }
     } else {
       if (this.mp4Files.length > 0) {
