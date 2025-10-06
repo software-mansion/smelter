@@ -23,6 +23,7 @@ pub struct GraphicsContext {
 #[derive(Debug, Default)]
 pub struct GraphicsContextOptions<'a> {
     pub device_id: Option<u32>,
+    pub driver_name: Option<String>,
     pub force_gpu: bool,
     pub features: wgpu::Features,
     pub limits: wgpu::Limits,
@@ -40,6 +41,7 @@ impl GraphicsContext {
 
         let GraphicsContextOptions {
             device_id,
+            driver_name,
             force_gpu,
             features,
             limits,
@@ -59,21 +61,36 @@ impl GraphicsContext {
             }?;
 
             log_available_adapters(&instance, compatible_surface);
-            let adapter = match device_id {
-                Some(device_id) => instance
-                    .iter_adapters(compatible_surface)?
-                    .find(|a| a.info().device_properties.device_id == device_id)
-                    .ok_or(VulkanInitError::NoDevice)?,
-                None => instance
-                    .iter_adapters(compatible_surface)?
-                    .sorted_by_key(|a| match (a.supports_decoding(), a.supports_encoding()) {
+            let adapter = instance
+                .iter_adapters(compatible_surface)?
+                .filter(|a| match device_id {
+                    Some(device_id) => a.info().device_properties.device_id == device_id,
+                    None => true,
+                })
+                .filter(|a| match &driver_name {
+                    Some(driver_name) => {
+                        let info = a.info();
+                        let driver_name = driver_name.to_lowercase();
+                        info.driver_name.to_lowercase().contains(&driver_name)
+                            || info.driver_info.to_lowercase().contains(&driver_name)
+                    }
+                    None => true,
+                })
+                .sorted_by_key(|a| {
+                    let decode_encode_key = match (a.supports_decoding(), a.supports_encoding()) {
                         (true, true) => 0,
                         (true, false) | (false, true) => 1,
                         (false, false) => 2,
-                    })
-                    .next()
-                    .ok_or(VulkanInitError::NoDevice)?,
-            };
+                    };
+                    let device_type_key = match a.info().device_type {
+                        wgpu::DeviceType::DiscreteGpu => 0,
+                        wgpu::DeviceType::IntegratedGpu => 1,
+                        _ => 2,
+                    };
+                    (decode_encode_key, device_type_key)
+                })
+                .next()
+                .ok_or(VulkanInitError::NoDevice)?;
 
             let device = adapter.create_device(vulkan_features, limits.clone())?;
             Ok((instance, device))
@@ -96,8 +113,15 @@ impl GraphicsContext {
                     adapter,
                     device,
                     queue,
-                } = create_wgpu_ctx(device_id, force_gpu, features, limits, compatible_surface)
-                    .map_err(InitRendererEngineError::FailedToInitWgpuCtx)?;
+                } = create_wgpu_ctx(
+                    device_id,
+                    driver_name,
+                    force_gpu,
+                    features,
+                    limits,
+                    compatible_surface,
+                )
+                .map_err(InitRendererEngineError::FailedToInitWgpuCtx)?;
 
                 Ok(GraphicsContext {
                     device,
@@ -114,6 +138,7 @@ impl GraphicsContext {
     pub fn new(opts: GraphicsContextOptions) -> Result<Self, InitPipelineError> {
         let GraphicsContextOptions {
             device_id,
+            driver_name,
             force_gpu,
             features,
             limits,
@@ -125,8 +150,15 @@ impl GraphicsContext {
             adapter,
             device,
             queue,
-        } = create_wgpu_ctx(device_id, force_gpu, features, limits, compatible_surface)
-            .map_err(InitRendererEngineError::FailedToInitWgpuCtx)?;
+        } = create_wgpu_ctx(
+            device_id,
+            driver_name,
+            force_gpu,
+            features,
+            limits,
+            compatible_surface,
+        )
+        .map_err(InitRendererEngineError::FailedToInitWgpuCtx)?;
 
         Ok(GraphicsContext {
             device,
@@ -159,21 +191,4 @@ impl GraphicsContext {
     pub fn has_vulkan_encoder_support(&self) -> bool {
         false
     }
-}
-
-#[cfg(feature = "vk-video")]
-fn log_available_adapters(
-    instance: &vk_video::VulkanInstance,
-    compatible_surface: Option<&wgpu::Surface<'_>>,
-) {
-    use tracing::info;
-
-    let adapters = match instance.iter_adapters(compatible_surface) {
-        Ok(adapters) => adapters
-            .map(|adapter| format!("\n - {:?}", adapter.info()))
-            .collect(),
-        Err(_) => Vec::new(),
-    };
-
-    info!("Available adapters: {}", adapters.join(""))
 }

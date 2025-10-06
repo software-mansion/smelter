@@ -134,6 +134,7 @@ pub struct WgpuComponents {
 
 pub fn create_wgpu_ctx(
     device_id: Option<u32>,
+    driver_name: Option<String>,
     force_gpu: bool,
     features: wgpu::Features,
     limits: wgpu::Limits,
@@ -144,7 +145,7 @@ pub fn create_wgpu_ctx(
         ..Default::default()
     });
 
-    let adapter = request_adapter(device_id, compatible_surface, &instance)?;
+    let adapter = request_adapter(device_id, driver_name, compatible_surface, &instance)?;
     let adapter_info = adapter.get_info();
     info!(
         "Using {} adapter with {:?} backend",
@@ -181,23 +182,40 @@ pub fn create_wgpu_ctx(
 #[cfg(not(target_arch = "wasm32"))]
 fn request_adapter(
     device_id: Option<u32>,
+    driver_name: Option<String>,
     compatible_surface: Option<&wgpu::Surface<'_>>,
     instance: &wgpu::Instance,
 ) -> Result<wgpu::Adapter, CreateWgpuCtxError> {
+    use itertools::Itertools;
+
     log_available_adapters(instance);
-    match device_id {
-        Some(device_id) => instance
-            .enumerate_adapters(wgpu::Backends::all())
-            .into_iter()
-            .find(|adapter| adapter.get_info().device == device_id)
-            .ok_or(CreateWgpuCtxError::NoAdapter),
-        None => pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptionsBase {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            force_fallback_adapter: false,
-            compatible_surface,
-        }))
-        .map_err(Into::into),
-    }
+    instance
+        .enumerate_adapters(wgpu::Backends::all())
+        .into_iter()
+        .filter(|a| match device_id {
+            Some(device_id) => a.get_info().device == device_id,
+            None => true,
+        })
+        .filter(|a| match &driver_name {
+            Some(driver_name) => {
+                let info = a.get_info();
+                let driver_name = driver_name.to_lowercase();
+                info.driver.to_lowercase().contains(&driver_name)
+                    || info.driver_info.to_lowercase().contains(&driver_name)
+            }
+            None => true,
+        })
+        .filter(|a| match compatible_surface {
+            Some(surface) => a.is_surface_supported(surface),
+            None => true,
+        })
+        .sorted_by_key(|a| match a.get_info().device_type {
+            wgpu::DeviceType::DiscreteGpu => 0,
+            wgpu::DeviceType::IntegratedGpu => 1,
+            _ => 2,
+        })
+        .next()
+        .ok_or(CreateWgpuCtxError::NoAdapter)
 }
 
 #[cfg(target_arch = "wasm32")]
