@@ -18,6 +18,7 @@ use crate::{
         webrtc::{
             WhipWhepServerState,
             error::WhipWhepServerError,
+            negotiated_codecs::WebrtcNegotiatedAudioCodecsInfo,
             whip_input::{utils::listen_for_rtcp, AsyncReceiverIter},
         },
     },
