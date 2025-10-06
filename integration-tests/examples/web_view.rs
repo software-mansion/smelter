@@ -4,7 +4,7 @@ use smelter_api::Resolution;
 use std::env;
 
 use integration_tests::{
-    examples::{self, run_example, TestSample},
+    examples::{self, TestSample, run_example},
     ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
 };
 
@@ -20,7 +20,9 @@ const INPUT_PORT: u16 = 8002;
 const OUTPUT_PORT: u16 = 8004;
 
 fn main() {
-    env::set_var("SMELTER_WEB_RENDERER_ENABLE", "1");
+    unsafe {
+        env::set_var("SMELTER_WEB_RENDERER_ENABLE", "1");
+    }
 
     #[cfg(feature = "web-renderer")]
     {
@@ -30,7 +32,9 @@ fn main() {
             .unwrap()
             .join("..");
         if let Err(err) = libcef::bundle_for_development(target_path) {
-            panic!("Build process helper first. For release profile use: cargo build -r --bin process_helper. {err:?}");
+            panic!(
+                "Build process helper first. For release profile use: cargo build -r --bin process_helper. {err:?}"
+            );
         }
     }
 

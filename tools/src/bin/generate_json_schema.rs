@@ -1,8 +1,9 @@
 use std::{fs, io, path::PathBuf};
 
 use schemars::{
+    JsonSchema,
     schema::{RootSchema, Schema, SchemaObject},
-    schema_for, JsonSchema,
+    schema_for,
 };
 use serde::{Deserialize, Serialize};
 use smelter::routes;
@@ -71,7 +72,7 @@ fn flatten_definition_with_one_of(definition: &mut SchemaObject) {
     for variant in one_of.iter_mut() {
         match variant {
             Schema::Bool(_) => (),
-            Schema::Object(ref mut variant) => {
+            Schema::Object(variant) => {
                 for (prop_name, prop) in properties.properties.iter() {
                     variant
                         .object()
