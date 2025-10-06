@@ -18,6 +18,7 @@ pub(crate) struct WhipInputConnectionStateOptions {
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    pub buffer_options: InputBufferOptions,
 }
 
 #[derive(Debug, Clone)]
@@ -28,6 +29,7 @@ pub(crate) struct WhipInputConnectionState {
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    pub buffer_options: InputBufferOptions,
 }
 
 impl WhipInputConnectionState {
@@ -39,6 +41,7 @@ impl WhipInputConnectionState {
             video_preferences: options.video_preferences,
             frame_sender: options.frame_sender,
             input_samples_sender: options.input_samples_sender,
+            buffer_options: options.buffer_options,
         }
     }
 

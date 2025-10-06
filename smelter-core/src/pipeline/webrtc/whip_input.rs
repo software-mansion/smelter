@@ -57,6 +57,7 @@ impl WhipInput {
                 video_preferences,
                 frame_sender,
                 input_samples_sender,
+                buffer_options: options.buffer,
             },
         );
 
