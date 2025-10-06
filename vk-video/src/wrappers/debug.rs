@@ -58,16 +58,20 @@ unsafe extern "system" fn debug_messenger_callback(
     _p_user_data: *mut c_void,
 ) -> vk::Bool32 {
     let callback_data = unsafe { *p_callback_data };
-    let message_id = callback_data
-        .message_id_name_as_c_str()
-        .unwrap_or(c"")
-        .to_str()
-        .unwrap();
-    let message = callback_data
-        .message_as_c_str()
-        .unwrap_or(c"")
-        .to_str()
-        .unwrap();
+    let message_id = unsafe {
+        callback_data
+            .message_id_name_as_c_str()
+            .unwrap_or(c"")
+            .to_str()
+            .unwrap()
+    };
+    let message = unsafe {
+        callback_data
+            .message_as_c_str()
+            .unwrap_or(c"")
+            .to_str()
+            .unwrap()
+    };
     let t = format!("{message_types:?}");
     match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => {

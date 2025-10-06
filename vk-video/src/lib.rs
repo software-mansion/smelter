@@ -350,6 +350,6 @@ impl WgpuTexturesEncoder {
         frame: Frame<wgpu::Texture>,
         force_keyframe: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        self.vulkan_encoder.encode_texture(frame, force_keyframe)
+        unsafe { self.vulkan_encoder.encode_texture(frame, force_keyframe) }
     }
 }
