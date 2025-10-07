@@ -24,7 +24,7 @@ jobs:
 
             - name: "Increase disk space"
               run: |
-                  sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+                  df -h && docker system prune -a -f && sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup && df -h
 
             - name: 🔧 Install the rust toolchain
               uses: dtolnay/rust-toolchain@stable
