@@ -105,7 +105,9 @@ impl HlsInputBuilder {
                                 }
                                 Err(error) => {
                                     error!(%error, "`streamlink` command failed.");
-                                    println!("If streamlink is not installed please use manual URL resolution.");
+                                    println!(
+                                        "If streamlink is not installed please use manual URL resolution."
+                                    );
                                     continue;
                                 }
                             };
