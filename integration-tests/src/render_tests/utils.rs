@@ -60,7 +60,15 @@ pub(super) fn yuv_frame_to_rgba(frame: &Frame, planes: &YuvPlanes) -> Vec<u8> {
 fn get_wgpu_ctx() -> WgpuComponents {
     static CTX: OnceLock<WgpuComponents> = OnceLock::new();
     CTX.get_or_init(|| {
-        create_wgpu_ctx(false, Default::default(), Default::default(), None).unwrap()
+        create_wgpu_ctx(
+            None,
+            None,
+            false,
+            Default::default(),
+            Default::default(),
+            None,
+        )
+        .unwrap()
     })
     .clone()
 }

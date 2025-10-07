@@ -1,5 +1,9 @@
 use ash::vk;
-use std::{ffi::CStr, sync::Arc};
+use std::{
+    ffi::CStr,
+    fmt::{self, Debug},
+    sync::Arc,
+};
 use tracing::{debug, warn};
 use wgpu::hal::DynAdapter;
 
@@ -158,6 +162,38 @@ impl<'a> VulkanAdapter<'a> {
         debug!("decode capabilities: {decode_capabilities:#?}");
         debug!("encode capabilities: {encode_capabilities:#?}");
 
+        let (driver_name, driver_info) = match properties.api_version >= vk::API_VERSION_1_2 {
+            true => {
+                let mut driver_properties = vk::PhysicalDeviceDriverProperties::default();
+                let mut properties2 =
+                    vk::PhysicalDeviceProperties2::default().push_next(&mut driver_properties);
+                unsafe {
+                    instance.get_physical_device_properties2(device, &mut properties2);
+                }
+
+                let driver_name = driver_properties
+                    .driver_name_as_c_str()
+                    .map(CStr::to_string_lossy)
+                    .unwrap_or("unknown".into())
+                    .into_owned();
+                let driver_info = driver_properties
+                    .driver_info_as_c_str()
+                    .map(CStr::to_string_lossy)
+                    .unwrap_or_default()
+                    .into_owned();
+                (driver_name, driver_info)
+            }
+            false => ("unknown".to_owned(), "".to_owned()),
+        };
+
+        let device_type = match properties.device_type {
+            vk::PhysicalDeviceType::DISCRETE_GPU => wgpu::DeviceType::DiscreteGpu,
+            vk::PhysicalDeviceType::INTEGRATED_GPU => wgpu::DeviceType::IntegratedGpu,
+            vk::PhysicalDeviceType::VIRTUAL_GPU => wgpu::DeviceType::VirtualGpu,
+            vk::PhysicalDeviceType::CPU => wgpu::DeviceType::Cpu,
+            _ => wgpu::DeviceType::Other,
+        };
+
         let device_candidate = DeviceCandidate {
             physical_device: device,
             wgpu_adapter,
@@ -193,6 +229,10 @@ impl<'a> VulkanAdapter<'a> {
             instance: vulkan_instance,
             device_candidate,
             info: AdapterInfo {
+                name: device_name.into_owned(),
+                driver_name,
+                driver_info,
+                device_type,
                 device_properties: properties,
                 supports_decoding: has_decode_extensions,
                 supports_encoding: has_encode_extensions,
@@ -222,9 +262,37 @@ impl<'a> VulkanAdapter<'a> {
 }
 
 pub struct AdapterInfo {
-    pub device_properties: vk::PhysicalDeviceProperties,
+    pub name: String,
+    pub driver_name: String,
+    pub driver_info: String,
+    pub device_type: wgpu::DeviceType,
     pub supports_decoding: bool,
     pub supports_encoding: bool,
+    pub device_properties: vk::PhysicalDeviceProperties,
+}
+
+impl Debug for AdapterInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        let version = {
+            let version = self.device_properties.api_version;
+            let major = vk::api_version_major(version);
+            let minor = vk::api_version_minor(version);
+            let patch = vk::api_version_patch(version);
+
+            format!("{major}.{minor}.{patch}")
+        };
+        f.debug_struct("AdapterInfo")
+            .field("name", &self.name)
+            .field("device_type", &self.device_type)
+            .field("api_version", &version)
+            .field("driver", &self.driver_name)
+            .field("driver_info", &self.driver_info)
+            .field("vendor", &self.device_properties.vendor_id)
+            .field("device", &self.device_properties.device_id)
+            .field("supports_decoding", &self.supports_decoding)
+            .field("supports_encoding", &self.supports_encoding)
+            .finish()
+    }
 }
 
 pub(crate) struct DeviceCandidate {
