@@ -8,6 +8,7 @@ use whip_input::WhipInputsState;
 mod bearer_token;
 mod error;
 mod handle_keyframe_requests;
+mod negotiated_codecs;
 mod peer_connection_recvonly;
 mod server;
 mod supported_video_codec_parameters;

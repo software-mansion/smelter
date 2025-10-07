@@ -1,33 +1,23 @@
-use std::{iter, sync::Arc};
+use std::sync::Arc;
 
 use crossbeam_channel::Sender;
-use smelter_render::{Frame, error::ErrorStack};
+use smelter_render::Frame;
 use tokio::sync::oneshot;
-use tracing::{debug, error, trace, warn};
-use webrtc::{
-    rtp,
-    rtp_transceiver::{PayloadType, RTCRtpTransceiver},
-    track::track_remote::TrackRemote,
-};
+use tracing::{debug, trace, warn};
+use webrtc::{rtp_transceiver::RTCRtpTransceiver, track::track_remote::TrackRemote};
 
 use crate::{
     pipeline::{
-        decoder::{
-            VideoDecoder, VideoDecoderInstance, ffmpeg_h264::FfmpegH264Decoder,
-            ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder,
-            vulkan_h264::VulkanH264Decoder,
-        },
+        decoder::{DynamicVideoDecoderStream, VideoDecoderMapping},
         rtp::{
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
-            depayloader::{Depayloader, DepayloaderOptions, DepayloadingError, new_depayloader},
+            depayloader::{DynamicDepayloaderStream, VideoPayloadTypeMapping},
         },
         webrtc::{
             WhipWhepServerState,
             error::WhipWhepServerError,
-            whip_input::{
-                AsyncReceiverIter, negotiated_codecs::NegotiatedVideoCodecsInfo,
-                utils::listen_for_rtcp,
-            },
+            negotiated_codecs::{WebrtcVideoDecoderMapping, WebrtcVideoPayloadTypeMapping},
+            whip_input::{AsyncReceiverIter, utils::listen_for_rtcp},
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},
@@ -44,9 +34,10 @@ pub async fn process_video_track(
     video_preferences: Vec<VideoDecoderOptions>,
 ) -> Result<(), WhipWhepServerError> {
     let rtc_receiver = transceiver.receiver().await;
-    let Some(negotiated_codecs) =
-        NegotiatedVideoCodecsInfo::new(transceiver, &video_preferences).await
-    else {
+    let (Some(video_decoder_mapping), Some(video_payload_type_mapping)) = (
+        VideoDecoderMapping::from_webrtc_transceiver(transceiver.clone(), &video_preferences).await,
+        VideoPayloadTypeMapping::from_webrtc_transceiver(transceiver).await,
+    ) else {
         warn!("Skipping video track, no valid codec negotiated");
         return Err(WhipWhepServerError::InternalError(
             "No video codecs negotiated".to_string(),
@@ -55,8 +46,15 @@ pub async fn process_video_track(
 
     let WhipWhepServerState { inputs, ctx, .. } = state;
     let frame_sender = inputs.get_with(&endpoint_id, |input| Ok(input.frame_sender.clone()))?;
-    let handle =
-        VideoTrackThread::spawn(&endpoint_id, (ctx.clone(), negotiated_codecs, frame_sender))?;
+    let handle = VideoTrackThread::spawn(
+        &endpoint_id,
+        (
+            ctx.clone(),
+            video_decoder_mapping,
+            video_payload_type_mapping,
+            frame_sender,
+        ),
+    )?;
 
     let mut timestamp_sync =
         RtpTimestampSync::new(&sync_point, 90_000, ctx.default_buffer_duration);
@@ -95,7 +93,8 @@ pub(super) struct VideoTrackThread {
 impl InitializableThread for VideoTrackThread {
     type InitOptions = (
         Arc<PipelineCtx>,
-        NegotiatedVideoCodecsInfo,
+        VideoDecoderMapping,
+        VideoPayloadTypeMapping,
         Sender<PipelineEvent<Frame>>,
     );
 
@@ -103,7 +102,7 @@ impl InitializableThread for VideoTrackThread {
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, codec_info, frame_sender) = options;
+        let (ctx, video_decoder_mapping, video_payload_type_mapping, frame_sender) = options;
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
         let packet_stream = AsyncReceiverIter {
@@ -111,10 +110,11 @@ impl InitializableThread for VideoTrackThread {
         };
 
         let depayloader_stream =
-            DynamicDepayloaderStream::new(codec_info.clone(), packet_stream).flatten();
+            DynamicDepayloaderStream::new(video_payload_type_mapping, packet_stream).flatten();
 
         let decoder_stream =
-            DynamicVideoDecoderStream::new(ctx, codec_info, depayloader_stream).flatten();
+            DynamicVideoDecoderStream::new(ctx, video_decoder_mapping, depayloader_stream)
+                .flatten();
 
         let result_stream = decoder_stream
             .filter_map(|event| match event {
@@ -146,197 +146,6 @@ impl InitializableThread for VideoTrackThread {
         ThreadMetadata {
             thread_name: "Whip Video Decoder".to_string(),
             thread_instance_name: "Input".to_string(),
-        }
-    }
-}
-
-struct DynamicVideoDecoderStream<Source>
-where
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
-{
-    ctx: Arc<PipelineCtx>,
-    decoder: Option<Box<dyn VideoDecoderInstance>>,
-    last_chunk_kind: Option<MediaKind>,
-    source: Source,
-    eos_sent: bool,
-    codec_info: NegotiatedVideoCodecsInfo,
-}
-
-impl<Source> DynamicVideoDecoderStream<Source>
-where
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
-{
-    fn new(ctx: Arc<PipelineCtx>, codec_info: NegotiatedVideoCodecsInfo, source: Source) -> Self {
-        Self {
-            ctx,
-            decoder: None,
-            last_chunk_kind: None,
-            source,
-            eos_sent: false,
-            codec_info,
-        }
-    }
-
-    fn ensure_decoder(&mut self, chunk_kind: MediaKind) {
-        if self.last_chunk_kind == Some(chunk_kind) {
-            return;
-        }
-        self.last_chunk_kind = Some(chunk_kind);
-        let preferred_decoder = match chunk_kind {
-            MediaKind::Video(VideoCodec::H264) => self
-                .codec_info
-                .h264
-                .as_ref()
-                .map(|info| info.preferred_decoder),
-            MediaKind::Video(VideoCodec::Vp8) => self
-                .codec_info
-                .vp8
-                .as_ref()
-                .map(|info| info.preferred_decoder),
-            MediaKind::Video(VideoCodec::Vp9) => self
-                .codec_info
-                .vp9
-                .as_ref()
-                .map(|info| info.preferred_decoder),
-            MediaKind::Audio(_) => {
-                error!("Found audio packet in video stream.");
-                None
-            }
-        };
-        let Some(preferred_decoder) = preferred_decoder else {
-            error!("No matching decoder found");
-            return;
-        };
-        let decoder = match self.create_decoder(preferred_decoder) {
-            Ok(decoder) => decoder,
-            Err(err) => {
-                error!(
-                    "Failed to instantiate a decoder {}",
-                    ErrorStack::new(&err).into_string()
-                );
-                return;
-            }
-        };
-        self.decoder = Some(decoder);
-    }
-
-    fn create_decoder(
-        &self,
-        decoder: VideoDecoderOptions,
-    ) -> Result<Box<dyn VideoDecoderInstance>, DecoderInitError> {
-        let decoder: Box<dyn VideoDecoderInstance> = match decoder {
-            VideoDecoderOptions::FfmpegH264 => Box::new(FfmpegH264Decoder::new(&self.ctx)?),
-            VideoDecoderOptions::FfmpegVp8 => Box::new(FfmpegVp8Decoder::new(&self.ctx)?),
-            VideoDecoderOptions::FfmpegVp9 => Box::new(FfmpegVp9Decoder::new(&self.ctx)?),
-            VideoDecoderOptions::VulkanH264 => Box::new(VulkanH264Decoder::new(&self.ctx)?),
-        };
-        Ok(decoder)
-    }
-}
-
-impl<Source> Iterator for DynamicVideoDecoderStream<Source>
-where
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
-{
-    type Item = Vec<PipelineEvent<Frame>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.source.next() {
-            Some(PipelineEvent::Data(samples)) => {
-                // TODO: flush on decoder change
-                self.ensure_decoder(samples.kind);
-                let decoder = self.decoder.as_mut()?;
-                let chunks = decoder.decode(samples);
-                Some(chunks.into_iter().map(PipelineEvent::Data).collect())
-            }
-            Some(PipelineEvent::EOS) | None => match self.eos_sent {
-                true => None,
-                false => {
-                    let chunks = self
-                        .decoder
-                        .as_mut()
-                        .map(|decoder| decoder.flush())
-                        .unwrap_or_default();
-                    let events = chunks.into_iter().map(PipelineEvent::Data);
-                    let eos = iter::once(PipelineEvent::EOS);
-                    self.eos_sent = true;
-                    Some(events.chain(eos).collect())
-                }
-            },
-        }
-    }
-}
-
-struct DynamicDepayloaderStream<Source>
-where
-    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
-{
-    depayloader: Option<Box<dyn Depayloader>>,
-    last_payload_type: Option<PayloadType>,
-    source: Source,
-    eos_sent: bool,
-    codec_info: NegotiatedVideoCodecsInfo,
-}
-
-impl<Source> DynamicDepayloaderStream<Source>
-where
-    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
-{
-    fn new(codec_info: NegotiatedVideoCodecsInfo, source: Source) -> Self {
-        Self {
-            source,
-            eos_sent: false,
-            codec_info,
-            depayloader: None,
-            last_payload_type: None,
-        }
-    }
-
-    fn ensure_depayloader(&mut self, payload_type: PayloadType) {
-        if self.last_payload_type == Some(payload_type) {
-            return;
-        }
-        self.last_payload_type = Some(payload_type);
-        if self.codec_info.is_payload_type_h264(payload_type) {
-            self.depayloader = Some(new_depayloader(DepayloaderOptions::H264));
-        } else if self.codec_info.is_payload_type_vp8(payload_type) {
-            self.depayloader = Some(new_depayloader(DepayloaderOptions::Vp8));
-        } else if self.codec_info.is_payload_type_vp9(payload_type) {
-            self.depayloader = Some(new_depayloader(DepayloaderOptions::Vp9));
-        } else {
-            error!("Failed to create depayloader for payload_type: {payload_type}")
-        }
-    }
-}
-
-impl<Source> Iterator for DynamicDepayloaderStream<Source>
-where
-    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
-{
-    type Item = Vec<PipelineEvent<EncodedInputChunk>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.source.next() {
-            Some(PipelineEvent::Data(packet)) => {
-                self.ensure_depayloader(packet.packet.header.payload_type);
-                let depayloader = self.depayloader.as_mut()?;
-                match depayloader.depayload(packet) {
-                    Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
-                    // TODO: Remove after updating webrc-rs
-                    Err(DepayloadingError::Rtp(rtp::Error::ErrShortPacket)) => Some(vec![]),
-                    Err(err) => {
-                        warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
-                        Some(vec![])
-                    }
-                }
-            }
-            Some(PipelineEvent::EOS) | None => match self.eos_sent {
-                true => None,
-                false => {
-                    self.eos_sent = true;
-                    Some(vec![PipelineEvent::EOS])
-                }
-            },
         }
     }
 }

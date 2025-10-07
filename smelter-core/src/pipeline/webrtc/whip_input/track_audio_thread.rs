@@ -7,7 +7,6 @@ use webrtc::{rtp_transceiver::RTCRtpTransceiver, track::track_remote::TrackRemot
 
 use crate::{
     pipeline::{
-        PipelineCtx,
         decoder::{AudioDecoderStream, libopus::OpusDecoder},
         resampler::decoder_resampler::ResampledDecoderStream,
         rtp::{
@@ -17,10 +16,8 @@ use crate::{
         webrtc::{
             WhipWhepServerState,
             error::WhipWhepServerError,
-            whip_input::{
-                AsyncReceiverIter, negotiated_codecs::NegotiatedAudioCodecsInfo,
-                utils::listen_for_rtcp,
-            },
+            negotiated_codecs::audio_codec_negotiated,
+            whip_input::{AsyncReceiverIter, utils::listen_for_rtcp},
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},
@@ -36,7 +33,7 @@ pub async fn process_audio_track(
     transceiver: Arc<RTCRtpTransceiver>,
 ) -> Result<(), WhipWhepServerError> {
     let rtc_receiver = transceiver.receiver().await;
-    let Some(_negotiated_codecs) = NegotiatedAudioCodecsInfo::new(transceiver).await else {
+    if !audio_codec_negotiated(rtc_receiver.clone()).await {
         warn!("Skipping audio track, no valid codec negotiated");
         return Err(WhipWhepServerError::InternalError(
             "No audio codecs negotiated".to_string(),
