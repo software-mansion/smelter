@@ -1,10 +1,9 @@
 import Fastify from 'fastify';
 import { Type } from '@sinclair/typebox';
 import type { Static, TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-
 import { state } from './serverState';
 import { TwitchChannelSuggestions } from '../twitch/TwitchChannelMonitor';
-import type { RoomInputState } from './roomState';
+import type { RoomInputState, RegisterInputOptions } from './roomState';
 import { config } from '../config';
 import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 import { KickChannelSuggestions } from '../kick/KickChannelMonitor';
@@ -22,8 +21,7 @@ type InputState = {
   status: 'disconnected' | 'pending' | 'connected';
   volume: number;
   shaders: ShaderConfig[];
-  twitchChannelId?: string;
-  kickChannelId?: string;
+  channelId?: string;
 };
 
 export const routes = Fastify({
@@ -50,7 +48,15 @@ routes.get('/suggestions', async (_req, res) => {
 
 routes.post('/room', async (_req, res) => {
   console.log('[request] Create new room');
-  const { roomId, room } = await state.createRoom();
+  const body = _req.body as { initInputs?: unknown } | undefined;
+
+  if (body?.initInputs !== undefined && !Array.isArray(body.initInputs)) {
+    return res.status(400).send({ error: 'initInputs must be an array' });
+  }
+
+  const initInputs = (body?.initInputs as RegisterInputOptions[]) || [];
+
+  const { roomId, room } = await state.createRoom(initInputs);
   res.status(200).send({ roomId, whepUrl: room.getWhepUrl() });
 });
 
@@ -105,11 +111,11 @@ routes.post<RoomIdParams & { Body: Static<typeof UpdateRoomSchema> }>(
 const AddInputSchema = Type.Union([
   Type.Object({
     type: Type.Literal('twitch-channel'),
-    twitchChannelId: Type.String(),
+    channelId: Type.String(),
   }),
   Type.Object({
     type: Type.Literal('kick-channel'),
-    kickChannelId: Type.String(),
+    channelId: Type.String(),
   }),
   Type.Object({
     type: Type.Literal('local-mp4'),
@@ -212,7 +218,7 @@ function publicInputState(input: RoomInputState): InputState {
         status: input.status,
         volume: input.volume,
         shaders: input.shaders,
-        twitchChannelId: input.channelId,
+        channelId: input.channelId,
       };
     case 'kick-channel':
       return {
@@ -223,7 +229,7 @@ function publicInputState(input: RoomInputState): InputState {
         status: input.status,
         volume: input.volume,
         shaders: input.shaders,
-        kickChannelId: input.channelId,
+        channelId: input.channelId,
       };
     default:
       throw new Error('Unknown input state');
