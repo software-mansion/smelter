@@ -28,7 +28,7 @@ pub enum AudioCodec {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum WhipVideoDecoderOptions {
+pub enum WebrtcVideoDecoderOptions {
     FfmpegH264,
     FfmpegVp8,
     FfmpegVp9,

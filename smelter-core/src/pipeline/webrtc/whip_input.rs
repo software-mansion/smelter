@@ -94,15 +94,15 @@ impl<T> Iterator for AsyncReceiverIter<T> {
 }
 
 fn resolve_video_preferences(
-    video_preferences: Vec<WhipVideoDecoderOptions>,
+    video_preferences: Vec<WebrtcVideoDecoderOptions>,
     ctx: &Arc<PipelineCtx>,
 ) -> Result<Vec<VideoDecoderOptions>, InputInitError> {
     let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
     let video_preferences: Vec<VideoDecoderOptions> = video_preferences
         .into_iter()
         .flat_map(|preference| match preference {
-            WhipVideoDecoderOptions::FfmpegH264 => vec![VideoDecoderOptions::FfmpegH264],
-            WhipVideoDecoderOptions::VulkanH264 => {
+            WebrtcVideoDecoderOptions::FfmpegH264 => vec![VideoDecoderOptions::FfmpegH264],
+            WebrtcVideoDecoderOptions::VulkanH264 => {
                 if vulkan_supported {
                     vec![VideoDecoderOptions::VulkanH264]
                 } else {
@@ -110,9 +110,9 @@ fn resolve_video_preferences(
                     vec![]
                 }
             }
-            WhipVideoDecoderOptions::FfmpegVp8 => vec![VideoDecoderOptions::FfmpegVp8],
-            WhipVideoDecoderOptions::FfmpegVp9 => vec![VideoDecoderOptions::FfmpegVp9],
-            WhipVideoDecoderOptions::Any => {
+            WebrtcVideoDecoderOptions::FfmpegVp8 => vec![VideoDecoderOptions::FfmpegVp8],
+            WebrtcVideoDecoderOptions::FfmpegVp9 => vec![VideoDecoderOptions::FfmpegVp9],
+            WebrtcVideoDecoderOptions::Any => {
                 vec![
                     VideoDecoderOptions::FfmpegVp9,
                     VideoDecoderOptions::FfmpegVp8,

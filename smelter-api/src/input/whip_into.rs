@@ -17,10 +17,10 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
 
         let video_preferences = match video {
             Some(options) => match options.decoder_preferences.as_deref() {
-                Some([]) | None => vec![core::WhipVideoDecoderOptions::Any],
+                Some([]) | None => vec![core::WebrtcVideoDecoderOptions::Any],
                 Some(v) => v.iter().copied().map(Into::into).collect(),
             },
-            None => vec![core::WhipVideoDecoderOptions::Any],
+            None => vec![core::WebrtcVideoDecoderOptions::Any],
         };
 
         let whip_options = core::WhipInputOptions {
@@ -43,14 +43,14 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
     }
 }
 
-impl From<WhipVideoDecoderOptions> for core::WhipVideoDecoderOptions {
+impl From<WhipVideoDecoderOptions> for core::WebrtcVideoDecoderOptions {
     fn from(decoder: WhipVideoDecoderOptions) -> Self {
         match decoder {
-            WhipVideoDecoderOptions::FfmpegH264 => core::WhipVideoDecoderOptions::FfmpegH264,
-            WhipVideoDecoderOptions::FfmpegVp8 => core::WhipVideoDecoderOptions::FfmpegVp8,
-            WhipVideoDecoderOptions::FfmpegVp9 => core::WhipVideoDecoderOptions::FfmpegVp9,
-            WhipVideoDecoderOptions::VulkanH264 => core::WhipVideoDecoderOptions::VulkanH264,
-            WhipVideoDecoderOptions::Any => core::WhipVideoDecoderOptions::Any,
+            WhipVideoDecoderOptions::FfmpegH264 => core::WebrtcVideoDecoderOptions::FfmpegH264,
+            WhipVideoDecoderOptions::FfmpegVp8 => core::WebrtcVideoDecoderOptions::FfmpegVp8,
+            WhipVideoDecoderOptions::FfmpegVp9 => core::WebrtcVideoDecoderOptions::FfmpegVp9,
+            WhipVideoDecoderOptions::VulkanH264 => core::WebrtcVideoDecoderOptions::VulkanH264,
+            WhipVideoDecoderOptions::Any => core::WebrtcVideoDecoderOptions::Any,
         }
     }
 }
