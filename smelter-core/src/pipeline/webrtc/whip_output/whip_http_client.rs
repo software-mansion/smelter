@@ -9,7 +9,7 @@ use webrtc::{
     peer_connection::sdp::session_description::RTCSessionDescription,
 };
 
-use super::{WhipOutputError, WhipOutputOptions};
+use super::{WebrtcClientError, WhipOutputOptions};
 
 #[derive(Debug)]
 pub(super) struct WhipHttpClient {
@@ -24,9 +24,9 @@ pub(super) struct SdpAnswer {
 }
 
 impl WhipHttpClient {
-    pub fn new(options: &WhipOutputOptions) -> Result<Arc<Self>, WhipOutputError> {
+    pub fn new(options: &WhipOutputOptions) -> Result<Arc<Self>, WebrtcClientError> {
         let endpoint_url = Url::parse(&options.endpoint_url).map_err(|e| {
-            WhipOutputError::InvalidEndpointUrl(e, options.endpoint_url.to_string())
+            WebrtcClientError::InvalidEndpointUrl(e, options.endpoint_url.to_string())
         })?;
 
         Ok(Arc::new(Self {
@@ -39,7 +39,7 @@ impl WhipHttpClient {
     pub async fn send_offer(
         &self,
         offer: &RTCSessionDescription,
-    ) -> Result<SdpAnswer, WhipOutputError> {
+    ) -> Result<SdpAnswer, WebrtcClientError> {
         let headers = self.header_map(HeaderValue::from_static("application/sdp"));
 
         let response = self
@@ -49,7 +49,9 @@ impl WhipHttpClient {
             .body(offer.sdp.clone())
             .send()
             .await
-            .map_err(|_| WhipOutputError::RequestFailed(Method::POST, self.endpoint_url.clone()))?;
+            .map_err(|_| {
+                WebrtcClientError::RequestFailed(Method::POST, self.endpoint_url.clone())
+            })?;
 
         let response = map_response_err(response).await?;
         let session_url = self.get_location_from_headers(&response).await?;
@@ -57,10 +59,10 @@ impl WhipHttpClient {
         let answer = response
             .text()
             .await
-            .map_err(|e| WhipOutputError::BodyParsingError("sdp answer", e))?;
+            .map_err(|e| WebrtcClientError::BodyParsingError("sdp answer", e))?;
 
         let answer = RTCSessionDescription::answer(answer)
-            .map_err(WhipOutputError::RTCSessionDescriptionError)?;
+            .map_err(WebrtcClientError::RTCSessionDescriptionError)?;
 
         Ok(SdpAnswer {
             session_url,
@@ -72,7 +74,7 @@ impl WhipHttpClient {
         &self,
         session_url: &Url,
         ice_candidate: RTCIceCandidateInit,
-    ) -> Result<(), WhipOutputError> {
+    ) -> Result<(), WebrtcClientError> {
         let headers = self.header_map(HeaderValue::from_static("application/trickle-ice-sdpfrag"));
         let response = self
             .http_client
@@ -81,22 +83,22 @@ impl WhipHttpClient {
             .body(sdp_from_candidate(ice_candidate))
             .send()
             .await
-            .map_err(|_| WhipOutputError::RequestFailed(Method::PATCH, session_url.clone()))?;
+            .map_err(|_| WebrtcClientError::RequestFailed(Method::PATCH, session_url.clone()))?;
 
         let status = response.status();
         if status.is_server_error() || status.is_client_error() {
             let trickle_ice_error = match status {
                 StatusCode::UNPROCESSABLE_ENTITY | StatusCode::METHOD_NOT_ALLOWED => {
-                    WhipOutputError::TrickleIceNotSupported
+                    WebrtcClientError::TrickleIceNotSupported
                 }
-                StatusCode::PRECONDITION_REQUIRED => WhipOutputError::EntityTagMissing,
-                StatusCode::PRECONDITION_FAILED => WhipOutputError::EntityTagNonMatching,
+                StatusCode::PRECONDITION_REQUIRED => WebrtcClientError::EntityTagMissing,
+                StatusCode::PRECONDITION_FAILED => WebrtcClientError::EntityTagNonMatching,
                 _ => {
                     let answer = &response
                         .text()
                         .await
-                        .map_err(|e| WhipOutputError::BodyParsingError("ICE Candidate", e))?;
-                    WhipOutputError::BadStatus(status, answer.to_string())
+                        .map_err(|e| WebrtcClientError::BodyParsingError("ICE Candidate", e))?;
+                    WebrtcClientError::BadStatus(status, answer.to_string())
                 }
             };
             return Err(trickle_ice_error);
@@ -132,12 +134,12 @@ impl WhipHttpClient {
     async fn get_location_from_headers(
         &self,
         response: &reqwest::Response,
-    ) -> Result<Url, WhipOutputError> {
+    ) -> Result<Url, WebrtcClientError> {
         let location_url_str = response
             .headers()
             .get("location")
             .and_then(|url| url.to_str().ok())
-            .ok_or_else(|| WhipOutputError::MissingLocationHeader)?;
+            .ok_or_else(|| WebrtcClientError::MissingLocationHeader)?;
 
         let location = match Url::parse(location_url_str) {
             Ok(url) => Ok(url),
@@ -147,7 +149,7 @@ impl WhipHttpClient {
                     location.set_path(location_url_str);
                     Ok(location)
                 }
-                _ => Err(WhipOutputError::InvalidEndpointUrl(
+                _ => Err(WebrtcClientError::InvalidEndpointUrl(
                     err,
                     location_url_str.to_string(),
                 )),
@@ -160,14 +162,14 @@ impl WhipHttpClient {
 
 async fn map_response_err(
     response: reqwest::Response,
-) -> Result<reqwest::Response, WhipOutputError> {
+) -> Result<reqwest::Response, WebrtcClientError> {
     let status = response.status();
     if status.is_client_error() || status.is_server_error() {
         let answer = &response
             .text()
             .await
-            .map_err(|e| WhipOutputError::BodyParsingError("sdp offer", e))?;
-        Err(WhipOutputError::BadStatus(status, answer.to_string()))
+            .map_err(|e| WebrtcClientError::BodyParsingError("sdp offer", e))?;
+        Err(WebrtcClientError::BadStatus(status, answer.to_string()))
     } else {
         Ok(response)
     }

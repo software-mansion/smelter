@@ -31,7 +31,7 @@ use crate::{
 use crate::prelude::*;
 
 use super::{
-    WhipOutputError, WhipSenderTrack, track_task_audio::WhipAudioTrackThreadHandle,
+    WhipSenderTrack, track_task_audio::WhipAudioTrackThreadHandle,
     track_task_video::WhipVideoTrackThreadHandle,
 };
 
@@ -71,7 +71,7 @@ pub async fn setup_video_track(
     output_id: &OutputId,
     rtc_sender: Arc<RTCRtpSender>,
     options: &VideoWhipOptions,
-) -> Result<(WhipVideoTrackThreadHandle, WhipSenderTrack), WhipOutputError> {
+) -> Result<(WhipVideoTrackThreadHandle, WhipSenderTrack), WebrtcClientError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
     let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
@@ -90,7 +90,7 @@ pub async fn setup_video_track(
                 Some((encoder_options.clone(), supported.clone()))
             })
     else {
-        return Err(WhipOutputError::NoVideoCodecNegotiated);
+        return Err(WebrtcClientError::NoVideoCodecNegotiated);
     };
 
     let track = Arc::new(TrackLocalStaticRTP::new(
@@ -190,7 +190,7 @@ pub async fn setup_audio_track(
     rtc_sender: Arc<RTCRtpSender>,
     pc: PeerConnection,
     options: &AudioWhipOptions,
-) -> Result<(WhipAudioTrackThreadHandle, WhipSenderTrack), WhipOutputError> {
+) -> Result<(WhipAudioTrackThreadHandle, WhipSenderTrack), WebrtcClientError> {
     let rtc_sender_params = rtc_sender.get_parameters().await;
     debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
 
@@ -209,7 +209,7 @@ pub async fn setup_audio_track(
                 Some((encoder_options.clone(), supported.clone()))
             })
     else {
-        return Err(WhipOutputError::NoAudioCodecNegotiated);
+        return Err(WebrtcClientError::NoAudioCodecNegotiated);
     };
 
     let track = Arc::new(TrackLocalStaticRTP::new(
@@ -250,7 +250,7 @@ pub async fn setup_audio_track(
             },
         ),
         AudioEncoderOptions::FdkAac(_options) => {
-            return Err(WhipOutputError::UnsupportedCodec("aac"));
+            return Err(WebrtcClientError::UnsupportedCodec("aac"));
         }
     }?;
 
