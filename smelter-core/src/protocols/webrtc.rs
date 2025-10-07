@@ -1,16 +1,14 @@
-use std::sync::Arc;
-
 use reqwest::{Method, StatusCode};
+use std::sync::Arc;
 use url::{ParseError, Url};
 
 use crate::{
-    codecs::{AudioEncoderOptions, VideoEncoderOptions, WhipVideoDecoderOptions},
-    error::EncoderInitError,
+    codecs::{AudioEncoderOptions, VideoEncoderOptions, WebrtcVideoDecoderOptions},
+    error::{DecoderInitError, EncoderInitError},
 };
-
 #[derive(Debug, Clone)]
 pub struct WhipInputOptions {
-    pub video_preferences: Vec<WhipVideoDecoderOptions>,
+    pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_override: Option<Arc<str>>,
 }
@@ -41,15 +39,15 @@ pub struct WhepOutputOptions {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum WhipOutputError {
-    #[error("Bad status in WHIP response Status: {0} Body:\n{1}")]
+pub enum WebrtcClientError {
+    #[error("Bad status in response Status: {0} Body:\n{1}")]
     BadStatus(StatusCode, String),
 
-    #[error("WHIP request failed! Method: {0} URL: {1}")]
+    #[error("Request failed! Method: {0} URL: {1}")]
     RequestFailed(Method, Url),
 
     #[error(
-        "Unable to get location endpoint, check correctness of WHIP endpoint and your Bearer token"
+        "Unable to get location endpoint, check correctness of webrtc endpoint and your bearer token"
     )]
     MissingLocationHeader,
 
@@ -92,60 +90,8 @@ pub enum WhipOutputError {
     #[error("Codec not supported: {0}")]
     UnsupportedCodec(&'static str),
 
-    #[error("Failed to initialize the encoder")]
-    EncoderInitError(#[from] EncoderInitError),
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum WhepOutputError {
-    #[error("Bad status in WHEP response Status: {0} Body:\n{1}")]
-    BadStatus(StatusCode, String),
-
-    #[error("WHEP request failed! Method: {0} URL: {1}")]
-    RequestFailed(Method, Url),
-
-    #[error(
-        "Unable to get location endpoint, check correctness of WHEP endpoint and your Bearer token"
-    )]
-    MissingLocationHeader,
-
-    #[error("Invalid endpoint URL: {1}")]
-    InvalidEndpointUrl(#[source] ParseError, String),
-
-    #[error("Failed to create RTC session description: {0}")]
-    RTCSessionDescriptionError(webrtc::Error),
-
-    #[error("Failed to set local description: {0}")]
-    LocalDescriptionError(webrtc::Error),
-
-    #[error("Failed to set remote description: {0}")]
-    RemoteDescriptionError(webrtc::Error),
-
-    #[error("Failed to parse {0} response body: {1}")]
-    BodyParsingError(&'static str, reqwest::Error),
-
-    #[error("Failed to create offer: {0}")]
-    OfferCreationError(webrtc::Error),
-
-    #[error(transparent)]
-    PeerConnectionInitError(#[from] webrtc::Error),
-
-    // #[error("Trickle ICE not supported")]
-    // TrickleIceNotSupported,
-    #[error("Entity Tag missing")]
-    EntityTagMissing,
-
-    #[error("Entity Tag non-matching")]
-    EntityTagNonMatching,
-
-    #[error("No video codec was negotiated")]
-    NoVideoCodecNegotiated,
-
-    #[error("No audio codec was negotiated")]
-    NoAudioCodecNegotiated,
-
-    #[error("Codec not supported: {0}")]
-    UnsupportedCodec(&'static str),
+    #[error("Failed to initialize the decoder")]
+    DecoderInitError(#[from] DecoderInitError),
 
     #[error("Failed to initialize the encoder")]
     EncoderInitError(#[from] EncoderInitError),
