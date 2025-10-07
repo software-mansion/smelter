@@ -5,7 +5,7 @@ use std::process::Command;
 use std::{fs, path::Path};
 use tools::paths::{git_root, tools_root};
 
-use crate::utils::{self, ffmpeg_url, ffmpeg_version, SmelterBin};
+use crate::utils::{self, SmelterBin, ffmpeg_url, ffmpeg_version};
 
 const X86_TARGET: &str = "x86_64-unknown-linux-gnu";
 const X86_OUTPUT_FILE: &str = "smelter_linux_x86_64.tar.gz";
