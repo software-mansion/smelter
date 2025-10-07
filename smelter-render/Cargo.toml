@@ -9,7 +9,7 @@ license-file = "../LICENSE"
 web-renderer = ["dep:libcef", "dep:shared_memory"]
 
 [dependencies]
-pollster = "0.3.0"
+pollster = { workspace = true }
 thiserror = { workspace = true }
 wgpu = { workspace = true }
 libcef = { workspace = true, optional = true }

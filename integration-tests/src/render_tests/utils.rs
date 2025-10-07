@@ -3,9 +3,11 @@ use std::{io::Write, sync::OnceLock, time::Duration};
 
 use bytes::BufMut;
 use crossbeam_channel::bounded;
+use smelter_core::graphics_context::{
+    GraphicsContext, GraphicsContextOptions, wgpu_context::create_wgpu_graphics_ctx,
+};
 use smelter_render::{
-    Frame, FrameData, Framerate, Renderer, RendererOptions, RenderingMode, WgpuComponents,
-    YuvPlanes, create_wgpu_ctx,
+    Frame, FrameData, Framerate, Renderer, RendererOptions, RenderingMode, YuvPlanes,
 };
 use tracing::error;
 
@@ -57,16 +59,23 @@ pub(super) fn yuv_frame_to_rgba(frame: &Frame, planes: &YuvPlanes) -> Vec<u8> {
     rgba_data
 }
 
-fn get_wgpu_ctx() -> WgpuComponents {
-    static CTX: OnceLock<WgpuComponents> = OnceLock::new();
+fn get_graphics_ctx() -> GraphicsContext {
+    static CTX: OnceLock<GraphicsContext> = OnceLock::new();
     CTX.get_or_init(|| {
-        create_wgpu_ctx(false, Default::default(), Default::default(), None).unwrap()
+        create_wgpu_graphics_ctx(GraphicsContextOptions {
+            force_gpu: false,
+            features: Default::default(),
+            limits: Default::default(),
+            compatible_surface: None,
+            libvulkan_path: None,
+        })
+        .unwrap()
     })
     .clone()
 }
 
 pub(super) fn create_renderer() -> Renderer {
-    let wgpu_ctx = get_wgpu_ctx();
+    let wgpu_ctx = get_graphics_ctx();
 
     Renderer::new(RendererOptions {
         chromium_context: None,
@@ -81,7 +90,7 @@ pub(super) fn create_renderer() -> Renderer {
 }
 
 fn read_rgba_texture(texture: &wgpu::Texture) -> bytes::Bytes {
-    let WgpuComponents { device, queue, .. } = get_wgpu_ctx();
+    let GraphicsContext { device, queue, .. } = get_graphics_ctx();
     let buffer = new_download_buffer(&device, texture);
 
     let mut encoder = device.create_command_encoder(&Default::default());

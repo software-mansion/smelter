@@ -73,6 +73,7 @@ wgpu = { version = "25.0.2", default-features = false, features = [
 ] }
 tower-http = { version = "0.6.1", features = ["cors"] }
 tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
+pollster = "0.3.0"
 
 [dependencies]
 smelter-api = { workspace = true }
@@ -87,7 +88,7 @@ ffmpeg-next = { workspace = true }
 crossbeam-channel = { workspace = true }
 log = { workspace = true }
 signal-hook = { workspace = true }
-fs_extra = { workspace = true } 
+fs_extra = { workspace = true }
 schemars = { workspace = true }
 image = { workspace = true }
 thiserror = { workspace = true }

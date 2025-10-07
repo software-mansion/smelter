@@ -6,19 +6,18 @@ use smelter_render::{
     },
 };
 
-use crate::prelude::*;
+use crate::{graphics_context::CreateGraphicsContextError, prelude::*};
 
 #[derive(Debug, thiserror::Error)]
 pub enum InitPipelineError {
     #[error(transparent)]
     InitRendererEngine(#[from] InitRendererEngineError),
 
+    #[error(transparent)]
+    CreateGraphicsContext(#[from] CreateGraphicsContextError),
+
     #[error("Failed to create a download directory.")]
     CreateDownloadDir(#[source] std::io::Error),
-
-    #[cfg(feature = "vk-video")]
-    #[error(transparent)]
-    VulkanInitError(#[from] vk_video::VulkanInitError),
 
     #[error("Failed to create tokio::Runtime.")]
     CreateTokioRuntime(#[source] std::io::Error),
