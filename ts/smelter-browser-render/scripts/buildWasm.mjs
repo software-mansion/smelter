@@ -13,10 +13,6 @@ async function build() {
 function spawn(command, args) {
   const child = nodeSpawn(command, args, {
     stdio: 'inherit',
-    env: {
-      'RUSTFLAGS': '--cfg getrandom_backend="wasm_js" --cfg web_sys_unstable_apis',
-      ...process.env,
-    }
   });
 
   return new Promise((resolve, reject) => {
