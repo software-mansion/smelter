@@ -84,13 +84,28 @@ impl HlsInputBuilder {
                                 .output();
                             let stream_url = match streamlink_result {
                                 Ok(streamlink_output) => {
-                                    String::from_utf8(streamlink_output.stdout)?
-                                        .trim()
-                                        .to_string()
+                                    let code = streamlink_output.status.code();
+                                    if code != Some(0) {
+                                        // For some reason streamlink prints that into stdout
+                                        // instead of stderr
+                                        let streamlink_error_msg =
+                                            String::from_utf8(streamlink_output.stdout)?
+                                                .trim()
+                                                .to_string();
+                                        error!(
+                                            error = streamlink_error_msg,
+                                            "`streamlink` command failed with code {code:?}."
+                                        );
+                                        continue;
+                                    } else {
+                                        String::from_utf8(streamlink_output.stdout)?
+                                            .trim()
+                                            .to_string()
+                                    }
                                 }
                                 Err(error) => {
-                                    error!(%error, "streamlink command failed");
-                                    println!("If streamlink is not installed please use manual URL resolution");
+                                    error!(%error, "`streamlink` command failed.");
+                                    println!("If streamlink is not installed please use manual URL resolution.");
                                     continue;
                                 }
                             };
