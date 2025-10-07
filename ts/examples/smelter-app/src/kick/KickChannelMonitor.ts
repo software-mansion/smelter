@@ -2,7 +2,7 @@ import type { KickStreamInfo } from '../kick/KickApi';
 import { getKickStreamInfo, getKickTopStreamsFromCategory } from '../kick/KickApi';
 import { sleep } from '../utils';
 
-const CHOSEN_KICK_CATEGORY = '5';
+const CHOSEN_KICK_CATEGORY = '5'; // Gaming: LOL
 const KICK_CATEGORIES = [CHOSEN_KICK_CATEGORY];
 const KICK_STREAMS_PER_CATEGORY = 10;
 
