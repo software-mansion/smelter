@@ -302,7 +302,7 @@ impl SmelterState {
     pub fn json_dump(&self) -> Result<()> {
         let json = serde_json::to_value(self)?;
         rename_old_dump().with_context(|| "Failed to check existing JSON dumps")?;
-        Ok(fs::write(JSON_BASE, json.to_string())?)
+        Ok(fs::write(JSON_BASE, serde_json::to_string_pretty(&json)?)?)
     }
 }
 

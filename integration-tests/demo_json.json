@@ -1,0 +1,33 @@
+{
+  "inputs": [
+    {
+      "type": "RtpInput",
+      "video": {
+        "decoder": "FfmpegVp9"
+      },
+      "audio": null,
+      "transport_protocol": "Udp",
+      "path": null,
+      "player": "Ffmpeg"
+    }
+  ],
+  "outputs": [
+    {
+      "type": "RtpOutput",
+      "video": {
+        "root_id": "root",
+        "resolution": {
+          "width": 1920,
+          "height": 1080
+        },
+        "encoder": "FfmpegH264",
+        "scene": "Tiles"
+      },
+      "audio": {
+        "encoder": "Opus"
+      },
+      "transport_protocol": "TcpServer",
+      "player": "Gstreamer"
+    }
+  ]
+}
