@@ -1,14 +1,14 @@
 use std::time::Duration;
 
-use image::{codecs::gif::GifDecoder, AnimationDecoder, ImageFormat};
+use image::{AnimationDecoder, ImageFormat, codecs::gif::GifDecoder};
 
 use crate::{
+    RenderingMode, Resolution,
     state::node_texture::NodeTextureState,
     wgpu::{
-        texture::{RgbaLinearTexture, RgbaSrgbTexture},
         WgpuCtx,
+        texture::{RgbaLinearTexture, RgbaSrgbTexture},
     },
-    RenderingMode, Resolution,
 };
 
 use super::AnimatedError;

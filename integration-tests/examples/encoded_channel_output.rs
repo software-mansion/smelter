@@ -5,9 +5,9 @@ use integration_tests::{examples::download_file, paths::integration_tests_root};
 use smelter::{config::read_config, logger, state::ApiState};
 use smelter_core::{codecs::*, protocols::*, *};
 use smelter_render::{
+    InputId, OutputId, Resolution,
     error::ErrorStack,
     scene::{Component, InputStreamComponent},
-    InputId, OutputId, Resolution,
 };
 use tokio::runtime::Runtime;
 

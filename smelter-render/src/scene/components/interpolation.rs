@@ -1,6 +1,6 @@
 use crate::scene::{
-    types::interpolation::{ContinuousValue, InterpolationState},
     BorderRadius, BoxShadow,
+    types::interpolation::{ContinuousValue, InterpolationState},
 };
 
 use super::{AbsolutePosition, Position};

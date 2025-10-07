@@ -1,6 +1,6 @@
 use std::process::Child;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use inquire::{Confirm, Select};
 use integration_tests::{
     ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_receive_vp8, start_ffmpeg_receive_vp9},
@@ -16,10 +16,10 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
-    inputs::{filter_video_inputs, InputHandle},
-    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
-    players::OutputPlayer,
     IP,
+    inputs::{InputHandle, filter_video_inputs},
+    outputs::{AudioEncoder, OutputHandle, VideoEncoder, VideoResolution, scene::Scene},
+    players::OutputPlayer,
 };
 
 use crate::smelter_state::TransportProtocol;
@@ -113,7 +113,9 @@ impl RtpOutput {
         match &self.video {
             Some(video) => {
                 if self.audio.is_some() {
-                    return Err(anyhow!("Receiving both audio and video on the same port is possible only over TCP!"));
+                    return Err(anyhow!(
+                        "Receiving both audio and video on the same port is possible only over TCP!"
+                    ));
                 }
                 match video.encoder {
                     VideoEncoder::FfmpegH264 => self
@@ -143,7 +145,7 @@ impl RtpOutput {
             (Some(_), Some(_)) => {
                 return Err(anyhow!(
                     "FFmpeg can't handle both audio and video on a single port over RTP."
-                ))
+                ));
             }
             (Some(video), None) => match video.encoder {
                 VideoEncoder::FfmpegH264 => self
@@ -216,7 +218,9 @@ impl OutputHandle for RtpOutput {
                     match (&self.video, &self.audio) {
                         (Some(_), Some(_)) => {
                             let cmd = cmd_base + video_cmd + audio_cmd;
-                            println!("Start stream receiver for H264 encoded video and OPUS encoded audio:");
+                            println!(
+                                "Start stream receiver for H264 encoded video and OPUS encoded audio:"
+                            );
                             println!("{cmd}");
                             println!();
                         }

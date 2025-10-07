@@ -10,8 +10,8 @@ use strum::{Display, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
-    inputs::{filter_video_inputs, InputHandle},
-    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
+    inputs::{InputHandle, filter_video_inputs},
+    outputs::{AudioEncoder, OutputHandle, VideoEncoder, VideoResolution, scene::Scene},
     players::OutputPlayer,
     smelter_state::RunningState,
 };
@@ -111,7 +111,7 @@ pub struct HlsOutputBuilder {
 
 impl HlsOutputBuilder {
     pub fn new() -> Self {
-        let suffix = rand::thread_rng().next_u32();
+        let suffix = rand::rng().next_u32();
         let name = format!("hls_output_{suffix}");
         Self {
             name,

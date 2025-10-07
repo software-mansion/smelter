@@ -1,10 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::{scene::Size, transformations::image::Image, Resolution};
+use crate::{Resolution, scene::Size, transformations::image::Image};
 
 use super::{
-    scene_state::BuildStateTreeCtx, ComponentId, ImageComponent, IntermediateNode, SceneError,
-    StatefulComponent,
+    ComponentId, ImageComponent, IntermediateNode, SceneError, StatefulComponent,
+    scene_state::BuildStateTreeCtx,
 };
 
 #[derive(Debug)]

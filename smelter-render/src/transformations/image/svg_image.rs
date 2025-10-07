@@ -9,13 +9,13 @@ use resvg::{
 use tracing::error;
 
 use crate::{
+    RenderingMode, Resolution,
     state::node_texture::NodeTextureState,
     wgpu::{
+        WgpuCtx,
         texture::{RgbaLinearTexture, RgbaMultiViewTexture, RgbaSrgbTexture, TextureExt},
         utils::ReinterpretToSrgb,
-        WgpuCtx,
     },
-    RenderingMode, Resolution,
 };
 
 use super::SvgError;

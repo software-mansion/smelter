@@ -2,7 +2,7 @@ use std::thread;
 
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
-use smelter_render::event_handler::{subscribe, Event};
+use smelter_render::event_handler::{Event, subscribe};
 use tokio::sync::mpsc::channel;
 use tracing::debug;
 

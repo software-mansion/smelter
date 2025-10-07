@@ -50,7 +50,9 @@ fn prepare(cef_root: &Path, target_path: &Path) -> Result<bindgen::Bindings> {
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
         .clang_arg(format!("-I{}", cef_root.display()))
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(
+            bindgen::CargoCallbacks::new().rerun_on_header_files(false),
+        ))
         .parse_callbacks(Box::new(RemoveCommentsCallback))
         .generate()?;
 

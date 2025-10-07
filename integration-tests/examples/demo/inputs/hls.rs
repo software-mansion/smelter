@@ -37,7 +37,7 @@ pub struct HlsInputBuilder {
 
 impl HlsInputBuilder {
     pub fn new() -> Self {
-        let suffix = rand::thread_rng().next_u32();
+        let suffix = rand::rng().next_u32();
         let name = format!("hls_input_{suffix}");
         Self { name, url: None }
     }

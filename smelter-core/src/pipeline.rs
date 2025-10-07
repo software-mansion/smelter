@@ -6,7 +6,7 @@ use std::{
 
 use tokio::runtime::Runtime;
 
-use smelter_render::{web_renderer::ChromiumContext, Framerate, RenderingMode, WgpuFeatures};
+use smelter_render::{Framerate, RenderingMode, WgpuFeatures, web_renderer::ChromiumContext};
 
 use crate::{
     event::EventEmitter, graphics_context::GraphicsContext, pipeline::webrtc::WhipWhepPipelineState,

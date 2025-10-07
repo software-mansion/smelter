@@ -10,8 +10,8 @@ use super::{
 use anyhow::Result;
 use smelter::routes::UpdateOutputRequest;
 use smelter_render::{
-    scene::Component, Frame, FrameSet, InputId, OutputFrameFormat, OutputId, Renderer, RendererId,
-    RendererSpec, Resolution,
+    Frame, FrameSet, InputId, OutputFrameFormat, OutputId, Renderer, RendererId, RendererSpec,
+    Resolution, scene::Component,
 };
 
 pub(super) const OUTPUT_ID: &str = "output_1";

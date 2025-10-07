@@ -1,8 +1,8 @@
 use crate::Resolution;
 
 use super::{
-    scene_state::BuildStateTreeCtx, ComponentId, InputStreamComponent, IntermediateNode,
-    SceneError, Size, StatefulComponent,
+    ComponentId, InputStreamComponent, IntermediateNode, SceneError, Size, StatefulComponent,
+    scene_state::BuildStateTreeCtx,
 };
 
 #[derive(Debug, Clone)]

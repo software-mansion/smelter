@@ -1,9 +1,8 @@
 use std::{thread, time::Duration};
 
 use crate::{
-    compare_video_dumps, input_dump_from_disk, paths::integration_tests_root,
-    video::VideoValidationConfig, CommunicationProtocol, CompositorInstance, OutputReceiver,
-    PacketSender,
+    CommunicationProtocol, CompositorInstance, OutputReceiver, PacketSender, compare_video_dumps,
+    input_dump_from_disk, paths::integration_tests_root, video::VideoValidationConfig,
 };
 use anyhow::Result;
 use serde_json::json;

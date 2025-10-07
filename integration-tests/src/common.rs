@@ -58,7 +58,7 @@ pub fn split_rtp_packet_dump(dump: Bytes, split_at_pts: Duration) -> Result<(Byt
             96 => Duration::from_secs_f64(packet.header.timestamp as f64 / 90000.0),
             97 => Duration::from_secs_f64(packet.header.timestamp as f64 / 48000.0),
             payload_type => {
-                return Err(anyhow::anyhow!("Unsupported payload type: {payload_type}"))
+                return Err(anyhow::anyhow!("Unsupported payload type: {payload_type}"));
             }
         };
 

@@ -1,6 +1,6 @@
 use std::{ptr, sync::Arc, time::Duration};
 
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use ffmpeg_next::{self as ffmpeg, Dictionary, Rational, Rescale};
 use log::error;
 use smelter_render::{Framerate, OutputId};
@@ -163,10 +163,10 @@ impl HlsOutput {
                 )?
             }
             VideoEncoderOptions::FfmpegVp8(_) => {
-                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp8))
+                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp8));
             }
             VideoEncoderOptions::FfmpegVp9(_) => {
-                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp9))
+                return Err(OutputInitError::UnsupportedVideoCodec(VideoCodec::Vp9));
             }
         };
 
@@ -220,7 +220,7 @@ impl HlsOutput {
                 },
             )?,
             AudioEncoderOptions::Opus(_) => {
-                return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus))
+                return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Opus));
             }
         };
 
@@ -342,24 +342,24 @@ fn write_chunk(
     timestamp_offset: Duration,
 ) {
     let stream = match chunk.kind {
-        MediaKind::Video(_) => {
-            match video_stream {
-                Some(stream) => stream,
-                None => {
-                    error!("Failed to create packet for video chunk. No video stream registered on init.");
-                    return;
-                }
+        MediaKind::Video(_) => match video_stream {
+            Some(stream) => stream,
+            None => {
+                error!(
+                    "Failed to create packet for video chunk. No video stream registered on init."
+                );
+                return;
             }
-        }
-        MediaKind::Audio(_) => {
-            match audio_stream {
-                Some(stream) => stream,
-                None => {
-                    error!("Failed to create packet for audio chunk. No audio stream registered on init.");
-                    return;
-                }
+        },
+        MediaKind::Audio(_) => match audio_stream {
+            Some(stream) => stream,
+            None => {
+                error!(
+                    "Failed to create packet for audio chunk. No audio stream registered on init."
+                );
+                return;
             }
-        }
+        },
     };
 
     let pts = chunk.pts.saturating_sub(timestamp_offset);

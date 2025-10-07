@@ -3,14 +3,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::{bounded, Receiver, Sender, TrySendError};
+use crossbeam_channel::{Receiver, Sender, TrySendError, bounded};
 use decklink::{
     AudioInputPacket, DetectedVideoInputFormatFlags, DisplayMode, DisplayModeType, InputCallback,
     InputCallbackResult, PixelFormat, VideoInputFlags, VideoInputFormatChangedEvents,
     VideoInputFrame,
 };
-use smelter_render::{error::ErrorStack, Frame, FrameData, Resolution};
-use tracing::{debug, info, trace, warn, Span};
+use smelter_render::{Frame, FrameData, Resolution, error::ErrorStack};
+use tracing::{Span, debug, info, trace, warn};
 
 use crate::pipeline::resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch};
 use crate::prelude::*;
@@ -286,22 +286,22 @@ impl InputCallback for ChannelCallbackAdapter {
     ) -> InputCallbackResult {
         let _span = self.span.enter();
 
-        if let (Some(video_frame), Some(sender)) = (video_frame, &self.video_sender) {
-            if let Err(err) = self.handle_video_frame(video_frame, sender) {
-                warn!(
-                    "Failed to handle video frame: {}",
-                    ErrorStack::new(&err).into_string()
-                )
-            }
+        if let (Some(video_frame), Some(sender)) = (video_frame, &self.video_sender)
+            && let Err(err) = self.handle_video_frame(video_frame, sender)
+        {
+            warn!(
+                "Failed to handle video frame: {}",
+                ErrorStack::new(&err).into_string()
+            )
         }
 
-        if let (Some(audio_packet), Some(sender)) = (audio_packet, &self.audio_sender) {
-            if let Err(err) = self.handle_audio_packet(audio_packet, sender) {
-                warn!(
-                    "Failed to handle video frame: {}",
-                    ErrorStack::new(&err).into_string()
-                )
-            }
+        if let (Some(audio_packet), Some(sender)) = (audio_packet, &self.audio_sender)
+            && let Err(err) = self.handle_audio_packet(audio_packet, sender)
+        {
+            warn!(
+                "Failed to handle video frame: {}",
+                ErrorStack::new(&err).into_string()
+            )
         }
 
         InputCallbackResult::Ok
@@ -315,16 +315,15 @@ impl InputCallback for ChannelCallbackAdapter {
     ) -> InputCallbackResult {
         let _span = self.span.enter();
 
-        if events.field_dominance_changed
+        if (events.field_dominance_changed
             || events.display_mode_changed
-            || events.colorspace_changed
+            || events.colorspace_changed)
+            && let Err(err) = self.handle_format_change(display_mode, flags)
         {
-            if let Err(err) = self.handle_format_change(display_mode, flags) {
-                warn!(
-                    "Failed to handle format change: {}",
-                    ErrorStack::new(&err).into_string()
-                );
-            }
+            warn!(
+                "Failed to handle format change: {}",
+                ErrorStack::new(&err).into_string()
+            );
         }
 
         InputCallbackResult::Ok

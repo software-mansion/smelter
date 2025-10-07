@@ -1,10 +1,10 @@
 use std::os::raw::c_int;
 
 use crate::{
+    Frame, ProcessId, ProcessMessage,
     browser::Browser,
     cef_ref::{CefRc, CefRefData, CefStruct},
     render_handler::{RenderHandler, RenderHandlerWrapper},
-    Frame, ProcessId, ProcessMessage,
 };
 
 /// [`Client`] is used for setting browser-specific handlers.

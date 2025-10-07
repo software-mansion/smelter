@@ -1,12 +1,12 @@
 use image::ImageFormat;
 
 use crate::{
+    RenderingMode, Resolution,
     state::node_texture::NodeTextureState,
     wgpu::{
-        texture::{RgbaLinearTexture, RgbaSrgbTexture},
         WgpuCtx,
+        texture::{RgbaLinearTexture, RgbaSrgbTexture},
     },
-    RenderingMode, Resolution,
 };
 
 pub struct BitmapNodeState {

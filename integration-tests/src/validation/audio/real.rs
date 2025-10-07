@@ -1,16 +1,16 @@
 use anyhow::Result;
 use spectrum_analyzer::{
+    Frequency, FrequencyLimit, FrequencySpectrum, FrequencyValue,
     error::SpectrumAnalyzerError,
     samples_fft_to_spectrum,
-    scaling::{scale_20_times_log10, scale_to_zero_to_one, SpectrumScalingFunction},
+    scaling::{SpectrumScalingFunction, scale_20_times_log10, scale_to_zero_to_one},
     windows::hann_window,
-    Frequency, FrequencyLimit, FrequencySpectrum, FrequencyValue,
 };
 use tracing::{error, trace};
 
 use crate::{
     audio::{RealFrequencyTolerance, SamplingInterval},
-    validation::audio::{calc_level, find_samples, split_samples, Channel},
+    validation::audio::{Channel, calc_level, find_samples, split_samples},
 };
 
 pub fn validate(

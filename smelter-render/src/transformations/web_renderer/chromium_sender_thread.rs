@@ -9,16 +9,16 @@ use log::error;
 
 use crate::error::ErrorStack;
 use crate::scene::ComponentId;
+use crate::transformations::web_renderer::UNEMBED_SOURCE_FRAMES_MESSAGE;
 use crate::transformations::web_renderer::chromium_sender::{
     ChromiumSenderMessage, UpdateSharedMemoryInfo,
 };
 use crate::transformations::web_renderer::shared_memory::{SharedMemory, SharedMemoryError};
-use crate::transformations::web_renderer::UNEMBED_SOURCE_FRAMES_MESSAGE;
 use crate::wgpu::texture::utils::pad_to_256;
 use crate::{RendererId, Resolution};
 
+use super::{EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE, WebRendererSpec, utils};
 use super::{browser_client::BrowserClient, chromium_context::ChromiumContext};
-use super::{utils, WebRendererSpec, EMBED_SOURCE_FRAMES_MESSAGE, GET_FRAME_POSITIONS_MESSAGE};
 
 pub(super) struct ChromiumSenderThread {
     chromium_context: Arc<ChromiumContext>,

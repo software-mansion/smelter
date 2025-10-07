@@ -3,10 +3,10 @@ use std::{sync::Arc, time::Duration};
 use wgpu::util::DeviceExt;
 
 use crate::{
-    scene::ShaderParam,
-    state::{node_texture::NodeTexture, RenderCtx},
-    wgpu::WgpuCtx,
     Resolution,
+    scene::ShaderParam,
+    state::{RenderCtx, node_texture::NodeTexture},
+    wgpu::WgpuCtx,
 };
 
 use super::Shader;

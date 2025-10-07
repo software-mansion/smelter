@@ -5,8 +5,8 @@ use wgpu::ShaderStages;
 use crate::{
     state::node_texture::NodeTextureState,
     wgpu::{
-        common_pipeline::{self, CreateShaderError, Sampler},
         WgpuCtx, WgpuErrorScope,
+        common_pipeline::{self, CreateShaderError, Sampler},
     },
 };
 

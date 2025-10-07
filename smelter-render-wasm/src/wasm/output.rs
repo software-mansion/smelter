@@ -5,9 +5,9 @@ use tracing::error;
 use wasm_bindgen::JsValue;
 
 use super::{
-    types::{to_js_error, WgpuCtx},
-    wgpu::pad_to_256,
     OutputFrame,
+    types::{WgpuCtx, to_js_error},
+    wgpu::pad_to_256,
 };
 
 #[derive(Default)]

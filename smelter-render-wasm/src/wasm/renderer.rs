@@ -6,10 +6,10 @@ use smelter_render::{
 use wasm_bindgen::JsValue;
 
 use super::{
+    InputFrameSet,
     input::RendererInputs,
     output::RendererOutputs,
     types::{self, OutputFrameSet, WgpuCtx},
-    InputFrameSet,
 };
 
 pub(super) struct Renderer {

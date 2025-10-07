@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tracing::warn;
 
-use crate::{state::node_texture::NodeTextureState, wgpu::WgpuCtx, Resolution};
+use crate::{Resolution, state::node_texture::NodeTextureState, wgpu::WgpuCtx};
 
 pub(super) struct RgbaTextureInput {
     texture: Arc<wgpu::Texture>,

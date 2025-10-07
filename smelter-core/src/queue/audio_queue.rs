@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     event::{Event, EventEmitter},
-    queue::{utils::EmitEventOnce, SharedState},
+    queue::{SharedState, utils::EmitEventOnce},
 };
 
 use crate::prelude::*;

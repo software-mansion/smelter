@@ -5,6 +5,8 @@ use glyphon::fontdb;
 use tracing::trace;
 
 use crate::{
+    FrameSet, InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RenderingMode,
+    Resolution,
     error::{
         InitRendererEngineError, RegisterRendererError, RenderSceneError, UnregisterRendererError,
         UpdateSceneError,
@@ -20,8 +22,6 @@ use crate::{
     },
     types::Framerate,
     wgpu::{WgpuCtx, WgpuErrorScope},
-    FrameSet, InputId, OutputFrameFormat, OutputId, RegistryType, RendererId, RenderingMode,
-    Resolution,
 };
 
 use self::{

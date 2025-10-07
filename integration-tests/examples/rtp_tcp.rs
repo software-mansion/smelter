@@ -3,7 +3,7 @@ use serde_json::json;
 use smelter_api::Resolution;
 
 use integration_tests::{
-    examples::{self, run_example, TestSample},
+    examples::{self, TestSample, run_example},
     gstreamer::{start_gst_receive_tcp_h264, start_gst_send_tcp},
 };
 

@@ -1,16 +1,16 @@
 use std::{iter, sync::Arc};
 
 use ffmpeg_next::{
+    Rational,
     codec::{Context, Id},
     format::Pixel,
-    Rational,
 };
 use smelter_render::{Frame, OutputFrameFormat};
 use tracing::{error, info, trace, warn};
 
 use crate::pipeline::{
-    encoder::ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet, FfmpegOptions},
     PipelineCtx,
+    encoder::ffmpeg_utils::{FfmpegOptions, create_av_frame, encoded_chunk_from_av_packet},
 };
 use crate::prelude::*;
 

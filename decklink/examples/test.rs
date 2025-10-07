@@ -1,8 +1,8 @@
 #[cfg(target_os = "linux")]
 mod example {
     use decklink::{
-        get_decklinks, AudioSampleType, DeckLinkError, DisplayModeType, PixelFormat,
-        SupportedVideoModeFlags, VideoConnection, VideoInputConversionMode, VideoInputFlags,
+        AudioSampleType, DeckLinkError, DisplayModeType, PixelFormat, SupportedVideoModeFlags,
+        VideoConnection, VideoInputConversionMode, VideoInputFlags, get_decklinks,
     };
 
     pub struct ErrorStack<'a>(Option<&'a (dyn std::error::Error + 'static)>);

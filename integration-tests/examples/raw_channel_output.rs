@@ -8,7 +8,7 @@ use std::{
 };
 
 use crossbeam_channel::bounded;
-use image::{codecs::png::PngEncoder, ColorType, ImageEncoder};
+use image::{ColorType, ImageEncoder, codecs::png::PngEncoder};
 use integration_tests::{
     examples::download_file, paths::integration_tests_root, read_rgba_texture,
 };
@@ -21,9 +21,9 @@ use smelter_core::{
     codecs::VideoDecoderOptions, graphics_context::GraphicsContext, protocols::*, *,
 };
 use smelter_render::{
+    Frame, FrameData, InputId, OutputId, Resolution,
     error::ErrorStack,
     scene::{Component, InputStreamComponent},
-    Frame, FrameData, InputId, OutputId, Resolution,
 };
 use tokio::runtime::Runtime;
 

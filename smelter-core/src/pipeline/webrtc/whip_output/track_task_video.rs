@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use crossbeam_channel::Sender;
-use smelter_render::{error::ErrorStack, Frame};
+use smelter_render::{Frame, error::ErrorStack};
 use tokio::sync::mpsc;
 use tracing::warn;
 
@@ -10,8 +10,8 @@ use crate::{
     pipeline::{
         encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
         rtp::{
-            payloader::{PayloaderOptions, PayloaderStream},
             RtpPacket,
+            payloader::{PayloaderOptions, PayloaderStream},
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},

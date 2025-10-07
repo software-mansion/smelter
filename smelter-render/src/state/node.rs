@@ -3,11 +3,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::vec;
 
-use crate::scene::{self, image_component::ImageRenderParams, ComponentId, ShaderComponentParams};
-use crate::transformations::layout::LayoutNode;
-use crate::transformations::shader::node::ShaderNode;
-use crate::transformations::shader::Shader;
 use crate::InputId;
+use crate::scene::{self, ComponentId, ShaderComponentParams, image_component::ImageRenderParams};
+use crate::transformations::layout::LayoutNode;
+use crate::transformations::shader::Shader;
+use crate::transformations::shader::node::ShaderNode;
 
 use crate::transformations::text_renderer::TextRenderParams;
 use crate::transformations::web_renderer::WebRenderer;
@@ -15,9 +15,9 @@ use crate::transformations::{
     image::ImageNode, text_renderer::TextRendererNode, web_renderer::WebRendererNode,
 };
 
+use super::RenderCtx;
 use super::input_texture::InputTexture;
 use super::node_texture::NodeTexture;
-use super::RenderCtx;
 
 pub(super) enum InnerRenderNode {
     Shader(ShaderNode),
@@ -37,7 +37,7 @@ impl InnerRenderNode {
         pts: Duration,
     ) {
         match self {
-            InnerRenderNode::Shader(ref shader) => {
+            InnerRenderNode::Shader(shader) => {
                 shader.render(ctx.wgpu_ctx, sources, target, pts);
             }
             InnerRenderNode::Web(renderer) => renderer.render(ctx, sources, target),

@@ -1,6 +1,6 @@
 use crate::paths::render_snapshots_dir_path;
 
-use super::{test_case::TestCase, test_steps_from_scene, test_steps_from_scenes, TestRunner};
+use super::{TestRunner, test_case::TestCase, test_steps_from_scene, test_steps_from_scenes};
 
 #[test]
 fn text_tests() {

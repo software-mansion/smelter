@@ -4,8 +4,8 @@ use crate::{
 };
 
 use super::{
-    array::V8Array, array_buffer::V8ArrayBuffer, bool::V8Bool, numbers::*, object::V8Object,
-    string::V8String, V8Function, V8GenericValue, V8Null, V8Undefined,
+    V8Function, V8GenericValue, V8Null, V8Undefined, array::V8Array, array_buffer::V8ArrayBuffer,
+    bool::V8Bool, numbers::*, object::V8Object, string::V8String,
 };
 
 /// Represents JavaScript values

@@ -3,8 +3,8 @@ use std::{
     env, fs,
     path::PathBuf,
     sync::{
-        atomic::{AtomicU16, Ordering},
         OnceLock,
+        atomic::{AtomicU16, Ordering},
     },
 };
 

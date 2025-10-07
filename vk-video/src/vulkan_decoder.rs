@@ -7,11 +7,11 @@ use session_resources::VideoSessionResources;
 use tracing::error;
 
 use crate::{
+    RawFrameData,
     device::DecodingDevice,
     parser::{DecodeInformation, DecoderInstruction, ReferenceId},
-    RawFrameData,
 };
-use crate::{wrappers::*, VulkanCommonError};
+use crate::{VulkanCommonError, wrappers::*};
 
 mod frame_sorter;
 mod session_resources;
@@ -65,10 +65,14 @@ pub enum VulkanDecoderError {
     #[error("The device does not support vulkan h264 decoding")]
     VulkanDecoderUnsupported,
 
-    #[error("A NALU requiring a session received before a session was created (probably before receiving first SPS)")]
+    #[error(
+        "A NALU requiring a session received before a session was created (probably before receiving first SPS)"
+    )]
     NoSession,
 
-    #[error("A picture which is not in the decoded pictures buffer was requested as a reference picture")]
+    #[error(
+        "A picture which is not in the decoded pictures buffer was requested as a reference picture"
+    )]
     NonExistentReferenceRequested,
 
     #[error("A vulkan decode operation failed with code {0:?}")]

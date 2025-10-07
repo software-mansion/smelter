@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use smelter_core::{codecs::FfmpegH264EncoderPreset, graphics_context::GraphicsContext};
 use tracing::{error, info};
 

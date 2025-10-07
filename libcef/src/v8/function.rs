@@ -8,8 +8,8 @@ use crate::{
 };
 
 use super::{
-    value::{V8Value, V8ValueError},
     V8ContextEntered, V8Object,
+    value::{V8Value, V8ValueError},
 };
 
 pub struct V8Function(pub(super) CefRc<libcef_sys::cef_v8value_t>);

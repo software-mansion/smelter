@@ -51,9 +51,9 @@ impl WhipInputConnectionState {
         if let Some(peer_connection) = &self.peer_connection {
             if peer_connection.connection_state() == RTCPeerConnectionState::Connected {
                 return Err(WhipWhepServerError::InternalError(format!(
-                      "Another stream is currently connected to the given endpoint {endpoint_id:?} \
+                    "Another stream is currently connected to the given endpoint {endpoint_id:?} \
                       Disconnect the existing stream before starting a new one, or check if the session_id is correct."
-                  )));
+                )));
             }
             if let Some(peer_connection) = self.peer_connection.take() {
                 let endpoint_id = endpoint_id.clone();

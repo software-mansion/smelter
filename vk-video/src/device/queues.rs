@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use ash::vk;
 
-use crate::wrappers::*;
 use crate::VulkanCommonError;
+use crate::wrappers::*;
 
 #[derive(Clone)]
 pub(crate) struct Queue {

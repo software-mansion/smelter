@@ -1,4 +1,4 @@
-use crate::pipeline::webrtc::{error::WhipWhepServerError, WhipWhepServerState};
+use crate::pipeline::webrtc::{WhipWhepServerState, error::WhipWhepServerError};
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},

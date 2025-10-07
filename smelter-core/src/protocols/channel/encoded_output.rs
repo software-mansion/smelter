@@ -2,8 +2,8 @@ use core::fmt;
 use std::time::Duration;
 
 use crate::{
-    codecs::{AudioEncoderOptions, VideoEncoderOptions},
     MediaKind,
+    codecs::{AudioEncoderOptions, VideoEncoderOptions},
 };
 
 /// Options to configure output that sends encoded audio and video chunks via single channel

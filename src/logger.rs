@@ -6,13 +6,13 @@ use std::{
 };
 
 use tracing_subscriber::{
+    Layer, Registry,
     fmt::{self},
     layer::SubscriberExt,
     util::SubscriberInitExt,
-    Layer, Registry,
 };
 
-use crate::config::{read_config, LoggerConfig, LoggerFormat};
+use crate::config::{LoggerConfig, LoggerFormat, read_config};
 
 #[derive(Debug, Clone, Copy)]
 pub enum FfmpegLogLevel {

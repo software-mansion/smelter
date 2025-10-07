@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use axum::response::IntoResponse;
 use smelter_core::{
-    error::InitPipelineError, Pipeline, PipelineOptions, PipelineWgpuOptions,
-    PipelineWhipWhepServerOptions,
+    Pipeline, PipelineOptions, PipelineWgpuOptions, PipelineWhipWhepServerOptions,
+    error::InitPipelineError,
 };
 use smelter_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
 

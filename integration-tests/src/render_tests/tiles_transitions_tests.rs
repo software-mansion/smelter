@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::paths::render_snapshots_dir_path;
 
-use super::{input::TestInput, test_case::TestCase, Step, TestRunner};
+use super::{Step, TestRunner, input::TestInput, test_case::TestCase};
 
 #[test]
 fn tiles_transitions_tests() {

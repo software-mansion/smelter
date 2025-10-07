@@ -1,13 +1,13 @@
 use std::{borrow::Cow, num::NonZeroU32, sync::Arc, time::Duration};
 
-use wgpu::{naga, ShaderStages};
+use wgpu::{ShaderStages, naga};
 
 use crate::{
     scene::ShaderParam,
     state::node_texture::{NodeTexture, NodeTextureState},
     wgpu::{
-        common_pipeline::{self, CreateShaderError, Sampler},
         WgpuCtx, WgpuErrorScope,
+        common_pipeline::{self, CreateShaderError, Sampler},
     },
 };
 

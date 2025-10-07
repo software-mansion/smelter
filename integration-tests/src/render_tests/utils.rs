@@ -4,8 +4,8 @@ use std::{io::Write, sync::OnceLock, time::Duration};
 use bytes::BufMut;
 use crossbeam_channel::bounded;
 use smelter_render::{
-    create_wgpu_ctx, Frame, FrameData, Framerate, Renderer, RendererOptions, RenderingMode,
-    WgpuComponents, YuvPlanes,
+    Frame, FrameData, Framerate, Renderer, RendererOptions, RenderingMode, WgpuComponents,
+    YuvPlanes, create_wgpu_ctx,
 };
 use tracing::error;
 

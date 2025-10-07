@@ -3,7 +3,7 @@ use std::sync::Arc;
 use smelter_render::error::ErrorStack;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info};
-use webrtc::track::track_local::{track_local_static_rtp::TrackLocalStaticRTP, TrackLocalWriter};
+use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
 
 use crate::event::Event;
 use crate::pipeline::rtp::payloader::Payloader;

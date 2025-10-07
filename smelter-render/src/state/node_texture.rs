@@ -1,11 +1,11 @@
 use std::mem;
 
 use crate::{
-    wgpu::{
-        texture::{RgbaLinearTexture, RgbaMultiViewTexture, RgbaSrgbTexture},
-        WgpuCtx,
-    },
     RenderingMode, Resolution,
+    wgpu::{
+        WgpuCtx,
+        texture::{RgbaLinearTexture, RgbaMultiViewTexture, RgbaSrgbTexture},
+    },
 };
 
 pub struct NodeTexture(OptionalState<NodeTextureState>);
@@ -172,7 +172,7 @@ impl<State> OptionalState<State> {
         match self {
             OptionalState::None => None,
             OptionalState::NoneWithOldState(_) => None,
-            OptionalState::Some(ref state) => Some(state),
+            OptionalState::Some(state) => Some(state),
         }
     }
 

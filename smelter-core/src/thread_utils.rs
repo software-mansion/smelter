@@ -1,4 +1,4 @@
-use tracing::{span, Level};
+use tracing::{Level, span};
 
 pub(crate) trait InitializableThread: Sized {
     type InitOptions: Send + 'static;

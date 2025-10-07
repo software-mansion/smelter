@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use crate::{
     scene::{
-        layout::StatefulLayoutComponent, BorderRadius, Overflow, Position, RGBAColor, Size,
-        StatefulComponent, ViewChildrenDirection,
+        BorderRadius, Overflow, Position, RGBAColor, Size, StatefulComponent,
+        ViewChildrenDirection, layout::StatefulLayoutComponent,
     },
     transformations::layout::{LayoutContent, Mask, NestedLayout},
 };

@@ -8,7 +8,7 @@ use axum::{
 use core::str;
 use http_body_util::BodyExt;
 use serde_json::Value;
-use tracing::{enabled, trace, Level};
+use tracing::{Level, enabled, trace};
 
 pub async fn body_logger_middleware(
     request: Request,

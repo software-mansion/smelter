@@ -8,12 +8,12 @@ use self::{
 };
 
 use super::{
+    Component, ComponentId, HorizontalAlign, IntermediateNode, Position, RGBAColor, SceneError,
+    Size, StatefulComponent, TilesComponent, VerticalAlign,
     layout::StatefulLayoutComponent,
     scene_state::BuildStateTreeCtx,
     transition::{TransitionOptions, TransitionState},
     types::interpolation::ContinuousValue,
-    Component, ComponentId, HorizontalAlign, IntermediateNode, Position, RGBAColor, SceneError,
-    Size, StatefulComponent, TilesComponent, VerticalAlign,
 };
 
 mod interpolation;

@@ -9,13 +9,13 @@ use images::DecodingImages;
 use parameters::{SessionParams, VideoSessionParametersManager};
 
 use crate::{
+    VulkanDecoderError,
     device::DecodingDevice,
     wrappers::{
-        h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc, CommandBuffer, DecodeInputBuffer,
-        DecodingQueryPool, Fence, H264DecodeProfileInfo, ProfileInfo, SeqParameterSetExt,
-        VideoSession,
+        CommandBuffer, DecodeInputBuffer, DecodingQueryPool, Fence, H264DecodeProfileInfo,
+        ProfileInfo, SeqParameterSetExt, VideoSession, h264_level_idc_to_max_dpb_mbs,
+        vk_to_h264_level_idc,
     },
-    VulkanDecoderError,
 };
 
 mod images;
@@ -76,9 +76,9 @@ impl VideoSessionResources<'_> {
         )?;
 
         if level_idc > max_level_idc {
-            return Err(VulkanDecoderError::InvalidInputData(
-                format!("stream has level_idc = {level_idc}, while the GPU can decode at most {max_level_idc}")
-            ));
+            return Err(VulkanDecoderError::InvalidInputData(format!(
+                "stream has level_idc = {level_idc}, while the GPU can decode at most {max_level_idc}"
+            )));
         }
 
         let max_coded_extent = sps.size()?;

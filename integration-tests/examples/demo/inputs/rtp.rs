@@ -4,14 +4,14 @@ use std::{
     process::Child,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use inquire::{Select, Text};
 use integration_tests::{
     assets::{
         BUNNY_H264_PATH, BUNNY_H264_URL, BUNNY_VP8_PATH, BUNNY_VP8_URL, BUNNY_VP9_PATH,
         BUNNY_VP9_URL,
     },
-    examples::{download_asset, AssetData, TestSample},
+    examples::{AssetData, TestSample, download_asset},
     ffmpeg::{start_ffmpeg_send, start_ffmpeg_send_from_file},
     gstreamer::{
         start_gst_send_from_file_tcp, start_gst_send_from_file_udp, start_gst_send_tcp,
@@ -25,12 +25,12 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
+    IP,
     autocompletion::FilePathCompleter,
     inputs::{AudioDecoder, InputHandle, VideoDecoder},
     players::InputPlayer,
     smelter_state::TransportProtocol,
     utils::resolve_path,
-    IP,
 };
 
 use crate::utils::get_free_port;
@@ -181,7 +181,7 @@ impl RtpInput {
             (Some(_), Some(_)) => {
                 return Err(anyhow!(
                     "FFmpeg can't handle both audio and video on a single port over RTP."
-                ))
+                ));
             }
             (Some(video), None) => {
                 let video_codec = video.decoder.into();
@@ -616,15 +616,23 @@ fn build_gst_send_tcp_cmd(
     );
 
     let video_cmd = match video_codec {
-        Some(VideoDecoder::FfmpegH264) =>  format!("demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host='127.0.0.1' port={port} "),
-        Some(VideoDecoder::FfmpegVp8) => format!("demux.video_0 ! queue ! rtpvp8pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host='127.0.0.1' port={port} "),
-        Some(VideoDecoder::FfmpegVp9) => format!("demux.video_0 ! queue ! rtpvp9pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host='127.0.0.1' port={port} "),
+        Some(VideoDecoder::FfmpegH264) => format!(
+            "demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host='127.0.0.1' port={port} "
+        ),
+        Some(VideoDecoder::FfmpegVp8) => format!(
+            "demux.video_0 ! queue ! rtpvp8pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host='127.0.0.1' port={port} "
+        ),
+        Some(VideoDecoder::FfmpegVp9) => format!(
+            "demux.video_0 ! queue ! rtpvp9pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host='127.0.0.1' port={port} "
+        ),
         None => String::new(),
         _ => unreachable!(),
     };
 
     let audio_cmd = if has_audio {
-        format!("demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 !  rtpstreampay ! tcpclientsink host='127.0.0.1' port={port}")
+        format!(
+            "demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 !  rtpstreampay ! tcpclientsink host='127.0.0.1' port={port}"
+        )
     } else {
         String::new()
     };
@@ -654,15 +662,23 @@ fn build_gst_send_udp_cmd(
     );
 
     let video_cmd = match video_codec {
-        Some(VideoDecoder::FfmpegH264) =>  format!("demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! udpsink host='127.0.0.1' port={port} "),
-        Some(VideoDecoder::FfmpegVp8) => format!("demux.video_0 ! queue ! rtpvp8pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96  ! udpsink host='127.0.0.1' port={port} "),
-        Some(VideoDecoder::FfmpegVp9) => format!("demux.video_0 ! queue ! rtpvp9pay picture-id-mode=2 mtu=1200 ! application/x-rtp,payload=96 ! udpsink host='127.0.0.1' port={port} "),
+        Some(VideoDecoder::FfmpegH264) => format!(
+            "demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! udpsink host='127.0.0.1' port={port} "
+        ),
+        Some(VideoDecoder::FfmpegVp8) => format!(
+            "demux.video_0 ! queue ! rtpvp8pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96  ! udpsink host='127.0.0.1' port={port} "
+        ),
+        Some(VideoDecoder::FfmpegVp9) => format!(
+            "demux.video_0 ! queue ! rtpvp9pay picture-id-mode=2 mtu=1200 ! application/x-rtp,payload=96 ! udpsink host='127.0.0.1' port={port} "
+        ),
         None => String::new(),
         _ => unreachable!(),
     };
 
     let audio_cmd = if has_audio {
-        format!("demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! udpsink host='127.0.0.1' port={port}")
+        format!(
+            "demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! udpsink host='127.0.0.1' port={port}"
+        )
     } else {
         String::new()
     };

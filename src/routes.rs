@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
 use axum::{
-    async_trait,
-    extract::{rejection::JsonRejection, ws::WebSocketUpgrade, FromRequest, Request, State},
+    Router, async_trait,
+    extract::{FromRequest, Request, State, rejection::JsonRejection, ws::WebSocketUpgrade},
     http::StatusCode,
     middleware,
     response::IntoResponse,
     routing::{get, post},
-    Router,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use smelter_core::Pipeline;
 use tower_http::cors::CorsLayer;
 

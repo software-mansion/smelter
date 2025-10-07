@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use log::{info, warn};
 use std::{fs, path::PathBuf, process::Command, str::from_utf8};
 use tools::paths::git_root;

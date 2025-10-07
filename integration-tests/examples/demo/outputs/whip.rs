@@ -9,8 +9,8 @@ use strum::IntoEnumIterator;
 use tracing::error;
 
 use crate::{
-    inputs::{filter_video_inputs, InputHandle},
-    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
+    inputs::{InputHandle, filter_video_inputs},
+    outputs::{AudioEncoder, OutputHandle, VideoEncoder, VideoResolution, scene::Scene},
 };
 
 const WHIP_TOKEN_ENV: &str = "WHIP_OUTPUT_BEARER_TOKEN";
@@ -78,7 +78,7 @@ pub struct WhipOutputBuilder {
 
 impl WhipOutputBuilder {
     pub fn new() -> Self {
-        let suffix = rand::thread_rng().next_u32();
+        let suffix = rand::rng().next_u32();
         let name = format!("output_whip_{suffix}");
         Self {
             name,

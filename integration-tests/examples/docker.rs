@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use log::{error, info, warn};
 use serde_json::json;
 use signal_hook::{consts, iterator::Signals};
@@ -7,7 +7,7 @@ use smelter_api::Resolution;
 use std::{env, process::Command, thread, time::Duration};
 
 use integration_tests::{
-    examples::{self, start_server_msg_listener, TestSample},
+    examples::{self, TestSample, start_server_msg_listener},
     ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
     paths::integration_tests_root,
 };

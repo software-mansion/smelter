@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use futures_util::{SinkExt, StreamExt};
-use reqwest::{blocking::Response, StatusCode};
+use reqwest::{StatusCode, blocking::Response};
 use smelter::{config::read_config, server};
 use std::{
     env,

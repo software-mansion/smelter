@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use crate::{
     scene::{
-        layout::StatefulLayoutComponent, BorderRadius, HorizontalAlign, RGBAColor, RescaleMode,
-        Size, StatefulComponent, VerticalAlign,
+        BorderRadius, HorizontalAlign, RGBAColor, RescaleMode, Size, StatefulComponent,
+        VerticalAlign, layout::StatefulLayoutComponent,
     },
     transformations::layout::{LayoutContent, Mask, NestedLayout},
 };

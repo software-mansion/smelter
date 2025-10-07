@@ -1,7 +1,7 @@
 use rand::Rng;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{mpsc, watch};
-use tracing::{debug, error, span, trace, Instrument, Level};
+use tracing::{Instrument, Level, debug, error, span, trace};
 use webrtc::{
     api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
     rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_sender::RTCRtpSender},
@@ -19,9 +19,9 @@ use crate::{
         webrtc::{
             handle_keyframe_requests::handle_keyframe_requests,
             whip_output::{
+                PeerConnection,
                 track_task_audio::{WhipAudioTrackThread, WhipAudioTrackThreadOptions},
                 track_task_video::{WhipVideoTrackThread, WhipVideoTrackThreadOptions},
-                PeerConnection,
             },
         },
     },
@@ -31,8 +31,8 @@ use crate::{
 use crate::prelude::*;
 
 use super::{
-    track_task_audio::WhipAudioTrackThreadHandle, track_task_video::WhipVideoTrackThreadHandle,
-    WhipOutputError, WhipSenderTrack,
+    WhipOutputError, WhipSenderTrack, track_task_audio::WhipAudioTrackThreadHandle,
+    track_task_video::WhipVideoTrackThreadHandle,
 };
 
 pub trait MatchCodecCapability {
@@ -113,7 +113,7 @@ pub async fn setup_video_track(
 
     let ssrc = match rtc_sender_params.encodings.first() {
         Some(e) => e.ssrc,
-        None => rand::thread_rng().gen::<u32>(),
+        None => rand::rng().random::<u32>(),
     };
     let (sender, receiver) = mpsc::channel(1000);
     let handle = match options {
@@ -232,7 +232,7 @@ pub async fn setup_audio_track(
 
     let ssrc = match rtc_sender_params.encodings.first() {
         Some(e) => e.ssrc,
-        None => rand::thread_rng().gen::<u32>(),
+        None => rand::rng().random::<u32>(),
     };
     let (sender, receiver) = mpsc::channel(1000);
     let handle = match options {
@@ -250,7 +250,7 @@ pub async fn setup_audio_track(
             },
         ),
         AudioEncoderOptions::FdkAac(_options) => {
-            return Err(WhipOutputError::UnsupportedCodec("aac"))
+            return Err(WhipOutputError::UnsupportedCodec("aac"));
         }
     }?;
 
@@ -370,8 +370,7 @@ fn calculate_packet_loss_percentage(
 
     trace!(
         packets_sent_since_last_report,
-        packets_lost_since_last_report,
-        packet_loss_percentage,
+        packets_lost_since_last_report, packet_loss_percentage,
     );
     packet_loss_percentage
 }

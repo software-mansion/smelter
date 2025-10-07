@@ -1,8 +1,8 @@
 use wgpu::ShaderStages;
 
 use crate::wgpu::{
-    common_pipeline::{Vertex, PRIMITIVE_STATE},
     WgpuCtx,
+    common_pipeline::{PRIMITIVE_STATE, Vertex},
 };
 
 #[derive(Debug)]

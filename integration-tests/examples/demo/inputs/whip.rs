@@ -1,6 +1,6 @@
 use std::{
     env,
-    sync::{atomic::AtomicU32, OnceLock},
+    sync::{OnceLock, atomic::AtomicU32},
 };
 
 use anyhow::Result;
@@ -51,7 +51,10 @@ impl InputHandle for WhipInput {
 
         println!("Instructions to start streaming:");
         println!("1. Open OBS Studio");
-        println!("2. In a 'Stream' tab enter 'http://127.0.0.1:9000/whip/{}' in 'Server' field and '{}' in 'Bearer Token' field", self.name, self.bearer_token);
+        println!(
+            "2. In a 'Stream' tab enter 'http://127.0.0.1:9000/whip/{}' in 'Server' field and '{}' in 'Bearer Token' field",
+            self.name, self.bearer_token
+        );
         println!("OR");
         println!("Open in browser:");
         println!("{url}");

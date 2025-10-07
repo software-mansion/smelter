@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
 use crate::scene::{self, OutputNode};
-use crate::{error::UpdateSceneError, wgpu::WgpuErrorScope};
 use crate::{InputId, OutputFrameFormat, OutputId};
+use crate::{error::UpdateSceneError, wgpu::WgpuErrorScope};
 
 use super::input_texture::InputTexture;
 use super::node_texture::NodeTexture;
 use super::output_texture::OutputTexture;
-use super::{node::RenderNode, RenderCtx};
+use super::{RenderCtx, node::RenderNode};
 
 pub(super) struct RenderGraph {
     pub(super) outputs: HashMap<OutputId, OutputRenderTree>,

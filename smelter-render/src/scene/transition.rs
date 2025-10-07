@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use self::{bounce::bounce_easing, cubic_bezier::cubic_bezier_easing};
 
-use super::{types::interpolation::InterpolationState, InterpolationKind};
+use super::{InterpolationKind, types::interpolation::InterpolationState};
 
 mod bounce;
 mod cubic_bezier;
@@ -91,13 +91,13 @@ impl TransitionState {
             (pts.as_secs_f64() - self.start_pts.as_secs_f64()) / self.duration.as_secs_f64();
         // Value in range [initial_offset.0 , 1]. Previous progress ([0, 1]) is rescaled to fit
         // smaller range and offset is added.
-        let progress = self.initial_offset.0 .0 + progress * (1.0 - self.initial_offset.0 .0);
+        let progress = self.initial_offset.0.0 + progress * (1.0 - self.initial_offset.0.0);
         // Clamp just to handle a case where this function is called after transition is finished.
         let progress = f64::clamp(progress, 0.0, 1.0);
         // Value in range [initial_offset.1, 1] or [state(initial_offset.0), 1].
         let state = self.interpolation_kind.state(progress);
         // Value in range [0, 1].
-        InterpolationState((state.0 - self.initial_offset.1 .0) / (1.0 - self.initial_offset.1 .0))
+        InterpolationState((state.0 - self.initial_offset.1.0) / (1.0 - self.initial_offset.1.0))
     }
 
     fn is_finished(&self, current_pts: Duration) -> bool {

@@ -1,5 +1,5 @@
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use smelter_render::{error::ErrorStack, InputId, OutputId, Resolution};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use smelter_render::{InputId, OutputId, Resolution, error::ErrorStack};
 use std::{sync::Arc, time::Duration};
 use wasm_bindgen::prelude::*;
 

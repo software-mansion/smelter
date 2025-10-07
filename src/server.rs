@@ -71,7 +71,7 @@ pub fn run_api(
 
 #[cfg(target_os = "linux")]
 fn listen_for_parent_termination() {
-    use libc::{prctl, SIGTERM};
+    use libc::{SIGTERM, prctl};
     unsafe {
         prctl(libc::PR_SET_PDEATHSIG, SIGTERM);
     }
@@ -85,15 +85,17 @@ fn listen_for_parent_termination() {
 
     thread::Builder::new()
         .name("Parent process pid change".to_string())
-        .spawn(move || loop {
-            let current_pid = parent_id();
-            if current_pid != ppid {
-                info!("Compositor parent process was terminated.");
-                unsafe {
-                    libc::kill(std::process::id() as libc::c_int, SIGTERM);
+        .spawn(move || {
+            loop {
+                let current_pid = parent_id();
+                if current_pid != ppid {
+                    info!("Compositor parent process was terminated.");
+                    unsafe {
+                        libc::kill(std::process::id() as libc::c_int, SIGTERM);
+                    }
                 }
+                thread::sleep(Duration::from_secs(1));
             }
-            thread::sleep(Duration::from_secs(1));
         })
         .unwrap();
 }

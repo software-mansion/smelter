@@ -11,8 +11,8 @@ use web_sys::VideoFrameCopyToOptions;
 use crate::types::ObjectExt;
 
 use super::{
-    types::{InputFrame, WgpuCtx},
     InputFrameKind, InputFrameSet,
+    types::{InputFrame, WgpuCtx},
 };
 
 pub struct RendererInputs {

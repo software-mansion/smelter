@@ -18,9 +18,9 @@ use smelter_core::{
     *,
 };
 use smelter_render::{
+    Frame, FrameData, InputId, OutputId, Resolution,
     error::ErrorStack,
     scene::{Component, InputStreamComponent},
-    Frame, FrameData, InputId, OutputId, Resolution,
 };
 use tokio::runtime::Runtime;
 

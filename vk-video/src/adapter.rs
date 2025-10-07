@@ -4,12 +4,12 @@ use tracing::{debug, warn};
 use wgpu::hal::DynAdapter;
 
 use crate::{
+    VulkanDevice, VulkanInitError, VulkanInstance,
     device::{
+        DECODE_EXTENSIONS, ENCODE_EXTENSIONS, REQUIRED_EXTENSIONS,
         caps::{DecodeCapabilities, NativeEncodeCapabilities},
         queues::{QueueIndex, QueueIndices},
-        DECODE_EXTENSIONS, ENCODE_EXTENSIONS, REQUIRED_EXTENSIONS,
     },
-    VulkanDevice, VulkanInitError, VulkanInstance,
 };
 
 /// Represents handle to a physical device.

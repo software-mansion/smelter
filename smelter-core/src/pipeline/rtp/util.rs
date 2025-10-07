@@ -41,7 +41,7 @@ pub(super) fn bind_to_requested_port(
                     return Err(BindToPortError::AllPortsAlreadyInUse {
                         lower_bound,
                         upper_bound,
-                    })
+                    });
                 }
             }
         }

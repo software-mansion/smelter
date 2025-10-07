@@ -1,23 +1,23 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use crossbeam_channel::{Receiver, Sender};
 use reqwest::StatusCode;
 use smelter::{
     config::read_config,
     logger,
     server::run_api,
-    state::{pipeline_options_from_config, ApiState},
+    state::{ApiState, pipeline_options_from_config},
 };
 use smelter_core::{
+    Pipeline, PipelineWgpuOptions, PipelineWhipWhepServerOptions,
     event::Event,
     graphics_context::{GraphicsContext, GraphicsContextOptions},
-    Pipeline, PipelineWgpuOptions, PipelineWhipWhepServerOptions,
 };
 use smelter_render::WgpuFeatures;
 use std::{
     env,
     sync::{
-        atomic::{AtomicU16, Ordering},
         Arc, Mutex, OnceLock,
+        atomic::{AtomicU16, Ordering},
     },
     thread,
     time::{Duration, Instant},
@@ -138,7 +138,9 @@ fn get_free_port() -> u16 {
 fn init_compositor_prerequisites() {
     static GLOBAL_PREREQUISITES_INITIALIZED: OnceLock<()> = OnceLock::new();
     GLOBAL_PREREQUISITES_INITIALIZED.get_or_init(|| {
-        env::set_var("SMELTER_WEB_RENDERER_ENABLE", "0");
+        unsafe {
+            env::set_var("SMELTER_WEB_RENDERER_ENABLE", "0");
+        }
         ffmpeg_next::format::network::init();
         logger::init_logger(read_config().logger);
     });

@@ -24,7 +24,10 @@ pub(super) fn from_av_frame(
         ));
     };
     if pts < 0 {
-        error!(pts, "Received negative PTS. PTS values of the decoder output are not monotonically increasing.")
+        error!(
+            pts,
+            "Received negative PTS. PTS values of the decoder output are not monotonically increasing."
+        )
     }
     let pts = Duration::from_secs_f64(f64::max(pts as f64 / time_base as f64, 0.0));
 

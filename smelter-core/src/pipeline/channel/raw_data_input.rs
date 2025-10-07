@@ -1,6 +1,6 @@
 use std::{sync::Arc, thread, time::Duration};
 
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use tracing::{debug, trace};
 
 use crate::{pipeline::input::Input, queue::QueueDataReceiver};

@@ -86,7 +86,9 @@ fn main() {
         .join("..");
 
     if libcef::bundle_for_development(target_path).is_err() {
-        panic!("Build process helper first. For release profile use: cargo build -r --bin process_helper");
+        panic!(
+            "Build process helper first. For release profile use: cargo build -r --bin process_helper"
+        );
     }
 
     let app = App;

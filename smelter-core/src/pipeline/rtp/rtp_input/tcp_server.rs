@@ -2,18 +2,18 @@ use std::{
     collections::VecDeque,
     io::Read,
     net::TcpStream,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
     thread,
     time::Duration,
 };
 
 use bytes::BytesMut;
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use log::error;
-use smelter_render::{error::ErrorStack, InputId};
-use tracing::{debug, info, span, trace, Level};
+use smelter_render::{InputId, error::ErrorStack};
+use tracing::{Level, debug, info, span, trace};
 
-use crate::pipeline::{rtp::util::bind_to_requested_port, Port};
+use crate::pipeline::{Port, rtp::util::bind_to_requested_port};
 
 use super::{RtpInputError, RtpInputOptions};
 

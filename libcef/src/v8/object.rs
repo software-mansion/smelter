@@ -2,8 +2,8 @@ use crate::{cef_ref::CefRc, cef_string::CefString, validated::ValidatedError};
 use log::error;
 
 use super::{
-    value::{V8Value, V8ValueError},
     V8ContextEntered, V8FunctionError,
+    value::{V8Value, V8ValueError},
 };
 
 mod document;
@@ -105,7 +105,7 @@ impl V8Object {
                 return Err(V8ObjectError::ExpectedType {
                     name: key.to_owned(),
                     expected: "number".to_owned(),
-                })
+                });
             }
         };
 

@@ -3,15 +3,15 @@ use std::sync::Arc;
 use tracing::error;
 
 use crate::{
+    Resolution,
     state::node_texture::{NodeTexture, NodeTextureState},
     wgpu::{
-        common_pipeline::{self, CreateShaderError, Sampler},
         WgpuCtx, WgpuErrorScope,
+        common_pipeline::{self, CreateShaderError, Sampler},
     },
-    Resolution,
 };
 
-use super::{params::ParamsBindGroups, RenderLayout};
+use super::{RenderLayout, params::ParamsBindGroups};
 
 const LABEL: Option<&str> = Some("layout node");
 

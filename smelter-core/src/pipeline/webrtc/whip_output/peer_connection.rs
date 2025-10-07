@@ -1,9 +1,9 @@
 use tracing::debug;
 use webrtc::{
     api::{
-        interceptor_registry::register_default_interceptors,
-        media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
         APIBuilder,
+        interceptor_registry::register_default_interceptors,
+        media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9, MediaEngine},
     },
     ice_transport::{
         ice_connection_state::RTCIceConnectionState, ice_gatherer::OnLocalCandidateHdlrFn,
@@ -11,14 +11,14 @@ use webrtc::{
     },
     interceptor::registry::Registry,
     peer_connection::{
-        configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
-        RTCPeerConnection,
+        RTCPeerConnection, configuration::RTCConfiguration,
+        sdp::session_description::RTCSessionDescription,
     },
     rtp_transceiver::{
+        RTCPFeedback, RTCRtpTransceiverInit,
         rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
         rtp_sender::RTCRtpSender,
         rtp_transceiver_direction::RTCRtpTransceiverDirection,
-        RTCPFeedback, RTCRtpTransceiverInit,
     },
     stats::StatsReport,
 };

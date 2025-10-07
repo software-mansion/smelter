@@ -2,15 +2,15 @@ use core::panic;
 use std::{sync::Arc, time::Duration};
 
 use smelter_render::{
+    OutputFrameFormat, RendererId, RendererSpec, Resolution,
     scene::{
         BorderRadius, Component, Overflow, Position, RGBAColor, ShaderComponent, Size,
         ViewChildrenDirection, ViewComponent,
     },
     shader::ShaderSpec,
-    OutputFrameFormat, RendererId, RendererSpec, Resolution,
 };
 
-use super::{test_case::TestCase, Step};
+use super::{Step, test_case::TestCase};
 
 fn run_case(test_case: TestCase, expected: &[u8]) {
     let snapshots = test_case.generate_snapshots();

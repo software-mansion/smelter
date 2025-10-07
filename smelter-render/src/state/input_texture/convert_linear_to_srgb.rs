@@ -1,6 +1,6 @@
 use crate::{
-    wgpu::{texture::RgbaLinearTexture, utils::ReinterpretToSrgb, WgpuCtx},
     Resolution,
+    wgpu::{WgpuCtx, texture::RgbaLinearTexture, utils::ReinterpretToSrgb},
 };
 
 pub(super) struct RgbToSrgbConverter {

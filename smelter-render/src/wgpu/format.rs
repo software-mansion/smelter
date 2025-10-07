@@ -4,8 +4,8 @@ use nv12_to_rgba::Nv12ToRgbaConverter;
 use self::{planar_yuv_to_rgba::PlanarYuvToRgbaConverter, rgba_to_yuv::RgbaToYuvConverter};
 
 use super::{
-    texture::{NV12Texture, PlanarYuvTextures},
     WgpuCtx,
+    texture::{NV12Texture, PlanarYuvTextures},
 };
 
 mod interleaved_yuv_to_rgba;

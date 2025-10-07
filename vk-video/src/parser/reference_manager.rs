@@ -7,8 +7,8 @@ use h264_reader::nal::{
 };
 
 use super::{
-    nalu_parser::{Slice, SpsExt},
     DecodeInformation, DecoderInstruction, PictureInfo, ReferencePictureInfo,
+    nalu_parser::{Slice, SpsExt},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -185,9 +185,9 @@ impl ReferenceContext {
             }
         }
 
-        Err(ReferenceManagementError::IncorrectData(
-            format!("cannot remove long term reference with id {long_term_frame_idx}, because it does not exist")
-        ))
+        Err(ReferenceManagementError::IncorrectData(format!(
+            "cannot remove long term reference with id {long_term_frame_idx}, because it does not exist"
+        )))
     }
 
     #[allow(non_snake_case)]
@@ -210,9 +210,9 @@ impl ReferenceContext {
             }
         }
 
-        Err(ReferenceManagementError::IncorrectData(
-            format!("cannot remove long term reference with pic num {pic_num_to_remove}, because it does not exist")
-        ))
+        Err(ReferenceManagementError::IncorrectData(format!(
+            "cannot remove long term reference with pic num {pic_num_to_remove}, because it does not exist"
+        )))
     }
 
     fn reference_picture_marking_process_adaptive(
@@ -469,10 +469,10 @@ impl ReferenceContext {
             }
             h264_reader::nal::slice::SliceFamily::I => None,
             h264_reader::nal::slice::SliceFamily::SP => {
-                return Err(ReferenceManagementError::SPFramesNotSupported)
+                return Err(ReferenceManagementError::SPFramesNotSupported);
             }
             h264_reader::nal::slice::SliceFamily::SI => {
-                return Err(ReferenceManagementError::SIFramesNotSupported)
+                return Err(ReferenceManagementError::SIFramesNotSupported);
             }
         };
 

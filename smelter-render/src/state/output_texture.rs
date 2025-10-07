@@ -6,13 +6,13 @@ use tracing::error;
 use wgpu::{Buffer, BufferAsyncError};
 
 use crate::{
-    wgpu::{
-        texture::{
-            utils::pad_to_256, PlanarYuvPendingDownload, PlanarYuvTextures, PlanarYuvVariant,
-        },
-        WgpuCtx,
-    },
     OutputFrameFormat, Resolution,
+    wgpu::{
+        WgpuCtx,
+        texture::{
+            PlanarYuvPendingDownload, PlanarYuvTextures, PlanarYuvVariant, utils::pad_to_256,
+        },
+    },
 };
 
 pub enum OutputTexture {

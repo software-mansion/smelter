@@ -1,6 +1,6 @@
 use crate::scene::{HorizontalAlign, Size, StatefulComponent, VerticalAlign};
 
-use super::{interpolation::TileId, TilesComponentParams};
+use super::{TilesComponentParams, interpolation::TileId};
 
 #[derive(Debug, Clone, Copy)]
 struct RowsCols {

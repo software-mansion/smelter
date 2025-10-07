@@ -3,10 +3,10 @@ use std::sync::{Arc, Mutex};
 use ash::vk;
 
 use crate::{
+    VulkanDecoderError,
     device::DecodingDevice,
     vulkan_decoder::Image,
     wrappers::{CodingImageBundle, CommandBuffer, DecodedPicturesBuffer, H264DecodeProfileInfo},
-    VulkanDecoderError,
 };
 
 pub(crate) struct DecodingImages<'a> {

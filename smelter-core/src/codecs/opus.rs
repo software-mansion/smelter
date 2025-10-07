@@ -1,4 +1,4 @@
-use crate::{codecs::AudioEncoderOptionsExt, AudioChannels};
+use crate::{AudioChannels, codecs::AudioEncoderOptionsExt};
 
 pub use opus::Error as LibOpusDecoderError;
 

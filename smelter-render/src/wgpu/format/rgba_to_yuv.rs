@@ -1,5 +1,5 @@
 use crate::wgpu::{
-    common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE},
+    common_pipeline::{PRIMITIVE_STATE, Sampler, Vertex},
     texture::PlanarYuvTextures,
 };
 

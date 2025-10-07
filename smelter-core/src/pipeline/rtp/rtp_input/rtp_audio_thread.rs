@@ -9,8 +9,8 @@ use crate::{
         decoder::{AudioDecoder, AudioDecoderStream},
         resampler::decoder_resampler::ResampledDecoderStream,
         rtp::{
-            depayloader::{DepayloaderOptions, DepayloaderStream},
             RtpPacket,
+            depayloader::{DepayloaderOptions, DepayloaderStream},
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},

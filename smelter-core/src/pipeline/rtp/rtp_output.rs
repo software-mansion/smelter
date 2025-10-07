@@ -1,11 +1,11 @@
-use crossbeam_channel::{bounded, Sender};
+use crossbeam_channel::{Sender, bounded};
 use packet_stream::RtpBinaryPacketStream;
 use rand::Rng;
 use rtp_audio_thread::RtpAudioTrackThreadHandle;
 use rtp_video_thread::RtpVideoTrackThreadHandle;
 use smelter_render::OutputId;
-use std::sync::{atomic::AtomicBool, Arc};
-use tracing::{debug, span, Level};
+use std::sync::{Arc, atomic::AtomicBool};
+use tracing::{Level, debug, span};
 use webrtc::rtcp;
 
 use crate::pipeline::encoder::vulkan_h264::VulkanH264Encoder;
@@ -26,8 +26,8 @@ use crate::{
         },
         output::{Output, OutputAudio, OutputVideo},
         rtp::{
-            payloader::{PayloadedCodec, PayloaderOptions, PayloadingError},
             RtpPacket,
+            payloader::{PayloadedCodec, PayloaderOptions, PayloadingError},
         },
     },
 };
@@ -146,7 +146,7 @@ impl RtpOutput {
                 payload_type: 96,
                 clock_rate: 90000,
                 mtu,
-                ssrc: rand::thread_rng().gen::<u32>(),
+                ssrc: rand::rng().random::<u32>(),
             }
         }
 
@@ -216,7 +216,7 @@ impl RtpOutput {
                 payload_type: 97,
                 clock_rate: sample_rate,
                 mtu,
-                ssrc: rand::thread_rng().gen::<u32>(),
+                ssrc: rand::rng().random::<u32>(),
             }
         }
 
@@ -231,7 +231,7 @@ impl RtpOutput {
                 },
             )?,
             AudioEncoderOptions::FdkAac(_options) => {
-                return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Aac))
+                return Err(OutputInitError::UnsupportedAudioCodec(AudioCodec::Aac));
             }
         };
         Ok(thread_handle)

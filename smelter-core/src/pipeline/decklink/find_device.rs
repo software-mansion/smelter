@@ -1,5 +1,5 @@
 use decklink::{
-    get_decklinks, FlagAttributeId, IntegerAttributeId, StringAttributeId, VideoIOSupport,
+    FlagAttributeId, IntegerAttributeId, StringAttributeId, VideoIOSupport, get_decklinks,
 };
 
 use super::{DeckLinkDeviceInfo, DeckLinkInputError, DeckLinkInputOptions};
@@ -40,22 +40,22 @@ fn is_selected_decklink(
 ) -> Result<bool, DeckLinkInputError> {
     let attr = decklink.profile_attributes()?;
 
-    if let Some(subdevice) = opts.subdevice_index {
-        if attr.get_integer(IntegerAttributeId::SubDeviceIndex)? != Some(subdevice.into()) {
-            return Ok(false);
-        }
+    if let Some(subdevice) = opts.subdevice_index
+        && attr.get_integer(IntegerAttributeId::SubDeviceIndex)? != Some(subdevice.into())
+    {
+        return Ok(false);
     }
 
-    if let Some(display_name) = &opts.display_name {
-        if attr.get_string(StringAttributeId::DisplayName)?.as_ref() != Some(display_name) {
-            return Ok(false);
-        }
+    if let Some(display_name) = &opts.display_name
+        && attr.get_string(StringAttributeId::DisplayName)?.as_ref() != Some(display_name)
+    {
+        return Ok(false);
     }
 
-    if let Some(persistent_id) = opts.persistent_id {
-        if attr.get_integer(IntegerAttributeId::PersistentID)? != Some(persistent_id as i64) {
-            return Ok(false);
-        }
+    if let Some(persistent_id) = opts.persistent_id
+        && attr.get_integer(IntegerAttributeId::PersistentID)? != Some(persistent_id as i64)
+    {
+        return Ok(false);
     }
 
     let video_io_support = VideoIOSupport::from(

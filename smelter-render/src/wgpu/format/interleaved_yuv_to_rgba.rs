@@ -1,4 +1,4 @@
-use crate::wgpu::common_pipeline::{Sampler, Vertex, PRIMITIVE_STATE};
+use crate::wgpu::common_pipeline::{PRIMITIVE_STATE, Sampler, Vertex};
 
 use super::WgpuCtx;
 

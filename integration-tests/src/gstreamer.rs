@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use log::info;
 use std::process::Child;
 
@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use super::examples::{get_asset_path, TestSample};
+use super::examples::{TestSample, get_asset_path};
 
 #[derive(Clone)]
 pub enum Video {
@@ -241,7 +241,7 @@ pub fn start_gst_send_from_file_tcp(
         (None, None) => {
             return Err(anyhow!(
                 "At least one of: 'video_port', 'audio_port' has to be specified."
-            ))
+            ));
         }
     }
 
@@ -257,14 +257,23 @@ pub fn start_gst_send_from_file_tcp(
 
     if let (Some(port), Some(codec)) = (video_port, video_codec) {
         let command_video_spec = match codec {
-            Video::H264 =>  &format!("demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port} "),
-            Video::VP8 => &format!("demux.video_0 ! queue ! rtpvp8pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
-            Video::VP9 => &format!("demux.video_0 ! queue ! rtpvp9pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
+            Video::H264 => &format!(
+                "demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port} "
+            ),
+            Video::VP8 => &format!(
+                "demux.video_0 ! queue ! rtpvp8pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"
+            ),
+            Video::VP9 => &format!(
+                "demux.video_0 ! queue ! rtpvp9pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"
+            ),
         };
         gst_input_command = gst_input_command + command_video_spec
     }
     if let Some(port) = audio_port {
-        gst_input_command = gst_input_command + &format!("demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 !  rtpstreampay ! tcpclientsink host={ip} port={port} ");
+        gst_input_command = gst_input_command
+            + &format!(
+                "demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 !  rtpstreampay ! tcpclientsink host={ip} port={port} "
+            );
     }
 
     let handle = Command::new("bash")
@@ -293,7 +302,7 @@ pub fn start_gst_send_from_file_udp(
         (None, None) => {
             return Err(anyhow!(
                 "At least one of: 'video_port', 'audio_port' has to be specified."
-            ))
+            ));
         }
     }
 
@@ -312,14 +321,23 @@ pub fn start_gst_send_from_file_udp(
 
     if let (Some(port), Some(codec)) = (video_port, video_codec) {
         let command_video_spec = match codec {
-            Video::H264 =>  &format!(" demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! udpsink host={ip} port={port} "),
-            Video::VP8 => &format!(" demux.video_0 ! queue ! rtpvp8pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96  ! udpsink host={ip} port={port} "),
-            Video::VP9 => &format!(" demux.video_0 ! queue ! rtpvp9pay picture-id-mode=2 mtu=1200 ! application/x-rtp,payload=96 ! udpsink host={ip} port={port} "),
-                };
+            Video::H264 => &format!(
+                " demux.video_0 ! queue ! h264parse ! rtph264pay config-interval=1 !  application/x-rtp,payload=96  ! udpsink host={ip} port={port} "
+            ),
+            Video::VP8 => &format!(
+                " demux.video_0 ! queue ! rtpvp8pay mtu=1200 picture-id-mode=2 !  application/x-rtp,payload=96  ! udpsink host={ip} port={port} "
+            ),
+            Video::VP9 => &format!(
+                " demux.video_0 ! queue ! rtpvp9pay picture-id-mode=2 mtu=1200 ! application/x-rtp,payload=96 ! udpsink host={ip} port={port} "
+            ),
+        };
         gst_input_command = gst_input_command + command_video_spec
     }
     if let Some(port) = audio_port {
-        gst_input_command = gst_input_command + &format!("demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! udpsink host={ip} port={port} ");
+        gst_input_command = gst_input_command
+            + &format!(
+                "demux.audio_0 ! queue ! decodebin ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! udpsink host={ip} port={port} "
+            );
     }
 
     let handle = Command::new("bash")
@@ -342,12 +360,16 @@ fn start_gst_send_testsrc_tcp(
         (Some(video_port), Some(audio_port)) => info!(
             "[example] Start sending generic video on port {video_port} and audio on port {audio_port}."
         ),
-        (Some(video_port), None) => info!("[example] Start sending generic video on port {video_port}."),
-        (None, Some(audio_port)) => info!("[example] Start sending generic audio on port {audio_port}."),
+        (Some(video_port), None) => {
+            info!("[example] Start sending generic video on port {video_port}.")
+        }
+        (None, Some(audio_port)) => {
+            info!("[example] Start sending generic audio on port {audio_port}.")
+        }
         (None, None) => {
             return Err(anyhow!(
                 "At least one of: 'video_port', 'audio_port' has to be specified."
-            ))
+            ));
         }
     }
 
@@ -359,14 +381,23 @@ fn start_gst_send_testsrc_tcp(
 
     if let (Some(port), Some(codec)) = (video_port, video_codec) {
         let command_video_spec = match codec {
-            Video::H264 =>  &format!(" x264enc tune=zerolatency speed-preset=superfast ! rtph264pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
-            Video::VP8 => &format!(" vp8enc deadline=1 error-resilient=partitions keyframe-max-dist=30 auto-alt-ref=true cpu-used=-5 ! rtpvp8pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
-            Video::VP9 => &format!(" vp9enc deadline=1 auto-alt-ref=true cpu-used=-5 ! rtpvp9pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"),
+            Video::H264 => &format!(
+                " x264enc tune=zerolatency speed-preset=superfast ! rtph264pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"
+            ),
+            Video::VP8 => &format!(
+                " vp8enc deadline=1 error-resilient=partitions keyframe-max-dist=30 auto-alt-ref=true cpu-used=-5 ! rtpvp8pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"
+            ),
+            Video::VP9 => &format!(
+                " vp9enc deadline=1 auto-alt-ref=true cpu-used=-5 ! rtpvp9pay ! application/x-rtp,payload=96 ! rtpstreampay ! tcpclientsink host={ip} port={port}"
+            ),
         };
         gst_input_command = gst_input_command + command_video_spec
     }
     if let Some(port) = audio_port {
-        gst_input_command = gst_input_command + &format!(" audiotestsrc ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! rtpstreampay ! tcpclientsink host={ip} port={port}");
+        gst_input_command = gst_input_command
+            + &format!(
+                " audiotestsrc ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! rtpstreampay ! tcpclientsink host={ip} port={port}"
+            );
     }
 
     let handle = Command::new("bash")
@@ -389,12 +420,16 @@ fn start_gst_send_testsrc_udp(
         (Some(video_port), Some(audio_port)) => info!(
             "[example] Start sending generic video on port {video_port} and audio on port {audio_port}."
         ),
-        (Some(video_port), None) => info!("[example] Start sending generic video on port {video_port}."),
-        (None, Some(audio_port)) => info!("[example] Start sending generic audio on port {audio_port}."),
+        (Some(video_port), None) => {
+            info!("[example] Start sending generic video on port {video_port}.")
+        }
+        (None, Some(audio_port)) => {
+            info!("[example] Start sending generic audio on port {audio_port}.")
+        }
         (None, None) => {
             return Err(anyhow!(
                 "At least one of: 'video_port', 'audio_port' has to be specified."
-            ))
+            ));
         }
     }
 
@@ -406,14 +441,23 @@ fn start_gst_send_testsrc_udp(
 
     if let (Some(port), Some(codec)) = (video_port, video_codec) {
         let command_video_spec = match codec {
-            Video::H264 =>  &format!(" x264enc tune=zerolatency speed-preset=superfast ! rtph264pay ! application/x-rtp,payload=96 ! udpsink host={ip} port={port}"),
-            Video::VP8 => &format!(" vp8enc deadline=1 error-resilient=partitions keyframe-max-dist=30 auto-alt-ref=true cpu-used=-5 ! rtpvp8pay ! application/x-rtp,payload=96 ! udpsink host={ip} port={port}"),
-            Video::VP9 => &format!(" vp9enc deadline=1 auto-alt-ref=true cpu-used=-5 ! rtpvp9pay ! application/x-rtp,payload=96 ! udpsink host={ip} port={port}"),
+            Video::H264 => &format!(
+                " x264enc tune=zerolatency speed-preset=superfast ! rtph264pay ! application/x-rtp,payload=96 ! udpsink host={ip} port={port}"
+            ),
+            Video::VP8 => &format!(
+                " vp8enc deadline=1 error-resilient=partitions keyframe-max-dist=30 auto-alt-ref=true cpu-used=-5 ! rtpvp8pay ! application/x-rtp,payload=96 ! udpsink host={ip} port={port}"
+            ),
+            Video::VP9 => &format!(
+                " vp9enc deadline=1 auto-alt-ref=true cpu-used=-5 ! rtpvp9pay ! application/x-rtp,payload=96 ! udpsink host={ip} port={port}"
+            ),
         };
         gst_input_command = gst_input_command + command_video_spec
     }
     if let Some(port) = audio_port {
-        gst_input_command = gst_input_command + &format!(" audiotestsrc ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! udpsink host={ip} port={port}");
+        gst_input_command = gst_input_command
+            + &format!(
+                " audiotestsrc ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,payload=97 ! udpsink host={ip} port={port}"
+            );
     }
 
     let handle = Command::new("bash")

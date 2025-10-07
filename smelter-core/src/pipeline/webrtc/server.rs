@@ -1,8 +1,8 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
-    routing::{delete, get, patch, post},
     Router,
+    routing::{delete, get, patch, post},
 };
 use reqwest::StatusCode;
 use serde_json::json;
@@ -14,7 +14,9 @@ use tracing::{error, info, warn};
 use crate::{
     error::InitPipelineError,
     pipeline::{
+        PipelineCtx,
         webrtc::{
+            WhipWhepPipelineState, WhipWhepServerHandle, WhipWhepServerState,
             server::{
                 create_whep_session::handle_create_whep_session,
                 create_whip_session::handle_create_whip_session,
@@ -23,9 +25,7 @@ use crate::{
                 terminate_whep_session::handle_terminate_whep_session,
                 terminate_whip_session::handle_terminate_whip_session,
             },
-            WhipWhepPipelineState, WhipWhepServerHandle, WhipWhepServerState,
         },
-        PipelineCtx,
     },
 };
 

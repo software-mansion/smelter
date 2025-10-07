@@ -4,7 +4,7 @@ use ash::vk;
 use vk_mem::Alloc;
 
 use crate::{
-    vulkan_encoder::H264EncodeProfileInfo, VulkanCommonError, VulkanDecoderError, VulkanInitError,
+    VulkanCommonError, VulkanDecoderError, VulkanInitError, vulkan_encoder::H264EncodeProfileInfo,
 };
 
 use super::{Device, H264DecodeProfileInfo, Instance};

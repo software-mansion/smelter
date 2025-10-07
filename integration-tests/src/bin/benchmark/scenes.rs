@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use smelter_render::{
+    InputId, OutputId, RendererId, RendererSpec,
     image::{ImageSource, ImageSpec, ImageType},
     scene::{
         Component, ImageComponent, InputStreamComponent, RGBAColor, RescalerComponent,
         ShaderComponent, Size, TilesComponent, ViewComponent,
     },
     shader::ShaderSpec,
-    InputId, OutputId, RendererId, RendererSpec,
 };
 
 use crate::utils::example_image_path;

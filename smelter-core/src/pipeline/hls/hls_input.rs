@@ -2,15 +2,16 @@ use std::{
     ffi::CString,
     ptr, slice,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
 };
 
 use bytes::Bytes;
-use crossbeam_channel::{bounded, Receiver};
+use crossbeam_channel::{Receiver, bounded};
 use ffmpeg_next::{
+    Dictionary, Packet, Stream,
     ffi::{
         avformat_alloc_context, avformat_close_input, avformat_find_stream_info,
         avformat_open_input,
@@ -18,19 +19,19 @@ use ffmpeg_next::{
     format::context,
     media::Type,
     util::interrupt,
-    Dictionary, Packet, Stream,
 };
 use smelter_render::InputId;
-use tracing::{debug, error, span, trace, warn, Level};
+use tracing::{Level, debug, error, span, trace, warn};
 
 use crate::{
     pipeline::{
         decoder::{
+            DecoderThreadHandle,
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac, ffmpeg_h264,
             h264_utils::{AvccToAnnexBRepacker, H264AvcDecoderConfig},
-            vulkan_h264, DecoderThreadHandle,
+            vulkan_h264,
         },
         input::Input,
     },
@@ -247,76 +248,76 @@ impl HlsInput {
                 continue;
             }
 
-            if let Some(track) = &mut video {
-                if packet.stream() == track.index {
-                    let (pts, dts, is_discontinuity) = track.state.pts_dts_from_packet(&packet);
+            if let Some(track) = &mut video
+                && packet.stream() == track.index
+            {
+                let (pts, dts, is_discontinuity) = track.state.pts_dts_from_packet(&packet);
 
-                    // Some streams give us packets "from the past", which get dropped by the queue
-                    // resulting in no video or blinking. This heuristic moves the next packets forward in
-                    // time. We only care about video buffer, audio uses the same offset as video
-                    // to avoid audio sync issues.
-                    if is_discontinuity {
-                        pts_offset = Duration::ZERO;
-                    } else if track.handle.chunk_sender.len() < HlsInput::MIN_BUFFER_SIZE
-                        && start_time.elapsed() > Duration::from_secs(10)
-                    {
-                        pts_offset += Duration::from_secs_f64(0.1);
-                        warn!(?pts_offset, "Increasing offset");
-                    }
-                    let pts = pts + pts_offset;
+                // Some streams give us packets "from the past", which get dropped by the queue
+                // resulting in no video or blinking. This heuristic moves the next packets forward in
+                // time. We only care about video buffer, audio uses the same offset as video
+                // to avoid audio sync issues.
+                if is_discontinuity {
+                    pts_offset = Duration::ZERO;
+                } else if track.handle.chunk_sender.len() < HlsInput::MIN_BUFFER_SIZE
+                    && start_time.elapsed() > Duration::from_secs(10)
+                {
+                    pts_offset += Duration::from_secs_f64(0.1);
+                    warn!(?pts_offset, "Increasing offset");
+                }
+                let pts = pts + pts_offset;
 
-                    let chunk = EncodedInputChunk {
-                        data: Bytes::copy_from_slice(packet.data().unwrap()),
-                        pts,
-                        dts,
-                        kind: MediaKind::Video(VideoCodec::H264),
-                    };
+                let chunk = EncodedInputChunk {
+                    data: Bytes::copy_from_slice(packet.data().unwrap()),
+                    pts,
+                    dts,
+                    kind: MediaKind::Video(VideoCodec::H264),
+                };
 
-                    let sender = &track.handle.chunk_sender;
-                    trace!(?chunk, "Sending video chunk");
-                    if sender.is_empty() {
-                        debug!("HLS input video channel was drained");
-                    }
-                    if sender.send(PipelineEvent::Data(chunk)).is_err() {
-                        debug!("Channel closed")
-                    }
+                let sender = &track.handle.chunk_sender;
+                trace!(?chunk, "Sending video chunk");
+                if sender.is_empty() {
+                    debug!("HLS input video channel was drained");
+                }
+                if sender.send(PipelineEvent::Data(chunk)).is_err() {
+                    debug!("Channel closed")
                 }
             }
 
-            if let Some(track) = &mut audio {
-                if packet.stream() == track.index {
-                    let (pts, dts, _) = track.state.pts_dts_from_packet(&packet);
-                    let pts = pts + pts_offset;
+            if let Some(track) = &mut audio
+                && packet.stream() == track.index
+            {
+                let (pts, dts, _) = track.state.pts_dts_from_packet(&packet);
+                let pts = pts + pts_offset;
 
-                    let chunk = EncodedInputChunk {
-                        data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
-                        pts,
-                        dts,
-                        kind: MediaKind::Audio(AudioCodec::Aac),
-                    };
+                let chunk = EncodedInputChunk {
+                    data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
+                    pts,
+                    dts,
+                    kind: MediaKind::Audio(AudioCodec::Aac),
+                };
 
-                    let sender = &track.handle.chunk_sender;
-                    trace!(?chunk, "Sending audio chunk");
-                    if sender.is_empty() {
-                        debug!("HLS input audio channel was drained");
-                    }
-                    if sender.send(PipelineEvent::Data(chunk)).is_err() {
-                        debug!("Channel closed")
-                    }
+                let sender = &track.handle.chunk_sender;
+                trace!(?chunk, "Sending audio chunk");
+                if sender.is_empty() {
+                    debug!("HLS input audio channel was drained");
+                }
+                if sender.send(PipelineEvent::Data(chunk)).is_err() {
+                    debug!("Channel closed")
                 }
             }
         }
 
-        if let Some(Track { handle, .. }) = &audio {
-            if handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
-                debug!("Channel closed. Failed to send audio EOS.")
-            }
+        if let Some(Track { handle, .. }) = &audio
+            && handle.chunk_sender.send(PipelineEvent::EOS).is_err()
+        {
+            debug!("Channel closed. Failed to send audio EOS.")
         }
 
-        if let Some(Track { handle, .. }) = &video {
-            if handle.chunk_sender.send(PipelineEvent::EOS).is_err() {
-                debug!("Channel closed. Failed to send video EOS.")
-            }
+        if let Some(Track { handle, .. }) = &video
+            && handle.chunk_sender.send(PipelineEvent::EOS).is_err()
+        {
+            debug!("Channel closed. Failed to send video EOS.")
         }
     }
 }

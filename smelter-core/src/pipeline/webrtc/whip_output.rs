@@ -9,11 +9,11 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, span, warn, Instrument, Level};
+use tracing::{Instrument, Level, debug, span, warn};
 use track_task_audio::WhipAudioTrackThreadHandle;
 use track_task_video::WhipVideoTrackThreadHandle;
 use url::Url;
-use webrtc::track::track_local::{track_local_static_rtp::TrackLocalStaticRTP, TrackLocalWriter};
+use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
 use whip_http_client::WhipHttpClient;
 
 use crate::{
@@ -205,37 +205,35 @@ impl WhipClientTask {
                     if audio.timestamp > video.timestamp {
                         if let (Some(packet), Some(track)) =
                             (next_video_packet.take(), &video_track)
+                            && let Err(err) = track.write_rtp(&packet.packet).await
                         {
-                            if let Err(err) = track.write_rtp(&packet.packet).await {
-                                warn!("RTP write error {}", err);
-                                break;
-                            }
-                        }
-                    } else if let (Some(packet), Some(track)) =
-                        (next_audio_packet.take(), &audio_track)
-                    {
-                        if let Err(err) = track.write_rtp(&packet.packet).await {
                             warn!("RTP write error {}", err);
                             break;
                         }
+                    } else if let (Some(packet), Some(track)) =
+                        (next_audio_packet.take(), &audio_track)
+                        && let Err(err) = track.write_rtp(&packet.packet).await
+                    {
+                        warn!("RTP write error {}", err);
+                        break;
                     }
                 }
                 // read audio if there is not way to get video packet
                 (None, Some(_)) if video_receiver.is_none() => {
-                    if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track) {
-                        if let Err(err) = track.write_rtp(&p.packet).await {
-                            warn!("RTP write error {}", err);
-                            break;
-                        }
+                    if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track)
+                        && let Err(err) = track.write_rtp(&p.packet).await
+                    {
+                        warn!("RTP write error {}", err);
+                        break;
                     }
                 }
                 // read video if there is not way to get audio packet
                 (Some(_), None) if audio_receiver.is_none() => {
-                    if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track) {
-                        if let Err(err) = track.write_rtp(&p.packet).await {
-                            warn!("RTP write error {}", err);
-                            break;
-                        }
+                    if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track)
+                        && let Err(err) = track.write_rtp(&p.packet).await
+                    {
+                        warn!("RTP write error {}", err);
+                        break;
                     }
                 }
                 (None, None) => break,
@@ -291,7 +289,7 @@ fn wait_with_deadline<T>(
             },
             Err(err) => match err {
                 oneshot::error::TryRecvError::Closed => {
-                    return Err(OutputInitError::UnknownWhipError)
+                    return Err(OutputInitError::UnknownWhipError);
                 }
                 oneshot::error::TryRecvError::Empty => {}
             },

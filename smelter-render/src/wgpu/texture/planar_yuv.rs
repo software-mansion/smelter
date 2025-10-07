@@ -3,11 +3,11 @@ use std::marker::PhantomData;
 use bytes::Bytes;
 use wgpu::Buffer;
 
-use crate::{scene::RGBColor, wgpu::WgpuCtx, Resolution, YuvPlanes};
+use crate::{Resolution, YuvPlanes, scene::RGBColor, wgpu::WgpuCtx};
 
 use super::{
-    base::{new_texture, DEFAULT_BINDING_TYPE},
     TextureExt,
+    base::{DEFAULT_BINDING_TYPE, new_texture},
 };
 
 pub struct YuvPendingDownload<'a, F, E>

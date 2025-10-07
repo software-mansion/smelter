@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     event::{Event, EventEmitter},
-    queue::{utils::EmitEventOnce, QueueVideoOutput, SharedState},
+    queue::{QueueVideoOutput, SharedState, utils::EmitEventOnce},
 };
 
 use crate::prelude::*;

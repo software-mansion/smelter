@@ -21,7 +21,7 @@ pub(super) use whep_output::WhepOutput;
 pub(super) use whip_input::WhipInput;
 pub(super) use whip_output::WhipOutput;
 
-use crate::pipeline::{webrtc::whep_output::state::WhepOutputsState, PipelineCtx};
+use crate::pipeline::{PipelineCtx, webrtc::whep_output::state::WhepOutputsState};
 
 #[derive(Debug, Clone)]
 struct WhipWhepServerState {
@@ -55,10 +55,10 @@ pub struct WhipWhepServerHandle {
 impl Drop for WhipWhepServerHandle {
     fn drop(&mut self) {
         info!("Stopping WHIP/WHEP server");
-        if let Some(sender) = self.shutdown_sender.take() {
-            if sender.send(()).is_err() {
-                error!("Cannot send shutdown signal to WHIP/WHEP server")
-            }
+        if let Some(sender) = self.shutdown_sender.take()
+            && sender.send(()).is_err()
+        {
+            error!("Cannot send shutdown signal to WHIP/WHEP server")
         }
     }
 }

@@ -10,8 +10,8 @@ use tracing::error;
 
 use crate::{
     autocompletion::FilePathCompleter,
-    inputs::{filter_video_inputs, InputHandle},
-    outputs::{scene::Scene, AudioEncoder, OutputHandle, VideoEncoder, VideoResolution},
+    inputs::{InputHandle, filter_video_inputs},
+    outputs::{AudioEncoder, OutputHandle, VideoEncoder, VideoResolution, scene::Scene},
     utils::resolve_path,
 };
 const MP4_OUTPUT_PATH: &str = "MP4_OUTPUT_PATH";
@@ -68,7 +68,7 @@ pub struct Mp4OutputBuilder {
 
 impl Mp4OutputBuilder {
     pub fn new() -> Self {
-        let suffix = rand::thread_rng().next_u32();
+        let suffix = rand::rng().next_u32();
         let name = format!("mp4_output_{suffix}");
         Self {
             name,

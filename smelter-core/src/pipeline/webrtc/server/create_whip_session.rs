@@ -1,12 +1,12 @@
 use crate::pipeline::{
     rtp::RtpNtpSyncPoint,
     webrtc::{
+        WhipWhepServerState,
         error::WhipWhepServerError,
         peer_connection_recvonly::RecvonlyPeerConnection,
         whip_input::{
             track_audio_thread::process_audio_track, track_video_thread::process_video_track,
         },
-        WhipWhepServerState,
     },
 };
 use axum::{
@@ -16,7 +16,7 @@ use axum::{
     http::{HeaderMap, Response, StatusCode},
 };
 use std::{sync::Arc, time::Duration};
-use tracing::{debug, span, trace, warn, Instrument, Level};
+use tracing::{Instrument, Level, debug, span, trace, warn};
 use webrtc::{
     peer_connection::sdp::session_description::RTCSessionDescription,
     rtp_transceiver::rtp_codec::RTPCodecType,

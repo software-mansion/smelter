@@ -54,10 +54,10 @@ impl TryFrom<AudioSceneInput> for core::AudioMixerInputConfig {
     type Error = TypeError;
 
     fn try_from(value: AudioSceneInput) -> Result<Self, Self::Error> {
-        if let Some(volume) = value.volume {
-            if !(0.0..=2.0).contains(&volume) {
-                return Err(TypeError::new("Input volume has to be in [0, 2] range."));
-            }
+        if let Some(volume) = value.volume
+            && !(0.0..=2.0).contains(&volume)
+        {
+            return Err(TypeError::new("Input volume has to be in [0, 2] range."));
         }
         Ok(Self {
             input_id: value.input_id.into(),

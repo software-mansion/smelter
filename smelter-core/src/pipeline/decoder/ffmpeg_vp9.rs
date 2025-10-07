@@ -1,15 +1,15 @@
 use std::{iter, sync::Arc};
 
 use crate::pipeline::decoder::{
-    ffmpeg_utils::{create_av_packet, from_av_frame},
     VideoDecoder, VideoDecoderInstance,
+    ffmpeg_utils::{create_av_packet, from_av_frame},
 };
 use crate::prelude::*;
 
 use ffmpeg_next::{
+    Rational,
     codec::{Context, Id},
     media::Type,
-    Rational,
 };
 use smelter_render::Frame;
 use tracing::{error, info, trace, warn};

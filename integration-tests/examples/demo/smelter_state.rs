@@ -9,10 +9,10 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::debug;
 
+use crate::inputs::InputHandle;
 use crate::inputs::hls::HlsInputBuilder;
 use crate::inputs::mp4::Mp4InputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
-use crate::inputs::InputHandle;
 
 use crate::outputs::hls::HlsOutputBuilder;
 use crate::outputs::mp4::Mp4OutputBuilder;
@@ -20,8 +20,8 @@ use crate::outputs::whep::WhepOutputBuilder;
 use crate::outputs::whip::WhipOutputBuilder;
 use crate::utils::rename_old_dump;
 use crate::{
-    inputs::{rtp::RtpInputBuilder, InputProtocol},
-    outputs::{rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder, OutputHandle, OutputProtocol},
+    inputs::{InputProtocol, rtp::RtpInputBuilder},
+    outputs::{OutputHandle, OutputProtocol, rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder},
 };
 
 pub const JSON_BASE: &str = "demo_json.json";

@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process::Command;
 use tools::paths::{git_root, tools_root};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use log::info;
 
 use crate::utils;

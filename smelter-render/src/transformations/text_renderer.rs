@@ -5,10 +5,10 @@ use std::{
 };
 
 use glyphon::{
-    cosmic_text::FontFeatures,
-    fontdb::{Database, Source},
     AttrsOwned, Buffer, Cache, Color, FontSystem, Metrics, Shaping, SwashCache, TextArea,
     TextAtlas, TextBounds,
+    cosmic_text::FontFeatures,
+    fontdb::{Database, Source},
 };
 use tracing::warn;
 use wgpu::{
@@ -17,12 +17,12 @@ use wgpu::{
 };
 
 use crate::{
+    Resolution,
     scene::{
         HorizontalAlign, RGBAColor, TextComponent, TextDimensions, TextStyle, TextWeight, TextWrap,
     },
-    state::{node_texture::NodeTexture, RenderCtx},
-    wgpu::{utils::convert_to_shader_color, WgpuCtx},
-    Resolution,
+    state::{RenderCtx, node_texture::NodeTexture},
+    wgpu::{WgpuCtx, utils::convert_to_shader_color},
 };
 
 #[derive(Debug, Clone)]

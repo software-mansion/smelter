@@ -1,7 +1,7 @@
 use smelter_render::error::ErrorStack;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use tracing::{debug, error, info, warn};
 use url::Url;
@@ -11,7 +11,7 @@ use webrtc::{
 };
 
 use crate::pipeline::webrtc::whip_output::{
-    whip_http_client::SdpAnswer, PeerConnection, WhipHttpClient,
+    PeerConnection, WhipHttpClient, whip_http_client::SdpAnswer,
 };
 
 use crate::prelude::*;

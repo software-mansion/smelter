@@ -9,8 +9,8 @@ use crate::{
     pipeline::{
         decoder::{VideoDecoder, VideoDecoderStream},
         rtp::{
-            depayloader::{DepayloaderOptions, DepayloaderStream},
             RtpPacket,
+            depayloader::{DepayloaderOptions, DepayloaderStream},
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},

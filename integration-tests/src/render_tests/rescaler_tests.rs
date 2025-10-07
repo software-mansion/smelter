@@ -3,7 +3,7 @@ use smelter_render::Resolution;
 use crate::paths::render_snapshots_dir_path;
 
 use super::{
-    input::TestInput, test_case::TestCase, test_steps_from_scene, TestRunner, DEFAULT_RESOLUTION,
+    DEFAULT_RESOLUTION, TestRunner, input::TestInput, test_case::TestCase, test_steps_from_scene,
 };
 
 #[test]

@@ -1,14 +1,14 @@
 use std::time::Duration;
 
 use crate::{
-    transformations::layout::{self, LayoutContent, NestedLayout},
     Resolution,
+    transformations::layout::{self, LayoutContent, NestedLayout},
 };
 
 use super::{
-    rescaler_component::StatefulRescalerComponent, tiles_component::StatefulTilesComponent,
-    view_component::StatefulViewComponent, AbsolutePosition, BorderRadius, ComponentId,
-    HorizontalPosition, Position, RGBAColor, Size, StatefulComponent, VerticalPosition,
+    AbsolutePosition, BorderRadius, ComponentId, HorizontalPosition, Position, RGBAColor, Size,
+    StatefulComponent, VerticalPosition, rescaler_component::StatefulRescalerComponent,
+    tiles_component::StatefulTilesComponent, view_component::StatefulViewComponent,
 };
 
 #[derive(Debug, Clone)]

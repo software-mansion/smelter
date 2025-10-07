@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::scene::image_component::ImageRenderParams;
-use crate::transformations::shader::validation::error::ParametersValidationError;
 use crate::transformations::shader::Shader;
+use crate::transformations::shader::validation::error::ParametersValidationError;
 use crate::transformations::text_renderer::TextRenderParams;
 use crate::transformations::web_renderer::WebRenderer;
 use crate::{InputId, OutputId, RendererId, Resolution};
@@ -187,19 +187,27 @@ impl Component {
 
 #[derive(Debug, thiserror::Error)]
 pub enum SceneError {
-    #[error("\"{component}\" that is a child of an non-layout component e.g. \"Shader\", \"WebView\" need to have known size. {msg}")]
+    #[error(
+        "\"{component}\" that is a child of an non-layout component e.g. \"Shader\", \"WebView\" need to have known size. {msg}"
+    )]
     UnknownDimensionsForLayoutNodeRoot {
         component: &'static str,
         msg: String,
     },
 
-    #[error("Image \"{0}\" does not exist. You have to register it first before using it in the scene definition.")]
+    #[error(
+        "Image \"{0}\" does not exist. You have to register it first before using it in the scene definition."
+    )]
     ImageNotFound(RendererId),
 
-    #[error("Shader \"{0}\" does not exist. You have to register it first before using it in the scene definition.")]
+    #[error(
+        "Shader \"{0}\" does not exist. You have to register it first before using it in the scene definition."
+    )]
     ShaderNotFound(RendererId),
 
-    #[error("Instance of web renderer \"{0}\" does not exist. You have to register it first before using it in the scene definition.")]
+    #[error(
+        "Instance of web renderer \"{0}\" does not exist. You have to register it first before using it in the scene definition."
+    )]
     WebRendererNotFound(RendererId),
 
     #[error(
@@ -213,6 +221,8 @@ pub enum SceneError {
     #[error("Invalid parameter passed to \"{1}\" shader.")]
     ShaderNodeParametersValidationError(#[source] ParametersValidationError, RendererId),
 
-    #[error("More than one component has an id \"{0}\". Component IDs in scene definition need to be unique.")]
+    #[error(
+        "More than one component has an id \"{0}\". Component IDs in scene definition need to be unique."
+    )]
     DuplicateComponentId(ComponentId),
 }

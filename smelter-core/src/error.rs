@@ -1,9 +1,9 @@
 use smelter_render::{
+    InputId, OutputId,
     error::{
         InitRendererEngineError, RegisterError, RegisterRendererError, RequestKeyframeError,
         UnregisterRendererError, UpdateSceneError, WgpuError,
     },
-    InputId, OutputId,
 };
 
 use crate::prelude::*;
@@ -44,13 +44,17 @@ pub enum RegisterOutputError {
     #[error("Output initialization error while registering output for stream \"{0}\".")]
     OutputError(OutputId, #[source] OutputInitError),
 
-    #[error("Failed to register output stream \"{0}\". Resolution in each dimension has to be divisible by 2.")]
+    #[error(
+        "Failed to register output stream \"{0}\". Resolution in each dimension has to be divisible by 2."
+    )]
     UnsupportedResolution(OutputId),
 
     #[error("Failed to initialize the scene when registering output \"{0}\".")]
     SceneError(OutputId, #[source] UpdateSceneError),
 
-    #[error("Failed to register output stream \"{0}\". At least one of \"video\" and \"audio\" must be specified.")]
+    #[error(
+        "Failed to register output stream \"{0}\". At least one of \"video\" and \"audio\" must be specified."
+    )]
     NoVideoAndAudio(OutputId),
 
     #[error("Unknown error: {0}")]
@@ -96,7 +100,9 @@ pub enum OutputInitError {
     #[error("Failed to register output. Port: {0} is already used or not available.")]
     PortAlreadyInUse(u16),
 
-    #[error("Failed to register output. All ports in range {lower_bound} to {upper_bound} are already used or not available.")]
+    #[error(
+        "Failed to register output. All ports in range {lower_bound} to {upper_bound} are already used or not available."
+    )]
     AllPortsAlreadyInUse { lower_bound: u16, upper_bound: u16 },
 
     #[error("Failed to register output. FFmpeg error: {0}.")]
@@ -145,7 +151,9 @@ pub enum EncoderInitError {
     #[error(transparent)]
     VulkanEncoderError(#[from] vk_video::VulkanEncoderError),
 
-    #[error("Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video encoder")]
+    #[error(
+        "Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video encoder"
+    )]
     VulkanContextRequiredForVulkanEncoder,
 }
 
@@ -183,7 +191,9 @@ pub enum DecoderInitError {
     #[error(transparent)]
     VulkanDecoderError(#[from] vk_video::DecoderError),
 
-    #[error("Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video decoder")]
+    #[error(
+        "Pipeline couldn't detect a vulkan video compatible device when it was being initialized. Cannot create a vulkan video decoder"
+    )]
     VulkanContextRequiredForVulkanDecoder,
 
     #[error(transparent)]

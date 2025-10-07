@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use crate::{
-    scene::ComponentId, state::node_texture::NodeTexture,
-    transformations::web_renderer::chromium_context::ChromiumContext, RendererId, Resolution,
+    RendererId, Resolution, scene::ComponentId, state::node_texture::NodeTexture,
+    transformations::web_renderer::chromium_context::ChromiumContext,
 };
 use crossbeam_channel::{Receiver, Sender};
 use log::error;
 
 use super::{
-    browser_client::BrowserClient, chromium_sender_thread::ChromiumSenderThread, WebRendererSpec,
+    WebRendererSpec, browser_client::BrowserClient, chromium_sender_thread::ChromiumSenderThread,
 };
 
 #[derive(Debug)]

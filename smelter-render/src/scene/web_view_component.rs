@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::transformations::web_renderer::WebRenderer;
 
 use super::{
-    scene_state::BuildStateTreeCtx, Component, ComponentId, IntermediateNode, SceneError, Size,
-    StatefulComponent, WebViewComponent,
+    Component, ComponentId, IntermediateNode, SceneError, Size, StatefulComponent,
+    WebViewComponent, scene_state::BuildStateTreeCtx,
 };
 
 #[derive(Debug, Clone)]

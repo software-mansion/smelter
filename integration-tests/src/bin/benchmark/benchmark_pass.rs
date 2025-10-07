@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::{
     fmt,
     path::{Path, PathBuf},
@@ -16,7 +16,7 @@ use smelter_core::{
     *,
 };
 use smelter_render::{
-    scene::Component, Frame, InputId, OutputId, RendererId, RendererSpec, RenderingMode, YuvPlanes,
+    Frame, InputId, OutputId, RendererId, RendererSpec, RenderingMode, YuvPlanes, scene::Component,
 };
 use tracing::debug;
 

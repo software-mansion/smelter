@@ -4,9 +4,9 @@ use tokio::{sync::watch, time::timeout};
 use tracing::{debug, warn};
 use webrtc::{
     api::{
-        interceptor_registry::register_default_interceptors,
-        media_engine::{MediaEngine, MIME_TYPE_OPUS},
         APIBuilder,
+        interceptor_registry::register_default_interceptors,
+        media_engine::{MIME_TYPE_OPUS, MediaEngine},
     },
     ice_transport::{
         ice_candidate::RTCIceCandidateInit, ice_connection_state::RTCIceConnectionState,
@@ -14,19 +14,21 @@ use webrtc::{
     },
     interceptor::registry::Registry,
     peer_connection::{
-        configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState,
-        sdp::session_description::RTCSessionDescription, OnTrackHdlrFn, RTCPeerConnection,
+        OnTrackHdlrFn, RTCPeerConnection, configuration::RTCConfiguration,
+        peer_connection_state::RTCPeerConnectionState,
+        sdp::session_description::RTCSessionDescription,
     },
     rtp_transceiver::{
+        RTCRtpTransceiver, RTCRtpTransceiverInit,
         rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
         rtp_transceiver_direction::RTCRtpTransceiverDirection,
-        RTCRtpTransceiver, RTCRtpTransceiverInit,
     },
 };
 
 use crate::{
     codecs::VideoDecoderOptions,
     pipeline::{
+        PipelineCtx,
         webrtc::{
             error::WhipWhepServerError,
             supported_video_codec_parameters::{
@@ -34,7 +36,6 @@ use crate::{
                 get_video_h264_codecs_for_media_engine, get_video_vp8_codecs, get_video_vp9_codecs,
             },
         },
-        PipelineCtx,
     },
 };
 
