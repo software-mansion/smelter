@@ -139,8 +139,7 @@ fn bundle_app_with_ffmpeg(
                 &format!("@rpath/{basename}"),
                 smelter_bin_path.to_str().unwrap(),
             ])
-            .spawn()?
-            .wait()?
+            .status()?
             .code();
         if exit_code != Some(0) {
             bail!("Command \"install_name_tool\" failed with exit code: {exit_code:?}");
