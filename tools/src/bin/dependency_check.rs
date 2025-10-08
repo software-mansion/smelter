@@ -202,7 +202,7 @@ fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
 fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
     let command_result = check_ffmpeg_command(required_ffmpeg_version)?;
     if !command_result {
-        info!("Checking if ffmpeg is installed as homebrew keg-only");
+        info!("Checking if FFmpeg is installed as homebrew keg-only");
         return check_ffmpeg_homebrew(required_ffmpeg_version);
     }
     Ok(command_result)
@@ -219,7 +219,7 @@ fn check_ffmpeg_command(required_ffmpeg_version: &str) -> Result<bool> {
                     warn!(
                         installed_ffmpeg_version = version,
                         required_ffmpeg_version,
-                        "Inatelled version doesn't match the required version."
+                        "Installed version doesn't match the required version."
                     );
                     Ok(false)
                 }
