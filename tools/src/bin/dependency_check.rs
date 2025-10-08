@@ -121,11 +121,11 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
     let re = if cfg!(target_os = "linux") {
         // Matches dynamic libav library with major version only on linux
         // E.g. libavcodec.so.62
-        Regex::new(r"^libav[a-zA-Z]+\.so\.\d+$")?
+        Regex::new(r"^lib[a-zA-Z]+\.so\.\d+$")?
     } else if cfg!(target_os = "macos") {
         // Matches dynamic libav library with major version only on macos
         // E.g. libavcodec.62.dylib
-        Regex::new(r"^libav[a-zA-Z]+\.\d+\.dylib$")?
+        Regex::new(r"^lib[a-zA-Z]+\.\d+\.dylib$")?
     } else {
         panic!("Unknown platform");
     };
