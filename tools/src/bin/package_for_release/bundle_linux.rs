@@ -1,6 +1,7 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use fs_extra::dir::{self, CopyOptions};
 use log::info;
+use regex::Regex;
 use std::process::Command;
 use std::{fs, path::Path};
 use tools::paths::{git_root, tools_root};
