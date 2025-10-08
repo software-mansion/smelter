@@ -7,7 +7,7 @@ pub(crate) mod texture;
 pub(crate) mod utils;
 
 pub(crate) use ctx::WgpuCtx;
-pub use ctx::{WgpuComponents, create_wgpu_ctx, required_wgpu_features, set_required_wgpu_limits};
+pub use ctx::{required_wgpu_features, set_required_wgpu_limits};
 pub use wgpu::Features as WgpuFeatures;
 
 #[must_use]
@@ -46,15 +46,6 @@ impl WgpuErrorScope {
 
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum CreateWgpuCtxError {
-    #[error("Failed to get a wgpu adapter.")]
-    NoAdapter,
-
-    #[error("Error when requesting a wgpu adapter.")]
-    AdapterError(#[from] wgpu::RequestAdapterError),
-
-    #[error("Failed to get a wgpu device.")]
-    NoDevice(#[from] wgpu::RequestDeviceError),
-
     #[error(transparent)]
     WgpuError(#[from] WgpuError),
 }
