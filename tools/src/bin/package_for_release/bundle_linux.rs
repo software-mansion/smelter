@@ -141,8 +141,7 @@ fn bundle_app(
     let exit_code = Command::new("tar")
         .args(["-czvf", output_name, "smelter"])
         .current_dir(workdir)
-        .spawn()?
-        .wait()?
+        .status()?
         .code();
     if exit_code != Some(0) {
         return Err(anyhow!("Command tar failed with exit code {:?}", exit_code));
