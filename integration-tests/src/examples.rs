@@ -366,7 +366,7 @@ pub fn download_asset(asset: &AssetData) -> Result<()> {
     fs::create_dir_all(asset.path.parent().unwrap())?;
     if !asset.path.exists() {
         let file = asset.path.file_name().unwrap().to_str().unwrap();
-        info!("Asset \"{file}\" not found and will be donwloaded.");
+        info!("Asset \"{file}\" not found and will be downloaded.");
         let mut resp = reqwest::blocking::get(&asset.url)?;
         let mut out = File::create(asset.path.clone())?;
         io::copy(&mut resp, &mut out)?;
