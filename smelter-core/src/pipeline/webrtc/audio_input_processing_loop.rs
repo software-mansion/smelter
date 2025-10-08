@@ -14,26 +14,26 @@ use crate::{
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
             depayloader::{DepayloaderOptions, DepayloaderStream},
         },
-        webrtc::listen_for_rtcp::listen_for_rtcp,
+        webrtc::{AsyncReceiverIter, listen_for_rtcp::listen_for_rtcp},
     },
     thread_utils::{InitializableThread, ThreadMetadata},
 };
 
 use crate::prelude::*;
 
-pub struct AudioTrackCtx {
+pub(super) struct AudioInputTrackCtx {
     pub sync_point: Arc<RtpNtpSyncPoint>,
     pub track: Arc<TrackRemote>,
     pub samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
     pub rtc_receiver: Arc<RTCRtpReceiver>,
 }
 
-pub async fn audio_processing_loop(
+pub async fn audio_input_processing_loop(
     ctx: Arc<PipelineCtx>,
-    audio_track_ctx: AudioTrackCtx,
+    audio_track_ctx: AudioInputTrackCtx,
     thread_instance_id: Arc<str>,
 ) -> Result<(), DecoderInitError> {
-    let AudioTrackCtx {
+    let AudioInputTrackCtx {
         sync_point,
         track,
         samples_sender,
@@ -67,23 +67,11 @@ pub async fn audio_processing_loop(
     Ok(())
 }
 
-struct AsyncReceiverIter<T> {
-    pub receiver: tokio::sync::mpsc::Receiver<T>,
+struct AudioTrackThreadHandle {
+    rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpPacket>>,
 }
 
-impl<T> Iterator for AsyncReceiverIter<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.receiver.blocking_recv()
-    }
-}
-
-pub(super) struct AudioTrackThreadHandle {
-    pub rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpPacket>>,
-}
-
-pub(super) struct AudioTrackThread {
+struct AudioTrackThread {
     stream: Box<dyn Iterator<Item = PipelineEvent<InputAudioSamples>>>,
     samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
 }
@@ -120,7 +108,7 @@ impl InitializableThread for AudioTrackThread {
                 // TODO: maybe queue should be able to handle packets after EOS
                 PipelineEvent::EOS => None,
             })
-            .inspect(|batch| trace!(?batch, "Produced a sample batch"));
+            .inspect(|batch| trace!(?batch, "Sample batch produced"));
 
         let state = Self {
             stream: Box::new(result_stream),

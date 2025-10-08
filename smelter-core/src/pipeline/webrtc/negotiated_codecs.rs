@@ -14,8 +14,8 @@ use crate::{
 };
 
 pub(super) struct VideoCodecMappings {
-    pub(super) decoder_mapping: VideoDecoderMapping,
-    pub(super) payload_type_mapping: VideoPayloadTypeMapping,
+    pub decoder_mapping: VideoDecoderMapping,
+    pub payload_type_mapping: VideoPayloadTypeMapping,
 }
 
 pub trait WebrtcVideoDecoderMapping: Sized {

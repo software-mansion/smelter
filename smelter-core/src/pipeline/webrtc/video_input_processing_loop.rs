@@ -12,27 +12,30 @@ use crate::{
         rtp::{
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync, depayloader::DynamicDepayloaderStream,
         },
-        webrtc::{listen_for_rtcp::listen_for_rtcp, negotiated_codecs::VideoCodecMappings},
+        webrtc::{
+            AsyncReceiverIter, listen_for_rtcp::listen_for_rtcp,
+            negotiated_codecs::VideoCodecMappings,
+        },
     },
     thread_utils::{InitializableThread, ThreadMetadata},
 };
 
 use crate::prelude::*;
 
-pub struct VideoTrackCtx {
+pub(super) struct VideoInputTrackCtx {
     pub sync_point: Arc<RtpNtpSyncPoint>,
     pub track: Arc<TrackRemote>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub rtc_receiver: Arc<RTCRtpReceiver>,
 }
 
-pub async fn video_processing_loop(
+pub async fn video_input_processing_loop(
     ctx: Arc<PipelineCtx>,
-    video_track_ctx: VideoTrackCtx,
+    video_track_ctx: VideoInputTrackCtx,
     thread_instance_id: Arc<str>,
-    video_mappings: VideoCodecMappings,
+    video_codec_mappings: VideoCodecMappings,
 ) -> Result<(), DecoderInitError> {
-    let VideoTrackCtx {
+    let VideoInputTrackCtx {
         sync_point,
         track,
         frame_sender,
@@ -40,7 +43,7 @@ pub async fn video_processing_loop(
     } = video_track_ctx;
     let handle = VideoTrackThread::spawn(
         thread_instance_id,
-        (ctx.clone(), video_mappings, frame_sender),
+        (ctx.clone(), video_codec_mappings, frame_sender),
     )?;
 
     let mut timestamp_sync =
@@ -68,22 +71,11 @@ pub async fn video_processing_loop(
     Ok(())
 }
 
-struct AsyncReceiverIter<T> {
-    pub receiver: tokio::sync::mpsc::Receiver<T>,
+struct VideoTrackThreadHandle {
+    rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpPacket>>,
 }
 
-impl<T> Iterator for AsyncReceiverIter<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.receiver.blocking_recv()
-    }
-}
-pub(crate) struct VideoTrackThreadHandle {
-    pub rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpPacket>>,
-}
-
-pub(super) struct VideoTrackThread {
+struct VideoTrackThread {
     stream: Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
 }
@@ -121,7 +113,7 @@ impl InitializableThread for VideoTrackThread {
                 // TODO: maybe queue should be able to handle packets after EOS
                 PipelineEvent::EOS => None,
             })
-            .inspect(|frame| trace!(?frame, "WHIP input produced a frame"));
+            .inspect(|frame| trace!(?frame, "Frame produced"));
 
         let state = Self {
             stream: Box::new(result_stream),
@@ -142,7 +134,7 @@ impl InitializableThread for VideoTrackThread {
 
     fn metadata() -> ThreadMetadata {
         ThreadMetadata {
-            thread_name: "Whip Video Decoder".to_string(),
+            thread_name: "Video Decoder".to_string(),
             thread_instance_name: "Input".to_string(),
         }
     }

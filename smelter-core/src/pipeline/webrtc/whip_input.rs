@@ -18,10 +18,8 @@ use crate::{
 use crate::prelude::*;
 
 pub(super) mod connection_state;
+pub(super) mod process_tracks;
 pub(super) mod state;
-
-pub(super) mod track_audio_thread;
-pub(super) mod track_video_thread;
 
 pub(super) use state::WhipInputsState;
 

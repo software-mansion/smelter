@@ -4,9 +4,7 @@ use crate::pipeline::{
         WhipWhepServerState,
         error::WhipWhepServerError,
         peer_connection_recvonly::RecvonlyPeerConnection,
-        whip_input::{
-            track_audio_thread::process_audio_track, track_video_thread::process_video_track,
-        },
+        whip_input::process_tracks::{process_audio_track, process_video_track},
     },
 };
 use axum::{

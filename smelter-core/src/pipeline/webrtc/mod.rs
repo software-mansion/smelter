@@ -5,7 +5,7 @@ use tracing::{error, info};
 
 use whip_input::WhipInputsState;
 
-mod audio_processing_loop;
+mod audio_input_processing_loop;
 mod bearer_token;
 mod error;
 mod handle_keyframe_requests;
@@ -15,7 +15,7 @@ mod peer_connection_recvonly;
 mod server;
 mod supported_video_codec_parameters;
 mod trickle_ice_utils;
-mod video_processing_loop;
+mod video_input_processing_loop;
 mod whep_output;
 mod whip_input;
 mod whip_output;
@@ -64,5 +64,17 @@ impl Drop for WhipWhepServerHandle {
         {
             error!("Cannot send shutdown signal to WHIP/WHEP server")
         }
+    }
+}
+
+pub struct AsyncReceiverIter<T> {
+    pub receiver: tokio::sync::mpsc::Receiver<T>,
+}
+
+impl<T> Iterator for AsyncReceiverIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.receiver.blocking_recv()
     }
 }
