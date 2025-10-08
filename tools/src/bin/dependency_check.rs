@@ -17,14 +17,22 @@ const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.gz";
 #[cfg(target_os = "linux")]
 const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.xz";
 
+/// FFMPEG_VERSION is set at compile time and contains FFmpeg version in `x.y` format which was used to compile
+/// Smelter.
+fn required_ffmpeg_version() -> &'static str {
+    #[allow(clippy::option_env_unwrap)]
+    option_env!("FFMPEG_VERSION").unwrap()
+}
+
+/// FFMPEG_URL is set at compile time and provides the URL of the FFmpeg prebuilt release with
+/// libav dynamic libraries that should be downloaded if the required FFmpeg version is not installed
+fn ffmpeg_url() -> &'static str {
+    #[allow(clippy::option_env_unwrap)]
+    option_env!("FFMPEG_URL").unwrap()
+}
+
 fn main() -> Result<()> {
     tracing_subscriber::fmt().init();
-
-    #[allow(clippy::option_env_unwrap)]
-    let (required_ffmpeg_version, ffmpeg_url) = (
-        option_env!("FFMPEG_VERSION").unwrap(),
-        option_env!("FFMPEG_URL").unwrap(),
-    );
 
     let executable_path =
         env::current_exe().with_context(|| "Failed to get current executable directory.")?;
@@ -40,19 +48,17 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let ffmpeg_installed = check_ffmpeg(required_ffmpeg_version);
+    let ffmpeg_installed = check_ffmpeg();
     let fetch_result = match ffmpeg_installed {
         Ok(true) => Ok(()),
         Ok(false) => {
             info!("Downloading dependencies...");
-            prepare_dependencies(&executable_dir, ffmpeg_url)
-                .with_context(|| "Failed to fetch dependencies.")
+            prepare_dependencies(&executable_dir).with_context(|| "Failed to fetch dependencies.")
         }
         Err(error) => {
             error!(%error);
             info!("Downloading dependencies...");
-            prepare_dependencies(&executable_dir, ffmpeg_url)
-                .with_context(|| "Failed to fetch dependencies.")
+            prepare_dependencies(&executable_dir).with_context(|| "Failed to fetch dependencies.")
         }
     };
     cleanup(&executable_dir);
@@ -71,8 +77,8 @@ fn cleanup(executable_dir: &Path) {
     }
 }
 
-fn prepare_dependencies(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
-    download_ffmpeg(executable_dir, ffmpeg_url).with_context(|| "libav download failed.")?;
+fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
+    download_ffmpeg(executable_dir).with_context(|| "libav download failed.")?;
 
     let ffmpeg_archive_path = executable_dir.join(FFMPEG_ARCHIVE_NAME);
     let ffmpeg_download_dir = executable_dir.join(FFMPEG_DOWNLOAD_DIR);
@@ -141,12 +147,12 @@ fn prepare_dependencies(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
     Ok(())
 }
 
-// Recursively scans donwloaded archive for any libav dynamic libraries, i.e. *.n.dylib for macos and
-// *.so.n files for linux, where 'n' is version number. If a matched library is a symlink
-// (which is the case for prebuilt linux libs) it follows the
-// link, removes it and renames the original file.
+// Recursively scans the downloaded archive for libav dynamic libraries —
+// `*.n.dylib` on macOS and `*.so.n` on Linux, where `n` is the version number.
+// If a found library is a symlink (as in prebuilt Linux libs), it follows the link,
+// removes the symlink, and renames the target file.
 //
-// Returns vector of paths to libav files.
+// Returns a vector of paths to the libav files.
 fn extract_libav_libraries(dirpath: PathBuf, re: &Regex) -> Result<Vec<PathBuf>> {
     let mut libraries: Vec<PathBuf> = vec![];
     for file in fs::read_dir(dirpath)?.flatten() {
@@ -193,9 +199,9 @@ fn extract_libav_libraries(dirpath: PathBuf, re: &Regex) -> Result<Vec<PathBuf>>
     Ok(libraries)
 }
 
-fn download_ffmpeg(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
-    let response = get(ffmpeg_url)
-        .with_context(|| format!("Failed to download libav libraries. URL: {ffmpeg_url}"))?;
+fn download_ffmpeg(executable_dir: &Path) -> Result<()> {
+    let response = get(ffmpeg_url())
+        .with_context(|| format!("Failed to download libav libraries. URL: {}", ffmpeg_url()))?;
     let content = response.bytes()?;
 
     fs::write(executable_dir.join(FFMPEG_ARCHIVE_NAME), &content)
@@ -209,26 +215,26 @@ fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
 }
 
 #[cfg(target_os = "macos")]
-fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
-    let command_result = check_ffmpeg_command(required_ffmpeg_version)?;
+fn check_ffmpeg() -> Result<bool> {
+    let command_result = check_ffmpeg_command()?;
     if !command_result {
         info!("Checking if FFmpeg is installed as homebrew keg-only");
-        return check_ffmpeg_homebrew(required_ffmpeg_version);
+        return check_ffmpeg_homebrew();
     }
     Ok(command_result)
 }
 
-fn check_ffmpeg_command(required_ffmpeg_version: &str) -> Result<bool> {
+fn check_ffmpeg_command() -> Result<bool> {
     let ffmpeg_result = Command::new("ffmpeg").arg("-version").output();
     match ffmpeg_result {
         Ok(ffmpeg_output) => {
             let ffmpeg_output = String::from_utf8(ffmpeg_output.stdout)?.trim().to_string();
             match match_ffmpeg_version(&ffmpeg_output) {
-                Some(version) if version == required_ffmpeg_version => Ok(true),
+                Some(version) if version == required_ffmpeg_version() => Ok(true),
                 Some(version) => {
                     warn!(
                         installed_ffmpeg_version = version,
-                        required_ffmpeg_version,
+                        required_ffmpeg_version = required_ffmpeg_version(),
                         "Installed version doesn't match the required version."
                     );
                     Ok(false)
@@ -262,9 +268,9 @@ fn match_ffmpeg_version(ffmpeg_output: &str) -> Option<&str> {
 }
 
 #[cfg(target_os = "macos")]
-fn check_ffmpeg_homebrew(required_ffmpeg_version: &str) -> Result<bool> {
+fn check_ffmpeg_homebrew() -> Result<bool> {
     let required_ffmpeg_version_brew =
-        &required_ffmpeg_version[..required_ffmpeg_version.find(".").unwrap_or(1)];
+        &required_ffmpeg_version()[..required_ffmpeg_version().find(".").unwrap_or(1)];
     let brew_output = Command::new("brew").arg("list").output()?;
     let brew_output = String::from_utf8(brew_output.stdout)?.trim().to_string();
 
