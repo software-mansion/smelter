@@ -156,8 +156,7 @@ fn bundle_app_with_ffmpeg(
     let exit_code = Command::new("tar")
         .args(["-czvf", output_name, "smelter"])
         .current_dir(workdir)
-        .spawn()?
-        .wait()?
+        .status()?
         .code();
     if exit_code != Some(0) {
         bail!("Command \"tar\" failed with exit code {:?}", exit_code);
@@ -206,8 +205,7 @@ fn bundle_app_no_ffmpeg(
     let exit_code = Command::new("tar")
         .args(["-czvf", output_name, "smelter"])
         .current_dir(workdir)
-        .spawn()?
-        .wait()?
+        .status()?
         .code();
     if exit_code != Some(0) {
         bail!("Command \"tar\" failed with exit code {:?}", exit_code);
