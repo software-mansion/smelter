@@ -84,6 +84,9 @@ pub fn ffmpeg_version() -> Result<String> {
     let ffmpeg_output = Command::new("ffmpeg").arg("-version").output()?;
     let ffmpeg_output = String::from_utf8(ffmpeg_output.stdout)?.trim().to_string();
 
+    // Matches the FFmpeg version installed on machine and captures `x.y` where `x` is major and
+    // `y` is minor.
+    // E.g. "ffmpeg version n8.0" (captures 8.0)
     let re = Regex::new(r"(?m)^ffmpeg version \D*(\d+\.\d+)")?;
 
     let caps = re.captures(&ffmpeg_output).unwrap();

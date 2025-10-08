@@ -18,7 +18,7 @@ const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.gz";
 const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.xz";
 
 /// FFMPEG_VERSION is set at compile time and contains FFmpeg version in `x.y` format which was used to compile
-/// Smelter.
+/// Smelter. FFmpeg version is found by matching `ffmpeg -version` output during compilation.
 fn required_ffmpeg_version() -> &'static str {
     #[allow(clippy::option_env_unwrap)]
     option_env!("FFMPEG_VERSION").unwrap()
