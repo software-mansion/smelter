@@ -214,8 +214,8 @@ fn download_ffmpeg(executable_dir: &Path) -> Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn check_ffmpeg(required_ffmpeg_version: &str) -> Result<bool> {
-    check_ffmpeg_command(required_ffmpeg_version)
+fn check_ffmpeg() -> Result<bool> {
+    check_ffmpeg_command()
 }
 
 #[cfg(target_os = "macos")]
