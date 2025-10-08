@@ -36,7 +36,7 @@ fn main() -> Result<()> {
     // Matches if version is in correct format i.e. `x.y`
     let re = Regex::new(r"^\d+\.\d+$")?;
     if !re.is_match(required_ffmpeg_version()) {
-        // NOTE: This should NEVER happen, especially that analogic check is performed at compile
+        // NOTE: This should NEVER happen, especially that analogical check is performed at compile
         // time
         bail!("Version in invalid format: {}", required_ffmpeg_version());
     }
