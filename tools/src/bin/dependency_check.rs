@@ -114,9 +114,6 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
         Some(code) => bail!("`tar` command failed with code: {code}."),
         None => bail!("`tar` command failed."),
     }
-    if tar_code != Some(0) {
-        bail!("`tar` command failed with code: {tar_code:?}.");
-    }
 
     let re = if cfg!(target_os = "linux") {
         // Matches dynamic libav library with major version only on linux
