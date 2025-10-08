@@ -72,7 +72,7 @@ fn cleanup(executable_dir: &Path) {
 }
 
 fn prepare_dependencies(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
-    download_ffmpeg(executable_dir, ffmpeg_url).with_context(|| "FFmpeg download failed.")?;
+    download_ffmpeg(executable_dir, ffmpeg_url).with_context(|| "libav download failed.")?;
 
     let ffmpeg_archive_path = executable_dir.join(FFMPEG_ARCHIVE_NAME);
     let ffmpeg_download_dir = executable_dir.join(FFMPEG_DOWNLOAD_DIR);
@@ -113,15 +113,19 @@ fn prepare_dependencies(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
     }
 
     let re = if cfg!(target_os = "linux") {
-        Regex::new(r"^lib[a-zA-Z]+\.so\.\d+$")?
+        // Matches dynamic libav library with major version only on linux
+        // E.g. libavcodec.so.62
+        Regex::new(r"^libav[a-zA-Z]+\.so\.\d+$")?
     } else if cfg!(target_os = "macos") {
-        Regex::new(r"^lib[a-zA-Z]+\.\d+\.dylib$")?
+        // Matches dynamic libav library with major version only on macos
+        // E.g. libavcodec.62.dylib
+        Regex::new(r"^libav[a-zA-Z]+\.\d+\.dylib$")?
     } else {
         panic!("Unknown platform");
     };
 
-    let ffmpeg_libs_paths = find_ffmpeg_libs(executable_dir.join(FFMPEG_DOWNLOAD_DIR), &re)
-        .with_context(|| "Failed to extract FFmpeg libraries from downloaded archive.")?;
+    let ffmpeg_libs_paths = extract_libav_libraries(executable_dir.join(FFMPEG_DOWNLOAD_DIR), &re)
+        .with_context(|| "Failed to extract libav libraries from downloaded archive.")?;
     fs::create_dir(executable_dir.join(FFMPEG_LIB_DIR))?;
     for lib in ffmpeg_libs_paths {
         let libname = match lib.file_name() {
@@ -137,12 +141,18 @@ fn prepare_dependencies(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
     Ok(())
 }
 
-fn find_ffmpeg_libs(dirpath: PathBuf, re: &Regex) -> Result<Vec<PathBuf>> {
+// Recursively scans donwloaded archive for any libav dynamic libraries, i.e. *.n.dylib for macos and
+// *.so.n files for linux, where 'n' is version number. If a matched library is a symlink
+// (which is the case for prebuilt linux libs) it follows the
+// link, removes it and renames the original file.
+//
+// Returns vector of paths to libav files.
+fn extract_libav_libraries(dirpath: PathBuf, re: &Regex) -> Result<Vec<PathBuf>> {
     let mut libraries: Vec<PathBuf> = vec![];
     for file in fs::read_dir(dirpath)?.flatten() {
         if file.file_type()?.is_dir() {
             let path = file.path();
-            libraries.extend(find_ffmpeg_libs(path, re)?);
+            libraries.extend(extract_libav_libraries(path, re)?);
         } else if file.file_type()?.is_symlink() {
             let path = file.path();
             let filename = path
@@ -185,11 +195,11 @@ fn find_ffmpeg_libs(dirpath: PathBuf, re: &Regex) -> Result<Vec<PathBuf>> {
 
 fn download_ffmpeg(executable_dir: &Path, ffmpeg_url: &str) -> Result<()> {
     let response = get(ffmpeg_url)
-        .with_context(|| format!("Failed to download FFmpeg libraries. URL: {ffmpeg_url}"))?;
+        .with_context(|| format!("Failed to download libav libraries. URL: {ffmpeg_url}"))?;
     let content = response.bytes()?;
 
     fs::write(executable_dir.join(FFMPEG_ARCHIVE_NAME), &content)
-        .with_context(|| "Failed to save downloaded FFmpeg libraries to file")?;
+        .with_context(|| "Failed to save downloaded libav libraries to file")?;
     Ok(())
 }
 
@@ -237,6 +247,8 @@ fn check_ffmpeg_command(required_ffmpeg_version: &str) -> Result<bool> {
 }
 
 fn match_ffmpeg_version(ffmpeg_output: &str) -> Option<&str> {
+    // Matches ffmpeg version in the output of `ffmpeg -version` command, then returns the version.
+    // E.g. "ffmpeg version 8.0" (captures 8.0) or "ffmpeg version n7.1" (captures 7.1)
     let re = Regex::new(r"(?m)^ffmpeg version \D*(\d+\.\d+)")
         .expect("Failed to compile regular expression");
     let caps = re.captures(ffmpeg_output);
@@ -256,9 +268,7 @@ fn check_ffmpeg_homebrew(required_ffmpeg_version: &str) -> Result<bool> {
     let brew_output = Command::new("brew").arg("list").output()?;
     let brew_output = String::from_utf8(brew_output.stdout)?.trim().to_string();
 
-    let ffmpeg_string = format!("ffmpeg@{required_ffmpeg_version_brew}");
-
-    let re = Regex::new(&format!("(?m){ffmpeg_string}"))?;
+    let re = Regex::new(&format!("(?m)ffmpeg@{required_ffmpeg_version_brew}"))?;
     if re.is_match(&brew_output) {
         Ok(true)
     } else {
