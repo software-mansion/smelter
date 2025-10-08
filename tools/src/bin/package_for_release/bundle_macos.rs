@@ -58,6 +58,12 @@ fn bundle_app_with_ffmpeg(
     }
 
     let ffmpeg_version = utils::ffmpeg_version()?;
+    // Matches if version is in correct format i.e. `x.y`
+    let re = Regex::new(r"^\d+\.\d+$")?;
+    if !re.is_match(&ffmpeg_version) {
+        bail!("Version in invalid format: {ffmpeg_version}");
+    }
+
     let ffmpeg_version_homebrew = &ffmpeg_version[..ffmpeg_version.find(".").unwrap_or(1)];
     let ffmpeg_url = utils::ffmpeg_url(&ffmpeg_version)?;
     let brew_prefix = Command::new("brew").arg("--prefix").output()?;

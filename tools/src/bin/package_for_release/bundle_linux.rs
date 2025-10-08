@@ -5,7 +5,7 @@ use std::process::Command;
 use std::{fs, path::Path};
 use tools::paths::{git_root, tools_root};
 
-use crate::utils::{self, SmelterBin, ffmpeg_url, ffmpeg_version};
+use crate::utils::{self, SmelterBin};
 
 const X86_TARGET: &str = "x86_64-unknown-linux-gnu";
 const X86_OUTPUT_FILE: &str = "smelter_linux_x86_64.tar.gz";
@@ -46,8 +46,14 @@ fn bundle_app(
         info!("Bundling smelter without web rendering");
     }
 
-    let ffmpeg_version = ffmpeg_version()?;
-    let ffmpeg_url = ffmpeg_url(&ffmpeg_version)?;
+    let ffmpeg_version = utils::ffmpeg_version()?;
+    // Matches if version is in correct format i.e. `x.y`
+    let re = Regex::new(r"^\d+\.\d+$")?;
+    if !re.is_match(&ffmpeg_version) {
+        bail!("Version in invalid format: {ffmpeg_version}");
+    }
+
+    let ffmpeg_url = utils::ffmpeg_url(&ffmpeg_version)?;
 
     let rustc_envs = vec![
         ("FFMPEG_VERSION", ffmpeg_version),
