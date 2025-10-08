@@ -57,7 +57,7 @@ fn main() -> Result<()> {
 
     let ffmpeg_installed = check_ffmpeg();
     let fetch_result = match ffmpeg_installed {
-        Ok(true) => Ok(()),
+        Ok(true) => return Ok(()),
         Ok(false) => {
             info!("Downloading dependencies...");
             prepare_dependencies(&executable_dir).with_context(|| "Failed to fetch dependencies.")
