@@ -37,9 +37,8 @@ fn client_code() -> Result<()> {
     examples::post(
         "output/output_1/register",
         &json!({
-            "type": "rtp_stream",
-            "port": OUTPUT_PORT,
-            "ip": IP,
+            "type": "mp4",
+            "path": "./processed_bunny.mp4",
             "video": {
                 "resolution": {
                     "width": VIDEO_RESOLUTION.width,
@@ -68,6 +67,8 @@ fn client_code() -> Result<()> {
     std::thread::sleep(Duration::from_millis(500));
 
     examples::post("start", &json!({}))?;
+    std::thread::sleep(Duration::from_secs(10));
+    examples::post("output/output_1/unregister", &json!({}))?;
 
     Ok(())
 }
