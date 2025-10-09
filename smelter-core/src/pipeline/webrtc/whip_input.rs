@@ -18,11 +18,8 @@ use crate::{
 use crate::prelude::*;
 
 pub(super) mod connection_state;
+pub(super) mod process_tracks;
 pub(super) mod state;
-mod utils;
-
-pub(super) mod track_audio_thread;
-pub(super) mod track_video_thread;
 
 pub(super) use state::WhipInputsState;
 
@@ -77,18 +74,6 @@ impl Drop for WhipInput {
     fn drop(&mut self) {
         self.whip_inputs_state
             .ensure_input_closed(&self.endpoint_id);
-    }
-}
-
-struct AsyncReceiverIter<T> {
-    pub receiver: tokio::sync::mpsc::Receiver<T>,
-}
-
-impl<T> Iterator for AsyncReceiverIter<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.receiver.blocking_recv()
     }
 }
 
