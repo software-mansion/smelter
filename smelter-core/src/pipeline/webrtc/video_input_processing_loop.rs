@@ -8,74 +8,59 @@ use webrtc::{rtp_transceiver::rtp_receiver::RTCRtpReceiver, track::track_remote:
 
 use crate::{
     pipeline::{
-        decoder::DynamicVideoDecoderStream,
+        decoder::{DynamicVideoDecoderStream, VideoDecoderMapping},
         rtp::{
-            RtpNtpSyncPoint, RtpPacket, RtpTimestampSync, depayloader::DynamicDepayloaderStream,
+            RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
+            depayloader::{DynamicDepayloaderStream, VideoPayloadTypeMapping},
         },
-        webrtc::{
-            AsyncReceiverIter, listen_for_rtcp::listen_for_rtcp,
-            negotiated_codecs::VideoCodecMappings,
-        },
+        webrtc::{AsyncReceiverIter, listen_for_rtcp::listen_for_rtcp},
     },
     thread_utils::{InitializableThread, ThreadMetadata},
 };
 
 use crate::prelude::*;
 
-pub(super) struct VideoInputTrackCtx {
+pub(super) struct VideoInputLoop {
     pub sync_point: Arc<RtpNtpSyncPoint>,
     pub track: Arc<TrackRemote>,
-    pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub rtc_receiver: Arc<RTCRtpReceiver>,
+    pub handle: VideoTrackThreadHandle,
 }
 
-pub async fn video_input_processing_loop(
-    ctx: Arc<PipelineCtx>,
-    video_track_ctx: VideoInputTrackCtx,
-    thread_instance_id: Arc<str>,
-    video_codec_mappings: VideoCodecMappings,
-) -> Result<(), DecoderInitError> {
-    let VideoInputTrackCtx {
-        sync_point,
-        track,
-        frame_sender,
-        rtc_receiver,
-    } = video_track_ctx;
-    let handle = VideoTrackThread::spawn(
-        thread_instance_id,
-        (ctx.clone(), video_codec_mappings, frame_sender),
-    )?;
+impl VideoInputLoop {
+    pub(super) async fn run(self, ctx: Arc<PipelineCtx>) -> Result<(), DecoderInitError> {
+        let mut timestamp_sync =
+            RtpTimestampSync::new(&self.sync_point, 90_000, ctx.default_buffer_duration);
 
-    let mut timestamp_sync =
-        RtpTimestampSync::new(&sync_point, 90_000, ctx.default_buffer_duration);
+        let (sender_report_sender, mut sender_report_receiver) = oneshot::channel();
+        listen_for_rtcp(&ctx, self.rtc_receiver, sender_report_sender);
 
-    let (sender_report_sender, mut sender_report_receiver) = oneshot::channel();
-    listen_for_rtcp(&ctx, rtc_receiver, sender_report_sender);
+        while let Ok((packet, _)) = self.track.read_rtp().await {
+            if let Ok(report) = sender_report_receiver.try_recv() {
+                timestamp_sync.on_sender_report(report.ntp_time, report.rtp_time);
+            }
+            let timestamp = timestamp_sync.pts_from_timestamp(packet.header.timestamp);
 
-    while let Ok((packet, _)) = track.read_rtp().await {
-        if let Ok(report) = sender_report_receiver.try_recv() {
-            timestamp_sync.on_sender_report(report.ntp_time, report.rtp_time);
+            let packet = RtpPacket { packet, timestamp };
+            trace!(?packet, "Sending RTP packet");
+            if let Err(e) = self
+                .handle
+                .rtp_packet_sender
+                .send(PipelineEvent::Data(packet))
+                .await
+            {
+                debug!("Failed to send audio RTP packet: {e}");
+            }
         }
-        let timestamp = timestamp_sync.pts_from_timestamp(packet.header.timestamp);
-
-        let packet = RtpPacket { packet, timestamp };
-        trace!(?packet, "Sending RTP packet");
-        if let Err(e) = handle
-            .rtp_packet_sender
-            .send(PipelineEvent::Data(packet))
-            .await
-        {
-            debug!("Failed to send audio RTP packet: {e}");
-        }
+        Ok(())
     }
-    Ok(())
 }
 
-struct VideoTrackThreadHandle {
+pub(super) struct VideoTrackThreadHandle {
     rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpPacket>>,
 }
 
-struct VideoTrackThread {
+pub(super) struct VideoTrackThread {
     stream: Box<dyn Iterator<Item = PipelineEvent<Frame>>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
 }
@@ -83,7 +68,8 @@ struct VideoTrackThread {
 impl InitializableThread for VideoTrackThread {
     type InitOptions = (
         Arc<PipelineCtx>,
-        VideoCodecMappings,
+        VideoDecoderMapping,
+        VideoPayloadTypeMapping,
         Sender<PipelineEvent<Frame>>,
     );
 
@@ -91,7 +77,7 @@ impl InitializableThread for VideoTrackThread {
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, video_mappings, frame_sender) = options;
+        let (ctx, decoder_mapping, payload_type_mapping, frame_sender) = options;
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
         let packet_stream = AsyncReceiverIter {
@@ -99,12 +85,10 @@ impl InitializableThread for VideoTrackThread {
         };
 
         let depayloader_stream =
-            DynamicDepayloaderStream::new(video_mappings.payload_type_mapping, packet_stream)
-                .flatten();
+            DynamicDepayloaderStream::new(payload_type_mapping, packet_stream).flatten();
 
         let decoder_stream =
-            DynamicVideoDecoderStream::new(ctx, video_mappings.decoder_mapping, depayloader_stream)
-                .flatten();
+            DynamicVideoDecoderStream::new(ctx, decoder_mapping, depayloader_stream).flatten();
 
         let result_stream = decoder_stream
             .filter_map(|event| match event {

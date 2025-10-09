@@ -10,15 +10,15 @@ use crate::{
         rtp::{RtpNtpSyncPoint, depayloader::VideoPayloadTypeMapping},
         webrtc::{
             WhipWhepServerState,
-            audio_input_processing_loop::{AudioInputTrackCtx, audio_input_processing_loop},
+            audio_input_processing_loop::{AudioInputLoop, AudioTrackThread},
             error::WhipWhepServerError,
             negotiated_codecs::{
-                VideoCodecMappings, WebrtcVideoDecoderMapping, WebrtcVideoPayloadTypeMapping,
-                audio_codec_negotiated,
+                WebrtcVideoDecoderMapping, WebrtcVideoPayloadTypeMapping, audio_codec_negotiated,
             },
-            video_input_processing_loop::{VideoInputTrackCtx, video_input_processing_loop},
+            video_input_processing_loop::{VideoInputLoop, VideoTrackThread},
         },
     },
+    thread_utils::InitializableThread,
 };
 
 pub async fn process_audio_track(
@@ -40,19 +40,20 @@ pub async fn process_audio_track(
     let samples_sender =
         inputs.get_with(&endpoint_id, |input| Ok(input.input_samples_sender.clone()))?;
 
-    let audio_track_ctx = AudioInputTrackCtx {
+    let handle = AudioTrackThread::spawn(
+        format!("WHIP input audio, endpoint_id: {}", endpoint_id),
+        (ctx.clone(), samples_sender),
+    )?;
+
+    let audio_input_loop = AudioInputLoop {
         sync_point,
         track,
-        samples_sender,
         rtc_receiver,
+        handle,
     };
 
-    audio_input_processing_loop(
-        ctx,
-        audio_track_ctx,
-        format!("WHIP input audio, endpoint_id: {}", endpoint_id).into(),
-    )
-    .await?;
+    audio_input_loop.run(ctx).await?;
+
     Ok(())
 }
 
@@ -78,25 +79,24 @@ pub async fn process_video_track(
     let WhipWhepServerState { inputs, ctx, .. } = state;
     let frame_sender = inputs.get_with(&endpoint_id, |input| Ok(input.frame_sender.clone()))?;
 
-    let video_mappings = VideoCodecMappings {
-        decoder_mapping,
-        payload_type_mapping,
-    };
+    let handle = VideoTrackThread::spawn(
+        format!("WHIP input video, endpoint_id: {}", endpoint_id),
+        (
+            ctx.clone(),
+            decoder_mapping,
+            payload_type_mapping,
+            frame_sender,
+        ),
+    )?;
 
-    let video_track_ctx = VideoInputTrackCtx {
+    let video_input_loop = VideoInputLoop {
         sync_point,
         track,
-        frame_sender,
         rtc_receiver,
+        handle,
     };
 
-    video_input_processing_loop(
-        ctx,
-        video_track_ctx,
-        format!("WHIP input video, endpoint_id: {}", endpoint_id).into(),
-        video_mappings,
-    )
-    .await?;
+    video_input_loop.run(ctx).await?;
 
     Ok(())
 }

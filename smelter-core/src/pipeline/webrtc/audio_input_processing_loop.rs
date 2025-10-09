@@ -21,57 +21,48 @@ use crate::{
 
 use crate::prelude::*;
 
-pub(super) struct AudioInputTrackCtx {
+pub(super) struct AudioInputLoop {
     pub sync_point: Arc<RtpNtpSyncPoint>,
     pub track: Arc<TrackRemote>,
-    pub samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
     pub rtc_receiver: Arc<RTCRtpReceiver>,
+    pub handle: AudioTrackThreadHandle,
 }
 
-pub async fn audio_input_processing_loop(
-    ctx: Arc<PipelineCtx>,
-    audio_track_ctx: AudioInputTrackCtx,
-    thread_instance_id: Arc<str>,
-) -> Result<(), DecoderInitError> {
-    let AudioInputTrackCtx {
-        sync_point,
-        track,
-        samples_sender,
-        rtc_receiver,
-    } = audio_track_ctx;
-    let handle = AudioTrackThread::spawn(thread_instance_id, (ctx.clone(), samples_sender))?;
+impl AudioInputLoop {
+    pub(super) async fn run(self, ctx: Arc<PipelineCtx>) -> Result<(), DecoderInitError> {
+        let mut timestamp_sync =
+            RtpTimestampSync::new(&self.sync_point, 48_000, ctx.default_buffer_duration);
 
-    let mut timestamp_sync =
-        RtpTimestampSync::new(&sync_point, 48_000, ctx.default_buffer_duration);
+        let (sender_report_sender, mut sender_report_receiver) = oneshot::channel();
+        listen_for_rtcp(&ctx, self.rtc_receiver, sender_report_sender);
 
-    let (sender_report_sender, mut sender_report_receiver) = oneshot::channel();
-    listen_for_rtcp(&ctx, rtc_receiver, sender_report_sender);
+        while let Ok((packet, _)) = self.track.read_rtp().await {
+            if let Ok(report) = sender_report_receiver.try_recv() {
+                timestamp_sync.on_sender_report(report.ntp_time, report.rtp_time);
+            }
+            let timestamp = timestamp_sync.pts_from_timestamp(packet.header.timestamp);
 
-    while let Ok((packet, _)) = track.read_rtp().await {
-        if let Ok(report) = sender_report_receiver.try_recv() {
-            timestamp_sync.on_sender_report(report.ntp_time, report.rtp_time);
+            let packet = RtpPacket { packet, timestamp };
+            trace!(?packet, "Sending RTP packet");
+            if let Err(e) = self
+                .handle
+                .rtp_packet_sender
+                .send(PipelineEvent::Data(packet))
+                .await
+            {
+                debug!("Failed to send audio RTP packet: {e}");
+            }
         }
-        let timestamp = timestamp_sync.pts_from_timestamp(packet.header.timestamp);
 
-        let packet = RtpPacket { packet, timestamp };
-        trace!(?packet, "Sending RTP packet");
-        if let Err(e) = handle
-            .rtp_packet_sender
-            .send(PipelineEvent::Data(packet))
-            .await
-        {
-            debug!("Failed to send audio RTP packet: {e}");
-        }
+        Ok(())
     }
-
-    Ok(())
 }
 
-struct AudioTrackThreadHandle {
+pub(super) struct AudioTrackThreadHandle {
     rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpPacket>>,
 }
 
-struct AudioTrackThread {
+pub(super) struct AudioTrackThread {
     stream: Box<dyn Iterator<Item = PipelineEvent<InputAudioSamples>>>,
     samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
 }

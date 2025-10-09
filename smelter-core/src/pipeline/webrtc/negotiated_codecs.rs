@@ -13,11 +13,6 @@ use crate::{
     pipeline::{decoder::VideoDecoderMapping, rtp::depayloader::VideoPayloadTypeMapping},
 };
 
-pub(super) struct VideoCodecMappings {
-    pub decoder_mapping: VideoDecoderMapping,
-    pub payload_type_mapping: VideoPayloadTypeMapping,
-}
-
 pub trait WebrtcVideoDecoderMapping: Sized {
     async fn from_webrtc_transceiver(
         transceiver: Arc<RTCRtpTransceiver>,
