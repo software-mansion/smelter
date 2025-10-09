@@ -111,6 +111,8 @@ pub fn ffmpeg_url(ffmpeg_version: &str) -> Result<String> {
             bail!("Invalid architecture");
         };
 
+        // WARN: Use ONLY builds from the last day of any month. Builds are created daily however
+        // only builds from the last day of each month are kept longer than 2 weeks.
         match ffmpeg_version {
             "6.0" => {
                 format!("autobuild-2023-11-30-12-55/ffmpeg-n6.0.1-{os_arch}-lgpl-shared-6.0.tar.xz")
@@ -125,12 +127,12 @@ pub fn ffmpeg_url(ffmpeg_version: &str) -> Result<String> {
             }
             "7.1" => {
                 format!(
-                    "autobuild-2025-09-25-15-12/ffmpeg-n7.1.2-4-g8320e6b415-{os_arch}-lgpl-shared-7.1.tar.xz"
+                    "autobuild-2025-09-30-13-19/ffmpeg-n7.1.2-5-g8f77695e65-{os_arch}-lgpl-shared-7.1.tar.xz"
                 )
             }
             "8.0" => {
                 format!(
-                    "autobuild-2025-09-25-15-12/ffmpeg-n8.0-16-gd8605a6b55-{os_arch}-lgpl-shared-8.0.tar.xz"
+                    "autobuild-2025-09-30-13-19/ffmpeg-n8.0-16-gd8605a6b55-{os_arch}-lgpl-shared-8.0.tar.xz"
                 )
             }
             _ => bail!("Unsupported FFmpeg version"),
