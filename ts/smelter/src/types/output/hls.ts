@@ -30,7 +30,7 @@ export type HlsVideoEncoderOptions =
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
-      ffmpegOptions?: Extract<Api.VideoEncoderOptions, { type: 'ffmpeg_h264' }>['ffmpeg_options'];
+      ffmpegOptions?: Record<string, string>;
     }
   | {
       type: 'vulkan_h264';

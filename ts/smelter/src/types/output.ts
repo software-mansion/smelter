@@ -46,6 +46,10 @@ export type RegisterMp4Output = {
    * Audio track configuration.
    */
   audio?: Mp4AudioOptions;
+  /**
+   * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
+   */
+  ffmpegOptions?: Record<string, string>;
 };
 
 export type RegisterHlsOutput = {

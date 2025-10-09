@@ -217,6 +217,12 @@ export type RegisterOutput =
        * Audio track configuration.
        */
       audio?: OutputMp4AudioOptions | null;
+      /**
+       * Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
     }
   | {
       type: "whip_client";

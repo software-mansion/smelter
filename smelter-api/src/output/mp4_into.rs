@@ -5,7 +5,12 @@ impl TryFrom<Mp4Output> for core::RegisterOutputOptions {
     type Error = TypeError;
 
     fn try_from(request: Mp4Output) -> Result<Self, Self::Error> {
-        let Mp4Output { path, video, audio } = request;
+        let Mp4Output {
+            path,
+            video,
+            audio,
+            ffmpeg_options,
+        } = request;
 
         if video.is_none() && audio.is_none() {
             return Err(TypeError::new(
@@ -52,6 +57,7 @@ impl TryFrom<Mp4Output> for core::RegisterOutputOptions {
             output_path: path.into(),
             video: video_encoder_options,
             audio: audio_encoder_options,
+            raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
         });
 
         Ok(Self {

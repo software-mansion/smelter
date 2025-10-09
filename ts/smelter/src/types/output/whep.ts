@@ -30,14 +30,14 @@ export type WhepVideoEncoderOptions =
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
-      ffmpegOptions?: Extract<Api.VideoEncoderOptions, { type: 'ffmpeg_h264' }>['ffmpeg_options'];
+      ffmpegOptions?: Record<string, string>;
     }
   | {
       type: 'ffmpeg_vp8';
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
-      ffmpegOptions?: Extract<Api.VideoEncoderOptions, { type: 'ffmpeg_vp8' }>['ffmpeg_options'];
+      ffmpegOptions?: Record<string, string>;
     }
   | {
       type: 'ffmpeg_vp9';
@@ -48,7 +48,7 @@ export type WhepVideoEncoderOptions =
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
-      ffmpegOptions?: Extract<Api.VideoEncoderOptions, { type: 'ffmpeg_vp9' }>['ffmpeg_options'];
+      ffmpegOptions?: Record<string, string>;
     }
   | {
       type: 'vulkan_h264';
