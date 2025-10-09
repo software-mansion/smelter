@@ -403,17 +403,48 @@ impl NativeEncodeQualityLevelProperties {
     }
 }
 
+/// The device capabilities for decoding
+#[derive(Debug, Clone, Copy)]
+pub struct DecodeCapabilities {
+    pub h264: Option<DecodeH264Capabilities>,
+}
+
+/// The device capabilities for H264 decoding.
+#[derive(Debug, Clone, Copy)]
+pub struct DecodeH264Capabilities {
+    /// The minimum width of the coded image
+    pub min_width: u32,
+    /// The maximum width of the coded image
+    pub max_width: u32,
+    /// The minimal height of the coded image
+    pub min_height: u32,
+    /// The maximum height of the coded image
+    pub max_height: u32,
+    /// The maximum H264 level
+    pub max_level_idc: Option<u8>,
+}
+
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub(crate) struct DecodeCapabilities {
+pub(crate) struct NativeDecodeCapabilities {
     pub(crate) video_capabilities: vk::VideoCapabilitiesKHR<'static>,
+    #[allow(dead_code)]
     pub(crate) decode_capabilities: vk::VideoDecodeCapabilitiesKHR<'static>,
     pub(crate) h264_decode_capabilities: vk::VideoDecodeH264CapabilitiesKHR<'static>,
     pub(crate) h264_dpb_format_properties: vk::VideoFormatPropertiesKHR<'static>,
     pub(crate) h264_dst_format_properties: Option<vk::VideoFormatPropertiesKHR<'static>>,
 }
 
-impl DecodeCapabilities {
+impl NativeDecodeCapabilities {
+    pub(crate) fn user_facing(&self) -> DecodeH264Capabilities {
+        DecodeH264Capabilities {
+            min_width: self.video_capabilities.min_coded_extent.width,
+            max_width: self.video_capabilities.max_coded_extent.width,
+            min_height: self.video_capabilities.min_coded_extent.height,
+            max_height: self.video_capabilities.max_coded_extent.height,
+            max_level_idc: vk_to_h264_level_idc(self.h264_decode_capabilities.max_level_idc).ok(),
+        }
+    }
+
     pub(crate) fn query(
         instance: &Instance,
         device: vk::PhysicalDevice,
