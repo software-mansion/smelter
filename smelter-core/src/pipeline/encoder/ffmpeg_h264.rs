@@ -6,8 +6,9 @@ use smelter_render::{Frame, OutputFrameFormat};
 use tracing::{error, info, trace, warn};
 
 use crate::pipeline::encoder::ffmpeg_utils::{
-    FfmpegOptions, create_av_frame, encoded_chunk_from_av_packet, read_extradata,
+    create_av_frame, encoded_chunk_from_av_packet, read_extradata,
 };
+use crate::pipeline::ffmpeg_utils::FfmpegOptions;
 use crate::prelude::*;
 
 use super::{VideoEncoder, VideoEncoderConfig};

@@ -20,6 +20,7 @@ use crate::{
             ffmpeg_h264::FfmpegH264Encoder,
             vulkan_h264::VulkanH264Encoder,
         },
+        ffmpeg_utils::{StreamMutExt, write_extradata},
         output::{Output, OutputAudio, OutputVideo},
     },
     thread_utils::InitializableThread,
@@ -175,24 +176,16 @@ impl HlsOutput {
             .map_err(OutputInitError::FfmpegError)?;
 
         stream.set_time_base(VIDEO_TIME_BASE);
+        stream.update_codecpar(|codecpar| {
+            if let Some(extradata) = encoder.encoder_context() {
+                write_extradata(codecpar, extradata);
+            }
 
-        let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
-
-        if let Some(extradata) = encoder.encoder_context() {
-            unsafe {
-                // The allocated size of extradata must be at least extradata_size + AV_INPUT_BUFFER_PADDING_SIZE, with the padding bytes zeroed.
-                codecpar.extradata = ffmpeg_next::ffi::av_mallocz(
-                    extradata.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
-                ) as *mut u8;
-                std::ptr::copy(extradata.as_ptr(), codecpar.extradata, extradata.len());
-                codecpar.extradata_size = extradata.len() as i32;
-            };
-        }
-
-        codecpar.codec_id = ffmpeg::codec::Id::H264.into();
-        codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
-        codecpar.width = resolution.width as i32;
-        codecpar.height = resolution.height as i32;
+            codecpar.codec_id = ffmpeg::codec::Id::H264.into();
+            codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
+            codecpar.width = resolution.width as i32;
+            codecpar.height = resolution.height as i32;
+        });
 
         Ok((encoder, stream.index()))
     }
@@ -228,29 +221,23 @@ impl HlsOutput {
             .add_stream(ffmpeg::codec::Id::AAC)
             .map_err(OutputInitError::FfmpegError)?;
 
-        let codecpar = unsafe { &mut *(*stream.as_mut_ptr()).codecpar };
-        if let Some(extradata) = encoder.encoder_context() {
-            unsafe {
-                // The allocated size of extradata must be at least extradata_size + AV_INPUT_BUFFER_PADDING_SIZE, with the padding bytes zeroed.
-                codecpar.extradata = ffmpeg_next::ffi::av_mallocz(
-                    extradata.len() + ffmpeg_next::ffi::AV_INPUT_BUFFER_PADDING_SIZE as usize,
-                ) as *mut u8;
-                std::ptr::copy(extradata.as_ptr(), codecpar.extradata, extradata.len());
-                codecpar.extradata_size = extradata.len() as i32;
+        stream.update_codecpar(|codecpar| {
+            if let Some(extradata) = encoder.encoder_context() {
+                write_extradata(codecpar, extradata);
+            }
+            codecpar.codec_id = ffmpeg::codec::Id::AAC.into();
+            codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_AUDIO;
+            codecpar.sample_rate = sample_rate as i32;
+            codecpar.profile = ffmpeg::ffi::FF_PROFILE_AAC_LOW;
+            codecpar.ch_layout = ffmpeg::ffi::AVChannelLayout {
+                nb_channels: channel_count,
+                order: ffmpeg::ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC,
+                // This value is ignored when order is AV_CHANNEL_ORDER_UNSPEC
+                u: ffmpeg::ffi::AVChannelLayout__bindgen_ty_1 { mask: 0 },
+                // Field doc: "For some private data of the user."
+                opaque: ptr::null_mut(),
             };
-        }
-        codecpar.codec_id = ffmpeg::codec::Id::AAC.into();
-        codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_AUDIO;
-        codecpar.sample_rate = sample_rate as i32;
-        codecpar.profile = ffmpeg::ffi::FF_PROFILE_AAC_LOW;
-        codecpar.ch_layout = ffmpeg::ffi::AVChannelLayout {
-            nb_channels: channel_count,
-            order: ffmpeg::ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC,
-            // This value is ignored when order is AV_CHANNEL_ORDER_UNSPEC
-            u: ffmpeg::ffi::AVChannelLayout__bindgen_ty_1 { mask: 0 },
-            // Field doc: "For some private data of the user."
-            opaque: ptr::null_mut(),
-        };
+        });
 
         Ok((encoder, stream.index()))
     }

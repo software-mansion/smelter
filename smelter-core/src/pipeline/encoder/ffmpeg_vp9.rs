@@ -10,7 +10,8 @@ use tracing::{error, info, trace, warn};
 
 use crate::pipeline::{
     PipelineCtx,
-    encoder::ffmpeg_utils::{FfmpegOptions, create_av_frame, encoded_chunk_from_av_packet},
+    encoder::ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet},
+    ffmpeg_utils::FfmpegOptions,
 };
 use crate::prelude::*;
 

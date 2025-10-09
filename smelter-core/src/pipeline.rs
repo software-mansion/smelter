@@ -18,6 +18,8 @@ mod decoder;
 mod encoder;
 mod resampler;
 
+mod ffmpeg_utils;
+
 #[cfg(feature = "decklink")]
 mod decklink;
 
