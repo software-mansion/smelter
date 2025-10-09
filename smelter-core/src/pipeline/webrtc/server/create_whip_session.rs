@@ -58,6 +58,7 @@ pub async fn handle_create_whip_session(
     {
         let endpoint_id = endpoint_id.clone();
         let sync_point = RtpNtpSyncPoint::new(state.ctx.queue_sync_point);
+        peer_connection.start_stats_monitor();
         peer_connection.on_track(Box::new(move |track, _, transceiver| {
             debug!(
                 ?endpoint_id,

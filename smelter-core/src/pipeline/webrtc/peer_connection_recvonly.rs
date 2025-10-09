@@ -1,7 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{rc::Weak, sync::Arc, time::Duration};
 
 use tokio::{sync::watch, time::timeout};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 use webrtc::{
     api::{
         APIBuilder,
@@ -23,6 +23,7 @@ use webrtc::{
         rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
         rtp_transceiver_direction::RTCRtpTransceiverDirection,
     },
+    stats::StatsReportType,
 };
 
 use crate::{
@@ -189,6 +190,33 @@ impl RecvonlyPeerConnection {
         candidate: RTCIceCandidateInit,
     ) -> Result<(), WhipWhepServerError> {
         Ok(self.pc.add_ice_candidate(candidate).await?)
+    }
+
+    pub fn start_stats_monitor(&self) {
+        let pc = Arc::downgrade(&self.pc);
+        tokio::spawn(async move {
+            loop {
+                let Some(pc) = pc.upgrade() else {
+                    return;
+                };
+                let stats = pc.get_stats().await;
+                for (_, report) in stats.reports.into_iter() {
+                    match report {
+                        StatsReportType::CandidatePair(stats) if stats.packets_received > 0 => {
+                            info!("CandidatePair {stats:#?}");
+                        }
+                        StatsReportType::InboundRTP(stats) => {
+                            info!("InboundRTP {stats:#?}");
+                        }
+                        StatsReportType::RemoteOutboundRTP(stats) => {
+                            info!("RemoteOutboundRTP {stats:#?}");
+                        }
+                        _ => (),
+                    }
+                }
+                tokio::time::sleep(Duration::from_secs(10)).await;
+            }
+        });
     }
 }
 
