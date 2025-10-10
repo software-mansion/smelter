@@ -1,5 +1,6 @@
 use std::{iter, sync::Arc};
 
+use crossbeam_channel::Sender;
 use smelter_render::{Frame, error::ErrorStack};
 use tracing::error;
 
@@ -20,6 +21,7 @@ where
     source: Source,
     eos_sent: bool,
     decoders_info: VideoDecoderMapping,
+    keyframe_request_sender: Sender<()>,
 }
 
 impl<Source> DynamicVideoDecoderStream<Source>
@@ -30,6 +32,7 @@ where
         ctx: Arc<PipelineCtx>,
         decoders_info: VideoDecoderMapping,
         source: Source,
+        keyframe_request_sender: Sender<()>,
     ) -> Self {
         Self {
             ctx,
@@ -38,6 +41,7 @@ where
             source,
             eos_sent: false,
             decoders_info,
+            keyframe_request_sender,
         }
     }
 
@@ -99,6 +103,9 @@ where
                 self.ensure_decoder(samples.kind);
                 let decoder = self.decoder.as_mut()?;
                 let chunks = decoder.decode(samples);
+                if chunks.len() == 0 {
+                    let _ = self.keyframe_request_sender.try_send(());
+                }
                 Some(chunks.into_iter().map(PipelineEvent::Data).collect())
             }
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
