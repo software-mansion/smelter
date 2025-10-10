@@ -97,10 +97,7 @@ export function Input({ input }: { input: InputConfig }) {
 
   const activeShaders = input.shaders.filter(shader => shader.enabled);
 
-  if (activeShaders.length) {
-    return wrapWithShaders(inputComponent, activeShaders, resolution, 0);
-  }
-  return inputComponent;
+  return wrapWithShaders(inputComponent, activeShaders, resolution, 0);
 }
 
 export function SmallInput({
