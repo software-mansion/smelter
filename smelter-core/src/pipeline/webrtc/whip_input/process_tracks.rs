@@ -41,7 +41,7 @@ pub async fn process_audio_track(
         inputs.get_with(&endpoint_id, |input| Ok(input.input_samples_sender.clone()))?;
 
     let handle = AudioTrackThread::spawn(
-        format!("WHIP input audio, endpoint_id: {}", endpoint_id),
+        format!("WHIP input audio, endpoint_id: {endpoint_id}"),
         (ctx.clone(), samples_sender),
     )?;
 
@@ -80,7 +80,7 @@ pub async fn process_video_track(
     let frame_sender = inputs.get_with(&endpoint_id, |input| Ok(input.frame_sender.clone()))?;
 
     let handle = VideoTrackThread::spawn(
-        format!("WHIP input video, endpoint_id: {}", endpoint_id),
+        format!("WHIP input video, endpoint_id: {endpoint_id}"),
         (
             ctx.clone(),
             decoder_mapping,

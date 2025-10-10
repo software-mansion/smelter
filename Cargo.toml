@@ -120,3 +120,7 @@ smelter-core = { workspace = true, features = ["vk-video"] }
 name = "process_helper"
 path = "src/bin/process_helper.rs"
 required-features = ["web-renderer"]
+
+[lints.clippy]
+todo = "warn"
+uninlined_format_args = "warn"
