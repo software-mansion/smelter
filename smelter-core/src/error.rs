@@ -158,6 +158,15 @@ pub enum InputInitError {
     #[error("WHIP WHEP server is not running, cannot start WHIP input")]
     WhipWhepServerNotRunning,
 
+    #[error("Unknown WHEP input error.")]
+    UnknownWhepError,
+
+    #[error("WHEP init timeout exceeded")]
+    WhepInitTimeout,
+
+    #[error("Failed to init WHEP input")]
+    WhepInitError(#[source] Box<WebrtcClientError>),
+
     #[cfg(feature = "decklink")]
     #[error(transparent)]
     DeckLink(#[from] DeckLinkInputError),
