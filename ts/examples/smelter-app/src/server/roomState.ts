@@ -279,7 +279,6 @@ export class RoomState {
     let response = "";
     try {
       const res = await SmelterInstance.registerInput(inputId, options);
-      console.log('res', res);
       response = res;
     } catch (err: any) {
       response = err.body?.url;
