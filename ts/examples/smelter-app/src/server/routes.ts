@@ -118,6 +118,9 @@ const AddInputSchema = Type.Union([
     channelId: Type.String(),
   }),
   Type.Object({
+    type: Type.Literal('whip'),
+  }),
+  Type.Object({
     type: Type.Literal('local-mp4'),
     source: Type.Union([
       Type.Object({ fileName: Type.String() }),
@@ -135,10 +138,11 @@ routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
     const room = state.getRoom(roomId);
     const inputId = await room.addNewInput(req.body);
     console.log('[info] Added input', { inputId });
+    let bearerToken = '';
     if (inputId) {
-      await room.connectInput(inputId);
+      bearerToken = await room.connectInput(inputId);
     }
-    res.status(200).send({ inputId });
+    res.status(200).send({ inputId, bearerToken });
   }
 );
 
@@ -230,6 +234,16 @@ function publicInputState(input: RoomInputState): InputState {
         volume: input.volume,
         shaders: input.shaders,
         channelId: input.channelId,
+      };
+    case 'whip':
+      return {
+        inputId: input.inputId,
+        title: input.metadata.title,
+        description: input.metadata.description,
+        sourceState: 'always-live',
+        status: input.status,
+        volume: input.volume,
+        shaders: input.shaders,
       };
     default:
       throw new Error('Unknown input state');
