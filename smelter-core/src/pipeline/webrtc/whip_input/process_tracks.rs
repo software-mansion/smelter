@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
+use crossbeam_channel::bounded;
 use tracing::warn;
-use webrtc::{rtp_transceiver::RTCRtpTransceiver, track::track_remote::TrackRemote};
+use webrtc::{
+    rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication,
+    rtp_transceiver::RTCRtpTransceiver, track::track_remote::TrackRemote,
+};
 
 use crate::{
     codecs::VideoDecoderOptions,
@@ -79,6 +83,25 @@ pub async fn process_video_track(
     let WhipWhepServerState { inputs, ctx, .. } = state;
     let frame_sender = inputs.get_with(&endpoint_id, |input| Ok(input.frame_sender.clone()))?;
 
+    let (keyframe_request_sender, keyframe_request_receiver) = bounded(1);
+    let ssrc = track.ssrc();
+    let rtc_receiver_clone = rtc_receiver.clone();
+    tokio::spawn(async move {
+        let transport = rtc_receiver_clone.transport();
+        for _ in keyframe_request_receiver.into_iter() {
+            warn!("Sending PLI");
+            let pli = PictureLossIndication {
+                // For receive-only endpoints RTP sender SSRC can be set to 0.
+                sender_ssrc: 0,
+                media_ssrc: ssrc,
+            };
+
+            if let Err(err) = transport.write_rtcp(&[Box::new(pli)]).await {
+                warn!(?err)
+            }
+        }
+    });
+
     let handle = VideoTrackThread::spawn(
         format!("WHIP input video, endpoint_id: {endpoint_id}"),
         (
@@ -86,6 +109,7 @@ pub async fn process_video_track(
             decoder_mapping,
             payload_type_mapping,
             frame_sender,
+            keyframe_request_sender,
         ),
     )?;
 
