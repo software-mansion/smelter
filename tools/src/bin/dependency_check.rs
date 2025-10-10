@@ -17,14 +17,14 @@ const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.gz";
 #[cfg(target_os = "linux")]
 const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.xz";
 
-/// FFMPEG_VERSION is set at compile time and contains FFmpeg version in `x.y` format which was used to compile
+/// FFMPEG_VERSION is set at compile time (in package_for_release bin) and contains FFmpeg version in `x.y` format which was used to compile
 /// Smelter. FFmpeg version is found by matching `ffmpeg -version` output during compilation.
 fn required_ffmpeg_version() -> &'static str {
     #[allow(clippy::option_env_unwrap)]
     option_env!("FFMPEG_VERSION").unwrap()
 }
 
-/// FFMPEG_URL is set at compile time and provides the URL of the FFmpeg prebuilt release with
+/// FFMPEG_URL is set at compile time (in package_for_release bin) and provides the URL of the FFmpeg prebuilt release with
 /// libav dynamic libraries that should be downloaded if the required FFmpeg version is not installed
 fn ffmpeg_url() -> &'static str {
     #[allow(clippy::option_env_unwrap)]
