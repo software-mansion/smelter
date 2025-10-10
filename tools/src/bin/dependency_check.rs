@@ -80,7 +80,7 @@ fn main() -> Result<()> {
     };
     cleanup(&executable_dir);
 
-    fs::write(&executable_dir.join(FFMPEG_LIB_DIR).join(".ready"), "")?;
+    fs::write(executable_dir.join(FFMPEG_LIB_DIR).join(".ready"), "")?;
 
     fetch_result
 }
