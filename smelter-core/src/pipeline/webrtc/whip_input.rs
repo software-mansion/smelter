@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
-use crossbeam_channel::bounded;
-use itertools::Itertools;
-use tracing::warn;
-
 use crate::{
     pipeline::{
         input::Input,
         webrtc::{
             bearer_token::generate_token,
-            whip_input::connection_state::WhipInputConnectionStateOptions,
+            whip_input::{
+                connection_state::WhipInputConnectionStateOptions,
+                resolve_video_preferences::resolve_video_preferences,
+            },
         },
     },
     queue::QueueDataReceiver,
@@ -19,8 +18,10 @@ use crate::prelude::*;
 
 pub(super) mod connection_state;
 pub(super) mod process_tracks;
+mod resolve_video_preferences;
 pub(super) mod state;
 
+use crossbeam_channel::bounded;
 pub(super) use state::WhipInputsState;
 
 pub struct WhipInput {
@@ -44,13 +45,15 @@ impl WhipInput {
 
         let bearer_token = options.bearer_token.unwrap_or_else(generate_token);
 
-        let video_preferences = resolve_video_preferences(options.video_preferences, &ctx)?;
+        let (video_preferences, video_codecs) =
+            resolve_video_preferences(&ctx, options.video_preferences)?;
 
         state.inputs.add_input(
             &endpoint_id,
             WhipInputConnectionStateOptions {
                 bearer_token: bearer_token.clone(),
                 video_preferences,
+                video_codecs,
                 frame_sender,
                 input_samples_sender,
             },
@@ -75,47 +78,4 @@ impl Drop for WhipInput {
         self.whip_inputs_state
             .ensure_input_closed(&self.endpoint_id);
     }
-}
-
-fn resolve_video_preferences(
-    video_preferences: Vec<WebrtcVideoDecoderOptions>,
-    ctx: &Arc<PipelineCtx>,
-) -> Result<Vec<VideoDecoderOptions>, InputInitError> {
-    let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
-    let video_preferences: Vec<VideoDecoderOptions> = video_preferences
-        .into_iter()
-        .flat_map(|preference| match preference {
-            WebrtcVideoDecoderOptions::FfmpegH264 => vec![VideoDecoderOptions::FfmpegH264],
-            WebrtcVideoDecoderOptions::VulkanH264 => {
-                if vulkan_supported {
-                    vec![VideoDecoderOptions::VulkanH264]
-                } else {
-                    warn!("Vulkan is not supported, skipping \"vulkan_h264\" preference");
-                    vec![]
-                }
-            }
-            WebrtcVideoDecoderOptions::FfmpegVp8 => vec![VideoDecoderOptions::FfmpegVp8],
-            WebrtcVideoDecoderOptions::FfmpegVp9 => vec![VideoDecoderOptions::FfmpegVp9],
-            WebrtcVideoDecoderOptions::Any => {
-                vec![
-                    VideoDecoderOptions::FfmpegVp9,
-                    VideoDecoderOptions::FfmpegVp8,
-                    if vulkan_supported {
-                        VideoDecoderOptions::VulkanH264
-                    } else {
-                        VideoDecoderOptions::FfmpegH264
-                    },
-                ]
-            }
-        })
-        .unique()
-        .collect();
-
-    if video_preferences.is_empty() {
-        return Err(InputInitError::DecoderError(
-            DecoderInitError::VulkanContextRequiredForVulkanDecoder,
-        ));
-    }
-
-    Ok(video_preferences)
 }
