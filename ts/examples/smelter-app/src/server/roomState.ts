@@ -11,7 +11,7 @@ import type { ShaderConfig } from '../shaders/shaders';
 
 export type RoomInputState = {
   inputId: string;
-  type: 'local-mp4' | 'twitch-channel' | 'kick-channel';
+  type: 'local-mp4' | 'twitch-channel' | 'kick-channel' | 'whip';
   status: 'disconnected' | 'pending' | 'connected';
   volume: number;
   shaders: ShaderConfig[];
@@ -24,7 +24,8 @@ export type RoomInputState = {
 type TypeSpecificState =
   | { type: 'local-mp4'; mp4FilePath: string }
   | { type: 'twitch-channel'; channelId: string; hlsUrl: string; monitor: TwitchChannelMonitor }
-  | { type: 'kick-channel'; channelId: string; hlsUrl: string; monitor: KickChannelMonitor };
+  | { type: 'kick-channel'; channelId: string; hlsUrl: string; monitor: KickChannelMonitor }
+  | { type: 'whip'; whipUrl: string };
 
 type UpdateInputOptions = {
   volume: number;
@@ -39,6 +40,9 @@ export type RegisterInputOptions =
   | {
       type: 'kick-channel';
       channelId: string;
+    }
+  | {
+      type: 'whip';
     }
   | {
       type: 'local-mp4';
@@ -128,8 +132,28 @@ export class RoomState {
     return this.inputs;
   }
 
+  public async addNewWhipInput() {
+    const inputId = `${this.idPrefix}::whip::${Date.now()}`;
+    this.inputs.push({
+      inputId,
+      type: 'whip',
+      status: 'disconnected',
+      shaders: [],
+      metadata: {
+        title: '', // will be populated on update
+        description: '',
+      },
+      volume: 0,
+      whipUrl: '',
+    });
+    return inputId;
+  }
+
   public async addNewInput(opts: RegisterInputOptions) {
-    if (opts.type === 'twitch-channel') {
+    if (opts.type === 'whip') {
+      const inputId = await this.addNewWhipInput();
+      return inputId;
+    } else if (opts.type === 'twitch-channel') {
       const inputId = inputIdForTwitchInput(this.idPrefix, opts.channelId);
       if (this.inputs.find(input => input.inputId === inputId)) {
         throw new Error(`Input for Twitch channel ${opts.channelId} already exists.`);
@@ -237,22 +261,34 @@ export class RoomState {
       input.status = 'disconnected';
     }
   }
-
-  public async connectInput(inputId: string) {
+  public async connectWhipInput(inputId: string) {
     const input = this.getInput(inputId);
     if (input.status !== 'disconnected') {
       return;
     }
     input.status = 'pending';
+  }
+
+  public async connectInput(inputId: string):Promise<string> {
+    const input = this.getInput(inputId);
+    if (input.status !== 'disconnected') {
+      return "";
+    }
+    input.status = 'pending';
     const options = registerOptionsFromInput(input);
+    let response = "";
     try {
-      await SmelterInstance.registerInput(inputId, options);
+      const res = await SmelterInstance.registerInput(inputId, options);
+      console.log('res', res);
+      response = res;
     } catch (err: any) {
+      response = err.body?.url;
       input.status = 'disconnected';
       throw err;
     }
     input.status = 'connected';
     this.updateStoreWithState();
+    return response;
   }
 
   public async disconnectInput(inputId: string) {
@@ -349,8 +385,10 @@ export class RoomState {
 function registerOptionsFromInput(input: RoomInputState): RegisterSmelterInputOptions {
   if (input.type === 'local-mp4') {
     return { type: 'mp4', filePath: input.mp4FilePath };
-  } else if (['twitch-channel', 'kick-channel'].includes(input.type)) {
+  } else if (input.type === 'twitch-channel' || input.type === 'kick-channel') {
     return { type: 'hls', url: input.hlsUrl };
+  } else if (input.type === 'whip') {
+    return { type: 'whip', url: input.whipUrl };
   } else {
     throw Error('Unknown type');
   }
