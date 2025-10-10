@@ -54,10 +54,15 @@ fn main() -> Result<()> {
         None => bail!("Failed to get current executable directory."),
     };
 
-    let lib_exists = fs::exists(executable_dir.join(FFMPEG_LIB_DIR))
+    let lib_exists = fs::exists(executable_dir.join(FFMPEG_LIB_DIR).join(".ready"))
         .with_context(|| "Failed to check if local ffmpeg lib directory exists.")?;
     if lib_exists {
         return Ok(());
+    } else {
+        let malformed_lib_exists = fs::exists(executable_dir.join(FFMPEG_LIB_DIR))?;
+        if malformed_lib_exists {
+            fs::remove_dir_all(executable_dir.join(FFMPEG_LIB_DIR))?;
+        }
     }
 
     let ffmpeg_installed = check_ffmpeg();
@@ -74,6 +79,8 @@ fn main() -> Result<()> {
         }
     };
     cleanup(&executable_dir);
+
+    fs::write(&executable_dir.join(FFMPEG_LIB_DIR).join(".ready"), "")?;
 
     fetch_result
 }
