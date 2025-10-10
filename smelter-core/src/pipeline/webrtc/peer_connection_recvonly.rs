@@ -8,7 +8,8 @@ use webrtc::{
     },
     ice_transport::{
         ice_candidate::RTCIceCandidateInit, ice_connection_state::RTCIceConnectionState,
-        ice_gatherer_state::RTCIceGathererState, ice_server::RTCIceServer,
+        ice_gatherer::OnLocalCandidateHdlrFn, ice_gatherer_state::RTCIceGathererState,
+        ice_server::RTCIceServer,
     },
     interceptor::registry::Registry,
     peer_connection::{
@@ -122,6 +123,10 @@ impl RecvonlyPeerConnection {
         self.pc.set_local_description(offer).await
     }
 
+    pub async fn create_offer(&self) -> Result<RTCSessionDescription, webrtc::Error> {
+        self.pc.create_offer(None).await
+    }
+
     pub async fn create_answer(&self) -> Result<RTCSessionDescription, webrtc::Error> {
         self.pc.create_answer(None).await
     }
@@ -156,6 +161,10 @@ impl RecvonlyPeerConnection {
             debug!("Maximum time for gathering candidate has elapsed.");
         }
         Ok(())
+    }
+
+    pub fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
+        self.pc.on_ice_candidate(f);
     }
 
     pub fn on_track(&self, f: OnTrackHdlrFn) {
