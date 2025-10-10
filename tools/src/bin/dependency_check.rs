@@ -5,6 +5,7 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
     process::Command,
+    sync::OnceLock,
 };
 use tracing::{error, info, warn};
 
@@ -20,8 +21,19 @@ const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.xz";
 /// FFMPEG_VERSION is set at compile time (in package_for_release bin) and contains FFmpeg version in `x.y` format which was used to compile
 /// Smelter. FFmpeg version is found by matching `ffmpeg -version` output during compilation.
 fn required_ffmpeg_version() -> &'static str {
-    #[allow(clippy::option_env_unwrap)]
-    option_env!("FFMPEG_VERSION").unwrap()
+    static VERSION: OnceLock<&'static str> = OnceLock::new();
+    VERSION.get_or_init(|| {
+        #[allow(clippy::option_env_unwrap)]
+        let version = option_env!("FFMPEG_VERSION").unwrap();
+        // Matches if version is in correct format i.e. `x.y`
+        let re = Regex::new(r"^\d+\.\d+$").expect("Failed to compile RegEx");
+        if !re.is_match(version) {
+            // NOTE: This should NEVER happen, especially that analogical check is performed at compile
+            // time
+            panic!("Version in invalid format: {}", required_ffmpeg_version());
+        }
+        version
+    })
 }
 
 /// FFMPEG_URL is set at compile time (in package_for_release bin) and provides the URL of the FFmpeg prebuilt release with
@@ -33,13 +45,6 @@ fn ffmpeg_url() -> &'static str {
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt().init();
-    // Matches if version is in correct format i.e. `x.y`
-    let re = Regex::new(r"^\d+\.\d+$")?;
-    if !re.is_match(required_ffmpeg_version()) {
-        // NOTE: This should NEVER happen, especially that analogical check is performed at compile
-        // time
-        bail!("Version in invalid format: {}", required_ffmpeg_version());
-    }
 
     let executable_path =
         env::current_exe().with_context(|| "Failed to get current executable directory.")?;
