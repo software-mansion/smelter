@@ -9,7 +9,7 @@ use std::{
 };
 use tracing::{error, info, warn};
 
-const FFMPEG_LIB_DIR: &str = "ffmpeg_lib";
+const FFMPEG_LIB_DIR: &str = "libav";
 const FFMPEG_DOWNLOAD_DIR: &str = "ffmpeg_download";
 
 #[cfg(target_os = "macos")]
@@ -139,19 +139,13 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
         panic!("Unknown platform");
     };
 
-    let ffmpeg_libs_paths = extract_libav_libraries(executable_dir.join(FFMPEG_DOWNLOAD_DIR), &re)
-        .with_context(|| "Failed to extract libav libraries from downloaded archive.")?;
     fs::create_dir(executable_dir.join(FFMPEG_LIB_DIR))?;
-    for lib in ffmpeg_libs_paths {
-        let libname = match lib.file_name() {
-            Some(name) => name.to_owned(),
-            None => {
-                error!("Unable to get library filename");
-                continue;
-            }
-        };
-        fs::rename(lib, executable_dir.join(FFMPEG_LIB_DIR).join(libname))?;
-    }
+    extract_libav_libraries(
+        executable_dir.join(FFMPEG_DOWNLOAD_DIR),
+        &re,
+        executable_dir,
+    )
+    .with_context(|| "Failed to extract libav libraries from downloaded archive.")?;
 
     Ok(())
 }
@@ -162,12 +156,11 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
 // removes the symlink, and renames the target file.
 //
 // Returns a vector of paths to the libav files.
-fn extract_libav_libraries(dirpath: PathBuf, re: &Regex) -> Result<Vec<PathBuf>> {
-    let mut libraries: Vec<PathBuf> = vec![];
+fn extract_libav_libraries(dirpath: PathBuf, re: &Regex, executable_dir: &Path) -> Result<()> {
     for file in fs::read_dir(dirpath)?.flatten() {
         if file.file_type()?.is_dir() {
             let path = file.path();
-            libraries.extend(extract_libav_libraries(path, re)?);
+            extract_libav_libraries(path, re, executable_dir)?;
         } else if file.file_type()?.is_symlink() {
             let path = file.path();
             let filename = path
@@ -187,9 +180,11 @@ fn extract_libav_libraries(dirpath: PathBuf, re: &Regex) -> Result<Vec<PathBuf>>
                     };
                     dir.join(target_file_path)
                 };
-                fs::remove_file(&path).with_context(|| "Symlink removal failed")?;
-                fs::rename(target_file_path, &path).with_context(|| "Failed to rename file")?;
-                libraries.push(path);
+                fs::rename(
+                    target_file_path,
+                    executable_dir.join(FFMPEG_LIB_DIR).join(filename),
+                )
+                .with_context(|| "Failed to move libav file")?;
             }
         } else if file.file_type()?.is_file() {
             let path = file.path();
@@ -199,13 +194,14 @@ fn extract_libav_libraries(dirpath: PathBuf, re: &Regex) -> Result<Vec<PathBuf>>
                 .to_str()
                 .unwrap_or_default();
             if re.is_match(filename) {
-                libraries.push(path);
+                fs::rename(&path, executable_dir.join(FFMPEG_LIB_DIR).join(filename))
+                    .with_context(|| "Failed to move libav file.")?;
             }
         } else {
             unreachable!();
         }
     }
-    Ok(libraries)
+    Ok(())
 }
 
 fn download_ffmpeg(executable_dir: &Path) -> Result<()> {
