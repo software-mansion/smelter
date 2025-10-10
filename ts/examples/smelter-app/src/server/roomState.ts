@@ -269,14 +269,14 @@ export class RoomState {
     input.status = 'pending';
   }
 
-  public async connectInput(inputId: string):Promise<string> {
+  public async connectInput(inputId: string): Promise<string> {
     const input = this.getInput(inputId);
     if (input.status !== 'disconnected') {
-      return "";
+      return '';
     }
     input.status = 'pending';
     const options = registerOptionsFromInput(input);
-    let response = "";
+    let response = '';
     try {
       const res = await SmelterInstance.registerInput(inputId, options);
       response = res;

@@ -103,12 +103,11 @@ export class SmelterManager {
 
   public async registerInput(inputId: string, opts: RegisterSmelterInputOptions): Promise<string> {
     try {
-      if(opts.type === 'whip'){
+      if (opts.type === 'whip') {
         const res = await this.instance.registerInput(inputId, { type: 'whip_server' });
         console.log('whipInput', res);
         return res.bearerToken;
-      }else
-      if (opts.type === 'mp4') {
+      } else if (opts.type === 'mp4') {
         await this.instance.registerInput(inputId, {
           type: 'mp4',
           serverPath: opts.filePath,
@@ -121,7 +120,7 @@ export class SmelterManager {
           url: opts.url,
           decoderMap: DECODER_MAP,
         });
-      } 
+      }
     } catch (err: any) {
       if (err.body?.error_code === 'INPUT_STREAM_ALREADY_REGISTERED') {
         throw new Error('already registered');
@@ -131,13 +130,13 @@ export class SmelterManager {
         await this.instance.unregisterInput(inputId);
       } catch (err: any) {
         if (err.body?.error_code === 'INPUT_STREAM_NOT_FOUND') {
-          return "";
+          return '';
         }
       }
       console.log(err.body, err);
       throw err;
     }
-    return "";
+    return '';
   }
 
   public async unregisterInput(inputId: string): Promise<void> {
