@@ -7,7 +7,6 @@ use webrtc::{rtp_transceiver::rtp_receiver::RTCRtpReceiver, track::track_remote:
 
 use crate::{
     pipeline::{
-        PipelineCtx,
         decoder::{AudioDecoderStream, libopus::OpusDecoder},
         resampler::decoder_resampler::ResampledDecoderStream,
         rtp::{
