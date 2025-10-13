@@ -15,13 +15,17 @@
     }
 
     video {
-      width: 80vw;
+      width: 70vw;
     }
 
     #inputs {
       display: flex;
-      justify-content: center;
-      gap: 10vw;
+      justify-content: space-evenly;
+      margin: 0 400px;
+    }
+
+    #update {
+      align-self: flex-start;
     }
 
     #player-div {
@@ -30,9 +34,9 @@
     }
 
     input {
-      height: 50px;
-      width: 700px;
-      font-size: 28px;
+      height: 30px;
+      width: 300px;
+      font-size: 20px;
     }
 
     .input-div {
@@ -48,11 +52,10 @@
     }
 
     button {
-      height: 50px;
-      width: 300px;
-      font-size: 28px;
+      height: 40px;
+      width: 150px;
+      font-size: 20px;
       background-color: #ff1493;
-      box-shadow: 10px 5px 5px red;
       align-self: center;
       font-family: 'Comic Sans MS', 'Comic Sans';
     }
@@ -60,6 +63,44 @@
     /* Style for the video player's poster */
     video[poster] {
       object-fit: cover;
+    }
+
+    @media screen and (width <=1920px) {
+      #inputs {
+        margin: 0 200px;
+      }
+    }
+
+    @media screen and (width < 1400px) {
+      video {
+        width: 90vw;
+      }
+
+      #inputs {
+        flex-direction: column;
+        gap: 15px;
+        margin: 0;
+      }
+
+      #update {
+        align-self: center;
+      }
+    }
+
+    @media screen and (width < 900px) {
+      label {
+        font-size: 15px;
+      }
+
+      input {
+        width: 200px;
+        font-size: 15px;
+      }
+
+      button {
+        height: 30px;
+        font-size: 17px;
+      }
     }
   </style>
 </head>
@@ -80,8 +121,8 @@
       <input type="text" name="token" id="token-input" />
       <label for="token">Bearer token</label>
     </div>
+    <button id="update" onclick="rerun()">Update</button>
   </div>
-  <button onclick="rerun()">Reconnect</button>
 
   <script>
     const run = async () => {
