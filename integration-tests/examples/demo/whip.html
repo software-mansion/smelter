@@ -73,10 +73,17 @@
       object-fit: cover;
     }
 
+    @media screen and (width <=1920px) {
+      #inputs {
+        margin: 0 200px;
+      }
+    }
+
     @media screen and (width < 1400px) {
       #inputs {
         flex-direction: column;
         gap: 15px;
+        margin: 0;
       }
 
       #reconnect {
@@ -98,6 +105,11 @@
       input {
         width: 200px;
         font-size: 15px;
+      }
+
+      button {
+        height: 30px;
+        font-size: 17px;
       }
     }
   </style>
