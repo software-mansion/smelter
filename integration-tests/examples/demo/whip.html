@@ -16,6 +16,7 @@
 
     video {
       width: 70vw;
+      margin-bottom: 15px;
     }
 
     #inputs {
@@ -24,7 +25,7 @@
       margin: 0 400px;
     }
 
-    #reconnect {
+    #update {
       align-self: flex-start;
     }
 
@@ -90,7 +91,7 @@
         margin: 0;
       }
 
-      #reconnect {
+      #update {
         align-self: center;
       }
 
@@ -135,7 +136,7 @@
       <input type="text" name="token" id="token-input" />
       <label for="token">Bearer token</label>
     </div>
-    <button id="reconnect">Update</button>
+    <button id="update">Update</button>
   </div>
   <div id="buttons">
     <button id="screen-share">Screen share</button>
@@ -191,8 +192,8 @@
         cameraStream = await connect(endpointUrl, bearerToken, stream);
         videoPlayer.srcObject = stream;
       };
-      const reconnectBtn = document.getElementById("reconnect");
-      reconnectBtn.onclick = rerun;
+      const updateBtn = document.getElementById("update");
+      updateBtn.onclick = rerun;
       return [cameraStream, screenShareStream];
     }
     run().then((streams) => {
