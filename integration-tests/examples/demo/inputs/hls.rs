@@ -5,18 +5,11 @@ use inquire::{Select, Text};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
 
 use crate::inputs::{InputHandle, VideoDecoder};
 
 const HLS_INPUT_URL: &str = "HLS_INPUT_URL";
-
-#[derive(Debug, EnumIter, Display)]
-enum UrlInputOptions {
-    Streamlink,
-    Manual,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HlsInput {
@@ -72,51 +65,40 @@ impl HlsInputBuilder {
                 .prompt_skippable()?;
 
             match hls_url {
-                Some(url) => {
-                    let url_options = UrlInputOptions::iter().collect();
-                    let url_selection =
-                        Select::new("How to resolve URL? (ESC for Streamlink)", url_options)
-                            .prompt_skippable()?;
-                    match url_selection {
-                        Some(UrlInputOptions::Streamlink) => {
-                            let streamlink_result = Command::new("streamlink")
-                                .args(["--stream-url", &url])
-                                .output();
-                            let stream_url = match streamlink_result {
-                                Ok(streamlink_output) => {
-                                    let code = streamlink_output.status.code();
-                                    if code != Some(0) {
-                                        // For some reason streamlink prints that into stdout
-                                        // instead of stderr
-                                        let streamlink_error_msg =
-                                            String::from_utf8(streamlink_output.stdout)?
-                                                .trim()
-                                                .to_string();
-                                        error!(
-                                            error = streamlink_error_msg,
-                                            "`streamlink` command failed with code {code:?}."
-                                        );
-                                        continue;
-                                    } else {
-                                        String::from_utf8(streamlink_output.stdout)?
-                                            .trim()
-                                            .to_string()
-                                    }
-                                }
-                                Err(error) => {
-                                    error!(%error, "`streamlink` command failed.");
-                                    println!(
-                                        "If streamlink is not installed please use manual URL resolution."
-                                    );
-                                    continue;
-                                }
-                            };
-                            return Ok(self.with_url(stream_url));
+                Some(url) if !url.trim().is_empty() => {
+                    const STREAMLINK_PREFIXES: [&str; 3] = [
+                        "https://www.twitch.tv/",
+                        "https://www.youtube.com/",
+                        "https://kick.com/",
+                    ];
+
+                    let url = if STREAMLINK_PREFIXES
+                        .iter()
+                        .any(|prefix| url.starts_with(prefix))
+                    {
+                        let streamlink_output = Command::new("streamlink")
+                            .arg("--stream-url")
+                            .arg(&url)
+                            .output();
+                        match streamlink_output {
+                            Ok(output) if output.status.code() == Some(0) => {
+                                String::from_utf8(output.stdout)?
+                            }
+                            Ok(output) => {
+                                error!("`streamlink` failed with code {:?}.", output.status.code());
+                                continue;
+                            }
+                            Err(error) => {
+                                error!(%error, "`streamlink` failed.");
+                                continue;
+                            }
                         }
-                        Some(UrlInputOptions::Manual) | None => return Ok(self.with_url(url)),
-                    }
+                    } else {
+                        url
+                    };
+                    return Ok(self.with_url(url.trim().to_string()));
                 }
-                None => return Ok(self.with_url(DEFAULT_URL.to_string())),
+                Some(_) | None => return Ok(self.with_url(DEFAULT_URL.to_string())),
             }
         }
     }
