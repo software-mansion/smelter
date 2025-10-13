@@ -15,13 +15,17 @@
     }
 
     video {
-      width: 80vw;
+      width: 70vw;
     }
 
     #inputs {
       display: flex;
-      justify-content: center;
-      gap: 10vw;
+      justify-content: space-evenly;
+      margin: 0 400px;
+    }
+
+    #reconnect {
+      align-self: flex-start;
     }
 
     #player-div {
@@ -30,9 +34,9 @@
     }
 
     input {
-      height: 50px;
-      width: 700px;
-      font-size: 28px;
+      height: 30px;
+      width: 300px;
+      font-size: 20px;
     }
 
     .input-div {
@@ -42,11 +46,12 @@
       align-items: center;
     }
 
-    .button-div {
+    #buttons {
       display: flex;
       gap: 5vw;
       align-items: center;
       justify-content: center;
+      margin-top: 1vw;
     }
 
     label {
@@ -55,11 +60,10 @@
     }
 
     button {
-      height: 50px;
-      width: 300px;
-      font-size: 28px;
+      height: 40px;
+      width: 150px;
+      font-size: 20px;
       background-color: #ff1493;
-      box-shadow: 10px 5px 5px red;
       align-self: center;
       font-family: 'Comic Sans MS', 'Comic Sans';
     }
@@ -67,6 +71,34 @@
     /* Style for the video player's poster */
     video[poster] {
       object-fit: cover;
+    }
+
+    @media screen and (width < 1400px) {
+      #inputs {
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      #reconnect {
+        align-self: center;
+      }
+
+      #buttons {
+        margin-top: 50px;
+        flex-direction: column;
+        gap: 15px;
+      }
+    }
+
+    @media screen and (width < 900px) {
+      label {
+        font-size: 15px;
+      }
+
+      input {
+        width: 200px;
+        font-size: 15px;
+      }
     }
   </style>
 </head>
@@ -87,11 +119,11 @@
       <input type="text" name="token" id="token-input" />
       <label for="token">Bearer token</label>
     </div>
+    <button id="reconnect">Update</button>
   </div>
-  <div class="button-div">
-    <button id="screen-share">Start screen share</button>
-    <button id="camera">Start camera</button>
-    <button id="reconnect">Reconnect</button>
+  <div id="buttons">
+    <button id="screen-share">Screen share</button>
+    <button id="camera">Camera</button>
   </div>
 
   <script>
