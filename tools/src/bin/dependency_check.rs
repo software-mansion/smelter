@@ -55,23 +55,24 @@ fn main() -> Result<()> {
     }
 
     let ffmpeg_installed = check_ffmpeg();
-    let fetch_result = match ffmpeg_installed {
+    match ffmpeg_installed {
         Ok(true) => return Ok(()),
         Ok(false) => {
             info!("Downloading dependencies...");
-            prepare_dependencies(&executable_dir).with_context(|| "Failed to fetch dependencies.")
+            prepare_dependencies(&executable_dir)
+                .with_context(|| "Failed to fetch dependencies.")?;
         }
         Err(error) => {
             error!(%error);
             info!("Downloading dependencies...");
-            prepare_dependencies(&executable_dir).with_context(|| "Failed to fetch dependencies.")
+            prepare_dependencies(&executable_dir)
+                .with_context(|| "Failed to fetch dependencies.")?;
         }
-    };
+    }
     cleanup(&executable_dir);
 
     fs::write(executable_dir.join(FFMPEG_LIB_DIR).join(".ready"), "")?;
-
-    fetch_result
+    Ok(())
 }
 
 fn cleanup(executable_dir: &Path) {
