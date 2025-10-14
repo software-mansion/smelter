@@ -108,9 +108,6 @@ pub fn ffmpeg_url(ffmpeg_version: &str) -> Result<String> {
         };
 
         match ffmpeg_version {
-            "6.0" => {
-                format!("n6.0/ffmpeg_n6.0_{os_arch}.tar.gz")
-            }
             "6.1" => {
                 format!("n6.1/ffmpeg_n6.1_{os_arch}.tar.gz")
             }
