@@ -1,10 +1,11 @@
-use std::env;
+use std::{env, process::Command};
 
 use anyhow::Result;
 use inquire::{Select, Text};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tracing::error;
 
 use crate::inputs::{InputHandle, VideoDecoder};
 
@@ -58,13 +59,47 @@ impl HlsInputBuilder {
     fn prompt_url(self) -> Result<Self> {
         const DEFAULT_URL: &str = "https://raw.githubusercontent.com/membraneframework/membrane_http_adaptive_stream_plugin/master/test/membrane_http_adaptive_stream/integration_test/fixtures/audio_multiple_video_tracks/index.m3u8";
         let env_url = env::var(HLS_INPUT_URL).unwrap_or_default();
-        let hls_url = Text::new("HLS input url (ESC for default):")
-            .with_default(DEFAULT_URL)
-            .with_initial_value(&env_url)
-            .prompt_skippable()?;
-        match hls_url {
-            Some(url) => Ok(self.with_url(url)),
-            None => Ok(self.with_url(DEFAULT_URL.to_string())),
+        loop {
+            let hls_url = Text::new("HLS input url (ESC for default):")
+                .with_initial_value(&env_url)
+                .prompt_skippable()?;
+
+            match hls_url {
+                Some(url) if !url.trim().is_empty() => {
+                    const STREAMLINK_PREFIXES: [&str; 3] = [
+                        "https://www.twitch.tv/",
+                        "https://www.youtube.com/",
+                        "https://kick.com/",
+                    ];
+
+                    let url = if STREAMLINK_PREFIXES
+                        .iter()
+                        .any(|prefix| url.starts_with(prefix))
+                    {
+                        let streamlink_output = Command::new("streamlink")
+                            .arg("--stream-url")
+                            .arg(&url)
+                            .output();
+                        match streamlink_output {
+                            Ok(output) if output.status.code() == Some(0) => {
+                                String::from_utf8(output.stdout)?
+                            }
+                            Ok(output) => {
+                                error!("`streamlink` failed with code {:?}.", output.status.code());
+                                continue;
+                            }
+                            Err(error) => {
+                                error!(%error, "`streamlink` failed.");
+                                continue;
+                            }
+                        }
+                    } else {
+                        url
+                    };
+                    return Ok(self.with_url(url.trim().to_string()));
+                }
+                Some(_) | None => return Ok(self.with_url(DEFAULT_URL.to_string())),
+            }
         }
     }
 
