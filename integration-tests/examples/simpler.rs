@@ -20,14 +20,6 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    let shader_source = include_str!("./silly.wgsl");
-    examples::post(
-        "shader/shader_example_1/register",
-        &json!({
-            "source": shader_source,
-        }),
-    )?;
-
     examples::post(
         "output/output_1/register",
         &json!({
@@ -35,11 +27,22 @@ fn client_code() -> Result<()> {
             "path": "processed_bunny.mp4",
             "video": {
                 "resolution": {
-                    "width": 1920,
-                    "height": 1080,
+                    "width": 1280,
+                    "height": 720,
                 },
                 "encoder": {
                     "type": "ffmpeg_h264",
+                },
+                "initial": {
+                    "root": {
+                        "type": "view",
+                        "children": [
+                            {
+                                "type": "input_stream",
+                                "input_id": "input_1",
+                            },
+                        ],
+                    },
                 },
             },
         }),
