@@ -108,14 +108,15 @@ impl WhepOutputBuilder {
         builder = builder.prompt_name()?.prompt_token()?;
 
         loop {
-            builder = builder.prompt_video()?.prompt_audio()?;
+            builder = builder.prompt_video()?;
 
-            if builder.video.is_none() && builder.audio.is_none() {
-                error!("Either audio or video has to be specified for WHEP output");
+            if builder.video.is_none() {
+                error!("Video must be specified for WHEP output");
             } else {
                 break;
             }
         }
+        builder = builder.with_audio(WhepOutputAudioOptions::default());
 
         Ok(builder)
     }
@@ -172,24 +173,6 @@ impl WhepOutputBuilder {
                     video.scene = scene;
                 }
                 Ok(self.with_video(video))
-            }
-            Some(WhepRegisterOptions::Skip) | None => Ok(self),
-            _ => unreachable!(),
-        }
-    }
-
-    fn prompt_audio(self) -> Result<Self> {
-        let audio_options = vec![
-            WhepRegisterOptions::SetAudioStream,
-            WhepRegisterOptions::Skip,
-        ];
-
-        let audio_selection =
-            Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
-
-        match audio_selection {
-            Some(WhepRegisterOptions::SetAudioStream) => {
-                Ok(self.with_audio(WhepOutputAudioOptions::default()))
             }
             Some(WhepRegisterOptions::Skip) | None => Ok(self),
             _ => unreachable!(),
