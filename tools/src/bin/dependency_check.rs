@@ -1,22 +1,11 @@
 use anyhow::{Context, Result, bail};
 use regex::Regex;
 use reqwest::blocking::get;
-use std::{
-    env, fs,
-    path::{Path, PathBuf},
-    process::Command,
-    sync::OnceLock,
-};
+use std::{env, fs, path::Path, process::Command, sync::OnceLock};
 use tracing::{error, info, warn};
 
 const FFMPEG_LIB_DIR: &str = "libav";
-const FFMPEG_DOWNLOAD_DIR: &str = "ffmpeg_download";
-
-#[cfg(target_os = "macos")]
 const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.gz";
-
-#[cfg(target_os = "linux")]
-const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.xz";
 
 /// FFMPEG_VERSION is set at compile time (in package_for_release bin) and contains FFmpeg version in `x.y` format which was used to compile
 /// Smelter. FFmpeg version is found by matching `ffmpeg -version` output during compilation.
@@ -87,12 +76,8 @@ fn main() -> Result<()> {
 
 fn cleanup(executable_dir: &Path) {
     let ffmpeg_archive = executable_dir.join(FFMPEG_ARCHIVE_NAME);
-    let ffmpeg_download_dir = executable_dir.join(FFMPEG_DOWNLOAD_DIR);
     if let Err(error) = fs::remove_file(executable_dir.join(FFMPEG_ARCHIVE_NAME)) {
         error!(%error, "Failed to delete downloaded archive at {ffmpeg_archive:?}.");
-    }
-    if let Err(error) = fs::remove_dir_all(executable_dir.join(FFMPEG_DOWNLOAD_DIR)) {
-        error!(%error, "Failed to delete downloaded archive at {ffmpeg_download_dir:?}.");
     }
 }
 
@@ -100,114 +85,24 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
     download_ffmpeg(executable_dir).with_context(|| "libav download failed.")?;
 
     let ffmpeg_archive_path = executable_dir.join(FFMPEG_ARCHIVE_NAME);
-    let ffmpeg_download_dir = executable_dir.join(FFMPEG_DOWNLOAD_DIR);
 
-    let tar_compression = if cfg!(target_os = "macos") {
-        "--gzip"
-    } else if cfg!(target_os = "linux") {
-        "--xz"
-    } else {
-        panic!("Unknown platform");
-    };
-
-    fs::create_dir(&ffmpeg_download_dir)
-        .with_context(|| format!("Failed to create directory {ffmpeg_download_dir:?}",))?;
-
-    let tar_code = Command::new("tar")
+    // Archive contains only `libav` directory in the root. This directory contains all smelter
+    // libav dependencies.
+    let tar_status = Command::new("tar")
         .args([
-            tar_compression,
-            "-xf",
+            "-zxf",
             ffmpeg_archive_path.to_str().unwrap_or(FFMPEG_ARCHIVE_NAME),
-            "-C",
-            ffmpeg_download_dir
-                .to_str()
-                .expect("Failed to convert directory path to string"),
         ])
-        .spawn()
-        .with_context(|| "Failed to spawn `tar` process")?
-        .wait()
-        .with_context(|| "`tar` process failed")?
-        .code();
-    match tar_code {
-        Some(0) => {}
-        Some(code) => bail!("`tar` command failed with code: {code}."),
-        None => bail!("`tar` command failed."),
+        .status();
+    match tar_status {
+        Ok(status) => match status.code() {
+            Some(0) => {}
+            Some(code) => bail!("`tar` command failed with code: {code}"),
+            None => bail!("`tar` command failed"),
+        },
+        Err(error) => return Err(anyhow::Error::from(error).context("`tar` command failed")),
     }
 
-    let re = if cfg!(target_os = "linux") {
-        // Matches dynamic libav library with major version only on linux
-        // E.g. libavcodec.so.62
-        Regex::new(r"^lib[a-zA-Z]+\.so\.\d+$")?
-    } else if cfg!(target_os = "macos") {
-        // Matches dynamic libav library with major version only on macos
-        // E.g. libavcodec.62.dylib
-        Regex::new(r"^lib[a-zA-Z]+\.\d+\.dylib$")?
-    } else {
-        panic!("Unknown platform");
-    };
-
-    fs::create_dir(executable_dir.join(FFMPEG_LIB_DIR))?;
-    extract_libav_libraries(
-        executable_dir.join(FFMPEG_DOWNLOAD_DIR),
-        &re,
-        executable_dir,
-    )
-    .with_context(|| "Failed to extract libav libraries from downloaded archive.")?;
-
-    Ok(())
-}
-
-// Recursively scans the downloaded archive for libav dynamic libraries —
-// `*.n.dylib` on macOS and `*.so.n` on Linux, where `n` is the version number.
-// If a found library is a symlink (as in prebuilt Linux libs), it follows the link,
-// removes the symlink, and renames the target file.
-//
-// Returns a vector of paths to the libav files.
-fn extract_libav_libraries(dirpath: PathBuf, re: &Regex, executable_dir: &Path) -> Result<()> {
-    for file in fs::read_dir(dirpath)?.flatten() {
-        if file.file_type()?.is_dir() {
-            let path = file.path();
-            extract_libav_libraries(path, re, executable_dir)?;
-        } else if file.file_type()?.is_symlink() {
-            let path = file.path();
-            let filename = path
-                .file_name()
-                .unwrap_or_default()
-                .to_str()
-                .unwrap_or_default();
-            if re.is_match(filename) {
-                let target_file_path =
-                    fs::read_link(&path).with_context(|| "Failed to read symlink")?;
-                let target_file_path = if target_file_path.is_absolute() {
-                    target_file_path
-                } else {
-                    let dir = match path.parent() {
-                        Some(p) => p,
-                        None => bail!("Failed to find parent directory of {path:?}"),
-                    };
-                    dir.join(target_file_path)
-                };
-                fs::rename(
-                    target_file_path,
-                    executable_dir.join(FFMPEG_LIB_DIR).join(filename),
-                )
-                .with_context(|| "Failed to move libav file")?;
-            }
-        } else if file.file_type()?.is_file() {
-            let path = file.path();
-            let filename = path
-                .file_name()
-                .unwrap_or_default()
-                .to_str()
-                .unwrap_or_default();
-            if re.is_match(filename) {
-                fs::rename(&path, executable_dir.join(FFMPEG_LIB_DIR).join(filename))
-                    .with_context(|| "Failed to move libav file.")?;
-            }
-        } else {
-            unreachable!();
-        }
-    }
     Ok(())
 }
 
