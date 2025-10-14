@@ -14,7 +14,7 @@ use crate::{
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
             depayloader::{DepayloaderOptions, DepayloaderStream},
         },
-        webrtc::{AsyncReceiverIter, listen_for_rtcp::listen_for_rtcp},
+        webrtc::{AsyncReceiverIter, rtcp_utils::listen_for_sender_reports},
     },
     thread_utils::{InitializableThread, ThreadMetadata},
 };
@@ -34,7 +34,7 @@ impl AudioInputLoop {
             RtpTimestampSync::new(&self.sync_point, 48_000, ctx.default_buffer_duration);
 
         let (sender_report_sender, mut sender_report_receiver) = oneshot::channel();
-        listen_for_rtcp(&ctx, self.rtc_receiver, sender_report_sender);
+        listen_for_sender_reports(&ctx, self.rtc_receiver, sender_report_sender);
 
         while let Ok((packet, _)) = self.track.read_rtp().await {
             if let Ok(report) = sender_report_receiver.try_recv() {

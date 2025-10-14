@@ -1,7 +1,7 @@
 use crate::pipeline::webrtc::{
     WhipWhepServerState,
     error::WhipWhepServerError,
-    handle_keyframe_requests::handle_keyframe_requests,
+    rtcp_utils::handle_keyframe_requests,
     whep_output::{
         cleanup_session_handler::OnCleanupSessionHdlr,
         init_payloaders::{init_audio_payloader, init_video_payloader},

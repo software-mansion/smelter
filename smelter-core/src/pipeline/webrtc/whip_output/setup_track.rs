@@ -17,7 +17,7 @@ use crate::{
         },
         rtp::payloader::{PayloadedCodec, PayloaderOptions},
         webrtc::{
-            handle_keyframe_requests::handle_keyframe_requests,
+            rtcp_utils::handle_keyframe_requests,
             whip_output::{
                 PeerConnection,
                 track_task_audio::{WhipAudioTrackThread, WhipAudioTrackThreadOptions},
