@@ -14,13 +14,13 @@ use track_task_audio::WhipAudioTrackThreadHandle;
 use track_task_video::WhipVideoTrackThreadHandle;
 use url::Url;
 use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
-use whip_http_client::WhipHttpClient;
 
 use crate::{
     event::Event,
     pipeline::{
         output::{Output, OutputAudio, OutputVideo},
         rtp::RtpPacket,
+        webrtc::http_client::WhipWhepHttpClient,
     },
 };
 
@@ -32,7 +32,6 @@ mod setup_track;
 mod peer_connection;
 mod track_task_audio;
 mod track_task_video;
-mod whip_http_client;
 
 #[derive(Debug)]
 pub(crate) struct WhipOutput {
@@ -82,7 +81,7 @@ struct WhipSenderTrack {
 struct WhipClientTask {
     session_url: Url,
     ctx: Arc<PipelineCtx>,
-    client: Arc<WhipHttpClient>,
+    client: Arc<WhipWhepHttpClient>,
     output_id: OutputId,
     video_track: Option<WhipSenderTrack>,
     audio_track: Option<WhipSenderTrack>,
@@ -94,7 +93,7 @@ impl WhipClientTask {
         output_id: OutputId,
         options: WhipOutputOptions,
     ) -> Result<(Self, WhipOutput), WebrtcClientError> {
-        let client = WhipHttpClient::new(&options)?;
+        let client = WhipWhepHttpClient::new(&options.endpoint_url, &options.bearer_token)?;
         let pc = PeerConnection::new(&ctx, &options).await?;
 
         let video_rtc_sender = pc.new_video_track().await?;
