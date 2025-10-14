@@ -8,15 +8,17 @@
   <style>
     body {
       font-family: 'Inter', sans-serif;
-      background-color: black;
+      background-color: #322d31;
       display: flex;
       justify-content: center;
       flex-direction: column;
     }
 
     video {
-      width: 70vw;
       margin-bottom: 15px;
+      max-height: 80vh;
+      max-width: 100vw;
+      object-fit: contain;
     }
 
     #inputs {
@@ -73,10 +75,6 @@
     }
 
     @media screen and (width < 1400px) {
-      video {
-        width: 90vw;
-      }
-
       #inputs {
         flex-direction: column;
         gap: 15px;
