@@ -10,15 +10,16 @@ use webrtc::{
     peer_connection::sdp::session_description::RTCSessionDescription,
 };
 
-use crate::pipeline::webrtc::whip_output::{
-    PeerConnection, WhipHttpClient, whip_http_client::SdpAnswer,
+use crate::pipeline::webrtc::{
+    http_client::{SdpAnswer, WhipWhepHttpClient},
+    whip_output::PeerConnection,
 };
 
 use crate::prelude::*;
 
 pub async fn exchange_sdp_offers(
     pc: &PeerConnection,
-    client: &Arc<WhipHttpClient>,
+    client: &Arc<WhipWhepHttpClient>,
 ) -> Result<(Url, RTCSessionDescription), WebrtcClientError> {
     let offer = pc.create_offer().await?;
     debug!("SDP offer: {}", offer.sdp);
@@ -36,7 +37,11 @@ pub async fn exchange_sdp_offers(
     Ok((location, answer))
 }
 
-fn listen_for_trickle_candidates(pc: &PeerConnection, client: &Arc<WhipHttpClient>, location: Url) {
+fn listen_for_trickle_candidates(
+    pc: &PeerConnection,
+    client: &Arc<WhipWhepHttpClient>,
+    location: Url,
+) {
     let should_stop_trickle = Arc::new(AtomicBool::new(false));
     let location = location.clone();
     let client = client.clone();
@@ -51,7 +56,7 @@ fn listen_for_trickle_candidates(pc: &PeerConnection, client: &Arc<WhipHttpClien
 }
 
 async fn handle_trickle_candidate(
-    client: Arc<WhipHttpClient>,
+    client: Arc<WhipWhepHttpClient>,
     candidate: Option<RTCIceCandidate>,
     location: Url,
     should_stop_trickle: Arc<AtomicBool>,
