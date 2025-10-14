@@ -95,45 +95,27 @@ pub fn ffmpeg_version() -> Result<String> {
 }
 
 pub fn ffmpeg_url(ffmpeg_version: &str) -> Result<String> {
-    #[cfg(target_os = "linux")]
-    const FFMPEG_URL_PREFIX: &str = "https://github.com/BtbN/FFmpeg-Builds/releases/download/";
-
-    #[cfg(target_os = "macos")]
     const FFMPEG_URL_PREFIX: &str =
         "https://github.com/smelter-labs/smelter-dep-prebuilds/releases/download/";
 
     let ffmpeg_url_suffix = if cfg!(target_os = "linux") {
         let os_arch = if cfg!(target_arch = "x86_64") {
-            "linux64"
+            "linux_x86_64"
         } else if cfg!(target_arch = "aarch64") {
-            "linuxarm64"
+            "linux_arm64"
         } else {
             bail!("Invalid architecture");
         };
 
-        // WARN: Use ONLY builds from the last day of any month. Builds are created daily however
-        // only builds from the last day of each month are kept longer than 2 weeks.
         match ffmpeg_version {
             "6.0" => {
-                format!("autobuild-2023-11-30-12-55/ffmpeg-n6.0.1-{os_arch}-lgpl-shared-6.0.tar.xz")
+                format!("n6.0/ffmpeg_n6.0_{os_arch}.tar.gz")
             }
             "6.1" => {
-                format!("autobuild-2025-08-31-13-00/ffmpeg-n6.1.3-{os_arch}-lgpl-shared-6.1.tar.xz")
-            }
-            "7.0" => {
-                format!(
-                    "autobuild-2024-08-31-12-50/ffmpeg-n7.0.2-6-g7e69129d2f-{os_arch}-lgpl-shared-7.0.tar.xz"
-                )
-            }
-            "7.1" => {
-                format!(
-                    "autobuild-2025-09-30-13-19/ffmpeg-n7.1.2-5-g8f77695e65-{os_arch}-lgpl-shared-7.1.tar.xz"
-                )
+                format!("n6.1/ffmpeg_n6.1_{os_arch}.tar.gz")
             }
             "8.0" => {
-                format!(
-                    "autobuild-2025-09-30-13-19/ffmpeg-n8.0-16-gd8605a6b55-{os_arch}-lgpl-shared-8.0.tar.xz"
-                )
+                format!("n8.0/ffmpeg_n8.0_{os_arch}.tar.gz")
             }
             _ => bail!("Unsupported FFmpeg version"),
         }
@@ -141,7 +123,7 @@ pub fn ffmpeg_url(ffmpeg_version: &str) -> Result<String> {
         let os_arch = if cfg!(target_arch = "x86_64") {
             bail!("Download not available for macos with amd64 architecture");
         } else if cfg!(target_arch = "aarch64") {
-            "macos_arm"
+            "macos_arm64"
         } else {
             bail!("Invalid architecture");
         };
