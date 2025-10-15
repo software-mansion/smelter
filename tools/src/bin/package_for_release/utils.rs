@@ -47,7 +47,12 @@ pub fn compile_smelter(
     let rustc_args = rustc_args.unwrap_or_default();
     let rustc_envs = rustc_envs.unwrap_or_default();
 
-    info!("Running command \"cargo {}\"", args.join(" "));
+    info!(
+        "Running command \"{} cargo {} -- {}\"",
+        display_rustc_envs(&rustc_envs).join(" "),
+        args.join(" "),
+        rustc_args.join(" ")
+    );
     let output = Command::new("cargo")
         .envs(rustc_envs)
         .args(args)
@@ -62,6 +67,13 @@ pub fn compile_smelter(
         return Err(anyhow!("Command failed with exit code {}.", output.status));
     }
     Ok(())
+}
+
+fn display_rustc_envs(rustc_envs: &Vec<(&'static str, String)>) -> Vec<String> {
+    rustc_envs
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect()
 }
 
 pub fn ensure_empty_dir(dir: &PathBuf) -> Result<()> {
