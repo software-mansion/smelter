@@ -59,7 +59,7 @@ impl VideoEncoder for FfmpegH264Encoder {
         println!();
         info!(codec_name, "THIS IS A CODEC NAME TEST LOG");
         println!();
-        if codec_name != "libopenh264" {
+        if codec_name != "libopenh264" && codec_name != "h264_videotoolbox" {
             ffmpeg_options.append(&[
                 // Quality-based VBR (0-51)
                 ("crf", "23"),
