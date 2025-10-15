@@ -9,6 +9,7 @@ mod audio_input_processing_loop;
 mod bearer_token;
 mod error;
 mod handle_keyframe_requests;
+mod http_client;
 mod listen_for_rtcp;
 mod negotiated_codecs;
 mod peer_connection_recvonly;

@@ -9,10 +9,10 @@ use webrtc::{
     peer_connection::sdp::session_description::RTCSessionDescription,
 };
 
-use super::{WebrtcClientError, WhipOutputOptions};
+use crate::prelude::*;
 
 #[derive(Debug)]
-pub(super) struct WhipHttpClient {
+pub(super) struct WhipWhepHttpClient {
     http_client: reqwest::Client,
     endpoint_url: Url,
     bearer_token: Option<Arc<str>>,
@@ -23,16 +23,18 @@ pub(super) struct SdpAnswer {
     pub answer: RTCSessionDescription,
 }
 
-impl WhipHttpClient {
-    pub fn new(options: &WhipOutputOptions) -> Result<Arc<Self>, WebrtcClientError> {
-        let endpoint_url = Url::parse(&options.endpoint_url).map_err(|e| {
-            WebrtcClientError::InvalidEndpointUrl(e, options.endpoint_url.to_string())
-        })?;
+impl WhipWhepHttpClient {
+    pub fn new(
+        endpoint_url: &Arc<str>,
+        bearer_token: &Option<Arc<str>>,
+    ) -> Result<Arc<Self>, WebrtcClientError> {
+        let endpoint_url = Url::parse(endpoint_url)
+            .map_err(|e| WebrtcClientError::InvalidEndpointUrl(e, endpoint_url.to_string()))?;
 
         Ok(Arc::new(Self {
             http_client: reqwest::Client::new(),
             endpoint_url,
-            bearer_token: options.bearer_token.clone(),
+            bearer_token: bearer_token.clone(),
         }))
     }
 
@@ -110,7 +112,7 @@ impl WhipHttpClient {
         // Endpoint is required, but some platforms e.g. Twitch do not implement it
         // so we are silently ignoring
         if let Err(err) = self.http_client.delete(session_url).send().await {
-            error!("Error while sending delete whip session request: {}", err);
+            error!("Error while sending delete session request: {}", err);
         }
     }
 
