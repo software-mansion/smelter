@@ -128,7 +128,7 @@ fn bundle_app(
         info!("Copy dependency_check binary.");
         fs::copy(
             cargo_build_dir.join("dependency_check"),
-            workdir.join("smelter/smelter"),
+            workdir.join("smelter/dependency_check"),
         )?;
         info!("Copy wrapper script.");
         fs::copy(
@@ -136,6 +136,22 @@ fn bundle_app(
             workdir.join("smelter/smelter"),
         )?;
     }
+
+    Command::new("cargo")
+        .args([
+            "build",
+            "-r",
+            "-p",
+            "integration-tests",
+            "--example",
+            "simpler",
+        ])
+        .spawn()?
+        .wait()?;
+    fs::copy(
+        git_root().join("target/release/examples/simpler"),
+        workdir.join("smelter/simpler"),
+    )?;
 
     info!("Create tar.gz archive.");
     let exit_code = Command::new("tar")
