@@ -19,7 +19,7 @@ import { WebSocketConnection } from '../ws';
 import { smelterInstanceLoggerOptions } from '../logger';
 import { getSmelterStatus } from '../getSmelterStatus';
 
-const VERSION = `v0.4.1`;
+const VERSION = `c1355c41`;
 
 type ManagedInstanceOptions = {
   port: number;
@@ -140,7 +140,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
 }
 
 async function prepareExecutable(enableWebRenderer?: boolean): Promise<string> {
-  const version = enableWebRenderer ? `${VERSION}-web` : VERSION;
+  const version = VERSION;
   const downloadDir = path.join(os.homedir(), '.smelter', version, architecture());
   const readyFilePath = path.join(downloadDir, '.ready');
   const executablePath = path.join(downloadDir, 'smelter/smelter');
@@ -183,7 +183,7 @@ function architecture(): 'linux_aarch64' | 'linux_x86_64' | 'darwin_x86_64' | 'd
 function smelterTarGzUrl(withWebRenderer?: boolean): string {
   const archiveNameSuffix = withWebRenderer ? '_with_web_renderer' : '';
   const archiveName = `smelter${archiveNameSuffix}_${architecture()}.tar.gz`;
-  return `https://github.com/software-mansion/smelter/releases/download/${VERSION}/${archiveName}`;
+  return `https://github.com/smelter-labs/smelter-rc/releases/download/${VERSION}/${archiveName}`;
 }
 
 export default LocallySpawnedInstanceManager;
