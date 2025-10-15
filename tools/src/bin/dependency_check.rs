@@ -92,7 +92,13 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
     let tar_status = Command::new("tar")
         .args([
             "-zxf",
-            ffmpeg_archive_path.to_str().unwrap_or(FFMPEG_ARCHIVE_NAME),
+            ffmpeg_archive_path
+                .to_str()
+                .expect("Unable to resolve executable directory as string"),
+            "-C",
+            executable_dir
+                .to_str()
+                .expect("Unable to resolve executable directory as string"),
         ])
         .status();
     match tar_status {
