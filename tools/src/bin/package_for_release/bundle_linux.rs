@@ -140,6 +140,7 @@ fn bundle_app(
     Command::new("cargo")
         .args([
             "build",
+            "--no-default-features",
             "-r",
             "-p",
             "integration-tests",
