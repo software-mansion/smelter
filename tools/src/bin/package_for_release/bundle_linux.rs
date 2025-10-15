@@ -128,7 +128,7 @@ fn bundle_app(
         info!("Copy dependency_check binary.");
         fs::copy(
             cargo_build_dir.join("dependency_check"),
-            workdir.join("smelter/smelter"),
+            workdir.join("smelter/dependency_check"),
         )?;
         info!("Copy wrapper script.");
         fs::copy(
