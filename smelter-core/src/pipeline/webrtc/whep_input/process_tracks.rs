@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use crossbeam_channel::Sender;
 use smelter_render::Frame;
-use tracing::warn;
+use tracing::{Instrument, Level, debug, span, warn};
 use webrtc::{
     rtcp::{packet::Packet, payload_feedbacks::picture_loss_indication::PictureLossIndication},
-    rtp_transceiver::{RTCRtpTransceiver, rtp_receiver::RTCRtpReceiver},
+    rtp_transceiver::{RTCRtpTransceiver, rtp_codec::RTPCodecType, rtp_receiver::RTCRtpReceiver},
     track::track_remote::TrackRemote,
 };
 
@@ -20,6 +20,7 @@ use crate::{
             negotiated_codecs::{
                 WebrtcVideoDecoderMapping, WebrtcVideoPayloadTypeMapping, audio_codec_negotiated,
             },
+            peer_connection_recvonly::RecvonlyPeerConnection,
             video_input_processing_loop::{VideoInputLoop, VideoTrackThread},
         },
     },
@@ -27,7 +28,59 @@ use crate::{
     thread_utils::InitializableThread,
 };
 
-pub async fn process_audio_track(
+pub fn setup_track_processing(
+    pc: &RecvonlyPeerConnection,
+    ctx: &Arc<PipelineCtx>,
+    input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    frame_sender: Sender<PipelineEvent<Frame>>,
+    video_preferences: Vec<VideoDecoderOptions>,
+) {
+    let ctx = ctx.clone();
+    let sync_point = RtpNtpSyncPoint::new(ctx.queue_sync_point);
+    pc.on_track(Box::new(move |track, _, transceiver| {
+        debug!(
+            kind=?track.kind(),
+            "on_track called"
+        );
+
+        let span = span!(Level::INFO, "WHEP input track", track_type=?track.kind());
+
+        match track.kind() {
+            RTPCodecType::Audio => {
+                tokio::spawn(
+                    process_audio_track(
+                        ctx.clone(),
+                        sync_point.clone(),
+                        input_samples_sender.clone(),
+                        track,
+                        transceiver,
+                    )
+                    .instrument(span),
+                );
+            }
+            RTPCodecType::Video => {
+                tokio::spawn(
+                    process_video_track(
+                        ctx.clone(),
+                        sync_point.clone(),
+                        frame_sender.clone(),
+                        track,
+                        transceiver,
+                        video_preferences.clone(),
+                    )
+                    .instrument(span),
+                );
+            }
+            RTPCodecType::Unspecified => {
+                warn!("Unknown track kind")
+            }
+        }
+
+        Box::pin(async {})
+    }))
+}
+
+async fn process_audio_track(
     ctx: Arc<PipelineCtx>,
     sync_point: Arc<RtpNtpSyncPoint>,
     samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
@@ -54,7 +107,7 @@ pub async fn process_audio_track(
     Ok(())
 }
 
-pub async fn process_video_track(
+async fn process_video_track(
     ctx: Arc<PipelineCtx>,
     sync_point: Arc<RtpNtpSyncPoint>,
     frame_sender: Sender<PipelineEvent<Frame>>,

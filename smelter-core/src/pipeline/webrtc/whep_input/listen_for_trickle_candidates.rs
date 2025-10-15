@@ -2,38 +2,16 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::pipeline::webrtc::{
-    http_client::{SdpAnswer, WhipWhepHttpClient},
-    peer_connection_recvonly::RecvonlyPeerConnection,
+    http_client::WhipWhepHttpClient, peer_connection_recvonly::RecvonlyPeerConnection,
 };
 use smelter_render::error::ErrorStack;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 use url::Url;
 use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
-use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
 use crate::prelude::*;
 
-pub(crate) async fn exchange_sdp_offers(
-    pc: &RecvonlyPeerConnection,
-    client: &Arc<WhipWhepHttpClient>,
-) -> Result<(Url, RTCSessionDescription), WebrtcClientError> {
-    let offer = pc.create_offer().await?;
-    debug!("SDP offer: {}", offer.sdp);
-
-    let SdpAnswer {
-        session_url: location,
-        answer,
-    } = client.send_offer(&offer).await?;
-    debug!("SDP answer: {}", answer.sdp);
-
-    pc.set_local_description(offer).await?;
-
-    listen_for_trickle_candidates(pc, client, location.clone());
-
-    Ok((location, answer))
-}
-
-fn listen_for_trickle_candidates(
+pub(crate) fn listen_for_trickle_candidates(
     pc: &RecvonlyPeerConnection,
     client: &Arc<WhipWhepHttpClient>,
     location: Url,
