@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-cargo build -p integration-tests --example simpler
+set -euo pipefail
+
+cargo build -r -p integration-tests --example simpler
 
 cargo run -p tools --bin package_for_release
 
