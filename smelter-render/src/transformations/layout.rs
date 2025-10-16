@@ -14,8 +14,7 @@ mod shader;
 use self::shader::LayoutShader;
 
 pub(crate) use layout_renderer::LayoutRenderer;
-
-use log::error;
+use tracing::error;
 
 pub(crate) trait LayoutProvider: Send {
     fn layouts(&mut self, pts: Duration, inputs: &[Option<Resolution>]) -> NestedLayout;

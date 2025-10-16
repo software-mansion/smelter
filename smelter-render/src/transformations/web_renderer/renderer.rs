@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
-use log::info;
+use tracing::info;
 
 use crate::{
     RendererId, RenderingMode, Resolution,

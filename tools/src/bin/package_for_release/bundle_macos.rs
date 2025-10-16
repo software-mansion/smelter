@@ -4,7 +4,7 @@ use std::process::Command;
 use tools::paths::{git_root, tools_root};
 
 use anyhow::{Result, anyhow};
-use log::info;
+use tracing::info;
 
 use crate::utils;
 use crate::utils::SmelterBin;

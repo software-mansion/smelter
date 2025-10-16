@@ -5,7 +5,7 @@ use std::{
 };
 
 use crossbeam_channel::{Receiver, Sender};
-use log::error;
+use tracing::error;
 
 use crate::error::ErrorStack;
 use crate::scene::ComponentId;

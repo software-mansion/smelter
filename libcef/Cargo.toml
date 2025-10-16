@@ -11,5 +11,5 @@ libcef-sys = { path = "libcef-sys" }
 fs_extra = { workspace = true }
 thiserror = { workspace = true }
 widestring = "1.0.2"
-log = { workspace = true }
 anyhow = { workspace = true }
+tracing = { workspace = true }
