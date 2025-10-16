@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tools::paths::{git_root, tools_root};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Result, bail};
 use tracing::info;
 
 use crate::utils::{self, SmelterBin};
