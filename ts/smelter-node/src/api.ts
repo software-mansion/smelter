@@ -8,6 +8,7 @@ import type {
   RegisterRtpOutput,
   RegisterWhipInput,
   RegisterWhipOutput,
+  RegisterWhepInput,
   RegisterWhepOutput,
 } from '@swmansion/smelter';
 
@@ -27,7 +28,8 @@ export type RegisterInput =
   | ({ type: 'rtp_stream' } & RegisterRtpInput)
   | ({ type: 'mp4' } & RegisterMp4Input)
   | ({ type: 'hls' } & RegisterHlsInput)
-  | ({ type: 'whip_server' } & RegisterWhipInput);
+  | ({ type: 'whip_server' } & RegisterWhipInput)
+  | ({ type: 'whep_client' } & RegisterWhepInput);
 
 export type RegisterMp4InputResponse = {
   videoDurationMs?: number;

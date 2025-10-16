@@ -9,6 +9,7 @@ import {
   type RegisterImage,
   type RegisterShader,
   intoRegisterOutputRequest,
+  intoRegisterInputRequest,
 } from './api';
 import WasmInstance from '../mainContext/instance';
 import type { RegisterOutputResponse } from '../mainContext/output';
@@ -104,7 +105,7 @@ export default class Smelter {
   public async registerInput(inputId: string, request: RegisterInput): Promise<void> {
     return await this.scheduler.run(async () => {
       assert(this.coreSmelter);
-      await this.coreSmelter.registerInput(inputId, request);
+      await this.coreSmelter.registerInput(inputId, intoRegisterInputRequest(request));
     });
   }
 
