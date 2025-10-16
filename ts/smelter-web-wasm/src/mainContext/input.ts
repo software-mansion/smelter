@@ -29,7 +29,7 @@ export async function handleRegisterInputRequest(
     return await handleRegisterScreenCaptureInput(ctx, inputId);
   } else if (body.type === 'stream') {
     return await handleRegisterStreamInput(ctx, inputId, body.stream);
-  } else if (body.type === 'whep_client') {
+  } else if (body.type === 'web-wasm-whep') {
     return await handleRegisterWhepInput(ctx, inputId, body.endpointUrl, body.bearerToken);
   } else {
     throw new Error(`Unknown input type ${body.type}`);
