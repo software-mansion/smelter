@@ -9,15 +9,22 @@ use crate::{
     codecs::{VideoDecoderOptions, WebrtcVideoDecoderOptions},
     error::{DecoderInitError, InputInitError},
     pipeline::webrtc::supported_codec_parameters::{
-        h264_codec_params_default_payload_type, vp8_codec_params_default_payload_type,
+        h264_codec_params, h264_codec_params_default_payload_type, vp8_codec_params,
+        vp8_codec_params_default_payload_type, vp9_codec_params,
         vp9_codec_params_default_payload_type,
     },
 };
 
+type ResolvedVideoPreferences = (
+    Vec<VideoDecoderOptions>,
+    Vec<RTCRtpCodecParameters>,
+    Vec<RTCRtpCodecParameters>,
+);
+
 pub(super) fn resolve_video_preferences(
     ctx: &Arc<PipelineCtx>,
     video_preferences: Vec<WebrtcVideoDecoderOptions>,
-) -> Result<(Vec<VideoDecoderOptions>, Vec<RTCRtpCodecParameters>), InputInitError> {
+) -> Result<ResolvedVideoPreferences, InputInitError> {
     let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
     let only_vulkan_in_preferences = video_preferences
         .iter()
@@ -58,29 +65,50 @@ pub(super) fn resolve_video_preferences(
         .collect();
 
     // When setting codec preferences, payload types should be compatible with those in the offer. Simplest way to achieve that is by setting defaults
-    let mut video_codecs_params: Vec<RTCRtpCodecParameters> = Vec::new();
-    for pref in &video_preferences {
-        match pref {
+    let video_codecs_params = build_codec_params(&video_preferences, false);
+    let video_codecs_params_with_payloads = build_codec_params(&video_preferences, true);
+
+    Ok((
+        video_preferences,
+        video_codecs_params,
+        video_codecs_params_with_payloads,
+    ))
+}
+
+fn build_codec_params(
+    preferences: &[VideoDecoderOptions],
+    with_explicit_payloads: bool,
+) -> Vec<RTCRtpCodecParameters> {
+    preferences
+        .iter()
+        .flat_map(|pref| match pref {
             VideoDecoderOptions::FfmpegH264 | VideoDecoderOptions::VulkanH264 => {
-                video_codecs_params.extend(h264_codec_params_default_payload_type())
+                if with_explicit_payloads {
+                    h264_codec_params()
+                } else {
+                    h264_codec_params_default_payload_type()
+                }
             }
             VideoDecoderOptions::FfmpegVp8 => {
-                video_codecs_params.extend(vp8_codec_params_default_payload_type())
+                if with_explicit_payloads {
+                    vp8_codec_params()
+                } else {
+                    vp8_codec_params_default_payload_type()
+                }
             }
             VideoDecoderOptions::FfmpegVp9 => {
-                video_codecs_params.extend(vp9_codec_params_default_payload_type())
+                if with_explicit_payloads {
+                    vp9_codec_params()
+                } else {
+                    vp9_codec_params_default_payload_type()
+                }
             }
-        }
-    }
-
-    let video_codecs_params = video_codecs_params
-        .into_iter()
+        })
         .unique_by(|c| {
             (
                 c.capability.mime_type.clone(),
                 c.capability.sdp_fmtp_line.clone(),
             )
         })
-        .collect();
-    Ok((video_preferences, video_codecs_params))
+        .collect()
 }

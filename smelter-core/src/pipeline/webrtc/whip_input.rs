@@ -45,7 +45,7 @@ impl WhipInput {
 
         let bearer_token = options.bearer_token.unwrap_or_else(generate_token);
 
-        let (video_preferences, video_codecs) =
+        let (video_preferences, video_codecs, video_codecs_with_payloads) =
             resolve_video_preferences(&ctx, options.video_preferences)?;
 
         state.inputs.add_input(
@@ -54,6 +54,7 @@ impl WhipInput {
                 bearer_token: bearer_token.clone(),
                 video_preferences,
                 video_codecs,
+                video_codecs_with_payloads,
                 frame_sender,
                 input_samples_sender,
                 buffer_options: options.buffer,

@@ -41,7 +41,12 @@ pub async fn handle_create_whip_session(
 
     let video_codecs = inputs.get_with(&endpoint_id, |input| Ok(input.video_codecs.clone()))?;
 
-    let peer_connection = RecvonlyPeerConnection::new(&state.ctx, &video_codecs).await?;
+    let video_codecs_with_payloads = inputs.get_with(&endpoint_id, |input| {
+        Ok(input.video_codecs_with_payloads.clone())
+    })?;
+
+    let peer_connection =
+        RecvonlyPeerConnection::new(&state.ctx, &video_codecs_with_payloads).await?;
 
     let _video_transceiver = peer_connection.new_video_track(video_codecs).await?;
     let _audio_transceiver = peer_connection.new_audio_track().await?;
