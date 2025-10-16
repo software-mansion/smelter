@@ -9,8 +9,8 @@ use std::{
 
 use bytes::BytesMut;
 use crossbeam_channel::{Receiver, Sender, bounded};
-use log::error;
 use smelter_render::{InputId, error::ErrorStack};
+use tracing::error;
 use tracing::{Level, debug, info, span, trace};
 
 use crate::pipeline::{Port, rtp::util::bind_to_requested_port};

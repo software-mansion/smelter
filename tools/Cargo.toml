@@ -19,7 +19,6 @@ serde_json = { workspace = true }
 ffmpeg-next = { workspace = true }
 fs_extra = { workspace = true }
 socket2 = { workspace = true }
-log = { workspace = true }
 bytes = { workspace = true }
 webrtc-util = { workspace = true }
 crossbeam-channel = { workspace = true }

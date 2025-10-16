@@ -2,8 +2,8 @@ use std::{fs, path::PathBuf, ptr, sync::Arc, time::Duration};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
 use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
-use log::error;
 use smelter_render::OutputId;
+use tracing::error;
 use tracing::{debug, warn};
 
 use crate::{

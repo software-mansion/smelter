@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use log::error;
+use tracing::error;
 
 use crate::{
     error::ErrorStack,

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
-use log::error;
+use tracing::error;
 
 use crate::{
     InputId, OutputId, Resolution, state::renderers::Renderers,

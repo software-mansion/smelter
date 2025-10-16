@@ -2,10 +2,10 @@ use core::fmt;
 use rand::Rng;
 use rand::distr::Alphanumeric;
 use std::sync::Arc;
+use tracing::info;
 
 use crate::{transformations::web_renderer::utils, types::Framerate};
 use crossbeam_channel::RecvError;
-use log::info;
 
 pub struct ChromiumContext {
     instance_id: String,

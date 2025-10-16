@@ -2,9 +2,9 @@ use std::{ptr, sync::Arc, time::Duration};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
 use ffmpeg_next::{self as ffmpeg, Dictionary, Rational, Rescale};
-use log::error;
 use smelter_render::{Framerate, OutputId};
 use tracing::debug;
+use tracing::error;
 
 use crate::{
     event::Event,

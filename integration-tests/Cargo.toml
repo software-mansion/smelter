@@ -38,7 +38,6 @@ opus = { workspace = true }
 spectrum-analyzer = "1.7.0"
 rand = { workspace = true }
 futures-util = { workspace = true }
-log = { workspace = true }
 tokio = { workspace = true }
 signal-hook = { workspace = true }
 tokio-tungstenite = "0.21.0"

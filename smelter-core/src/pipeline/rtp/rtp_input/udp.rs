@@ -82,7 +82,7 @@ fn run_udp_receiver_thread(
             Err(e) => match e.kind() {
                 std::io::ErrorKind::WouldBlock => continue,
                 _ => {
-                    log::error!("Error while receiving UDP packet: {}", e);
+                    tracing::error!("Error while receiving UDP packet: {}", e);
                     continue;
                 }
             },
