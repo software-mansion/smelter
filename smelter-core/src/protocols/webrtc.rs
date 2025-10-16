@@ -14,6 +14,13 @@ pub struct WhipInputOptions {
 }
 
 #[derive(Debug, Clone)]
+pub struct WhepInputOptions {
+    pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
+    pub bearer_token: Option<Arc<str>>,
+    pub endpoint_url: Arc<str>,
+}
+
+#[derive(Debug, Clone)]
 pub struct VideoWhipOptions {
     pub encoder_preferences: Vec<VideoEncoderOptions>,
 }

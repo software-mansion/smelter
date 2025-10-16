@@ -14,6 +14,7 @@ pub enum ProtocolInputOptions {
     Mp4(Mp4InputOptions),
     Hls(HlsInputOptions),
     Whip(WhipInputOptions),
+    Whep(WhepInputOptions),
     #[cfg(feature = "decklink")]
     DeckLink(DeckLinkInputOptions),
 }
@@ -51,6 +52,7 @@ pub enum InputProtocolKind {
     Mp4,
     Hls,
     Whip,
+    Whep,
     DeckLink,
     RawDataChannel,
 }

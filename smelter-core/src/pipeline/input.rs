@@ -1,7 +1,12 @@
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    pipeline::{hls::HlsInput, mp4::Mp4Input, rtp::RtpInput, webrtc::WhipInput},
+    pipeline::{
+        hls::HlsInput,
+        mp4::Mp4Input,
+        rtp::RtpInput,
+        webrtc::{WhepInput, WhipInput},
+    },
     queue::QueueDataReceiver,
 };
 
@@ -22,6 +27,7 @@ pub enum Input {
     Rtp(RtpInput),
     Mp4(Mp4Input),
     Whip(WhipInput),
+    Whep(WhepInput),
     Hls(HlsInput),
     #[cfg(feature = "decklink")]
     DeckLink(super::decklink::DeckLink),
@@ -34,6 +40,7 @@ impl Input {
             Input::Rtp(_input) => InputProtocolKind::Rtp,
             Input::Mp4(_input) => InputProtocolKind::Mp4,
             Input::Whip(_input) => InputProtocolKind::Whip,
+            Input::Whep(_input) => InputProtocolKind::Whep,
             Input::Hls(_input) => InputProtocolKind::Hls,
             #[cfg(feature = "decklink")]
             Input::DeckLink(_input) => InputProtocolKind::DeckLink,
@@ -52,6 +59,7 @@ pub(super) fn new_external_input(
         ProtocolInputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_id, opts),
         ProtocolInputOptions::Hls(opts) => HlsInput::new_input(ctx, input_id, opts),
         ProtocolInputOptions::Whip(opts) => WhipInput::new_input(ctx, input_id, opts),
+        ProtocolInputOptions::Whep(opts) => WhepInput::new_input(ctx, input_id, opts),
         #[cfg(feature = "decklink")]
         ProtocolInputOptions::DeckLink(opts) => {
             super::decklink::DeckLink::new_input(ctx, input_id, opts)
