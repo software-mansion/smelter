@@ -57,10 +57,6 @@ impl VideoEncoder for FfmpegH264Encoder {
             ("threads", "0"),
         ]);
 
-        println!();
-        info!(codec_name, "THIS IS A CODEC NAME TEST LOG");
-        println!();
-
         // I am not sure at the moment if default FFmpeg settings are the best for videotoolbox,
         // but they are definitely better than these
         if codec_name != "libopenh264" && codec_name != "h264_videotoolbox" {

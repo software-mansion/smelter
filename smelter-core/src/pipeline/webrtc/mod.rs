@@ -17,11 +17,13 @@ mod server;
 mod supported_codec_parameters;
 mod trickle_ice_utils;
 mod video_input_processing_loop;
+mod whep_input;
 mod whep_output;
 mod whip_input;
 mod whip_output;
 
 pub(super) use server::WhipWhepServer;
+pub(super) use whep_input::WhepInput;
 pub(super) use whep_output::WhepOutput;
 pub(super) use whip_input::WhipInput;
 pub(super) use whip_output::WhipOutput;

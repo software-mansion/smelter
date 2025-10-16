@@ -13,7 +13,7 @@ use crate::{
 };
 use smelter_api::{
     DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId,
-    RtmpOutput, RtpInput, RtpOutput, ShaderSpec, WebRendererSpec, WhepOutput, WhipInput,
+    RtmpOutput, RtpInput, RtpOutput, ShaderSpec, WebRendererSpec, WhepInput, WhepOutput, WhipInput,
     WhipOutput,
 };
 
@@ -25,6 +25,7 @@ pub enum RegisterInput {
     RtpStream(RtpInput),
     Mp4(Mp4Input),
     WhipServer(WhipInput),
+    WhepClient(WhepInput),
     Hls(HlsInput),
     #[serde(rename = "decklink")]
     DeckLink(DeckLink),
@@ -60,6 +61,9 @@ pub(super) async fn handle_input(
             }
             RegisterInput::WhipServer(whip) => {
                 Pipeline::register_input(&api.pipeline()?, input_id.into(), whip.try_into()?)?
+            }
+            RegisterInput::WhepClient(whep) => {
+                Pipeline::register_input(&api.pipeline()?, input_id.into(), whep.try_into()?)?
             }
             RegisterInput::Hls(hls) => {
                 Pipeline::register_input(&api.pipeline()?, input_id.into(), hls.try_into()?)?
