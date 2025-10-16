@@ -23,6 +23,7 @@ export {
   RegisterMp4Input,
   RegisterHlsInput,
   RegisterWhipInput,
+  RegisterWhepInput,
 } from './types/input.js';
 export {
   RegisterRtpOutput,

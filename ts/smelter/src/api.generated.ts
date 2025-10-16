@@ -90,6 +90,29 @@ export type RegisterInput =
       offset_ms?: number | null;
     }
   | {
+      type: "whep_client";
+      /**
+       * WHEP server endpoint URL
+       */
+      endpoint_url: string;
+      /**
+       * Optional Bearer token for auth
+       */
+      bearer_token?: string | null;
+      /**
+       * Parameters of a video source included in the RTP stream.
+       */
+      video?: InputWhepVideoOptions | null;
+      /**
+       * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+      /**
+       * Offset in milliseconds relative to the pipeline start (start request).
+       */
+      offset_ms?: number | null;
+    }
+  | {
       type: "hls";
       /**
        * URL to HLS playlist
@@ -166,6 +189,7 @@ export type InputRtpAudioOptions =
 export type AacRtpMode = "low_bitrate" | "high_bitrate";
 export type Mp4VideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type WhipVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
+export type WhepVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type HlsVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type RegisterOutput =
   | {
@@ -965,6 +989,9 @@ export interface InputRtpVideoOptions {
 }
 export interface InputWhipVideoOptions {
   decoder_preferences?: WhipVideoDecoderOptions[] | null;
+}
+export interface InputWhepVideoOptions {
+  decoder_preferences?: WhepVideoDecoderOptions[] | null;
 }
 export interface OutputVideoOptions {
   /**

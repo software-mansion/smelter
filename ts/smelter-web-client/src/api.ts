@@ -6,6 +6,7 @@ import type {
   RegisterRtmpClientOutput,
   RegisterRtpInput,
   RegisterRtpOutput,
+  RegisterWhepInput,
   RegisterWhepOutput,
   RegisterWhipInput,
   RegisterWhipOutput,
@@ -23,7 +24,8 @@ export type RegisterInput =
   | ({ type: 'rtp_stream' } & RegisterRtpInput)
   | ({ type: 'mp4' } & RegisterMp4Input)
   | ({ type: 'hls' } & RegisterHlsInput)
-  | ({ type: 'whip_server' } & RegisterWhipInput);
+  | ({ type: 'whip_server' } & RegisterWhipInput)
+  | ({ type: 'whep_client' } & RegisterWhepInput);
 
 export type RegisterWhepOutputResponse = {
   endpointRoute: string;
