@@ -16,7 +16,6 @@ libcef = { workspace = true, optional = true }
 image = { workspace = true }
 reqwest = { workspace = true }
 bytes = { workspace = true }
-log = { workspace = true }
 bytemuck = { version = "1.13.1", features = ["derive"] }
 glyphon = { workspace = true }
 crossbeam-channel = { workspace = true }

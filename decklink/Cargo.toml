@@ -8,7 +8,6 @@ license-file = "../LICENSE"
 [dependencies]
 bytes = { workspace = true }
 thiserror = { workspace = true }
-log = { workspace = true }
 cxx = "1.0"
 
 [build-dependencies]

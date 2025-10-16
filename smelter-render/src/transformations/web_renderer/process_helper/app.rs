@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use log::info;
+use tracing::info;
 
 use super::{handler::RenderProcessHandler, state::State};
 

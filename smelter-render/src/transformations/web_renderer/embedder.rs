@@ -5,9 +5,9 @@ use crate::wgpu::WgpuCtx;
 use crate::wgpu::texture::TextureExt;
 use bytes::Bytes;
 use crossbeam_channel::bounded;
-use log::error;
 use nalgebra_glm::Mat4;
 use std::sync::Arc;
+use tracing::error;
 
 use super::WebEmbeddingMethod;
 use super::chromium_sender::ChromiumSenderError;

@@ -1,5 +1,5 @@
-use log::info;
 use smelter::server;
+use tracing::info;
 
 fn main() {
     ffmpeg_next::format::network::init();

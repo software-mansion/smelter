@@ -5,7 +5,7 @@ use std::{
 };
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
-use log::trace;
+use tracing::trace;
 
 #[derive(Debug, Clone)]
 pub struct Event {

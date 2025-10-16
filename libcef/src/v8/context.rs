@@ -1,4 +1,4 @@
-use log::warn;
+use tracing::warn;
 
 use crate::cef_ref::{CefRc, CefRefCountable};
 use crate::cef_string::CefString;

@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow};
-use log::info;
 use std::process::Child;
+use tracing::info;
 
 use std::{
     path::PathBuf,

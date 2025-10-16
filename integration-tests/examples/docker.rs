@@ -1,10 +1,10 @@
 use anyhow::{Result, anyhow};
-use log::{error, info, warn};
 use serde_json::json;
 use signal_hook::{consts, iterator::Signals};
 use smelter::config::read_config;
 use smelter_api::Resolution;
 use std::{env, process::Command, thread, time::Duration};
+use tracing::{error, info, warn};
 
 use integration_tests::{
     examples::{self, TestSample, start_server_msg_listener},

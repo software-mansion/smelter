@@ -5,11 +5,11 @@ use std::{
 };
 
 use anyhow::{Result, anyhow};
-use log::info;
 use regex::Regex;
 use serde_json::json;
 use smelter::config::read_config;
 use tokio_tungstenite::tungstenite;
+use tracing::info;
 
 use crate::{CompositorInstance, pipeline_tests::start_server_msg_listener};
 

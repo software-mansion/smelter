@@ -1,5 +1,3 @@
-use log::error;
-
 pub(crate) mod common_pipeline;
 mod ctx;
 pub(crate) mod format;

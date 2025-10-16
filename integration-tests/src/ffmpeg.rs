@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow};
-use log::info;
 use smelter_api::Resolution;
 use std::process::Child;
+use tracing::info;
 
 use super::examples::{TestSample, get_asset_path};
 use std::{

@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::Resolution;
 use bytes::Bytes;
-use log::error;
+use tracing::error;
 
 use crate::transformations::web_renderer::{FrameData, SourceTransforms};
 

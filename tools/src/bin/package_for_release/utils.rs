@@ -1,8 +1,8 @@
 use anyhow::{Result, anyhow, bail};
-use log::{info, warn};
 use regex::Regex;
 use std::{fs, path::PathBuf, process::Command, str::from_utf8};
 use tools::paths::git_root;
+use tracing::{info, warn};
 
 #[derive(PartialEq)]
 pub enum SmelterBin {

@@ -1,8 +1,8 @@
 use crossbeam_channel::Receiver;
-use log::info;
 use signal_hook::{consts, iterator::Signals};
 use smelter_render::error::ErrorStack;
 use tracing::error;
+use tracing::info;
 
 use std::{net::SocketAddr, process, sync::Arc, thread};
 use tokio::runtime::Runtime;

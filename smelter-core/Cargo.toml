@@ -17,7 +17,6 @@ bytes = { workspace = true }
 crossbeam-channel = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
-log = { workspace = true }
 ffmpeg-next = { workspace = true }
 webrtc = { workspace = true }
 webrtc-util = { workspace = true }

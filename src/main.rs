@@ -1,4 +1,4 @@
-use log::info;
+use tracing::info;
 
 pub mod config;
 pub mod error;

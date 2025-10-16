@@ -5,7 +5,7 @@ use crate::{
     transformations::web_renderer::chromium_context::ChromiumContext,
 };
 use crossbeam_channel::{Receiver, Sender};
-use log::error;
+use tracing::error;
 
 use super::{
     WebRendererSpec, browser_client::BrowserClient, chromium_sender_thread::ChromiumSenderThread,

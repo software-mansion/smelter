@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use libcef::V8ObjectError;
-use log::error;
+use tracing::error;
 
 use crate::error::ErrorStack;
 use crate::transformations::web_renderer::{
