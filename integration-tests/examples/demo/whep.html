@@ -8,52 +8,67 @@
   <style>
     body {
       font-family: 'Inter', sans-serif;
-      background-color: black;
+      background-color: #333333;
       display: flex;
       justify-content: center;
       flex-direction: column;
+      height: 95vh;
+      overflow: hidden;
     }
 
     video {
-      width: 80vw;
+        max-height: 100%;
+        max-width: 100%;
     }
 
     #inputs {
       display: flex;
       justify-content: center;
-      gap: 10vw;
     }
 
     #player-div {
       display: flex;
+      flex: 1 0 0px;
+      overflow: hidden;
       justify-content: center;
     }
 
     input {
-      height: 50px;
-      width: 700px;
-      font-size: 28px;
+      font-size: 24px;
+    }
+    
+    .inputs {
+      display: flex;
+      flex-direction: row;
     }
 
     .input-div {
       display: flex;
+      flex: 1;
       flex-direction: column;
       gap: 10px;
+      margin: 10px;
+      align-items: stretch;
+    }
+
+    .button-div {
+      display: flex;
+      gap: 5vw;
       align-items: center;
+      justify-content: center;
     }
 
     label {
       color: white;
-      font-size: 20px;
+      font-size: 18px;
     }
 
     button {
-      height: 50px;
+      height: 36px;
+      margin: 10px;
       width: 300px;
-      font-size: 28px;
+      font-size: 22px;
       background-color: #ff1493;
-      box-shadow: 10px 5px 5px red;
-      align-self: center;
       font-family: 'Comic Sans MS', 'Comic Sans';
     }
 
@@ -61,6 +76,7 @@
     video[poster] {
       object-fit: cover;
     }
+
   </style>
 </head>
 
@@ -80,8 +96,8 @@
       <input type="text" name="token" id="token-input" />
       <label for="token">Bearer token</label>
     </div>
+    <button onclick="rerun()">Reconnect</button>
   </div>
-  <button onclick="rerun()">Reconnect</button>
 
   <script>
     const run = async () => {
