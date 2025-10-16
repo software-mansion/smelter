@@ -6,40 +6,55 @@
   <meta name="viewport" content="width=device-width, initial-scale-1.0">
   <title>WHIP Streamer</title>
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       font-family: 'Inter', sans-serif;
       background-color: #322d31;
       display: flex;
-      justify-content: center;
       flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 2vw;
     }
 
     video {
-      margin-bottom: 15px;
-      max-height: 80vh;
-      max-width: 100vw;
+      max-width: 80vw;
+      max-height: 70vh;
       object-fit: contain;
+      background-color: black;
+      margin-bottom: 10px;
     }
 
-    #inputs {
+    video[poster] {
+      object-fit: cover;
+    }
+
+    #controls {
       display: flex;
-      justify-content: space-evenly;
-      margin: 0 400px;
+      flex-direction: column;
+      max-height: 30vh;
+      width: 100%;
+      align-items: center;
     }
 
-    #update {
-      align-self: flex-start;
-    }
-
-    #player-div {
+    #inputs,
+    #buttons {
       display: flex;
+      flex-wrap: wrap;
       justify-content: center;
+      align-items: center;
+      gap: clamp(15px, 3vw, 30px);
+      width: 100%;
+      max-width: 900px;
     }
 
-    input {
-      height: 30px;
-      width: 300px;
-      font-size: 20px;
+    #buttons {
+      margin-top: 20px;
     }
 
     .input-div {
@@ -47,119 +62,44 @@
       flex-direction: column;
       gap: 10px;
       align-items: center;
+      flex: 1 1 auto;
+      min-width: 200px;
     }
 
-    #buttons {
-      display: flex;
-      gap: 5vw;
-      align-items: center;
-      justify-content: center;
-      margin-top: 1vw;
+    input {
+      width: 100%;
+      height: clamp(30px, 5vh, 40px);
+      font-size: clamp(14px, 2vw, 20px);
     }
 
     label {
       color: white;
-      font-size: 20px;
+      font-size: clamp(14px, 2vw, 20px);
     }
 
     button {
-      height: 40px;
-      width: 150px;
-      font-size: 20px;
+      height: clamp(25px, 6vh, 45px);
+      min-width: 80px;
+      font-size: clamp(11px, 2vw, 20px);
       background-color: #ff1493;
-      align-self: center;
       font-family: 'Comic Sans MS', 'Comic Sans';
+      color: white;
+      border: none;
+      cursor: pointer;
     }
 
-    /* Style for the video player's poster */
-    video[poster] {
-      object-fit: cover;
+    #update {
+      align-self: flex-start;
     }
 
-    @media screen and (width <=1920px) {
-      #inputs {
-        margin: 0 200px;
-      }
-    }
-
-    @media screen and (height <=780px) and (orientation: landscape) {
-      video {
-        max-height: 60vh;
+    @media screen and (height <=670px) and (orientation: landscape) {
+      body {
+        flex-direction: row;
+        align-items: flex-start;
       }
 
-      #inputs {
-        margin: 0 30px;
-      }
-
-      .input-div {
-        gap: 5px;
-      }
-
-      button {
-        height: 20px;
-        width: 75px;
-        font-size: 8px;
-      }
-
-      input {
-        height: 15px;
-        width: 150px;
-        font-size: 10px;
-      }
-
-      label {
-        font-size: 10px;
-      }
-    }
-
-    @media screen and (width < 1400px) and (orientation: portrait) {
-      #inputs {
-        flex-direction: column;
-        gap: 15px;
-        margin: 0;
-      }
-
-      #update {
-        align-self: center;
-      }
-
-      #buttons {
-        margin-top: 20px;
-        flex-direction: column;
-        gap: 15px;
-      }
-    }
-
-    @media screen and (width < 900px) and (orientation: portrait) {
-      label {
-        font-size: 15px;
-      }
-
-      input {
-        width: 200px;
-        font-size: 15px;
-      }
-
-      button {
-        height: 30px;
-        font-size: 17px;
-      }
-    }
-
-    @media screen and (width < 500px) and (orientation: portrait) {
-      label {
-        font-size: 10px;
-      }
-
-      input {
-        width: 150px;
-        height: 20px;
-        font-size: 12px;
-      }
-
-      button {
-        height: 20px;
-        font-size: 12px;
+      #controls {
+        margin: 0 10px;
       }
     }
   </style>
@@ -172,20 +112,23 @@
       poster="https://placehold.co/1280x720/000000/333333?text=Start+screen+share+or+camera">
     </video>
   </div>
-  <div id="inputs">
-    <div class="input-div">
-      <input type="text" name="url" id="url-input" />
-      <label for="url">URL</label>
+
+  <div id="controls">
+    <div id="inputs">
+      <div class="input-div">
+        <input type="text" name="url" id="url-input" />
+        <label for="url">URL</label>
+      </div>
+      <div class="input-div">
+        <input type="text" name="token" id="token-input" />
+        <label for="token">Bearer token</label>
+      </div>
+      <button id="update">Update</button>
     </div>
-    <div class="input-div">
-      <input type="text" name="token" id="token-input" />
-      <label for="token">Bearer token</label>
+    <div id="buttons">
+      <button id="screen-share">Screen share</button>
+      <button id="camera">Camera</button>
     </div>
-    <button id="update">Update</button>
-  </div>
-  <div id="buttons">
-    <button id="screen-share">Screen share</button>
-    <button id="camera">Camera</button>
   </div>
 
   <script>
