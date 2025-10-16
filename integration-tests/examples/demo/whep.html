@@ -49,6 +49,14 @@
       align-items: center;
     }
 
+    #buttons {
+      display: flex;
+      gap: 5vw;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1vw;
+    }
+
     label {
       color: white;
       font-size: 20px;
@@ -74,7 +82,37 @@
       }
     }
 
-    @media screen and (width < 1400px) {
+    @media screen and (height <=780px) and (orientation: landscape) {
+      video {
+        max-height: 60vh;
+      }
+
+      #inputs {
+        margin: 0 30px;
+      }
+
+      .input-div {
+        gap: 5px;
+      }
+
+      button {
+        height: 20px;
+        width: 75px;
+        font-size: 8px;
+      }
+
+      input {
+        height: 15px;
+        width: 150px;
+        font-size: 10px;
+      }
+
+      label {
+        font-size: 10px;
+      }
+    }
+
+    @media screen and (width < 1400px) and (orientation: portrait) {
       #inputs {
         flex-direction: column;
         gap: 15px;
@@ -84,9 +122,15 @@
       #update {
         align-self: center;
       }
+
+      #buttons {
+        margin-top: 20px;
+        flex-direction: column;
+        gap: 15px;
+      }
     }
 
-    @media screen and (width < 900px) {
+    @media screen and (width < 900px) and (orientation: portrait) {
       label {
         font-size: 15px;
       }
@@ -99,6 +143,23 @@
       button {
         height: 30px;
         font-size: 17px;
+      }
+    }
+
+    @media screen and (width < 500px) and (orientation: portrait) {
+      label {
+        font-size: 10px;
+      }
+
+      input {
+        width: 150px;
+        height: 20px;
+        font-size: 12px;
+      }
+
+      button {
+        height: 20px;
+        font-size: 12px;
       }
     }
   </style>
