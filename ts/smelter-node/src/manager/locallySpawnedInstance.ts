@@ -19,7 +19,7 @@ import { WebSocketConnection } from '../ws';
 import { smelterInstanceLoggerOptions } from '../logger';
 import { getSmelterStatus } from '../getSmelterStatus';
 
-const VERSION = `84a5d191`;
+const VERSION = `663ac286`;
 
 type ManagedInstanceOptions = {
   port: number;
