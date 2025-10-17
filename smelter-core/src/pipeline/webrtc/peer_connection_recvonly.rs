@@ -89,7 +89,15 @@ impl RecvonlyPeerConnection {
             )
             .await?;
 
-        if let Err(err) = transceiver.set_codec_preferences(video_codecs).await {
+        // When setting codec preferences, payload types should be compatible with those in the offer. Simplest way to achieve that is by setting defaults
+        let codec_preferences = video_codecs
+            .iter()
+            .map(|codec| RTCRtpCodecParameters {
+                capability: codec.capability.clone(),
+                ..Default::default()
+            })
+            .collect();
+        if let Err(err) = transceiver.set_codec_preferences(codec_preferences).await {
             warn!("Cannot set codec preferences for sdp answer: {err:?}");
         }
         Ok(transceiver)

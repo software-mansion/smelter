@@ -9,8 +9,7 @@ use crate::{
     codecs::{VideoDecoderOptions, WebrtcVideoDecoderOptions},
     error::{DecoderInitError, InputInitError},
     pipeline::webrtc::supported_codec_parameters::{
-        h264_codec_params_default_payload_type, vp8_codec_params_default_payload_type,
-        vp9_codec_params_default_payload_type,
+        h264_codec_params, vp8_codec_params, vp9_codec_params,
     },
 };
 
@@ -57,24 +56,15 @@ pub(super) fn resolve_video_preferences(
         .unique()
         .collect();
 
-    // When setting codec preferences, payload types should be compatible with those in the offer. Simplest way to achieve that is by setting defaults
-    let mut video_codecs_params: Vec<RTCRtpCodecParameters> = Vec::new();
-    for pref in &video_preferences {
-        match pref {
+    let video_codecs_params = video_preferences
+        .iter()
+        .flat_map(|pref| match pref {
             VideoDecoderOptions::FfmpegH264 | VideoDecoderOptions::VulkanH264 => {
-                video_codecs_params.extend(h264_codec_params_default_payload_type())
+                h264_codec_params()
             }
-            VideoDecoderOptions::FfmpegVp8 => {
-                video_codecs_params.extend(vp8_codec_params_default_payload_type())
-            }
-            VideoDecoderOptions::FfmpegVp9 => {
-                video_codecs_params.extend(vp9_codec_params_default_payload_type())
-            }
-        }
-    }
-
-    let video_codecs_params = video_codecs_params
-        .into_iter()
+            VideoDecoderOptions::FfmpegVp8 => vp8_codec_params(),
+            VideoDecoderOptions::FfmpegVp9 => vp9_codec_params(),
+        })
         .unique_by(|c| {
             (
                 c.capability.mime_type.clone(),
@@ -82,5 +72,6 @@ pub(super) fn resolve_video_preferences(
             )
         })
         .collect();
+
     Ok((video_preferences, video_codecs_params))
 }
