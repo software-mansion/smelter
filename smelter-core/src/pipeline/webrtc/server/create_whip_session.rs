@@ -4,7 +4,6 @@ use crate::pipeline::{
         WhipWhepServerState,
         error::WhipWhepServerError,
         peer_connection_recvonly::RecvonlyPeerConnection,
-        supported_codec_parameters::reset_payload_types_to_default,
         whip_input::process_tracks::{process_audio_track, process_video_track},
     },
 };
@@ -42,12 +41,7 @@ pub async fn handle_create_whip_session(
 
     let peer_connection = RecvonlyPeerConnection::new(&state.ctx, &video_codecs).await?;
 
-    // When setting codec preferences, payload types should be compatible with those in the offer. Simplest way to achieve that is by setting defaults
-    let video_codecs_with_default_payload_types = reset_payload_types_to_default(video_codecs);
-
-    let _video_transceiver = peer_connection
-        .new_video_track(video_codecs_with_default_payload_types)
-        .await?;
+    let _video_transceiver = peer_connection.new_video_track(video_codecs).await?;
     let _audio_transceiver = peer_connection.new_audio_track().await?;
 
     let offer = RTCSessionDescription::offer(offer)?;

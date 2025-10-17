@@ -118,15 +118,3 @@ pub fn opus_codec_params() -> Vec<RTCRtpCodecParameters> {
         })
         .collect()
 }
-
-pub fn reset_payload_types_to_default(
-    codecs: Vec<RTCRtpCodecParameters>,
-) -> Vec<RTCRtpCodecParameters> {
-    codecs
-        .iter()
-        .map(|codec| RTCRtpCodecParameters {
-            capability: codec.capability.clone(),
-            ..Default::default()
-        })
-        .collect()
-}
