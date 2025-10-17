@@ -45,6 +45,7 @@ WORKDIR /root/project/ts
 RUN pnpm install && pnpm build:node-sdk && pnpm -C examples/smelter-app build
 
 WORKDIR /root/project
+ENV CARGO_PROFILE_RELEASE_DEBUG=true
 RUN source ~/.cargo/env && cargo build --release --no-default-features
 
 # Runtime image

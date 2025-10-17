@@ -8,7 +8,7 @@ import { createRoomStore } from './app/store';
 import { config } from './config';
 import fs from 'fs-extra';
 import shadersController from './shaders/shaders';
-import type { RegisterWhipInputResponse } from '@swmansion/smelter-node/dist/api';
+import type { RegisterWhipServerInputResponse } from '@swmansion/smelter-node/dist/api';
 
 export type SmelterOutput = {
   id: string;
@@ -31,9 +31,11 @@ export type RegisterSmelterInputOptions =
     };
 
 // TODO: optional based on env
-const DECODER_MAP = {
+const MP4_DECODER_MAP = {
   h264: config.h264Decoder,
-} as const;
+};
+
+const WHIP_SERVER_DECODER_PREFERENCES = [config.h264Decoder];
 
 export class SmelterManager {
   private instance: Smelter;
@@ -97,28 +99,28 @@ export class SmelterManager {
       throw err;
     }
   }
-  public async registerWhipInput(inputId: string): Promise<RegisterWhipInputResponse> {
-    return await this.instance.registerInput(inputId, { type: 'whip_server' });
-  }
 
   public async registerInput(inputId: string, opts: RegisterSmelterInputOptions): Promise<string> {
     try {
       if (opts.type === 'whip') {
-        const res = await this.instance.registerInput(inputId, { type: 'whip_server' });
+        const res = await this.instance.registerInput(inputId, {
+          type: 'whip_server',
+          video: { decoderPreferences: WHIP_SERVER_DECODER_PREFERENCES },
+        });
         console.log('whipInput', res);
         return res.bearerToken;
       } else if (opts.type === 'mp4') {
         await this.instance.registerInput(inputId, {
           type: 'mp4',
           serverPath: opts.filePath,
-          decoderMap: DECODER_MAP,
+          decoderMap: MP4_DECODER_MAP,
           loop: true,
         });
       } else if (opts.type === 'hls') {
         await this.instance.registerInput(inputId, {
           type: 'hls',
           url: opts.url,
-          decoderMap: DECODER_MAP,
+          decoderMap: MP4_DECODER_MAP,
         });
       }
     } catch (err: any) {
