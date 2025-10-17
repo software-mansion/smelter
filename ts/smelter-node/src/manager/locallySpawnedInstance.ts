@@ -84,7 +84,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
     });
 
     await retry(async () => {
-      await sleep(500);
+      await sleep(2000);
       let smelterStatus = await getSmelterStatus(this);
 
       const expectedConfig = {
