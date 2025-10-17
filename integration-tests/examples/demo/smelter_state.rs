@@ -12,6 +12,7 @@ use tracing::debug;
 use crate::inputs::InputHandle;
 use crate::inputs::hls::HlsInputBuilder;
 use crate::inputs::mp4::Mp4InputBuilder;
+use crate::inputs::whep::WhepInputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
 
 use crate::outputs::hls::HlsOutputBuilder;
@@ -113,6 +114,11 @@ impl SmelterState {
                     let register_request = whip_input.serialize_register();
                     (Box::new(whip_input), register_request)
                 }
+                InputProtocol::Whep => {
+                    let whep_input = WhepInputBuilder::new().prompt()?.build();
+                    let register_request = whep_input.serialize_register();
+                    (Box::new(whep_input), register_request)
+                }
                 InputProtocol::Mp4 => {
                     let mp4_input = Mp4InputBuilder::new().prompt()?.build();
                     let register_request = mp4_input.serialize_register();
@@ -128,6 +134,8 @@ impl SmelterState {
         let input_route = format!("input/{}/register", input_handler.name());
 
         debug!("Input register request: {input_json:#?}");
+
+        input_handler.on_before_registration()?;
 
         examples::post(&input_route, &input_json)
             .with_context(|| "Input registration failed.".to_string())?;
