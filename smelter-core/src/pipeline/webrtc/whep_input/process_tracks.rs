@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Sender, bounded};
 use smelter_render::Frame;
 use tracing::{Instrument, Level, debug, span, warn};
 use webrtc::{
@@ -132,6 +132,25 @@ async fn process_video_track(
     };
 
     request_keyframe(&track, &rtc_receiver).await?;
+    let (keyframe_request_sender, keyframe_request_receiver) = bounded(1);
+    let ssrc = track.ssrc();
+    let rtc_receiver_clone = rtc_receiver.clone();
+    tokio::spawn(async move {
+        let transport = rtc_receiver_clone.transport();
+        for _ in keyframe_request_receiver.into_iter() {
+            warn!("Sending PLI");
+            let pli = PictureLossIndication {
+                // For receive-only endpoints RTP sender SSRC can be set to 0.
+                sender_ssrc: 0,
+                media_ssrc: ssrc,
+            };
+
+            if let Err(err) = transport.write_rtcp(&[Box::new(pli)]).await {
+                warn!(?err)
+            }
+        }
+    });
+
     let handle = VideoTrackThread::spawn(
         "WHEP input video",
         (
@@ -139,6 +158,7 @@ async fn process_video_track(
             decoder_mapping,
             payload_type_mapping,
             frame_sender,
+            keyframe_request_sender,
         ),
     )?;
 
