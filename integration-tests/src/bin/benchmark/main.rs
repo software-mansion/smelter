@@ -65,6 +65,8 @@ fn main() {
         })
         .collect();
 
+    std::thread::sleep(std::time::Duration::from_millis(250));
+
     if args.json {
         let value = serde_json::Value::Array(results.iter().map(|r| r.json()).collect());
         println!("{}", serde_json::to_string_pretty(&value).unwrap())

@@ -250,7 +250,7 @@ impl FromStr for ResolutionArgument {
 /// Only one option can be set to "maximize"
 #[derive(Debug, Clone, clap::Parser)]
 pub struct Args {
-    /// [possible values: none, full or minimal] Run entire benchmark suites, this option will ignore most of the other options.
+    /// [possible values: none, full, minimal, encoders, cpu] Run entire benchmark suites, this option will ignore most of the other options.
     #[arg(long, default_value("none"))]
     pub suite: BenchmarkSuite,
 

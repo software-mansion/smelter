@@ -53,7 +53,6 @@ pub struct RendererOptions {
 pub struct Renderer(Arc<Mutex<InnerRenderer>>);
 
 struct InnerRenderer {
-    wgpu_ctx: Arc<WgpuCtx>,
     text_renderer_ctx: Arc<TextRendererCtx>,
 
     chromium_context: Option<Arc<ChromiumContext>>,
@@ -64,6 +63,8 @@ struct InnerRenderer {
     renderers: Renderers,
 
     stream_fallback_timeout: Duration,
+
+    wgpu_ctx: Arc<WgpuCtx>,
 }
 
 pub(crate) struct RenderCtx<'a> {

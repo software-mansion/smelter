@@ -19,12 +19,12 @@ mod session_resources;
 pub(crate) use frame_sorter::FrameSorter;
 
 pub struct VulkanDecoder<'a> {
-    decoding_device: Arc<DecodingDevice>,
     video_session_resources: Option<VideoSessionResources<'a>>,
     command_buffers: CommandBuffers,
     _command_pools: CommandPools,
     sync_structures: SyncStructures,
     reference_id_to_dpb_slot_index: std::collections::HashMap<ReferenceId, usize>,
+    decoding_device: Arc<DecodingDevice>,
 }
 
 struct SyncStructures {

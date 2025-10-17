@@ -14,9 +14,6 @@ use super::{
 
 #[derive(Debug)]
 pub struct WgpuCtx {
-    pub device: Arc<wgpu::Device>,
-    pub queue: Arc<wgpu::Queue>,
-
     pub mode: RenderingMode,
 
     pub shader_header: wgpu::naga::Module,
@@ -28,6 +25,9 @@ pub struct WgpuCtx {
     pub plane: Plane,
     pub empty_rgba_linear_texture: RgbaLinearTexture,
     pub empty_rgba_srgb_texture: RgbaSrgbTexture,
+
+    pub device: Arc<wgpu::Device>,
+    pub queue: Arc<wgpu::Queue>,
 }
 
 impl WgpuCtx {

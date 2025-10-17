@@ -299,9 +299,8 @@ impl SyncStructures {
 }
 
 pub struct VulkanEncoder<'a> {
-    encoding_device: Arc<EncodingDevice>,
-    _command_pools: CommandPools,
     command_buffers: CommandBuffers,
+    _command_pools: CommandPools,
     sync_structures: SyncStructures,
     query_pool: EncodingQueryPool,
     profile: H264Profile,
@@ -316,6 +315,7 @@ pub struct VulkanEncoder<'a> {
     active_reference_slots: VecDeque<(usize, vk::native::StdVideoEncodeH264ReferenceInfo)>,
     rate_control: RateControl,
     converter: Option<Converter>,
+    encoding_device: Arc<EncodingDevice>,
 }
 
 #[derive(Debug, Clone, Copy)]
