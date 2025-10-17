@@ -48,7 +48,8 @@ impl OutputHandle for WhipOutput {
         println!("Instructions to start receiving stream:");
         println!("1. Start Broadcast Box: {cmd}");
         println!("2. Open: {url}");
-        println!("3. Enter '{}' in 'Stream Key' field", self.bearer_token);
+        println!("3. Make sure that 'I want to watch' option is selected.");
+        println!("4. Enter '{}' in 'Stream Key' field", self.bearer_token);
 
         loop {
             let confirmation = Confirm::new("Is player running? [Y/n]")
@@ -97,19 +98,15 @@ impl WhipOutputBuilder {
     }
 
     fn prompt_url(self) -> Result<Self> {
+        const BROADCAST_BOX_URL: &str = "http://127.0.0.1:8080/api/whip";
         let env_url = env::var(WHIP_URL_ENV).unwrap_or_default();
-        loop {
-            let endpoint_url_input = Text::new("Enter the WHIP endpoint URL:")
-                .with_initial_value(&env_url)
-                .prompt_skippable()?;
+        let endpoint_url_input = Text::new("Enter the WHIP endpoint URL (ESC for BroadcastBox):")
+            .with_initial_value(&env_url)
+            .prompt_skippable()?;
 
-            match endpoint_url_input {
-                Some(url) if !url.trim().is_empty() => return Ok(self.with_endpoint_url(url)),
-                Some(_) | None => {
-                    error!("URL cannot be empty.");
-                    continue;
-                }
-            }
+        match endpoint_url_input {
+            Some(url) if !url.trim().is_empty() => Ok(self.with_endpoint_url(url)),
+            Some(_) | None => Ok(self.with_endpoint_url(BROADCAST_BOX_URL.to_string())),
         }
     }
 

@@ -7,6 +7,7 @@ use strum::{Display, EnumIter};
 pub mod hls;
 pub mod mp4;
 pub mod rtp;
+pub mod whep;
 pub mod whip;
 
 #[typetag::serde(tag = "type")]
@@ -20,6 +21,10 @@ pub trait InputHandle: Debug {
 
     fn has_audio(&self) -> bool {
         true
+    }
+
+    fn on_before_registration(&mut self) -> Result<()> {
+        Ok(())
     }
 
     fn on_after_registration(&mut self) -> Result<()> {
@@ -40,6 +45,9 @@ pub enum InputProtocol {
 
     #[strum(to_string = "whip_server")]
     Whip,
+
+    #[strum(to_string = "whep_client")]
+    Whep,
 
     #[strum(to_string = "mp4")]
     Mp4,
