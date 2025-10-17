@@ -152,6 +152,23 @@ fn bundle_app_with_ffmpeg(
         }
     }
 
+    Command::new("cargo")
+        .args([
+            "build",
+            "--no-default-features",
+            "-r",
+            "-p",
+            "integration-tests",
+            "--example",
+            "simpler",
+        ])
+        .spawn()?
+        .wait()?;
+    fs::copy(
+        git_root().join("target/release/examples/simpler"),
+        workdir.join("smelter/simpler"),
+    )?;
+
     info!("Create tar.gz archive.");
     let exit_code = Command::new("tar")
         .args(["-czvf", output_name, "smelter"])
