@@ -3,43 +3,51 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale-1.0">
   <title>WHIP Streamer</title>
   <style>
     body {
       font-family: 'Inter', sans-serif;
-      background-color: black;
+      background-color: #333333;
       display: flex;
       justify-content: center;
       flex-direction: column;
+      height: 90vh;
+      overflow: hidden;
     }
 
     video {
-      width: 80vw;
+        max-height: 100%;
+        max-width: 100%;
     }
 
     #inputs {
       display: flex;
       justify-content: center;
-      gap: 10vw;
     }
 
     #player-div {
       display: flex;
+      flex: 1 0 0px;
+      overflow: hidden;
       justify-content: center;
     }
 
     input {
-      height: 50px;
-      width: 700px;
-      font-size: 28px;
+      font-size: 24px;
+    }
+    
+    .inputs {
+      display: flex;
+      flex-direction: row;
     }
 
     .input-div {
       display: flex;
+      flex: 1;
       flex-direction: column;
       gap: 10px;
-      align-items: center;
+      margin: 10px;
+      align-items: stretch;
     }
 
     .button-div {
@@ -51,22 +59,16 @@
 
     label {
       color: white;
-      font-size: 20px;
+      font-size: 18px;
     }
 
     button {
-      height: 50px;
+      height: 36px;
+      margin: 10px;
       width: 300px;
-      font-size: 28px;
+      font-size: 22px;
       background-color: #ff1493;
-      box-shadow: 10px 5px 5px red;
-      align-self: center;
       font-family: 'Comic Sans MS', 'Comic Sans';
-    }
-
-    /* Style for the video player's poster */
-    video[poster] {
-      object-fit: cover;
     }
   </style>
 </head>
@@ -87,11 +89,11 @@
       <input type="text" name="token" id="token-input" />
       <label for="token">Bearer token</label>
     </div>
+    <button id="update">Update</button>
   </div>
   <div class="button-div">
-    <button id="screen-share">Start screen share</button>
-    <button id="camera">Start camera</button>
-    <button id="reconnect">Reconnect</button>
+    <button id="screen-share">Stream screen share</button>
+    <button id="camera">Stream camera</button>
   </div>
 
   <script>
@@ -143,8 +145,8 @@
         cameraStream = await connect(endpointUrl, bearerToken, stream);
         videoPlayer.srcObject = stream;
       };
-      const reconnectBtn = document.getElementById("reconnect");
-      reconnectBtn.onclick = rerun;
+      const updateBtn = document.getElementById("update");
+      updateBtn.onclick = rerun;
       return [cameraStream, screenShareStream];
     }
     run().then((streams) => {
