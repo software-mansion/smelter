@@ -58,8 +58,8 @@ impl InputBuffer {
     }
 }
 
-/// Buffer intended for low latency inputs, if input stream is not delivers on time
-/// it quickly increasing. However when buffer is stable for some time it starts to shrink to
+/// Buffer intended for low latency inputs, if input stream is not delivered on time,
+/// it quickly increases. However, when buffer is stable for some time it starts to shrink to
 /// minimize the latency.
 pub(crate) struct LatencyOptimizedBuffer {
     sync_point: Instant,
