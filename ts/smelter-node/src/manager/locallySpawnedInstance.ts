@@ -24,7 +24,7 @@ const VERSION = `v0.4.1`;
 type ManagedInstanceOptions = {
   port: number;
   workingdir?: string;
-  executablePath?: string;
+  mainProcessPath?: string;
   dependencyCheckPath?: string;
   enableWebRenderer?: boolean;
 };
@@ -40,7 +40,7 @@ type ExecutablePath = {
 class LocallySpawnedInstanceManager implements SmelterManager {
   private port: number;
   private workingdir: string;
-  private executablePath?: string;
+  private mainProcessPath?: string;
   private dependencyCheckPath?: string;
   private wsConnection: WebSocketConnection;
   private enableWebRenderer?: boolean;
@@ -49,7 +49,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   constructor(opts: ManagedInstanceOptions) {
     this.port = opts.port;
     this.workingdir = opts.workingdir ?? path.join(os.tmpdir(), `smelter-${uuidv4()}`);
-    this.executablePath = opts.executablePath;
+    this.mainProcessPath = opts.mainProcessPath;
     this.dependencyCheckPath = opts.dependencyCheckPath;
     this.enableWebRenderer = opts.enableWebRenderer;
     this.wsConnection = new WebSocketConnection(`ws://127.0.0.1:${this.port}/ws`);
@@ -59,14 +59,14 @@ class LocallySpawnedInstanceManager implements SmelterManager {
     const port = process.env.SMELTER_API_PORT ? Number(process.env.SMELTER_API_PORT) : 8000;
     return new LocallySpawnedInstanceManager({
       port,
-      executablePath: process.env.SMELTER_PATH,
+      mainProcessPath: process.env.SMELTER_PATH,
     });
   }
 
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
     const { mainProcess: mainProcessPath, dependencyCheck: dependencyCheckPath } =
-      this.executablePath && this.dependencyCheckPath
-        ? { mainProcess: this.executablePath, dependencyCheck: this.dependencyCheckPath }
+      this.mainProcessPath && this.dependencyCheckPath
+        ? { mainProcess: this.mainProcessPath, dependencyCheck: this.dependencyCheckPath }
         : await prepareExecutable(this.enableWebRenderer);
 
     const { level, format } = smelterInstanceLoggerOptions();
@@ -74,9 +74,12 @@ class LocallySpawnedInstanceManager implements SmelterManager {
     let downloadDir = path.join(this.workingdir, 'download');
     const executableDir = path.parse(mainProcessPath).dir;
 
-    const smelterLibraryPath = process.env.LD_LIBRARY_PATH
+    const smelterLdLibraryPath = process.env.LD_LIBRARY_PATH
       ? `${executableDir}/lib:${process.env.LD_LIBRARY_PATH}:${executableDir}/libav`
       : `${executableDir}/lib:${executableDir}/libav`;
+
+    // TODO: (@jbrs) Check if it works without setting `LD_LIBRARY_PATH`. If if does
+    // then change it
     const env =
       process.platform === 'linux'
         ? {
@@ -87,7 +90,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
             ...process.env,
             SMELTER_LOGGER_FORMAT: format,
             SMELTER_LOGGER_LEVEL: level,
-            LD_LIBRARY_PATH: smelterLibraryPath,
+            LD_LIBRARY_PATH: smelterLdLibraryPath,
           }
         : {
             SMELTER_DOWNLOAD_DIR: downloadDir,
