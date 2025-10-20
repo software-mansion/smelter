@@ -72,7 +72,7 @@ export type RegisterHlsOutput = {
   audio?: HlsAudioOptions;
 };
 
-export type RegisterWhipOutput = {
+export type RegisterWhipClientOutput = {
   /**
    * WHIP server endpoint.
    */
@@ -91,7 +91,7 @@ export type RegisterWhipOutput = {
   audio?: true | WhipAudioOptions | null;
 };
 
-export type RegisterWhepOutput = {
+export type RegisterWhepServerOutput = {
   /**
    * Token for authenticating comunication with the WHEP server.
    */

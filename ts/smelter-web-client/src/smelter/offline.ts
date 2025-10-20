@@ -6,7 +6,7 @@ import type {
   RegisterInput,
   RegisterMp4InputResponse,
   RegisterOutput,
-  RegisterWhipInputResponse,
+  RegisterWhipServerInputResponse,
 } from '../api';
 import type { InstanceOptions } from '../manager';
 import RemoteInstanceManager from '../manager';
@@ -45,7 +45,7 @@ export default class OfflineSmelter {
   public async registerInput(
     inputId: string,
     request: Extract<RegisterInput, { type: 'whip_server' }>
-  ): Promise<RegisterWhipInputResponse>;
+  ): Promise<RegisterWhipServerInputResponse>;
 
   public async registerInput(
     inputId: string,

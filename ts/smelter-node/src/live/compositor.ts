@@ -11,8 +11,8 @@ import type {
   RegisterInput,
   RegisterMp4InputResponse,
   RegisterOutput,
-  RegisterWhepOutputResponse,
-  RegisterWhipInputResponse,
+  RegisterWhepServerOutputResponse,
+  RegisterWhipServerInputResponse,
 } from '../api';
 
 export default class Smelter {
@@ -37,7 +37,7 @@ export default class Smelter {
     outputId: string,
     root: ReactElement,
     request: Extract<RegisterOutput, { type: 'whep_server' }>
-  ): Promise<RegisterWhepOutputResponse>;
+  ): Promise<RegisterWhepServerOutputResponse>;
 
   public async registerOutput(
     outputId: string,
@@ -70,7 +70,7 @@ export default class Smelter {
   public async registerInput(
     inputId: string,
     request: Extract<RegisterInput, { type: 'whip_server' }>
-  ): Promise<RegisterWhipInputResponse>;
+  ): Promise<RegisterWhipServerInputResponse>;
 
   public async registerInput(
     inputId: string,
