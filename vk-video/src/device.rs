@@ -74,13 +74,13 @@ pub struct VulkanDevice {
     pub(crate) wgpu_queue: wgpu::Queue,
     pub(crate) wgpu_adapter: wgpu::Adapter,
     pub(crate) _physical_device: vk::PhysicalDevice,
-    pub(crate) device: Arc<Device>,
     pub(crate) allocator: Arc<Allocator>,
     pub(crate) queues: Queues,
     pub(crate) decode_capabilities: Option<DecodeCapabilities>,
     pub(crate) native_encode_capabilities: Option<NativeEncodeCapabilities>,
     pub(crate) supports_decoding: bool,
     pub(crate) supports_encoding: bool,
+    pub(crate) device: Arc<Device>,
 }
 
 impl VulkanDevice {

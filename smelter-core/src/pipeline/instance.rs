@@ -36,11 +36,11 @@ use crate::{
 };
 
 pub struct Pipeline {
-    pub(super) ctx: Arc<PipelineCtx>,
     pub(super) inputs: HashMap<InputId, PipelineInput>,
     pub(super) outputs: HashMap<OutputId, PipelineOutput>,
     pub(super) queue: Arc<Queue>,
     pub(super) renderer: Renderer,
+    pub(super) ctx: Arc<PipelineCtx>,
     pub(super) audio_mixer: AudioMixer,
     pub(super) is_started: bool,
 

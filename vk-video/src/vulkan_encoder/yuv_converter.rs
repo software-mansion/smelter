@@ -301,13 +301,13 @@ struct ShaderInfo {
 }
 
 struct ConvertingPipeline {
-    device: Arc<VulkanDevice>,
     pipeline: Pipeline,
     render_pass: Arc<RenderPass>,
     framebuffer: Framebuffer,
     texture_descriptor_set: vk::DescriptorSet,
     extent: vk::Extent3D,
     common_state: Arc<CommonState>,
+    device: Arc<VulkanDevice>,
 }
 
 impl ConvertingPipeline {
