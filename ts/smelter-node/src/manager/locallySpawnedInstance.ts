@@ -24,7 +24,7 @@ const VERSION = `v0.4.1`;
 type ManagedInstanceOptions = {
   port: number;
   workingdir?: string;
-  mainProcessPath?: string;
+  mainExecutablePath?: string;
   dependencyCheckPath?: string;
   enableWebRenderer?: boolean;
 };
@@ -40,7 +40,7 @@ type ExecutablePath = {
 class LocallySpawnedInstanceManager implements SmelterManager {
   private port: number;
   private workingdir: string;
-  private mainProcessPath?: string;
+  private mainExecutablePath?: string;
   private dependencyCheckPath?: string;
   private wsConnection: WebSocketConnection;
   private enableWebRenderer?: boolean;
@@ -49,7 +49,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   constructor(opts: ManagedInstanceOptions) {
     this.port = opts.port;
     this.workingdir = opts.workingdir ?? path.join(os.tmpdir(), `smelter-${uuidv4()}`);
-    this.mainProcessPath = opts.mainProcessPath;
+    this.mainExecutablePath = opts.mainExecutablePath;
     this.dependencyCheckPath = opts.dependencyCheckPath;
     this.enableWebRenderer = opts.enableWebRenderer;
     this.wsConnection = new WebSocketConnection(`ws://127.0.0.1:${this.port}/ws`);
@@ -59,14 +59,14 @@ class LocallySpawnedInstanceManager implements SmelterManager {
     const port = process.env.SMELTER_API_PORT ? Number(process.env.SMELTER_API_PORT) : 8000;
     return new LocallySpawnedInstanceManager({
       port,
-      mainProcessPath: process.env.SMELTER_PATH,
+      mainExecutablePath: process.env.SMELTER_PATH,
     });
   }
 
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
     const { mainProcess: mainProcessPath, dependencyCheck: dependencyCheckPath } =
-      this.mainProcessPath && this.dependencyCheckPath
-        ? { mainProcess: this.mainProcessPath, dependencyCheck: this.dependencyCheckPath }
+      this.mainExecutablePath && this.dependencyCheckPath
+        ? { mainProcess: this.mainExecutablePath, dependencyCheck: this.dependencyCheckPath }
         : await prepareExecutable(this.enableWebRenderer);
 
     const { level, format } = smelterInstanceLoggerOptions();
