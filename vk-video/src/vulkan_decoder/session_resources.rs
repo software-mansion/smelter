@@ -70,7 +70,7 @@ impl VideoSessionResources<'_> {
         let level_idc = sps.level_idc;
         let max_level_idc = vk_to_h264_level_idc(
             decoding_device
-                .decode_capabilities
+                .profile_capabilities
                 .h264_decode_capabilities
                 .max_level_idc,
         )?;
@@ -96,7 +96,7 @@ impl VideoSessionResources<'_> {
             max_active_references,
             vk::VideoSessionCreateFlagsKHR::empty(),
             &decoding_device
-                .decode_capabilities
+                .profile_capabilities
                 .video_capabilities
                 .std_header_version,
         )?;
@@ -205,7 +205,7 @@ impl VideoSessionResources<'_> {
 
         let max_level_idc = vk_to_h264_level_idc(
             decoding_device
-                .decode_capabilities
+                .profile_capabilities
                 .h264_decode_capabilities
                 .max_level_idc,
         )?;
@@ -243,7 +243,7 @@ impl VideoSessionResources<'_> {
             new_params.max_active_references,
             vk::VideoSessionCreateFlagsKHR::empty(),
             &decoding_device
-                .decode_capabilities
+                .profile_capabilities
                 .video_capabilities
                 .std_header_version,
         )?;
@@ -285,10 +285,10 @@ impl VideoSessionResources<'_> {
             decode_buffer,
             profile,
             &decoding_device
-                .decode_capabilities
+                .profile_capabilities
                 .h264_dpb_format_properties,
             &decoding_device
-                .decode_capabilities
+                .profile_capabilities
                 .h264_dst_format_properties,
             max_coded_extent,
             max_dpb_slots,

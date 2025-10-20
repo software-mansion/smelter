@@ -7,7 +7,7 @@ use crate::{
     VulkanDevice, VulkanInitError, VulkanInstance,
     device::{
         DECODE_EXTENSIONS, ENCODE_EXTENSIONS, REQUIRED_EXTENSIONS,
-        caps::{DecodeCapabilities, NativeEncodeCapabilities},
+        caps::{NativeDecodeCapabilities, NativeEncodeCapabilities},
         queues::{QueueIndex, QueueIndices},
     },
 };
@@ -93,24 +93,12 @@ impl<'a> VulkanAdapter<'a> {
         unsafe { instance.get_physical_device_queue_family_properties2(device, &mut queues) };
 
         let decode_capabilities = match has_decode_extensions {
-            true => match DecodeCapabilities::query(instance, device) {
-                Ok(caps) => caps,
-                Err(err) => {
-                    warn!("Couldn't query device decode capabilities: {err}");
-                    return None;
-                }
-            },
+            true => Some(NativeDecodeCapabilities::query(instance, device)),
             false => None,
         };
 
         let encode_capabilities = match has_encode_extensions {
-            true => match NativeEncodeCapabilities::query(instance, device) {
-                Ok(caps) => Some(caps),
-                Err(err) => {
-                    warn!("Couldn't query device encode capabilities: {err}");
-                    return None;
-                }
-            },
+            true => Some(NativeEncodeCapabilities::query(instance, device)),
             false => None,
         };
 
@@ -231,7 +219,7 @@ pub(crate) struct DeviceCandidate {
     pub(crate) physical_device: vk::PhysicalDevice,
     pub(crate) wgpu_adapter: wgpu::hal::ExposedAdapter<wgpu::hal::vulkan::Api>,
     pub(crate) queue_indices: QueueIndices<'static>,
-    pub(crate) decode_capabilities: Option<DecodeCapabilities>,
+    pub(crate) decode_capabilities: Option<NativeDecodeCapabilities>,
     pub(crate) encode_capabilities: Option<NativeEncodeCapabilities>,
 }
 

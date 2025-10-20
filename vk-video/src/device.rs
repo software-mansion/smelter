@@ -6,7 +6,10 @@ use std::sync::Arc;
 use ash::vk;
 
 use crate::adapter::{DeviceCandidate, VulkanAdapter};
-use crate::device::caps::{DecodeCapabilities, EncodeCapabilities, NativeEncodeCapabilities};
+use crate::device::caps::{
+    DecodeCapabilities, EncodeCapabilities, NativeDecodeCapabilities,
+    NativeDecodeProfileCapabilities, NativeEncodeCapabilities,
+};
 use crate::device::queues::{Queue, Queues};
 use crate::parser::Parser;
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
@@ -77,7 +80,7 @@ pub struct VulkanDevice {
     pub(crate) device: Arc<Device>,
     pub(crate) allocator: Arc<Allocator>,
     pub(crate) queues: Queues,
-    pub(crate) decode_capabilities: Option<DecodeCapabilities>,
+    pub(crate) native_decode_capabilities: Option<NativeDecodeCapabilities>,
     pub(crate) native_encode_capabilities: Option<NativeEncodeCapabilities>,
     pub(crate) supports_decoding: bool,
     pub(crate) supports_encoding: bool,
@@ -256,7 +259,7 @@ impl VulkanDevice {
             device,
             allocator,
             queues,
-            decode_capabilities,
+            native_decode_capabilities: decode_capabilities,
             native_encode_capabilities: encode_capabilities,
             wgpu_device,
             wgpu_queue,
@@ -269,6 +272,12 @@ impl VulkanDevice {
     pub fn create_wgpu_textures_decoder(
         self: &Arc<Self>,
     ) -> Result<WgpuTexturesDecoder, DecoderError> {
+        let decode_caps = self
+            .native_decode_capabilities
+            .as_ref()
+            .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
+        let max_profile = decode_caps.max_profile();
+
         let parser = Parser::default();
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
@@ -277,11 +286,12 @@ impl VulkanDevice {
                 .h264_decode
                 .clone()
                 .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?,
-            decode_capabilities: self
-                .decode_capabilities
-                .clone()
+            profile_capabilities: decode_caps
+                .profile(max_profile)
+                .cloned()
                 .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?,
         };
+
         let vulkan_decoder = VulkanDecoder::new(Arc::new(decoding_device))?;
         let frame_sorter = FrameSorter::<wgpu::Texture>::new();
 
@@ -293,6 +303,12 @@ impl VulkanDevice {
     }
 
     pub fn create_bytes_decoder(self: &Arc<Self>) -> Result<BytesDecoder, DecoderError> {
+        let decode_caps = self
+            .native_decode_capabilities
+            .as_ref()
+            .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
+        let max_profile = decode_caps.max_profile();
+
         let parser = Parser::default();
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
@@ -301,11 +317,12 @@ impl VulkanDevice {
                 .h264_decode
                 .clone()
                 .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?,
-            decode_capabilities: self
-                .decode_capabilities
-                .clone()
+            profile_capabilities: decode_caps
+                .profile(max_profile)
+                .cloned()
                 .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?,
         };
+
         let vulkan_decoder = VulkanDecoder::new(Arc::new(decoding_device))?;
         let frame_sorter = FrameSorter::<RawFrameData>::new();
 
@@ -372,6 +389,15 @@ impl VulkanDevice {
         Ok(WgpuTexturesEncoder {
             vulkan_encoder: encoder,
         })
+    }
+
+    pub fn decode_capabilities(&self) -> DecodeCapabilities {
+        DecodeCapabilities {
+            h264: self
+                .native_decode_capabilities
+                .as_ref()
+                .map(NativeDecodeCapabilities::user_facing),
+        }
     }
 
     pub fn encode_capabilities(&self) -> EncodeCapabilities {
@@ -590,7 +616,7 @@ impl std::fmt::Debug for VulkanDevice {
 pub(crate) struct DecodingDevice {
     pub(crate) vulkan_device: Arc<VulkanDevice>,
     pub(crate) h264_decode_queue: Queue,
-    pub(crate) decode_capabilities: DecodeCapabilities,
+    pub(crate) profile_capabilities: NativeDecodeProfileCapabilities,
 }
 
 impl Deref for DecodingDevice {

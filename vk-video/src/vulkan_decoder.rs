@@ -304,7 +304,7 @@ impl VulkanDecoder<'_> {
         let size = Self::pad_size_to_alignment(
             decode_information.rbsp_bytes.len() as u64,
             self.decoding_device
-                .decode_capabilities
+                .profile_capabilities
                 .video_capabilities
                 .min_bitstream_buffer_offset_alignment,
         );
