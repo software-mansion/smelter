@@ -25,6 +25,7 @@ use crate::{
         },
         input::Input,
         mp4::reader::{DecoderOptions, Mp4FileReader, Track},
+        utils::input_buffer::InputBuffer,
     },
     queue::QueueDataReceiver,
     thread_utils::InitializableThread,
@@ -54,6 +55,7 @@ impl Mp4Input {
                 remove_on_drop: false,
             }),
         };
+        let buffer = InputBuffer::new(&ctx, options.buffer);
 
         let video = Mp4FileReader::from_path(&source.path)?.find_h264_track();
         let video_duration = video.as_ref().and_then(|track| track.duration());
@@ -149,6 +151,7 @@ impl Mp4Input {
         if options.should_loop {
             start_thread_with_loop(
                 ctx.clone(),
+                buffer,
                 video_handle,
                 video_track,
                 video_span,
@@ -161,6 +164,7 @@ impl Mp4Input {
         } else {
             start_thread_single_run(
                 ctx.clone(),
+                buffer,
                 video_handle,
                 video_track,
                 video_span,
@@ -210,6 +214,7 @@ impl Mp4Input {
 #[allow(clippy::too_many_arguments)]
 fn start_thread_with_loop(
     ctx: Arc<PipelineCtx>,
+    buffer: InputBuffer,
     video_handle: Option<DecoderThreadHandle>,
     video_track: Option<Track<File>>,
     video_span: Span,
@@ -227,7 +232,7 @@ fn start_thread_with_loop(
                 Handle(JoinHandle<Box<Track<File>>>),
             }
             let _source_file = source_file;
-            let mut offset = ctx.queue_sync_point.elapsed() + ctx.default_buffer_duration;
+            let mut offset = ctx.queue_sync_point.elapsed();
             let has_audio = audio_track.is_some();
             let last_audio_sample_pts = Arc::new(AtomicU64::new(0));
             let last_video_sample_pts = Arc::new(AtomicU64::new(0));
@@ -247,6 +252,7 @@ fn start_thread_with_loop(
                         let last_sample_pts = last_video_sample_pts.clone();
                         let should_close = should_close.clone();
                         let should_close_input = should_close_input.clone();
+                        let buffer = buffer.clone();
                         std::thread::Builder::new()
                             .name("mp4 reader - video".to_string())
                             .spawn(move || {
@@ -262,6 +268,10 @@ fn start_thread_with_loop(
                                         (chunk.pts + duration).as_nanos() as u64,
                                         Ordering::Relaxed,
                                     );
+
+                                    // add buffer after recording last sample
+                                    chunk.pts = buffer.pts_with_buffer(chunk.pts);
+
                                     trace!(pts=?chunk.pts, "MP4 reader produced a video chunk.");
                                     if sender.send(PipelineEvent::Data(chunk)).is_err() {
                                         debug!("Failed to send a video chunk. Channel closed.")
@@ -289,6 +299,7 @@ fn start_thread_with_loop(
                         let last_sample_pts = last_audio_sample_pts.clone();
                         let should_close = should_close.clone();
                         let should_close_input = should_close_input.clone();
+                        let buffer = buffer.clone();
                         std::thread::Builder::new()
                             .name("mp4 reader - audio".to_string())
                             .spawn(move || {
@@ -300,10 +311,15 @@ fn start_thread_with_loop(
                                 for (mut chunk, duration) in track.chunks() {
                                     chunk.pts += offset;
                                     chunk.dts = chunk.dts.map(|dts| dts + offset);
+
                                     last_sample_pts.fetch_max(
                                         (chunk.pts + duration).as_nanos() as u64,
                                         Ordering::Relaxed,
                                     );
+
+                                    // add buffer after recording last sample
+                                    chunk.pts = buffer.pts_with_buffer(chunk.pts);
+
                                     trace!(pts=?chunk.pts, "MP4 reader produced an audio chunk.");
                                     if sender.send(PipelineEvent::Data(chunk)).is_err() {
                                         debug!("Failed to send a audio chunk. Channel closed.")
@@ -355,6 +371,7 @@ fn start_thread_with_loop(
 #[allow(clippy::too_many_arguments)]
 fn start_thread_single_run(
     ctx: Arc<PipelineCtx>,
+    buffer: InputBuffer,
     video_handle: Option<DecoderThreadHandle>,
     video_track: Option<Track<File>>,
     video_span: Span,
@@ -364,15 +381,16 @@ fn start_thread_single_run(
     should_close: Arc<AtomicBool>,
     _source_file: Arc<SourceFile>,
 ) {
-    let offset = ctx.queue_sync_point.elapsed() + ctx.default_buffer_duration;
+    let offset = ctx.queue_sync_point.elapsed();
     if let (Some(handle), Some(mut track)) = (video_handle, video_track) {
         let should_close = should_close.clone();
+        let buffer = buffer.clone();
         std::thread::Builder::new()
             .name("mp4 reader - video".to_string())
             .spawn(move || {
                 let _span = video_span.enter();
                 for (mut chunk, _duration) in track.chunks() {
-                    chunk.pts += offset;
+                    chunk.pts = buffer.pts_with_buffer(chunk.pts + offset);
                     chunk.dts = chunk.dts.map(|dts| dts + offset);
                     trace!(?chunk, "Sending video chunk");
                     if handle
@@ -395,12 +413,13 @@ fn start_thread_single_run(
 
     if let (Some(handle), Some(mut track)) = (audio_handle, audio_track) {
         let should_close = should_close.clone();
+        let buffer = buffer.clone();
         std::thread::Builder::new()
             .name("mp4 reader - audio".to_string())
             .spawn(move || {
                 let _span = audio_span.enter();
                 for (mut chunk, _duration) in track.chunks() {
-                    chunk.pts += offset;
+                    chunk.pts = buffer.pts_with_buffer(chunk.pts + offset);
                     chunk.dts = chunk.dts.map(|dts| dts + offset);
                     trace!(?chunk, "Sending audio chunk");
                     if handle

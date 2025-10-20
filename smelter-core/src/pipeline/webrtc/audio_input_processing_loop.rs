@@ -13,6 +13,7 @@ use crate::{
             RtpNtpSyncPoint, RtpPacket, RtpTimestampSync,
             depayloader::{DepayloaderOptions, DepayloaderStream},
         },
+        utils::input_buffer::InputBuffer,
         webrtc::{AsyncReceiverIter, listen_for_rtcp::listen_for_rtcp},
     },
     thread_utils::{InitializableThread, ThreadMetadata},
@@ -25,12 +26,12 @@ pub(super) struct AudioInputLoop {
     pub track: Arc<TrackRemote>,
     pub rtc_receiver: Arc<RTCRtpReceiver>,
     pub handle: AudioTrackThreadHandle,
+    pub buffer: InputBuffer,
 }
 
 impl AudioInputLoop {
     pub(super) async fn run(self, ctx: Arc<PipelineCtx>) -> Result<(), DecoderInitError> {
-        let mut timestamp_sync =
-            RtpTimestampSync::new(&self.sync_point, 48_000, ctx.default_buffer_duration);
+        let mut timestamp_sync = RtpTimestampSync::new(&self.sync_point, 48_000, self.buffer);
 
         let (sender_report_sender, mut sender_report_receiver) = oneshot::channel();
         listen_for_rtcp(&ctx, self.rtc_receiver, sender_report_sender);

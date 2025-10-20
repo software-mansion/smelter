@@ -33,6 +33,7 @@ mod webrtc;
 mod input;
 mod instance;
 mod output;
+mod utils;
 
 pub use instance::Pipeline;
 

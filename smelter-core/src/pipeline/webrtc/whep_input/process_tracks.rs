@@ -15,6 +15,7 @@ use crate::{
     pipeline::{
         decoder::VideoDecoderMapping,
         rtp::{RtpNtpSyncPoint, depayloader::VideoPayloadTypeMapping},
+        utils::input_buffer::InputBuffer,
         webrtc::{
             audio_input_processing_loop::{AudioInputLoop, AudioTrackThread},
             negotiated_codecs::{
@@ -31,6 +32,7 @@ use crate::{
 pub fn setup_track_processing(
     pc: &RecvonlyPeerConnection,
     ctx: &Arc<PipelineCtx>,
+    buffer: InputBuffer,
     input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
     video_preferences: Vec<VideoDecoderOptions>,
@@ -51,6 +53,7 @@ pub fn setup_track_processing(
                     process_audio_track(
                         ctx.clone(),
                         sync_point.clone(),
+                        buffer.clone(),
                         input_samples_sender.clone(),
                         track,
                         transceiver,
@@ -63,6 +66,7 @@ pub fn setup_track_processing(
                     process_video_track(
                         ctx.clone(),
                         sync_point.clone(),
+                        buffer.clone(),
                         frame_sender.clone(),
                         track,
                         transceiver,
@@ -83,6 +87,7 @@ pub fn setup_track_processing(
 async fn process_audio_track(
     ctx: Arc<PipelineCtx>,
     sync_point: Arc<RtpNtpSyncPoint>,
+    buffer: InputBuffer,
     samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
@@ -100,6 +105,7 @@ async fn process_audio_track(
         track,
         rtc_receiver,
         handle,
+        buffer,
     };
 
     audio_input_loop.run(ctx).await?;
@@ -110,6 +116,7 @@ async fn process_audio_track(
 async fn process_video_track(
     ctx: Arc<PipelineCtx>,
     sync_point: Arc<RtpNtpSyncPoint>,
+    buffer: InputBuffer,
     frame_sender: Sender<PipelineEvent<Frame>>,
     track: Arc<TrackRemote>,
     transceiver: Arc<RTCRtpTransceiver>,
@@ -140,6 +147,7 @@ async fn process_video_track(
         track,
         rtc_receiver,
         handle,
+        buffer,
     };
 
     video_input_loop.run(ctx).await?;

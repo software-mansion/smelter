@@ -56,3 +56,18 @@ pub enum InputProtocolKind {
     DeckLink,
     RawDataChannel,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum InputBufferOptions {
+    /// No buffering, should only be used with required or if offset
+    /// guarantees a enough time to deliver media to the queue.
+    None,
+    /// Fixed buffer, default to pipeline default (80ms).
+    Const(Option<Duration>),
+    /// Buffer that can increase and decrease to minimize latency.
+    /// Desired buffer size is set based on pipeline default (80ms).
+    LatencyOptimized,
+    /// Buffer that can increase if packets are not delivered on time.
+    /// It will never decrease even network conditions improve.
+    Adaptive,
+}

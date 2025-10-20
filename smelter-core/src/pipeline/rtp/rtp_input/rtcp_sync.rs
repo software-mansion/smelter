@@ -5,7 +5,9 @@ use std::{
 
 use tracing::{debug, info, warn};
 
-use crate::pipeline::rtp::rtp_input::rollover_state::RolloverState;
+use crate::pipeline::{
+    rtp::rtp_input::rollover_state::RolloverState, utils::input_buffer::InputBuffer,
+};
 
 #[cfg(test)]
 mod sync_test;
@@ -109,7 +111,7 @@ pub(crate) struct RtpTimestampSync {
     sync_offset_secs: Option<f64>,
     // additional buffer that defines how much input start should be ahead
     // of the queue.
-    buffer_duration_secs: f64,
+    input_buffer: InputBuffer,
     clock_rate: u32,
     rollover_state: RolloverState,
 
@@ -121,12 +123,12 @@ impl RtpTimestampSync {
     pub fn new(
         sync_point: &Arc<RtpNtpSyncPoint>,
         clock_rate: u32,
-        buffer_duration: Duration,
+        input_buffer: InputBuffer,
     ) -> Self {
         Self {
             sync_offset_secs: None,
             rtp_timestamp_offset: None,
-            buffer_duration_secs: buffer_duration.as_secs_f64(),
+            input_buffer,
 
             clock_rate,
             rollover_state: Default::default(),
@@ -174,13 +176,13 @@ impl RtpTimestampSync {
             _ => (),
         }
 
-        let pts_secs = pts_secs + self.buffer_duration_secs;
-        if pts_secs < 0.0 {
+        let pts = if pts_secs < 0.0 {
             warn!(pts_secs, "PTS from before queue start");
             Duration::ZERO
         } else {
             Duration::from_secs_f64(pts_secs)
-        }
+        };
+        self.input_buffer.pts_with_buffer(pts)
     }
 
     pub fn on_sender_report(&mut self, ntp_time: u64, rtp_timestamp: u32) {

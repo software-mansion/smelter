@@ -3,13 +3,17 @@ use std::{
     sync::Arc,
 };
 
-use crate::codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions};
+use crate::{
+    InputBufferOptions,
+    codecs::{AudioEncoderOptions, VideoDecoderOptions, VideoEncoderOptions},
+};
 
 #[derive(Debug, Clone)]
 pub struct Mp4InputOptions {
     pub source: Mp4InputSource,
     pub should_loop: bool,
     pub video_decoders: Mp4InputVideoDecoders,
+    pub buffer: InputBufferOptions,
 }
 
 #[derive(Debug, Clone)]

@@ -225,7 +225,7 @@ fn ensure_correct_amount_of_samples(
 fn check_input_batch(samples: &InputAudioSamples, expected_sample_rate: u32) {
     let sample_rate =
         samples.samples.len() as f64 / (samples.end_pts - samples.start_pts).as_secs_f64();
-    if f64::abs(sample_rate - expected_sample_rate as f64) > 0.0001 {
+    if f64::abs(sample_rate - expected_sample_rate as f64) > 0.001 {
         tracing::error!(
             expected_sample_rate,
             ?samples,

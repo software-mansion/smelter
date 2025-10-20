@@ -20,6 +20,7 @@ pub(crate) struct WhipInputConnectionStateOptions {
     pub video_codecs: Vec<RTCRtpCodecParameters>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    pub buffer_options: InputBufferOptions,
 }
 
 #[derive(Debug, Clone)]
@@ -31,6 +32,7 @@ pub(crate) struct WhipInputConnectionState {
     pub video_codecs: Vec<RTCRtpCodecParameters>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    pub buffer_options: InputBufferOptions,
 }
 
 impl WhipInputConnectionState {
@@ -43,6 +45,7 @@ impl WhipInputConnectionState {
             video_codecs: options.video_codecs,
             frame_sender: options.frame_sender,
             input_samples_sender: options.input_samples_sender,
+            buffer_options: options.buffer_options,
         }
     }
 

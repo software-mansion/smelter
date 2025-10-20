@@ -8,6 +8,7 @@ use crate::{
     pipeline::{
         decoder::VideoDecoderMapping,
         rtp::{RtpNtpSyncPoint, depayloader::VideoPayloadTypeMapping},
+        utils::input_buffer::InputBuffer,
         webrtc::{
             WhipWhepServerState,
             audio_input_processing_loop::{AudioInputLoop, AudioTrackThread},
@@ -23,6 +24,7 @@ use crate::{
 
 pub async fn process_audio_track(
     sync_point: Arc<RtpNtpSyncPoint>,
+    buffer: InputBuffer,
     state: WhipWhepServerState,
     endpoint_id: Arc<str>,
     track: Arc<TrackRemote>,
@@ -50,6 +52,7 @@ pub async fn process_audio_track(
         track,
         rtc_receiver,
         handle,
+        buffer,
     };
 
     audio_input_loop.run(ctx).await?;
@@ -59,6 +62,7 @@ pub async fn process_audio_track(
 
 pub async fn process_video_track(
     sync_point: Arc<RtpNtpSyncPoint>,
+    buffer: InputBuffer,
     state: WhipWhepServerState,
     endpoint_id: Arc<str>,
     track: Arc<TrackRemote>,
@@ -94,6 +98,7 @@ pub async fn process_video_track(
         track,
         rtc_receiver,
         handle,
+        buffer,
     };
 
     video_input_loop.run(ctx).await?;
