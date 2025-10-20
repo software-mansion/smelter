@@ -4,8 +4,8 @@ import type {
   RegisterHlsInput,
   RegisterRtpInput,
   Inputs,
-  RegisterWhipInput,
-  RegisterWhepInput,
+  RegisterWhipServerInput,
+  RegisterWhepClientInput,
 } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
 
@@ -17,8 +17,8 @@ export type RegisterInputRequest =
   | RegisterRtpStreamInputRequest
   | RegisterMp4InputRequest
   | RegisterHlsInputRequest
-  | RegisterWhipInputRequest
-  | RegisterWhepInputRequest
+  | RegisterWhipServerInputRequest
+  | RegisterWhepClientInputRequest
   | RegisterDecklinkInputRequest
   | { type: 'camera' }
   | { type: 'screen_capture' }
@@ -28,8 +28,8 @@ export type RegisterInputRequest =
 export type RegisterRtpStreamInputRequest = Extract<Api.RegisterInput, { type: 'rtp_stream' }>;
 export type RegisterMp4InputRequest = { blob?: any } & Extract<Api.RegisterInput, { type: 'mp4' }>;
 export type RegisterHlsInputRequest = Extract<Api.RegisterInput, { type: 'hls' }>;
-export type RegisterWhipInputRequest = Extract<Api.RegisterInput, { type: 'whip_server' }>;
-export type RegisterWhepInputRequest = Extract<Api.RegisterInput, { type: 'whep_client' }>;
+export type RegisterWhipServerInputRequest = Extract<Api.RegisterInput, { type: 'whip_server' }>;
+export type RegisterWhepClientInputRequest = Extract<Api.RegisterInput, { type: 'whep_client' }>;
 export type RegisterDecklinkInputRequest = Extract<Api.RegisterInput, { type: 'decklink' }>;
 
 export type InputRef = _smelterInternals.InputRef;
@@ -40,8 +40,8 @@ export type RegisterInput =
   | ({ type: 'rtp_stream' } & RegisterRtpInput)
   | ({ type: 'mp4' } & RegisterMp4Input)
   | ({ type: 'hls' } & RegisterHlsInput)
-  | ({ type: 'whip_server' } & RegisterWhipInput)
-  | ({ type: 'whep_client' } & RegisterWhepInput)
+  | ({ type: 'whip_server' } & RegisterWhipServerInput)
+  | ({ type: 'whep_client' } & RegisterWhepClientInput)
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any }
@@ -116,7 +116,7 @@ function intoRtpRegisterInput(input: Inputs.RegisterRtpInput): RegisterInputRequ
 
 function intoWhipRegisterInput(
   inputId: string,
-  input: Inputs.RegisterWhipInput
+  input: Inputs.RegisterWhipServerInput
 ): RegisterInputRequest {
   return {
     type: 'whip_server',
@@ -128,7 +128,7 @@ function intoWhipRegisterInput(
   };
 }
 
-function intoWhepRegisterInput(input: Inputs.RegisterWhepInput): RegisterInputRequest {
+function intoWhepRegisterInput(input: Inputs.RegisterWhepClientInput): RegisterInputRequest {
   return {
     type: 'whep_client',
     endpoint_url: input.endpointUrl,

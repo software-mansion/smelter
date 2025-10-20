@@ -3,14 +3,14 @@ import type {
   RegisterRtpOutput,
   RegisterMp4Output,
   RegisterHlsOutput,
-  RegisterWhipOutput,
-  RegisterWhepOutput,
-  _smelterInternals,
+  RegisterWhipClientOutput,
+  RegisterWhepServerOutput,
   RegisterRtmpClientOutput,
+  _smelterInternals,
 } from '@swmansion/smelter';
 import { inputRefIntoRawId } from './input';
-import { intoRegisterWhipOutput } from './output/whip';
-import { intoRegisterWhepOutput } from './output/whep';
+import { intoRegisterWhipClientOutput } from './output/whip';
+import { intoRegisterWhepServerOutput } from './output/whep';
 import { intoRegisterRtpOutput } from './output/rtp';
 import { intoRegisterMp4Output } from './output/mp4';
 import { intoRegisterHlsOutput } from './output/hls';
@@ -68,8 +68,8 @@ export type RegisterOutput =
   | ({ type: 'rtp_stream' } & RegisterRtpOutput)
   | ({ type: 'mp4' } & RegisterMp4Output)
   | ({ type: 'hls' } & RegisterHlsOutput)
-  | ({ type: 'whip_client' } & RegisterWhipOutput)
-  | ({ type: 'whep_server' } & RegisterWhepOutput)
+  | ({ type: 'whip_client' } & RegisterWhipClientOutput)
+  | ({ type: 'whep_server' } & RegisterWhepServerOutput)
   | ({ type: 'rtmp_client' } & RegisterRtmpClientOutput)
   | RegisterWasmSpecificOutput;
 
@@ -87,9 +87,9 @@ export function intoRegisterOutput(
   } else if (output.type === 'hls') {
     return intoRegisterHlsOutput(output, initial);
   } else if (output.type === 'whip_client') {
-    return intoRegisterWhipOutput(output, initial);
+    return intoRegisterWhipClientOutput(output, initial);
   } else if (output.type === 'whep_server') {
-    return intoRegisterWhepOutput(output, initial);
+    return intoRegisterWhepServerOutput(output, initial);
   } else if (output.type === 'rtmp_client') {
     return intoRegisterRtmpClientOutput(output, initial);
   } else if (['web-wasm-canvas', 'web-wasm-whip', 'web-wasm-stream'].includes(output.type)) {

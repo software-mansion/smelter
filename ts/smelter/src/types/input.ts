@@ -96,7 +96,7 @@ export type RegisterHlsInput = {
   decoderMap?: InputHlsDecoderMap | null;
 };
 
-export type RegisterWhipInput = {
+export type RegisterWhipServerInput = {
   /**
    * Parameters of a video source included in the RTP stream.
    */
@@ -119,7 +119,7 @@ export type RegisterWhipInput = {
   offsetMs?: number | null;
 };
 
-export type RegisterWhepInput = {
+export type RegisterWhepClientInput = {
   /**
    * WHEP server endpoint URL.
    */

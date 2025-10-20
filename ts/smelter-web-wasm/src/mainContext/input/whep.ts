@@ -58,7 +58,7 @@ export class WhepInput implements Input {
   }
 }
 
-export async function handleRegisterWhepInput(
+export async function handleRegisterWhepClientInput(
   ctx: InstanceContext,
   inputId: string,
   endpointUrl: string,

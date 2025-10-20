@@ -2,8 +2,8 @@ import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputRequest } from '../output';
 import { intoOutputEosCondition, intoVulkanH264EncoderBitrate } from './common';
 
-export function intoRegisterWhipOutput(
-  output: Outputs.RegisterWhipOutput,
+export function intoRegisterWhipClientOutput(
+  output: Outputs.RegisterWhipClientOutput,
   initial: { video?: Api.VideoScene; audio?: Api.AudioScene }
 ): RegisterOutputRequest {
   return {
