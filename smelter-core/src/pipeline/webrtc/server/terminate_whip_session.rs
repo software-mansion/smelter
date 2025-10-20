@@ -11,20 +11,18 @@ pub async fn handle_terminate_whip_session(
     State(state): State<WhipWhepServerState>,
     headers: HeaderMap,
 ) -> Result<StatusCode, WhipWhepServerError> {
-    let endpoint_id = Arc::from(endpoint_id);
+    let input_id = state.inputs.find_by_endpoint_id(&Arc::from(endpoint_id))?;
     let session_id = Arc::from(session_id);
 
-    state.inputs.validate_token(&endpoint_id, &headers).await?;
-    state
-        .inputs
-        .validate_session_id(&endpoint_id, &session_id)?;
+    state.inputs.validate_token(&input_id, &headers).await?;
+    state.inputs.validate_session_id(&input_id, &session_id)?;
 
-    let peer_connection = state
+    let session = state
         .inputs
-        .get_mut_with(&endpoint_id, |input| Ok(input.peer_connection.take()))?;
+        .get_mut_with(&input_id, |input| Ok(input.session.take()))?;
 
-    match peer_connection {
-        Some(peer_connection) => peer_connection.close().await?,
+    match session {
+        Some(session) => session.peer_connection.close().await?,
         None => {
             return Err(WhipWhepServerError::InternalError(format!(
                 "None peer connection for {session_id:?}"

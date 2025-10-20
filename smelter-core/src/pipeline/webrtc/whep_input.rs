@@ -30,7 +30,7 @@ mod resolve_video_preferences;
 const WHEP_INIT_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug)]
-pub struct WhepInput {
+pub(crate) struct WhepInput {
     ctx: Arc<PipelineCtx>,
     session_url: Url,
     client: Arc<WhipWhepHttpClient>,
@@ -112,7 +112,7 @@ async fn init_whep_client(
         resolve_video_preferences(&ctx, options.video_preferences)?;
     let pc = RecvonlyPeerConnection::new(&ctx, &video_codecs_params).await?;
 
-    let _video_transceiver = pc.new_video_track(video_codecs_params).await?;
+    let _video_transceiver = pc.new_video_track(&video_codecs_params).await?;
     let _audio_transceiver = pc.new_audio_track().await?;
 
     let offer = pc.create_offer().await?;
