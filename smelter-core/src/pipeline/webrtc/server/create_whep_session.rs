@@ -71,20 +71,26 @@ pub async fn handle_create_whep_session(
         _ => (None, None),
     };
 
-    let audio_media_stream = match (&audio_encoder, audio_receiver) {
+    let (audio_media_stream, audio_sender) = match (&audio_encoder, audio_receiver) {
         (Some(encoder), Some(receiver)) => {
-            let (track, ssrc, payload_type) = peer_connection.new_audio_track(encoder).await?;
+            let (track, sender, ssrc, payload_type) =
+                peer_connection.new_audio_track(encoder).await?;
             let payloader = init_audio_payloader(ssrc, payload_type);
-            Some(MediaStream {
-                receiver,
-                track,
-                payloader,
-            })
+            (
+                Some(MediaStream {
+                    receiver,
+                    track,
+                    payloader,
+                }),
+                Some(sender),
+            )
         }
-        _ => None,
+        _ => (None, None),
     };
 
-    let sdp_answer = peer_connection.negotiate_connection(offer).await?;
+    let sdp_answer = peer_connection
+        .negotiate_connection(offer, video_sender.clone(), audio_sender.clone())
+        .await?;
     trace!("SDP answer: {}", sdp_answer.sdp);
 
     let session_id = outputs.add_session(&output_id, peer_connection.clone())?;

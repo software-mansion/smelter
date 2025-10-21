@@ -117,7 +117,7 @@ impl PeerConnection {
     pub async fn new_audio_track(
         &self,
         encoder: &AudioEncoderOptions,
-    ) -> Result<(Arc<TrackLocalStaticRTP>, u32, u8), WhipWhepServerError> {
+    ) -> Result<(Arc<TrackLocalStaticRTP>, Arc<RTCRtpSender>, u32, u8), WhipWhepServerError> {
         let track = match encoder {
             AudioEncoderOptions::Opus(opts) => {
                 let channels = match opts.channels {
@@ -153,7 +153,7 @@ impl PeerConnection {
             None => (rand::rng().random::<u32>(), 111),
         };
 
-        Ok((track, ssrc, payload_type))
+        Ok((track, sender, ssrc, payload_type))
     }
 
     pub async fn set_remote_description(
@@ -186,9 +186,14 @@ impl PeerConnection {
     pub async fn negotiate_connection(
         &self,
         offer: String,
+        video_sender: Option<Arc<RTCRtpSender>>,
+        audio_sender: Option<Arc<RTCRtpSender>>,
     ) -> Result<RTCSessionDescription, WhipWhepServerError> {
         let offer = RTCSessionDescription::offer(offer)?;
         self.set_remote_description(offer).await?;
+
+        // allow audio/video only stream, when on second track codec wasn't succesfully negotiated
+        cleanup_unnegotiated_tracks(video_sender, audio_sender).await?;
 
         let answer = self.create_answer().await?;
         self.set_local_description(answer).await?;
@@ -365,4 +370,37 @@ fn create_opus_codec_params(
         payload_type,
         ..Default::default()
     }
+}
+
+async fn cleanup_unnegotiated_tracks(
+    video_sender: Option<Arc<RTCRtpSender>>,
+    audio_sender: Option<Arc<RTCRtpSender>>,
+) -> Result<(), WhipWhepServerError> {
+    let mut any_codec_negotiated = false;
+    match video_sender {
+        Some(sender) if is_sender_codec_empty(&sender).await => sender.replace_track(None).await?,
+        Some(_) => any_codec_negotiated = true,
+        _ => {}
+    }
+    match audio_sender {
+        Some(sender) if is_sender_codec_empty(&sender).await => sender.replace_track(None).await?,
+        Some(_) => any_codec_negotiated = true,
+        _ => {}
+    }
+
+    if !any_codec_negotiated {
+        return Err(WhipWhepServerError::InternalError(
+            "No codec was negotiated for either audio or video track".into(),
+        ));
+    }
+    Ok(())
+}
+
+async fn is_sender_codec_empty(sender: &Arc<RTCRtpSender>) -> bool {
+    sender
+        .get_parameters()
+        .await
+        .rtp_parameters
+        .codecs
+        .is_empty()
 }
