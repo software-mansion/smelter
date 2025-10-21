@@ -56,23 +56,30 @@ fn bundle_app(
 
     let ffmpeg_url = utils::ffmpeg_url(&ffmpeg_version)?;
 
-    let rustc_envs = vec![
-        ("FFMPEG_VERSION", ffmpeg_version),
-        ("FFMPEG_URL", ffmpeg_url),
-    ];
-
     let cargo_build_dir = git_root().join("target").join(target_name).join("release");
     utils::ensure_empty_dir(&workdir.join("smelter"))?;
 
+    let rustc_args = if enable_web_rendering {
+        vec![
+            "-Clink-arg=-Wl,-rpath,$ORIGIN/libav".to_string(),
+            "-Clink-arg=-Wl,-rpath,$ORIGIN/lib".to_string(),
+        ]
+    } else {
+        vec!["-Clink-arg=-Wl,-rpath,$ORIGIN/libav".to_string()]
+    };
     info!("Build main_process binary.");
     utils::compile_smelter(
         SmelterBin::MainProcess,
         target_name,
         !enable_web_rendering,
-        None,
+        Some(&rustc_args),
         None,
     )?;
 
+    let rustc_envs = vec![
+        ("FFMPEG_VERSION", ffmpeg_version),
+        ("FFMPEG_URL", ffmpeg_url),
+    ];
     info!("Build dependency_check binary.");
     utils::compile_smelter(
         SmelterBin::DependencyCheck,
@@ -87,8 +94,15 @@ fn bundle_app(
     )?;
 
     if enable_web_rendering {
+        let rustc_args = ["-Clink-arg=-Wl,-rpath,$ORIGIN/lib".to_string()];
         info!("Build process_helper binary.");
-        utils::compile_smelter(SmelterBin::ChromiumHelper, target_name, false, None, None)?;
+        utils::compile_smelter(
+            SmelterBin::ChromiumHelper,
+            target_name,
+            false,
+            Some(&rustc_args),
+            None,
+        )?;
 
         info!("Copy main_process binary.");
         fs::copy(

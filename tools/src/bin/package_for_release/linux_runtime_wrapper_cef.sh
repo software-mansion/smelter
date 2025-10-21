@@ -6,7 +6,6 @@
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-export LD_LIBRARY_PATH="$SCRIPT_DIR/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}:$SCRIPT_DIR/libav"
 export SMELTER_PROCESS_HELPER_PATH="$SCRIPT_DIR/smelter_process_helper"
 
 "$SCRIPT_DIR/dependency_check"
