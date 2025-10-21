@@ -21,7 +21,7 @@ use crate::{
             negotiated_codecs::{
                 WebrtcVideoDecoderMapping, WebrtcVideoPayloadTypeMapping, audio_codec_negotiated,
             },
-            peer_connection_recvonly::RecvonlyPeerConnection,
+            peer_connection_recvonly::{OnTrackContext, RecvonlyPeerConnection},
             video_input_processing_loop::{VideoInputLoop, VideoTrackThread},
         },
     },
@@ -39,49 +39,53 @@ pub fn setup_track_processing(
 ) {
     let ctx = ctx.clone();
     let sync_point = RtpNtpSyncPoint::new(ctx.queue_sync_point);
-    pc.on_track(Box::new(move |track, _, transceiver| {
-        debug!(
-            kind=?track.kind(),
-            "on_track called"
-        );
+    pc.on_track(
+        move |OnTrackContext {
+                  track,
+                  transceiver,
+                  rtc_receiver: _,
+              }| {
+            debug!(
+                kind=?track.kind(),
+                "on_track called"
+            );
 
-        let span = span!(Level::INFO, "WHEP input track", track_type=?track.kind());
+            let span = span!(Level::INFO, "WHEP input track", track_type=?track.kind());
 
-        match track.kind() {
-            RTPCodecType::Audio => {
-                tokio::spawn(
-                    process_audio_track(
-                        ctx.clone(),
-                        sync_point.clone(),
-                        buffer.clone(),
-                        input_samples_sender.clone(),
-                        track,
-                        transceiver,
-                    )
-                    .instrument(span),
-                );
+            match track.kind() {
+                RTPCodecType::Audio => {
+                    tokio::spawn(
+                        process_audio_track(
+                            ctx.clone(),
+                            sync_point.clone(),
+                            buffer.clone(),
+                            input_samples_sender.clone(),
+                            track,
+                            transceiver,
+                        )
+                        .instrument(span),
+                    );
+                }
+                RTPCodecType::Video => {
+                    tokio::spawn(
+                        process_video_track(
+                            ctx.clone(),
+                            sync_point.clone(),
+                            buffer.clone(),
+                            frame_sender.clone(),
+                            track,
+                            transceiver,
+                            video_preferences.clone(),
+                        )
+                        .instrument(span),
+                    );
+                }
+                RTPCodecType::Unspecified => {
+                    warn!("Unknown track kind")
+                }
             }
-            RTPCodecType::Video => {
-                tokio::spawn(
-                    process_video_track(
-                        ctx.clone(),
-                        sync_point.clone(),
-                        buffer.clone(),
-                        frame_sender.clone(),
-                        track,
-                        transceiver,
-                        video_preferences.clone(),
-                    )
-                    .instrument(span),
-                );
-            }
-            RTPCodecType::Unspecified => {
-                warn!("Unknown track kind")
-            }
-        }
-
-        Box::pin(async {})
-    }))
+        },
+    )
 }
 
 async fn process_audio_track(
@@ -93,7 +97,7 @@ async fn process_audio_track(
     transceiver: Arc<RTCRtpTransceiver>,
 ) -> Result<(), WebrtcClientError> {
     let rtc_receiver = transceiver.receiver().await;
-    if !audio_codec_negotiated(rtc_receiver.clone()).await {
+    if !audio_codec_negotiated(&rtc_receiver).await {
         warn!("Skipping audio track, no valid codec negotiated");
         return Err(WebrtcClientError::NoAudioCodecNegotiated);
     };
@@ -102,10 +106,13 @@ async fn process_audio_track(
 
     let audio_input_loop = AudioInputLoop {
         sync_point,
-        track,
-        rtc_receiver,
         handle,
         buffer,
+        track_ctx: OnTrackContext {
+            track,
+            transceiver,
+            rtc_receiver,
+        },
     };
 
     audio_input_loop.run(ctx).await?;
@@ -124,8 +131,8 @@ async fn process_video_track(
 ) -> Result<(), WebrtcClientError> {
     let rtc_receiver = transceiver.receiver().await;
     let (Some(decoder_mapping), Some(payload_type_mapping)) = (
-        VideoDecoderMapping::from_webrtc_transceiver(transceiver.clone(), &video_preferences).await,
-        VideoPayloadTypeMapping::from_webrtc_transceiver(transceiver).await,
+        VideoDecoderMapping::from_webrtc_receiver(&rtc_receiver, &video_preferences).await,
+        VideoPayloadTypeMapping::from_webrtc_receiver(&rtc_receiver).await,
     ) else {
         warn!("Skipping video track, no valid codec negotiated");
         return Err(WebrtcClientError::NoVideoCodecNegotiated);
@@ -144,10 +151,13 @@ async fn process_video_track(
 
     let video_input_loop = VideoInputLoop {
         sync_point,
-        track,
-        rtc_receiver,
         handle,
         buffer,
+        track_ctx: OnTrackContext {
+            track,
+            transceiver,
+            rtc_receiver,
+        },
     };
 
     video_input_loop.run(ctx).await?;

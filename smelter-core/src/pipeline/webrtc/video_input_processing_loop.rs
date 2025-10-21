@@ -4,7 +4,6 @@ use crossbeam_channel::Sender;
 use smelter_render::Frame;
 use tokio::sync::oneshot;
 use tracing::{debug, trace, warn};
-use webrtc::{rtp_transceiver::rtp_receiver::RTCRtpReceiver, track::track_remote::TrackRemote};
 
 use crate::{
     pipeline::{
@@ -14,7 +13,10 @@ use crate::{
             depayloader::{DynamicDepayloaderStream, VideoPayloadTypeMapping},
         },
         utils::input_buffer::InputBuffer,
-        webrtc::{AsyncReceiverIter, listen_for_rtcp::listen_for_rtcp},
+        webrtc::{
+            AsyncReceiverIter, listen_for_rtcp::listen_for_rtcp,
+            peer_connection_recvonly::OnTrackContext,
+        },
     },
     thread_utils::{InitializableThread, ThreadMetadata},
 };
@@ -23,10 +25,9 @@ use crate::prelude::*;
 
 pub(super) struct VideoInputLoop {
     pub sync_point: Arc<RtpNtpSyncPoint>,
-    pub track: Arc<TrackRemote>,
-    pub rtc_receiver: Arc<RTCRtpReceiver>,
     pub handle: VideoTrackThreadHandle,
     pub buffer: InputBuffer,
+    pub track_ctx: OnTrackContext,
 }
 
 impl VideoInputLoop {
@@ -34,9 +35,9 @@ impl VideoInputLoop {
         let mut timestamp_sync = RtpTimestampSync::new(&self.sync_point, 90_000, self.buffer);
 
         let (sender_report_sender, mut sender_report_receiver) = oneshot::channel();
-        listen_for_rtcp(&ctx, self.rtc_receiver, sender_report_sender);
+        listen_for_rtcp(&ctx, self.track_ctx.rtc_receiver, sender_report_sender);
 
-        while let Ok((packet, _)) = self.track.read_rtp().await {
+        while let Ok((packet, _)) = self.track_ctx.track.read_rtp().await {
             if let Ok(report) = sender_report_receiver.try_recv() {
                 timestamp_sync.on_sender_report(report.ntp_time, report.rtp_time);
             }

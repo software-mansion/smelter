@@ -16,7 +16,7 @@ use crate::{
 pub(super) fn resolve_video_preferences(
     ctx: &Arc<PipelineCtx>,
     video_preferences: Vec<WebrtcVideoDecoderOptions>,
-) -> Result<(Vec<VideoDecoderOptions>, Vec<RTCRtpCodecParameters>), InputInitError> {
+) -> Result<Vec<VideoDecoderOptions>, InputInitError> {
     let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
     let only_vulkan_in_preferences = video_preferences
         .iter()
@@ -55,8 +55,13 @@ pub(super) fn resolve_video_preferences(
         })
         .unique()
         .collect();
+    Ok(video_preferences)
+}
 
-    let video_codecs_params = video_preferences
+pub(super) fn params_from_video_preferences(
+    video_preferences: &[VideoDecoderOptions],
+) -> Vec<RTCRtpCodecParameters> {
+    video_preferences
         .iter()
         .flat_map(|pref| match pref {
             VideoDecoderOptions::FfmpegH264 | VideoDecoderOptions::VulkanH264 => {
@@ -71,7 +76,5 @@ pub(super) fn resolve_video_preferences(
                 c.capability.sdp_fmtp_line.clone(),
             )
         })
-        .collect();
-
-    Ok((video_preferences, video_codecs_params))
+        .collect()
 }

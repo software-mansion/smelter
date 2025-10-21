@@ -3,8 +3,7 @@ use std::sync::Arc;
 use webrtc::{
     api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9},
     rtp_transceiver::{
-        PayloadType, RTCRtpTransceiver, rtp_codec::RTCRtpCodecParameters,
-        rtp_receiver::RTCRtpReceiver,
+        PayloadType, rtp_codec::RTCRtpCodecParameters, rtp_receiver::RTCRtpReceiver,
     },
 };
 
@@ -14,19 +13,18 @@ use crate::{
 };
 
 pub trait WebrtcVideoDecoderMapping: Sized {
-    async fn from_webrtc_transceiver(
-        transceiver: Arc<RTCRtpTransceiver>,
+    async fn from_webrtc_receiver(
+        rtc_receiver: &Arc<RTCRtpReceiver>,
         preferences: &[VideoDecoderOptions],
     ) -> Option<Self>;
 }
 
 impl WebrtcVideoDecoderMapping for VideoDecoderMapping {
-    async fn from_webrtc_transceiver(
-        video_transceiver: Arc<RTCRtpTransceiver>,
+    async fn from_webrtc_receiver(
+        rtc_receiver: &Arc<RTCRtpReceiver>,
         video_preferences: &[VideoDecoderOptions],
     ) -> Option<Self> {
-        let video_receiver = video_transceiver.receiver().await;
-        let codecs = video_receiver.get_parameters().await.codecs;
+        let codecs = rtc_receiver.get_parameters().await.codecs;
 
         let info = Self {
             h264: h264_decoder_info(&codecs, video_preferences),
@@ -85,13 +83,12 @@ fn vp9_decoder_info(
 }
 
 pub trait WebrtcVideoPayloadTypeMapping: Sized {
-    async fn from_webrtc_transceiver(transceiver: Arc<RTCRtpTransceiver>) -> Option<Self>;
+    async fn from_webrtc_receiver(rtc_receiver: &Arc<RTCRtpReceiver>) -> Option<Self>;
 }
 
 impl WebrtcVideoPayloadTypeMapping for VideoPayloadTypeMapping {
-    async fn from_webrtc_transceiver(video_transceiver: Arc<RTCRtpTransceiver>) -> Option<Self> {
-        let video_receiver = video_transceiver.receiver().await;
-        let codecs = video_receiver.get_parameters().await.codecs;
+    async fn from_webrtc_receiver(rtc_receiver: &Arc<RTCRtpReceiver>) -> Option<Self> {
+        let codecs = rtc_receiver.get_parameters().await.codecs;
 
         let info = Self {
             h264: h264_payload_type_info(&codecs),
@@ -133,7 +130,7 @@ fn vp9_payload_type_info(track_codecs: &[RTCRtpCodecParameters]) -> Option<Vec<P
     (!payload_types.is_empty()).then_some(payload_types)
 }
 
-pub async fn audio_codec_negotiated(receiver: Arc<RTCRtpReceiver>) -> bool {
+pub async fn audio_codec_negotiated(receiver: &Arc<RTCRtpReceiver>) -> bool {
     let track_codecs = receiver.get_parameters().await.codecs;
     track_codecs
         .iter()

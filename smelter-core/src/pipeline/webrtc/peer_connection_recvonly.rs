@@ -13,18 +13,27 @@ use webrtc::{
     },
     interceptor::registry::Registry,
     peer_connection::{
-        OnTrackHdlrFn, RTCPeerConnection, configuration::RTCConfiguration,
+        RTCPeerConnection, configuration::RTCConfiguration,
         peer_connection_state::RTCPeerConnectionState,
         sdp::session_description::RTCSessionDescription,
     },
     rtp_transceiver::{
         RTCRtpTransceiver, RTCRtpTransceiverInit,
         rtp_codec::{RTCRtpCodecParameters, RTPCodecType},
+        rtp_receiver::RTCRtpReceiver,
         rtp_transceiver_direction::RTCRtpTransceiverDirection,
     },
+    track::track_remote::TrackRemote,
 };
 
 use crate::pipeline::{PipelineCtx, webrtc::supported_codec_parameters::opus_codec_params};
+
+#[derive(Debug, Clone)]
+pub(crate) struct OnTrackContext {
+    pub track: Arc<TrackRemote>,
+    pub transceiver: Arc<RTCRtpTransceiver>,
+    pub rtc_receiver: Arc<RTCRtpReceiver>,
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct RecvonlyPeerConnection {
@@ -34,7 +43,7 @@ pub(crate) struct RecvonlyPeerConnection {
 impl RecvonlyPeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
-        video_codecs: &Vec<RTCRtpCodecParameters>,
+        video_codecs: &[RTCRtpCodecParameters],
     ) -> Result<Self, webrtc::Error> {
         let mut media_engine = media_engine_with_codecs(video_codecs)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
@@ -76,7 +85,7 @@ impl RecvonlyPeerConnection {
 
     pub async fn new_video_track(
         &self,
-        video_codecs: Vec<RTCRtpCodecParameters>,
+        video_codecs: &[RTCRtpCodecParameters],
     ) -> Result<Arc<RTCRtpTransceiver>, webrtc::Error> {
         let transceiver = self
             .pc
@@ -175,8 +184,17 @@ impl RecvonlyPeerConnection {
         self.pc.on_ice_candidate(f);
     }
 
-    pub fn on_track(&self, f: OnTrackHdlrFn) {
-        self.pc.on_track(f);
+    pub fn on_track<F: FnMut(OnTrackContext) + Send + Sync + 'static>(&self, mut f: F) {
+        self.pc
+            .on_track(Box::new(move |track, rtc_receiver, transceiver| {
+                let ctx = OnTrackContext {
+                    track,
+                    transceiver,
+                    rtc_receiver,
+                };
+                f(ctx);
+                Box::pin(async {})
+            }));
     }
 
     pub async fn add_ice_candidate(
@@ -188,7 +206,7 @@ impl RecvonlyPeerConnection {
 }
 
 fn media_engine_with_codecs(
-    video_codecs: &Vec<RTCRtpCodecParameters>,
+    video_codecs: &[RTCRtpCodecParameters],
 ) -> webrtc::error::Result<MediaEngine> {
     let mut media_engine = MediaEngine::default();
 

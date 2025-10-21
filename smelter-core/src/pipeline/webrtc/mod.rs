@@ -3,8 +3,6 @@ use tokio::sync::oneshot;
 use std::sync::Arc;
 use tracing::{error, info};
 
-use whip_input::WhipInputsState;
-
 mod audio_input_processing_loop;
 mod bearer_token;
 mod error;
@@ -28,7 +26,10 @@ pub(super) use whep_output::WhepOutput;
 pub(super) use whip_input::WhipInput;
 pub(super) use whip_output::WhipOutput;
 
-use crate::pipeline::{PipelineCtx, webrtc::whep_output::state::WhepOutputsState};
+use crate::pipeline::{
+    PipelineCtx,
+    webrtc::{whep_output::state::WhepOutputsState, whip_input::state::WhipInputsState},
+};
 
 #[derive(Debug, Clone)]
 struct WhipWhepServerState {
