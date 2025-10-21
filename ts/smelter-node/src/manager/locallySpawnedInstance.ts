@@ -72,35 +72,16 @@ class LocallySpawnedInstanceManager implements SmelterManager {
     const { level, format } = smelterInstanceLoggerOptions();
 
     let downloadDir = path.join(this.workingdir, 'download');
-    const executableDir = path.parse(mainProcessPath).dir;
 
-    const smelterLdLibraryPath = process.env.LD_LIBRARY_PATH
-      ? `${executableDir}/lib:${process.env.LD_LIBRARY_PATH}:${executableDir}/libav`
-      : `${executableDir}/lib:${executableDir}/libav`;
-
-    // TODO: (@jbrs) Check if it works without setting `LD_LIBRARY_PATH`. If if does
-    // then change it
-    const env =
-      process.platform === 'linux'
-        ? {
-            SMELTER_DOWNLOAD_DIR: downloadDir,
-            SMELTER_API_PORT: this.port.toString(),
-            SMELTER_WEB_RENDERER_ENABLE: this.enableWebRenderer ? 'true' : 'false',
-            SMELTER_AHEAD_OF_TIME_PROCESSING_ENABLE: opts.aheadOfTimeProcessing ? 'true' : 'false',
-            ...process.env,
-            SMELTER_LOGGER_FORMAT: format,
-            SMELTER_LOGGER_LEVEL: level,
-            LD_LIBRARY_PATH: smelterLdLibraryPath,
-          }
-        : {
-            SMELTER_DOWNLOAD_DIR: downloadDir,
-            SMELTER_API_PORT: this.port.toString(),
-            SMELTER_WEB_RENDERER_ENABLE: this.enableWebRenderer ? 'true' : 'false',
-            SMELTER_AHEAD_OF_TIME_PROCESSING_ENABLE: opts.aheadOfTimeProcessing ? 'true' : 'false',
-            ...process.env,
-            SMELTER_LOGGER_FORMAT: format,
-            SMELTER_LOGGER_LEVEL: level,
-          };
+    const env = {
+      SMELTER_DOWNLOAD_DIR: downloadDir,
+      SMELTER_API_PORT: this.port.toString(),
+      SMELTER_WEB_RENDERER_ENABLE: this.enableWebRenderer ? 'true' : 'false',
+      SMELTER_AHEAD_OF_TIME_PROCESSING_ENABLE: opts.aheadOfTimeProcessing ? 'true' : 'false',
+      ...process.env,
+      SMELTER_LOGGER_FORMAT: format,
+      SMELTER_LOGGER_LEVEL: level,
+    };
 
     const executableError = (err: any, message: string) => {
       opts.logger.error(err, message);
