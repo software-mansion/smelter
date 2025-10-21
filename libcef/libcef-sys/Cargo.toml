@@ -8,6 +8,9 @@ license-file = "../../LICENSE"
 
 [dependencies]
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2.177"
+
 [build-dependencies]
 anyhow = { workspace = true }
 bindgen = "0.72.1"
