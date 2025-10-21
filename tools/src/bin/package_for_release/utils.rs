@@ -121,8 +121,7 @@ pub fn ffmpeg_url(ffmpeg_version: &str) -> Result<String> {
 
         match ffmpeg_version {
             "6.1" => {
-                // format!("n6.1/ffmpeg_n6.1_{os_arch}.tar.gz")
-                format!("patchelf-test/ffmpeg_n6.1_{os_arch}.tar.gz")
+                format!("n6.1/ffmpeg_n6.1_{os_arch}.tar.gz")
             }
             "7.1" => {
                 format!("n7.1/ffmpeg_n7.1_{os_arch}.tar.gz")
