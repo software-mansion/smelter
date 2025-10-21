@@ -13,7 +13,7 @@ use crate::pipeline::{
         error::WhipWhepServerError,
         peer_connection_recvonly::RecvonlyPeerConnection,
         whip_input::{
-            on_track::handle_on_track, state::WhipInputSession,
+            WhipTrackContext, on_track::handle_on_track, state::WhipInputSession,
             video_preferences::params_from_video_preferences,
         },
     },
@@ -59,14 +59,8 @@ pub(crate) async fn create_new_whip_session(
         let buffer = InputBuffer::new(&state.ctx, buffer_option);
         let sync_point = RtpNtpSyncPoint::new(state.ctx.queue_sync_point);
         peer_connection.on_track(move |track_ctx| {
-            handle_on_track(
-                track_ctx,
-                state.clone(),
-                input_id.clone(),
-                sync_point.clone(),
-                buffer.clone(),
-                video_preferences.clone(),
-            );
+            let ctx = WhipTrackContext::new(track_ctx, &state, &sync_point, &buffer);
+            handle_on_track(ctx, input_id.clone(), video_preferences.clone());
         })
     };
 

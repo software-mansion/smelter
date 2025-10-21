@@ -155,17 +155,11 @@ pub enum InputInitError {
     #[error(transparent)]
     Mp4(#[from] Mp4InputError),
 
-    #[error("WHIP WHEP server is not running, cannot start WHIP input")]
-    WhipWhepServerNotRunning,
+    #[error(transparent)]
+    Whip(#[from] WebrtcServerError),
 
-    #[error("Unknown WHEP input error.")]
-    UnknownWhepError,
-
-    #[error("WHEP init timeout exceeded")]
-    WhepInitTimeout,
-
-    #[error("Failed to init WHEP input")]
-    WhepInitError(#[source] Box<WebrtcClientError>),
+    #[error(transparent)]
+    Whep(#[from] Box<WebrtcClientError>),
 
     #[cfg(feature = "decklink")]
     #[error(transparent)]
@@ -182,6 +176,9 @@ pub enum InputInitError {
 
     #[error("Invalid video decoder provided. Expected {expected:?} decoder")]
     InvalidVideoDecoderProvided { expected: VideoCodec },
+
+    #[error("Internal Server Error")]
+    InternalServerError,
 }
 
 #[derive(Debug, thiserror::Error)]

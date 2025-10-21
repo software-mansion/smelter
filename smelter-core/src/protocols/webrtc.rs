@@ -49,7 +49,19 @@ pub struct WhepOutputOptions {
 }
 
 #[derive(Debug, thiserror::Error)]
+pub enum WebrtcServerError {
+    #[error("Endpoint ID already in use (endpoint_id: {0})")]
+    EndpointIdAlreadyInUse(Arc<str>),
+
+    #[error("WHIP/WHEP server is not running, cannot start WHIP input.")]
+    ServerNotRunning,
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum WebrtcClientError {
+    #[error("Establishing the connection timed out")]
+    Timeout,
+
     #[error("Bad status in response Status: {0} Body:\n{1}")]
     BadStatus(StatusCode, String),
 

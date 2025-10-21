@@ -67,14 +67,28 @@ impl WhipInputsState {
         }
     }
 
-    pub fn add_input(&self, input_id: &InputId, options: WhipInputStateOptions) {
+    pub fn add_input(
+        &self,
+        input_id: &InputId,
+        options: WhipInputStateOptions,
+    ) -> Result<(), WebrtcServerError> {
         let mut guard = self.0.lock().unwrap();
         let is_endpoint_id_in_use = guard
             .iter()
             .any(|(_, input)| input.endpoint_id == options.endpoint_id);
-        if !is_endpoint_id_in_use {
-            guard.insert(input_id.clone(), WhipInputState::new(options));
+        if is_endpoint_id_in_use {
+            return Err(WebrtcServerError::EndpointIdAlreadyInUse(
+                options.endpoint_id,
+            ));
         }
+        let old_value = guard.insert(input_id.clone(), WhipInputState::new(options));
+        if old_value.is_some() {
+            error!(
+                ?input_id,
+                "Old WHIP input entry was overriden. This should not happen"
+            )
+        }
+        Ok(())
     }
 
     // called on drop (when input is unregistered)
