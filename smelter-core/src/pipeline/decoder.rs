@@ -13,7 +13,9 @@ pub(super) mod h264_utils;
 mod dynamic_stream;
 mod static_stream;
 
-pub(super) use dynamic_stream::{DynamicVideoDecoderStream, VideoDecoderMapping};
+pub(super) use dynamic_stream::{
+    DynamicVideoDecoderStream, KeyframeRequestSender, VideoDecoderMapping,
+};
 pub(super) use static_stream::{AudioDecoderStream, VideoDecoderStream};
 
 mod ffmpeg_utils;
