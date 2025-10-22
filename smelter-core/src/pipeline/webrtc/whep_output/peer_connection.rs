@@ -1,4 +1,5 @@
 use std::{
+    env,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -7,7 +8,7 @@ use rand::Rng;
 use tokio::{
     sync::watch,
     task::JoinHandle,
-    time::{sleep, timeout},
+    time::sleep,
 };
 use tracing::debug;
 use webrtc::{
@@ -15,10 +16,11 @@ use webrtc::{
         APIBuilder,
         interceptor_registry::register_default_interceptors,
         media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9, MediaEngine},
+        setting_engine::SettingEngine,
     },
     ice_transport::{
-        ice_candidate::RTCIceCandidateInit, ice_gatherer_state::RTCIceGathererState,
-        ice_server::RTCIceServer,
+        ice_candidate::RTCIceCandidateInit, ice_candidate_type::RTCIceCandidateType,
+        ice_gatherer_state::RTCIceGathererState, ice_server::RTCIceServer,
     },
     interceptor::registry::Registry,
     peer_connection::{
@@ -54,6 +56,10 @@ impl PeerConnection {
         audio_encoder: &Option<AudioEncoderOptions>,
     ) -> Result<Self, WhipWhepServerError> {
         let mut media_engine = MediaEngine::default();
+        let mut setting_engine = SettingEngine::default();
+        if let Ok(ip) = env::var("SMELTER_NAT_1_TO_1_IP") {
+            setting_engine.set_nat_1to1_ips(vec![ip], RTCIceCandidateType::Host);
+        }
 
         register_codecs(
             &mut media_engine,
@@ -66,6 +72,7 @@ impl PeerConnection {
         let api = APIBuilder::new()
             .with_media_engine(media_engine)
             .with_interceptor_registry(registry)
+            .with_setting_engine(setting_engine)
             .build();
 
         let config = RTCConfiguration {
@@ -216,16 +223,10 @@ impl PeerConnection {
                 Box::pin(async {})
             }));
 
-        let gather_candidates = async {
-            while receiver.changed().await.is_ok() {
-                if *receiver.borrow() == RTCIceGathererState::Complete {
-                    break;
-                }
+        while receiver.changed().await.is_ok() {
+            if *receiver.borrow() == RTCIceGathererState::Complete {
+                break;
             }
-        };
-
-        if timeout(wait_timeout, gather_candidates).await.is_err() {
-            debug!("Maximum time for gathering candidate has elapsed.");
         }
         Ok(())
     }

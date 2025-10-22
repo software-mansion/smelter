@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{env, sync::Arc, time::Duration};
 
 use tokio::{sync::watch, time::timeout};
 use tracing::{debug, warn};
@@ -7,10 +7,12 @@ use webrtc::{
         APIBuilder,
         interceptor_registry::register_default_interceptors,
         media_engine::{MIME_TYPE_OPUS, MediaEngine},
+        setting_engine::SettingEngine,
     },
     ice_transport::{
-        ice_candidate::RTCIceCandidateInit, ice_connection_state::RTCIceConnectionState,
-        ice_gatherer_state::RTCIceGathererState, ice_server::RTCIceServer,
+        ice_candidate::RTCIceCandidateInit, ice_candidate_type::RTCIceCandidateType,
+        ice_connection_state::RTCIceConnectionState, ice_gatherer_state::RTCIceGathererState,
+        ice_server::RTCIceServer,
     },
     interceptor::registry::Registry,
     peer_connection::{
@@ -51,10 +53,15 @@ impl RecvonlyPeerConnection {
     ) -> Result<Self, WhipWhepServerError> {
         let mut media_engine = media_engine_with_codecs(video_preferences)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
+        let mut setting_engine = SettingEngine::default();
+        if let Ok(ip) = env::var("SMELTER_NAT_1_TO_1_IP") {
+            setting_engine.set_nat_1to1_ips(vec![ip], RTCIceCandidateType::Host);
+        }
 
         let api = APIBuilder::new()
             .with_media_engine(media_engine)
             .with_interceptor_registry(registry)
+            .with_setting_engine(setting_engine)
             .build();
 
         let config = RTCConfiguration {

@@ -103,7 +103,7 @@ where
                 self.ensure_decoder(samples.kind);
                 let decoder = self.decoder.as_mut()?;
                 let chunks = decoder.decode(samples);
-                if chunks.len() == 0 {
+                if chunks.is_empty() {
                     let _ = self.keyframe_request_sender.try_send(());
                 }
                 Some(chunks.into_iter().map(PipelineEvent::Data).collect())
