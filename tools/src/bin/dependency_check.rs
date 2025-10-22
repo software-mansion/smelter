@@ -33,7 +33,7 @@ fn ffmpeg_url() -> &'static str {
 }
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt().init();
+    self::logger::init_logger();
 
     let executable_path =
         env::current_exe().with_context(|| "Failed to get current executable directory.")?;
@@ -194,6 +194,59 @@ fn check_ffmpeg_homebrew() -> Result<bool> {
     } else {
         warn!("FFmpeg installation not found in homebrew");
         Ok(false)
+    }
+}
+
+mod logger {
+    use std::{env, str::FromStr};
+    use tracing_subscriber::{Layer, Registry, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+
+    enum LoggerFormat {
+        Pretty,
+        Json,
+        Compact,
+    }
+
+    impl FromStr for LoggerFormat {
+        type Err = &'static str;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            match s {
+                "json" => Ok(LoggerFormat::Json),
+                "pretty" => Ok(LoggerFormat::Pretty),
+                "compact" => Ok(LoggerFormat::Compact),
+                _ => Err("invalid logger format"),
+            }
+        }
+    }
+
+    pub(super) fn init_logger() {
+        let logger_level = match env::var("SMELTER_LOGGER_LEVEL") {
+            Ok(level) => level,
+            Err(_) => "info".to_string(),
+        };
+        let stdio_logger_level = match env::var("SMELTER_STDIO_LOGGER_LEVEL") {
+            Ok(level) => level,
+            Err(_) => logger_level.clone(),
+        };
+        // When building in repo use compact logger
+        let default_logger_format = match env::var("CARGO_MANIFEST_DIR") {
+            Ok(_) => LoggerFormat::Compact,
+            Err(_) => LoggerFormat::Json,
+        };
+        let logger_format = match env::var("SMELTER_LOGGER_FORMAT") {
+            Ok(format) => LoggerFormat::from_str(&format).unwrap_or(default_logger_format),
+            Err(_) => default_logger_format,
+        };
+
+        let stdio_filter = tracing_subscriber::EnvFilter::new(stdio_logger_level);
+        let stdio_layer = match logger_format {
+            LoggerFormat::Pretty => fmt::Layer::default().pretty().boxed(),
+            LoggerFormat::Json => fmt::Layer::default().json().boxed(),
+            LoggerFormat::Compact => fmt::Layer::default().compact().boxed(),
+        }
+        .with_filter(stdio_filter);
+        Registry::default().with(stdio_layer).init();
     }
 }
 
