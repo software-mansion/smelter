@@ -6,15 +6,14 @@ use std::{
 
 use ash::vk;
 use encode_parameter_sets::{pps, sps};
-use wgpu::hal::Device as _;
 use yuv_converter::Converter;
 
 use crate::{
     EncodedOutputChunk, Frame, H264Profile, RawFrameData, VulkanCommonError,
     device::{EncodingDevice, Rational},
     wrappers::{
-        Buffer, CommandBuffer, CommandPool, DecodedPicturesBuffer, Device, Fence, Image, ImageView,
-        ProfileInfo, QueryPool, Semaphore, VideoEncodeQueueExt, VideoQueueExt, VideoSession,
+        Buffer, CommandBuffer, CommandPool, DecodedPicturesBuffer, Image, ImageView, ProfileInfo,
+        QueryPool, Tracker, VideoEncodeQueueExt, VideoQueueExt, VideoSession,
         VideoSessionParameters,
     },
 };
@@ -251,6 +250,7 @@ struct EncodeFeedback {
 }
 
 struct CommandBuffers {
+    init_buffer: CommandBuffer,
     encode_buffer: CommandBuffer,
     transfer_buffer: CommandBuffer,
 }
@@ -278,30 +278,26 @@ impl CommandPools {
 
     fn buffers(&self) -> Result<CommandBuffers, VulkanEncoderError> {
         Ok(CommandBuffers {
+            init_buffer: CommandBuffer::new_primary(self.encode_pool.clone())?,
             encode_buffer: CommandBuffer::new_primary(self.encode_pool.clone())?,
             transfer_buffer: CommandBuffer::new_primary(self.transfer_pool.clone())?,
         })
     }
 }
 
-struct SyncStructures {
-    fence_done: Fence,
-    sem_ready_to_encode: Semaphore,
+pub(crate) enum EncoderTrackerWaitState {
+    InitializeEncoder,
+    CopyBufferToImage,
+    Convert,
+    Encode,
 }
 
-impl SyncStructures {
-    fn new(device: Arc<Device>) -> Result<Self, VulkanEncoderError> {
-        Ok(SyncStructures {
-            fence_done: Fence::new(device.clone(), false)?,
-            sem_ready_to_encode: Semaphore::new(device.clone())?,
-        })
-    }
-}
+pub(crate) type EncoderTracker = Tracker<EncoderTrackerWaitState>;
 
 pub struct VulkanEncoder<'a> {
     command_buffers: CommandBuffers,
     _command_pools: CommandPools,
-    sync_structures: SyncStructures,
+    tracker: EncoderTracker,
     query_pool: EncodingQueryPool,
     profile: H264Profile,
     profile_info: H264EncodeProfileInfo<'a>,
@@ -361,7 +357,7 @@ impl VulkanEncoder<'_> {
 
         let command_buffers = command_pools.buffers()?;
 
-        let sync_structures = SyncStructures::new(encoding_device.vulkan_device.device.clone())?;
+        let mut tracker = EncoderTracker::new(encoding_device.device.clone())?;
 
         let query_pool = EncodingQueryPool::new(
             &encoding_device,
@@ -376,25 +372,24 @@ impl VulkanEncoder<'_> {
             &profile_info,
         )?;
 
-        command_buffers.encode_buffer.begin()?;
+        command_buffers.init_buffer.begin()?;
 
         let session_resources = VideoSessionResources::new(
             &encoding_device,
-            &command_buffers.encode_buffer,
+            &command_buffers.init_buffer,
             parameters,
             &profile_info.profile_info,
         )?;
 
-        command_buffers.encode_buffer.end()?;
+        command_buffers.init_buffer.end()?;
 
-        encoding_device.h264_encode_queue.submit(
-            &command_buffers.encode_buffer,
-            &[],
-            &[],
-            Some(*sync_structures.fence_done),
+        encoding_device.h264_encode_queue.submit_chain_semaphore(
+            &command_buffers.init_buffer,
+            &mut tracker,
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            EncoderTrackerWaitState::InitializeEncoder,
         )?;
-
-        sync_structures.fence_done.wait_and_reset(u64::MAX)?;
 
         Ok(Self {
             idr_period_counter: 0,
@@ -407,7 +402,7 @@ impl VulkanEncoder<'_> {
             encoding_device,
             _command_pools: command_pools,
             command_buffers,
-            sync_structures,
+            tracker,
             query_pool,
             session_resources,
             idr_period: parameters.idr_period.get(),
@@ -619,15 +614,16 @@ impl VulkanEncoder<'_> {
 
         self.command_buffers.transfer_buffer.end()?;
 
-        self.encoding_device.queues.transfer.submit(
-            &self.command_buffers.transfer_buffer,
-            &[],
-            &[(
-                *self.sync_structures.sem_ready_to_encode,
+        self.encoding_device
+            .queues
+            .transfer
+            .submit_chain_semaphore(
+                &self.command_buffers.transfer_buffer,
+                &mut self.tracker,
                 vk::PipelineStageFlags2::COPY,
-            )],
-            None,
-        )?;
+                vk::PipelineStageFlags2::COPY,
+                EncoderTrackerWaitState::CopyBufferToImage,
+            )?;
 
         Ok((image, buffer))
     }
@@ -636,7 +632,6 @@ impl VulkanEncoder<'_> {
         &mut self,
         image: Arc<Mutex<Image>>,
         force_idr: bool,
-        wait_semaphore: vk::Semaphore,
     ) -> Result<Vec<u8>, VulkanEncoderError> {
         let is_idr = force_idr || self.idr_period_counter == 0;
         let mut idr_pic_id = 0;
@@ -957,27 +952,17 @@ impl VulkanEncoder<'_> {
 
         self.command_buffers.encode_buffer.end()?;
 
-        let sem_info = vk::SemaphoreSubmitInfo::default()
-            .value(1)
-            .stage_mask(vk::PipelineStageFlags2::VIDEO_ENCODE_KHR)
-            .semaphore(wait_semaphore);
+        self.encoding_device
+            .h264_encode_queue
+            .submit_chain_semaphore(
+                &self.command_buffers.encode_buffer,
+                &mut self.tracker,
+                vk::PipelineStageFlags2::VIDEO_ENCODE_KHR,
+                vk::PipelineStageFlags2::ALL_COMMANDS,
+                EncoderTrackerWaitState::Encode,
+            )?;
 
-        let buffer_info = vk::CommandBufferSubmitInfo::default()
-            .command_buffer(self.command_buffers.encode_buffer.buffer);
-
-        let submit_info = vk::SubmitInfo2::default()
-            .wait_semaphore_infos(std::slice::from_ref(&sem_info))
-            .command_buffer_infos(std::slice::from_ref(&buffer_info));
-
-        unsafe {
-            self.encoding_device.vulkan_device.device.queue_submit2(
-                *self.encoding_device.h264_encode_queue.queue.lock().unwrap(),
-                &[submit_info],
-                *self.sync_structures.fence_done,
-            )?
-        };
-
-        self.sync_structures.fence_done.wait_and_reset(u64::MAX)?;
+        self.tracker.wait(u64::MAX)?;
 
         let feedback = self.query_pool.get_result_blocking()?;
 
@@ -1033,7 +1018,7 @@ impl VulkanEncoder<'_> {
         let image = Arc::new(Mutex::new(image));
 
         let is_keyframe = force_idr || self.idr_period_counter == 0;
-        let result = self.encode(image, force_idr, *self.sync_structures.sem_ready_to_encode)?;
+        let result = self.encode(image, force_idr)?;
 
         Ok(EncodedOutputChunk {
             data: result,
@@ -1050,26 +1035,16 @@ impl VulkanEncoder<'_> {
         frame: Frame<wgpu::Texture>,
         force_idr: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        let convert_state =
-            unsafe { self.converter.as_ref().unwrap().convert(frame.data) }.unwrap();
-
-        let sem = match convert_state.fence {
-            wgpu::hal::vulkan::Fence::TimelineSemaphore(semaphore) => semaphore,
-            wgpu::hal::vulkan::Fence::FencePool { .. } => {
-                panic!("wgpu fence pools are unsupported")
-            }
-        };
+        let convert_state = unsafe {
+            self.converter
+                .as_ref()
+                .unwrap()
+                .convert(frame.data, &mut self.tracker)
+        }
+        .unwrap();
 
         let is_keyframe = force_idr || self.idr_period_counter == 0;
-        let result = self.encode(convert_state.image, force_idr, sem)?;
-
-        unsafe {
-            self.encoding_device
-                .wgpu_device()
-                .as_hal::<wgpu::hal::vulkan::Api, _, _>(|d| {
-                    d.unwrap().destroy_fence(convert_state.fence)
-                })
-        }
+        let result = self.encode(convert_state.image, force_idr)?;
 
         Ok(EncodedOutputChunk {
             data: result,
