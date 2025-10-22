@@ -121,7 +121,7 @@ fn bundle_app_with_ffmpeg(
     let smelter_bin_path = workdir.join("smelter/smelter_main");
 
     fs::copy(
-        tools_root().join("src/bin/package_for_release/macos_runtime_wrapper.sh"),
+        tools_root().join("src/bin/package_for_release/runtime_wrapper.sh"),
         workdir.join("smelter/smelter"),
     )?;
 

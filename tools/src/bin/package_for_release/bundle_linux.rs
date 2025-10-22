@@ -118,7 +118,7 @@ fn bundle_app(
 
         info!("Copy wrapper script.");
         fs::copy(
-            tools_root().join("src/bin/package_for_release/linux_runtime_wrapper_cef.sh"),
+            tools_root().join("src/bin/package_for_release/runtime_wrapper.sh"),
             workdir.join("smelter/smelter"),
         )?;
 
@@ -146,7 +146,7 @@ fn bundle_app(
         )?;
         info!("Copy wrapper script.");
         fs::copy(
-            tools_root().join("src/bin/package_for_release/linux_runtime_wrapper_no_cef.sh"),
+            tools_root().join("src/bin/package_for_release/runtime_wrapper.sh"),
             workdir.join("smelter/smelter"),
         )?;
     }
