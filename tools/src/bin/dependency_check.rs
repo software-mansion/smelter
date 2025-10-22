@@ -253,11 +253,7 @@ mod logger {
             Ok(level) => level,
             Err(_) => logger_level.clone(),
         };
-        // When building in repo use compact logger
-        let default_logger_format = match env::var("CARGO_MANIFEST_DIR") {
-            Ok(_) => LoggerFormat::Compact,
-            Err(_) => LoggerFormat::Json,
-        };
+        let default_logger_format = LoggerFormat::Compact;
         let logger_format = match env::var("SMELTER_LOGGER_FORMAT") {
             Ok(format) => LoggerFormat::from_str(&format).unwrap_or(default_logger_format),
             Err(_) => default_logger_format,
