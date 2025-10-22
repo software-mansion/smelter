@@ -4,7 +4,7 @@ use ash::{Entry, vk};
 
 use crate::{VulkanInitError, adapter::VulkanAdapter, wrappers::*};
 
-/// Context for all encoders, decoders. Also contains a [`wgpu::Instance`].
+/// Context for all encoders and decoders. Also contains a [`wgpu::Instance`].
 pub struct VulkanInstance {
     pub(crate) wgpu_instance: wgpu::Instance,
     _entry: Arc<Entry>,
@@ -132,9 +132,9 @@ impl VulkanInstance {
         .into())
     }
 
-    /// Creates adapter that supports both decoding and encoding.
+    /// Creates an adapter that supports both decoding and encoding.
     ///
-    /// If your hardware supports only decoding or encoding, use [`VulkanInstance::iter_adapters`] and choose adapter manually.
+    /// If your hardware only supports one of the operations, use [`VulkanInstance::iter_adapters`] and choose an adapter manually.
     pub fn create_adapter<'a>(
         &'a self,
         compatible_surface: Option<&'a wgpu::Surface<'_>>,
