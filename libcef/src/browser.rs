@@ -102,7 +102,7 @@ impl BrowserSettings {
             text_area_resize: libcef_sys::cef_state_t_STATE_DEFAULT,
             tab_to_links: libcef_sys::cef_state_t_STATE_DEFAULT,
             local_storage: libcef_sys::cef_state_t_STATE_DEFAULT,
-            databases: libcef_sys::cef_state_t_STATE_DEFAULT,
+            databases_deprecated: libcef_sys::cef_state_t_STATE_DEFAULT,
             webgl: libcef_sys::cef_state_t_STATE_DEFAULT,
             background_color: self.background_color,
             chrome_zoom_bubble: libcef_sys::cef_state_t_STATE_DISABLED,

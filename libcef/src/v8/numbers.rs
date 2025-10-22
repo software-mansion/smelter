@@ -2,11 +2,11 @@ use crate::cef_ref::CefRc;
 
 use super::value::{V8Value, V8ValueError};
 
-pub struct V8Int(pub(super) CefRc<libcef_sys::cef_v8value_t>);
+pub struct V8Int(pub(super) CefRc<libcef_sys::cef_v8_value_t>);
 
 impl V8Int {
     pub fn new(value: i32) -> Self {
-        let inner = unsafe { libcef_sys::cef_v8value_create_int(value) };
+        let inner = unsafe { libcef_sys::cef_v8_value_create_int(value) };
         Self(CefRc::new(inner))
     }
 
@@ -25,11 +25,11 @@ impl From<V8Int> for V8Value {
     }
 }
 
-pub struct V8Uint(pub(super) CefRc<libcef_sys::cef_v8value_t>);
+pub struct V8Uint(pub(super) CefRc<libcef_sys::cef_v8_value_t>);
 
 impl V8Uint {
     pub fn new(value: u32) -> Self {
-        let inner = unsafe { libcef_sys::cef_v8value_create_uint(value) };
+        let inner = unsafe { libcef_sys::cef_v8_value_create_uint(value) };
         Self(CefRc::new(inner))
     }
 
@@ -48,11 +48,11 @@ impl From<V8Uint> for V8Value {
     }
 }
 
-pub struct V8Double(pub(super) CefRc<libcef_sys::cef_v8value_t>);
+pub struct V8Double(pub(super) CefRc<libcef_sys::cef_v8_value_t>);
 
 impl V8Double {
     pub fn new(value: f64) -> Self {
-        let inner = unsafe { libcef_sys::cef_v8value_create_double(value) };
+        let inner = unsafe { libcef_sys::cef_v8_value_create_double(value) };
         Self(CefRc::new(inner))
     }
 

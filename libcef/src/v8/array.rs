@@ -3,11 +3,11 @@ use crate::validated::ValidatedError;
 
 use super::value::{V8Value, V8ValueError};
 
-pub struct V8Array(pub(super) CefRc<libcef_sys::cef_v8value_t>);
+pub struct V8Array(pub(super) CefRc<libcef_sys::cef_v8_value_t>);
 
 impl V8Array {
     pub fn new(len: usize) -> Self {
-        let inner = unsafe { libcef_sys::cef_v8value_create_array(len as i32) };
+        let inner = unsafe { libcef_sys::cef_v8_value_create_array(len as i32) };
         Self(CefRc::new(inner))
     }
 

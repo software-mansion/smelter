@@ -56,7 +56,7 @@ impl<R: RenderProcessHandler> RenderProcessHandlerWrapper<R> {
         self_: *mut libcef_sys::cef_render_process_handler_t,
         browser: *mut libcef_sys::cef_browser_t,
         frame: *mut libcef_sys::cef_frame_t,
-        context: *mut libcef_sys::cef_v8context_t,
+        context: *mut libcef_sys::cef_v8_context_t,
     ) {
         let self_ref = unsafe { CefRefData::<Self>::from_cef(self_) };
         let browser = Browser::new(browser);

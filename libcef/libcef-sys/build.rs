@@ -128,18 +128,21 @@ impl ParseCallbacks for RemoveCommentsCallback {
     }
 }
 
+// TODO: Add version to download checking
+// TODO: Test on macos
+
 fn cef_url() -> &'static str {
     if cfg!(target_os = "macos") {
         if cfg!(target_arch = "aarch64") {
-            return "https://cef-builds.spotifycdn.com/cef_binary_132.3.1%2Bg144febe%2Bchromium-132.0.6834.83_macosarm64_minimal.tar.bz2";
+            return "https://cef-builds.spotifycdn.com/cef_binary_141.0.8%2Bg8365640%2Bchromium-141.0.7390.108_macosarm64_minimal.tar.bz2";
         } else if cfg!(target_arch = "x86_64") {
-            return "https://cef-builds.spotifycdn.com/cef_binary_132.3.1%2Bg144febe%2Bchromium-132.0.6834.83_macosx64_minimal.tar.bz2";
+            return "https://cef-builds.spotifycdn.com/cef_binary_141.0.8%2Bg8365640%2Bchromium-141.0.7390.108_macosx64_minimal.tar.bz2";
         }
     } else if cfg!(target_os = "linux") {
         if cfg!(target_arch = "aarch64") {
-            return "https://cef-builds.spotifycdn.com/cef_binary_132.3.1%2Bg144febe%2Bchromium-132.0.6834.83_linuxarm64_minimal.tar.bz2";
+            return "https://cef-builds.spotifycdn.com/cef_binary_141.0.8%2Bg8365640%2Bchromium-141.0.7390.108_linuxarm64_minimal.tar.bz2";
         } else if cfg!(target_arch = "x86_64") {
-            return "https://cef-builds.spotifycdn.com/cef_binary_132.3.1%2Bg144febe%2Bchromium-132.0.6834.83_linux64_minimal.tar.bz2";
+            return "https://cef-builds.spotifycdn.com/cef_binary_141.0.8%2Bg8365640%2Bchromium-141.0.7390.108_linux64_minimal.tar.bz2";
         }
     };
     panic!("Unsupported platform");

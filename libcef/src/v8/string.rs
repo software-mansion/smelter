@@ -2,13 +2,13 @@ use crate::{cef_ref::CefRc, cef_string::CefString};
 
 use super::value::{V8Value, V8ValueError};
 
-pub struct V8String(pub(super) CefRc<libcef_sys::cef_v8value_t>);
+pub struct V8String(pub(super) CefRc<libcef_sys::cef_v8_value_t>);
 
 impl V8String {
     pub fn new(value: &str) -> Self {
         let value = CefString::new(value);
         // `cef_v8value_create_string` copies the string so it's safe to drop `CefString`
-        let value = unsafe { libcef_sys::cef_v8value_create_string(value.raw()) };
+        let value = unsafe { libcef_sys::cef_v8_value_create_string(value.raw()) };
 
         Self(CefRc::new(value))
     }

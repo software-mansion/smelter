@@ -12,7 +12,7 @@ use super::{
     value::{V8Value, V8ValueError},
 };
 
-pub struct V8Function(pub(super) CefRc<libcef_sys::cef_v8value_t>);
+pub struct V8Function(pub(super) CefRc<libcef_sys::cef_v8_value_t>);
 
 impl V8Function {
     pub fn new<F>(name: &str, func: F) -> Self
@@ -21,7 +21,7 @@ impl V8Function {
     {
         let name = CefString::new_raw(name);
         let handler = CefRefData::new_ptr(V8Handler(func));
-        let inner = unsafe { libcef_sys::cef_v8value_create_function(&name, handler) };
+        let inner = unsafe { libcef_sys::cef_v8_value_create_function(&name, handler) };
 
         Self(CefRc::new(inner))
     }
@@ -86,10 +86,10 @@ impl From<V8Function> for V8Value {
 struct V8Handler<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>>(F);
 
 impl<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>> CefStruct for V8Handler<F> {
-    type CefType = libcef_sys::cef_v8handler_t;
+    type CefType = libcef_sys::cef_v8_handler_t;
 
     fn new_cef_data() -> Self::CefType {
-        libcef_sys::cef_v8handler_t {
+        libcef_sys::cef_v8_handler_t {
             base: unsafe { std::mem::zeroed() },
             execute: Some(Self::execute),
         }
@@ -102,12 +102,12 @@ impl<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>> CefStruct for V8
 
 impl<F: Fn(&[V8Value]) -> Result<V8Value, NativeFunctionError>> V8Handler<F> {
     extern "C" fn execute(
-        self_: *mut libcef_sys::cef_v8handler_t,
+        self_: *mut libcef_sys::cef_v8_handler_t,
         _name: *const libcef_sys::cef_string_t,
-        _object: *mut libcef_sys::cef_v8value_t,
+        _object: *mut libcef_sys::cef_v8_value_t,
         arguments_count: usize,
-        arguments: *const *mut libcef_sys::cef_v8value_t,
-        retval: *mut *mut libcef_sys::cef_v8value_t,
+        arguments: *const *mut libcef_sys::cef_v8_value_t,
+        retval: *mut *mut libcef_sys::cef_v8_value_t,
         exception: *mut libcef_sys::cef_string_t,
     ) -> c_int {
         const HANDLED: c_int = 1;

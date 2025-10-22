@@ -41,7 +41,7 @@ impl Frame {
                 return Err(FrameError::V8ContextWrongThread);
             }
 
-            let get_v8_context = (*frame).get_v8context.unwrap();
+            let get_v8_context = (*frame).get_v8_context.unwrap();
             let context = get_v8_context(frame);
             Ok(V8Context::new(context))
         }

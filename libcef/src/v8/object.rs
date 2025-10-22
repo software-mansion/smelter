@@ -16,7 +16,7 @@ pub use dom_rect::*;
 pub use element::*;
 pub use global::*;
 
-pub struct V8Object(pub(super) CefRc<libcef_sys::cef_v8value_t>);
+pub struct V8Object(pub(super) CefRc<libcef_sys::cef_v8_value_t>);
 
 impl V8Object {
     pub fn has(&self, key: &str) -> Result<bool, V8ObjectError> {

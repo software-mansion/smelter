@@ -27,6 +27,7 @@ impl WindowInfo {
         use std::os::raw::c_ulong;
 
         libcef_sys::cef_window_info_t {
+            size: std::mem::size_of::<libcef_sys::cef_window_info_t>(),
             window_name: CefString::empty_raw(),
             bounds: unsafe { std::mem::zeroed() },
             parent_window: 0 as c_ulong,

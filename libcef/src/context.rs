@@ -43,6 +43,10 @@ impl Context {
         let app = CefRefData::new_ptr(AppWrapper::new(app));
 
         let init_result = unsafe {
+            let _ = libcef_sys::cef_api_hash(
+                libcef_sys::CEF_API_VERSION_14100 as i32,
+                0, // CEF_API_HASH_PLATFORM,
+            );
             libcef_sys::cef_initialize(main_args.raw_mut(), &settings, app, std::ptr::null_mut())
         };
 
@@ -69,6 +73,12 @@ impl Context {
             Self::load_framework(framework_path)?;
         }
 
+        unsafe {
+            let _ = libcef_sys::cef_api_hash(
+                libcef_sys::CEF_API_VERSION_14100 as i32,
+                0, // CEF_API_HASH_PLATFORM,
+            );
+        }
         Ok(Context { _priv: () })
     }
 

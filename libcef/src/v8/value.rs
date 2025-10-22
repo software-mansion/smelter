@@ -28,7 +28,7 @@ pub enum V8Value {
 }
 
 impl V8Value {
-    pub(crate) fn from_raw(v8_value: *mut libcef_sys::cef_v8value_t) -> Self {
+    pub(crate) fn from_raw(v8_value: *mut libcef_sys::cef_v8_value_t) -> Self {
         let validated_value = CefRc::new(v8_value);
         if Self::is_undefined(v8_value) {
             return Self::Undefined(V8Undefined(validated_value));
@@ -74,7 +74,7 @@ impl V8Value {
     }
 
     /// Increments the reference count and returns a V8Value
-    pub(crate) fn get_raw(&self) -> Result<*mut libcef_sys::cef_v8value_t, V8ValueError> {
+    pub(crate) fn get_raw(&self) -> Result<*mut libcef_sys::cef_v8_value_t, V8ValueError> {
         let raw_value = match self {
             V8Value::Undefined(V8Undefined(v)) => v.get_with_validation()?,
             V8Value::Null(V8Null(v)) => v.get_with_validation()?,
@@ -95,7 +95,7 @@ impl V8Value {
     }
 
     /// Returns a raw pointer to the V8Value without incrementing the reference count
-    pub(crate) fn get_raw_weak(&self) -> Result<*mut libcef_sys::cef_v8value_t, V8ValueError> {
+    pub(crate) fn get_raw_weak(&self) -> Result<*mut libcef_sys::cef_v8_value_t, V8ValueError> {
         let raw_value = match self {
             V8Value::Undefined(V8Undefined(v)) => v.get_weak_with_validation()?,
             V8Value::Null(V8Null(v)) => v.get_weak_with_validation()?,
@@ -114,91 +114,91 @@ impl V8Value {
 
         Ok(raw_value)
     }
-    fn is_undefined(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_undefined(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_undefined = (*v8_value).is_undefined.unwrap();
             is_undefined(v8_value) == 1
         }
     }
 
-    fn is_null(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_null(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_null = (*v8_value).is_null.unwrap();
             is_null(v8_value) == 1
         }
     }
 
-    fn is_bool(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_bool(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_bool = (*v8_value).is_bool.unwrap();
             is_bool(v8_value) == 1
         }
     }
 
-    fn is_int(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_int(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_int = (*v8_value).is_int.unwrap();
             is_int(v8_value) == 1
         }
     }
 
-    fn is_uint(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_uint(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_uint = (*v8_value).is_uint.unwrap();
             is_uint(v8_value) == 1
         }
     }
 
-    fn is_double(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_double(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_double = (*v8_value).is_double.unwrap();
             is_double(v8_value) == 1
         }
     }
 
-    fn is_string(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_string(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_string = (*v8_value).is_string.unwrap();
             is_string(v8_value) == 1
         }
     }
 
-    fn is_array(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_array(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_array = (*v8_value).is_array.unwrap();
             is_array(v8_value) == 1
         }
     }
 
-    fn is_array_buffer(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_array_buffer(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_array = (*v8_value).is_array_buffer.unwrap();
             is_array(v8_value) == 1
         }
     }
 
-    fn is_object(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_object(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_object = (*v8_value).is_object.unwrap();
             is_object(v8_value) == 1
         }
     }
 
-    fn is_function(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_function(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_function = (*v8_value).is_function.unwrap();
             is_function(v8_value) == 1
         }
     }
 
-    fn is_date(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_date(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_date = (*v8_value).is_date.unwrap();
             is_date(v8_value) == 1
         }
     }
 
-    fn is_promise(v8_value: *mut libcef_sys::cef_v8value_t) -> bool {
+    fn is_promise(v8_value: *mut libcef_sys::cef_v8_value_t) -> bool {
         unsafe {
             let is_promise = (*v8_value).is_promise.unwrap();
             is_promise(v8_value) == 1
@@ -206,7 +206,7 @@ impl V8Value {
     }
 }
 
-impl Validatable for libcef_sys::cef_v8value_t {
+impl Validatable for libcef_sys::cef_v8_value_t {
     fn is_valid(&mut self) -> bool {
         match self.is_valid {
             Some(is_valid) => unsafe { is_valid(self) == 1 },
@@ -215,7 +215,7 @@ impl Validatable for libcef_sys::cef_v8value_t {
     }
 }
 
-impl CefRefCountable for libcef_sys::cef_v8value_t {
+impl CefRefCountable for libcef_sys::cef_v8_value_t {
     fn base_mut(&mut self) -> *mut libcef_sys::cef_base_ref_counted_t {
         &mut self.base
     }
