@@ -29,7 +29,7 @@ type ManagedInstanceOptions = {
   enableWebRenderer?: boolean;
 };
 
-type ExecutablePath = {
+type ExecutablePaths = {
   mainProcess: string;
   dependencyCheck: string;
 };
@@ -64,10 +64,10 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   }
 
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
-    const { mainProcess: mainProcessPath, dependencyCheck: dependencyCheckPath } =
-      this.mainExecutablePath && this.dependencyCheckPath
-        ? { mainProcess: this.mainExecutablePath, dependencyCheck: this.dependencyCheckPath }
-        : await prepareExecutable(this.enableWebRenderer);
+    const { mainProcess: mainProcessPath, dependencyCheck: _dependencyCheckPath } = this
+      .mainExecutablePath
+      ? { mainProcess: this.mainExecutablePath, dependencyCheck: this.dependencyCheckPath }
+      : await prepareExecutable(this.enableWebRenderer);
 
     const { level, format } = smelterInstanceLoggerOptions();
 
@@ -94,11 +94,18 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       }
     };
 
-    try {
-      await spawn(dependencyCheckPath, [], {});
-    } catch (err) {
-      executableError(err, 'Dependency check failed');
-    }
+    // This code will be uncomented with the next smelter release which is going to
+    // include `dependency_check`
+    //
+    // As a result of this we explicitly let the user to skip dependency check by setting
+    // the SMELTER_PATH env.
+    // if (dependencyCheckPath) {
+    //   try {
+    //     await spawn(dependencyCheckPath, [], {});
+    //   } catch (err) {
+    //     executableError(err, 'Dependency check failed');
+    //   }
+    // }
 
     this.childSpawnPromise = spawn(mainProcessPath, [], { env, stdio: 'inherit' });
     this.childSpawnPromise.catch(err => executableError(err, 'Smelter instance failed'));
@@ -159,7 +166,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   }
 }
 
-async function prepareExecutable(enableWebRenderer?: boolean): Promise<ExecutablePath> {
+async function prepareExecutable(enableWebRenderer?: boolean): Promise<ExecutablePaths> {
   const version = enableWebRenderer ? `${VERSION}-web` : VERSION;
   const downloadDir = path.join(os.homedir(), '.smelter', version, architecture());
   const readyFilePath = path.join(downloadDir, '.ready');
