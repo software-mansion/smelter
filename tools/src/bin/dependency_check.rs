@@ -1,11 +1,20 @@
 use anyhow::{Context, Result, bail};
 use regex::Regex;
 use reqwest::blocking::get;
-use std::{env, fs, path::Path, process::Command, sync::OnceLock};
-use tracing::{error, info, warn};
+use std::{
+    env,
+    fs::{self, File},
+    io::BufReader,
+    path::Path,
+    process::Command,
+    sync::OnceLock,
+};
+use tar::Archive;
+use tracing::{error, info, trace, warn};
 
 const FFMPEG_LIB_DIR: &str = "libav";
-const FFMPEG_ARCHIVE_NAME: &str = "ffmpeg.tar.gz";
+const FFMPEG_GZIP_ARCHIVE_NAME: &str = "ffmpeg.tar.gz";
+const FFMPEG_TAR_ARCHIVE_NAME: &str = "ffmpeg.tar";
 
 /// FFMPEG_VERSION is set at compile time (in package_for_release bin) and contains FFmpeg version in `x.y` format which was used to compile
 /// Smelter. FFmpeg version is found by matching `ffmpeg -version` output during compilation.
@@ -52,6 +61,14 @@ fn main() -> Result<()> {
         if malformed_lib_exists {
             fs::remove_dir_all(executable_dir.join(FFMPEG_LIB_DIR))?;
         }
+        let gz_archive_exists = fs::exists(executable_dir.join(FFMPEG_GZIP_ARCHIVE_NAME))?;
+        if gz_archive_exists {
+            fs::remove_file(executable_dir.join(FFMPEG_GZIP_ARCHIVE_NAME))?;
+        }
+        let tar_archive_exists = fs::exists(executable_dir.join(FFMPEG_TAR_ARCHIVE_NAME))?;
+        if tar_archive_exists {
+            fs::remove_file(executable_dir.join(FFMPEG_TAR_ARCHIVE_NAME))?;
+        }
     }
 
     let ffmpeg_installed = check_ffmpeg();
@@ -76,39 +93,23 @@ fn main() -> Result<()> {
 }
 
 fn cleanup(executable_dir: &Path) {
-    let ffmpeg_archive = executable_dir.join(FFMPEG_ARCHIVE_NAME);
-    if let Err(error) = fs::remove_file(executable_dir.join(FFMPEG_ARCHIVE_NAME)) {
-        error!(%error, "Failed to delete downloaded archive at {ffmpeg_archive:?}.");
+    let gz_archive = executable_dir.join(FFMPEG_GZIP_ARCHIVE_NAME);
+    if let Err(error) = fs::remove_file(&gz_archive) {
+        error!(%error, "Failed to delete downloaded archive at {gz_archive:?}.");
+    }
+
+    let tar_archive = executable_dir.join(FFMPEG_TAR_ARCHIVE_NAME);
+    if let Err(error) = fs::remove_file(&tar_archive) {
+        error!(%error, "Failed to delete downloaded archive at {tar_archive:?}.");
     }
 }
 
 fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
     download_ffmpeg(executable_dir).with_context(|| "libav download failed.")?;
 
-    let ffmpeg_archive_path = executable_dir.join(FFMPEG_ARCHIVE_NAME);
-
     // Archive contains only `libav` directory in the root. This directory contains all smelter
     // libav dependencies.
-    let tar_status = Command::new("tar")
-        .args([
-            "-zxf",
-            ffmpeg_archive_path
-                .to_str()
-                .expect("Unable to resolve executable directory as string"),
-            "-C",
-            executable_dir
-                .to_str()
-                .expect("Unable to resolve executable directory as string"),
-        ])
-        .status();
-    match tar_status {
-        Ok(status) => match status.code() {
-            Some(0) => {}
-            Some(code) => bail!("`tar` command failed with code: {code}"),
-            None => bail!("`tar` command failed"),
-        },
-        Err(error) => return Err(anyhow::Error::from(error).context("`tar` command failed")),
-    }
+    unpack_ffmpeg(executable_dir).with_context(|| "Failed to unpack downloaded archive")?;
 
     Ok(())
 }
@@ -118,8 +119,31 @@ fn download_ffmpeg(executable_dir: &Path) -> Result<()> {
         .with_context(|| format!("Failed to download libav libraries. URL: {}", ffmpeg_url()))?;
     let content = response.bytes()?;
 
-    fs::write(executable_dir.join(FFMPEG_ARCHIVE_NAME), &content)
+    fs::write(executable_dir.join(FFMPEG_GZIP_ARCHIVE_NAME), &content)
         .with_context(|| "Failed to save downloaded libav libraries to file")?;
+    Ok(())
+}
+
+fn unpack_ffmpeg(executable_dir: &Path) -> Result<()> {
+    let gz_archive_path = executable_dir.join(FFMPEG_GZIP_ARCHIVE_NAME);
+    let tar_archive_path = executable_dir.join(FFMPEG_TAR_ARCHIVE_NAME);
+
+    let gz_input = BufReader::new(
+        File::open(&gz_archive_path).with_context(|| "Failed to open downloaded archive")?,
+    );
+    let mut tar_output = File::create(&tar_archive_path)?;
+
+    let mut decoder = flate2::bufread::GzDecoder::new(gz_input);
+    let decompressed_bytes = std::io::copy(&mut decoder, &mut tar_output)
+        .with_context(|| "Failed to decompress the archive")?;
+    trace!(decompressed_bytes);
+
+    drop(tar_output);
+    let tar_output = File::open(&tar_archive_path).with_context(|| "Failed to open tar archive")?;
+
+    let mut tar_archive = Archive::new(tar_output);
+    tar_archive.unpack(executable_dir)?;
+
     Ok(())
 }
 
