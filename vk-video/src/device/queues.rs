@@ -22,48 +22,6 @@ impl Queue {
             == vk::TRUE
     }
 
-    pub(crate) fn submit(
-        &self,
-        buffer: &CommandBuffer,
-        wait_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
-        signal_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
-        fence: Option<vk::Fence>,
-    ) -> Result<(), VulkanCommonError> {
-        fn to_sem_submit_info(
-            submits: &[(vk::Semaphore, vk::PipelineStageFlags2)],
-        ) -> Vec<vk::SemaphoreSubmitInfo<'_>> {
-            submits
-                .iter()
-                .map(|&(sem, stage)| {
-                    vk::SemaphoreSubmitInfo::default()
-                        .semaphore(sem)
-                        .stage_mask(stage)
-                })
-                .collect::<Vec<_>>()
-        }
-
-        let wait_semaphores = to_sem_submit_info(wait_semaphores);
-        let signal_semaphores = to_sem_submit_info(signal_semaphores);
-
-        let buffer_submit_info =
-            [vk::CommandBufferSubmitInfo::default().command_buffer(buffer.buffer)];
-
-        let submit_info = [vk::SubmitInfo2::default()
-            .wait_semaphore_infos(&wait_semaphores)
-            .signal_semaphore_infos(&signal_semaphores)
-            .command_buffer_infos(&buffer_submit_info)];
-
-        unsafe {
-            self.device.queue_submit2(
-                *self.queue.lock().unwrap(),
-                &submit_info,
-                fence.unwrap_or(vk::Fence::null()),
-            )?
-        };
-
-        Ok(())
-    }
-
     pub(crate) fn submit_chain_semaphore<S>(
         &self,
         buffer: &CommandBuffer,

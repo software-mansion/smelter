@@ -6,13 +6,14 @@ use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
 use crate::{
     VulkanCommonError, VulkanDevice,
     device::EncodingDevice,
+    vulkan_encoder::EncoderTracker,
     wrappers::{
         DescriptorPool, DescriptorSetLayout, Framebuffer, Image, ImageView, Pipeline,
-        PipelineLayout, RenderPass, Sampler, ShaderModule,
+        PipelineLayout, RenderPass, Sampler, ShaderModule, TrackerWait,
     },
 };
 
-use super::H264EncodeProfileInfo;
+use super::{EncoderTrackerWaitState, H264EncodeProfileInfo};
 
 #[derive(Debug, thiserror::Error)]
 pub enum YuvConverterError {
@@ -217,6 +218,7 @@ impl Converter {
     pub(crate) unsafe fn convert(
         &self,
         texture: wgpu::Texture,
+        tracker: &mut EncoderTracker,
     ) -> Result<ConvertState, YuvConverterError> {
         let mut command_encoder = unsafe {
             self.device.wgpu_device().as_hal::<VkApi, _, _>(|d| {
@@ -264,23 +266,30 @@ impl Converter {
 
         let wgpu_command_buffer = unsafe { command_encoder.end_encoding()? };
 
-        let mut fence = unsafe {
-            self.device
-                .wgpu_device()
-                .as_hal::<VkApi, _, _>(|d| d.unwrap().create_fence())?
-        };
+        tracker.wait(u64::MAX)?;
+
+        let mut wgpu_fence =
+            wgpu::hal::vulkan::Fence::TimelineSemaphore(tracker.semaphore.semaphore);
+        let signal_value = tracker.next_sem_value();
 
         unsafe {
             self.device.wgpu_queue().as_hal::<VkApi, _, _>(|q| {
-                q.unwrap()
-                    .submit(&[&wgpu_command_buffer], &[], (&mut fence, 1))
+                q.unwrap().submit(
+                    &[&wgpu_command_buffer],
+                    &[],
+                    (&mut wgpu_fence, signal_value),
+                )
             })?;
         }
+
+        tracker.wait_for = Some(TrackerWait {
+            value: signal_value,
+            _state: EncoderTrackerWaitState::Convert,
+        });
 
         Ok(ConvertState {
             image: self.image.clone(),
             _view: view,
-            fence,
             _encoder: command_encoder,
             _buffer: wgpu_command_buffer,
         })
@@ -290,7 +299,6 @@ impl Converter {
 pub(crate) struct ConvertState {
     _encoder: wgpu::hal::vulkan::CommandEncoder,
     _buffer: wgpu::hal::vulkan::CommandBuffer,
-    pub(crate) fence: wgpu::hal::vulkan::Fence,
     pub(crate) image: Arc<Mutex<Image>>,
     pub(crate) _view: ImageView,
 }
