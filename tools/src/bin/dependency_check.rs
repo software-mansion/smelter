@@ -157,7 +157,8 @@ fn check_ffmpeg() -> Result<bool> {
     let command_result = check_ffmpeg_command()?;
     if !command_result {
         info!("Checking if FFmpeg is installed as homebrew keg-only");
-        return check_ffmpeg_homebrew();
+        return check_ffmpeg_homebrew()
+            .with_context(|| "Failed to check homebrew FFmpeg installation");
     }
     Ok(command_result)
 }
@@ -209,7 +210,17 @@ fn match_ffmpeg_version(ffmpeg_output: &str) -> Option<&str> {
 fn check_ffmpeg_homebrew() -> Result<bool> {
     let required_ffmpeg_version_brew =
         &required_ffmpeg_version()[..required_ffmpeg_version().find(".").unwrap_or(1)];
-    let brew_output = Command::new("brew").arg("list").output()?;
+    let brew_output = Command::new("brew").arg("list").output();
+    let brew_output = match brew_output {
+        Ok(output) => output,
+        Err(error) => {
+            error!(%error, "Unable to run `brew`.");
+            warn!(
+                "Downloaded libav libraries require the same dependencies as FFmpeg and will not work without them installed."
+            );
+            return Ok(false);
+        }
+    };
     let brew_output = String::from_utf8(brew_output.stdout)?.trim().to_string();
 
     let re = Regex::new(&format!("(?m)ffmpeg@{required_ffmpeg_version_brew}"))?;
@@ -217,6 +228,9 @@ fn check_ffmpeg_homebrew() -> Result<bool> {
         Ok(true)
     } else {
         warn!("FFmpeg installation not found in homebrew");
+        warn!(
+            "Downloaded libav libraries require the same dependencies as FFmpeg and will not work without them installed."
+        );
         Ok(false)
     }
 }
