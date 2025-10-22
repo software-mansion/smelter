@@ -151,6 +151,9 @@ pub enum VulkanCommonError {
 
     #[error("DPB can have at most 32 slots, {0} was requested")]
     DpbTooLong(u32),
+
+    #[error("Tried to create a semaphore submit that waits for an unsignaled value")]
+    SemaphoreSubmitWaitOnUnsignaledValue,
 }
 
 /// A profile in H264 is a set of codec features used while encoding a specific video.

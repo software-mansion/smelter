@@ -11,10 +11,10 @@ use parameters::{SessionParams, VideoSessionParametersManager};
 use crate::{
     VulkanDecoderError,
     device::DecodingDevice,
+    vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState},
     wrappers::{
-        CommandBuffer, DecodeInputBuffer, DecodingQueryPool, Fence, H264DecodeProfileInfo,
-        ProfileInfo, SeqParameterSetExt, VideoSession, h264_level_idc_to_max_dpb_mbs,
-        vk_to_h264_level_idc,
+        CommandBuffer, DecodeInputBuffer, DecodingQueryPool, H264DecodeProfileInfo, ProfileInfo,
+        SeqParameterSetExt, VideoSession, h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc,
     },
 };
 
@@ -63,7 +63,7 @@ impl VideoSessionResources<'_> {
         decoding_device: &DecodingDevice,
         decode_buffer: &CommandBuffer,
         sps: SeqParameterSet,
-        fence_memory_barrier_completed: &Fence,
+        tracker: &mut DecoderTracker,
     ) -> Result<Self, VulkanDecoderError> {
         let profile_info = Arc::new(ProfileInfo::from_sps_decode(&sps)?);
 
@@ -112,7 +112,7 @@ impl VideoSessionResources<'_> {
             max_coded_extent,
             max_dpb_slots,
             decode_buffer,
-            fence_memory_barrier_completed,
+            tracker,
         )?;
 
         let sps = HashMap::from_iter([(sps.id().id(), sps)]);
@@ -191,7 +191,7 @@ impl VideoSessionResources<'_> {
         &mut self,
         decoding_device: &DecodingDevice,
         decode_buffer: &CommandBuffer,
-        fence_memory_barrier_completed: &Fence,
+        tracker: &mut DecoderTracker,
     ) -> Result<(), VulkanDecoderError> {
         let Some(new_params) = self.parameters_scheduled_for_reset.take() else {
             return Ok(());
@@ -257,7 +257,7 @@ impl VideoSessionResources<'_> {
             self.video_session.max_coded_extent,
             self.video_session.max_dpb_slots,
             decode_buffer,
-            fence_memory_barrier_completed,
+            tracker,
         )?;
 
         self.parameters = new_params;
@@ -276,7 +276,7 @@ impl VideoSessionResources<'_> {
         max_coded_extent: vk::Extent2D,
         max_dpb_slots: u32,
         decode_buffer: &CommandBuffer,
-        fence_memory_barrier_completed: &Fence,
+        tracker: &mut DecoderTracker,
     ) -> Result<DecodingImages<'a>, VulkanDecoderError> {
         decode_buffer.begin()?;
 
@@ -296,15 +296,13 @@ impl VideoSessionResources<'_> {
 
         decode_buffer.end()?;
 
-        decoding_device.h264_decode_queue.submit(
+        decoding_device.h264_decode_queue.submit_chain_semaphore(
             decode_buffer,
-            &[],
-            &[],
-            Some(**fence_memory_barrier_completed),
+            tracker,
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            DecoderTrackerWaitState::NewDecodingImagesLayoutTransition,
         )?;
-
-        // TODO: this shouldn't be a fence
-        fence_memory_barrier_completed.wait_and_reset(u64::MAX)?;
 
         Ok(decoding_images)
     }

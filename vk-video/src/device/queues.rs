@@ -63,6 +63,57 @@ impl Queue {
 
         Ok(())
     }
+
+    pub(crate) fn submit_chain_semaphore<S>(
+        &self,
+        buffer: &CommandBuffer,
+        tracker: &mut Tracker<S>,
+        wait_stages: vk::PipelineStageFlags2,
+        signal_stages: vk::PipelineStageFlags2,
+        new_wait_state: S,
+    ) -> Result<(), VulkanCommonError> {
+        let buffer_submit_info =
+            [vk::CommandBufferSubmitInfo::default().command_buffer(buffer.buffer)];
+
+        let signal_value = tracker.next_sem_value();
+        let signal_info = vk::SemaphoreSubmitInfo::default()
+            .semaphore(tracker.semaphore.semaphore)
+            .value(signal_value)
+            .stage_mask(signal_stages);
+
+        let wait_info = match tracker.wait_for.take() {
+            Some(wait_for) => Some(
+                vk::SemaphoreSubmitInfo::default()
+                    .semaphore(tracker.semaphore.semaphore)
+                    .value(wait_for.value)
+                    .stage_mask(wait_stages),
+            ),
+            _ => None,
+        };
+
+        let mut submit_info = vk::SubmitInfo2::default()
+            .signal_semaphore_infos(std::slice::from_ref(&signal_info))
+            .command_buffer_infos(&buffer_submit_info);
+
+        if let Some(wait_info) = wait_info.as_ref() {
+            submit_info = submit_info.wait_semaphore_infos(std::slice::from_ref(wait_info));
+        }
+
+        unsafe {
+            self.device.queue_submit2(
+                *self.queue.lock().unwrap(),
+                &[submit_info],
+                vk::Fence::null(),
+            )?
+        };
+
+        tracker.wait_for = Some(TrackerWait {
+            value: signal_value,
+            _state: new_wait_state,
+        });
+
+        Ok(())
+    }
 }
 
 pub(crate) struct Queues {

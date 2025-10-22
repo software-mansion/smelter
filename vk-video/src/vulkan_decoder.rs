@@ -22,16 +22,18 @@ pub struct VulkanDecoder<'a> {
     video_session_resources: Option<VideoSessionResources<'a>>,
     command_buffers: CommandBuffers,
     _command_pools: CommandPools,
-    sync_structures: SyncStructures,
+    tracker: Tracker<DecoderTrackerWaitState>,
     reference_id_to_dpb_slot_index: std::collections::HashMap<ReferenceId, usize>,
     decoding_device: Arc<DecodingDevice>,
 }
 
-struct SyncStructures {
-    sem_decode_done: Semaphore,
-    fence_transfer_done: Fence,
-    fence_memory_barrier_completed: Fence,
+pub(crate) enum DecoderTrackerWaitState {
+    NewDecodingImagesLayoutTransition,
+    Decode,
+    DownloadImageToBuffer,
 }
+
+pub(crate) type DecoderTracker = Tracker<DecoderTrackerWaitState>;
 
 pub(crate) struct CommandPools {
     pub(crate) _decode_pool: Arc<CommandPool>,
@@ -40,6 +42,7 @@ pub(crate) struct CommandPools {
 
 struct CommandBuffers {
     decode_buffer: CommandBuffer,
+    sps_layout_transition_buffer: CommandBuffer,
     gpu_to_mem_transfer_buffer: CommandBuffer,
     vulkan_to_wgpu_transfer_buffer: CommandBuffer,
 }
@@ -50,7 +53,6 @@ struct DecodeSubmission {
     image: Arc<Mutex<Image>>,
     dimensions: vk::Extent2D,
     layer: u32,
-    wait_semaphore: vk::Semaphore,
     picture_order_cnt: i32,
     max_num_reorder_frames: u64,
     is_idr: bool,
@@ -102,6 +104,8 @@ impl VulkanDecoder<'_> {
 
         let decode_buffer = CommandBuffer::new_primary(decode_pool.clone())?;
 
+        let sps_layout_transition_buffer = CommandBuffer::new_primary(decode_pool.clone())?;
+
         let gpu_to_mem_transfer_buffer = CommandBuffer::new_primary(transfer_pool.clone())?;
 
         let vulkan_to_wgpu_transfer_buffer = CommandBuffer::new_primary(transfer_pool.clone())?;
@@ -111,14 +115,7 @@ impl VulkanDecoder<'_> {
             _transfer_pool: transfer_pool,
         };
 
-        let sync_structures = SyncStructures {
-            sem_decode_done: Semaphore::new(decoding_device.vulkan_device.device.clone())?,
-            fence_transfer_done: Fence::new(decoding_device.vulkan_device.device.clone(), false)?,
-            fence_memory_barrier_completed: Fence::new(
-                decoding_device.vulkan_device.device.clone(),
-                false,
-            )?,
-        };
+        let tracker = Tracker::new(decoding_device.vulkan_device.device.clone())?;
 
         Ok(Self {
             decoding_device,
@@ -126,10 +123,11 @@ impl VulkanDecoder<'_> {
             _command_pools: command_pools,
             command_buffers: CommandBuffers {
                 decode_buffer,
+                sps_layout_transition_buffer,
                 gpu_to_mem_transfer_buffer,
                 vulkan_to_wgpu_transfer_buffer,
             },
-            sync_structures,
+            tracker,
             reference_id_to_dpb_slot_index: Default::default(),
         })
     }
@@ -237,9 +235,9 @@ impl VulkanDecoder<'_> {
             None => {
                 self.video_session_resources = Some(VideoSessionResources::new_from_sps(
                     &self.decoding_device,
-                    &self.command_buffers.decode_buffer,
+                    &self.command_buffers.sps_layout_transition_buffer,
                     sps.clone(),
-                    &self.sync_structures.fence_memory_barrier_completed,
+                    &mut self.tracker,
                 )?)
             }
         }
@@ -295,8 +293,8 @@ impl VulkanDecoder<'_> {
         if is_idr {
             video_session_resources.ensure_session(
                 &self.decoding_device,
-                &self.command_buffers.decode_buffer,
-                &self.sync_structures.fence_memory_barrier_completed,
+                &self.command_buffers.sps_layout_transition_buffer,
+                &mut self.tracker,
             )?;
         }
 
@@ -510,15 +508,15 @@ impl VulkanDecoder<'_> {
 
         self.command_buffers.decode_buffer.end()?;
 
-        self.decoding_device.h264_decode_queue.submit(
-            &self.command_buffers.decode_buffer,
-            &[],
-            &[(
-                *self.sync_structures.sem_decode_done,
+        self.decoding_device
+            .h264_decode_queue
+            .submit_chain_semaphore(
+                &self.command_buffers.decode_buffer,
+                &mut self.tracker,
                 vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
-            )],
-            None,
-        )?;
+                vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
+                DecoderTrackerWaitState::Decode,
+            )?;
 
         // after the decode save the new reference picture
         self.reference_id_to_dpb_slot_index
@@ -533,7 +531,6 @@ impl VulkanDecoder<'_> {
 
         Ok(DecodeSubmission {
             image: target_image,
-            wait_semaphore: *self.sync_structures.sem_decode_done,
             layer: target_layer as u32,
             dimensions,
             picture_order_cnt: decode_information.picture_info.PicOrderCnt_for_decoding[0],
@@ -544,7 +541,7 @@ impl VulkanDecoder<'_> {
     }
 
     fn output_to_wgpu_texture(
-        &self,
+        &mut self,
         decode_output: DecodeSubmission,
     ) -> Result<wgpu::Texture, VulkanDecoderError> {
         let copy_extent = vk::Extent3D {
@@ -674,20 +671,20 @@ impl VulkanDecoder<'_> {
 
         self.command_buffers.vulkan_to_wgpu_transfer_buffer.end()?;
 
-        self.decoding_device.queues.transfer.submit(
-            &self.command_buffers.vulkan_to_wgpu_transfer_buffer,
-            &[(
-                decode_output.wait_semaphore,
-                // TODO: why?? why not something weaker?
-                vk::PipelineStageFlags2::TOP_OF_PIPE,
-            )],
-            &[],
-            Some(*self.sync_structures.fence_transfer_done),
-        )?;
+        // TODO: why?? will something weaker, such as PipelineStageFlags2::TRANSFER suffice? this
+        // just needs a test
+        self.decoding_device
+            .queues
+            .transfer
+            .submit_chain_semaphore(
+                &self.command_buffers.vulkan_to_wgpu_transfer_buffer,
+                &mut self.tracker,
+                vk::PipelineStageFlags2::ALL_COMMANDS,
+                vk::PipelineStageFlags2::ALL_COMMANDS,
+                DecoderTrackerWaitState::DownloadImageToBuffer,
+            )?;
 
-        self.sync_structures
-            .fence_transfer_done
-            .wait_and_reset(u64::MAX)?;
+        self.tracker.wait(u64::MAX)?;
 
         let result = self
             .video_session_resources
@@ -759,21 +756,16 @@ impl VulkanDecoder<'_> {
     }
 
     fn download_output(
-        &self,
+        &mut self,
         decode_output: DecodeSubmission,
     ) -> Result<Vec<u8>, VulkanDecoderError> {
         let mut dst_buffer = self.copy_image_to_buffer(
             &mut decode_output.image.lock().unwrap(),
             decode_output.dimensions,
             decode_output.layer,
-            &[(decode_output.wait_semaphore, vk::PipelineStageFlags2::COPY)],
-            &[],
-            Some(*self.sync_structures.fence_transfer_done),
         )?;
 
-        self.sync_structures
-            .fence_transfer_done
-            .wait_and_reset(u64::MAX)?;
+        self.tracker.wait(u64::MAX)?;
 
         let output = unsafe {
             dst_buffer.download_data_from_buffer(
@@ -845,15 +837,11 @@ impl VulkanDecoder<'_> {
         Ok(pic_reference_slots)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn copy_image_to_buffer(
-        &self,
+        &mut self,
         image: &mut Image,
         dimensions: vk::Extent2D,
         layer: u32,
-        wait_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
-        signal_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
-        fence: Option<vk::Fence>,
     ) -> Result<Buffer, VulkanDecoderError> {
         self.command_buffers.gpu_to_mem_transfer_buffer.begin()?;
 
@@ -931,12 +919,17 @@ impl VulkanDecoder<'_> {
 
         self.command_buffers.gpu_to_mem_transfer_buffer.end()?;
 
-        self.decoding_device.queues.transfer.submit(
-            &self.command_buffers.gpu_to_mem_transfer_buffer,
-            wait_semaphores,
-            signal_semaphores,
-            fence,
-        )?;
+        // TODO: test if just putting COPY here works as well
+        self.decoding_device
+            .queues
+            .transfer
+            .submit_chain_semaphore(
+                &self.command_buffers.gpu_to_mem_transfer_buffer,
+                &mut self.tracker,
+                vk::PipelineStageFlags2::COPY,
+                vk::PipelineStageFlags2::ALL_COMMANDS,
+                DecoderTrackerWaitState::DownloadImageToBuffer,
+            )?;
 
         Ok(dst_buffer)
     }
