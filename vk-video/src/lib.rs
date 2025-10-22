@@ -113,16 +113,16 @@ pub enum VulkanInitError {
     #[error("Vulkan error: {0}")]
     VkError(#[from] vk::Result),
 
-    #[error("wgpu instance error: {0}")]
+    #[error("Wgpu instance error: {0}")]
     WgpuInstanceError(#[from] wgpu::hal::InstanceError),
 
-    #[error("wgpu device error: {0}")]
+    #[error("Wgpu device error: {0}")]
     WgpuDeviceError(#[from] wgpu::hal::DeviceError),
 
-    #[error("wgpu request device error: {0}")]
+    #[error("Wgpu request device error: {0}")]
     WgpuRequestDeviceError(#[from] wgpu::RequestDeviceError),
 
-    #[error("cannot create a wgpu adapter")]
+    #[error("Cannot create a wgpu adapter")]
     WgpuAdapterNotCreated,
 
     #[error("Cannot find a suitable physical device")]
@@ -130,6 +130,9 @@ pub enum VulkanInitError {
 
     #[error("String conversion error: {0}")]
     StringConversionError(#[from] std::ffi::FromBytesUntilNulError),
+
+    #[error("Profile does not support NV12 texture format")]
+    NoNV12ProfileSupport,
 }
 
 #[derive(thiserror::Error, Debug)]
