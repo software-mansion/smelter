@@ -241,6 +241,10 @@ impl WhepOutputVideoOptions {
             "resolution": self.resolution.serialize(),
             "encoder": {
                 "type": self.encoder.to_string(),
+                "ffmpeg_options": {
+                    "tune": "zerolatency",
+                    "threads": "2",
+                }
             },
             "initial": {
                 "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),

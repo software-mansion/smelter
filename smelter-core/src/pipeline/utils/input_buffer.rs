@@ -90,14 +90,19 @@ impl LatencyOptimizedBuffer {
     }
 
     fn pts_with_buffer(&mut self, pts: Duration) -> Duration {
-        const INCREMENT_DURATION: Duration = Duration::from_micros(100);
-        const DECREMENT_DURATION: Duration = Duration::from_micros(10);
+        const INCREMENT_DURATION: Duration = Duration::from_micros(1000);
+        const DECREMENT_DURATION: Duration = Duration::from_micros(100);
         const STABLE_STATE_DURATION: Duration = Duration::from_secs(10);
 
         let next_pts = pts + self.dynamic_buffer;
         if next_pts > self.sync_point.elapsed() + self.max_buffer {
             let first_pts = self.state.set_over_max_buffer(next_pts);
             if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
+                debug!(
+                    old=?self.dynamic_buffer,
+                    new=?self.dynamic_buffer.saturating_sub(DECREMENT_DURATION),
+                    "Decreased latency optimized buffer"
+                );
                 self.dynamic_buffer = self.dynamic_buffer.saturating_sub(DECREMENT_DURATION);
             }
         } else if next_pts > self.sync_point.elapsed() + self.desired_buffer {
@@ -123,6 +128,11 @@ impl LatencyOptimizedBuffer {
             self.dynamic_buffer = new_buffer
         }
 
+        trace!(
+            next_pts=?pts+self.dynamic_buffer,
+            queue_pts=?self.sync_point.elapsed(),
+            "latency optimized buffer next packet"
+        );
         pts + self.dynamic_buffer
     }
 }
