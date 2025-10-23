@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use ash::vk;
 
-use crate::adapter::{DeviceCandidate, VulkanAdapter};
+use crate::adapter::VulkanAdapter;
 use crate::device::caps::{
     DecodeCapabilities, EncodeCapabilities, NativeDecodeCapabilities,
     NativeDecodeProfileCapabilities, NativeEncodeCapabilities,
@@ -15,7 +15,7 @@ use crate::parser::Parser;
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 use crate::{
-    BytesDecoder, BytesEncoder, DecoderError, H264Profile, RateControl, RawFrameData,
+    AdapterInfo, BytesDecoder, BytesEncoder, DecoderError, H264Profile, RateControl, RawFrameData,
     VulkanDecoderError, VulkanEncoderError, VulkanInitError, VulkanInstance, WgpuTexturesDecoder,
     WgpuTexturesEncoder, wrappers::*,
 };
@@ -81,8 +81,7 @@ pub struct VulkanDevice {
     pub(crate) queues: Queues,
     pub(crate) native_decode_capabilities: Option<NativeDecodeCapabilities>,
     pub(crate) native_encode_capabilities: Option<NativeEncodeCapabilities>,
-    pub(crate) supports_decoding: bool,
-    pub(crate) supports_encoding: bool,
+    pub(crate) adapter_info: AdapterInfo,
     pub(crate) device: Arc<Device>,
 }
 
@@ -93,16 +92,15 @@ impl VulkanDevice {
         wgpu_limits: wgpu::Limits,
         adapter: VulkanAdapter<'_>,
     ) -> Result<Self, VulkanInitError> {
-        let supports_decoding = adapter.supports_decoding();
-        let supports_encoding = adapter.supports_encoding();
-
-        let DeviceCandidate {
+        let VulkanAdapter {
             physical_device,
             wgpu_adapter,
             queue_indices,
             decode_capabilities,
             encode_capabilities,
-        } = adapter.device_candidate;
+            info,
+            ..
+        } = adapter;
 
         let wgpu_features = wgpu_features | wgpu::Features::TEXTURE_FORMAT_NV12;
         let wgpu_extensions = wgpu_adapter
@@ -113,11 +111,11 @@ impl VulkanDevice {
             .iter()
             .copied()
             .chain(wgpu_extensions)
-            .chain(match supports_decoding {
+            .chain(match info.supports_decoding {
                 true => DECODE_EXTENSIONS.iter().copied(),
                 false => [].iter().copied(),
             })
-            .chain(match supports_encoding {
+            .chain(match info.supports_encoding {
                 true => ENCODE_EXTENSIONS.iter().copied(),
                 false => [].iter().copied(),
             })
@@ -264,8 +262,7 @@ impl VulkanDevice {
             wgpu_device,
             wgpu_queue,
             wgpu_adapter,
-            supports_decoding,
-            supports_encoding,
+            adapter_info: info,
         })
     }
 
@@ -392,21 +389,11 @@ impl VulkanDevice {
     }
 
     pub fn decode_capabilities(&self) -> DecodeCapabilities {
-        DecodeCapabilities {
-            h264: self
-                .native_decode_capabilities
-                .as_ref()
-                .map(NativeDecodeCapabilities::user_facing),
-        }
+        self.adapter_info.decode_capabilities
     }
 
     pub fn encode_capabilities(&self) -> EncodeCapabilities {
-        EncodeCapabilities {
-            h264: self
-                .native_encode_capabilities
-                .as_ref()
-                .map(NativeEncodeCapabilities::user_facing),
-        }
+        self.adapter_info.encode_capabilities
     }
 
     pub fn encoder_parameters_low_latency(
@@ -599,11 +586,11 @@ impl VulkanDevice {
     }
 
     pub fn supports_decoding(&self) -> bool {
-        self.supports_decoding
+        self.adapter_info.supports_decoding
     }
 
     pub fn supports_encoding(&self) -> bool {
-        self.supports_encoding
+        self.adapter_info.supports_encoding
     }
 }
 
