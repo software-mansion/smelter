@@ -2,8 +2,10 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::pipeline::rtp::RtpNtpSyncPoint;
 use crate::pipeline::utils::input_buffer::InputBuffer;
-use crate::pipeline::webrtc::whep_input::process_tracks::setup_track_processing;
+use crate::pipeline::webrtc::whep_input::WhepTrackContext;
+use crate::pipeline::webrtc::whep_input::on_track::handle_on_track;
 use crate::pipeline::{
     input::Input,
     webrtc::{
@@ -22,10 +24,6 @@ use tracing::{Instrument, Level, debug, span};
 use url::Url;
 
 use crate::prelude::*;
-
-mod listen_for_trickle_candidates;
-mod process_tracks;
-mod resolve_video_preferences;
 
 const WHEP_INIT_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -52,7 +50,7 @@ impl WhepInput {
         let ctx_clone = ctx.clone();
         ctx.tokio_rt.spawn(
             async {
-                let result = init_whep_client(ctx_clone, options).await;
+                let result = init_whep_client(input_id, ctx_clone, options).await;
                 match result {
                     Ok(handle) => init_confirmation_sender.send(Ok(handle)),
                     Err(err) => init_confirmation_sender.send(Err(err)),
@@ -86,21 +84,22 @@ fn wait_with_deadline<T>(
         match result_receiver.try_recv() {
             Ok(result) => match result {
                 Ok(handle) => return Ok(handle),
-                Err(err) => return Err(InputInitError::WhepInitError(err.into())),
+                Err(err) => return Err(Box::new(err).into()),
             },
             Err(err) => match err {
                 oneshot::error::TryRecvError::Closed => {
-                    return Err(InputInitError::UnknownWhepError);
+                    return Err(InputInitError::InternalServerError);
                 }
                 oneshot::error::TryRecvError::Empty => {}
             },
         };
     }
     result_receiver.close();
-    Err(InputInitError::WhepInitTimeout)
+    Err(Box::new(WebrtcClientError::Timeout).into())
 }
 
 async fn init_whep_client(
+    input_id: InputId,
     ctx: Arc<PipelineCtx>,
     options: WhepInputOptions,
 ) -> Result<(Input, InputInitInfo, QueueDataReceiver), WebrtcClientError> {
@@ -130,15 +129,22 @@ async fn init_whep_client(
 
     pc.set_remote_description(answer).await?;
 
-    let buffer = InputBuffer::new(&ctx, options.buffer);
-    setup_track_processing(
-        &pc,
-        &ctx,
-        buffer,
-        input_samples_sender,
-        frame_sender,
-        video_preferences,
-    );
+    {
+        let input_id = input_id.clone();
+        let sync_point = RtpNtpSyncPoint::new(ctx.queue_sync_point);
+        let ctx = ctx.clone();
+        let buffer = InputBuffer::new(&ctx, options.buffer);
+        pc.on_track(move |track_ctx| {
+            let ctx = WhepTrackContext::new(track_ctx, &ctx, &sync_point, &buffer);
+            handle_on_track(
+                ctx,
+                input_id.clone(),
+                input_samples_sender.clone(),
+                frame_sender.clone(),
+                video_preferences.clone(),
+            );
+        });
+    }
 
     Ok((
         Input::Whep(WhepInput {

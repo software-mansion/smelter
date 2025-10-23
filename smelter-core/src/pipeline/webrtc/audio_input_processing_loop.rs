@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crossbeam_channel::Sender;
 use tokio::sync::oneshot;
 use tracing::{debug, trace, warn};
+use webrtc::{rtp_transceiver::rtp_receiver::RTCRtpReceiver, track::track_remote::TrackRemote};
 
 use crate::{
     pipeline::{
@@ -13,10 +14,7 @@ use crate::{
             depayloader::{DepayloaderOptions, DepayloaderStream},
         },
         utils::input_buffer::InputBuffer,
-        webrtc::{
-            AsyncReceiverIter, listen_for_rtcp::listen_for_rtcp,
-            peer_connection_recvonly::OnTrackContext,
-        },
+        webrtc::{AsyncReceiverIter, listen_for_rtcp::listen_for_rtcp},
     },
     thread_utils::{InitializableThread, ThreadMetadata},
 };
@@ -27,17 +25,18 @@ pub(super) struct AudioInputLoop {
     pub sync_point: Arc<RtpNtpSyncPoint>,
     pub handle: AudioTrackThreadHandle,
     pub buffer: InputBuffer,
-    pub track_ctx: OnTrackContext,
+    pub track: Arc<TrackRemote>,
+    pub rtc_receiver: Arc<RTCRtpReceiver>,
 }
 
 impl AudioInputLoop {
-    pub(super) async fn run(self, ctx: Arc<PipelineCtx>) -> Result<(), DecoderInitError> {
+    pub(super) async fn run(self, ctx: &Arc<PipelineCtx>) -> Result<(), DecoderInitError> {
         let mut timestamp_sync = RtpTimestampSync::new(&self.sync_point, 48_000, self.buffer);
 
         let (sender_report_sender, mut sender_report_receiver) = oneshot::channel();
-        listen_for_rtcp(&ctx, self.track_ctx.rtc_receiver, sender_report_sender);
+        listen_for_rtcp(ctx, self.rtc_receiver, sender_report_sender);
 
-        while let Ok((packet, _)) = self.track_ctx.track.read_rtp().await {
+        while let Ok((packet, _)) = self.track.read_rtp().await {
             if let Ok(report) = sender_report_receiver.try_recv() {
                 timestamp_sync.on_sender_report(report.ntp_time, report.rtp_time);
             }

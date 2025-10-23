@@ -29,9 +29,8 @@ use webrtc::{
 use crate::pipeline::{PipelineCtx, webrtc::supported_codec_parameters::opus_codec_params};
 
 #[derive(Debug, Clone)]
-pub(crate) struct OnTrackContext {
+pub(crate) struct OnTrackHdlrContext {
     pub track: Arc<TrackRemote>,
-    pub transceiver: Arc<RTCRtpTransceiver>,
     pub rtc_receiver: Arc<RTCRtpReceiver>,
 }
 
@@ -184,17 +183,15 @@ impl RecvonlyPeerConnection {
         self.pc.on_ice_candidate(f);
     }
 
-    pub fn on_track<F: FnMut(OnTrackContext) + Send + Sync + 'static>(&self, mut f: F) {
-        self.pc
-            .on_track(Box::new(move |track, rtc_receiver, transceiver| {
-                let ctx = OnTrackContext {
-                    track,
-                    transceiver,
-                    rtc_receiver,
-                };
-                f(ctx);
-                Box::pin(async {})
-            }));
+    pub fn on_track<F: FnMut(OnTrackHdlrContext) + Send + Sync + 'static>(&self, mut f: F) {
+        self.pc.on_track(Box::new(move |track, rtc_receiver, _| {
+            let ctx = OnTrackHdlrContext {
+                track,
+                rtc_receiver,
+            };
+            f(ctx);
+            Box::pin(async {})
+        }));
     }
 
     pub async fn add_ice_candidate(

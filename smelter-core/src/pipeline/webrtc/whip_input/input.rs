@@ -30,7 +30,7 @@ impl WhipInput {
         options: WhipInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let Some(state) = &ctx.whip_whep_state else {
-            return Err(InputInitError::WhipWhepServerNotRunning);
+            return Err(WebrtcServerError::ServerNotRunning.into());
         };
 
         let endpoint_id = options.endpoint_override.unwrap_or(input_id.0.clone());
@@ -51,7 +51,7 @@ impl WhipInput {
                 input_samples_sender,
                 buffer_options: options.buffer,
             },
-        );
+        )?;
 
         Ok((
             Input::Whip(Self {
