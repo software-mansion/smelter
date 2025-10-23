@@ -115,6 +115,7 @@ fn prepare_dependencies(executable_dir: &Path) -> Result<()> {
 }
 
 fn download_ffmpeg(executable_dir: &Path) -> Result<()> {
+    // TODO: Download in chunks
     let response = get(ffmpeg_url())
         .with_context(|| format!("Failed to download libav libraries. URL: {}", ffmpeg_url()))?;
     let content = response.bytes()?;
@@ -267,7 +268,7 @@ mod logger {
             Ok(level) => level,
             Err(_) => logger_level.clone(),
         };
-        let default_logger_format = LoggerFormat::Compact;
+        let default_logger_format = LoggerFormat::Json;
         let logger_format = match env::var("SMELTER_LOGGER_FORMAT") {
             Ok(format) => LoggerFormat::from_str(&format).unwrap_or(default_logger_format),
             Err(_) => default_logger_format,
