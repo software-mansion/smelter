@@ -125,14 +125,11 @@ fn unpack_ffmpeg(executable_dir: &Path) -> Result<()> {
 
     let mut decoder = flate2::bufread::GzDecoder::new(gz_input);
 
-    let decompressed_bytes = std::io::copy(&mut decoder, &mut tar_bytes)
+    let decompressed_size = std::io::copy(&mut decoder, &mut tar_bytes)
         .with_context(|| "Failed to decompress the archive")?;
-    trace!(decompressed_bytes);
+    trace!(decompressed_size);
 
-    let tar_bytes = tar_bytes;
-
-    let mut tar_archive = Archive::new(&tar_bytes[..]);
-    tar_archive.unpack(executable_dir)?;
+    Archive::new(&tar_bytes[..]).unpack(executable_dir)?;
 
     Ok(())
 }

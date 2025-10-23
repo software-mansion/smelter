@@ -57,8 +57,6 @@ impl VideoEncoder for FfmpegH264Encoder {
             ("threads", "0"),
         ]);
 
-        // I am not sure at the moment if default FFmpeg settings are the best for videotoolbox,
-        // but they are definitely better than these
         if codec_name != "libopenh264" && codec_name != "h264_videotoolbox" {
             ffmpeg_options.append(&[
                 // Quality-based VBR (0-51)
