@@ -24,8 +24,14 @@ const VERSION = `v0.4.1`;
 type ManagedInstanceOptions = {
   port: number;
   workingdir?: string;
-  executablePath?: string;
+  mainExecutablePath?: string;
+  dependencyCheckPath?: string;
   enableWebRenderer?: boolean;
+};
+
+type ExecutablePaths = {
+  mainProcess: string;
+  dependencyCheck: string;
 };
 
 /**
@@ -34,7 +40,8 @@ type ManagedInstanceOptions = {
 class LocallySpawnedInstanceManager implements SmelterManager {
   private port: number;
   private workingdir: string;
-  private executablePath?: string;
+  private mainExecutablePath?: string;
+  private dependencyCheckPath?: string;
   private wsConnection: WebSocketConnection;
   private enableWebRenderer?: boolean;
   private childSpawnPromise?: SpawnPromise;
@@ -42,7 +49,8 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   constructor(opts: ManagedInstanceOptions) {
     this.port = opts.port;
     this.workingdir = opts.workingdir ?? path.join(os.tmpdir(), `smelter-${uuidv4()}`);
-    this.executablePath = opts.executablePath;
+    this.mainExecutablePath = opts.mainExecutablePath;
+    this.dependencyCheckPath = opts.dependencyCheckPath;
     this.enableWebRenderer = opts.enableWebRenderer;
     this.wsConnection = new WebSocketConnection(`ws://127.0.0.1:${this.port}/ws`);
   }
@@ -51,12 +59,15 @@ class LocallySpawnedInstanceManager implements SmelterManager {
     const port = process.env.SMELTER_API_PORT ? Number(process.env.SMELTER_API_PORT) : 8000;
     return new LocallySpawnedInstanceManager({
       port,
-      executablePath: process.env.SMELTER_PATH,
+      mainExecutablePath: process.env.SMELTER_PATH,
     });
   }
 
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
-    const executablePath = this.executablePath ?? (await prepareExecutable(this.enableWebRenderer));
+    const { mainProcess: mainProcessPath, dependencyCheck: _dependencyCheckPath } = this
+      .mainExecutablePath
+      ? { mainProcess: this.mainExecutablePath, dependencyCheck: this.dependencyCheckPath }
+      : await prepareExecutable(this.enableWebRenderer);
 
     const { level, format } = smelterInstanceLoggerOptions();
 
@@ -71,9 +82,9 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       SMELTER_LOGGER_FORMAT: format,
       SMELTER_LOGGER_LEVEL: level,
     };
-    this.childSpawnPromise = spawn(executablePath, [], { env, stdio: 'inherit' });
-    this.childSpawnPromise.catch(err => {
-      opts.logger.error(err, 'Smelter instance failed');
+
+    const executableError = (err: any, message: string) => {
+      opts.logger.error(err, message);
       // TODO: parse structured logging from smelter and send them to this logger
       if (err.stderr) {
         console.error(err.stderr);
@@ -81,7 +92,23 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       if (err.stdout) {
         console.error(err.stdout);
       }
-    });
+    };
+
+    // This code will be uncomented with the next smelter release which is going to
+    // include `dependency_check`
+    //
+    // As a result of this we explicitly let the user to skip dependency check by setting
+    // the SMELTER_PATH env.
+    // if (dependencyCheckPath) {
+    //   try {
+    //     await spawn(dependencyCheckPath, [], {});
+    //   } catch (err) {
+    //     executableError(err, 'Dependency check failed');
+    //   }
+    // }
+
+    this.childSpawnPromise = spawn(mainProcessPath, [], { env, stdio: 'inherit' });
+    this.childSpawnPromise.catch(err => executableError(err, 'Smelter instance failed'));
 
     await retry(async () => {
       await sleep(500);
@@ -139,14 +166,17 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   }
 }
 
-async function prepareExecutable(enableWebRenderer?: boolean): Promise<string> {
+async function prepareExecutable(enableWebRenderer?: boolean): Promise<ExecutablePaths> {
   const version = enableWebRenderer ? `${VERSION}-web` : VERSION;
   const downloadDir = path.join(os.homedir(), '.smelter', version, architecture());
   const readyFilePath = path.join(downloadDir, '.ready');
-  const executablePath = path.join(downloadDir, 'smelter/smelter');
+  const executableDir = path.join(downloadDir, 'smelter');
 
   if (await fs.pathExists(readyFilePath)) {
-    return executablePath;
+    return {
+      mainProcess: path.join(executableDir, 'smelter_main'),
+      dependencyCheck: path.join(executableDir, 'dependency_check'),
+    };
   }
   await fs.mkdirp(downloadDir);
 
@@ -163,7 +193,10 @@ async function prepareExecutable(enableWebRenderer?: boolean): Promise<string> {
   await fs.remove(tarGzPath);
 
   await fs.writeFile(readyFilePath, '\n', 'utf-8');
-  return executablePath;
+  return {
+    mainProcess: path.join(executableDir, 'smelter_main'),
+    dependencyCheck: path.join(executableDir, 'dependency_check'),
+  };
 }
 
 function architecture(): 'linux_aarch64' | 'linux_x86_64' | 'darwin_x86_64' | 'darwin_aarch64' {

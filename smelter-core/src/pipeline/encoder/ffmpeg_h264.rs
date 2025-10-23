@@ -56,7 +56,8 @@ impl VideoEncoder for FfmpegH264Encoder {
             // Auto number of threads
             ("threads", "0"),
         ]);
-        if codec_name != "libopenh264" {
+
+        if codec_name != "libopenh264" && codec_name != "h264_videotoolbox" {
             ffmpeg_options.append(&[
                 // Quality-based VBR (0-51)
                 ("crf", "23"),

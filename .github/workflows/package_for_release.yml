@@ -18,6 +18,9 @@ jobs:
 
             - name: 📦 Package
               run: cargo run -p tools --bin package_for_release
+            
+            - name: Run dependency check
+              run: ./tools/build/smelter/dependency_check
 
             - uses: actions/upload-artifact@v4
               with:
@@ -44,6 +47,9 @@ jobs:
 
             - name: 📦 Package
               run: cargo run -p tools --bin package_for_release
+
+            - name: Run dependency check
+              run: ./tools/build/smelter/dependency_check
 
             - uses: actions/upload-artifact@v4
               with:
@@ -89,6 +95,9 @@ jobs:
 
             - name: 📦 Package
               run: cargo run -p tools --bin package_for_release
+
+            - name: Run dependency check
+              run: ./tools/build/smelter/dependency_check
 
             - uses: actions/upload-artifact@v4
               with:
