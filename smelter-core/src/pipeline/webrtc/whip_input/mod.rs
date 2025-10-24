@@ -1,10 +1,16 @@
 use std::sync::Arc;
 use webrtc::{rtp_transceiver::rtp_receiver::RTCRtpReceiver, track::track_remote::TrackRemote};
 
-use crate::pipeline::{
-    rtp::RtpNtpSyncPoint,
-    utils::input_buffer::InputBuffer,
-    webrtc::{WhipWhepServerState, peer_connection_recvonly::OnTrackHdlrContext},
+use crate::{
+    PipelineCtx,
+    pipeline::{
+        rtp::RtpNtpSyncPoint,
+        utils::input_buffer::InputBuffer,
+        webrtc::{
+            WhipWhepServerState, peer_connection_recvonly::OnTrackHdlrContext,
+            whip_input::state::WhipInputsState,
+        },
+    },
 };
 
 mod input;
@@ -20,7 +26,8 @@ pub(crate) use input::WhipInput;
 struct WhipTrackContext {
     track: Arc<TrackRemote>,
     rtc_receiver: Arc<RTCRtpReceiver>,
-    state: WhipWhepServerState,
+    pipeline_ctx: Arc<PipelineCtx>,
+    inputs: WhipInputsState,
     sync_point: Arc<RtpNtpSyncPoint>,
     buffer: InputBuffer,
 }
@@ -35,7 +42,8 @@ impl WhipTrackContext {
         Self {
             track: track_ctx.track,
             rtc_receiver: track_ctx.rtc_receiver,
-            state: state.clone(),
+            pipeline_ctx: state.ctx.clone(),
+            inputs: state.inputs.clone(),
             sync_point: sync_point.clone(),
             buffer: buffer.clone(),
         }

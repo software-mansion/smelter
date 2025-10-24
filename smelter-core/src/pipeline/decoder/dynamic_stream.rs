@@ -10,6 +10,36 @@ use crate::pipeline::decoder::{
 
 use crate::prelude::*;
 
+pub(crate) enum KeyframeRequestSender {
+    Async(tokio::sync::mpsc::Sender<()>),
+    #[allow(dead_code)]
+    Sync(crossbeam_channel::Sender<()>),
+}
+
+impl KeyframeRequestSender {
+    pub fn new_async() -> (Self, tokio::sync::mpsc::Receiver<()>) {
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        (Self::Async(sender), receiver)
+    }
+
+    #[allow(dead_code)]
+    pub fn new_sync() -> (Self, crossbeam_channel::Receiver<()>) {
+        let (sender, receiver) = crossbeam_channel::bounded(1);
+        (Self::Sync(sender), receiver)
+    }
+
+    pub fn send(&self) {
+        match &self {
+            KeyframeRequestSender::Async(sender) => {
+                let _ = sender.try_send(());
+            }
+            KeyframeRequestSender::Sync(sender) => {
+                let _ = sender.try_send(());
+            }
+        }
+    }
+}
+
 pub(crate) struct DynamicVideoDecoderStream<Source>
 where
     Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
@@ -20,6 +50,7 @@ where
     source: Source,
     eos_sent: bool,
     decoders_info: VideoDecoderMapping,
+    keyframe_request_sender: KeyframeRequestSender,
 }
 
 impl<Source> DynamicVideoDecoderStream<Source>
@@ -30,6 +61,7 @@ where
         ctx: Arc<PipelineCtx>,
         decoders_info: VideoDecoderMapping,
         source: Source,
+        keyframe_request_sender: KeyframeRequestSender,
     ) -> Self {
         Self {
             ctx,
@@ -38,6 +70,7 @@ where
             source,
             eos_sent: false,
             decoders_info,
+            keyframe_request_sender,
         }
     }
 
@@ -99,6 +132,10 @@ where
                 self.ensure_decoder(samples.kind);
                 let decoder = self.decoder.as_mut()?;
                 let chunks = decoder.decode(samples);
+                // TODO: add better detection
+                if chunks.is_empty() {
+                    self.keyframe_request_sender.send();
+                }
                 Some(chunks.into_iter().map(PipelineEvent::Data).collect())
             }
             Some(PipelineEvent::EOS) | None => match self.eos_sent {

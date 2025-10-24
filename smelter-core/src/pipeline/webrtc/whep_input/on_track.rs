@@ -1,24 +1,19 @@
-use std::sync::Arc;
-
 use crossbeam_channel::Sender;
 use smelter_render::{Frame, InputId};
-use tracing::{Instrument, debug, info_span, warn};
-use webrtc::{
-    rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication,
-    rtp_transceiver::{rtp_codec::RTPCodecType, rtp_receiver::RTCRtpReceiver},
-    track::track_remote::TrackRemote,
-};
+use tracing::{Instrument, debug, info_span, trace, warn};
+use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
 
 use crate::{
     pipeline::{
         decoder::VideoDecoderMapping,
-        rtp::depayloader::VideoPayloadTypeMapping,
+        rtp::{RtpTimestampSync, depayloader::VideoPayloadTypeMapping},
         webrtc::{
-            audio_input_processing_loop::{AudioInputLoop, AudioTrackThread},
+            input_rtcp_listener::RtcpListeners,
+            input_rtp_reader::WebrtcRtpReader,
+            input_thread::{AudioTrackThread, VideoTrackThread, start_pli_sender_task},
             negotiated_codecs::{
                 WebrtcVideoDecoderMapping, WebrtcVideoPayloadTypeMapping, audio_codec_negotiated,
             },
-            video_input_processing_loop::{VideoInputLoop, VideoTrackThread},
             whep_input::WhepTrackContext,
         },
     },
@@ -35,25 +30,28 @@ pub fn handle_on_track(
     video_preferences: Vec<VideoDecoderOptions>,
 ) {
     let kind = ctx.track.kind();
-    let _span = info_span!("WHEP input track", ?kind, ?input_id).entered();
-    debug!("on_track called");
+    let span = info_span!("WHEP input track", ?kind, ?input_id);
 
-    match kind {
-        RTPCodecType::Audio => {
-            tokio::spawn(
-                process_audio_track(ctx, input_samples_sender).instrument(tracing::Span::current()),
-            );
+    tokio::spawn(
+        async move {
+            debug!("on_track called");
+            let result = match kind {
+                RTPCodecType::Audio => process_audio_track(ctx, input_samples_sender).await,
+                RTPCodecType::Video => {
+                    process_video_track(ctx, frame_sender, video_preferences).await
+                }
+                RTPCodecType::Unspecified => {
+                    warn!("Unknown track kind");
+                    Ok(())
+                }
+            };
+            if let Err(err) = result {
+                // TODO: address after WhipWhepServerError rework
+                warn!(?err, "On track handler failed")
+            }
         }
-        RTPCodecType::Video => {
-            tokio::spawn(
-                process_video_track(ctx, frame_sender, video_preferences)
-                    .instrument(tracing::Span::current()),
-            );
-        }
-        RTPCodecType::Unspecified => {
-            warn!("Unknown track kind")
-        }
-    }
+        .instrument(span),
+    );
 }
 
 async fn process_audio_track(
@@ -70,15 +68,24 @@ async fn process_audio_track(
         (ctx.pipeline_ctx.clone(), samples_sender),
     )?;
 
-    let audio_input_loop = AudioInputLoop {
-        handle,
-        sync_point: ctx.sync_point,
-        buffer: ctx.buffer,
+    let mut rtp_reader = WebrtcRtpReader {
         track: ctx.track,
-        rtc_receiver: ctx.rtc_receiver,
+        timestamp_sync: RtpTimestampSync::new(&ctx.sync_point, 48_000, ctx.buffer),
+        rtcp_listeners: RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
     };
 
-    audio_input_loop.run(&ctx.pipeline_ctx).await?;
+    while let Some(packet) = rtp_reader.read_packet().await {
+        trace!(?packet, "Sending RTP packet");
+        if handle
+            .rtp_packet_sender
+            .send(PipelineEvent::Data(packet))
+            .await
+            .is_err()
+        {
+            debug!("Failed to send audio RTP packet, Channel closed.");
+            break;
+        }
+    }
 
     Ok(())
 }
@@ -96,7 +103,9 @@ async fn process_video_track(
         return Err(WebrtcClientError::NoVideoCodecNegotiated);
     };
 
-    request_keyframe(&ctx.track, &ctx.rtc_receiver).await?;
+    let keyframe_request_sender = start_pli_sender_task(&ctx.track, &ctx.rtc_receiver);
+    keyframe_request_sender.send();
+
     let handle = VideoTrackThread::spawn(
         "WHEP input video",
         (
@@ -104,32 +113,27 @@ async fn process_video_track(
             decoder_mapping,
             payload_type_mapping,
             frame_sender,
+            keyframe_request_sender,
         ),
     )?;
 
-    let video_input_loop = VideoInputLoop {
-        handle,
-        sync_point: ctx.sync_point,
-        buffer: ctx.buffer,
+    let mut rtp_reader = WebrtcRtpReader {
         track: ctx.track,
-        rtc_receiver: ctx.rtc_receiver,
+        timestamp_sync: RtpTimestampSync::new(&ctx.sync_point, 90_000, ctx.buffer),
+        rtcp_listeners: RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
     };
 
-    video_input_loop.run(&ctx.pipeline_ctx).await?;
-
+    while let Some(packet) = rtp_reader.read_packet().await {
+        trace!(?packet, "Sending RTP packet");
+        if handle
+            .rtp_packet_sender
+            .send(PipelineEvent::Data(packet))
+            .await
+            .is_err()
+        {
+            debug!("Failed to send video RTP packet, Channel closed.");
+            break;
+        }
+    }
     Ok(())
-}
-
-async fn request_keyframe(
-    track: &Arc<TrackRemote>,
-    rtc_receiver: &Arc<RTCRtpReceiver>,
-) -> Result<usize, webrtc::Error> {
-    let ssrc = track.ssrc();
-    let pli = PictureLossIndication {
-        // For receive-only endpoints RTP sender SSRC can be set to 0.
-        sender_ssrc: 0,
-        media_ssrc: ssrc,
-    };
-
-    rtc_receiver.transport().write_rtcp(&[Box::new(pli)]).await
 }
