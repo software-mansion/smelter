@@ -38,7 +38,7 @@ impl ContinuousValue for Vec<Option<Tile>> {
                             .map(|old_tile| ContinuousValue::interpolate(old_tile, tile, state))
                     })
                     .or_else(|| {
-                        if end_index < start.len() {
+                        if start.len() == end.len() && end_index < start.len() {
                             Some(ContinuousValue::interpolate(tile, tile, state))
                         } else {
                             None
@@ -57,6 +57,10 @@ impl ContinuousValue for Tile {
             left: ContinuousValue::interpolate(&start.left, &end.left, state),
             width: ContinuousValue::interpolate(&start.width, &end.width, state),
             height: ContinuousValue::interpolate(&start.height, &end.height, state),
+
+            // These values are strictly informational and don't need to be interpolated
+            row: end.row,
+            column: end.column,
         }
     }
 }

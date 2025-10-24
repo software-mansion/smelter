@@ -16,8 +16,9 @@ const VIDEO_RESOLUTION: Resolution = Resolution {
 };
 
 const IP: &str = "127.0.0.1";
-const INPUT_PORT: u16 = 8002;
-const OUTPUT_PORT: u16 = 8004;
+const INPUT_PORT_1: u16 = 8002;
+const INPUT_PORT_2: u16 = 8004;
+const OUTPUT_PORT: u16 = 8006;
 
 fn main() {
     run_example(client_code);
@@ -30,7 +31,18 @@ fn client_code() -> Result<()> {
         "input/input_1/register",
         &json!({
             "type": "rtp_stream",
-            "port": INPUT_PORT,
+            "port": INPUT_PORT_1,
+            "video": {
+                "decoder": "ffmpeg_h264"
+            }
+        }),
+    )?;
+
+    examples::post(
+        "input/input_2/register",
+        &json!({
+            "type": "rtp_stream",
+            "port": INPUT_PORT_2,
             "video": {
                 "decoder": "ffmpeg_h264"
             }
@@ -53,7 +65,12 @@ fn client_code() -> Result<()> {
                 "type": "input_stream",
                 "input_id": "input_1",
                 "id": "2"
-            }
+            },
+            {
+                "type": "input_stream",
+                "input_id": "input_1",
+                "id": "3"
+            },
         ],
     });
 
@@ -63,17 +80,28 @@ fn client_code() -> Result<()> {
         "transition": {
             "duration_ms": 700,
         },
+        "horizontal_align": "right",
         "children": [
             {
                 "type": "input_stream",
                 "input_id": "input_1",
-                "id": "3"
+                "id": "1"
+            },
+            {
+                "type": "input_stream",
+                "input_id": "input_2",
+                "id": "5"
             },
             {
                 "type": "input_stream",
                 "input_id": "input_1",
-                "id": "2"
-            }
+                "id": "4"
+            },
+            {
+                "type": "input_stream",
+                "input_id": "input_2",
+                "id": "7"
+            },
         ],
     });
 
@@ -101,7 +129,13 @@ fn client_code() -> Result<()> {
 
     examples::post("start", &json!({}))?;
 
-    start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::TestPatternH264)?;
+    start_ffmpeg_send(IP, Some(INPUT_PORT_1), None, TestSample::TestPatternH264)?;
+    start_ffmpeg_send(
+        IP,
+        Some(INPUT_PORT_2),
+        None,
+        TestSample::BigBuckBunnyH264Opus,
+    )?;
 
     for _ in 0..15 {
         examples::post(

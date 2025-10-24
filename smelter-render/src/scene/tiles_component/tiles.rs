@@ -1,3 +1,5 @@
+use std::ops::AddAssign;
+
 use crate::scene::{HorizontalAlign, Size, StatefulComponent, VerticalAlign};
 
 use super::{TilesComponentParams, interpolation::TileId};
@@ -8,6 +10,23 @@ struct RowsCols {
     columns: u32,
 }
 
+impl RowsCols {
+    fn increment(&mut self, limit: &RowsCols) {
+        if self.rows >= limit.rows && self.columns >= limit.columns {
+            return;
+        }
+
+        if self.columns < limit.columns {
+            self.columns += 1;
+        } else if self.rows < limit.rows {
+            self.rows += 1;
+            self.columns = 0;
+        } else {
+            unreachable!();
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct Tile {
     pub id: TileId,
@@ -15,6 +34,8 @@ pub(super) struct Tile {
     pub left: f32,
     pub width: f32,
     pub height: f32,
+    pub row: u32,
+    pub column: u32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -32,15 +53,21 @@ impl TilesComponentParams {
         let tile_size = self.tile_size(rows_cols, size);
         let tiles = self.tiles_positions(input_count, rows_cols, tile_size, size);
         let mut index = 0;
+        let mut curr_row_col = RowsCols {
+            rows: 0,
+            columns: 0,
+        };
         tiles
             .into_iter()
             .zip(children.iter())
             .map(|(tile, child)| {
-                Some(Tile {
+                let tile = Some(Tile {
                     top: tile.top,
                     left: tile.left,
                     width: tile.width,
                     height: tile.height,
+                    row: curr_row_col.rows,
+                    column: curr_row_col.columns,
                     id: match child.component_id() {
                         Some(id) => TileId::ComponentId(id.clone()),
                         None => {
@@ -49,7 +76,9 @@ impl TilesComponentParams {
                             id
                         }
                     },
-                })
+                });
+                curr_row_col.increment(&rows_cols);
+                tile
             })
             .collect()
     }
