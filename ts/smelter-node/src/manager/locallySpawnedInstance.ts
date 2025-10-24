@@ -19,7 +19,12 @@ import { WebSocketConnection } from '../ws';
 import { smelterInstanceLoggerOptions } from '../logger';
 import { getSmelterStatus } from '../getSmelterStatus';
 
+// TODO: This should be changed to `software-mansion/smelter` repo with proper version on ts-sdk release
 const VERSION = `6e118f3f`;
+const REPO = `smelter-labs/smelter-rc`;
+
+// const VERSION = `v0.4.1`;
+// const REPO = `software-mansion/smelter`;
 
 type ManagedInstanceOptions = {
   port: number;
@@ -213,9 +218,7 @@ function architecture(): 'linux_aarch64' | 'linux_x86_64' | 'darwin_x86_64' | 'd
 function smelterTarGzUrl(withWebRenderer?: boolean): string {
   const archiveNameSuffix = withWebRenderer ? '_with_web_renderer' : '';
   const archiveName = `smelter${archiveNameSuffix}_${architecture()}.tar.gz`;
-  // return `https://github.com/software-mansion/smelter/releases/download/${VERSION}/${archiveName}`;
-  // WARN: This should be changed back to main smelter repository at release.
-  return `https://github.com/smelter-labs/smelter-rc/releases/download/${VERSION}/${archiveName}`;
+  return `https://github.com/${REPO}/releases/download/${VERSION}/${archiveName}`;
 }
 
 export default LocallySpawnedInstanceManager;
