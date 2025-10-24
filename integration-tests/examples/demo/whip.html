@@ -130,7 +130,7 @@
         if (screenShareStream) {
           screenShareStream.close();
         }
-        const stream = await navigator.mediaDevices.getDisplayMedia();
+        const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true});
         screenShareStream = await connect(endpointUrl, bearerToken, stream);
         videoPlayer.srcObject = stream;
       };
