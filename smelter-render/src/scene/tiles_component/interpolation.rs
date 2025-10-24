@@ -26,7 +26,8 @@ impl ContinuousValue for Vec<Option<Tile>> {
         };
 
         end.iter()
-            .map(|tile| {
+            .enumerate()
+            .map(|(end_index, tile)| {
                 let tile = tile.as_ref()?;
                 start_id_map
                     .get(&tile.id)
@@ -35,6 +36,13 @@ impl ContinuousValue for Vec<Option<Tile>> {
                         old_tile
                             .as_ref()
                             .map(|old_tile| ContinuousValue::interpolate(old_tile, tile, state))
+                    })
+                    .or_else(|| {
+                        if end_index < start.len() {
+                            Some(ContinuousValue::interpolate(tile, tile, state))
+                        } else {
+                            None
+                        }
                     })
             })
             .collect()
