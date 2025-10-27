@@ -21,9 +21,8 @@ use crate::{
         rtp::RtpPacket,
         webrtc::{
             http_client::WhipWhepHttpClient,
-            whip_output::preferences::{
-                params_from_audio_preferences, params_from_video_preferences,
-                resolve_audio_preferences, resolve_video_preferences,
+            whip_output::codec_preferences::{
+                codec_params_from_preferences, resolve_audio_preferences, resolve_video_preferences,
             },
         },
     },
@@ -31,9 +30,9 @@ use crate::{
 
 use crate::prelude::*;
 
+mod codec_preferences;
 mod establish_peer_connection;
 mod peer_connection;
-mod preferences;
 mod setup_track;
 mod track_task_audio;
 mod track_task_video;
@@ -101,11 +100,10 @@ impl WhipClientTask {
         let video_preferences = resolve_video_preferences(&ctx, &options)?;
         let audio_preferences = resolve_audio_preferences(&options);
 
-        let video_codecs = params_from_video_preferences(&video_preferences);
-        let audio_codecs = params_from_audio_preferences(&audio_preferences);
+        let codec_params = codec_params_from_preferences(&video_preferences, &audio_preferences);
 
         let client = WhipWhepHttpClient::new(&options.endpoint_url, &options.bearer_token)?;
-        let pc = PeerConnection::new(&ctx, &video_codecs, &audio_codecs).await?;
+        let pc = PeerConnection::new(&ctx, codec_params).await?;
 
         let video_rtc_sender = pc.new_video_track().await?;
         let audio_rtc_sender = pc.new_audio_track().await?;

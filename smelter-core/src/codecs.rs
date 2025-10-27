@@ -28,15 +28,6 @@ pub enum AudioCodec {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum WebrtcVideoDecoderOptions {
-    FfmpegH264,
-    FfmpegVp8,
-    FfmpegVp9,
-    VulkanH264,
-    Any,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VideoDecoderOptions {
     FfmpegH264,
     FfmpegVp8,
@@ -51,26 +42,11 @@ pub enum AudioDecoderOptions {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum WebrtcVideoEncoderOptions {
-    FfmpegH264(FfmpegH264EncoderOptions),
-    FfmpegVp8(FfmpegVp8EncoderOptions),
-    FfmpegVp9(FfmpegVp9EncoderOptions),
-    VulkanH264(VulkanH264EncoderOptions),
-    Any(Resolution),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum VideoEncoderOptions {
     FfmpegH264(FfmpegH264EncoderOptions),
     FfmpegVp8(FfmpegVp8EncoderOptions),
     FfmpegVp9(FfmpegVp9EncoderOptions),
     VulkanH264(VulkanH264EncoderOptions),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum WebrtcAudioEncoderOptions {
-    Opus(OpusEncoderOptions),
-    Any(AudioChannels),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

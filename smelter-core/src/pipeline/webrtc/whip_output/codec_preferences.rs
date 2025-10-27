@@ -22,7 +22,7 @@ pub(super) fn resolve_video_preferences(
     let vulkan_supported = ctx.graphics_context.has_vulkan_encoder_support();
     let only_vulkan_in_preferences = video_preferences
         .iter()
-        .all(|pref| matches!(pref, WebrtcVideoEncoderOptions::VulkanH264(_)));
+        .all(|pref| matches!(pref, WhipVideoEncoderOptions::VulkanH264(_)));
     if !vulkan_supported && only_vulkan_in_preferences {
         return Err(WebrtcClientError::EncoderInitError(
             EncoderInitError::VulkanContextRequiredForVulkanEncoder,
@@ -32,10 +32,10 @@ pub(super) fn resolve_video_preferences(
     let video_preferences: Vec<VideoEncoderOptions> = video_preferences
         .into_iter()
         .flat_map(|preference| match preference {
-            WebrtcVideoEncoderOptions::FfmpegH264(opts) => {
+            WhipVideoEncoderOptions::FfmpegH264(opts) => {
                 vec![VideoEncoderOptions::FfmpegH264(opts)]
             }
-            WebrtcVideoEncoderOptions::VulkanH264(opts) => {
+            WhipVideoEncoderOptions::VulkanH264(opts) => {
                 if vulkan_supported {
                     vec![VideoEncoderOptions::VulkanH264(opts)]
                 } else {
@@ -43,13 +43,13 @@ pub(super) fn resolve_video_preferences(
                     vec![]
                 }
             }
-            WebrtcVideoEncoderOptions::FfmpegVp8(opts) => {
+            WhipVideoEncoderOptions::FfmpegVp8(opts) => {
                 vec![VideoEncoderOptions::FfmpegVp8(opts)]
             }
-            WebrtcVideoEncoderOptions::FfmpegVp9(opts) => {
+            WhipVideoEncoderOptions::FfmpegVp9(opts) => {
                 vec![VideoEncoderOptions::FfmpegVp9(opts)]
             }
-            WebrtcVideoEncoderOptions::Any(resolution) => {
+            WhipVideoEncoderOptions::Any(resolution) => {
                 vec![
                     VideoEncoderOptions::FfmpegVp9(FfmpegVp9EncoderOptions {
                         resolution,
@@ -82,32 +82,6 @@ pub(super) fn resolve_video_preferences(
     Ok(Some(video_preferences))
 }
 
-pub(super) fn params_from_video_preferences(
-    video_preferences: &Option<Vec<VideoEncoderOptions>>,
-) -> Vec<RTCRtpCodecParameters> {
-    // default codecs register to make Twitch work even without video
-    let Some(video_preferences) = video_preferences else {
-        return h264_codec_params();
-    };
-
-    video_preferences
-        .iter()
-        .flat_map(|pref| match pref {
-            VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
-                h264_codec_params()
-            }
-            VideoEncoderOptions::FfmpegVp8(_) => vp8_codec_params(),
-            VideoEncoderOptions::FfmpegVp9(_) => vp9_codec_params(),
-        })
-        .unique_by(|c| {
-            (
-                c.capability.mime_type.clone(),
-                c.capability.sdp_fmtp_line.clone(),
-            )
-        })
-        .collect()
-}
-
 pub(super) fn resolve_audio_preferences(
     options: &WhipOutputOptions,
 ) -> Option<Vec<AudioEncoderOptions>> {
@@ -116,10 +90,10 @@ pub(super) fn resolve_audio_preferences(
     let audio_preferences = audio_preferences
         .into_iter()
         .flat_map(|preference| match preference {
-            WebrtcAudioEncoderOptions::Opus(opts) => {
+            WhipAudioEncoderOptions::Opus(opts) => {
                 vec![AudioEncoderOptions::Opus(opts)]
             }
-            WebrtcAudioEncoderOptions::Any(channels) => {
+            WhipAudioEncoderOptions::Any(channels) => {
                 vec![AudioEncoderOptions::Opus(OpusEncoderOptions {
                     channels,
                     preset: OpusEncoderPreset::Voip,
@@ -135,9 +109,35 @@ pub(super) fn resolve_audio_preferences(
     Some(audio_preferences)
 }
 
-pub(super) fn params_from_audio_preferences(
+pub(super) struct CodecParameters {
+    pub video_codecs: Vec<RTCRtpCodecParameters>,
+    pub audio_codecs: Vec<RTCRtpCodecParameters>,
+}
+
+pub(super) fn codec_params_from_preferences(
+    video_preferences: &Option<Vec<VideoEncoderOptions>>,
     audio_preferences: &Option<Vec<AudioEncoderOptions>>,
-) -> Vec<RTCRtpCodecParameters> {
+) -> CodecParameters {
+    let video_codecs = match video_preferences {
+        Some(video_preferences) => video_preferences
+            .iter()
+            .flat_map(|pref| match pref {
+                VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
+                    h264_codec_params()
+                }
+                VideoEncoderOptions::FfmpegVp8(_) => vp8_codec_params(),
+                VideoEncoderOptions::FfmpegVp9(_) => vp9_codec_params(),
+            })
+            .unique_by(|c| {
+                (
+                    c.capability.mime_type.clone(),
+                    c.capability.sdp_fmtp_line.clone(),
+                )
+            })
+            .collect(),
+        None => h264_codec_params(), // default codecs register to make audio-only stream work
+    };
+
     // Opus is the only supported codec. The only negotiable option in AudioEncoderOptions is FEC.
     // Since FEC is the only variant, we can just check the first option’s FEC value
     // and register Opus with/without FEC accordingly, in the preferred order.
@@ -150,5 +150,10 @@ pub(super) fn params_from_audio_preferences(
             _ => None,
         })
         .unwrap_or(true);
-    opus_codec_params(fec_first)
+    let audio_codecs = opus_codec_params(fec_first);
+
+    CodecParameters {
+        video_codecs,
+        audio_codecs,
+    }
 }

@@ -28,12 +28,11 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
 
                 let encoder_preferences = match options.encoder_preferences.as_deref() {
                     Some([]) | None => {
-                        vec![core::WebrtcVideoEncoderOptions::Any(resolution.into())]
+                        vec![core::WhipVideoEncoderOptions::Any(resolution.into())]
                     }
                     Some(prefs) => prefs
                         .iter()
-                        .cloned()
-                        .map(|p| p.into_pipeline_options(resolution.clone()))
+                        .map(|p| p.to_pipeline_options(resolution))
                         .collect::<Result<_, _>>()?,
                 };
 
@@ -61,19 +60,16 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                     mixing_strategy: mixing_strategy
                         .unwrap_or(AudioMixingStrategy::SumClip)
                         .into(),
-                    channels: channels.clone().into(),
+                    channels: channels.into(),
                 };
 
                 let encoder_preferences = match encoder_preferences.as_deref() {
                     Some([]) | None => {
-                        vec![core::WebrtcAudioEncoderOptions::Any(
-                            channels.clone().into(),
-                        )]
+                        vec![core::WhipAudioEncoderOptions::Any(channels.into())]
                     }
                     Some(prefs) => prefs
                         .iter()
-                        .cloned()
-                        .map(|opts| opts.into_pipeline_options(channels.clone()))
+                        .map(|opts| opts.to_pipeline_options(channels))
                         .collect(),
                 };
 
@@ -101,42 +97,54 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
 }
 
 impl WhipVideoEncoderOptions {
-    fn into_pipeline_options(
-        self,
+    fn to_pipeline_options(
+        &self,
         resolution: Resolution,
-    ) -> Result<core::WebrtcVideoEncoderOptions, TypeError> {
-        let encoder_options: core::WebrtcVideoEncoderOptions = match self {
+    ) -> Result<core::WhipVideoEncoderOptions, TypeError> {
+        let encoder_options: core::WhipVideoEncoderOptions = match self {
             WhipVideoEncoderOptions::FfmpegH264 {
                 preset,
                 pixel_format,
                 ffmpeg_options,
-            } => core::WebrtcVideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
+            } => core::WhipVideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                 resolution: resolution.into(),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
-                raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+                raw_options: ffmpeg_options
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
             }),
             WhipVideoEncoderOptions::VulkanH264 { bitrate } => {
-                core::WebrtcVideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
+                core::WhipVideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
                     resolution: resolution.into(),
                     bitrate: bitrate.map(|b| b.try_into()).transpose()?,
                 })
             }
             WhipVideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
-                core::WebrtcVideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
+                core::WhipVideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
                     resolution: resolution.into(),
-                    raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+                    raw_options: ffmpeg_options
+                        .clone()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .collect(),
                 })
             }
             WhipVideoEncoderOptions::FfmpegVp9 {
                 pixel_format,
                 ffmpeg_options,
-            } => core::WebrtcVideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
+            } => core::WhipVideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
                 resolution: resolution.into(),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
-                raw_options: ffmpeg_options.unwrap_or_default().into_iter().collect(),
+                raw_options: ffmpeg_options
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
             }),
-            WhipVideoEncoderOptions::Any => core::WebrtcVideoEncoderOptions::Any(resolution.into()),
+            WhipVideoEncoderOptions::Any => core::WhipVideoEncoderOptions::Any(resolution.into()),
         };
 
         Ok(encoder_options)
@@ -144,20 +152,20 @@ impl WhipVideoEncoderOptions {
 }
 
 impl WhipAudioEncoderOptions {
-    fn into_pipeline_options(self, channels: AudioChannels) -> core::WebrtcAudioEncoderOptions {
-        let encoder_options: core::WebrtcAudioEncoderOptions = match self {
+    fn to_pipeline_options(&self, channels: AudioChannels) -> core::WhipAudioEncoderOptions {
+        let encoder_options: core::WhipAudioEncoderOptions = match self {
             WhipAudioEncoderOptions::Opus {
                 preset,
                 sample_rate,
                 forward_error_correction,
-            } => core::WebrtcAudioEncoderOptions::Opus(core::OpusEncoderOptions {
+            } => core::WhipAudioEncoderOptions::Opus(core::OpusEncoderOptions {
                 channels: channels.into(),
                 preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
                 sample_rate: sample_rate.unwrap_or(48000),
                 forward_error_correction: forward_error_correction.unwrap_or(true),
                 packet_loss: 0,
             }),
-            WhipAudioEncoderOptions::Any => core::WebrtcAudioEncoderOptions::Any(channels.into()),
+            WhipAudioEncoderOptions::Any => core::WhipAudioEncoderOptions::Any(channels.into()),
         };
         encoder_options
     }

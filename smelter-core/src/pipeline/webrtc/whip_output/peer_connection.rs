@@ -13,9 +13,7 @@ use webrtc::{
         sdp::session_description::RTCSessionDescription,
     },
     rtp_transceiver::{
-        RTCRtpTransceiverInit,
-        rtp_codec::{RTCRtpCodecParameters, RTPCodecType},
-        rtp_sender::RTCRtpSender,
+        RTCRtpTransceiverInit, rtp_codec::RTPCodecType, rtp_sender::RTCRtpSender,
         rtp_transceiver_direction::RTCRtpTransceiverDirection,
     },
     stats::StatsReport,
@@ -23,7 +21,7 @@ use webrtc::{
 
 use std::sync::Arc;
 
-use crate::prelude::*;
+use crate::{pipeline::webrtc::whip_output::codec_preferences::CodecParameters, prelude::*};
 
 #[derive(Debug, Clone)]
 pub(super) struct PeerConnection {
@@ -33,10 +31,16 @@ pub(super) struct PeerConnection {
 impl PeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
-        video_codecs: &[RTCRtpCodecParameters],
-        audio_codecs: &[RTCRtpCodecParameters],
+        codec_params: CodecParameters,
     ) -> Result<Self, WebrtcClientError> {
-        let mut media_engine = media_engine_with_codecs(video_codecs, audio_codecs)?;
+        let mut media_engine = MediaEngine::default();
+        for audio_codec in codec_params.audio_codecs {
+            media_engine.register_codec(audio_codec.clone(), RTPCodecType::Audio)?;
+        }
+        for video_codec in codec_params.video_codecs {
+            media_engine.register_codec(video_codec.clone(), RTPCodecType::Video)?;
+        }
+
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
         let api = APIBuilder::new()
@@ -135,21 +139,4 @@ impl PeerConnection {
     pub async fn get_stats(&self) -> StatsReport {
         self.pc.get_stats().await
     }
-}
-
-fn media_engine_with_codecs(
-    video_codecs: &[RTCRtpCodecParameters],
-    audio_codecs: &[RTCRtpCodecParameters],
-) -> webrtc::error::Result<MediaEngine> {
-    let mut media_engine = MediaEngine::default();
-
-    for audio_codec in audio_codecs {
-        media_engine.register_codec(audio_codec.clone(), RTPCodecType::Audio)?;
-    }
-
-    for video_codec in video_codecs {
-        media_engine.register_codec(video_codec.clone(), RTPCodecType::Video)?;
-    }
-
-    Ok(media_engine)
 }

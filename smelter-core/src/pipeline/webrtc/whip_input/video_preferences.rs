@@ -6,11 +6,12 @@ use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecParameters;
 
 use crate::{
     PipelineCtx,
-    codecs::{VideoDecoderOptions, WebrtcVideoDecoderOptions},
+    codecs::VideoDecoderOptions,
     error::{DecoderInitError, InputInitError},
     pipeline::webrtc::supported_codec_parameters::{
         h264_codec_params, vp8_codec_params, vp9_codec_params,
     },
+    prelude::WebrtcVideoDecoderOptions,
 };
 
 pub(super) fn resolve_video_preferences(
