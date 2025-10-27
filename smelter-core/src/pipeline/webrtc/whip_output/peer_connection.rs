@@ -1,9 +1,7 @@
 use tracing::debug;
 use webrtc::{
     api::{
-        APIBuilder,
-        interceptor_registry::register_default_interceptors,
-        media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9, MediaEngine},
+        APIBuilder, interceptor_registry::register_default_interceptors, media_engine::MediaEngine,
     },
     ice_transport::{
         ice_connection_state::RTCIceConnectionState, ice_gatherer::OnLocalCandidateHdlrFn,
@@ -15,8 +13,8 @@ use webrtc::{
         sdp::session_description::RTCSessionDescription,
     },
     rtp_transceiver::{
-        RTCPFeedback, RTCRtpTransceiverInit,
-        rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
+        RTCRtpTransceiverInit,
+        rtp_codec::{RTCRtpCodecParameters, RTPCodecType},
         rtp_sender::RTCRtpSender,
         rtp_transceiver_direction::RTCRtpTransceiverDirection,
     },
@@ -35,9 +33,10 @@ pub(super) struct PeerConnection {
 impl PeerConnection {
     pub async fn new(
         ctx: &Arc<PipelineCtx>,
-        options: &WhipOutputOptions,
+        video_codecs: &[RTCRtpCodecParameters],
+        audio_codecs: &[RTCRtpCodecParameters],
     ) -> Result<Self, WebrtcClientError> {
-        let mut media_engine = media_engine_with_codecs(options)?;
+        let mut media_engine = media_engine_with_codecs(video_codecs, audio_codecs)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
         let api = APIBuilder::new()
@@ -138,206 +137,19 @@ impl PeerConnection {
     }
 }
 
-fn media_engine_with_codecs(options: &WhipOutputOptions) -> webrtc::error::Result<MediaEngine> {
+fn media_engine_with_codecs(
+    video_codecs: &[RTCRtpCodecParameters],
+    audio_codecs: &[RTCRtpCodecParameters],
+) -> webrtc::error::Result<MediaEngine> {
     let mut media_engine = MediaEngine::default();
 
-    let video_encoder_preferences = options
-        .video
-        .as_ref()
-        .map(|v| v.encoder_preferences.clone());
-    let audio_encoder_preferences = options
-        .audio
-        .as_ref()
-        .map(|a| a.encoder_preferences.clone());
-
-    // Opus is the only supported codec. The only negotiable option in AudioEncoderOptions is FEC.
-    // Since FEC is the only variant, we can just check the first option’s FEC value
-    // and register Opus with/without FEC accordingly, in the preferred order.
-    // Channels field is the same for all encoder preferences.
-    if let Some(AudioEncoderOptions::Opus(opts)) =
-        audio_encoder_preferences.unwrap_or_default().first()
-    {
-        let channels = match opts.channels {
-            AudioChannels::Mono => 1,
-            AudioChannels::Stereo => 2,
-        };
-        register_opus_for_both_fec(
-            &mut media_engine,
-            opts.sample_rate,
-            channels,
-            opts.forward_error_correction,
-        )?;
-    } else {
-        // default Opus register to make Twitch work
-        register_opus_for_both_fec(&mut media_engine, 48000, 2, true)?;
+    for audio_codec in audio_codecs {
+        media_engine.register_codec(audio_codec.clone(), RTPCodecType::Audio)?;
     }
 
-    let video_rtcp_feedback = vec![
-        RTCPFeedback {
-            typ: "goog-remb".to_owned(),
-            parameter: "".to_owned(),
-        },
-        RTCPFeedback {
-            typ: "ccm".to_owned(),
-            parameter: "fir".to_owned(),
-        },
-        RTCPFeedback {
-            typ: "nack".to_owned(),
-            parameter: "".to_owned(),
-        },
-        RTCPFeedback {
-            typ: "nack".to_owned(),
-            parameter: "pli".to_owned(),
-        },
-    ];
-
-    for encoder_options in &video_encoder_preferences.unwrap_or_default() {
-        match encoder_options {
-            VideoEncoderOptions::FfmpegH264(_) | VideoEncoderOptions::VulkanH264(_) => {
-                let h264_codec_parameters = vec![
-                    RTCRtpCodecParameters {
-                        capability: RTCRtpCodecCapability {
-                            mime_type: MIME_TYPE_H264.to_owned(),
-                            clock_rate: 90000,
-                            channels: 0,
-                            sdp_fmtp_line:
-                                "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
-                                    .to_owned(),
-                            rtcp_feedback: video_rtcp_feedback.clone(),
-                        },
-                        payload_type: 102,
-                        ..Default::default()
-                    },
-                    RTCRtpCodecParameters {
-                        capability: RTCRtpCodecCapability {
-                            mime_type: MIME_TYPE_H264.to_owned(),
-                            clock_rate: 90000,
-                            channels: 0,
-                            sdp_fmtp_line:
-                                "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f"
-                                    .to_owned(),
-                            rtcp_feedback: video_rtcp_feedback.clone(),
-                        },
-                        payload_type: 127,
-                        ..Default::default()
-                    },
-                    RTCRtpCodecParameters {
-                        capability: RTCRtpCodecCapability {
-                            mime_type: MIME_TYPE_H264.to_owned(),
-                            clock_rate: 90000,
-                            channels: 0,
-                            sdp_fmtp_line:
-                                "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"
-                                    .to_owned(),
-                            rtcp_feedback: video_rtcp_feedback.clone(),
-                        },
-                        payload_type: 125,
-                        ..Default::default()
-                    },
-                    RTCRtpCodecParameters {
-                        capability: RTCRtpCodecCapability {
-                            mime_type: MIME_TYPE_H264.to_owned(),
-                            clock_rate: 90000,
-                            channels: 0,
-                            sdp_fmtp_line:
-                                "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f"
-                                    .to_owned(),
-                            rtcp_feedback: video_rtcp_feedback.clone(),
-                        },
-                        payload_type: 108,
-                        ..Default::default()
-                    },
-                    RTCRtpCodecParameters {
-                        capability: RTCRtpCodecCapability {
-                            mime_type: MIME_TYPE_H264.to_owned(),
-                            clock_rate: 90000,
-                            channels: 0,
-                            sdp_fmtp_line:
-                                "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032"
-                                    .to_owned(),
-                            rtcp_feedback: video_rtcp_feedback.clone(),
-                        },
-                        payload_type: 123,
-                        ..Default::default()
-                    },
-                ];
-                for codec in h264_codec_parameters {
-                    media_engine.register_codec(codec, RTPCodecType::Video)?;
-                }
-            }
-            VideoEncoderOptions::FfmpegVp8(_) => {
-                media_engine.register_codec(
-                    RTCRtpCodecParameters {
-                        capability: RTCRtpCodecCapability {
-                            mime_type: MIME_TYPE_VP8.to_owned(),
-                            clock_rate: 90000,
-                            channels: 0,
-                            sdp_fmtp_line: "".to_owned(),
-                            rtcp_feedback: video_rtcp_feedback.clone(),
-                        },
-                        payload_type: 96,
-                        ..Default::default()
-                    },
-                    RTPCodecType::Video,
-                )?;
-            }
-            VideoEncoderOptions::FfmpegVp9(_) => {
-                media_engine.register_codec(
-                    RTCRtpCodecParameters {
-                        capability: RTCRtpCodecCapability {
-                            mime_type: MIME_TYPE_VP9.to_owned(),
-                            clock_rate: 90000,
-                            channels: 0,
-                            sdp_fmtp_line: "".to_owned(),
-                            rtcp_feedback: video_rtcp_feedback.clone(),
-                        },
-                        payload_type: 98,
-                        ..Default::default()
-                    },
-                    RTPCodecType::Video,
-                )?;
-            }
-        }
+    for video_codec in video_codecs {
+        media_engine.register_codec(video_codec.clone(), RTPCodecType::Video)?;
     }
 
     Ok(media_engine)
-}
-
-fn register_opus_for_both_fec(
-    media_engine: &mut MediaEngine,
-    sample_rate: u32,
-    channels: u16,
-    fec_first: bool,
-) -> webrtc::error::Result<()> {
-    media_engine.register_codec(
-        create_opus_codec_params(sample_rate, channels, fec_first),
-        RTPCodecType::Audio,
-    )?;
-
-    media_engine.register_codec(
-        create_opus_codec_params(sample_rate, channels, !fec_first),
-        RTPCodecType::Audio,
-    )?;
-
-    Ok(())
-}
-
-fn create_opus_codec_params(
-    sample_rate: u32,
-    channels: u16,
-    fec_enabled: bool,
-) -> RTCRtpCodecParameters {
-    let (payload_type, fec) = if fec_enabled { (111, 1) } else { (110, 0) };
-
-    RTCRtpCodecParameters {
-        capability: RTCRtpCodecCapability {
-            mime_type: MIME_TYPE_OPUS.to_owned(),
-            clock_rate: sample_rate,
-            channels,
-            sdp_fmtp_line: format!("minptime=10;useinbandfec={fec}"),
-            rtcp_feedback: vec![],
-        },
-        payload_type,
-        ..Default::default()
-    }
 }

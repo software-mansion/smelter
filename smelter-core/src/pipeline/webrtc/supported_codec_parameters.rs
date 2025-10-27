@@ -95,13 +95,22 @@ fn get_video_rtcp_feedback() -> Vec<RTCPFeedback> {
     ]
 }
 
-pub fn opus_codec_params() -> Vec<RTCRtpCodecParameters> {
-    let codec_configs = [
-        ("minptime=10;useinbandfec=1", 111, 2),
-        ("minptime=10;useinbandfec=1", 112, 1),
-        ("minptime=10;useinbandfec=0", 109, 2),
-        ("minptime=10;useinbandfec=0", 110, 1),
-    ];
+pub fn opus_codec_params(fec_first: bool) -> Vec<RTCRtpCodecParameters> {
+    let codec_configs = if fec_first {
+        [
+            ("minptime=10;useinbandfec=1", 111, 2),
+            ("minptime=10;useinbandfec=1", 112, 1),
+            ("minptime=10;useinbandfec=0", 109, 2),
+            ("minptime=10;useinbandfec=0", 110, 1),
+        ]
+    } else {
+        [
+            ("minptime=10;useinbandfec=0", 109, 2),
+            ("minptime=10;useinbandfec=0", 110, 1),
+            ("minptime=10;useinbandfec=1", 111, 2),
+            ("minptime=10;useinbandfec=1", 112, 1),
+        ]
+    };
 
     codec_configs
         .iter()

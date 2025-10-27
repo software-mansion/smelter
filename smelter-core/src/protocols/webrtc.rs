@@ -4,7 +4,10 @@ use url::{ParseError, Url};
 
 use crate::{
     InputBufferOptions,
-    codecs::{AudioEncoderOptions, VideoEncoderOptions, WebrtcVideoDecoderOptions},
+    codecs::{
+        AudioEncoderOptions, VideoEncoderOptions, WebrtcAudioEncoderOptions,
+        WebrtcVideoDecoderOptions, WebrtcVideoEncoderOptions,
+    },
     error::{DecoderInitError, EncoderInitError},
 };
 #[derive(Debug, Clone)]
@@ -25,12 +28,12 @@ pub struct WhepInputOptions {
 
 #[derive(Debug, Clone)]
 pub struct VideoWhipOptions {
-    pub encoder_preferences: Vec<VideoEncoderOptions>,
+    pub encoder_preferences: Vec<WebrtcVideoEncoderOptions>,
 }
 
 #[derive(Debug, Clone)]
 pub struct AudioWhipOptions {
-    pub encoder_preferences: Vec<AudioEncoderOptions>,
+    pub encoder_preferences: Vec<WebrtcAudioEncoderOptions>,
 }
 
 #[derive(Debug, Clone)]
