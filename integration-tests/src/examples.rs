@@ -91,10 +91,10 @@ pub fn run_example_server() {
 }
 
 fn wait_for_server_ready(timeout: Duration) -> Result<()> {
-    let server_status_url = "http://127.0.0.1:8081/status";
+    let server_status_url = format!("http://127.0.0.1:{}/status", read_config().api_port);
     let wait_start_time = Instant::now();
     loop {
-        match reqwest::blocking::get(server_status_url) {
+        match reqwest::blocking::get(&server_status_url) {
             Ok(_) => break,
             Err(_) => info!("Waiting for the server to start."),
         };
