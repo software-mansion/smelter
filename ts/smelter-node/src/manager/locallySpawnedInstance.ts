@@ -19,7 +19,12 @@ import { WebSocketConnection } from '../ws';
 import { smelterInstanceLoggerOptions } from '../logger';
 import { getSmelterStatus } from '../getSmelterStatus';
 
-const VERSION = `v0.4.1`;
+// TODO: This should be changed to `software-mansion/smelter` repo with proper version on ts-sdk release
+const VERSION = `6e118f3f`;
+const REPO = `smelter-labs/smelter-rc`;
+
+// const VERSION = `v0.4.1`;
+// const REPO = `software-mansion/smelter`;
 
 type ManagedInstanceOptions = {
   port: number;
@@ -64,7 +69,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   }
 
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
-    const { mainProcess: mainProcessPath, dependencyCheck: _dependencyCheckPath } = this
+    const { mainProcess: mainProcessPath, dependencyCheck: dependencyCheckPath } = this
       .mainExecutablePath
       ? { mainProcess: this.mainExecutablePath, dependencyCheck: this.dependencyCheckPath }
       : await prepareExecutable(this.enableWebRenderer);
@@ -94,18 +99,13 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       }
     };
 
-    // This code will be uncomented with the next smelter release which is going to
-    // include `dependency_check`
-    //
-    // As a result of this we explicitly let the user to skip dependency check by setting
-    // the SMELTER_PATH env.
-    // if (dependencyCheckPath) {
-    //   try {
-    //     await spawn(dependencyCheckPath, [], {});
-    //   } catch (err) {
-    //     executableError(err, 'Dependency check failed');
-    //   }
-    // }
+    if (dependencyCheckPath) {
+      try {
+        await spawn(dependencyCheckPath, [], {});
+      } catch (err) {
+        executableError(err, 'Dependency check failed');
+      }
+    }
 
     this.childSpawnPromise = spawn(mainProcessPath, [], { env, stdio: 'inherit' });
     this.childSpawnPromise.catch(err => executableError(err, 'Smelter instance failed'));
@@ -216,7 +216,7 @@ function architecture(): 'linux_aarch64' | 'linux_x86_64' | 'darwin_x86_64' | 'd
 function smelterTarGzUrl(withWebRenderer?: boolean): string {
   const archiveNameSuffix = withWebRenderer ? '_with_web_renderer' : '';
   const archiveName = `smelter${archiveNameSuffix}_${architecture()}.tar.gz`;
-  return `https://github.com/software-mansion/smelter/releases/download/${VERSION}/${archiveName}`;
+  return `https://github.com/${REPO}/releases/download/${VERSION}/${archiveName}`;
 }
 
 export default LocallySpawnedInstanceManager;
