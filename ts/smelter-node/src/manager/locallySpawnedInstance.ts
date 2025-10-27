@@ -99,8 +99,6 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       }
     };
 
-    // As a result of this we explicitly let the user skip dependency check by setting
-    // the SMELTER_PATH env.
     if (dependencyCheckPath) {
       try {
         await spawn(dependencyCheckPath, [], {});
