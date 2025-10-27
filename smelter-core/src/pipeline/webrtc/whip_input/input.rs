@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crossbeam_channel::bounded;
+use tracing::error;
 
 use crate::{
     pipeline::{
@@ -32,6 +33,8 @@ impl WhipInput {
         let Some(state) = &ctx.whip_whep_state else {
             return Err(WebrtcServerError::ServerNotRunning.into());
         };
+
+        error!("WHIP INPUT");
 
         let endpoint_id = options.endpoint_override.unwrap_or(input_id.0.clone());
         let (frame_sender, frame_receiver) = bounded(5);

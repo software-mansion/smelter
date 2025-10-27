@@ -93,6 +93,7 @@ impl WhipInputsState {
 
     // called on drop (when input is unregistered)
     pub fn ensure_input_closed(&self, input_id: &InputId) {
+        error!("CLOSE");
         let mut guard = self.0.lock().unwrap();
         let Some(session) = guard.remove(input_id).and_then(|input| input.session) else {
             return;
