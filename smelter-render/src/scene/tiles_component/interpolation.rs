@@ -13,10 +13,26 @@ pub(super) enum TileId {
     Index(usize),
 }
 
-// #[derive(Clone, Copy)]
-// struct TilePosition {
-//     top:
-// }
+#[derive(Clone, Copy)]
+struct TilePosition {
+    top: f32,
+    left: f32,
+    width: f32,
+    height: f32,
+}
+
+impl PartialEq for TilePosition {
+    fn eq(&self, other: &Self) -> bool {
+        const TOLERANCE: f32 = 0.001;
+
+        let top_eq = f32::abs(self.top - other.top) <= TOLERANCE;
+        let left_eq = f32::abs(self.left - other.left) <= TOLERANCE;
+        let width_eq = f32::abs(self.width - other.width) <= TOLERANCE;
+        let height_eq = f32::abs(self.height - other.height) <= TOLERANCE;
+
+        top_eq && left_eq && width_eq && height_eq
+    }
+}
 
 impl ContinuousValue for Vec<Option<Tile>> {
     fn interpolate(start: &Self, end: &Self, state: InterpolationState) -> Self {
