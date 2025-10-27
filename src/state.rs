@@ -10,6 +10,7 @@ use smelter_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
 use reqwest::StatusCode;
 use serde::Serialize;
 use tokio::runtime::Runtime;
+use tracing::Instrument;
 
 use crate::{config::Config, error::ApiError};
 
@@ -86,10 +87,14 @@ impl ApiState {
         let mut guard = self.pipeline.lock().unwrap();
         guard.take();
 
+        self.runtime.spawn(async {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        });
         let options =
             pipeline_options_from_config(&self.config, &self.runtime, &self.chromium_context);
         let pipeline = Arc::new(Mutex::new(Pipeline::new(options)?));
         *guard = Some(pipeline);
+        tracing::error!("RESET");
         Ok(())
     }
 }
