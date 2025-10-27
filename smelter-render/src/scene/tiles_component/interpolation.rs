@@ -13,6 +13,11 @@ pub(super) enum TileId {
     Index(usize),
 }
 
+// #[derive(Clone, Copy)]
+// struct TilePosition {
+//     top:
+// }
+
 impl ContinuousValue for Vec<Option<Tile>> {
     fn interpolate(start: &Self, end: &Self, state: InterpolationState) -> Self {
         let start_id_map: HashMap<&TileId, usize> = start
