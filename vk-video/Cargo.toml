@@ -36,3 +36,6 @@ winit = "0.29"
 
 [build-dependencies]
 cfg_aliases = "0.2.1"
+
+[lints]
+workspace = true

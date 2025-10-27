@@ -121,6 +121,9 @@ name = "process_helper"
 path = "src/bin/process_helper.rs"
 required-features = ["web-renderer"]
 
-[lints.clippy]
+[workspace.lints.clippy]
 todo = "warn"
 uninlined_format_args = "warn"
+
+[lints]
+workspace = true

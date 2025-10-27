@@ -21,3 +21,5 @@ itertools = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 smelter-core = { workspace = true }
 
+[lints]
+workspace = true
