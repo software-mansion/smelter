@@ -22,7 +22,7 @@ impl ContinuousValue for Vec<Option<Tile>> {
             .collect();
         let end_id_set: HashSet<&TileId> = end
             .iter()
-            .flat_map(|tile| tile.as_ref().map(|tile| &tile.id))
+            .filter_map(|tile| tile.as_ref().map(|tile| &tile.id))
             .collect();
 
         if state.0 >= 1.0 {
@@ -41,16 +41,14 @@ impl ContinuousValue for Vec<Option<Tile>> {
                             .map(|old_tile| ContinuousValue::interpolate(old_tile, tile, state))
                     })
                     .or_else(|| {
-                        for start_tile in start.iter().flatten() {
-                            if are_positions_equal(tile, start_tile) {
-                                if !end_id_set.contains(&start_tile.id) {
-                                    return Some(ContinuousValue::interpolate(tile, tile, state));
-                                } else {
-                                    return None;
-                                }
-                            }
-                        }
-                        None
+                        start
+                            .iter()
+                            .flatten()
+                            .find(|start_tile| are_positions_equal(start_tile, tile))
+                            .and_then(|start_tile| match end_id_set.contains(&start_tile.id) {
+                                true => None,
+                                false => Some(ContinuousValue::interpolate(tile, tile, state)),
+                            })
                     })
             })
             .collect()

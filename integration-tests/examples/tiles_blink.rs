@@ -55,7 +55,7 @@ fn client_code() -> Result<()> {
         "transition": {
             "duration_ms": 700,
         },
-        "horizontal_align": "left",
+        "horizontal_align": "center",
         "children": [
             {
                 "type": "input_stream",
@@ -64,7 +64,7 @@ fn client_code() -> Result<()> {
             },
             {
                 "type": "input_stream",
-                "input_id": "input_1",
+                "input_id": "input_2",
                 "id": "2"
             },
             {
@@ -81,7 +81,7 @@ fn client_code() -> Result<()> {
         "transition": {
             "duration_ms": 700,
         },
-        "horizontal_align": "left",
+        "horizontal_align": "center",
         // "margin": 50,
         "children": [
             {
@@ -92,7 +92,7 @@ fn client_code() -> Result<()> {
             {
                 "type": "input_stream",
                 "input_id": "input_1",
-                "id": "2",
+                "id": "11",
             },
             {
                 "type": "input_stream",
@@ -101,8 +101,8 @@ fn client_code() -> Result<()> {
             },
             {
                 "type": "input_stream",
-                "input_id": "input_2",
-                "id": "5"
+                "input_id": "input_1",
+                "id": "3"
             },
         ],
     });
