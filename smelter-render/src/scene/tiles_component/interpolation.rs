@@ -41,6 +41,13 @@ impl ContinuousValue for Vec<Option<Tile>> {
                             .map(|old_tile| ContinuousValue::interpolate(old_tile, tile, state))
                     })
                     .or_else(|| {
+                        // This handles case when a tile is swapped "in place" with entirely new tile
+                        // that has different ID.
+                        // It only takes effect when:
+                        // - Exact position exists in the previous state represented by `start`
+                        //   so tile disappears whenever any animation is triggered, for example margin change.
+                        // - Replaced tile does not exist in state represented by `end` (so no
+                        //   animation is triggered).
                         start
                             .iter()
                             .flatten()
