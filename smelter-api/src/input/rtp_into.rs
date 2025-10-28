@@ -24,12 +24,18 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
             offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
         };
 
-        let buffer = match &queue_options {
+        let jitter_buffer = match &queue_options {
             core::QueueInputOptions {
                 required: false,
                 offset: None,
-            } => core::InputBufferOptions::Const(None),
-            _ => core::InputBufferOptions::None,
+            } => core::RtpJitterBufferOptions {
+                mode: core::RtpJitterBufferMode::QueueBased,
+                buffer: core::InputBufferOptions::Const(None),
+            },
+            _ => core::RtpJitterBufferOptions {
+                mode: core::RtpJitterBufferMode::Fixed(Duration::from_secs(1)),
+                buffer: core::InputBufferOptions::None,
+            },
         };
 
         const NO_VIDEO_AUDIO_SPEC: &str =
@@ -55,7 +61,7 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
                 .transpose()?,
             audio: audio.map(TryFrom::try_from).transpose()?,
             transport_protocol: transport_protocol.unwrap_or(TransportProtocol::Udp).into(),
-            buffer,
+            jitter_buffer,
         });
 
         Ok(core::RegisterInputOptions {

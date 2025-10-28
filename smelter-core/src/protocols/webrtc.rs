@@ -4,19 +4,21 @@ use std::sync::Arc;
 use url::{ParseError, Url};
 
 use crate::{
-    AudioChannels, InputBufferOptions,
+    AudioChannels,
     codecs::{
         AudioEncoderOptions, FfmpegH264EncoderOptions, FfmpegVp8EncoderOptions,
         FfmpegVp9EncoderOptions, OpusEncoderOptions, VideoEncoderOptions, VulkanH264EncoderOptions,
     },
     error::{DecoderInitError, EncoderInitError},
+    protocols::RtpJitterBufferOptions,
 };
+
 #[derive(Debug, Clone)]
 pub struct WhipInputOptions {
     pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_override: Option<Arc<str>>,
-    pub buffer: InputBufferOptions,
+    pub jitter_buffer: RtpJitterBufferOptions,
 }
 
 #[derive(Debug, Clone)]
@@ -24,7 +26,7 @@ pub struct WhepInputOptions {
     pub video_preferences: Vec<WebrtcVideoDecoderOptions>,
     pub bearer_token: Option<Arc<str>>,
     pub endpoint_url: Arc<str>,
-    pub buffer: InputBufferOptions,
+    pub jitter_buffer: RtpJitterBufferOptions,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
