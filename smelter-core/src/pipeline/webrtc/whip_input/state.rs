@@ -150,7 +150,7 @@ pub(crate) struct WhipInputStateOptions {
     pub video_preferences: Vec<VideoDecoderOptions>,
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
-    pub buffer_options: InputBufferOptions,
+    pub jitter_buffer_options: RtpJitterBufferOptions,
 }
 
 #[derive(Debug, Clone)]
@@ -161,7 +161,7 @@ pub(crate) struct WhipInputState {
     pub frame_sender: Sender<PipelineEvent<Frame>>,
     pub input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
     pub session: Option<WhipInputSession>,
-    pub buffer_option: InputBufferOptions,
+    pub jitter_buffer_options: RtpJitterBufferOptions,
 }
 
 #[derive(Debug, Clone)]
@@ -179,7 +179,7 @@ impl WhipInputState {
             frame_sender: options.frame_sender,
             input_samples_sender: options.input_samples_sender,
             session: None,
-            buffer_option: options.buffer_options,
+            jitter_buffer_options: options.jitter_buffer_options,
         }
     }
 

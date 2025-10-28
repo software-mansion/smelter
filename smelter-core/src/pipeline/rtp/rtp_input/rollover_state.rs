@@ -23,7 +23,7 @@ impl RolloverState {
 
         self.previous_timestamp = Some(current_timestamp);
 
-        (self.rollover_count as u64) * (u32::MAX as u64 + 1) + current_timestamp as u64
+        ((self.rollover_count as u64) * (u32::MAX as u64 + 1)) + current_timestamp as u64
     }
 }
 

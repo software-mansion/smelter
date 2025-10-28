@@ -5,9 +5,7 @@ use std::{
 
 use tracing::{debug, info, warn};
 
-use crate::pipeline::{
-    rtp::rtp_input::rollover_state::RolloverState, utils::input_buffer::InputBuffer,
-};
+use crate::pipeline::rtp::rtp_input::rollover_state::RolloverState;
 
 #[cfg(test)]
 mod sync_test;
@@ -17,7 +15,7 @@ const POW_2_32: f64 = (1i64 << 32) as f64;
 #[derive(Debug)]
 /// State that should be shared between different RTP tracks to use for synchronization.
 pub(crate) struct RtpNtpSyncPoint {
-    sync_point: Instant,
+    pub sync_point: Instant,
     /// First 32 bytes represent seconds, last 32 bytes fraction of the second.
     /// Represents NTP time of sync point
     ntp_time: RwLock<Option<u64>>,
@@ -109,26 +107,18 @@ pub(crate) struct RtpTimestampSync {
     //   - calculate pts of first packet based on the difference
     //   - pts of first packet is an offset
     sync_offset_secs: Option<f64>,
-    // additional buffer that defines how much input start should be ahead
-    // of the queue.
-    input_buffer: InputBuffer,
     clock_rate: u32,
     rollover_state: RolloverState,
 
-    sync_point: Arc<RtpNtpSyncPoint>,
+    pub sync_point: Arc<RtpNtpSyncPoint>,
     partial_sync_info: PartialNtpSyncInfo,
 }
 
 impl RtpTimestampSync {
-    pub fn new(
-        sync_point: &Arc<RtpNtpSyncPoint>,
-        clock_rate: u32,
-        input_buffer: InputBuffer,
-    ) -> Self {
+    pub fn new(sync_point: &Arc<RtpNtpSyncPoint>, clock_rate: u32) -> Self {
         Self {
             sync_offset_secs: None,
             rtp_timestamp_offset: None,
-            input_buffer,
 
             clock_rate,
             rollover_state: Default::default(),
@@ -176,13 +166,12 @@ impl RtpTimestampSync {
             _ => (),
         }
 
-        let pts = if pts_secs < 0.0 {
+        if pts_secs < 0.0 {
             warn!(pts_secs, "PTS from before queue start");
             Duration::ZERO
         } else {
             Duration::from_secs_f64(pts_secs)
-        };
-        self.input_buffer.pts_with_buffer(pts)
+        }
     }
 
     pub fn on_sender_report(&mut self, ntp_time: u64, rtp_timestamp: u32) {

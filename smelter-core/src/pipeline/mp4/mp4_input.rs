@@ -270,7 +270,8 @@ fn start_thread_with_loop(
                                     );
 
                                     // add buffer after recording last sample
-                                    chunk.pts = buffer.pts_with_buffer(chunk.pts);
+                                    buffer.recalculate_buffer(chunk.pts);
+                                    chunk.pts += buffer.size();
 
                                     trace!(pts=?chunk.pts, "MP4 reader produced a video chunk.");
                                     if sender.send(PipelineEvent::Data(chunk)).is_err() {
@@ -318,7 +319,8 @@ fn start_thread_with_loop(
                                     );
 
                                     // add buffer after recording last sample
-                                    chunk.pts = buffer.pts_with_buffer(chunk.pts);
+                                    buffer.recalculate_buffer(chunk.pts);
+                                    chunk.pts += buffer.size();
 
                                     trace!(pts=?chunk.pts, "MP4 reader produced an audio chunk.");
                                     if sender.send(PipelineEvent::Data(chunk)).is_err() {
@@ -390,7 +392,8 @@ fn start_thread_single_run(
             .spawn(move || {
                 let _span = video_span.enter();
                 for (mut chunk, _duration) in track.chunks() {
-                    chunk.pts = buffer.pts_with_buffer(chunk.pts + offset);
+                    buffer.recalculate_buffer(chunk.pts + offset);
+                    chunk.pts = chunk.pts + offset + buffer.size();
                     chunk.dts = chunk.dts.map(|dts| dts + offset);
                     trace!(?chunk, "Sending video chunk");
                     if handle
@@ -419,7 +422,8 @@ fn start_thread_single_run(
             .spawn(move || {
                 let _span = audio_span.enter();
                 for (mut chunk, _duration) in track.chunks() {
-                    chunk.pts = buffer.pts_with_buffer(chunk.pts + offset);
+                    buffer.recalculate_buffer(chunk.pts + offset);
+                    chunk.pts = chunk.pts + offset + buffer.size();
                     chunk.dts = chunk.dts.map(|dts| dts + offset);
                     trace!(?chunk, "Sending audio chunk");
                     if handle
