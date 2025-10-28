@@ -49,7 +49,7 @@ impl TryFrom<RtpOutput> for core::RegisterOutputOptions {
 
                         (
                             core::AudioEncoderOptions::Opus(core::OpusEncoderOptions {
-                                channels: resolved_channels.clone().into(),
+                                channels: resolved_channels.into(),
                                 preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
                                 sample_rate: sample_rate.unwrap_or(48000),
                                 forward_error_correction: forward_error_correction.unwrap_or(false),

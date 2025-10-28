@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ pub struct OutputVideoOptions {
     pub initial: VideoScene,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum PixelFormat {
     Yuv420p,
@@ -26,7 +26,7 @@ pub enum PixelFormat {
     Yuv444p,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Copy)]
 #[serde(untagged)]
 pub enum VulkanH264EncoderBitrate {
     /// Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,
@@ -53,19 +53,19 @@ pub enum VideoEncoderOptions {
         pixel_format: Option<PixelFormat>,
 
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-        ffmpeg_options: Option<HashMap<String, String>>,
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "ffmpeg_vp8")]
     FfmpegVp8 {
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-        ffmpeg_options: Option<HashMap<String, String>>,
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "ffmpeg_vp9")]
     FfmpegVp9 {
         /// (**default=`"yuv420p"`**) Encoder pixel format
         pixel_format: Option<PixelFormat>,
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-        ffmpeg_options: Option<HashMap<String, String>>,
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "vulkan_h264")]
     VulkanH264 {
@@ -94,7 +94,7 @@ pub struct OutputEndCondition {
     pub all_inputs: Option<bool>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum H264EncoderPreset {
     Ultrafast,
@@ -109,7 +109,7 @@ pub enum H264EncoderPreset {
     Placebo,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum OpusEncoderPreset {
     /// Best for broadcast/high-fidelity application where the decoded audio

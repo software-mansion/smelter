@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ pub struct Mp4Output {
     /// Audio track configuration.
     pub audio: Option<OutputMp4AudioOptions>,
     /// Raw FFmpeg muxer options. See [docs](https://ffmpeg.org/ffmpeg-formats.html) for more.
-    pub ffmpeg_options: Option<HashMap<String, String>>,
+    pub ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]

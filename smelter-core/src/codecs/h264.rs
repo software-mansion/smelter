@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use smelter_render::Resolution;
 
 use crate::codecs::OutputPixelFormat;
@@ -21,7 +23,7 @@ pub struct FfmpegH264EncoderOptions {
     pub preset: FfmpegH264EncoderPreset,
     pub resolution: Resolution,
     pub pixel_format: OutputPixelFormat,
-    pub raw_options: Vec<(String, String)>,
+    pub raw_options: Vec<(Arc<str>, Arc<str>)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -200,7 +200,7 @@ impl SingleBenchmarkPass {
                             height: self.output_resolution.height,
                         },
                         pixel_format: OutputPixelFormat::YUV420P,
-                        raw_options: vec![("threads".to_string(), "0".to_string())],
+                        raw_options: vec![("threads".into(), "0".into())],
                     })),
                 },
             },
