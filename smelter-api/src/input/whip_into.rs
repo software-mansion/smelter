@@ -20,12 +20,18 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
             offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
         };
 
-        let buffer = match &queue_options {
-            smelter_core::QueueInputOptions {
+        let jitter_buffer = match &queue_options {
+            core::QueueInputOptions {
                 required: false,
                 offset: None,
-            } => core::InputBufferOptions::LatencyOptimized,
-            _ => core::InputBufferOptions::None,
+            } => core::RtpJitterBufferOptions {
+                mode: core::RtpJitterBufferMode::QueueBased,
+                buffer: core::InputBufferOptions::LatencyOptimized,
+            },
+            _ => core::RtpJitterBufferOptions {
+                mode: core::RtpJitterBufferMode::Fixed(Duration::from_secs(1)),
+                buffer: core::InputBufferOptions::None,
+            },
         };
 
         let video_preferences = match video {
@@ -40,7 +46,7 @@ impl TryFrom<WhipInput> for core::RegisterInputOptions {
             video_preferences,
             bearer_token,
             endpoint_override,
-            buffer,
+            jitter_buffer,
         };
 
         let input_options = core::ProtocolInputOptions::Whip(whip_options);

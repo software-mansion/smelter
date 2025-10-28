@@ -6,8 +6,7 @@ use uuid::Uuid;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
 use crate::pipeline::{
-    rtp::RtpNtpSyncPoint,
-    utils::input_buffer::InputBuffer,
+    rtp::{RtpJitterBufferInitOptions, RtpNtpSyncPoint},
     webrtc::{
         WhipWhepServerState,
         error::WhipWhepServerError,
@@ -28,8 +27,11 @@ pub(crate) async fn create_new_whip_session(
 ) -> Result<(Arc<str>, RTCSessionDescription), WhipWhepServerError> {
     let inputs = state.inputs.clone();
 
-    let (video_preferences, buffer_option) = inputs.get_with(&input_id, |input| {
-        Ok((input.video_preferences.clone(), input.buffer_option))
+    let (video_preferences, jitter_buffer_options) = inputs.get_with(&input_id, |input| {
+        Ok((
+            input.video_preferences.clone(),
+            input.jitter_buffer_options.clone(),
+        ))
     })?;
     let video_codecs = params_from_video_preferences(&video_preferences);
 
@@ -56,7 +58,7 @@ pub(crate) async fn create_new_whip_session(
 
     {
         let input_id = input_id.clone();
-        let buffer = InputBuffer::new(&state.ctx, buffer_option);
+        let buffer = RtpJitterBufferInitOptions::new(&state.ctx, jitter_buffer_options);
         let sync_point = RtpNtpSyncPoint::new(state.ctx.queue_sync_point);
         peer_connection.on_track(move |track_ctx| {
             let ctx = WhipTrackContext::new(track_ctx, &state, &sync_point, &buffer);

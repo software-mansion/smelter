@@ -4,8 +4,7 @@ use webrtc::{rtp_transceiver::rtp_receiver::RTCRtpReceiver, track::track_remote:
 use crate::{
     PipelineCtx,
     pipeline::{
-        rtp::RtpNtpSyncPoint,
-        utils::input_buffer::InputBuffer,
+        rtp::{RtpJitterBufferInitOptions, RtpNtpSyncPoint},
         webrtc::{
             WhipWhepServerState, peer_connection_recvonly::OnTrackHdlrContext,
             whip_input::state::WhipInputsState,
@@ -29,7 +28,7 @@ struct WhipTrackContext {
     pipeline_ctx: Arc<PipelineCtx>,
     inputs: WhipInputsState,
     sync_point: Arc<RtpNtpSyncPoint>,
-    buffer: InputBuffer,
+    buffer: RtpJitterBufferInitOptions,
 }
 
 impl WhipTrackContext {
@@ -37,7 +36,7 @@ impl WhipTrackContext {
         track_ctx: OnTrackHdlrContext,
         state: &WhipWhepServerState,
         sync_point: &Arc<RtpNtpSyncPoint>,
-        buffer: &InputBuffer,
+        buffer: &RtpJitterBufferInitOptions,
     ) -> Self {
         Self {
             track: track_ctx.track,

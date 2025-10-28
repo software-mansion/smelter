@@ -2,8 +2,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::pipeline::rtp::RtpNtpSyncPoint;
-use crate::pipeline::utils::input_buffer::InputBuffer;
+use crate::pipeline::rtp::{RtpJitterBufferInitOptions, RtpNtpSyncPoint};
 use crate::pipeline::webrtc::whep_input::WhepTrackContext;
 use crate::pipeline::webrtc::whep_input::on_track::handle_on_track;
 use crate::pipeline::{
@@ -133,7 +132,7 @@ async fn init_whep_client(
         let input_id = input_id.clone();
         let sync_point = RtpNtpSyncPoint::new(ctx.queue_sync_point);
         let ctx = ctx.clone();
-        let buffer = InputBuffer::new(&ctx, options.buffer);
+        let buffer = RtpJitterBufferInitOptions::new(&ctx, options.jitter_buffer);
         pc.on_track(move |track_ctx| {
             let ctx = WhepTrackContext::new(track_ctx, &ctx, &sync_point, &buffer);
             handle_on_track(

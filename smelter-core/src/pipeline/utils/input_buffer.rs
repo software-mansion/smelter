@@ -48,12 +48,20 @@ impl InputBuffer {
         }
     }
 
-    pub fn pts_with_buffer(&self, pts: Duration) -> Duration {
+    pub fn recalculate_buffer(&self, pts: Duration) {
         match self {
-            InputBuffer::None => pts,
-            InputBuffer::Const { buffer } => pts + *buffer,
-            InputBuffer::LatencyOptimized(buffer) => buffer.lock().unwrap().pts_with_buffer(pts),
-            InputBuffer::Adaptive(buffer) => buffer.lock().unwrap().pts_with_buffer(pts),
+            InputBuffer::LatencyOptimized(buffer) => buffer.lock().unwrap().recalculate_buffer(pts),
+            InputBuffer::Adaptive(buffer) => buffer.lock().unwrap().recalculate_buffer(pts),
+            _ => (),
+        }
+    }
+
+    pub fn size(&self) -> Duration {
+        match self {
+            InputBuffer::None => Duration::ZERO,
+            InputBuffer::Const { buffer } => *buffer,
+            InputBuffer::LatencyOptimized(buffer) => buffer.lock().unwrap().dynamic_buffer,
+            InputBuffer::Adaptive(buffer) => buffer.lock().unwrap().dynamic_buffer,
         }
     }
 }
@@ -89,7 +97,7 @@ impl LatencyOptimizedBuffer {
         }
     }
 
-    fn pts_with_buffer(&mut self, pts: Duration) -> Duration {
+    fn recalculate_buffer(&mut self, pts: Duration) {
         const INCREMENT_DURATION: Duration = Duration::from_micros(100);
         const DECREMENT_DURATION: Duration = Duration::from_micros(10);
         const STABLE_STATE_DURATION: Duration = Duration::from_secs(10);
@@ -122,8 +130,6 @@ impl LatencyOptimizedBuffer {
             // pts + self.dynamic_buffer == self.sync_point.elapsed() + self.desired_buffer
             self.dynamic_buffer = new_buffer
         }
-
-        pts + self.dynamic_buffer
     }
 }
 
@@ -170,7 +176,7 @@ impl AdaptiveBuffer {
         }
     }
 
-    fn pts_with_buffer(&mut self, pts: Duration) -> Duration {
+    fn recalculate_buffer(&mut self, pts: Duration) {
         const INCREMENT_DURATION: Duration = Duration::from_micros(100);
 
         let next_pts = pts + self.dynamic_buffer;
@@ -192,7 +198,5 @@ impl AdaptiveBuffer {
             );
             self.dynamic_buffer = new_buffer
         }
-
-        pts + self.dynamic_buffer
     }
 }

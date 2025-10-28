@@ -9,14 +9,14 @@ mod util;
 
 pub(crate) use rtp_input::{
     RtpInput,
+    jitter_buffer::{RtpJitterBuffer, RtpJitterBufferInitOptions},
     rtcp_sync::{RtpNtpSyncPoint, RtpTimestampSync},
 };
 pub(crate) use rtp_output::RtpOutput;
-use webrtc::rtp;
 
 #[derive(Clone)]
 pub struct RtpPacket {
-    pub packet: rtp::packet::Packet,
+    pub packet: webrtc::rtp::packet::Packet,
     pub timestamp: Duration,
 }
 
