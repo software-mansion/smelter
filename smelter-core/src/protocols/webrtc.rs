@@ -1,10 +1,14 @@
 use reqwest::{Method, StatusCode};
+use smelter_render::Resolution;
 use std::sync::Arc;
 use url::{ParseError, Url};
 
 use crate::{
-    InputBufferOptions,
-    codecs::{AudioEncoderOptions, VideoEncoderOptions, WebrtcVideoDecoderOptions},
+    AudioChannels, InputBufferOptions,
+    codecs::{
+        AudioEncoderOptions, FfmpegH264EncoderOptions, FfmpegVp8EncoderOptions,
+        FfmpegVp9EncoderOptions, OpusEncoderOptions, VideoEncoderOptions, VulkanH264EncoderOptions,
+    },
     error::{DecoderInitError, EncoderInitError},
 };
 #[derive(Debug, Clone)]
@@ -23,14 +27,13 @@ pub struct WhepInputOptions {
     pub buffer: InputBufferOptions,
 }
 
-#[derive(Debug, Clone)]
-pub struct VideoWhipOptions {
-    pub encoder_preferences: Vec<VideoEncoderOptions>,
-}
-
-#[derive(Debug, Clone)]
-pub struct AudioWhipOptions {
-    pub encoder_preferences: Vec<AudioEncoderOptions>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WebrtcVideoDecoderOptions {
+    FfmpegH264,
+    FfmpegVp8,
+    FfmpegVp9,
+    VulkanH264,
+    Any,
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +49,31 @@ pub struct WhepOutputOptions {
     pub bearer_token: Option<Arc<str>>,
     pub video: Option<VideoEncoderOptions>,
     pub audio: Option<AudioEncoderOptions>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VideoWhipOptions {
+    pub encoder_preferences: Vec<WhipVideoEncoderOptions>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum WhipVideoEncoderOptions {
+    FfmpegH264(FfmpegH264EncoderOptions),
+    FfmpegVp8(FfmpegVp8EncoderOptions),
+    FfmpegVp9(FfmpegVp9EncoderOptions),
+    VulkanH264(VulkanH264EncoderOptions),
+    Any(Resolution),
+}
+
+#[derive(Debug, Clone)]
+pub struct AudioWhipOptions {
+    pub encoder_preferences: Vec<WhipAudioEncoderOptions>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum WhipAudioEncoderOptions {
+    Opus(OpusEncoderOptions),
+    Any(AudioChannels),
 }
 
 #[derive(Debug, thiserror::Error)]

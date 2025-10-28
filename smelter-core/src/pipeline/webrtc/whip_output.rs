@@ -1,8 +1,7 @@
 use establish_peer_connection::exchange_sdp_offers;
-use smelter_render::OutputId;
-
 use peer_connection::PeerConnection;
 use setup_track::{setup_audio_track, setup_video_track};
+use smelter_render::OutputId;
 use std::{
     sync::Arc,
     thread,
@@ -20,16 +19,21 @@ use crate::{
     pipeline::{
         output::{Output, OutputAudio, OutputVideo},
         rtp::RtpPacket,
-        webrtc::http_client::WhipWhepHttpClient,
+        webrtc::{
+            http_client::WhipWhepHttpClient,
+            whip_output::codec_preferences::{
+                codec_params_from_preferences, resolve_audio_preferences, resolve_video_preferences,
+            },
+        },
     },
 };
 
 use crate::prelude::*;
 
+mod codec_preferences;
 mod establish_peer_connection;
-mod setup_track;
-
 mod peer_connection;
+mod setup_track;
 mod track_task_audio;
 mod track_task_video;
 
@@ -51,7 +55,7 @@ impl WhipOutput {
 
         let span = span!(
             Level::INFO,
-            "WHIP sender task",
+            "WHIP client task",
             output_id = output_id.to_string()
         );
         let rt = ctx.tokio_rt.clone();
@@ -73,7 +77,7 @@ impl WhipOutput {
     }
 }
 
-struct WhipSenderTrack {
+struct WhipClientTrack {
     receiver: mpsc::Receiver<RtpPacket>,
     track: Arc<TrackLocalStaticRTP>,
 }
@@ -83,8 +87,8 @@ struct WhipClientTask {
     ctx: Arc<PipelineCtx>,
     client: Arc<WhipWhepHttpClient>,
     output_id: OutputId,
-    video_track: Option<WhipSenderTrack>,
-    audio_track: Option<WhipSenderTrack>,
+    video_track: Option<WhipClientTrack>,
+    audio_track: Option<WhipClientTrack>,
 }
 
 impl WhipClientTask {
@@ -93,8 +97,13 @@ impl WhipClientTask {
         output_id: OutputId,
         options: WhipOutputOptions,
     ) -> Result<(Self, WhipOutput), WebrtcClientError> {
+        let video_preferences = resolve_video_preferences(&ctx, &options)?;
+        let audio_preferences = resolve_audio_preferences(&options);
+
+        let codec_params = codec_params_from_preferences(&video_preferences, &audio_preferences);
+
         let client = WhipWhepHttpClient::new(&options.endpoint_url, &options.bearer_token)?;
-        let pc = PeerConnection::new(&ctx, &options).await?;
+        let pc = PeerConnection::new(&ctx, codec_params).await?;
 
         let video_rtc_sender = pc.new_video_track().await?;
         let audio_rtc_sender = pc.new_audio_track().await?;
@@ -103,19 +112,26 @@ impl WhipClientTask {
 
         pc.set_remote_description(answer).await?;
 
-        let (video_thread_handle, video_track) = match &options.video {
-            Some(opts) => {
+        let (video_thread_handle, video_track) = match video_preferences {
+            Some(encoder_preferences) => {
                 let (video_thread_handle, video) =
-                    setup_video_track(&ctx, &output_id, video_rtc_sender, opts).await?;
+                    setup_video_track(&ctx, &output_id, video_rtc_sender, encoder_preferences)
+                        .await?;
                 (Some(video_thread_handle), Some(video))
             }
             None => (None, None),
         };
 
-        let (audio_thread_handle, audio_track) = match &options.audio {
-            Some(opts) => {
-                let (audio_thread_handle, audio) =
-                    setup_audio_track(&ctx, &output_id, audio_rtc_sender, pc.clone(), opts).await?;
+        let (audio_thread_handle, audio_track) = match audio_preferences {
+            Some(encoder_preferences) => {
+                let (audio_thread_handle, audio) = setup_audio_track(
+                    &ctx,
+                    &output_id,
+                    audio_rtc_sender,
+                    pc.clone(),
+                    encoder_preferences,
+                )
+                .await?;
                 (Some(audio_thread_handle), Some(audio))
             }
             None => (None, None),
@@ -139,12 +155,12 @@ impl WhipClientTask {
 
     async fn run(self) {
         let (mut audio_receiver, audio_track) = match self.audio_track {
-            Some(WhipSenderTrack { receiver, track }) => (Some(receiver), Some(track)),
+            Some(WhipClientTrack { receiver, track }) => (Some(receiver), Some(track)),
             None => (None, None),
         };
 
         let (mut video_receiver, video_track) = match self.video_track {
-            Some(WhipSenderTrack { receiver, track }) => (Some(receiver), Some(track)),
+            Some(WhipClientTrack { receiver, track }) => (Some(receiver), Some(track)),
             None => (None, None),
         };
         let mut next_video_packet = None;

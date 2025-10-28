@@ -207,7 +207,7 @@ fn media_engine_with_codecs(
 ) -> webrtc::error::Result<MediaEngine> {
     let mut media_engine = MediaEngine::default();
 
-    for audio_codec in opus_codec_params() {
+    for audio_codec in opus_codec_params(true /* fec_first */) {
         media_engine.register_codec(audio_codec.clone(), RTPCodecType::Audio)?;
     }
 
