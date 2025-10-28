@@ -215,7 +215,7 @@ impl Converter {
     /// # Safety
     /// - The texture can not be a surface texture
     /// - The texture has to be transitioned to [`wgpu::TextureUses::RESOURCE`] usage
-    pub(crate) unsafe fn convert(
+    pub(super) unsafe fn convert(
         &self,
         texture: wgpu::Texture,
         tracker: &mut EncoderTracker,
@@ -268,9 +268,10 @@ impl Converter {
 
         tracker.wait(u64::MAX)?;
 
-        let mut wgpu_fence =
-            wgpu::hal::vulkan::Fence::TimelineSemaphore(tracker.semaphore.semaphore);
-        let signal_value = tracker.next_sem_value();
+        let mut wgpu_fence = wgpu::hal::vulkan::Fence::TimelineSemaphore(
+            tracker.semaphore_tracker.semaphore.semaphore,
+        );
+        let signal_value = tracker.semaphore_tracker.next_sem_value();
 
         unsafe {
             self.device.wgpu_queue().as_hal::<VkApi, _, _>(|q| {
@@ -282,7 +283,7 @@ impl Converter {
             })?;
         }
 
-        tracker.wait_for = Some(TrackerWait {
+        tracker.semaphore_tracker.wait_for = Some(TrackerWait {
             value: signal_value,
             _state: EncoderTrackerWaitState::Convert,
         });

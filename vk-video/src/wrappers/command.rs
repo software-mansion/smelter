@@ -1,18 +1,16 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use ash::vk;
+use ash::vk::{self, Handle};
 
 use crate::{VulkanCommonError, VulkanDevice};
 
-use super::Device;
-
-pub(crate) struct CommandPool {
-    pub(crate) command_pool: vk::CommandPool,
-    pub(crate) device: Arc<VulkanDevice>,
+struct CommandPool {
+    command_pool: vk::CommandPool,
+    device: Arc<VulkanDevice>,
 }
 
 impl CommandPool {
-    pub(crate) fn new(
+    fn new(
         device: Arc<VulkanDevice>,
         queue_family_index: usize,
     ) -> Result<Self, VulkanCommonError> {
@@ -26,6 +24,21 @@ impl CommandPool {
             device,
             command_pool,
         })
+    }
+
+    fn new_primary(&self) -> Result<vk::CommandBuffer, VulkanCommonError> {
+        let allocate_info = vk::CommandBufferAllocateInfo::default()
+            .command_pool(**self)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1);
+
+        let buffer = unsafe {
+            self.device
+                .device
+                .allocate_command_buffers(&allocate_info)?[0]
+        };
+
+        Ok(buffer)
     }
 }
 
@@ -47,62 +60,122 @@ impl std::ops::Deref for CommandPool {
     }
 }
 
-pub(crate) struct CommandBuffer {
-    pub(crate) pool: Arc<CommandPool>,
-    pub(crate) buffer: vk::CommandBuffer,
+pub(crate) struct CommandBufferPool(Arc<Mutex<CommandBufferPoolInner>>);
+
+pub(crate) struct CommandBufferPoolInner {
+    command_pool: CommandPool,
+    free: Vec<vk::CommandBuffer>,
+    submitted: Vec<vk::CommandBuffer>,
 }
 
-impl CommandBuffer {
-    pub(crate) fn new_primary(pool: Arc<CommandPool>) -> Result<Self, VulkanCommonError> {
-        let allocate_info = vk::CommandBufferAllocateInfo::default()
-            .command_pool(**pool)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .command_buffer_count(1);
+impl CommandBufferPool {
+    pub(crate) fn new(
+        device: Arc<VulkanDevice>,
+        queue_family_index: usize,
+    ) -> Result<Self, VulkanCommonError> {
+        let command_pool = CommandPool::new(device, queue_family_index)?;
 
-        let buffer = unsafe {
-            pool.device
-                .device
-                .allocate_command_buffers(&allocate_info)?[0]
-        };
-
-        Ok(Self { pool, buffer })
+        Ok(Self(Arc::new(Mutex::new(CommandBufferPoolInner {
+            command_pool,
+            free: Vec::new(),
+            submitted: Vec::new(),
+        }))))
     }
 
-    pub(crate) fn begin(&self) -> Result<(), VulkanCommonError> {
+    pub(crate) fn begin_buffer(&self) -> Result<OpenCommandBuffer, VulkanCommonError> {
+        let mut inner = self.0.lock().unwrap();
+        let buffer = match inner.free.pop() {
+            Some(buffer) => buffer,
+            None => inner.command_pool.new_primary()?,
+        };
+
         unsafe {
-            self.device().begin_command_buffer(
-                self.buffer,
+            inner.command_pool.device.device.begin_command_buffer(
+                buffer,
                 &vk::CommandBufferBeginInfo::default()
                     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?
         };
-        Ok(())
+
+        Ok(OpenCommandBuffer(UnfinishedCommandBuffer {
+            buffer,
+            pool: self.0.clone(),
+        }))
     }
 
-    pub(crate) fn end(&self) -> Result<(), VulkanCommonError> {
-        unsafe { self.device().end_command_buffer(self.buffer)? };
-
-        Ok(())
-    }
-
-    pub(crate) fn device(&self) -> &Device {
-        &self.pool.device.device
-    }
-}
-
-impl std::ops::Deref for CommandBuffer {
-    type Target = vk::CommandBuffer;
-
-    fn deref(&self) -> &Self::Target {
-        &self.buffer
+    pub(crate) fn mark_submitted_as_free(&self) {
+        let mut guard = self.0.lock().unwrap();
+        let inner = &mut *guard;
+        inner.free.append(&mut inner.submitted);
     }
 }
 
-impl Drop for CommandBuffer {
+struct UnfinishedCommandBuffer {
+    buffer: vk::CommandBuffer,
+    pool: Arc<Mutex<CommandBufferPoolInner>>,
+}
+
+impl UnfinishedCommandBuffer {
+    fn destroy_without_reset(self) {
+        std::mem::forget(self);
+    }
+}
+
+impl Drop for UnfinishedCommandBuffer {
     fn drop(&mut self) {
+        let mut locked = self.pool.lock().unwrap();
+
         unsafe {
-            self.device()
-                .free_command_buffers(**self.pool, &[self.buffer])
-        };
+            if let Err(e) = locked
+                .command_pool
+                .device
+                .device
+                .reset_command_buffer(self.buffer, vk::CommandBufferResetFlags::empty())
+            {
+                tracing::error!(
+                    "Open command buffer {:x} failed when resetting: {e}. Something is very wrong",
+                    self.buffer.as_raw()
+                );
+            }
+        }
+
+        locked.free.push(self.buffer);
+    }
+}
+
+pub(crate) struct OpenCommandBuffer(UnfinishedCommandBuffer);
+
+impl OpenCommandBuffer {
+    pub(crate) fn end(self) -> Result<RecordedCommandBuffer, VulkanCommonError> {
+        let buffer = self.0.buffer;
+        unsafe {
+            self.0
+                .pool
+                .lock()
+                .unwrap()
+                .command_pool
+                .device
+                .device
+                .end_command_buffer(buffer)?
+        }
+
+        Ok(RecordedCommandBuffer(self.0))
+    }
+
+    pub(crate) fn buffer(&self) -> vk::CommandBuffer {
+        self.0.buffer
+    }
+}
+
+pub(crate) struct RecordedCommandBuffer(UnfinishedCommandBuffer);
+
+impl RecordedCommandBuffer {
+    pub(crate) fn mark_submitted(self) {
+        self.0.pool.lock().unwrap().submitted.push(self.0.buffer);
+        self.0.destroy_without_reset();
+    }
+
+    pub(crate) fn buffer(&self) -> vk::CommandBuffer {
+        self.0.buffer
     }
 }

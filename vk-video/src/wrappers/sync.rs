@@ -40,18 +40,54 @@ impl Drop for TimelineSemaphore {
     }
 }
 
+pub(crate) trait TrackerKind {
+    type WaitState;
+    type CommandBufferPools: CommandBufferPoolStorage;
+}
+
+pub(crate) trait CommandBufferPoolStorage: Sized {
+    fn mark_submitted_as_free(&mut self);
+}
+
 pub(crate) struct TrackerWait<S> {
     pub(crate) value: u64,
     pub(crate) _state: S,
 }
 
-pub(crate) struct Tracker<S> {
+pub(crate) struct Tracker<K: TrackerKind> {
+    pub(crate) semaphore_tracker: SemaphoreTracker<K::WaitState>,
+    pub(crate) command_buffer_pools: K::CommandBufferPools,
+}
+
+impl<K: TrackerKind> Tracker<K> {
+    pub(crate) fn new(
+        device: Arc<Device>,
+        command_buffer_pools: K::CommandBufferPools,
+    ) -> Result<Self, VulkanCommonError> {
+        let semaphore_tracker = SemaphoreTracker::new(device)?;
+
+        Ok(Self {
+            semaphore_tracker,
+            command_buffer_pools,
+        })
+    }
+
+    pub(crate) fn wait(&mut self, timeout: u64) -> Result<(), VulkanCommonError> {
+        self.semaphore_tracker.wait(timeout)?;
+
+        self.command_buffer_pools.mark_submitted_as_free();
+
+        Ok(())
+    }
+}
+
+pub(crate) struct SemaphoreTracker<S> {
     pub(crate) semaphore: TimelineSemaphore,
     next_value: u64,
     pub(crate) wait_for: Option<TrackerWait<S>>,
 }
 
-impl<S> Tracker<S> {
+impl<S> SemaphoreTracker<S> {
     pub(crate) fn new(device: Arc<Device>) -> Result<Self, VulkanCommonError> {
         Ok(Self {
             next_value: 1,

@@ -4,7 +4,7 @@ use ash::vk;
 
 use crate::{VulkanCommonError, VulkanDevice, device::queues::Queue};
 
-use super::{CommandBuffer, Device, Image, ImageView, MemoryAllocation, VideoQueueExt};
+use super::{Device, Image, ImageView, MemoryAllocation, VideoQueueExt};
 
 pub(crate) struct VideoSessionParameters {
     pub(crate) parameters: vk::VideoSessionParametersKHR,
@@ -306,7 +306,7 @@ impl<'a> CodingImageBundle<'a> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         vulkan_ctx: &VulkanDevice,
-        command_buffer: &CommandBuffer,
+        command_buffer: vk::CommandBuffer,
         format: &vk::VideoFormatPropertiesKHR<'a>,
         dimensions: vk::Extent2D,
         image_usage: vk::ImageUsageFlags,
@@ -396,7 +396,7 @@ impl<'a> CodingImageBundle<'a> {
 
             for image in &images {
                 image.lock().unwrap().transition_layout(
-                    **command_buffer,
+                    command_buffer,
                     stages.clone(),
                     accesses.clone(),
                     layout,
@@ -433,7 +433,7 @@ impl<'a> CodingImageBundle<'a> {
             )?;
 
             image.lock().unwrap().transition_layout(
-                **command_buffer,
+                command_buffer,
                 stages.clone(),
                 accesses.clone(),
                 layout,
@@ -474,7 +474,7 @@ impl<'a> DecodedPicturesBuffer<'a> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         vulkan_ctx: &VulkanDevice,
-        command_buffer: &CommandBuffer,
+        command_buffer: vk::CommandBuffer,
         use_separate_images: bool,
         profile_info: &vk::VideoProfileInfoKHR,
         image_usage: vk::ImageUsageFlags,

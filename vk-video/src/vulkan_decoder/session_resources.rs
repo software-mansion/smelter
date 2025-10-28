@@ -13,8 +13,9 @@ use crate::{
     device::DecodingDevice,
     vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState},
     wrappers::{
-        CommandBuffer, DecodeInputBuffer, DecodingQueryPool, H264DecodeProfileInfo, ProfileInfo,
-        SeqParameterSetExt, VideoSession, h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc,
+        DecodeInputBuffer, DecodingQueryPool, H264DecodeProfileInfo, OpenCommandBuffer,
+        ProfileInfo, SeqParameterSetExt, VideoSession, h264_level_idc_to_max_dpb_mbs,
+        vk_to_h264_level_idc,
     },
 };
 
@@ -61,7 +62,7 @@ fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, Vulkan
 impl VideoSessionResources<'_> {
     pub(crate) fn new_from_sps(
         decoding_device: &DecodingDevice,
-        decode_buffer: &CommandBuffer,
+        decode_buffer: OpenCommandBuffer,
         sps: SeqParameterSet,
         tracker: &mut DecoderTracker,
     ) -> Result<Self, VulkanDecoderError> {
@@ -190,7 +191,7 @@ impl VideoSessionResources<'_> {
     pub(crate) fn ensure_session(
         &mut self,
         decoding_device: &DecodingDevice,
-        decode_buffer: &CommandBuffer,
+        decode_buffer: OpenCommandBuffer,
         tracker: &mut DecoderTracker,
     ) -> Result<(), VulkanDecoderError> {
         let Some(new_params) = self.parameters_scheduled_for_reset.take() else {
@@ -275,14 +276,12 @@ impl VideoSessionResources<'_> {
         profile: &H264DecodeProfileInfo,
         max_coded_extent: vk::Extent2D,
         max_dpb_slots: u32,
-        decode_buffer: &CommandBuffer,
+        decode_buffer: OpenCommandBuffer,
         tracker: &mut DecoderTracker,
     ) -> Result<DecodingImages<'a>, VulkanDecoderError> {
-        decode_buffer.begin()?;
-
         let decoding_images = DecodingImages::new(
             decoding_device,
-            decode_buffer,
+            decode_buffer.buffer(),
             profile,
             &decoding_device
                 .profile_capabilities
@@ -294,11 +293,9 @@ impl VideoSessionResources<'_> {
             max_dpb_slots,
         )?;
 
-        decode_buffer.end()?;
-
         decoding_device.h264_decode_queue.submit_chain_semaphore(
-            decode_buffer,
-            tracker,
+            decode_buffer.end()?,
+            &mut tracker.semaphore_tracker,
             vk::PipelineStageFlags2::ALL_COMMANDS,
             vk::PipelineStageFlags2::ALL_COMMANDS,
             DecoderTrackerWaitState::NewDecodingImagesLayoutTransition,
