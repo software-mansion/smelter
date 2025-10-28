@@ -48,3 +48,6 @@ inquire = "0.7.5"
 strum = { version = "0.27", features = ["derive"] }
 fuzzy-matcher = "0.3.7"
 typetag = "0.2.20"
+
+[lints]
+workspace = true

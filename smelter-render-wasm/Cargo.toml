@@ -43,3 +43,6 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = true
+
+[lints]
+workspace = true

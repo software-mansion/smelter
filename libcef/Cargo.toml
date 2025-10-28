@@ -13,3 +13,6 @@ thiserror = { workspace = true }
 widestring = "1.0.2"
 anyhow = { workspace = true }
 tracing = { workspace = true }
+
+[lints]
+workspace = true
