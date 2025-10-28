@@ -1,0 +1,28 @@
+{
+    "video": {
+        "root": {
+            "type": "tiles",
+            "id": "tiles",
+            "transition": {
+                "duration_ms": 500
+            },
+            "children": [
+                {
+                    "type": "input_stream",
+                    "input_id": "input_1",
+                    "id": "input_1"
+                },
+                {
+                    "type": "input_stream",
+                    "input_id": "input_4",
+                    "id": "input_4"
+                },
+                {
+                    "type": "input_stream",
+                    "input_id": "input_3",
+                    "id": "input_3"
+                }
+            ]
+        }
+    }
+}
