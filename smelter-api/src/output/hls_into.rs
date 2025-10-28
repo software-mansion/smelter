@@ -60,7 +60,7 @@ fn maybe_audio_options(
             let resolved_channels = channels.unwrap_or(AudioChannels::Stereo);
             (
                 core::AudioEncoderOptions::FdkAac(core::FdkAacEncoderOptions {
-                    channels: resolved_channels.clone().into(),
+                    channels: resolved_channels.into(),
                     sample_rate: sample_rate.unwrap_or(44100),
                 }),
                 resolved_channels,

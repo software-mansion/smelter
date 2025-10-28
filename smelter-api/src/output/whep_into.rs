@@ -119,7 +119,7 @@ fn resolve_audio_options(
 
             (
                 core::AudioEncoderOptions::Opus(core::OpusEncoderOptions {
-                    channels: channels.clone().into(),
+                    channels: channels.into(),
                     preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
                     sample_rate: sample_rate.unwrap_or(48_000),
                     forward_error_correction: forward_error_correction.unwrap_or(true),

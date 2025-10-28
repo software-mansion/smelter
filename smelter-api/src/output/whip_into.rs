@@ -42,7 +42,7 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                             vec![core::VideoEncoderOptions::FfmpegH264(
                                 core::FfmpegH264EncoderOptions {
                                     preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
-                                    resolution: options.resolution.clone().into(),
+                                    resolution: options.resolution.into(),
                                     pixel_format: pixel_format
                                         .unwrap_or(PixelFormat::Yuv420p)
                                         .into(),
@@ -57,7 +57,7 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                         WhipVideoEncoderOptions::VulkanH264 { bitrate } => {
                             vec![core::VideoEncoderOptions::VulkanH264(
                                 core::VulkanH264EncoderOptions {
-                                    resolution: options.resolution.clone().into(),
+                                    resolution: options.resolution.into(),
                                     bitrate: bitrate
                                         .map(|bitrate| bitrate.try_into())
                                         .transpose()?,
@@ -71,7 +71,7 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                         WhipVideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
                             vec![core::VideoEncoderOptions::FfmpegVp8(
                                 core::FfmpegVp8EncoderOptions {
-                                    resolution: options.resolution.clone().into(),
+                                    resolution: options.resolution.into(),
                                     raw_options: ffmpeg_options
                                         .unwrap_or_default()
                                         .into_iter()
@@ -85,7 +85,7 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                         } => {
                             vec![core::VideoEncoderOptions::FfmpegVp9(
                                 core::FfmpegVp9EncoderOptions {
-                                    resolution: options.resolution.clone().into(),
+                                    resolution: options.resolution.into(),
                                     pixel_format: pixel_format
                                         .unwrap_or(PixelFormat::Yuv420p)
                                         .into(),
@@ -100,21 +100,21 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                             vec![
                                 core::VideoEncoderOptions::FfmpegVp9(
                                     core::FfmpegVp9EncoderOptions {
-                                        resolution: options.resolution.clone().into(),
+                                        resolution: options.resolution.into(),
                                         pixel_format: core::OutputPixelFormat::YUV420P,
                                         raw_options: Vec::new(),
                                     },
                                 ),
                                 core::VideoEncoderOptions::FfmpegVp8(
                                     core::FfmpegVp8EncoderOptions {
-                                        resolution: options.resolution.clone().into(),
+                                        resolution: options.resolution.into(),
                                         raw_options: Vec::new(),
                                     },
                                 ),
                                 core::VideoEncoderOptions::FfmpegH264(
                                     core::FfmpegH264EncoderOptions {
                                         preset: H264EncoderPreset::Fast.into(),
-                                        resolution: options.resolution.clone().into(),
+                                        resolution: options.resolution.into(),
                                         pixel_format: core::OutputPixelFormat::YUV420P,
                                         raw_options: Vec::new(),
                                     },
@@ -150,7 +150,7 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                     mixing_strategy: mixing_strategy
                         .unwrap_or(AudioMixingStrategy::SumClip)
                         .into(),
-                    channels: resolved_channels.clone().into(),
+                    channels: resolved_channels.into(),
                 };
 
                 let encoder_preferences = match encoder_preferences.as_deref() {
@@ -168,7 +168,7 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                             ..
                         } => {
                             vec![core::AudioEncoderOptions::Opus(core::OpusEncoderOptions {
-                                channels: resolved_channels.clone().into(),
+                                channels: resolved_channels.into(),
                                 preset: preset.unwrap_or(OpusEncoderPreset::Voip).into(),
                                 sample_rate: sample_rate.unwrap_or(48000),
                                 forward_error_correction: forward_error_correction.unwrap_or(true),
@@ -177,7 +177,7 @@ impl TryFrom<WhipOutput> for core::RegisterOutputOptions {
                         }
                         WhipAudioEncoderOptions::Any => {
                             vec![core::AudioEncoderOptions::Opus(core::OpusEncoderOptions {
-                                channels: resolved_channels.clone().into(),
+                                channels: resolved_channels.into(),
                                 preset: OpusEncoderPreset::Voip.into(),
                                 sample_rate: 48000,
                                 forward_error_correction: true,

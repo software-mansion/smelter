@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use smelter_render::Resolution;
 
 use crate::codecs::OutputPixelFormat;
@@ -6,5 +8,5 @@ use crate::codecs::OutputPixelFormat;
 pub struct FfmpegVp9EncoderOptions {
     pub resolution: Resolution,
     pub pixel_format: OutputPixelFormat,
-    pub raw_options: Vec<(String, String)>,
+    pub raw_options: Vec<(Arc<str>, Arc<str>)>,
 }

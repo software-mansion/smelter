@@ -21,7 +21,7 @@ pub struct Mp4OutputOptions {
     pub output_path: PathBuf,
     pub video: Option<VideoEncoderOptions>,
     pub audio: Option<AudioEncoderOptions>,
-    pub raw_options: Vec<(String, String)>,
+    pub raw_options: Vec<(Arc<str>, Arc<str>)>,
 }
 
 #[derive(Debug, Clone)]

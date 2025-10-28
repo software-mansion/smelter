@@ -43,12 +43,12 @@ pub enum WhipVideoEncoderOptions {
         pixel_format: Option<PixelFormat>,
 
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-        ffmpeg_options: Option<HashMap<String, String>>,
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "ffmpeg_vp8")]
     FfmpegVp8 {
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-        ffmpeg_options: Option<HashMap<String, String>>,
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "ffmpeg_vp9")]
     FfmpegVp9 {
@@ -56,7 +56,7 @@ pub enum WhipVideoEncoderOptions {
         pixel_format: Option<PixelFormat>,
 
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
-        ffmpeg_options: Option<HashMap<String, String>>,
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "vulkan_h264")]
     VulkanH264 {
