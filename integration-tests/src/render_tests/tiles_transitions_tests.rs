@@ -231,7 +231,7 @@ fn tiles_transitions_tests() {
         ..Default::default()
     });
     runner.add(TestCase {
-        name: "tiles_transitions/replace_component_by_changing_id_add_new_component_last_row_center",
+        name: "tiles_transitions/replace_component_by_changing_id_add_new_component_last_row_center_aligned",
         steps: vec![
             Step::UpdateSceneJson(include_str!(
                 "./tiles_transitions/start_with_3_inputs_all_id_center.scene.json"
@@ -255,7 +255,7 @@ fn tiles_transitions_tests() {
         ..Default::default()
     });
     runner.add(TestCase {
-        name: "tiles_transitions/replace_component_by_changing_id_add_new_component_last_row_left",
+        name: "tiles_transitions/replace_component_by_changing_id_add_new_component_last_row_left_aligned",
         steps: vec![
             Step::UpdateSceneJson(include_str!(
                 "./tiles_transitions/start_with_3_inputs_all_id_left.scene.json"
