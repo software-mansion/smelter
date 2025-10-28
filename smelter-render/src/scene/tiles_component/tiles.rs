@@ -36,13 +36,6 @@ impl TilesComponentParams {
             .into_iter()
             .zip(children.iter())
             .map(|(tile, child)| {
-                // #remove
-                tracing::error!(
-                    top = tile.top,
-                    left = tile.left,
-                    width = tile.width,
-                    height = tile.height
-                );
                 Some(Tile {
                     top: tile.top,
                     left: tile.left,
