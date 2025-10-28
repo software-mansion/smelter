@@ -55,19 +55,22 @@ fn client_code() -> Result<()> {
         "transition": {
             "duration_ms": 700,
         },
-        "vertical_align": "center",
+        "horizontal_align": "left",
         "children": [
             {
                 "type": "input_stream",
                 "input_id": "input_1",
+                "id": "1"
             },
             {
                 "type": "input_stream",
                 "input_id": "input_1",
+                "id": "2"
             },
             {
                 "type": "input_stream",
                 "input_id": "input_1",
+                "id": "3"
             },
         ],
     });
@@ -78,21 +81,23 @@ fn client_code() -> Result<()> {
         "transition": {
             "duration_ms": 700,
         },
-        "vertical_align": "justified",
+        "horizontal_align": "left",
         // "margin": 50,
         "children": [
             {
                 "type": "input_stream",
                 "input_id": "input_1",
+                "id": "1"
             },
             {
                 "type": "input_stream",
                 "input_id": "input_2",
-                "id": "3",
+                "id": "4",
             },
             {
                 "type": "input_stream",
                 "input_id": "input_1",
+                "id": "3"
             },
         ],
     });
