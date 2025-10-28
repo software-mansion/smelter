@@ -230,6 +230,54 @@ fn tiles_transitions_tests() {
         ],
         ..Default::default()
     });
+    runner.add(TestCase {
+        name: "tiles_transitions/replace_component_by_changing_id_add_new_component_last_row_center",
+        steps: vec![
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/start_with_3_inputs_all_id_center.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/end_with_4_inputs_3_id_center.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(1)),
+            Step::RenderWithSnapshot(Duration::from_millis(150)),
+            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(500)),
+        ],
+        inputs: vec![
+            input1.clone(),
+            input2.clone(),
+            input3.clone(),
+            input4.clone(),
+            input5.clone(),
+        ],
+        ..Default::default()
+    });
+    runner.add(TestCase {
+        name: "tiles_transitions/replace_component_by_changing_id_add_new_component_last_row_left",
+        steps: vec![
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/start_with_3_inputs_all_id_left.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/end_with_4_inputs_3_id_left.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(1)),
+            Step::RenderWithSnapshot(Duration::from_millis(150)),
+            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(500)),
+        ],
+        inputs: vec![
+            input1.clone(),
+            input2.clone(),
+            input3.clone(),
+            input4.clone(),
+            input5.clone(),
+        ],
+        ..Default::default()
+    });
 
     runner.run()
 }

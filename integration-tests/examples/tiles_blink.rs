@@ -91,13 +91,18 @@ fn client_code() -> Result<()> {
             },
             {
                 "type": "input_stream",
+                "input_id": "input_1",
+                "id": "2",
+            },
+            {
+                "type": "input_stream",
                 "input_id": "input_2",
                 "id": "4",
             },
             {
                 "type": "input_stream",
-                "input_id": "input_1",
-                "id": "3"
+                "input_id": "input_2",
+                "id": "5"
             },
         ],
     });
