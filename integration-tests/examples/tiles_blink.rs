@@ -59,53 +59,16 @@ fn client_code() -> Result<()> {
         "children": [
             {
                 "type": "input_stream",
-                "input_id": "input_2",
-                "id": "100"
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-                "id": "101"
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-                "id": "3"
+                "input_id": "input_1",
             },
             {
                 "type": "input_stream",
                 "input_id": "input_1",
-                "id": "4"
             },
             {
                 "type": "input_stream",
                 "input_id": "input_1",
-                "id": "2"
-            }
+            },
         ],
     });
 
@@ -120,48 +83,17 @@ fn client_code() -> Result<()> {
         "children": [
             {
                 "type": "input_stream",
-                "input_id": "input_2",
-                "id": "100",
+                "input_id": "input_1",
             },
             {
                 "type": "input_stream",
                 "input_id": "input_2",
-                "id": "101",
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
-            },
-            {
-                "type": "input_stream",
-                "input_id": "input_2",
+                "id": "3",
             },
             {
                 "type": "input_stream",
                 "input_id": "input_1",
-                "id": "3"
             },
-            {
-                "type": "input_stream",
-                "input_id": "input_1",
-                "id": "2"
-            }
         ],
     });
 

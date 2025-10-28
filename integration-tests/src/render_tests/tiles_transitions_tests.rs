@@ -160,6 +160,53 @@ fn tiles_transitions_tests() {
         ],
         ..Default::default()
     });
+    runner.add(TestCase {
+        name: "tiles_transitions/replace_component_by_changing_id",
+        steps: vec![
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/start_with_3_inputs_all_id.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/end_with_3_inputs_3_id_different_component.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(1)),
+            Step::RenderWithSnapshot(Duration::from_millis(150)),
+            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(500)),
+        ],
+        inputs: vec![
+            input1.clone(),
+            input2.clone(),
+            input3.clone(),
+            input4.clone(),
+        ],
+        ..Default::default()
+    });
+    runner.add(TestCase {
+        name: "tiles_transitions/replace_component_by_changing_id_and_add_new_component",
+        steps: vec![
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/start_with_3_inputs_all_id.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/end_with_4_inputs_3_id.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(1)),
+            Step::RenderWithSnapshot(Duration::from_millis(150)),
+            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(500)),
+        ],
+        inputs: vec![
+            input1.clone(),
+            input2.clone(),
+            input3.clone(),
+            input4.clone(),
+            input5.clone(),
+        ],
+        ..Default::default()
+    });
 
     runner.run()
 }
