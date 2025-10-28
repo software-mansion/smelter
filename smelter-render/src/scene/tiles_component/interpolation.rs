@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::scene::{
     ComponentId,
@@ -13,27 +13,6 @@ pub(super) enum TileId {
     Index(usize),
 }
 
-#[derive(Clone, Copy)]
-struct TilePosition {
-    top: f32,
-    left: f32,
-    width: f32,
-    height: f32,
-}
-
-impl PartialEq for TilePosition {
-    fn eq(&self, other: &Self) -> bool {
-        const TOLERANCE: f32 = 0.001;
-
-        let top_eq = f32::abs(self.top - other.top) <= TOLERANCE;
-        let left_eq = f32::abs(self.left - other.left) <= TOLERANCE;
-        let width_eq = f32::abs(self.width - other.width) <= TOLERANCE;
-        let height_eq = f32::abs(self.height - other.height) <= TOLERANCE;
-
-        top_eq && left_eq && width_eq && height_eq
-    }
-}
-
 impl ContinuousValue for Vec<Option<Tile>> {
     fn interpolate(start: &Self, end: &Self, state: InterpolationState) -> Self {
         let start_id_map: HashMap<&TileId, usize> = start
@@ -41,14 +20,17 @@ impl ContinuousValue for Vec<Option<Tile>> {
             .enumerate()
             .filter_map(|(index, tile)| tile.as_ref().map(|tile| (&tile.id, index)))
             .collect();
+        let end_id_set: HashSet<&TileId> = end
+            .iter()
+            .flat_map(|tile| tile.as_ref().map(|tile| &tile.id))
+            .collect();
 
         if state.0 >= 1.0 {
             return end.clone();
         };
 
         end.iter()
-            .enumerate()
-            .map(|(end_index, tile)| {
+            .map(|tile| {
                 let tile = tile.as_ref()?;
                 start_id_map
                     .get(&tile.id)
@@ -59,11 +41,16 @@ impl ContinuousValue for Vec<Option<Tile>> {
                             .map(|old_tile| ContinuousValue::interpolate(old_tile, tile, state))
                     })
                     .or_else(|| {
-                        if end_index < start.len() {
-                            Some(ContinuousValue::interpolate(tile, tile, state))
-                        } else {
-                            None
+                        for start_tile in start.iter().flatten() {
+                            if are_positions_equal(tile, start_tile) {
+                                if !end_id_set.contains(&start_tile.id) {
+                                    return Some(ContinuousValue::interpolate(tile, tile, state));
+                                } else {
+                                    return None;
+                                }
+                            }
                         }
+                        None
                     })
             })
             .collect()
@@ -80,4 +67,15 @@ impl ContinuousValue for Tile {
             height: ContinuousValue::interpolate(&start.height, &end.height, state),
         }
     }
+}
+
+fn are_positions_equal(lhs: &Tile, rhs: &Tile) -> bool {
+    const TOLERANCE: f32 = 0.001;
+
+    let top_eq = f32::abs(lhs.top - rhs.top) <= TOLERANCE;
+    let left_eq = f32::abs(lhs.left - rhs.left) <= TOLERANCE;
+    let width_eq = f32::abs(lhs.width - rhs.width) <= TOLERANCE;
+    let height_eq = f32::abs(lhs.height - rhs.height) <= TOLERANCE;
+
+    top_eq && left_eq && width_eq && height_eq
 }
