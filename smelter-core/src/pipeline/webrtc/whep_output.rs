@@ -103,6 +103,11 @@ impl WhepOutput {
                 )?
             }
             VideoEncoderOptions::VulkanH264(options) => {
+                if !ctx.graphics_context.has_vulkan_encoder_support() {
+                    return Err(OutputInitError::EncoderError(
+                        EncoderInitError::VulkanContextRequiredForVulkanEncoder,
+                    ));
+                }
                 WhepVideoTrackThread::<VulkanH264Encoder>::spawn(
                     output_id.clone(),
                     WhepVideoTrackThreadOptions {
