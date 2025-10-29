@@ -54,7 +54,7 @@ impl ContinuousValue for Vec<Option<Tile>> {
                             .find(|start_tile| are_positions_equal(start_tile, tile))
                             .and_then(|start_tile| match end_id_set.contains(&start_tile.id) {
                                 true => None,
-                                false => Some(ContinuousValue::interpolate(tile, tile, state)),
+                                false => Some(tile.clone()),
                             })
                     })
             })
