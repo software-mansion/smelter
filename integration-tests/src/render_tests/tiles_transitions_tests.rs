@@ -24,11 +24,11 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_tile_resize_with_view_transition.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             // TODO: This transition does not look great, but it would require automatic
             // transitions triggered by a size change (not scene update)
-            Step::RenderWithSnapshot(Duration::from_millis(450)),
+            Step::RenderWithSnapshot(Duration::from_millis(400)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
@@ -44,8 +44,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_tile_resize.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
@@ -61,8 +61,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_with_3_inputs_3_id_different_order.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
@@ -78,8 +78,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_with_3_inputs_1_id.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
@@ -100,8 +100,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_with_5_inputs_no_id.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
@@ -123,8 +123,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_with_4_inputs_1_id.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
@@ -148,8 +148,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/after_end_with_4_inputs_no_id.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
@@ -171,8 +171,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_with_3_inputs_3_id_different_component.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(1)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
@@ -194,8 +194,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_with_4_inputs_3_id.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(1)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
@@ -218,8 +218,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_with_3_inputs_3_id_different_component_margin.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(1)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
@@ -241,8 +241,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_with_4_inputs_3_id_center.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(1)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
@@ -265,8 +265,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_with_4_inputs_3_id_left.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(1)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
