@@ -1,10 +1,10 @@
 use smelter_render::error::ErrorStack;
 use tracing::{error, warn};
-use webrtc::{rtp, rtp_transceiver::PayloadType};
+use webrtc::rtp_transceiver::PayloadType;
 
 use crate::pipeline::rtp::{
     RtpPacket,
-    depayloader::{Depayloader, DepayloaderOptions, DepayloadingError, new_depayloader},
+    depayloader::{Depayloader, DepayloaderOptions, new_depayloader},
 };
 
 use crate::prelude::*;
@@ -64,8 +64,6 @@ where
                 let depayloader = self.depayloader.as_mut()?;
                 match depayloader.depayload(packet) {
                     Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
-                    // TODO: Remove after updating webrc-rs
-                    Err(DepayloadingError::Rtp(rtp::Error::ErrShortPacket)) => Some(vec![]),
                     Err(err) => {
                         warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                         Some(vec![])
