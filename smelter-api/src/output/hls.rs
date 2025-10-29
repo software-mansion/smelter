@@ -1,3 +1,5 @@
+use std::{collections::HashMap, sync::Arc};
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -12,9 +14,44 @@ pub struct HlsOutput {
     /// If not specified, no segments will removed.
     pub max_playlist_size: Option<usize>,
     /// Video track configuration.
-    pub video: Option<OutputVideoOptions>,
+    pub video: Option<OutputHlsVideoOptions>,
     /// Audio track configuration.
     pub audio: Option<OutputHlsAudioOptions>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OutputHlsVideoOptions {
+    /// Output resolution in pixels.
+    pub resolution: Resolution,
+    /// Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+    pub send_eos_when: Option<OutputEndCondition>,
+    /// Video encoder options.
+    pub encoder: HlsVideoEncoderOptions,
+    /// Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+    pub initial: VideoScene,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum HlsVideoEncoderOptions {
+    #[serde(rename = "ffmpeg_h264")]
+    FfmpegH264 {
+        /// (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+        preset: Option<H264EncoderPreset>,
+
+        /// (**default=`"yuv420p"`**) Encoder pixel format
+        pixel_format: Option<PixelFormat>,
+
+        /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
+    },
+    #[serde(rename = "vulkan_h264")]
+    VulkanH264 {
+        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+        /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+        bitrate: Option<VulkanH264EncoderBitrate>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
