@@ -6,6 +6,7 @@ use std::env;
 use integration_tests::{
     examples::{self, TestSample, run_example},
     ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
+    paths::integration_tests_root,
 };
 
 const HTML_FILE_PATH: &str = "examples/web_view.html";
@@ -44,7 +45,7 @@ fn main() {
 fn client_code() -> Result<()> {
     start_ffmpeg_receive_h264(Some(OUTPUT_PORT), None)?;
 
-    let html_file_path = env::current_dir()?
+    let html_file_path = integration_tests_root()
         .join(HTML_FILE_PATH)
         .display()
         .to_string();
