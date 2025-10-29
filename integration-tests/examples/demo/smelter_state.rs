@@ -1,5 +1,5 @@
 use std::ops::Deref;
-use std::{fs, mem};
+use std::{env, fs, mem};
 
 use anyhow::{Context, Result};
 use inquire::Select;
@@ -7,7 +7,7 @@ use integration_tests::examples;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::inputs::InputHandle;
 use crate::inputs::hls::HlsInputBuilder;
@@ -15,11 +15,12 @@ use crate::inputs::mp4::Mp4InputBuilder;
 use crate::inputs::whep::WhepInputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
 
+use crate::JSON_ENV;
 use crate::outputs::hls::HlsOutputBuilder;
 use crate::outputs::mp4::Mp4OutputBuilder;
 use crate::outputs::whep::WhepOutputBuilder;
 use crate::outputs::whip::WhipOutputBuilder;
-use crate::utils::rename_old_dump;
+use crate::utils::{parse_json, rename_old_dump};
 use crate::{
     inputs::{InputProtocol, rtp::RtpInputBuilder},
     outputs::{OutputHandle, OutputProtocol, rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder},
@@ -70,6 +71,7 @@ impl SmelterState {
         state.start()?;
 
         for input in &mut state.inputs {
+            input.on_before_registration()?;
             examples::post(
                 &format!("input/{}/register", input.name()),
                 &input.serialize_register(),
@@ -89,6 +91,31 @@ impl SmelterState {
         }
 
         Ok(state)
+    }
+
+    pub fn try_read_from_json() -> Option<Self> {
+        match env::var(JSON_ENV) {
+            Ok(json_path) => {
+                let json_val = parse_json(json_path.into());
+                match json_val {
+                    Ok(json) => {
+                        debug!("{json:#?}");
+                        match Self::from_json(json) {
+                            Ok(state) => Some(state),
+                            Err(error) => {
+                                error!(%error, "Failed to create state from provided JSON dump.");
+                                None
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        error!(%error, "Failed to parse JSON.");
+                        None
+                    }
+                }
+            }
+            Err(_) => None,
+        }
     }
 
     pub fn start(&mut self) -> Result<()> {

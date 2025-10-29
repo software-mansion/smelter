@@ -1,4 +1,4 @@
-use std::{env, thread, time::Duration};
+use std::{thread, time::Duration};
 
 use inquire::{InquireError, Select};
 use integration_tests::examples;
@@ -14,7 +14,7 @@ mod players;
 mod smelter_state;
 mod utils;
 
-use crate::{smelter_state::SmelterState, utils::parse_json};
+use crate::smelter_state::SmelterState;
 
 const IP: &str = "127.0.0.1";
 const JSON_ENV: &str = "DEMO_JSON";
@@ -53,30 +53,14 @@ fn run_demo() {
     }
 
     let mut options = Action::iter().collect::<Vec<_>>();
-    let mut state = match env::var(JSON_ENV) {
-        Ok(json_path) => {
-            let json_val = parse_json(json_path.into());
-            match json_val {
-                Ok(json) => {
-                    debug!("{json:#?}");
-                    match SmelterState::from_json(json) {
-                        Ok(state) => {
-                            options.retain(|a| *a != Action::Start);
-                            state
-                        }
-                        Err(e) => {
-                            error!("Failed to create state from provided JSON dump: {e}");
-                            SmelterState::new()
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to parse JSON: {e}");
-                    SmelterState::new()
-                }
-            }
+    let mut state = match SmelterState::try_read_from_json() {
+        Some(state) => {
+            // Reading state from json starts the demo automatically,
+            // so this action needs to be removed on succesful read.
+            options.retain(|opt| *opt != Action::Start);
+            state
         }
-        Err(_) => SmelterState::new(),
+        None => SmelterState::new(),
     };
 
     loop {
