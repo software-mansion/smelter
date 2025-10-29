@@ -24,14 +24,14 @@ impl Queue {
 
     pub(crate) fn submit_chain_semaphore<S>(
         &self,
-        buffer: &CommandBuffer,
-        tracker: &mut Tracker<S>,
+        buffer: RecordedCommandBuffer,
+        tracker: &mut SemaphoreTracker<S>,
         wait_stages: vk::PipelineStageFlags2,
         signal_stages: vk::PipelineStageFlags2,
         new_wait_state: S,
     ) -> Result<(), VulkanCommonError> {
         let buffer_submit_info =
-            [vk::CommandBufferSubmitInfo::default().command_buffer(buffer.buffer)];
+            [vk::CommandBufferSubmitInfo::default().command_buffer(buffer.buffer())];
 
         let signal_value = tracker.next_sem_value();
         let signal_info = vk::SemaphoreSubmitInfo::default()
@@ -64,6 +64,8 @@ impl Queue {
                 vk::Fence::null(),
             )?
         };
+
+        buffer.mark_submitted();
 
         tracker.wait_for = Some(TrackerWait {
             value: signal_value,

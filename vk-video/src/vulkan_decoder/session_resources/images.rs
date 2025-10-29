@@ -6,7 +6,7 @@ use crate::{
     VulkanDecoderError,
     device::DecodingDevice,
     vulkan_decoder::Image,
-    wrappers::{CodingImageBundle, CommandBuffer, DecodedPicturesBuffer, H264DecodeProfileInfo},
+    wrappers::{CodingImageBundle, DecodedPicturesBuffer, H264DecodeProfileInfo},
 };
 
 pub(crate) struct DecodingImages<'a> {
@@ -43,7 +43,7 @@ impl<'a> DecodingImages<'a> {
 
     pub(crate) fn new(
         decoding_device: &DecodingDevice,
-        command_buffer: &CommandBuffer,
+        command_buffer: vk::CommandBuffer,
         profile: &H264DecodeProfileInfo,
         dpb_format: &vk::VideoFormatPropertiesKHR<'a>,
         dst_format: &Option<vk::VideoFormatPropertiesKHR<'a>>,

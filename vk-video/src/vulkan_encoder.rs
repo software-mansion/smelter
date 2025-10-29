@@ -12,9 +12,9 @@ use crate::{
     EncodedOutputChunk, Frame, H264Profile, RawFrameData, VulkanCommonError,
     device::{EncodingDevice, Rational},
     wrappers::{
-        Buffer, CommandBuffer, CommandPool, DecodedPicturesBuffer, Image, ImageView, ProfileInfo,
-        QueryPool, Tracker, VideoEncodeQueueExt, VideoQueueExt, VideoSession,
-        VideoSessionParameters,
+        Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
+        ImageView, ProfileInfo, QueryPool, Tracker, TrackerKind, VideoEncodeQueueExt,
+        VideoQueueExt, VideoSession, VideoSessionParameters,
     },
 };
 
@@ -77,7 +77,7 @@ struct VideoSessionResources<'a> {
 impl VideoSessionResources<'_> {
     fn new(
         encoding_device: &EncodingDevice,
-        command_buffer: &CommandBuffer,
+        command_buffer: vk::CommandBuffer,
         parameters: FullEncoderParameters,
         profile_info: &vk::VideoProfileInfoKHR,
     ) -> Result<Self, VulkanEncoderError> {
@@ -249,42 +249,6 @@ struct EncodeFeedback {
     status: vk::QueryResultStatusKHR,
 }
 
-struct CommandBuffers {
-    init_buffer: CommandBuffer,
-    encode_buffer: CommandBuffer,
-    transfer_buffer: CommandBuffer,
-}
-
-struct CommandPools {
-    encode_pool: Arc<CommandPool>,
-    transfer_pool: Arc<CommandPool>,
-}
-
-impl CommandPools {
-    fn new(device: Arc<EncodingDevice>) -> Result<Self, VulkanEncoderError> {
-        Ok(CommandPools {
-            encode_pool: CommandPool::new(
-                device.vulkan_device.clone(),
-                device.h264_encode_queue.idx,
-            )?
-            .into(),
-            transfer_pool: CommandPool::new(
-                device.vulkan_device.clone(),
-                device.queues.transfer.idx,
-            )?
-            .into(),
-        })
-    }
-
-    fn buffers(&self) -> Result<CommandBuffers, VulkanEncoderError> {
-        Ok(CommandBuffers {
-            init_buffer: CommandBuffer::new_primary(self.encode_pool.clone())?,
-            encode_buffer: CommandBuffer::new_primary(self.encode_pool.clone())?,
-            transfer_buffer: CommandBuffer::new_primary(self.transfer_pool.clone())?,
-        })
-    }
-}
-
 pub(crate) enum EncoderTrackerWaitState {
     InitializeEncoder,
     CopyBufferToImage,
@@ -292,11 +256,40 @@ pub(crate) enum EncoderTrackerWaitState {
     Encode,
 }
 
-pub(crate) type EncoderTracker = Tracker<EncoderTrackerWaitState>;
+struct EncoderCommandBufferPools {
+    transfer: CommandBufferPool,
+    encode: CommandBufferPool,
+}
+
+impl EncoderCommandBufferPools {
+    fn new(device: &EncodingDevice) -> Result<Self, VulkanEncoderError> {
+        let transfer =
+            CommandBufferPool::new(device.vulkan_device.clone(), device.queues.transfer.idx)?;
+        let encode =
+            CommandBufferPool::new(device.vulkan_device.clone(), device.h264_encode_queue.idx)?;
+
+        Ok(Self { transfer, encode })
+    }
+}
+
+impl CommandBufferPoolStorage for EncoderCommandBufferPools {
+    fn mark_submitted_as_free(&mut self) {
+        self.transfer.mark_submitted_as_free();
+        self.encode.mark_submitted_as_free();
+    }
+}
+
+struct EncoderTrackerKind {}
+
+impl TrackerKind for EncoderTrackerKind {
+    type WaitState = EncoderTrackerWaitState;
+
+    type CommandBufferPools = EncoderCommandBufferPools;
+}
+
+type EncoderTracker = Tracker<EncoderTrackerKind>;
 
 pub struct VulkanEncoder<'a> {
-    command_buffers: CommandBuffers,
-    _command_pools: CommandPools,
     tracker: EncoderTracker,
     query_pool: EncodingQueryPool,
     profile: H264Profile,
@@ -353,11 +346,10 @@ impl VulkanEncoder<'_> {
         parameters: FullEncoderParameters,
     ) -> Result<Self, VulkanEncoderError> {
         let profile_info = H264EncodeProfileInfo::new_encode(parameters.profile);
-        let command_pools = CommandPools::new(encoding_device.clone())?;
 
-        let command_buffers = command_pools.buffers()?;
-
-        let mut tracker = EncoderTracker::new(encoding_device.device.clone())?;
+        let command_buffer_pools = EncoderCommandBufferPools::new(&encoding_device)?;
+        let mut tracker =
+            EncoderTracker::new(encoding_device.device.clone(), command_buffer_pools)?;
 
         let query_pool = EncodingQueryPool::new(
             &encoding_device,
@@ -372,20 +364,18 @@ impl VulkanEncoder<'_> {
             &profile_info,
         )?;
 
-        command_buffers.init_buffer.begin()?;
+        let buffer = tracker.command_buffer_pools.encode.begin_buffer()?;
 
         let session_resources = VideoSessionResources::new(
             &encoding_device,
-            &command_buffers.init_buffer,
+            buffer.buffer(),
             parameters,
             &profile_info.profile_info,
         )?;
 
-        command_buffers.init_buffer.end()?;
-
         encoding_device.h264_encode_queue.submit_chain_semaphore(
-            &command_buffers.init_buffer,
-            &mut tracker,
+            buffer.end()?,
+            &mut tracker.semaphore_tracker,
             vk::PipelineStageFlags2::ALL_COMMANDS,
             vk::PipelineStageFlags2::ALL_COMMANDS,
             EncoderTrackerWaitState::InitializeEncoder,
@@ -400,8 +390,6 @@ impl VulkanEncoder<'_> {
             profile: parameters.profile,
             profile_info,
             encoding_device,
-            _command_pools: command_pools,
-            command_buffers,
             tracker,
             query_pool,
             session_resources,
@@ -412,7 +400,7 @@ impl VulkanEncoder<'_> {
         })
     }
 
-    fn begin_video_coding(&self) {
+    fn begin_video_coding(&self, buffer: vk::CommandBuffer) {
         let mut h264_layers =
             self.h264_rate_control_layers_for(self.session_resources.rate_control);
         let layers = self.rate_control_layers_for(
@@ -462,11 +450,15 @@ impl VulkanEncoder<'_> {
                 .vulkan_device
                 .device
                 .video_queue_ext
-                .cmd_begin_video_coding_khr(*self.command_buffers.encode_buffer, &begin_info);
+                .cmd_begin_video_coding_khr(buffer, &begin_info);
         }
     }
 
-    fn issue_coding_control_reset_for(&mut self, rate_control: RateControl) {
+    fn issue_coding_control_reset_for(
+        &mut self,
+        buffer: vk::CommandBuffer,
+        rate_control: RateControl,
+    ) {
         let mut quality_level = vk::VideoEncodeQualityLevelInfoKHR::default()
             .quality_level(self.session_resources.quality_level);
 
@@ -501,7 +493,7 @@ impl VulkanEncoder<'_> {
                 .vulkan_device
                 .device
                 .video_queue_ext
-                .cmd_control_video_coding_khr(*self.command_buffers.encode_buffer, &control_info);
+                .cmd_control_video_coding_khr(buffer, &control_info);
         }
 
         self.session_resources.rate_control = rate_control;
@@ -551,10 +543,10 @@ impl VulkanEncoder<'_> {
 
         let mut image = Image::new(self.encoding_device.allocator.clone(), &image_create_info)?;
 
-        self.command_buffers.transfer_buffer.begin()?;
+        let cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
 
         image.transition_layout_single_layer(
-            *self.command_buffers.transfer_buffer,
+            cmd_buffer.buffer(),
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
             vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_WRITE,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -571,7 +563,7 @@ impl VulkanEncoder<'_> {
                 .vulkan_device
                 .device
                 .cmd_copy_buffer_to_image(
-                    *self.command_buffers.transfer_buffer,
+                    cmd_buffer.buffer(),
                     *buffer,
                     *image,
                     image.layout[0],
@@ -612,14 +604,12 @@ impl VulkanEncoder<'_> {
                 );
         }
 
-        self.command_buffers.transfer_buffer.end()?;
-
         self.encoding_device
             .queues
             .transfer
             .submit_chain_semaphore(
-                &self.command_buffers.transfer_buffer,
-                &mut self.tracker,
+                cmd_buffer.end()?,
+                &mut self.tracker.semaphore_tracker,
                 vk::PipelineStageFlags2::COPY,
                 vk::PipelineStageFlags2::COPY,
                 EncoderTrackerWaitState::CopyBufferToImage,
@@ -653,10 +643,10 @@ impl VulkanEncoder<'_> {
             }
         }
 
-        self.command_buffers.encode_buffer.begin()?;
+        let cmd_buffer = self.tracker.command_buffer_pools.encode.begin_buffer()?;
 
         let old_layout = image.lock().unwrap().transition_layout_single_layer(
-            *self.command_buffers.encode_buffer,
+            cmd_buffer.buffer(),
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::VIDEO_ENCODE_KHR,
             vk::AccessFlags2::NONE..vk::AccessFlags2::VIDEO_ENCODE_READ_KHR,
             vk::ImageLayout::VIDEO_ENCODE_SRC_KHR,
@@ -687,13 +677,13 @@ impl VulkanEncoder<'_> {
             &view_create_info,
         )?;
 
-        self.query_pool.reset(*self.command_buffers.encode_buffer);
+        self.query_pool.reset(cmd_buffer.buffer());
 
-        self.begin_video_coding();
+        self.begin_video_coding(cmd_buffer.buffer());
 
         if is_idr {
             // TODO: controllable rate control, framerate and all stream parameters
-            self.issue_coding_control_reset_for(self.rate_control);
+            self.issue_coding_control_reset_for(cmd_buffer.buffer(), self.rate_control);
         }
 
         let frame_num = self.frame_num;
@@ -917,19 +907,17 @@ impl VulkanEncoder<'_> {
             encode_info = encode_info.reference_slots(&reference_slots);
         }
 
-        self.query_pool
-            .begin_query(*self.command_buffers.encode_buffer);
+        self.query_pool.begin_query(cmd_buffer.buffer());
 
         unsafe {
             self.encoding_device
                 .vulkan_device
                 .device
                 .video_encode_queue_ext
-                .cmd_encode_video_khr(*self.command_buffers.encode_buffer, &encode_info);
+                .cmd_encode_video_khr(cmd_buffer.buffer(), &encode_info);
         }
 
-        self.query_pool
-            .end_query(*self.command_buffers.encode_buffer);
+        self.query_pool.end_query(cmd_buffer.buffer());
 
         unsafe {
             self.encoding_device
@@ -937,26 +925,24 @@ impl VulkanEncoder<'_> {
                 .device
                 .video_queue_ext
                 .cmd_end_video_coding_khr(
-                    *self.command_buffers.encode_buffer,
+                    cmd_buffer.buffer(),
                     &vk::VideoEndCodingInfoKHR::default(),
                 );
         }
 
         image.lock().unwrap().transition_layout_single_layer(
-            *self.command_buffers.encode_buffer,
+            cmd_buffer.buffer(),
             vk::PipelineStageFlags2::VIDEO_ENCODE_KHR..vk::PipelineStageFlags2::NONE,
             vk::AccessFlags2::VIDEO_ENCODE_READ_KHR..vk::AccessFlags2::NONE,
             old_layout,
             0,
         )?;
 
-        self.command_buffers.encode_buffer.end()?;
-
         self.encoding_device
             .h264_encode_queue
             .submit_chain_semaphore(
-                &self.command_buffers.encode_buffer,
-                &mut self.tracker,
+                cmd_buffer.end()?,
+                &mut self.tracker.semaphore_tracker,
                 vk::PipelineStageFlags2::VIDEO_ENCODE_KHR,
                 vk::PipelineStageFlags2::ALL_COMMANDS,
                 EncoderTrackerWaitState::Encode,
