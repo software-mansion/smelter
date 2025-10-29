@@ -29,6 +29,14 @@ impl ContinuousValue for Vec<Option<Tile>> {
             return end.clone();
         };
 
+        // For each tile in `end` state it checks whether tile with the same
+        // ID exists in `start` state. If yes then the animation is calculated,
+        // if not, the tile should be visible from the start of the transition if:
+        // - There exists a tile with the same position (i.e. top, left, width and
+        //   height match) in the previous state represented by `start` AND
+        // - Replaced tile (i.e. the one that had the same position as the new tile)
+        //   does not exist in state represented by `end` (so no animation is triggered).
+        // Otherwise the new tile is visible only after the transition is finished.
         end.iter()
             .map(|tile| {
                 let tile = tile.as_ref()?;
@@ -41,13 +49,6 @@ impl ContinuousValue for Vec<Option<Tile>> {
                             .map(|old_tile| ContinuousValue::interpolate(old_tile, tile, state))
                     })
                     .or_else(|| {
-                        // This handles case when a tile is swapped "in place" with entirely new tile
-                        // that has different ID.
-                        // It only takes effect when:
-                        // - Exact position exists in the previous state represented by `start`
-                        //   so tile disappears whenever any animation is triggered, for example margin change.
-                        // - Replaced tile does not exist in state represented by `end` (so no
-                        //   animation is triggered).
                         start
                             .iter()
                             .flatten()
