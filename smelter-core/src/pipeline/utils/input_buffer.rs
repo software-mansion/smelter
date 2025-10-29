@@ -123,7 +123,7 @@ impl LatencyOptimizedBuffer {
             self.dynamic_buffer = new_buffer
         }
 
-        pts + self.dynamic_buffer
+        pts + self.dynamic_buffer + Duration::from_millis(1000)
     }
 }
 

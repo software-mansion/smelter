@@ -74,8 +74,7 @@ async fn process_audio_track(
         track: ctx.track,
         timestamp_sync: RtpTimestampSync::new(&ctx.sync_point, 48_000, ctx.buffer),
         rtcp_listeners: RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
-        jitter_buffer: Default::default(),
-        last_returned_seq: Default::default(),
+        state: Default::default(),
     };
 
     while let Some(packet) = rtp_reader.read_packet().await {
@@ -130,8 +129,7 @@ async fn process_video_track(
         track: ctx.track,
         timestamp_sync: RtpTimestampSync::new(&ctx.sync_point, 90_000, ctx.buffer),
         rtcp_listeners: RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
-        jitter_buffer: Default::default(),
-        last_returned_seq: Default::default(),
+        state: Default::default(),
     };
 
     while let Some(packet) = rtp_reader.read_packet().await {

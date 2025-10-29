@@ -1,1 +1,49 @@
-{"inputs":[{"type":"WhipInput","name":"input_whip_0","bearer_token":"example","video":{"decoder_preferences":["FfmpegH264"]}},{"type":"Mp4Input","name":"mp4_input_389794538","source":{"Path":"/home/wojtek/smelter/smelter/integration-tests/examples/assets/BigBuckBunny720p24fps597s.mp4"},"decoder":"FfmpegH264","loop":true}],"outputs":[{"type":"RtmpOutput","video":{"root_id":"root","resolution":{"width":1920,"height":1080},"encoder":"FfmpegH264","scene":"Tiles"},"audio":{"encoder":"Aac"},"player":"Ffmpeg"},{"type":"WhepOutput","name":"output_whep_0","bearer_token":"example","video":{"resolution":{"width":1920,"height":1080},"encoder":"FfmpegH264","root_id":"root","scene":"Tiles"},"audio":{"encoder":"Opus"}}]}
+{
+  "inputs": [
+    {
+      "type": "WhipInput",
+      "name": "input_whip_0",
+      "bearer_token": "example",
+      "video": {
+        "decoder_preferences": [
+          "FfmpegH264"
+        ]
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "type": "RtmpOutput",
+      "video": {
+        "root_id": "root",
+        "resolution": {
+          "width": 1920,
+          "height": 1080
+        },
+        "encoder": "FfmpegH264",
+        "scene": "Tiles"
+      },
+      "audio": {
+        "encoder": "Aac"
+      },
+      "player": "Ffmpeg"
+    },
+    {
+      "type": "WhepOutput",
+      "name": "output_whep_0",
+      "bearer_token": "example",
+      "video": {
+        "resolution": {
+          "width": 1920,
+          "height": 1080
+        },
+        "encoder": "FfmpegH264",
+        "root_id": "root",
+        "scene": "Tiles"
+      },
+      "audio": {
+        "encoder": "Opus"
+      }
+    }
+  ]
+}
