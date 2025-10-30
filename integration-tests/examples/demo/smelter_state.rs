@@ -337,7 +337,7 @@ impl SmelterState {
 
     pub fn json_dump(&self) -> Result<()> {
         let json = serde_json::to_value(self)?;
-        Ok(fs::write(JSON_BASE, json.to_string())?)
+        Ok(fs::write(JSON_BASE, serde_json::to_string_pretty(&json)?)?)
     }
 }
 
