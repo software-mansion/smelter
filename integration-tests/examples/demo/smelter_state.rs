@@ -93,7 +93,7 @@ impl SmelterState {
         Ok(state)
     }
 
-    pub fn try_read_from_env(env: &str) -> Option<Self> {
+    pub fn try_read_dump_from_env(env: &str) -> Option<Self> {
         match env::var(env) {
             Ok(json_path) => {
                 let json_val = parse_json(json_path.into());

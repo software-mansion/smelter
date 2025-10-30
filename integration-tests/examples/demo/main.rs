@@ -57,7 +57,7 @@ fn run_demo() {
     }
 
     let mut options = Action::iter().collect::<Vec<_>>();
-    let mut state = match SmelterState::try_read_from_env(JSON_ENV) {
+    let mut state = match SmelterState::try_read_dump_from_env(JSON_ENV) {
         Some(state) => {
             // Reading state from json starts the demo automatically,
             // so this action needs to be removed on succesful read.
@@ -91,8 +91,8 @@ fn run_demo() {
             Action::ReorderInputs => state.reorder_inputs(),
             Action::Reset => match examples::post("reset", &json!({})) {
                 Ok(_) => {
-                    state = if reread_json_dump(JSON_ENV)
-                        && let Some(new_state) = SmelterState::try_read_from_env(JSON_ENV)
+                    state = if should_reread_json_dump(JSON_ENV)
+                        && let Some(new_state) = SmelterState::try_read_dump_from_env(JSON_ENV)
                     {
                         options.retain(|opt| *opt != Action::Start);
                         new_state
@@ -125,7 +125,7 @@ fn run_demo() {
     }
 }
 
-fn reread_json_dump(env: &str) -> bool {
+fn should_reread_json_dump(env: &str) -> bool {
     match env::var(env) {
         Ok(_) => {
             let confirmation = Confirm::new("DEMO_JSON is set. Read the dump? [Y/n]:")
