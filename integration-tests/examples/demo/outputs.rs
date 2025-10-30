@@ -19,8 +19,8 @@ pub mod scene;
 #[typetag::serde(tag = "type")]
 pub trait OutputHandle: Debug {
     fn name(&self) -> &str;
-    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value;
-    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value;
+    fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value;
+    fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value;
 
     fn on_before_registration(&mut self) -> Result<()> {
         Ok(())

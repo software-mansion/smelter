@@ -44,7 +44,7 @@ impl OutputHandle for WhepOutput {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "whep_server",
             "bearer_token": self.bearer_token,
@@ -69,7 +69,7 @@ impl OutputHandle for WhepOutput {
         Ok(())
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
@@ -235,7 +235,7 @@ pub struct WhepOutputVideoOptions {
 }
 
 impl WhepOutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
@@ -248,7 +248,7 @@ impl WhepOutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
@@ -278,7 +278,7 @@ pub struct WhepOutputAudioOptions {
 }
 
 impl WhepOutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {
@@ -303,7 +303,7 @@ impl WhepOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {

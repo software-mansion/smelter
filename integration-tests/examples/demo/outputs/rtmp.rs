@@ -89,7 +89,7 @@ impl OutputHandle for RtmpOutput {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "rtmp_client",
             "url": self.url,
@@ -98,7 +98,7 @@ impl OutputHandle for RtmpOutput {
         })
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
@@ -270,7 +270,7 @@ pub struct RtmpOutputVideoOptions {
 }
 
 impl RtmpOutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
 
         json!({
@@ -284,7 +284,7 @@ impl RtmpOutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
 
         json!({
@@ -315,7 +315,7 @@ pub struct RtmpOutputAudioOptions {
 }
 
 impl RtmpOutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let input_json = inputs
             .iter()
             .filter_map(|input| {
@@ -339,7 +339,7 @@ impl RtmpOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let input_json = inputs
             .iter()
             .filter_map(|input| {

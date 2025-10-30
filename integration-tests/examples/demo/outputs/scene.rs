@@ -14,7 +14,7 @@ pub enum Scene {
 }
 
 impl Scene {
-    fn tiles(&self, root_id: &str, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    fn tiles(&self, root_id: &str, inputs: &[&InputHandle]) -> serde_json::Value {
         let input_json = inputs
             .iter()
             .map(|input| {
@@ -39,7 +39,7 @@ impl Scene {
     fn primary_left(
         &self,
         root_id: &str,
-        inputs: &[&dyn InputHandle],
+        inputs: &[&InputHandle],
         resolution: VideoResolution,
     ) -> serde_json::Value {
         let primary_input = inputs
@@ -98,7 +98,7 @@ impl Scene {
     pub fn serialize(
         &self,
         id: &str,
-        inputs: &[&dyn InputHandle],
+        inputs: &[&InputHandle],
         resolution: VideoResolution,
     ) -> serde_json::Value {
         match self {

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::error;
 
-use crate::inputs::{InputHandle, VideoDecoder};
+use crate::inputs::VideoDecoder;
 
 const HLS_INPUT_URL: &str = "HLS_INPUT_URL";
 
@@ -18,13 +18,12 @@ pub struct HlsInput {
     decoder: VideoDecoder,
 }
 
-#[typetag::serde]
-impl InputHandle for HlsInput {
-    fn name(&self) -> &str {
+impl HlsInput {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self) -> serde_json::Value {
+    pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "hls",
             "url": self.url,
