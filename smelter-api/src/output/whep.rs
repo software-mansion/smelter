@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -12,9 +12,56 @@ pub struct WhepOutput {
     /// If not provided, the bearer token is not required to establish the session.
     pub bearer_token: Option<Arc<str>>,
     /// Video track configuration.
-    pub video: Option<OutputVideoOptions>,
+    pub video: Option<OutputWhepVideoOptions>,
     /// Audio track configuration.
     pub audio: Option<OutputWhepAudioOptions>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OutputWhepVideoOptions {
+    /// Output resolution in pixels.
+    pub resolution: Resolution,
+    /// Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+    pub send_eos_when: Option<OutputEndCondition>,
+    /// Video encoder options.
+    pub encoder: WhepVideoEncoderOptions,
+    /// Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+    pub initial: VideoScene,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WhepVideoEncoderOptions {
+    #[serde(rename = "ffmpeg_h264")]
+    FfmpegH264 {
+        /// (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+        preset: Option<H264EncoderPreset>,
+
+        /// (**default=`"yuv420p"`**) Encoder pixel format.
+        pixel_format: Option<PixelFormat>,
+
+        /// Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
+    },
+    #[serde(rename = "ffmpeg_vp8")]
+    FfmpegVp8 {
+        /// Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
+    },
+    #[serde(rename = "ffmpeg_vp9")]
+    FfmpegVp9 {
+        /// (**default=`"yuv420p"`**) Encoder pixel format.
+        pixel_format: Option<PixelFormat>,
+        /// Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+        ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
+    },
+    #[serde(rename = "vulkan_h264")]
+    VulkanH264 {
+        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+        /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+        bitrate: Option<VulkanH264EncoderBitrate>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
