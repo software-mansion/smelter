@@ -27,7 +27,7 @@ use tracing::error;
 use crate::{
     IP,
     autocompletion::FilePathCompleter,
-    inputs::{AudioDecoder, InputHandle, VideoDecoder},
+    inputs::{AudioDecoder, VideoDecoder},
     players::InputPlayer,
     smelter_state::TransportProtocol,
     utils::resolve_path,
@@ -94,6 +94,35 @@ impl From<RtpInputDeserialize> for RtpInput {
 }
 
 impl RtpInput {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn serialize_register(&self) -> serde_json::Value {
+        json!({
+            "type": "rtp_stream",
+            "port": self.port,
+            "transport_protocol": self.transport_protocol.to_string(),
+            "video": self.video.as_ref().map(|v| v.serialize()),
+            "audio": self.audio.as_ref().map(|a| a.serialize()),
+        })
+    }
+
+    pub fn has_video(&self) -> bool {
+        self.video.is_some()
+    }
+
+    pub fn has_audio(&self) -> bool {
+        self.audio.is_some()
+    }
+
+    pub fn on_after_registration(&mut self) -> Result<()> {
+        match self.transport_protocol {
+            TransportProtocol::TcpServer => self.on_after_registration_tcp(),
+            TransportProtocol::Udp => self.on_after_registration_udp(),
+        }
+    }
+
     fn test_sample(&self) -> TestSample {
         match &self.video {
             Some(RtpInputVideoOptions {
@@ -302,38 +331,6 @@ impl RtpInput {
                 Ok(())
             }
             _ => unreachable!(),
-        }
-    }
-}
-
-#[typetag::serde]
-impl InputHandle for RtpInput {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn serialize_register(&self) -> serde_json::Value {
-        json!({
-            "type": "rtp_stream",
-            "port": self.port,
-            "transport_protocol": self.transport_protocol.to_string(),
-            "video": self.video.as_ref().map(|v| v.serialize()),
-            "audio": self.audio.as_ref().map(|a| a.serialize()),
-        })
-    }
-
-    fn has_video(&self) -> bool {
-        self.video.is_some()
-    }
-
-    fn has_audio(&self) -> bool {
-        self.audio.is_some()
-    }
-
-    fn on_after_registration(&mut self) -> Result<()> {
-        match self.transport_protocol {
-            TransportProtocol::TcpServer => self.on_after_registration_tcp(),
-            TransportProtocol::Udp => self.on_after_registration_udp(),
         }
     }
 }

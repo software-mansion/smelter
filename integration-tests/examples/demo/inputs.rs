@@ -4,35 +4,69 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
+use crate::inputs::{
+    hls::HlsInput, mp4::Mp4Input, rtp::RtpInput, whep::WhepInput, whip::WhipInput,
+};
+
 pub mod hls;
 pub mod mp4;
 pub mod rtp;
 pub mod whep;
 pub mod whip;
 
-#[typetag::serde(tag = "type")]
-pub trait InputHandle: Debug {
-    fn name(&self) -> &str;
-    fn serialize_register(&self) -> serde_json::Value;
+#[derive(Debug, Serialize, Deserialize)]
+pub enum InputHandle {
+    Rtp(RtpInput),
+    Mp4(Mp4Input),
+    Hls(HlsInput),
+    Whip(WhipInput),
+    Whep(WhepInput),
+}
 
-    fn has_video(&self) -> bool {
-        true
+impl InputHandle {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Rtp(i) | Self::Mp4(i) | Self::Hls(i) | Self::Whip(i) | Self::Whep(i) => i.name(),
+        }
     }
 
-    fn has_audio(&self) -> bool {
-        true
+    pub fn serialize_register(&self) -> serde_json::Value {
+        match self {
+            Self::Rtp(i) | Self::Mp4(i) | Self::Hls(i) | Self::Whip(i) | Self::Whep(i) => {
+                i.serialize_register()
+            }
+        }
     }
 
-    fn on_before_registration(&mut self) -> Result<()> {
-        Ok(())
+    pub fn has_video(&self) -> bool {
+        match self {
+            Self::Rtp(i) => i.has_video(),
+            _ => true,
+        }
     }
 
-    fn on_after_registration(&mut self) -> Result<()> {
-        Ok(())
+    pub fn has_audio(&self) -> bool {
+        match self {
+            Self::Rtp(i) => i.has_audio(),
+            _ => true,
+        }
+    }
+
+    pub fn on_before_registration(&mut self) -> Result<()> {
+        match self {
+            _ => Ok(()),
+        }
+    }
+
+    pub fn on_after_registration(&mut self) -> Result<()> {
+        match self {
+            Self::Rtp(i) => i.on_after_registration(),
+            _ => Ok(()),
+        }
     }
 }
 
-impl std::fmt::Display for dyn InputHandle {
+impl std::fmt::Display for InputHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
