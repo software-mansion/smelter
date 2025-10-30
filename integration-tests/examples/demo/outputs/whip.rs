@@ -108,7 +108,7 @@ impl WhipOutputBuilder {
             builder = builder.prompt_video()?.prompt_audio()?;
 
             if builder.video.is_none() && builder.audio.is_none() {
-                error!("At least one video or one audio stream has to be specified!");
+                error!("Either audio or video has to be specified.");
             } else {
                 return Ok(builder);
             }
