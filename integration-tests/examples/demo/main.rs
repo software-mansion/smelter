@@ -1,6 +1,10 @@
-use std::{env, thread, time::Duration};
+use std::{
+    env::{self, VarError},
+    thread,
+    time::Duration,
+};
 
-use inquire::{InquireError, Select};
+use inquire::{Confirm, InquireError, Select};
 use integration_tests::examples;
 use serde_json::json;
 use smelter::{config::read_config, logger::init_logger};
@@ -14,7 +18,7 @@ mod players;
 mod smelter_state;
 mod utils;
 
-use crate::{smelter_state::SmelterState, utils::parse_json};
+use crate::smelter_state::SmelterState;
 
 const IP: &str = "127.0.0.1";
 const JSON_ENV: &str = "DEMO_JSON";
@@ -47,49 +51,33 @@ pub enum Action {
 }
 
 fn run_demo() {
-    while let Err(e) = examples::post("reset", &json!({})) {
-        error!("Initial reset failed: {e}");
+    while let Err(error) = examples::post("reset", &json!({})) {
+        error!(%error, "Initial reset failed.");
         thread::sleep(Duration::from_secs(3));
     }
 
     let mut options = Action::iter().collect::<Vec<_>>();
-    let mut state = match env::var(JSON_ENV) {
-        Ok(json_path) => {
-            let json_val = parse_json(json_path.into());
-            match json_val {
-                Ok(json) => {
-                    debug!("{json:#?}");
-                    match SmelterState::from_json(json) {
-                        Ok(state) => {
-                            options.retain(|a| *a != Action::Start);
-                            state
-                        }
-                        Err(e) => {
-                            error!("Failed to create state from provided JSON dump: {e}");
-                            SmelterState::new()
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to parse JSON: {e}");
-                    SmelterState::new()
-                }
-            }
+    let mut state = match SmelterState::try_read_dump_from_env(JSON_ENV) {
+        Some(state) => {
+            // Reading state from json starts the demo automatically,
+            // so this action needs to be removed on succesful read.
+            options.retain(|opt| *opt != Action::Start);
+            state
         }
-        Err(_) => SmelterState::new(),
+        None => SmelterState::new(),
     };
 
     loop {
         let action = Select::new("Select option:", options.clone()).prompt();
         let action = match action {
             Ok(a) => a,
-            Err(e) => match e {
+            Err(error) => match error {
                 InquireError::OperationInterrupted | InquireError::OperationCanceled => {
                     info!("Exit.");
                     break;
                 }
                 _ => {
-                    error!("{e}");
+                    error!(%error);
                     continue;
                 }
             },
@@ -103,10 +91,17 @@ fn run_demo() {
             Action::ReorderInputs => state.reorder_inputs(),
             Action::Reset => match examples::post("reset", &json!({})) {
                 Ok(_) => {
-                    if !options.contains(&Action::Start) {
-                        options.insert(0, Action::Start);
-                    }
-                    state = SmelterState::new();
+                    state = if should_reread_json_dump(JSON_ENV)
+                        && let Some(new_state) = SmelterState::try_read_dump_from_env(JSON_ENV)
+                    {
+                        options.retain(|opt| *opt != Action::Start);
+                        new_state
+                    } else {
+                        if !options.contains(&Action::Start) {
+                            options.insert(0, Action::Start);
+                        }
+                        SmelterState::new()
+                    };
                     Ok(())
                 }
                 Err(e) => Err(e.context("Reset request failed")),
@@ -127,6 +122,28 @@ fn run_demo() {
         if let Err(e) = action_result {
             error!("{e}");
         }
+    }
+}
+
+fn should_reread_json_dump(env: &str) -> bool {
+    match env::var(env) {
+        Ok(_) => {
+            let confirmation = Confirm::new("DEMO_JSON is set. Read the dump? [Y/n]:")
+                .with_default(true)
+                .prompt_skippable()
+                .unwrap_or(None);
+            match confirmation {
+                Some(true) => true,
+                Some(_) | None => false,
+            }
+        }
+        Err(error) => match error {
+            VarError::NotPresent => false,
+            VarError::NotUnicode(_) => {
+                error!(%error, "Error reading env.");
+                false
+            }
+        },
     }
 }
 
