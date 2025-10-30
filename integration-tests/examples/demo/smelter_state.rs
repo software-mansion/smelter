@@ -1,3 +1,4 @@
+use std::env::VarError;
 use std::ops::Deref;
 use std::{env, fs, mem};
 
@@ -15,12 +16,11 @@ use crate::inputs::mp4::Mp4InputBuilder;
 use crate::inputs::whep::WhepInputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
 
-use crate::JSON_ENV;
 use crate::outputs::hls::HlsOutputBuilder;
 use crate::outputs::mp4::Mp4OutputBuilder;
 use crate::outputs::whep::WhepOutputBuilder;
 use crate::outputs::whip::WhipOutputBuilder;
-use crate::utils::{parse_json, rename_old_dump};
+use crate::utils::parse_json;
 use crate::{
     inputs::{InputProtocol, rtp::RtpInputBuilder},
     outputs::{OutputHandle, OutputProtocol, rtmp::RtmpOutputBuilder, rtp::RtpOutputBuilder},
@@ -93,8 +93,8 @@ impl SmelterState {
         Ok(state)
     }
 
-    pub fn try_read_from_json() -> Option<Self> {
-        match env::var(JSON_ENV) {
+    pub fn try_read_from_env(env: &str) -> Option<Self> {
+        match env::var(env) {
             Ok(json_path) => {
                 let json_val = parse_json(json_path.into());
                 match json_val {
@@ -114,7 +114,13 @@ impl SmelterState {
                     }
                 }
             }
-            Err(_) => None,
+            Err(error) => match error {
+                VarError::NotPresent => None,
+                VarError::NotUnicode(_) => {
+                    error!(%error, "Error reading env.");
+                    None
+                }
+            },
         }
     }
 
@@ -336,7 +342,6 @@ impl SmelterState {
 
     pub fn json_dump(&self) -> Result<()> {
         let json = serde_json::to_value(self)?;
-        rename_old_dump().with_context(|| "Failed to check existing JSON dumps")?;
         Ok(fs::write(JSON_BASE, json.to_string())?)
     }
 }
