@@ -261,6 +261,21 @@ impl Converter {
         unsafe { command_encoder.begin_encoding(None)? };
         let command_buffer = unsafe { command_encoder.raw_handle() };
 
+        self.image.lock().unwrap().transition_layout(
+            command_buffer,
+            vk::PipelineStageFlags2::VIDEO_ENCODE_KHR
+                ..vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+            vk::AccessFlags2::VIDEO_ENCODE_READ_KHR..vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_array_layer: 0,
+                layer_count: 1,
+                base_mip_level: 0,
+                level_count: 1,
+            },
+        )?;
+
         self.pipeline_y.convert(command_buffer, &view);
         self.pipeline_uv.convert(command_buffer, &view);
 

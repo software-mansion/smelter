@@ -645,7 +645,7 @@ impl VulkanEncoder<'_> {
 
         let cmd_buffer = self.tracker.command_buffer_pools.encode.begin_buffer()?;
 
-        let old_layout = image.lock().unwrap().transition_layout_single_layer(
+        image.lock().unwrap().transition_layout_single_layer(
             cmd_buffer.buffer(),
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::VIDEO_ENCODE_KHR,
             vk::AccessFlags2::NONE..vk::AccessFlags2::VIDEO_ENCODE_READ_KHR,
@@ -929,14 +929,6 @@ impl VulkanEncoder<'_> {
                     &vk::VideoEndCodingInfoKHR::default(),
                 );
         }
-
-        image.lock().unwrap().transition_layout_single_layer(
-            cmd_buffer.buffer(),
-            vk::PipelineStageFlags2::VIDEO_ENCODE_KHR..vk::PipelineStageFlags2::NONE,
-            vk::AccessFlags2::VIDEO_ENCODE_READ_KHR..vk::AccessFlags2::NONE,
-            old_layout,
-            0,
-        )?;
 
         self.encoding_device
             .h264_encode_queue

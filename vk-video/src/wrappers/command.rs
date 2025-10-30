@@ -115,6 +115,11 @@ struct UnfinishedCommandBuffer {
     pool: Arc<Mutex<CommandBufferPoolInner>>,
 }
 
+// plan:
+// 1. remove the dependency on the image-returned layout
+// 2. remove the dependency on the image being in any specific state
+// 3. implement keeping layout changes in the buffer and applying them on submission
+
 impl UnfinishedCommandBuffer {
     fn destroy_without_reset(self) {
         std::mem::forget(self);

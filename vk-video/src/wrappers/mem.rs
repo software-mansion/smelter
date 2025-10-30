@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use ash::vk;
+use ash::vk::{self, Handle};
 use vk_mem::Alloc;
 
 use crate::{
@@ -327,38 +327,104 @@ impl Image {
         accesses: std::ops::Range<vk::AccessFlags2>,
         new_layout: vk::ImageLayout,
         subresource_range: vk::ImageSubresourceRange,
-    ) -> Result<vk::ImageLayout, VulkanCommonError> {
+    ) -> Result<(), VulkanCommonError> {
         let barrier = vk::ImageMemoryBarrier2::default()
             .src_stage_mask(stages.start)
             .dst_stage_mask(stages.end)
             .src_access_mask(accesses.start)
             .dst_access_mask(accesses.end)
-            .old_layout(self.layout[subresource_range.base_array_layer as usize])
+            .old_layout(self.layout[subresource_range.base_array_layer as usize]) // wrong!
             .new_layout(new_layout)
             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .image(self.image)
             .subresource_range(subresource_range);
 
-        unsafe {
-            self.device.cmd_pipeline_barrier2(
-                command_buffer,
-                &vk::DependencyInfo::default().image_memory_barriers(&[barrier]),
-            );
-        }
-
-        let old_layout = self.layout[subresource_range.base_array_layer as usize];
         let end = if subresource_range.layer_count == vk::REMAINING_ARRAY_LAYERS {
             self.layout.len()
         } else {
             subresource_range.base_array_layer as usize + subresource_range.layer_count as usize
         };
 
+        let mut current_old_layout = None;
+        let mut current_start = None;
+
+        for (i, layout) in self.layout[subresource_range.base_array_layer as usize..end]
+            .iter()
+            .enumerate()
+        {
+            let i = i + subresource_range.base_array_layer as usize;
+
+            if current_old_layout.is_none() {
+                if *layout == new_layout {
+                    continue;
+                }
+
+                current_old_layout = Some(*layout);
+                current_start = Some(i);
+                continue;
+            }
+
+            if let Some(old) = current_old_layout {
+                if old == *layout {
+                    continue;
+                }
+
+                if old != *layout {
+                    let start = current_start.unwrap();
+
+                    let barrier = barrier.clone().old_layout(old).subresource_range(
+                        vk::ImageSubresourceRange {
+                            base_array_layer: start as u32,
+                            layer_count: (i - start) as u32,
+                            ..subresource_range
+                        },
+                    );
+
+                    unsafe {
+                        self.device.cmd_pipeline_barrier2(
+                            command_buffer,
+                            &vk::DependencyInfo::default().image_memory_barriers(&[barrier]),
+                        );
+                    }
+
+                    if *layout != new_layout {
+                        current_old_layout = Some(*layout);
+                        current_start = Some(i);
+                    } else {
+                        current_old_layout = None;
+                        current_start = None;
+                    }
+                }
+            }
+        }
+
+        if let Some(old) = current_old_layout {
+            let start = current_start.unwrap();
+
+            let barrier =
+                barrier
+                    .clone()
+                    .old_layout(old)
+                    .subresource_range(vk::ImageSubresourceRange {
+                        base_array_layer: start as u32,
+                        layer_count: (end - start) as u32,
+                        ..subresource_range
+                    });
+
+            unsafe {
+                self.device.cmd_pipeline_barrier2(
+                    command_buffer,
+                    &vk::DependencyInfo::default().image_memory_barriers(&[barrier]),
+                );
+            }
+        }
+
         for layout in self.layout[subresource_range.base_array_layer as usize..end].iter_mut() {
             *layout = new_layout;
         }
 
-        Ok(old_layout)
+        Ok(())
     }
 
     pub(crate) fn transition_layout_single_layer(
@@ -368,7 +434,7 @@ impl Image {
         accesses: std::ops::Range<vk::AccessFlags2>,
         new_layout: vk::ImageLayout,
         base_array_layer: u32,
-    ) -> Result<vk::ImageLayout, VulkanCommonError> {
+    ) -> Result<(), VulkanCommonError> {
         self.transition_layout(
             command_buffer,
             stages,

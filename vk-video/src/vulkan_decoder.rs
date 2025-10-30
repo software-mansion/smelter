@@ -316,6 +316,47 @@ impl VulkanDecoder<'_> {
         // begin video coding
         let cmd_buffer = self.tracker.command_buffer_pools.decode.begin_buffer()?;
 
+        video_session_resources
+            .decoding_images
+            .dpb
+            .image
+            .image_with_view
+            .transition_layout(
+                cmd_buffer.buffer(),
+                vk::PipelineStageFlags2::VIDEO_DECODE_KHR
+                    ..vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
+                vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
+                    ..vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
+                        | vk::AccessFlags2::VIDEO_DECODE_READ_KHR,
+                vk::ImageLayout::VIDEO_DECODE_DPB_KHR,
+                vk::ImageSubresourceRange {
+                    base_array_layer: 0,
+                    layer_count: vk::REMAINING_ARRAY_LAYERS,
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                },
+            )?;
+
+        if let Some(dst) = &video_session_resources.decoding_images.dst_image {
+            dst.image_with_view.transition_layout(
+                cmd_buffer.buffer(),
+                vk::PipelineStageFlags2::VIDEO_DECODE_KHR
+                    ..vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
+                vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
+                    ..vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
+                        | vk::AccessFlags2::VIDEO_DECODE_READ_KHR,
+                vk::ImageLayout::VIDEO_DECODE_DST_KHR,
+                vk::ImageSubresourceRange {
+                    base_array_layer: 0,
+                    layer_count: vk::REMAINING_ARRAY_LAYERS,
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                },
+            )?;
+        }
+
         let memory_barrier = vk::MemoryBarrier2::default()
             .src_stage_mask(vk::PipelineStageFlags2::VIDEO_DECODE_KHR)
             .src_access_mask(vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR)
@@ -451,7 +492,8 @@ impl VulkanDecoder<'_> {
             .target_picture_resource_info(new_reference_slot_index)
             .unwrap();
 
-        // these 3 veriables are for copying the result later
+        // these 3 variables are for copying the result later
+        // TODO HERE
         let (target_image, target_layer) = video_session_resources
             .decoding_images
             .target_info(new_reference_slot_index);
@@ -562,7 +604,7 @@ impl VulkanDecoder<'_> {
 
         let cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
 
-        let old_layout = decode_output
+        decode_output
             .image
             .lock()
             .unwrap()
@@ -631,18 +673,6 @@ impl VulkanDecoder<'_> {
                 &copy_info,
             );
         }
-
-        decode_output
-            .image
-            .lock()
-            .unwrap()
-            .transition_layout_single_layer(
-                cmd_buffer.buffer(),
-                vk::PipelineStageFlags2::COPY..vk::PipelineStageFlags2::NONE,
-                vk::AccessFlags2::TRANSFER_READ..vk::AccessFlags2::NONE,
-                old_layout,
-                decode_output.layer,
-            )?;
 
         image.transition_layout_single_layer(
             cmd_buffer.buffer(),
@@ -826,7 +856,7 @@ impl VulkanDecoder<'_> {
     ) -> Result<Buffer, VulkanDecoderError> {
         let cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
 
-        let old_layout = image.transition_layout_single_layer(
+        image.transition_layout_single_layer(
             cmd_buffer.buffer(),
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
             vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_READ,
@@ -889,14 +919,6 @@ impl VulkanDecoder<'_> {
                     &copy_info,
                 )
         };
-
-        image.transition_layout_single_layer(
-            cmd_buffer.buffer(),
-            vk::PipelineStageFlags2::COPY..vk::PipelineStageFlags2::NONE,
-            vk::AccessFlags2::TRANSFER_READ..vk::AccessFlags2::NONE,
-            old_layout,
-            layer,
-        )?;
 
         // TODO: test if just putting COPY here works as well
         self.decoding_device
