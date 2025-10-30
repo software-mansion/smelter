@@ -103,10 +103,16 @@ impl WhipOutputBuilder {
     }
 
     pub fn prompt(self) -> Result<Self> {
-        self.prompt_url()?
-            .prompt_token()?
-            .prompt_video()?
-            .prompt_audio()
+        let mut builder = self.prompt_url()?.prompt_token()?;
+        loop {
+            builder = builder.prompt_video()?.prompt_audio()?;
+
+            if builder.video.is_none() && builder.audio.is_none() {
+                error!("At least one video or one audio stream has to be specified!");
+            } else {
+                return Ok(builder);
+            }
+        }
     }
 
     fn prompt_url(self) -> Result<Self> {
@@ -186,32 +192,43 @@ impl WhipOutputBuilder {
     }
 
     fn prompt_audio(self) -> Result<Self> {
-        let mut audio = WhipOutputAudioOptions::default();
+        let audio_options = vec![
+            WhipRegisterOptions::SetAudioStream,
+            WhipRegisterOptions::Skip,
+        ];
+        let audio_selection = Select::new("Set audio stream?", audio_options).prompt_skippable()?;
 
-        let mut encoder_options = vec![AudioEncoder::Any, AudioEncoder::Opus];
-        let mut encoder_preferences = vec![];
-        loop {
-            let encoder_selection = Select::new(
-                "Select encoder (ESC or Any to progress):",
-                encoder_options.clone(),
-            )
-            .prompt_skippable()?;
+        match audio_selection {
+            Some(WhipRegisterOptions::SetAudioStream) => {
+                let mut audio = WhipOutputAudioOptions::default();
+                let mut encoder_options = vec![AudioEncoder::Any, AudioEncoder::Opus];
+                let mut encoder_preferences = vec![];
+                loop {
+                    let encoder_selection = Select::new(
+                        "Select encoder (ESC or Any to progress):",
+                        encoder_options.clone(),
+                    )
+                    .prompt_skippable()?;
 
-            match encoder_selection {
-                Some(encoder) => {
-                    encoder_preferences.push(encoder);
-                    if encoder == AudioEncoder::Any {
-                        break;
-                    } else {
-                        encoder_options.retain(|enc| *enc != encoder);
+                    match encoder_selection {
+                        Some(encoder) => {
+                            encoder_preferences.push(encoder);
+                            if encoder == AudioEncoder::Any {
+                                break;
+                            } else {
+                                encoder_options.retain(|enc| *enc != encoder);
+                            }
+                        }
+                        None => break,
                     }
                 }
-                None => break,
-            }
-        }
-        audio.encoder_preferences = encoder_preferences;
+                audio.encoder_preferences = encoder_preferences;
 
-        Ok(self.with_audio(audio))
+                Ok(self.with_audio(audio))
+            }
+            Some(WhipRegisterOptions::Skip) | None => Ok(self),
+            _ => unreachable!(),
+        }
     }
 
     pub fn with_video(mut self, video: WhipOutputVideoOptions) -> Self {

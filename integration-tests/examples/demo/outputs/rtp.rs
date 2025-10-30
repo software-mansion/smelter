@@ -361,8 +361,7 @@ impl RtpOutputBuilder {
 
     fn prompt_audio(self) -> Result<Self> {
         let audio_options = vec![RtpRegisterOptions::SetAudioStream, RtpRegisterOptions::Skip];
-        let audio_selection =
-            Select::new("Set audio stream?", audio_options.clone()).prompt_skippable()?;
+        let audio_selection = Select::new("Set audio stream?", audio_options).prompt_skippable()?;
 
         match audio_selection {
             Some(RtpRegisterOptions::SetAudioStream) => {
