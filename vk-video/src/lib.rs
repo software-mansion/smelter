@@ -98,6 +98,7 @@ pub use vulkan_decoder::VulkanDecoderError;
 pub use vulkan_encoder::{RateControl, VulkanEncoderError};
 
 use crate::vulkan_encoder::VulkanEncoder;
+use crate::wrappers::ImageKey;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DecoderError {
@@ -157,6 +158,15 @@ pub enum VulkanCommonError {
 
     #[error("Tried to create a semaphore submit that waits for an unsignaled value")]
     SemaphoreSubmitWaitOnUnsignaledValue,
+
+    #[error("Tried to register {0:x?} as a new image, while it already exists")]
+    RegisteredNewImageTwice(ImageKey),
+
+    #[error("Tried to access state of image {0:x?}, which does not exist")]
+    TriedToAccessNonexistentImageState(ImageKey),
+
+    #[error("Tried to unregister image {0:x?} that was not registered")]
+    UnregisteredNonexistentImage(ImageKey),
 }
 
 /// A profile in H264 is a set of codec features used while encoding a specific video.

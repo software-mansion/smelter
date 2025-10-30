@@ -13,8 +13,8 @@ use crate::{
     device::{EncodingDevice, Rational},
     wrappers::{
         Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
-        ImageView, ProfileInfo, QueryPool, Tracker, TrackerKind, VideoEncodeQueueExt,
-        VideoQueueExt, VideoSession, VideoSessionParameters,
+        ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool, Tracker,
+        TrackerKind, VideoEncodeQueueExt, VideoQueueExt, VideoSession, VideoSessionParameters,
     },
 };
 
@@ -77,7 +77,8 @@ struct VideoSessionResources<'a> {
 impl VideoSessionResources<'_> {
     fn new(
         encoding_device: &EncodingDevice,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: &mut OpenCommandBuffer,
+        image_tracker: Arc<Mutex<ImageLayoutTracker>>,
         parameters: FullEncoderParameters,
         profile_info: &vk::VideoProfileInfoKHR,
     ) -> Result<Self, VulkanEncoderError> {
@@ -116,6 +117,7 @@ impl VideoSessionResources<'_> {
         let dpb = DecodedPicturesBuffer::new(
             encoding_device,
             command_buffer,
+            image_tracker,
             use_separate_images,
             profile_info,
             vk::ImageUsageFlags::VIDEO_ENCODE_DPB_KHR,
@@ -333,6 +335,7 @@ impl VulkanEncoder<'_> {
             parameters.width.get(),
             parameters.height.get(),
             &enc.profile_info,
+            enc.tracker.image_layout_tracker.clone(),
         )
         .unwrap();
 
@@ -364,18 +367,19 @@ impl VulkanEncoder<'_> {
             &profile_info,
         )?;
 
-        let buffer = tracker.command_buffer_pools.encode.begin_buffer()?;
+        let mut buffer = tracker.command_buffer_pools.encode.begin_buffer()?;
 
         let session_resources = VideoSessionResources::new(
             &encoding_device,
-            buffer.buffer(),
+            &mut buffer,
+            tracker.image_layout_tracker.clone(),
             parameters,
             &profile_info.profile_info,
         )?;
 
         encoding_device.h264_encode_queue.submit_chain_semaphore(
             buffer.end()?,
-            &mut tracker.semaphore_tracker,
+            &mut tracker,
             vk::PipelineStageFlags2::ALL_COMMANDS,
             vk::PipelineStageFlags2::ALL_COMMANDS,
             EncoderTrackerWaitState::InitializeEncoder,
@@ -541,12 +545,16 @@ impl VulkanEncoder<'_> {
             .queue_family_indices(&queue_family_indices)
             .push_next(&mut profile_list_info);
 
-        let mut image = Image::new(self.encoding_device.allocator.clone(), &image_create_info)?;
+        let image = Image::new(
+            self.encoding_device.allocator.clone(),
+            &image_create_info,
+            self.tracker.image_layout_tracker.clone(),
+        )?;
 
-        let cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
+        let mut cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
 
         image.transition_layout_single_layer(
-            cmd_buffer.buffer(),
+            &mut cmd_buffer,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
             vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_WRITE,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -566,7 +574,7 @@ impl VulkanEncoder<'_> {
                     cmd_buffer.buffer(),
                     *buffer,
                     *image,
-                    image.layout[0],
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     &[
                         vk::BufferImageCopy::default()
                             .buffer_offset(0)
@@ -609,7 +617,7 @@ impl VulkanEncoder<'_> {
             .transfer
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
-                &mut self.tracker.semaphore_tracker,
+                &mut self.tracker,
                 vk::PipelineStageFlags2::COPY,
                 vk::PipelineStageFlags2::COPY,
                 EncoderTrackerWaitState::CopyBufferToImage,
@@ -620,7 +628,7 @@ impl VulkanEncoder<'_> {
 
     fn encode(
         &mut self,
-        image: Arc<Mutex<Image>>,
+        image: Arc<Image>,
         force_idr: bool,
     ) -> Result<Vec<u8>, VulkanEncoderError> {
         let is_idr = force_idr || self.idr_period_counter == 0;
@@ -643,10 +651,10 @@ impl VulkanEncoder<'_> {
             }
         }
 
-        let cmd_buffer = self.tracker.command_buffer_pools.encode.begin_buffer()?;
+        let mut cmd_buffer = self.tracker.command_buffer_pools.encode.begin_buffer()?;
 
-        let old_layout = image.lock().unwrap().transition_layout_single_layer(
-            cmd_buffer.buffer(),
+        image.transition_layout_single_layer(
+            &mut cmd_buffer,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::VIDEO_ENCODE_KHR,
             vk::AccessFlags2::NONE..vk::AccessFlags2::VIDEO_ENCODE_READ_KHR,
             vk::ImageLayout::VIDEO_ENCODE_SRC_KHR,
@@ -658,7 +666,7 @@ impl VulkanEncoder<'_> {
 
         let view_create_info = vk::ImageViewCreateInfo::default()
             .flags(vk::ImageViewCreateFlags::empty())
-            .image(image.lock().unwrap().image)
+            .image(image.image)
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
             .components(vk::ComponentMapping::default())
@@ -884,7 +892,7 @@ impl VulkanEncoder<'_> {
             .picture_resource(setup_reference_slot_video_resource_info)
             .push_next(&mut new_slot_reference_info);
 
-        let extent = image.lock().unwrap().extent;
+        let extent = image.extent;
 
         let src_picture_resource = vk::VideoPictureResourceInfoKHR::default()
             .coded_offset(vk::Offset2D::default())
@@ -930,19 +938,11 @@ impl VulkanEncoder<'_> {
                 );
         }
 
-        image.lock().unwrap().transition_layout_single_layer(
-            cmd_buffer.buffer(),
-            vk::PipelineStageFlags2::VIDEO_ENCODE_KHR..vk::PipelineStageFlags2::NONE,
-            vk::AccessFlags2::VIDEO_ENCODE_READ_KHR..vk::AccessFlags2::NONE,
-            old_layout,
-            0,
-        )?;
-
         self.encoding_device
             .h264_encode_queue
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
-                &mut self.tracker.semaphore_tracker,
+                &mut self.tracker,
                 vk::PipelineStageFlags2::VIDEO_ENCODE_KHR,
                 vk::PipelineStageFlags2::ALL_COMMANDS,
                 EncoderTrackerWaitState::Encode,
@@ -1001,7 +1001,7 @@ impl VulkanEncoder<'_> {
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         let (image, _buffer) = self.transfer_buffer_to_image(frame)?;
 
-        let image = Arc::new(Mutex::new(image));
+        let image = Arc::new(image);
 
         let is_keyframe = force_idr || self.idr_period_counter == 0;
         let result = self.encode(image, force_idr)?;

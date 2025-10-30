@@ -1,8 +1,12 @@
-use std::sync::Arc;
+use std::{
+    collections::hash_map::Entry,
+    sync::{Arc, Mutex},
+};
 
 use ash::vk;
+use rustc_hash::FxHashMap;
 
-use crate::VulkanCommonError;
+use crate::{VulkanCommonError, wrappers::ImageKey};
 
 use super::Device;
 
@@ -57,6 +61,7 @@ pub(crate) struct TrackerWait<S> {
 pub(crate) struct Tracker<K: TrackerKind> {
     pub(crate) semaphore_tracker: SemaphoreTracker<K::WaitState>,
     pub(crate) command_buffer_pools: K::CommandBufferPools,
+    pub(crate) image_layout_tracker: Arc<Mutex<ImageLayoutTracker>>,
 }
 
 impl<K: TrackerKind> Tracker<K> {
@@ -69,6 +74,7 @@ impl<K: TrackerKind> Tracker<K> {
         Ok(Self {
             semaphore_tracker,
             command_buffer_pools,
+            image_layout_tracker: Default::default(),
         })
     }
 
@@ -107,6 +113,36 @@ impl<S> SemaphoreTracker<S> {
         if let Some(wait_for) = self.wait_for.as_ref() {
             self.semaphore.wait(timeout, wait_for.value)?;
             self.wait_for = None;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct ImageLayoutTracker {
+    pub(crate) map: FxHashMap<ImageKey, Box<[vk::ImageLayout]>>,
+}
+
+impl ImageLayoutTracker {
+    pub(crate) fn register_image(
+        &mut self,
+        image: ImageKey,
+        initial_layout: vk::ImageLayout,
+        array_layers: usize,
+    ) -> Result<(), VulkanCommonError> {
+        match self.map.entry(image) {
+            Entry::Occupied(_) => Err(VulkanCommonError::RegisteredNewImageTwice(image)),
+            Entry::Vacant(entry) => {
+                entry.insert(vec![initial_layout; array_layers].into_boxed_slice());
+                Ok(())
+            }
+        }
+    }
+
+    pub(crate) fn unregister_image(&mut self, image: ImageKey) -> Result<(), VulkanCommonError> {
+        if self.map.remove(&image).is_none() {
+            return Err(VulkanCommonError::UnregisteredNonexistentImage(image));
         }
 
         Ok(())

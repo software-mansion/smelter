@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use ash::vk;
 
@@ -56,7 +56,7 @@ type DecoderTracker = Tracker<DecoderTrackerKind>;
 /// this cannot outlive the image and semaphore it borrows, but it seems very hard to encode that
 /// in the lifetimes
 struct DecodeSubmission {
-    image: Arc<Mutex<Image>>,
+    image: Arc<Image>,
     dimensions: vk::Extent2D,
     layer: u32,
     picture_order_cnt: i32,
@@ -314,7 +314,48 @@ impl VulkanDecoder<'_> {
         }
 
         // begin video coding
-        let cmd_buffer = self.tracker.command_buffer_pools.decode.begin_buffer()?;
+        let mut cmd_buffer = self.tracker.command_buffer_pools.decode.begin_buffer()?;
+
+        video_session_resources
+            .decoding_images
+            .dpb
+            .image
+            .image_with_view
+            .transition_layout(
+                &mut cmd_buffer,
+                vk::PipelineStageFlags2::VIDEO_DECODE_KHR
+                    ..vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
+                vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
+                    ..vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
+                        | vk::AccessFlags2::VIDEO_DECODE_READ_KHR,
+                vk::ImageLayout::VIDEO_DECODE_DPB_KHR,
+                vk::ImageSubresourceRange {
+                    base_array_layer: 0,
+                    layer_count: vk::REMAINING_ARRAY_LAYERS,
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                },
+            )?;
+
+        if let Some(dst) = &video_session_resources.decoding_images.dst_image {
+            dst.image_with_view.transition_layout(
+                &mut cmd_buffer,
+                vk::PipelineStageFlags2::VIDEO_DECODE_KHR
+                    ..vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
+                vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
+                    ..vk::AccessFlags2::VIDEO_DECODE_WRITE_KHR
+                        | vk::AccessFlags2::VIDEO_DECODE_READ_KHR,
+                vk::ImageLayout::VIDEO_DECODE_DST_KHR,
+                vk::ImageSubresourceRange {
+                    base_array_layer: 0,
+                    layer_count: vk::REMAINING_ARRAY_LAYERS,
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                },
+            )?;
+        }
 
         let memory_barrier = vk::MemoryBarrier2::default()
             .src_stage_mask(vk::PipelineStageFlags2::VIDEO_DECODE_KHR)
@@ -451,7 +492,7 @@ impl VulkanDecoder<'_> {
             .target_picture_resource_info(new_reference_slot_index)
             .unwrap();
 
-        // these 3 veriables are for copying the result later
+        // these 3 variables are for copying the result later
         let (target_image, target_layer) = video_session_resources
             .decoding_images
             .target_info(new_reference_slot_index);
@@ -497,7 +538,7 @@ impl VulkanDecoder<'_> {
             .h264_decode_queue
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
-                &mut self.tracker.semaphore_tracker,
+                &mut self.tracker,
                 vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
                 vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
                 DecoderTrackerWaitState::Decode,
@@ -558,24 +599,24 @@ impl VulkanDecoder<'_> {
             .queue_family_indices(&queue_indices)
             .initial_layout(vk::ImageLayout::UNDEFINED);
 
-        let mut image = Image::new(self.decoding_device.allocator.clone(), &create_info)?;
+        let image = Image::new(
+            self.decoding_device.allocator.clone(),
+            &create_info,
+            self.tracker.image_layout_tracker.clone(),
+        )?;
 
-        let cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
+        let mut cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
 
-        let old_layout = decode_output
-            .image
-            .lock()
-            .unwrap()
-            .transition_layout_single_layer(
-                cmd_buffer.buffer(),
-                vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
-                vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_READ,
-                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                decode_output.layer,
-            )?;
+        decode_output.image.transition_layout_single_layer(
+            &mut cmd_buffer,
+            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
+            vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_READ,
+            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+            decode_output.layer,
+        )?;
 
         image.transition_layout_single_layer(
-            cmd_buffer.buffer(),
+            &mut cmd_buffer,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
             vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_WRITE,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -624,7 +665,7 @@ impl VulkanDecoder<'_> {
         unsafe {
             self.decoding_device.vulkan_device.device.cmd_copy_image(
                 cmd_buffer.buffer(),
-                decode_output.image.lock().unwrap().image,
+                decode_output.image.image,
                 vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                 *image,
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -632,20 +673,8 @@ impl VulkanDecoder<'_> {
             );
         }
 
-        decode_output
-            .image
-            .lock()
-            .unwrap()
-            .transition_layout_single_layer(
-                cmd_buffer.buffer(),
-                vk::PipelineStageFlags2::COPY..vk::PipelineStageFlags2::NONE,
-                vk::AccessFlags2::TRANSFER_READ..vk::AccessFlags2::NONE,
-                old_layout,
-                decode_output.layer,
-            )?;
-
         image.transition_layout_single_layer(
-            cmd_buffer.buffer(),
+            &mut cmd_buffer,
             vk::PipelineStageFlags2::COPY..vk::PipelineStageFlags2::NONE,
             vk::AccessFlags2::TRANSFER_WRITE..vk::AccessFlags2::NONE,
             vk::ImageLayout::GENERAL,
@@ -659,7 +688,7 @@ impl VulkanDecoder<'_> {
             .transfer
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
-                &mut self.tracker.semaphore_tracker,
+                &mut self.tracker,
                 vk::PipelineStageFlags2::ALL_COMMANDS,
                 vk::PipelineStageFlags2::ALL_COMMANDS,
                 DecoderTrackerWaitState::DownloadImageToBuffer,
@@ -741,7 +770,7 @@ impl VulkanDecoder<'_> {
         decode_output: DecodeSubmission,
     ) -> Result<Vec<u8>, VulkanDecoderError> {
         let mut dst_buffer = self.copy_image_to_buffer(
-            &mut decode_output.image.lock().unwrap(),
+            &decode_output.image,
             decode_output.dimensions,
             decode_output.layer,
         )?;
@@ -820,14 +849,14 @@ impl VulkanDecoder<'_> {
 
     fn copy_image_to_buffer(
         &mut self,
-        image: &mut Image,
+        image: &Image,
         dimensions: vk::Extent2D,
         layer: u32,
     ) -> Result<Buffer, VulkanDecoderError> {
-        let cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
+        let mut cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
 
-        let old_layout = image.transition_layout_single_layer(
-            cmd_buffer.buffer(),
+        image.transition_layout_single_layer(
+            &mut cmd_buffer,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
             vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_READ,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -890,21 +919,13 @@ impl VulkanDecoder<'_> {
                 )
         };
 
-        image.transition_layout_single_layer(
-            cmd_buffer.buffer(),
-            vk::PipelineStageFlags2::COPY..vk::PipelineStageFlags2::NONE,
-            vk::AccessFlags2::TRANSFER_READ..vk::AccessFlags2::NONE,
-            old_layout,
-            layer,
-        )?;
-
         // TODO: test if just putting COPY here works as well
         self.decoding_device
             .queues
             .transfer
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
-                &mut self.tracker.semaphore_tracker,
+                &mut self.tracker,
                 vk::PipelineStageFlags2::COPY,
                 vk::PipelineStageFlags2::ALL_COMMANDS,
                 DecoderTrackerWaitState::DownloadImageToBuffer,

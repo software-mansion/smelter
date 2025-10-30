@@ -1,10 +1,12 @@
 use std::sync::{Arc, Mutex};
 
-use ash::vk;
+use ash::vk::{self, Handle};
 use vk_mem::Alloc;
 
 use crate::{
-    VulkanCommonError, VulkanDecoderError, VulkanInitError, vulkan_encoder::H264EncodeProfileInfo,
+    VulkanCommonError, VulkanDecoderError, VulkanInitError,
+    vulkan_encoder::H264EncodeProfileInfo,
+    wrappers::{ImageLayoutTracker, OpenCommandBuffer},
 };
 
 use super::{Device, H264DecodeProfileInfo, Instance};
@@ -288,20 +290,21 @@ pub(crate) struct Image {
     pub(crate) image: vk::Image,
     allocation: vk_mem::Allocation,
     allocator: Arc<Allocator>,
+    tracker: Arc<Mutex<ImageLayoutTracker>>,
     pub(crate) device: Arc<Device>,
-    pub(crate) layout: Box<[vk::ImageLayout]>,
     pub(crate) extent: vk::Extent3D,
 }
+
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct ImageKey(u64);
 
 impl Image {
     pub(crate) fn new(
         allocator: Arc<Allocator>,
         image_create_info: &vk::ImageCreateInfo,
+        tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Result<Self, VulkanCommonError> {
         let extent = image_create_info.extent;
-        let layout =
-            vec![image_create_info.initial_layout; image_create_info.array_layers as usize]
-                .into_boxed_slice();
         let alloc_info = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::Auto,
             ..Default::default()
@@ -310,65 +313,155 @@ impl Image {
         let (image, allocation) =
             unsafe { allocator.create_image(image_create_info, &alloc_info)? };
 
+        tracker.lock().unwrap().register_image(
+            ImageKey(image.as_raw()),
+            image_create_info.initial_layout,
+            image_create_info.array_layers as usize,
+        )?;
+
         Ok(Image {
             image,
             allocation,
             device: allocator.device.clone(),
             allocator,
-            layout,
+            tracker,
             extent,
         })
     }
 
-    pub(crate) fn transition_layout(
-        &mut self,
+    pub(crate) fn transition_layout_raw(
+        &self,
         command_buffer: vk::CommandBuffer,
+        layout: &mut [vk::ImageLayout],
         stages: std::ops::Range<vk::PipelineStageFlags2>,
         accesses: std::ops::Range<vk::AccessFlags2>,
         new_layout: vk::ImageLayout,
         subresource_range: vk::ImageSubresourceRange,
-    ) -> Result<vk::ImageLayout, VulkanCommonError> {
+    ) -> Result<(), VulkanCommonError> {
         let barrier = vk::ImageMemoryBarrier2::default()
             .src_stage_mask(stages.start)
             .dst_stage_mask(stages.end)
             .src_access_mask(accesses.start)
             .dst_access_mask(accesses.end)
-            .old_layout(self.layout[subresource_range.base_array_layer as usize])
             .new_layout(new_layout)
             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .image(self.image)
             .subresource_range(subresource_range);
 
-        unsafe {
-            self.device.cmd_pipeline_barrier2(
-                command_buffer,
-                &vk::DependencyInfo::default().image_memory_barriers(&[barrier]),
-            );
-        }
-
-        let old_layout = self.layout[subresource_range.base_array_layer as usize];
         let end = if subresource_range.layer_count == vk::REMAINING_ARRAY_LAYERS {
-            self.layout.len()
+            layout.len()
         } else {
             subresource_range.base_array_layer as usize + subresource_range.layer_count as usize
         };
 
-        for layout in self.layout[subresource_range.base_array_layer as usize..end].iter_mut() {
+        let mut current_old_layout = None;
+        let mut current_start = None;
+
+        for (i, layout) in layout[subresource_range.base_array_layer as usize..end]
+            .iter()
+            .enumerate()
+        {
+            let i = i + subresource_range.base_array_layer as usize;
+
+            if current_old_layout.is_none() {
+                if *layout == new_layout {
+                    continue;
+                }
+
+                current_old_layout = Some(*layout);
+                current_start = Some(i);
+                continue;
+            }
+
+            if let Some(old) = current_old_layout {
+                if old == *layout {
+                    continue;
+                }
+
+                let start = current_start.unwrap();
+
+                let barrier =
+                    barrier
+                        .old_layout(old)
+                        .subresource_range(vk::ImageSubresourceRange {
+                            base_array_layer: start as u32,
+                            layer_count: (i - start) as u32,
+                            ..subresource_range
+                        });
+
+                unsafe {
+                    self.device.cmd_pipeline_barrier2(
+                        command_buffer,
+                        &vk::DependencyInfo::default().image_memory_barriers(&[barrier]),
+                    );
+                }
+
+                if *layout != new_layout {
+                    current_old_layout = Some(*layout);
+                    current_start = Some(i);
+                } else {
+                    current_old_layout = None;
+                    current_start = None;
+                }
+            }
+        }
+
+        if let Some(old) = current_old_layout {
+            let start = current_start.unwrap();
+
+            let barrier = barrier
+                .old_layout(old)
+                .subresource_range(vk::ImageSubresourceRange {
+                    base_array_layer: start as u32,
+                    layer_count: (end - start) as u32,
+                    ..subresource_range
+                });
+
+            unsafe {
+                self.device.cmd_pipeline_barrier2(
+                    command_buffer,
+                    &vk::DependencyInfo::default().image_memory_barriers(&[barrier]),
+                );
+            }
+        }
+
+        for layout in layout[subresource_range.base_array_layer as usize..end].iter_mut() {
             *layout = new_layout;
         }
 
-        Ok(old_layout)
+        Ok(())
+    }
+
+    pub(crate) fn transition_layout(
+        &self,
+        command_buffer: &mut OpenCommandBuffer,
+        stages: std::ops::Range<vk::PipelineStageFlags2>,
+        accesses: std::ops::Range<vk::AccessFlags2>,
+        new_layout: vk::ImageLayout,
+        subresource_range: vk::ImageSubresourceRange,
+    ) -> Result<(), VulkanCommonError> {
+        let raw_buffer = command_buffer.buffer();
+        let layout = command_buffer.image_layout(self.key(), &self.tracker.lock().unwrap())?;
+
+        self.transition_layout_raw(
+            raw_buffer,
+            layout,
+            stages,
+            accesses,
+            new_layout,
+            subresource_range,
+        )
     }
 
     pub(crate) fn transition_layout_single_layer(
-        &mut self,
-        command_buffer: vk::CommandBuffer,
+        &self,
+        command_buffer: &mut OpenCommandBuffer,
         stages: std::ops::Range<vk::PipelineStageFlags2>,
         accesses: std::ops::Range<vk::AccessFlags2>,
         new_layout: vk::ImageLayout,
         base_array_layer: u32,
-    ) -> Result<vk::ImageLayout, VulkanCommonError> {
+    ) -> Result<(), VulkanCommonError> {
         self.transition_layout(
             command_buffer,
             stages,
@@ -383,6 +476,10 @@ impl Image {
             },
         )
     }
+
+    pub(crate) fn key(&self) -> ImageKey {
+        ImageKey(self.image.as_raw())
+    }
 }
 
 impl std::ops::Deref for Image {
@@ -396,6 +493,10 @@ impl std::ops::Deref for Image {
 impl Drop for Image {
     fn drop(&mut self) {
         unsafe {
+            if let Err(e) = self.tracker.lock().unwrap().unregister_image(self.key()) {
+                tracing::error!("Error while freeing image: {e}")
+            }
+
             self.allocator
                 .destroy_image(self.image, &mut self.allocation)
         };
@@ -404,14 +505,14 @@ impl Drop for Image {
 
 pub(crate) struct ImageView {
     pub(crate) view: vk::ImageView,
-    pub(crate) _image: Arc<Mutex<Image>>,
+    pub(crate) _image: Arc<Image>,
     pub(crate) device: Arc<Device>,
 }
 
 impl ImageView {
     pub(crate) fn new(
         device: Arc<Device>,
-        image: Arc<Mutex<Image>>,
+        image: Arc<Image>,
         create_info: &vk::ImageViewCreateInfo,
     ) -> Result<Self, VulkanCommonError> {
         let view = unsafe { device.create_image_view(create_info, None)? };

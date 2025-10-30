@@ -6,7 +6,10 @@ use crate::{
     VulkanDecoderError,
     device::DecodingDevice,
     vulkan_decoder::Image,
-    wrappers::{CodingImageBundle, DecodedPicturesBuffer, H264DecodeProfileInfo},
+    wrappers::{
+        CodingImageBundle, DecodedPicturesBuffer, H264DecodeProfileInfo, ImageLayoutTracker,
+        OpenCommandBuffer,
+    },
 };
 
 pub(crate) struct DecodingImages<'a> {
@@ -25,10 +28,7 @@ impl<'a> DecodingImages<'a> {
         }
     }
 
-    pub(crate) fn target_info(
-        &self,
-        new_reference_slot_index: usize,
-    ) -> (Arc<Mutex<Image>>, usize) {
+    pub(crate) fn target_info(&self, new_reference_slot_index: usize) -> (Arc<Image>, usize) {
         match &self.dst_image {
             Some(image) => (image.image_with_view.target_info(0), 0),
             None => (
@@ -41,9 +41,11 @@ impl<'a> DecodingImages<'a> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         decoding_device: &DecodingDevice,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: &mut OpenCommandBuffer,
+        image_tracker: Arc<Mutex<ImageLayoutTracker>>,
         profile: &H264DecodeProfileInfo,
         dpb_format: &vk::VideoFormatPropertiesKHR<'a>,
         dst_format: &Option<vk::VideoFormatPropertiesKHR<'a>>,
@@ -67,6 +69,7 @@ impl<'a> DecodingImages<'a> {
         let dpb = DecodedPicturesBuffer::new(
             decoding_device,
             command_buffer,
+            image_tracker.clone(),
             false,
             &profile.profile_info,
             dpb_image_usage,
@@ -89,6 +92,7 @@ impl<'a> DecodingImages<'a> {
                 CodingImageBundle::new(
                     decoding_device,
                     command_buffer,
+                    image_tracker,
                     &dst_format,
                     dimensions,
                     dst_image_usage,
