@@ -21,8 +21,12 @@ use crate::{
         rtp::RtpPacket,
         webrtc::{
             http_client::WhipWhepHttpClient,
-            whip_output::codec_preferences::{
-                codec_params_from_preferences, resolve_audio_preferences, resolve_video_preferences,
+            whip_output::{
+                codec_preferences::{
+                    codec_params_from_preferences, resolve_audio_preferences,
+                    resolve_video_preferences,
+                },
+                extract_negotiated_codecs::extract_negotiated_codecs,
             },
         },
     },
@@ -32,6 +36,7 @@ use crate::prelude::*;
 
 mod codec_preferences;
 mod establish_peer_connection;
+mod extract_negotiated_codecs;
 mod peer_connection;
 mod setup_track;
 mod track_task_audio;
@@ -109,14 +114,18 @@ impl WhipClientTask {
         let audio_rtc_sender = pc.new_audio_track().await?;
 
         let (session_url, answer) = exchange_sdp_offers(&pc, &client).await?;
-
-        pc.set_remote_description(answer).await?;
+        let negotiated_codecs = extract_negotiated_codecs(&answer)?;
 
         let (video_thread_handle, video_track) = match video_preferences {
             Some(encoder_preferences) => {
-                let (video_thread_handle, video) =
-                    setup_video_track(&ctx, &output_id, video_rtc_sender, encoder_preferences)
-                        .await?;
+                let (video_thread_handle, video) = setup_video_track(
+                    &ctx,
+                    &output_id,
+                    video_rtc_sender,
+                    negotiated_codecs.video,
+                    encoder_preferences,
+                )
+                .await?;
                 (Some(video_thread_handle), Some(video))
             }
             None => (None, None),
@@ -129,6 +138,7 @@ impl WhipClientTask {
                     &output_id,
                     audio_rtc_sender,
                     pc.clone(),
+                    negotiated_codecs.audio,
                     encoder_preferences,
                 )
                 .await?;
@@ -136,6 +146,8 @@ impl WhipClientTask {
             }
             None => (None, None),
         };
+
+        pc.set_remote_description(answer).await?;
 
         Ok((
             Self {
