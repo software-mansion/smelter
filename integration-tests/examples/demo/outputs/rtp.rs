@@ -329,8 +329,7 @@ impl RtpOutputBuilder {
 
     fn prompt_video(self) -> Result<Self> {
         let video_options = vec![RtpRegisterOptions::SetVideoStream, RtpRegisterOptions::Skip];
-        let video_selection =
-            Select::new("Set video stream?", video_options.clone()).prompt_skippable()?;
+        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
 
         match video_selection {
             Some(RtpRegisterOptions::SetVideoStream) => {
