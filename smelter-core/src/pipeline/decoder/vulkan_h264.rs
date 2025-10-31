@@ -22,7 +22,7 @@ impl VideoDecoder for VulkanH264Decoder {
                 info!("Initializing Vulkan H264 decoder");
                 let device = vulkan_ctx.device.clone();
                 let decoder = device.create_wgpu_textures_decoder(DecoderParameters {
-                    allow_gaps_in_frames: false,
+                    detect_missed_frames: true,
                 })?;
                 Ok(Self { decoder })
             }
@@ -43,7 +43,7 @@ impl VideoDecoderInstance for VulkanH264Decoder {
             Err(DecoderError::ParserError(ParserError::ReferenceManagementError(
                 ReferenceManagementError::MissingFrame,
             ))) => {
-                debug!("Vulkan H264 decoder detected missing frame.");
+                debug!("Vulkan H264 decoder detected a missing frame.");
                 return Vec::new();
             }
             Err(err) => {

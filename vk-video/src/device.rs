@@ -43,13 +43,24 @@ pub struct Rational {
 }
 
 /// Parameters for decoder creation
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct DecoderParameters {
-    /// If set to `false` and decoder detects missing frames, it will enter corrupted state
-    /// and won't decode any reference frames until IDR frame is provided.
+    /// If set to `true`, the decoder will detect missed frames.
+    /// If missed frames are detected, the decoder will enter a corrupted state and won't decode
+    /// any reference frames until an IDR frame is provided.
     ///
-    /// **Defaults to `false`**
-    pub allow_gaps_in_frames: bool,
+    /// If set to `false`, the decoder won't detect missed frames, which may cause visible artifacts.
+    ///
+    /// **Defaults to `true`**
+    pub detect_missed_frames: bool,
+}
+
+impl Default for DecoderParameters {
+    fn default() -> Self {
+        Self {
+            detect_missed_frames: true,
+        }
+    }
 }
 
 /// Things the encoder needs to know about the video
@@ -286,7 +297,7 @@ impl VulkanDevice {
             .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
         let max_profile = decode_caps.max_profile();
 
-        let parser = Parser::new(parameters.allow_gaps_in_frames);
+        let parser = Parser::new(parameters.detect_missed_frames);
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
             h264_decode_queue: self
@@ -320,7 +331,7 @@ impl VulkanDevice {
             .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
         let max_profile = decode_caps.max_profile();
 
-        let parser = Parser::new(parameters.allow_gaps_in_frames);
+        let parser = Parser::new(parameters.detect_missed_frames);
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
             h264_decode_queue: self

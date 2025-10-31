@@ -108,12 +108,12 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(allow_gaps_in_frames: bool) -> Self {
+    pub fn new(detect_missed_frames: bool) -> Self {
         let (tx, rx) = mpsc::channel();
 
         Parser {
             reader: AnnexBReader::accumulate(NalReceiver::new(tx)),
-            reference_ctx: ReferenceContext::new(allow_gaps_in_frames),
+            reference_ctx: ReferenceContext::new(detect_missed_frames),
             au_splitter: AUSplitter::default(),
             receiver: rx,
             nalu_splitter: NALUSplitter::default(),

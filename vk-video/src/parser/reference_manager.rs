@@ -37,14 +37,15 @@ pub struct ReferenceId(usize);
 pub(crate) struct ReferenceContext {
     pictures: ReferencePictures,
     next_reference_id: ReferenceId,
-    previous_frame_num: u16,
+    prevFrameNum: u16,
+    PrevRefFrameNum: u16,
     prev_pic_order_cnt_msb: i32,
     prev_pic_order_cnt_lsb: i32,
     MaxLongTermFrameIdx: MaxLongTermFrameIdx,
     prevFrameNumOffset: i64,
     previous_picture_included_mmco_equal_5: bool,
-    is_missing_frames: bool,
-    allow_gaps_in_frames: bool,
+    is_frame_loss_detected: bool,
+    detect_missed_frames: bool,
 }
 
 #[derive(Debug, Default)]
@@ -55,9 +56,9 @@ enum MaxLongTermFrameIdx {
 }
 
 impl ReferenceContext {
-    pub fn new(allow_gaps_in_frames: bool) -> Self {
+    pub fn new(detect_missed_frames: bool) -> Self {
         Self {
-            allow_gaps_in_frames,
+            detect_missed_frames,
             ..Default::default()
         }
     }
@@ -72,14 +73,15 @@ impl ReferenceContext {
         *self = Self {
             pictures: ReferencePictures::default(),
             next_reference_id: ReferenceId::default(),
-            previous_frame_num: 0,
+            prevFrameNum: 0,
+            PrevRefFrameNum: 0,
             prev_pic_order_cnt_msb: 0,
             prev_pic_order_cnt_lsb: 0,
             MaxLongTermFrameIdx: MaxLongTermFrameIdx::NoLongTermFrameIndices,
             prevFrameNumOffset: 0,
             previous_picture_included_mmco_equal_5: false,
-            is_missing_frames: false,
-            allow_gaps_in_frames: self.allow_gaps_in_frames,
+            is_frame_loss_detected: false,
+            detect_missed_frames: self.detect_missed_frames,
         };
     }
 
@@ -124,13 +126,12 @@ impl ReferenceContext {
         let pps = slices.last().unwrap().0.pps.clone();
         let pts = slices.last().unwrap().1;
 
-        match header.slice_type.family {
+        let is_ref_frame = matches!(
+            header.slice_type.family,
             h264_reader::nal::slice::SliceFamily::P | h264_reader::nal::slice::SliceFamily::B
-                if !self.allow_gaps_in_frames =>
-            {
-                self.verify_frame_num(&sps, &header)?;
-            }
-            _ => {}
+        );
+        if is_ref_frame && self.detect_missed_frames {
+            self.verify_frame_num(&sps, &header)?;
         }
 
         // maybe this should be done in a different place, but if you think about it, there's not
@@ -194,7 +195,10 @@ impl ReferenceContext {
         };
 
         self.previous_picture_included_mmco_equal_5 = header.includes_mmco_equal_5();
-        self.previous_frame_num = header.frame_num;
+        self.prevFrameNum = header.frame_num;
+        if is_ref_frame {
+            self.PrevRefFrameNum = header.frame_num;
+        }
 
         Ok(decoder_instructions)
     }
@@ -553,7 +557,7 @@ impl ReferenceContext {
                 self.prevFrameNumOffset
             };
 
-            if self.previous_frame_num > header.frame_num {
+            if self.prevFrameNum > header.frame_num {
                 prevFrameNumOffset + sps.max_frame_num()
             } else {
                 prevFrameNumOffset
@@ -698,11 +702,10 @@ impl ReferenceContext {
         header: &SliceHeader,
     ) -> Result<(), ReferenceManagementError> {
         let is_expected_frame_num = !sps.gaps_in_frame_num_value_allowed_flag
-            && header.frame_num != self.previous_frame_num + 1
-            && header.frame_num
-                != ((self.previous_frame_num as i64 + 1) % sps.max_frame_num()) as u16;
-        if is_expected_frame_num || self.is_missing_frames {
-            self.is_missing_frames = true;
+            && header.frame_num != self.PrevRefFrameNum
+            && header.frame_num != ((self.PrevRefFrameNum as i64 + 1) % sps.max_frame_num()) as u16;
+        if is_expected_frame_num || self.is_frame_loss_detected {
+            self.is_frame_loss_detected = true;
             return Err(ReferenceManagementError::MissingFrame);
         }
 
