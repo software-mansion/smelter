@@ -37,16 +37,11 @@ pub enum TransportProtocol {
     TcpServer,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum RunningState {
     Running,
+    #[default]
     Idle,
-}
-
-impl Default for RunningState {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -147,7 +147,9 @@ impl NodeTextureState {
 
 /// Type that behaves like Option, but when is set to None
 /// it keeps ownership of the value it had before.
+#[derive(Default)]
 enum OptionalState<State> {
+    #[default]
     None,
     /// It should be treated as None, but hold on the old state, so
     /// it can be reused in the future.
@@ -178,11 +180,5 @@ impl<State> OptionalState<State> {
 
     fn replace(&mut self, replacement: Self) -> Self {
         mem::replace(self, replacement)
-    }
-}
-
-impl<State> Default for OptionalState<State> {
-    fn default() -> Self {
-        Self::None
     }
 }

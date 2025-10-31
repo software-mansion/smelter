@@ -62,7 +62,9 @@ impl Settings {
 }
 
 #[repr(u32)]
+#[derive(Default)]
 pub enum LogSeverity {
+    #[default]
     Default = libcef_sys::cef_log_severity_t_LOGSEVERITY_DEFAULT,
     Debug = libcef_sys::cef_log_severity_t_LOGSEVERITY_DEBUG,
     Info = libcef_sys::cef_log_severity_t_LOGSEVERITY_INFO,
@@ -70,12 +72,6 @@ pub enum LogSeverity {
     Error = libcef_sys::cef_log_severity_t_LOGSEVERITY_ERROR,
     Fatal = libcef_sys::cef_log_severity_t_LOGSEVERITY_FATAL,
     Disable = libcef_sys::cef_log_severity_t_LOGSEVERITY_DISABLE,
-}
-
-impl Default for LogSeverity {
-    fn default() -> Self {
-        Self::Default
-    }
 }
 
 #[cfg(target_os = "linux")]
