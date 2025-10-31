@@ -38,16 +38,13 @@ pub enum TransportProtocol {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum RunningState {
     Running,
+    #[default]
     Idle,
 }
 
-impl Default for RunningState {
-    fn default() -> Self {
-        Self::Idle
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SmelterState {
