@@ -11,7 +11,7 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::info;
 
-use crate::inputs::{InputHandle, VideoDecoder};
+use crate::inputs::VideoDecoder;
 
 const WHIP_TOKEN_ENV: &str = "WHIP_INPUT_BEARER_TOKEN";
 
@@ -36,6 +36,10 @@ impl WhipInput {
         &self.name
     }
 
+    pub fn has_video(&self) -> bool {
+        self.video.is_some()
+    }
+
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "whip_server",
@@ -43,40 +47,28 @@ impl WhipInput {
             "video": self.video.as_ref().map(|v| v.serialize_register()),
         })
     }
-}
 
-// #[typetag::serde]
-// impl InputHandle for WhipInput {
-//     fn name(&self) -> &str {
-//         &self.name
-//     }
-//
-//
-//     fn has_video(&self) -> bool {
-//         self.video.is_some()
-//     }
-//
-//     fn on_after_registration(&mut self) -> Result<()> {
-//         let html_path = integration_tests_root().join("examples/demo/whip.html");
-//         let url = format!(
-//             "file://{}?url=http://127.0.0.1:9000/whip/{}&token={}",
-//             html_path.to_str().unwrap(),
-//             self.name,
-//             self.bearer_token
-//         );
-//
-//         println!("Instructions to start streaming:");
-//         println!("1. Open OBS Studio");
-//         println!(
-//             "2. In a 'Stream' tab enter 'http://127.0.0.1:9000/whip/{}' in 'Server' field and '{}' in 'Bearer Token' field",
-//             self.name, self.bearer_token
-//         );
-//         println!("OR");
-//         println!("Open in browser:");
-//         println!("{url}");
-//         Ok(())
-//     }
-// }
+    pub fn on_after_registration(&mut self) -> Result<()> {
+        let html_path = integration_tests_root().join("examples/demo/whip.html");
+        let url = format!(
+            "file://{}?url=http://127.0.0.1:9000/whip/{}&token={}",
+            html_path.to_str().unwrap(),
+            self.name,
+            self.bearer_token
+        );
+
+        println!("Instructions to start streaming:");
+        println!("1. Open OBS Studio");
+        println!(
+            "2. In a 'Stream' tab enter 'http://127.0.0.1:9000/whip/{}' in 'Server' field and '{}' in 'Bearer Token' field",
+            self.name, self.bearer_token
+        );
+        println!("OR");
+        println!("Open in browser:");
+        println!("{url}");
+        Ok(())
+    }
+}
 
 pub struct WhipInputBuilder {
     name: String,

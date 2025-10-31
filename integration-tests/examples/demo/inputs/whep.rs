@@ -8,7 +8,7 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::info;
 
-use crate::inputs::{InputHandle, VideoDecoder};
+use crate::inputs::VideoDecoder;
 
 const WHEP_TOKEN_ENV: &str = "WHEP_INPUT_BEARER_TOKEN";
 const WHEP_URL_ENV: &str = "WHEP_INPUT_URL";
@@ -35,6 +35,10 @@ impl WhepInput {
         &self.name
     }
 
+    pub fn has_video(&self) -> bool {
+        self.video.is_some()
+    }
+
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "whep_client",
@@ -43,39 +47,27 @@ impl WhepInput {
             "video": self.video.as_ref().map(|v| v.serialize_register()),
         })
     }
-}
 
-// #[typetag::serde]
-// impl InputHandle for WhepInput {
-//     fn name(&self) -> &str {
-//         &self.name
-//     }
-//
-//
-//     fn has_video(&self) -> bool {
-//         self.video.is_some()
-//     }
-//
-//     fn on_before_registration(&mut self) -> Result<()> {
-//         let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
-//         let url = "http://127.0.0.1:8080";
-//
-//         println!("Instructions to start streaming:");
-//         println!("1. Start Broadcast Box: {cmd}");
-//         println!("2. Open: {url}");
-//         println!("3. Make sure that 'I want to stream' option is selected.");
-//         println!("4. Enter '{}' in 'Stream Key' field", self.bearer_token);
-//
-//         loop {
-//             let confirmation = Confirm::new("Is server running? [Y/n]")
-//                 .with_default(true)
-//                 .prompt()?;
-//             if confirmation {
-//                 return Ok(());
-//             }
-//         }
-//     }
-// }
+    pub fn on_before_registration(&mut self) -> Result<()> {
+        let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
+        let url = "http://127.0.0.1:8080";
+
+        println!("Instructions to start streaming:");
+        println!("1. Start Broadcast Box: {cmd}");
+        println!("2. Open: {url}");
+        println!("3. Make sure that 'I want to stream' option is selected.");
+        println!("4. Enter '{}' in 'Stream Key' field", self.bearer_token);
+
+        loop {
+            let confirmation = Confirm::new("Is server running? [Y/n]")
+                .with_default(true)
+                .prompt()?;
+            if confirmation {
+                return Ok(());
+            }
+        }
+    }
+}
 
 pub struct WhepInputBuilder {
     name: String,

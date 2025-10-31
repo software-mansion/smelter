@@ -1,5 +1,4 @@
 use std::env::VarError;
-use std::ops::Deref;
 use std::{env, fs, mem};
 
 use anyhow::{Context, Result};
@@ -75,13 +74,11 @@ impl SmelterState {
             input.on_after_registration()?;
         }
 
-        let inputs = state.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
-
         for output in &mut state.outputs {
             output.on_before_registration()?;
             examples::post(
                 &format!("output/{}/register", output.name()),
-                &output.serialize_register(&inputs),
+                &output.serialize_register(&state.inputs),
             )?;
             output.on_after_registration()?;
         }
@@ -135,27 +132,27 @@ impl SmelterState {
             InputProtocol::Rtp => {
                 let rtp_input = RtpInputBuilder::new().prompt()?.build();
                 let register_request = rtp_input.serialize_register();
-                (rtp_input, register_request)
+                (InputHandle::Rtp(rtp_input), register_request)
             }
             InputProtocol::Whip => {
                 let whip_input = WhipInputBuilder::new().prompt()?.build();
                 let register_request = whip_input.serialize_register();
-                (whip_input, register_request)
+                (InputHandle::Whip(whip_input), register_request)
             }
             InputProtocol::Whep => {
                 let whep_input = WhepInputBuilder::new().prompt()?.build();
                 let register_request = whep_input.serialize_register();
-                (whep_input, register_request)
+                (InputHandle::Whep(whep_input), register_request)
             }
             InputProtocol::Mp4 => {
                 let mp4_input = Mp4InputBuilder::new().prompt()?.build();
                 let register_request = mp4_input.serialize_register();
-                (mp4_input, register_request)
+                (InputHandle::Mp4(mp4_input), register_request)
             }
             InputProtocol::Hls => {
                 let hls_input = HlsInputBuilder::new().prompt()?.build();
                 let register_request = hls_input.serialize_register();
-                (hls_input, register_request)
+                (InputHandle::Hls(hls_input), register_request)
             }
         };
 
@@ -171,10 +168,9 @@ impl SmelterState {
         input_handle.on_after_registration()?;
         self.inputs.push(input_handle);
 
-        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
         for output in &mut self.outputs {
             let update_route = format!("output/{}/update", output.name());
-            let update_json = output.serialize_update(&inputs);
+            let update_json = output.serialize_update(&self.inputs);
             debug!("{update_json:#?}");
             examples::post(&update_route, &update_json)
                 .with_context(|| "Output update failed".to_string())?;
@@ -252,10 +248,9 @@ impl SmelterState {
         let to_delete = Select::new("Select input to remove:", input_names).prompt()?;
         self.inputs.remove(to_delete.idx);
 
-        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
         for output in &mut self.outputs {
             let update_route = format!("output/{}/update", output.name());
-            let update_json = output.serialize_update(&inputs);
+            let update_json = output.serialize_update(&self.inputs);
             examples::post(&update_route, &update_json)
                 .with_context(|| "Output update failed".to_string())?;
         }
@@ -323,10 +318,9 @@ impl SmelterState {
         let [input_1, input_2] = self.inputs.get_disjoint_mut([idx_1, idx_2])?;
         mem::swap(input_1, input_2);
 
-        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
         for output in &mut self.outputs {
             let update_route = format!("output/{}/update", output.name());
-            let update_json = output.serialize_update(&inputs);
+            let update_json = output.serialize_update(&self.inputs);
             debug!("{update_json:#?}");
             examples::post(&update_route, &update_json)?;
         }

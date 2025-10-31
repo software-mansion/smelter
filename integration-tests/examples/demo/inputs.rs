@@ -26,21 +26,29 @@ pub enum InputHandle {
 impl InputHandle {
     pub fn name(&self) -> &str {
         match self {
-            Self::Rtp(i) | Self::Mp4(i) | Self::Hls(i) | Self::Whip(i) | Self::Whep(i) => i.name(),
+            Self::Rtp(i) => i.name(),
+            Self::Mp4(i) => i.name(),
+            Self::Hls(i) => i.name(),
+            Self::Whip(i) => i.name(),
+            Self::Whep(i) => i.name(),
         }
     }
 
     pub fn serialize_register(&self) -> serde_json::Value {
         match self {
-            Self::Rtp(i) | Self::Mp4(i) | Self::Hls(i) | Self::Whip(i) | Self::Whep(i) => {
-                i.serialize_register()
-            }
+            Self::Rtp(i) => i.serialize_register(),
+            Self::Mp4(i) => i.serialize_register(),
+            Self::Hls(i) => i.serialize_register(),
+            Self::Whip(i) => i.serialize_register(),
+            Self::Whep(i) => i.serialize_register(),
         }
     }
 
     pub fn has_video(&self) -> bool {
         match self {
             Self::Rtp(i) => i.has_video(),
+            Self::Whep(i) => i.has_video(),
+            Self::Whip(i) => i.has_video(),
             _ => true,
         }
     }
@@ -54,6 +62,7 @@ impl InputHandle {
 
     pub fn on_before_registration(&mut self) -> Result<()> {
         match self {
+            Self::Whep(i) => i.on_before_registration(),
             _ => Ok(()),
         }
     }
@@ -61,6 +70,7 @@ impl InputHandle {
     pub fn on_after_registration(&mut self) -> Result<()> {
         match self {
             Self::Rtp(i) => i.on_after_registration(),
+            Self::Whip(i) => i.on_after_registration(),
             _ => Ok(()),
         }
     }
@@ -134,15 +144,6 @@ pub enum AudioDecoder {
     Opus,
 }
 
-pub fn filter_video_inputs<'a>(inputs: &'a [&'a InputHandle]) -> Vec<&'a InputHandle> {
-    inputs
-        .iter()
-        .filter_map(|input| {
-            if input.has_video() {
-                Some(*input)
-            } else {
-                None
-            }
-        })
-        .collect()
+pub fn filter_video_inputs(inputs: &[InputHandle]) -> Vec<&InputHandle> {
+    inputs.iter().filter(|i| i.has_video()).collect()
 }

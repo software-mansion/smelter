@@ -12,11 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info};
 
-use crate::{
-    autocompletion::FilePathCompleter,
-    inputs::{InputHandle, VideoDecoder},
-    utils::resolve_path,
-};
+use crate::{autocompletion::FilePathCompleter, inputs::VideoDecoder, utils::resolve_path};
 
 const MP4_INPUT_SOURCE: &str = "MP4_INPUT_SOURCE";
 
