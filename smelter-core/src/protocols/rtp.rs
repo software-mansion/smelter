@@ -1,6 +1,6 @@
 mod aac;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 pub use aac::*;
 
@@ -12,6 +12,15 @@ use crate::{
     protocols::{Port, PortOrRange},
 };
 
+#[derive(Debug, Clone)]
+pub struct RtpInputOptions {
+    pub port: PortOrRange,
+    pub transport_protocol: RtpInputTransportProtocol,
+    pub video: Option<VideoDecoderOptions>,
+    pub audio: Option<RtpAudioOptions>,
+    pub jitter_buffer: RtpJitterBufferOptions,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RtpAudioOptions {
     Opus,
@@ -22,19 +31,25 @@ pub enum RtpAudioOptions {
     },
 }
 
-#[derive(Debug, Clone)]
-pub struct RtpInputOptions {
-    pub port: PortOrRange,
-    pub transport_protocol: RtpInputTransportProtocol,
-    pub video: Option<VideoDecoderOptions>,
-    pub audio: Option<RtpAudioOptions>,
-    pub buffer: InputBufferOptions,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RtpInputTransportProtocol {
     Udp,
     TcpServer,
+}
+
+#[derive(Debug, Clone)]
+pub enum RtpJitterBufferMode {
+    /// Fixed size buffer
+    Fixed(Duration),
+    /// Jitter buffer synchronized to real-time queue, packets are in jitter buffer
+    /// as long as `queue.sync_point.elapsed()` is smaller than PTS of a packet.
+    QueueBased,
+}
+
+#[derive(Debug, Clone)]
+pub struct RtpJitterBufferOptions {
+    pub mode: RtpJitterBufferMode,
+    pub buffer: InputBufferOptions,
 }
 
 #[derive(Debug, Clone)]

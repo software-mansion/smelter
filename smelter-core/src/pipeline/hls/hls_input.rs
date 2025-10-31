@@ -363,7 +363,8 @@ impl StreamState {
             Duration::from_secs_f64(f64::max(timestamp_to_secs(dts, self.time_base), 0.0))
         });
 
-        (self.buffer.pts_with_buffer(pts), dts)
+        self.buffer.recalculate_buffer(pts);
+        (pts + self.buffer.size(), dts)
     }
 }
 
