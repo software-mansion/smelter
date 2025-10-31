@@ -18,7 +18,7 @@ use tracing::error;
 use crate::{
     IP,
     inputs::{InputHandle, filter_video_inputs},
-    outputs::{AudioEncoder, OutputHandle, VideoEncoder, VideoResolution, scene::Scene},
+    outputs::{AudioEncoder, VideoEncoder, VideoResolution, scene::Scene},
     players::OutputPlayer,
 };
 
@@ -79,6 +79,112 @@ impl From<RtpOutputDeserialize> for RtpOutput {
 }
 
 impl RtpOutput {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
+        let ip = match self.transport_protocol {
+            TransportProtocol::Udp => Some(IP),
+            TransportProtocol::TcpServer => None,
+        };
+        json!({
+            "type": "rtp_stream",
+            "port": self.port,
+            "ip": ip,
+            "transport_protocol": self.transport_protocol.to_string(),
+            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+        })
+    }
+
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
+        json!({
+           "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
+           "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
+        })
+    }
+
+    pub fn on_before_registration(&mut self) -> Result<()> {
+        match self.transport_protocol {
+            TransportProtocol::Udp => match self.player {
+                OutputPlayer::Ffmpeg => self.start_ffmpeg_receiver(),
+                OutputPlayer::Gstreamer => self.start_gst_recv_udp(),
+                OutputPlayer::Manual => {
+                    match (&self.video, &self.audio) {
+                        (Some(video), Some(_)) => {
+                            let cmd = build_gst_recv_udp_cmd(Some(video.encoder), true, self.port);
+                            println!(
+                                "Start stream receiver for H264 encoded video and OPUS encoded audio:"
+                            );
+                            println!("{cmd}");
+                            println!();
+                        }
+                        (Some(video), None) => {
+                            let cmd = build_gst_recv_udp_cmd(Some(video.encoder), false, self.port);
+                            println!("Start stream receiver for H264 encoded video:");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        (None, Some(_)) => {
+                            let cmd = build_gst_recv_udp_cmd(None, true, self.port);
+                            println!("Start stream receiver for OPUS encoded audio");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        _ => unreachable!(),
+                    }
+
+                    loop {
+                        let confirmation = Confirm::new("Is player running? [Y/n]")
+                            .with_default(true)
+                            .prompt()?;
+                        if confirmation {
+                            return Ok(());
+                        }
+                    }
+                }
+            },
+            TransportProtocol::TcpServer => Ok(()),
+        }
+    }
+
+    pub fn on_after_registration(&mut self) -> Result<()> {
+        match self.transport_protocol {
+            TransportProtocol::TcpServer => match self.player {
+                OutputPlayer::Gstreamer => self.start_gst_recv_tcp(),
+                OutputPlayer::Manual => {
+                    match (&self.video, &self.audio) {
+                        (Some(video), Some(_)) => {
+                            let cmd = build_gst_recv_tcp_cmd(Some(video.encoder), true, self.port);
+                            println!(
+                                "Start stream receiver for H264 encoded video and OPUS encoded audio:"
+                            );
+                            println!("{cmd}");
+                            println!();
+                        }
+                        (Some(video), None) => {
+                            let cmd = build_gst_recv_tcp_cmd(Some(video.encoder), false, self.port);
+                            println!("Start stream receiver for H264 encoded video:");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        (None, Some(_)) => {
+                            let cmd = build_gst_recv_tcp_cmd(None, true, self.port);
+                            println!("Start stream receiver for OPUS encoded audio:");
+                            println!("{cmd}");
+                            println!();
+                        }
+                        _ => unreachable!(),
+                    }
+                    Ok(())
+                }
+                _ => Err(anyhow!("Invalid player for RTP in TCP server mode.")),
+            },
+            TransportProtocol::Udp => Ok(()),
+        }
+    }
+
     fn start_gst_recv_tcp(&mut self) -> Result<()> {
         if self.video.is_none() && self.audio.is_none() {
             return Err(anyhow!("No stream specified, GStreamer not started!"));
@@ -165,115 +271,6 @@ impl RtpOutput {
             (None, None) => return Err(anyhow!("No stream specified, ffmpeg not started!")),
         }
         Ok(())
-    }
-}
-
-#[typetag::serde]
-impl OutputHandle for RtpOutput {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
-        let ip = match self.transport_protocol {
-            TransportProtocol::Udp => Some(IP),
-            TransportProtocol::TcpServer => None,
-        };
-        json!({
-            "type": "rtp_stream",
-            "port": self.port,
-            "ip": ip,
-            "transport_protocol": self.transport_protocol.to_string(),
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
-        })
-    }
-
-    fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
-        json!({
-           "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
-           "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
-        })
-    }
-
-    fn on_before_registration(&mut self) -> Result<()> {
-        match self.transport_protocol {
-            TransportProtocol::Udp => match self.player {
-                OutputPlayer::Ffmpeg => self.start_ffmpeg_receiver(),
-                OutputPlayer::Gstreamer => self.start_gst_recv_udp(),
-                OutputPlayer::Manual => {
-                    match (&self.video, &self.audio) {
-                        (Some(video), Some(_)) => {
-                            let cmd = build_gst_recv_udp_cmd(Some(video.encoder), true, self.port);
-                            println!(
-                                "Start stream receiver for H264 encoded video and OPUS encoded audio:"
-                            );
-                            println!("{cmd}");
-                            println!();
-                        }
-                        (Some(video), None) => {
-                            let cmd = build_gst_recv_udp_cmd(Some(video.encoder), false, self.port);
-                            println!("Start stream receiver for H264 encoded video:");
-                            println!("{cmd}");
-                            println!();
-                        }
-                        (None, Some(_)) => {
-                            let cmd = build_gst_recv_udp_cmd(None, true, self.port);
-                            println!("Start stream receiver for OPUS encoded audio");
-                            println!("{cmd}");
-                            println!();
-                        }
-                        _ => unreachable!(),
-                    }
-
-                    loop {
-                        let confirmation = Confirm::new("Is player running? [Y/n]")
-                            .with_default(true)
-                            .prompt()?;
-                        if confirmation {
-                            return Ok(());
-                        }
-                    }
-                }
-            },
-            TransportProtocol::TcpServer => Ok(()),
-        }
-    }
-
-    fn on_after_registration(&mut self) -> Result<()> {
-        match self.transport_protocol {
-            TransportProtocol::TcpServer => match self.player {
-                OutputPlayer::Gstreamer => self.start_gst_recv_tcp(),
-                OutputPlayer::Manual => {
-                    match (&self.video, &self.audio) {
-                        (Some(video), Some(_)) => {
-                            let cmd = build_gst_recv_tcp_cmd(Some(video.encoder), true, self.port);
-                            println!(
-                                "Start stream receiver for H264 encoded video and OPUS encoded audio:"
-                            );
-                            println!("{cmd}");
-                            println!();
-                        }
-                        (Some(video), None) => {
-                            let cmd = build_gst_recv_tcp_cmd(Some(video.encoder), false, self.port);
-                            println!("Start stream receiver for H264 encoded video:");
-                            println!("{cmd}");
-                            println!();
-                        }
-                        (None, Some(_)) => {
-                            let cmd = build_gst_recv_tcp_cmd(None, true, self.port);
-                            println!("Start stream receiver for OPUS encoded audio:");
-                            println!("{cmd}");
-                            println!();
-                        }
-                        _ => unreachable!(),
-                    }
-                    Ok(())
-                }
-                _ => Err(anyhow!("Invalid player for RTP in TCP server mode.")),
-            },
-            TransportProtocol::Udp => Ok(()),
-        }
     }
 }
 

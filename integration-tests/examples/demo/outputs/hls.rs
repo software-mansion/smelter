@@ -11,7 +11,7 @@ use tracing::error;
 
 use crate::{
     inputs::{InputHandle, filter_video_inputs},
-    outputs::{AudioEncoder, OutputHandle, VideoEncoder, VideoResolution, scene::Scene},
+    outputs::{AudioEncoder, VideoEncoder, VideoResolution, scene::Scene},
     players::OutputPlayer,
     smelter_state::RunningState,
 };
@@ -41,20 +41,11 @@ pub struct HlsOutput {
 }
 
 impl HlsOutput {
-    fn start_ffmpeg_receiver(&mut self) -> Result<()> {
-        let stream_handle = start_ffmpeg_receive_hls(&self.path)?;
-        self.stream_handles.push(stream_handle);
-        Ok(())
-    }
-}
-
-#[typetag::serde]
-impl OutputHandle for HlsOutput {
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "hls",
             "path": self.path,
@@ -63,19 +54,19 @@ impl OutputHandle for HlsOutput {
         })
     }
 
-    fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
 
-    fn on_before_registration(&mut self) -> Result<()> {
+    pub fn on_before_registration(&mut self) -> Result<()> {
         let dir_path = self.path.parent().unwrap();
         Ok(fs::create_dir(dir_path)?)
     }
 
-    fn on_after_registration(&mut self) -> Result<()> {
+    pub fn on_after_registration(&mut self) -> Result<()> {
         match self.player {
             OutputPlayer::Ffmpeg => self.start_ffmpeg_receiver(),
             OutputPlayer::Manual => {
@@ -86,6 +77,12 @@ impl OutputHandle for HlsOutput {
             }
             _ => unreachable!(),
         }
+    }
+
+    fn start_ffmpeg_receiver(&mut self) -> Result<()> {
+        let stream_handle = start_ffmpeg_receive_hls(&self.path)?;
+        self.stream_handles.push(stream_handle);
+        Ok(())
     }
 }
 

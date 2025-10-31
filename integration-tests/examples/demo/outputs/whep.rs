@@ -13,7 +13,7 @@ use tracing::error;
 
 use crate::{
     inputs::{InputHandle, filter_video_inputs},
-    outputs::{AudioEncoder, OutputHandle, VideoEncoder, VideoResolution, scene::Scene},
+    outputs::{AudioEncoder, VideoEncoder, VideoResolution, scene::Scene},
 };
 
 const WHEP_TOKEN_ENV: &str = "WHEP_OUTPUT_BEARER_TOKEN";
@@ -38,13 +38,12 @@ pub struct WhepOutput {
     audio: Option<WhepOutputAudioOptions>,
 }
 
-#[typetag::serde]
-impl OutputHandle for WhepOutput {
-    fn name(&self) -> &str {
+impl WhepOutput {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "whep_server",
             "bearer_token": self.bearer_token,
@@ -53,7 +52,7 @@ impl OutputHandle for WhepOutput {
         })
     }
 
-    fn on_after_registration(&mut self) -> Result<()> {
+    pub fn on_after_registration(&mut self) -> Result<()> {
         let html_path = integration_tests_root().join("examples/demo/whep.html");
 
         let url = format!(
@@ -69,7 +68,7 @@ impl OutputHandle for WhepOutput {
         Ok(())
     }
 
-    fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
