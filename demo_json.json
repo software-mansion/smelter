@@ -13,22 +13,6 @@
   ],
   "outputs": [
     {
-      "type": "RtmpOutput",
-      "video": {
-        "root_id": "root",
-        "resolution": {
-          "width": 1920,
-          "height": 1080
-        },
-        "encoder": "FfmpegH264",
-        "scene": "Tiles"
-      },
-      "audio": {
-        "encoder": "Aac"
-      },
-      "player": "Ffmpeg"
-    },
-    {
       "type": "WhepOutput",
       "name": "output_whep_0",
       "bearer_token": "example",

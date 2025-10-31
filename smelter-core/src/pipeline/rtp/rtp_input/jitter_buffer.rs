@@ -84,7 +84,7 @@ impl RtpJitterBuffer {
 
         self.input_buffer.recalculate_buffer(pts);
 
-        trace!(packet=?packet.header, ?pts, "Writing packet to jitter buffer");
+        trace!(packet=?packet.header, ?pts, buffer_size=self.packets.len(), "Writing packet to jitter buffer");
         self.packets.insert(
             sequence_number,
             JitterBufferPacket {
