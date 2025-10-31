@@ -4579,6 +4579,7 @@ dependencies = [
  "crossbeam-channel",
  "glyphon",
  "image",
+ "itertools 0.14.0",
  "libcef",
  "naga",
  "nalgebra-glm",

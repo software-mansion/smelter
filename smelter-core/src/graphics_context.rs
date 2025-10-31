@@ -25,6 +25,8 @@ pub struct GraphicsContext {
 
 #[derive(Debug, Default, Clone)]
 pub struct GraphicsContextOptions<'a> {
+    pub device_id: Option<u32>,
+    pub driver_name: Option<String>,
     pub force_gpu: bool,
     pub features: wgpu::Features,
     pub limits: wgpu::Limits,

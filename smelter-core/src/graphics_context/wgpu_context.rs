@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use smelter_render::{required_wgpu_features, set_required_wgpu_limits};
 use tracing::{error, info};
 
@@ -13,6 +14,8 @@ pub fn create_wgpu_graphics_ctx(
         features,
         limits,
         compatible_surface,
+        device_id,
+        driver_name,
         ..
     } = opts;
 
@@ -22,13 +25,35 @@ pub fn create_wgpu_graphics_ctx(
     });
 
     #[cfg(not(target_arch = "wasm32"))]
-    log_available_adapters(&instance);
+    log_available_adapters(&instance, compatible_surface);
 
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptionsBase {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        force_fallback_adapter: false,
-        compatible_surface,
-    }))?;
+    let adapter = instance
+        .enumerate_adapters(wgpu::Backends::all())
+        .into_iter()
+        .filter(|adapter| match compatible_surface {
+            Some(surface) => adapter.is_surface_supported(surface),
+            None => true,
+        })
+        .filter(|a| match device_id {
+            Some(device_id) => a.get_info().device == device_id,
+            None => true,
+        })
+        .filter(|a| match driver_name {
+            Some(ref driver_name) => {
+                let info = a.get_info();
+                let driver_name = driver_name.to_lowercase();
+                info.driver.to_lowercase().contains(&driver_name)
+                    || info.driver_info.to_lowercase().contains(&driver_name)
+            }
+            None => true,
+        })
+        .sorted_by_key(|a| match a.get_info().device_type {
+            wgpu::DeviceType::DiscreteGpu => 0,
+            wgpu::DeviceType::IntegratedGpu => 1,
+            _ => 3,
+        })
+        .next()
+        .ok_or(CreateGraphicsContextError::NoAdapter)?;
 
     let adapter_info = adapter.get_info();
     info!(
@@ -71,10 +96,14 @@ pub fn create_wgpu_graphics_ctx(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn log_available_adapters(instance: &wgpu::Instance) {
+fn log_available_adapters(instance: &wgpu::Instance, compatible_surface: Option<&wgpu::Surface>) {
     let adapters: Vec<_> = instance
         .enumerate_adapters(wgpu::Backends::all())
         .iter()
+        .filter(|adapter| match compatible_surface {
+            Some(surface) => adapter.is_surface_supported(surface),
+            None => true,
+        })
         .map(|adapter| {
             let info = adapter.get_info();
             format!("\n - {info:?}")
