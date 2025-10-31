@@ -111,7 +111,7 @@ impl WhepOutputBuilder {
             builder = builder.prompt_video()?.prompt_audio()?;
 
             if builder.video.is_none() && builder.audio.is_none() {
-                error!("Either audio or video has to be specified for WHEP output");
+                error!("Either audio or video has to be specified.");
             } else {
                 break;
             }

@@ -8,12 +8,21 @@ use inquire::{Select, Text};
 use integration_tests::paths::integration_tests_root;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use strum::IntoEnumIterator;
+use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::info;
 
 use crate::inputs::{InputHandle, VideoDecoder};
 
 const WHIP_TOKEN_ENV: &str = "WHIP_INPUT_BEARER_TOKEN";
+
+#[derive(Debug, Display, EnumIter, Clone)]
+pub enum WhipRegisterOptions {
+    #[strum(to_string = "Set video stream")]
+    SetVideoStream,
+
+    #[strum(to_string = "Skip")]
+    Skip,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WhipInput {
@@ -113,32 +122,39 @@ impl WhipInputBuilder {
     }
 
     fn prompt_video(self) -> Result<Self> {
-        let mut video = WhipInputVideoOptions::default();
+        let video_options = WhipRegisterOptions::iter().collect();
+        let video_selection = Select::new("Set video stream?", video_options).prompt_skippable()?;
 
-        let mut decoder_options = VideoDecoder::iter().collect::<Vec<_>>();
-        let mut decoder_preferences = vec![];
-        loop {
-            let decoder_selection = Select::new(
-                "Select decoder (ESC or Any to progress):",
-                decoder_options.clone(),
-            )
-            .prompt_skippable()?;
+        match video_selection {
+            Some(WhipRegisterOptions::SetVideoStream) => {
+                let mut video = WhipInputVideoOptions::default();
+                let mut decoder_options = VideoDecoder::iter().collect::<Vec<_>>();
+                let mut decoder_preferences = vec![];
+                loop {
+                    let decoder_selection = Select::new(
+                        "Select decoder (ESC or Any to progress):",
+                        decoder_options.clone(),
+                    )
+                    .prompt_skippable()?;
 
-            match decoder_selection {
-                Some(decoder) => {
-                    decoder_preferences.push(decoder);
-                    if decoder == VideoDecoder::Any {
-                        break;
-                    } else {
-                        decoder_options.retain(|dec| *dec != decoder);
+                    match decoder_selection {
+                        Some(decoder) => {
+                            decoder_preferences.push(decoder);
+                            if decoder == VideoDecoder::Any {
+                                break;
+                            } else {
+                                decoder_options.retain(|dec| *dec != decoder);
+                            }
+                        }
+                        None => break,
                     }
                 }
-                None => break,
-            }
-        }
-        video.decoder_preferences = decoder_preferences;
+                video.decoder_preferences = decoder_preferences;
 
-        Ok(self.with_video(video))
+                Ok(self.with_video(video))
+            }
+            Some(WhipRegisterOptions::Skip) | None => Ok(self),
+        }
     }
 
     pub fn with_name(mut self, name: String) -> Self {
