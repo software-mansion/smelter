@@ -20,6 +20,7 @@ use crate::{
             handle_keyframe_requests::handle_keyframe_requests,
             whip_output::{
                 PeerConnection,
+                extract_negotiated_codecs::NegotiatedCodec,
                 track_task_audio::{WhipAudioTrackThread, WhipAudioTrackThreadOptions},
                 track_task_video::{WhipVideoTrackThread, WhipVideoTrackThreadOptions},
             },
@@ -70,19 +71,17 @@ pub async fn setup_video_track(
     ctx: &Arc<PipelineCtx>,
     output_id: &OutputId,
     rtc_sender: Arc<RTCRtpSender>,
+    negotiated_codecs: Vec<NegotiatedCodec>,
     encoder_preferences: Vec<VideoEncoderOptions>,
 ) -> Result<(WhipVideoTrackThreadHandle, WhipClientTrack), WebrtcClientError> {
-    let rtc_sender_params = rtc_sender.get_parameters().await;
-    debug!("RTCRtpSender video params: {:#?}", rtc_sender_params);
-    let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
-
     let Some((options, codec_params)) = encoder_preferences.iter().find_map(|encoder_options| {
-        let supported = supported_codecs.iter().find_map(|codec_params| {
-            match encoder_options.matches(&codec_params.capability) {
-                true => Some(codec_params.clone()),
-                false => None,
-            }
-        })?;
+        let supported =
+            negotiated_codecs.iter().find_map(|codec_params| {
+                match encoder_options.matches(&codec_params.capability) {
+                    true => Some(codec_params.clone()),
+                    false => None,
+                }
+            })?;
         Some((encoder_options.clone(), supported.clone()))
     }) else {
         return Err(WebrtcClientError::NoVideoCodecNegotiated);
@@ -106,6 +105,7 @@ pub async fn setup_video_track(
         }
     }
 
+    let rtc_sender_params = rtc_sender.get_parameters().await;
     let ssrc = match rtc_sender_params.encodings.first() {
         Some(e) => e.ssrc,
         None => rand::rng().random::<u32>(),
@@ -184,19 +184,17 @@ pub async fn setup_audio_track(
     output_id: &OutputId,
     rtc_sender: Arc<RTCRtpSender>,
     pc: PeerConnection,
+    negotiated_codecs: Vec<NegotiatedCodec>,
     encoder_preferences: Vec<AudioEncoderOptions>,
 ) -> Result<(WhipAudioTrackThreadHandle, WhipClientTrack), WebrtcClientError> {
-    let rtc_sender_params = rtc_sender.get_parameters().await;
-    debug!("RTCRtpSender audio params: {:#?}", rtc_sender_params);
-
-    let supported_codecs = &rtc_sender_params.rtp_parameters.codecs;
     let Some((options, codec_params)) = encoder_preferences.iter().find_map(|encoder_options| {
-        let supported = supported_codecs.iter().find_map(|codec_params| {
-            match encoder_options.matches(&codec_params.capability) {
-                true => Some(codec_params.clone()),
-                false => None,
-            }
-        })?;
+        let supported =
+            negotiated_codecs.iter().find_map(|codec_params| {
+                match encoder_options.matches(&codec_params.capability) {
+                    true => Some(codec_params.clone()),
+                    false => None,
+                }
+            })?;
         Some((encoder_options.clone(), supported.clone()))
     }) else {
         return Err(WebrtcClientError::NoAudioCodecNegotiated);
@@ -220,6 +218,7 @@ pub async fn setup_audio_track(
         }
     }
 
+    let rtc_sender_params = rtc_sender.get_parameters().await;
     let ssrc = match rtc_sender_params.encodings.first() {
         Some(e) => e.ssrc,
         None => rand::rng().random::<u32>(),
