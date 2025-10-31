@@ -8,7 +8,7 @@ import { createRoomStore } from './app/store';
 import { config } from './config';
 import fs from 'fs-extra';
 import shadersController from './shaders/shaders';
-import type { RegisterWhipInputResponse } from '@swmansion/smelter-node/dist/api';
+import type { RegisterWhipServerInputResponse } from '@swmansion/smelter-node/dist/api';
 
 export type SmelterOutput = {
   id: string;
@@ -97,7 +97,7 @@ export class SmelterManager {
       throw err;
     }
   }
-  public async registerWhipInput(inputId: string): Promise<RegisterWhipInputResponse> {
+  public async registerWhipInput(inputId: string): Promise<RegisterWhipServerInputResponse> {
     return await this.instance.registerInput(inputId, { type: 'whip_server' });
   }
 
