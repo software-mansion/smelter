@@ -4,7 +4,7 @@ FROM ubuntu:noble-20250716 as builder
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG USERNAME=smelter
-ARG RUST_VERSION=1.90
+ARG RUST_VERSION=1.91
 
 ENV DEBIAN_FRONTEND=noninteractive
 
