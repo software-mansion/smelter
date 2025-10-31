@@ -11,7 +11,7 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::info;
 
-use crate::inputs::{InputHandle, VideoDecoder};
+use crate::inputs::VideoDecoder;
 
 const WHIP_TOKEN_ENV: &str = "WHIP_INPUT_BEARER_TOKEN";
 
@@ -31,13 +31,16 @@ pub struct WhipInput {
     video: Option<WhipInputVideoOptions>,
 }
 
-#[typetag::serde]
-impl InputHandle for WhipInput {
-    fn name(&self) -> &str {
+impl WhipInput {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self) -> serde_json::Value {
+    pub fn has_video(&self) -> bool {
+        self.video.is_some()
+    }
+
+    pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "whip_server",
             "bearer_token": self.bearer_token,
@@ -45,11 +48,7 @@ impl InputHandle for WhipInput {
         })
     }
 
-    fn has_video(&self) -> bool {
-        self.video.is_some()
-    }
-
-    fn on_after_registration(&mut self) -> Result<()> {
+    pub fn on_after_registration(&mut self) -> Result<()> {
         let html_path = integration_tests_root().join("examples/demo/whip.html");
         let url = format!(
             "file://{}?url=http://127.0.0.1:9000/whip/{}&token={}",

@@ -8,7 +8,7 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::info;
 
-use crate::inputs::{InputHandle, VideoDecoder};
+use crate::inputs::VideoDecoder;
 
 const WHEP_TOKEN_ENV: &str = "WHEP_INPUT_BEARER_TOKEN";
 const WHEP_URL_ENV: &str = "WHEP_INPUT_URL";
@@ -30,13 +30,16 @@ pub struct WhepInput {
     video: Option<WhepInputVideoOptions>,
 }
 
-#[typetag::serde]
-impl InputHandle for WhepInput {
-    fn name(&self) -> &str {
+impl WhepInput {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self) -> serde_json::Value {
+    pub fn has_video(&self) -> bool {
+        self.video.is_some()
+    }
+
+    pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "whep_client",
             "endpoint_url": self.endpoint_url,
@@ -45,11 +48,7 @@ impl InputHandle for WhepInput {
         })
     }
 
-    fn has_video(&self) -> bool {
-        self.video.is_some()
-    }
-
-    fn on_before_registration(&mut self) -> Result<()> {
+    pub fn on_before_registration(&mut self) -> Result<()> {
         let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
         let url = "http://127.0.0.1:8080";
 

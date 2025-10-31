@@ -5,7 +5,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::{Display, EnumIter};
 
-use crate::inputs::InputHandle;
+use crate::{
+    inputs::InputHandle,
+    outputs::{
+        hls::HlsOutput, mp4::Mp4Output, rtmp::RtmpOutput, rtp::RtpOutput, whep::WhepOutput,
+        whip::WhipOutput,
+    },
+};
 
 pub mod hls;
 pub mod mp4;
@@ -16,22 +22,42 @@ pub mod whip;
 
 pub mod scene;
 
-#[typetag::serde(tag = "type")]
-pub trait OutputHandle: Debug {
-    fn name(&self) -> &str;
-    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value;
-    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value;
+#[derive(Debug, Serialize, Deserialize)]
+pub enum OutputHandle {
+    Rtp(RtpOutput),
+    Rtmp(RtmpOutput),
+    Mp4(Mp4Output),
+    Whip(WhipOutput),
+    Whep(WhepOutput),
+    Hls(HlsOutput),
+}
 
-    fn on_before_registration(&mut self) -> Result<()> {
-        Ok(())
+impl OutputHandle {
+    pub fn name(&self) -> &str {
+        todo!()
     }
 
-    fn on_after_registration(&mut self) -> Result<()> {
-        Ok(())
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
+        todo!()
+    }
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
+        todo!()
+    }
+
+    pub fn on_before_registration(&mut self) -> Result<()> {
+        match self {
+            _ => Ok(()),
+        }
+    }
+
+    pub fn on_after_registration(&mut self) -> Result<()> {
+        match self {
+            _ => Ok(()),
+        }
     }
 }
 
-impl std::fmt::Display for dyn OutputHandle {
+impl std::fmt::Display for OutputHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }

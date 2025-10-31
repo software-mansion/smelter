@@ -4,35 +4,79 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
+use crate::inputs::{
+    hls::HlsInput, mp4::Mp4Input, rtp::RtpInput, whep::WhepInput, whip::WhipInput,
+};
+
 pub mod hls;
 pub mod mp4;
 pub mod rtp;
 pub mod whep;
 pub mod whip;
 
-#[typetag::serde(tag = "type")]
-pub trait InputHandle: Debug {
-    fn name(&self) -> &str;
-    fn serialize_register(&self) -> serde_json::Value;
+#[derive(Debug, Serialize, Deserialize)]
+pub enum InputHandle {
+    Rtp(RtpInput),
+    Mp4(Mp4Input),
+    Hls(HlsInput),
+    Whip(WhipInput),
+    Whep(WhepInput),
+}
 
-    fn has_video(&self) -> bool {
-        true
+impl InputHandle {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Rtp(i) => i.name(),
+            Self::Mp4(i) => i.name(),
+            Self::Hls(i) => i.name(),
+            Self::Whip(i) => i.name(),
+            Self::Whep(i) => i.name(),
+        }
     }
 
-    fn has_audio(&self) -> bool {
-        true
+    pub fn serialize_register(&self) -> serde_json::Value {
+        match self {
+            Self::Rtp(i) => i.serialize_register(),
+            Self::Mp4(i) => i.serialize_register(),
+            Self::Hls(i) => i.serialize_register(),
+            Self::Whip(i) => i.serialize_register(),
+            Self::Whep(i) => i.serialize_register(),
+        }
     }
 
-    fn on_before_registration(&mut self) -> Result<()> {
-        Ok(())
+    pub fn has_video(&self) -> bool {
+        match self {
+            Self::Rtp(i) => i.has_video(),
+            Self::Whep(i) => i.has_video(),
+            Self::Whip(i) => i.has_video(),
+            _ => true,
+        }
     }
 
-    fn on_after_registration(&mut self) -> Result<()> {
-        Ok(())
+    pub fn has_audio(&self) -> bool {
+        match self {
+            Self::Rtp(i) => i.has_audio(),
+            _ => true,
+        }
+    }
+
+    pub fn on_before_registration(&mut self) -> Result<()> {
+        match self {
+            Self::Whep(i) => i.on_before_registration(),
+            _ => Ok(()),
+        }
+    }
+
+    pub fn on_after_registration(&mut self) -> Result<()> {
+        match self {
+            Self::Rtp(i) => i.on_after_registration(),
+            Self::Whip(i) => i.on_after_registration(),
+            _ => Ok(()),
+        }
     }
 }
 
-impl std::fmt::Display for dyn InputHandle {
+impl std::fmt::Display for InputHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
@@ -98,18 +142,8 @@ impl From<VideoDecoder> for ffmpeg::Video {
 pub enum AudioDecoder {
     #[strum(to_string = "opus")]
     Opus,
-    // TODO: AAC
 }
 
-pub fn filter_video_inputs<'a>(inputs: &'a [&'a dyn InputHandle]) -> Vec<&'a dyn InputHandle> {
-    inputs
-        .iter()
-        .filter_map(|input| {
-            if input.has_video() {
-                Some(*input)
-            } else {
-                None
-            }
-        })
-        .collect()
+pub fn filter_video_inputs(inputs: &[InputHandle]) -> Vec<&InputHandle> {
+    inputs.iter().filter(|i| i.has_video()).collect()
 }

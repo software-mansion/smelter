@@ -37,13 +37,12 @@ pub struct WhipOutput {
     audio: Option<WhipOutputAudioOptions>,
 }
 
-#[typetag::serde]
-impl OutputHandle for WhipOutput {
-    fn name(&self) -> &str {
+impl WhipOutput {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "whip_client",
             "endpoint_url": self.endpoint_url,
@@ -53,7 +52,7 @@ impl OutputHandle for WhipOutput {
         })
     }
 
-    fn on_before_registration(&mut self) -> Result<()> {
+    pub fn on_before_registration(&mut self) -> Result<()> {
         let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
         let url = "http://127.0.0.1:8080";
 
@@ -73,7 +72,7 @@ impl OutputHandle for WhipOutput {
         }
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
@@ -282,7 +281,7 @@ impl WhipOutputVideoOptions {
             .collect()
     }
 
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
@@ -293,7 +292,7 @@ impl WhipOutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
@@ -334,7 +333,7 @@ impl WhipOutputAudioOptions {
             .collect()
     }
 
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {
@@ -356,7 +355,7 @@ impl WhipOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {

@@ -76,20 +76,11 @@ impl From<RtmpOutputSerialize> for RtmpOutput {
 }
 
 impl RtmpOutput {
-    fn start_ffmpeg_recv(&mut self) -> Result<()> {
-        let player_handle = start_ffmpeg_rtmp_receive(self.port)?;
-        self.stream_handles.push(player_handle);
-        Ok(())
-    }
-}
-
-#[typetag::serde]
-impl OutputHandle for RtmpOutput {
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "rtmp_client",
             "url": self.url,
@@ -98,14 +89,14 @@ impl OutputHandle for RtmpOutput {
         })
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
             "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
 
-    fn on_before_registration(&mut self) -> Result<()> {
+    pub fn on_before_registration(&mut self) -> Result<()> {
         match self.player {
             OutputPlayer::Ffmpeg => self.start_ffmpeg_recv(),
             OutputPlayer::Manual => {
@@ -127,6 +118,12 @@ impl OutputHandle for RtmpOutput {
             }
             _ => Err(anyhow!("Invalid player for RTMP output!")),
         }
+    }
+
+    fn start_ffmpeg_recv(&mut self) -> Result<()> {
+        let player_handle = start_ffmpeg_rtmp_receive(self.port)?;
+        self.stream_handles.push(player_handle);
+        Ok(())
     }
 }
 
@@ -270,7 +267,7 @@ pub struct RtmpOutputVideoOptions {
 }
 
 impl RtmpOutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
 
         json!({
@@ -284,7 +281,7 @@ impl RtmpOutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
 
         json!({
@@ -315,7 +312,7 @@ pub struct RtmpOutputAudioOptions {
 }
 
 impl RtmpOutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let input_json = inputs
             .iter()
             .filter_map(|input| {
@@ -339,7 +336,7 @@ impl RtmpOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let input_json = inputs
             .iter()
             .filter_map(|input| {

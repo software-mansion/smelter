@@ -41,20 +41,11 @@ pub struct HlsOutput {
 }
 
 impl HlsOutput {
-    fn start_ffmpeg_receiver(&mut self) -> Result<()> {
-        let stream_handle = start_ffmpeg_receive_hls(&self.path)?;
-        self.stream_handles.push(stream_handle);
-        Ok(())
-    }
-}
-
-#[typetag::serde]
-impl OutputHandle for HlsOutput {
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "hls",
             "path": self.path,
@@ -63,19 +54,19 @@ impl OutputHandle for HlsOutput {
         })
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
 
-    fn on_before_registration(&mut self) -> Result<()> {
+    pub fn on_before_registration(&mut self) -> Result<()> {
         let dir_path = self.path.parent().unwrap();
         Ok(fs::create_dir(dir_path)?)
     }
 
-    fn on_after_registration(&mut self) -> Result<()> {
+    pub fn on_after_registration(&mut self) -> Result<()> {
         match self.player {
             OutputPlayer::Ffmpeg => self.start_ffmpeg_receiver(),
             OutputPlayer::Manual => {
@@ -86,6 +77,12 @@ impl OutputHandle for HlsOutput {
             }
             _ => unreachable!(),
         }
+    }
+
+    fn start_ffmpeg_receiver(&mut self) -> Result<()> {
+        let stream_handle = start_ffmpeg_receive_hls(&self.path)?;
+        self.stream_handles.push(stream_handle);
+        Ok(())
     }
 }
 
@@ -232,7 +229,7 @@ pub struct HlsOutputVideoOptions {
 }
 
 impl HlsOutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
@@ -245,7 +242,7 @@ impl HlsOutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
@@ -275,7 +272,7 @@ pub struct HlsOutputAudioOptions {
 }
 
 impl HlsOutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {
@@ -299,7 +296,7 @@ impl HlsOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {

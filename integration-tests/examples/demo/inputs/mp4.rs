@@ -12,11 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info};
 
-use crate::{
-    autocompletion::FilePathCompleter,
-    inputs::{InputHandle, VideoDecoder},
-    utils::resolve_path,
-};
+use crate::{autocompletion::FilePathCompleter, inputs::VideoDecoder, utils::resolve_path};
 
 const MP4_INPUT_SOURCE: &str = "MP4_INPUT_SOURCE";
 
@@ -30,13 +26,12 @@ pub struct Mp4Input {
     input_loop: bool,
 }
 
-#[typetag::serde]
-impl InputHandle for Mp4Input {
-    fn name(&self) -> &str {
+impl Mp4Input {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self) -> serde_json::Value {
+    pub fn serialize_register(&self) -> serde_json::Value {
         let (source_key, source_val) = self.source.serialize();
         json!({
             "type": "mp4",
