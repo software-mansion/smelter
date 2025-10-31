@@ -2,7 +2,7 @@
 fn main() {
     use std::io::Write;
 
-    use vk_video::{EncodedInputChunk, Frame, VulkanInstance};
+    use vk_video::{DecoderParameters, EncodedInputChunk, Frame, VulkanInstance};
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::INFO)
@@ -31,7 +31,9 @@ fn main() {
         )
         .unwrap();
 
-    let mut decoder = vulkan_device.create_bytes_decoder().unwrap();
+    let mut decoder = vulkan_device
+        .create_bytes_decoder(DecoderParameters::default())
+        .unwrap();
 
     let mut output_file = std::fs::File::create("output.nv12").unwrap();
 

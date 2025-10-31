@@ -42,6 +42,27 @@ pub struct Rational {
     pub denominator: NonZeroU32,
 }
 
+/// Parameters for decoder creation
+#[derive(Debug, Clone, Copy)]
+pub struct DecoderParameters {
+    /// If set to `true`, the decoder will detect missed frames.
+    /// If missed frames are detected, the decoder will enter a corrupted state and won't decode
+    /// any reference frames until an IDR frame is provided.
+    ///
+    /// If set to `false`, the decoder won't detect missed frames, which may cause visible artifacts.
+    ///
+    /// **Defaults to `true`**
+    pub detect_missed_frames: bool,
+}
+
+impl Default for DecoderParameters {
+    fn default() -> Self {
+        Self {
+            detect_missed_frames: true,
+        }
+    }
+}
+
 /// Things the encoder needs to know about the video
 #[derive(Debug, Clone, Copy)]
 pub struct VideoParameters {
@@ -268,6 +289,7 @@ impl VulkanDevice {
 
     pub fn create_wgpu_textures_decoder(
         self: &Arc<Self>,
+        parameters: DecoderParameters,
     ) -> Result<WgpuTexturesDecoder, DecoderError> {
         let decode_caps = self
             .native_decode_capabilities
@@ -275,7 +297,7 @@ impl VulkanDevice {
             .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
         let max_profile = decode_caps.max_profile();
 
-        let parser = Parser::default();
+        let parser = Parser::new(parameters.detect_missed_frames);
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
             h264_decode_queue: self
@@ -299,14 +321,17 @@ impl VulkanDevice {
         })
     }
 
-    pub fn create_bytes_decoder(self: &Arc<Self>) -> Result<BytesDecoder, DecoderError> {
+    pub fn create_bytes_decoder(
+        self: &Arc<Self>,
+        parameters: DecoderParameters,
+    ) -> Result<BytesDecoder, DecoderError> {
         let decode_caps = self
             .native_decode_capabilities
             .as_ref()
             .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
         let max_profile = decode_caps.max_profile();
 
-        let parser = Parser::default();
+        let parser = Parser::new(parameters.detect_missed_frames);
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
             h264_decode_queue: self
