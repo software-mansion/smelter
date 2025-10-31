@@ -37,14 +37,12 @@ pub enum TransportProtocol {
     TcpServer,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum RunningState {
     Running,
     #[default]
     Idle,
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SmelterState {

@@ -74,7 +74,6 @@ pub enum LogSeverity {
     Disable = libcef_sys::cef_log_severity_t_LOGSEVERITY_DISABLE,
 }
 
-
 #[cfg(target_os = "linux")]
 fn executables_paths() -> (_cef_string_utf16_t, _cef_string_utf16_t) {
     let browser_subprocess_path = env::var(PROCESS_HELPER_PATH_ENV).unwrap_or_else(|_| {

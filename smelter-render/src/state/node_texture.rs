@@ -182,4 +182,3 @@ impl<State> OptionalState<State> {
         mem::replace(self, replacement)
     }
 }
-
