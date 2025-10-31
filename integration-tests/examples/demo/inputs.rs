@@ -132,10 +132,9 @@ impl From<VideoDecoder> for ffmpeg::Video {
 pub enum AudioDecoder {
     #[strum(to_string = "opus")]
     Opus,
-    // TODO: AAC
 }
 
-pub fn filter_video_inputs<'a>(inputs: &'a [&'a dyn InputHandle]) -> Vec<&'a dyn InputHandle> {
+pub fn filter_video_inputs<'a>(inputs: &'a [&'a InputHandle]) -> Vec<&'a InputHandle> {
     inputs
         .iter()
         .filter_map(|input| {
