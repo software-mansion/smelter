@@ -1,5 +1,6 @@
 use establish_peer_connection::exchange_sdp_offers;
 use peer_connection::PeerConnection;
+use replace_track_with_negotiated_codec::replace_tracks_with_negotiated_codec;
 use setup_track::{setup_audio_track, setup_video_track};
 use smelter_render::OutputId;
 use std::{
@@ -33,6 +34,7 @@ use crate::prelude::*;
 mod codec_preferences;
 mod establish_peer_connection;
 mod peer_connection;
+mod replace_track_with_negotiated_codec;
 mod setup_track;
 mod track_task_audio;
 mod track_task_video;
@@ -109,6 +111,10 @@ impl WhipClientTask {
         let audio_rtc_sender = pc.new_audio_track().await?;
 
         let (session_url, answer) = exchange_sdp_offers(&pc, &client).await?;
+
+        // replace tracks with negotiated codecs
+        // webrtc-rs does not support codec negotiation properly https://github.com/webrtc-rs/webrtc/issues/737
+        replace_tracks_with_negotiated_codec(&answer, &video_rtc_sender, &audio_rtc_sender).await?;
 
         pc.set_remote_description(answer).await?;
 
