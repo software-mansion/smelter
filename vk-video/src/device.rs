@@ -42,14 +42,25 @@ pub struct Rational {
     pub denominator: NonZeroU32,
 }
 
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MissedFrameHandling {
+    /// When missed frames are detected, error on every subsequent frame that depends on them
+    /// (i. e. fail on every frame until an IDR frame arrives)
+    #[default]
+    Strict,
+
+    /// When missed frames are detected, try to decode later frames that depend on them anyway.
+    /// This can produce decoded frames with very visible artifacts.
+    Tolerant,
+}
+
 /// Parameters for decoder creation
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct DecoderParameters {
-    /// If set to `false` and decoder detects missing frames, it will enter corrupted state
-    /// and won't decode any reference frames until IDR frame is provided.
+    /// See [`MissedFrameHandling`] for description of different handling approaches.
     ///
-    /// **Defaults to `false`**
-    pub allow_gaps_in_frames: bool,
+    /// **Defaults to [`MissedFrameHandling::Strict`]**
+    pub missed_frame_handling: MissedFrameHandling,
 }
 
 /// Things the encoder needs to know about the video
@@ -66,7 +77,7 @@ pub struct VideoParameters {
 pub struct EncoderParameters {
     /// Number of frames between IDRs. If [`None`], this will be set to 30.
     pub idr_period: Option<NonZeroU32>,
-    /// See [`RateControl`] for description of differnt rate control modes. The selected mode must
+    /// See [`RateControl`] for description of different rate control modes. The selected mode must
     /// be supported by the device.
     pub rate_control: RateControl,
     /// Max number of references a P-frame can have. If [`None`], this value will be set
@@ -286,7 +297,7 @@ impl VulkanDevice {
             .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
         let max_profile = decode_caps.max_profile();
 
-        let parser = Parser::new(parameters.allow_gaps_in_frames);
+        let parser = Parser::new(parameters.missed_frame_handling);
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
             h264_decode_queue: self
@@ -320,7 +331,7 @@ impl VulkanDevice {
             .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
         let max_profile = decode_caps.max_profile();
 
-        let parser = Parser::new(parameters.allow_gaps_in_frames);
+        let parser = Parser::new(parameters.missed_frame_handling);
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
             h264_decode_queue: self

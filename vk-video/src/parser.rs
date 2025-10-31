@@ -13,6 +13,8 @@ use reference_manager::ReferenceContext;
 pub(crate) use reference_manager::ReferenceId;
 pub use reference_manager::ReferenceManagementError;
 
+use crate::MissedFrameHandling;
+
 mod au_splitter;
 mod nalu_parser;
 mod nalu_splitter;
@@ -108,12 +110,12 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(allow_gaps_in_frames: bool) -> Self {
+    pub fn new(missed_frame_handling: MissedFrameHandling) -> Self {
         let (tx, rx) = mpsc::channel();
 
         Parser {
             reader: AnnexBReader::accumulate(NalReceiver::new(tx)),
-            reference_ctx: ReferenceContext::new(allow_gaps_in_frames),
+            reference_ctx: ReferenceContext::new(missed_frame_handling),
             au_splitter: AUSplitter::default(),
             receiver: rx,
             nalu_splitter: NALUSplitter::default(),

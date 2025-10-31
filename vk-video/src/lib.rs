@@ -88,7 +88,10 @@ use vulkan_decoder::{FrameSorter, VulkanDecoder};
 
 pub use adapter::{AdapterInfo, VulkanAdapter};
 pub use device::caps::{EncodeCapabilities, EncodeH264Capabilities, EncodeH264ProfileCapabilities};
-pub use device::{DecoderParameters, EncoderParameters, Rational, VideoParameters, VulkanDevice};
+pub use device::{
+    DecoderParameters, EncoderParameters, MissedFrameHandling, Rational, VideoParameters,
+    VulkanDevice,
+};
 pub use instance::VulkanInstance;
 pub use parser::{ParserError, ReferenceManagementError};
 pub use vulkan_decoder::VulkanDecoderError;
