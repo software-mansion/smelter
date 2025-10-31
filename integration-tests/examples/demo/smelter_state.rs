@@ -49,7 +49,7 @@ pub struct SmelterState {
     #[serde(skip)]
     running_state: RunningState,
     inputs: Vec<InputHandle>,
-    outputs: Vec<Box<dyn OutputHandle>>,
+    outputs: Vec<OutputHandle>,
 }
 
 impl SmelterState {
@@ -184,39 +184,38 @@ impl SmelterState {
 
         let protocol = Select::new("Select output protocol:", prot_opts).prompt()?;
 
-        let (mut output_handler, output_json): (Box<dyn OutputHandle>, serde_json::Value) =
-            match protocol {
-                OutputProtocol::Rtp => {
-                    let rtp_output = RtpOutputBuilder::new().prompt()?.build();
-                    let register_request = rtp_output.serialize_register(&self.inputs);
-                    (Box::new(rtp_output), register_request)
-                }
-                OutputProtocol::Rtmp => {
-                    let rtmp_output = RtmpOutputBuilder::new().prompt()?.build();
-                    let register_request = rtmp_output.serialize_register(&self.inputs);
-                    (Box::new(rtmp_output), register_request)
-                }
-                OutputProtocol::Whip => {
-                    let whip_output = WhipOutputBuilder::new().prompt()?.build();
-                    let register_request = whip_output.serialize_register(&self.inputs);
-                    (Box::new(whip_output), register_request)
-                }
-                OutputProtocol::Mp4 => {
-                    let mp4_output = Mp4OutputBuilder::new().prompt()?.build();
-                    let register_request = mp4_output.serialize_register(&self.inputs);
-                    (Box::new(mp4_output), register_request)
-                }
-                OutputProtocol::Whep => {
-                    let whep_output = WhepOutputBuilder::new().prompt()?.build();
-                    let register_request = whep_output.serialize_register(&self.inputs);
-                    (Box::new(whep_output), register_request)
-                }
-                OutputProtocol::Hls => {
-                    let hls_output = HlsOutputBuilder::new().prompt(self.running_state)?.build();
-                    let register_request = hls_output.serialize_register(&self.inputs);
-                    (Box::new(hls_output), register_request)
-                }
-            };
+        let (mut output_handler, output_json): (OutputHandle, serde_json::Value) = match protocol {
+            OutputProtocol::Rtp => {
+                let rtp_output = RtpOutputBuilder::new().prompt()?.build();
+                let register_request = rtp_output.serialize_register(&self.inputs);
+                (OutputHandle::Rtp(rtp_output), register_request)
+            }
+            OutputProtocol::Rtmp => {
+                let rtmp_output = RtmpOutputBuilder::new().prompt()?.build();
+                let register_request = rtmp_output.serialize_register(&self.inputs);
+                (OutputHandle::Rtmp(rtmp_output), register_request)
+            }
+            OutputProtocol::Whip => {
+                let whip_output = WhipOutputBuilder::new().prompt()?.build();
+                let register_request = whip_output.serialize_register(&self.inputs);
+                (OutputHandle::Whip(whip_output), register_request)
+            }
+            OutputProtocol::Mp4 => {
+                let mp4_output = Mp4OutputBuilder::new().prompt()?.build();
+                let register_request = mp4_output.serialize_register(&self.inputs);
+                (OutputHandle::Mp4(mp4_output), register_request)
+            }
+            OutputProtocol::Whep => {
+                let whep_output = WhepOutputBuilder::new().prompt()?.build();
+                let register_request = whep_output.serialize_register(&self.inputs);
+                (OutputHandle::Whep(whep_output), register_request)
+            }
+            OutputProtocol::Hls => {
+                let hls_output = HlsOutputBuilder::new().prompt(self.running_state)?.build();
+                let register_request = hls_output.serialize_register(&self.inputs);
+                (OutputHandle::Hls(hls_output), register_request)
+            }
+        };
 
         output_handler.on_before_registration()?;
 
