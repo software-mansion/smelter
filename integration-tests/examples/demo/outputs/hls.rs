@@ -4,7 +4,7 @@ use anyhow::Result;
 use inquire::Select;
 use integration_tests::{ffmpeg::start_ffmpeg_receive_hls, paths::integration_tests_root};
 use rand::RngCore;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use serde_json::json;
 use strum::{Display, IntoEnumIterator};
 use tracing::error;
@@ -28,8 +28,8 @@ pub enum HlsRegisterOptions {
     Skip,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(from = "HlsOutputOptions", into = "HlsOutputOptions")]
+#[derive(Debug, Deserialize)]
+#[serde(from = "HlsOutputOptions")]
 pub struct HlsOutput {
     name: String,
     path: PathBuf,
@@ -44,14 +44,16 @@ pub struct HlsOutputOptions {
     player: OutputPlayer,
 }
 
-impl Clone for HlsOutput {
-    fn clone(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            path: self.path.clone(),
-            options: self.options.clone(),
-            stream_handles: vec![],
-        }
+impl Serialize for HlsOutput {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("HlsOutput", 3)?;
+        state.serialize_field("video", &self.options.video)?;
+        state.serialize_field("audio", &self.options.audio)?;
+        state.serialize_field("player", &self.options.player)?;
+        state.end()
     }
 }
 
@@ -66,12 +68,6 @@ impl From<HlsOutputOptions> for HlsOutput {
             options: value,
             stream_handles: vec![],
         }
-    }
-}
-
-impl From<HlsOutput> for HlsOutputOptions {
-    fn from(value: HlsOutput) -> Self {
-        value.options.clone()
     }
 }
 

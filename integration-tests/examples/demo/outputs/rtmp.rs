@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow};
 use integration_tests::ffmpeg::start_ffmpeg_rtmp_receive;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use std::process::Child;
 
 use inquire::{Confirm, Select};
@@ -28,8 +28,8 @@ pub enum RtmpRegisterOptions {
     Skip,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(from = "RtmpOutputOptions", into = "RtmpOutputOptions")]
+#[derive(Debug, Deserialize)]
+#[serde(from = "RtmpOutputOptions")]
 pub struct RtmpOutput {
     name: String,
     url: String,
@@ -49,15 +49,16 @@ pub struct RtmpOutputOptions {
     player: OutputPlayer,
 }
 
-impl Clone for RtmpOutput {
-    fn clone(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            url: self.url.clone(),
-            port: self.port,
-            options: self.options.clone(),
-            stream_handles: vec![],
-        }
+impl Serialize for RtmpOutput {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("RtmpOutput", 3)?;
+        state.serialize_field("video", &self.options.video)?;
+        state.serialize_field("audio", &self.options.audio)?;
+        state.serialize_field("player", &self.options.player)?;
+        state.end()
     }
 }
 
@@ -73,12 +74,6 @@ impl From<RtmpOutputOptions> for RtmpOutput {
             options: value,
             stream_handles: vec![],
         }
-    }
-}
-
-impl From<RtmpOutput> for RtmpOutputOptions {
-    fn from(value: RtmpOutput) -> Self {
-        value.options.clone()
     }
 }
 

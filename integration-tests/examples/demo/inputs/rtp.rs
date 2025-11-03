@@ -19,7 +19,7 @@ use integration_tests::{
     },
     paths::integration_tests_root,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::error;
@@ -58,8 +58,8 @@ pub enum RtpRegisterOptions {
     Skip,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(from = "RtpInputOptions", into = "RtpInputOptions")]
+#[derive(Debug, Deserialize)]
+#[serde(from = "RtpInputOptions")]
 pub struct RtpInput {
     name: String,
     port: u16,
@@ -76,14 +76,18 @@ pub struct RtpInputOptions {
     player: InputPlayer,
 }
 
-impl Clone for RtpInput {
-    fn clone(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            port: self.port,
-            options: self.options.clone(),
-            stream_handles: vec![],
-        }
+impl Serialize for RtpInput {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("RtpInput", 5)?;
+        state.serialize_field("video", &self.options.video)?;
+        state.serialize_field("audio", &self.options.audio)?;
+        state.serialize_field("transport_protocol", &self.options.transport_protocol)?;
+        state.serialize_field("path", &self.options.path)?;
+        state.serialize_field("player", &self.options.player)?;
+        state.end()
     }
 }
 
@@ -97,12 +101,6 @@ impl From<RtpInputOptions> for RtpInput {
             options: value,
             stream_handles: vec![],
         }
-    }
-}
-
-impl From<RtpInput> for RtpInputOptions {
-    fn from(value: RtpInput) -> Self {
-        value.options.clone()
     }
 }
 
