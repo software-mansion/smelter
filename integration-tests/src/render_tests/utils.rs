@@ -68,6 +68,8 @@ fn get_graphics_ctx() -> GraphicsContext {
             limits: Default::default(),
             compatible_surface: None,
             libvulkan_path: None,
+            device_id: None,
+            driver_name: None,
         })
         .unwrap()
     })
