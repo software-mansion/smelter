@@ -6,6 +6,8 @@ use h264_reader::nal::{
     sps::SeqParameterSet,
 };
 
+use crate::MissedFrameHandling;
+
 use super::{
     DecodeInformation, DecoderInstruction, PictureInfo, ReferencePictureInfo,
     nalu_parser::{Slice, SpsExt},
@@ -24,6 +26,9 @@ pub enum ReferenceManagementError {
 
     #[error("The H.264 bytestream is not spec compliant: {0}.")]
     IncorrectData(String),
+
+    #[error("Missing frame. Decoder is in a corrupted state. Waiting for IDR frame")]
+    MissingFrame,
 }
 
 #[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -34,12 +39,15 @@ pub struct ReferenceId(usize);
 pub(crate) struct ReferenceContext {
     pictures: ReferencePictures,
     next_reference_id: ReferenceId,
-    previous_frame_num: usize,
+    prevFrameNum: u16,
+    PrevRefFrameNum: u16,
     prev_pic_order_cnt_msb: i32,
     prev_pic_order_cnt_lsb: i32,
     MaxLongTermFrameIdx: MaxLongTermFrameIdx,
     prevFrameNumOffset: i64,
     previous_picture_included_mmco_equal_5: bool,
+    detected_missed_frames: bool,
+    missed_frame_handling: MissedFrameHandling,
 }
 
 #[derive(Debug, Default)]
@@ -50,6 +58,13 @@ enum MaxLongTermFrameIdx {
 }
 
 impl ReferenceContext {
+    pub fn new(missed_frame_handling: MissedFrameHandling) -> Self {
+        Self {
+            missed_frame_handling,
+            ..Default::default()
+        }
+    }
+
     fn next_reference_id(&mut self) -> ReferenceId {
         let result = self.next_reference_id;
         self.next_reference_id = ReferenceId(result.0 + 1);
@@ -60,12 +75,15 @@ impl ReferenceContext {
         *self = Self {
             pictures: ReferencePictures::default(),
             next_reference_id: ReferenceId::default(),
-            previous_frame_num: 0,
+            prevFrameNum: 0,
+            PrevRefFrameNum: 0,
             prev_pic_order_cnt_msb: 0,
             prev_pic_order_cnt_lsb: 0,
             MaxLongTermFrameIdx: MaxLongTermFrameIdx::NoLongTermFrameIndices,
             prevFrameNumOffset: 0,
             previous_picture_included_mmco_equal_5: false,
+            detected_missed_frames: false,
+            missed_frame_handling: self.missed_frame_handling,
         };
     }
 
@@ -109,6 +127,14 @@ impl ReferenceContext {
         let sps = slices.last().unwrap().0.sps.clone();
         let pps = slices.last().unwrap().0.pps.clone();
         let pts = slices.last().unwrap().1;
+
+        let is_ref_frame = matches!(
+            header.slice_type.family,
+            h264_reader::nal::slice::SliceFamily::P | h264_reader::nal::slice::SliceFamily::B
+        );
+        if is_ref_frame && self.missed_frame_handling == MissedFrameHandling::Strict {
+            self.verify_frame_num(&sps, &header)?;
+        }
 
         // maybe this should be done in a different place, but if you think about it, there's not
         // really that many places to put this code in
@@ -171,6 +197,10 @@ impl ReferenceContext {
         };
 
         self.previous_picture_included_mmco_equal_5 = header.includes_mmco_equal_5();
+        self.prevFrameNum = header.frame_num;
+        if is_ref_frame {
+            self.PrevRefFrameNum = header.frame_num;
+        }
 
         Ok(decoder_instructions)
     }
@@ -529,7 +559,7 @@ impl ReferenceContext {
                 self.prevFrameNumOffset
             };
 
-            if self.previous_frame_num > header.frame_num.into() {
+            if self.prevFrameNum > header.frame_num {
                 prevFrameNumOffset + sps.max_frame_num()
             } else {
                 prevFrameNumOffset
@@ -666,6 +696,22 @@ impl ReferenceContext {
             .collect();
 
         Ok(reference_list)
+    }
+
+    fn verify_frame_num(
+        &mut self,
+        sps: &SeqParameterSet,
+        header: &SliceHeader,
+    ) -> Result<(), ReferenceManagementError> {
+        let is_expected_frame_num = !sps.gaps_in_frame_num_value_allowed_flag
+            && header.frame_num != self.PrevRefFrameNum
+            && header.frame_num != ((self.PrevRefFrameNum as i64 + 1) % sps.max_frame_num()) as u16;
+        if is_expected_frame_num || self.detected_missed_frames {
+            self.detected_missed_frames = true;
+            return Err(ReferenceManagementError::MissingFrame);
+        }
+
+        Ok(())
     }
 }
 

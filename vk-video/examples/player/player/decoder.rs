@@ -5,7 +5,7 @@ use std::{
 };
 
 use bytes::BytesMut;
-use vk_video::{EncodedInputChunk, Frame, VulkanDevice};
+use vk_video::{DecoderParameters, EncodedInputChunk, Frame, VulkanDevice};
 
 use super::FrameWithPts;
 
@@ -15,7 +15,9 @@ pub fn run_decoder(
     vulkan_device: Arc<VulkanDevice>,
     mut bytestream_reader: impl Read,
 ) {
-    let mut decoder = vulkan_device.create_wgpu_textures_decoder().unwrap();
+    let mut decoder = vulkan_device
+        .create_wgpu_textures_decoder(DecoderParameters::default())
+        .unwrap();
     let frame_interval = 1.0 / (framerate as f64);
     let mut frame_number = 0u64;
     let mut buffer = BytesMut::zeroed(4096);

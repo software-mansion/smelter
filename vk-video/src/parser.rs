@@ -8,9 +8,12 @@ use h264_reader::{
 };
 use nalu_parser::{NalReceiver, ParsedNalu};
 use nalu_splitter::NALUSplitter;
-use reference_manager::{ReferenceContext, ReferenceManagementError};
+use reference_manager::ReferenceContext;
 
 pub(crate) use reference_manager::ReferenceId;
+pub use reference_manager::ReferenceManagementError;
+
+use crate::MissedFrameHandling;
 
 mod au_splitter;
 mod nalu_parser;
@@ -106,21 +109,19 @@ pub struct Parser {
     nalu_splitter: NALUSplitter,
 }
 
-impl Default for Parser {
-    fn default() -> Self {
+impl Parser {
+    pub fn new(missed_frame_handling: MissedFrameHandling) -> Self {
         let (tx, rx) = mpsc::channel();
 
         Parser {
             reader: AnnexBReader::accumulate(NalReceiver::new(tx)),
-            reference_ctx: ReferenceContext::default(),
+            reference_ctx: ReferenceContext::new(missed_frame_handling),
             au_splitter: AUSplitter::default(),
             receiver: rx,
             nalu_splitter: NALUSplitter::default(),
         }
     }
-}
 
-impl Parser {
     pub fn parse(
         &mut self,
         bytes: &[u8],

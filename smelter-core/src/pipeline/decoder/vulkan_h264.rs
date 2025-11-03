@@ -1,8 +1,11 @@
 use std::{sync::Arc, time::Duration};
 
 use smelter_render::{Frame, FrameData, Resolution};
-use tracing::{info, warn};
-use vk_video::WgpuTexturesDecoder;
+use tracing::{debug, info, warn};
+use vk_video::{
+    DecoderError, DecoderParameters, MissedFrameHandling, ParserError, ReferenceManagementError,
+    WgpuTexturesDecoder,
+};
 
 use crate::pipeline::decoder::{VideoDecoder, VideoDecoderInstance};
 use crate::prelude::*;
@@ -19,7 +22,9 @@ impl VideoDecoder for VulkanH264Decoder {
             Some(vulkan_ctx) => {
                 info!("Initializing Vulkan H264 decoder");
                 let device = vulkan_ctx.device.clone();
-                let decoder = device.create_wgpu_textures_decoder()?;
+                let decoder = device.create_wgpu_textures_decoder(DecoderParameters {
+                    missed_frame_handling: MissedFrameHandling::Strict,
+                })?;
                 Ok(Self { decoder })
             }
             None => Err(DecoderInitError::VulkanContextRequiredForVulkanDecoder),
@@ -36,6 +41,12 @@ impl VideoDecoderInstance for VulkanH264Decoder {
 
         let frames = match self.decoder.decode(chunk) {
             Ok(res) => res,
+            Err(DecoderError::ParserError(ParserError::ReferenceManagementError(
+                ReferenceManagementError::MissingFrame,
+            ))) => {
+                debug!("Vulkan H264 decoder detected a missing frame.");
+                return Vec::new();
+            }
             Err(err) => {
                 warn!("Failed to decode frame: {err}");
                 return Vec::new();

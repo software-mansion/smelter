@@ -25,7 +25,7 @@
 //!         )
 //!         .unwrap();
 //!
-//!     let mut decoder = device.create_wgpu_textures_decoder().unwrap();
+//!     let mut decoder = device.create_wgpu_textures_decoder(vk_video::DecoderParameters::default()).unwrap();
 //!     let mut buffer = vec![0; 4096];
 //!
 //!     while let Ok(n) = encoded_video_reader.read(&mut buffer) {
@@ -87,13 +87,13 @@ use parser::Parser;
 use vulkan_decoder::{FrameSorter, VulkanDecoder};
 
 pub use adapter::{AdapterInfo, VulkanAdapter};
-pub use device::caps::{
-    DecodeCapabilities, DecodeH264Capabilities, DecodeH264ProfileCapabilities, EncodeCapabilities,
-    EncodeH264Capabilities, EncodeH264ProfileCapabilities,
+pub use device::caps::{EncodeCapabilities, EncodeH264Capabilities, EncodeH264ProfileCapabilities};
+pub use device::{
+    DecoderParameters, EncoderParameters, MissedFrameHandling, Rational, VideoParameters,
+    VulkanDevice,
 };
-pub use device::{EncoderParameters, Rational, VideoParameters, VulkanDevice};
 pub use instance::VulkanInstance;
-pub use parser::ParserError;
+pub use parser::{ParserError, ReferenceManagementError};
 pub use vulkan_decoder::VulkanDecoderError;
 pub use vulkan_encoder::{RateControl, VulkanEncoderError};
 
