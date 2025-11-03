@@ -308,11 +308,7 @@ impl WhipOutputVideoOptions {
     fn serialize_encoder_preferences(&self) -> Vec<serde_json::Value> {
         self.encoder_preferences
             .iter()
-            .map(|enc| {
-                json!({
-                    "type": enc.to_string(),
-                })
-            })
+            .map(|enc| enc.serialize())
             .collect()
     }
 

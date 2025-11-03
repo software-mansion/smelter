@@ -143,11 +143,31 @@ pub enum VideoEncoder {
     #[strum(to_string = "ffmpeg_h264")]
     FfmpegH264,
 
+    #[strum(to_string = "ffmpeg_h264_low_latency")]
+    FfmpegH264LowLatency,
+
     #[strum(to_string = "ffmpeg_vp8")]
     FfmpegVp8,
 
     #[strum(to_string = "ffmpeg_vp9")]
     FfmpegVp9,
+}
+
+impl VideoEncoder {
+    pub fn serialize(&self) -> serde_json::Value {
+        match self {
+            Self::FfmpegH264LowLatency => json!({
+                "type": "ffmpeg_h264",
+                "ffmpeg_options": {
+                    "tune": "zerolatency",
+                    "thread_type": "slice",
+                },
+            }),
+            _ => json!({
+                "type": self.to_string(),
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Display, EnumIter, PartialEq, Serialize, Deserialize, Clone, Copy)]
