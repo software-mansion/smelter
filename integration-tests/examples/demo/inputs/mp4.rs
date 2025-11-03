@@ -73,6 +73,7 @@ impl Mp4Input {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Mp4InputSource {
     Path(PathBuf),
     Url(String),

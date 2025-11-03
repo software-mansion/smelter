@@ -37,6 +37,7 @@ use crate::utils::get_free_port;
 const RTP_INPUT_PATH: &str = "RTP_INPUT_PATH";
 
 #[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TransportProtocol {
     #[strum(to_string = "udp")]
     Udp,

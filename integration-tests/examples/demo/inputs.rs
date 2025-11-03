@@ -15,7 +15,7 @@ pub mod whep;
 pub mod whip;
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum InputHandle {
     Rtp(RtpInput),
     Mp4(Mp4Input),
@@ -102,6 +102,7 @@ pub enum InputProtocol {
 }
 
 #[derive(Debug, EnumIter, Display, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum VideoDecoder {
     #[strum(to_string = "any")]
     Any,
@@ -140,6 +141,7 @@ impl From<VideoDecoder> for ffmpeg::Video {
 }
 
 #[derive(Debug, Display, EnumIter, Serialize, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
 pub enum AudioDecoder {
     #[strum(to_string = "opus")]
     Opus,

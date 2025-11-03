@@ -5,6 +5,7 @@ use strum::{Display, EnumIter};
 use crate::{inputs::InputHandle, outputs::VideoResolution};
 
 #[derive(Debug, Display, EnumIter, Serialize, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
 pub enum Scene {
     #[strum(to_string = "Tiles")]
     Tiles,

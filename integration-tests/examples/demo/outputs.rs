@@ -23,7 +23,7 @@ pub mod whip;
 pub mod scene;
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutputHandle {
     Rtp(RtpOutput),
     Rtmp(RtmpOutput),
@@ -135,6 +135,7 @@ impl std::fmt::Display for VideoResolution {
 }
 
 #[derive(Debug, Display, EnumIter, PartialEq, Serialize, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
 pub enum VideoEncoder {
     #[strum(to_string = "any")]
     Any,
@@ -150,6 +151,7 @@ pub enum VideoEncoder {
 }
 
 #[derive(Debug, Display, EnumIter, PartialEq, Serialize, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
 pub enum AudioEncoder {
     #[strum(to_string = "any")]
     Any,
