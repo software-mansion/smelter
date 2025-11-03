@@ -6,7 +6,7 @@ use inquire::Select;
 use integration_tests::examples;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use strum::{Display, EnumIter, IntoEnumIterator};
+use strum::IntoEnumIterator;
 use tracing::{debug, error};
 
 use crate::inputs::InputHandle;
@@ -27,16 +27,7 @@ use crate::{
 
 pub const JSON_BASE: &str = "demo_json.json";
 
-#[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum TransportProtocol {
-    #[strum(to_string = "udp")]
-    Udp,
-
-    #[strum(to_string = "tcp_server")]
-    TcpServer,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum RunningState {
     Running,
 

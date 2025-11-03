@@ -22,8 +22,16 @@ use crate::{
     players::OutputPlayer,
 };
 
-use crate::smelter_state::TransportProtocol;
 use crate::utils::get_free_port;
+
+#[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum TransportProtocol {
+    #[strum(to_string = "udp")]
+    Udp,
+
+    #[strum(to_string = "tcp_server")]
+    TcpServer,
+}
 
 #[derive(Debug, Display, EnumIter, Clone)]
 pub enum RtpRegisterOptions {
