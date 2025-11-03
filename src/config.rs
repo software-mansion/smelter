@@ -127,7 +127,7 @@ fn try_read_config() -> Result<Config, String> {
         ),
         Err(_) => None,
     };
-    let gpu_driver_name = env::var("SMELTER_GPU_DRIVER_NAME").ok();
+    let gpu_driver_name = env::var("SMELTER_GPU_DEVICE_DRIVER").ok();
 
     const DEFAULT_STREAM_FALLBACK_TIMEOUT: Duration = Duration::from_millis(500);
     let stream_fallback_timeout = match env::var("SMELTER_STREAM_FALLBACK_TIMEOUT_MS") {
