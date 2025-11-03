@@ -112,8 +112,10 @@ impl WhipClientTask {
 
         let (session_url, answer) = exchange_sdp_offers(&pc, &client).await?;
 
-        // replace tracks with negotiated codecs
-        // webrtc-rs does not support codec negotiation properly https://github.com/webrtc-rs/webrtc/issues/737
+        // webrtc-rs assigns a codec to the transceiver on creation, so we need to ensure that
+        // supported codec is set before set_remote_description https://github.com/webrtc-rs/webrtc/issues/737
+        //
+        // Final codec resolution is based on RTCRtpSendParameters and happens after set_remote_description call.
         replace_tracks_with_negotiated_codec(&answer, &video_rtc_sender, &audio_rtc_sender).await?;
 
         pc.set_remote_description(answer).await?;
