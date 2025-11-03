@@ -1,0 +1,22 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "create-smelter-app": "0.2.1",
+    "template-node-express-zustand": "1.0.0",
+    "template-node-minimal": "1.0.0",
+    "template-node-offline-minimal": "1.0.0",
+    "template-node-offline-showcase": "1.0.0",
+    "node-examples": "1.0.0",
+    "example": "1.0.0",
+    "@swmansion/smelter": "0.2.1",
+    "@swmansion/smelter-browser-render": "0.2.1",
+    "@swmansion/smelter-core": "0.2.1",
+    "@swmansion/smelter-node": "0.2.1",
+    "@swmansion/smelter-web-client": "0.2.1",
+    "@swmansion/smelter-web-wasm": "0.2.1"
+  },
+  "changesets": [
+    "seven-masks-fall"
+  ]
+}
