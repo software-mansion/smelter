@@ -29,15 +29,51 @@ pub enum HlsRegisterOptions {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(from = "HlsOutputOptions")]
+#[serde(into = "HlsOutputOptions")]
 pub struct HlsOutput {
     name: String,
     path: PathBuf,
+    options: HlsOutputOptions,
+    stream_handles: Vec<Child>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HlsOutputOptions {
     video: Option<HlsOutputVideoOptions>,
     audio: Option<HlsOutputAudioOptions>,
     player: OutputPlayer,
+}
 
-    #[serde(skip)]
-    stream_handles: Vec<Child>,
+impl Clone for HlsOutput {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            path: self.path.clone(),
+            options: self.options.clone(),
+            stream_handles: vec![],
+        }
+    }
+}
+
+impl From<HlsOutputOptions> for HlsOutput {
+    fn from(value: HlsOutputOptions) -> Self {
+        let suffix = rand::rng().next_u32();
+        let name = format!("hls_output_{suffix}");
+        let path = integration_tests_root().join(&name).join("index.m3u8");
+        Self {
+            name,
+            path,
+            options: value,
+            stream_handles: vec![],
+        }
+    }
+}
+
+impl From<HlsOutput> for HlsOutputOptions {
+    fn from(value: HlsOutput) -> Self {
+        value.options.clone()
+    }
 }
 
 impl HlsOutput {
@@ -49,15 +85,15 @@ impl HlsOutput {
         json!({
             "type": "hls",
             "path": self.path,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+            "video": self.options.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.options.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
     }
 
     pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
-           "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
-           "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
+           "video": self.options.video.as_ref().map(|v| v.serialize_update(inputs)),
+           "audio": self.options.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
 
@@ -67,7 +103,7 @@ impl HlsOutput {
     }
 
     pub fn on_after_registration(&mut self) -> Result<()> {
-        match self.player {
+        match self.options.player {
             OutputPlayer::Ffmpeg => self.start_ffmpeg_receiver(),
             OutputPlayer::Manual => {
                 let cmd = format!("ffplay -i {}", self.path.to_str().unwrap());
@@ -209,18 +245,21 @@ impl HlsOutputBuilder {
 
     pub fn build(self) -> HlsOutput {
         let path = integration_tests_root().join(&self.name).join("index.m3u8");
-        HlsOutput {
-            name: self.name,
-            path,
+        let options = HlsOutputOptions {
             video: self.video,
             audio: self.audio,
             player: self.player,
+        };
+        HlsOutput {
+            name: self.name,
+            path,
+            options,
             stream_handles: vec![],
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HlsOutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
@@ -266,7 +305,7 @@ impl Default for HlsOutputVideoOptions {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HlsOutputAudioOptions {
     encoder: AudioEncoder,
 }

@@ -28,13 +28,37 @@ pub enum WhipRegisterOptions {
     Skip,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "WhipOutputOptions")]
+#[serde(into = "WhipOutputOptions")]
 pub struct WhipOutput {
     name: String,
+    options: WhipOutputOptions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WhipOutputOptions {
     endpoint_url: String,
     bearer_token: String,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
+}
+
+impl From<WhipOutputOptions> for WhipOutput {
+    fn from(value: WhipOutputOptions) -> Self {
+        let suffix = rand::rng().next_u32();
+        let name = format!("output_whip_{suffix}");
+        Self {
+            name,
+            options: value,
+        }
+    }
+}
+
+impl From<WhipOutput> for WhipOutputOptions {
+    fn from(value: WhipOutput) -> Self {
+        value.options
+    }
 }
 
 impl WhipOutput {
@@ -43,12 +67,18 @@ impl WhipOutput {
     }
 
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
+        let WhipOutputOptions {
+            endpoint_url,
+            bearer_token,
+            video,
+            audio,
+        } = &self.options;
         json!({
             "type": "whip_client",
-            "endpoint_url": self.endpoint_url,
-            "bearer_token": self.bearer_token,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+            "endpoint_url": endpoint_url,
+            "bearer_token": bearer_token,
+            "video": video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
     }
 
@@ -60,7 +90,10 @@ impl WhipOutput {
         println!("1. Start Broadcast Box: {cmd}");
         println!("2. Open: {url}");
         println!("3. Make sure that 'I want to watch' option is selected.");
-        println!("4. Enter '{}' in 'Stream Key' field", self.bearer_token);
+        println!(
+            "4. Enter '{}' in 'Stream Key' field",
+            self.options.bearer_token
+        );
 
         loop {
             let confirmation = Confirm::new("Is player running? [Y/n]")
@@ -74,8 +107,8 @@ impl WhipOutput {
 
     pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
-           "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
-           "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
+           "video": self.options.video.as_ref().map(|v| v.serialize_update(inputs)),
+           "audio": self.options.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
 }
@@ -251,17 +284,20 @@ impl WhipOutputBuilder {
     }
 
     pub fn build(self) -> WhipOutput {
-        WhipOutput {
-            name: self.name,
+        let options = WhipOutputOptions {
             endpoint_url: self.endpoint_url.unwrap(),
             bearer_token: self.bearer_token.unwrap(),
             video: self.video,
             audio: self.audio,
+        };
+        WhipOutput {
+            name: self.name,
+            options,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WhipOutputVideoOptions {
     resolution: VideoResolution,
     encoder_preferences: Vec<VideoEncoder>,
@@ -316,7 +352,7 @@ impl Default for WhipOutputVideoOptions {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WhipOutputAudioOptions {
     encoder_preferences: Vec<AudioEncoder>,
 }

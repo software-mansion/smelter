@@ -28,12 +28,36 @@ pub enum Mp4RegisterOptions {
     Skip,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "Mp4OutputOptions")]
+#[serde(into = "Mp4OutputOptions")]
 pub struct Mp4Output {
     name: String,
+    options: Mp4OutputOptions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Mp4OutputOptions {
     path: PathBuf,
     video: Option<Mp4OutputVideoOptions>,
     audio: Option<Mp4OutputAudioOptions>,
+}
+
+impl From<Mp4OutputOptions> for Mp4Output {
+    fn from(value: Mp4OutputOptions) -> Self {
+        let suffix = rand::rng().next_u32();
+        let name = format!("mp4_output_{suffix}");
+        Self {
+            name,
+            options: value,
+        }
+    }
+}
+
+impl From<Mp4Output> for Mp4OutputOptions {
+    fn from(value: Mp4Output) -> Self {
+        value.options
+    }
 }
 
 impl Mp4Output {
@@ -42,18 +66,19 @@ impl Mp4Output {
     }
 
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
+        let Mp4OutputOptions { path, video, audio } = &self.options;
         json!({
             "type": "mp4",
-            "path": self.path,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+            "path": path,
+            "video": video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
     }
 
     pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
-           "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
-           "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
+           "video": self.options.video.as_ref().map(|v| v.serialize_update(inputs)),
+           "audio": self.options.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
 }
@@ -174,16 +199,19 @@ impl Mp4OutputBuilder {
     }
 
     pub fn build(self) -> Mp4Output {
-        Mp4Output {
-            name: self.name,
+        let options = Mp4OutputOptions {
             path: self.path.unwrap(),
             video: self.video,
             audio: self.audio,
+        };
+        Mp4Output {
+            name: self.name,
+            options,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mp4OutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
@@ -229,7 +257,7 @@ impl Default for Mp4OutputVideoOptions {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mp4OutputAudioOptions {
     encoder: AudioEncoder,
 }

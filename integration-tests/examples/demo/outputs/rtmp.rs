@@ -29,37 +29,41 @@ pub enum RtmpRegisterOptions {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(from = "RtmpOutputSerialize")]
+#[serde(from = "RtmpOutputOptions")]
+#[serde(into = "RtmpOutputOptions")]
 pub struct RtmpOutput {
-    #[serde(skip_serializing)]
     name: String,
-
-    #[serde(skip_serializing)]
     url: String,
-
-    #[serde(skip_serializing)]
     port: u16,
-    video: Option<RtmpOutputVideoOptions>,
-    audio: Option<RtmpOutputAudioOptions>,
-
-    #[serde(skip)]
+    options: RtmpOutputOptions,
     stream_handles: Vec<Child>,
-    player: OutputPlayer,
 }
 
 // URL and name fields of `RtmpOutput` depend on the port field which has to be calculated
 // dynamically to avoid situation in which ports collide. This struct is required to make it
 // possible for name and URL fields to read the port value. JSON is deserialized to this struct and
 // remaining fields are determined during conversion
-#[derive(Debug, Deserialize)]
-pub struct RtmpOutputSerialize {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RtmpOutputOptions {
     video: Option<RtmpOutputVideoOptions>,
     audio: Option<RtmpOutputAudioOptions>,
     player: OutputPlayer,
 }
 
-impl From<RtmpOutputSerialize> for RtmpOutput {
-    fn from(value: RtmpOutputSerialize) -> Self {
+impl Clone for RtmpOutput {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            url: self.url.clone(),
+            port: self.port,
+            options: self.options.clone(),
+            stream_handles: vec![],
+        }
+    }
+}
+
+impl From<RtmpOutputOptions> for RtmpOutput {
+    fn from(value: RtmpOutputOptions) -> Self {
         let port = get_free_port();
         let name = format!("rtmp_output_{port}");
         let url = format!("rtmp://127.0.0.1:{port}");
@@ -67,11 +71,15 @@ impl From<RtmpOutputSerialize> for RtmpOutput {
             name,
             url,
             port,
-            video: value.video,
-            audio: value.audio,
+            options: value,
             stream_handles: vec![],
-            player: value.player,
         }
+    }
+}
+
+impl From<RtmpOutput> for RtmpOutputOptions {
+    fn from(value: RtmpOutput) -> Self {
+        value.options.clone()
     }
 }
 
@@ -84,20 +92,20 @@ impl RtmpOutput {
         json!({
             "type": "rtmp_client",
             "url": self.url,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+            "video": self.options.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.options.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
     }
 
     pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
-            "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
+            "video": self.options.video.as_ref().map(|v| v.serialize_update(inputs)),
+            "audio": self.options.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
 
     pub fn on_before_registration(&mut self) -> Result<()> {
-        match self.player {
+        match self.options.player {
             OutputPlayer::Ffmpeg => self.start_ffmpeg_recv(),
             OutputPlayer::Manual => {
                 let cmd = format!(
@@ -246,14 +254,17 @@ impl RtmpOutputBuilder {
     }
 
     pub fn build(self) -> RtmpOutput {
+        let options = RtmpOutputOptions {
+            video: self.video,
+            audio: self.audio,
+            player: self.player,
+        };
         RtmpOutput {
             name: self.name,
             url: self.url,
             port: self.port,
-            video: self.video,
-            audio: self.audio,
+            options,
             stream_handles: vec![],
-            player: self.player,
         }
     }
 }
