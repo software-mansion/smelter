@@ -36,16 +36,19 @@ impl ContinuousValue for Vec<Option<Tile>> {
                     .get(&tile.id)
                     .and_then(|index| start.get(*index))
                     .and_then(|old_tile| {
-                        // Animation interpolation. Returns `Some(_)` only if for the tile from the `end` state
-                        // exists a tile with the same ID in the `start` state.
+                        // For each tile that existed before the last update (exists in both `start` and `end`)
+                        // interpolate between those 2 states.
                         old_tile
                             .as_ref()
                             .map(|old_tile| ContinuousValue::interpolate(old_tile, tile, state))
                     })
                     .or_else(|| {
-                        // This closure prevents tile from displaying empty square for the duration
-                        // of transition if the tile is swapped "in place" (i.e. no animation
-                        // occurs).
+                        // Handle a new tile (`tile` did not exist in the `start` state). Tiles that existed before
+                        // last update should be handled in the previous `and_then` clousure.
+                        //
+                        // - If any tile existed in the same position as the new tile before the transition and still exists
+                        //   somewhere in the `end` state then do not show the new tile until the end of the transition.
+                        // - Otherwise, show the new tile from the start of the transition.
                         start
                             .iter()
                             .flatten()
