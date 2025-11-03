@@ -24,11 +24,11 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_tile_resize_with_view_transition.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             // TODO: This transition does not look great, but it would require automatic
             // transitions triggered by a size change (not scene update)
-            Step::RenderWithSnapshot(Duration::from_millis(450)),
+            Step::RenderWithSnapshot(Duration::from_millis(400)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
@@ -40,12 +40,13 @@ fn tiles_transitions_tests() {
             Step::UpdateSceneJson(include_str!(
                 "./tiles_transitions/start_tile_resize.scene.json"
             )),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
             Step::UpdateSceneJson(include_str!(
                 "./tiles_transitions/end_tile_resize.scene.json"
             )),
-            Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(1)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
@@ -61,8 +62,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_with_3_inputs_3_id_different_order.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![input1.clone(), input2.clone(), input3.clone()],
@@ -74,12 +75,13 @@ fn tiles_transitions_tests() {
             Step::UpdateSceneJson(include_str!(
                 "./tiles_transitions/start_with_3_inputs_no_id.scene.json"
             )),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
             Step::UpdateSceneJson(include_str!(
                 "./tiles_transitions/end_with_3_inputs_1_id.scene.json"
             )),
-            Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(1)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
@@ -100,8 +102,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_with_5_inputs_no_id.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
@@ -123,8 +125,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/end_with_4_inputs_1_id.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
@@ -148,8 +150,8 @@ fn tiles_transitions_tests() {
                 "./tiles_transitions/after_end_with_4_inputs_no_id.scene.json"
             )),
             Step::RenderWithSnapshot(Duration::from_millis(0)),
-            Step::RenderWithSnapshot(Duration::from_millis(150)),
-            Step::RenderWithSnapshot(Duration::from_millis(350)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
             Step::RenderWithSnapshot(Duration::from_millis(500)),
         ],
         inputs: vec![
@@ -157,6 +159,124 @@ fn tiles_transitions_tests() {
             input2.clone(),
             input3.clone(),
             input4.clone(),
+        ],
+        ..Default::default()
+    });
+    runner.add(TestCase {
+        name: "tiles_transitions/replace_component_by_changing_id",
+        steps: vec![
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/start_with_3_inputs_all_id.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/end_with_3_inputs_3_id_different_component.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(1)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
+            Step::RenderWithSnapshot(Duration::from_millis(500)),
+        ],
+        inputs: vec![
+            input1.clone(),
+            input2.clone(),
+            input3.clone(),
+            input4.clone(),
+        ],
+        ..Default::default()
+    });
+    runner.add(TestCase {
+        name: "tiles_transitions/replace_component_by_changing_id_and_add_new_component",
+        steps: vec![
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/start_with_3_inputs_all_id.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/end_with_4_inputs_3_id.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(1)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
+            Step::RenderWithSnapshot(Duration::from_millis(500)),
+        ],
+        inputs: vec![
+            input1.clone(),
+            input2.clone(),
+            input3.clone(),
+            input4.clone(),
+            input5.clone(),
+        ],
+        ..Default::default()
+    });
+    runner.add(TestCase {
+        name: "tiles_transitions/replace_component_by_changing_id_add_margin",
+        steps: vec![
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/start_with_3_inputs_all_id.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/end_with_3_inputs_3_id_different_component_margin.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(1)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
+            Step::RenderWithSnapshot(Duration::from_millis(500)),
+        ],
+        inputs: vec![
+            input1.clone(),
+            input2.clone(),
+            input3.clone(),
+            input4.clone(),
+        ],
+        ..Default::default()
+    });
+    runner.add(TestCase {
+        name: "tiles_transitions/replace_component_by_changing_id_add_new_component_last_row_center_aligned",
+        steps: vec![
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/start_with_3_inputs_all_id_center.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/end_with_4_inputs_3_id_center.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(1)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
+            Step::RenderWithSnapshot(Duration::from_millis(500)),
+        ],
+        inputs: vec![
+            input1.clone(),
+            input2.clone(),
+            input3.clone(),
+            input4.clone(),
+            input5.clone(),
+        ],
+        ..Default::default()
+    });
+    runner.add(TestCase {
+        name: "tiles_transitions/replace_component_by_changing_id_add_new_component_last_row_left_aligned",
+        steps: vec![
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/start_with_3_inputs_all_id_left.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(0)),
+            Step::UpdateSceneJson(include_str!(
+                "./tiles_transitions/end_with_4_inputs_3_id_left.scene.json"
+            )),
+            Step::RenderWithSnapshot(Duration::from_millis(1)),
+            Step::RenderWithSnapshot(Duration::from_millis(100)),
+            Step::RenderWithSnapshot(Duration::from_millis(300)),
+            Step::RenderWithSnapshot(Duration::from_millis(500)),
+        ],
+        inputs: vec![
+            input1.clone(),
+            input2.clone(),
+            input3.clone(),
+            input4.clone(),
+            input5.clone(),
         ],
         ..Default::default()
     });

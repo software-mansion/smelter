@@ -1,0 +1,26 @@
+{
+    "video": {
+        "root": {
+            "type": "tiles",
+            "id": "tiles",
+            "horizontal_align": "left",
+            "children": [
+                {
+                    "type": "input_stream",
+                    "input_id": "input_1",
+                    "id": "input_1"
+                },
+                {
+                    "type": "input_stream",
+                    "input_id": "input_2",
+                    "id": "input_2"
+                },
+                {
+                    "type": "input_stream",
+                    "input_id": "input_3",
+                    "id": "input_3"
+                }
+            ]
+        }
+    }
+}
