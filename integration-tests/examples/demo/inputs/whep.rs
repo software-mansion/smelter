@@ -22,12 +22,36 @@ pub enum WhepRegisterOptions {
     Skip,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "WhepInputOptions")]
+#[serde(into = "WhepInputOptions")]
 pub struct WhepInput {
     name: String,
+    options: WhepInputOptions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WhepInputOptions {
     endpoint_url: String,
     bearer_token: String,
     video: Option<WhepInputVideoOptions>,
+}
+
+impl From<WhepInputOptions> for WhepInput {
+    fn from(value: WhepInputOptions) -> Self {
+        let suffix = rand::rng().next_u32();
+        let name = format!("input_whep_{suffix}");
+        Self {
+            name,
+            options: value,
+        }
+    }
+}
+
+impl From<WhepInput> for WhepInputOptions {
+    fn from(value: WhepInput) -> Self {
+        value.options
+    }
 }
 
 impl WhepInput {
@@ -36,15 +60,20 @@ impl WhepInput {
     }
 
     pub fn has_video(&self) -> bool {
-        self.video.is_some()
+        self.options.video.is_some()
     }
 
     pub fn serialize_register(&self) -> serde_json::Value {
+        let WhepInputOptions {
+            endpoint_url,
+            bearer_token,
+            video,
+        } = &self.options;
         json!({
             "type": "whep_client",
-            "endpoint_url": self.endpoint_url,
-            "bearer_token": self.bearer_token,
-            "video": self.video.as_ref().map(|v| v.serialize_register()),
+            "endpoint_url": endpoint_url,
+            "bearer_token": bearer_token,
+            "video": video.as_ref().map(|v| v.serialize_register()),
         })
     }
 
@@ -56,7 +85,10 @@ impl WhepInput {
         println!("1. Start Broadcast Box: {cmd}");
         println!("2. Open: {url}");
         println!("3. Make sure that 'I want to stream' option is selected.");
-        println!("4. Enter '{}' in 'Stream Key' field", self.bearer_token);
+        println!(
+            "4. Enter '{}' in 'Stream Key' field",
+            self.options.bearer_token,
+        );
 
         loop {
             let confirmation = Confirm::new("Is server running? [Y/n]")
@@ -171,16 +203,19 @@ impl WhepInputBuilder {
     }
 
     pub fn build(self) -> WhepInput {
-        WhepInput {
-            name: self.name,
+        let options = WhepInputOptions {
             endpoint_url: self.endpoint_url.unwrap(),
             bearer_token: self.bearer_token,
             video: self.video,
+        };
+        WhepInput {
+            name: self.name,
+            options,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WhepInputVideoOptions {
     decoder_preferences: Vec<VideoDecoder>,
 }

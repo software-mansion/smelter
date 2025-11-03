@@ -11,11 +11,35 @@ use crate::inputs::VideoDecoder;
 
 const HLS_INPUT_URL: &str = "HLS_INPUT_URL";
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "HlsInputOptions")]
+#[serde(into = "HlsInputOptions")]
 pub struct HlsInput {
     name: String,
+    options: HlsInputOptions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HlsInputOptions {
     url: String,
     decoder: VideoDecoder,
+}
+
+impl From<HlsInputOptions> for HlsInput {
+    fn from(value: HlsInputOptions) -> Self {
+        let suffix = rand::rng().next_u32();
+        let name = format!("hls_input_{suffix}");
+        Self {
+            name,
+            options: value,
+        }
+    }
+}
+
+impl From<HlsInput> for HlsInputOptions {
+    fn from(value: HlsInput) -> Self {
+        value.options
+    }
 }
 
 impl HlsInput {
@@ -24,11 +48,12 @@ impl HlsInput {
     }
 
     pub fn serialize_register(&self) -> serde_json::Value {
+        let HlsInputOptions { ref url, decoder } = self.options;
         json!({
             "type": "hls",
-            "url": self.url,
+            "url": url,
             "decoder_map": {
-                "h264": self.decoder.to_string(),
+                "h264": decoder.to_string(),
             },
         })
     }
@@ -125,10 +150,13 @@ impl HlsInputBuilder {
     }
 
     pub fn build(self) -> HlsInput {
-        HlsInput {
-            name: self.name,
+        let options = HlsInputOptions {
             url: self.url.unwrap(),
             decoder: self.decoder.unwrap(),
+        };
+        HlsInput {
+            name: self.name,
+            options,
         }
     }
 }
