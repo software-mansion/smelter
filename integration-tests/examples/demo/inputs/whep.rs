@@ -23,8 +23,7 @@ pub enum WhepRegisterOptions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(from = "WhepInputOptions")]
-#[serde(into = "WhepInputOptions")]
+#[serde(from = "WhepInputOptions", into = "WhepInputOptions")]
 pub struct WhepInput {
     name: String,
     options: WhepInputOptions,

@@ -15,6 +15,7 @@ pub mod whep;
 pub mod whip;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum InputHandle {
     Rtp(RtpInput),
     Mp4(Mp4Input),

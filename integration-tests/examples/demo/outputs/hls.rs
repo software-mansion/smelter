@@ -29,8 +29,7 @@ pub enum HlsRegisterOptions {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(from = "HlsOutputOptions")]
-#[serde(into = "HlsOutputOptions")]
+#[serde(from = "HlsOutputOptions", into = "HlsOutputOptions")]
 pub struct HlsOutput {
     name: String,
     path: PathBuf,

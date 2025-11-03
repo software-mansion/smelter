@@ -29,8 +29,7 @@ pub enum RtmpRegisterOptions {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(from = "RtmpOutputOptions")]
-#[serde(into = "RtmpOutputOptions")]
+#[serde(from = "RtmpOutputOptions", into = "RtmpOutputOptions")]
 pub struct RtmpOutput {
     name: String,
     url: String,

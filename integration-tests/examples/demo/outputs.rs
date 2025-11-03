@@ -23,6 +23,7 @@ pub mod whip;
 pub mod scene;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum OutputHandle {
     Rtp(RtpOutput),
     Rtmp(RtmpOutput),

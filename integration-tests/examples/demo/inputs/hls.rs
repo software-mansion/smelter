@@ -12,8 +12,7 @@ use crate::inputs::VideoDecoder;
 const HLS_INPUT_URL: &str = "HLS_INPUT_URL";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(from = "HlsInputOptions")]
-#[serde(into = "HlsInputOptions")]
+#[serde(from = "HlsInputOptions", into = "HlsInputOptions")]
 pub struct HlsInput {
     name: String,
     options: HlsInputOptions,

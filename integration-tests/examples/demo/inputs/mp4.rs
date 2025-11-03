@@ -17,8 +17,7 @@ use crate::{autocompletion::FilePathCompleter, inputs::VideoDecoder, utils::reso
 const MP4_INPUT_SOURCE: &str = "MP4_INPUT_SOURCE";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(from = "Mp4InputOptions")]
-#[serde(into = "Mp4InputOptions")]
+#[serde(from = "Mp4InputOptions", into = "Mp4InputOptions")]
 pub struct Mp4Input {
     name: String,
     options: Mp4InputOptions,

@@ -38,8 +38,7 @@ pub enum RtpRegisterOptions {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(from = "RtpOutputOptions")]
-#[serde(into = "RtpOutputOptions")]
+#[serde(from = "RtpOutputOptions", into = "RtpOutputOptions")]
 pub struct RtpOutput {
     name: String,
     port: u16,

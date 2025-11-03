@@ -29,8 +29,7 @@ pub enum WhipRegisterOptions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(from = "WhipOutputOptions")]
-#[serde(into = "WhipOutputOptions")]
+#[serde(from = "WhipOutputOptions", into = "WhipOutputOptions")]
 pub struct WhipOutput {
     name: String,
     options: WhipOutputOptions,

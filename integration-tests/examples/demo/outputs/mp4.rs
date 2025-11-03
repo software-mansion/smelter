@@ -29,8 +29,7 @@ pub enum Mp4RegisterOptions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(from = "Mp4OutputOptions")]
-#[serde(into = "Mp4OutputOptions")]
+#[serde(from = "Mp4OutputOptions", into = "Mp4OutputOptions")]
 pub struct Mp4Output {
     name: String,
     options: Mp4OutputOptions,
