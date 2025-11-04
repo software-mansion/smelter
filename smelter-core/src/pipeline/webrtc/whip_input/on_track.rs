@@ -7,7 +7,7 @@ use crate::{
     codecs::VideoDecoderOptions,
     pipeline::{
         decoder::VideoDecoderMapping,
-        rtp::{RtpTimestampSync, depayloader::VideoPayloadTypeMapping},
+        rtp::{RtpJitterBuffer, depayloader::VideoPayloadTypeMapping},
         webrtc::{
             error::WhipWhepServerError,
             input_rtcp_listener::RtcpListeners,
@@ -70,11 +70,11 @@ async fn process_audio_track(
         (ctx.pipeline_ctx.clone(), samples_sender),
     )?;
 
-    let mut rtp_reader = WebrtcRtpReader {
-        track: ctx.track,
-        timestamp_sync: RtpTimestampSync::new(&ctx.sync_point, 48_000, ctx.buffer),
-        rtcp_listeners: RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
-    };
+    let mut rtp_reader = WebrtcRtpReader::new(
+        ctx.track,
+        RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
+        RtpJitterBuffer::new(&ctx.pipeline_ctx, ctx.buffer, 48_000),
+    );
 
     while let Some(packet) = rtp_reader.read_packet().await {
         trace!(?packet, "Sending RTP packet");
@@ -122,11 +122,11 @@ async fn process_video_track(
         ),
     )?;
 
-    let mut rtp_reader = WebrtcRtpReader {
-        track: ctx.track,
-        timestamp_sync: RtpTimestampSync::new(&ctx.sync_point, 90_000, ctx.buffer),
-        rtcp_listeners: RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
-    };
+    let mut rtp_reader = WebrtcRtpReader::new(
+        ctx.track,
+        RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
+        RtpJitterBuffer::new(&ctx.pipeline_ctx, ctx.buffer, 90_000),
+    );
 
     while let Some(packet) = rtp_reader.read_packet().await {
         trace!(?packet, "Sending RTP packet");

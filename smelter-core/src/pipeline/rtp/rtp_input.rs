@@ -1,7 +1,4 @@
-use std::{
-    sync::{Arc, atomic::AtomicBool},
-    time::Instant,
-};
+use std::sync::{Arc, atomic::AtomicBool};
 
 use crossbeam_channel::{Receiver, bounded};
 use smelter_render::{Frame, InputId};
@@ -22,10 +19,9 @@ use crate::{
         },
         input::Input,
         rtp::{
-            RtpPacket,
+            RtpJitterBuffer, RtpJitterBufferInitOptions,
             depayloader::DepayloaderOptions,
             rtp_input::{
-                rtcp_sync::{RtpNtpSyncPoint, RtpTimestampSync},
                 rtp_audio_thread::{
                     RtpAudioThread, RtpAudioThreadOptions, RtpAudioTrackThreadHandle,
                 },
@@ -33,12 +29,12 @@ use crate::{
             },
             util::BindToPortError,
         },
-        utils::input_buffer::InputBuffer,
     },
-    prelude::*,
     queue::QueueDataReceiver,
     thread_utils::InitializableThread,
 };
+
+use crate::prelude::*;
 
 mod rollover_state;
 mod rtp_audio_thread;
@@ -46,6 +42,7 @@ mod rtp_video_thread;
 mod tcp_server;
 mod udp;
 
+pub(super) mod jitter_buffer;
 pub(super) mod rtcp_sync;
 
 pub struct RtpInput {
@@ -75,11 +72,13 @@ impl RtpInput {
         let (audio_handle, audio_samples_receiver) =
             Self::start_audio_thread(&ctx, &input_id, opts.audio)?;
 
+        let jitter_buffer_init = RtpJitterBufferInitOptions::new(&ctx, opts.jitter_buffer);
+
         // TODO: this could ran on the same thread as tcp/udp socket
         Self::start_rtp_demuxer_thread(
+            ctx,
             &input_id,
-            ctx.queue_sync_point,
-            InputBuffer::new(&ctx, opts.buffer),
+            jitter_buffer_init,
             raw_packets_receiver,
             audio_handle,
             video_handle,
@@ -96,9 +95,9 @@ impl RtpInput {
     }
 
     fn start_rtp_demuxer_thread(
+        ctx: Arc<PipelineCtx>,
         input_id: &InputId,
-        sync_point: Instant,
-        input_buffer: InputBuffer,
+        jitter_buffer_init: RtpJitterBufferInitOptions,
         receiver: Receiver<bytes::Bytes>,
         audio: Option<RtpAudioTrackThreadHandle>,
         video: Option<RtpVideoTrackThreadHandle>,
@@ -109,7 +108,7 @@ impl RtpInput {
             .spawn(move || {
                 let _span =
                     span!(Level::INFO, "RTP demuxer", input_id = input_id.to_string()).entered();
-                run_rtp_demuxer_thread(sync_point, input_buffer, receiver, video, audio)
+                run_rtp_demuxer_thread(ctx, jitter_buffer_init, receiver, video, audio)
             })
             .unwrap();
     }
@@ -212,27 +211,25 @@ impl Drop for RtpInput {
 }
 
 fn run_rtp_demuxer_thread(
-    sync_point: Instant,
-    input_buffer: InputBuffer,
+    ctx: Arc<PipelineCtx>,
+    jitter_buffer_init: RtpJitterBufferInitOptions,
     receiver: Receiver<bytes::Bytes>,
     video_handle: Option<RtpVideoTrackThreadHandle>,
     audio_handle: Option<RtpAudioTrackThreadHandle>,
 ) {
     struct TrackState<Handle> {
+        jitter_buffer: RtpJitterBuffer,
         handle: Handle,
-        time_sync: RtpTimestampSync,
         eos_received: bool,
     }
 
-    let sync_point = RtpNtpSyncPoint::new(sync_point);
-
     let mut audio = audio_handle.map(|handle| TrackState {
-        time_sync: RtpTimestampSync::new(&sync_point, handle.sample_rate, input_buffer.clone()),
+        jitter_buffer: RtpJitterBuffer::new(&ctx, jitter_buffer_init.clone(), handle.sample_rate),
         handle,
         eos_received: false,
     });
     let mut video = video_handle.map(|handle| TrackState {
-        time_sync: RtpTimestampSync::new(&sync_point, 90_000, input_buffer),
+        jitter_buffer: RtpJitterBuffer::new(&ctx, jitter_buffer_init, 90_000),
         handle,
         eos_received: false,
     });
@@ -279,29 +276,25 @@ fn run_rtp_demuxer_thread(
                 if packet.header.payload_type == 96 {
                     video_ssrc.get_or_insert(packet.header.ssrc);
                     if let Some(video) = &mut video {
-                        let timestamp = video.time_sync.pts_from_timestamp(packet.header.timestamp);
+                        video.jitter_buffer.write_packet(packet);
                         let sender = &video.handle.rtp_packet_sender;
-                        trace!(?timestamp, packet=?packet.header, "Received video RTP packet");
-                        if sender
-                            .send(PipelineEvent::Data(RtpPacket { packet, timestamp }))
-                            .is_err()
-                        {
-                            debug!("Channel closed");
-                            continue;
+                        while let Some(packet) = video.jitter_buffer.pop_packet() {
+                            trace!(?packet, "Received video RTP packet");
+                            if sender.send(PipelineEvent::Data(packet)).is_err() {
+                                debug!("Channel closed");
+                            }
                         }
                     }
                 } else if packet.header.payload_type == 97 {
                     audio_ssrc.get_or_insert(packet.header.ssrc);
                     if let Some(audio) = &mut audio {
-                        let timestamp = audio.time_sync.pts_from_timestamp(packet.header.timestamp);
+                        audio.jitter_buffer.write_packet(packet);
                         let sender = &audio.handle.rtp_packet_sender;
-                        trace!(?timestamp, packet=?packet.header, "Received audio RTP packet");
-                        if sender
-                            .send(PipelineEvent::Data(RtpPacket { packet, timestamp }))
-                            .is_err()
-                        {
-                            debug!("Channel closed");
-                            continue;
+                        while let Some(packet) = audio.jitter_buffer.pop_packet() {
+                            trace!(?packet, "Received audio RTP packet");
+                            if sender.send(PipelineEvent::Data(packet)).is_err() {
+                                debug!("Channel closed");
+                            }
                         }
                     }
                 }
@@ -321,7 +314,7 @@ fn run_rtp_demuxer_thread(
                                     if Some(sender_report.ssrc) == audio_ssrc
                                         && let Some(audio) = &mut audio
                                     {
-                                        audio.time_sync.on_sender_report(
+                                        audio.jitter_buffer.on_sender_report(
                                             sender_report.ntp_time,
                                             sender_report.rtp_time,
                                         );
@@ -330,7 +323,7 @@ fn run_rtp_demuxer_thread(
                                     if Some(sender_report.ssrc) == video_ssrc
                                         && let Some(video) = &mut video
                                     {
-                                        video.time_sync.on_sender_report(
+                                        video.jitter_buffer.on_sender_report(
                                             sender_report.ntp_time,
                                             sender_report.rtp_time,
                                         );

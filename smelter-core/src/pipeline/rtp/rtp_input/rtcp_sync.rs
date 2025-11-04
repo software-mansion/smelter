@@ -5,9 +5,7 @@ use std::{
 
 use tracing::{debug, info, warn};
 
-use crate::pipeline::{
-    rtp::rtp_input::rollover_state::RolloverState, utils::input_buffer::InputBuffer,
-};
+use crate::pipeline::rtp::rtp_input::rollover_state::RolloverState;
 
 #[cfg(test)]
 mod sync_test;
@@ -17,16 +15,14 @@ const POW_2_32: f64 = (1i64 << 32) as f64;
 #[derive(Debug)]
 /// State that should be shared between different RTP tracks to use for synchronization.
 pub(crate) struct RtpNtpSyncPoint {
-    sync_point: Instant,
     /// First 32 bytes represent seconds, last 32 bytes fraction of the second.
     /// Represents NTP time of sync point
     ntp_time: RwLock<Option<u64>>,
 }
 
 impl RtpNtpSyncPoint {
-    pub fn new(sync_point: Instant) -> Arc<Self> {
+    pub fn new() -> Arc<Self> {
         Self {
-            sync_point,
             ntp_time: RwLock::new(None),
         }
         .into()
@@ -109,38 +105,36 @@ pub(crate) struct RtpTimestampSync {
     //   - calculate pts of first packet based on the difference
     //   - pts of first packet is an offset
     sync_offset_secs: Option<f64>,
-    // additional buffer that defines how much input start should be ahead
-    // of the queue.
-    input_buffer: InputBuffer,
     clock_rate: u32,
     rollover_state: RolloverState,
 
-    sync_point: Arc<RtpNtpSyncPoint>,
+    queue_sync_point: Instant,
+    ntp_sync_point: Arc<RtpNtpSyncPoint>,
     partial_sync_info: PartialNtpSyncInfo,
 }
 
 impl RtpTimestampSync {
     pub fn new(
-        sync_point: &Arc<RtpNtpSyncPoint>,
+        queue_sync_point: Instant,
+        ntp_sync_point: Arc<RtpNtpSyncPoint>,
         clock_rate: u32,
-        input_buffer: InputBuffer,
     ) -> Self {
         Self {
             sync_offset_secs: None,
             rtp_timestamp_offset: None,
-            input_buffer,
 
             clock_rate,
             rollover_state: Default::default(),
 
-            sync_point: sync_point.clone(),
+            queue_sync_point,
+            ntp_sync_point,
             partial_sync_info: PartialNtpSyncInfo::None,
         }
     }
 
     pub fn pts_from_timestamp(&mut self, rtp_timestamp: u32) -> Duration {
         let sync_offset_secs = *self.sync_offset_secs.get_or_insert_with(|| {
-            let sync_offset = self.sync_point.sync_point.elapsed();
+            let sync_offset = self.queue_sync_point.elapsed();
             debug!(
                 ?sync_offset,
                 initial_rtp_timestamp = rtp_timestamp,
@@ -176,13 +170,12 @@ impl RtpTimestampSync {
             _ => (),
         }
 
-        let pts = if pts_secs < 0.0 {
+        if pts_secs < 0.0 {
             warn!(pts_secs, "PTS from before queue start");
             Duration::ZERO
         } else {
             Duration::from_secs_f64(pts_secs)
-        };
-        self.input_buffer.pts_with_buffer(pts)
+        }
     }
 
     pub fn on_sender_report(&mut self, ntp_time: u64, rtp_timestamp: u32) {
@@ -216,7 +209,7 @@ impl RtpTimestampSync {
         reference_pts_secs: f64,
     ) {
         self.partial_sync_info = PartialNtpSyncInfo::Synced;
-        self.sync_point.ensure_sync_info(
+        self.ntp_sync_point.ensure_sync_info(
             sr_ntp_time,
             sr_rtp_timestamp,
             reference_rtp_timestamp,
@@ -225,7 +218,7 @@ impl RtpTimestampSync {
         );
 
         // pts representing rtp timestamp from SenderReport
-        let pts_secs = self.sync_point.ntp_time_to_pts_secs(sr_ntp_time);
+        let pts_secs = self.ntp_sync_point.ntp_time_to_pts_secs(sr_ntp_time);
 
         let mut rtp_timestamp_diff = reference_rtp_timestamp as i64 - sr_rtp_timestamp as i64;
         if rtp_timestamp_diff > u32::MAX as i64 / 2 {
