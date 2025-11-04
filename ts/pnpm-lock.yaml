@@ -209,10 +209,10 @@ importers:
   examples/node-examples:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:^0.2.1
+        specifier: workspace:0.2.1
         version: link:../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:^0.2.1
+        specifier: workspace:0.2.1
         version: link:../../smelter-node
       fs-extra:
         specifier: ^11.2.0
@@ -243,7 +243,7 @@ importers:
   examples/vite-example:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:^0.2.1
+        specifier: workspace:0.2.1
         version: link:../../smelter
       '@swmansion/smelter-browser-render':
         specifier: workspace:0.2.1
@@ -299,7 +299,7 @@ importers:
   smelter-browser-render:
     dependencies:
       '@swmansion/smelter':
-        specifier: workspace:0.2.1
+        specifier: workspace:^0.2.1
         version: link:../smelter
     devDependencies:
       '@rollup/plugin-typescript':
@@ -361,7 +361,7 @@ importers:
         specifier: workspace:^0.2.1
         version: link:../smelter
       '@swmansion/smelter-core':
-        specifier: workspace:^0.2.1
+        specifier: workspace:0.2.1
         version: link:../smelter-core
       form-data:
         specifier: ^4.0.4
