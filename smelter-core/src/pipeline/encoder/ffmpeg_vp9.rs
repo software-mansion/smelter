@@ -3,7 +3,6 @@ use std::{iter, sync::Arc};
 use ffmpeg_next::{
     Rational,
     codec::{Context, Id},
-    format::Pixel,
 };
 use smelter_render::{Frame, OutputFrameFormat};
 use tracing::{error, info, trace, warn};
@@ -41,7 +40,7 @@ impl VideoEncoder for FfmpegVp9Encoder {
         let pts_unit_secs = Rational::new(1, TIME_BASE);
         let framerate = ctx.output_framerate;
         encoder.set_time_base(pts_unit_secs);
-        encoder.set_format(Pixel::YUV420P);
+        encoder.set_format(options.pixel_format.into());
         encoder.set_width(options.resolution.width as u32);
         encoder.set_height(options.resolution.height as u32);
         encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
