@@ -62,6 +62,16 @@ pub enum OutputPixelFormat {
     YUV444P,
 }
 
+impl From<OutputPixelFormat> for ffmpeg_next::format::Pixel {
+    fn from(value: OutputPixelFormat) -> Self {
+        match value {
+            OutputPixelFormat::YUV420P => Self::YUV420P,
+            OutputPixelFormat::YUV422P => Self::YUV422P,
+            OutputPixelFormat::YUV444P => Self::YUV444P,
+        }
+    }
+}
+
 pub(crate) trait AudioEncoderOptionsExt {
     fn sample_rate(&self) -> u32;
 }
