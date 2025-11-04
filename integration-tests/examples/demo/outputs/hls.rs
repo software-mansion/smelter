@@ -4,14 +4,14 @@ use anyhow::Result;
 use inquire::Select;
 use integration_tests::{ffmpeg::start_ffmpeg_receive_hls, paths::integration_tests_root};
 use rand::RngCore;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use serde_json::json;
 use strum::{Display, IntoEnumIterator};
 use tracing::error;
 
 use crate::{
     inputs::{InputHandle, filter_video_inputs},
-    outputs::{AudioEncoder, OutputHandle, VideoEncoder, VideoResolution, scene::Scene},
+    outputs::{AudioEncoder, VideoEncoder, VideoResolution, scene::Scene},
     players::OutputPlayer,
     smelter_state::RunningState,
 };
@@ -28,55 +28,77 @@ pub enum HlsRegisterOptions {
     Skip,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
+#[serde(from = "HlsOutputOptions")]
 pub struct HlsOutput {
     name: String,
     path: PathBuf,
-    video: Option<HlsOutputVideoOptions>,
-    audio: Option<HlsOutputAudioOptions>,
-    player: OutputPlayer,
-
-    #[serde(skip)]
+    options: HlsOutputOptions,
     stream_handles: Vec<Child>,
 }
 
-impl HlsOutput {
-    fn start_ffmpeg_receiver(&mut self) -> Result<()> {
-        let stream_handle = start_ffmpeg_receive_hls(&self.path)?;
-        self.stream_handles.push(stream_handle);
-        Ok(())
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HlsOutputOptions {
+    video: Option<HlsOutputVideoOptions>,
+    audio: Option<HlsOutputAudioOptions>,
+    player: OutputPlayer,
+}
+
+impl Serialize for HlsOutput {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("HlsOutput", 3)?;
+        state.serialize_field("video", &self.options.video)?;
+        state.serialize_field("audio", &self.options.audio)?;
+        state.serialize_field("player", &self.options.player)?;
+        state.end()
     }
 }
 
-#[typetag::serde]
-impl OutputHandle for HlsOutput {
-    fn name(&self) -> &str {
+impl From<HlsOutputOptions> for HlsOutput {
+    fn from(value: HlsOutputOptions) -> Self {
+        let suffix = rand::rng().next_u32();
+        let name = format!("hls_output_{suffix}");
+        let path = integration_tests_root().join(&name).join("index.m3u8");
+        Self {
+            name,
+            path,
+            options: value,
+            stream_handles: vec![],
+        }
+    }
+}
+
+impl HlsOutput {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "hls",
             "path": self.path,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+            "video": self.options.video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": self.options.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
-           "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
-           "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
+           "video": self.options.video.as_ref().map(|v| v.serialize_update(inputs)),
+           "audio": self.options.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
 
-    fn on_before_registration(&mut self) -> Result<()> {
+    pub fn on_before_registration(&mut self) -> Result<()> {
         let dir_path = self.path.parent().unwrap();
         Ok(fs::create_dir(dir_path)?)
     }
 
-    fn on_after_registration(&mut self) -> Result<()> {
-        match self.player {
+    pub fn on_after_registration(&mut self) -> Result<()> {
+        match self.options.player {
             OutputPlayer::Ffmpeg => self.start_ffmpeg_receiver(),
             OutputPlayer::Manual => {
                 let cmd = format!("ffplay -i {}", self.path.to_str().unwrap());
@@ -86,6 +108,12 @@ impl OutputHandle for HlsOutput {
             }
             _ => unreachable!(),
         }
+    }
+
+    fn start_ffmpeg_receiver(&mut self) -> Result<()> {
+        let stream_handle = start_ffmpeg_receive_hls(&self.path)?;
+        self.stream_handles.push(stream_handle);
+        Ok(())
     }
 }
 
@@ -212,18 +240,21 @@ impl HlsOutputBuilder {
 
     pub fn build(self) -> HlsOutput {
         let path = integration_tests_root().join(&self.name).join("index.m3u8");
-        HlsOutput {
-            name: self.name,
-            path,
+        let options = HlsOutputOptions {
             video: self.video,
             audio: self.audio,
             player: self.player,
+        };
+        HlsOutput {
+            name: self.name,
+            path,
+            options,
             stream_handles: vec![],
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HlsOutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
@@ -232,7 +263,7 @@ pub struct HlsOutputVideoOptions {
 }
 
 impl HlsOutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
@@ -245,7 +276,7 @@ impl HlsOutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
@@ -269,13 +300,13 @@ impl Default for HlsOutputVideoOptions {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HlsOutputAudioOptions {
     encoder: AudioEncoder,
 }
 
 impl HlsOutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {
@@ -299,7 +330,7 @@ impl HlsOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {

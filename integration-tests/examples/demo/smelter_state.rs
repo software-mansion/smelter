@@ -1,5 +1,4 @@
 use std::env::VarError;
-use std::ops::Deref;
 use std::{env, fs, mem};
 
 use anyhow::{Context, Result};
@@ -7,7 +6,7 @@ use inquire::Select;
 use integration_tests::examples;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use strum::{Display, EnumIter, IntoEnumIterator};
+use strum::IntoEnumIterator;
 use tracing::{debug, error};
 
 use crate::inputs::InputHandle;
@@ -28,18 +27,10 @@ use crate::{
 
 pub const JSON_BASE: &str = "demo_json.json";
 
-#[derive(Debug, EnumIter, Display, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum TransportProtocol {
-    #[strum(to_string = "udp")]
-    Udp,
-
-    #[strum(to_string = "tcp_server")]
-    TcpServer,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum RunningState {
     Running,
+
     #[default]
     Idle,
 }
@@ -48,8 +39,8 @@ pub enum RunningState {
 pub struct SmelterState {
     #[serde(skip)]
     running_state: RunningState,
-    inputs: Vec<Box<dyn InputHandle>>,
-    outputs: Vec<Box<dyn OutputHandle>>,
+    inputs: Vec<InputHandle>,
+    outputs: Vec<OutputHandle>,
 }
 
 impl SmelterState {
@@ -74,13 +65,11 @@ impl SmelterState {
             input.on_after_registration()?;
         }
 
-        let inputs = state.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
-
         for output in &mut state.outputs {
             output.on_before_registration()?;
             examples::post(
                 &format!("output/{}/register", output.name()),
-                &output.serialize_register(&inputs),
+                &output.serialize_register(&state.inputs),
             )?;
             output.on_after_registration()?;
         }
@@ -130,51 +119,49 @@ impl SmelterState {
 
         let protocol = Select::new("Select input protocol:", prot_opts).prompt()?;
 
-        let (mut input_handler, input_json): (Box<dyn InputHandle>, serde_json::Value) =
-            match protocol {
-                InputProtocol::Rtp => {
-                    let rtp_input = RtpInputBuilder::new().prompt()?.build();
-                    let register_request = rtp_input.serialize_register();
-                    (Box::new(rtp_input), register_request)
-                }
-                InputProtocol::Whip => {
-                    let whip_input = WhipInputBuilder::new().prompt()?.build();
-                    let register_request = whip_input.serialize_register();
-                    (Box::new(whip_input), register_request)
-                }
-                InputProtocol::Whep => {
-                    let whep_input = WhepInputBuilder::new().prompt()?.build();
-                    let register_request = whep_input.serialize_register();
-                    (Box::new(whep_input), register_request)
-                }
-                InputProtocol::Mp4 => {
-                    let mp4_input = Mp4InputBuilder::new().prompt()?.build();
-                    let register_request = mp4_input.serialize_register();
-                    (Box::new(mp4_input), register_request)
-                }
-                InputProtocol::Hls => {
-                    let hls_input = HlsInputBuilder::new().prompt()?.build();
-                    let register_request = hls_input.serialize_register();
-                    (Box::new(hls_input), register_request)
-                }
-            };
+        let (mut input_handle, input_json): (InputHandle, serde_json::Value) = match protocol {
+            InputProtocol::Rtp => {
+                let rtp_input = RtpInputBuilder::new().prompt()?.build();
+                let register_request = rtp_input.serialize_register();
+                (InputHandle::Rtp(rtp_input), register_request)
+            }
+            InputProtocol::Whip => {
+                let whip_input = WhipInputBuilder::new().prompt()?.build();
+                let register_request = whip_input.serialize_register();
+                (InputHandle::Whip(whip_input), register_request)
+            }
+            InputProtocol::Whep => {
+                let whep_input = WhepInputBuilder::new().prompt()?.build();
+                let register_request = whep_input.serialize_register();
+                (InputHandle::Whep(whep_input), register_request)
+            }
+            InputProtocol::Mp4 => {
+                let mp4_input = Mp4InputBuilder::new().prompt()?.build();
+                let register_request = mp4_input.serialize_register();
+                (InputHandle::Mp4(mp4_input), register_request)
+            }
+            InputProtocol::Hls => {
+                let hls_input = HlsInputBuilder::new().prompt()?.build();
+                let register_request = hls_input.serialize_register();
+                (InputHandle::Hls(hls_input), register_request)
+            }
+        };
 
-        let input_route = format!("input/{}/register", input_handler.name());
+        let input_route = format!("input/{}/register", input_handle.name());
 
         debug!("Input register request: {input_json:#?}");
 
-        input_handler.on_before_registration()?;
+        input_handle.on_before_registration()?;
 
         examples::post(&input_route, &input_json)
             .with_context(|| "Input registration failed.".to_string())?;
 
-        input_handler.on_after_registration()?;
-        self.inputs.push(input_handler);
+        input_handle.on_after_registration()?;
+        self.inputs.push(input_handle);
 
-        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
         for output in &mut self.outputs {
             let update_route = format!("output/{}/update", output.name());
-            let update_json = output.serialize_update(&inputs);
+            let update_json = output.serialize_update(&self.inputs);
             debug!("{update_json:#?}");
             examples::post(&update_route, &update_json)
                 .with_context(|| "Output update failed".to_string())?;
@@ -188,40 +175,38 @@ impl SmelterState {
 
         let protocol = Select::new("Select output protocol:", prot_opts).prompt()?;
 
-        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
-        let (mut output_handler, output_json): (Box<dyn OutputHandle>, serde_json::Value) =
-            match protocol {
-                OutputProtocol::Rtp => {
-                    let rtp_output = RtpOutputBuilder::new().prompt()?.build();
-                    let register_request = rtp_output.serialize_register(&inputs);
-                    (Box::new(rtp_output), register_request)
-                }
-                OutputProtocol::Rtmp => {
-                    let rtmp_output = RtmpOutputBuilder::new().prompt()?.build();
-                    let register_request = rtmp_output.serialize_register(&inputs);
-                    (Box::new(rtmp_output), register_request)
-                }
-                OutputProtocol::Whip => {
-                    let whip_output = WhipOutputBuilder::new().prompt()?.build();
-                    let register_request = whip_output.serialize_register(&inputs);
-                    (Box::new(whip_output), register_request)
-                }
-                OutputProtocol::Mp4 => {
-                    let mp4_output = Mp4OutputBuilder::new().prompt()?.build();
-                    let register_request = mp4_output.serialize_register(&inputs);
-                    (Box::new(mp4_output), register_request)
-                }
-                OutputProtocol::Whep => {
-                    let whep_output = WhepOutputBuilder::new().prompt()?.build();
-                    let register_request = whep_output.serialize_register(&inputs);
-                    (Box::new(whep_output), register_request)
-                }
-                OutputProtocol::Hls => {
-                    let hls_output = HlsOutputBuilder::new().prompt(self.running_state)?.build();
-                    let register_request = hls_output.serialize_register(&inputs);
-                    (Box::new(hls_output), register_request)
-                }
-            };
+        let (mut output_handler, output_json): (OutputHandle, serde_json::Value) = match protocol {
+            OutputProtocol::Rtp => {
+                let rtp_output = RtpOutputBuilder::new().prompt()?.build();
+                let register_request = rtp_output.serialize_register(&self.inputs);
+                (OutputHandle::Rtp(rtp_output), register_request)
+            }
+            OutputProtocol::Rtmp => {
+                let rtmp_output = RtmpOutputBuilder::new().prompt()?.build();
+                let register_request = rtmp_output.serialize_register(&self.inputs);
+                (OutputHandle::Rtmp(rtmp_output), register_request)
+            }
+            OutputProtocol::Whip => {
+                let whip_output = WhipOutputBuilder::new().prompt()?.build();
+                let register_request = whip_output.serialize_register(&self.inputs);
+                (OutputHandle::Whip(whip_output), register_request)
+            }
+            OutputProtocol::Mp4 => {
+                let mp4_output = Mp4OutputBuilder::new().prompt()?.build();
+                let register_request = mp4_output.serialize_register(&self.inputs);
+                (OutputHandle::Mp4(mp4_output), register_request)
+            }
+            OutputProtocol::Whep => {
+                let whep_output = WhepOutputBuilder::new().prompt()?.build();
+                let register_request = whep_output.serialize_register(&self.inputs);
+                (OutputHandle::Whep(whep_output), register_request)
+            }
+            OutputProtocol::Hls => {
+                let hls_output = HlsOutputBuilder::new().prompt(self.running_state)?.build();
+                let register_request = hls_output.serialize_register(&self.inputs);
+                (OutputHandle::Hls(hls_output), register_request)
+            }
+        };
 
         output_handler.on_before_registration()?;
 
@@ -253,10 +238,9 @@ impl SmelterState {
         let to_delete = Select::new("Select input to remove:", input_names).prompt()?;
         self.inputs.remove(to_delete.idx);
 
-        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
         for output in &mut self.outputs {
             let update_route = format!("output/{}/update", output.name());
-            let update_json = output.serialize_update(&inputs);
+            let update_json = output.serialize_update(&self.inputs);
             examples::post(&update_route, &update_json)
                 .with_context(|| "Output update failed".to_string())?;
         }
@@ -324,10 +308,9 @@ impl SmelterState {
         let [input_1, input_2] = self.inputs.get_disjoint_mut([idx_1, idx_2])?;
         mem::swap(input_1, input_2);
 
-        let inputs = self.inputs.iter().map(|i| i.deref()).collect::<Vec<_>>();
         for output in &mut self.outputs {
             let update_route = format!("output/{}/update", output.name());
-            let update_json = output.serialize_update(&inputs);
+            let update_json = output.serialize_update(&self.inputs);
             debug!("{update_json:#?}");
             examples::post(&update_route, &update_json)?;
         }
@@ -337,7 +320,7 @@ impl SmelterState {
 
     pub fn json_dump(&self) -> Result<()> {
         let json = serde_json::to_value(self)?;
-        Ok(fs::write(JSON_BASE, json.to_string())?)
+        Ok(fs::write(JSON_BASE, serde_json::to_string_pretty(&json)?)?)
     }
 }
 

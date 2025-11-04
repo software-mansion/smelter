@@ -10,7 +10,7 @@ use tracing::error;
 
 use crate::{
     inputs::{InputHandle, filter_video_inputs},
-    outputs::{AudioEncoder, OutputHandle, VideoEncoder, VideoResolution, scene::Scene},
+    outputs::{AudioEncoder, VideoEncoder, VideoResolution, scene::Scene},
 };
 
 const WHIP_TOKEN_ENV: &str = "WHIP_OUTPUT_BEARER_TOKEN";
@@ -28,32 +28,60 @@ pub enum WhipRegisterOptions {
     Skip,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "WhipOutputOptions", into = "WhipOutputOptions")]
 pub struct WhipOutput {
     name: String,
+    options: WhipOutputOptions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WhipOutputOptions {
     endpoint_url: String,
     bearer_token: String,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
 }
 
-#[typetag::serde]
-impl OutputHandle for WhipOutput {
-    fn name(&self) -> &str {
+impl From<WhipOutputOptions> for WhipOutput {
+    fn from(value: WhipOutputOptions) -> Self {
+        let suffix = rand::rng().next_u32();
+        let name = format!("output_whip_{suffix}");
+        Self {
+            name,
+            options: value,
+        }
+    }
+}
+
+impl From<WhipOutput> for WhipOutputOptions {
+    fn from(value: WhipOutput) -> Self {
+        value.options
+    }
+}
+
+impl WhipOutput {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
+        let WhipOutputOptions {
+            endpoint_url,
+            bearer_token,
+            video,
+            audio,
+        } = &self.options;
         json!({
             "type": "whip_client",
-            "endpoint_url": self.endpoint_url,
-            "bearer_token": self.bearer_token,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+            "endpoint_url": endpoint_url,
+            "bearer_token": bearer_token,
+            "video": video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
     }
 
-    fn on_before_registration(&mut self) -> Result<()> {
+    pub fn on_before_registration(&mut self) -> Result<()> {
         let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
         let url = "http://127.0.0.1:8080";
 
@@ -61,7 +89,10 @@ impl OutputHandle for WhipOutput {
         println!("1. Start Broadcast Box: {cmd}");
         println!("2. Open: {url}");
         println!("3. Make sure that 'I want to watch' option is selected.");
-        println!("4. Enter '{}' in 'Stream Key' field", self.bearer_token);
+        println!(
+            "4. Enter '{}' in 'Stream Key' field",
+            self.options.bearer_token
+        );
 
         loop {
             let confirmation = Confirm::new("Is player running? [Y/n]")
@@ -73,10 +104,10 @@ impl OutputHandle for WhipOutput {
         }
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
-           "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
-           "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
+           "video": self.options.video.as_ref().map(|v| v.serialize_update(inputs)),
+           "audio": self.options.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
 }
@@ -252,17 +283,20 @@ impl WhipOutputBuilder {
     }
 
     pub fn build(self) -> WhipOutput {
-        WhipOutput {
-            name: self.name,
+        let options = WhipOutputOptions {
             endpoint_url: self.endpoint_url.unwrap(),
             bearer_token: self.bearer_token.unwrap(),
             video: self.video,
             audio: self.audio,
+        };
+        WhipOutput {
+            name: self.name,
+            options,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WhipOutputVideoOptions {
     resolution: VideoResolution,
     encoder_preferences: Vec<VideoEncoder>,
@@ -282,7 +316,7 @@ impl WhipOutputVideoOptions {
             .collect()
     }
 
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
@@ -293,7 +327,7 @@ impl WhipOutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
@@ -317,7 +351,7 @@ impl Default for WhipOutputVideoOptions {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WhipOutputAudioOptions {
     encoder_preferences: Vec<AudioEncoder>,
 }
@@ -334,7 +368,7 @@ impl WhipOutputAudioOptions {
             .collect()
     }
 
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {
@@ -356,7 +390,7 @@ impl WhipOutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {

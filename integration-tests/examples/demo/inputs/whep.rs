@@ -8,7 +8,7 @@ use serde_json::json;
 use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::info;
 
-use crate::inputs::{InputHandle, VideoDecoder};
+use crate::inputs::VideoDecoder;
 
 const WHEP_TOKEN_ENV: &str = "WHEP_INPUT_BEARER_TOKEN";
 const WHEP_URL_ENV: &str = "WHEP_INPUT_URL";
@@ -22,34 +22,61 @@ pub enum WhepRegisterOptions {
     Skip,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "WhepInputOptions", into = "WhepInputOptions")]
 pub struct WhepInput {
     name: String,
+    options: WhepInputOptions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WhepInputOptions {
     endpoint_url: String,
     bearer_token: String,
     video: Option<WhepInputVideoOptions>,
 }
 
-#[typetag::serde]
-impl InputHandle for WhepInput {
-    fn name(&self) -> &str {
+impl From<WhepInputOptions> for WhepInput {
+    fn from(value: WhepInputOptions) -> Self {
+        let suffix = rand::rng().next_u32();
+        let name = format!("input_whep_{suffix}");
+        Self {
+            name,
+            options: value,
+        }
+    }
+}
+
+impl From<WhepInput> for WhepInputOptions {
+    fn from(value: WhepInput) -> Self {
+        value.options
+    }
+}
+
+impl WhepInput {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self) -> serde_json::Value {
+    pub fn has_video(&self) -> bool {
+        self.options.video.is_some()
+    }
+
+    pub fn serialize_register(&self) -> serde_json::Value {
+        let WhepInputOptions {
+            endpoint_url,
+            bearer_token,
+            video,
+        } = &self.options;
         json!({
             "type": "whep_client",
-            "endpoint_url": self.endpoint_url,
-            "bearer_token": self.bearer_token,
-            "video": self.video.as_ref().map(|v| v.serialize_register()),
+            "endpoint_url": endpoint_url,
+            "bearer_token": bearer_token,
+            "video": video.as_ref().map(|v| v.serialize_register()),
         })
     }
 
-    fn has_video(&self) -> bool {
-        self.video.is_some()
-    }
-
-    fn on_before_registration(&mut self) -> Result<()> {
+    pub fn on_before_registration(&mut self) -> Result<()> {
         let cmd = "docker run -e UDP_MUX_PORT=8080 -e NAT_1_TO_1_IP=127.0.0.1 -e NETWORK_TEST_ON_START=false -p 8080:8080 -p 8080:8080/udp seaduboi/broadcast-box";
         let url = "http://127.0.0.1:8080";
 
@@ -57,7 +84,10 @@ impl InputHandle for WhepInput {
         println!("1. Start Broadcast Box: {cmd}");
         println!("2. Open: {url}");
         println!("3. Make sure that 'I want to stream' option is selected.");
-        println!("4. Enter '{}' in 'Stream Key' field", self.bearer_token);
+        println!(
+            "4. Enter '{}' in 'Stream Key' field",
+            self.options.bearer_token,
+        );
 
         loop {
             let confirmation = Confirm::new("Is server running? [Y/n]")
@@ -172,16 +202,19 @@ impl WhepInputBuilder {
     }
 
     pub fn build(self) -> WhepInput {
-        WhepInput {
-            name: self.name,
+        let options = WhepInputOptions {
             endpoint_url: self.endpoint_url.unwrap(),
             bearer_token: self.bearer_token,
             video: self.video,
+        };
+        WhepInput {
+            name: self.name,
+            options,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WhepInputVideoOptions {
     decoder_preferences: Vec<VideoDecoder>,
 }

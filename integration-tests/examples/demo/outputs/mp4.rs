@@ -11,7 +11,7 @@ use tracing::error;
 use crate::{
     autocompletion::FilePathCompleter,
     inputs::{InputHandle, filter_video_inputs},
-    outputs::{AudioEncoder, OutputHandle, VideoEncoder, VideoResolution, scene::Scene},
+    outputs::{AudioEncoder, VideoEncoder, VideoResolution, scene::Scene},
     utils::resolve_path,
 };
 const MP4_OUTPUT_PATH: &str = "MP4_OUTPUT_PATH";
@@ -28,33 +28,56 @@ pub enum Mp4RegisterOptions {
     Skip,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "Mp4OutputOptions", into = "Mp4OutputOptions")]
 pub struct Mp4Output {
     name: String,
+    options: Mp4OutputOptions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Mp4OutputOptions {
     path: PathBuf,
     video: Option<Mp4OutputVideoOptions>,
     audio: Option<Mp4OutputAudioOptions>,
 }
 
-#[typetag::serde]
-impl OutputHandle for Mp4Output {
-    fn name(&self) -> &str {
+impl From<Mp4OutputOptions> for Mp4Output {
+    fn from(value: Mp4OutputOptions) -> Self {
+        let suffix = rand::rng().next_u32();
+        let name = format!("mp4_output_{suffix}");
+        Self {
+            name,
+            options: value,
+        }
+    }
+}
+
+impl From<Mp4Output> for Mp4OutputOptions {
+    fn from(value: Mp4Output) -> Self {
+        value.options
+    }
+}
+
+impl Mp4Output {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
+        let Mp4OutputOptions { path, video, audio } = &self.options;
         json!({
             "type": "mp4",
-            "path": self.path,
-            "video": self.video.as_ref().map(|v| v.serialize_register(inputs)),
-            "audio": self.audio.as_ref().map(|a| a.serialize_register(inputs)),
+            "path": path,
+            "video": video.as_ref().map(|v| v.serialize_register(inputs)),
+            "audio": audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
     }
 
-    fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
-           "video": self.video.as_ref().map(|v| v.serialize_update(inputs)),
-           "audio": self.audio.as_ref().map(|a| a.serialize_update(inputs)),
+           "video": self.options.video.as_ref().map(|v| v.serialize_update(inputs)),
+           "audio": self.options.audio.as_ref().map(|a| a.serialize_update(inputs)),
         })
     }
 }
@@ -175,16 +198,19 @@ impl Mp4OutputBuilder {
     }
 
     pub fn build(self) -> Mp4Output {
-        Mp4Output {
-            name: self.name,
+        let options = Mp4OutputOptions {
             path: self.path.unwrap(),
             video: self.video,
             audio: self.audio,
+        };
+        Mp4Output {
+            name: self.name,
+            options,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mp4OutputVideoOptions {
     resolution: VideoResolution,
     encoder: VideoEncoder,
@@ -193,7 +219,7 @@ pub struct Mp4OutputVideoOptions {
 }
 
 impl Mp4OutputVideoOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
@@ -206,7 +232,7 @@ impl Mp4OutputVideoOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs = filter_video_inputs(inputs);
         json!({
             "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
@@ -230,13 +256,13 @@ impl Default for Mp4OutputVideoOptions {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mp4OutputAudioOptions {
     encoder: AudioEncoder,
 }
 
 impl Mp4OutputAudioOptions {
-    pub fn serialize_register(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {
@@ -260,7 +286,7 @@ impl Mp4OutputAudioOptions {
         })
     }
 
-    pub fn serialize_update(&self, inputs: &[&dyn InputHandle]) -> serde_json::Value {
+    pub fn serialize_update(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let inputs_json = inputs
             .iter()
             .filter_map(|input| {

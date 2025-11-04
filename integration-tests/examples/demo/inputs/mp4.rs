@@ -12,17 +12,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info};
 
-use crate::{
-    autocompletion::FilePathCompleter,
-    inputs::{InputHandle, VideoDecoder},
-    utils::resolve_path,
-};
+use crate::{autocompletion::FilePathCompleter, inputs::VideoDecoder, utils::resolve_path};
 
 const MP4_INPUT_SOURCE: &str = "MP4_INPUT_SOURCE";
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "Mp4InputOptions", into = "Mp4InputOptions")]
 pub struct Mp4Input {
     name: String,
+    options: Mp4InputOptions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Mp4InputOptions {
     source: Mp4InputSource,
     decoder: VideoDecoder,
 
@@ -30,26 +32,48 @@ pub struct Mp4Input {
     input_loop: bool,
 }
 
-#[typetag::serde]
-impl InputHandle for Mp4Input {
-    fn name(&self) -> &str {
+impl From<Mp4InputOptions> for Mp4Input {
+    fn from(value: Mp4InputOptions) -> Self {
+        let suffix = rand::rng().next_u32();
+        let name = format!("mp4_input_{suffix}");
+        Self {
+            name,
+            options: value,
+        }
+    }
+}
+
+impl From<Mp4Input> for Mp4InputOptions {
+    fn from(value: Mp4Input) -> Self {
+        value.options
+    }
+}
+
+impl Mp4Input {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn serialize_register(&self) -> serde_json::Value {
-        let (source_key, source_val) = self.source.serialize();
+    pub fn serialize_register(&self) -> serde_json::Value {
+        let Mp4InputOptions {
+            ref source,
+            input_loop,
+            decoder,
+        } = self.options;
+        let (source_key, source_val) = source.serialize();
         json!({
             "type": "mp4",
             source_key: source_val,
-            "loop": self.input_loop,
+            "loop": input_loop,
             "decoder_map": {
-                "h264": self.decoder.to_string(),
+                "h264": decoder.to_string(),
             },
         })
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Mp4InputSource {
     Path(PathBuf),
     Url(String),
@@ -180,11 +204,14 @@ impl Mp4InputBuilder {
     }
 
     pub fn build(self) -> Mp4Input {
-        Mp4Input {
-            name: self.name,
+        let options = Mp4InputOptions {
             source: self.source.unwrap(),
             decoder: self.decoder.unwrap(),
             input_loop: self.input_loop,
+        };
+        Mp4Input {
+            name: self.name,
+            options,
         }
     }
 }
