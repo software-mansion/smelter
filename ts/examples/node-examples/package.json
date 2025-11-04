@@ -15,8 +15,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@swmansion/smelter": "workspace:0.2.1",
-    "@swmansion/smelter-node": "workspace:0.2.1",
+    "@swmansion/smelter": "workspace:0.3.0-rc.0",
+    "@swmansion/smelter-node": "workspace:0.3.0-rc.0",
     "fs-extra": "^11.2.0",
     "node-fetch": "^2.6.7",
     "react": "^18.3.1",
