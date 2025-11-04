@@ -5,7 +5,7 @@ use std::{
 };
 
 use bytes::BytesMut;
-use vk_video::{DecoderParameters, EncodedInputChunk, Frame, VulkanDevice};
+use vk_video::{EncodedInputChunk, Frame, VulkanDevice, parameters::DecoderParameters};
 
 use super::FrameWithPts;
 

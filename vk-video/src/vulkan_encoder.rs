@@ -9,8 +9,9 @@ use encode_parameter_sets::{pps, sps};
 use yuv_converter::Converter;
 
 use crate::{
-    EncodedOutputChunk, Frame, H264Profile, RawFrameData, VulkanCommonError,
+    EncodedOutputChunk, Frame, RawFrameData, VulkanCommonError,
     device::{EncodingDevice, Rational},
+    parameters::H264Profile,
     wrappers::{
         Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
         ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool, Tracker,

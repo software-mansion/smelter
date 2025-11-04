@@ -2,7 +2,10 @@ use std::{num::NonZero, ops::Deref, sync::Arc};
 
 use smelter_render::{FrameData, OutputFrameFormat};
 use tracing::{error, info};
-use vk_video::{RateControl, Rational, VideoParameters, WgpuTexturesEncoder};
+use vk_video::{
+    WgpuTexturesEncoder,
+    parameters::{RateControl, Rational, VideoParameters},
+};
 
 use crate::{graphics_context::GraphicsContext, prelude::*};
 

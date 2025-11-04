@@ -6,7 +6,7 @@ use h264_reader::nal::{
     sps::SeqParameterSet,
 };
 
-use crate::MissedFrameHandling;
+use crate::parameters::MissedFrameHandling;
 
 use super::{
     DecodeInformation, DecoderInstruction, PictureInfo, ReferencePictureInfo,

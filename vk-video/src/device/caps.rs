@@ -2,9 +2,9 @@ use std::ffi::c_void;
 
 use ash::vk;
 
-use crate::H264Profile;
 use crate::VulkanDecoderError;
 use crate::VulkanInitError;
+use crate::parameters::H264Profile;
 use crate::wrappers::*;
 
 pub(crate) fn query_video_format_properties<'a>(

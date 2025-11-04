@@ -5,7 +5,10 @@ fn main() {
         num::NonZeroU32,
     };
 
-    use vk_video::{Frame, RateControl, Rational, RawFrameData, VideoParameters, VulkanInstance};
+    use vk_video::{
+        Frame, RawFrameData, VulkanInstance,
+        parameters::{RateControl, VideoParameters},
+    };
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::INFO)
@@ -43,10 +46,7 @@ fn main() {
                     VideoParameters {
                         width,
                         height,
-                        target_framerate: Rational {
-                            numerator: 24,
-                            denominator: NonZeroU32::new(1).unwrap(),
-                        },
+                        target_framerate: 24.into(),
                     },
                     RateControl::Vbr {
                         average_bitrate: 1_000_000,

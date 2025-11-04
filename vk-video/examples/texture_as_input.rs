@@ -1,7 +1,10 @@
 #[cfg(vulkan)]
 fn main() {
     use std::{io::Write, num::NonZeroU32};
-    use vk_video::{Frame, RateControl, Rational, VideoParameters, VulkanInstance};
+    use vk_video::{
+        Frame, VulkanInstance,
+        parameters::{RateControl, VideoParameters},
+    };
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::INFO)
@@ -46,10 +49,7 @@ fn main() {
                     VideoParameters {
                         width,
                         height,
-                        target_framerate: Rational {
-                            numerator: 30,
-                            denominator: NonZeroU32::new(1).unwrap(),
-                        },
+                        target_framerate: 30.into(),
                     },
                     RateControl::Vbr {
                         average_bitrate: 500_000,

@@ -8,7 +8,8 @@ use tracing::{debug, warn};
 use wgpu::hal::DynAdapter;
 
 use crate::{
-    EncodeCapabilities, VulkanDevice, VulkanInitError, VulkanInstance,
+    VulkanDevice, VulkanInitError, VulkanInstance,
+    capabilities::EncodeCapabilities,
     device::{
         DECODE_EXTENSIONS, ENCODE_EXTENSIONS, REQUIRED_EXTENSIONS,
         caps::{DecodeCapabilities, NativeDecodeCapabilities, NativeEncodeCapabilities},

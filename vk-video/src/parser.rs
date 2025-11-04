@@ -13,7 +13,7 @@ use reference_manager::ReferenceContext;
 pub(crate) use reference_manager::ReferenceId;
 pub use reference_manager::ReferenceManagementError;
 
-use crate::MissedFrameHandling;
+use crate::parameters::MissedFrameHandling;
 
 mod au_splitter;
 mod nalu_parser;
