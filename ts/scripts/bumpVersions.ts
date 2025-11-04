@@ -12,6 +12,7 @@ const managedPackagePaths = [
   'smelter-browser-render',
   'smelter-web-wasm',
   'smelter-web-client',
+  'create-smelter-app',
 ] as const;
 
 type PackageJson = {
