@@ -58,7 +58,7 @@
             gst_all_1.gst-libav
 
             # Node.js
-            nodejs_20
+            nodejs_22
             pnpm
             yarn
 
