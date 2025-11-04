@@ -1,6 +1,5 @@
 import path from 'path';
 import fs from 'fs';
-import assert from 'assert';
 
 import yaml from 'yaml';
 import prompt from 'prompts';

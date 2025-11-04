@@ -22,7 +22,6 @@
     "@eslint/plugin-kit": "^0.3.4",
     "@types/prompts": "^2.4.9",
     "@types/semver": "^7.7.1",
-    "@types/yaml": "^1.9.7",
     "@typescript-eslint/eslint-plugin": "^8.8.1",
     "@typescript-eslint/parser": "^8.8.1",
     "concurrently": "^9.0.1",

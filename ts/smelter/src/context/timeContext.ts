@@ -4,6 +4,8 @@ export interface BlockingTask {
   done(): void;
 }
 
+type Timeout = ReturnType<typeof setTimeout>;
+
 export interface TimeContext {
   timestampMs(): number;
 
@@ -100,7 +102,7 @@ export class OfflineTimeContext {
 
 export class LiveTimeContext {
   private startTimestampMs: number = 0;
-  private timestamps: Array<{ timestamp: TimestampObject; timeout?: number }>;
+  private timestamps: Array<{ timestamp: TimestampObject; timeout?: Timeout }>;
   private onChangeCallbacks: Set<() => void> = new Set();
 
   constructor() {
@@ -125,7 +127,7 @@ export class LiveTimeContext {
     removed.forEach(ts => clearTimeout(ts.timeout));
   }
 
-  private scheduleChangeNotification(timestamp: TimestampObject): number | undefined {
+  private scheduleChangeNotification(timestamp: TimestampObject): Timeout | undefined {
     const timeLeft = timestamp.timestamp - this.timestampMs();
     if (timeLeft < 0) {
       return;
