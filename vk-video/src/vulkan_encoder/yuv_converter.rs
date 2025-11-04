@@ -8,8 +8,8 @@ use crate::{
     device::EncodingDevice,
     vulkan_encoder::EncoderTracker,
     wrappers::{
-        DescriptorPool, DescriptorSetLayout, Framebuffer, Image, ImageView, Pipeline,
-        PipelineLayout, RenderPass, Sampler, ShaderModule, TrackerWait,
+        DescriptorPool, DescriptorSetLayout, Framebuffer, Image, ImageLayoutTracker, ImageView,
+        Pipeline, PipelineLayout, RenderPass, Sampler, ShaderModule, TrackerWait,
     },
 };
 
@@ -26,9 +26,10 @@ pub enum YuvConverterError {
 
 pub(crate) struct Converter {
     device: Arc<VulkanDevice>,
-    image: Arc<Mutex<Image>>,
+    image: Arc<Image>,
     pipeline_y: ConvertingPipeline,
     pipeline_uv: ConvertingPipeline,
+    image_tracker: Arc<Mutex<ImageLayoutTracker>>,
 }
 
 impl Converter {
@@ -37,6 +38,7 @@ impl Converter {
         width: u32,
         height: u32,
         profile: &H264EncodeProfileInfo,
+        image_tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Result<Self, YuvConverterError> {
         let mut fence = unsafe {
             device
@@ -88,17 +90,36 @@ impl Converter {
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .push_next(&mut profile_list_info);
 
-        let mut image = Image::new(device.allocator.clone(), &create_info)?;
+        let image = Image::new(
+            device.allocator.clone(),
+            &create_info,
+            image_tracker.clone(),
+        )?;
 
-        image.transition_layout_single_layer(
+        let mut image_layout = image_tracker
+            .lock()
+            .unwrap()
+            .map
+            .get(&image.key())
+            .unwrap()
+            .clone();
+
+        image.transition_layout_raw(
             command_buffer,
+            &mut image_layout,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::NONE,
             vk::AccessFlags2::NONE..vk::AccessFlags2::NONE,
             vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-            0,
+            vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            },
         )?;
 
-        let image = Arc::new(Mutex::new(image));
+        let image = Arc::new(image);
 
         let module =
             wgpu::naga::front::wgsl::parse_str(include_str!("../shaders/rgba_to_yuv.wgsl"))
@@ -187,6 +208,12 @@ impl Converter {
             })?
         };
 
+        image_tracker
+            .lock()
+            .unwrap()
+            .map
+            .insert(image.key(), image_layout);
+
         let mut done = false;
         while !done {
             done = unsafe {
@@ -207,6 +234,7 @@ impl Converter {
             image,
             pipeline_y,
             pipeline_uv,
+            image_tracker,
         })
     }
 
@@ -261,6 +289,30 @@ impl Converter {
         unsafe { command_encoder.begin_encoding(None)? };
         let command_buffer = unsafe { command_encoder.raw_handle() };
 
+        let mut image_layout = self
+            .image_tracker
+            .lock()
+            .unwrap()
+            .map
+            .get(&self.image.key())
+            .unwrap()
+            .clone();
+
+        self.image.transition_layout_raw(
+            command_buffer,
+            &mut image_layout,
+            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+            vk::AccessFlags2::NONE..vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            },
+        )?;
+
         self.pipeline_y.convert(command_buffer, &view);
         self.pipeline_uv.convert(command_buffer, &view);
 
@@ -288,6 +340,12 @@ impl Converter {
             _state: EncoderTrackerWaitState::Convert,
         });
 
+        self.image_tracker
+            .lock()
+            .unwrap()
+            .map
+            .insert(self.image.key(), image_layout);
+
         Ok(ConvertState {
             image: self.image.clone(),
             _view: view,
@@ -300,7 +358,7 @@ impl Converter {
 pub(crate) struct ConvertState {
     _encoder: wgpu::hal::vulkan::CommandEncoder,
     _buffer: wgpu::hal::vulkan::CommandBuffer,
-    pub(crate) image: Arc<Mutex<Image>>,
+    pub(crate) image: Arc<Image>,
     pub(crate) _view: ImageView,
 }
 
@@ -325,7 +383,7 @@ impl ConvertingPipeline {
         vertex_info: ShaderInfo,
         fragment_info: ShaderInfo,
         common_state: Arc<CommonState>,
-        image: Arc<Mutex<Image>>,
+        image: Arc<Image>,
         format: vk::Format,
     ) -> Result<Self, YuvConverterError> {
         let vertex = ShaderModule::new(device.device.clone(), &vertex_info.compiled_shader)?;
@@ -439,7 +497,7 @@ impl ConvertingPipeline {
 
         let view_info = vk::ImageViewCreateInfo::default()
             .flags(vk::ImageViewCreateFlags::empty())
-            .image(image.lock().unwrap().image)
+            .image(image.image)
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(format)
             .components(vk::ComponentMapping::default())
@@ -458,7 +516,7 @@ impl ConvertingPipeline {
             &view_info,
         )?);
 
-        let extent = image.lock().unwrap().extent;
+        let extent = image.extent;
 
         let extent = match format {
             vk::Format::R8_UNORM => extent,

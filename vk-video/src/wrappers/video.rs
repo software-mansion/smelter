@@ -2,7 +2,11 @@ use std::sync::{Arc, Mutex};
 
 use ash::vk;
 
-use crate::{VulkanCommonError, VulkanDevice, device::queues::Queue};
+use crate::{
+    VulkanCommonError, VulkanDevice,
+    device::queues::Queue,
+    wrappers::{ImageLayoutTracker, OpenCommandBuffer},
+};
 
 use super::{Device, Image, ImageView, MemoryAllocation, VideoQueueExt};
 
@@ -251,12 +255,12 @@ impl From<crate::parser::PictureInfo> for vk::native::StdVideoDecodeH264Referenc
 
 pub(crate) enum ImageWithView {
     Single {
-        image: Arc<Mutex<Image>>,
+        image: Arc<Image>,
         image_view: ImageView,
     },
 
     Multiple {
-        images: Vec<Arc<Mutex<Image>>>,
+        images: Vec<Arc<Image>>,
         image_views: Vec<ImageView>,
     },
 }
@@ -264,12 +268,12 @@ pub(crate) enum ImageWithView {
 impl ImageWithView {
     fn extent(&self) -> vk::Extent3D {
         match self {
-            ImageWithView::Single { image, .. } => image.lock().unwrap().extent,
-            ImageWithView::Multiple { images, .. } => images[0].lock().unwrap().extent,
+            ImageWithView::Single { image, .. } => image.extent,
+            ImageWithView::Multiple { images, .. } => images[0].extent,
         }
     }
 
-    pub(crate) fn target_info(&self, index: usize) -> Arc<Mutex<Image>> {
+    pub(crate) fn target_info(&self, index: usize) -> Arc<Image> {
         match self {
             ImageWithView::Single { image, .. } => image.clone(),
             ImageWithView::Multiple { images, .. } => images[index].clone(),
@@ -285,14 +289,49 @@ impl ImageWithView {
 
     fn image_view(&self, index: u32) -> &ImageView {
         match self {
-            ImageWithView::Single {
-                image_view: _image_view,
-                ..
-            } => _image_view,
-            ImageWithView::Multiple {
-                image_views: _image_views,
-                ..
-            } => &_image_views[index as usize],
+            ImageWithView::Single { image_view, .. } => image_view,
+            ImageWithView::Multiple { image_views, .. } => &image_views[index as usize],
+        }
+    }
+
+    pub(crate) fn transition_layout(
+        &self,
+        command_buffer: &mut OpenCommandBuffer,
+        stages: std::ops::Range<vk::PipelineStageFlags2>,
+        accesses: std::ops::Range<vk::AccessFlags2>,
+        new_layout: vk::ImageLayout,
+        subresource_range: vk::ImageSubresourceRange,
+    ) -> Result<(), VulkanCommonError> {
+        match self {
+            ImageWithView::Single { image, .. } => image.transition_layout(
+                command_buffer,
+                stages,
+                accesses,
+                new_layout,
+                subresource_range,
+            ),
+
+            ImageWithView::Multiple { images, .. } => {
+                let start_layer = subresource_range.base_array_layer as usize;
+                let end_layer = if subresource_range.layer_count == vk::REMAINING_ARRAY_LAYERS {
+                    images.len()
+                } else {
+                    start_layer + subresource_range.layer_count as usize
+                };
+
+                for image in &images[start_layer..end_layer] {
+                    let subresource_range = subresource_range.base_array_layer(0).layer_count(1);
+                    image.transition_layout(
+                        command_buffer,
+                        stages.clone(),
+                        accesses.clone(),
+                        new_layout,
+                        subresource_range,
+                    )?;
+                }
+
+                Ok(())
+            }
         }
     }
 }
@@ -306,7 +345,8 @@ impl<'a> CodingImageBundle<'a> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         vulkan_ctx: &VulkanDevice,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: &mut OpenCommandBuffer,
+        image_tracker: Arc<Mutex<ImageLayoutTracker>>,
         format: &vk::VideoFormatPropertiesKHR<'a>,
         dimensions: vk::Extent2D,
         image_usage: vk::ImageUsageFlags,
@@ -366,8 +406,12 @@ impl<'a> CodingImageBundle<'a> {
             let images = (0..array_layer_count)
                 .map(|_| {
                     image_create_info = image_create_info.array_layers(1);
-                    Image::new(vulkan_ctx.allocator.clone(), &image_create_info)
-                        .map(|i| Arc::new(Mutex::new(i)))
+                    Image::new(
+                        vulkan_ctx.allocator.clone(),
+                        &image_create_info,
+                        image_tracker.clone(),
+                    )
+                    .map(Arc::new)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
@@ -382,7 +426,7 @@ impl<'a> CodingImageBundle<'a> {
                     };
 
                     let image_view_create_info = image_view_create_info
-                        .image(images[i as usize].lock().unwrap().image)
+                        .image(images[i as usize].image)
                         .view_type(vk::ImageViewType::TYPE_2D)
                         .subresource_range(subresource_range);
 
@@ -395,7 +439,7 @@ impl<'a> CodingImageBundle<'a> {
                 .collect::<Result<Vec<_>, _>>()?;
 
             for image in &images {
-                image.lock().unwrap().transition_layout(
+                image.transition_layout(
                     command_buffer,
                     stages.clone(),
                     accesses.clone(),
@@ -410,13 +454,14 @@ impl<'a> CodingImageBundle<'a> {
             }
         } else {
             image_create_info = image_create_info.array_layers(array_layer_count);
-            let image = Arc::new(Mutex::new(Image::new(
+            let image = Arc::new(Image::new(
                 vulkan_ctx.allocator.clone(),
                 &image_create_info,
-            )?));
+                image_tracker.clone(),
+            )?);
 
             image_view_create_info = image_view_create_info
-                .image(image.lock().unwrap().image)
+                .image(image.image)
                 .view_type(vk::ImageViewType::TYPE_2D_ARRAY)
                 .subresource_range(vk::ImageSubresourceRange {
                     aspect_mask: vk::ImageAspectFlags::COLOR,
@@ -432,7 +477,7 @@ impl<'a> CodingImageBundle<'a> {
                 &image_view_create_info,
             )?;
 
-            image.lock().unwrap().transition_layout(
+            image.transition_layout(
                 command_buffer,
                 stages.clone(),
                 accesses.clone(),
@@ -474,7 +519,8 @@ impl<'a> DecodedPicturesBuffer<'a> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         vulkan_ctx: &VulkanDevice,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: &mut OpenCommandBuffer,
+        image_tracker: Arc<Mutex<ImageLayoutTracker>>,
         use_separate_images: bool,
         profile_info: &vk::VideoProfileInfoKHR,
         image_usage: vk::ImageUsageFlags,
@@ -491,6 +537,7 @@ impl<'a> DecodedPicturesBuffer<'a> {
         let image = CodingImageBundle::new(
             vulkan_ctx,
             command_buffer,
+            image_tracker,
             format,
             dimensions,
             image_usage,

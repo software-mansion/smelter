@@ -22,27 +22,27 @@ impl Queue {
             == vk::TRUE
     }
 
-    pub(crate) fn submit_chain_semaphore<S>(
+    pub(crate) fn submit_chain_semaphore<K: TrackerKind>(
         &self,
         buffer: RecordedCommandBuffer,
-        tracker: &mut SemaphoreTracker<S>,
+        tracker: &mut Tracker<K>,
         wait_stages: vk::PipelineStageFlags2,
         signal_stages: vk::PipelineStageFlags2,
-        new_wait_state: S,
+        new_wait_state: K::WaitState,
     ) -> Result<(), VulkanCommonError> {
         let buffer_submit_info =
             [vk::CommandBufferSubmitInfo::default().command_buffer(buffer.buffer())];
 
-        let signal_value = tracker.next_sem_value();
+        let signal_value = tracker.semaphore_tracker.next_sem_value();
         let signal_info = vk::SemaphoreSubmitInfo::default()
-            .semaphore(tracker.semaphore.semaphore)
+            .semaphore(tracker.semaphore_tracker.semaphore.semaphore)
             .value(signal_value)
             .stage_mask(signal_stages);
 
-        let wait_info = match tracker.wait_for.take() {
+        let wait_info = match tracker.semaphore_tracker.wait_for.take() {
             Some(wait_for) => Some(
                 vk::SemaphoreSubmitInfo::default()
-                    .semaphore(tracker.semaphore.semaphore)
+                    .semaphore(tracker.semaphore_tracker.semaphore.semaphore)
                     .value(wait_for.value)
                     .stage_mask(wait_stages),
             ),
@@ -65,9 +65,9 @@ impl Queue {
             )?
         };
 
-        buffer.mark_submitted();
+        buffer.mark_submitted(&mut tracker.image_layout_tracker.lock().unwrap());
 
-        tracker.wait_for = Some(TrackerWait {
+        tracker.semaphore_tracker.wait_for = Some(TrackerWait {
             value: signal_value,
             _state: new_wait_state,
         });

@@ -5729,6 +5729,7 @@ dependencies = [
  "derivative",
  "h264-reader",
  "memchr",
+ "rustc-hash 2.1.1",
  "thiserror 1.0.69",
  "tracing",
  "tracing-subscriber",

@@ -1,8 +1,15 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::hash_map::Entry,
+    sync::{Arc, Mutex},
+};
 
 use ash::vk::{self, Handle};
+use rustc_hash::FxHashMap;
 
-use crate::{VulkanCommonError, VulkanDevice};
+use crate::{
+    VulkanCommonError, VulkanDevice,
+    wrappers::{ImageKey, ImageLayoutTracker},
+};
 
 struct CommandPool {
     command_pool: vk::CommandPool,
@@ -100,6 +107,7 @@ impl CommandBufferPool {
         Ok(OpenCommandBuffer(UnfinishedCommandBuffer {
             buffer,
             pool: self.0.clone(),
+            image_layout_transitions: Default::default(),
         }))
     }
 
@@ -113,10 +121,15 @@ impl CommandBufferPool {
 struct UnfinishedCommandBuffer {
     buffer: vk::CommandBuffer,
     pool: Arc<Mutex<CommandBufferPoolInner>>,
+    image_layout_transitions: FxHashMap<ImageKey, Box<[vk::ImageLayout]>>,
 }
 
 impl UnfinishedCommandBuffer {
-    fn destroy_without_reset(self) {
+    fn destroy_without_reset(mut self) {
+        // free the hashmap
+        drop(std::mem::take(&mut self.image_layout_transitions));
+
+        // but don't run our destructor
         std::mem::forget(self);
     }
 }
@@ -165,13 +178,33 @@ impl OpenCommandBuffer {
     pub(crate) fn buffer(&self) -> vk::CommandBuffer {
         self.0.buffer
     }
+
+    pub(crate) fn image_layout(
+        &mut self,
+        image: ImageKey,
+        tracker: &ImageLayoutTracker,
+    ) -> Result<&mut [vk::ImageLayout], VulkanCommonError> {
+        let entry = self.0.image_layout_transitions.entry(image);
+
+        match entry {
+            Entry::Occupied(entry) => Ok(entry.into_mut()),
+            Entry::Vacant(entry) => Ok(entry.insert(
+                tracker
+                    .map
+                    .get(&image)
+                    .ok_or(VulkanCommonError::TriedToAccessNonexistentImageState(image))?
+                    .clone(),
+            )),
+        }
+    }
 }
 
 pub(crate) struct RecordedCommandBuffer(UnfinishedCommandBuffer);
 
 impl RecordedCommandBuffer {
-    pub(crate) fn mark_submitted(self) {
+    pub(crate) fn mark_submitted(mut self, tracker: &mut ImageLayoutTracker) {
         self.0.pool.lock().unwrap().submitted.push(self.0.buffer);
+        tracker.map.extend(self.0.image_layout_transitions.drain());
         self.0.destroy_without_reset();
     }
 

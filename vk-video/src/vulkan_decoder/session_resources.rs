@@ -276,12 +276,13 @@ impl VideoSessionResources<'_> {
         profile: &H264DecodeProfileInfo,
         max_coded_extent: vk::Extent2D,
         max_dpb_slots: u32,
-        decode_buffer: OpenCommandBuffer,
+        mut decode_buffer: OpenCommandBuffer,
         tracker: &mut DecoderTracker,
     ) -> Result<DecodingImages<'a>, VulkanDecoderError> {
         let decoding_images = DecodingImages::new(
             decoding_device,
-            decode_buffer.buffer(),
+            &mut decode_buffer,
+            tracker.image_layout_tracker.clone(),
             profile,
             &decoding_device
                 .profile_capabilities
@@ -295,7 +296,7 @@ impl VideoSessionResources<'_> {
 
         decoding_device.h264_decode_queue.submit_chain_semaphore(
             decode_buffer.end()?,
-            &mut tracker.semaphore_tracker,
+            tracker,
             vk::PipelineStageFlags2::ALL_COMMANDS,
             vk::PipelineStageFlags2::ALL_COMMANDS,
             DecoderTrackerWaitState::NewDecodingImagesLayoutTransition,

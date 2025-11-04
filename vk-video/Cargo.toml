@@ -22,6 +22,7 @@ bytes = "1"
 derivative = "2.2.0"
 h264-reader = { workspace = true }
 memchr = "2.7.4"
+rustc-hash = "2.1.1"
 thiserror = "1.0.59"
 tracing = "0.1.40"
 vk-mem = "0.4.0"
