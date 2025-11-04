@@ -13,6 +13,7 @@
   "dependencies": {
     "@swmansion/smelter-browser-render": "workspace:0.2.1",
     "@swmansion/smelter-web-wasm": "workspace:0.2.1",
+    "@swmansion/smelter": "workspace:0.2.1",
     "mp4box": "^0.5.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -26,8 +27,5 @@
     "typescript-eslint": "^8.0.1",
     "vite": "^5.4.21",
     "vite-plugin-static-copy": "^2.3.2"
-  },
-  "peerDependencies": {
-    "@swmansion/smelter": "workspace:^0.2.1"
   }
 }

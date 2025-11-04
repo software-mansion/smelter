@@ -30,6 +30,6 @@
     "wasm-pack": "^0.13.0"
   },
   "peerDependencies": {
-    "@swmansion/smelter": "workspace:0.2.1"
+    "@swmansion/smelter": "workspace:^0.2.1"
   }
 }
