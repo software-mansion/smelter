@@ -1,5 +1,5 @@
 use smelter_render::error::ErrorStack;
-use tracing::warn;
+use tracing::debug;
 
 use crate::pipeline::rtp::{
     RtpPacket,
@@ -41,7 +41,7 @@ where
             Some(PipelineEvent::Data(packet)) => match self.depayloader.depayload(packet) {
                 Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
                 Err(err) => {
-                    warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
+                    debug!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                     Some(vec![])
                 }
             },
