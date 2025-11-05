@@ -1,12 +1,13 @@
 use std::{iter, sync::Arc};
 
 use ffmpeg_next::codec::Id;
+use ffmpeg_next::error::EINVAL;
 use ffmpeg_next::{Rational, codec::Context};
 use smelter_render::{Frame, OutputFrameFormat};
 use tracing::{error, info, trace, warn};
 
 use crate::pipeline::encoder::ffmpeg_utils::{
-    create_av_frame, encoded_chunk_from_av_packet, read_extradata,
+    create_av_frame, encoded_chunk_from_av_packet, ffmpeg_pix_fmt, read_extradata,
 };
 use crate::pipeline::ffmpeg_utils::FfmpegOptions;
 use crate::prelude::*;
@@ -27,29 +28,13 @@ impl VideoEncoder for FfmpegH264Encoder {
 
     fn new(
         ctx: &Arc<PipelineCtx>,
-        options: FfmpegH264EncoderOptions,
+        mut options: FfmpegH264EncoderOptions,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
         info!(?options, "Initialize FFmpeg H264 encoder");
         let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
         let codec_name = codec.name();
 
-        let mut encoder = Context::new().encoder().video()?;
-
-        let pts_unit_secs = Rational::new(1, TIME_BASE);
-        let framerate = ctx.output_framerate;
-        encoder.set_time_base(pts_unit_secs);
-        encoder.set_format(options.pixel_format.into());
-        encoder.set_width(options.resolution.width as u32);
-        encoder.set_height(options.resolution.height as u32);
-        encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
-        encoder.set_colorspace(ffmpeg_next::color::Space::BT709);
-        encoder.set_color_range(ffmpeg_next::color::Range::MPEG);
-        unsafe {
-            let encoder = encoder.as_mut_ptr();
-            use ffmpeg_next::ffi;
-            (*encoder).color_primaries = ffi::AVColorPrimaries::AVCOL_PRI_BT709;
-            (*encoder).color_trc = ffi::AVColorTransferCharacteristic::AVCOL_TRC_BT709;
-        }
+        let encoder = init_h264_encoder(ctx, &options)?;
 
         let mut ffmpeg_options = FfmpegOptions::from(&[
             ("preset", preset_to_str(options.preset)),
@@ -85,7 +70,17 @@ impl VideoEncoder for FfmpegH264Encoder {
         };
         ffmpeg_options.append(&options.raw_options);
 
-        let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
+        let encoder = match encoder.open_as_with(codec, ffmpeg_options.clone().into_dictionary()) {
+            Ok(enc) => enc,
+            Err(error) if error == ffmpeg_next::error::Error::Other { errno: EINVAL } => {
+                warn!(%error, pixel_format = ?options.pixel_format, "Failed to initialize encoder with `pixel_format` Trying again with yuv420p.");
+                options.pixel_format = OutputPixelFormat::YUV420P;
+                let encoder = init_h264_encoder(ctx, &options)?;
+                encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?
+            }
+            Err(e) => return Err(EncoderInitError::FfmpegError(e)),
+        };
+
         let extradata = read_extradata(&encoder);
 
         Ok((
@@ -167,6 +162,30 @@ impl FfmpegH264Encoder {
             }
         }).collect()
     }
+}
+
+fn init_h264_encoder(
+    ctx: &Arc<PipelineCtx>,
+    options: &FfmpegH264EncoderOptions,
+) -> Result<ffmpeg_next::encoder::video::Video, EncoderInitError> {
+    let mut encoder = Context::new().encoder().video()?;
+
+    let pts_unit_secs = Rational::new(1, TIME_BASE);
+    let framerate = ctx.output_framerate;
+    encoder.set_time_base(pts_unit_secs);
+    encoder.set_format(ffmpeg_pix_fmt(options.pixel_format));
+    encoder.set_width(options.resolution.width as u32);
+    encoder.set_height(options.resolution.height as u32);
+    encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
+    encoder.set_colorspace(ffmpeg_next::color::Space::BT709);
+    encoder.set_color_range(ffmpeg_next::color::Range::MPEG);
+    unsafe {
+        let encoder = encoder.as_mut_ptr();
+        use ffmpeg_next::ffi;
+        (*encoder).color_primaries = ffi::AVColorPrimaries::AVCOL_PRI_BT709;
+        (*encoder).color_trc = ffi::AVColorTransferCharacteristic::AVCOL_TRC_BT709;
+    }
+    Ok(encoder)
 }
 
 fn preset_to_str(preset: FfmpegH264EncoderPreset) -> &'static str {
