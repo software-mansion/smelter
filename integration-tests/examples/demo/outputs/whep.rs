@@ -238,9 +238,7 @@ impl WhepOutputVideoOptions {
         let inputs = filter_video_inputs(inputs);
         json!({
             "resolution": self.resolution.serialize(),
-            "encoder": {
-                "type": self.encoder.to_string(),
-            },
+            "encoder": self.encoder.serialize(),
             "initial": {
                 "root": self.scene.serialize(&self.root_id, &inputs, self.resolution),
             },
