@@ -2,7 +2,7 @@
 fn main() {
     use std::io::Write;
 
-    use vk_video::{DecoderParameters, EncodedInputChunk, Frame, VulkanInstance};
+    use vk_video::{EncodedInputChunk, Frame, VulkanInstance, parameters::DecoderParameters};
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::INFO)

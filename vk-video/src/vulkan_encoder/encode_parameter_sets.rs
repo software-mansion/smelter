@@ -1,6 +1,6 @@
 use ash::vk;
 
-use crate::H264Profile;
+use crate::parameters::H264Profile;
 
 use super::VulkanEncoderError;
 

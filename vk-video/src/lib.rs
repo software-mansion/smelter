@@ -25,7 +25,11 @@
 //!         )
 //!         .unwrap();
 //!
-//!     let mut decoder = device.create_wgpu_textures_decoder(vk_video::DecoderParameters::default()).unwrap();
+//!     let mut decoder = device
+//!         .create_wgpu_textures_decoder(
+//!             vk_video::parameters::DecoderParameters::default()
+//!         ).unwrap();
+//!
 //!     let mut buffer = vec![0; 4096];
 //!
 //!     while let Ok(n) = encoded_video_reader.read(&mut buffer) {
@@ -49,7 +53,7 @@
 //!
 //! # Compatibility
 //!
-//! On Linux, the library should work on NVIDIA and AMD GPUs out of the box with recent Mesa drivers. For AMD GPUs with a bit older Mesa drivers, you may need to set the `RADV_PERFTEST=video_decode` environment variable:
+//! On Linux, the library should work on NVIDIA and AMD GPUs out of the box with recent Mesa drivers. For AMD GPUs with a bit older Mesa drivers, you may need to set the `RADV_PERFTEST=video_decode,video_encode` environment variable:
 //!
 //! ```sh
 //! RADV_PERFTEST=video_decode,video_encode cargo run
@@ -82,20 +86,56 @@ mod vulkan_decoder;
 mod vulkan_encoder;
 pub(crate) mod wrappers;
 
+pub mod capabilities {
+    pub use super::adapter::AdapterInfo;
+    pub use super::device::caps::{
+        DecodeCapabilities, DecodeH264Capabilities, DecodeH264ProfileCapabilities,
+        EncodeCapabilities, EncodeH264Capabilities, EncodeH264ProfileCapabilities,
+    };
+}
+
+pub mod parameters {
+    pub use super::device::{
+        DecoderParameters, EncoderParameters, MissedFrameHandling, Rational, VideoParameters,
+    };
+    pub use super::vulkan_encoder::RateControl;
+
+    /// A profile in H264 is a set of codec features used while encoding a specific video.
+    /// Baseline uses the fewest features, Main can use more and High even more than Main.
+    #[derive(Debug, Clone, Copy)]
+    pub enum H264Profile {
+        Baseline,
+        Main,
+        High,
+    }
+
+    impl H264Profile {
+        pub(crate) fn to_profile_idc(self) -> ash::vk::native::StdVideoH264ProfileIdc {
+            match self {
+                H264Profile::Baseline => {
+                    ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_BASELINE
+                }
+                H264Profile::Main => {
+                    ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN
+                }
+                H264Profile::High => {
+                    ash::vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH
+                }
+            }
+        }
+    }
+}
+
 use ash::vk;
 use parser::Parser;
 use vulkan_decoder::{FrameSorter, VulkanDecoder};
 
-pub use adapter::{AdapterInfo, VulkanAdapter};
-pub use device::caps::{EncodeCapabilities, EncodeH264Capabilities, EncodeH264ProfileCapabilities};
-pub use device::{
-    DecoderParameters, EncoderParameters, MissedFrameHandling, Rational, VideoParameters,
-    VulkanDevice,
-};
+pub use adapter::VulkanAdapter;
+pub use device::VulkanDevice;
 pub use instance::VulkanInstance;
 pub use parser::{ParserError, ReferenceManagementError};
 pub use vulkan_decoder::VulkanDecoderError;
-pub use vulkan_encoder::{RateControl, VulkanEncoderError};
+pub use vulkan_encoder::VulkanEncoderError;
 
 use crate::vulkan_encoder::VulkanEncoder;
 use crate::wrappers::ImageKey;
@@ -167,27 +207,6 @@ pub enum VulkanCommonError {
 
     #[error("Tried to unregister image {0:x?} that was not registered")]
     UnregisteredNonexistentImage(ImageKey),
-}
-
-/// A profile in H264 is a set of codec features used while encoding a specific video.
-/// Baseline uses the fewest features, Main can use more and High even more than Main.
-#[derive(Debug, Clone, Copy)]
-pub enum H264Profile {
-    Baseline,
-    Main,
-    High,
-}
-
-impl H264Profile {
-    pub(crate) fn to_profile_idc(self) -> vk::native::StdVideoH264ProfileIdc {
-        match self {
-            H264Profile::Baseline => {
-                vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_BASELINE
-            }
-            H264Profile::Main => vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_MAIN,
-            H264Profile::High => vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_HIGH,
-        }
-    }
 }
 
 /// Represents a chunk of encoded video data used for decoding.
@@ -299,7 +318,7 @@ impl BytesDecoder {
     }
 }
 
-/// An encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in RGBA)
+/// An encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12)
 pub struct BytesEncoder {
     vulkan_encoder: VulkanEncoder<'static>,
 }

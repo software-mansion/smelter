@@ -6,18 +6,19 @@ use std::sync::Arc;
 use ash::vk;
 
 use crate::adapter::VulkanAdapter;
+use crate::capabilities::AdapterInfo;
 use crate::device::caps::{
     DecodeCapabilities, EncodeCapabilities, NativeDecodeCapabilities,
     NativeDecodeProfileCapabilities, NativeEncodeCapabilities,
 };
 use crate::device::queues::{Queue, Queues};
+use crate::parameters::{H264Profile, RateControl};
 use crate::parser::Parser;
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 use crate::{
-    AdapterInfo, BytesDecoder, BytesEncoder, DecoderError, H264Profile, RateControl, RawFrameData,
-    VulkanDecoderError, VulkanEncoderError, VulkanInitError, VulkanInstance, WgpuTexturesDecoder,
-    WgpuTexturesEncoder, wrappers::*,
+    BytesDecoder, BytesEncoder, DecoderError, RawFrameData, VulkanDecoderError, VulkanEncoderError,
+    VulkanInitError, VulkanInstance, WgpuTexturesDecoder, WgpuTexturesEncoder, wrappers::*,
 };
 
 pub(crate) mod caps;
@@ -42,6 +43,16 @@ pub struct Rational {
     pub denominator: NonZeroU32,
 }
 
+impl From<u32> for Rational {
+    fn from(value: u32) -> Self {
+        Rational {
+            numerator: value,
+            denominator: std::num::NonZeroU32::new(1).unwrap(),
+        }
+    }
+}
+
+/// An enum used to specify how the decoder should handle missing frames
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MissedFrameHandling {
     /// When missed frames are detected, error on every subsequent frame that depends on them
@@ -86,7 +97,7 @@ pub struct EncoderParameters {
     /// The profile must be supported by the device
     pub profile: H264Profile,
     /// The value must be less than
-    /// [`EncodeH264ProfileCapabilities::quality_levels`](crate::EncodeH264ProfileCapabilities::quality_levels)
+    /// [`EncodeH264ProfileCapabilities::quality_levels`](crate::capabilities::EncodeH264ProfileCapabilities::quality_levels)
     pub quality_level: u32,
     pub video_parameters: VideoParameters,
 }

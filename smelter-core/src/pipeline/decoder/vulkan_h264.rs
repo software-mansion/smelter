@@ -2,10 +2,8 @@ use std::{sync::Arc, time::Duration};
 
 use smelter_render::{Frame, FrameData, Resolution};
 use tracing::{debug, info, warn};
-use vk_video::{
-    DecoderError, DecoderParameters, MissedFrameHandling, ParserError, ReferenceManagementError,
-    WgpuTexturesDecoder,
-};
+use vk_video::parameters::{DecoderParameters, MissedFrameHandling};
+use vk_video::{DecoderError, ParserError, ReferenceManagementError, WgpuTexturesDecoder};
 
 use crate::pipeline::decoder::{VideoDecoder, VideoDecoderInstance};
 use crate::prelude::*;
