@@ -1,5 +1,6 @@
 use std::{
     fmt,
+    ops::{Add, Div},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -83,6 +84,7 @@ pub(crate) struct LatencyOptimizedBuffer {
     dynamic_buffer: Duration,
 
     state: LatencyOptimizedBufferState,
+    effective_buffer_log: ThrottledLogger<Duration>,
 }
 
 impl LatencyOptimizedBuffer {
@@ -94,6 +96,9 @@ impl LatencyOptimizedBuffer {
             max_buffer: ctx.default_buffer_duration + Duration::from_millis(50),
             dynamic_buffer: ctx.default_buffer_duration,
             state: LatencyOptimizedBufferState::Ok,
+            effective_buffer_log: ThrottledLogger::new(Box::new(|min, max, avg| {
+                debug!(?min, ?max, ?avg, "Effective jitter buffer")
+            })),
         }
     }
 
@@ -198,6 +203,65 @@ impl AdaptiveBuffer {
                 "Increase adaptive buffer (force)"
             );
             self.dynamic_buffer = new_buffer
+        }
+    }
+}
+
+struct ThrottledLogger<V: PartialOrd + Copy + Add<Output = V> + Default + Div<u32, Output = V>> {
+    max: Option<V>,
+    min: Option<V>,
+    sum: V,
+    count: u32,
+    last: Instant,
+    log_fn: Box<dyn FnMut(V, V, V)>,
+}
+
+impl<V: PartialOrd + Copy + Add<Output = V> + Default + Div<u32, Output = V>> ThrottledLogger<V> {
+    fn new(log_fn: Box<dyn FnMut(V, V, V)>) -> Self {
+        Self {
+            max: None,
+            min: None,
+            sum: V::default(),
+            count: 0,
+            last: Instant::now(),
+            log_fn,
+        }
+    }
+
+    fn log(&mut self, value: V) {
+        let max = match self.max {
+            Some(max) if max < value => {
+                self.max = Some(value);
+                value
+            }
+            Some(max) => max,
+            None => {
+                self.max = Some(value);
+                value
+            }
+        };
+        let min = match self.min {
+            Some(min) if min < value => {
+                self.min = Some(value);
+                value
+            }
+            Some(min) => min,
+            None => {
+                self.min = Some(value);
+                value
+            }
+        };
+        self.sum = self.sum + value;
+        self.count += 1;
+
+        if self.last.elapsed() > Duration::from_secs(1) {
+            let avg = self.sum / self.count;
+            self.last = Instant::now();
+            self.max = None;
+            self.min = None;
+            self.count = 0;
+            self.sum = V::default();
+            (self.log_fn)(min, max, avg)
         }
     }
 }

@@ -322,6 +322,9 @@ impl VideoQueueInput {
         if self.offset_from_start.is_none() {
             match self.receiver.try_recv()? {
                 PipelineEvent::Data(frame) => {
+                    if self.sync_point.elapsed() > frame.pts && !self.required {
+                        debug!(?frame, "Frame delivered to late")
+                    }
                     let _ = self.shared_state.get_or_init_first_pts(frame.pts);
                     self.queue.push_back(frame);
                 }
@@ -337,6 +340,9 @@ impl VideoQueueInput {
                 PipelineEvent::Data(mut frame) => {
                     let first_pts = self.shared_state.get_or_init_first_pts(frame.pts);
                     frame.pts = offset_pts + frame.pts - first_pts;
+                    if self.sync_point.elapsed() > frame.pts && !self.required {
+                        debug!(?frame, "Frame delivered to late")
+                    }
                     self.queue.push_back(frame);
                 }
                 PipelineEvent::EOS => self.eos_received = true,

@@ -4,7 +4,7 @@ use webrtc::rtp_transceiver::PayloadType;
 
 use crate::pipeline::rtp::{
     RtpPacket,
-    depayloader::{Depayloader, DepayloaderOptions, new_depayloader},
+    depayloader::{Depayloader, DepayloaderOptions, DepayloadingError, new_depayloader},
 };
 
 use crate::prelude::*;
@@ -64,6 +64,7 @@ where
                 let depayloader = self.depayloader.as_mut()?;
                 match depayloader.depayload(packet) {
                     Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
+                    Err(DepayloadingError::Rtp(webrtc::rtp::Error::ErrShortPacket)) => Some(vec![]),
                     Err(err) => {
                         warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                         Some(vec![])
