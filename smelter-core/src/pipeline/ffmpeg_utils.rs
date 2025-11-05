@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use ffmpeg_next::{Dictionary, StreamMut, ffi::AVCodecParameters};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub(super) struct FfmpegOptions(HashMap<String, String>);
 
 impl FfmpegOptions {
