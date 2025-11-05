@@ -9,7 +9,9 @@ use tracing::{error, info, trace, warn};
 
 use crate::pipeline::{
     PipelineCtx,
-    encoder::ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet},
+    encoder::ffmpeg_utils::{
+        create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format,
+    },
     ffmpeg_utils::FfmpegOptions,
 };
 use crate::prelude::*;
@@ -40,7 +42,7 @@ impl VideoEncoder for FfmpegVp9Encoder {
         let pts_unit_secs = Rational::new(1, TIME_BASE);
         let framerate = ctx.output_framerate;
         encoder.set_time_base(pts_unit_secs);
-        encoder.set_format(options.pixel_format.into());
+        encoder.set_format(into_ffmpeg_pixel_format(options.pixel_format));
         encoder.set_width(options.resolution.width as u32);
         encoder.set_height(options.resolution.height as u32);
         encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));

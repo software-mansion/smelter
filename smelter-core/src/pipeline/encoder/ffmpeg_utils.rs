@@ -122,7 +122,9 @@ pub(super) fn encoded_chunk_from_av_packet(
     })
 }
 
-pub(super) fn ffmpeg_pix_fmt(pixel_format: OutputPixelFormat) -> ffmpeg_next::format::Pixel {
+pub(super) fn into_ffmpeg_pixel_format(
+    pixel_format: OutputPixelFormat,
+) -> ffmpeg_next::format::Pixel {
     match pixel_format {
         OutputPixelFormat::YUV420P => ffmpeg_next::format::Pixel::YUV420P,
         OutputPixelFormat::YUV422P => ffmpeg_next::format::Pixel::YUV422P,
