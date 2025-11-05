@@ -31,7 +31,7 @@ pub enum HlsRegisterOptions {
 #[derive(Debug, Deserialize)]
 #[serde(from = "HlsOutputOptions")]
 pub struct HlsOutput {
-    name: String,
+    pub name: String,
     path: PathBuf,
     options: HlsOutputOptions,
     stream_handles: Vec<Child>,
@@ -72,10 +72,6 @@ impl From<HlsOutputOptions> for HlsOutput {
 }
 
 impl HlsOutput {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "hls",

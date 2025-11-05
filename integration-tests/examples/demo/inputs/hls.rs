@@ -14,7 +14,7 @@ const HLS_INPUT_URL: &str = "HLS_INPUT_URL";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(from = "HlsInputOptions", into = "HlsInputOptions")]
 pub struct HlsInput {
-    name: String,
+    pub name: String,
     options: HlsInputOptions,
 }
 
@@ -42,10 +42,6 @@ impl From<HlsInput> for HlsInputOptions {
 }
 
 impl HlsInput {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn serialize_register(&self) -> serde_json::Value {
         let HlsInputOptions { ref url, decoder } = self.options;
         json!({

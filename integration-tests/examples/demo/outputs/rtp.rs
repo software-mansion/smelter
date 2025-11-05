@@ -49,7 +49,7 @@ pub enum RtpRegisterOptions {
 #[derive(Debug, Deserialize)]
 #[serde(from = "RtpOutputOptions")]
 pub struct RtpOutput {
-    name: String,
+    pub name: String,
     port: u16,
     options: RtpOutputOptions,
     stream_handles: Vec<Child>,
@@ -91,10 +91,6 @@ impl From<RtpOutputOptions> for RtpOutput {
 }
 
 impl RtpOutput {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let RtpOutputOptions {
             ref video,

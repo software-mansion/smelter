@@ -25,7 +25,7 @@ pub enum WhepRegisterOptions {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(from = "WhepInputOptions", into = "WhepInputOptions")]
 pub struct WhepInput {
-    name: String,
+    pub name: String,
     options: WhepInputOptions,
 }
 
@@ -54,10 +54,6 @@ impl From<WhepInput> for WhepInputOptions {
 }
 
 impl WhepInput {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn has_video(&self) -> bool {
         self.options.video.is_some()
     }

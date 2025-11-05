@@ -31,7 +31,7 @@ pub enum RtmpRegisterOptions {
 #[derive(Debug, Deserialize)]
 #[serde(from = "RtmpOutputOptions")]
 pub struct RtmpOutput {
-    name: String,
+    pub name: String,
     url: String,
     port: u16,
     options: RtmpOutputOptions,
@@ -78,10 +78,6 @@ impl From<RtmpOutputOptions> for RtmpOutput {
 }
 
 impl RtmpOutput {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "rtmp_client",

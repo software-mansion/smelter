@@ -31,7 +31,7 @@ pub enum Mp4RegisterOptions {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(from = "Mp4OutputOptions", into = "Mp4OutputOptions")]
 pub struct Mp4Output {
-    name: String,
+    pub name: String,
     options: Mp4OutputOptions,
 }
 
@@ -60,10 +60,6 @@ impl From<Mp4Output> for Mp4OutputOptions {
 }
 
 impl Mp4Output {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let Mp4OutputOptions { path, video, audio } = &self.options;
         json!({
