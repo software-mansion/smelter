@@ -19,7 +19,7 @@ const MP4_INPUT_SOURCE: &str = "MP4_INPUT_SOURCE";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(from = "Mp4InputOptions", into = "Mp4InputOptions")]
 pub struct Mp4Input {
-    name: String,
+    pub name: String,
     options: Mp4InputOptions,
 }
 
@@ -50,10 +50,6 @@ impl From<Mp4Input> for Mp4InputOptions {
 }
 
 impl Mp4Input {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn serialize_register(&self) -> serde_json::Value {
         let Mp4InputOptions {
             ref source,

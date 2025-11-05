@@ -31,7 +31,7 @@ pub enum WhipRegisterOptions {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(from = "WhipOutputOptions", into = "WhipOutputOptions")]
 pub struct WhipOutput {
-    name: String,
+    pub name: String,
     options: WhipOutputOptions,
 }
 
@@ -61,10 +61,6 @@ impl From<WhipOutput> for WhipOutputOptions {
 }
 
 impl WhipOutput {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         let WhipOutputOptions {
             endpoint_url,
