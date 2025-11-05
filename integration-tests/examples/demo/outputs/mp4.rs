@@ -147,16 +147,22 @@ impl Mp4OutputBuilder {
 
         match video_selection {
             Some(Mp4RegisterOptions::SetVideoStream) => {
+                let mut video = Mp4OutputVideoOptions::default();
                 let scene_options = Scene::iter().collect();
                 let scene_choice =
                     Select::new("Select scene:", scene_options).prompt_skippable()?;
-                let video = match scene_choice {
-                    Some(scene) => Mp4OutputVideoOptions {
-                        scene,
-                        ..Default::default()
-                    },
-                    None => Mp4OutputVideoOptions::default(),
-                };
+                if let Some(scene) = scene_choice {
+                    video.scene = scene;
+                }
+
+                let encoder_options = vec![VideoEncoder::FfmpegH264, VideoEncoder::VulkanH264];
+                let encoder_choice =
+                    Select::new("Select encoder (ESC for ffmpeg_h264):", encoder_options)
+                        .prompt_skippable()?;
+                if let Some(enc) = encoder_choice {
+                    video.encoder = enc;
+                }
+
                 Ok(self.with_video(video))
             }
             Some(Mp4RegisterOptions::Skip) | None => Ok(self),
