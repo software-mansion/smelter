@@ -55,7 +55,7 @@ function wrapWithShaders(
 export function Input({ input }: { input: InputConfig }) {
   const streams = useInputStreams();
   const streamState = streams[input.inputId]?.videoState ?? 'finished';
-  const resolution = { width: 1920, height: 1210 };
+  const resolution = { width: 1920, height: 1080 };
 
   const inputComponent = (
     <Rescaler style={resolution}>
@@ -103,9 +103,11 @@ export function Input({ input }: { input: InputConfig }) {
 export function SmallInput({
   input,
   resolution = { width: 640, height: 360 },
+  showTitle = true,
 }: {
   input: InputConfig;
   resolution?: Resolution;
+  showTitle?: boolean;
 }) {
   const activeShaders = input.shaders.filter(shader => shader.enabled);
 
@@ -114,16 +116,18 @@ export function SmallInput({
       <Rescaler style={{ rescaleMode: 'fill' }}>
         <InputStream inputId={input.inputId} volume={input.volume} />
       </Rescaler>
-      <View
-        style={{
-          backgroundColor: '#493880',
-          height: 40,
-          padding: 20,
-          borderRadius: 10,
-          direction: 'column',
-        }}>
-        <Text style={{ fontSize: 30, color: 'white' }}>{input.title}</Text>
-      </View>
+      {showTitle && (
+        <View
+          style={{
+            backgroundColor: '#493880',
+            height: 40,
+            padding: 20,
+            borderRadius: 10,
+            direction: 'column',
+          }}>
+          <Text style={{ fontSize: 30, color: 'white' }}>{input.title}</Text>
+        </View>
+      )}
     </View>
   );
 
