@@ -1,5 +1,5 @@
 use smelter_render::error::ErrorStack;
-use tracing::{error, warn};
+use tracing::{debug, error};
 use webrtc::rtp_transceiver::PayloadType;
 
 use crate::pipeline::rtp::{
@@ -65,7 +65,7 @@ where
                 match depayloader.depayload(packet) {
                     Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
                     Err(err) => {
-                        warn!("Depayloader error: {}", ErrorStack::new(&err).into_string());
+                        debug!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                         Some(vec![])
                     }
                 }

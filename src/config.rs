@@ -143,16 +143,17 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => DEFAULT_STREAM_FALLBACK_TIMEOUT,
     };
 
+    let default_logger_level = "info,wgpu_hal=warn,wgpu_core=warn,webrtc_srtp::session=warn";
     let logger_level = match env::var("SMELTER_LOGGER_LEVEL") {
-        Ok(level) => level,
-        Err(_) => "info,wgpu_hal=warn,wgpu_core=warn".to_string(),
+        Ok(level) => format!("{default_logger_level},{level}"),
+        Err(_) => default_logger_level.to_string(),
     };
     let stdio_logger_level = match env::var("SMELTER_STDIO_LOGGER_LEVEL") {
-        Ok(level) => level,
+        Ok(level) => format!("{logger_level},{level}"),
         Err(_) => logger_level.clone(),
     };
     let file_logger_level = match env::var("SMELTER_FILE_LOGGER_LEVEL") {
-        Ok(level) => level,
+        Ok(level) => format!("{logger_level},{level}"),
         Err(_) => logger_level.clone(),
     };
 
