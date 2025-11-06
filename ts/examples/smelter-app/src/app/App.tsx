@@ -28,8 +28,8 @@ function OutputScene() {
         <PrimaryOnTopLayout />
       ) : layout === 'primary-on-left' ? (
         <PrimaryOnLeftLayout />
-      ) : layout === 'secondary-in-corner' ? (
-        <SecondaryInCornerLayout />
+      ) : layout === 'videos-in-primary-corner' ? (
+        <VideosInPrimaryCornerLayout />
       ) : null}
     </View>
   );
@@ -95,7 +95,7 @@ function PrimaryOnTopLayout() {
   );
 }
 
-function SecondaryInCornerLayout() {
+function VideosInPrimaryCornerLayout() {
   const store = useContext(StoreContext);
   const inputs = useStore(store, state => state.inputs);
   const firstInput = inputs[0];
@@ -109,8 +109,16 @@ function SecondaryInCornerLayout() {
         <Input input={firstInput} />
       </Rescaler>
       {secondInput ? (
-        <Rescaler style={{ top: 80, right: 80, width: 640, height: 320 }}>
-          <SmallInput input={secondInput} />
+        <Rescaler style={{ top: 60, right: 60, width: 640, height: 1080 }}>
+          <View style={{ direction: 'column' }}>
+            <Tiles transition={{ durationMs: 300 }} style={{ padding: 10, verticalAlign: 'top' }}>
+              {Object.values(inputs)
+                .filter(input => input.inputId != firstInput.inputId)
+                .map(input => (
+                  <SmallInput key={input.inputId} input={input} showTitle={false} />
+                ))}
+            </Tiles>
+          </View>
         </Rescaler>
       ) : null}
     </View>

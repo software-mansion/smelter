@@ -55,6 +55,21 @@ const AVAILABLE_SHADERS: AvailableShader[] = [
     description: 'A filter that converts the input video to grayscale.',
     shaderFile: 'grayscale.wgsl',
   },
+  {
+    id: 'opacity',
+    name: 'Opacity',
+    description: 'A filter that sets the opacity of the input video.',
+    shaderFile: 'opacity.wgsl',
+    params: [
+      {
+        name: 'opacity',
+        type: 'number',
+        minValue: 0,
+        maxValue: 1,
+        defaultValue: 1,
+      },
+    ],
+  },
 ];
 
 class ShadersController {
