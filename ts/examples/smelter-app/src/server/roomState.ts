@@ -155,15 +155,6 @@ export class RoomState {
     return inputId;
   }
 
-  public async refreshWhipInput(inputId: string) {
-    const input = this.getInput(inputId);
-    if (input.type !== 'whip') {
-      throw new Error('Input is not a Whip input');
-    }
-    input.status = 'pending';
-    this.updateStoreWithState();
-  }
-
   public async addNewInput(opts: RegisterInputOptions) {
     if (opts.type === 'whip') {
       const inputId = await this.addNewWhipInput(opts.username);
