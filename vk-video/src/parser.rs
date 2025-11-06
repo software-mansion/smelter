@@ -6,12 +6,13 @@ use h264_reader::{
     nal::{pps::PicParameterSet, slice::SliceHeader, sps::SeqParameterSet},
     push::NalAccumulator,
 };
-use nalu_parser::{NalReceiver, ParsedNalu};
+use nalu_parser::NalReceiver;
 use nalu_splitter::NALUSplitter;
-use reference_manager::ReferenceContext;
 
-pub(crate) use reference_manager::ReferenceId;
 pub use reference_manager::ReferenceManagementError;
+pub(crate) use reference_manager::{ReferenceContext, ReferenceId};
+
+pub use nalu_parser::{ParsedNalu, Slice};
 
 use crate::parameters::MissedFrameHandling;
 
@@ -79,9 +80,6 @@ pub enum DecoderInstruction {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ParserError {
-    #[error(transparent)]
-    ReferenceManagementError(#[from] ReferenceManagementError),
-
     #[error("Bitstreams that allow gaps in frame_num are not supported")]
     GapsInFrameNumNotSupported,
 
@@ -103,19 +101,18 @@ pub enum ParserError {
 
 pub struct Parser {
     reader: AnnexBReader<NalAccumulator<NalReceiver>>,
-    reference_ctx: ReferenceContext,
     au_splitter: AUSplitter,
     receiver: mpsc::Receiver<Result<ParsedNalu, ParserError>>,
     nalu_splitter: NALUSplitter,
 }
 
 impl Parser {
-    pub fn new(missed_frame_handling: MissedFrameHandling) -> Self {
+    // TODO: Make it default
+    pub fn new() -> Self {
         let (tx, rx) = mpsc::channel();
 
         Parser {
             reader: AnnexBReader::accumulate(NalReceiver::new(tx)),
-            reference_ctx: ReferenceContext::new(missed_frame_handling),
             au_splitter: AUSplitter::default(),
             receiver: rx,
             nalu_splitter: NALUSplitter::default(),
@@ -126,7 +123,7 @@ impl Parser {
         &mut self,
         bytes: &[u8],
         pts: Option<u64>,
-    ) -> Result<Vec<DecoderInstruction>, ParserError> {
+    ) -> Result<Vec<Vec<(ParsedNalu, Option<u64>)>>, ParserError> {
         let nalus = self.nalu_splitter.push(bytes, pts);
         let nalus = nalus
             .into_iter()
@@ -136,7 +133,7 @@ impl Parser {
             })
             .collect::<Vec<_>>();
 
-        let mut instructions = Vec::new();
+        let mut parsed_nalus = Vec::new();
         for (nalu, pts) in nalus {
             let nalu = nalu?;
 
@@ -144,28 +141,9 @@ impl Parser {
                 continue;
             };
 
-            let mut slices = Vec::new();
-            for (nalu, pts) in nalus {
-                match nalu {
-                    ParsedNalu::Sps(seq_parameter_set) => {
-                        instructions.push(DecoderInstruction::Sps(seq_parameter_set))
-                    }
-                    ParsedNalu::Pps(pic_parameter_set) => {
-                        instructions.push(DecoderInstruction::Pps(pic_parameter_set))
-                    }
-                    ParsedNalu::Slice(slice) => {
-                        slices.push((slice, pts));
-                    }
-
-                    ParsedNalu::Other(_) => {}
-                }
-            }
-
-            // TODO: warn when not all pts are equal here
-            let mut inst = self.reference_ctx.put_picture(slices)?;
-            instructions.append(&mut inst);
+            parsed_nalus.push(nalus);
         }
 
-        Ok(instructions)
+        Ok(parsed_nalus)
     }
 }

@@ -6,7 +6,7 @@ use h264_reader::nal::{
     sps::SeqParameterSet,
 };
 
-use crate::parameters::MissedFrameHandling;
+use crate::{parameters::MissedFrameHandling, parser::nalu_parser::ParsedNalu};
 
 use super::{
     DecodeInformation, DecoderInstruction, PictureInfo, ReferencePictureInfo,
@@ -63,6 +63,37 @@ impl ReferenceContext {
             missed_frame_handling,
             ..Default::default()
         }
+    }
+
+    pub fn parse_nalus(
+        &mut self,
+        nalus: Vec<Vec<(ParsedNalu, Option<u64>)>>,
+    ) -> Result<Vec<DecoderInstruction>, ReferenceManagementError> {
+        let mut instructions = Vec::new();
+        for nalus in nalus {
+            let mut slices = Vec::new();
+            for (nalu, pts) in nalus {
+                match nalu {
+                    ParsedNalu::Sps(seq_parameter_set) => {
+                        instructions.push(DecoderInstruction::Sps(seq_parameter_set))
+                    }
+                    ParsedNalu::Pps(pic_parameter_set) => {
+                        instructions.push(DecoderInstruction::Pps(pic_parameter_set))
+                    }
+                    ParsedNalu::Slice(slice) => {
+                        slices.push((slice, pts));
+                    }
+
+                    ParsedNalu::Other(_) => {}
+                }
+            }
+
+            // TODO: warn when not all pts are equal here
+            let mut inst = self.put_picture(slices)?;
+            instructions.append(&mut inst);
+        }
+
+        Ok(instructions)
     }
 
     fn next_reference_id(&mut self) -> ReferenceId {

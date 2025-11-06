@@ -39,10 +39,8 @@ impl VideoDecoderInstance for VulkanH264Decoder {
 
         let frames = match self.decoder.decode(chunk) {
             Ok(res) => res,
-            Err(DecoderError::ParserError(ParserError::ReferenceManagementError(
-                ReferenceManagementError::MissingFrame,
-            ))) => {
-                debug!("Vulkan H264 decoder detected a missing frame.");
+            Err(DecoderError::ReferenceManagamentError(ReferenceManagementError::MissingFrame)) => {
+                tracing::error!("Vulkan H264 decoder detected a missing frame.");
                 return Vec::new();
             }
             Err(err) => {

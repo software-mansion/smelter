@@ -13,7 +13,7 @@ use crate::device::caps::{
 };
 use crate::device::queues::{Queue, Queues};
 use crate::parameters::{H264Profile, RateControl};
-use crate::parser::Parser;
+use crate::parser::{Parser, ReferenceContext};
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 use crate::{
@@ -308,7 +308,8 @@ impl VulkanDevice {
             .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
         let max_profile = decode_caps.max_profile();
 
-        let parser = Parser::new(parameters.missed_frame_handling);
+        let parser = Parser::new();
+        let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
             h264_decode_queue: self
@@ -327,6 +328,7 @@ impl VulkanDevice {
 
         Ok(WgpuTexturesDecoder {
             parser,
+            reference_ctx,
             vulkan_decoder,
             frame_sorter,
         })
@@ -342,7 +344,8 @@ impl VulkanDevice {
             .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
         let max_profile = decode_caps.max_profile();
 
-        let parser = Parser::new(parameters.missed_frame_handling);
+        let parser = Parser::new();
+        let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
             h264_decode_queue: self
@@ -361,6 +364,7 @@ impl VulkanDevice {
 
         Ok(BytesDecoder {
             parser,
+            reference_ctx,
             vulkan_decoder,
             frame_sorter,
         })

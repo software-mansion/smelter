@@ -3,6 +3,7 @@ use std::{iter, sync::Arc};
 use smelter_render::{Frame, error::ErrorStack};
 use tracing::error;
 
+use crate::pipeline::decoder::missed_frame_detector::MissedFrameDetector;
 use crate::pipeline::decoder::{
     VideoDecoder, VideoDecoderInstance, ffmpeg_h264::FfmpegH264Decoder,
     ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder, vulkan_h264::VulkanH264Decoder,
@@ -46,6 +47,7 @@ where
 {
     ctx: Arc<PipelineCtx>,
     decoder: Option<Box<dyn VideoDecoderInstance>>,
+    missed_frame_detector: Option<MissedFrameDetector>,
     last_chunk_kind: Option<MediaKind>,
     source: Source,
     eos_sent: bool,
@@ -66,6 +68,7 @@ where
         Self {
             ctx,
             decoder: None,
+            missed_frame_detector: None,
             last_chunk_kind: None,
             source,
             eos_sent: false,
@@ -79,6 +82,7 @@ where
             return;
         }
         self.last_chunk_kind = Some(chunk_kind);
+        // TODO: I don't like it
         let preferred_decoder = match chunk_kind {
             MediaKind::Video(VideoCodec::H264) => self.decoders_info.h264,
             MediaKind::Video(VideoCodec::Vp8) => self.decoders_info.vp8,
@@ -102,7 +106,12 @@ where
                 return;
             }
         };
+
         self.decoder = Some(decoder);
+        self.missed_frame_detector = match chunk_kind {
+            MediaKind::Video(video_codec) => MissedFrameDetector::new(video_codec).ok(),
+            MediaKind::Audio(_) => None,
+        };
     }
 
     fn create_decoder(
@@ -127,16 +136,20 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(samples)) => {
+            Some(PipelineEvent::Data(chunk)) => {
                 // TODO: flush on decoder change
-                self.ensure_decoder(samples.kind);
-                let decoder = self.decoder.as_mut()?;
-                let chunks = decoder.decode(samples);
-                // TODO: add better detection
-                if chunks.is_empty() {
+                self.ensure_decoder(chunk.kind);
+                if let Some(detector) = self.missed_frame_detector.as_mut()
+                    && detector.detect(&chunk)
+                {
                     self.keyframe_request_sender.send();
+                    tracing::error!("Key request sent");
                 }
-                Some(chunks.into_iter().map(PipelineEvent::Data).collect())
+
+                let decoder = self.decoder.as_mut()?;
+                let frames = decoder.decode(chunk);
+
+                Some(frames.into_iter().map(PipelineEvent::Data).collect())
             }
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
                 true => None,

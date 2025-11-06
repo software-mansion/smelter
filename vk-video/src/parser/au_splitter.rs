@@ -4,7 +4,8 @@ use crate::parser::nalu_parser::ParsedNalu;
 
 use super::nalu_parser::Slice;
 
-#[derive(Default)]
+// TODO: Remove debug
+#[derive(Default, Debug)]
 pub(crate) struct AUSplitter {
     buffered_nals: Vec<(ParsedNalu, Option<u64>)>,
 }

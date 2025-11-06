@@ -10,6 +10,8 @@ pub(super) mod decoder_thread_audio;
 pub(super) mod decoder_thread_video;
 pub(super) mod h264_utils;
 
+mod missed_frame_detector;
+
 mod dynamic_stream;
 mod static_stream;
 
