@@ -86,7 +86,8 @@ pub struct VideoParameters {
 /// Parameters for encoder creation
 #[derive(Debug, Clone, Copy)]
 pub struct EncoderParameters {
-    /// Number of frames between IDRs. If [`None`], this will be set to 30.
+    /// Number of frames between IDRs. If [`None`], this will be set to an encoder preferred value,
+    /// or, if the encoder doesn't provide a preferred value, to 30.
     pub idr_period: Option<NonZeroU32>,
     /// See [`RateControl`] for description of different rate control modes. The selected mode must
     /// be supported by the device.

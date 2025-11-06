@@ -48,9 +48,10 @@ impl VideoEncoder for VulkanH264Encoder {
                 max_bitrate: max_bitrate as u64,
             }
         });
-        let rate_control = RateControl::Vbr {
+        let rate_control = RateControl::VariableBitrate {
             average_bitrate: bitrate.average_bitrate,
             max_bitrate: bitrate.max_bitrate,
+            virtual_buffer_size: std::time::Duration::from_secs(2),
         };
         let device = vulkan_ctx.device.clone();
 
