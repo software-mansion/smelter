@@ -81,17 +81,21 @@ routes.get('/rooms', async (_req, res) => {
 
   const allRooms = state.getRooms();
 
-  const roomsInfo = allRooms.map((room) => {
-    if (!room) return undefined;
-    const [inputs, layout] = room.getState();
-    return {
-      roomId: room.idPrefix,
-      inputs: inputs.map(publicInputState),
-      layout,
-      whepUrl: room.getWhepUrl(),
-      pendingDelete: room.pendingDelete,
-    };
-  }).filter(Boolean);
+  const roomsInfo = allRooms
+    .map(room => {
+      if (!room) {
+        return undefined;
+      }
+      const [inputs, layout] = room.getState();
+      return {
+        roomId: room.idPrefix,
+        inputs: inputs.map(publicInputState),
+        layout,
+        whepUrl: room.getWhepUrl(),
+        pendingDelete: room.pendingDelete,
+      };
+    })
+    .filter(Boolean);
 
   res
     .status(200)
@@ -172,10 +176,14 @@ routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
 routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/whip/ack', async (req, res) => {
   const { roomId, inputId } = req.params;
   console.log('[request] WHIP ack', { roomId, inputId });
-  const room = state.getRoom(roomId);
   try {
-    const input = state.getRoom(roomId).getInputs().find(i => i.inputId === inputId);
-    if (!input || input.type !== 'whip') return res.status(400).send({ error: 'Not a WHIP input' });
+    const input = state
+      .getRoom(roomId)
+      .getInputs()
+      .find(i => i.inputId === inputId);
+    if (!input || input.type !== 'whip') {
+      return res.status(400).send({ error: 'Not a WHIP input' });
+    }
     await state.getRoom(roomId).ackWhipInput(inputId);
     res.status(200).send({ status: 'ok' });
   } catch (err: any) {

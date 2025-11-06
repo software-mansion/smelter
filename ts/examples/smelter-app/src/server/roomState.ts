@@ -26,7 +26,7 @@ type TypeSpecificState =
   | { type: 'local-mp4'; mp4FilePath: string }
   | { type: 'twitch-channel'; channelId: string; hlsUrl: string; monitor: TwitchChannelMonitor }
   | { type: 'kick-channel'; channelId: string; hlsUrl: string; monitor: KickChannelMonitor }
-  | { type: 'whip'; whipUrl: string, monitor: WhipInputMonitor };
+  | { type: 'whip'; whipUrl: string; monitor: WhipInputMonitor };
 
 type UpdateInputOptions = {
   volume: number;
@@ -149,7 +149,7 @@ export class RoomState {
         description: `Whip Input for ${username}`,
       },
       volume: 0,
-      whipUrl: ''
+      whipUrl: '',
     });
 
     return inputId;
@@ -357,7 +357,11 @@ export class RoomState {
     const inputs = this.inputs;
     this.inputs = [];
     for (const input of inputs) {
-      if (input.type === 'twitch-channel' || input.type === 'kick-channel' || input.type === 'whip') {
+      if (
+        input.type === 'twitch-channel' ||
+        input.type === 'kick-channel' ||
+        input.type === 'whip'
+      ) {
         input.monitor.stop();
       }
       try {
