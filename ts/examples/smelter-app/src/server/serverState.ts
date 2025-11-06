@@ -116,7 +116,6 @@ class ServerState {
           continue;
         }
         try {
-          const SOFT_LIMIT_LOG_INTERVAL = 10_000;
           console.log('Schedule stop from soft limit');
           room.pendingDelete = true;
           setTimeout(async () => {

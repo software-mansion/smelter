@@ -134,9 +134,9 @@ export class RoomState {
     return this.inputs;
   }
 
-  public async addNewWhipInput(clientId: string) {
+  public async addNewWhipInput(username: string) {
     const inputId = `${this.idPrefix}::whip::${Date.now()}`;
-    const monitor = await WhipInputMonitor.startMonitor(clientId);
+    const monitor = await WhipInputMonitor.startMonitor(username);
     monitor.touch();
     this.inputs.push({
       inputId,
@@ -145,7 +145,7 @@ export class RoomState {
       shaders: [],
       monitor: monitor,
       metadata: {
-        title: 'Whip Input', // will be populated on update
+        title: username, // will be populated on update
         description: 'Whip Input Description',
       },
       volume: 0,
