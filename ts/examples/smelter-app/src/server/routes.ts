@@ -99,20 +99,6 @@ routes.get('/rooms', async (_req, res) => {
     .send(JSON.stringify({ rooms: roomsInfo }, null, 2));
 });
 
-routes.get('/dev/remove-all-rooms', async (_req, res) => {
-  try {
-    const activeRooms = state.getRooms();
-    for (const room of activeRooms) {
-      if (room && room.idPrefix) {
-        state.deleteRoom(room.idPrefix);
-      }
-    }
-    res.status(200).send({ status: 'all rooms removed' });
-  } catch (err) {
-    res.status(500).send({ error: 'Failed to remove all rooms', details: (err as Error).message });
-  }
-});
-
 const UpdateRoomSchema = Type.Object({
   inputOrder: Type.Optional(Type.Array(Type.String())),
   layout: Type.Optional(
@@ -183,22 +169,17 @@ routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
   }
 );
 
-routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/refresh', async (req, res) => {
-  const { roomId, inputId } = req.params;
-  console.log('[request] Refresh input', { roomId, inputId });
-  const room = state.getRoom(roomId);
-  await room.refreshWhipInput(inputId);
-  res.status(200).send({ status: 'ok' });
-});
-
 routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/whip/ack', async (req, res) => {
   const { roomId, inputId } = req.params;
   console.log('[request] WHIP ack', { roomId, inputId });
   const room = state.getRoom(roomId);
   try {
-    await room.ackWhipInput(inputId);
+    const input = state.getRoom(roomId).getInputs().find(i => i.inputId === inputId);
+    if (!input || input.type !== 'whip') return res.status(400).send({ error: 'Not a WHIP input' });
+    await state.getRoom(roomId).refreshWhipInput(inputId);
+    res.status(200).send({ status: 'ok' });
   } catch (err: any) {
-    return res.status(400).send({ status: 'error', message: err?.message ?? 'Invalid input' });
+    res.status(400).send({ status: 'error', message: err?.message ?? 'Invalid input' });
   }
   res.status(200).send({ status: 'ok' });
 });
