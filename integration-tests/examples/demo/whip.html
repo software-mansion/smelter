@@ -16,8 +16,8 @@
     }
 
     video {
-        max-height: 100%;
-        max-width: 100%;
+      max-height: 100%;
+      max-width: 100%;
     }
 
     #inputs {
@@ -35,7 +35,7 @@
     input {
       font-size: 24px;
     }
-    
+
     .inputs {
       display: flex;
       flex-direction: row;
@@ -63,12 +63,16 @@
     }
 
     button {
-      height: 36px;
+      height: 72px;
       margin: 10px;
       width: 300px;
       font-size: 22px;
       background-color: #ff1493;
       font-family: 'Comic Sans MS', 'Comic Sans';
+    }
+
+    #update {
+      height: 36px;
     }
   </style>
 </head>
@@ -93,7 +97,9 @@
   </div>
   <div class="button-div">
     <button id="screen-share">Stream screen share</button>
+    <button id="screen-share-no-audio">Stream screen share no audio</button>
     <button id="camera">Stream camera</button>
+    <button id="camera-no-audio">Stream camera no audio</button>
   </div>
 
   <script>
@@ -130,7 +136,16 @@
         if (screenShareStream) {
           screenShareStream.close();
         }
-        const stream = await navigator.mediaDevices.getDisplayMedia();
+        const stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: true});
+        screenShareStream = await connect(endpointUrl, bearerToken, stream);
+        videoPlayer.srcObject = stream;
+      };
+      const screenShareNoAudioBtn = document.getElementById("screen-share-no-audio");
+      screenShareNoAudioBtn.onclick = async () => {
+        if (screenShareStream) {
+          screenShareStream.close();
+        }
+        const stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: false});
         screenShareStream = await connect(endpointUrl, bearerToken, stream);
         videoPlayer.srcObject = stream;
       };
@@ -142,6 +157,15 @@
           cameraStream.close();
         }
         const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+        cameraStream = await connect(endpointUrl, bearerToken, stream);
+        videoPlayer.srcObject = stream;
+      };
+      const cameraNoAudioBtn = document.getElementById("camera-no-audio");
+      cameraNoAudioBtn.onclick = async () => {
+        if (cameraStream) {
+          cameraStream.close();
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: false});
         cameraStream = await connect(endpointUrl, bearerToken, stream);
         videoPlayer.srcObject = stream;
       };
@@ -160,12 +184,6 @@
         }
       }
     });
-
-    async function screenShare() {
-
-
-    }
-
 
     async function connect(endpointUrl, token, stream) {
       const pc = new RTCPeerConnection({
