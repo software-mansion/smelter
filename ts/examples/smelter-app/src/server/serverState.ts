@@ -12,7 +12,7 @@ export type CreateRoomResult = {
 const ROOM_COUNT_SOFT_LIMIT = 3;
 const ROOM_COUNT_HARD_LIMIT = 5;
 const SOFT_LIMIT_ROOM_DELETE_DELAY = 20_000;
-const WHIP_STALE_TTL_MS = 10_000;
+const WHIP_STALE_TTL_MS = 15_000;
 
 class ServerState {
   private rooms: Record<string, RoomState> = {};
@@ -67,7 +67,7 @@ class ServerState {
     let rooms = Object.entries(this.rooms);
     rooms.sort(([_aId, aRoom], [_bId, bRoom]) => bRoom.creationTimestamp - aRoom.creationTimestamp);
     const now = Date.now();
-    // Remove WHIP inputs that haven't acked within 20s
+    // Remove WHIP inputs that haven't acked within 15 s
     for (const [_roomId, room] of rooms) {
       for (const input of room.getInputs()) {
         if (input.type === 'whip') {
