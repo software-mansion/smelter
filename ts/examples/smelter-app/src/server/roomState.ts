@@ -145,8 +145,8 @@ export class RoomState {
       shaders: [],
       monitor: monitor,
       metadata: {
-        title: username, // will be populated on update
-        description: 'Whip Input Description',
+        title: `[Whip] ${username}`,
+        description: `Whip Input for ${username}`,
       },
       volume: 0,
       whipUrl: ''

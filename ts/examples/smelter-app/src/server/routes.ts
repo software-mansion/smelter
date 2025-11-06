@@ -176,12 +176,11 @@ routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/whip/ack', async
   try {
     const input = state.getRoom(roomId).getInputs().find(i => i.inputId === inputId);
     if (!input || input.type !== 'whip') return res.status(400).send({ error: 'Not a WHIP input' });
-    await state.getRoom(roomId).refreshWhipInput(inputId);
+    await state.getRoom(roomId).ackWhipInput(inputId);
     res.status(200).send({ status: 'ok' });
   } catch (err: any) {
     res.status(400).send({ status: 'error', message: err?.message ?? 'Invalid input' });
   }
-  res.status(200).send({ status: 'ok' });
 });
 
 routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/connect', async (req, res) => {

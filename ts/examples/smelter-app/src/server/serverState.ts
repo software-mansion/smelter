@@ -12,7 +12,7 @@ export type CreateRoomResult = {
 const ROOM_COUNT_SOFT_LIMIT = 3;
 const ROOM_COUNT_HARD_LIMIT = 5;
 const SOFT_LIMIT_ROOM_DELETE_DELAY = 20_000;
-const WHIP_STALE_TTL_MS = 20_000; 
+const WHIP_STALE_TTL_MS = 10_000; 
 
 class ServerState {
   private rooms: Record<string, RoomState> = {};
@@ -73,7 +73,6 @@ class ServerState {
         if (input.type === 'whip') {
 
           const last = input.monitor.getLastAckTimestamp() || 0;
-          console.log(`[monitor] WHIP input ${input.inputId} last acked ${last} ago`);
           if (now - last > WHIP_STALE_TTL_MS) {
             try {
               console.log('[monitor] Removing stale WHIP input', { inputId: input.inputId });
