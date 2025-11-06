@@ -41,7 +41,6 @@ routes.get('/suggestions/kick', async (_req, res) => {
   res.status(200).send({ kick: KickChannelSuggestions.getTopStreams() });
 });
 
-// TODO: Remove this later
 routes.get('/suggestions', async (_req, res) => {
   res.status(200).send({ twitch: TwitchChannelSuggestions.getTopStreams() });
 });
@@ -77,6 +76,39 @@ routes.get<RoomIdParams>('/room/:roomId', async (req, res) => {
   });
 });
 
+//for testing purposes only
+routes.get('/rooms', async (_req, res) => {
+  const adminKey = _req.headers['x-admin-key'];
+  if (!adminKey || adminKey !== 'super-secret-hardcode-admin-key') {
+    return res.status(401).send({ error: 'Unauthorized' });
+  }
+
+  res.header('Refresh', '2');
+
+  const allRooms = state.getRooms();
+
+  const roomsInfo = allRooms
+    .map(room => {
+      if (!room) {
+        return undefined;
+      }
+      const [inputs, layout] = room.getState();
+      return {
+        roomId: room.idPrefix,
+        inputs: inputs.map(publicInputState),
+        layout,
+        whepUrl: room.getWhepUrl(),
+        pendingDelete: room.pendingDelete,
+      };
+    })
+    .filter(Boolean);
+
+  res
+    .status(200)
+    .header('Content-Type', 'application/json')
+    .send(JSON.stringify({ rooms: roomsInfo }, null, 2));
+});
+
 const UpdateRoomSchema = Type.Object({
   inputOrder: Type.Optional(Type.Array(Type.String())),
   layout: Type.Optional(
@@ -84,7 +116,7 @@ const UpdateRoomSchema = Type.Object({
       Type.Literal('grid'),
       Type.Literal('primary-on-left'),
       Type.Literal('primary-on-top'),
-      Type.Literal('secondary-in-corner'),
+      Type.Literal('picture-in-picture'),
     ])
   ),
 });
@@ -119,6 +151,7 @@ const AddInputSchema = Type.Union([
   }),
   Type.Object({
     type: Type.Literal('whip'),
+    username: Type.String(),
   }),
   Type.Object({
     type: Type.Literal('local-mp4'),
@@ -145,6 +178,24 @@ routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
     res.status(200).send({ inputId, bearerToken });
   }
 );
+
+routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/whip/ack', async (req, res) => {
+  const { roomId, inputId } = req.params;
+  console.log('[request] WHIP ack', { roomId, inputId });
+  try {
+    const input = state
+      .getRoom(roomId)
+      .getInputs()
+      .find(i => i.inputId === inputId);
+    if (!input || input.type !== 'whip') {
+      return res.status(400).send({ error: 'Not a WHIP input' });
+    }
+    await state.getRoom(roomId).ackWhipInput(inputId);
+    res.status(200).send({ status: 'ok' });
+  } catch (err: any) {
+    res.status(400).send({ status: 'error', message: err?.message ?? 'Invalid input' });
+  }
+});
 
 routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/connect', async (req, res) => {
   const { roomId, inputId } = req.params;
@@ -240,7 +291,7 @@ function publicInputState(input: RoomInputState): InputState {
         inputId: input.inputId,
         title: input.metadata.title,
         description: input.metadata.description,
-        sourceState: 'always-live',
+        sourceState: input.monitor.isLive() ? 'live' : 'offline',
         status: input.status,
         volume: input.volume,
         shaders: input.shaders,
