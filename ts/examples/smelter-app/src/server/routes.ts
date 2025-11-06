@@ -15,6 +15,7 @@ type RoomAndInputIdParams = { Params: { roomId: string; inputId: string } };
 
 type InputState = {
   inputId: string;
+  type: 'local-mp4' | 'twitch-channel' | 'kick-channel' | 'whip';
   title: string;
   description: string;
   sourceState: 'live' | 'offline' | 'unknown' | 'always-live';
@@ -78,11 +79,6 @@ routes.get<RoomIdParams>('/room/:roomId', async (req, res) => {
 
 //for testing purposes only
 routes.get('/rooms', async (_req, res) => {
-  const adminKey = _req.headers['x-admin-key'];
-  if (!adminKey || adminKey !== 'super-secret-hardcode-admin-key') {
-    return res.status(401).send({ error: 'Unauthorized' });
-  }
-
   res.header('Refresh', '2');
 
   const allRooms = state.getRooms();
@@ -258,6 +254,7 @@ function publicInputState(input: RoomInputState): InputState {
       return {
         inputId: input.inputId,
         title: input.metadata.title,
+        type: input.type,
         description: input.metadata.description,
         sourceState: 'always-live',
         status: input.status,
@@ -267,6 +264,7 @@ function publicInputState(input: RoomInputState): InputState {
     case 'twitch-channel':
       return {
         inputId: input.inputId,
+        type: input.type,
         title: input.metadata.title,
         description: input.metadata.description,
         sourceState: input.monitor.isLive() ? 'live' : 'offline',
@@ -278,6 +276,7 @@ function publicInputState(input: RoomInputState): InputState {
     case 'kick-channel':
       return {
         inputId: input.inputId,
+        type: input.type,
         title: input.metadata.title,
         description: input.metadata.description,
         sourceState: input.monitor.isLive() ? 'live' : 'offline',
@@ -289,6 +288,7 @@ function publicInputState(input: RoomInputState): InputState {
     case 'whip':
       return {
         inputId: input.inputId,
+        type: input.type,
         title: input.metadata.title,
         description: input.metadata.description,
         sourceState: input.monitor.isLive() ? 'live' : 'offline',
