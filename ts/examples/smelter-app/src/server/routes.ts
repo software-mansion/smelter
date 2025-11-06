@@ -41,7 +41,6 @@ routes.get('/suggestions/kick', async (_req, res) => {
   res.status(200).send({ kick: KickChannelSuggestions.getTopStreams() });
 });
 
-// TODO: Remove this later
 routes.get('/suggestions', async (_req, res) => {
   res.status(200).send({ twitch: TwitchChannelSuggestions.getTopStreams() });
 });
@@ -75,6 +74,43 @@ routes.get<RoomIdParams>('/room/:roomId', async (req, res) => {
     whepUrl: room.getWhepUrl(),
     pendingDelete: room.pendingDelete,
   });
+});
+
+routes.get('/rooms', async (_req, res) => {
+  res.header('Refresh', '2');
+
+  const allRooms = state.getRooms();
+
+  const roomsInfo = allRooms.map((room) => {
+    if (!room) return undefined;
+    const [inputs, layout] = room.getState();
+    return {
+      roomId: room.idPrefix,
+      inputs: inputs.map(publicInputState),
+      layout,
+      whepUrl: room.getWhepUrl(),
+      pendingDelete: room.pendingDelete,
+    };
+  }).filter(Boolean);
+
+  res
+    .status(200)
+    .header('Content-Type', 'application/json')
+    .send(JSON.stringify({ rooms: roomsInfo }, null, 2));
+});
+
+routes.get('/dev/remove-all-rooms', async (_req, res) => {
+  try {
+    const activeRooms = state.getRooms();
+    for (const room of activeRooms) {
+      if (room && room.idPrefix) {
+        state.deleteRoom(room.idPrefix);
+      }
+    }
+    res.status(200).send({ status: 'all rooms removed' });
+  } catch (err) {
+    res.status(500).send({ error: 'Failed to remove all rooms', details: (err as Error).message });
+  }
 });
 
 const UpdateRoomSchema = Type.Object({
@@ -119,6 +155,7 @@ const AddInputSchema = Type.Union([
   }),
   Type.Object({
     type: Type.Literal('whip'),
+    username: Type.String(),
   }),
   Type.Object({
     type: Type.Literal('local-mp4'),
@@ -145,6 +182,26 @@ routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
     res.status(200).send({ inputId, bearerToken });
   }
 );
+
+routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/refresh', async (req, res) => {
+  const { roomId, inputId } = req.params;
+  console.log('[request] Refresh input', { roomId, inputId });
+  const room = state.getRoom(roomId);
+  await room.refreshWhipInput(inputId);
+  res.status(200).send({ status: 'ok' });
+});
+
+routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/whip/ack', async (req, res) => {
+  const { roomId, inputId } = req.params;
+  console.log('[request] WHIP ack', { roomId, inputId });
+  const room = state.getRoom(roomId);
+  try {
+    await room.ackWhipInput(inputId);
+  } catch (err: any) {
+    return res.status(400).send({ status: 'error', message: err?.message ?? 'Invalid input' });
+  }
+  res.status(200).send({ status: 'ok' });
+});
 
 routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/connect', async (req, res) => {
   const { roomId, inputId } = req.params;
@@ -240,7 +297,7 @@ function publicInputState(input: RoomInputState): InputState {
         inputId: input.inputId,
         title: input.metadata.title,
         description: input.metadata.description,
-        sourceState: 'always-live',
+        sourceState: input.monitor.isLive() ? 'live' : 'offline',
         status: input.status,
         volume: input.volume,
         shaders: input.shaders,

@@ -11,10 +11,11 @@ export type CreateRoomResult = {
 
 const ROOM_COUNT_SOFT_LIMIT = 3;
 const ROOM_COUNT_HARD_LIMIT = 5;
+const SOFT_LIMIT_ROOM_DELETE_DELAY = 20_000;
 
 class ServerState {
   private rooms: Record<string, RoomState> = {};
-  private getRooms(): RoomState[] {
+  public getRooms(): RoomState[] {
     return Object.values(this.rooms);
   }
 
@@ -64,7 +65,25 @@ class ServerState {
   private async monitorConnectedRooms() {
     let rooms = Object.entries(this.rooms);
     rooms.sort(([_aId, aRoom], [_bId, bRoom]) => bRoom.creationTimestamp - aRoom.creationTimestamp);
+    const now = Date.now();
+    // Remove WHIP inputs that haven't acked within 20s
+    for (const [_roomId, room] of rooms) {
+      for (const input of room.getInputs()) {
+        if (input.type === 'whip') {
 
+          const last = input.monitor.getLastAckTimestamp() || 0;
+          console.log(`[monitor] WHIP input ${input.inputId} last acked ${last} ago`);
+          if (now - last > 10_000) {
+            try {
+              console.log('[monitor] Removing stale WHIP input', { inputId: input.inputId });
+              await room.removeInput(input.inputId);
+            } catch (err: any) {
+              console.log(err, 'Failed to remove stale WHIP input');
+            }
+          }
+        }
+      }
+    }
     for (const [roomId, room] of rooms) {
       if (Date.now() - room.lastReadTimestamp > 60_000) {
         try {
@@ -97,12 +116,13 @@ class ServerState {
           continue;
         }
         try {
+          const SOFT_LIMIT_LOG_INTERVAL = 10_000;
           console.log('Schedule stop from soft limit');
           room.pendingDelete = true;
           setTimeout(async () => {
             console.log('Stop from soft limit');
             await this.deleteRoom(roomId).catch(() => {});
-          }, 20_000);
+          }, SOFT_LIMIT_ROOM_DELETE_DELAY);
         } catch (err: any) {
           console.log(err, `Failed to remove room ${roomId}`);
         }

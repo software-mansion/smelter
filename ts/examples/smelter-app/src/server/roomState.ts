@@ -8,6 +8,7 @@ import type { InputConfig, Layout } from '../app/store';
 import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
 import { KickChannelMonitor } from '../kick/KickChannelMonitor';
 import type { ShaderConfig } from '../shaders/shaders';
+import { WhipInputMonitor } from '../whip/WhipInputMonitor';
 
 export type RoomInputState = {
   inputId: string;
@@ -25,7 +26,7 @@ type TypeSpecificState =
   | { type: 'local-mp4'; mp4FilePath: string }
   | { type: 'twitch-channel'; channelId: string; hlsUrl: string; monitor: TwitchChannelMonitor }
   | { type: 'kick-channel'; channelId: string; hlsUrl: string; monitor: KickChannelMonitor }
-  | { type: 'whip'; whipUrl: string };
+  | { type: 'whip'; whipUrl: string, monitor: WhipInputMonitor };
 
 type UpdateInputOptions = {
   volume: number;
@@ -43,6 +44,7 @@ export type RegisterInputOptions =
     }
   | {
       type: 'whip';
+      username: string;
     }
   | {
       type: 'local-mp4';
@@ -55,7 +57,7 @@ export type RegisterInputOptions =
 export class RoomState {
   private inputs: RoomInputState[];
   private layout: Layout = 'grid';
-  private idPrefix: string;
+  public idPrefix: string;
 
   private mp4sDir: string;
   private mp4Files: string[];
@@ -132,26 +134,39 @@ export class RoomState {
     return this.inputs;
   }
 
-  public async addNewWhipInput() {
+  public async addNewWhipInput(clientId: string) {
     const inputId = `${this.idPrefix}::whip::${Date.now()}`;
+    const monitor = await WhipInputMonitor.startMonitor(clientId);
+    monitor.touch();
     this.inputs.push({
       inputId,
       type: 'whip',
       status: 'disconnected',
       shaders: [],
+      monitor: monitor,
       metadata: {
-        title: '', // will be populated on update
-        description: '',
+        title: 'Whip Input', // will be populated on update
+        description: 'Whip Input Description',
       },
       volume: 0,
-      whipUrl: '',
+      whipUrl: ''
     });
+
     return inputId;
+  }
+
+  public async refreshWhipInput(inputId: string) {
+    const input = this.getInput(inputId);
+    if (input.type !== 'whip') {
+      throw new Error('Input is not a Whip input');
+    }
+    input.status = 'pending';
+    this.updateStoreWithState();
   }
 
   public async addNewInput(opts: RegisterInputOptions) {
     if (opts.type === 'whip') {
-      const inputId = await this.addNewWhipInput();
+      const inputId = await this.addNewWhipInput(opts.username);
       return inputId;
     } else if (opts.type === 'twitch-channel') {
       const inputId = inputIdForTwitchInput(this.idPrefix, opts.channelId);
@@ -221,8 +236,7 @@ export class RoomState {
       let mp4Name = opts.source.fileName;
       const inputId = `${this.idPrefix}::local::sample_streamer::${Date.now()}`;
 
-      //@ts-ignore
-      if (await fs.exists(mp4Path)) {
+      if (await fs.pathExists(mp4Path)) {
         this.inputs.push({
           inputId,
           type: 'local-mp4',
@@ -245,7 +259,7 @@ export class RoomState {
     const input = this.getInput(inputId);
     this.inputs = this.inputs.filter(input => input.inputId !== inputId);
     this.updateStoreWithState();
-    if (input.type === 'twitch-channel' || input.type === 'kick-channel') {
+    if (input.type === 'twitch-channel' || input.type === 'kick-channel' || input.type === 'whip') {
       input.monitor.stop();
     }
 
@@ -260,13 +274,6 @@ export class RoomState {
       }
       input.status = 'disconnected';
     }
-  }
-  public async connectWhipInput(inputId: string) {
-    const input = this.getInput(inputId);
-    if (input.status !== 'disconnected') {
-      return;
-    }
-    input.status = 'pending';
   }
 
   public async connectInput(inputId: string): Promise<string> {
@@ -288,6 +295,14 @@ export class RoomState {
     input.status = 'connected';
     this.updateStoreWithState();
     return response;
+  }
+
+  public async ackWhipInput(inputId: string): Promise<void> {
+    const input = this.getInput(inputId);
+    if (input.type !== 'whip') {
+      throw new Error('Input is not a Whip input');
+    }
+    input.monitor.touch();
   }
 
   public async disconnectInput(inputId: string) {
@@ -342,7 +357,7 @@ export class RoomState {
     const inputs = this.inputs;
     this.inputs = [];
     for (const input of inputs) {
-      if (input.type === 'twitch-channel' || input.type === 'kick-channel') {
+      if (input.type === 'twitch-channel' || input.type === 'kick-channel' || input.type === 'whip') {
         input.monitor.stop();
       }
       try {
