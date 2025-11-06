@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use smelter_render::InputId;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use super::InputSamplesSet;
 use crate::prelude::*;
@@ -143,7 +143,7 @@ fn frame_input_samples(
             if sample_count != 0 {
                 // We should only drop samples in the first batch that overlaps with target batch.
                 // It is possible that first batch does not overlap at all with the result range.
-                warn!(
+                debug!(
                     "Received overlapping batches on input. Dropping {samples_to_remove_from_start} samples.",
                 );
             }
