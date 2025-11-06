@@ -110,7 +110,7 @@ const UpdateRoomSchema = Type.Object({
       Type.Literal('grid'),
       Type.Literal('primary-on-left'),
       Type.Literal('primary-on-top'),
-      Type.Literal('videos-in-primary-corner'),
+      Type.Literal('picture-in-picture'),
     ])
   ),
 });

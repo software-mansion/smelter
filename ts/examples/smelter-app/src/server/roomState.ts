@@ -259,7 +259,7 @@ export class RoomState {
     const input = this.getInput(inputId);
     this.inputs = this.inputs.filter(input => input.inputId !== inputId);
     this.updateStoreWithState();
-    if (input.type === 'twitch-channel' || input.type === 'kick-channel' || input.type === 'whip') {
+    if (input.type === 'twitch-channel' || input.type === 'kick-channel') {
       input.monitor.stop();
     }
 
@@ -320,6 +320,23 @@ export class RoomState {
     }
   }
 
+  public async removeStaleWhipInputs(staleTtlMs: number): Promise<void> {
+    const now = Date.now();
+    for (const input of this.getInputs()) {
+      if (input.type === 'whip') {
+        const last = input.monitor.getLastAckTimestamp() || 0;
+        if (now - last > staleTtlMs) {
+          try {
+            console.log('[monitor] Removing stale WHIP input', { inputId: input.inputId });
+            await this.removeInput(input.inputId);
+          } catch (err: any) {
+            console.log(err, 'Failed to remove stale WHIP input');
+          }
+        }
+      }
+    }
+  }
+
   public async updateInput(inputId: string, options: Partial<UpdateInputOptions>) {
     const input = this.getInput(inputId);
     input.volume = options.volume ?? input.volume;
@@ -357,11 +374,7 @@ export class RoomState {
     const inputs = this.inputs;
     this.inputs = [];
     for (const input of inputs) {
-      if (
-        input.type === 'twitch-channel' ||
-        input.type === 'kick-channel' ||
-        input.type === 'whip'
-      ) {
+      if (input.type === 'twitch-channel' || input.type === 'kick-channel') {
         input.monitor.stop();
       }
       try {

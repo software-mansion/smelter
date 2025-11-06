@@ -14,10 +14,10 @@ export const LayoutValues = [
   'grid',
   'primary-on-left',
   'primary-on-top',
-  'videos-in-primary-corner',
+  'picture-in-picture',
 ] as const;
 
-export type Layout = 'grid' | 'primary-on-left' | 'primary-on-top' | 'videos-in-primary-corner';
+export type Layout = 'grid' | 'primary-on-left' | 'primary-on-top' | 'picture-in-picture';
 
 export type RoomStore = {
   inputs: InputConfig[];

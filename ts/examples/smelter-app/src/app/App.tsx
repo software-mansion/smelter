@@ -28,8 +28,8 @@ function OutputScene() {
         <PrimaryOnTopLayout />
       ) : layout === 'primary-on-left' ? (
         <PrimaryOnLeftLayout />
-      ) : layout === 'videos-in-primary-corner' ? (
-        <VideosInPrimaryCornerLayout />
+      ) : layout === 'picture-in-picture' ? (
+        <PictureInPictureLayout />
       ) : null}
     </View>
   );
@@ -95,7 +95,7 @@ function PrimaryOnTopLayout() {
   );
 }
 
-function VideosInPrimaryCornerLayout() {
+function PictureInPictureLayout() {
   const store = useContext(StoreContext);
   const inputs = useStore(store, state => state.inputs);
   const firstInput = inputs[0];

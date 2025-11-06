@@ -66,22 +66,9 @@ class ServerState {
   private async monitorConnectedRooms() {
     let rooms = Object.entries(this.rooms);
     rooms.sort(([_aId, aRoom], [_bId, bRoom]) => bRoom.creationTimestamp - aRoom.creationTimestamp);
-    const now = Date.now();
     // Remove WHIP inputs that haven't acked within 15 s
     for (const [_roomId, room] of rooms) {
-      for (const input of room.getInputs()) {
-        if (input.type === 'whip') {
-          const last = input.monitor.getLastAckTimestamp() || 0;
-          if (now - last > WHIP_STALE_TTL_MS) {
-            try {
-              console.log('[monitor] Removing stale WHIP input', { inputId: input.inputId });
-              await room.removeInput(input.inputId);
-            } catch (err: any) {
-              console.log(err, 'Failed to remove stale WHIP input');
-            }
-          }
-        }
-      }
+      await room.removeStaleWhipInputs(WHIP_STALE_TTL_MS);
     }
     for (const [roomId, room] of rooms) {
       if (Date.now() - room.lastReadTimestamp > 60_000) {
