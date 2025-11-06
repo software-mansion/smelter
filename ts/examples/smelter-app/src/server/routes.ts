@@ -76,7 +76,13 @@ routes.get<RoomIdParams>('/room/:roomId', async (req, res) => {
   });
 });
 
+//for testing purposes only
 routes.get('/rooms', async (_req, res) => {
+  const adminKey = _req.headers['x-admin-key'];
+  if (!adminKey || adminKey !== 'super-secret-hardcode-admin-key') {
+    return res.status(401).send({ error: 'Unauthorized' });
+  }
+
   res.header('Refresh', '2');
 
   const allRooms = state.getRooms();
