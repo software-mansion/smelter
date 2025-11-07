@@ -6,6 +6,8 @@ use webrtc::{
     },
 };
 
+use crate::AudioChannels;
+
 pub fn vp8_codec_params() -> Vec<RTCRtpCodecParameters> {
     vec![RTCRtpCodecParameters {
         capability: RTCRtpCodecCapability {
@@ -95,30 +97,30 @@ fn get_video_rtcp_feedback() -> Vec<RTCPFeedback> {
     ]
 }
 
-pub fn opus_codec_params(fec_first: bool) -> Vec<RTCRtpCodecParameters> {
-    let codec_configs = if fec_first {
-        [
-            ("minptime=10;useinbandfec=1", 111, 2),
-            ("minptime=10;useinbandfec=1", 112, 1),
-            ("minptime=10;useinbandfec=0", 109, 2),
-            ("minptime=10;useinbandfec=0", 110, 1),
-        ]
-    } else {
-        [
-            ("minptime=10;useinbandfec=0", 109, 2),
-            ("minptime=10;useinbandfec=0", 110, 1),
-            ("minptime=10;useinbandfec=1", 111, 2),
-            ("minptime=10;useinbandfec=1", 112, 1),
-        ]
+pub fn opus_codec_params(fec_first: bool, channels: AudioChannels) -> Vec<RTCRtpCodecParameters> {
+    let codec_configs = match fec_first {
+        true => [
+            ("minptime=10;useinbandfec=1", 111),
+            ("minptime=10;useinbandfec=0", 110),
+        ],
+        false => [
+            ("minptime=10;useinbandfec=0", 110),
+            ("minptime=10;useinbandfec=1", 111),
+        ],
+    };
+
+    let channels = match channels {
+        AudioChannels::Mono => 1,
+        AudioChannels::Stereo => 2,
     };
 
     codec_configs
         .iter()
-        .map(|(fmtp, payload_type, channels)| RTCRtpCodecParameters {
+        .map(|(fmtp, payload_type)| RTCRtpCodecParameters {
             capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_OPUS.to_owned(),
                 clock_rate: 48000,
-                channels: *channels,
+                channels,
                 sdp_fmtp_line: fmtp.to_string(),
                 rtcp_feedback: vec![],
             },

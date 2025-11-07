@@ -26,7 +26,10 @@ use webrtc::{
     track::track_remote::TrackRemote,
 };
 
-use crate::pipeline::{PipelineCtx, webrtc::supported_codec_parameters::opus_codec_params};
+use crate::{
+    AudioChannels,
+    pipeline::{PipelineCtx, webrtc::supported_codec_parameters::opus_codec_params},
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct OnTrackHdlrContext {
@@ -207,7 +210,8 @@ fn media_engine_with_codecs(
 ) -> webrtc::error::Result<MediaEngine> {
     let mut media_engine = MediaEngine::default();
 
-    for audio_codec in opus_codec_params(true /* fec_first */) {
+    // our decoder supports only stereo
+    for audio_codec in opus_codec_params(true /* fec_first */, AudioChannels::Stereo) {
         media_engine.register_codec(audio_codec.clone(), RTPCodecType::Audio)?;
     }
 

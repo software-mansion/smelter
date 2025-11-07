@@ -142,15 +142,16 @@ pub(super) fn codec_params_from_preferences(
     // Since FEC is the only variant, we can just check the first option’s FEC value
     // and register Opus with/without FEC accordingly, in the preferred order.
     // Channels field is the same for all encoder preferences.
-    let fec_first = audio_preferences
+    let (fec_first, channels) = audio_preferences
         .as_ref()
         .and_then(|prefs| prefs.first())
         .and_then(|opt| match opt {
-            AudioEncoderOptions::Opus(opts) => Some(opts.forward_error_correction),
+            AudioEncoderOptions::Opus(opts) => Some((opts.forward_error_correction, opts.channels)),
             _ => None,
         })
-        .unwrap_or(true);
-    let audio_codecs = opus_codec_params(fec_first);
+        .unwrap_or((true, AudioChannels::Stereo));
+
+    let audio_codecs = opus_codec_params(fec_first, channels);
 
     CodecParameters {
         video_codecs,
