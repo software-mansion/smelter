@@ -19,10 +19,10 @@ pub(crate) fn init_video_payloader(encoder: &VideoEncoderOptions, ssrc: u32) -> 
     })
 }
 
-pub(crate) fn init_audio_payloader(ssrc: u32, payload_type: u8) -> Payloader {
+pub(crate) fn init_audio_payloader(ssrc: u32) -> Payloader {
     Payloader::new(PayloaderOptions {
         codec: PayloadedCodec::Opus,
-        payload_type,
+        payload_type: 111,
         clock_rate: 48000,
         mtu: 1200,
         ssrc,

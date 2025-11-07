@@ -117,7 +117,7 @@ impl PeerConnection {
     pub async fn new_audio_track(
         &self,
         encoder: &AudioEncoderOptions,
-    ) -> Result<(Arc<TrackLocalStaticRTP>, Arc<RTCRtpSender>, u32, u8), WhipWhepServerError> {
+    ) -> Result<(Arc<TrackLocalStaticRTP>, Arc<RTCRtpSender>, u32), WhipWhepServerError> {
         let track = match encoder {
             AudioEncoderOptions::Opus(opts) => {
                 let channels = match opts.channels {
@@ -148,12 +148,12 @@ impl PeerConnection {
         let sender = self.pc.add_track(track.clone()).await?;
 
         let rtc_sender_params = sender.get_parameters().await;
-        let (ssrc, payload_type) = match rtc_sender_params.encodings.first() {
-            Some(e) => (e.ssrc, e.payload_type),
-            None => (rand::rng().random::<u32>(), 111),
+        let ssrc = match rtc_sender_params.encodings.first() {
+            Some(e) => e.ssrc,
+            None => rand::rng().random::<u32>(),
         };
 
-        Ok((track, sender, ssrc, payload_type))
+        Ok((track, sender, ssrc))
     }
 
     pub async fn set_remote_description(
