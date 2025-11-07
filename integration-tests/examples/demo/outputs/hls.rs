@@ -130,7 +130,7 @@ pub struct HlsOutputBuilder {
     name: String,
     video: Option<HlsOutputVideoOptions>,
     audio: Option<HlsOutputAudioOptions>,
-    player: OutputPlayer,
+    player: Option<OutputPlayer>,
 }
 
 impl HlsOutputBuilder {
@@ -141,7 +141,7 @@ impl HlsOutputBuilder {
             name,
             video: None,
             audio: None,
-            player: OutputPlayer::Manual,
+            player: None,
         }
     }
 
@@ -205,23 +205,17 @@ impl HlsOutputBuilder {
     }
 
     fn prompt_player(self, running_state: RunningState) -> Result<Self> {
-        let (player_options, default_player) = match running_state {
-            RunningState::Running => (
-                vec![OutputPlayer::Ffmpeg, OutputPlayer::Manual],
-                OutputPlayer::Ffmpeg,
-            ),
-            RunningState::Idle => (vec![OutputPlayer::Manual], OutputPlayer::Manual),
+        let player_options = match running_state {
+            RunningState::Running => vec![OutputPlayer::Ffmpeg, OutputPlayer::Manual],
+            RunningState::Idle => vec![OutputPlayer::Manual],
         };
 
-        let player_selection = Select::new(
-            &format!("Select player (ESC for {default_player}):"),
-            player_options,
-        )
-        .prompt_skippable()?;
+        let player_selection =
+            Select::new("Select player: (ESC for Manual)", player_options).prompt_skippable()?;
 
         match player_selection {
             Some(player) => Ok(self.with_player(player)),
-            None => Ok(self.with_player(default_player)),
+            None => Ok(self),
         }
     }
 
@@ -236,7 +230,7 @@ impl HlsOutputBuilder {
     }
 
     pub fn with_player(mut self, player: OutputPlayer) -> Self {
-        self.player = player;
+        self.player = Some(player);
         self
     }
 
@@ -245,7 +239,7 @@ impl HlsOutputBuilder {
         let options = HlsOutputOptions {
             video: self.video,
             audio: self.audio,
-            player: self.player,
+            player: self.player.unwrap_or(OutputPlayer::Manual),
         };
         HlsOutput {
             name: self.name,
