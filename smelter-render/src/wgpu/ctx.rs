@@ -26,18 +26,22 @@ pub struct WgpuCtx {
     pub empty_rgba_linear_texture: RgbaLinearTexture,
     pub empty_rgba_srgb_texture: RgbaSrgbTexture,
 
+    pub instance: Arc<wgpu::Instance>,
+    pub adapter: Arc<wgpu::Adapter>,
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
 }
 
 impl WgpuCtx {
     pub fn new(
+        instance: Arc<wgpu::Instance>,
+        adapter: Arc<wgpu::Adapter>,
         device: Arc<wgpu::Device>,
         queue: Arc<wgpu::Queue>,
         mode: RenderingMode,
     ) -> Result<Arc<Self>, CreateWgpuCtxError> {
         Self::check_wgpu_ctx(&device, required_wgpu_features());
-        let ctx = Self::new_from_device_queue(device, queue, mode)?;
+        let ctx = Self::new_from_device_queue(instance, adapter, device, queue, mode)?;
         Ok(Arc::new(ctx))
     }
 
@@ -69,6 +73,8 @@ impl WgpuCtx {
     }
 
     fn new_from_device_queue(
+        instance: Arc<wgpu::Instance>,
+        adapter: Arc<wgpu::Adapter>,
         device: Arc<wgpu::Device>,
         queue: Arc<wgpu::Queue>,
         mode: RenderingMode,
@@ -93,6 +99,8 @@ impl WgpuCtx {
         }));
 
         Ok(Self {
+            adapter,
+            instance,
             mode,
             device,
             queue,

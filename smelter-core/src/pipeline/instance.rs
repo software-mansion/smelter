@@ -504,6 +504,8 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         framerate: opts.output_framerate,
         stream_fallback_timeout: opts.stream_fallback_timeout,
         load_system_fonts: opts.load_system_fonts,
+        instance: graphics_context.instance.clone(),
+        adapter: graphics_context.adaper.clone(),
         device: graphics_context.device.clone(),
         queue: graphics_context.queue.clone(),
         rendering_mode: opts.rendering_mode,

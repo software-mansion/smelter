@@ -56,6 +56,7 @@ impl WebRenderer {
         let source_transforms = Arc::new(Mutex::new(Vec::new()));
 
         let client = BrowserClient::new(
+            ctx.wgpu_ctx.clone(),
             frame_data.clone(),
             source_transforms.clone(),
             spec.resolution,

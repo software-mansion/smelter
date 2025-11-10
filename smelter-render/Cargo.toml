@@ -26,3 +26,5 @@ rand = { workspace = true }
 tracing = { workspace = true }
 shared_memory = { workspace = true, optional = true }
 sys-locale = "0.3.1"
+ash = "0.38.0"
+vk-mem = "0.5.0"

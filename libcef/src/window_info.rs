@@ -32,7 +32,7 @@ impl WindowInfo {
             bounds: unsafe { std::mem::zeroed() },
             parent_window: 0 as c_ulong,
             windowless_rendering_enabled: self.windowless_rendering_enabled as c_int,
-            shared_texture_enabled: false as c_int,
+            shared_texture_enabled: true as c_int,
             external_begin_frame_enabled: false as c_int,
             window: 0 as c_ulong,
             runtime_style: libcef_sys::cef_runtime_style_t_CEF_RUNTIME_STYLE_ALLOY,

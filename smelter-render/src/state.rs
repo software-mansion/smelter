@@ -45,6 +45,8 @@ pub struct RendererOptions {
     pub stream_fallback_timeout: Duration,
     pub load_system_fonts: bool,
     pub rendering_mode: RenderingMode,
+    pub instance: Arc<wgpu::Instance>,
+    pub adapter: Arc<wgpu::Adapter>,
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
 }
@@ -193,7 +195,13 @@ impl Renderer {
 
 impl InnerRenderer {
     pub fn new(opts: RendererOptions) -> Result<Self, InitRendererEngineError> {
-        let wgpu_ctx = WgpuCtx::new(opts.device, opts.queue, opts.rendering_mode)?;
+        let wgpu_ctx = WgpuCtx::new(
+            opts.instance,
+            opts.adapter,
+            opts.device,
+            opts.queue,
+            opts.rendering_mode,
+        )?;
 
         Ok(Self {
             wgpu_ctx: wgpu_ctx.clone(),

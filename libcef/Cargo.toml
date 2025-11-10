@@ -13,3 +13,4 @@ thiserror = { workspace = true }
 widestring = "1.0.2"
 anyhow = { workspace = true }
 tracing = { workspace = true }
+libc = "0.2.177"
