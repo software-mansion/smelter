@@ -80,7 +80,7 @@ impl Mp4Output {
 
 pub struct Mp4OutputBuilder {
     name: String,
-    path: Option<PathBuf>,
+    path: PathBuf,
     video: Option<Mp4OutputVideoOptions>,
     audio: Option<Mp4OutputAudioOptions>,
 }
@@ -89,9 +89,10 @@ impl Mp4OutputBuilder {
     pub fn new() -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("mp4_output_{suffix}");
+        let path = env::current_dir().unwrap().join("example_output.mp4");
         Self {
             name,
-            path: None,
+            path,
             video: None,
             audio: None,
         }
@@ -118,13 +119,10 @@ impl Mp4OutputBuilder {
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
 
-        let default_path = env::current_dir().unwrap().join("example_output.mp4");
-
         loop {
-            let path_output = Text::new("Output path (ESC for default):")
+            let path_output = Text::new("Output path (ESC for \"Big Buck Bunny\"):")
                 .with_autocomplete(FilePathCompleter::default())
                 .with_initial_value(&env_path)
-                .with_default(default_path.to_str().unwrap())
                 .prompt_skippable()?;
 
             match path_output {
@@ -136,7 +134,7 @@ impl Mp4OutputBuilder {
                         Some(_) | None => error!("Path is not valid"),
                     }
                 }
-                Some(_) | None => break Ok(self.with_path(default_path)),
+                Some(_) | None => break Ok(self),
             }
         }
     }
@@ -185,7 +183,7 @@ impl Mp4OutputBuilder {
     }
 
     pub fn with_path(mut self, path: PathBuf) -> Self {
-        self.path = Some(path);
+        self.path = path;
         self
     }
 
@@ -201,7 +199,7 @@ impl Mp4OutputBuilder {
 
     pub fn build(self) -> Mp4Output {
         let options = Mp4OutputOptions {
-            path: self.path.unwrap(),
+            path: self.path,
             video: self.video,
             audio: self.audio,
         };
