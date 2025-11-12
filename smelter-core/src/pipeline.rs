@@ -9,7 +9,8 @@ use tokio::runtime::Runtime;
 use smelter_render::{Framerate, RenderingMode, WgpuFeatures, web_renderer::ChromiumContext};
 
 use crate::{
-    event::EventEmitter, graphics_context::GraphicsContext, pipeline::webrtc::WhipWhepPipelineState,
+    event::EventEmitter, graphics_context::GraphicsContext,
+    pipeline::webrtc::WhipWhepPipelineState, stats::StatsSender,
 };
 
 use crate::prelude::*;
@@ -83,7 +84,7 @@ pub enum PipelineWhipWhepServerOptions {
 pub const DEFAULT_BUFFER_DURATION: Duration = Duration::from_millis(16 * 5); // about 5 frames at 60 fps
 
 #[derive(Clone)]
-pub struct PipelineCtx {
+pub(crate) struct PipelineCtx {
     pub queue_sync_point: Instant,
     pub default_buffer_duration: Duration,
 
@@ -94,6 +95,7 @@ pub struct PipelineCtx {
     pub download_dir: Arc<Path>,
     pub graphics_context: GraphicsContext,
     pub event_emitter: Arc<EventEmitter>,
+    pub stats_sender: StatsSender,
     tokio_rt: Arc<Runtime>,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
 }

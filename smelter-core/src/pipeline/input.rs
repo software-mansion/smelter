@@ -85,7 +85,7 @@ where
         return Err(RegisterInputError::AlreadyRegistered(input_id));
     }
 
-    let pipeline_ctx = pipeline.lock().unwrap().ctx().clone();
+    let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
 
     let (input, input_result, receiver) = build_input(pipeline_ctx, Ref::new(&input_id))
         .map_err(|err| RegisterInputError::InputError(input_id.clone(), err))?;

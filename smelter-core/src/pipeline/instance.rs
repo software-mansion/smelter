@@ -29,6 +29,7 @@ use crate::{
         webrtc::{WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle},
     },
     queue::{Queue, QueueAudioOutput, QueueOptions, QueueVideoOutput},
+    stats::StatsMonitor,
 };
 use crate::{
     graphics_context::{GraphicsContext, GraphicsContextOptions},
@@ -40,6 +41,8 @@ pub struct Pipeline {
     pub(super) outputs: HashMap<OutputId, PipelineOutput>,
     pub(super) queue: Arc<Queue>,
     pub(super) renderer: Renderer,
+    pub(super) stats_monitor: StatsMonitor,
+
     pub(super) ctx: Arc<PipelineCtx>,
     pub(super) audio_mixer: AudioMixer,
     pub(super) is_started: bool,
@@ -58,8 +61,8 @@ impl Pipeline {
         &self.queue
     }
 
-    pub fn ctx(&self) -> &Arc<PipelineCtx> {
-        &self.ctx
+    pub fn stats(&self) -> StatsReport {
+        self.stats_monitor.report()
     }
 
     pub fn subscribe_pipeline_events(&self) -> Receiver<Event> {
@@ -524,6 +527,8 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         None => Arc::new(Runtime::new().map_err(InitPipelineError::CreateTokioRuntime)?),
     };
 
+    let (stats_monitor, stats_sender) = StatsMonitor::new();
+
     let ctx = Arc::new(PipelineCtx {
         queue_sync_point: Instant::now(),
         default_buffer_duration: opts.default_buffer_duration,
@@ -534,6 +539,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         stun_servers: opts.whip_whep_stun_servers.clone(),
         download_dir,
         event_emitter: Arc::new(EventEmitter::new()),
+        stats_sender,
         tokio_rt: tokio_rt.clone(),
         graphics_context,
         whip_whep_state: match opts.whip_whep_server {
@@ -554,6 +560,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         inputs: HashMap::new(),
         queue: Queue::new(queue_options, &ctx),
         renderer,
+        stats_monitor,
         audio_mixer: AudioMixer::new(opts.mixing_sample_rate),
         is_started: false,
         ctx,

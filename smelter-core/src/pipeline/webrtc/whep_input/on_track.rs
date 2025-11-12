@@ -36,9 +36,11 @@ pub fn handle_on_track(
         async move {
             debug!("on_track called");
             let result = match kind {
-                RTPCodecType::Audio => process_audio_track(ctx, input_samples_sender).await,
+                RTPCodecType::Audio => {
+                    process_audio_track(ctx, input_ref, input_samples_sender).await
+                }
                 RTPCodecType::Video => {
-                    process_video_track(ctx, frame_sender, video_preferences).await
+                    process_video_track(ctx, input_ref, frame_sender, video_preferences).await
                 }
                 RTPCodecType::Unspecified => {
                     warn!("Unknown track kind");
@@ -56,6 +58,7 @@ pub fn handle_on_track(
 
 async fn process_audio_track(
     ctx: WhepTrackContext,
+    input_ref: Ref<InputId>,
     samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
 ) -> Result<(), WebrtcClientError> {
     if !audio_codec_negotiated(&ctx.rtc_receiver).await {
@@ -68,10 +71,18 @@ async fn process_audio_track(
         (ctx.pipeline_ctx.clone(), samples_sender),
     )?;
 
+    let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
     let mut rtp_reader = WebrtcRtpReader::new(
         ctx.track,
         RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
-        RtpJitterBuffer::new(&ctx.pipeline_ctx, ctx.buffer, 48_000),
+        RtpJitterBuffer::new(
+            &ctx.pipeline_ctx,
+            ctx.buffer,
+            48_000,
+            Box::new(move |event| {
+                stats_sender.send(WhepInputStatsEvent::AudioRtp(event).into_event(&input_ref));
+            }),
+        ),
     );
 
     while let Some(packet) = rtp_reader.read_packet().await {
@@ -92,6 +103,7 @@ async fn process_audio_track(
 
 async fn process_video_track(
     ctx: WhepTrackContext,
+    input_ref: Ref<InputId>,
     frame_sender: Sender<PipelineEvent<Frame>>,
     video_preferences: Vec<VideoDecoderOptions>,
 ) -> Result<(), WebrtcClientError> {
@@ -117,10 +129,18 @@ async fn process_video_track(
         ),
     )?;
 
+    let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
     let mut rtp_reader = WebrtcRtpReader::new(
         ctx.track,
         RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
-        RtpJitterBuffer::new(&ctx.pipeline_ctx, ctx.buffer, 90_000),
+        RtpJitterBuffer::new(
+            &ctx.pipeline_ctx,
+            ctx.buffer,
+            90_000,
+            Box::new(move |event| {
+                stats_sender.send(WhepInputStatsEvent::VideoRtp(event).into_event(&input_ref));
+            }),
+        ),
     );
 
     while let Some(packet) = rtp_reader.read_packet().await {
