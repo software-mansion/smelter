@@ -120,7 +120,7 @@ impl Mp4OutputBuilder {
         let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
 
         loop {
-            let path_output = Text::new("Output path (ESC for \"Big Buck Bunny\"):")
+            let path_output = Text::new("Output path (ESC for \"example_output.mp4\"):")
                 .with_autocomplete(FilePathCompleter::default())
                 .with_initial_value(&env_path)
                 .prompt_skippable()?;
