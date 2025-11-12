@@ -387,7 +387,7 @@ pub struct RtpInputBuilder {
     port: u16,
     video: Option<RtpInputVideoOptions>,
     audio: Option<RtpInputAudioOptions>,
-    transport_protocol: Option<TransportProtocol>,
+    transport_protocol: TransportProtocol,
     path: Option<PathBuf>,
     player: InputPlayer,
 }
@@ -401,7 +401,7 @@ impl RtpInputBuilder {
             port,
             video: None,
             audio: None,
-            transport_protocol: None,
+            transport_protocol: TransportProtocol::Udp,
             path: None,
             player: InputPlayer::Manual,
         }
@@ -507,7 +507,7 @@ impl RtpInputBuilder {
 
     fn prompt_player(self) -> Result<Self> {
         match self.transport_protocol {
-            Some(TransportProtocol::Udp) | None => {
+            TransportProtocol::Udp => {
                 let player_options = match (&self.video, &self.audio) {
                     (Some(_), Some(_)) => {
                         vec![InputPlayer::Gstreamer, InputPlayer::Manual]
@@ -523,7 +523,7 @@ impl RtpInputBuilder {
                     None => Ok(self.with_player(InputPlayer::Gstreamer)),
                 }
             }
-            Some(TransportProtocol::TcpServer) => {
+            TransportProtocol::TcpServer => {
                 let (player_options, default_player) = match (&self.video, &self.audio) {
                     (Some(_), Some(_)) => (vec![InputPlayer::Manual], InputPlayer::Manual),
                     _ => (
@@ -563,7 +563,7 @@ impl RtpInputBuilder {
                 self.name = format!("input_rtp_tcp_{}", self.port);
             }
         }
-        self.transport_protocol = Some(transport_protocol);
+        self.transport_protocol = transport_protocol;
         self
     }
 
@@ -582,7 +582,7 @@ impl RtpInputBuilder {
             path: self.path,
             video: self.video,
             audio: self.audio,
-            transport_protocol: self.transport_protocol.unwrap_or(TransportProtocol::Udp),
+            transport_protocol: self.transport_protocol,
             player: self.player,
         };
         RtpInput {
