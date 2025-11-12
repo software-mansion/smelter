@@ -118,13 +118,10 @@ impl Mp4OutputBuilder {
     fn prompt_path(self) -> Result<Self> {
         let env_path = env::var(MP4_OUTPUT_PATH).unwrap_or_default();
 
-        let default_path = env::current_dir().unwrap().join("example_output.mp4");
-
         loop {
             let path_output = Text::new("Output path (ESC for default):")
                 .with_autocomplete(FilePathCompleter::default())
                 .with_initial_value(&env_path)
-                .with_default(default_path.to_str().unwrap())
                 .prompt_skippable()?;
 
             match path_output {
@@ -132,11 +129,11 @@ impl Mp4OutputBuilder {
                     let path = resolve_path(path.into())?;
                     let parent = path.parent();
                     match parent {
-                        Some(p) if p.exists() => break Ok(self.with_path(path)),
+                        Some(p) if p.exists() => return Ok(self.with_path(path)),
                         Some(_) | None => error!("Path is not valid"),
                     }
                 }
-                Some(_) | None => break Ok(self.with_path(default_path)),
+                Some(_) | None => return Ok(self),
             }
         }
     }
@@ -200,8 +197,9 @@ impl Mp4OutputBuilder {
     }
 
     pub fn build(self) -> Mp4Output {
+        let default_path = env::current_dir().unwrap().join("example_output.mp4");
         let options = Mp4OutputOptions {
-            path: self.path.unwrap(),
+            path: self.path.unwrap_or(default_path),
             video: self.video,
             audio: self.audio,
         };
