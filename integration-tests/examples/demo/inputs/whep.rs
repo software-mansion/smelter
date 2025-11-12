@@ -167,7 +167,8 @@ impl WhepInputBuilder {
                 }
             }
             WhepInputPlayer::Fishjam => {
-                Ok(self.with_endpoint_url("https://fishjam.io/api/v1/live/api/whep".to_string()))
+                const FISHJAM_URL: &str = "https://fishjam.io/api/v1/live/api/whep";
+                Ok(self.with_endpoint_url(FISHJAM_URL.to_string()))
             }
         }
     }
@@ -182,7 +183,7 @@ impl WhepInputBuilder {
                 "3. Paste your Fishjam ID in the appropriate input field (you will find it in the dashboard)."
             );
             println!("4. Start streaming and press 'Connect to stream'.");
-            println!("5. In dev tools search for the request named 'whep' with post method.");
+            println!("5. In dev tools search for the request named 'whep' using POST method.");
             println!(
                 "6. In 'Request headers' section search for 'Authorization header' and use it's value as a bearer token."
             );
