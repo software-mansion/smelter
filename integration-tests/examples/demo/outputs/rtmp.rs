@@ -31,7 +31,7 @@ pub enum RtmpRegisterOptions {
 #[derive(Debug, Deserialize)]
 #[serde(from = "RtmpOutputOptions")]
 pub struct RtmpOutput {
-    name: String,
+    pub name: String,
     url: String,
     port: u16,
     options: RtmpOutputOptions,
@@ -78,10 +78,6 @@ impl From<RtmpOutputOptions> for RtmpOutput {
 }
 
 impl RtmpOutput {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "rtmp_client",
@@ -187,16 +183,25 @@ impl RtmpOutputBuilder {
 
         match video_selection {
             Some(RtmpRegisterOptions::SetVideoStream) => {
+                let mut video = RtmpOutputVideoOptions::default();
                 let scene_options = Scene::iter().collect();
                 let scene_choice =
                     Select::new("Select scene:", scene_options).prompt_skippable()?;
-                let video = match scene_choice {
-                    Some(scene) => RtmpOutputVideoOptions {
-                        scene,
-                        ..Default::default()
-                    },
-                    None => RtmpOutputVideoOptions::default(),
-                };
+                if let Some(scene) = scene_choice {
+                    video.scene = scene;
+                }
+
+                let encoder_options = vec![
+                    VideoEncoder::FfmpegH264,
+                    VideoEncoder::FfmpegH264LowLatency,
+                    VideoEncoder::VulkanH264,
+                ];
+                let encoder_choice =
+                    Select::new("Select encoder (ESC for ffmpeg_h264)", encoder_options)
+                        .prompt_skippable()?;
+                if let Some(encoder) = encoder_choice {
+                    video.encoder = encoder;
+                }
                 Ok(self.with_video(video))
             }
             Some(RtmpRegisterOptions::Skip) | None => Ok(self),

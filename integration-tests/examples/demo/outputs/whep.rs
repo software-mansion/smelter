@@ -32,17 +32,13 @@ pub enum WhepRegisterOptions {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WhepOutput {
-    name: String,
+    pub name: String,
     bearer_token: String,
     video: Option<WhepOutputVideoOptions>,
     audio: Option<WhepOutputAudioOptions>,
 }
 
 impl WhepOutput {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "whep_server",

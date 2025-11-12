@@ -26,16 +26,12 @@ pub enum WhipRegisterOptions {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WhipInput {
-    name: String,
+    pub name: String,
     bearer_token: String,
     video: Option<WhipInputVideoOptions>,
 }
 
 impl WhipInput {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn has_video(&self) -> bool {
         self.video.is_some()
     }

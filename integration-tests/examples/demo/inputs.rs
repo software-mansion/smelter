@@ -27,11 +27,11 @@ pub enum InputHandle {
 impl InputHandle {
     pub fn name(&self) -> &str {
         match self {
-            Self::Rtp(i) => i.name(),
-            Self::Mp4(i) => i.name(),
-            Self::Hls(i) => i.name(),
-            Self::Whip(i) => i.name(),
-            Self::Whep(i) => i.name(),
+            Self::Rtp(i) => &i.name,
+            Self::Mp4(i) => &i.name,
+            Self::Hls(i) => &i.name,
+            Self::Whip(i) => &i.name,
+            Self::Whep(i) => &i.name,
         }
     }
 

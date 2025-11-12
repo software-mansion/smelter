@@ -36,12 +36,12 @@ pub enum OutputHandle {
 impl OutputHandle {
     pub fn name(&self) -> &str {
         match self {
-            OutputHandle::Rtp(o) => o.name(),
-            OutputHandle::Rtmp(o) => o.name(),
-            OutputHandle::Mp4(o) => o.name(),
-            OutputHandle::Whip(o) => o.name(),
-            OutputHandle::Whep(o) => o.name(),
-            OutputHandle::Hls(o) => o.name(),
+            OutputHandle::Rtp(o) => &o.name,
+            OutputHandle::Rtmp(o) => &o.name,
+            OutputHandle::Mp4(o) => &o.name,
+            OutputHandle::Whip(o) => &o.name,
+            OutputHandle::Whep(o) => &o.name,
+            OutputHandle::Hls(o) => &o.name,
         }
     }
 
@@ -142,6 +142,9 @@ pub enum VideoEncoder {
 
     #[strum(to_string = "ffmpeg_h264")]
     FfmpegH264,
+
+    #[strum(to_string = "vulkan_h264")]
+    VulkanH264,
 
     #[strum(to_string = "ffmpeg_h264_low_latency")]
     FfmpegH264LowLatency,
