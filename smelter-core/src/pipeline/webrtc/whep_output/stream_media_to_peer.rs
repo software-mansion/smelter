@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use smelter_render::error::ErrorStack;
 use tokio::sync::broadcast;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
 
 use crate::event::Event;
@@ -117,6 +117,7 @@ async fn send_chunk_to_peer(
                 if let Err(err) = track.write_rtp(&rtp_packet.packet).await {
                     return Err(WhepError::RtpWriteError(err));
                 }
+                trace!(?rtp_packet, "RTP packet written to track");
             }
         }
         Err(err) => {

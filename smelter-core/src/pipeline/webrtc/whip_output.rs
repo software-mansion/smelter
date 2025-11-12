@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::{mpsc, oneshot};
-use tracing::{Instrument, Level, debug, span, warn};
+use tracing::{Instrument, Level, debug, span, trace, warn};
 use track_task_audio::WhipAudioTrackThreadHandle;
 use track_task_video::WhipVideoTrackThreadHandle;
 use url::Url;
@@ -226,37 +226,48 @@ impl WhipClientTask {
                 // try to wait for both audio and video packet to be ready
                 (Some(video), Some(audio)) => {
                     if audio.timestamp > video.timestamp {
-                        if let (Some(packet), Some(track)) =
-                            (next_video_packet.take(), &video_track)
-                            && let Err(err) = track.write_rtp(&packet.packet).await
-                        {
-                            warn!("RTP write error {}", err);
-                            break;
+                        if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track) {
+                            match track.write_rtp(&p.packet).await {
+                                Ok(_) => trace!(packet=?p, "Video RTP packet written to track"),
+                                Err(err) => {
+                                    warn!("RTP write error {}", err);
+                                    break;
+                                }
+                            }
                         }
-                    } else if let (Some(packet), Some(track)) =
-                        (next_audio_packet.take(), &audio_track)
-                        && let Err(err) = track.write_rtp(&packet.packet).await
+                    } else if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track)
                     {
-                        warn!("RTP write error {}", err);
-                        break;
+                        match track.write_rtp(&p.packet).await {
+                            Ok(_) => trace!(packet=?p, "Audio RTP packet written to track"),
+                            Err(err) => {
+                                warn!("RTP write error {}", err);
+                                break;
+                            }
+                        }
                     }
                 }
                 // read audio if there is not way to get video packet
                 (None, Some(_)) if video_receiver.is_none() => {
-                    if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track)
-                        && let Err(err) = track.write_rtp(&p.packet).await
-                    {
-                        warn!("RTP write error {}", err);
-                        break;
+                    if let (Some(p), Some(track)) = (next_audio_packet.take(), &audio_track) {
+                        match track.write_rtp(&p.packet).await {
+                            Ok(_) => trace!(packet=?p, "Audio RTP packet written to track"),
+                            Err(err) => {
+                                warn!("RTP write error {}", err);
+                                break;
+                            }
+                        }
                     }
                 }
                 // read video if there is not way to get audio packet
                 (Some(_), None) if audio_receiver.is_none() => {
-                    if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track)
-                        && let Err(err) = track.write_rtp(&p.packet).await
-                    {
-                        warn!("RTP write error {}", err);
-                        break;
+                    if let (Some(p), Some(track)) = (next_video_packet.take(), &video_track) {
+                        match track.write_rtp(&p.packet).await {
+                            Ok(_) => trace!(packet=?p, "Video RTP packet written to track"),
+                            Err(err) => {
+                                warn!("RTP write error {}", err);
+                                break;
+                            }
+                        }
                     }
                 }
                 (None, None) => break,
