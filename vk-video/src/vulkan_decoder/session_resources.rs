@@ -14,8 +14,7 @@ use crate::{
     vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState},
     wrappers::{
         DecodeInputBuffer, DecodingQueryPool, H264DecodeProfileInfo, OpenCommandBuffer,
-        ProfileInfo, SeqParameterSetExt, VideoSession, h264_level_idc_to_max_dpb_mbs,
-        vk_to_h264_level_idc,
+        SeqParameterSetExt, VideoSession, h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc,
     },
 };
 
@@ -59,14 +58,15 @@ fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, Vulkan
     Ok(max_num_reorder_frames)
 }
 
-impl VideoSessionResources<'_> {
+impl<'a> VideoSessionResources<'a> {
     pub(crate) fn new_from_sps(
         decoding_device: &DecodingDevice,
         decode_buffer: OpenCommandBuffer,
         sps: SeqParameterSet,
+        usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
         tracker: &mut DecoderTracker,
     ) -> Result<Self, VulkanDecoderError> {
-        let profile_info = Arc::new(ProfileInfo::from_sps_decode(&sps)?);
+        let profile_info = Arc::new(H264DecodeProfileInfo::from_sps_decode(&sps, usage_info)?);
 
         let level_idc = sps.level_idc;
         let max_level_idc = vk_to_h264_level_idc(
@@ -91,7 +91,7 @@ impl VideoSessionResources<'_> {
         let video_session = VideoSession::new(
             &decoding_device.vulkan_device,
             &decoding_device.h264_decode_queue,
-            &profile_info.profile_info,
+            &profile_info.profile_info.profile_info,
             max_coded_extent,
             max_dpb_slots,
             max_active_references,
@@ -123,7 +123,7 @@ impl VideoSessionResources<'_> {
         {
             Some(DecodingQueryPool::new(
                 decoding_device.vulkan_device.device.clone(),
-                profile_info.profile_info,
+                profile_info.profile_info.profile_info,
             )?)
         } else {
             None
@@ -154,13 +154,17 @@ impl VideoSessionResources<'_> {
         })
     }
 
-    pub(crate) fn process_sps(&mut self, sps: SeqParameterSet) -> Result<(), VulkanDecoderError> {
+    pub(crate) fn process_sps(
+        &mut self,
+        sps: SeqParameterSet,
+        usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
+    ) -> Result<(), VulkanDecoderError> {
         let new_session_params = SessionParams {
             max_coded_extent: sps.size()?,
             max_dpb_slots: sps.max_num_ref_frames + 1, // +1 for current frame
             max_active_references: sps.max_num_ref_frames,
             max_num_reorder_frames: calculate_max_num_reorder_frames(&sps)?,
-            profile_info: Arc::new(ProfileInfo::from_sps_decode(&sps)?),
+            profile_info: Arc::new(H264DecodeProfileInfo::from_sps_decode(&sps, usage_info)?),
             level_idc: sps.level_idc,
         };
         let current_session_params = self
@@ -225,7 +229,7 @@ impl VideoSessionResources<'_> {
             {
                 true => Some(DecodingQueryPool::new(
                     decoding_device.vulkan_device.device.clone(),
-                    new_params.profile_info.profile_info,
+                    new_params.profile_info.profile_info.profile_info,
                 )?),
                 false => None,
             };
@@ -238,7 +242,7 @@ impl VideoSessionResources<'_> {
         self.video_session = VideoSession::new(
             &decoding_device.vulkan_device,
             &decoding_device.h264_decode_queue,
-            &new_params.profile_info.profile_info,
+            &new_params.profile_info.profile_info.profile_info,
             new_params.max_coded_extent,
             new_params.max_dpb_slots,
             new_params.max_active_references,
@@ -271,7 +275,7 @@ impl VideoSessionResources<'_> {
     /// If you're replacing existing decoding images, make sure the old references won't be used,
     /// e.g. do it right before decoding IDR. Otherwise it may result in error because the decoder
     /// could try to use references which no longer exist if there's a non IDR frame after SPS.
-    fn new_decoding_images<'a>(
+    fn new_decoding_images(
         decoding_device: &DecodingDevice,
         profile: &H264DecodeProfileInfo,
         max_coded_extent: vk::Extent2D,

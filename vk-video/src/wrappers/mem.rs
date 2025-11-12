@@ -149,7 +149,7 @@ impl Buffer {
         profile: &H264DecodeProfileInfo,
     ) -> Result<Self, VulkanCommonError> {
         let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
-            .profiles(std::slice::from_ref(&profile.profile_info));
+            .profiles(std::slice::from_ref(&profile.profile_info.profile_info));
 
         let buffer_create_info = vk::BufferCreateInfo::default()
             .size(size)

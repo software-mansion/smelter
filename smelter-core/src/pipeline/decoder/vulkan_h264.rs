@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use smelter_render::{Frame, FrameData, Resolution};
 use tracing::{debug, info, warn};
-use vk_video::parameters::{DecoderParameters, MissedFrameHandling};
+use vk_video::parameters::{DecoderParameters, DecoderUsageFlags, MissedFrameHandling};
 use vk_video::{DecoderError, ParserError, ReferenceManagementError, WgpuTexturesDecoder};
 
 use crate::pipeline::decoder::{VideoDecoder, VideoDecoderInstance};
@@ -22,6 +22,7 @@ impl VideoDecoder for VulkanH264Decoder {
                 let device = vulkan_ctx.device.clone();
                 let decoder = device.create_wgpu_textures_decoder(DecoderParameters {
                     missed_frame_handling: MissedFrameHandling::Strict,
+                    usage_flags: DecoderUsageFlags::DEFAULT,
                 })?;
                 Ok(Self { decoder })
             }

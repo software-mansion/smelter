@@ -100,6 +100,12 @@ pub mod parameters {
     };
     pub use super::vulkan_encoder::RateControl;
 
+    pub use ash::vk::VideoDecodeUsageFlagsKHR as DecoderUsageFlags;
+
+    pub use ash::vk::VideoEncodeContentFlagsKHR as EncoderContentFlags;
+    pub use ash::vk::VideoEncodeTuningModeKHR as EncoderTuningMode;
+    pub use ash::vk::VideoEncodeUsageFlagsKHR as EncoderUsageFlags;
+
     /// A profile in H264 is a set of codec features used while encoding a specific video.
     /// Baseline uses the fewest features, Main can use more and High even more than Main.
     #[derive(Debug, Clone, Copy)]
