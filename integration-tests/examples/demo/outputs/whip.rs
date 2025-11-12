@@ -110,8 +110,8 @@ impl WhipOutput {
 
 pub struct WhipOutputBuilder {
     name: String,
-    endpoint_url: Option<String>,
-    bearer_token: Option<String>,
+    endpoint_url: String,
+    bearer_token: String,
     video: Option<WhipOutputVideoOptions>,
     audio: Option<WhipOutputAudioOptions>,
 }
@@ -120,10 +120,12 @@ impl WhipOutputBuilder {
     pub fn new() -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("output_whip_{suffix}");
+        let bearer_token = "example".to_string();
+        let endpoint_url = "http://127.0.0.1:8080/api/whip".to_string();
         Self {
             name,
-            endpoint_url: None,
-            bearer_token: None,
+            endpoint_url,
+            bearer_token,
             video: None,
             audio: None,
         }
@@ -143,7 +145,6 @@ impl WhipOutputBuilder {
     }
 
     fn prompt_url(self) -> Result<Self> {
-        const BROADCAST_BOX_URL: &str = "http://127.0.0.1:8080/api/whip";
         let env_url = env::var(WHIP_URL_ENV).unwrap_or_default();
         let endpoint_url_input = Text::new("Enter the WHIP endpoint URL (ESC for BroadcastBox):")
             .with_initial_value(&env_url)
@@ -151,24 +152,20 @@ impl WhipOutputBuilder {
 
         match endpoint_url_input {
             Some(url) if !url.trim().is_empty() => Ok(self.with_endpoint_url(url)),
-            Some(_) | None => Ok(self.with_endpoint_url(BROADCAST_BOX_URL.to_string())),
+            Some(_) | None => Ok(self),
         }
     }
 
     fn prompt_token(self) -> Result<Self> {
         let env_token = env::var(WHIP_TOKEN_ENV).unwrap_or_default();
-        loop {
-            let endpoint_token_input = Text::new("Enter the WHIP endpoint bearer token:")
+        let endpoint_token_input =
+            Text::new("Enter the WHIP endpoint bearer token (ESC for \"example\"):")
                 .with_initial_value(&env_token)
                 .prompt_skippable()?;
 
-            match endpoint_token_input {
-                Some(token) if !token.trim().is_empty() => return Ok(self.with_bearer_token(token)),
-                Some(_) | None => {
-                    error!("Bearer token cannot be empty.");
-                    continue;
-                }
-            }
+        match endpoint_token_input {
+            Some(token) if !token.trim().is_empty() => Ok(self.with_bearer_token(token)),
+            Some(_) | None => Ok(self),
         }
     }
 
@@ -269,19 +266,19 @@ impl WhipOutputBuilder {
     }
 
     pub fn with_endpoint_url(mut self, url: String) -> Self {
-        self.endpoint_url = Some(url);
+        self.endpoint_url = url;
         self
     }
 
     pub fn with_bearer_token(mut self, token: String) -> Self {
-        self.bearer_token = Some(token);
+        self.bearer_token = token;
         self
     }
 
     pub fn build(self) -> WhipOutput {
         let options = WhipOutputOptions {
-            endpoint_url: self.endpoint_url.unwrap(),
-            bearer_token: self.bearer_token.unwrap(),
+            endpoint_url: self.endpoint_url,
+            bearer_token: self.bearer_token,
             video: self.video,
             audio: self.audio,
         };
