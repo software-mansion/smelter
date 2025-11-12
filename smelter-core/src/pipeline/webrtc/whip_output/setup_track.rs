@@ -68,7 +68,7 @@ impl MatchCodecCapability for AudioEncoderOptions {
 
 pub async fn setup_video_track(
     ctx: &Arc<PipelineCtx>,
-    output_id: &OutputId,
+    output_ref: &Ref<OutputId>,
     rtc_sender: Arc<RTCRtpSender>,
     encoder_preferences: Vec<VideoEncoderOptions>,
 ) -> Result<(WhipVideoTrackThreadHandle, WhipClientTrack), WebrtcClientError> {
@@ -114,7 +114,7 @@ pub async fn setup_video_track(
     let handle = match options {
         VideoEncoderOptions::FfmpegH264(options) => {
             WhipVideoTrackThread::<FfmpegH264Encoder>::spawn(
-                output_id.clone(),
+                output_ref.clone(),
                 WhipVideoTrackThreadOptions {
                     ctx: ctx.clone(),
                     encoder_options: options,
@@ -129,7 +129,7 @@ pub async fn setup_video_track(
         }
         VideoEncoderOptions::VulkanH264(options) => {
             WhipVideoTrackThread::<VulkanH264Encoder>::spawn(
-                output_id.clone(),
+                output_ref.clone(),
                 WhipVideoTrackThreadOptions {
                     ctx: ctx.clone(),
                     encoder_options: options,
@@ -143,7 +143,7 @@ pub async fn setup_video_track(
             )
         }
         VideoEncoderOptions::FfmpegVp8(options) => WhipVideoTrackThread::<FfmpegVp8Encoder>::spawn(
-            output_id.clone(),
+            output_ref.clone(),
             WhipVideoTrackThreadOptions {
                 ctx: ctx.clone(),
                 encoder_options: options,
@@ -156,7 +156,7 @@ pub async fn setup_video_track(
             },
         ),
         VideoEncoderOptions::FfmpegVp9(options) => WhipVideoTrackThread::<FfmpegVp9Encoder>::spawn(
-            output_id.clone(),
+            output_ref.clone(),
             WhipVideoTrackThreadOptions {
                 ctx: ctx.clone(),
                 encoder_options: options,
@@ -181,7 +181,7 @@ pub async fn setup_video_track(
 
 pub async fn setup_audio_track(
     ctx: &Arc<PipelineCtx>,
-    output_id: &OutputId,
+    output_id: &Ref<OutputId>,
     rtc_sender: Arc<RTCRtpSender>,
     pc: PeerConnection,
     encoder_preferences: Vec<AudioEncoderOptions>,

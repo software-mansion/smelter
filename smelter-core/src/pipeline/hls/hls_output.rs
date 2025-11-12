@@ -3,8 +3,7 @@ use std::{ptr, sync::Arc, time::Duration};
 use crossbeam_channel::{Receiver, Sender, bounded};
 use ffmpeg_next::{self as ffmpeg, Dictionary, Rational, Rescale};
 use smelter_render::{Framerate, OutputId};
-use tracing::debug;
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::{
     event::Event,
@@ -42,7 +41,7 @@ pub struct HlsOutput {
 impl HlsOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
-        output_id: OutputId,
+        output_ref: Ref<OutputId>,
         options: HlsOutputOptions,
     ) -> Result<Self, OutputInitError> {
         let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1);
@@ -53,7 +52,7 @@ impl HlsOutput {
         let video = match options.video {
             Some(video) => Some(Self::init_video_track(
                 &ctx,
-                &output_id,
+                &output_ref,
                 video,
                 &mut output_ctx,
                 encoded_chunks_sender.clone(),
@@ -63,7 +62,7 @@ impl HlsOutput {
         let audio = match options.audio {
             Some(audio) => Some(Self::init_audio_track(
                 &ctx,
-                &output_id,
+                &output_ref,
                 audio,
                 &mut output_ctx,
                 encoded_chunks_sender.clone(),
@@ -110,10 +109,10 @@ impl HlsOutput {
         };
 
         std::thread::Builder::new()
-            .name(format!("HLS writer thread for output {output_id}"))
+            .name(format!("HLS writer thread for output {output_ref}"))
             .spawn(move || {
                 let _span =
-                    tracing::info_span!("HLS writer", output_id = output_id.to_string()).entered();
+                    tracing::info_span!("HLS writer", output_id = output_ref.to_string()).entered();
 
                 run_ffmpeg_output_thread(
                     output_ctx,
@@ -122,7 +121,8 @@ impl HlsOutput {
                     encoded_chunks_receiver,
                     ctx.output_framerate,
                 );
-                ctx.event_emitter.emit(Event::OutputDone(output_id.clone()));
+                ctx.event_emitter
+                    .emit(Event::OutputDone(output_ref.id().clone()));
                 debug!("Closing HLS writer thread.");
             })
             .unwrap();
@@ -135,7 +135,7 @@ impl HlsOutput {
 
     fn init_video_track(
         ctx: &Arc<PipelineCtx>,
-        output_id: &OutputId,
+        output_id: &Ref<OutputId>,
         options: VideoEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,
@@ -197,7 +197,7 @@ impl HlsOutput {
 
     fn init_audio_track(
         ctx: &Arc<PipelineCtx>,
-        output_id: &OutputId,
+        output_id: &Ref<OutputId>,
         options: AudioEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,

@@ -120,7 +120,7 @@ impl Pipeline {
             output_id,
             register_options.video,
             register_options.audio,
-            |ctx, output_id| new_external_output(ctx, output_id, register_options.output_options),
+            |ctx, output_ref| new_external_output(ctx, output_ref, register_options.output_options),
         )
     }
 
@@ -134,9 +134,9 @@ impl Pipeline {
             output_id,
             register_options.video,
             register_options.audio,
-            |ctx, output_id| {
+            |ctx, output_ref| {
                 let (output, result) =
-                    EncodedDataOutput::new(output_id, ctx, register_options.output_options)?;
+                    EncodedDataOutput::new(ctx, output_ref, register_options.output_options)?;
                 Ok((Box::new(output), result))
             },
         )
@@ -152,7 +152,7 @@ impl Pipeline {
             output_id,
             register_options.video,
             register_options.audio,
-            |_ctx, _output_id| {
+            |_ctx, _output_ref| {
                 let (output, result) = RawDataOutput::new(register_options.output_options)?;
                 Ok((Box::new(output), result))
             },

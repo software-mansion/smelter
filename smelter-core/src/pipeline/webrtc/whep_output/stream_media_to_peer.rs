@@ -5,9 +5,11 @@ use tokio::sync::broadcast;
 use tracing::{debug, error, info, trace};
 use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
 
-use crate::event::Event;
-use crate::pipeline::rtp::payloader::Payloader;
-use crate::pipeline::webrtc::error::WhepError;
+use crate::{
+    event::Event,
+    pipeline::{rtp::payloader::Payloader, webrtc::error::WhepError},
+};
+
 use crate::prelude::*;
 
 pub struct MediaStream {
@@ -18,7 +20,7 @@ pub struct MediaStream {
 
 pub async fn stream_media_to_peer(
     ctx: Arc<PipelineCtx>,
-    output_id: OutputId,
+    output_ref: Ref<OutputId>,
     mut video_stream: Option<MediaStream>,
     mut audio_stream: Option<MediaStream>,
 ) {
@@ -102,7 +104,8 @@ pub async fn stream_media_to_peer(
         }
     }
 
-    ctx.event_emitter.emit(Event::OutputDone(output_id));
+    ctx.event_emitter
+        .emit(Event::OutputDone(output_ref.id().clone()));
     debug!("Closing WHEP sender thread.");
 }
 

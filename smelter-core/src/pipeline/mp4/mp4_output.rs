@@ -3,8 +3,7 @@ use std::{fs, path::PathBuf, ptr, sync::Arc, time::Duration};
 use crossbeam_channel::{Receiver, Sender, bounded};
 use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
 use smelter_render::OutputId;
-use tracing::error;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 use crate::{
     event::Event,
@@ -42,7 +41,7 @@ pub struct Mp4Output {
 impl Mp4Output {
     pub fn new(
         ctx: Arc<PipelineCtx>,
-        output_id: OutputId,
+        output_ref: Ref<OutputId>,
         options: Mp4OutputOptions,
     ) -> Result<Self, OutputInitError> {
         if options.output_path.exists() {
@@ -77,7 +76,7 @@ impl Mp4Output {
         let video = match options.video {
             Some(video) => Some(Self::init_video_track(
                 &ctx,
-                &output_id,
+                &output_ref,
                 video,
                 &mut output_ctx,
                 encoded_chunks_sender.clone(),
@@ -87,7 +86,7 @@ impl Mp4Output {
         let audio = match options.audio {
             Some(audio) => Some(Self::init_audio_track(
                 &ctx,
-                &output_id,
+                &output_ref,
                 audio,
                 &mut output_ctx,
                 encoded_chunks_sender.clone(),
@@ -125,10 +124,10 @@ impl Mp4Output {
         };
 
         std::thread::Builder::new()
-            .name(format!("MP4 writer thread for output {output_id}"))
+            .name(format!("MP4 writer thread for output {output_ref}"))
             .spawn(move || {
                 let _span =
-                    tracing::info_span!("MP4 writer", output_id = output_id.to_string()).entered();
+                    tracing::info_span!("MP4 writer", output_id = output_ref.to_string()).entered();
 
                 run_ffmpeg_output_thread(
                     output_ctx,
@@ -136,7 +135,8 @@ impl Mp4Output {
                     audio_stream,
                     encoded_chunks_receiver,
                 );
-                ctx.event_emitter.emit(Event::OutputDone(output_id.clone()));
+                ctx.event_emitter
+                    .emit(Event::OutputDone(output_ref.id().clone()));
                 debug!("Closing MP4 writer thread.");
             })
             .unwrap();
@@ -149,7 +149,7 @@ impl Mp4Output {
 
     fn init_video_track(
         ctx: &Arc<PipelineCtx>,
-        output_id: &OutputId,
+        output_id: &Ref<OutputId>,
         options: VideoEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,
@@ -211,7 +211,7 @@ impl Mp4Output {
 
     fn init_audio_track(
         ctx: &Arc<PipelineCtx>,
-        output_id: &OutputId,
+        output_ref: &Ref<OutputId>,
         options: AudioEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,
@@ -224,7 +224,7 @@ impl Mp4Output {
 
         let encoder = match options {
             AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
-                output_id.clone(),
+                output_ref.clone(),
                 AudioEncoderThreadOptions {
                     ctx: ctx.clone(),
                     encoder_options: options,
