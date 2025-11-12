@@ -121,6 +121,8 @@ impl WhipOutputBuilder {
         let suffix = rand::rng().next_u32();
         let name = format!("output_whip_{suffix}");
         let bearer_token = "example".to_string();
+
+        // Broadcast Box input url
         let endpoint_url = "http://127.0.0.1:8080/api/whip".to_string();
         Self {
             name,

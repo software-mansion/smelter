@@ -124,11 +124,14 @@ impl WhepInputBuilder {
     pub fn new() -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("input_whep_{suffix}");
+
+        // Broadcast Box output url
         let endpoint_url = "http://127.0.0.1:8080/api/whep".to_string();
+        let bearer_token = "example".to_string();
         Self {
             name,
             endpoint_url,
-            bearer_token: "example".to_string(),
+            bearer_token,
             video: None,
             player: WhepInputPlayer::Manual,
         }

@@ -75,9 +75,10 @@ pub struct WhipInputBuilder {
 impl WhipInputBuilder {
     pub fn new() -> Self {
         let name = Self::generate_name();
+        let bearer_token = "example".to_string();
         Self {
             name,
-            bearer_token: "example".to_string(),
+            bearer_token,
             video: None,
         }
     }
