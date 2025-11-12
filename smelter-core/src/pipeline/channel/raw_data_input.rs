@@ -12,7 +12,7 @@ pub struct RawDataInput;
 impl RawDataInput {
     pub fn new_input(
         ctx: Arc<PipelineCtx>,
-        input_id: InputId,
+        input_ref: Ref<InputId>,
         options: RawDataInputOptions,
     ) -> Result<(Input, RawDataInputSender, QueueDataReceiver), InputInitError> {
         let buffer_duration = options
@@ -21,7 +21,7 @@ impl RawDataInput {
         let (video_sender, video_receiver) = match options.video {
             true => {
                 let (sender, receiver) =
-                    spawn_video_repacking_thread(ctx.clone(), &input_id, buffer_duration);
+                    spawn_video_repacking_thread(ctx.clone(), &input_ref, buffer_duration);
                 (Some(sender), Some(receiver))
             }
             false => (None, None),
@@ -29,7 +29,7 @@ impl RawDataInput {
         let (audio_sender, audio_receiver) = match options.audio {
             true => {
                 let (sender, receiver) =
-                    spawn_audio_repacking_thread(ctx.clone(), &input_id, buffer_duration);
+                    spawn_audio_repacking_thread(ctx.clone(), &input_ref, buffer_duration);
                 (Some(sender), Some(receiver))
             }
             false => (None, None),
@@ -50,7 +50,7 @@ impl RawDataInput {
 
 fn spawn_video_repacking_thread(
     ctx: Arc<PipelineCtx>,
-    input_id: &InputId,
+    input_ref: &Ref<InputId>,
     buffer_duration: Duration,
 ) -> (Sender<PipelineEvent<Frame>>, Receiver<PipelineEvent<Frame>>) {
     let (output_sender, output_receiver) = bounded(5);
@@ -58,7 +58,7 @@ fn spawn_video_repacking_thread(
 
     thread::Builder::new()
         .name(format!(
-            "Raw channel video synchronization thread for input {input_id}"
+            "Raw channel video synchronization thread for input {input_ref}"
         ))
         .spawn(move || {
             let mut start_pts = None;
@@ -88,7 +88,7 @@ fn spawn_video_repacking_thread(
 
 fn spawn_audio_repacking_thread(
     ctx: Arc<PipelineCtx>,
-    input_id: &InputId,
+    input_ref: &Ref<InputId>,
     buffer_duration: Duration,
 ) -> (
     Sender<PipelineEvent<InputAudioSamples>>,
@@ -99,7 +99,7 @@ fn spawn_audio_repacking_thread(
 
     thread::Builder::new()
         .name(format!(
-            "Raw channel audio synchronization thread for input {input_id}"
+            "Raw channel audio synchronization thread for input {input_ref}"
         ))
         .spawn(move || {
             let mut start_pts = None;

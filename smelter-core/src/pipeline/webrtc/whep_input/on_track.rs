@@ -1,5 +1,5 @@
 use crossbeam_channel::Sender;
-use smelter_render::{Frame, InputId};
+use smelter_render::Frame;
 use tracing::{Instrument, debug, info_span, trace, warn};
 use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
 
@@ -24,13 +24,13 @@ use crate::prelude::*;
 
 pub fn handle_on_track(
     ctx: WhepTrackContext,
-    input_id: InputId,
+    input_ref: Ref<InputId>,
     input_samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
     video_preferences: Vec<VideoDecoderOptions>,
 ) {
     let kind = ctx.track.kind();
-    let span = info_span!("WHEP input track", ?kind, ?input_id);
+    let span = info_span!("WHEP input track", ?kind, ?input_ref);
 
     tokio::spawn(
         async move {

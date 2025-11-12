@@ -25,14 +25,14 @@ pub async fn handle_create_whip_session(
     let endpoint_id = Arc::from(endpoint_id.clone());
     debug!("SDP offer: {}", offer);
 
-    let input_id = state.inputs.find_by_endpoint_id(&endpoint_id)?;
+    let input_ref = state.inputs.find_by_endpoint_id(&endpoint_id)?;
 
     validate_sdp_content_type(&headers)?;
-    state.inputs.validate_token(&input_id, &headers).await?;
+    state.inputs.validate_token(&input_ref, &headers).await?;
 
     let offer = RTCSessionDescription::offer(offer)?;
 
-    let (session_id, answer) = create_new_whip_session(state, input_id, offer).await?;
+    let (session_id, answer) = create_new_whip_session(state, input_ref, offer).await?;
 
     let body = Body::from(answer.sdp.to_string());
     let response = Response::builder()

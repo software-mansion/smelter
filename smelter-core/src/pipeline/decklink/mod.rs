@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use smelter_render::InputId;
 use tracing::{Level, error, span};
 
-use crate::prelude::*;
 use crate::{pipeline::input::Input, queue::QueueDataReceiver};
+
+use crate::prelude::*;
 
 use self::{capture::ChannelCallbackAdapter, find_device::find_decklink};
 
@@ -21,13 +21,13 @@ pub struct DeckLink {
 impl DeckLink {
     pub(super) fn new_input(
         ctx: Arc<PipelineCtx>,
-        input_id: InputId,
+        input_ref: Ref<InputId>,
         opts: DeckLinkInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let span = span!(
             Level::INFO,
             "DeckLink input",
-            input_id = input_id.to_string()
+            input_id = input_ref.to_string()
         );
         let input = Arc::new(
             find_decklink(&opts)?

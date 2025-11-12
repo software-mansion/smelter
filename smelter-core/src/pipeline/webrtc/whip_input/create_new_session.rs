@@ -1,5 +1,4 @@
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use tracing::debug;
 use uuid::Uuid;
@@ -22,12 +21,12 @@ use crate::prelude::*;
 
 pub(crate) async fn create_new_whip_session(
     state: WhipWhepServerState,
-    input_id: InputId,
+    input_ref: Ref<InputId>,
     offer: RTCSessionDescription,
 ) -> Result<(Arc<str>, RTCSessionDescription), WhipWhepServerError> {
     let inputs = state.inputs.clone();
 
-    let (video_preferences, jitter_buffer_options) = inputs.get_with(&input_id, |input| {
+    let (video_preferences, jitter_buffer_options) = inputs.get_with(&input_ref, |input| {
         Ok((
             input.video_preferences.clone(),
             input.jitter_buffer_options.clone(),
@@ -57,17 +56,17 @@ pub(crate) async fn create_new_whip_session(
     debug!("SDP answer: {}", answer.sdp);
 
     {
-        let input_id = input_id.clone();
+        let input_ref = input_ref.clone();
         let buffer = RtpJitterBufferInitOptions::new(&state.ctx, jitter_buffer_options);
         peer_connection.on_track(move |track_ctx| {
             let ctx = WhipTrackContext::new(track_ctx, &state, &buffer);
-            handle_on_track(ctx, input_id.clone(), video_preferences.clone());
+            handle_on_track(ctx, input_ref.clone(), video_preferences.clone());
         })
     };
 
     let session_id: Arc<str> = Arc::from(Uuid::new_v4().to_string());
     // It will fail if there is already connected peer connection
-    inputs.get_mut_with(&input_id, |input| {
+    inputs.get_mut_with(&input_ref, |input| {
         input.maybe_replace_session(WhipInputSession {
             peer_connection,
             session_id: session_id.clone(),

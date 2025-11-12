@@ -10,10 +10,12 @@ use tracing::{Level, debug, span, warn};
 
 use crate::pipeline::{Port, rtp::util::bind_to_requested_port};
 
+use crate::prelude::*;
+
 use super::{RtpInputError, RtpInputOptions};
 
 pub(super) fn start_udp_reader_thread(
-    input_id: &InputId,
+    input_ref: &Ref<InputId>,
     opts: &RtpInputOptions,
     should_close: Arc<AtomicBool>,
 ) -> Result<(Port, Receiver<bytes::Bytes>), RtpInputError> {
@@ -46,14 +48,14 @@ pub(super) fn start_udp_reader_thread(
 
     let socket = std::net::UdpSocket::from(socket);
 
-    let input_id = input_id.clone();
+    let input_ref = input_ref.clone();
     thread::Builder::new()
-        .name(format!("RTP UDP receiver {input_id}"))
+        .name(format!("RTP UDP receiver {input_ref}"))
         .spawn(move || {
             let _span = span!(
                 Level::INFO,
                 "RTP TCP server",
-                input_id = input_id.to_string()
+                input_id = input_ref.to_string()
             )
             .entered();
             run_udp_receiver_thread(socket, packets_tx, should_close);
