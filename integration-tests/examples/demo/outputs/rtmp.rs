@@ -142,7 +142,7 @@ pub struct RtmpOutputBuilder {
     port: u16,
     video: Option<RtmpOutputVideoOptions>,
     audio: Option<RtmpOutputAudioOptions>,
-    player: OutputPlayer,
+    player: Option<OutputPlayer>,
 }
 
 impl RtmpOutputBuilder {
@@ -154,7 +154,7 @@ impl RtmpOutputBuilder {
             port,
             video: None,
             audio: None,
-            player: OutputPlayer::Manual,
+            player: None,
         }
     }
 
@@ -233,7 +233,7 @@ impl RtmpOutputBuilder {
             Select::new("Select player (ESC for FFmpeg):", player_options).prompt_skippable()?;
         match player_choice {
             Some(player) => Ok(self.with_player(player)),
-            None => Ok(self.with_player(OutputPlayer::Ffmpeg)),
+            None => Ok(self),
         }
     }
 
@@ -248,7 +248,7 @@ impl RtmpOutputBuilder {
     }
 
     pub fn with_player(mut self, player: OutputPlayer) -> Self {
-        self.player = player;
+        self.player = Some(player);
         self
     }
 
@@ -256,7 +256,7 @@ impl RtmpOutputBuilder {
         let options = RtmpOutputOptions {
             video: self.video,
             audio: self.audio,
-            player: self.player,
+            player: self.player.unwrap_or(OutputPlayer::Ffmpeg),
         };
         RtmpOutput {
             name: self.name,
