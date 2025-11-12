@@ -27,17 +27,8 @@ use crate::{
 
 use crate::prelude::*;
 
-pub(crate) mod cleanup_session_handler;
-pub(super) mod connection_state;
-pub(super) mod init_payloaders;
-pub(super) mod peer_connection;
-pub(super) mod state;
-pub(super) mod stream_media_to_peer;
-pub(super) mod track_task_audio;
-pub(super) mod track_task_video;
-
 #[derive(Debug)]
-pub struct WhepOutput {
+pub(crate) struct WhepOutput {
     video: Option<WhepVideoTrackThreadHandle>,
     audio: Option<WhepAudioTrackThreadHandle>,
     output_id: OutputId,
