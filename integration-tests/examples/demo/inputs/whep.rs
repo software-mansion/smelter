@@ -114,7 +114,7 @@ impl WhepInput {
 
 pub struct WhepInputBuilder {
     name: String,
-    endpoint_url: Option<String>,
+    endpoint_url: String,
     bearer_token: String,
     video: Option<WhepInputVideoOptions>,
     player: WhepInputPlayer,
@@ -124,9 +124,10 @@ impl WhepInputBuilder {
     pub fn new() -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("input_whep_{suffix}");
+        let endpoint_url = "http://127.0.0.1:8080/api/whep".to_string();
         Self {
             name,
-            endpoint_url: None,
+            endpoint_url,
             bearer_token: "example".to_string(),
             video: None,
             player: WhepInputPlayer::Manual,
@@ -154,7 +155,6 @@ impl WhepInputBuilder {
     fn prompt_url(self) -> Result<Self> {
         match self.player {
             WhepInputPlayer::Manual => {
-                const BROADCAST_BOX_URL: &str = "http://127.0.0.1:8080/api/whep";
                 let env_url = env::var(WHEP_URL_ENV).unwrap_or_default();
                 let endpoint_url_input =
                     Text::new("Enter the WHEP endpoint URL (ESC for BroadcastBox):")
@@ -163,7 +163,7 @@ impl WhepInputBuilder {
 
                 match endpoint_url_input {
                     Some(url) if !url.trim().is_empty() => Ok(self.with_endpoint_url(url)),
-                    Some(_) | None => Ok(self.with_endpoint_url(BROADCAST_BOX_URL.to_string())),
+                    Some(_) | None => Ok(self),
                 }
             }
             WhepInputPlayer::Fishjam => {
@@ -242,7 +242,7 @@ impl WhepInputBuilder {
     }
 
     pub fn with_endpoint_url(mut self, url: String) -> Self {
-        self.endpoint_url = Some(url);
+        self.endpoint_url = url;
         self
     }
 
@@ -258,7 +258,7 @@ impl WhepInputBuilder {
 
     pub fn build(self) -> WhepInput {
         let options = WhepInputOptions {
-            endpoint_url: self.endpoint_url.unwrap(),
+            endpoint_url: self.endpoint_url,
             bearer_token: self.bearer_token,
             video: self.video,
             player: self.player,
