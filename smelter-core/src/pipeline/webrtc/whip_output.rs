@@ -1,19 +1,21 @@
-use establish_peer_connection::exchange_sdp_offers;
-use peer_connection::PeerConnection;
-use replace_track_with_negotiated_codec::replace_tracks_with_negotiated_codec;
-use setup_track::{setup_audio_track, setup_video_track};
-use smelter_render::OutputId;
 use std::{
     sync::Arc,
     thread,
     time::{Duration, Instant},
 };
+
 use tokio::sync::{mpsc, oneshot};
 use tracing::{Instrument, Level, debug, span, trace, warn};
-use track_task_audio::WhipAudioTrackThreadHandle;
-use track_task_video::WhipVideoTrackThreadHandle;
 use url::Url;
 use webrtc::track::track_local::{TrackLocalWriter, track_local_static_rtp::TrackLocalStaticRTP};
+
+use establish_peer_connection::exchange_sdp_offers;
+use peer_connection::PeerConnection;
+use replace_track_with_negotiated_codec::replace_tracks_with_negotiated_codec;
+use setup_track::{setup_audio_track, setup_video_track};
+use smelter_render::OutputId;
+use track_task_audio::WhipAudioTrackThreadHandle;
+use track_task_video::WhipVideoTrackThreadHandle;
 
 use crate::{
     event::Event,
@@ -50,7 +52,7 @@ const WHIP_INIT_TIMEOUT: Duration = Duration::from_secs(60);
 impl WhipOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
-        output_id: OutputId,
+        output_ref: Ref<OutputId>,
         options: WhipOutputOptions,
     ) -> Result<Self, OutputInitError> {
         let (init_confirmation_sender, init_confirmation_receiver) = oneshot::channel();
@@ -58,12 +60,12 @@ impl WhipOutput {
         let span = span!(
             Level::INFO,
             "WHIP client task",
-            output_id = output_id.to_string()
+            output_id = output_ref.to_string()
         );
         let rt = ctx.tokio_rt.clone();
         rt.spawn(
             async {
-                let result = WhipClientTask::new(ctx, output_id, options).await;
+                let result = WhipClientTask::new(ctx, output_ref, options).await;
                 match result {
                     Ok((task, handle)) => {
                         init_confirmation_sender.send(Ok(handle)).unwrap();
@@ -88,7 +90,7 @@ struct WhipClientTask {
     session_url: Url,
     ctx: Arc<PipelineCtx>,
     client: Arc<WhipWhepHttpClient>,
-    output_id: OutputId,
+    output_ref: Ref<OutputId>,
     video_track: Option<WhipClientTrack>,
     audio_track: Option<WhipClientTrack>,
 }
@@ -96,7 +98,7 @@ struct WhipClientTask {
 impl WhipClientTask {
     async fn new(
         ctx: Arc<PipelineCtx>,
-        output_id: OutputId,
+        output_ref: Ref<OutputId>,
         options: WhipOutputOptions,
     ) -> Result<(Self, WhipOutput), WebrtcClientError> {
         let video_preferences = resolve_video_preferences(&ctx, &options)?;
@@ -123,7 +125,7 @@ impl WhipClientTask {
         let (video_thread_handle, video_track) = match video_preferences {
             Some(encoder_preferences) => {
                 let (video_thread_handle, video) =
-                    setup_video_track(&ctx, &output_id, video_rtc_sender, encoder_preferences)
+                    setup_video_track(&ctx, &output_ref, video_rtc_sender, encoder_preferences)
                         .await?;
                 (Some(video_thread_handle), Some(video))
             }
@@ -134,7 +136,7 @@ impl WhipClientTask {
             Some(encoder_preferences) => {
                 let (audio_thread_handle, audio) = setup_audio_track(
                     &ctx,
-                    &output_id,
+                    &output_ref,
                     audio_rtc_sender,
                     pc.clone(),
                     encoder_preferences,
@@ -150,7 +152,7 @@ impl WhipClientTask {
                 session_url,
                 ctx: ctx.clone(),
                 client,
-                output_id,
+                output_ref,
                 video_track,
                 audio_track,
             },
@@ -282,7 +284,7 @@ impl WhipClientTask {
         self.client.delete_session(self.session_url).await;
         self.ctx
             .event_emitter
-            .emit(Event::OutputDone(self.output_id));
+            .emit(Event::OutputDone(self.output_ref.id().clone()));
         debug!("Closing WHIP sender thread.")
     }
 }

@@ -40,14 +40,14 @@ pub(super) mod track_task_video;
 pub struct WhepOutput {
     video: Option<WhepVideoTrackThreadHandle>,
     audio: Option<WhepAudioTrackThreadHandle>,
-    output_id: OutputId,
+    output_ref: Ref<OutputId>,
     outputs_state: WhepOutputsState,
 }
 
 impl WhepOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
-        output_id: OutputId,
+        output_ref: Ref<OutputId>,
         options: WhepOutputOptions,
     ) -> Result<Self, OutputInitError> {
         let state_clone = ctx.whip_whep_state.clone();
@@ -59,17 +59,17 @@ impl WhepOutput {
         let video_options = options
             .video
             .as_ref()
-            .map(|video| Self::init_video_thread(&ctx, &output_id, video.clone()))
+            .map(|video| Self::init_video_thread(&ctx, &output_ref, video.clone()))
             .transpose()?;
 
         let audio_options = options
             .audio
             .as_ref()
-            .map(|audio| Self::init_audio_thread(&ctx, &output_id, audio.clone()))
+            .map(|audio| Self::init_audio_thread(&ctx, &output_ref, audio.clone()))
             .transpose()?;
 
         state.outputs.add_output(
-            &output_id,
+            &output_ref,
             WhepOutputConnectionStateOptions {
                 bearer_token: bearer_token.clone(),
                 video_options: video_options.clone(),
@@ -80,21 +80,21 @@ impl WhepOutput {
         Ok(Self {
             audio: audio_options.map(|a| a.track_thread_handle),
             video: video_options.map(|v| v.track_thread_handle),
-            output_id,
+            output_ref,
             outputs_state: state.outputs.clone(),
         })
     }
 
     fn init_video_thread(
         ctx: &Arc<PipelineCtx>,
-        output_id: &OutputId,
+        output_ref: &Ref<OutputId>,
         options: VideoEncoderOptions,
     ) -> Result<WhepVideoConnectionOptions, OutputInitError> {
         let (sender, receiver) = broadcast::channel(1000);
         let thread_handle = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 WhepVideoTrackThread::<FfmpegH264Encoder>::spawn(
-                    output_id.clone(),
+                    output_ref.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
@@ -109,7 +109,7 @@ impl WhepOutput {
                     ));
                 }
                 WhepVideoTrackThread::<VulkanH264Encoder>::spawn(
-                    output_id.clone(),
+                    output_ref.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
@@ -119,7 +119,7 @@ impl WhepOutput {
             }
             VideoEncoderOptions::FfmpegVp8(options) => {
                 WhepVideoTrackThread::<FfmpegVp8Encoder>::spawn(
-                    output_id.clone(),
+                    output_ref.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
@@ -129,7 +129,7 @@ impl WhepOutput {
             }
             VideoEncoderOptions::FfmpegVp9(options) => {
                 WhepVideoTrackThread::<FfmpegVp9Encoder>::spawn(
-                    output_id.clone(),
+                    output_ref.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
@@ -148,13 +148,13 @@ impl WhepOutput {
 
     fn init_audio_thread(
         ctx: &Arc<PipelineCtx>,
-        output_id: &OutputId,
+        output_ref: &Ref<OutputId>,
         options: AudioEncoderOptions,
     ) -> Result<WhepAudioConnectionOptions, OutputInitError> {
         let (sender, receiver) = broadcast::channel(1000);
         let thread_handle = match options.clone() {
             AudioEncoderOptions::Opus(options) => WhepAudioTrackThread::<OpusEncoder>::spawn(
-                output_id.clone(),
+                output_ref.clone(),
                 WhepAudioTrackThreadOptions {
                     ctx: ctx.clone(),
                     encoder_options: options.clone(),
@@ -176,7 +176,7 @@ impl WhepOutput {
 
 impl Drop for WhepOutput {
     fn drop(&mut self) {
-        self.outputs_state.ensure_output_closed(&self.output_id);
+        self.outputs_state.ensure_output_closed(&self.output_ref);
     }
 }
 

@@ -8,29 +8,27 @@ use std::sync::{Arc, atomic::AtomicBool};
 use tracing::{Level, debug, span};
 use webrtc::rtcp;
 
-use crate::pipeline::encoder::vulkan_h264::VulkanH264Encoder;
-use crate::pipeline::rtp::rtp_output::rtp_audio_thread::{
-    RtpAudioTrackThread, RtpAudioTrackThreadOptions,
-};
-use crate::pipeline::rtp::rtp_output::rtp_video_thread::{
-    RtpVideoTrackThread, RtpVideoTrackThreadOptions,
-};
-use crate::prelude::*;
-use crate::thread_utils::InitializableThread;
 use crate::{
     event::Event,
     pipeline::{
         encoder::{
             ffmpeg_h264::FfmpegH264Encoder, ffmpeg_vp8::FfmpegVp8Encoder,
-            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder,
+            ffmpeg_vp9::FfmpegVp9Encoder, libopus::OpusEncoder, vulkan_h264::VulkanH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
         rtp::{
             RtpPacket,
             payloader::{PayloadedCodec, PayloaderOptions, PayloadingError},
+            rtp_output::{
+                rtp_audio_thread::{RtpAudioTrackThread, RtpAudioTrackThreadOptions},
+                rtp_video_thread::{RtpVideoTrackThread, RtpVideoTrackThreadOptions},
+            },
         },
     },
+    thread_utils::InitializableThread,
 };
+
+use crate::prelude::*;
 
 mod packet_stream;
 mod rtp_audio_thread;
@@ -63,7 +61,7 @@ pub enum RtpEvent {
 impl RtpOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
-        output_id: OutputId,
+        output_ref: Ref<OutputId>,
         options: RtpOutputOptions,
     ) -> Result<(Self, Port), OutputInitError> {
         let mtu = options.connection_options.mtu();
@@ -78,7 +76,7 @@ impl RtpOutput {
         let video = match options.video {
             Some(video) => Some(Self::init_video_thread(
                 &ctx,
-                &output_id,
+                &output_ref,
                 mtu,
                 video,
                 rtp_sender.clone(),
@@ -88,7 +86,7 @@ impl RtpOutput {
         let audio = match options.audio {
             Some(audio) => Some(Self::init_audio_thread(
                 &ctx,
-                &output_id,
+                &output_ref,
                 mtu,
                 audio,
                 rtp_sender.clone(),
@@ -106,10 +104,14 @@ impl RtpOutput {
         let connection_options = options.connection_options;
         let should_close2 = should_close.clone();
         std::thread::Builder::new()
-            .name(format!("RTP sender for output {output_id}"))
+            .name(format!("RTP sender for output {output_ref}"))
             .spawn(move || {
-                let _span =
-                    span!(Level::INFO, "RTP sender", output_id = output_id.to_string()).entered();
+                let _span = span!(
+                    Level::INFO,
+                    "RTP sender",
+                    output_id = output_ref.to_string()
+                )
+                .entered();
                 match connection_options {
                     RtpOutputConnectionOptions::Udp { .. } => {
                         udp::run_udp_sender_thread(socket, rtp_stream)
@@ -118,7 +120,8 @@ impl RtpOutput {
                         tcp_server::run_tcp_sender_thread(socket, should_close2, rtp_stream)
                     }
                 }
-                ctx.event_emitter.emit(Event::OutputDone(output_id));
+                ctx.event_emitter
+                    .emit(Event::OutputDone(output_ref.id().clone()));
                 debug!("Closing RTP sender thread.")
             })
             .unwrap();
@@ -135,7 +138,7 @@ impl RtpOutput {
 
     fn init_video_thread(
         ctx: &Arc<PipelineCtx>,
-        output_id: &OutputId,
+        output_ref: &Ref<OutputId>,
         mtu: usize,
         options: VideoEncoderOptions,
         sender: Sender<RtpEvent>,
@@ -153,7 +156,7 @@ impl RtpOutput {
         let thread_handle = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 RtpVideoTrackThread::<FfmpegH264Encoder>::spawn(
-                    output_id.clone(),
+                    output_ref.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
@@ -169,7 +172,7 @@ impl RtpOutput {
                     ));
                 }
                 RtpVideoTrackThread::<VulkanH264Encoder>::spawn(
-                    output_id.clone(),
+                    output_ref.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
@@ -180,7 +183,7 @@ impl RtpOutput {
             }
             VideoEncoderOptions::FfmpegVp8(options) => {
                 RtpVideoTrackThread::<FfmpegVp8Encoder>::spawn(
-                    output_id.clone(),
+                    output_ref.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
@@ -191,7 +194,7 @@ impl RtpOutput {
             }
             VideoEncoderOptions::FfmpegVp9(options) => {
                 RtpVideoTrackThread::<FfmpegVp9Encoder>::spawn(
-                    output_id.clone(),
+                    output_ref.clone(),
                     RtpVideoTrackThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
@@ -206,7 +209,7 @@ impl RtpOutput {
 
     fn init_audio_thread(
         ctx: &Arc<PipelineCtx>,
-        output_id: &OutputId,
+        output_ref: &Ref<OutputId>,
         mtu: usize,
         options: AudioEncoderOptions,
         sender: Sender<RtpEvent>,
@@ -227,7 +230,7 @@ impl RtpOutput {
 
         let thread_handle = match options {
             AudioEncoderOptions::Opus(options) => RtpAudioTrackThread::<OpusEncoder>::spawn(
-                output_id.clone(),
+                output_ref.clone(),
                 RtpAudioTrackThreadOptions {
                     ctx: ctx.clone(),
                     encoder_options: options.clone(),

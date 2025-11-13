@@ -40,7 +40,7 @@ pub struct RtmpClientOutput {
 impl RtmpClientOutput {
     pub fn new(
         ctx: Arc<PipelineCtx>,
-        output_id: OutputId,
+        output_ref: Ref<OutputId>,
         options: RtmpOutputOptions,
     ) -> Result<Self, OutputInitError> {
         let mut output_ctx = ffmpeg::format::output_as(&options.url.deref(), "flv")
@@ -51,7 +51,7 @@ impl RtmpClientOutput {
         let video = match options.video {
             Some(video) => Some(Self::init_video_track(
                 &ctx,
-                &output_id,
+                &output_ref,
                 video,
                 &mut output_ctx,
                 encoded_chunks_sender.clone(),
@@ -61,7 +61,7 @@ impl RtmpClientOutput {
         let audio = match options.audio {
             Some(audio) => Some(Self::init_audio_track(
                 &ctx,
-                &output_id,
+                &output_ref,
                 audio,
                 &mut output_ctx,
                 encoded_chunks_sender.clone(),
@@ -96,13 +96,13 @@ impl RtmpClientOutput {
             None => (None, None),
         };
 
-        let output_id = output_id.clone();
+        let output_ref = output_ref.clone();
         let ctx = ctx.clone();
         std::thread::Builder::new()
-            .name(format!("RTMP sender thread for output {output_id}"))
+            .name(format!("RTMP sender thread for output {output_ref}"))
             .spawn(move || {
                 let _span =
-                    tracing::info_span!("RTMP sender  writer", output_id = output_id.to_string())
+                    tracing::info_span!("RTMP sender  writer", output_id = output_ref.to_string())
                         .entered();
 
                 run_ffmpeg_output_thread(
@@ -111,7 +111,8 @@ impl RtmpClientOutput {
                     audio_stream,
                     encoded_chunks_receiver,
                 );
-                ctx.event_emitter.emit(Event::OutputDone(output_id));
+                ctx.event_emitter
+                    .emit(Event::OutputDone(output_ref.id().clone()));
                 debug!("Closing RTMP sender thread.");
             })
             .unwrap();
@@ -124,7 +125,7 @@ impl RtmpClientOutput {
 
     fn init_video_track(
         ctx: &Arc<PipelineCtx>,
-        output_id: &OutputId,
+        output_id: &Ref<OutputId>,
         options: VideoEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,
@@ -184,7 +185,7 @@ impl RtmpClientOutput {
 
     fn init_audio_track(
         ctx: &Arc<PipelineCtx>,
-        output_id: &OutputId,
+        output_id: &Ref<OutputId>,
         options: AudioEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,

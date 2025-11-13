@@ -44,32 +44,32 @@ pub(crate) trait Output: Send {
 
 pub(super) fn new_external_output(
     ctx: Arc<PipelineCtx>,
-    output_id: OutputId,
+    output_ref: Ref<OutputId>,
     options: ProtocolOutputOptions,
 ) -> Result<(Box<dyn Output>, Option<Port>), OutputInitError> {
     match options {
         ProtocolOutputOptions::Rtp(opt) => {
-            let (output, port) = RtpOutput::new(ctx, output_id, opt)?;
+            let (output, port) = RtpOutput::new(ctx, output_ref, opt)?;
             Ok((Box::new(output), Some(port)))
         }
         ProtocolOutputOptions::Rtmp(opt) => {
-            let output = RtmpClientOutput::new(ctx, output_id, opt)?;
+            let output = RtmpClientOutput::new(ctx, output_ref, opt)?;
             Ok((Box::new(output), None))
         }
         ProtocolOutputOptions::Mp4(opt) => {
-            let output = Mp4Output::new(ctx, output_id, opt)?;
+            let output = Mp4Output::new(ctx, output_ref, opt)?;
             Ok((Box::new(output), None))
         }
         ProtocolOutputOptions::Hls(opt) => {
-            let output = HlsOutput::new(ctx, output_id, opt)?;
+            let output = HlsOutput::new(ctx, output_ref, opt)?;
             Ok((Box::new(output), None))
         }
         ProtocolOutputOptions::Whip(opt) => {
-            let output = WhipOutput::new(ctx, output_id, opt)?;
+            let output = WhipOutput::new(ctx, output_ref, opt)?;
             Ok((Box::new(output), None))
         }
         ProtocolOutputOptions::Whep(opt) => {
-            let output = WhepOutput::new(ctx, output_id, opt)?;
+            let output = WhepOutput::new(ctx, output_ref, opt)?;
             Ok((Box::new(output), None))
         }
     }
@@ -90,7 +90,7 @@ pub(super) fn register_pipeline_output<BuildFn, NewOutputResult>(
 where
     BuildFn: FnOnce(
         Arc<PipelineCtx>,
-        OutputId,
+        Ref<OutputId>,
     ) -> Result<(Box<dyn Output>, NewOutputResult), OutputInitError>,
 {
     let (has_video, has_audio) = (video.is_some(), audio.is_some());
@@ -103,8 +103,7 @@ where
     }
 
     let pipeline_ctx = pipeline.lock().unwrap().ctx.clone();
-
-    let (output, output_result) = build_output(pipeline_ctx, output_id.clone())
+    let (output, output_result) = build_output(pipeline_ctx, Ref::new(&output_id))
         .map_err(|e| RegisterOutputError::OutputError(output_id.clone(), e))?;
 
     let mut guard = pipeline.lock().unwrap();

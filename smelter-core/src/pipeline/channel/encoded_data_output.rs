@@ -33,8 +33,8 @@ pub struct EncodedDataOutput {
 
 impl EncodedDataOutput {
     pub fn new(
-        output_id: OutputId,
         ctx: Arc<PipelineCtx>,
+        output_id: Ref<OutputId>,
         options: EncodedDataOutputOptions,
     ) -> Result<(Self, Receiver<EncodedOutputEvent>), OutputInitError> {
         let (sender, encoded_chunks_receiver) = bounded(1);

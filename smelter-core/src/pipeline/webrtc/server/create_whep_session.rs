@@ -1,3 +1,12 @@
+use std::sync::Arc;
+
+use axum::{
+    body::Body,
+    extract::{Path, State},
+    http::{HeaderMap, Response, StatusCode},
+};
+use tracing::trace;
+
 use crate::pipeline::webrtc::{
     WhipWhepServerState,
     error::WhipWhepServerError,
@@ -9,14 +18,6 @@ use crate::pipeline::webrtc::{
         stream_media_to_peer::{MediaStream, stream_media_to_peer},
     },
 };
-use axum::{
-    body::Body,
-    extract::{Path, State},
-    http::{HeaderMap, Response, StatusCode},
-};
-use smelter_render::OutputId;
-use std::sync::Arc;
-use tracing::trace;
 
 pub async fn handle_create_whep_session(
     Path(endpoint_id): Path<String>,
@@ -24,16 +25,17 @@ pub async fn handle_create_whep_session(
     headers: HeaderMap,
     offer: String,
 ) -> Result<Response<Body>, WhipWhepServerError> {
-    let output_id = OutputId(Arc::from(endpoint_id.clone()));
+    let endpoint_id = Arc::from(endpoint_id.clone());
+    let output_ref = state.outputs.find_by_endpoint_id(&endpoint_id)?;
     trace!("SDP offer: {}", offer);
 
     validate_sdp_content_type(&headers)?;
     let outputs = state.outputs;
-    outputs.validate_token(&output_id, &headers).await?;
+    outputs.validate_token(&output_ref, &headers).await?;
     let ctx = state.ctx.clone();
 
     let (video_encoder, video_receiver, keyframe_request_sender) =
-        outputs.get_with(&output_id, |output| {
+        outputs.get_with(&output_ref, |output| {
             if let Some(v) = &output.video_options {
                 Ok((
                     Some(v.encoder.clone()),
@@ -45,7 +47,7 @@ pub async fn handle_create_whep_session(
             }
         })?;
 
-    let (audio_encoder, audio_receiver) = outputs.get_with(&output_id, |output| {
+    let (audio_encoder, audio_receiver) = outputs.get_with(&output_ref, |output| {
         if let Some(a) = &output.audio_options {
             Ok((Some(a.encoder.clone()), Some(a.receiver.resubscribe())))
         } else {
@@ -92,17 +94,17 @@ pub async fn handle_create_whep_session(
         .await?;
     trace!("SDP answer: {}", sdp_answer.sdp);
 
-    let session_id = outputs.add_session(&output_id, peer_connection.clone())?;
+    let session_id = outputs.add_session(&output_ref, peer_connection.clone())?;
 
     peer_connection.on_peer_connection_cleanup(OnCleanupSessionHdlr::new(
         &outputs,
-        &output_id,
+        &output_ref,
         &session_id,
     ));
 
     tokio::spawn(stream_media_to_peer(
         ctx.clone(),
-        output_id,
+        output_ref,
         video_media_stream,
         audio_media_stream,
     ));
