@@ -9,11 +9,11 @@ use h264_reader::{
     push::{AccumulatedNalHandler, NalInterest},
 };
 
-use super::ParserError;
+use super::h264::H264ParserError;
 
 pub(crate) struct NalReceiver {
     parser_ctx: h264_reader::Context,
-    sender: mpsc::Sender<Result<ParsedNalu, ParserError>>,
+    sender: mpsc::Sender<Result<ParsedNalu, H264ParserError>>,
 }
 
 impl AccumulatedNalHandler for NalReceiver {
@@ -30,23 +30,23 @@ impl AccumulatedNalHandler for NalReceiver {
 }
 
 impl NalReceiver {
-    pub(crate) fn new(sender: mpsc::Sender<Result<ParsedNalu, ParserError>>) -> Self {
+    pub(crate) fn new(sender: mpsc::Sender<Result<ParsedNalu, H264ParserError>>) -> Self {
         Self {
             sender,
             parser_ctx: Context::default(),
         }
     }
 
-    fn handle_nal(&mut self, nal: RefNal<'_>) -> Result<ParsedNalu, ParserError> {
+    fn handle_nal(&mut self, nal: RefNal<'_>) -> Result<ParsedNalu, H264ParserError> {
         let nal_unit_type = nal
             .header()
-            .map_err(ParserError::NalHeaderParseError)?
+            .map_err(H264ParserError::NalHeaderParseError)?
             .nal_unit_type();
 
         match nal_unit_type {
             h264_reader::nal::UnitType::SeqParameterSet => {
                 let parsed = h264_reader::nal::sps::SeqParameterSet::from_bits(nal.rbsp_bits())
-                    .map_err(ParserError::SpsParseError)?;
+                    .map_err(H264ParserError::SpsParseError)?;
 
                 // Perhaps this shouldn't be here, but this is the only place we process sps
                 // before sending them to the decoder. It also seems that this is the only thing we
@@ -55,7 +55,7 @@ impl NalReceiver {
                     // TODO: what else to do here? sure we'll throw an error, but shouldn't we also
                     // terminate the parser somehow?
                     // perhaps this should be considered in other places we throw errors too
-                    Err(ParserError::GapsInFrameNumNotSupported)
+                    Err(H264ParserError::GapsInFrameNumNotSupported)
                 } else {
                     self.parser_ctx.put_seq_param_set(parsed.clone());
                     Ok(ParsedNalu::Sps(parsed.clone()))
@@ -67,7 +67,7 @@ impl NalReceiver {
                     &self.parser_ctx,
                     nal.rbsp_bits(),
                 )
-                .map_err(ParserError::PpsParseError)?;
+                .map_err(H264ParserError::PpsParseError)?;
 
                 self.parser_ctx.put_pic_param_set(parsed.clone());
 
@@ -81,7 +81,7 @@ impl NalReceiver {
                     &mut nal.rbsp_bits(),
                     nal.header().unwrap(),
                 )
-                .map_err(ParserError::SliceParseError)?;
+                .map_err(H264ParserError::SliceParseError)?;
 
                 let header = Arc::new(header);
 
@@ -142,6 +142,14 @@ pub enum ParsedNalu {
     Pps(PicParameterSet),
     Slice(Slice),
     Other(String),
+}
+
+/// H264 Network Abstraction Layer Unit
+pub struct Nalu {
+    /// Parsed nalu from [`Nalu::raw_bytes`]
+    pub parsed: ParsedNalu,
+    pub raw_bytes: Box<[u8]>,
+    pub pts: Option<u64>,
 }
 
 #[derive(derivative::Derivative)]

@@ -81,10 +81,11 @@
 mod adapter;
 mod device;
 mod instance;
-mod parser;
 mod vulkan_decoder;
 mod vulkan_encoder;
 pub(crate) mod wrappers;
+
+pub mod parser;
 
 pub mod capabilities {
     pub use super::adapter::AdapterInfo;
@@ -133,16 +134,18 @@ pub mod parameters {
 }
 
 use ash::vk;
-use parser::Parser;
 use vulkan_decoder::{FrameSorter, VulkanDecoder};
 
 pub use adapter::VulkanAdapter;
 pub use device::VulkanDevice;
 pub use instance::VulkanInstance;
-pub use parser::{ParserError, ReferenceManagementError};
 pub use vulkan_decoder::VulkanDecoderError;
 pub use vulkan_encoder::VulkanEncoderError;
 
+use crate::parser::{
+    ReferenceContext, ReferenceManagementError, compile_to_decoder_instructions,
+    h264::{H264Parser, H264ParserError},
+};
 use crate::vulkan_encoder::VulkanEncoder;
 use crate::wrappers::ImageKey;
 
@@ -152,7 +155,10 @@ pub enum DecoderError {
     VulkanDecoderError(#[from] VulkanDecoderError),
 
     #[error("H264 parser error: {0}")]
-    ParserError(#[from] ParserError),
+    ParserError(#[from] H264ParserError),
+
+    #[error("Reference managament error: {0}")]
+    ReferenceManagementError(#[from] ReferenceManagementError),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -248,7 +254,8 @@ pub struct RawFrameData {
 /// A decoder that outputs frames stored as [`wgpu::Texture`]s
 pub struct WgpuTexturesDecoder {
     vulkan_decoder: VulkanDecoder<'static>,
-    parser: Parser,
+    parser: H264Parser,
+    reference_ctx: ReferenceContext,
     frame_sorter: FrameSorter<wgpu::Texture>,
 }
 
@@ -261,7 +268,8 @@ impl WgpuTexturesDecoder {
         &mut self,
         frame: EncodedInputChunk<&[u8]>,
     ) -> Result<Vec<Frame<wgpu::Texture>>, DecoderError> {
-        let instructions = self.parser.parse(frame.data, frame.pts)?;
+        let nalus = self.parser.parse(frame.data, frame.pts)?;
+        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, nalus)?;
 
         let unsorted_frames = self.vulkan_decoder.decode_to_wgpu_textures(&instructions)?;
 
@@ -287,14 +295,15 @@ impl WgpuTexturesDecoder {
     ///
     /// What the decoder will do depends on the set [`parameters::MissedFrameHandling`]
     pub fn mark_missing_data(&mut self) {
-        self.parser.mark_missing_data();
+        self.reference_ctx.mark_missed_frames();
     }
 }
 
 /// A decoder that outputs frames stored as [`Vec<u8>`] with the raw pixel data.
 pub struct BytesDecoder {
     vulkan_decoder: VulkanDecoder<'static>,
-    parser: Parser,
+    parser: H264Parser,
+    reference_ctx: ReferenceContext,
     frame_sorter: FrameSorter<RawFrameData>,
 }
 
@@ -308,7 +317,8 @@ impl BytesDecoder {
         &mut self,
         frame: EncodedInputChunk<&[u8]>,
     ) -> Result<Vec<Frame<RawFrameData>>, DecoderError> {
-        let instructions = self.parser.parse(frame.data, frame.pts)?;
+        let nalus = self.parser.parse(frame.data, frame.pts)?;
+        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, nalus)?;
 
         let unsorted_frames = self.vulkan_decoder.decode_to_bytes(&instructions)?;
 
@@ -334,7 +344,7 @@ impl BytesDecoder {
     ///
     /// What the decoder will do depends on the set [`parameters::MissedFrameHandling`]
     pub fn mark_missing_data(&mut self) {
-        self.parser.mark_missing_data();
+        self.reference_ctx.mark_missed_frames();
     }
 }
 
