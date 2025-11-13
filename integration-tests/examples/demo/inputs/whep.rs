@@ -176,19 +176,22 @@ impl WhepInputBuilder {
     fn prompt_bearer_token(self) -> Result<Self> {
         let env_token = env::var(WHEP_TOKEN_ENV).unwrap_or_default();
         if self.player == WhepInputPlayer::Fishjam {
-            println!("To start streaming and acquire the bearer token:");
-            println!("1. Visit https://livestreaming.fishjam.io/");
-            println!("2. Open network tab in dev tools and reload if necessary.");
+            println!();
             println!(
-                "3. Paste your Fishjam ID in the appropriate input field (you will find it in the dashboard)."
+                "1. Visit https://fishjam.io and sign in. Create an account if you don't have one."
             );
-            println!("4. Start streaming and press 'Connect to stream'.");
-            println!("5. In dev tools search for the request named 'whep' using POST method.");
+            println!("2. Copy your Fishjam ID from dashboard.");
+            println!("3. Visit https://livestreaming.fishjam.io/");
+            println!("4. Open network tab in dev tools and reload if necessary.");
+            println!("5. Paste copied Fishjam ID in the appropriate input field.");
+            println!("6. Start streaming and press \"Connect to stream\".");
+            println!("7. In dev tools search for the request named \"whep\" using POST method.");
             println!(
-                "6. In 'Request headers' section find 'Authorization' header and copy a token from there."
+                "8. In \"Request headers\" section find \"Authorization\" header and copy a token from there."
             );
+            println!("9. Disconnect from watching the stream before pasting the token.");
         }
-        let token_input = Text::new("Enter the WHEP bearer token. (ESC for 'example'):")
+        let token_input = Text::new("Enter the WHEP bearer token. (ESC for \"example\"):")
             .with_initial_value(&env_token)
             .prompt_skippable()?;
         match token_input {
