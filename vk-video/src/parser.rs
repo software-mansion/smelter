@@ -168,4 +168,8 @@ impl Parser {
 
         Ok(instructions)
     }
+
+    pub fn mark_missing_data(&mut self) {
+        self.reference_ctx.mark_missed_frames();
+    }
 }

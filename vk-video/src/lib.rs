@@ -282,6 +282,13 @@ impl WgpuTexturesDecoder {
     pub fn flush(&mut self) -> Vec<Frame<wgpu::Texture>> {
         self.frame_sorter.flush()
     }
+
+    /// Notify the decoder that a chunk of the bitstream was lost.
+    ///
+    /// What the decoder will do depends on the set [`parameters::MissedFrameHandling`]
+    pub fn mark_missing_data(&mut self) {
+        self.parser.mark_missing_data();
+    }
 }
 
 /// A decoder that outputs frames stored as [`Vec<u8>`] with the raw pixel data.
@@ -321,6 +328,13 @@ impl BytesDecoder {
     /// that need to be presented before the already decoded frames.
     pub fn flush(&mut self) -> Vec<Frame<RawFrameData>> {
         self.frame_sorter.flush()
+    }
+
+    /// Notify the decoder that a chunk of the bitstream was lost.
+    ///
+    /// What the decoder will do depends on the set [`parameters::MissedFrameHandling`]
+    pub fn mark_missing_data(&mut self) {
+        self.parser.mark_missing_data();
     }
 }
 
