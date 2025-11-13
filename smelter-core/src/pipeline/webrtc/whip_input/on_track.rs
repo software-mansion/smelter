@@ -1,4 +1,3 @@
-use smelter_render::InputId;
 use tracing::{Instrument, debug, info_span, trace, warn};
 use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
 
@@ -22,20 +21,22 @@ use crate::{
     thread_utils::InitializableThread,
 };
 
+use crate::prelude::*;
+
 pub(super) fn handle_on_track(
     ctx: WhipTrackContext,
-    input_id: InputId,
+    input_ref: Ref<InputId>,
     video_preferences: Vec<VideoDecoderOptions>,
 ) {
     let kind = ctx.track.kind();
-    let span = info_span!("WHIP input track", ?kind, ?input_id);
+    let span = info_span!("WHIP input track", ?kind, ?input_ref);
 
     tokio::spawn(
         async move {
             debug!("on_track called");
             let result = match kind {
-                RTPCodecType::Audio => process_audio_track(ctx, input_id).await,
-                RTPCodecType::Video => process_video_track(ctx, input_id, video_preferences).await,
+                RTPCodecType::Audio => process_audio_track(ctx, input_ref).await,
+                RTPCodecType::Video => process_video_track(ctx, input_ref, video_preferences).await,
                 RTPCodecType::Unspecified => {
                     warn!("Unknown track kind");
                     Ok(())
@@ -52,7 +53,7 @@ pub(super) fn handle_on_track(
 
 async fn process_audio_track(
     ctx: WhipTrackContext,
-    input_id: InputId,
+    input_ref: Ref<InputId>,
 ) -> Result<(), WhipWhepServerError> {
     if !audio_codec_negotiated(&ctx.rtc_receiver).await {
         warn!("Skipping audio track, no valid codec negotiated");
@@ -63,10 +64,10 @@ async fn process_audio_track(
 
     let samples_sender = ctx
         .inputs
-        .get_with(&input_id, |input| Ok(input.input_samples_sender.clone()))?;
+        .get_with(&input_ref, |input| Ok(input.input_samples_sender.clone()))?;
 
     let handle = AudioTrackThread::spawn(
-        format!("WHIP input audio, endpoint_id: {input_id}"),
+        format!("WHIP input audio, input_id: {input_ref}"),
         (ctx.pipeline_ctx.clone(), samples_sender),
     )?;
 
@@ -94,7 +95,7 @@ async fn process_audio_track(
 
 async fn process_video_track(
     ctx: WhipTrackContext,
-    input_id: InputId,
+    input_ref: Ref<InputId>,
     video_preferences: Vec<VideoDecoderOptions>,
 ) -> Result<(), WhipWhepServerError> {
     let (Some(decoder_mapping), Some(payload_type_mapping)) = (
@@ -109,10 +110,10 @@ async fn process_video_track(
 
     let frame_sender = ctx
         .inputs
-        .get_with(&input_id, |input| Ok(input.frame_sender.clone()))?;
+        .get_with(&input_ref, |input| Ok(input.frame_sender.clone()))?;
     let keyframe_request_sender = start_pli_sender_task(&ctx.track, &ctx.rtc_receiver);
     let handle = VideoTrackThread::spawn(
-        format!("WHIP input video, endpoint_id: {input_id}"),
+        format!("WHIP input video, input_id: {input_ref}"),
         (
             ctx.pipeline_ctx.clone(),
             decoder_mapping,

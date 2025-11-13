@@ -20,7 +20,6 @@ use ffmpeg_next::{
     media::Type,
     util::interrupt,
 };
-use smelter_render::InputId;
 use tracing::{Level, debug, error, span, trace, warn};
 
 use crate::{
@@ -55,7 +54,7 @@ struct Track {
 impl HlsInput {
     pub fn new_input(
         ctx: Arc<PipelineCtx>,
-        input_id: InputId,
+        input_ref: Ref<InputId>,
         opts: HlsInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
@@ -65,7 +64,7 @@ impl HlsInput {
         let (audio, samples_receiver) = match input_ctx.audio_stream() {
             Some(stream) => {
                 let (track, receiver) =
-                    Self::handle_audio_track(&ctx, &input_id, &stream, buffer.clone())?;
+                    Self::handle_audio_track(&ctx, &input_ref, &stream, buffer.clone())?;
                 (Some(track), Some(receiver))
             }
             None => (None, None),
@@ -74,7 +73,7 @@ impl HlsInput {
             Some(stream) => {
                 let (track, receiver) = Self::handle_video_track(
                     &ctx,
-                    &input_id,
+                    &input_ref,
                     &stream,
                     opts.video_decoders,
                     buffer,
@@ -89,7 +88,7 @@ impl HlsInput {
             audio: samples_receiver,
         };
 
-        Self::spawn_demuxer_thread(input_id, input_ctx, audio, video);
+        Self::spawn_demuxer_thread(input_ref, input_ctx, audio, video);
 
         Ok((
             Input::Hls(Self { should_close }),
@@ -100,7 +99,7 @@ impl HlsInput {
 
     fn handle_audio_track(
         ctx: &Arc<PipelineCtx>,
-        input_id: &InputId,
+        input_ref: &Ref<InputId>,
         stream: &Stream<'_>,
         buffer: InputBuffer,
     ) -> Result<(Track, Receiver<PipelineEvent<InputAudioSamples>>), InputInitError> {
@@ -110,7 +109,7 @@ impl HlsInput {
         let (samples_sender, samples_receiver) = bounded(5);
         let state = StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer);
         let handle = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
-            input_id.clone(),
+            input_ref.clone(),
             AudioDecoderThreadOptions {
                 ctx: ctx.clone(),
                 decoder_options: FdkAacDecoderOptions { asc },
@@ -131,7 +130,7 @@ impl HlsInput {
 
     fn handle_video_track(
         ctx: &Arc<PipelineCtx>,
-        input_id: &InputId,
+        input_ref: &Ref<InputId>,
         stream: &Stream<'_>,
         video_decoders: HlsInputVideoDecoders,
         buffer: InputBuffer,
@@ -169,7 +168,7 @@ impl HlsInput {
         let handle = match h264_decoder {
             VideoDecoderOptions::FfmpegH264 => {
                 VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
-                    input_id,
+                    input_ref,
                     decoder_thread_options,
                 )?
             }
@@ -180,7 +179,7 @@ impl HlsInput {
                     ));
                 }
                 VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
-                    input_id,
+                    input_ref,
                     decoder_thread_options,
                 )?
             }
@@ -202,16 +201,16 @@ impl HlsInput {
     }
 
     fn spawn_demuxer_thread(
-        input_id: InputId,
+        input_ref: Ref<InputId>,
         input_ctx: FfmpegInputContext,
         audio: Option<Track>,
         video: Option<Track>,
     ) {
         std::thread::Builder::new()
-            .name(format!("HLS thread for input {}", input_id.clone()))
+            .name(format!("HLS thread for input {input_ref}"))
             .spawn(move || {
                 let _span =
-                    span!(Level::INFO, "HLS thread", input_id = input_id.to_string()).entered();
+                    span!(Level::INFO, "HLS thread", input_id = input_ref.to_string()).entered();
 
                 Self::run_demuxer_thread(input_ctx, audio, video);
             })

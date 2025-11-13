@@ -10,7 +10,6 @@ use std::{
 };
 
 use crossbeam_channel::bounded;
-use smelter_render::InputId;
 use tracing::{Level, Span, debug, error, span, trace};
 
 use crate::{
@@ -45,7 +44,7 @@ enum TrackType {
 impl Mp4Input {
     pub fn new_input(
         ctx: Arc<PipelineCtx>,
-        input_id: InputId,
+        input_ref: Ref<InputId>,
         options: Mp4InputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let source = match options.source {
@@ -81,7 +80,7 @@ impl Mp4Input {
                 let handle = match (track.decoder_options(), h264_decoder) {
                     (DecoderOptions::H264(h264_config), VideoDecoderOptions::FfmpegH264) => {
                         VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
-                            input_id.clone(),
+                            input_ref.clone(),
                             VideoDecoderThreadOptions {
                                 ctx: ctx.clone(),
                                 transformer: Some(AvccToAnnexBRepacker::new(h264_config.clone())),
@@ -97,7 +96,7 @@ impl Mp4Input {
                             ));
                         }
                         VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
-                            input_id.clone(),
+                            input_ref.clone(),
                             VideoDecoderThreadOptions {
                                 ctx: ctx.clone(),
                                 transformer: Some(AvccToAnnexBRepacker::new(h264_config.clone())),
@@ -123,7 +122,7 @@ impl Mp4Input {
                 let handle = match track.decoder_options() {
                     DecoderOptions::Aac(data) => {
                         AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
-                            input_id.clone(),
+                            input_ref.clone(),
                             AudioDecoderThreadOptions {
                                 ctx: ctx.clone(),
                                 decoder_options: FdkAacDecoderOptions {
@@ -145,8 +144,8 @@ impl Mp4Input {
             None => (None, None, None),
         };
 
-        let video_span = span!(Level::INFO, "MP4 video", input_id = input_id.to_string());
-        let audio_span = span!(Level::INFO, "MP4 audio", input_id = input_id.to_string());
+        let video_span = span!(Level::INFO, "MP4 video", input_id = input_ref.to_string());
+        let audio_span = span!(Level::INFO, "MP4 audio", input_id = input_ref.to_string());
         let should_close = Arc::new(AtomicBool::new(false));
         if options.should_loop {
             start_thread_with_loop(

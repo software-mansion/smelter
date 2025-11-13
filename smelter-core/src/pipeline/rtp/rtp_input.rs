@@ -1,7 +1,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use crossbeam_channel::{Receiver, bounded};
-use smelter_render::{Frame, InputId};
+use smelter_render::Frame;
 use tracing::{Level, debug, span, trace, warn};
 use webrtc::{
     rtcp::{self, header::PacketType, sender_report::SenderReport},
@@ -52,32 +52,32 @@ pub struct RtpInput {
 impl RtpInput {
     pub fn new_input(
         ctx: Arc<PipelineCtx>,
-        input_id: InputId,
+        input_ref: Ref<InputId>,
         opts: RtpInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
 
         let (port, raw_packets_receiver) = match opts.transport_protocol {
             RtpInputTransportProtocol::Udp => {
-                start_udp_reader_thread(&input_id, &opts, should_close.clone())?
+                start_udp_reader_thread(&input_ref, &opts, should_close.clone())?
             }
             RtpInputTransportProtocol::TcpServer => {
-                start_tcp_server_thread(&input_id, &opts, should_close.clone())?
+                start_tcp_server_thread(&input_ref, &opts, should_close.clone())?
             }
         };
 
         let (video_handle, video_frames_receiver) =
-            Self::start_video_thread(&ctx, &input_id, opts.video)?;
+            Self::start_video_thread(&ctx, &input_ref, opts.video)?;
 
         let (audio_handle, audio_samples_receiver) =
-            Self::start_audio_thread(&ctx, &input_id, opts.audio)?;
+            Self::start_audio_thread(&ctx, &input_ref, opts.audio)?;
 
         let jitter_buffer_init = RtpJitterBufferInitOptions::new(&ctx, opts.jitter_buffer);
 
         // TODO: this could ran on the same thread as tcp/udp socket
         Self::start_rtp_demuxer_thread(
             ctx,
-            &input_id,
+            &input_ref,
             jitter_buffer_init,
             raw_packets_receiver,
             audio_handle,
@@ -96,18 +96,18 @@ impl RtpInput {
 
     fn start_rtp_demuxer_thread(
         ctx: Arc<PipelineCtx>,
-        input_id: &InputId,
+        input_ref: &Ref<InputId>,
         jitter_buffer_init: RtpJitterBufferInitOptions,
         receiver: Receiver<bytes::Bytes>,
         audio: Option<RtpAudioTrackThreadHandle>,
         video: Option<RtpVideoTrackThreadHandle>,
     ) {
-        let input_id = input_id.clone();
+        let input_ref = input_ref.clone();
         std::thread::Builder::new()
-            .name(format!("Depayloading thread for input: {}", input_id.0))
+            .name(format!("Depayloading thread for input: {input_ref}"))
             .spawn(move || {
                 let _span =
-                    span!(Level::INFO, "RTP demuxer", input_id = input_id.to_string()).entered();
+                    span!(Level::INFO, "RTP demuxer", input_id = input_ref.to_string()).entered();
                 run_rtp_demuxer_thread(ctx, jitter_buffer_init, receiver, video, audio)
             })
             .unwrap();
@@ -116,7 +116,7 @@ impl RtpInput {
     #[allow(clippy::type_complexity)]
     fn start_video_thread(
         ctx: &Arc<PipelineCtx>,
-        input_id: &InputId,
+        input_ref: &Ref<InputId>,
         options: Option<VideoDecoderOptions>,
     ) -> Result<
         (
@@ -132,15 +132,15 @@ impl RtpInput {
         let (sender, receiver) = bounded(5);
         let handle = match options {
             VideoDecoderOptions::FfmpegH264 => RtpVideoThread::<FfmpegH264Decoder>::spawn(
-                input_id.clone(),
+                input_ref.clone(),
                 (ctx.clone(), DepayloaderOptions::H264, sender),
             )?,
             VideoDecoderOptions::FfmpegVp8 => RtpVideoThread::<FfmpegVp8Decoder>::spawn(
-                input_id.clone(),
+                input_ref.clone(),
                 (ctx.clone(), DepayloaderOptions::Vp8, sender),
             )?,
             VideoDecoderOptions::FfmpegVp9 => RtpVideoThread::<FfmpegVp9Decoder>::spawn(
-                input_id.clone(),
+                input_ref.clone(),
                 (ctx.clone(), DepayloaderOptions::Vp9, sender),
             )?,
             VideoDecoderOptions::VulkanH264 => {
@@ -148,7 +148,7 @@ impl RtpInput {
                     return Err(DecoderInitError::VulkanContextRequiredForVulkanDecoder);
                 }
                 RtpVideoThread::<VulkanH264Decoder>::spawn(
-                    input_id.clone(),
+                    input_ref.clone(),
                     (ctx.clone(), DepayloaderOptions::H264, sender),
                 )?
             }
@@ -159,7 +159,7 @@ impl RtpInput {
     #[allow(clippy::type_complexity)]
     fn start_audio_thread(
         ctx: &Arc<PipelineCtx>,
-        input_id: &InputId,
+        input_ref: &Ref<InputId>,
         options: Option<RtpAudioOptions>,
     ) -> Result<
         (
@@ -175,7 +175,7 @@ impl RtpInput {
         let (sender, receiver) = bounded(5);
         let handle = match options {
             RtpAudioOptions::Opus => RtpAudioThread::<OpusDecoder>::spawn(
-                input_id,
+                input_ref,
                 RtpAudioThreadOptions {
                     ctx: ctx.clone(),
                     sample_rate: 48_000,
@@ -189,7 +189,7 @@ impl RtpInput {
                 raw_asc,
                 depayloader_mode,
             } => RtpAudioThread::<FdkAacDecoder>::spawn(
-                input_id,
+                input_ref,
                 RtpAudioThreadOptions {
                     ctx: ctx.clone(),
                     sample_rate: asc.sample_rate,

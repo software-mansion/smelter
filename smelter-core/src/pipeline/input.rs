@@ -51,18 +51,18 @@ impl Input {
 
 pub(super) fn new_external_input(
     ctx: Arc<PipelineCtx>,
-    input_id: InputId,
+    input_ref: Ref<InputId>,
     options: ProtocolInputOptions,
 ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
     match options {
-        ProtocolInputOptions::Rtp(opts) => RtpInput::new_input(ctx, input_id, opts),
-        ProtocolInputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_id, opts),
-        ProtocolInputOptions::Hls(opts) => HlsInput::new_input(ctx, input_id, opts),
-        ProtocolInputOptions::Whip(opts) => WhipInput::new_input(ctx, input_id, opts),
-        ProtocolInputOptions::Whep(opts) => WhepInput::new_input(ctx, input_id, opts),
+        ProtocolInputOptions::Rtp(opts) => RtpInput::new_input(ctx, input_ref, opts),
+        ProtocolInputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_ref, opts),
+        ProtocolInputOptions::Hls(opts) => HlsInput::new_input(ctx, input_ref, opts),
+        ProtocolInputOptions::Whip(opts) => WhipInput::new_input(ctx, input_ref, opts),
+        ProtocolInputOptions::Whep(opts) => WhepInput::new_input(ctx, input_ref, opts),
         #[cfg(feature = "decklink")]
         ProtocolInputOptions::DeckLink(opts) => {
-            super::decklink::DeckLink::new_input(ctx, input_id, opts)
+            super::decklink::DeckLink::new_input(ctx, input_ref, opts)
         }
     }
 }
@@ -78,7 +78,7 @@ pub(super) fn register_pipeline_input<BuildFn, NewInputResult>(
 where
     BuildFn: FnOnce(
         Arc<PipelineCtx>,
-        InputId,
+        Ref<InputId>,
     ) -> Result<(Input, NewInputResult, QueueDataReceiver), InputInitError>,
 {
     if pipeline.lock().unwrap().inputs.contains_key(&input_id) {
@@ -87,7 +87,7 @@ where
 
     let pipeline_ctx = pipeline.lock().unwrap().ctx().clone();
 
-    let (input, input_result, receiver) = build_input(pipeline_ctx, input_id.clone())
+    let (input, input_result, receiver) = build_input(pipeline_ctx, Ref::new(&input_id))
         .map_err(|err| RegisterInputError::InputError(input_id.clone(), err))?;
 
     let (audio_eos_received, video_eos_received) = (
