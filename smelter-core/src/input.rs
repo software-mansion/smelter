@@ -11,6 +11,7 @@ pub struct RegisterInputOptions {
 #[derive(Debug, Clone)]
 pub enum ProtocolInputOptions {
     Rtp(RtpInputOptions),
+    RtmpServer(RtmpServerInputOptions),
     Mp4(Mp4InputOptions),
     Hls(HlsInputOptions),
     Whip(WhipInputOptions),
@@ -51,6 +52,7 @@ pub struct InputInfo {
 #[derive(Debug, Clone, Copy)]
 pub enum InputProtocolKind {
     Rtp,
+    RtmpServer,
     Mp4,
     Hls,
     Whip,

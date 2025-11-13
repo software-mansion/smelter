@@ -4569,6 +4569,7 @@ dependencies = [
  "ffmpeg-next",
  "glyphon",
  "itertools 0.14.0",
+ "libc",
  "mp4",
  "opus",
  "pollster",

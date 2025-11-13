@@ -42,6 +42,7 @@ urlencoding = "2.1.3"
 itertools = { workspace = true }
 uuid = "1.17.0"
 pollster = { workspace = true }
+libc = { workspace = true }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 decklink = { path = "../decklink", optional = true }
