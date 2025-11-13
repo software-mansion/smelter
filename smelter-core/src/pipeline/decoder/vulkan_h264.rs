@@ -3,9 +3,8 @@ use std::{sync::Arc, time::Duration};
 use smelter_render::{Frame, FrameData, Resolution};
 use tracing::{debug, info, warn};
 use vk_video::{
-    DecoderError, WgpuTexturesDecoder,
+    DecoderError, ReferenceManagementError, WgpuTexturesDecoder,
     parameters::{DecoderParameters, DecoderUsageFlags, MissedFrameHandling},
-    parser::ReferenceManagementError,
 };
 
 use crate::pipeline::decoder::{VideoDecoder, VideoDecoderInstance};

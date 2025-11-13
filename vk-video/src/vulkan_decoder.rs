@@ -9,7 +9,10 @@ use tracing::error;
 use crate::{
     RawFrameData,
     device::DecodingDevice,
-    parser::{DecodeInformation, DecoderInstruction, ReferenceId},
+    parser::{
+        decoder_instructions::DecoderInstruction,
+        reference_manager::{DecodeInformation, ReferenceId},
+    },
 };
 use crate::{VulkanCommonError, wrappers::*};
 

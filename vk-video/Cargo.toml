@@ -17,7 +17,6 @@ keywords = ["vulkan", "video", "wgpu", "decoding", "h264"]
 vk_api_dump = []
 
 [dependencies]
-ash = "0.38.0"
 bytes = "1"
 derivative = "2.2.0"
 h264-reader = { workspace = true }
@@ -25,8 +24,13 @@ memchr = "2.7.4"
 rustc-hash = "2.1.1"
 thiserror = "1.0.59"
 tracing = "0.1.40"
-vk-mem = "0.4.0"
 wgpu =  "25.0.2"
+
+# Platforms that support vulkan are: windows and all non-apple unixes. emscripten is a web-based platform, where vulkan is not available either
+[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies]
+ash = "0.38.0"
+vk-mem = "0.4.0"
+
 
 [dev-dependencies]
 bytemuck = { version = "1.19.0", features = ["derive"] }

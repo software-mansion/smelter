@@ -111,9 +111,8 @@ regex = { workspace = true }
 shared_memory = { workspace = true }
 libcef = { workspace = true, optional = true }
 
-# platforms that support vulkan are: windows and all non-apple unixes. emscripten is a web-based platform, where vulkan is not available either
+# Platforms that support vulkan are: windows and all non-apple unixes. emscripten is a web-based platform, where vulkan is not available either
 [target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies]
-smelter-api = { workspace = true, features = ["vk-video"] }
 smelter-core = { workspace = true, features = ["vk-video"] }
 
 [[bin]]

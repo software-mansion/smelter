@@ -123,6 +123,8 @@ impl NalReceiver {
     }
 }
 
+// It's not used if compiled on macOS, so it's reported as a dead code
+#[allow(dead_code)]
 pub(crate) trait SpsExt {
     fn max_frame_num(&self) -> i64;
 }

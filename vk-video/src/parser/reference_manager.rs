@@ -6,12 +6,9 @@ use h264_reader::nal::{
     sps::SeqParameterSet,
 };
 
-use crate::parameters::MissedFrameHandling;
+use crate::{parameters::MissedFrameHandling, parser::decoder_instructions::DecoderInstruction};
 
-use super::{
-    DecodeInformation, DecoderInstruction, PictureInfo, ReferencePictureInfo,
-    nalu_parser::{Slice, SpsExt},
-};
+use super::nalu_parser::{Slice, SpsExt};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReferenceManagementError {
@@ -32,7 +29,7 @@ pub enum ReferenceManagementError {
 }
 
 #[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ReferenceId(usize);
+pub(crate) struct ReferenceId(usize);
 
 #[derive(Debug, Default)]
 #[allow(non_snake_case)]
@@ -790,4 +787,40 @@ impl SliceHeaderExt for SliceHeader {
             .iter()
             .any(|mmco| matches!(mmco, MemoryManagementControlOperation::AllRefPicturesUnused))
     }
+}
+
+#[derive(Clone, derivative::Derivative)]
+#[derivative(Debug)]
+#[allow(non_snake_case)]
+pub(crate) struct DecodeInformation {
+    pub(crate) reference_list: Option<Vec<ReferencePictureInfo>>,
+    #[derivative(Debug = "ignore")]
+    pub(crate) rbsp_bytes: Vec<u8>,
+    pub(crate) slice_indices: Vec<usize>,
+    #[derivative(Debug = "ignore")]
+    pub(crate) header: Arc<SliceHeader>,
+    pub(crate) sps_id: u8,
+    pub(crate) pps_id: u8,
+    pub(crate) picture_info: PictureInfo,
+    pub(crate) pts: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[allow(non_snake_case)]
+pub(crate) struct ReferencePictureInfo {
+    pub(crate) id: ReferenceId,
+    pub(crate) LongTermPicNum: Option<u64>,
+    pub(crate) non_existing: bool,
+    pub(crate) FrameNum: u16,
+    pub(crate) PicOrderCnt: [i32; 2],
+}
+
+#[derive(Debug, Clone, Copy)]
+#[allow(non_snake_case)]
+pub(crate) struct PictureInfo {
+    pub(crate) used_for_long_term_reference: bool,
+    pub(crate) non_existing: bool,
+    pub(crate) FrameNum: u16,
+    pub(crate) PicOrderCnt_for_decoding: [i32; 2],
+    pub(crate) PicOrderCnt_as_reference_pic: [i32; 2],
 }

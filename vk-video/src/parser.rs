@@ -1,15 +1,11 @@
-use std::sync::Arc;
-
-use crate::parser::h264::{AccessUnit, ParsedNalu};
-use h264_reader::nal::{pps::PicParameterSet, slice::SliceHeader, sps::SeqParameterSet};
-
-pub use reference_manager::ReferenceManagementError;
-pub(crate) use reference_manager::{ReferenceContext, ReferenceId};
-
 mod au_splitter;
 mod nalu_parser;
 mod nalu_splitter;
-mod reference_manager;
+
+#[cfg(vulkan)]
+pub(crate) mod decoder_instructions;
+#[cfg(vulkan)]
+pub(crate) mod reference_manager;
 
 pub mod h264 {
     use super::au_splitter::AUSplitter;
@@ -99,92 +95,4 @@ pub mod h264 {
             Ok(access_units)
         }
     }
-}
-
-#[derive(Clone, derivative::Derivative)]
-#[derivative(Debug)]
-#[allow(non_snake_case)]
-pub(crate) struct DecodeInformation {
-    pub(crate) reference_list: Option<Vec<ReferencePictureInfo>>,
-    #[derivative(Debug = "ignore")]
-    pub(crate) rbsp_bytes: Vec<u8>,
-    pub(crate) slice_indices: Vec<usize>,
-    #[derivative(Debug = "ignore")]
-    pub(crate) header: Arc<SliceHeader>,
-    pub(crate) sps_id: u8,
-    pub(crate) pps_id: u8,
-    pub(crate) picture_info: PictureInfo,
-    pub(crate) pts: Option<u64>,
-}
-
-#[derive(Debug, Clone, Copy)]
-#[allow(non_snake_case)]
-pub(crate) struct ReferencePictureInfo {
-    pub(crate) id: ReferenceId,
-    pub(crate) LongTermPicNum: Option<u64>,
-    pub(crate) non_existing: bool,
-    pub(crate) FrameNum: u16,
-    pub(crate) PicOrderCnt: [i32; 2],
-}
-
-#[derive(Debug, Clone, Copy)]
-#[allow(non_snake_case)]
-pub(crate) struct PictureInfo {
-    pub(crate) used_for_long_term_reference: bool,
-    pub(crate) non_existing: bool,
-    pub(crate) FrameNum: u16,
-    pub(crate) PicOrderCnt_for_decoding: [i32; 2],
-    pub(crate) PicOrderCnt_as_reference_pic: [i32; 2],
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum DecoderInstruction {
-    Decode {
-        decode_info: DecodeInformation,
-        reference_id: ReferenceId,
-    },
-
-    Idr {
-        decode_info: DecodeInformation,
-        reference_id: ReferenceId,
-    },
-
-    Drop {
-        reference_ids: Vec<ReferenceId>,
-    },
-
-    Sps(SeqParameterSet),
-
-    Pps(PicParameterSet),
-}
-
-pub(crate) fn compile_to_decoder_instructions(
-    reference_ctx: &mut ReferenceContext,
-    access_units: Vec<AccessUnit>,
-) -> Result<Vec<DecoderInstruction>, ReferenceManagementError> {
-    let mut instructions = Vec::new();
-    for AccessUnit(nalus) in access_units {
-        let mut slices = Vec::new();
-        for nalu in nalus {
-            match nalu.parsed {
-                ParsedNalu::Sps(seq_parameter_set) => {
-                    instructions.push(DecoderInstruction::Sps(seq_parameter_set))
-                }
-                ParsedNalu::Pps(pic_parameter_set) => {
-                    instructions.push(DecoderInstruction::Pps(pic_parameter_set))
-                }
-                ParsedNalu::Slice(slice) => {
-                    slices.push((slice, nalu.pts));
-                }
-
-                ParsedNalu::Other(_) => {}
-            }
-        }
-
-        // TODO: warn when not all pts are equal here
-        let mut inst = reference_ctx.put_picture(slices)?;
-        instructions.append(&mut inst);
-    }
-
-    Ok(instructions)
 }
