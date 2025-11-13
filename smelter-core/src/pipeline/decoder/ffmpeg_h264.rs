@@ -2,6 +2,7 @@ use std::{iter, sync::Arc};
 
 use crate::pipeline::decoder::{
     KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
+    au_splitter::AUSplitter,
     ffmpeg_utils::{create_av_packet, from_av_frame},
 };
 use crate::prelude::*;
@@ -12,7 +13,7 @@ use ffmpeg_next::{
     media::Type,
 };
 use smelter_render::Frame;
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 const TIME_BASE: i32 = 1_000_000;
 
@@ -20,6 +21,7 @@ pub struct FfmpegH264Decoder {
     decoder: ffmpeg_next::decoder::Opened,
     keyframe_request_sender: Option<KeyframeRequestSender>,
     av_frame: ffmpeg_next::frame::Video,
+    au_splitter: AUSplitter,
 }
 
 impl VideoDecoder for FfmpegH264Decoder {
@@ -49,6 +51,7 @@ impl VideoDecoder for FfmpegH264Decoder {
             decoder,
             keyframe_request_sender,
             av_frame: ffmpeg_next::frame::Video::empty(),
+            au_splitter: AUSplitter::default(),
         })
     }
 }
@@ -56,25 +59,35 @@ impl VideoDecoder for FfmpegH264Decoder {
 impl VideoDecoderInstance for FfmpegH264Decoder {
     fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame> {
         trace!(?chunk, "H264 decoder received a chunk.");
-        let av_packet = match create_av_packet(chunk, VideoCodec::H264, TIME_BASE) {
-            Ok(packet) => packet,
+        let chunks = match self.au_splitter.put_chunk(chunk) {
+            Ok(chunks) => chunks,
             Err(err) => {
-                warn!("Dropping frame: {}", err);
+                if let Some(s) = self.keyframe_request_sender.as_ref() {
+                    s.send()
+                }
+                debug!("H264 AU splitter could not process the chunks: {err}");
                 return Vec::new();
             }
         };
 
-        match self.decoder.send_packet(&av_packet) {
-            Ok(()) => {}
-            Err(e) => {
-                // TODO: move to parser
-                if let Some(s) = self.keyframe_request_sender.as_ref() {
-                    s.send()
+        for chunk in chunks {
+            let av_packet = match create_av_packet(chunk, VideoCodec::H264, TIME_BASE) {
+                Ok(packet) => packet,
+                Err(err) => {
+                    warn!("Dropping frame: {}", err);
+                    continue;
                 }
-                warn!("Failed to send a packet to decoder: {:?}", e);
-                return Vec::new();
+            };
+
+            match self.decoder.send_packet(&av_packet) {
+                Ok(()) => {}
+                Err(e) => {
+                    warn!("Failed to send a packet to decoder: {:?}", e);
+                    continue;
+                }
             }
         }
+
         self.read_all_frames()
     }
 

@@ -39,7 +39,7 @@ pub fn new_depayloader(options: DepayloaderOptions) -> Box<dyn Depayloader> {
     info!(?options, "Initialize RTP depayloader");
     match options {
         DepayloaderOptions::H264 => {
-            BufferedDepayloader::<H264Packet>::new_boxed(MediaKind::Video(VideoCodec::H264))
+            SimpleDepayloader::<H264Packet>::new_boxed(MediaKind::Video(VideoCodec::H264))
         }
         DepayloaderOptions::Vp8 => {
             BufferedDepayloader::<Vp8Packet>::new_boxed(MediaKind::Video(VideoCodec::Vp8))
@@ -134,6 +134,10 @@ impl<T: Depacketizer + Default + 'static> Depayloader for SimpleDepayloader<T> {
     ) -> Result<Vec<EncodedInputChunk>, DepayloadingError> {
         trace!(?packet, "RTP depayloader received new packet");
         let data = self.depayloader.depacketize(&packet.packet.payload)?;
+        if data.is_empty() {
+            return Ok(vec![]);
+        }
+
         let chunk = EncodedInputChunk {
             data,
             pts: packet.timestamp,
