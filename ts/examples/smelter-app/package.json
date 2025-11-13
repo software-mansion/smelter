@@ -13,8 +13,8 @@
   "dependencies": {
     "@fastify/type-provider-typebox": "^5.2.0",
     "@sinclair/typebox": "^0.34.38",
-    "@swmansion/smelter": "workspace:^0.2.1",
-    "@swmansion/smelter-node": "workspace:^0.2.1",
+    "@swmansion/smelter": "workspace:^0.3.0-rc.0",
+    "@swmansion/smelter-node": "workspace:^0.3.0-rc.0",
     "@types/fs-extra": "^11.0.4",
     "fastify": "^5.4.0",
     "fs-extra": "^11.2.0",

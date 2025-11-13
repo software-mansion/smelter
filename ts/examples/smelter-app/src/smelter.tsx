@@ -8,7 +8,6 @@ import { createRoomStore } from './app/store';
 import { config } from './config';
 import fs from 'fs-extra';
 import shadersController from './shaders/shaders';
-import type { RegisterWhipServerInputResponse } from '@swmansion/smelter-node/dist/api';
 
 export type SmelterOutput = {
   id: string;

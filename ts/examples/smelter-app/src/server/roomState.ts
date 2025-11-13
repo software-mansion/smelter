@@ -145,7 +145,7 @@ export class RoomState {
       shaders: [],
       monitor: monitor,
       metadata: {
-        title: `[Whip] ${username}`,
+        title: `[Camera] ${username}`,
         description: `Whip Input for ${username}`,
       },
       volume: 0,

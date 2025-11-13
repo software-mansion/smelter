@@ -175,7 +175,8 @@ routes.post<RoomIdParams & { Body: Static<typeof AddInputSchema> }>(
     if (inputId) {
       bearerToken = await room.connectInput(inputId);
     }
-    res.status(200).send({ inputId, bearerToken });
+    let whipUrl = `${config.whipBaseUrl}/${inputId}`;
+    res.status(200).send({ inputId, bearerToken, whipUrl });
   }
 );
 
