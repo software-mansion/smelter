@@ -185,9 +185,8 @@ impl WhepInputBuilder {
             println!("4. Start streaming and press 'Connect to stream'.");
             println!("5. In dev tools search for the request named 'whep' using POST method.");
             println!(
-                "6. In 'Request headers' section search for 'Authorization header' and use it's value as a bearer token."
+                "6. In 'Request headers' section find 'Authorization' header and copy a token from there."
             );
-            println!("   - Do not copy the 'Bearer' word.");
         }
         let token_input = Text::new("Enter the WHEP bearer token. (ESC for 'example'):")
             .with_initial_value(&env_token)
