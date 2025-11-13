@@ -74,16 +74,18 @@ impl WhepOutput {
 
 pub struct WhepOutputBuilder {
     name: String,
-    bearer_token: Option<String>,
+    bearer_token: String,
     video: Option<WhepOutputVideoOptions>,
     audio: Option<WhepOutputAudioOptions>,
 }
 
 impl WhepOutputBuilder {
     pub fn new() -> Self {
+        let name = Self::generate_name();
+        let bearer_token = "example".to_string();
         Self {
-            name: "".to_string(),
-            bearer_token: None,
+            name,
+            bearer_token,
             video: None,
             audio: None,
         }
@@ -100,7 +102,7 @@ impl WhepOutputBuilder {
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
 
-        builder = builder.prompt_name()?.prompt_token()?;
+        builder = builder.prompt_name()?.prompt_bearer_token()?;
 
         loop {
             builder = builder.prompt_video()?.prompt_audio()?;
@@ -120,22 +122,20 @@ impl WhepOutputBuilder {
 
         match name_input {
             Some(name) if !name.trim().is_empty() => Ok(self.with_name(name)),
-            None | Some(_) => Ok(self.with_name(WhepOutputBuilder::generate_name())),
+            None | Some(_) => Ok(self),
         }
     }
 
-    fn prompt_token(self) -> Result<Self> {
+    fn prompt_bearer_token(self) -> Result<Self> {
         let env_token = env::var(WHEP_TOKEN_ENV).unwrap_or_default();
-        let default_token = "example";
         let endpoint_token_input =
-            Text::new("Enter the WHEP endpoint bearer token (ESC for default):")
-                .with_default(default_token)
+            Text::new("Enter the WHEP endpoint bearer token (ESC for \"example\"):")
                 .with_initial_value(&env_token)
                 .prompt_skippable()?;
 
         match endpoint_token_input {
             Some(token) => Ok(self.with_bearer_token(token)),
-            None => Ok(self.with_bearer_token(default_token.to_string())),
+            None => Ok(self),
         }
     }
 
@@ -207,14 +207,14 @@ impl WhepOutputBuilder {
     }
 
     pub fn with_bearer_token(mut self, token: String) -> Self {
-        self.bearer_token = Some(token);
+        self.bearer_token = token;
         self
     }
 
     pub fn build(self) -> WhepOutput {
         WhepOutput {
             name: self.name,
-            bearer_token: self.bearer_token.unwrap(),
+            bearer_token: self.bearer_token,
             video: self.video,
             audio: self.audio,
         }

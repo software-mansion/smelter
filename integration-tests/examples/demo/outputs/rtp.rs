@@ -424,28 +424,26 @@ impl RtpOutputBuilder {
     fn prompt_player(self) -> Result<Self> {
         match self.transport_protocol {
             TransportProtocol::Udp => {
-                let (player_options, default_player) = match (&self.video, &self.audio) {
-                    (Some(_), Some(_)) => (vec![OutputPlayer::Manual], OutputPlayer::Manual),
-                    _ => (OutputPlayer::iter().collect(), OutputPlayer::Gstreamer),
+                let player_options = match (&self.video, &self.audio) {
+                    (Some(_), Some(_)) => vec![OutputPlayer::Manual],
+                    _ => OutputPlayer::iter().collect(),
                 };
-                let player_selection = Select::new(
-                    &format!("Select player (ESC for {default_player}):"),
-                    player_options,
-                )
-                .prompt_skippable()?;
+                let player_selection =
+                    Select::new("Select player (ESC for Manual):", player_options)
+                        .prompt_skippable()?;
                 match player_selection {
                     Some(player) => Ok(self.with_player(player)),
-                    None => Ok(self.with_player(default_player)),
+                    None => Ok(self),
                 }
             }
             TransportProtocol::TcpServer => {
                 let player_options = vec![OutputPlayer::Gstreamer, OutputPlayer::Manual];
                 let player_selection =
-                    Select::new("Select player (ESC for GStreamer):", player_options)
+                    Select::new("Select player (ESC for Manual):", player_options)
                         .prompt_skippable()?;
                 match player_selection {
                     Some(player) => Ok(self.with_player(player)),
-                    None => Ok(self.with_player(OutputPlayer::Gstreamer)),
+                    None => Ok(self),
                 }
             }
         }

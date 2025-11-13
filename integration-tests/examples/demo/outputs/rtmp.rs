@@ -154,7 +154,7 @@ impl RtmpOutputBuilder {
             port,
             video: None,
             audio: None,
-            player: OutputPlayer::Manual,
+            player: OutputPlayer::Ffmpeg,
         }
     }
 
@@ -233,7 +233,7 @@ impl RtmpOutputBuilder {
             Select::new("Select player (ESC for FFmpeg):", player_options).prompt_skippable()?;
         match player_choice {
             Some(player) => Ok(self.with_player(player)),
-            None => Ok(self.with_player(OutputPlayer::Ffmpeg)),
+            None => Ok(self),
         }
     }
 

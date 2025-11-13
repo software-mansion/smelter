@@ -56,18 +56,19 @@ impl HlsInput {
 
 pub struct HlsInputBuilder {
     name: String,
-    url: Option<String>,
-    decoder: Option<VideoDecoder>,
+    url: String,
+    decoder: VideoDecoder,
 }
 
 impl HlsInputBuilder {
     pub fn new() -> Self {
         let suffix = rand::rng().next_u32();
         let name = format!("hls_input_{suffix}");
+        let url = "https://raw.githubusercontent.com/membraneframework/membrane_http_adaptive_stream_plugin/master/test/membrane_http_adaptive_stream/integration_test/fixtures/audio_multiple_video_tracks/index.m3u8".to_string();
         Self {
             name,
-            url: None,
-            decoder: None,
+            url,
+            decoder: VideoDecoder::FfmpegH264,
         }
     }
 
@@ -76,10 +77,9 @@ impl HlsInputBuilder {
     }
 
     fn prompt_url(self) -> Result<Self> {
-        const DEFAULT_URL: &str = "https://raw.githubusercontent.com/membraneframework/membrane_http_adaptive_stream_plugin/master/test/membrane_http_adaptive_stream/integration_test/fixtures/audio_multiple_video_tracks/index.m3u8";
         let env_url = env::var(HLS_INPUT_URL).unwrap_or_default();
         loop {
-            let hls_url = Text::new("HLS input url (ESC for default):")
+            let hls_url = Text::new("HLS input url (ESC for \"Big Buck Bunny\"):")
                 .with_initial_value(&env_url)
                 .prompt_skippable()?;
 
@@ -117,7 +117,7 @@ impl HlsInputBuilder {
                     };
                     return Ok(self.with_url(url.trim().to_string()));
                 }
-                Some(_) | None => return Ok(self.with_url(DEFAULT_URL.to_string())),
+                Some(_) | None => return Ok(self),
             }
         }
     }
@@ -130,24 +130,24 @@ impl HlsInputBuilder {
 
         match decoder_selection {
             Some(decoder) => Ok(self.with_decoder(decoder)),
-            None => Ok(self.with_decoder(VideoDecoder::FfmpegH264)),
+            None => Ok(self),
         }
     }
 
     pub fn with_url(mut self, url: String) -> Self {
-        self.url = Some(url);
+        self.url = url;
         self
     }
 
     pub fn with_decoder(mut self, decoder: VideoDecoder) -> Self {
-        self.decoder = Some(decoder);
+        self.decoder = decoder;
         self
     }
 
     pub fn build(self) -> HlsInput {
         let options = HlsInputOptions {
-            url: self.url.unwrap(),
-            decoder: self.decoder.unwrap(),
+            url: self.url,
+            decoder: self.decoder,
         };
         HlsInput {
             name: self.name,
