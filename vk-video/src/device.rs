@@ -12,7 +12,9 @@ use crate::device::caps::{
     NativeDecodeProfileCapabilities, NativeEncodeCapabilities,
 };
 use crate::device::queues::{Queue, Queues};
-use crate::parameters::{H264Profile, RateControl};
+use crate::parameters::{
+    EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, RateControl,
+};
 use crate::parser::Parser;
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
@@ -72,6 +74,11 @@ pub struct DecoderParameters {
     ///
     /// **Defaults to [`MissedFrameHandling::Strict`]**
     pub missed_frame_handling: MissedFrameHandling,
+
+    /// A hint indicating what kind of content the decoder is going to be used for.
+    ///
+    /// Multiple flags can be combined using the `|` operator to indicate multiple usages.
+    pub usage_flags: crate::parameters::DecoderUsageFlags,
 }
 
 /// Things the encoder needs to know about the video
@@ -100,6 +107,19 @@ pub struct EncoderParameters {
     /// [`EncodeH264ProfileCapabilities::quality_levels`](crate::capabilities::EncodeH264ProfileCapabilities::quality_levels)
     pub quality_level: u32,
     pub video_parameters: VideoParameters,
+
+    /// A hint indicating what the encoded content is going to be used for.
+    ///
+    /// Multiple flags can be combined using the `|` operator to indicate multiple usages.
+    pub usage_flags: Option<EncoderUsageFlags>,
+
+    /// A hint indicating how to tune the encoder implementation.
+    pub tuning_mode: Option<EncoderTuningMode>,
+
+    /// A hint indicating what kind of content the encoder is going to be used for.
+    ///
+    /// Multiple flags can be combined using the `|` operator to indicate multiple usages.
+    pub content_flags: Option<EncoderContentFlags>,
 }
 
 /// Open connection to a coding-capable device. Also contains a [`wgpu::Device`], a [`wgpu::Queue`] and
@@ -322,7 +342,7 @@ impl VulkanDevice {
                 .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?,
         };
 
-        let vulkan_decoder = VulkanDecoder::new(Arc::new(decoding_device))?;
+        let vulkan_decoder = VulkanDecoder::new(Arc::new(decoding_device), parameters.usage_flags)?;
         let frame_sorter = FrameSorter::<wgpu::Texture>::new();
 
         Ok(WgpuTexturesDecoder {
@@ -356,7 +376,7 @@ impl VulkanDevice {
                 .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?,
         };
 
-        let vulkan_decoder = VulkanDecoder::new(Arc::new(decoding_device))?;
+        let vulkan_decoder = VulkanDecoder::new(Arc::new(decoding_device), parameters.usage_flags)?;
         let frame_sorter = FrameSorter::<RawFrameData>::new();
 
         Ok(BytesDecoder {
@@ -448,6 +468,9 @@ impl VulkanDevice {
             max_references: None,
             rate_control,
             quality_level: 0,
+            usage_flags: Some(EncoderUsageFlags::DEFAULT),
+            content_flags: Some(EncoderContentFlags::DEFAULT),
+            tuning_mode: Some(EncoderTuningMode::LOW_LATENCY),
         })
     }
 
@@ -472,6 +495,9 @@ impl VulkanDevice {
                 .encode_capabilities
                 .max_quality_levels
                 - 1,
+            usage_flags: Some(EncoderUsageFlags::DEFAULT),
+            content_flags: Some(EncoderContentFlags::DEFAULT),
+            tuning_mode: Some(EncoderTuningMode::HIGH_QUALITY),
         })
     }
 
@@ -609,6 +635,16 @@ impl VulkanDevice {
             });
         }
 
+        let usage_flags = encoder_parameters
+            .usage_flags
+            .unwrap_or(vk::VideoEncodeUsageFlagsKHR::DEFAULT);
+        let tuning_mode = encoder_parameters
+            .tuning_mode
+            .unwrap_or(vk::VideoEncodeTuningModeKHR::DEFAULT);
+        let content_flags = encoder_parameters
+            .content_flags
+            .unwrap_or(vk::VideoEncodeContentFlagsKHR::DEFAULT);
+
         Ok(FullEncoderParameters {
             idr_period,
             width,
@@ -618,6 +654,9 @@ impl VulkanDevice {
             quality_level: encoder_parameters.quality_level,
             profile: encoder_parameters.profile,
             framerate,
+            usage_flags,
+            tuning_mode,
+            content_flags,
         })
     }
 

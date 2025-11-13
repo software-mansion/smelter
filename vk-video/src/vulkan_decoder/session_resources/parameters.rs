@@ -153,7 +153,7 @@ impl SessionParams<'_> {
             profile_info: cmp::max_by(
                 current_params.profile_info,
                 new_params.profile_info,
-                |p1, p2| p1.profile_idc().cmp(&p2.profile_idc()),
+                |p1, p2| p1.profile_idc.cmp(&p2.profile_idc),
             ),
             level_idc: u8::max(current_params.level_idc, new_params.level_idc),
         }
@@ -163,6 +163,6 @@ impl SessionParams<'_> {
         self.max_coded_extent.width >= new_params.max_coded_extent.width
             && self.max_coded_extent.height >= new_params.max_coded_extent.height
             && self.max_dpb_slots >= new_params.max_dpb_slots
-            && self.profile_info.profile_idc() >= new_params.profile_info.profile_idc()
+            && self.profile_info.profile_idc >= new_params.profile_info.profile_idc
     }
 }

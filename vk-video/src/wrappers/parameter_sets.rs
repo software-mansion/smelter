@@ -462,55 +462,75 @@ fn h264_profile_idc_to_vk(
     }
 }
 
-unsafe impl<'a, T: 'a + vk::ExtendsVideoProfileInfoKHR> Send for ProfileInfo<'a, T> {}
-unsafe impl<'a, T: 'a + vk::ExtendsVideoProfileInfoKHR> Sync for ProfileInfo<'a, T> {}
+unsafe impl<'a> Send for ProfileInfo<'a> {}
+unsafe impl<'a> Sync for ProfileInfo<'a> {}
 
-pub(crate) struct ProfileInfo<'a, T: 'a + vk::ExtendsVideoProfileInfoKHR> {
+pub(crate) struct ProfileInfo<'a> {
     pub(crate) profile_info: vk::VideoProfileInfoKHR<'a>,
-    additional_info_ptr: NonNull<T>,
+    additional_infos_ptr: Vec<NonNull<dyn vk::ExtendsVideoProfileInfoKHR + 'a>>,
 }
 
-impl<'a, T: vk::ExtendsVideoProfileInfoKHR> ProfileInfo<'a, T> {
-    pub(crate) fn new(profile_info: vk::VideoProfileInfoKHR<'a>, additional_info: T) -> Self {
-        let additional_info = Box::leak(Box::new(additional_info));
-        let additional_info_ptr = NonNull::from(&mut *additional_info);
-        let profile_info = profile_info.push_next(additional_info);
+impl<'a> ProfileInfo<'a> {
+    pub(crate) fn new(
+        mut profile_info: vk::VideoProfileInfoKHR<'a>,
+        additional_info: Vec<Box<dyn vk::ExtendsVideoProfileInfoKHR + 'a>>,
+    ) -> Self {
+        let (refs, ptrs) = additional_info
+            .into_iter()
+            .map(|i| {
+                let r = Box::leak(i);
+                let p = NonNull::from(&mut *r);
+                (r, p)
+            })
+            .unzip::<_, _, Vec<_>, Vec<_>>();
+
+        for r in refs {
+            profile_info = profile_info.push_next(r);
+        }
 
         Self {
             profile_info,
-            additional_info_ptr,
+            additional_infos_ptr: ptrs,
         }
     }
 }
 
-impl<T: vk::ExtendsVideoProfileInfoKHR> Drop for ProfileInfo<'_, T> {
+impl Drop for ProfileInfo<'_> {
     fn drop(&mut self) {
         unsafe {
-            let _ = Box::from_raw(self.additional_info_ptr.as_ptr());
+            for ptr in self.additional_infos_ptr.drain(..) {
+                let _ = Box::from_raw(ptr.as_ptr());
+            }
         }
     }
 }
 
-pub(crate) type H264DecodeProfileInfo<'a> = ProfileInfo<'a, vk::VideoDecodeH264ProfileInfoKHR<'a>>;
+pub(crate) struct H264DecodeProfileInfo<'a> {
+    pub(crate) profile_info: ProfileInfo<'a>,
+    pub(crate) profile_idc: vk::native::StdVideoH264ProfileIdc,
+    pub(crate) picture_layout: vk::VideoDecodeH264PictureLayoutFlagsKHR,
+}
 
 impl PartialEq for H264DecodeProfileInfo<'_> {
     fn eq(&self, other: &Self) -> bool {
-        unsafe {
-            other.profile_info.chroma_subsampling == self.profile_info.chroma_subsampling
-                && other.profile_info.luma_bit_depth == self.profile_info.luma_bit_depth
-                && other.profile_info.chroma_bit_depth == self.profile_info.chroma_bit_depth
-                && (*other.additional_info_ptr.as_ptr()).std_profile_idc
-                    == (*self.additional_info_ptr.as_ptr()).std_profile_idc
-                && (*other.additional_info_ptr.as_ptr()).picture_layout
-                    == (*self.additional_info_ptr.as_ptr()).picture_layout
-        }
+        other.profile_info.profile_info.chroma_subsampling
+            == self.profile_info.profile_info.chroma_subsampling
+            && other.profile_info.profile_info.luma_bit_depth
+                == self.profile_info.profile_info.luma_bit_depth
+            && other.profile_info.profile_info.chroma_bit_depth
+                == self.profile_info.profile_info.chroma_bit_depth
+            && other.profile_idc == self.profile_idc
+            && other.picture_layout == self.picture_layout
     }
 }
 
 impl Eq for H264DecodeProfileInfo<'_> {}
 
-impl H264DecodeProfileInfo<'_> {
-    pub(crate) fn from_sps_decode(sps: &SeqParameterSet) -> Result<Self, VulkanDecoderError> {
+impl<'a> H264DecodeProfileInfo<'a> {
+    pub(crate) fn from_sps_decode(
+        sps: &SeqParameterSet,
+        decode_usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
+    ) -> Result<Self, VulkanDecoderError> {
         let profile_idc = h264_profile_idc_to_vk(sps.profile());
 
         if profile_idc == vk::native::StdVideoH264ProfileIdc_STD_VIDEO_H264_PROFILE_IDC_INVALID {
@@ -519,9 +539,16 @@ impl H264DecodeProfileInfo<'_> {
             ));
         }
 
+        let picture_layout = vk::VideoDecodeH264PictureLayoutFlagsKHR::PROGRESSIVE;
+
         let h264_profile_info = vk::VideoDecodeH264ProfileInfoKHR::default()
             .std_profile_idc(profile_idc)
-            .picture_layout(vk::VideoDecodeH264PictureLayoutFlagsKHR::PROGRESSIVE);
+            .picture_layout(picture_layout);
+
+        let h264_profile_info: Box<dyn vk::ExtendsVideoProfileInfoKHR> =
+            Box::new(h264_profile_info);
+        let decode_usage_info: Box<dyn vk::ExtendsVideoProfileInfoKHR> =
+            Box::new(decode_usage_info);
 
         let chroma_subsampling = match sps.chroma_info.chroma_format {
             h264_reader::nal::sps::ChromaFormat::YUV420 => {
@@ -562,11 +589,14 @@ impl H264DecodeProfileInfo<'_> {
             .luma_bit_depth(luma_bit_depth)
             .chroma_bit_depth(chroma_bit_depth);
 
-        Ok(ProfileInfo::new(profile_info, h264_profile_info))
-    }
-
-    pub(crate) fn profile_idc(&self) -> vk::native::StdVideoH264ProfileIdc {
-        unsafe { self.additional_info_ptr.as_ref().std_profile_idc }
+        Ok(Self {
+            profile_info: ProfileInfo::new(
+                profile_info,
+                vec![h264_profile_info, decode_usage_info],
+            ),
+            profile_idc,
+            picture_layout,
+        })
     }
 }
 

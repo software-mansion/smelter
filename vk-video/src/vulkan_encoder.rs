@@ -158,12 +158,12 @@ impl VideoSessionResources<'_> {
     }
 }
 
-pub(crate) type H264EncodeProfileInfo<'a> = ProfileInfo<'a, vk::VideoEncodeH264ProfileInfoKHR<'a>>;
+pub(crate) type H264EncodeProfileInfo<'a> = ProfileInfo<'a>;
 
 impl H264EncodeProfileInfo<'_> {
-    pub(crate) fn new_encode(profile: H264Profile) -> Self {
-        let h264_profile =
-            vk::VideoEncodeH264ProfileInfoKHR::default().std_profile_idc(profile.to_profile_idc());
+    pub(crate) fn new_encode(parameters: &FullEncoderParameters) -> Self {
+        let h264_profile = vk::VideoEncodeH264ProfileInfoKHR::default()
+            .std_profile_idc(parameters.profile.to_profile_idc());
 
         let profile = vk::VideoProfileInfoKHR::default()
             .video_codec_operation(vk::VideoCodecOperationFlagsKHR::ENCODE_H264)
@@ -171,7 +171,16 @@ impl H264EncodeProfileInfo<'_> {
             .luma_bit_depth(vk::VideoComponentBitDepthFlagsKHR::TYPE_8)
             .chroma_bit_depth(vk::VideoComponentBitDepthFlagsKHR::TYPE_8);
 
-        ProfileInfo::new(profile, h264_profile)
+        let h264_profile = Box::new(h264_profile);
+
+        let usage_info = vk::VideoEncodeUsageInfoKHR::default()
+            .video_usage_hints(parameters.usage_flags)
+            .tuning_mode(parameters.tuning_mode)
+            .video_content_hints(parameters.content_flags);
+
+        let usage_info = Box::new(usage_info);
+
+        ProfileInfo::new(profile, vec![h264_profile, usage_info])
     }
 }
 
@@ -320,6 +329,9 @@ pub struct FullEncoderParameters {
     pub(crate) profile: H264Profile,
     pub(crate) quality_level: u32,
     pub(crate) framerate: Rational,
+    pub(crate) usage_flags: vk::VideoEncodeUsageFlagsKHR,
+    pub(crate) tuning_mode: vk::VideoEncodeTuningModeKHR,
+    pub(crate) content_flags: vk::VideoEncodeContentFlagsKHR,
 }
 
 impl VulkanEncoder<'_> {
@@ -349,7 +361,7 @@ impl VulkanEncoder<'_> {
         encoding_device: Arc<EncodingDevice>,
         parameters: FullEncoderParameters,
     ) -> Result<Self, VulkanEncoderError> {
-        let profile_info = H264EncodeProfileInfo::new_encode(parameters.profile);
+        let profile_info = H264EncodeProfileInfo::new_encode(&parameters);
 
         let command_buffer_pools = EncoderCommandBufferPools::new(&encoding_device)?;
         let mut tracker =
