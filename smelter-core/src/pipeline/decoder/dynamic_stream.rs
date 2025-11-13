@@ -1,5 +1,6 @@
 use std::{iter, sync::Arc};
 
+use bytes::BytesMut;
 use smelter_render::{Frame, error::ErrorStack};
 use tracing::error;
 
@@ -51,6 +52,8 @@ where
     eos_sent: bool,
     decoders_info: VideoDecoderMapping,
     keyframe_request_sender: KeyframeRequestSender,
+    dump_buffer: BytesMut,
+    chunks_received: usize,
 }
 
 impl<Source> DynamicVideoDecoderStream<Source>
@@ -71,6 +74,8 @@ where
             eos_sent: false,
             decoders_info,
             keyframe_request_sender,
+            dump_buffer: BytesMut::new(),
+            chunks_received: 0,
         }
     }
 
@@ -130,6 +135,17 @@ where
             Some(PipelineEvent::Data(samples)) => {
                 // TODO: flush on decoder change
                 self.ensure_decoder(samples.kind);
+                match samples.kind {
+                    MediaKind::Video(VideoCodec::H264) => {}
+                    _ => panic!("Wrong codec"),
+                }
+                self.dump_buffer.extend(samples.data.iter());
+                self.chunks_received += 1;
+                if self.chunks_received >= 100 {
+                    std::fs::write("dump.h264", &self.dump_buffer).unwrap();
+                    panic!("Done");
+                }
+
                 let decoder = self.decoder.as_mut()?;
                 let chunks = decoder.decode(samples);
                 // TODO: add better detection
