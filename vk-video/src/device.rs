@@ -15,7 +15,7 @@ use crate::device::queues::{Queue, Queues};
 use crate::parameters::{
     EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, RateControl,
 };
-use crate::parser::Parser;
+use crate::parser::{H264NaluProcessor, H264Parser};
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 use crate::{
@@ -318,6 +318,7 @@ impl VulkanDevice {
         })
     }
 
+    // TODO: Create (or modify this) function which would accept parsed nalu
     pub fn create_wgpu_textures_decoder(
         self: &Arc<Self>,
         parameters: DecoderParameters,
@@ -328,7 +329,8 @@ impl VulkanDevice {
             .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
         let max_profile = decode_caps.max_profile();
 
-        let parser = Parser::new(parameters.missed_frame_handling);
+        let parser = H264Parser::default();
+        let nalu_processor = H264NaluProcessor::new(parameters.missed_frame_handling);
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
             h264_decode_queue: self
@@ -347,11 +349,13 @@ impl VulkanDevice {
 
         Ok(WgpuTexturesDecoder {
             parser,
+            nalu_processor,
             vulkan_decoder,
             frame_sorter,
         })
     }
 
+    // TODO: Create (or modify this) function which would accept parsed nalu
     pub fn create_bytes_decoder(
         self: &Arc<Self>,
         parameters: DecoderParameters,
@@ -362,7 +366,8 @@ impl VulkanDevice {
             .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?;
         let max_profile = decode_caps.max_profile();
 
-        let parser = Parser::new(parameters.missed_frame_handling);
+        let parser = H264Parser::default();
+        let nalu_processor = H264NaluProcessor::new(parameters.missed_frame_handling);
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
             h264_decode_queue: self
@@ -381,6 +386,7 @@ impl VulkanDevice {
 
         Ok(BytesDecoder {
             parser,
+            nalu_processor,
             vulkan_decoder,
             frame_sorter,
         })

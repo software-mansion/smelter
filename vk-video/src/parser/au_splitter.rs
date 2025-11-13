@@ -1,20 +1,16 @@
 use h264_reader::nal::slice::PicOrderCountLsb;
 
-use crate::parser::nalu_parser::ParsedNalu;
+use crate::parser::{Nalu, nalu_parser::ParsedNalu};
 
 use super::nalu_parser::Slice;
 
 #[derive(Default)]
 pub(crate) struct AUSplitter {
-    buffered_nals: Vec<(ParsedNalu, Option<u64>)>,
+    buffered_nals: Vec<Nalu>,
 }
 
 impl AUSplitter {
-    pub(crate) fn put_nalu(
-        &mut self,
-        nalu: ParsedNalu,
-        pts: Option<u64>,
-    ) -> Option<Vec<(ParsedNalu, Option<u64>)>> {
+    pub(crate) fn put_nalu(&mut self, nalu: Nalu) -> Option<AccessUnit> {
         if self.is_new_au(&nalu) {
             // retain frames at the back until you hit the previous slice
             let i = self
@@ -22,31 +18,38 @@ impl AUSplitter {
                 .iter()
                 .enumerate()
                 .rev()
-                .find(|(_, (nalu, _))| matches!(nalu, ParsedNalu::Slice(_)))
+                .find(|(_, nalu)| matches!(nalu.parsed, ParsedNalu::Slice(_)))
                 .map(|(i, _)| i);
             let au = match i {
                 Some(i) => self.buffered_nals.drain(..=i).collect::<Vec<_>>(),
                 None => Vec::new(),
             };
-            self.buffered_nals.push((nalu, pts));
-            if !au.is_empty() { Some(au) } else { None }
+            self.buffered_nals.push(nalu);
+            if !au.is_empty() {
+                Some(AccessUnit(au))
+            } else {
+                None
+            }
         } else {
-            self.buffered_nals.push((nalu, pts));
+            self.buffered_nals.push(nalu);
             None
         }
     }
 
     /// returns `true` if `slice` is a first slice in an Access Unit
-    fn is_new_au(&self, nalu: &ParsedNalu) -> bool {
-        let ParsedNalu::Slice(slice) = nalu else {
+    fn is_new_au(&self, nalu: &Nalu) -> bool {
+        let ParsedNalu::Slice(slice) = &nalu.parsed else {
             return false;
         };
 
-        let Some((ParsedNalu::Slice(last), _)) = self
+        let Some(Nalu {
+            parsed: ParsedNalu::Slice(last),
+            ..
+        }) = self
             .buffered_nals
             .iter()
             .rev()
-            .find(|(nalu, _)| matches!(nalu, ParsedNalu::Slice(_)))
+            .find(|nalu| matches!(nalu.parsed, ParsedNalu::Slice(_)))
         else {
             return true;
         };
@@ -152,3 +155,6 @@ fn idrs_where_idr_pic_id_differs(last: &Slice, curr: &Slice) -> bool {
         _ => false,
     }
 }
+
+// TODO: Docs
+pub struct AccessUnit(pub Vec<Nalu>);

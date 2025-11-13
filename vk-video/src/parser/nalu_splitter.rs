@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use bytes::{BufMut, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use memchr::memmem::Finder;
 
 #[derive(Debug, Default)]
@@ -36,7 +36,7 @@ impl NALUSplitter {
         &mut self,
         bytestream: &[u8],
         pts: Option<u64>,
-    ) -> Vec<(Vec<u8>, Option<u64>)> {
+    ) -> Vec<(Bytes, Option<u64>)> {
         let mut output_pts = if self.buffer.is_empty() {
             pts
         } else {
@@ -49,7 +49,7 @@ impl NALUSplitter {
         while let Some(i) = find_start_of_next_nalu(&self.buffer[self.previous_search_end..]) {
             let nalu = self.buffer.split_to(self.previous_search_end + i);
             self.previous_search_end = 0;
-            result.push((nalu.to_vec(), output_pts));
+            result.push((nalu.freeze(), output_pts));
             output_pts = pts;
         }
 

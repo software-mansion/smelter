@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, mpsc},
 };
 
+use bytes::Bytes;
 use h264_reader::{
     Context,
     nal::{Nal, RefNal, pps::PicParameterSet, slice::SliceHeader, sps::SeqParameterSet},
@@ -133,6 +134,7 @@ impl SpsExt for SeqParameterSet {
     }
 }
 
+// TODO: Document this because now it's a public type
 #[derive(Debug)]
 // one variant of this enum is only ever printed out in debug mode, but clippy detects this as it not being
 // used.
@@ -142,6 +144,13 @@ pub enum ParsedNalu {
     Pps(PicParameterSet),
     Slice(Slice),
     Other(String),
+}
+
+// TODO: Document this because now it's a public type
+pub struct Nalu {
+    pub parsed: ParsedNalu,
+    pub raw: Bytes,
+    pub pts: Option<u64>,
 }
 
 #[derive(derivative::Derivative)]

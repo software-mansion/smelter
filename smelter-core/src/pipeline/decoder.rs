@@ -18,6 +18,7 @@ pub(super) use dynamic_stream::{
 };
 pub(super) use static_stream::{AudioDecoderStream, VideoDecoderStream};
 
+mod au_splitter;
 mod ffmpeg_utils;
 
 pub mod ffmpeg_h264;

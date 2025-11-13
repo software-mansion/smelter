@@ -6,7 +6,7 @@ use h264_reader::{
     nal::{pps::PicParameterSet, slice::SliceHeader, sps::SeqParameterSet},
     push::NalAccumulator,
 };
-use nalu_parser::{NalReceiver, ParsedNalu};
+use nalu_parser::NalReceiver;
 use nalu_splitter::NALUSplitter;
 use reference_manager::ReferenceContext;
 
@@ -14,6 +14,9 @@ pub(crate) use reference_manager::ReferenceId;
 pub use reference_manager::ReferenceManagementError;
 
 use crate::parameters::MissedFrameHandling;
+
+pub use au_splitter::AccessUnit;
+pub use nalu_parser::{Nalu, ParsedNalu};
 
 mod au_splitter;
 mod nalu_parser;
@@ -101,52 +104,86 @@ pub enum ParserError {
     SliceParseError(h264_reader::nal::slice::SliceHeaderError),
 }
 
-pub struct Parser {
+// TODO: This is a public API now, document it
+pub struct H264Parser {
     reader: AnnexBReader<NalAccumulator<NalReceiver>>,
-    reference_ctx: ReferenceContext,
-    au_splitter: AUSplitter,
     receiver: mpsc::Receiver<Result<ParsedNalu, ParserError>>,
     nalu_splitter: NALUSplitter,
+    au_splitter: AUSplitter,
 }
 
-impl Parser {
-    pub fn new(missed_frame_handling: MissedFrameHandling) -> Self {
+impl Default for H264Parser {
+    fn default() -> Self {
         let (tx, rx) = mpsc::channel();
 
-        Parser {
+        H264Parser {
             reader: AnnexBReader::accumulate(NalReceiver::new(tx)),
-            reference_ctx: ReferenceContext::new(missed_frame_handling),
-            au_splitter: AUSplitter::default(),
             receiver: rx,
             nalu_splitter: NALUSplitter::default(),
+            au_splitter: AUSplitter::default(),
         }
     }
+}
 
+impl H264Parser {
+    // TODO: This is a public API now, document it
     pub fn parse(
         &mut self,
         bytes: &[u8],
         pts: Option<u64>,
-    ) -> Result<Vec<DecoderInstruction>, ParserError> {
+    ) -> Result<Vec<AccessUnit>, ParserError> {
         let nalus = self.nalu_splitter.push(bytes, pts);
         let nalus = nalus
             .into_iter()
-            .map(|(nalu, pts)| {
-                self.reader.push(&nalu);
-                (self.receiver.try_recv().unwrap(), pts)
+            .map(|(nalu_bytes, pts)| {
+                self.reader.push(&nalu_bytes);
+
+                let parsed_nalu = self.receiver.try_recv().unwrap();
+                parsed_nalu.map(|parsed_nalu| Nalu {
+                    parsed: parsed_nalu,
+                    raw: nalu_bytes,
+                    pts,
+                })
             })
             .collect::<Vec<_>>();
 
-        let mut instructions = Vec::new();
-        for (nalu, pts) in nalus {
+        let mut access_units = Vec::new();
+        for nalu in nalus {
             let nalu = nalu?;
 
-            let Some(nalus) = self.au_splitter.put_nalu(nalu, pts) else {
+            let Some(au) = self.au_splitter.put_nalu(nalu) else {
                 continue;
             };
 
+            access_units.push(au);
+        }
+
+        Ok(access_units)
+    }
+}
+
+// TODO: Nalu is only h264 abstraction? Maybe drop h264
+pub struct H264NaluProcessor {
+    reference_ctx: ReferenceContext,
+}
+
+impl H264NaluProcessor {
+    pub fn new(missed_frame_handling: MissedFrameHandling) -> Self {
+        Self {
+            reference_ctx: ReferenceContext::new(missed_frame_handling),
+        }
+    }
+
+    // TODO: Don't use ParserError?
+    pub fn process(
+        &mut self,
+        access_units: Vec<AccessUnit>,
+    ) -> Result<Vec<DecoderInstruction>, ParserError> {
+        let mut instructions = Vec::new();
+        for AccessUnit(nalus) in access_units {
             let mut slices = Vec::new();
-            for (nalu, pts) in nalus {
-                match nalu {
+            for nalu in nalus {
+                match nalu.parsed {
                     ParsedNalu::Sps(seq_parameter_set) => {
                         instructions.push(DecoderInstruction::Sps(seq_parameter_set))
                     }
@@ -154,7 +191,7 @@ impl Parser {
                         instructions.push(DecoderInstruction::Pps(pic_parameter_set))
                     }
                     ParsedNalu::Slice(slice) => {
-                        slices.push((slice, pts));
+                        slices.push((slice, nalu.pts));
                     }
 
                     ParsedNalu::Other(_) => {}

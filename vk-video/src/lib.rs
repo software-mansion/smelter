@@ -133,15 +133,18 @@ pub mod parameters {
 }
 
 use ash::vk;
-use parser::Parser;
+use parser::H264NaluProcessor;
 use vulkan_decoder::{FrameSorter, VulkanDecoder};
 
 pub use adapter::VulkanAdapter;
 pub use device::VulkanDevice;
 pub use instance::VulkanInstance;
-pub use parser::{ParserError, ReferenceManagementError};
+pub use parser::{AccessUnit, H264Parser, ParsedNalu, ParserError, ReferenceManagementError};
 pub use vulkan_decoder::VulkanDecoderError;
 pub use vulkan_encoder::VulkanEncoderError;
+
+// TODO:
+pub use h264_reader::nal::slice::SliceFamily as H264SliceFamily;
 
 use crate::vulkan_encoder::VulkanEncoder;
 use crate::wrappers::ImageKey;
@@ -248,7 +251,8 @@ pub struct RawFrameData {
 /// A decoder that outputs frames stored as [`wgpu::Texture`]s
 pub struct WgpuTexturesDecoder {
     vulkan_decoder: VulkanDecoder<'static>,
-    parser: Parser,
+    parser: H264Parser,
+    nalu_processor: H264NaluProcessor,
     frame_sorter: FrameSorter<wgpu::Texture>,
 }
 
@@ -261,7 +265,8 @@ impl WgpuTexturesDecoder {
         &mut self,
         frame: EncodedInputChunk<&[u8]>,
     ) -> Result<Vec<Frame<wgpu::Texture>>, DecoderError> {
-        let instructions = self.parser.parse(frame.data, frame.pts)?;
+        let nalus = self.parser.parse(frame.data, frame.pts)?;
+        let instructions = self.nalu_processor.process(nalus)?;
 
         let unsorted_frames = self.vulkan_decoder.decode_to_wgpu_textures(&instructions)?;
 
@@ -287,7 +292,8 @@ impl WgpuTexturesDecoder {
 /// A decoder that outputs frames stored as [`Vec<u8>`] with the raw pixel data.
 pub struct BytesDecoder {
     vulkan_decoder: VulkanDecoder<'static>,
-    parser: Parser,
+    parser: H264Parser,
+    nalu_processor: H264NaluProcessor,
     frame_sorter: FrameSorter<RawFrameData>,
 }
 
@@ -301,7 +307,8 @@ impl BytesDecoder {
         &mut self,
         frame: EncodedInputChunk<&[u8]>,
     ) -> Result<Vec<Frame<RawFrameData>>, DecoderError> {
-        let instructions = self.parser.parse(frame.data, frame.pts)?;
+        let nalus = self.parser.parse(frame.data, frame.pts)?;
+        let instructions = self.nalu_processor.process(nalus)?;
 
         let unsorted_frames = self.vulkan_decoder.decode_to_bytes(&instructions)?;
 
