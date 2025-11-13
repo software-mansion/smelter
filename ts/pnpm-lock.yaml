@@ -249,10 +249,10 @@ importers:
         specifier: ^0.34.38
         version: 0.34.40
       '@swmansion/smelter':
-        specifier: workspace:^0.2.1
+        specifier: workspace:^0.3.0-rc.0
         version: link:../../smelter
       '@swmansion/smelter-node':
-        specifier: workspace:^0.2.1
+        specifier: workspace:^0.3.0-rc.0
         version: link:../../smelter-node
       '@types/fs-extra':
         specifier: ^11.0.4
