@@ -13,14 +13,13 @@ use crossbeam_channel::{Receiver, bounded};
 use ffmpeg_next::{
     Dictionary, Packet, Stream,
     ffi::{
-        avformat_alloc_context, avformat_close_input, avformat_find_stream_info,
+        EAGAIN, avformat_alloc_context, avformat_close_input, avformat_find_stream_info,
         avformat_open_input,
     },
     format::context,
     media::Type,
     util::interrupt,
 };
-use libc::EAGAIN;
 use smelter_render::InputId;
 use tracing::{Level, debug, error, span, trace, warn};
 
@@ -64,41 +63,119 @@ impl RtmpServerInput {
         let should_close = Arc::new(AtomicBool::new(false));
         let buffer = InputBuffer::new(&ctx, opts.buffer);
 
-        let input_ctx = FfmpegInputContext::new(&opts.url, should_close.clone())?;
-        let (audio, samples_receiver) = match input_ctx.audio_stream() {
-            Some(stream) => {
-                let (track, receiver) =
-                    Self::handle_audio_track(&ctx, &input_ref, &stream, buffer.clone())?;
-                (Some(track), Some(receiver))
-            }
-            None => (None, None),
-        };
-        let (video, frame_receiver) = match input_ctx.video_stream() {
-            Some(stream) => {
-                let (track, receiver) = Self::handle_video_track(
-                    &ctx,
-                    &input_ref,
-                    &stream,
-                    opts.video_decoders,
-                    buffer,
-                )?;
-                (Some(track), Some(receiver))
-            }
-            None => (None, None),
-        };
+        let (video_sender, frame_receiver) = bounded(5);
+        let (audio_sender, samples_receiver) = bounded(5);
 
         let receivers = QueueDataReceiver {
-            video: frame_receiver,
-            audio: samples_receiver,
+            video: Some(frame_receiver),
+            audio: Some(samples_receiver),
         };
 
-        Self::spawn_demuxer_thread(input_ref, input_ctx, audio, video);
+        Self::spawn_connection_thread(
+            ctx,
+            input_ref.clone(),
+            opts,
+            should_close.clone(),
+            buffer,
+            video_sender,
+            audio_sender,
+        );
 
         Ok((
             Input::RtmpServer(Self { should_close }),
             InputInitInfo::Other,
             receivers,
         ))
+    }
+
+    fn spawn_connection_thread(
+        ctx: Arc<PipelineCtx>,
+        input_ref: Ref<InputId>,
+        opts: RtmpServerInputOptions,
+        should_close: Arc<AtomicBool>,
+        buffer: InputBuffer,
+        video_sender: crossbeam_channel::Sender<PipelineEvent<Frame>>,
+        audio_sender: crossbeam_channel::Sender<PipelineEvent<InputAudioSamples>>,
+    ) {
+        std::thread::Builder::new()
+            .name(format!("RTMP connection thread for input {input_ref}"))
+            .spawn(move || {
+                loop {
+                    let _span = span!(
+                        Level::INFO,
+                        "RTMP connection thread",
+                        input_id = input_ref.to_string()
+                    )
+                    .entered();
+
+                    let input_ctx = match FfmpegInputContext::new(&opts.url, should_close.clone()) {
+                        Ok(ctx) => ctx,
+                        Err(err) => {
+                            error!("Failed to open RTMP input: {err:?}");
+                            std::thread::sleep(Duration::from_secs(3));
+                            continue;
+                        }
+                    };
+                    let (audio, samples_receiver) = match input_ctx.audio_stream() {
+                        Some(stream) => match Self::handle_audio_track(
+                            &ctx,
+                            &input_ref,
+                            &stream,
+                            buffer.clone(),
+                        ) {
+                            Ok((track, receiver)) => (Some(track), Some(receiver)),
+                            Err(err) => {
+                                error!("Failed to initialize audio track: {err:?}");
+                                (None, None)
+                            }
+                        },
+                        None => (None, None),
+                    };
+
+                    let (video, frame_receiver) = match input_ctx.video_stream() {
+                        Some(stream) => match Self::handle_video_track(
+                            &ctx,
+                            &input_ref,
+                            &stream,
+                            opts.video_decoders.clone(),
+                            buffer.clone(),
+                        ) {
+                            Ok((track, receiver)) => (Some(track), Some(receiver)),
+                            Err(err) => {
+                                error!("Failed to initialize video track: {err:?}");
+                                (None, None)
+                            }
+                        },
+                        None => (None, None),
+                    };
+
+                    if let Some(receiver) = frame_receiver {
+                        let sender = video_sender.clone();
+                        std::thread::spawn(move || {
+                            while let Ok(event) = receiver.recv() {
+                                if sender.send(event).is_err() {
+                                    break;
+                                }
+                            }
+                        });
+                    }
+
+                    if let Some(receiver) = samples_receiver {
+                        let sender = audio_sender.clone();
+                        std::thread::spawn(move || {
+                            while let Ok(event) = receiver.recv() {
+                                if sender.send(event).is_err() {
+                                    break;
+                                }
+                            }
+                        });
+                    }
+
+                    Self::run_demuxer_thread(input_ctx, audio, video);
+                    std::thread::sleep(Duration::from_secs(3));
+                }
+            })
+            .unwrap();
     }
 
     fn handle_audio_track(
@@ -204,27 +281,6 @@ impl RtmpServerInput {
         ))
     }
 
-    fn spawn_demuxer_thread(
-        input_ref: Ref<InputId>,
-        input_ctx: FfmpegInputContext,
-        audio: Option<Track>,
-        video: Option<Track>,
-    ) {
-        std::thread::Builder::new()
-            .name(format!("RTMP server thread for input {input_ref}"))
-            .spawn(move || {
-                let _span = span!(
-                    Level::INFO,
-                    "RTMP server thread",
-                    input_id = input_ref.to_string()
-                )
-                .entered();
-
-                Self::run_demuxer_thread(input_ctx, audio, video);
-            })
-            .unwrap();
-    }
-
     fn run_demuxer_thread(
         mut input_ctx: FfmpegInputContext,
         mut audio: Option<Track>,
@@ -239,8 +295,12 @@ impl RtmpServerInput {
                     std::thread::sleep(RTMP_READ_RETRY_DELAY);
                     continue;
                 }
+                Err(ffmpeg_next::Error::Other { errno: 5 }) => {
+                    warn!("Input session disconnected!");
+                    break;
+                }
                 Err(err) => {
-                    warn!("RTMP read error {err:?}");
+                    trace!("RTMP read error {err:?}");
                     continue;
                 }
             };
