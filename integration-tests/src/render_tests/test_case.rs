@@ -201,14 +201,16 @@ impl TestCase {
     }
 
     pub fn calculate_and_set_timestamp_length(&mut self) {
-        self.timestamp_length = self
+        let longest_timestamp_length = self
             .steps
             .iter()
             .filter_map(|step| match step {
                 Step::RenderWithSnapshot(pts) => Some(pts.as_millis().to_string().len()),
                 _ => None,
             })
-            .max()
-            .expect("There are no snapshots."); // TODO: (@jbrs) this message is terrible
+            .max();
+        if let Some(timestamp_length) = longest_timestamp_length {
+            self.timestamp_length = timestamp_length;
+        }
     }
 }
