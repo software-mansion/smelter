@@ -119,6 +119,10 @@ impl ReferenceContext {
         id
     }
 
+    pub(crate) fn mark_missed_frames(&mut self) {
+        self.detected_missed_frames = true;
+    }
+
     pub(crate) fn put_picture(
         &mut self,
         mut slices: Vec<(Slice, Option<u64>)>,
