@@ -124,8 +124,8 @@ impl RtpJitterBuffer {
             Some(previous_seq_num) => {
                 match self.mode {
                     RtpJitterBufferMode::Fixed(duration) => {
-                        // if input is required or offset is set, we can assume that we can wait a
-                        // while, but it should not depend on queue clock
+                        // if input is required or offset is set, we can assume that we can wait
+                        // a while, but it should not depend on queue clock
                         if first_packet.received_at.elapsed() < duration {
                             return None;
                         }
