@@ -119,3 +119,10 @@ pub(super) async fn status_handler(
     }))
     .into_response())
 }
+
+pub(super) async fn stats_handler(
+    State(state): State<Arc<ApiState>>,
+) -> Result<impl IntoResponse, ApiError> {
+    let pipeline = state.pipeline()?;
+    Ok(axum::Json(pipeline.lock().unwrap().stats()))
+}

@@ -71,10 +71,18 @@ async fn process_audio_track(
         (ctx.pipeline_ctx.clone(), samples_sender),
     )?;
 
+    let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
     let mut rtp_reader = WebrtcRtpReader::new(
         ctx.track,
         RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
-        RtpJitterBuffer::new(&ctx.pipeline_ctx, ctx.buffer, 48_000),
+        RtpJitterBuffer::new(
+            &ctx.pipeline_ctx,
+            ctx.buffer,
+            48_000,
+            Box::new(move |event| {
+                stats_sender.send(WhipInputStatsEvent::AudioRtp(event).into_event(&input_ref));
+            }),
+        ),
     );
 
     while let Some(packet) = rtp_reader.read_packet().await {
@@ -123,10 +131,18 @@ async fn process_video_track(
         ),
     )?;
 
+    let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
     let mut rtp_reader = WebrtcRtpReader::new(
         ctx.track,
         RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
-        RtpJitterBuffer::new(&ctx.pipeline_ctx, ctx.buffer, 90_000),
+        RtpJitterBuffer::new(
+            &ctx.pipeline_ctx,
+            ctx.buffer,
+            90_000,
+            Box::new(move |event| {
+                stats_sender.send(WhipInputStatsEvent::VideoRtp(event).into_event(&input_ref));
+            }),
+        ),
     );
 
     while let Some(packet) = rtp_reader.read_packet().await {

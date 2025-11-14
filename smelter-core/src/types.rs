@@ -81,6 +81,10 @@ impl<Id: fmt::Display + Clone> Ref<Id> {
     pub fn id(&self) -> &Id {
         &self.public_id
     }
+
+    pub fn to_unique_string(&self) -> String {
+        format!("{}-{}", self.public_id, self.generated_id)
+    }
 }
 
 impl<Id: fmt::Display + Clone> fmt::Display for Ref<Id> {

@@ -14,7 +14,7 @@ use tower_http::cors::CorsLayer;
 
 use crate::{
     error::ApiError,
-    routes::status::status_handler,
+    routes::status::{stats_handler, status_handler},
     state::{ApiState, Response},
 };
 
@@ -87,6 +87,7 @@ pub fn routes(state: Arc<ApiState>) -> Router {
         // WebSocket - events
         .route("/ws", get(ws_handler))
         .route("/status", get(status_handler))
+        .route("/stats", get(stats_handler))
         .layer(CorsLayer::permissive())
         .layer(middleware::from_fn(body_logger_middleware))
         .with_state(state)

@@ -32,6 +32,10 @@ impl WhipInput {
         let Some(state) = &ctx.whip_whep_state else {
             return Err(WebrtcServerError::ServerNotRunning.into());
         };
+        ctx.stats_sender.send(StatsEvent::NewInput {
+            input_ref: input_ref.clone(),
+            kind: InputProtocolKind::Whip,
+        });
 
         let endpoint_id = options
             .endpoint_override

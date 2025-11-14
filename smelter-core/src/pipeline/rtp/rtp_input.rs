@@ -224,12 +224,22 @@ fn run_rtp_demuxer_thread(
     }
 
     let mut audio = audio_handle.map(|handle| TrackState {
-        jitter_buffer: RtpJitterBuffer::new(&ctx, jitter_buffer_init.clone(), handle.sample_rate),
+        jitter_buffer: RtpJitterBuffer::new(
+            &ctx,
+            jitter_buffer_init.clone(),
+            handle.sample_rate,
+            Box::new(|_event| {}),
+        ),
         handle,
         eos_received: false,
     });
     let mut video = video_handle.map(|handle| TrackState {
-        jitter_buffer: RtpJitterBuffer::new(&ctx, jitter_buffer_init, 90_000),
+        jitter_buffer: RtpJitterBuffer::new(
+            &ctx,
+            jitter_buffer_init,
+            90_000,
+            Box::new(|_event| {}),
+        ),
         handle,
         eos_received: false,
     });

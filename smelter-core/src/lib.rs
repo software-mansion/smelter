@@ -7,6 +7,7 @@ pub mod error;
 pub mod event;
 pub mod graphics_context;
 pub mod protocols;
+pub mod stats;
 
 mod pipeline;
 pub use pipeline::*;
