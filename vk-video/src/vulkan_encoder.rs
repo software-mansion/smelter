@@ -1061,13 +1061,29 @@ impl VulkanEncoder<'_> {
 
         match rate_control {
             RateControl::EncoderDefault => None,
-            RateControl::Vbr { .. } => Some(
+
+            RateControl::VariableBitrate {
+                virtual_buffer_size,
+                ..
+            } => Some(
                 vk::VideoEncodeRateControlInfoKHR::default()
                     .rate_control_mode(vk::VideoEncodeRateControlModeFlagsKHR::VBR)
                     .layers(layers)
-                    .virtual_buffer_size_in_ms(1000)
+                    .virtual_buffer_size_in_ms(virtual_buffer_size.as_millis() as u32)
                     .initial_virtual_buffer_size_in_ms(0),
             ),
+
+            RateControl::ConstantBitrate {
+                virtual_buffer_size,
+                ..
+            } => Some(
+                vk::VideoEncodeRateControlInfoKHR::default()
+                    .rate_control_mode(vk::VideoEncodeRateControlModeFlagsKHR::CBR)
+                    .layers(layers)
+                    .virtual_buffer_size_in_ms(virtual_buffer_size.as_millis() as u32)
+                    .initial_virtual_buffer_size_in_ms(0),
+            ),
+
             RateControl::Disabled => {
                 let mut rate_control = vk::VideoEncodeRateControlInfoKHR::default()
                     .rate_control_mode(vk::VideoEncodeRateControlModeFlagsKHR::DISABLED)
@@ -1090,7 +1106,8 @@ impl VulkanEncoder<'_> {
 
         match rate_control {
             RateControl::EncoderDefault => return None,
-            RateControl::Vbr { .. } => {}
+            RateControl::VariableBitrate { .. } => {}
+            RateControl::ConstantBitrate { .. } => {}
             RateControl::Disabled => {}
         }
 
@@ -1109,15 +1126,24 @@ impl VulkanEncoder<'_> {
 
         match rate_control {
             RateControl::EncoderDefault => return None,
-            RateControl::Vbr {
+            RateControl::VariableBitrate {
                 average_bitrate,
                 max_bitrate,
+                ..
             } => {
                 layer_info = layer_info
                     .average_bitrate(average_bitrate)
                     .max_bitrate(max_bitrate)
                     .push_next(&mut h264_layer_info[0])
             }
+
+            RateControl::ConstantBitrate { bitrate, .. } => {
+                layer_info = layer_info
+                    .average_bitrate(bitrate)
+                    .max_bitrate(bitrate)
+                    .push_next(&mut h264_layer_info[0])
+            }
+
             RateControl::Disabled => layer_info = layer_info.push_next(&mut h264_layer_info[0]),
         }
 
@@ -1154,13 +1180,24 @@ impl VulkanEncoder<'_> {
 pub enum RateControl {
     /// Use the default setting of the encoder implementation.
     EncoderDefault,
+
     /// Variable bitrate rate control. This setting fits most use cases. The encoder will try to
     /// keep the bitrate around the average, but may increase it temporarily up to the max when
-    /// necessary. Bitrate is measured in bits/second.
-    Vbr {
+    /// necessary, in `virtual_buffer_size`-length windows. Bitrate is measured in bits/second.
+    VariableBitrate {
         average_bitrate: u64,
         max_bitrate: u64,
+        virtual_buffer_size: std::time::Duration,
     },
+
+    /// Constant bitrate rate control. This setting is for environments that are more
+    /// bandwidth-constrained. The encoder will keep the bitrate at the specified value, in
+    /// `virtual_buffer_size`-length windows. Bitrate is measured in bits/second.
+    ConstantBitrate {
+        bitrate: u64,
+        virtual_buffer_size: std::time::Duration,
+    },
+
     /// Rate control is turned off, frames are compressed with a constant rate. A more complicated
     /// frame will just be bigger.
     Disabled,
@@ -1170,7 +1207,8 @@ impl RateControl {
     pub(crate) fn to_vk(self) -> vk::VideoEncodeRateControlModeFlagsKHR {
         match self {
             RateControl::EncoderDefault => vk::VideoEncodeRateControlModeFlagsKHR::DEFAULT,
-            RateControl::Vbr { .. } => vk::VideoEncodeRateControlModeFlagsKHR::VBR,
+            RateControl::VariableBitrate { .. } => vk::VideoEncodeRateControlModeFlagsKHR::VBR,
+            RateControl::ConstantBitrate { .. } => vk::VideoEncodeRateControlModeFlagsKHR::CBR,
             RateControl::Disabled => vk::VideoEncodeRateControlModeFlagsKHR::DISABLED,
         }
     }

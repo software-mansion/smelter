@@ -48,9 +48,10 @@ fn main() {
                         height,
                         target_framerate: 24.into(),
                     },
-                    RateControl::Vbr {
+                    RateControl::VariableBitrate {
                         average_bitrate: 1_000_000,
-                        max_bitrate: 4_000_000,
+                        max_bitrate: 2_000_000,
+                        virtual_buffer_size: std::time::Duration::from_secs(2),
                     },
                 )
                 .unwrap(),
