@@ -55,7 +55,7 @@ impl TestRunner {
         let has_only = self.cases.iter().any(|test| test.only);
 
         let mut failed = false;
-        for test in self.cases.iter_mut() {
+        for test in self.cases.iter() {
             if has_only && !test.only {
                 continue;
             }
@@ -100,9 +100,9 @@ fn check_test_names_uniqueness(tests: &[TestCase]) {
     }
 }
 
-fn snapshot_save_path(test_name: &str, pts: &Duration, pts_length: usize) -> PathBuf {
+fn snapshot_save_path(test_name: &str, pts: &Duration, longest_pts_length: usize) -> PathBuf {
     let mut pts = pts.as_millis().to_string();
-    let left_padding = pts_length - pts.len();
+    let left_padding = longest_pts_length - pts.len();
     pts.insert_str(0, "0".repeat(left_padding).as_str());
     let out_file_name = format!("{test_name}_{pts}_{OUTPUT_ID}.png");
     render_snapshots_dir_path().join(out_file_name)
