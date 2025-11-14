@@ -127,7 +127,7 @@ impl WhepOutputBuilder {
     }
 
     fn prompt_bearer_token(self) -> Result<Self> {
-        let env_token = env::var(WHEP_TOKEN_ENV).unwrap_or_default();
+        let env_token = env::var(WHEP_TOKEN_ENV).unwrap_or("example".to_string());
         let endpoint_token_input =
             Text::new("Enter the WHEP endpoint bearer token (ESC for \"example\"):")
                 .with_initial_value(&env_token)

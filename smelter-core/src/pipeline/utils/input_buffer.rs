@@ -91,15 +91,15 @@ impl LatencyOptimizedBuffer {
             sync_point: ctx.queue_sync_point,
             desired_buffer: ctx.default_buffer_duration,
             min_buffer: Duration::min(Duration::from_millis(20), ctx.default_buffer_duration),
-            max_buffer: ctx.default_buffer_duration + Duration::from_millis(50),
+            max_buffer: ctx.default_buffer_duration + Duration::from_millis(80),
             dynamic_buffer: ctx.default_buffer_duration,
             state: LatencyOptimizedBufferState::Ok,
         }
     }
 
     fn recalculate_buffer(&mut self, pts: Duration) {
-        const INCREMENT_DURATION: Duration = Duration::from_micros(100);
-        const DECREMENT_DURATION: Duration = Duration::from_micros(10);
+        const INCREMENT_DURATION: Duration = Duration::from_micros(200);
+        const DECREMENT_DURATION: Duration = Duration::from_micros(200);
         const STABLE_STATE_DURATION: Duration = Duration::from_secs(10);
 
         let next_pts = pts + self.dynamic_buffer;
