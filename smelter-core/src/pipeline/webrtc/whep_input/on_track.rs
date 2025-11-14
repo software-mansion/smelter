@@ -30,7 +30,7 @@ pub fn handle_on_track(
     video_preferences: Vec<VideoDecoderOptions>,
 ) {
     let kind = ctx.track.kind();
-    let span = info_span!("WHEP input track", ?kind, ?input_ref);
+    let span = info_span!("WHEP input track", ?kind, input_id=%input_ref);
 
     tokio::spawn(
         async move {

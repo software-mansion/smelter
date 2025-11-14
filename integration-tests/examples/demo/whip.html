@@ -11,7 +11,7 @@
       display: flex;
       justify-content: center;
       flex-direction: column;
-      height: 90vh;
+      height: 95vh;
       overflow: hidden;
     }
 
@@ -52,9 +52,8 @@
 
     .button-div {
       display: flex;
-      gap: 5vw;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
     }
 
     label {
@@ -65,7 +64,7 @@
     button {
       height: 72px;
       margin: 10px;
-      width: 300px;
+      flex: 1;
       font-size: 22px;
       background-color: #ff1493;
       font-family: 'Comic Sans MS', 'Comic Sans';
@@ -73,6 +72,8 @@
 
     #update {
       height: 36px;
+      width: 300px;
+      flex: unset;
     }
   </style>
 </head>
@@ -96,10 +97,10 @@
     <button id="update">Update</button>
   </div>
   <div class="button-div">
-    <button id="screen-share">Stream screen share</button>
-    <button id="screen-share-no-audio">Stream screen share no audio</button>
-    <button id="camera">Stream camera</button>
-    <button id="camera-no-audio">Stream camera no audio</button>
+    <button id="screen-share">Screen share<br/>(audio + video)</button>
+    <button id="screen-share-no-audio">Screen share<br/>(video only)</button>
+    <button id="camera">Camera<br/>(audio + video)</button>
+    <button id="camera-no-audio">Camera<br/>(video only)</button>
   </div>
 
   <script>

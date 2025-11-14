@@ -71,53 +71,72 @@ impl InputBuffer {
 /// minimize the latency.
 pub(crate) struct LatencyOptimizedBuffer {
     sync_point: Instant,
-    /// We expect pts to be at least greater than sync_point.elapsed() + desired_buffer.
-    ///
-    /// This buffer should be large enough, so a packet can be decoded and
-    /// placed in queue before queue attempts to render that pts.
-    desired_buffer: Duration,
-
-    min_buffer: Duration,
-    max_buffer: Duration,
-
+    state: LatencyOptimizedBufferState,
     dynamic_buffer: Duration,
 
-    state: LatencyOptimizedBufferState,
+    /// effective_buffer = queue_sync_point.elapsed() - next_pts
+    /// Estimates how much packet has to reach the queue.
+
+    /// If effective_buffer is above this threshold for a period of time, aggressively shrink
+    /// the buffer.
+    max_hard_threshold: Duration,
+    /// If effective_buffer is above this threshold for a period of time, slowly shrink the buffer.
+    max_soft_threshold: Duration,
+    /// If effective_buffer is below this value, slowly increase the buffer with every packet.
+    desired_buffer: Duration,
+    /// If effective_buffer is below this threshold, aggressively and immediately increase the buffer
+    min_threshold: Duration,
 }
 
 impl LatencyOptimizedBuffer {
     fn new(ctx: &PipelineCtx) -> Self {
+        // As a result for default numbers if effective_buffer is between 80ms and 240ms, no
+        // adjustment/optimization will be triggered
+        let min_threshold = ctx.default_buffer_duration;
+        let desired_buffer = min_threshold + ctx.default_buffer_duration;
+        let max_soft_threshold = desired_buffer + ctx.default_buffer_duration;
+        let max_hard_threshold = max_soft_threshold + Duration::from_millis(500);
         Self {
             sync_point: ctx.queue_sync_point,
-            desired_buffer: ctx.default_buffer_duration,
-            min_buffer: Duration::min(Duration::from_millis(20), ctx.default_buffer_duration),
-            max_buffer: ctx.default_buffer_duration + Duration::from_millis(50),
             dynamic_buffer: ctx.default_buffer_duration,
             state: LatencyOptimizedBufferState::Ok,
+
+            min_threshold,
+            desired_buffer,
+            max_soft_threshold,
+            max_hard_threshold,
         }
     }
 
     fn recalculate_buffer(&mut self, pts: Duration) {
-        const INCREMENT_DURATION: Duration = Duration::from_micros(100);
-        const DECREMENT_DURATION: Duration = Duration::from_micros(10);
+        const INCREMENT_DURATION: Duration = Duration::from_micros(200);
+        const DECREMENT_DURATION: Duration = Duration::from_micros(200);
         const STABLE_STATE_DURATION: Duration = Duration::from_secs(10);
 
         let next_pts = pts + self.dynamic_buffer;
         trace!(effective_buffer=?next_pts.saturating_sub(self.sync_point.elapsed()));
-        if next_pts > self.sync_point.elapsed() + self.max_buffer {
-            let first_pts = self.state.set_over_max_buffer(next_pts);
+
+        if next_pts > self.sync_point.elapsed() + self.max_hard_threshold {
+            let first_pts = self.state.set_too_large(next_pts);
+            if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
+                self.dynamic_buffer = self
+                    .dynamic_buffer
+                    .saturating_sub(self.dynamic_buffer / 100);
+            }
+        } else if next_pts > self.sync_point.elapsed() + self.max_soft_threshold {
+            let first_pts = self.state.set_too_large(next_pts);
             if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
                 self.dynamic_buffer = self.dynamic_buffer.saturating_sub(DECREMENT_DURATION);
             }
         } else if next_pts > self.sync_point.elapsed() + self.desired_buffer {
             self.state.set_ok();
-        } else if next_pts > self.sync_point.elapsed() + self.min_buffer {
+        } else if next_pts > self.sync_point.elapsed() + self.min_threshold {
             trace!(
                 old=?self.dynamic_buffer,
                 new=?self.dynamic_buffer + INCREMENT_DURATION,
                 "Increase latency optimized buffer"
             );
-            self.state.set_to_small();
+            self.state.set_too_small();
             self.dynamic_buffer += INCREMENT_DURATION;
         } else {
             let new_buffer = (self.sync_point.elapsed() + self.desired_buffer).saturating_sub(pts);
@@ -126,7 +145,7 @@ impl LatencyOptimizedBuffer {
                 new=?new_buffer,
                 "Increase latency optimized buffer (force)"
             );
-            self.state.set_to_small();
+            self.state.set_too_small();
             // adjust buffer so:
             // pts + self.dynamic_buffer == self.sync_point.elapsed() + self.desired_buffer
             self.dynamic_buffer = new_buffer
@@ -136,23 +155,23 @@ impl LatencyOptimizedBuffer {
 
 enum LatencyOptimizedBufferState {
     Ok,
-    ToSmallBuffer,
-    OverMaxBuffer { first_pts: Duration },
+    TooSmall,
+    TooLarge { first_pts: Duration },
 }
 
 impl LatencyOptimizedBufferState {
-    fn set_over_max_buffer(&mut self, pts: Duration) -> Duration {
+    fn set_too_large(&mut self, pts: Duration) -> Duration {
         match &self {
-            LatencyOptimizedBufferState::OverMaxBuffer { first_pts } => *first_pts,
+            LatencyOptimizedBufferState::TooLarge { first_pts } => *first_pts,
             _ => {
-                *self = LatencyOptimizedBufferState::OverMaxBuffer { first_pts: pts };
+                *self = LatencyOptimizedBufferState::TooLarge { first_pts: pts };
                 pts
             }
         }
     }
 
-    fn set_to_small(&mut self) {
-        *self = LatencyOptimizedBufferState::ToSmallBuffer
+    fn set_too_small(&mut self) {
+        *self = LatencyOptimizedBufferState::TooSmall
     }
 
     fn set_ok(&mut self) {
