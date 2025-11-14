@@ -25,11 +25,11 @@ impl InputStatsState {
         match kind {
             InputProtocolKind::Whip => InputStatsState::WhipInput(WhipInputState::new()),
             InputProtocolKind::Whep => InputStatsState::WhepInput(WhepInputState::new()),
-            InputProtocolKind::Rtp => panic!(),
-            InputProtocolKind::Mp4 => panic!(),
-            InputProtocolKind::Hls => panic!(),
-            InputProtocolKind::DeckLink => panic!(),
-            InputProtocolKind::RawDataChannel => panic!(),
+            InputProtocolKind::Rtp => unimplemented!(),
+            InputProtocolKind::Mp4 => unimplemented!(),
+            InputProtocolKind::Hls => unimplemented!(),
+            InputProtocolKind::DeckLink => unimplemented!(),
+            InputProtocolKind::RawDataChannel => unimplemented!(),
         }
     }
 
