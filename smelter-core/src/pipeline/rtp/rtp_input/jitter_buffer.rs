@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tracing::{debug, trace, warn};
+use tracing::{debug, trace};
 
 use crate::pipeline::{
     rtp::{
