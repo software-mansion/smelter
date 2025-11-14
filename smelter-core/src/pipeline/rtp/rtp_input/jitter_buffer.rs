@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::pipeline::{
     rtp::{
@@ -157,6 +157,9 @@ impl RtpJitterBuffer {
         (self.on_stats_event)(RtpJitterBufferStatsEvent::EffectiveBuffer(
             timestamp.saturating_sub(self.queue_sync_point.elapsed()),
         ));
+        (self.on_stats_event)(RtpJitterBufferStatsEvent::InputBufferSize(
+            self.input_buffer.size(),
+        ));
 
         self.previous_seq_num = Some(first_seq_num);
         Some(RtpPacket {
@@ -185,6 +188,7 @@ impl SequenceNumberRollover {
                 self.rollover_count = self.rollover_count.saturating_sub(1);
             }
         }
+        self.last_value = Some(sequence_number);
 
         (self.rollover_count * (u16::MAX as u64 + 1)) + sequence_number as u64
     }

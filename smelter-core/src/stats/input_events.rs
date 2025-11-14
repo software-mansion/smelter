@@ -54,4 +54,5 @@ pub(crate) enum RtpJitterBufferStatsEvent {
     RtpPacketLost(u64),
     RtpPacketReceived,
     EffectiveBuffer(Duration),
+    InputBufferSize(Duration)
 }
