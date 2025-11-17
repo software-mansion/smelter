@@ -134,8 +134,8 @@ impl WhepOutputBuilder {
                 .prompt_skippable()?;
 
         match endpoint_token_input {
-            Some(token) => Ok(self.with_bearer_token(token)),
-            None => Ok(self),
+            Some(token) if !token.trim().is_empty() => Ok(self.with_bearer_token(token)),
+            Some(_) | None => Ok(self),
         }
     }
 
