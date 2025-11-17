@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tracing::{debug, trace, warn};
+use tracing::{trace, warn};
 
 use crate::pipeline::{
     rtp::{
@@ -103,7 +103,7 @@ impl RtpJitterBuffer {
 
         self.input_buffer.recalculate_buffer(pts);
 
-        warn!(packet=?packet.header, ?pts, buffer_size=self.packets.len(), "Writing packet to jitter buffer");
+        trace!(packet=?packet.header, ?pts, buffer_size=self.packets.len(), "Writing packet to jitter buffer");
         self.packets.insert(
             sequence_number,
             JitterBufferPacket {

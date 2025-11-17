@@ -48,7 +48,7 @@ pub async fn handle_new_whip_ice_candidates(
         }
         info!(
             ?session_id,
-            ?input_ref,
+            input_id=%input_ref,
             "Added ICE candidate for WHIP session"
         );
     }

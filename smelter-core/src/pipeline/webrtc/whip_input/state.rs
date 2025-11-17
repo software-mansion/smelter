@@ -84,8 +84,8 @@ impl WhipInputsState {
         let old_value = guard.insert(input_ref.clone(), WhipInputState::new(options));
         if old_value.is_some() {
             error!(
-                ?input_ref,
-                "Old WHIP input entry was overriden. This should not happen"
+                input_id=%input_ref,
+                "Old WHIP input entry was overridden. This should not happen"
             )
         }
         Ok(())
