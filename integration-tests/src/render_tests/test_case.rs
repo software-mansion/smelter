@@ -35,7 +35,6 @@ pub(super) struct TestCase {
     pub allowed_error: f32,
     pub resolution: Resolution,
     pub output_format: OutputFrameFormat,
-    pub timestamp_length: usize,
 }
 
 impl Default for TestCase {
@@ -52,7 +51,6 @@ impl Default for TestCase {
                 height: 360,
             },
             output_format: OutputFrameFormat::PlanarYuv420Bytes,
-            timestamp_length: 0,
         }
     }
 }
@@ -160,9 +158,7 @@ impl TestCase {
         self.steps
             .iter()
             .flat_map(|step| match step {
-                Step::RenderWithSnapshot(pts) => {
-                    Some(snapshot_save_path(self.name, pts, self.timestamp_length))
-                }
+                Step::RenderWithSnapshot(pts) => Some(snapshot_save_path(self.name, pts)),
                 _ => None,
             })
             .collect()
@@ -176,7 +172,6 @@ impl TestCase {
             pts,
             resolution: output_frame.resolution,
             data: new_snapshot,
-            timestamp_length: self.timestamp_length,
         })
     }
 
@@ -198,19 +193,5 @@ impl TestCase {
             .remove(&OutputId(OUTPUT_ID.into()))
             .expect("No scene update provided before render");
         Ok(output_frame)
-    }
-
-    pub fn calculate_and_set_timestamp_length(&mut self) {
-        let longest_timestamp_length = self
-            .steps
-            .iter()
-            .filter_map(|step| match step {
-                Step::RenderWithSnapshot(pts) => Some(pts.as_millis().to_string().len()),
-                _ => None,
-            })
-            .max();
-        if let Some(timestamp_length) = longest_timestamp_length {
-            self.timestamp_length = timestamp_length;
-        }
     }
 }

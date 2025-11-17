@@ -16,12 +16,11 @@ pub(super) struct Snapshot {
     pub pts: Duration,
     pub resolution: Resolution,
     pub data: Vec<u8>,
-    pub timestamp_length: usize,
 }
 
 impl Snapshot {
     pub(super) fn save_path(&self) -> PathBuf {
-        snapshot_save_path(&self.test_name, &self.pts, self.timestamp_length)
+        snapshot_save_path(&self.test_name, &self.pts)
     }
 
     pub(super) fn diff_with_saved(&self) -> f32 {

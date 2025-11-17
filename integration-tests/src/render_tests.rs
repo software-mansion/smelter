@@ -48,8 +48,7 @@ impl TestRunner {
         self.cases.push(case)
     }
 
-    fn run(mut self) {
-        calculate_timestamps_lengths(&mut self.cases);
+    fn run(self) {
         check_test_names_uniqueness(&self.cases);
         check_unused_snapshots(&self.cases, &self.snapshot_dir);
         let has_only = self.cases.iter().any(|test| test.only);
@@ -100,11 +99,11 @@ fn check_test_names_uniqueness(tests: &[TestCase]) {
     }
 }
 
-fn snapshot_save_path(test_name: &str, pts: &Duration, longest_pts_length: usize) -> PathBuf {
-    let mut pts = pts.as_millis().to_string();
-    let left_padding = longest_pts_length - pts.len();
-    pts.insert_str(0, "0".repeat(left_padding).as_str());
-    let out_file_name = format!("{test_name}_{pts}_{OUTPUT_ID}.png");
+fn snapshot_save_path(test_name: &str, pts: &Duration) -> PathBuf {
+    let pts = pts.as_millis();
+
+    // Pad timestamp with 0s on the left to the summaric length of 5.
+    let out_file_name = format!("{test_name}_{pts:05}_{OUTPUT_ID}.png");
     render_snapshots_dir_path().join(out_file_name)
 }
 
@@ -134,11 +133,5 @@ fn check_unused_snapshots(tests: &[TestCase], snapshot_dir: &Path) {
         } else {
             panic!("Some snapshots were not used: {unused_snapshots:#?}")
         }
-    }
-}
-
-fn calculate_timestamps_lengths(tests: &mut [TestCase]) {
-    for test in tests.iter_mut() {
-        test.calculate_and_set_timestamp_length();
     }
 }
