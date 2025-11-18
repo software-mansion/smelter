@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::pipeline::{
     rtp::{
@@ -119,7 +119,10 @@ impl RtpJitterBuffer {
 
         // check if next sequence_number is ready (and return it if it is)
         match self.previous_seq_num {
-            Some(previous_seq_num) if previous_seq_num + 1 == *first_seq_num => (),
+            Some(previous_seq_num) if previous_seq_num + 1 == *first_seq_num => {}
+            Some(previous_seq_num) if previous_seq_num >= *first_seq_num => {
+                warn!(previous_seq_num, first_seq_num, "duplicate or loss")
+            }
             None => (),
             Some(previous_seq_num) => {
                 match self.mode {
@@ -127,8 +130,8 @@ impl RtpJitterBuffer {
                         // if input is required or offset is set, we can assume that we can wait
                         // a while, but it should not depend on queue clock
                         if first_packet.received_at.elapsed() < duration {
-                            return Some(RtpInputEvent::LostPacket);
-                        }
+                            return None;
+                        };
                     }
                     RtpJitterBufferMode::QueueBased => {
                         let lowest_pts = self.packets.values().map(|packet| packet.pts).min()?;
@@ -140,13 +143,17 @@ impl RtpJitterBuffer {
                         let should_pop = lowest_pts + self.input_buffer.size()
                             < self.queue_sync_point.elapsed() + MIN_DECODE_TIME;
                         if !should_pop {
-                            return Some(RtpInputEvent::LostPacket);
-                        }
+                            return None;
+                        };
                     }
                 }
+
+                warn!("packet lost");
+                self.previous_seq_num = Some(previous_seq_num + 1);
                 (self.on_stats_event)(RtpJitterBufferStatsEvent::RtpPacketLost(
                     first_seq_num.saturating_sub(previous_seq_num),
                 ));
+                return Some(RtpInputEvent::LostPacket);
             }
         };
 
