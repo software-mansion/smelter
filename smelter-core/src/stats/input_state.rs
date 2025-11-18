@@ -137,9 +137,9 @@ impl RtpJitterBufferState {
 
     pub fn handle_event(&mut self, event: RtpJitterBufferStatsEvent) {
         match event {
-            RtpJitterBufferStatsEvent::RtpPacketLost(count) => {
+            RtpJitterBufferStatsEvent::RtpPacketLost => {
                 self.packets_lost += 1;
-                self.packets_lost_10_secs.push(count);
+                self.packets_lost_10_secs.push(1);
             }
             RtpJitterBufferStatsEvent::RtpPacketReceived => {
                 self.packets_received += 1;

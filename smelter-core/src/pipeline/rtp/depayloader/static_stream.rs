@@ -1,16 +1,19 @@
 use smelter_render::error::ErrorStack;
 use tracing::debug;
 
-use crate::pipeline::rtp::{
-    RtpPacket,
-    depayloader::{Depayloader, DepayloaderOptions, new_depayloader},
+use crate::pipeline::{
+    decoder::EncodedInputEvent,
+    rtp::{
+        RtpInputEvent,
+        depayloader::{Depayloader, DepayloaderOptions, new_depayloader},
+    },
 };
 
 use crate::prelude::*;
 
 pub(crate) struct DepayloaderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
+    Source: Iterator<Item = PipelineEvent<RtpInputEvent>>,
 {
     depayloader: Box<dyn Depayloader>,
     source: Source,
@@ -19,7 +22,7 @@ where
 
 impl<Source> DepayloaderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
+    Source: Iterator<Item = PipelineEvent<RtpInputEvent>>,
 {
     pub fn new(options: DepayloaderOptions, source: Source) -> Self {
         Self {
@@ -32,19 +35,29 @@ where
 
 impl<Source> Iterator for DepayloaderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
+    Source: Iterator<Item = PipelineEvent<RtpInputEvent>>,
 {
-    type Item = Vec<PipelineEvent<EncodedInputChunk>>;
+    type Item = Vec<PipelineEvent<EncodedInputEvent>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(packet)) => match self.depayloader.depayload(packet) {
-                Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
-                Err(err) => {
-                    debug!("Depayloader error: {}", ErrorStack::new(&err).into_string());
-                    Some(vec![])
+            Some(PipelineEvent::Data(RtpInputEvent::Packet(packet))) => {
+                match self.depayloader.depayload(packet) {
+                    Ok(chunks) => Some(
+                        chunks
+                            .into_iter()
+                            .map(|chunk| PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)))
+                            .collect(),
+                    ),
+                    Err(err) => {
+                        debug!("Depayloader error: {}", ErrorStack::new(&err).into_string());
+                        Some(vec![])
+                    }
                 }
-            },
+            }
+            Some(PipelineEvent::Data(RtpInputEvent::LostPacket)) => {
+                Some(vec![PipelineEvent::Data(EncodedInputEvent::LostData)])
+            }
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
                 true => None,
                 false => {

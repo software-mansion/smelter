@@ -50,6 +50,7 @@ impl VideoDecoder for FfmpegVp9Decoder {
 
 impl VideoDecoderInstance for FfmpegVp9Decoder {
     fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame> {
+        trace!(?chunk, "VP9 decoder received a chunk.");
         let av_packet = match create_av_packet(chunk, VideoCodec::Vp9, TIME_BASE) {
             Ok(packet) => packet,
             Err(err) => {
@@ -72,6 +73,8 @@ impl VideoDecoderInstance for FfmpegVp9Decoder {
         self.decoder.flush();
         self.read_all_frames()
     }
+
+    fn skip_until_keyframe(&mut self) {}
 }
 
 impl FfmpegVp9Decoder {

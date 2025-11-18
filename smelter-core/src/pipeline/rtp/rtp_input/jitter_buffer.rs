@@ -8,7 +8,7 @@ use tracing::{debug, trace};
 
 use crate::pipeline::{
     rtp::{
-        RtpPacket,
+        RtpInputEvent, RtpPacket,
         rtp_input::rtcp_sync::{RtpNtpSyncPoint, RtpTimestampSync},
     },
     utils::input_buffer::InputBuffer,
@@ -46,7 +46,7 @@ pub(crate) struct RtpJitterBuffer {
     seq_num_rollover: SequenceNumberRollover,
     packets: BTreeMap<u64, JitterBufferPacket>,
     /// Last sequence number returned from `pop_packets`
-    previous_seq_num: Option<u64>,
+    next_seq_num: Option<u64>,
     queue_sync_point: Instant,
     on_stats_event: Box<dyn FnMut(RtpJitterBufferStatsEvent) + 'static + Send>,
 }
@@ -72,7 +72,7 @@ impl RtpJitterBuffer {
             timestamp_sync,
             seq_num_rollover: SequenceNumberRollover::default(),
             packets: BTreeMap::new(),
-            previous_seq_num: None,
+            next_seq_num: None,
             queue_sync_point: ctx.queue_sync_point,
             on_stats_event,
         }
@@ -88,7 +88,7 @@ impl RtpJitterBuffer {
             .seq_num_rollover
             .rolled_sequence_number(packet.header.sequence_number);
 
-        if let Some(last_returned) = self.previous_seq_num
+        if let Some(last_returned) = self.next_seq_num
             && last_returned > sequence_number
         {
             debug!(sequence_number, "Packet to old. Dropping.");
@@ -114,42 +114,48 @@ impl RtpJitterBuffer {
         );
     }
 
-    pub fn pop_packet(&mut self) -> Option<RtpPacket> {
+    pub fn pop_packet(&mut self) -> Option<RtpInputEvent> {
         let (first_seq_num, first_packet) = self.packets.first_key_value()?;
 
-        // check if next sequence_number is ready (and return it if it is)
-        match self.previous_seq_num {
-            Some(previous_seq_num) if previous_seq_num + 1 == *first_seq_num => (),
-            None => (),
-            Some(previous_seq_num) => {
-                match self.mode {
-                    RtpJitterBufferMode::Fixed(duration) => {
-                        // if input is required or offset is set, we can assume that we can wait
-                        // a while, but it should not depend on queue clock
-                        if first_packet.received_at.elapsed() < duration {
-                            return None;
-                        }
-                    }
-                    RtpJitterBufferMode::QueueBased => {
-                        let lowest_pts = self.packets.values().map(|packet| packet.pts).min()?;
+        if self.next_seq_num == Some(*first_seq_num) {
+            return self.pop();
+        }
 
-                        // TODO: if lowest pts is not first it means that we have B-frames
-                        //
-                        // It would be safer to use value based on index than constant, in the worst
-                        // case scenario this could be 16 frames that needs to decoded in that time
-                        let should_pop = lowest_pts + self.input_buffer.size()
-                            < self.queue_sync_point.elapsed() + MIN_DECODE_TIME;
-                        if !should_pop {
-                            return None;
-                        }
-                    }
-                }
-                (self.on_stats_event)(RtpJitterBufferStatsEvent::RtpPacketLost(
-                    first_seq_num.saturating_sub(previous_seq_num),
-                ));
+        let wait_for_next_packet = match self.mode {
+            RtpJitterBufferMode::Fixed(duration) => {
+                // if input is required or offset is set, we can assume that we can wait
+                // a while, but it should not depend on queue clock
+                first_packet.received_at.elapsed() < duration
+            }
+            RtpJitterBufferMode::QueueBased => {
+                let lowest_pts = self.packets.values().map(|packet| packet.pts).min()?;
+
+                // TODO: if lowest pts is not first it means that we have B-frames
+                //
+                // It would be safer to use value based on index than constant, in the worst
+                // case scenario this could be 16 frames that needs to decoded in that time
+                let next_pts = lowest_pts + self.input_buffer.size();
+                next_pts > self.queue_sync_point.elapsed() + MIN_DECODE_TIME
             }
         };
+        if wait_for_next_packet {
+            return None;
+        }
 
+        match self.next_seq_num {
+            Some(next) => {
+                (self.on_stats_event)(RtpJitterBufferStatsEvent::RtpPacketLost);
+                self.next_seq_num = Some(next + 1);
+                Some(RtpInputEvent::LostPacket)
+            }
+            None => {
+                // first packet
+                self.pop()
+            }
+        }
+    }
+
+    fn pop(&mut self) -> Option<RtpInputEvent> {
         let (first_seq_num, first_packet) = self.packets.pop_first()?;
         let timestamp = first_packet.pts + self.input_buffer.size();
 
@@ -161,11 +167,11 @@ impl RtpJitterBuffer {
             self.input_buffer.size(),
         ));
 
-        self.previous_seq_num = Some(first_seq_num);
-        Some(RtpPacket {
+        self.next_seq_num = Some(first_seq_num + 1);
+        Some(RtpInputEvent::Packet(RtpPacket {
             packet: first_packet.packet,
             timestamp,
-        })
+        }))
     }
 }
 

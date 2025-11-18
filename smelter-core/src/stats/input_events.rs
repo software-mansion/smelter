@@ -51,7 +51,7 @@ impl WhepInputStatsEvent {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum RtpJitterBufferStatsEvent {
-    RtpPacketLost(u64),
+    RtpPacketLost,
     RtpPacketReceived,
     EffectiveBuffer(Duration),
     InputBufferSize(Duration),

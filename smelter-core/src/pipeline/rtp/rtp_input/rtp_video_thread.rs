@@ -4,20 +4,21 @@ use crossbeam_channel::Sender;
 use smelter_render::Frame;
 use tracing::warn;
 
-use crate::prelude::*;
 use crate::{
     pipeline::{
         decoder::{VideoDecoder, VideoDecoderStream},
         rtp::{
-            RtpPacket,
+            RtpInputEvent,
             depayloader::{DepayloaderOptions, DepayloaderStream},
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},
 };
 
+use crate::prelude::*;
+
 pub(crate) struct RtpVideoTrackThreadHandle {
-    pub rtp_packet_sender: Sender<PipelineEvent<RtpPacket>>,
+    pub rtp_packet_sender: Sender<PipelineEvent<RtpInputEvent>>,
 }
 
 pub(super) struct RtpVideoThread<Decoder: VideoDecoder + 'static> {

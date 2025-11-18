@@ -2,16 +2,19 @@ use smelter_render::error::ErrorStack;
 use tracing::{debug, error};
 use webrtc::rtp_transceiver::PayloadType;
 
-use crate::pipeline::rtp::{
-    RtpPacket,
-    depayloader::{Depayloader, DepayloaderOptions, new_depayloader},
+use crate::pipeline::{
+    decoder::EncodedInputEvent,
+    rtp::{
+        RtpInputEvent,
+        depayloader::{Depayloader, DepayloaderOptions, new_depayloader},
+    },
 };
 
 use crate::prelude::*;
 
 pub(crate) struct DynamicDepayloaderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
+    Source: Iterator<Item = PipelineEvent<RtpInputEvent>>,
 {
     depayloader: Option<Box<dyn Depayloader>>,
     last_payload_type: Option<PayloadType>,
@@ -22,7 +25,7 @@ where
 
 impl<Source> DynamicDepayloaderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
+    Source: Iterator<Item = PipelineEvent<RtpInputEvent>>,
 {
     pub(crate) fn new(codec_info: VideoPayloadTypeMapping, source: Source) -> Self {
         Self {
@@ -53,22 +56,30 @@ where
 
 impl<Source> Iterator for DynamicDepayloaderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<RtpPacket>>,
+    Source: Iterator<Item = PipelineEvent<RtpInputEvent>>,
 {
-    type Item = Vec<PipelineEvent<EncodedInputChunk>>;
+    type Item = Vec<PipelineEvent<EncodedInputEvent>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(packet)) => {
+            Some(PipelineEvent::Data(RtpInputEvent::Packet(packet))) => {
                 self.ensure_depayloader(packet.packet.header.payload_type);
                 let depayloader = self.depayloader.as_mut()?;
                 match depayloader.depayload(packet) {
-                    Ok(chunks) => Some(chunks.into_iter().map(PipelineEvent::Data).collect()),
+                    Ok(chunks) => Some(
+                        chunks
+                            .into_iter()
+                            .map(|chunk| PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)))
+                            .collect(),
+                    ),
                     Err(err) => {
                         debug!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                         Some(vec![])
                     }
                 }
+            }
+            Some(PipelineEvent::Data(RtpInputEvent::LostPacket)) => {
+                Some(vec![PipelineEvent::Data(EncodedInputEvent::LostData)])
             }
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
                 true => None,

@@ -26,4 +26,6 @@ impl VideoDecoderInstance for VulkanH264Decoder {
         error!("Vulkan decoder unavailable, this code should never be called");
         vec![]
     }
+
+    fn skip_until_keyframe(&mut self) {}
 }
