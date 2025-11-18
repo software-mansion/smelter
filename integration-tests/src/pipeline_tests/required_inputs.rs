@@ -535,8 +535,10 @@ pub fn required_audio_inputs_with_offset_missing_data() -> Result<()> {
 /// Optional inputs with some packets delayed in the middle
 /// No offset
 ///
-/// Show `input_1` and `input_2` side by side for 1 second. `input_2` disappears for 3 seconds,
-/// and then returns back to showing both stream.
+/// Show `input_1` and `input_2` side by side for 1 second. `input_2` stops sending
+/// frames for 5 seconds and then returns back to showing both streams. On replay
+/// the gap should last for approx. 3 seconds as the renderer resorts to
+/// a blank fallback stream if there are no new frames received for 2 seconds.
 #[test]
 pub fn optional_inputs_no_offset_flaky() -> Result<()> {
     const OUTPUT_DUMP_FILE: &str = "optional_inputs_no_offset_output.rtp";
@@ -626,7 +628,7 @@ pub fn optional_inputs_no_offset_flaky() -> Result<()> {
     let input_2_handle = thread::spawn(move || {
         input_2_sender.send(&input_2_first_part).unwrap();
         // Simulate delay in sending input_2 packets.
-        thread::sleep(Duration::from_secs(3));
+        thread::sleep(Duration::from_secs(5));
         input_2_sender.send(&input_2_second_part).unwrap();
     });
 
