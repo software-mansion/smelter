@@ -3,7 +3,6 @@ use std::{collections::HashMap, sync::Arc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Parameters for an input stream accepted by the built-in RTMP server.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RtmpInput {
