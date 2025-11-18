@@ -13,9 +13,7 @@ pub(super) mod h264_utils;
 mod dynamic_stream;
 mod static_stream;
 
-pub(super) use dynamic_stream::{
-    DynamicVideoDecoderStream, KeyframeRequestSender, VideoDecoderMapping,
-};
+pub(super) use dynamic_stream::{DynamicVideoDecoderStream, VideoDecoderMapping};
 pub(super) use static_stream::{AudioDecoderStream, VideoDecoderStream};
 
 mod ffmpeg_utils;
@@ -43,6 +41,11 @@ pub(crate) struct DecodedSamples {
     pub sample_rate: u32,
 }
 
+pub(crate) enum EncodedInputEvent {
+    Chunk(EncodedInputChunk),
+    LostData,
+}
+
 #[derive(Debug)]
 pub(crate) struct DecoderThreadHandle {
     pub chunk_sender: Sender<PipelineEvent<EncodedInputChunk>>,
@@ -57,6 +60,7 @@ pub(crate) trait VideoDecoder: Sized + VideoDecoderInstance {
 pub(crate) trait VideoDecoderInstance {
     fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame>;
     fn flush(&mut self) -> Vec<Frame>;
+    fn skip_until_keyframe(&mut self);
 }
 
 pub(crate) trait BytestreamTransformer: Send + 'static {

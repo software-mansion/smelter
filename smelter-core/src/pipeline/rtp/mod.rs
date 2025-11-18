@@ -19,6 +19,12 @@ pub struct RtpPacket {
     pub timestamp: Duration,
 }
 
+#[derive(Debug, Clone)]
+pub enum RtpInputEvent {
+    Packet(RtpPacket),
+    LostPacket,
+}
+
 impl std::fmt::Debug for RtpPacket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let first_bytes = &self.packet.payload[0..usize::min(10, self.packet.payload.len())];

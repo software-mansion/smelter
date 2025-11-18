@@ -73,6 +73,8 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
         self.decoder.flush();
         self.read_all_frames()
     }
+
+    fn skip_until_keyframe(&mut self) {}
 }
 
 impl FfmpegH264Decoder {

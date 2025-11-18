@@ -51,7 +51,7 @@ pub(crate) struct RtpOutput {
 }
 
 #[derive(Debug)]
-pub enum RtpEvent {
+pub enum RtpOutputEvent {
     Data(RtpPacket),
     AudioEos(rtcp::goodbye::Goodbye),
     VideoEos(rtcp::goodbye::Goodbye),
@@ -141,7 +141,7 @@ impl RtpOutput {
         output_ref: &Ref<OutputId>,
         mtu: usize,
         options: VideoEncoderOptions,
-        sender: Sender<RtpEvent>,
+        sender: Sender<RtpOutputEvent>,
     ) -> Result<RtpVideoTrackThreadHandle, OutputInitError> {
         fn payloader_options(codec: PayloadedCodec, mtu: usize) -> PayloaderOptions {
             PayloaderOptions {
@@ -212,7 +212,7 @@ impl RtpOutput {
         output_ref: &Ref<OutputId>,
         mtu: usize,
         options: AudioEncoderOptions,
-        sender: Sender<RtpEvent>,
+        sender: Sender<RtpOutputEvent>,
     ) -> Result<RtpAudioTrackThreadHandle, OutputInitError> {
         fn payloader_options(
             codec: PayloadedCodec,

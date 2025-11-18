@@ -8,7 +8,7 @@ use tracing::{debug, trace};
 
 use crate::pipeline::{
     rtp::{
-        RtpPacket,
+        RtpInputEvent, RtpPacket,
         rtp_input::rtcp_sync::{RtpNtpSyncPoint, RtpTimestampSync},
     },
     utils::input_buffer::InputBuffer,
@@ -114,7 +114,7 @@ impl RtpJitterBuffer {
         );
     }
 
-    pub fn pop_packet(&mut self) -> Option<RtpPacket> {
+    pub fn pop_packet(&mut self) -> Option<RtpInputEvent> {
         let (first_seq_num, first_packet) = self.packets.first_key_value()?;
 
         // check if next sequence_number is ready (and return it if it is)
@@ -127,7 +127,7 @@ impl RtpJitterBuffer {
                         // if input is required or offset is set, we can assume that we can wait
                         // a while, but it should not depend on queue clock
                         if first_packet.received_at.elapsed() < duration {
-                            return None;
+                            return Some(RtpInputEvent::LostPacket);
                         }
                     }
                     RtpJitterBufferMode::QueueBased => {
@@ -140,7 +140,7 @@ impl RtpJitterBuffer {
                         let should_pop = lowest_pts + self.input_buffer.size()
                             < self.queue_sync_point.elapsed() + MIN_DECODE_TIME;
                         if !should_pop {
-                            return None;
+                            return Some(RtpInputEvent::LostPacket);
                         }
                     }
                 }
@@ -162,10 +162,10 @@ impl RtpJitterBuffer {
         ));
 
         self.previous_seq_num = Some(first_seq_num);
-        Some(RtpPacket {
+        Some(RtpInputEvent::Packet(RtpPacket {
             packet: first_packet.packet,
             timestamp,
-        })
+        }))
     }
 }
 

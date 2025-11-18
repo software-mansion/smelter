@@ -8,7 +8,8 @@ use crate::{
     PipelineCtx, PipelineEvent,
     error::DecoderInitError,
     pipeline::decoder::{
-        BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, VideoDecoderStream,
+        BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, EncodedInputEvent,
+        VideoDecoderStream,
     },
     thread_utils::{InitializableThread, ThreadMetadata},
 };
@@ -49,7 +50,15 @@ where
         let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(buffer_size);
 
         let transformed_bytestream =
-            BytestreamTransformStream::new(transformer, chunk_receiver.into_iter());
+            BytestreamTransformStream::new(transformer, chunk_receiver.into_iter()).map(|event| {
+                match event {
+                    PipelineEvent::Data(chunk) => {
+                        PipelineEvent::Data(EncodedInputEvent::Chunk(chunk))
+                    }
+                    PipelineEvent::EOS => PipelineEvent::EOS,
+                }
+            });
+
         let decoder_stream = VideoDecoderStream::<Decoder, _>::new(ctx, transformed_bytestream)?;
 
         let state = Self {

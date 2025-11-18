@@ -62,6 +62,10 @@ impl VideoDecoderInstance for VulkanH264Decoder {
             .map(from_vk_frame)
             .collect()
     }
+
+    fn skip_until_keyframe(&mut self) {
+        self.decoder.mark_missing_data();
+    }
 }
 
 fn from_vk_frame(frame: vk_video::Frame<wgpu::Texture>) -> Frame {

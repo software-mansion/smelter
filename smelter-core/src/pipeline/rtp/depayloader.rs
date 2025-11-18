@@ -39,7 +39,7 @@ pub fn new_depayloader(options: DepayloaderOptions) -> Box<dyn Depayloader> {
     info!(?options, "Initialize RTP depayloader");
     match options {
         DepayloaderOptions::H264 => {
-            BufferedDepayloader::<H264Packet>::new_boxed(MediaKind::Video(VideoCodec::H264))
+            SimpleDepayloader::<H264Packet>::new_boxed(MediaKind::Video(VideoCodec::H264))
         }
         DepayloaderOptions::Vp8 => {
             BufferedDepayloader::<Vp8Packet>::new_boxed(MediaKind::Video(VideoCodec::Vp8))

@@ -3,15 +3,15 @@ use std::{marker::PhantomData, sync::Arc};
 use crossbeam_channel::Sender;
 use tracing::warn;
 
-use crate::prelude::*;
-use crate::thread_utils::ThreadMetadata;
 use crate::{
     pipeline::{
-        decoder::{AudioDecoderStream, DecoderThreadHandle},
+        decoder::{AudioDecoderStream, DecoderThreadHandle, EncodedInputEvent},
         resampler::decoder_resampler::ResampledDecoderStream,
     },
-    thread_utils::InitializableThread,
+    thread_utils::{InitializableThread, ThreadMetadata},
 };
+
+use crate::prelude::*;
 
 use super::AudioDecoder;
 
@@ -48,11 +48,13 @@ where
         let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(buffer_size);
         let output_sample_rate = ctx.mixing_sample_rate;
 
-        let decoded_stream = AudioDecoderStream::<Decoder, _>::new(
-            ctx,
-            decoder_options,
-            chunk_receiver.into_iter(),
-        )?;
+        let chunk_stream = chunk_receiver.into_iter().map(|event| match event {
+            PipelineEvent::Data(chunk) => PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)),
+            PipelineEvent::EOS => PipelineEvent::EOS,
+        });
+
+        let decoded_stream =
+            AudioDecoderStream::<Decoder, _>::new(ctx, decoder_options, chunk_stream)?;
 
         let resampled_stream =
             ResampledDecoderStream::new(output_sample_rate, decoded_stream.flatten()).flatten();

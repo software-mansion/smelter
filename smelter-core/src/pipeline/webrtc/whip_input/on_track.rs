@@ -9,9 +9,8 @@ use crate::{
         rtp::{RtpJitterBuffer, depayloader::VideoPayloadTypeMapping},
         webrtc::{
             error::WhipWhepServerError,
-            input_rtcp_listener::RtcpListeners,
             input_rtp_reader::WebrtcRtpReader,
-            input_thread::{AudioTrackThread, VideoTrackThread, start_pli_sender_task},
+            input_thread::{AudioTrackThread, VideoTrackThread},
             negotiated_codecs::{
                 WebrtcVideoDecoderMapping, WebrtcVideoPayloadTypeMapping, audio_codec_negotiated,
             },
@@ -73,8 +72,9 @@ async fn process_audio_track(
 
     let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
     let mut rtp_reader = WebrtcRtpReader::new(
+        &ctx.pipeline_ctx,
         ctx.track,
-        RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
+        ctx.rtc_receiver,
         RtpJitterBuffer::new(
             &ctx.pipeline_ctx,
             ctx.buffer,
@@ -119,7 +119,6 @@ async fn process_video_track(
     let frame_sender = ctx
         .inputs
         .get_with(&input_ref, |input| Ok(input.frame_sender.clone()))?;
-    let keyframe_request_sender = start_pli_sender_task(&ctx.track, &ctx.rtc_receiver);
     let handle = VideoTrackThread::spawn(
         format!("WHIP input video, input_id: {input_ref}"),
         (
@@ -127,14 +126,14 @@ async fn process_video_track(
             decoder_mapping,
             payload_type_mapping,
             frame_sender,
-            keyframe_request_sender,
         ),
     )?;
 
     let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
     let mut rtp_reader = WebrtcRtpReader::new(
+        &ctx.pipeline_ctx,
         ctx.track,
-        RtcpListeners::start(&ctx.pipeline_ctx, ctx.rtc_receiver),
+        ctx.rtc_receiver,
         RtpJitterBuffer::new(
             &ctx.pipeline_ctx,
             ctx.buffer,
@@ -144,6 +143,7 @@ async fn process_video_track(
             }),
         ),
     );
+    rtp_reader.enable_pli().await;
 
     while let Some(packet) = rtp_reader.read_packet().await {
         trace!(?packet, "Sending RTP packet");

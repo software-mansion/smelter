@@ -3,6 +3,7 @@ use std::{iter, sync::Arc};
 use smelter_render::{Frame, error::ErrorStack};
 use tracing::error;
 
+use crate::pipeline::decoder::EncodedInputEvent;
 use crate::pipeline::decoder::{
     VideoDecoder, VideoDecoderInstance, ffmpeg_h264::FfmpegH264Decoder,
     ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder, vulkan_h264::VulkanH264Decoder,
@@ -10,39 +11,9 @@ use crate::pipeline::decoder::{
 
 use crate::prelude::*;
 
-pub(crate) enum KeyframeRequestSender {
-    Async(tokio::sync::mpsc::Sender<()>),
-    #[allow(dead_code)]
-    Sync(crossbeam_channel::Sender<()>),
-}
-
-impl KeyframeRequestSender {
-    pub fn new_async() -> (Self, tokio::sync::mpsc::Receiver<()>) {
-        let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        (Self::Async(sender), receiver)
-    }
-
-    #[allow(dead_code)]
-    pub fn new_sync() -> (Self, crossbeam_channel::Receiver<()>) {
-        let (sender, receiver) = crossbeam_channel::bounded(1);
-        (Self::Sync(sender), receiver)
-    }
-
-    pub fn send(&self) {
-        match &self {
-            KeyframeRequestSender::Async(sender) => {
-                let _ = sender.try_send(());
-            }
-            KeyframeRequestSender::Sync(sender) => {
-                let _ = sender.try_send(());
-            }
-        }
-    }
-}
-
 pub(crate) struct DynamicVideoDecoderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     ctx: Arc<PipelineCtx>,
     decoder: Option<Box<dyn VideoDecoderInstance>>,
@@ -50,18 +21,16 @@ where
     source: Source,
     eos_sent: bool,
     decoders_info: VideoDecoderMapping,
-    keyframe_request_sender: KeyframeRequestSender,
 }
 
 impl<Source> DynamicVideoDecoderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     pub(crate) fn new(
         ctx: Arc<PipelineCtx>,
         decoders_info: VideoDecoderMapping,
         source: Source,
-        keyframe_request_sender: KeyframeRequestSender,
     ) -> Self {
         Self {
             ctx,
@@ -70,7 +39,6 @@ where
             source,
             eos_sent: false,
             decoders_info,
-            keyframe_request_sender,
         }
     }
 
@@ -121,22 +89,24 @@ where
 
 impl<Source> Iterator for DynamicVideoDecoderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     type Item = Vec<PipelineEvent<Frame>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(samples)) => {
+            Some(PipelineEvent::Data(EncodedInputEvent::Chunk(samples))) => {
                 // TODO: flush on decoder change
                 self.ensure_decoder(samples.kind);
                 let decoder = self.decoder.as_mut()?;
                 let chunks = decoder.decode(samples);
-                // TODO: add better detection
-                if chunks.is_empty() {
-                    self.keyframe_request_sender.send();
-                }
                 Some(chunks.into_iter().map(PipelineEvent::Data).collect())
+            }
+            Some(PipelineEvent::Data(EncodedInputEvent::LostData)) => {
+                if let Some(decoder) = self.decoder.as_mut() {
+                    decoder.skip_until_keyframe()
+                }
+                Some(vec![])
             }
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
                 true => None,
