@@ -6,11 +6,11 @@ use std::{
 };
 
 use bytes::Bytes;
-use crossbeam_channel::{Receiver, bounded};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use ffmpeg_next::{
     Dictionary, Stream,
     ffi::{
-        EAGAIN, avformat_alloc_context, avformat_close_input, avformat_find_stream_info,
+        EAGAIN, EIO, avformat_alloc_context, avformat_close_input, avformat_find_stream_info,
         avformat_open_input,
     },
     format::context,
@@ -71,9 +71,9 @@ impl RtmpServerInput {
             audio: Some(samples_receiver),
         };
 
-        Self::spawn_connection_thread(
+        Self::spawn_initialization_thread(
             ctx,
-            input_ref.clone(),
+            input_ref,
             opts,
             should_close.clone(),
             buffer,
@@ -88,25 +88,28 @@ impl RtmpServerInput {
         ))
     }
 
-    fn spawn_connection_thread(
+    fn spawn_initialization_thread(
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
         opts: RtmpServerInputOptions,
         should_close: Arc<AtomicBool>,
         buffer: InputBuffer,
-        video_sender: crossbeam_channel::Sender<PipelineEvent<Frame>>,
-        audio_sender: crossbeam_channel::Sender<PipelineEvent<InputAudioSamples>>,
+        video_sender: Sender<PipelineEvent<Frame>>,
+        audio_sender: Sender<PipelineEvent<InputAudioSamples>>,
     ) {
         std::thread::Builder::new()
-            .name(format!("RTMP connection thread for input {input_ref}"))
+            .name(format!("RTMP thread for input {input_ref}"))
             .spawn(move || {
+                let _span =
+                    span!(Level::INFO, "RTMP thread", input_id = input_ref.to_string()).entered();
+
+                let mut audio_track: Option<Track> = None;
+                let mut video_track: Option<Track> = None;
+
                 loop {
-                    let _span = span!(
-                        Level::INFO,
-                        "RTMP connection thread",
-                        input_id = input_ref.to_string()
-                    )
-                    .entered();
+                    if should_close.load(std::sync::atomic::Ordering::Relaxed) {
+                        break;
+                    }
 
                     let input_ctx = match FfmpegInputContext::new(&opts.url, should_close.clone()) {
                         Ok(ctx) => ctx,
@@ -116,64 +119,74 @@ impl RtmpServerInput {
                             continue;
                         }
                     };
-                    let (audio, samples_receiver) = match input_ctx.audio_stream() {
-                        Some(stream) => match Self::handle_audio_track(
-                            &ctx,
-                            &input_ref,
-                            &stream,
-                            buffer.clone(),
-                        ) {
-                            Ok((track, receiver)) => (Some(track), Some(receiver)),
-                            Err(err) => {
-                                error!("Failed to initialize audio track: {err:?}");
-                                (None, None)
-                            }
-                        },
-                        None => (None, None),
-                    };
 
-                    let (video, frame_receiver) = match input_ctx.video_stream() {
-                        Some(stream) => match Self::handle_video_track(
-                            &ctx,
-                            &input_ref,
-                            &stream,
-                            opts.video_decoders.clone(),
-                            buffer.clone(),
-                        ) {
-                            Ok((track, receiver)) => (Some(track), Some(receiver)),
-                            Err(err) => {
-                                error!("Failed to initialize video track: {err:?}");
-                                (None, None)
-                            }
-                        },
-                        None => (None, None),
-                    };
-
-                    if let Some(receiver) = frame_receiver {
-                        let sender = video_sender.clone();
-                        std::thread::spawn(move || {
-                            while let Ok(event) = receiver.recv() {
-                                if sender.send(event).is_err() {
-                                    break;
+                    if audio_track.is_none() && video_track.is_none() {
+                        if let Some(stream) = input_ctx.audio_stream() {
+                            match Self::handle_audio_track(
+                                &ctx,
+                                &input_ref,
+                                &stream,
+                                buffer.clone(),
+                            ) {
+                                Ok((track, receiver)) => {
+                                    audio_track = Some(track);
+                                    let sender = audio_sender.clone();
+                                    std::thread::spawn(move || {
+                                        for event in receiver {
+                                            if sender.send(event).is_err() {
+                                                break;
+                                            }
+                                        }
+                                    });
+                                }
+                                Err(err) => {
+                                    error!("Failed to initialize audio track: {err:?}");
                                 }
                             }
-                        });
-                    }
+                        }
 
-                    // TODO audio does not work after reconnect
-                    if let Some(receiver) = samples_receiver {
-                        let sender = audio_sender.clone();
-                        std::thread::spawn(move || {
-                            while let Ok(event) = receiver.recv() {
-                                if sender.send(event).is_err() {
-                                    break;
+                        if let Some(stream) = input_ctx.video_stream() {
+                            match Self::handle_video_track(
+                                &ctx,
+                                &input_ref,
+                                &stream,
+                                opts.video_decoders.clone(),
+                                buffer.clone(),
+                            ) {
+                                Ok((track, receiver)) => {
+                                    video_track = Some(track);
+                                    let sender = video_sender.clone();
+                                    std::thread::spawn(move || {
+                                        for event in receiver {
+                                            if sender.send(event).is_err() {
+                                                break;
+                                            }
+                                        }
+                                    });
+                                }
+                                Err(err) => {
+                                    error!("Failed to initialize video track: {err:?}");
                                 }
                             }
-                        });
+                        }
                     }
 
-                    Self::run_demuxer_thread(input_ctx, audio, video);
+                    Self::run_demuxer_thread(input_ctx, audio_track.as_mut(), video_track.as_mut());
+
+                    warn!("RTMP connection lost, reconnecting possible in 3s...");
                     std::thread::sleep(Duration::from_secs(3));
+                }
+
+                if let Some(Track { handle, .. }) = &audio_track
+                    && handle.chunk_sender.send(PipelineEvent::EOS).is_err()
+                {
+                    debug!("Channel closed. Failed to send audio EOS.")
+                }
+
+                if let Some(Track { handle, .. }) = &video_track
+                    && handle.chunk_sender.send(PipelineEvent::EOS).is_err()
+                {
+                    debug!("Channel closed. Failed to send video EOS.")
                 }
             })
             .unwrap();
@@ -284,19 +297,19 @@ impl RtmpServerInput {
 
     fn run_demuxer_thread(
         mut input_ctx: FfmpegInputContext,
-        mut audio: Option<Track>,
-        mut video: Option<Track>,
+        mut audio: Option<&mut Track>,
+        mut video: Option<&mut Track>,
     ) {
         loop {
             let packet = match input_ctx.read_packet() {
                 Ok(packet) => packet,
                 Err(ffmpeg_next::Error::Eof | ffmpeg_next::Error::Exit) => break,
-                Err(ffmpeg_next::Error::Other { errno }) if errno == EAGAIN => {
+                Err(ffmpeg_next::Error::Other { errno: EAGAIN }) => {
                     trace!("RTMP demuxer waiting for packets");
                     std::thread::sleep(RTMP_READ_RETRY_DELAY);
                     continue;
                 }
-                Err(ffmpeg_next::Error::Other { errno: 5 }) => {
+                Err(ffmpeg_next::Error::Other { errno: EIO }) => {
                     warn!("Input session disconnected!");
                     break;
                 }
@@ -358,18 +371,6 @@ impl RtmpServerInput {
                     debug!("Channel closed")
                 }
             }
-        }
-
-        if let Some(Track { handle, .. }) = &audio
-            && handle.chunk_sender.send(PipelineEvent::EOS).is_err()
-        {
-            debug!("Channel closed. Failed to send audio EOS.")
-        }
-
-        if let Some(Track { handle, .. }) = &video
-            && handle.chunk_sender.send(PipelineEvent::EOS).is_err()
-        {
-            debug!("Channel closed. Failed to send video EOS.")
         }
     }
 }
