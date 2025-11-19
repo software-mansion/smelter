@@ -89,9 +89,9 @@ impl LatencyOptimizedBuffer {
     fn new(ctx: &PipelineCtx) -> Self {
         Self {
             sync_point: ctx.queue_sync_point,
-            desired_buffer: ctx.default_buffer_duration,
+            desired_buffer: ctx.default_buffer_duration + Duration::from_millis(100),
             min_buffer: Duration::min(Duration::from_millis(20), ctx.default_buffer_duration),
-            max_buffer: ctx.default_buffer_duration + Duration::from_millis(50),
+            max_buffer: ctx.default_buffer_duration + Duration::from_millis(500),
             dynamic_buffer: ctx.default_buffer_duration,
             state: LatencyOptimizedBufferState::Ok,
         }
