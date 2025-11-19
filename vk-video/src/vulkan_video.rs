@@ -50,13 +50,12 @@ use ash::vk;
 pub use crate::adapter::VulkanAdapter;
 pub use crate::device::VulkanDevice;
 pub use crate::instance::VulkanInstance;
-pub use crate::parser::reference_manager::ReferenceManagementError;
+pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 pub use crate::vulkan_decoder::VulkanDecoderError;
 pub use crate::vulkan_encoder::VulkanEncoderError;
 
 use crate::parser::{
-    decoder_instructions::compile_to_decoder_instructions,
-    h264::{H264Parser, H264ParserError},
+    decoder_instructions::compile_to_decoder_instructions, h264::H264Parser,
     reference_manager::ReferenceContext,
 };
 use crate::vulkan_encoder::VulkanEncoder;

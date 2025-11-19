@@ -17,6 +17,7 @@ pub mod h264 {
 
     pub use super::au_splitter::AccessUnit;
     pub use super::nalu_parser::{Nalu, ParsedNalu};
+    #[cfg(feature = "expose_parsers")]
     pub use h264_reader::nal as nal_types;
 
     #[derive(Debug, thiserror::Error)]

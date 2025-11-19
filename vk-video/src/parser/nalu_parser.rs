@@ -150,6 +150,8 @@ pub enum ParsedNalu {
 pub struct Nalu {
     /// Parsed nalu from [`Nalu::raw_bytes`]
     pub parsed: ParsedNalu,
+    // Only used if parsers are exposed
+    #[allow(dead_code)]
     pub raw_bytes: Box<[u8]>,
     pub pts: Option<u64>,
 }
