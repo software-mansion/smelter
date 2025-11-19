@@ -5,6 +5,7 @@ use ash::vk;
 use crate::{
     VulkanCommonError, VulkanDevice,
     device::queues::Queue,
+    parser::reference_manager::{PictureInfo, ReferencePictureInfo},
     wrappers::{ImageLayoutTracker, OpenCommandBuffer},
 };
 
@@ -213,8 +214,8 @@ impl Drop for VideoSession {
     }
 }
 
-impl From<crate::parser::ReferencePictureInfo> for vk::native::StdVideoDecodeH264ReferenceInfo {
-    fn from(picture_info: crate::parser::ReferencePictureInfo) -> Self {
+impl From<ReferencePictureInfo> for vk::native::StdVideoDecodeH264ReferenceInfo {
+    fn from(picture_info: ReferencePictureInfo) -> Self {
         vk::native::StdVideoDecodeH264ReferenceInfo {
             flags: vk::native::StdVideoDecodeH264ReferenceInfoFlags {
                 __bindgen_padding_0: [0; 3],
@@ -233,8 +234,8 @@ impl From<crate::parser::ReferencePictureInfo> for vk::native::StdVideoDecodeH26
     }
 }
 
-impl From<crate::parser::PictureInfo> for vk::native::StdVideoDecodeH264ReferenceInfo {
-    fn from(picture_info: crate::parser::PictureInfo) -> Self {
+impl From<PictureInfo> for vk::native::StdVideoDecodeH264ReferenceInfo {
+    fn from(picture_info: PictureInfo) -> Self {
         vk::native::StdVideoDecodeH264ReferenceInfo {
             flags: vk::native::StdVideoDecodeH264ReferenceInfoFlags {
                 __bindgen_padding_0: [0; 3],

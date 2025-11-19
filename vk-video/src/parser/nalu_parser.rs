@@ -123,6 +123,8 @@ impl NalReceiver {
     }
 }
 
+// It's not used if compiled on macOS, so it's reported as a dead code
+#[allow(dead_code)]
 pub(crate) trait SpsExt {
     fn max_frame_num(&self) -> i64;
 }
@@ -148,6 +150,8 @@ pub enum ParsedNalu {
 pub struct Nalu {
     /// Parsed nalu from [`Nalu::raw_bytes`]
     pub parsed: ParsedNalu,
+    // Only used if parsers are exposed
+    #[allow(dead_code)]
     pub raw_bytes: Box<[u8]>,
     pub pts: Option<u64>,
 }

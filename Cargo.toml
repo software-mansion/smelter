@@ -35,7 +35,7 @@ smelter-api = { path = "smelter-api" }
 smelter-core = { path = "smelter-core" }
 smelter-render = { path = "smelter-render" }
 libcef = { path = "libcef" }
-vk-video = { path = "vk-video" }
+vk-video = { path = "vk-video", features = ["expose_parsers"] }
 bytes = "1.4.0"
 serde_json = { version = "1.0.99", features = ["preserve_order"] }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
@@ -111,9 +111,8 @@ regex = { workspace = true }
 shared_memory = { workspace = true }
 libcef = { workspace = true, optional = true }
 
-# platforms that support vulkan are: windows and all non-apple unixes. emscripten is a web-based platform, where vulkan is not available either
+# Platforms that support vulkan are: windows and all non-apple unixes. emscripten is a web-based platform, where vulkan is not available either
 [target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies]
-smelter-api = { workspace = true, features = ["vk-video"] }
 smelter-core = { workspace = true, features = ["vk-video"] }
 
 [[bin]]

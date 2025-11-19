@@ -15,8 +15,7 @@ use crate::device::queues::{Queue, Queues};
 use crate::parameters::{
     EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, RateControl,
 };
-use crate::parser::ReferenceContext;
-use crate::parser::h264::H264Parser;
+use crate::parser::{h264::H264Parser, reference_manager::ReferenceContext};
 use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 use crate::{

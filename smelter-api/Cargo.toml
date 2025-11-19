@@ -8,7 +8,6 @@ license-file = "../LICENSE"
 default = []
 decklink = ["smelter-core/decklink"]
 web-renderer = ["smelter-core/web-renderer"]
-vk-video = ["smelter-core/vk-video"]
 
 [dependencies]
 smelter-render = { workspace = true }
