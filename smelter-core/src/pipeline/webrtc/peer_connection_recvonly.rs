@@ -4,7 +4,7 @@ use tokio::{sync::watch, time::timeout};
 use tracing::{debug, warn};
 use webrtc::{
     api::{
-        APIBuilder, interceptor_registry::register_default_interceptors, media_engine::MediaEngine,
+        interceptor_registry::register_default_interceptors, media_engine::MediaEngine, setting_engine::{self, SettingEngine}, APIBuilder
     },
     ice_transport::{
         ice_candidate::RTCIceCandidateInit, ice_connection_state::RTCIceConnectionState,
@@ -13,15 +13,10 @@ use webrtc::{
     },
     interceptor::registry::Registry,
     peer_connection::{
-        RTCPeerConnection, configuration::RTCConfiguration,
-        peer_connection_state::RTCPeerConnectionState,
-        sdp::session_description::RTCSessionDescription,
+        configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState, sdp::session_description::RTCSessionDescription, RTCPeerConnection
     },
     rtp_transceiver::{
-        RTCRtpTransceiver, RTCRtpTransceiverInit,
-        rtp_codec::{RTCRtpCodecParameters, RTPCodecType},
-        rtp_receiver::RTCRtpReceiver,
-        rtp_transceiver_direction::RTCRtpTransceiverDirection,
+        rtp_codec::{RTCRtpCodecParameters, RTPCodecType}, rtp_receiver::RTCRtpReceiver, rtp_transceiver_direction::RTCRtpTransceiverDirection, RTCRtpTransceiver, RTCRtpTransceiverInit
     },
     track::track_remote::TrackRemote,
 };
@@ -49,6 +44,9 @@ impl RecvonlyPeerConnection {
     ) -> Result<Self, webrtc::Error> {
         let mut media_engine = media_engine_with_codecs(video_codecs)?;
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
+        let mut setting_engine = SettingEngine::default();
+        setting_engine.set_srtp_replay_protection_window(128); 
+        setting_engine.set_srtcp_replay_protection_window(128); 
 
         let api = APIBuilder::new()
             .with_media_engine(media_engine)
