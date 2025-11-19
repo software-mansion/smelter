@@ -1,5 +1,6 @@
 use bytes::{Buf, Bytes, BytesMut};
 use std::io::Read;
+use tracing::error;
 
 use crate::pipeline::decoder::BytestreamTransformer;
 use crate::prelude::*;
@@ -56,7 +57,10 @@ impl BytestreamTransformer for AvccToAnnexBRepacker {
             let len = u32::from_be_bytes(len);
 
             let mut nalu = BytesMut::zeroed(len as usize);
-            reader.read_exact(&mut nalu).unwrap();
+            if let Err(err) = reader.read_exact(&mut nalu) {
+                error!("Read NALU error: {err}");
+                return Bytes::new();
+            }
 
             data.extend_from_slice(&[0, 0, 0, 1]);
             data.extend_from_slice(&nalu);
