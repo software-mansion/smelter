@@ -13,7 +13,9 @@ pub(super) mod h264_utils;
 mod dynamic_stream;
 mod static_stream;
 
-pub(super) use dynamic_stream::{DynamicVideoDecoderStream, VideoDecoderMapping};
+pub(super) use dynamic_stream::{
+    DynamicVideoDecoderStream, KeyframeRequestSender, VideoDecoderMapping,
+};
 pub(super) use static_stream::{AudioDecoderStream, VideoDecoderStream};
 
 mod ffmpeg_utils;
@@ -54,7 +56,10 @@ pub(crate) struct DecoderThreadHandle {
 pub(crate) trait VideoDecoder: Sized + VideoDecoderInstance {
     const LABEL: &'static str;
 
-    fn new(ctx: &Arc<PipelineCtx>) -> Result<Self, DecoderInitError>;
+    fn new(
+        ctx: &Arc<PipelineCtx>,
+        keyframe_request_sender: Option<KeyframeRequestSender>,
+    ) -> Result<Self, DecoderInitError>;
 }
 
 pub(crate) trait VideoDecoderInstance {

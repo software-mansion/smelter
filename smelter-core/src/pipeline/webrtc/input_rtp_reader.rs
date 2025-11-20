@@ -1,9 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use tokio::sync::mpsc::Receiver;
-use tracing::{debug, warn};
+use tracing::{Instrument, debug, warn};
 use webrtc::{
-    dtls_transport::RTCDtlsTransport,
     rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication,
     rtp_transceiver::rtp_receiver::RTCRtpReceiver, track::track_remote::TrackRemote,
 };
@@ -11,16 +10,19 @@ use webrtc::{
 use crate::{
     PipelineCtx,
     pipeline::{
+        decoder::KeyframeRequestSender,
         rtp::{RtpInputEvent, RtpJitterBuffer},
         webrtc::input_rtcp_listener::RtcpListeners,
     },
 };
 
 pub(super) struct WebrtcRtpReader {
+    track: Arc<TrackRemote>,
+    rtc_receiver: Arc<RTCRtpReceiver>,
     rtcp_listeners: RtcpListeners,
     jitter_buffer: RtpJitterBuffer,
     rtp_receiver: Receiver<webrtc::rtp::packet::Packet>,
-    pli_sender: PliSender,
+    keyframe_request_sender: Option<KeyframeRequestSender>,
 }
 
 impl WebrtcRtpReader {
@@ -30,21 +32,24 @@ impl WebrtcRtpReader {
         rtc_receiver: Arc<RTCRtpReceiver>,
         jitter_buffer: RtpJitterBuffer,
     ) -> Self {
-        let pli_sender = PliSender::new(&track, &rtc_receiver);
-        let rtcp_listeners = RtcpListeners::start(ctx, rtc_receiver);
-        let rtp_receiver = Self::start_rtp_reader_task(track);
+        let rtcp_listeners = RtcpListeners::start(ctx, rtc_receiver.clone());
+        let rtp_receiver = Self::start_rtp_reader_task(track.clone());
 
         Self {
+            track,
+            rtc_receiver,
             rtcp_listeners,
             jitter_buffer,
             rtp_receiver,
-            pli_sender,
+            keyframe_request_sender: None,
         }
     }
 
-    pub async fn enable_pli(&mut self) {
-        self.pli_sender.enabled = true;
-        self.pli_sender.try_send().await;
+    pub async fn enable_pli(&mut self) -> KeyframeRequestSender {
+        let sender = start_pli_sender_task(&self.track, &self.rtc_receiver);
+        self.keyframe_request_sender = Some(sender.clone());
+        sender.send();
+        sender
     }
 
     /// read_rtp is not cancel safe so we need to create separate tasks that
@@ -71,8 +76,10 @@ impl WebrtcRtpReader {
     pub async fn read_packet(&mut self) -> Option<RtpInputEvent> {
         loop {
             if let Some(packet) = self.jitter_buffer.pop_packet() {
-                if let RtpInputEvent::LostPacket = &packet {
-                    self.pli_sender.try_send().await;
+                if let (RtpInputEvent::LostPacket, Some(sender)) =
+                    (&packet, &self.keyframe_request_sender)
+                {
+                    sender.send()
                 };
                 return Some(packet);
             }
@@ -99,37 +106,32 @@ impl WebrtcRtpReader {
     }
 }
 
-struct PliSender {
-    transport: Arc<RTCDtlsTransport>,
-    ssrc: u32,
-    enabled: bool,
-}
+pub fn start_pli_sender_task(
+    track: &Arc<TrackRemote>,
+    rtc_receiver: &Arc<RTCRtpReceiver>,
+) -> KeyframeRequestSender {
+    let (keyframe_request_sender, mut keyframe_request_receiver) =
+        KeyframeRequestSender::new_async();
+    let ssrc = track.ssrc();
+    let transport = rtc_receiver.transport();
+    tokio::spawn(
+        async move {
+            while keyframe_request_receiver.recv().await.is_some() {
+                debug!(ssrc, "Sending PLI");
+                let pli = PictureLossIndication {
+                    // For receive-only endpoints RTP sender SSRC can be set to 0.
+                    sender_ssrc: 0,
+                    media_ssrc: ssrc,
+                };
 
-impl PliSender {
-    fn new(track: &Arc<TrackRemote>, rtc_receiver: &Arc<RTCRtpReceiver>) -> Self {
-        let ssrc = track.ssrc();
-        let transport = rtc_receiver.transport();
-        Self {
-            transport,
-            ssrc,
-            enabled: false,
+                if let Err(err) = transport.write_rtcp(&[Box::new(pli)]).await {
+                    warn!(%err, "Failed to send RTCP packet (PictureLossIndication)")
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await
+            }
         }
-    }
+        .instrument(tracing::Span::current()),
+    );
 
-    async fn try_send(&self) {
-        if !self.enabled {
-            return;
-        }
-
-        debug!(ssrc = self.ssrc, "Sending PLI");
-        let pli = PictureLossIndication {
-            // For receive-only endpoints RTP sender SSRC can be set to 0.
-            sender_ssrc: 0,
-            media_ssrc: self.ssrc,
-        };
-
-        if let Err(err) = self.transport.write_rtcp(&[Box::new(pli)]).await {
-            warn!(%err, "Failed to send RTCP packet (PictureLossIndication)")
-        }
-    }
+    keyframe_request_sender
 }

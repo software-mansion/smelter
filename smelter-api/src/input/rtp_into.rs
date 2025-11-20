@@ -44,7 +44,7 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
                     buffer: input_buffer,
                 },
                 _ => core::RtpJitterBufferOptions {
-                    mode: core::RtpJitterBufferMode::Fixed(Duration::from_millis(100)),
+                    mode: core::RtpJitterBufferMode::Fixed(Duration::from_millis(200)),
                     buffer: input_buffer,
                 },
             },

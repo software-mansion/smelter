@@ -7,8 +7,8 @@ use tracing::{trace, warn};
 use crate::{
     pipeline::{
         decoder::{
-            AudioDecoderStream, DynamicVideoDecoderStream, VideoDecoderMapping,
-            libopus::OpusDecoder,
+            AudioDecoderStream, DynamicVideoDecoderStream, KeyframeRequestSender,
+            VideoDecoderMapping, libopus::OpusDecoder,
         },
         resampler::decoder_resampler::ResampledDecoderStream,
         rtp::{
@@ -40,13 +40,15 @@ impl InitializableThread for VideoTrackThread {
         VideoDecoderMapping,
         VideoPayloadTypeMapping,
         Sender<PipelineEvent<Frame>>,
+        KeyframeRequestSender,
     );
 
     type SpawnOutput = VideoTrackThreadHandle;
     type SpawnError = DecoderInitError;
 
     fn init(options: Self::InitOptions) -> Result<(Self, Self::SpawnOutput), Self::SpawnError> {
-        let (ctx, decoder_mapping, payload_type_mapping, frame_sender) = options;
+        let (ctx, decoder_mapping, payload_type_mapping, frame_sender, keyframe_request_sender) =
+            options;
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
 
         let packet_stream = AsyncReceiverIter {
@@ -56,8 +58,13 @@ impl InitializableThread for VideoTrackThread {
         let depayloader_stream =
             DynamicDepayloaderStream::new(payload_type_mapping, packet_stream).flatten();
 
-        let decoder_stream =
-            DynamicVideoDecoderStream::new(ctx, decoder_mapping, depayloader_stream).flatten();
+        let decoder_stream = DynamicVideoDecoderStream::new(
+            ctx,
+            decoder_mapping,
+            depayloader_stream,
+            keyframe_request_sender,
+        )
+        .flatten();
 
         let result_stream = decoder_stream
             .filter_map(|event| match event {

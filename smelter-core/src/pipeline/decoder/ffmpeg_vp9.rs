@@ -1,7 +1,7 @@
 use std::{iter, sync::Arc};
 
 use crate::pipeline::decoder::{
-    VideoDecoder, VideoDecoderInstance,
+    KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
     ffmpeg_utils::{create_av_packet, from_av_frame},
 };
 use crate::prelude::*;
@@ -24,7 +24,10 @@ pub struct FfmpegVp9Decoder {
 impl VideoDecoder for FfmpegVp9Decoder {
     const LABEL: &'static str = "FFmpeg VP9 decoder";
 
-    fn new(_ctx: &Arc<PipelineCtx>) -> Result<Self, DecoderInitError> {
+    fn new(
+        _ctx: &Arc<PipelineCtx>,
+        _keyframe_request_sender: Option<KeyframeRequestSender>,
+    ) -> Result<Self, DecoderInitError> {
         info!("Initializing FFmpeg VP9 decoder");
         let mut parameters = ffmpeg_next::codec::Parameters::new();
         unsafe {

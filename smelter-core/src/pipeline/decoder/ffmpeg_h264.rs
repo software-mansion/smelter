@@ -1,7 +1,7 @@
 use std::{iter, sync::Arc};
 
 use crate::pipeline::decoder::{
-    VideoDecoder, VideoDecoderInstance,
+    KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
     ffmpeg_utils::{create_av_packet, from_av_frame},
 };
 use crate::prelude::*;
@@ -18,13 +18,17 @@ const TIME_BASE: i32 = 1_000_000;
 
 pub struct FfmpegH264Decoder {
     decoder: ffmpeg_next::decoder::Opened,
+    keyframe_request_sender: Option<KeyframeRequestSender>,
     av_frame: ffmpeg_next::frame::Video,
 }
 
 impl VideoDecoder for FfmpegH264Decoder {
     const LABEL: &'static str = "FFmpeg H264 decoder";
 
-    fn new(_ctx: &Arc<PipelineCtx>) -> Result<Self, DecoderInitError> {
+    fn new(
+        _ctx: &Arc<PipelineCtx>,
+        keyframe_request_sender: Option<KeyframeRequestSender>,
+    ) -> Result<Self, DecoderInitError> {
         info!("Initializing FFmpeg H264 decoder");
         let mut parameters = ffmpeg_next::codec::Parameters::new();
         unsafe {
@@ -43,6 +47,7 @@ impl VideoDecoder for FfmpegH264Decoder {
         let decoder = decoder.open_as(Id::H264)?;
         Ok(Self {
             decoder,
+            keyframe_request_sender,
             av_frame: ffmpeg_next::frame::Video::empty(),
         })
     }
@@ -62,6 +67,10 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
         match self.decoder.send_packet(&av_packet) {
             Ok(()) => {}
             Err(e) => {
+                // TODO: move to parser
+                if let Some(s) = self.keyframe_request_sender.as_ref() {
+                    s.send()
+                }
                 warn!("Failed to send a packet to decoder: {:?}", e);
                 return Vec::new();
             }

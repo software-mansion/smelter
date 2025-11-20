@@ -10,6 +10,37 @@ use crate::pipeline::decoder::{
 
 use crate::prelude::*;
 
+#[derive(Clone)]
+pub(crate) enum KeyframeRequestSender {
+    Async(tokio::sync::mpsc::Sender<()>),
+    #[allow(dead_code)]
+    Sync(crossbeam_channel::Sender<()>),
+}
+
+impl KeyframeRequestSender {
+    pub fn new_async() -> (Self, tokio::sync::mpsc::Receiver<()>) {
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        (Self::Async(sender), receiver)
+    }
+
+    #[allow(dead_code)]
+    pub fn new_sync() -> (Self, crossbeam_channel::Receiver<()>) {
+        let (sender, receiver) = crossbeam_channel::bounded(1);
+        (Self::Sync(sender), receiver)
+    }
+
+    pub fn send(&self) {
+        match &self {
+            KeyframeRequestSender::Async(sender) => {
+                let _ = sender.try_send(());
+            }
+            KeyframeRequestSender::Sync(sender) => {
+                let _ = sender.try_send(());
+            }
+        }
+    }
+}
+
 pub(crate) struct DynamicVideoDecoderStream<Source>
 where
     Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
@@ -20,6 +51,7 @@ where
     source: Source,
     eos_sent: bool,
     decoders_info: VideoDecoderMapping,
+    keyframe_request_sender: KeyframeRequestSender,
 }
 
 impl<Source> DynamicVideoDecoderStream<Source>
@@ -30,6 +62,7 @@ where
         ctx: Arc<PipelineCtx>,
         decoders_info: VideoDecoderMapping,
         source: Source,
+        keyframe_request_sender: KeyframeRequestSender,
     ) -> Self {
         Self {
             ctx,
@@ -38,6 +71,7 @@ where
             source,
             eos_sent: false,
             decoders_info,
+            keyframe_request_sender,
         }
     }
 
@@ -77,10 +111,22 @@ where
         decoder: VideoDecoderOptions,
     ) -> Result<Box<dyn VideoDecoderInstance>, DecoderInitError> {
         let decoder: Box<dyn VideoDecoderInstance> = match decoder {
-            VideoDecoderOptions::FfmpegH264 => Box::new(FfmpegH264Decoder::new(&self.ctx)?),
-            VideoDecoderOptions::FfmpegVp8 => Box::new(FfmpegVp8Decoder::new(&self.ctx)?),
-            VideoDecoderOptions::FfmpegVp9 => Box::new(FfmpegVp9Decoder::new(&self.ctx)?),
-            VideoDecoderOptions::VulkanH264 => Box::new(VulkanH264Decoder::new(&self.ctx)?),
+            VideoDecoderOptions::FfmpegH264 => Box::new(FfmpegH264Decoder::new(
+                &self.ctx,
+                Some(self.keyframe_request_sender.clone()),
+            )?),
+            VideoDecoderOptions::FfmpegVp8 => Box::new(FfmpegVp8Decoder::new(
+                &self.ctx,
+                Some(self.keyframe_request_sender.clone()),
+            )?),
+            VideoDecoderOptions::FfmpegVp9 => Box::new(FfmpegVp9Decoder::new(
+                &self.ctx,
+                Some(self.keyframe_request_sender.clone()),
+            )?),
+            VideoDecoderOptions::VulkanH264 => Box::new(VulkanH264Decoder::new(
+                &self.ctx,
+                Some(self.keyframe_request_sender.clone()),
+            )?),
         };
         Ok(decoder)
     }

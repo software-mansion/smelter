@@ -23,7 +23,7 @@ where
     Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     pub fn new(ctx: Arc<PipelineCtx>, source: Source) -> Result<Self, DecoderInitError> {
-        let decoder = Decoder::new(&ctx)?;
+        let decoder = Decoder::new(&ctx, None)?;
         Ok(Self {
             decoder,
             source,
