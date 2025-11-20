@@ -137,6 +137,9 @@ impl RtpJitterBuffer {
                 let next_pts = lowest_pts + self.input_buffer.size();
                 next_pts > self.queue_sync_point.elapsed() + MIN_DECODE_TIME
             }
+            RtpJitterBufferMode::Disabled => {
+                return self.pop();
+            }
         };
         if wait_for_next_packet {
             return None;
