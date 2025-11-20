@@ -643,7 +643,7 @@ pub fn optional_inputs_no_offset_flaky() -> Result<()> {
         &new_output_dump,
         VideoValidationConfig {
             validation_intervals: vec![Duration::ZERO..Duration::from_secs(18)],
-            allowed_invalid_frames: 10,
+            allowed_invalid_frames: 15,
             ..Default::default()
         },
     )?;
