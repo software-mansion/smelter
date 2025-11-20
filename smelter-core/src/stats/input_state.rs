@@ -27,7 +27,7 @@ impl InputStatsState {
             InputProtocolKind::Whip => InputStatsState::Whip(WhipInputState::new()),
             InputProtocolKind::Whep => InputStatsState::Whep(WhepInputState::new()),
             InputProtocolKind::Rtp => unimplemented!(),
-            InputProtocolKind::RtmpServer => unimplemented!(),
+            InputProtocolKind::Rtmp => unimplemented!(),
             InputProtocolKind::Mp4 => unimplemented!(),
             InputProtocolKind::Hls => InputStatsState::Hls(HlsInputState::new()),
             InputProtocolKind::V4l2 => unimplemented!(),

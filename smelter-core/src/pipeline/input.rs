@@ -42,7 +42,7 @@ impl Input {
     pub fn kind(&self) -> InputProtocolKind {
         match self {
             Input::Rtp(_input) => InputProtocolKind::Rtp,
-            Input::RtmpServer(_input) => InputProtocolKind::RtmpServer,
+            Input::RtmpServer(_input) => InputProtocolKind::Rtmp,
             Input::Mp4(_input) => InputProtocolKind::Mp4,
             Input::Whip(_input) => InputProtocolKind::Whip,
             Input::Whep(_input) => InputProtocolKind::Whep,

@@ -56,7 +56,7 @@ pub(super) async fn status_handler(
         .map(|(id, input)| {
             let input_type = match &input.protocol {
                 InputProtocolKind::Rtp => "rtp",
-                InputProtocolKind::RtmpServer => "rtmp",
+                InputProtocolKind::Rtmp => "rtmp",
                 InputProtocolKind::Mp4 => "mp4",
                 InputProtocolKind::Whip => "whip",
                 InputProtocolKind::Whep => "whep",

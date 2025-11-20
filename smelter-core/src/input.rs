@@ -52,7 +52,7 @@ pub struct InputInfo {
 #[derive(Debug, Clone, Copy)]
 pub enum InputProtocolKind {
     Rtp,
-    RtmpServer,
+    Rtmp,
     Mp4,
     Hls,
     Whip,

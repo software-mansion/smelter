@@ -7,12 +7,22 @@ use crossbeam_channel::Sender;
 use smelter_render::InputId;
 use tracing::{Level, debug, error, span, warn};
 
-use crate::pipeline::{
-    rtmp::rtmp_input::{
-        Track, demux::run_demuxer_thread, ffmpeg_context::FfmpegInputContext,
-        track_audio::handle_audio_track, track_video::handle_video_track,
+use crate::{
+    pipeline::{
+        decoder::{
+            decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
+            decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
+            fdk_aac, ffmpeg_h264,
+            h264_utils::{AvccToAnnexBRepacker, H264AvcDecoderConfig},
+            vulkan_h264,
+        },
+        rtmp::rtmp_input::{
+            StreamState, Track, demux::run_demuxer_thread, ffmpeg_context::FfmpegInputContext,
+            ffmpeg_utils::read_extra_data,
+        },
+        utils::input_buffer::InputBuffer,
     },
-    utils::input_buffer::InputBuffer,
+    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
@@ -52,18 +62,31 @@ pub(super) fn spawn_initialization_thread(
                 if audio_track.is_none()
                     && let Some(stream) = input_ctx.audio_stream()
                 {
-                    match handle_audio_track(
-                        &ctx,
-                        &input_ref,
-                        &stream,
-                        buffer.clone(),
-                        samples_sender.clone(),
-                    ) {
-                        Ok(track) => {
-                            audio_track = Some(track);
+                    let asc = read_extra_data(&stream);
+                    let state =
+                        StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer.clone());
+                    let handle = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
+                        input_ref.clone(),
+                        AudioDecoderThreadOptions {
+                            ctx: ctx.clone(),
+                            decoder_options: FdkAacDecoderOptions { asc },
+                            samples_sender: samples_sender.clone(),
+                            input_buffer_size: 2000,
+                        },
+                    );
+
+                    match handle {
+                        Ok(handle) => {
+                            let track = Track {
+                                index: stream.index(),
+                                handle,
+                                state,
+                            };
+                            audio_track = Some(track)
                         }
                         Err(err) => {
                             error!("Failed to initialize audio track: {err:?}");
+                            break;
                         }
                     }
                 }
@@ -71,19 +94,67 @@ pub(super) fn spawn_initialization_thread(
                 if video_track.is_none()
                     && let Some(stream) = input_ctx.video_stream()
                 {
-                    match handle_video_track(
-                        &ctx,
-                        &input_ref,
-                        &stream,
-                        opts.video_decoders.clone(),
-                        buffer.clone(),
-                        frame_sender.clone(),
-                    ) {
-                        Ok(track) => {
-                            video_track = Some(track);
+                    let state =
+                        StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer.clone());
+
+                    let extra_data = read_extra_data(&stream);
+                    let h264_config = extra_data
+                        .map(H264AvcDecoderConfig::parse)
+                        .transpose()
+                        .unwrap_or_else(|e| match e {
+                            H264AvcDecoderConfigError::NotAVCC => None,
+                            _ => {
+                                warn!("Could not parse extra data: {e}");
+                                None
+                            }
+                        });
+
+                    let decoder_thread_options = VideoDecoderThreadOptions {
+                        ctx: ctx.clone(),
+                        transformer: h264_config.map(AvccToAnnexBRepacker::new),
+                        frame_sender: frame_sender.clone(),
+                        input_buffer_size: 2000,
+                    };
+
+                    let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
+                    let h264_decoder = opts.video_decoders.h264.unwrap_or({
+                        match vulkan_supported {
+                            true => VideoDecoderOptions::VulkanH264,
+                            false => VideoDecoderOptions::FfmpegH264,
+                        }
+                    });
+
+                    let handle = match h264_decoder {
+                        VideoDecoderOptions::FfmpegH264 => {
+                            VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
+                                input_ref.clone(),
+                                decoder_thread_options,
+                            )
+                        }
+                        VideoDecoderOptions::VulkanH264 => {
+                            VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
+                                input_ref.clone(),
+                                decoder_thread_options,
+                            )
+                        }
+                        _ => {
+                            error!("Invalid video decoder provided, expected H264");
+                            break;
+                        }
+                    };
+
+                    match handle {
+                        Ok(handle) => {
+                            let track = Track {
+                                index: stream.index(),
+                                handle,
+                                state,
+                            };
+                            video_track = Some(track)
                         }
                         Err(err) => {
                             error!("Failed to initialize video track: {err:?}");
+                            break;
                         }
                     }
                 }

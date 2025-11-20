@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use ffmpeg_next::ffi::{EAGAIN, EIO};
-use tracing::{error, trace, warn};
+use tracing::{trace, warn};
 
 use crate::pipeline::rtmp::rtmp_input::{Track, ffmpeg_context::FfmpegInputContext};
 
@@ -32,15 +32,6 @@ pub(super) fn run_demuxer_thread(
                 continue;
             }
         };
-
-        if packet.is_corrupt() {
-            error!(
-                "Corrupted packet {:?} {:?}",
-                packet.stream(),
-                packet.flags()
-            );
-            continue;
-        }
 
         if let Some(track) = &mut video
             && packet.stream() == track.index

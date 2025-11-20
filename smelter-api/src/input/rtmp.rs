@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RtmpInput {
-    /// RTMP endpoint URL that Smelter listens on for incoming stream.
+    /// URL where the RTMP server will listen for incoming stream.
+    /// Format: `rtmp://<ip_address>:<port>/<app>/<stream_key>`
     pub url: Arc<str>,
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
