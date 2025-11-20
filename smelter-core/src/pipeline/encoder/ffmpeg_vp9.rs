@@ -62,7 +62,7 @@ impl VideoEncoder for FfmpegVp9Encoder {
             // Time to spend encoding.
             ("quality", "realtime"),
             // Tiling splits the video into rectangular regions, which allows multi-threading for encoding and decoding.
-            ("title-columns", "2"),
+            ("tile-columns", "2"),
             // Enable parallel decodability features.
             ("frame-parallel", "1"),
             // Auto number of threads to use.
