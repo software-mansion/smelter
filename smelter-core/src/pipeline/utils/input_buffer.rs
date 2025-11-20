@@ -84,7 +84,7 @@ pub(crate) struct LatencyOptimizedBuffer {
     max_soft_threshold: Duration,
     /// If effective_buffer is below this value, slowly increase the buffer with every packet.
     desired_buffer: Duration,
-    /// If effective_buffer is below this threshold, aggressively and immediately increase the buffer
+    /// If effective_buffer is below this threshold, aggressively and immediately increase the buffer.
     min_threshold: Duration,
 }
 
