@@ -100,7 +100,10 @@ fn check_test_names_uniqueness(tests: &[TestCase]) {
 }
 
 fn snapshot_save_path(test_name: &str, pts: &Duration) -> PathBuf {
-    let out_file_name = format!("{}_{}_{}.png", test_name, pts.as_millis(), OUTPUT_ID);
+    let pts = pts.as_millis();
+
+    // Pad timestamp with 0s on the left to the summaric length of 5.
+    let out_file_name = format!("{test_name}_{pts:05}_{OUTPUT_ID}.png");
     render_snapshots_dir_path().join(out_file_name)
 }
 
