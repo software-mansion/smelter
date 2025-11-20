@@ -29,6 +29,8 @@ pub enum Input {
     Whip(WhipInput),
     Whep(WhepInput),
     Hls(HlsInput),
+    #[cfg(target_os = "linux")]
+    V4L2(super::v4l2::V4L2Input),
     #[cfg(feature = "decklink")]
     DeckLink(super::decklink::DeckLink),
     RawDataChannel,
@@ -42,6 +44,8 @@ impl Input {
             Input::Whip(_input) => InputProtocolKind::Whip,
             Input::Whep(_input) => InputProtocolKind::Whep,
             Input::Hls(_input) => InputProtocolKind::Hls,
+            #[cfg(target_os = "linux")]
+            Input::V4L2(_input) => InputProtocolKind::V4L2,
             #[cfg(feature = "decklink")]
             Input::DeckLink(_input) => InputProtocolKind::DeckLink,
             Input::RawDataChannel => InputProtocolKind::RawDataChannel,
@@ -60,6 +64,8 @@ pub(super) fn new_external_input(
         ProtocolInputOptions::Hls(opts) => HlsInput::new_input(ctx, input_ref, opts),
         ProtocolInputOptions::Whip(opts) => WhipInput::new_input(ctx, input_ref, opts),
         ProtocolInputOptions::Whep(opts) => WhepInput::new_input(ctx, input_ref, opts),
+        #[cfg(target_os = "linux")]
+        ProtocolInputOptions::V4L2(opts) => super::v4l2::V4L2Input::new_input(ctx, input_ref, opts),
         #[cfg(feature = "decklink")]
         ProtocolInputOptions::DeckLink(opts) => {
             super::decklink::DeckLink::new_input(ctx, input_ref, opts)

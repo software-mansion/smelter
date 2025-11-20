@@ -45,6 +45,7 @@ pollster = { workspace = true }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 decklink = { path = "../decklink", optional = true }
+v4l = "0.14.0"
 
 [lints]
 workspace = true

@@ -32,16 +32,16 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     // - input.tex_coords represents middle of pixel, so to shift to column index we need to shift by that value
     // - adding eps to avoid numerical errors when converting f32 -> u32
     var x_pos = u32((input.tex_coords.x * f32(dimensions.x) - half_pixel_width + eps) * 2.0);
-    // x_pos/2 is calculated before conversion to float to make sure that reminder is lost for odd column.
+    // x_pos/2 is calculated before conversion to float to make sure that remainder is lost for odd column.
     var tex_coords = vec2((f32(x_pos/2) / f32(dimensions.x)) + half_pixel_width, input.tex_coords.y);
 
-    var uyvy = textureSample(texture, sampler_, tex_coords);
+    var yuyv = textureSample(texture, sampler_, tex_coords);
 
-    var u = uyvy.x;
-    var v = uyvy.z;
-    var y = uyvy.y;
+    var u = yuyv.y;
+    var v = yuyv.w;
+    var y = yuyv.x;
     if (x_pos % 2 != 0) {
-        y = uyvy.w;
+        y = yuyv.z;
     }
 
     // YUV conversion from: https://en.wikipedia.org/w/index.php?title=YCbCr&section=8#ITU-R_BT.709_conversion

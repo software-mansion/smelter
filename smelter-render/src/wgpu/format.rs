@@ -1,4 +1,5 @@
-use interleaved_yuv_to_rgba::InterleavedYuv422ToRgbaConverter;
+use interleaved_uyvy_to_rgba::InterleavedUyvy422ToRgbaConverter;
+use interleaved_yuyv_to_rgba::InterleavedYuyv422ToRgbaConverter;
 use nv12_to_rgba::Nv12ToRgbaConverter;
 
 use self::{planar_yuv_to_rgba::PlanarYuvToRgbaConverter, rgba_to_yuv::RgbaToYuvConverter};
@@ -8,7 +9,8 @@ use super::{
     texture::{NV12Texture, PlanarYuvTextures},
 };
 
-mod interleaved_yuv_to_rgba;
+mod interleaved_uyvy_to_rgba;
+mod interleaved_yuyv_to_rgba;
 mod nv12_to_rgba;
 mod planar_yuv_to_rgba;
 mod rgba_to_yuv;
@@ -16,7 +18,8 @@ mod rgba_to_yuv;
 #[derive(Debug)]
 pub struct TextureFormat {
     pub planar_yuv_to_rgba_linear: PlanarYuvToRgbaConverter,
-    pub interleaved_yuv_to_rgba_linear: InterleavedYuv422ToRgbaConverter,
+    pub interleaved_uyvy_to_rgba_linear: InterleavedUyvy422ToRgbaConverter,
+    pub interleaved_yuyv_to_rgba_linear: InterleavedYuyv422ToRgbaConverter,
     pub nv12_to_rgba_linear: Nv12ToRgbaConverter,
     pub rgba_to_yuv: RgbaToYuvConverter,
 
@@ -36,11 +39,17 @@ impl TextureFormat {
             &planar_yuv_layout,
             wgpu::TextureFormat::Rgba8Unorm,
         );
-        let interleaved_yuv_to_rgba_linear = InterleavedYuv422ToRgbaConverter::new(
+        let interleaved_uyvy_to_rgba_linear = InterleavedUyvy422ToRgbaConverter::new(
             device,
             &single_texture_layout,
             wgpu::TextureFormat::Rgba8Unorm,
         );
+        let interleaved_yuyv_to_rgba_linear = InterleavedYuyv422ToRgbaConverter::new(
+            device,
+            &single_texture_layout,
+            wgpu::TextureFormat::Rgba8Unorm,
+        );
+
         let nv12_to_rgba_linear =
             Nv12ToRgbaConverter::new(device, &nv12_layout, wgpu::TextureFormat::Rgba8Unorm);
 
@@ -48,7 +57,8 @@ impl TextureFormat {
 
         Self {
             planar_yuv_to_rgba_linear,
-            interleaved_yuv_to_rgba_linear,
+            interleaved_uyvy_to_rgba_linear,
+            interleaved_yuyv_to_rgba_linear,
             nv12_to_rgba_linear,
 
             rgba_to_yuv,

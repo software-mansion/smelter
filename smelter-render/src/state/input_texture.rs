@@ -1,10 +1,11 @@
-use interleaved_yuv422::InterleavedYuv422Input;
-use nv12_texture::NV12TextureInput;
+use interleaved_uyvy422::InterleavedUyvy422Input;
+use nv12_texture::NV12Input;
 use planar_yuv::PlanarYuvInput;
 use rgba_texture::RgbaTextureInput;
 
 use crate::{
     Frame, FrameData, Resolution,
+    state::input_texture::interleaved_yuyv422::InterleavedYuyv422Input,
     wgpu::{WgpuCtx, texture::PlanarYuvVariant},
 };
 
@@ -14,7 +15,8 @@ use super::node_texture::NodeTexture;
 // CPU - connect as linear(default) view
 // WebGl - create temporary rgb texture, write to it convert from srg to rgb
 
-mod interleaved_yuv422;
+mod interleaved_uyvy422;
+mod interleaved_yuyv422;
 mod nv12_texture;
 mod planar_yuv;
 mod rgba_texture;
@@ -23,8 +25,9 @@ mod convert_linear_to_srgb;
 
 enum InputTextureState {
     PlanarYuvTextures(PlanarYuvInput),
-    InterleavedYuv422Texture(InterleavedYuv422Input),
-    Nv12WgpuTexture(NV12TextureInput),
+    InterleavedUyvy422Texture(InterleavedUyvy422Input),
+    InterleavedYuyv422Texture(InterleavedYuyv422Input),
+    Nv12(NV12Input),
     /// Depending on rendering mode
     /// - GPU - Rgba8UnormSrgb
     /// - CPU optimized - Rgba8Unorm (but data is in sRGB color space)
@@ -36,9 +39,10 @@ impl InputTextureState {
     fn resolution(&self) -> Resolution {
         match &self {
             InputTextureState::PlanarYuvTextures(input) => input.resolution(),
-            InputTextureState::InterleavedYuv422Texture(input) => input.resolution(),
+            InputTextureState::InterleavedUyvy422Texture(input) => input.resolution(),
+            InputTextureState::InterleavedYuyv422Texture(input) => input.resolution(),
             InputTextureState::Rgba8UnormWgpuTexture(input) => input.resolution(),
-            InputTextureState::Nv12WgpuTexture(input) => input.resolution(),
+            InputTextureState::Nv12(input) => input.resolution(),
         }
     }
 }
@@ -104,18 +108,39 @@ impl InputTexture {
                     }
                 };
             }
-            FrameData::InterleavedYuv422(data) => {
+            FrameData::Nv12(planes) => match &mut self.0 {
+                Some(InputTextureState::Nv12(input)) => {
+                    input.upload(ctx, planes, frame.resolution);
+                }
+
+                state => {
+                    let mut input = NV12Input::new_uploadable(ctx, frame.resolution);
+                    input.upload(ctx, planes, frame.resolution);
+                    *state = Some(InputTextureState::Nv12(input));
+                }
+            },
+            FrameData::InterleavedUyvy422(data) => {
                 match &mut self.0 {
-                    Some(InputTextureState::InterleavedYuv422Texture(input)) => {
+                    Some(InputTextureState::InterleavedUyvy422Texture(input)) => {
                         input.upload(ctx, &data, frame.resolution);
                     }
                     state => {
-                        let mut input = InterleavedYuv422Input::new(ctx);
+                        let mut input = InterleavedUyvy422Input::new(ctx);
                         input.upload(ctx, &data, frame.resolution);
-                        *state = Some(InputTextureState::InterleavedYuv422Texture(input));
+                        *state = Some(InputTextureState::InterleavedUyvy422Texture(input));
                     }
                 };
             }
+            FrameData::InterleavedYuyv422(data) => match &mut self.0 {
+                Some(InputTextureState::InterleavedYuyv422Texture(input)) => {
+                    input.upload(ctx, &data, frame.resolution);
+                }
+                state => {
+                    let mut input = InterleavedYuyv422Input::new(ctx);
+                    input.upload(ctx, &data, frame.resolution);
+                    *state = Some(InputTextureState::InterleavedYuyv422Texture(input));
+                }
+            },
             FrameData::Rgba8UnormWgpuTexture(texture) => {
                 match &mut self.0 {
                     Some(InputTextureState::Rgba8UnormWgpuTexture(input)) => {
@@ -130,12 +155,12 @@ impl InputTexture {
             }
             FrameData::Nv12WgpuTexture(texture) => {
                 match &mut self.0 {
-                    Some(InputTextureState::Nv12WgpuTexture(input)) => {
+                    Some(InputTextureState::Nv12(input)) => {
                         input.update(ctx, texture).unwrap();
                     }
                     state => {
-                        *state = Some(InputTextureState::Nv12WgpuTexture(
-                            NV12TextureInput::new(ctx, texture).unwrap(),
+                        *state = Some(InputTextureState::Nv12(
+                            NV12Input::new_from_texture(ctx, texture).unwrap(),
                         ));
                     }
                 };
@@ -149,13 +174,16 @@ impl InputTexture {
                 let dst_state = dest.ensure_size(ctx, input_texture.resolution());
                 match input_texture {
                     InputTextureState::PlanarYuvTextures(state) => state.convert(ctx, dst_state),
-                    InputTextureState::InterleavedYuv422Texture(state) => {
+                    InputTextureState::InterleavedUyvy422Texture(state) => {
+                        state.convert(ctx, dst_state)
+                    }
+                    InputTextureState::InterleavedYuyv422Texture(state) => {
                         state.convert(ctx, dst_state)
                     }
                     InputTextureState::Rgba8UnormWgpuTexture(state) => {
                         state.convert(ctx, dst_state)
                     }
-                    InputTextureState::Nv12WgpuTexture(state) => state.convert(ctx, dst_state),
+                    InputTextureState::Nv12(state) => state.convert(ctx, dst_state),
                 }
             }
             None => dest.clear(),

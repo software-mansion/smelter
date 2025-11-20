@@ -171,6 +171,9 @@ pub enum InputInitError {
     #[error(transparent)]
     ResamplerError(#[from] rubato::ResamplerConstructionError),
 
+    #[error(transparent)]
+    V4l2Error(#[from] V4l2InputError),
+
     #[error("Failed to initialize decoder.")]
     DecoderError(#[from] DecoderInitError),
 
