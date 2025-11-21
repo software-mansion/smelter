@@ -3,9 +3,12 @@ use std::{io::Read, time::Duration};
 use bytes::{Buf, BytesMut};
 use tracing::trace;
 
-use crate::pipeline::rtp::{
-    RtpPacket,
-    depayloader::{AacAudioSpecificConfig, Depayloader, DepayloadingError},
+use crate::pipeline::{
+    decoder::EncodedInputEvent,
+    rtp::{
+        RtpPacket,
+        depayloader::{AacAudioSpecificConfig, Depayloader, DepayloadingError},
+    },
 };
 use crate::prelude::*;
 
@@ -28,7 +31,7 @@ impl Depayloader for AacDepayloader {
     fn depayload(
         &mut self,
         packet: RtpPacket,
-    ) -> Result<Vec<EncodedInputChunk>, DepayloadingError> {
+    ) -> Result<Vec<EncodedInputEvent>, DepayloadingError> {
         trace!(?packet, "RTP AAC depayloader received new packet");
         let mut reader = std::io::Cursor::new(packet.packet.payload);
 
@@ -93,7 +96,7 @@ impl Depayloader for AacDepayloader {
                 kind: MediaKind::Audio(AudioCodec::Aac),
             };
             trace!(?chunk, "RTP AAC depayloader produced a new chunk");
-            chunks.push(chunk);
+            chunks.push(EncodedInputEvent::Chunk(chunk));
         }
 
         Ok(chunks)

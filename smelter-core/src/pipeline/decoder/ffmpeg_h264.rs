@@ -1,7 +1,7 @@
 use std::{iter, sync::Arc};
 
 use crate::pipeline::decoder::{
-    KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
+    EncodedInputEvent, KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
     au_splitter::AUSplitter,
     ffmpeg_utils::{create_av_packet, from_av_frame},
 };
@@ -57,8 +57,19 @@ impl VideoDecoder for FfmpegH264Decoder {
 }
 
 impl VideoDecoderInstance for FfmpegH264Decoder {
-    fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame> {
-        trace!(?chunk, "H264 decoder received a chunk.");
+    fn decode(&mut self, event: EncodedInputEvent) -> Vec<Frame> {
+        trace!(?event, "FFmpeg H264 decoder received an event.");
+        let chunk = match event {
+            EncodedInputEvent::Chunk(chunk) => chunk,
+            EncodedInputEvent::LostData => {
+                self.au_splitter.mark_missing_data();
+                return vec![];
+            }
+            EncodedInputEvent::AuDelimiter => {
+                // mark end of au
+                return vec![];
+            }
+        };
         let chunks = match self.au_splitter.put_chunk(chunk) {
             Ok(chunks) => chunks,
             Err(err) => {
@@ -95,8 +106,6 @@ impl VideoDecoderInstance for FfmpegH264Decoder {
         self.decoder.flush();
         self.read_all_frames()
     }
-
-    fn skip_until_keyframe(&mut self) {}
 }
 
 impl FfmpegH264Decoder {

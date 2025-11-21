@@ -44,9 +44,11 @@ pub(crate) struct DecodedSamples {
     pub sample_rate: u32,
 }
 
+#[derive(Debug)]
 pub(crate) enum EncodedInputEvent {
     Chunk(EncodedInputChunk),
     LostData,
+    AuDelimiter,
 }
 
 #[derive(Debug)]
@@ -64,9 +66,8 @@ pub(crate) trait VideoDecoder: Sized + VideoDecoderInstance {
 }
 
 pub(crate) trait VideoDecoderInstance {
-    fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame>;
+    fn decode(&mut self, chunk: EncodedInputEvent) -> Vec<Frame>;
     fn flush(&mut self) -> Vec<Frame>;
-    fn skip_until_keyframe(&mut self);
 }
 
 pub(crate) trait BytestreamTransformer: Send + 'static {

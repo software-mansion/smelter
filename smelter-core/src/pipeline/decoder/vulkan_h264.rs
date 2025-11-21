@@ -1,13 +1,15 @@
 use std::{sync::Arc, time::Duration};
 
 use smelter_render::{Frame, FrameData, Resolution};
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 use vk_video::{
     DecoderError, ReferenceManagementError, WgpuTexturesDecoder,
     parameters::{DecoderParameters, DecoderUsageFlags, MissedFrameHandling},
 };
 
-use crate::pipeline::decoder::{KeyframeRequestSender, VideoDecoder, VideoDecoderInstance};
+use crate::pipeline::decoder::{
+    EncodedInputEvent, KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
+};
 use crate::prelude::*;
 
 pub struct VulkanH264Decoder {
@@ -41,10 +43,21 @@ impl VideoDecoder for VulkanH264Decoder {
 }
 
 impl VideoDecoderInstance for VulkanH264Decoder {
-    fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame> {
-        let chunk = vk_video::EncodedInputChunk {
-            data: chunk.data.as_ref(),
-            pts: Some(chunk.pts.as_micros() as u64),
+    fn decode(&mut self, event: EncodedInputEvent) -> Vec<Frame> {
+        trace!(?event, "Vulkan H264 decoder received an event.");
+
+        let chunk = match &event {
+            EncodedInputEvent::Chunk(chunk) => vk_video::EncodedInputChunk {
+                data: chunk.data.as_ref(),
+                pts: Some(chunk.pts.as_micros() as u64),
+            },
+            EncodedInputEvent::LostData => {
+                self.decoder.mark_missing_data();
+                return vec![];
+            }
+            EncodedInputEvent::AuDelimiter => {
+                return vec![];
+            }
         };
 
         let frames = match self.decoder.decode(chunk) {
@@ -71,10 +84,6 @@ impl VideoDecoderInstance for VulkanH264Decoder {
             .into_iter()
             .map(from_vk_frame)
             .collect()
-    }
-
-    fn skip_until_keyframe(&mut self) {
-        self.decoder.mark_missing_data();
     }
 }
 

@@ -43,12 +43,7 @@ where
         match self.source.next() {
             Some(PipelineEvent::Data(RtpInputEvent::Packet(packet))) => {
                 match self.depayloader.depayload(packet) {
-                    Ok(chunks) => Some(
-                        chunks
-                            .into_iter()
-                            .map(|chunk| PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)))
-                            .collect(),
-                    ),
+                    Ok(events) => Some(events.into_iter().map(PipelineEvent::Data).collect()),
                     Err(err) => {
                         debug!("Depayloader error: {}", ErrorStack::new(&err).into_string());
                         Some(vec![])

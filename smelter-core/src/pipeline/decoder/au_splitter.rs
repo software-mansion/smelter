@@ -67,6 +67,10 @@ impl AUSplitter {
         Ok(chunks)
     }
 
+    pub fn mark_missing_data(&mut self) {
+        self.detected_missed_frames = true;
+    }
+
     fn verify_access_unit(&mut self, au: &AccessUnit) -> Result<(), AUSplitterError> {
         let Some(ParsedNalu::Slice(slice)) =
             au.0.iter()
@@ -78,6 +82,9 @@ impl AUSplitter {
 
         match slice.header.slice_type.family {
             SliceFamily::P | SliceFamily::B => {
+                if self.detected_missed_frames {
+                    return Err(AUSplitterError::MissingReferenceFrame);
+                }
                 let sps = &slice.sps;
                 let frame_num = slice.header.frame_num;
                 let max_frame_num = 1i64 << sps.log2_max_frame_num();
@@ -85,7 +92,7 @@ impl AUSplitter {
                 let is_expected_frame_num = !sps.gaps_in_frame_num_value_allowed_flag
                     && frame_num != self.prev_ref_frame_num
                     && frame_num != ((self.prev_ref_frame_num as i64 + 1) % max_frame_num) as u16;
-                if is_expected_frame_num || self.detected_missed_frames {
+                if is_expected_frame_num {
                     debug!("AUSplitter detected missing frame");
                     self.detected_missed_frames = true;
                     return Err(AUSplitterError::MissingReferenceFrame);
