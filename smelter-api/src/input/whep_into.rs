@@ -29,7 +29,7 @@ impl TryFrom<WhepInput> for core::RegisterInputOptions {
                 buffer: core::InputBufferOptions::LatencyOptimized,
             },
             _ => core::RtpJitterBufferOptions {
-                mode: core::RtpJitterBufferMode::Fixed(Duration::from_secs(1)),
+                mode: core::RtpJitterBufferMode::Fixed(Duration::from_millis(200)),
                 buffer: core::InputBufferOptions::None,
             },
         };

@@ -3,21 +3,22 @@ use std::{marker::PhantomData, sync::Arc};
 use crossbeam_channel::Sender;
 use tracing::warn;
 
-use crate::prelude::*;
 use crate::{
     pipeline::{
         decoder::{AudioDecoder, AudioDecoderStream},
         resampler::decoder_resampler::ResampledDecoderStream,
         rtp::{
-            RtpPacket,
+            RtpInputEvent,
             depayloader::{DepayloaderOptions, DepayloaderStream},
         },
     },
     thread_utils::{InitializableThread, ThreadMetadata},
 };
 
+use crate::prelude::*;
+
 pub(crate) struct RtpAudioTrackThreadHandle {
-    pub rtp_packet_sender: Sender<PipelineEvent<RtpPacket>>,
+    pub rtp_packet_sender: Sender<PipelineEvent<RtpInputEvent>>,
     pub sample_rate: u32,
 }
 

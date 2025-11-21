@@ -1,12 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use crossbeam_channel::Sender;
 use smelter_render::Frame;
-use tracing::{Instrument, debug, trace, warn};
-use webrtc::{
-    rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication,
-    rtp_transceiver::rtp_receiver::RTCRtpReceiver, track::track_remote::TrackRemote,
-};
+use tracing::{trace, warn};
 
 use crate::{
     pipeline::{
@@ -16,7 +12,7 @@ use crate::{
         },
         resampler::decoder_resampler::ResampledDecoderStream,
         rtp::{
-            RtpPacket,
+            RtpInputEvent,
             depayloader::{
                 DepayloaderOptions, DepayloaderStream, DynamicDepayloaderStream,
                 VideoPayloadTypeMapping,
@@ -29,38 +25,8 @@ use crate::{
 
 use crate::prelude::*;
 
-pub fn start_pli_sender_task(
-    track: &Arc<TrackRemote>,
-    rtc_receiver: &Arc<RTCRtpReceiver>,
-) -> KeyframeRequestSender {
-    let (keyframe_request_sender, mut keyframe_request_receiver) =
-        KeyframeRequestSender::new_async();
-    let ssrc = track.ssrc();
-    let transport = rtc_receiver.transport();
-    tokio::spawn(
-        async move {
-            while keyframe_request_receiver.recv().await.is_some() {
-                debug!(ssrc, "Sending PLI");
-                let pli = PictureLossIndication {
-                    // For receive-only endpoints RTP sender SSRC can be set to 0.
-                    sender_ssrc: 0,
-                    media_ssrc: ssrc,
-                };
-
-                if let Err(err) = transport.write_rtcp(&[Box::new(pli)]).await {
-                    warn!(%err, "Failed to send RTCP packet (PictureLossIndication)")
-                }
-                tokio::time::sleep(Duration::from_secs(1)).await
-            }
-        }
-        .instrument(tracing::Span::current()),
-    );
-
-    keyframe_request_sender
-}
-
 pub(super) struct VideoTrackThreadHandle {
-    pub rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpPacket>>,
+    pub rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpInputEvent>>,
 }
 
 pub(super) struct VideoTrackThread {
@@ -135,7 +101,7 @@ impl InitializableThread for VideoTrackThread {
 }
 
 pub(super) struct AudioTrackThreadHandle {
-    pub rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpPacket>>,
+    pub rtp_packet_sender: tokio::sync::mpsc::Sender<PipelineEvent<RtpInputEvent>>,
 }
 
 pub(super) struct AudioTrackThread {

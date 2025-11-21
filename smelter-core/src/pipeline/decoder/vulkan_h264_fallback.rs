@@ -3,7 +3,7 @@ use std::sync::Arc;
 use smelter_render::Frame;
 use tracing::error;
 
-use crate::pipeline::decoder::{VideoDecoder, VideoDecoderInstance};
+use crate::pipeline::decoder::{KeyframeRequestSender, VideoDecoder, VideoDecoderInstance};
 use crate::prelude::*;
 
 pub struct VulkanH264Decoder;
@@ -11,7 +11,10 @@ pub struct VulkanH264Decoder;
 impl VideoDecoder for VulkanH264Decoder {
     const LABEL: &'static str = "Vulkan H264 decoder";
 
-    fn new(_ctx: &Arc<PipelineCtx>) -> Result<Self, DecoderInitError> {
+    fn new(
+        _ctx: &Arc<PipelineCtx>,
+        _keyframe_request_sender: Option<KeyframeRequestSender>,
+    ) -> Result<Self, DecoderInitError> {
         Err(DecoderInitError::VulkanContextRequiredForVulkanDecoder)
     }
 }
@@ -26,4 +29,6 @@ impl VideoDecoderInstance for VulkanH264Decoder {
         error!("Vulkan decoder unavailable, this code should never be called");
         vec![]
     }
+
+    fn skip_until_keyframe(&mut self) {}
 }

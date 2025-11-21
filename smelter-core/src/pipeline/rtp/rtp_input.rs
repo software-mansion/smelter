@@ -1,6 +1,9 @@
-use std::sync::{Arc, atomic::AtomicBool};
+use std::{
+    sync::{Arc, atomic::AtomicBool},
+    time::Duration,
+};
 
-use crossbeam_channel::{Receiver, bounded};
+use crossbeam_channel::{Receiver, RecvTimeoutError, bounded};
 use smelter_render::Frame;
 use tracing::{Level, debug, span, trace, warn};
 use webrtc::{
@@ -270,9 +273,33 @@ fn run_rtp_demuxer_thread(
         }
     };
     loop {
-        let Ok(mut buffer) = receiver.recv() else {
-            debug!("Closing RTP demuxer thread.");
-            break;
+        let mut buffer = match receiver.recv_timeout(Duration::from_millis(10)) {
+            Ok(buffer) => buffer,
+            Err(RecvTimeoutError::Timeout) => {
+                if let Some(video) = &mut video {
+                    let sender = &video.handle.rtp_packet_sender;
+                    while let Some(packet) = video.jitter_buffer.pop_packet() {
+                        trace!(?packet, "Received video RTP packet");
+                        if sender.send(PipelineEvent::Data(packet)).is_err() {
+                            debug!("Channel closed");
+                        }
+                    }
+                };
+                if let Some(audio) = &mut audio {
+                    let sender = &audio.handle.rtp_packet_sender;
+                    while let Some(packet) = audio.jitter_buffer.pop_packet() {
+                        trace!(?packet, "Received audio RTP packet");
+                        if sender.send(PipelineEvent::Data(packet)).is_err() {
+                            debug!("Channel closed");
+                        }
+                    }
+                }
+                continue;
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                debug!("Closing RTP demuxer thread.");
+                break;
+            }
         };
 
         match rtp::packet::Packet::unmarshal(&mut buffer.clone()) {

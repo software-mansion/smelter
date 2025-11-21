@@ -4,12 +4,13 @@ use smelter_render::{Frame, error::ErrorStack};
 use tracing::error;
 
 use crate::pipeline::decoder::{
-    VideoDecoder, VideoDecoderInstance, ffmpeg_h264::FfmpegH264Decoder,
+    EncodedInputEvent, VideoDecoder, VideoDecoderInstance, ffmpeg_h264::FfmpegH264Decoder,
     ffmpeg_vp8::FfmpegVp8Decoder, ffmpeg_vp9::FfmpegVp9Decoder, vulkan_h264::VulkanH264Decoder,
 };
 
 use crate::prelude::*;
 
+#[derive(Clone)]
 pub(crate) enum KeyframeRequestSender {
     Async(tokio::sync::mpsc::Sender<()>),
     #[allow(dead_code)]
@@ -42,7 +43,7 @@ impl KeyframeRequestSender {
 
 pub(crate) struct DynamicVideoDecoderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     ctx: Arc<PipelineCtx>,
     decoder: Option<Box<dyn VideoDecoderInstance>>,
@@ -55,7 +56,7 @@ where
 
 impl<Source> DynamicVideoDecoderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     pub(crate) fn new(
         ctx: Arc<PipelineCtx>,
@@ -110,10 +111,22 @@ where
         decoder: VideoDecoderOptions,
     ) -> Result<Box<dyn VideoDecoderInstance>, DecoderInitError> {
         let decoder: Box<dyn VideoDecoderInstance> = match decoder {
-            VideoDecoderOptions::FfmpegH264 => Box::new(FfmpegH264Decoder::new(&self.ctx)?),
-            VideoDecoderOptions::FfmpegVp8 => Box::new(FfmpegVp8Decoder::new(&self.ctx)?),
-            VideoDecoderOptions::FfmpegVp9 => Box::new(FfmpegVp9Decoder::new(&self.ctx)?),
-            VideoDecoderOptions::VulkanH264 => Box::new(VulkanH264Decoder::new(&self.ctx)?),
+            VideoDecoderOptions::FfmpegH264 => Box::new(FfmpegH264Decoder::new(
+                &self.ctx,
+                Some(self.keyframe_request_sender.clone()),
+            )?),
+            VideoDecoderOptions::FfmpegVp8 => Box::new(FfmpegVp8Decoder::new(
+                &self.ctx,
+                Some(self.keyframe_request_sender.clone()),
+            )?),
+            VideoDecoderOptions::FfmpegVp9 => Box::new(FfmpegVp9Decoder::new(
+                &self.ctx,
+                Some(self.keyframe_request_sender.clone()),
+            )?),
+            VideoDecoderOptions::VulkanH264 => Box::new(VulkanH264Decoder::new(
+                &self.ctx,
+                Some(self.keyframe_request_sender.clone()),
+            )?),
         };
         Ok(decoder)
     }
@@ -121,22 +134,24 @@ where
 
 impl<Source> Iterator for DynamicVideoDecoderStream<Source>
 where
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     type Item = Vec<PipelineEvent<Frame>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(samples)) => {
+            Some(PipelineEvent::Data(EncodedInputEvent::Chunk(samples))) => {
                 // TODO: flush on decoder change
                 self.ensure_decoder(samples.kind);
                 let decoder = self.decoder.as_mut()?;
                 let chunks = decoder.decode(samples);
-                // TODO: add better detection
-                if chunks.is_empty() {
-                    self.keyframe_request_sender.send();
-                }
                 Some(chunks.into_iter().map(PipelineEvent::Data).collect())
+            }
+            Some(PipelineEvent::Data(EncodedInputEvent::LostData)) => {
+                if let Some(decoder) = self.decoder.as_mut() {
+                    decoder.skip_until_keyframe()
+                }
+                Some(vec![])
             }
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
                 true => None,

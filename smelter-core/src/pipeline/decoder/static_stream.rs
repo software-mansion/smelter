@@ -1,17 +1,16 @@
-use smelter_render::error::ErrorStack;
-use std::iter;
-use std::sync::Arc;
+use std::{iter, sync::Arc};
 use tracing::warn;
 
-use smelter_render::Frame;
+use smelter_render::{Frame, error::ErrorStack};
 
-use crate::pipeline::decoder::{AudioDecoder, DecodedSamples, VideoDecoder};
+use crate::pipeline::decoder::{AudioDecoder, DecodedSamples, EncodedInputEvent, VideoDecoder};
+
 use crate::prelude::*;
 
 pub(crate) struct VideoDecoderStream<Decoder, Source>
 where
     Decoder: VideoDecoder,
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     decoder: Decoder,
     source: Source,
@@ -21,10 +20,10 @@ where
 impl<Decoder, Source> VideoDecoderStream<Decoder, Source>
 where
     Decoder: VideoDecoder,
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     pub fn new(ctx: Arc<PipelineCtx>, source: Source) -> Result<Self, DecoderInitError> {
-        let decoder = Decoder::new(&ctx)?;
+        let decoder = Decoder::new(&ctx, None)?;
         Ok(Self {
             decoder,
             source,
@@ -36,15 +35,19 @@ where
 impl<Decoder, Source> Iterator for VideoDecoderStream<Decoder, Source>
 where
     Decoder: VideoDecoder,
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     type Item = Vec<PipelineEvent<Frame>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(samples)) => {
-                let chunks = self.decoder.decode(samples);
+            Some(PipelineEvent::Data(EncodedInputEvent::Chunk(chunk))) => {
+                let chunks = self.decoder.decode(chunk);
                 Some(chunks.into_iter().map(PipelineEvent::Data).collect())
+            }
+            Some(PipelineEvent::Data(EncodedInputEvent::LostData)) => {
+                self.decoder.skip_until_keyframe();
+                Some(vec![])
             }
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
                 true => None,
@@ -63,7 +66,7 @@ where
 pub(crate) struct AudioDecoderStream<Decoder, Source>
 where
     Decoder: AudioDecoder,
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     decoder: Decoder,
     source: Source,
@@ -73,7 +76,7 @@ where
 impl<Decoder, Source> AudioDecoderStream<Decoder, Source>
 where
     Decoder: AudioDecoder,
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     pub fn new(
         ctx: Arc<PipelineCtx>,
@@ -92,14 +95,14 @@ where
 impl<Decoder, Source> Iterator for AudioDecoderStream<Decoder, Source>
 where
     Decoder: AudioDecoder,
-    Source: Iterator<Item = PipelineEvent<EncodedInputChunk>>,
+    Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
     type Item = Vec<PipelineEvent<DecodedSamples>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(samples)) => {
-                let result = self.decoder.decode(samples);
+            Some(PipelineEvent::Data(EncodedInputEvent::Chunk(chunk))) => {
+                let result = self.decoder.decode(chunk);
                 let chunks = match result {
                     Ok(chunks) => chunks,
                     Err(err) => {
@@ -112,6 +115,7 @@ where
                 };
                 Some(chunks.into_iter().map(PipelineEvent::Data).collect())
             }
+            Some(PipelineEvent::Data(EncodedInputEvent::LostData)) => Some(vec![]),
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
                 true => None,
                 false => {

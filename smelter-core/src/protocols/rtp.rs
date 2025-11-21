@@ -44,6 +44,8 @@ pub enum RtpJitterBufferMode {
     /// Jitter buffer synchronized to real-time queue, packets are in jitter buffer
     /// as long as `queue.sync_point.elapsed()` is smaller than PTS of a packet.
     QueueBased,
+    /// Disable jitter buffer
+    Disabled,
 }
 
 #[derive(Debug, Clone)]

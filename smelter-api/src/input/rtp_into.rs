@@ -1,3 +1,4 @@
+use smelter_core::protocols::RtpInputTransportProtocol;
 use smelter_render::error::ErrorStack;
 use std::time::Duration;
 
@@ -24,17 +25,32 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
             offset: offset_ms.map(|offset_ms| Duration::from_secs_f64(offset_ms / 1000.0)),
         };
 
-        let jitter_buffer = match &queue_options {
+        let transport_protocol = transport_protocol.unwrap_or(TransportProtocol::Udp).into();
+
+        let input_buffer = match &queue_options {
             core::QueueInputOptions {
                 required: false,
                 offset: None,
-            } => core::RtpJitterBufferOptions {
-                mode: core::RtpJitterBufferMode::QueueBased,
-                buffer: core::InputBufferOptions::Const(None),
+            } => core::InputBufferOptions::Const(None),
+            _ => core::InputBufferOptions::None,
+        };
+        let jitter_buffer = match transport_protocol {
+            RtpInputTransportProtocol::Udp => match &queue_options {
+                core::QueueInputOptions {
+                    required: false,
+                    offset: None,
+                } => core::RtpJitterBufferOptions {
+                    mode: core::RtpJitterBufferMode::QueueBased,
+                    buffer: input_buffer,
+                },
+                _ => core::RtpJitterBufferOptions {
+                    mode: core::RtpJitterBufferMode::Fixed(Duration::from_millis(200)),
+                    buffer: input_buffer,
+                },
             },
-            _ => core::RtpJitterBufferOptions {
-                mode: core::RtpJitterBufferMode::Fixed(Duration::from_secs(1)),
-                buffer: core::InputBufferOptions::None,
+            RtpInputTransportProtocol::TcpServer => core::RtpJitterBufferOptions {
+                mode: core::RtpJitterBufferMode::Disabled,
+                buffer: input_buffer,
             },
         };
 
@@ -60,7 +76,7 @@ impl TryFrom<RtpInput> for core::RegisterInputOptions {
                 })
                 .transpose()?,
             audio: audio.map(TryFrom::try_from).transpose()?,
-            transport_protocol: transport_protocol.unwrap_or(TransportProtocol::Udp).into(),
+            transport_protocol,
             jitter_buffer,
         });
 

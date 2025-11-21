@@ -43,6 +43,11 @@ pub(crate) struct DecodedSamples {
     pub sample_rate: u32,
 }
 
+pub(crate) enum EncodedInputEvent {
+    Chunk(EncodedInputChunk),
+    LostData,
+}
+
 #[derive(Debug)]
 pub(crate) struct DecoderThreadHandle {
     pub chunk_sender: Sender<PipelineEvent<EncodedInputChunk>>,
@@ -51,12 +56,16 @@ pub(crate) struct DecoderThreadHandle {
 pub(crate) trait VideoDecoder: Sized + VideoDecoderInstance {
     const LABEL: &'static str;
 
-    fn new(ctx: &Arc<PipelineCtx>) -> Result<Self, DecoderInitError>;
+    fn new(
+        ctx: &Arc<PipelineCtx>,
+        keyframe_request_sender: Option<KeyframeRequestSender>,
+    ) -> Result<Self, DecoderInitError>;
 }
 
 pub(crate) trait VideoDecoderInstance {
     fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame>;
     fn flush(&mut self) -> Vec<Frame>;
+    fn skip_until_keyframe(&mut self);
 }
 
 pub(crate) trait BytestreamTransformer: Send + 'static {
