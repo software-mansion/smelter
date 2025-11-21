@@ -29,7 +29,12 @@ async function run() {
       type: 'mp4',
       serverPath: './output.mp4',
       video: {
-        encoder: { type: 'ffmpeg_h264', preset: 'ultrafast' },
+        encoder: {
+          type: 'ffmpeg_h264',
+          // 'ultrafast' is good for development. For production render select
+          // slower (higher quality) preset e.g. 'medium'.
+          preset: 'ultrafast',
+        },
         resolution: { width: 1920, height: 1080 },
       },
       audio: {

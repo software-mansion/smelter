@@ -124,7 +124,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       const actualConfig = {
         apiPort: smelterStatus.configuration.apiPort,
         downloadDir: smelterStatus.configuration.downloadRoot,
-        webRendererEnable: smelterStatus.configuration.webRendererEnable,
+        webRendererEnable: smelterStatus.configuration.webRendererEnable ?? false,
         aheadOfTimeProcessing: smelterStatus.configuration.aheadOfTimeProcessing,
       };
 
