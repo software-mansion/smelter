@@ -17,7 +17,7 @@ fn find_start_of_next_nalu(buf: &[u8]) -> Option<usize> {
         return None;
     };
 
-    // If the start code is at the beginning of nalu, we need to skip it, because this means we
+    // If the start code is at the beginning of the buffer, we need to skip it, because this means we
     // would give the parser only the start code, without a nal unit before it.
     //
     // The code can be either 0, 0, 0, 1 or 0, 0, 1.
@@ -58,6 +58,28 @@ impl NALUSplitter {
         self.previous_search_end = self.buffer.len().saturating_sub(3);
 
         self.pts = pts;
+
+        result
+    }
+
+    pub(crate) fn flush(&mut self) -> Vec<(Vec<u8>, Option<u64>)> {
+        if self.buffer.is_empty() {
+            return vec![];
+        }
+
+        let mut result = Vec::new();
+        while let Some(i) = find_start_of_next_nalu(&self.buffer[self.previous_search_end..]) {
+            let nalu = self.buffer.split_to(self.previous_search_end + i);
+            self.previous_search_end = 0;
+            result.push((nalu.to_vec(), self.pts));
+        }
+
+        result.push((
+            [self.buffer.to_vec(), [0, 0, 1].to_vec()].concat(),
+            self.pts,
+        ));
+        self.buffer = BytesMut::new();
+        self.previous_search_end = 0;
 
         result
     }
