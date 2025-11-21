@@ -1,3 +1,5 @@
+use std::mem;
+
 use h264_reader::nal::slice::PicOrderCountLsb;
 
 use crate::parser::nalu_parser::{Nalu, ParsedNalu};
@@ -34,6 +36,15 @@ impl AUSplitter {
             self.buffered_nals.push(nalu);
             None
         }
+    }
+
+    pub(crate) fn flush(&mut self) -> Option<AccessUnit> {
+        if self.buffered_nals.is_empty() {
+            return None;
+        }
+        Some(AccessUnit(
+            mem::take(&mut self.buffered_nals).into_boxed_slice(),
+        ))
     }
 
     /// returns `true` if `slice` is a first slice in an Access Unit

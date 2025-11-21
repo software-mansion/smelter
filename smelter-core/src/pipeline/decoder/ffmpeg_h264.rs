@@ -59,29 +59,35 @@ impl VideoDecoder for FfmpegH264Decoder {
 impl VideoDecoderInstance for FfmpegH264Decoder {
     fn decode(&mut self, event: EncodedInputEvent) -> Vec<Frame> {
         trace!(?event, "FFmpeg H264 decoder received an event.");
-        let chunk = match event {
-            EncodedInputEvent::Chunk(chunk) => chunk,
+        let au_chunks = match event {
+            EncodedInputEvent::Chunk(chunk) => match self.au_splitter.put_chunk(chunk) {
+                Ok(chunks) => chunks,
+                Err(err) => {
+                    if let Some(s) = self.keyframe_request_sender.as_ref() {
+                        s.send()
+                    }
+                    debug!("H264 AU splitter could not process the chunks: {err}");
+                    return Vec::new();
+                }
+            },
             EncodedInputEvent::LostData => {
                 self.au_splitter.mark_missing_data();
                 return vec![];
             }
-            EncodedInputEvent::AuDelimiter => {
-                // mark end of au
-                return vec![];
-            }
-        };
-        let chunks = match self.au_splitter.put_chunk(chunk) {
-            Ok(chunks) => chunks,
-            Err(err) => {
-                if let Some(s) = self.keyframe_request_sender.as_ref() {
-                    s.send()
+            EncodedInputEvent::AuDelimiter => match self.au_splitter.flush() {
+                Ok(chunks) => chunks,
+                Err(err) => {
+                    if let Some(s) = self.keyframe_request_sender.as_ref() {
+                        s.send()
+                    }
+                    debug!("H264 AU splitter could not process the chunks: {err}");
+                    return Vec::new();
                 }
-                debug!("H264 AU splitter could not process the chunks: {err}");
-                return Vec::new();
-            }
+            },
         };
 
-        for chunk in chunks {
+        for chunk in au_chunks {
+            trace!(?chunk, "FFmpeg H264 processing AU chunk");
             let av_packet = match create_av_packet(chunk, VideoCodec::H264, TIME_BASE) {
                 Ok(packet) => packet,
                 Err(err) => {

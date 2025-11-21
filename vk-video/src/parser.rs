@@ -13,7 +13,6 @@ pub mod h264 {
     use super::nalu_splitter::NALUSplitter;
     use h264_reader::annexb::AnnexBReader;
     use h264_reader::push::NalAccumulator;
-    use std::sync::mpsc;
 
     pub use super::au_splitter::AccessUnit;
     pub use super::nalu_parser::{Nalu, ParsedNalu};
@@ -44,18 +43,14 @@ pub mod h264 {
     /// H264 parser for Annex B format
     pub struct H264Parser {
         reader: AnnexBReader<NalAccumulator<NalReceiver>>,
-        receiver: mpsc::Receiver<Result<ParsedNalu, H264ParserError>>,
         nalu_splitter: NALUSplitter,
         au_splitter: AUSplitter,
     }
 
     impl Default for H264Parser {
         fn default() -> Self {
-            let (tx, rx) = mpsc::channel();
-
             H264Parser {
-                reader: AnnexBReader::accumulate(NalReceiver::new(tx)),
-                receiver: rx,
+                reader: AnnexBReader::accumulate(NalReceiver::new()),
                 nalu_splitter: NALUSplitter::default(),
                 au_splitter: AUSplitter::default(),
             }
@@ -71,25 +66,58 @@ pub mod h264 {
             pts: Option<u64>,
         ) -> Result<Vec<AccessUnit>, H264ParserError> {
             let nalus = self.nalu_splitter.push(bytes, pts);
-            let nalus = nalus.into_iter().map(|(nalu_bytes, pts)| {
+            let nalus = nalus.into_iter().flat_map(|(nalu_bytes, pts)| {
                 self.reader.push(&nalu_bytes);
-
-                let parsed_nalu = self.receiver.try_recv().unwrap();
-                parsed_nalu.map(|parsed_nalu| Nalu {
-                    parsed: parsed_nalu,
-                    raw_bytes: nalu_bytes.into_boxed_slice(),
-                    pts,
-                })
+                self.reader.reset();
+                self.reader
+                    .nal_handler_mut()
+                    .pop_parsed()
+                    .into_iter()
+                    .map(move |parsed_nalu| {
+                        parsed_nalu.map(|parsed_nalu| Nalu {
+                            parsed: parsed_nalu,
+                            raw_bytes: Box::from(&nalu_bytes[..]),
+                            pts,
+                        })
+                    })
             });
 
             let mut access_units = Vec::new();
             for nalu in nalus {
-                let nalu = nalu?;
+                if let Some(au) = self.au_splitter.put_nalu(nalu?) {
+                    access_units.push(au);
+                }
+            }
 
-                let Some(au) = self.au_splitter.put_nalu(nalu) else {
-                    continue;
-                };
+            Ok(access_units)
+        }
 
+        pub fn flush(&mut self) -> Result<Vec<AccessUnit>, H264ParserError> {
+            let nalus = self.nalu_splitter.flush();
+            let nalus = nalus.into_iter().flat_map(|(nalu_bytes, pts)| {
+                self.reader.push(&nalu_bytes);
+                self.reader.reset();
+
+                self.reader
+                    .nal_handler_mut()
+                    .pop_parsed()
+                    .into_iter()
+                    .map(move |parsed_nalu| {
+                        parsed_nalu.map(|parsed_nalu| Nalu {
+                            parsed: parsed_nalu,
+                            raw_bytes: Box::from(&nalu_bytes[..]),
+                            pts,
+                        })
+                    })
+            });
+
+            let mut access_units = Vec::new();
+            for nalu in nalus {
+                if let Some(au) = self.au_splitter.put_nalu(nalu?) {
+                    access_units.push(au);
+                }
+            }
+            if let Some(au) = self.au_splitter.flush() {
                 access_units.push(au);
             }
 

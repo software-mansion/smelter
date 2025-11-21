@@ -26,6 +26,18 @@ impl AUSplitter {
             .parser
             .parse(&chunk.data, Some(chunk.pts.as_micros() as u64))?;
 
+        self.process_au(access_units)
+    }
+
+    pub fn flush(&mut self) -> Result<Vec<EncodedInputChunk>, AUSplitterError> {
+        let access_units = self.parser.flush()?;
+        self.process_au(access_units)
+    }
+
+    fn process_au(
+        &mut self,
+        access_units: Vec<AccessUnit>,
+    ) -> Result<Vec<EncodedInputChunk>, AUSplitterError> {
         let mut chunks = Vec::new();
         for au in access_units {
             self.verify_access_unit(&au)?;

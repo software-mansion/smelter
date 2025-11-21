@@ -1,7 +1,4 @@
-use std::{
-    io::Read,
-    sync::{Arc, mpsc},
-};
+use std::{collections::VecDeque, io::Read, sync::Arc};
 
 use h264_reader::{
     Context,
@@ -13,7 +10,7 @@ use super::h264::H264ParserError;
 
 pub(crate) struct NalReceiver {
     parser_ctx: h264_reader::Context,
-    sender: mpsc::Sender<Result<ParsedNalu, H264ParserError>>,
+    results: VecDeque<Result<ParsedNalu, H264ParserError>>,
 }
 
 impl AccumulatedNalHandler for NalReceiver {
@@ -23,18 +20,22 @@ impl AccumulatedNalHandler for NalReceiver {
         }
 
         let result = self.handle_nal(nal);
-        self.sender.send(result).unwrap();
+        self.results.push_back(result);
 
         NalInterest::Ignore
     }
 }
 
 impl NalReceiver {
-    pub(crate) fn new(sender: mpsc::Sender<Result<ParsedNalu, H264ParserError>>) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            sender,
+            results: VecDeque::new(),
             parser_ctx: Context::default(),
         }
+    }
+
+    pub(crate) fn pop_parsed(&mut self) -> VecDeque<Result<ParsedNalu, H264ParserError>> {
+        std::mem::take(&mut self.results)
     }
 
     fn handle_nal(&mut self, nal: RefNal<'_>) -> Result<ParsedNalu, H264ParserError> {
