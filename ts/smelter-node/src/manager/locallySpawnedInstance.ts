@@ -56,7 +56,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
     this.workingdir = opts.workingdir ?? path.join(os.tmpdir(), `smelter-${uuidv4()}`);
     this.mainExecutablePath = opts.mainExecutablePath;
     this.dependencyCheckPath = opts.dependencyCheckPath;
-    this.enableWebRenderer = opts.enableWebRenderer;
+    this.enableWebRenderer = opts.enableWebRenderer ?? false;
     this.wsConnection = new WebSocketConnection(`ws://127.0.0.1:${this.port}/ws`);
   }
 
@@ -124,7 +124,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       const actualConfig = {
         apiPort: smelterStatus.configuration.apiPort,
         downloadDir: smelterStatus.configuration.downloadRoot,
-        webRendererEnable: smelterStatus.configuration.webRendererEnable,
+        webRendererEnable: smelterStatus.configuration.webRendererEnable ?? false,
         aheadOfTimeProcessing: smelterStatus.configuration.aheadOfTimeProcessing,
       };
 

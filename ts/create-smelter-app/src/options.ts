@@ -79,10 +79,30 @@ export async function resolveBrowserOptions(): Promise<BrowserOptions> {
 
 export async function resolveNodeOptions(): Promise<NodeOptions> {
   const templateName = await selectPrompt('Select project template: ', [
-    { title: 'Minimal example', value: 'node-minimal' },
-    { title: 'Express.js + Zustand', value: 'node-express-zustand' },
-    { title: 'Offline processing - minimal example', value: 'node-offline-minimal' },
-    { title: 'Offline processing - showcase', value: 'node-offline-showcase' },
+    {
+      title: 'Minimal example',
+      description:
+        'A Node.js application that streams a simple static layout to a local RTMP server.',
+      value: 'node-minimal',
+    },
+    {
+      title: 'Express.js + Zustand',
+      description:
+        'A Node.js application that streams composed video to an RTMP server. An HTTP API controls the stream, enabling dynamic layout changes and adding MP4 files.',
+      value: 'node-express-zustand',
+    },
+    {
+      title: 'Generate simple MP4 file',
+      description:
+        'A Node.js application that generates an MP4 file, rendering a single, simple static layout',
+      value: 'node-offline-minimal',
+    },
+    {
+      title: 'Converting and combining MP4 files',
+      description:
+        'A Node.js application that generates an MP4 file by combining and composing multiple source MP4 files.',
+      value: 'node-offline-showcase',
+    },
   ] as const);
   return {
     type: 'node',
