@@ -58,6 +58,11 @@ impl HlsInput {
         let should_close = Arc::new(AtomicBool::new(false));
         let buffer = InputBuffer::new(&ctx, opts.buffer);
 
+        ctx.stats_sender.send(StatsEvent::NewInput {
+            input_ref: input_ref.clone(),
+            kind: InputProtocolKind::Hls,
+        });
+
         let input_ctx = FfmpegInputContext::new(&opts.url, should_close.clone())?;
         let (audio, samples_receiver) = match input_ctx.audio_stream() {
             Some(stream) => {
@@ -86,7 +91,8 @@ impl HlsInput {
             audio: samples_receiver,
         };
 
-        Self::spawn_demuxer_thread(input_ref, input_ctx, audio, video);
+        let stats_sender = HlsInputStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());
+        Self::spawn_demuxer_thread(input_ref, input_ctx, audio, video, stats_sender);
 
         Ok((
             Input::Hls(Self { should_close }),
@@ -203,6 +209,7 @@ impl HlsInput {
         input_ctx: FfmpegInputContext,
         audio: Option<Track>,
         video: Option<Track>,
+        stats_sender: HlsInputStatsSender,
     ) {
         std::thread::Builder::new()
             .name(format!("HLS thread for input {input_ref}"))
@@ -210,7 +217,7 @@ impl HlsInput {
                 let _span =
                     span!(Level::INFO, "HLS thread", input_id = input_ref.to_string()).entered();
 
-                Self::run_demuxer_thread(input_ctx, audio, video);
+                Self::run_demuxer_thread(input_ctx, audio, video, stats_sender);
             })
             .unwrap();
     }
@@ -219,6 +226,7 @@ impl HlsInput {
         mut input_ctx: FfmpegInputContext,
         mut audio: Option<Track>,
         mut video: Option<Track>,
+        stats_sender: HlsInputStatsSender,
     ) {
         loop {
             let packet = match input_ctx.read_packet() {
@@ -226,6 +234,7 @@ impl HlsInput {
                 Err(ffmpeg_next::Error::Eof | ffmpeg_next::Error::Exit) => break,
                 Err(err) => {
                     warn!("HLS read error {err:?}");
+                    stats_sender.send(HlsInputStatsEvent::CorruptedPacketReceived);
                     continue;
                 }
             };
@@ -243,6 +252,15 @@ impl HlsInput {
                 && packet.stream() == track.index
             {
                 let (pts, dts) = track.state.pts_dts_from_packet(&packet);
+
+                stats_sender.send_video(HlsInputTrackStatsEvent::PacketReceived);
+                stats_sender.send_video(HlsInputTrackStatsEvent::ChunkSize(packet.size() as u64));
+                stats_sender.send_video(HlsInputTrackStatsEvent::InputBufferSize(
+                    track.state.buffer.size(),
+                ));
+                stats_sender.send_video(HlsInputTrackStatsEvent::EffectiveBuffer(
+                    pts.saturating_sub(track.state.queue_start_time.elapsed()),
+                ));
 
                 let chunk = EncodedInputChunk {
                     data: Bytes::copy_from_slice(packet.data().unwrap()),
@@ -265,6 +283,15 @@ impl HlsInput {
                 && packet.stream() == track.index
             {
                 let (pts, dts) = track.state.pts_dts_from_packet(&packet);
+
+                stats_sender.send_audio(HlsInputTrackStatsEvent::PacketReceived);
+                stats_sender.send_audio(HlsInputTrackStatsEvent::ChunkSize(packet.size() as u64));
+                stats_sender.send_audio(HlsInputTrackStatsEvent::InputBufferSize(
+                    track.state.buffer.size(),
+                ));
+                stats_sender.send_audio(HlsInputTrackStatsEvent::EffectiveBuffer(
+                    pts.saturating_sub(track.state.queue_start_time.elapsed()),
+                ));
 
                 let chunk = EncodedInputChunk {
                     data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
@@ -405,6 +432,7 @@ impl DiscontinuityState {
         if is_discontinuity {
             debug!("Discontinuity detected: {prev_timestamp} -> {timestamp}");
             self.offset += next_timestamp - timestamp;
+            // TODO: (stats) detected discontinuity
         }
 
         self.prev_timestamp = Some(timestamp);
@@ -494,5 +522,33 @@ where
 
             e => Err(ffmpeg_next::Error::from(e)),
         }
+    }
+}
+
+struct HlsInputStatsSender {
+    input_ref: Ref<InputId>,
+    stats_sender: StatsSender,
+}
+
+impl HlsInputStatsSender {
+    fn new(input_ref: Ref<InputId>, stats_sender: StatsSender) -> Self {
+        Self {
+            input_ref,
+            stats_sender,
+        }
+    }
+
+    fn send(&self, event: HlsInputStatsEvent) {
+        self.stats_sender.send(event.into_event(&self.input_ref));
+    }
+
+    fn send_video(&self, event: HlsInputTrackStatsEvent) {
+        self.stats_sender
+            .send(HlsInputStatsEvent::Video(event).into_event(&self.input_ref));
+    }
+
+    fn send_audio(&self, event: HlsInputTrackStatsEvent) {
+        self.stats_sender
+            .send(HlsInputStatsEvent::Audio(event).into_event(&self.input_ref));
     }
 }

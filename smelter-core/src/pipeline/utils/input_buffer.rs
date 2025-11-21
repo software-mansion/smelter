@@ -74,7 +74,7 @@ pub(crate) struct LatencyOptimizedBuffer {
     state: LatencyOptimizedBufferState,
     dynamic_buffer: Duration,
 
-    /// effective_buffer = queue_sync_point.elapsed() - next_pts
+    /// effective_buffer = next_pts - queue_sync_point.elapsed()
     /// Estimates how much time packet has to reach the queue.
 
     /// If effective_buffer is above this threshold for a period of time, aggressively shrink
