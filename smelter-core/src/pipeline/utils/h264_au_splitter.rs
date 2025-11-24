@@ -7,19 +7,19 @@ use vk_video::parser::h264::{AccessUnit, H264Parser, ParsedNalu, nal_types::slic
 use crate::prelude::*;
 
 #[derive(Default)]
-pub struct AUSplitter {
+pub struct H264AuSplitter {
     parser: H264Parser,
     prev_ref_frame_num: u16,
     detected_missed_frames: bool,
 }
 
-impl AUSplitter {
+impl H264AuSplitter {
     pub fn put_chunk(
         &mut self,
         chunk: EncodedInputChunk,
-    ) -> Result<Vec<EncodedInputChunk>, AUSplitterError> {
+    ) -> Result<Vec<EncodedInputChunk>, AuSplitterError> {
         if MediaKind::Video(VideoCodec::H264) != chunk.kind {
-            return Err(AUSplitterError::UnsupportedMediaKind(chunk.kind));
+            return Err(AuSplitterError::UnsupportedMediaKind(chunk.kind));
         }
 
         let access_units = self
@@ -29,7 +29,7 @@ impl AUSplitter {
         self.process_au(access_units)
     }
 
-    pub fn flush(&mut self) -> Result<Vec<EncodedInputChunk>, AUSplitterError> {
+    pub fn flush(&mut self) -> Result<Vec<EncodedInputChunk>, AuSplitterError> {
         let access_units = self.parser.flush()?;
         self.process_au(access_units)
     }
@@ -37,7 +37,7 @@ impl AUSplitter {
     fn process_au(
         &mut self,
         access_units: Vec<AccessUnit>,
-    ) -> Result<Vec<EncodedInputChunk>, AUSplitterError> {
+    ) -> Result<Vec<EncodedInputChunk>, AuSplitterError> {
         let mut chunks = Vec::new();
         for au in access_units {
             self.verify_access_unit(&au)?;
@@ -83,19 +83,19 @@ impl AUSplitter {
         self.detected_missed_frames = true;
     }
 
-    fn verify_access_unit(&mut self, au: &AccessUnit) -> Result<(), AUSplitterError> {
+    fn verify_access_unit(&mut self, au: &AccessUnit) -> Result<(), AuSplitterError> {
         let Some(ParsedNalu::Slice(slice)) =
             au.0.iter()
                 .map(|nalu| &nalu.parsed)
                 .find(|nalu| matches!(nalu, ParsedNalu::Slice(_)))
         else {
-            return Err(AUSplitterError::InvalidAccessUnit);
+            return Err(AuSplitterError::InvalidAccessUnit);
         };
 
         match slice.header.slice_type.family {
             SliceFamily::P | SliceFamily::B => {
                 if self.detected_missed_frames {
-                    return Err(AUSplitterError::MissingReferenceFrame);
+                    return Err(AuSplitterError::MissingReferenceFrame);
                 }
                 let sps = &slice.sps;
                 let frame_num = slice.header.frame_num;
@@ -107,7 +107,7 @@ impl AUSplitter {
                 if is_expected_frame_num {
                     debug!("AUSplitter detected missing frame");
                     self.detected_missed_frames = true;
-                    return Err(AUSplitterError::MissingReferenceFrame);
+                    return Err(AuSplitterError::MissingReferenceFrame);
                 }
 
                 self.prev_ref_frame_num = frame_num;
@@ -123,7 +123,7 @@ impl AUSplitter {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum AUSplitterError {
+pub enum AuSplitterError {
     #[error("Missing reference frame")]
     MissingReferenceFrame,
 

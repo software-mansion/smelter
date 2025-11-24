@@ -8,7 +8,6 @@ use crate::prelude::*;
 
 pub(super) mod decoder_thread_audio;
 pub(super) mod decoder_thread_video;
-pub(super) mod h264_utils;
 
 mod dynamic_stream;
 mod static_stream;
@@ -18,7 +17,6 @@ pub(super) use dynamic_stream::{
 };
 pub(super) use static_stream::{AudioDecoderStream, VideoDecoderStream};
 
-mod au_splitter;
 mod ffmpeg_utils;
 
 pub mod ffmpeg_h264;

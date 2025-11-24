@@ -1,9 +1,11 @@
 use std::{iter, sync::Arc};
 
-use crate::pipeline::decoder::{
-    EncodedInputEvent, KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
-    au_splitter::AUSplitter,
-    ffmpeg_utils::{create_av_packet, from_av_frame},
+use crate::pipeline::{
+    decoder::{
+        EncodedInputEvent, KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
+        ffmpeg_utils::{create_av_packet, from_av_frame},
+    },
+    utils::H264AuSplitter,
 };
 use crate::prelude::*;
 
@@ -21,7 +23,7 @@ pub struct FfmpegH264Decoder {
     decoder: ffmpeg_next::decoder::Opened,
     keyframe_request_sender: Option<KeyframeRequestSender>,
     av_frame: ffmpeg_next::frame::Video,
-    au_splitter: AUSplitter,
+    au_splitter: H264AuSplitter,
 }
 
 impl VideoDecoder for FfmpegH264Decoder {
@@ -51,7 +53,7 @@ impl VideoDecoder for FfmpegH264Decoder {
             decoder,
             keyframe_request_sender,
             av_frame: ffmpeg_next::frame::Video::empty(),
-            au_splitter: AUSplitter::default(),
+            au_splitter: H264AuSplitter::default(),
         })
     }
 }

@@ -14,7 +14,6 @@ pub mod h264 {
     use h264_reader::annexb::AnnexBReader;
     use h264_reader::push::NalAccumulator;
     use std::sync::mpsc;
-    use tracing::warn;
 
     pub use super::au_splitter::AccessUnit;
     pub use super::nalu_parser::{Nalu, ParsedNalu};
@@ -73,7 +72,6 @@ pub mod h264 {
         ) -> Result<Vec<AccessUnit>, H264ParserError> {
             let nalus = self.nalu_splitter.push(bytes, pts);
             let nalus = nalus.into_iter().map(|(nalu_bytes, pts)| {
-                warn!(?pts, ?nalu_bytes);
                 self.reader.push(&nalu_bytes);
 
                 let parsed_nalu = self.receiver.try_recv().unwrap();

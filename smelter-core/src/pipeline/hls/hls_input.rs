@@ -28,12 +28,10 @@ use crate::{
             DecoderThreadHandle,
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
-            fdk_aac, ffmpeg_h264,
-            h264_utils::{AvccToAnnexBRepacker, H264AvcDecoderConfig},
-            vulkan_h264,
+            fdk_aac, ffmpeg_h264, vulkan_h264,
         },
         input::Input,
-        utils::input_buffer::InputBuffer,
+        utils::{H264AvcDecoderConfig, H264AvccToAnnexB, input_buffer::InputBuffer},
     },
     queue::QueueDataReceiver,
     thread_utils::InitializableThread,
@@ -152,7 +150,7 @@ impl HlsInput {
 
         let decoder_thread_options = VideoDecoderThreadOptions {
             ctx: ctx.clone(),
-            transformer: h264_config.map(AvccToAnnexBRepacker::new),
+            transformer: h264_config.map(H264AvccToAnnexB::new),
             frame_sender,
             input_buffer_size: 2000,
         };

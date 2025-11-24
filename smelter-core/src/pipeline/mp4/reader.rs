@@ -10,7 +10,9 @@ use bytes::Bytes;
 use mp4::{Mp4Sample, Mp4Track};
 use tracing::warn;
 
-use crate::{pipeline::decoder::h264_utils::H264AvcDecoderConfig, prelude::*};
+use crate::pipeline::utils::H264AvcDecoderConfig;
+
+use crate::prelude::*;
 
 pub(super) struct Mp4FileReader<Reader: Read + Seek + Send + 'static> {
     reader: mp4::Mp4Reader<Reader>,
