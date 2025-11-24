@@ -251,7 +251,7 @@ impl HlsInput {
             if let Some(track) = &mut video
                 && packet.stream() == track.index
             {
-                let (pts, dts) = track.state.pts_dts_from_packet(&packet);
+                let (pts, dts, pts_discontinuity) = track.state.pts_dts_from_packet(&packet);
 
                 stats_sender.send_video(HlsInputTrackStatsEvent::PacketReceived);
                 stats_sender.send_video(HlsInputTrackStatsEvent::ChunkSize(packet.size() as u64));
@@ -261,6 +261,9 @@ impl HlsInput {
                 stats_sender.send_video(HlsInputTrackStatsEvent::EffectiveBuffer(
                     pts.saturating_sub(track.state.queue_start_time.elapsed()),
                 ));
+                if pts_discontinuity {
+                    stats_sender.send_video(HlsInputTrackStatsEvent::DiscontinuityDetected);
+                }
 
                 let chunk = EncodedInputChunk {
                     data: Bytes::copy_from_slice(packet.data().unwrap()),
@@ -282,7 +285,7 @@ impl HlsInput {
             if let Some(track) = &mut audio
                 && packet.stream() == track.index
             {
-                let (pts, dts) = track.state.pts_dts_from_packet(&packet);
+                let (pts, dts, pts_discontinuity) = track.state.pts_dts_from_packet(&packet);
 
                 stats_sender.send_audio(HlsInputTrackStatsEvent::PacketReceived);
                 stats_sender.send_audio(HlsInputTrackStatsEvent::ChunkSize(packet.size() as u64));
@@ -292,6 +295,9 @@ impl HlsInput {
                 stats_sender.send_audio(HlsInputTrackStatsEvent::EffectiveBuffer(
                     pts.saturating_sub(track.state.queue_start_time.elapsed()),
                 ));
+                if pts_discontinuity {
+                    stats_sender.send_audio(HlsInputTrackStatsEvent::DiscontinuityDetected);
+                }
 
                 let chunk = EncodedInputChunk {
                     data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
@@ -360,12 +366,13 @@ impl StreamState {
         }
     }
 
-    fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>) {
+    fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>, bool) {
         let pts_timestamp = packet.pts().unwrap_or(0) as f64;
         let dts_timestamp = packet.dts().map(|dts| dts as f64);
         let packet_duration = packet.duration() as f64;
 
-        self.pts_discontinuity
+        let pts_discontinuity = self
+            .pts_discontinuity
             .detect_discontinuity(pts_timestamp, packet_duration);
         if let Some(dts) = dts_timestamp {
             self.dts_discontinuity
@@ -388,7 +395,7 @@ impl StreamState {
         });
 
         self.buffer.recalculate_buffer(pts);
-        (pts + self.buffer.size(), dts)
+        (pts + self.buffer.size(), dts, pts_discontinuity)
     }
 }
 
@@ -414,13 +421,13 @@ impl DiscontinuityState {
         }
     }
 
-    fn detect_discontinuity(&mut self, timestamp: f64, packet_duration: f64) {
+    fn detect_discontinuity(&mut self, timestamp: f64, packet_duration: f64) -> bool {
         let (Some(prev_timestamp), Some(next_timestamp)) =
             (self.prev_timestamp, self.next_predicted_timestamp)
         else {
             self.prev_timestamp = Some(timestamp);
             self.next_predicted_timestamp = Some(timestamp + packet_duration);
-            return;
+            return false;
         };
 
         // Detect discontinuity
@@ -437,6 +444,7 @@ impl DiscontinuityState {
 
         self.prev_timestamp = Some(timestamp);
         self.next_predicted_timestamp = Some(timestamp + packet_duration);
+        is_discontinuity
     }
 }
 

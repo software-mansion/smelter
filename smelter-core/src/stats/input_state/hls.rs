@@ -21,6 +21,9 @@ pub struct HlsInputTrackState {
     pub packets_received: u64,
     pub packets_received_10_secs: SlidingWindowValue<u64>,
 
+    pub discontinuities_detected: u32,
+    pub discontinuities_detected_10_secs: SlidingWindowValue<u32>,
+
     pub bitrate_10_secs: SlidingWindowValue<u64>,
 
     pub effective_buffer_10_secs: SlidingWindowValue<Duration>,
@@ -72,6 +75,9 @@ impl HlsInputTrackState {
             packets_received: 0,
             packets_received_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
 
+            discontinuities_detected: 0,
+            discontinuities_detected_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
+
             bitrate_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
 
             effective_buffer_10_secs: SlidingWindowValue::new(Duration::from_secs(10)),
@@ -103,6 +109,10 @@ impl HlsInputTrackState {
             HlsInputTrackStatsEvent::PacketReceived => {
                 self.packets_received += 1;
                 self.packets_received_10_secs.push(1);
+            }
+            HlsInputTrackStatsEvent::DiscontinuityDetected => {
+                self.discontinuities_detected += 1;
+                self.discontinuities_detected_10_secs.push(1);
             }
             HlsInputTrackStatsEvent::EffectiveBuffer(duration) => {
                 self.effective_buffer_10_secs.push(duration);

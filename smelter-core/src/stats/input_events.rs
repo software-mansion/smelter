@@ -78,6 +78,7 @@ impl HlsInputStatsEvent {
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum HlsInputTrackStatsEvent {
     PacketReceived,
+    DiscontinuityDetected,
     ChunkSize(u64),
     EffectiveBuffer(Duration),
     InputBufferSize(Duration),
