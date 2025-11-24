@@ -64,7 +64,9 @@ class OfflineOutput {
       },
       this.logger
     );
-    this.childrenLifetimeContext = new _smelterInternals.ChildrenLifetimeContext(() => {});
+    this.childrenLifetimeContext = new _smelterInternals.ChildrenLifetimeContext(() => {
+      console.log('ChildrenLifetimeContext on Change');
+    });
 
     const rootElement = createElement(OutputRootComponent, {
       outputContext: new OutputContext(this, this.outputId, store),
@@ -100,10 +102,12 @@ class OfflineOutput {
     this.updateTracker = new UpdateTracker(this.logger);
 
     while (this.timeContext.timestampMs() <= (this.durationMs ?? Infinity)) {
+      console.log(this.timeContext.timestampMs(), 'loop');
       while (true) {
         await waitForBlockingTasks(this.timeContext);
         await this.updateTracker.waitForRenderEnd();
         if (!this.timeContext.isBlocked()) {
+          console.log('break');
           break;
         }
       }
@@ -113,6 +117,7 @@ class OfflineOutput {
 
       const timestampMs = this.timeContext.timestampMs();
       if (this.childrenLifetimeContext.isDone() && this.durationMs === undefined) {
+        console.log('isDone');
         await this.api.unregisterOutput(OFFLINE_OUTPUT_ID, { schedule_time_ms: timestampMs });
         break;
       }
@@ -150,6 +155,7 @@ class OutputContext implements SmelterOutputContext {
     inputId: number,
     registerRequest: RegisterMp4Input
   ): Promise<{ videoDurationMs?: number; audioDurationMs?: number }> {
+    console.log({ inputId, registerRequest });
     const inputRef = {
       type: 'output-specific-input',
       outputId: this.outputId,
@@ -265,6 +271,7 @@ class UpdateTracker {
   }
 
   public onUpdate() {
+    console.log('onRenderUpdate');
     clearTimeout(this.updateTimeout);
     this.updateTimeout = setTimeout(() => {
       this.promiseRes();

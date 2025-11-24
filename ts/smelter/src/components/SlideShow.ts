@@ -78,6 +78,8 @@ export function SlideShow(props: SlideShowProps) {
   // report this SlideShow lifetime to its parents (to support nested SlideShows)
   useCompletableComponent(childIndex >= childrenArray.length);
 
+  console.log('useCompletableComponent', childIndex >= childrenArray.length);
+
   return createElement(
     ChildrenLifetimeContextType.Provider,
     { value: slideContext },

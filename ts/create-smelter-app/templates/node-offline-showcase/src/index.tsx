@@ -8,6 +8,7 @@ import {
   Mp4,
   useAfterTimestamp,
   useCurrentTimestamp,
+  useInputStreams,
 } from '@swmansion/smelter';
 import { useEffect, useState } from 'react';
 import ora from 'ora';
@@ -34,6 +35,7 @@ function Instructions() {
 }
 
 function TitleSlide(props: { title: string; text: string }) {
+  console.log('title slide');
   return (
     <View style={{ direction: 'column', paddingLeft: 200 }}>
       <View />
@@ -78,6 +80,7 @@ function Timer() {
 }
 
 function FirstVideo() {
+  console.log('first video');
   return (
     <Rescaler>
       <Mp4 source="https://smelter.dev/videos/template-scene-race.mp4" />
@@ -107,6 +110,8 @@ function SecondVideo() {
 }
 
 function App() {
+  console.log('app');
+  console.log(useInputStreams());
   return (
     <View style={{ backgroundColor: '#161127' }}>
       <SlideShow>

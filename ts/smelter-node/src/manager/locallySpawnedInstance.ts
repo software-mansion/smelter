@@ -48,7 +48,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   private mainExecutablePath?: string;
   private dependencyCheckPath?: string;
   private wsConnection: WebSocketConnection;
-  private enableWebRenderer?: boolean;
+  private enableWebRenderer: boolean;
   private childSpawnPromise?: SpawnPromise;
 
   constructor(opts: ManagedInstanceOptions) {
@@ -56,7 +56,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
     this.workingdir = opts.workingdir ?? path.join(os.tmpdir(), `smelter-${uuidv4()}`);
     this.mainExecutablePath = opts.mainExecutablePath;
     this.dependencyCheckPath = opts.dependencyCheckPath;
-    this.enableWebRenderer = opts.enableWebRenderer;
+    this.enableWebRenderer = opts.enableWebRenderer ?? false;
     this.wsConnection = new WebSocketConnection(`ws://127.0.0.1:${this.port}/ws`);
   }
 
@@ -85,7 +85,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       SMELTER_AHEAD_OF_TIME_PROCESSING_ENABLE: opts.aheadOfTimeProcessing ? 'true' : 'false',
       ...process.env,
       SMELTER_LOGGER_FORMAT: format,
-      SMELTER_LOGGER_LEVEL: level,
+      SMELTER_LOGGER_LEVEL: process.env.SMELTER_SERVER_LOGGER_LEVEL ?? level,
     };
 
     const executableError = (err: any, message: string) => {
@@ -124,7 +124,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
       const actualConfig = {
         apiPort: smelterStatus.configuration.apiPort,
         downloadDir: smelterStatus.configuration.downloadRoot,
-        webRendererEnable: smelterStatus.configuration.webRendererEnable ?? false,
+        webRendererEnable: smelterStatus.configuration.webRendererEnable,
         aheadOfTimeProcessing: smelterStatus.configuration.aheadOfTimeProcessing,
       };
 

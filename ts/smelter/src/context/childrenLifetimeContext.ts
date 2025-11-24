@@ -57,6 +57,7 @@ export function useTimeLimitedComponent(timestamp: number) {
 
 export function useCompletableComponent(completed: boolean) {
   const childrenLifetimeContext = useContext(ChildrenLifetimeContextType);
+  console.log({ childrenLifetimeContext });
   const [ref, setComponentRef] = useState<Symbol>();
   useEffect(() => {
     let ref = Symbol();

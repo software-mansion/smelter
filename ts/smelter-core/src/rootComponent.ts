@@ -39,6 +39,7 @@ function useMinimalStreamDuration(childrenLifetimeContext: ChildrenLifetimeConte
     };
   }, []);
   const afterTimestamp = useAfterTimestamp(1000);
+  console.log({ afterTimestamp });
   useEffect(() => {
     if (afterTimestamp) {
       childrenLifetimeContext.removeRef(globalDelayRef);

@@ -8,7 +8,7 @@ use std::{
 
 use bytes::Bytes;
 use fdk_aac_sys as fdk;
-use tracing::{error, info};
+use tracing::{error, info, trace};
 
 use crate::prelude::*;
 
@@ -122,6 +122,7 @@ impl AudioEncoder for FdkAacEncoder {
     }
 
     fn encode(&mut self, output_samples: OutputAudioSamples) -> Vec<EncodedOutputChunk> {
+        trace!(?output_samples, "FDK AAC encoder received samples");
         self.enqueue_samples(output_samples);
         self.call_fdk_encode(false).unwrap_or_else(|err| {
             error!("Encoding error: {:?}", err);
@@ -130,6 +131,9 @@ impl AudioEncoder for FdkAacEncoder {
     }
 
     fn flush(&mut self) -> Vec<EncodedOutputChunk> {
+        if self.start_pts.is_none() {
+            return vec![]
+        }
         self.call_fdk_encode(true).unwrap_or_else(|err| {
             error!("Encoding error: {:?}", err);
             vec![]

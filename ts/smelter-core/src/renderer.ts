@@ -75,6 +75,7 @@ const HostConfig: Reconciler.HostConfig<
   },
 
   resetAfterCommit(rootContainer: RootContainer): void {
+    console.log('react onUpdate', rootContainer);
     rootContainer['onUpdate']();
   },
 
