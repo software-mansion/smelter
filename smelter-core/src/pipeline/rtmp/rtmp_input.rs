@@ -10,7 +10,7 @@ use crate::{
     pipeline::{
         decoder::DecoderThreadHandle,
         input::Input,
-        rtmp::rtmp_input::{init::spawn_initialization_thread, stream_state::StreamState},
+        rtmp::rtmp_input::{input_loop::spawn_input_loop, stream_state::StreamState},
         utils::input_buffer::InputBuffer,
     },
     queue::QueueDataReceiver,
@@ -21,7 +21,7 @@ use crate::prelude::*;
 mod demux;
 mod ffmpeg_context;
 mod ffmpeg_utils;
-mod init;
+mod input_loop;
 mod stream_state;
 
 pub struct RtmpServerInput {
@@ -45,7 +45,7 @@ impl RtmpServerInput {
             audio: Some(samples_receiver),
         };
 
-        spawn_initialization_thread(
+        spawn_input_loop(
             ctx,
             input_ref,
             opts,

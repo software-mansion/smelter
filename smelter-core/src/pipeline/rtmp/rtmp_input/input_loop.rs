@@ -12,22 +12,20 @@ use crate::{
         decoder::{
             decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
-            fdk_aac, ffmpeg_h264,
-            h264_utils::{AvccToAnnexBRepacker, H264AvcDecoderConfig},
-            vulkan_h264,
+            fdk_aac, ffmpeg_h264, vulkan_h264,
         },
         rtmp::rtmp_input::{
-            StreamState, Track, demux::run_demuxer_thread, ffmpeg_context::FfmpegInputContext,
+            StreamState, Track, demux::run_demuxer_loop, ffmpeg_context::FfmpegInputContext,
             ffmpeg_utils::read_extra_data,
         },
-        utils::input_buffer::InputBuffer,
+        utils::{H264AvcDecoderConfig, H264AvccToAnnexB, input_buffer::InputBuffer},
     },
     thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
 
-pub(super) fn spawn_initialization_thread(
+pub(super) fn spawn_input_loop(
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
     opts: RtmpServerInputOptions,
@@ -111,7 +109,7 @@ pub(super) fn spawn_initialization_thread(
 
                     let decoder_thread_options = VideoDecoderThreadOptions {
                         ctx: ctx.clone(),
-                        transformer: h264_config.map(AvccToAnnexBRepacker::new),
+                        transformer: h264_config.map(H264AvccToAnnexB::new),
                         frame_sender: frame_sender.clone(),
                         input_buffer_size: 2000,
                     };
@@ -159,7 +157,7 @@ pub(super) fn spawn_initialization_thread(
                     }
                 }
 
-                run_demuxer_thread(input_ctx, audio_track.as_mut(), video_track.as_mut());
+                run_demuxer_loop(input_ctx, audio_track.as_mut(), video_track.as_mut());
 
                 warn!("RTMP connection lost, reconnecting possible in 3s...");
                 std::thread::sleep(Duration::from_secs(3));

@@ -9,7 +9,7 @@ pub(super) struct StreamState {
     buffer: InputBuffer,
     time_base: ffmpeg_next::Rational,
 
-    reference_pts_and_timestamp: Option<(Duration, f64)>,
+    first_packet_offset: Option<Duration>,
 }
 
 impl StreamState {
@@ -23,31 +23,30 @@ impl StreamState {
             time_base,
             buffer,
 
-            reference_pts_and_timestamp: None,
+            first_packet_offset: None,
         }
     }
 
     pub(super) fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>) {
-        let pts_timestamp = packet.pts().unwrap_or(0) as f64;
-        let dts_timestamp = packet.dts().map(|dts| dts as f64);
+        let pts = timestamp_to_duration(packet.pts().unwrap_or(0), self.time_base);
+        let dts = packet
+            .dts()
+            .map(|dts| timestamp_to_duration(dts, self.time_base));
 
-        let (reference_pts, reference_timestamp) = *self
-            .reference_pts_and_timestamp
-            .get_or_insert_with(|| (self.queue_start_time.elapsed(), pts_timestamp));
+        let offset = self
+            .first_packet_offset
+            .get_or_insert_with(|| self.queue_start_time.elapsed().saturating_sub(pts));
 
-        let pts_diff_secs = timestamp_to_secs(pts_timestamp - reference_timestamp, self.time_base);
-        let pts =
-            Duration::from_secs_f64(reference_pts.as_secs_f64() + f64::max(pts_diff_secs, 0.0));
-
-        let dts = dts_timestamp.map(|dts| {
-            Duration::from_secs_f64(f64::max(timestamp_to_secs(dts, self.time_base), 0.0))
-        });
+        let pts = pts + *offset;
+        let dts = dts.map(|dts| dts + *offset);
 
         self.buffer.recalculate_buffer(pts);
         (pts + self.buffer.size(), dts)
     }
 }
 
-fn timestamp_to_secs(timestamp: f64, time_base: ffmpeg_next::Rational) -> f64 {
-    f64::max(timestamp, 0.0) * time_base.numerator() as f64 / time_base.denominator() as f64
+fn timestamp_to_duration(timestamp: i64, time_base: ffmpeg_next::Rational) -> Duration {
+    let secs = f64::max(timestamp as f64, 0.0) * time_base.numerator() as f64
+        / time_base.denominator() as f64;
+    Duration::from_secs_f64(secs)
 }
