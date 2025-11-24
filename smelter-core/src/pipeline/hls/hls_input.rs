@@ -234,7 +234,6 @@ impl HlsInput {
                 Err(ffmpeg_next::Error::Eof | ffmpeg_next::Error::Exit) => break,
                 Err(err) => {
                     warn!("HLS read error {err:?}");
-                    stats_sender.send(HlsInputStatsEvent::CorruptedPacketReceived);
                     continue;
                 }
             };
@@ -245,6 +244,7 @@ impl HlsInput {
                     packet.stream(),
                     packet.flags()
                 );
+                stats_sender.send(HlsInputStatsEvent::CorruptedPacketReceived);
                 continue;
             }
 

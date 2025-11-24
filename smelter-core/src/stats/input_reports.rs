@@ -55,12 +55,14 @@ pub struct HlsInputStatsReport {
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct HlsInputTrackStatsReport {
     pub packets_received: u64,
+    pub discontinuities_detected: u32,
     pub last_10_seconds: HlsInputTrackSlidingWindowStatsReport,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct HlsInputTrackSlidingWindowStatsReport {
     pub packets_received: u64,
+    pub discontinuities_detected: u32,
     pub bitrate_avg: u64,
 
     /// Measured when packet leaves jitter buffer. This value represents

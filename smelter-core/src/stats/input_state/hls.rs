@@ -88,8 +88,10 @@ impl HlsInputTrackState {
     pub fn report(&mut self) -> HlsInputTrackStatsReport {
         HlsInputTrackStatsReport {
             packets_received: self.packets_received,
+            discontinuities_detected: self.discontinuities_detected,
             last_10_seconds: HlsInputTrackSlidingWindowStatsReport {
                 packets_received: self.packets_received_10_secs.sum(),
+                discontinuities_detected: self.discontinuities_detected_10_secs.sum(),
                 bitrate_avg: self.bitrate_10_secs.sum()
                     / self.bitrate_10_secs.window_size().as_secs(),
 
