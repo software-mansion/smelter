@@ -259,7 +259,7 @@ impl HlsInput {
                     track.state.buffer.size(),
                 ));
                 stats_sender.send_video(HlsInputTrackStatsEvent::EffectiveBuffer(
-                    pts.saturating_sub(track.state.queue_start_time.elapsed()),
+                    pts.saturating_sub(track.state.queue_sync_point.elapsed()),
                 ));
                 if pts_discontinuity {
                     stats_sender.send_video(HlsInputTrackStatsEvent::DiscontinuityDetected);
@@ -293,7 +293,7 @@ impl HlsInput {
                     track.state.buffer.size(),
                 ));
                 stats_sender.send_audio(HlsInputTrackStatsEvent::EffectiveBuffer(
-                    pts.saturating_sub(track.state.queue_start_time.elapsed()),
+                    pts.saturating_sub(track.state.queue_sync_point.elapsed()),
                 ));
                 if pts_discontinuity {
                     stats_sender.send_audio(HlsInputTrackStatsEvent::DiscontinuityDetected);
@@ -339,7 +339,7 @@ impl Drop for HlsInput {
 }
 
 struct StreamState {
-    queue_start_time: Instant,
+    queue_sync_point: Instant,
     buffer: InputBuffer,
     time_base: ffmpeg_next::Rational,
 
@@ -351,12 +351,12 @@ struct StreamState {
 
 impl StreamState {
     fn new(
-        queue_start_time: Instant,
+        queue_sync_point: Instant,
         time_base: ffmpeg_next::Rational,
         buffer: InputBuffer,
     ) -> Self {
         Self {
-            queue_start_time,
+            queue_sync_point,
             time_base,
             buffer,
 
@@ -384,7 +384,7 @@ impl StreamState {
 
         let (reference_pts, reference_timestamp) = *self
             .reference_pts_and_timestamp
-            .get_or_insert_with(|| (self.queue_start_time.elapsed(), pts_timestamp));
+            .get_or_insert_with(|| (self.queue_sync_point.elapsed(), pts_timestamp));
 
         let pts_diff_secs = timestamp_to_secs(pts_timestamp - reference_timestamp, self.time_base);
         let pts =
@@ -439,7 +439,6 @@ impl DiscontinuityState {
         if is_discontinuity {
             debug!("Discontinuity detected: {prev_timestamp} -> {timestamp}");
             self.offset += next_timestamp - timestamp;
-            // TODO: (stats) detected discontinuity
         }
 
         self.prev_timestamp = Some(timestamp);
