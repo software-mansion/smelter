@@ -4,12 +4,12 @@ use std::io::Read;
 use crate::pipeline::decoder::BytestreamTransformer;
 use crate::prelude::*;
 
-pub(crate) struct AvccToAnnexBRepacker {
+pub(crate) struct H264AvccToAnnexB {
     config: H264AvcDecoderConfig,
     sps_pps: Option<Bytes>,
 }
 
-impl AvccToAnnexBRepacker {
+impl H264AvccToAnnexB {
     pub fn new(config: H264AvcDecoderConfig) -> Self {
         let mut sps_pps = BytesMut::new();
         sps_pps.extend(
@@ -32,7 +32,7 @@ impl AvccToAnnexBRepacker {
     }
 }
 
-impl BytestreamTransformer for AvccToAnnexBRepacker {
+impl BytestreamTransformer for H264AvccToAnnexB {
     /// Repacks data from AVCC to Annex-B
     fn transform(&mut self, chunk_data: bytes::Bytes) -> bytes::Bytes {
         let nalu_length_size = self.config.nalu_length_size;

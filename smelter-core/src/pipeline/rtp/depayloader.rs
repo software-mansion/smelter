@@ -8,12 +8,12 @@ use webrtc::rtp::{
     packetizer::Depacketizer,
 };
 
-use crate::prelude::*;
 use crate::{
     codecs::{AacAudioSpecificConfig, AudioCodec, VideoCodec},
     pipeline::rtp::RtpPacket,
     protocols::{AacDepayloadingError, RtpAacDepayloaderMode},
 };
+use crate::{pipeline::decoder::EncodedInputEvent, prelude::*};
 
 pub(crate) use crate::pipeline::rtp::depayloader::dynamic_stream::{
     DynamicDepayloaderStream, VideoPayloadTypeMapping,
@@ -39,7 +39,7 @@ pub fn new_depayloader(options: DepayloaderOptions) -> Box<dyn Depayloader> {
     info!(?options, "Initialize RTP depayloader");
     match options {
         DepayloaderOptions::H264 => {
-            BufferedDepayloader::<H264Packet>::new_boxed(MediaKind::Video(VideoCodec::H264))
+            SimpleDepayloader::<H264Packet>::new_boxed(MediaKind::Video(VideoCodec::H264))
         }
         DepayloaderOptions::Vp8 => {
             BufferedDepayloader::<Vp8Packet>::new_boxed(MediaKind::Video(VideoCodec::Vp8))
@@ -56,7 +56,7 @@ pub fn new_depayloader(options: DepayloaderOptions) -> Box<dyn Depayloader> {
 
 pub(crate) trait Depayloader {
     fn depayload(&mut self, packet: RtpPacket)
-    -> Result<Vec<EncodedInputChunk>, DepayloadingError>;
+    -> Result<Vec<EncodedInputEvent>, DepayloadingError>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -87,7 +87,7 @@ impl<T: Depacketizer + Default + 'static> Depayloader for BufferedDepayloader<T>
     fn depayload(
         &mut self,
         packet: RtpPacket,
-    ) -> Result<Vec<EncodedInputChunk>, DepayloadingError> {
+    ) -> Result<Vec<EncodedInputEvent>, DepayloadingError> {
         trace!(?packet, "RTP depayloader received new packet");
         let chunk = self.depayloader.depacketize(&packet.packet.payload)?;
 
@@ -101,12 +101,12 @@ impl<T: Depacketizer + Default + 'static> Depayloader for BufferedDepayloader<T>
             return Ok(Vec::new());
         }
 
-        let new_chunk = EncodedInputChunk {
+        let new_chunk = EncodedInputEvent::Chunk(EncodedInputChunk {
             data: mem::take(&mut self.buffer).concat().into(),
             pts: packet.timestamp,
             dts: None,
             kind: self.kind,
-        };
+        });
 
         trace!(chunk=?new_chunk, "RTP depayloader produced a new chunk");
         Ok(vec![new_chunk])
@@ -131,17 +131,26 @@ impl<T: Depacketizer + Default + 'static> Depayloader for SimpleDepayloader<T> {
     fn depayload(
         &mut self,
         packet: RtpPacket,
-    ) -> Result<Vec<EncodedInputChunk>, DepayloadingError> {
+    ) -> Result<Vec<EncodedInputEvent>, DepayloadingError> {
         trace!(?packet, "RTP depayloader received new packet");
         let data = self.depayloader.depacketize(&packet.packet.payload)?;
-        let chunk = EncodedInputChunk {
+        if data.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let chunk = EncodedInputEvent::Chunk(EncodedInputChunk {
             data,
             pts: packet.timestamp,
             dts: None,
             kind: self.kind,
-        };
+        });
 
-        trace!(?chunk, "RTP depayloader produced a new chunk");
-        Ok(vec![chunk])
+        if packet.packet.header.marker {
+            trace!(?chunk, "RTP depayloader produced a new chunk (last in au)");
+            Ok(vec![chunk, EncodedInputEvent::AuDelimiter])
+        } else {
+            trace!(?chunk, "RTP depayloader produced a new chunk");
+            Ok(vec![chunk])
+        }
     }
 }

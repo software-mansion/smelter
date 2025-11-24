@@ -95,5 +95,36 @@ pub mod h264 {
 
             Ok(access_units)
         }
+
+        pub fn flush(&mut self) -> Result<Vec<AccessUnit>, H264ParserError> {
+            let nalus = self.nalu_splitter.flush();
+            let nalus = nalus.into_iter().map(|(nalu_bytes, pts)| {
+                self.reader.push(&nalu_bytes);
+
+                let parsed_nalu = self.receiver.try_recv().unwrap();
+                parsed_nalu.map(|parsed_nalu| Nalu {
+                    parsed: parsed_nalu,
+                    raw_bytes: nalu_bytes.into_boxed_slice(),
+                    pts,
+                })
+            });
+
+            let mut access_units = Vec::new();
+            for nalu in nalus {
+                let nalu = nalu?;
+
+                let Some(au) = self.au_splitter.put_nalu(nalu) else {
+                    continue;
+                };
+
+                access_units.push(au);
+            }
+
+            if let Some(au) = self.au_splitter.flush() {
+                access_units.push(au);
+            }
+
+            Ok(access_units)
+        }
     }
 }

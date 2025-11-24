@@ -140,18 +140,14 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {
-            Some(PipelineEvent::Data(EncodedInputEvent::Chunk(samples))) => {
+            Some(PipelineEvent::Data(event)) => {
                 // TODO: flush on decoder change
-                self.ensure_decoder(samples.kind);
-                let decoder = self.decoder.as_mut()?;
-                let chunks = decoder.decode(samples);
-                Some(chunks.into_iter().map(PipelineEvent::Data).collect())
-            }
-            Some(PipelineEvent::Data(EncodedInputEvent::LostData)) => {
-                if let Some(decoder) = self.decoder.as_mut() {
-                    decoder.skip_until_keyframe()
+                if let EncodedInputEvent::Chunk(chunk) = &event {
+                    self.ensure_decoder(chunk.kind);
                 }
-                Some(vec![])
+                let decoder = self.decoder.as_mut()?;
+                let chunks = decoder.decode(event);
+                Some(chunks.into_iter().map(PipelineEvent::Data).collect())
             }
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
                 true => None,

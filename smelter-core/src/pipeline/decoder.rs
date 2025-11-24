@@ -8,7 +8,6 @@ use crate::prelude::*;
 
 pub(super) mod decoder_thread_audio;
 pub(super) mod decoder_thread_video;
-pub(super) mod h264_utils;
 
 mod dynamic_stream;
 mod static_stream;
@@ -43,9 +42,11 @@ pub(crate) struct DecodedSamples {
     pub sample_rate: u32,
 }
 
+#[derive(Debug)]
 pub(crate) enum EncodedInputEvent {
     Chunk(EncodedInputChunk),
     LostData,
+    AuDelimiter,
 }
 
 #[derive(Debug)]
@@ -63,9 +64,8 @@ pub(crate) trait VideoDecoder: Sized + VideoDecoderInstance {
 }
 
 pub(crate) trait VideoDecoderInstance {
-    fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame>;
+    fn decode(&mut self, chunk: EncodedInputEvent) -> Vec<Frame>;
     fn flush(&mut self) -> Vec<Frame>;
-    fn skip_until_keyframe(&mut self);
 }
 
 pub(crate) trait BytestreamTransformer: Send + 'static {

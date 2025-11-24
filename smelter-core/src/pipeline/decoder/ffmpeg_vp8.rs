@@ -1,7 +1,7 @@
 use std::{iter, sync::Arc};
 
 use crate::pipeline::decoder::{
-    KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
+    EncodedInputEvent, KeyframeRequestSender, VideoDecoder, VideoDecoderInstance,
     ffmpeg_utils::{create_av_packet, from_av_frame},
 };
 use crate::prelude::*;
@@ -52,8 +52,13 @@ impl VideoDecoder for FfmpegVp8Decoder {
 }
 
 impl VideoDecoderInstance for FfmpegVp8Decoder {
-    fn decode(&mut self, chunk: EncodedInputChunk) -> Vec<Frame> {
-        trace!(?chunk, "VP8 decoder received a chunk.");
+    fn decode(&mut self, event: EncodedInputEvent) -> Vec<Frame> {
+        trace!(?event, "FFmpeg VP8 decoder received an event.");
+
+        let EncodedInputEvent::Chunk(chunk) = event else {
+            return vec![];
+        };
+
         let av_packet = match create_av_packet(chunk, VideoCodec::Vp8, TIME_BASE) {
             Ok(packet) => packet,
             Err(err) => {
@@ -76,8 +81,6 @@ impl VideoDecoderInstance for FfmpegVp8Decoder {
         self.decoder.flush();
         self.read_all_frames()
     }
-
-    fn skip_until_keyframe(&mut self) {}
 }
 
 impl FfmpegVp8Decoder {
