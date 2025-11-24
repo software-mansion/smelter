@@ -130,6 +130,9 @@ impl AudioEncoder for FdkAacEncoder {
     }
 
     fn flush(&mut self) -> Vec<EncodedOutputChunk> {
+        if self.start_pts.is_none() {
+            return vec![];
+        }
         self.call_fdk_encode(true).unwrap_or_else(|err| {
             error!("Encoding error: {:?}", err);
             vec![]
