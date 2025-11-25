@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@swmansion/smelter':
-        specifier: 0.2.1
-        version: 0.2.1(react@18.3.1)
+        specifier: 0.3.0-rc.0
+        version: 0.3.0-rc.0(react@18.3.1)
       '@swmansion/smelter-web-wasm':
-        specifier: 0.2.1
-        version: 0.2.1(@swmansion/smelter@0.2.1(react@18.3.1))(react@18.3.1)
+        specifier: 0.3.0-rc.0
+        version: 0.3.0-rc.0(@swmansion/smelter@0.3.0-rc.0(react@18.3.1))(react@18.3.1)
       next:
         specifier: 14.2.32
         version: 14.2.32(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -222,24 +222,24 @@ packages:
   '@swc/helpers@0.5.5':
     resolution: {integrity: sha512-KGYxvIOXcceOAbEk4bi/dVLEK9z8sZ0uBB3Il5b1rhfClSpcX0yfRO0KmTkqR2cnQDymwLB+25ZyMzICg/cm/A==}
 
-  '@swmansion/smelter-browser-render@0.2.1':
-    resolution: {integrity: sha512-CczIc/agZbgJ8cdTa3BtMrrbLG9BmlYWlry2fJuo80e9r8KadCSWaKEsC559rWacR94ie2TeQBFYSCvaIR/JiQ==}
+  '@swmansion/smelter-browser-render@0.3.0-rc.0':
+    resolution: {integrity: sha512-rihnp/+Xxq+P7wZ90BIBpvYhhDuY5Ngp5VNkelhMcFZsNZbYyUIVzT8izLx0xNIhpnxbwOFXq0o6t6rUB7nZJQ==}
     peerDependencies:
-      '@swmansion/smelter': 0.2.1
+      '@swmansion/smelter': 0.3.0-rc.0
 
-  '@swmansion/smelter-core@0.2.1':
-    resolution: {integrity: sha512-Ih2ITv3/fRhgRRdxoo4QfVmJdnKKjBGDZNPM0E3dwyQ1RoiA+Gs18HjKipprA+SXkcaCNaOQ91wVYB2xKn3DDA==}
+  '@swmansion/smelter-core@0.3.0-rc.0':
+    resolution: {integrity: sha512-z6z967ZIEcNRcJK8HNFqZKT45sedSbN5McN+jHsaIGCIziq9G3ikG/9ufh+WmXO5D9ddSB81CsMOSPXJ1VfZjg==}
     peerDependencies:
-      '@swmansion/smelter': ^0.2.1
+      '@swmansion/smelter': 0.3.0-rc.0
       react: '*'
 
-  '@swmansion/smelter-web-wasm@0.2.1':
-    resolution: {integrity: sha512-69OO+Wgg7o8R7RzenjYpptv/o9apRjIPLUIFYwFEDloerd4LqBUxZQuA6IPcLeaGOMtrVxDaGbcuX5aM0IxWCA==}
+  '@swmansion/smelter-web-wasm@0.3.0-rc.0':
+    resolution: {integrity: sha512-UJXpbrPjIomvOfwsxvRZ4MiQ7hJwyKAqshhVdfJC299UqA4yDvstcmXPqfuMkO9w7vvHeNxvNb/nadOxI7M+Aw==}
     peerDependencies:
-      '@swmansion/smelter': ^0.2.1
+      '@swmansion/smelter': 0.3.0-rc.0
 
-  '@swmansion/smelter@0.2.1':
-    resolution: {integrity: sha512-DtntMIDfhUlyyVx+0jQjWX5/aEcRd/CFKXbz35TtUZlCAjA18g/+m/CWbaIUMRkpO8ePbB+fpkNs/e8m6UDyZw==}
+  '@swmansion/smelter@0.3.0-rc.0':
+    resolution: {integrity: sha512-riYaWduxYQ0GZQzdHP6A3ihHU6CNWcZ+6z8Ceyc3vP4iorjjm76bJqN+cY16qZ6zZTi/lST0y1dvnJuBJBxEQA==}
     peerDependencies:
       react: '*'
 
@@ -2122,29 +2122,29 @@ snapshots:
       '@swc/counter': 0.1.3
       tslib: 2.8.1
 
-  '@swmansion/smelter-browser-render@0.2.1(@swmansion/smelter@0.2.1(react@18.3.1))':
+  '@swmansion/smelter-browser-render@0.3.0-rc.0(@swmansion/smelter@0.3.0-rc.0(react@18.3.1))':
     dependencies:
-      '@swmansion/smelter': 0.2.1(react@18.3.1)
+      '@swmansion/smelter': 0.3.0-rc.0(react@18.3.1)
 
-  '@swmansion/smelter-core@0.2.1(@swmansion/smelter@0.2.1(react@18.3.1))(react@18.3.1)':
+  '@swmansion/smelter-core@0.3.0-rc.0(@swmansion/smelter@0.3.0-rc.0(react@18.3.1))(react@18.3.1)':
     dependencies:
-      '@swmansion/smelter': 0.2.1(react@18.3.1)
+      '@swmansion/smelter': 0.3.0-rc.0(react@18.3.1)
       react: 18.3.1
       react-reconciler: 0.29.2(react@18.3.1)
 
-  '@swmansion/smelter-web-wasm@0.2.1(@swmansion/smelter@0.2.1(react@18.3.1))(react@18.3.1)':
+  '@swmansion/smelter-web-wasm@0.3.0-rc.0(@swmansion/smelter@0.3.0-rc.0(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@datastructures-js/queue': 4.2.3
-      '@swmansion/smelter': 0.2.1(react@18.3.1)
-      '@swmansion/smelter-browser-render': 0.2.1(@swmansion/smelter@0.2.1(react@18.3.1))
-      '@swmansion/smelter-core': 0.2.1(@swmansion/smelter@0.2.1(react@18.3.1))(react@18.3.1)
+      '@swmansion/smelter': 0.3.0-rc.0(react@18.3.1)
+      '@swmansion/smelter-browser-render': 0.3.0-rc.0(@swmansion/smelter@0.3.0-rc.0(react@18.3.1))
+      '@swmansion/smelter-core': 0.3.0-rc.0(@swmansion/smelter@0.3.0-rc.0(react@18.3.1))(react@18.3.1)
       mp4box: 0.5.3
       path-parser: 6.1.0
       pino: 9.6.0
     transitivePeerDependencies:
       - react
 
-  '@swmansion/smelter@0.2.1(react@18.3.1)':
+  '@swmansion/smelter@0.3.0-rc.0(react@18.3.1)':
     dependencies:
       react: 18.3.1
 
