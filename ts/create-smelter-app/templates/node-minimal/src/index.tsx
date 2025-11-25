@@ -13,9 +13,9 @@ function App() {
       <View />
       <Text style={{ fontSize: 50, lineHeight: 80 }}>Open index.tsx and get started.</Text>
       <Text style={{ fontSize: 30, lineHeight: 35, width: 1000, wrap: 'word' }}>
-        This example renders static text and sends the output stream via RTP to local port 8001.
-        Generated code includes helpers in smelterFfplayHelper.ts that display the output stream
-        using ffplay, make sure to remove them for any real production use.
+        This example renders static text and sends the output stream via RTMP to the local port
+        8001. Generated code includes helpers in smelterFfplayHelper.ts that display the output
+        stream using ffplay, make sure to remove them for any real production use.
       </Text>
       <View />
     </View>

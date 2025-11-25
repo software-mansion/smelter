@@ -12,8 +12,8 @@ function App() {
       <View />
       <Text style={{ fontSize: 50, lineHeight: 80 }}>Open index.tsx and get started.</Text>
       <Text style={{ fontSize: 30, lineHeight: 35, width: 1000, wrap: 'word' }}>
-        This is an example of an offline processing with Smelter. It's just a very basic scene that
-        displays this text.
+        This is an example of an offline processing with Smelter. It's rendering a very basic scene
+        that displays this text and saves it as a static MP4 file.
       </Text>
       <View />
     </View>
@@ -29,7 +29,12 @@ async function run() {
       type: 'mp4',
       serverPath: './output.mp4',
       video: {
-        encoder: { type: 'ffmpeg_h264', preset: 'ultrafast' },
+        encoder: {
+          type: 'ffmpeg_h264',
+          // 'ultrafast' is good for development. For production render select
+          // slower (higher quality) preset e.g. 'medium'.
+          preset: 'ultrafast',
+        },
         resolution: { width: 1920, height: 1080 },
       },
       audio: {

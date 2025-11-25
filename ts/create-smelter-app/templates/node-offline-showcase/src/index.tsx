@@ -1,3 +1,5 @@
+import fs from 'fs';
+
 import { OfflineSmelter } from '@swmansion/smelter-node';
 import {
   View,
@@ -10,6 +12,7 @@ import {
   useCurrentTimestamp,
 } from '@swmansion/smelter';
 import { useEffect, useState } from 'react';
+import ora from 'ora';
 
 function Instructions() {
   return (
@@ -129,15 +132,26 @@ function App() {
 }
 
 async function run() {
+  if (fs.existsSync('output.mp4')) {
+    fs.unlinkSync('output.mp4');
+  }
+
   const smelter = new OfflineSmelter();
   await smelter.init();
 
-  console.log('Starting rendering ...');
+  const spinner = ora();
+  spinner.start('Rendering (this might take a few minutes) ...');
+
   await smelter.render(<App />, {
     type: 'mp4',
     serverPath: './output.mp4',
     video: {
-      encoder: { type: 'ffmpeg_h264', preset: 'ultrafast' },
+      encoder: {
+        type: 'ffmpeg_h264',
+        // 'ultrafast' is good for development. For production render select
+        // slower (higher quality) preset e.g. 'medium'.
+        preset: 'ultrafast',
+      },
       resolution: {
         width: 1920,
         height: 1080,
@@ -149,6 +163,6 @@ async function run() {
     },
   });
 
-  console.log(`Mp4 successfully written to ./output.mp4`);
+  spinner.succeed(`Mp4 successfully written to ./output.mp4`);
 }
 void run();
