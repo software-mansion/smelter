@@ -20,10 +20,6 @@ const nextConfig =  {
         ],
       })
     );
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      "smelter_render_wasm_bg.wasm": false,
-    };
 
     if (isServer) {
       config.externals = config.externals || [];
