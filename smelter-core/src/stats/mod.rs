@@ -27,7 +27,7 @@ pub struct StatsReport {
 pub(crate) struct StatsMonitor(Arc<Mutex<StatsState>>);
 
 #[derive(Debug, Clone)]
-pub(crate) struct StatsSender(Sender<StatsEvent>);
+pub(crate) struct StatsSender(Sender<Vec<StatsEvent>>);
 
 impl StatsMonitor {
     pub fn new() -> (Self, StatsSender) {
@@ -60,18 +60,24 @@ impl StatsMonitor {
 }
 
 impl StatsSender {
-    pub fn send(&self, event: StatsEvent) {
-        if let Err(TrySendError::Full(event)) = self.0.try_send(event) {
-            warn!(?event, "Stats channel full")
-        };
+    pub fn send(&self, events: Vec<StatsEvent>) {
+        if let Err(TrySendError::Full(events)) = self.0.try_send(events) {
+            warn!(?events, "Stats channel full.");
+        }
+    }
+
+    pub fn send_event(&self, event: StatsEvent) {
+        self.send(vec![event]);
     }
 }
 
-fn run_event_loop(monitor: Weak<Mutex<StatsState>>, receiver: Receiver<StatsEvent>) {
-    for event in receiver.into_iter() {
+fn run_event_loop(monitor: Weak<Mutex<StatsState>>, receiver: Receiver<Vec<StatsEvent>>) {
+    for events in receiver.into_iter() {
         let Some(monitor) = monitor.upgrade() else {
             return;
         };
-        monitor.lock().unwrap().handle_event(event);
+        for event in events {
+            monitor.lock().unwrap().handle_event(event);
+        }
     }
 }

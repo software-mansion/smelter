@@ -44,7 +44,7 @@ impl WhepInput {
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let (init_confirmation_sender, init_confirmation_receiver) = oneshot::channel();
 
-        ctx.stats_sender.send(StatsEvent::NewInput {
+        ctx.stats_sender.send_event(StatsEvent::NewInput {
             input_ref: input_ref.clone(),
             kind: InputProtocolKind::Whep,
         });

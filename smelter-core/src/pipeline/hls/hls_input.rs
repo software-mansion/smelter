@@ -58,7 +58,7 @@ impl HlsInput {
         let should_close = Arc::new(AtomicBool::new(false));
         let buffer = InputBuffer::new(&ctx, opts.buffer);
 
-        ctx.stats_sender.send(StatsEvent::NewInput {
+        ctx.stats_sender.send_event(StatsEvent::NewInput {
             input_ref: input_ref.clone(),
             kind: InputProtocolKind::Hls,
         });
@@ -546,16 +546,17 @@ impl HlsInputStatsSender {
     }
 
     fn send(&self, event: HlsInputStatsEvent) {
-        self.stats_sender.send(event.into_event(&self.input_ref));
+        self.stats_sender
+            .send_event(event.into_event(&self.input_ref));
     }
 
     fn send_video(&self, event: HlsInputTrackStatsEvent) {
         self.stats_sender
-            .send(HlsInputStatsEvent::Video(event).into_event(&self.input_ref));
+            .send_event(HlsInputStatsEvent::Video(event).into_event(&self.input_ref));
     }
 
     fn send_audio(&self, event: HlsInputTrackStatsEvent) {
         self.stats_sender
-            .send(HlsInputStatsEvent::Audio(event).into_event(&self.input_ref));
+            .send_event(HlsInputStatsEvent::Audio(event).into_event(&self.input_ref));
     }
 }
