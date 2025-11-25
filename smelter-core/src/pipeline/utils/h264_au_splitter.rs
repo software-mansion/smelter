@@ -113,7 +113,7 @@ impl H264AuSplitter {
                 self.prev_ref_frame_num = frame_num;
             }
             SliceFamily::I => {
-                self.prev_ref_frame_num = 0;
+                self.prev_ref_frame_num = slice.header.frame_num;
                 self.detected_missed_frames = false;
             }
             SliceFamily::SP | SliceFamily::SI => {} // Not supported
