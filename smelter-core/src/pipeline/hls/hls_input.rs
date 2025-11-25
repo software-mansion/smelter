@@ -244,7 +244,7 @@ impl HlsInput {
                     packet.stream(),
                     packet.flags()
                 );
-                stats_sender.send(HlsInputStatsEvent::CorruptedPacketReceived);
+                stats_sender.send_corrupted_packet_event();
                 continue;
             }
 
@@ -253,17 +253,12 @@ impl HlsInput {
             {
                 let (pts, dts, pts_discontinuity) = track.state.pts_dts_from_packet(&packet);
 
-                stats_sender.send_video(HlsInputTrackStatsEvent::PacketReceived);
-                stats_sender.send_video(HlsInputTrackStatsEvent::ChunkSize(packet.size() as u64));
-                stats_sender.send_video(HlsInputTrackStatsEvent::InputBufferSize(
+                stats_sender.send_video_events(
+                    packet.size() as u64,
                     track.state.buffer.size(),
-                ));
-                stats_sender.send_video(HlsInputTrackStatsEvent::EffectiveBuffer(
                     pts.saturating_sub(track.state.queue_sync_point.elapsed()),
-                ));
-                if pts_discontinuity {
-                    stats_sender.send_video(HlsInputTrackStatsEvent::DiscontinuityDetected);
-                }
+                    pts_discontinuity,
+                );
 
                 let chunk = EncodedInputChunk {
                     data: Bytes::copy_from_slice(packet.data().unwrap()),
@@ -287,17 +282,12 @@ impl HlsInput {
             {
                 let (pts, dts, pts_discontinuity) = track.state.pts_dts_from_packet(&packet);
 
-                stats_sender.send_audio(HlsInputTrackStatsEvent::PacketReceived);
-                stats_sender.send_audio(HlsInputTrackStatsEvent::ChunkSize(packet.size() as u64));
-                stats_sender.send_audio(HlsInputTrackStatsEvent::InputBufferSize(
+                stats_sender.send_audio_events(
+                    packet.size() as u64,
                     track.state.buffer.size(),
-                ));
-                stats_sender.send_audio(HlsInputTrackStatsEvent::EffectiveBuffer(
                     pts.saturating_sub(track.state.queue_sync_point.elapsed()),
-                ));
-                if pts_discontinuity {
-                    stats_sender.send_audio(HlsInputTrackStatsEvent::DiscontinuityDetected);
-                }
+                    pts_discontinuity,
+                );
 
                 let chunk = EncodedInputChunk {
                     data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
@@ -545,18 +535,56 @@ impl HlsInputStatsSender {
         }
     }
 
-    fn send(&self, event: HlsInputStatsEvent) {
+    fn send_corrupted_packet_event(&self) {
         self.stats_sender
-            .send_event(event.into_event(&self.input_ref));
+            .send_event(HlsInputStatsEvent::CorruptedPacketReceived.into_event(&self.input_ref));
     }
 
-    fn send_video(&self, event: HlsInputTrackStatsEvent) {
-        self.stats_sender
-            .send_event(HlsInputStatsEvent::Video(event).into_event(&self.input_ref));
+    fn send_video_events(
+        &self,
+        chunk_size: u64,
+        input_buffer: Duration,
+        effective_buffer: Duration,
+        pts_discontinuity: bool,
+    ) {
+        let mut events = vec![
+            HlsInputTrackStatsEvent::PacketReceived,
+            HlsInputTrackStatsEvent::ChunkSize(chunk_size),
+            HlsInputTrackStatsEvent::InputBufferSize(input_buffer),
+            HlsInputTrackStatsEvent::EffectiveBuffer(effective_buffer),
+        ];
+        if pts_discontinuity {
+            events.push(HlsInputTrackStatsEvent::DiscontinuityDetected);
+        }
+        let events = events
+            .into_iter()
+            .map(|event| HlsInputStatsEvent::Video(event).into_event(&self.input_ref))
+            .collect();
+
+        self.stats_sender.send(events);
     }
 
-    fn send_audio(&self, event: HlsInputTrackStatsEvent) {
-        self.stats_sender
-            .send_event(HlsInputStatsEvent::Audio(event).into_event(&self.input_ref));
+    fn send_audio_events(
+        &self,
+        chunk_size: u64,
+        input_buffer: Duration,
+        effective_buffer: Duration,
+        pts_discontinuity: bool,
+    ) {
+        let mut events = vec![
+            HlsInputTrackStatsEvent::PacketReceived,
+            HlsInputTrackStatsEvent::ChunkSize(chunk_size),
+            HlsInputTrackStatsEvent::InputBufferSize(input_buffer),
+            HlsInputTrackStatsEvent::EffectiveBuffer(effective_buffer),
+        ];
+        if pts_discontinuity {
+            events.push(HlsInputTrackStatsEvent::DiscontinuityDetected);
+        }
+        let events = events
+            .into_iter()
+            .map(|event| HlsInputStatsEvent::Audio(event).into_event(&self.input_ref))
+            .collect();
+
+        self.stats_sender.send(events);
     }
 }
