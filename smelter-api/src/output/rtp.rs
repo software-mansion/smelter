@@ -65,7 +65,7 @@ pub enum RtpVideoEncoderOptions {
     VulkanH264 {
         /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
         /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-        bitrate: Option<VulkanH264EncoderBitrate>,
+        bitrate: Option<VideoEncoderBitrate>,
     },
 }
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
