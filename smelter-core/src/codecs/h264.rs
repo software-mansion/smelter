@@ -21,6 +21,7 @@ pub enum FfmpegH264EncoderPreset {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FfmpegH264EncoderOptions {
     pub preset: FfmpegH264EncoderPreset,
+    pub bitrate: Option<VideoEncoderBitrate>,
     pub resolution: Resolution,
     pub pixel_format: OutputPixelFormat,
     pub raw_options: Vec<(Arc<str>, Arc<str>)>,
