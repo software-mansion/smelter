@@ -103,8 +103,7 @@ impl HlsInput {
             audio: samples_receiver,
         };
 
-        let stats_sender = HlsInputStatsSender::new(input_ref.clone(), ctx.stats_sender.clone());
-        Self::spawn_demuxer_thread(input_ref, input_ctx, audio, video, stats_sender);
+        Self::spawn_demuxer_thread(input_ref, input_ctx, audio, video, ctx.stats_sender.clone());
 
         Ok((
             Input::Hls(Self { should_close }),
@@ -134,11 +133,8 @@ impl HlsInput {
             },
         )?;
 
-        let stats_sender = HlsInputTrackStatsSender::new(
-            input_ref.clone(),
-            ctx.stats_sender.clone(),
-            HlsTrack::Audio,
-        );
+        let stats_sender =
+            HlsInputTrackStatsSender::new(input_ref, &ctx.stats_sender, HlsTrack::Audio);
         Ok((
             Track {
                 index: stream.index(),
@@ -212,11 +208,8 @@ impl HlsInput {
             }
         };
 
-        let stats_sender = HlsInputTrackStatsSender::new(
-            input_ref.clone(),
-            ctx.stats_sender.clone(),
-            HlsTrack::Video,
-        );
+        let stats_sender =
+            HlsInputTrackStatsSender::new(input_ref, &ctx.stats_sender, HlsTrack::Video);
         Ok((
             Track {
                 index: stream.index(),
@@ -233,7 +226,7 @@ impl HlsInput {
         input_ctx: FfmpegInputContext,
         audio: Option<Track>,
         video: Option<Track>,
-        stats_sender: HlsInputStatsSender,
+        stats_sender: StatsSender,
     ) {
         std::thread::Builder::new()
             .name(format!("HLS thread for input {input_ref}"))
@@ -241,7 +234,7 @@ impl HlsInput {
                 let _span =
                     span!(Level::INFO, "HLS thread", input_id = input_ref.to_string()).entered();
 
-                Self::run_demuxer_thread(input_ctx, audio, video, stats_sender);
+                Self::run_demuxer_thread(input_ctx, audio, video, input_ref, stats_sender);
             })
             .unwrap();
     }
@@ -250,7 +243,8 @@ impl HlsInput {
         mut input_ctx: FfmpegInputContext,
         mut audio: Option<Track>,
         mut video: Option<Track>,
-        stats_sender: HlsInputStatsSender,
+        input_ref: Ref<InputId>,
+        stats_sender: StatsSender,
     ) {
         loop {
             let packet = match input_ctx.read_packet() {
@@ -268,7 +262,8 @@ impl HlsInput {
                     packet.stream(),
                     packet.flags()
                 );
-                stats_sender.send_event(HlsInputStatsEvent::CorruptedPacketReceived);
+                stats_sender
+                    .send_event(HlsInputStatsEvent::CorruptedPacketReceived.into_event(&input_ref));
                 continue;
             }
 
@@ -547,25 +542,6 @@ where
     }
 }
 
-struct HlsInputStatsSender {
-    input_ref: Ref<InputId>,
-    stats_sender: StatsSender,
-}
-
-impl HlsInputStatsSender {
-    fn new(input_ref: Ref<InputId>, stats_sender: StatsSender) -> Self {
-        Self {
-            input_ref,
-            stats_sender,
-        }
-    }
-
-    fn send_event(&self, event: HlsInputStatsEvent) {
-        self.stats_sender
-            .send_event(event.into_event(&self.input_ref));
-    }
-}
-
 enum HlsTrack {
     Audio,
     Video,
@@ -578,10 +554,10 @@ struct HlsInputTrackStatsSender {
 }
 
 impl HlsInputTrackStatsSender {
-    fn new(input_ref: Ref<InputId>, stats_sender: StatsSender, track: HlsTrack) -> Self {
+    fn new(input_ref: &Ref<InputId>, stats_sender: &StatsSender, track: HlsTrack) -> Self {
         Self {
-            input_ref,
-            stats_sender,
+            input_ref: input_ref.clone(),
+            stats_sender: stats_sender.clone(),
             track,
         }
     }
