@@ -18,7 +18,7 @@ export function intoRegisterWhepServerOutput(
 export function intoOutputWhepVideoOptions(
   video: Outputs.WhepVideoOptions | null | undefined,
   initial: Api.VideoScene | undefined
-): Api.OutputVideoOptions | undefined {
+): Api.OutputWhepVideoOptions | undefined {
   if (!video || !initial) {
     return undefined;
   }
@@ -33,7 +33,7 @@ export function intoOutputWhepVideoOptions(
 
 export function intoWhepVideoEncoderOptions(
   encoder: Outputs.WhepVideoEncoderOptions
-): Api.VideoEncoderOptions {
+): Api.WhepVideoEncoderOptions {
   switch (encoder.type) {
     case 'ffmpeg_vp9':
       return {

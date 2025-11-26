@@ -18,7 +18,7 @@ export function intoRegisterHlsOutput(
 export function intoOutputHlsVideoOptions(
   video: Outputs.HlsVideoOptions,
   initial: Api.VideoScene
-): Api.OutputVideoOptions {
+): Api.OutputHlsVideoOptions {
   return {
     resolution: video.resolution,
     send_eos_when: video.sendEosWhen && intoOutputEosCondition(video.sendEosWhen),
@@ -29,7 +29,7 @@ export function intoOutputHlsVideoOptions(
 
 function intoHlsVideoEncoderOptions(
   encoder: Outputs.HlsVideoEncoderOptions
-): Api.VideoEncoderOptions {
+): Api.HlsVideoEncoderOptions {
   switch (encoder.type) {
     case 'ffmpeg_h264':
       return {

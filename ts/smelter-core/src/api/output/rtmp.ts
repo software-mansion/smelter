@@ -24,7 +24,7 @@ export function intoRegisterRtmpClientOutput(
 export function intoOutputRtmpClientVideoOptions(
   video: Outputs.RtmpClientVideoOptions,
   initial: Api.VideoScene
-): Api.OutputVideoOptions {
+): Api.OutputRtmpClientVideoOptions {
   return {
     resolution: video.resolution,
     send_eos_when: video.sendEosWhen && intoOutputEosCondition(video.sendEosWhen),
@@ -35,7 +35,7 @@ export function intoOutputRtmpClientVideoOptions(
 
 function intoRtmpClientVideoEncoderOptions(
   encoder: Outputs.RtmpClientVideoEncoderOptions
-): Api.VideoEncoderOptions {
+): Api.RtmpClientVideoEncoderOptions {
   switch (encoder.type) {
     case 'ffmpeg_h264':
       return {
