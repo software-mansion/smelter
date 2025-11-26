@@ -19,7 +19,7 @@ export function intoRegisterRtpOutput(
 export function intoOutputRtpVideoOptions(
   video: Outputs.RtpVideoOptions,
   initial: Api.VideoScene
-): Api.OutputVideoOptions {
+): Api.OutputRtpVideoOptions {
   return {
     resolution: video.resolution,
     send_eos_when: video.sendEosWhen && intoOutputEosCondition(video.sendEosWhen),
@@ -30,7 +30,7 @@ export function intoOutputRtpVideoOptions(
 
 export function intoRtpVideoEncoderOptions(
   encoder: Outputs.RtpVideoEncoderOptions
-): Api.VideoEncoderOptions {
+): Api.RtpVideoEncoderOptions {
   switch (encoder.type) {
     case 'ffmpeg_vp9':
       return {

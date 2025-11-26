@@ -18,7 +18,7 @@ export function intoRegisterMp4Output(
 export function intoOutputMp4VideoOptions(
   video: Outputs.Mp4VideoOptions,
   initial: Api.VideoScene
-): Api.OutputVideoOptions {
+): Api.OutputMp4VideoOptions {
   return {
     resolution: video.resolution,
     send_eos_when: video.sendEosWhen && intoOutputEosCondition(video.sendEosWhen),
@@ -29,7 +29,7 @@ export function intoOutputMp4VideoOptions(
 
 function intoMp4VideoEncoderOptions(
   encoder: Outputs.Mp4VideoEncoderOptions
-): Api.VideoEncoderOptions {
+): Api.Mp4VideoEncoderOptions {
   switch (encoder.type) {
     case 'ffmpeg_h264':
       return {

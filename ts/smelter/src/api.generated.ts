@@ -199,7 +199,7 @@ export type RegisterOutput =
        */
       port: PortOrPortRange;
       /**
-       * Only valid if `transport_protocol="udp"`. IP address where RTP packets should be sent to.
+       * IP address to which RTP packets should be sent. This field is only valid if `transport_protocol` field is set to `udp`.
        */
       ip?: string | null;
       /**
@@ -207,21 +207,24 @@ export type RegisterOutput =
        */
       transport_protocol?: TransportProtocol | null;
       /**
-       * Video stream configuration.
+       * Parameters of a video included in the RTP stream.
        */
-      video?: OutputVideoOptions | null;
+      video?: OutputRtpVideoOptions | null;
       /**
-       * Audio stream configuration.
+       * Parameters of an audio included in the RTP stream.
        */
       audio?: OutputRtpAudioOptions | null;
     }
   | {
       type: "rtmp_client";
+      /**
+       * RTMP endpoint url.
+       */
       url: string;
       /**
        * Video stream configuration.
        */
-      video?: OutputVideoOptions | null;
+      video?: OutputRtmpClientVideoOptions | null;
       /**
        * Audio stream configuration.
        */
@@ -234,11 +237,11 @@ export type RegisterOutput =
        */
       path: string;
       /**
-       * Video track configuration.
+       * Video stream configuration.
        */
-      video?: OutputVideoOptions | null;
+      video?: OutputMp4VideoOptions | null;
       /**
-       * Audio track configuration.
+       * Audio stream configuration.
        */
       audio?: OutputMp4AudioOptions | null;
       /**
@@ -273,7 +276,7 @@ export type RegisterOutput =
       /**
        * Video track configuration.
        */
-      video?: OutputVideoOptions | null;
+      video?: OutputWhepVideoOptions | null;
       /**
        * Audio track configuration.
        */
@@ -292,26 +295,26 @@ export type RegisterOutput =
       /**
        * Video track configuration.
        */
-      video?: OutputVideoOptions | null;
+      video?: OutputHlsVideoOptions | null;
       /**
        * Audio track configuration.
        */
       audio?: OutputHlsAudioOptions | null;
     };
 export type InputId = string;
-export type VideoEncoderOptions =
+export type RtpVideoEncoderOptions =
   | {
       type: "ffmpeg_h264";
       /**
-       * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
        */
       preset?: H264EncoderPreset | null;
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format
+       * (**default=`"yuv420p"`**) Encoder pixel format.
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -320,7 +323,7 @@ export type VideoEncoderOptions =
   | {
       type: "ffmpeg_vp8";
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -329,11 +332,11 @@ export type VideoEncoderOptions =
   | {
       type: "ffmpeg_vp9";
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format
+       * (**default=`"yuv420p"`**) Encoder pixel format.
        */
       pixel_format?: PixelFormat | null;
       /**
-       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
        */
       ffmpeg_options?: {
         [k: string]: string;
@@ -342,7 +345,7 @@ export type VideoEncoderOptions =
   | {
       type: "vulkan_h264";
       /**
-       * Encoding bitrate in bits/second. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VulkanH264EncoderBitrate | null;
     };
@@ -821,7 +824,7 @@ export type AudioMixingStrategy = "sum_clip" | "sum_scale";
 export type RtpAudioEncoderOptions = {
   type: "opus";
   /**
-   * (**default="voip"**) Specifies preset for audio output encoder.
+   * (**default="voip"**) Audio output encoder preset.
    */
   preset?: OpusEncoderPreset | null;
   /**
@@ -839,6 +842,31 @@ export type RtpAudioEncoderOptions = {
 };
 export type OpusEncoderPreset = "quality" | "voip" | "lowest_latency";
 export type AudioChannels = "mono" | "stereo";
+export type RtmpClientVideoEncoderOptions =
+  | {
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VulkanH264EncoderBitrate | null;
+    };
 export type RtmpClientAudioEncoderOptions = {
   type: "aac";
   /**
@@ -846,6 +874,31 @@ export type RtmpClientAudioEncoderOptions = {
    */
   sample_rate?: number | null;
 };
+export type Mp4VideoEncoderOptions =
+  | {
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format.
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VulkanH264EncoderBitrate | null;
+    };
 export type Mp4AudioEncoderOptions = {
   type: "aac";
   /**
@@ -907,10 +960,6 @@ export type WhipAudioEncoderOptions =
   | {
       type: "opus";
       /**
-       * Specifies channels configuration.
-       */
-      channels?: AudioChannels | null;
-      /**
        * (**default="voip"**) Specifies preset for audio output encoder.
        */
       preset?: OpusEncoderPreset | null;
@@ -925,6 +974,53 @@ export type WhipAudioEncoderOptions =
     }
   | {
       type: "any";
+    };
+export type WhepVideoEncoderOptions =
+  | {
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format.
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "ffmpeg_vp8";
+      /**
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "ffmpeg_vp9";
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format.
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VulkanH264EncoderBitrate | null;
     };
 export type WhepAudioEncoderOptions = {
   type: "opus";
@@ -945,6 +1041,31 @@ export type WhepAudioEncoderOptions = {
    */
   expected_packet_loss?: number | null;
 };
+export type HlsVideoEncoderOptions =
+  | {
+      type: "ffmpeg_h264";
+      /**
+       * (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
+       */
+      preset?: H264EncoderPreset | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
+      /**
+       * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
+       */
+      ffmpeg_options?: {
+        [k: string]: string;
+      } | null;
+    }
+  | {
+      type: "vulkan_h264";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VulkanH264EncoderBitrate | null;
+    };
 export type HlsAudioEncoderOptions = {
   type: "aac";
   /**
@@ -993,19 +1114,19 @@ export interface InputWhipVideoOptions {
 export interface InputWhepVideoOptions {
   decoder_preferences?: WhepVideoDecoderOptions[] | null;
 }
-export interface OutputVideoOptions {
+export interface OutputRtpVideoOptions {
   /**
    * Output resolution in pixels.
    */
   resolution: Resolution;
   /**
-   * Defines when output stream should end if some of the input streams are finished. If output includes both audio and video streams, then EOS needs to be sent on both.
+   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
    */
   send_eos_when?: OutputEndCondition | null;
   /**
    * Video encoder options.
    */
-  encoder: VideoEncoderOptions;
+  encoder: RtpVideoEncoderOptions;
   /**
    * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
    */
@@ -1071,7 +1192,7 @@ export interface OutputRtpAudioOptions {
    */
   mixing_strategy?: AudioMixingStrategy | null;
   /**
-   * Condition for termination of output stream based on the input streams states.
+   * Condition for termination of output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
    */
   send_eos_when?: OutputEndCondition | null;
   /**
@@ -1079,7 +1200,7 @@ export interface OutputRtpAudioOptions {
    */
   encoder: RtpAudioEncoderOptions;
   /**
-   * Specifies channels configuration.
+   * Channels configuration.
    */
   channels?: AudioChannels | null;
   /**
@@ -1097,13 +1218,31 @@ export interface AudioSceneInput {
    */
   volume?: number | null;
 }
+export interface OutputRtmpClientVideoOptions {
+  /**
+   * Output resolution in pixels.
+   */
+  resolution: Resolution;
+  /**
+   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Video encoder options.
+   */
+  encoder: RtmpClientVideoEncoderOptions;
+  /**
+   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   */
+  initial: VideoScene;
+}
 export interface OutputRtmpClientAudioOptions {
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
    */
   mixing_strategy?: AudioMixingStrategy | null;
   /**
-   * Condition for termination of output stream based on the input streams states.
+   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
    */
   send_eos_when?: OutputEndCondition | null;
   /**
@@ -1111,13 +1250,31 @@ export interface OutputRtmpClientAudioOptions {
    */
   encoder: RtmpClientAudioEncoderOptions;
   /**
-   * Specifies channels configuration.
+   * Channels configuration.
    */
   channels?: AudioChannels | null;
   /**
    * Initial audio mixer configuration for output.
    */
   initial: AudioScene;
+}
+export interface OutputMp4VideoOptions {
+  /**
+   * Output resolution in pixels.
+   */
+  resolution: Resolution;
+  /**
+   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Video encoder options.
+   */
+  encoder: Mp4VideoEncoderOptions;
+  /**
+   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   */
+  initial: VideoScene;
 }
 export interface OutputMp4AudioOptions {
   /**
@@ -1181,6 +1338,24 @@ export interface OutputWhipAudioOptions {
    */
   initial: AudioScene;
 }
+export interface OutputWhepVideoOptions {
+  /**
+   * Output resolution in pixels.
+   */
+  resolution: Resolution;
+  /**
+   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Video encoder options.
+   */
+  encoder: WhepVideoEncoderOptions;
+  /**
+   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   */
+  initial: VideoScene;
+}
 export interface OutputWhepAudioOptions {
   /**
    * (**default="sum_clip"**) Specifies how audio should be mixed.
@@ -1202,6 +1377,24 @@ export interface OutputWhepAudioOptions {
    * Initial audio mixer configuration for output.
    */
   initial: AudioScene;
+}
+export interface OutputHlsVideoOptions {
+  /**
+   * Output resolution in pixels.
+   */
+  resolution: Resolution;
+  /**
+   * Condition for termination of the output stream based on the input streams states. If output includes both audio and video streams, then EOS needs to be sent for every type.
+   */
+  send_eos_when?: OutputEndCondition | null;
+  /**
+   * Video encoder options.
+   */
+  encoder: HlsVideoEncoderOptions;
+  /**
+   * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
+   */
+  initial: VideoScene;
 }
 export interface OutputHlsAudioOptions {
   /**
