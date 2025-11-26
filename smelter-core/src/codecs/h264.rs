@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use smelter_render::Resolution;
 
-use crate::codecs::OutputPixelFormat;
+use crate::codecs::{OutputPixelFormat, VideoEncoderBitrate};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FfmpegH264EncoderPreset {
@@ -26,16 +26,10 @@ pub struct FfmpegH264EncoderOptions {
     pub raw_options: Vec<(Arc<str>, Arc<str>)>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct VulkanH264EncoderBitrate {
-    pub average_bitrate: u64,
-    pub max_bitrate: u64,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VulkanH264EncoderOptions {
     pub resolution: Resolution,
-    pub bitrate: Option<VulkanH264EncoderBitrate>,
+    pub bitrate: Option<VideoEncoderBitrate>,
 }
 
 #[derive(Debug, thiserror::Error)]
