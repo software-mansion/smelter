@@ -7,7 +7,7 @@ use crate::{Framerate, Resolution};
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct V4L2Input {
+pub struct V4l2Input {
     /// Path to the V4L2 device.
     ///
     /// Typically looks like either of:

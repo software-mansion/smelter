@@ -29,7 +29,7 @@ impl InputStatsState {
             InputProtocolKind::Rtp => unimplemented!(),
             InputProtocolKind::Mp4 => unimplemented!(),
             InputProtocolKind::Hls => InputStatsState::Hls(HlsInputState::new()),
-            InputProtocolKind::V4L2 => unimplemented!(),
+            InputProtocolKind::V4l2 => unimplemented!(),
             InputProtocolKind::DeckLink => unimplemented!(),
             InputProtocolKind::RawDataChannel => unimplemented!(),
         }

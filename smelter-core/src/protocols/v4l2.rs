@@ -3,7 +3,7 @@ use std::sync::Arc;
 use smelter_render::{Framerate, Resolution};
 
 #[derive(Debug, Clone)]
-pub struct V4L2InputOptions {
+pub struct V4l2InputOptions {
     pub path: Arc<std::path::Path>,
     pub resolution: Resolution,
     pub format: V4l2Format,

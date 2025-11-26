@@ -1,18 +1,18 @@
 use crate::common_core::prelude as core;
 use crate::*;
 
-impl TryFrom<V4L2Input> for core::RegisterInputOptions {
+impl TryFrom<V4l2Input> for core::RegisterInputOptions {
     type Error = TypeError;
 
     #[cfg(target_os = "linux")]
-    fn try_from(value: V4L2Input) -> Result<Self, Self::Error> {
+    fn try_from(value: V4l2Input) -> Result<Self, Self::Error> {
         let queue_options = smelter_core::QueueInputOptions {
             required: value.required.unwrap_or(false),
             offset: None,
         };
 
         Ok(core::RegisterInputOptions {
-            input_options: core::ProtocolInputOptions::V4L2(core::V4L2InputOptions {
+            input_options: core::ProtocolInputOptions::V4l2(core::V4l2InputOptions {
                 path: value.path,
                 resolution: value.resolution.into(),
                 format: value.format.into(),
@@ -23,7 +23,7 @@ impl TryFrom<V4L2Input> for core::RegisterInputOptions {
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn try_from(_value: DeckLink) -> Result<Self, Self::Error> {
+    fn try_from(_value: V4l2Input) -> Result<Self, Self::Error> {
         Err(TypeError::new(
             "The platform that Smelter is running on does not support Video for Linux.",
         ))
