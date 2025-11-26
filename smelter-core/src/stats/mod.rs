@@ -60,14 +60,10 @@ impl StatsMonitor {
 }
 
 impl StatsSender {
-    pub fn send(&self, events: Vec<StatsEvent>) {
-        if let Err(TrySendError::Full(events)) = self.0.try_send(events) {
-            warn!(?events, "Stats channel full.");
+    pub fn send(&self, events: impl IntoIterator<Item = StatsEvent>) {
+        if let Err(TrySendError::Full(events)) = self.0.try_send(events.into_iter().collect()) {
+            warn!(?events, "Stats channel is full.");
         }
-    }
-
-    pub fn send_event(&self, event: StatsEvent) {
-        self.send(vec![event]);
     }
 }
 

@@ -80,8 +80,7 @@ async fn process_audio_track(
             ctx.buffer,
             48_000,
             Box::new(move |event| {
-                stats_sender
-                    .send_event(WhipInputStatsEvent::AudioRtp(event).into_event(&input_ref));
+                stats_sender.send(WhipInputStatsEvent::AudioRtp(event).into_event(&input_ref));
             }),
         ),
     );
@@ -125,7 +124,7 @@ async fn process_video_track(
         let stats_sender = ctx.pipeline_ctx.stats_sender.clone();
         let input_ref = input_ref.clone();
         Box::new(move |event| {
-            stats_sender.send_event(WhipInputStatsEvent::VideoRtp(event).into_event(&input_ref));
+            stats_sender.send(WhipInputStatsEvent::VideoRtp(event).into_event(&input_ref));
         })
     };
     let mut rtp_reader = WebrtcRtpReader::new(
