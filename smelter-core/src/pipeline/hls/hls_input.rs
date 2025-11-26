@@ -253,7 +253,7 @@ impl HlsInput {
             {
                 let (pts, dts) = track.state.pts_dts_from_packet(&packet);
 
-                stats_sender.send_video_events(&packet, track);
+                stats_sender.send_video_track_events(&packet, pts, track);
 
                 let chunk = EncodedInputChunk {
                     data: Bytes::copy_from_slice(packet.data().unwrap()),
@@ -277,7 +277,7 @@ impl HlsInput {
             {
                 let (pts, dts) = track.state.pts_dts_from_packet(&packet);
 
-                stats_sender.send_audio_events(&packet, track);
+                stats_sender.send_audio_track_events(&packet, pts, track);
 
                 let chunk = EncodedInputChunk {
                     data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
@@ -528,10 +528,10 @@ impl HlsInputStatsSender {
             .send_event(event.into_event(&self.input_ref));
     }
 
-    fn send_video_events(&self, packet: &Packet, track: &Track) {
+    fn send_video_track_events(&self, packet: &Packet, packet_pts: Duration, track: &Track) {
         let chunk_size = packet.size() as u64;
         let input_buffer = track.state.buffer.size();
-        let effective_buffer = Duration::ZERO; // TODO:
+        let effective_buffer = packet_pts.saturating_sub(track.state.queue_sync_point.elapsed());
         let events = vec![
             HlsInputTrackStatsEvent::PacketReceived,
             HlsInputTrackStatsEvent::ChunkSize(chunk_size),
@@ -546,10 +546,10 @@ impl HlsInputStatsSender {
         self.stats_sender.send(events);
     }
 
-    fn send_audio_events(&self, packet: &Packet, track: &Track) {
+    fn send_audio_track_events(&self, packet: &Packet, packet_pts: Duration, track: &Track) {
         let chunk_size = packet.size() as u64;
         let input_buffer = track.state.buffer.size();
-        let effective_buffer = Duration::ZERO; // TODO:
+        let effective_buffer = packet_pts.saturating_sub(track.state.queue_sync_point.elapsed());
         let events = vec![
             HlsInputTrackStatsEvent::PacketReceived,
             HlsInputTrackStatsEvent::ChunkSize(chunk_size),
