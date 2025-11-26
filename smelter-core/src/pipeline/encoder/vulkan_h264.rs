@@ -43,7 +43,7 @@ impl VideoEncoder for VulkanH264Encoder {
             let average_bitrate = (average_bitrate / precision).ceil() * precision;
             let max_bitrate = average_bitrate * 1.25;
 
-            VulkanH264EncoderBitrate {
+            VideoEncoderBitrate {
                 average_bitrate: average_bitrate as u64,
                 max_bitrate: max_bitrate as u64,
             }
