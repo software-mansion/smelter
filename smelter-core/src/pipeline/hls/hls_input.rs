@@ -47,18 +47,6 @@ struct Track {
     index: usize,
     handle: DecoderThreadHandle,
     state: StreamState,
-    stats_sender: HlsInputTrackStatsSender,
-}
-
-impl Track {
-    fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>) {
-        self.state.pts_dts_from_packet(packet, &self.stats_sender)
-    }
-
-    fn send_stats_on_packet_received(&self, packet: &Packet, packet_pts: Duration) {
-        self.stats_sender
-            .send_on_packet_received(packet, packet_pts, &self.state);
-    }
 }
 
 impl HlsInput {
@@ -118,11 +106,18 @@ impl HlsInput {
         stream: &Stream<'_>,
         buffer: InputBuffer,
     ) -> Result<(Track, Receiver<PipelineEvent<InputAudioSamples>>), InputInitError> {
+        let stats_sender =
+            HlsInputTrackStatsSender::new(input_ref, &ctx.stats_sender, HlsTrack::Audio);
         // not tested it was always null, but audio is in ADTS, so config is not
         // necessary
         let asc = read_extra_data(stream);
         let (samples_sender, samples_receiver) = bounded(5);
-        let state = StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer);
+        let state = StreamState::new(
+            ctx.queue_sync_point,
+            stream.time_base(),
+            buffer,
+            stats_sender,
+        );
         let handle = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
             input_ref.clone(),
             AudioDecoderThreadOptions {
@@ -133,14 +128,11 @@ impl HlsInput {
             },
         )?;
 
-        let stats_sender =
-            HlsInputTrackStatsSender::new(input_ref, &ctx.stats_sender, HlsTrack::Audio);
         Ok((
             Track {
                 index: stream.index(),
                 handle,
                 state,
-                stats_sender,
             },
             samples_receiver,
         ))
@@ -153,8 +145,15 @@ impl HlsInput {
         video_decoders: HlsInputVideoDecoders,
         buffer: InputBuffer,
     ) -> Result<(Track, Receiver<PipelineEvent<Frame>>), InputInitError> {
+        let stats_sender =
+            HlsInputTrackStatsSender::new(input_ref, &ctx.stats_sender, HlsTrack::Video);
         let (frame_sender, frame_receiver) = bounded(5);
-        let state = StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer);
+        let state = StreamState::new(
+            ctx.queue_sync_point,
+            stream.time_base(),
+            buffer,
+            stats_sender,
+        );
 
         let extra_data = read_extra_data(stream);
         let h264_config = extra_data
@@ -208,14 +207,11 @@ impl HlsInput {
             }
         };
 
-        let stats_sender =
-            HlsInputTrackStatsSender::new(input_ref, &ctx.stats_sender, HlsTrack::Video);
         Ok((
             Track {
                 index: stream.index(),
                 handle,
                 state,
-                stats_sender,
             },
             frame_receiver,
         ))
@@ -270,9 +266,12 @@ impl HlsInput {
             if let Some(track) = &mut video
                 && packet.stream() == track.index
             {
-                let (pts, dts) = track.pts_dts_from_packet(&packet);
+                let (pts, dts) = track.state.pts_dts_from_packet(&packet);
 
-                track.send_stats_on_packet_received(&packet, pts);
+                track
+                    .state
+                    .stats_sender
+                    .send_on_packet_received(&packet, pts, &track.state);
 
                 let chunk = EncodedInputChunk {
                     data: Bytes::copy_from_slice(packet.data().unwrap()),
@@ -294,9 +293,12 @@ impl HlsInput {
             if let Some(track) = &mut audio
                 && packet.stream() == track.index
             {
-                let (pts, dts) = track.pts_dts_from_packet(&packet);
+                let (pts, dts) = track.state.pts_dts_from_packet(&packet);
 
-                track.send_stats_on_packet_received(&packet, pts);
+                track
+                    .state
+                    .stats_sender
+                    .send_on_packet_received(&packet, pts, &track.state);
 
                 let chunk = EncodedInputChunk {
                     data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
@@ -346,6 +348,8 @@ struct StreamState {
 
     pts_discontinuity: DiscontinuityState,
     dts_discontinuity: DiscontinuityState,
+
+    stats_sender: HlsInputTrackStatsSender,
 }
 
 impl StreamState {
@@ -353,6 +357,7 @@ impl StreamState {
         queue_sync_point: Instant,
         time_base: ffmpeg_next::Rational,
         buffer: InputBuffer,
+        stats_sender: HlsInputTrackStatsSender,
     ) -> Self {
         Self {
             queue_sync_point,
@@ -362,14 +367,12 @@ impl StreamState {
             reference_pts_and_timestamp: None,
             pts_discontinuity: DiscontinuityState::new(false, time_base),
             dts_discontinuity: DiscontinuityState::new(true, time_base),
+
+            stats_sender,
         }
     }
 
-    fn pts_dts_from_packet(
-        &mut self,
-        packet: &Packet,
-        track_stats_sender: &HlsInputTrackStatsSender,
-    ) -> (Duration, Option<Duration>) {
+    fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>) {
         let pts_timestamp = packet.pts().unwrap_or(0) as f64;
         let dts_timestamp = packet.dts().map(|dts| dts as f64);
         let packet_duration = packet.duration() as f64;
@@ -377,11 +380,11 @@ impl StreamState {
         self.pts_discontinuity.detect_discontinuity(
             pts_timestamp,
             packet_duration,
-            track_stats_sender,
+            Some(&self.stats_sender),
         );
         if let Some(dts) = dts_timestamp {
             self.dts_discontinuity
-                .detect_discontinuity(dts, packet_duration, track_stats_sender);
+                .detect_discontinuity(dts, packet_duration, None);
         }
 
         let pts_timestamp = pts_timestamp + self.pts_discontinuity.offset;
@@ -430,7 +433,7 @@ impl DiscontinuityState {
         &mut self,
         timestamp: f64,
         packet_duration: f64,
-        track_stats_sender: &HlsInputTrackStatsSender,
+        stats_sender: Option<&HlsInputTrackStatsSender>,
     ) {
         let (Some(prev_timestamp), Some(next_timestamp)) =
             (self.prev_timestamp, self.next_predicted_timestamp)
@@ -449,7 +452,9 @@ impl DiscontinuityState {
         if is_discontinuity {
             debug!("Discontinuity detected: {prev_timestamp} -> {timestamp}");
             self.offset += next_timestamp - timestamp;
-            track_stats_sender.send_event(HlsInputTrackStatsEvent::DiscontinuityDetected);
+            if let Some(stats_sender) = stats_sender {
+                stats_sender.send(HlsInputTrackStatsEvent::DiscontinuityDetected);
+            }
         }
 
         self.prev_timestamp = Some(timestamp);
@@ -542,11 +547,13 @@ where
     }
 }
 
+#[derive(Clone, Copy)]
 enum HlsTrack {
     Audio,
     Video,
 }
 
+#[derive(Clone)]
 struct HlsInputTrackStatsSender {
     input_ref: Ref<InputId>,
     stats_sender: StatsSender,
@@ -587,7 +594,7 @@ impl HlsInputTrackStatsSender {
         self.stats_sender.send(events);
     }
 
-    fn send_event(&self, event: HlsInputTrackStatsEvent) {
+    fn send(&self, event: HlsInputTrackStatsEvent) {
         let event = match self.track {
             HlsTrack::Video => HlsInputStatsEvent::Video(event),
             HlsTrack::Audio => HlsInputStatsEvent::Audio(event),
