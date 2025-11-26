@@ -244,21 +244,16 @@ impl HlsInput {
                     packet.stream(),
                     packet.flags()
                 );
-                stats_sender.send_corrupted_packet_event();
+                stats_sender.send_event(HlsInputStatsEvent::CorruptedPacketReceived);
                 continue;
             }
 
             if let Some(track) = &mut video
                 && packet.stream() == track.index
             {
-                let (pts, dts, pts_discontinuity) = track.state.pts_dts_from_packet(&packet);
+                let (pts, dts) = track.state.pts_dts_from_packet(&packet);
 
-                stats_sender.send_video_events(
-                    packet.size() as u64,
-                    track.state.buffer.size(),
-                    pts.saturating_sub(track.state.queue_sync_point.elapsed()),
-                    pts_discontinuity,
-                );
+                stats_sender.send_video_events(&packet, track);
 
                 let chunk = EncodedInputChunk {
                     data: Bytes::copy_from_slice(packet.data().unwrap()),
@@ -280,14 +275,9 @@ impl HlsInput {
             if let Some(track) = &mut audio
                 && packet.stream() == track.index
             {
-                let (pts, dts, pts_discontinuity) = track.state.pts_dts_from_packet(&packet);
+                let (pts, dts) = track.state.pts_dts_from_packet(&packet);
 
-                stats_sender.send_audio_events(
-                    packet.size() as u64,
-                    track.state.buffer.size(),
-                    pts.saturating_sub(track.state.queue_sync_point.elapsed()),
-                    pts_discontinuity,
-                );
+                stats_sender.send_audio_events(&packet, track);
 
                 let chunk = EncodedInputChunk {
                     data: bytes::Bytes::copy_from_slice(packet.data().unwrap()),
@@ -356,13 +346,12 @@ impl StreamState {
         }
     }
 
-    fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>, bool) {
+    fn pts_dts_from_packet(&mut self, packet: &Packet) -> (Duration, Option<Duration>) {
         let pts_timestamp = packet.pts().unwrap_or(0) as f64;
         let dts_timestamp = packet.dts().map(|dts| dts as f64);
         let packet_duration = packet.duration() as f64;
 
-        let pts_discontinuity = self
-            .pts_discontinuity
+        self.pts_discontinuity
             .detect_discontinuity(pts_timestamp, packet_duration);
         if let Some(dts) = dts_timestamp {
             self.dts_discontinuity
@@ -385,7 +374,7 @@ impl StreamState {
         });
 
         self.buffer.recalculate_buffer(pts);
-        (pts + self.buffer.size(), dts, pts_discontinuity)
+        (pts + self.buffer.size(), dts)
     }
 }
 
@@ -411,13 +400,13 @@ impl DiscontinuityState {
         }
     }
 
-    fn detect_discontinuity(&mut self, timestamp: f64, packet_duration: f64) -> bool {
+    fn detect_discontinuity(&mut self, timestamp: f64, packet_duration: f64) {
         let (Some(prev_timestamp), Some(next_timestamp)) =
             (self.prev_timestamp, self.next_predicted_timestamp)
         else {
             self.prev_timestamp = Some(timestamp);
             self.next_predicted_timestamp = Some(timestamp + packet_duration);
-            return false;
+            return;
         };
 
         // Detect discontinuity
@@ -433,7 +422,6 @@ impl DiscontinuityState {
 
         self.prev_timestamp = Some(timestamp);
         self.next_predicted_timestamp = Some(timestamp + packet_duration);
-        is_discontinuity
     }
 }
 
@@ -535,27 +523,21 @@ impl HlsInputStatsSender {
         }
     }
 
-    fn send_corrupted_packet_event(&self) {
+    fn send_event(&self, event: HlsInputStatsEvent) {
         self.stats_sender
-            .send_event(HlsInputStatsEvent::CorruptedPacketReceived.into_event(&self.input_ref));
+            .send_event(event.into_event(&self.input_ref));
     }
 
-    fn send_video_events(
-        &self,
-        chunk_size: u64,
-        input_buffer: Duration,
-        effective_buffer: Duration,
-        pts_discontinuity: bool,
-    ) {
-        let mut events = vec![
+    fn send_video_events(&self, packet: &Packet, track: &Track) {
+        let chunk_size = packet.size() as u64;
+        let input_buffer = track.state.buffer.size();
+        let effective_buffer = Duration::ZERO; // TODO:
+        let events = vec![
             HlsInputTrackStatsEvent::PacketReceived,
             HlsInputTrackStatsEvent::ChunkSize(chunk_size),
             HlsInputTrackStatsEvent::InputBufferSize(input_buffer),
             HlsInputTrackStatsEvent::EffectiveBuffer(effective_buffer),
         ];
-        if pts_discontinuity {
-            events.push(HlsInputTrackStatsEvent::DiscontinuityDetected);
-        }
         let events = events
             .into_iter()
             .map(|event| HlsInputStatsEvent::Video(event).into_event(&self.input_ref))
@@ -564,22 +546,16 @@ impl HlsInputStatsSender {
         self.stats_sender.send(events);
     }
 
-    fn send_audio_events(
-        &self,
-        chunk_size: u64,
-        input_buffer: Duration,
-        effective_buffer: Duration,
-        pts_discontinuity: bool,
-    ) {
-        let mut events = vec![
+    fn send_audio_events(&self, packet: &Packet, track: &Track) {
+        let chunk_size = packet.size() as u64;
+        let input_buffer = track.state.buffer.size();
+        let effective_buffer = Duration::ZERO; // TODO:
+        let events = vec![
             HlsInputTrackStatsEvent::PacketReceived,
             HlsInputTrackStatsEvent::ChunkSize(chunk_size),
             HlsInputTrackStatsEvent::InputBufferSize(input_buffer),
             HlsInputTrackStatsEvent::EffectiveBuffer(effective_buffer),
         ];
-        if pts_discontinuity {
-            events.push(HlsInputTrackStatsEvent::DiscontinuityDetected);
-        }
         let events = events
             .into_iter()
             .map(|event| HlsInputStatsEvent::Audio(event).into_event(&self.input_ref))
