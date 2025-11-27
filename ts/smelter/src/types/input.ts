@@ -4,12 +4,14 @@ import type { InputMp4DecoderMap } from './input/mp4.js';
 import type { InputRtpAudioOptions, InputRtpVideoOptions } from './input/rtp.js';
 import type { InputWhipVideoOptions } from './input/whip.js';
 import type { InputWhepVideoOptions } from './input/whep.js';
+import type { InputRtmpDecoderMap } from './input/rtmp.js';
 
 export * from './input/mp4.js';
 export * from './input/hls.js';
 export * from './input/whip.js';
 export * from './input/whep.js';
 export * from './input/rtp.js';
+export * from './input/rtmp.js';
 export * from './input/common.js';
 
 export type RegisterRtpInput = {
@@ -143,4 +145,24 @@ export type RegisterWhepClientInput = {
    * frames.
    */
   offsetMs?: number | null;
+};
+
+export type RegisterRtmpServerInput = {
+  type: 'rtmp_server';
+  /**
+   * URL where the RTMP server will listen for incoming stream. Format: `rtmp://<ip_address>:<port>`
+   */
+  url: string;
+  /**
+   * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
+   */
+  required?: boolean | null;
+  /**
+   * Offset in milliseconds relative to the pipeline start (start request). If the offset is not defined then the stream will be synchronized based on the delivery time of the initial frames.
+   */
+  offsetMs?: number | null;
+  /**
+   * Assigns which decoder should be used for media encoded with a specific codec.
+   */
+  decoderMap?: InputRtmpDecoderMap | null;
 };

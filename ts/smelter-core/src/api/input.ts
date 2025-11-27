@@ -6,6 +6,7 @@ import type {
   Inputs,
   RegisterWhipServerInput,
   RegisterWhepClientInput,
+  RegisterRtmpServerInput,
 } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
 
@@ -19,6 +20,7 @@ export type RegisterInputRequest =
   | RegisterHlsInputRequest
   | RegisterWhipServerInputRequest
   | RegisterWhepClientInputRequest
+  | RegisterRtmpServerInputRequest
   | RegisterDecklinkInputRequest
   | { type: 'camera' }
   | { type: 'screen_capture' }
@@ -30,6 +32,7 @@ export type RegisterMp4InputRequest = { blob?: any } & Extract<Api.RegisterInput
 export type RegisterHlsInputRequest = Extract<Api.RegisterInput, { type: 'hls' }>;
 export type RegisterWhipServerInputRequest = Extract<Api.RegisterInput, { type: 'whip_server' }>;
 export type RegisterWhepClientInputRequest = Extract<Api.RegisterInput, { type: 'whep_client' }>;
+export type RegisterRtmpServerInputRequest = Extract<Api.RegisterInput, { type: 'rtmp_server' }>;
 export type RegisterDecklinkInputRequest = Extract<Api.RegisterInput, { type: 'decklink' }>;
 
 export type InputRef = _smelterInternals.InputRef;
@@ -42,6 +45,7 @@ export type RegisterInput =
   | ({ type: 'hls' } & RegisterHlsInput)
   | ({ type: 'whip_server' } & RegisterWhipServerInput)
   | ({ type: 'whep_client' } & RegisterWhepClientInput)
+  | ({ type: 'rtmp_server' } & RegisterRtmpServerInput)
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any }
@@ -62,6 +66,8 @@ export function intoRegisterInput(inputId: string, input: RegisterInput): Regist
     return intoWhipRegisterInput(inputId, input);
   } else if (input.type === 'whep_client') {
     return intoWhepRegisterInput(input);
+  } else if (input.type === 'rtmp_server') {
+    return intoRtmpRegisterInput(input);
   } else if (input.type === 'camera') {
     return { type: 'camera' };
   } else if (input.type === 'screen_capture') {
@@ -136,6 +142,16 @@ function intoWhepRegisterInput(input: Inputs.RegisterWhepClientInput): RegisterI
     video: input.video && intoInputWhepVideoOptions(input.video),
     required: input.required,
     offset_ms: input.offsetMs,
+  };
+}
+
+function intoRtmpRegisterInput(input: Inputs.RegisterHlsInput): RegisterInputRequest {
+  return {
+    type: 'rtmp_server',
+    url: input.url,
+    required: input.required,
+    offset_ms: input.offsetMs,
+    decoder_map: input.decoderMap,
   };
 }
 
