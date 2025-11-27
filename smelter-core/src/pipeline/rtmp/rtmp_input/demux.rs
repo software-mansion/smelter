@@ -11,8 +11,8 @@ const RTMP_READ_RETRY_DELAY: Duration = Duration::from_millis(10);
 
 pub(super) fn run_demuxer_loop(
     mut input_ctx: FfmpegInputContext,
-    mut audio: Option<&mut Track>,
-    mut video: Option<&mut Track>,
+    mut audio: Option<Track>,
+    mut video: Option<Track>,
 ) {
     loop {
         let packet = match input_ctx.read_packet() {

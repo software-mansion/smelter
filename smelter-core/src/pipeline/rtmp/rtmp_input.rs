@@ -37,8 +37,8 @@ impl RtmpServerInput {
         let should_close = Arc::new(AtomicBool::new(false));
         let buffer = InputBuffer::new(&ctx, opts.buffer);
 
-        let (frame_sender, frame_receiver) = bounded(5);
-        let (samples_sender, samples_receiver) = bounded(5);
+        let (frame_sender, frame_receiver) = bounded(10);
+        let (samples_sender, samples_receiver) = bounded(10);
 
         let receivers = QueueDataReceiver {
             video: Some(frame_receiver),
@@ -89,9 +89,6 @@ impl Track {
 
         let sender = &self.handle.chunk_sender;
         trace!(?chunk, buffer = sender.len(), "Sending chunk");
-        if sender.is_empty() {
-            debug!("RTMP input channel was drained");
-        }
         if sender.send(PipelineEvent::Data(chunk)).is_err() {
             debug!("Channel closed")
         }

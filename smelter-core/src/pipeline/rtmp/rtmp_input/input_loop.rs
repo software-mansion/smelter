@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Receiver, Sender, bounded};
 use smelter_render::InputId;
 use tracing::{Level, debug, error, span, warn};
 
@@ -40,9 +40,6 @@ pub(super) fn spawn_input_loop(
             let _span =
                 span!(Level::INFO, "RTMP thread", input_id = input_ref.to_string()).entered();
 
-            let mut audio_track: Option<Track> = None;
-            let mut video_track: Option<Track> = None;
-
             loop {
                 if should_close.load(std::sync::atomic::Ordering::Relaxed) {
                     break;
@@ -57,122 +54,165 @@ pub(super) fn spawn_input_loop(
                     }
                 };
 
-                if audio_track.is_none()
-                    && let Some(stream) = input_ctx.audio_stream()
-                {
-                    let asc = read_extra_data(&stream);
-                    let state =
-                        StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer.clone());
-                    let handle = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
-                        input_ref.clone(),
-                        AudioDecoderThreadOptions {
-                            ctx: ctx.clone(),
-                            decoder_options: FdkAacDecoderOptions { asc },
-                            samples_sender: samples_sender.clone(),
-                            input_buffer_size: 2000,
-                        },
-                    );
+                let audio_track =
+                    setup_audio_track(&ctx, &input_ctx, &input_ref, &buffer, &samples_sender);
 
-                    match handle {
-                        Ok(handle) => {
-                            let track = Track {
-                                index: stream.index(),
-                                handle,
-                                state,
-                            };
-                            audio_track = Some(track)
-                        }
-                        Err(err) => {
-                            error!("Failed to initialize audio track: {err:?}");
-                            break;
-                        }
-                    }
-                }
+                let video_track =
+                    setup_video_track(&ctx, &input_ctx, &input_ref, &opts, &buffer, &frame_sender);
 
-                if video_track.is_none()
-                    && let Some(stream) = input_ctx.video_stream()
-                {
-                    let state =
-                        StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer.clone());
-
-                    let extra_data = read_extra_data(&stream);
-                    let h264_config = extra_data
-                        .map(H264AvcDecoderConfig::parse)
-                        .transpose()
-                        .unwrap_or_else(|e| match e {
-                            H264AvcDecoderConfigError::NotAVCC => None,
-                            _ => {
-                                warn!("Could not parse extra data: {e}");
-                                None
-                            }
-                        });
-
-                    let decoder_thread_options = VideoDecoderThreadOptions {
-                        ctx: ctx.clone(),
-                        transformer: h264_config.map(H264AvccToAnnexB::new),
-                        frame_sender: frame_sender.clone(),
-                        input_buffer_size: 2000,
-                    };
-
-                    let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
-                    let h264_decoder = opts.video_decoders.h264.unwrap_or({
-                        match vulkan_supported {
-                            true => VideoDecoderOptions::VulkanH264,
-                            false => VideoDecoderOptions::FfmpegH264,
-                        }
-                    });
-
-                    let handle = match h264_decoder {
-                        VideoDecoderOptions::FfmpegH264 => {
-                            VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
-                                input_ref.clone(),
-                                decoder_thread_options,
-                            )
-                        }
-                        VideoDecoderOptions::VulkanH264 => {
-                            VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
-                                input_ref.clone(),
-                                decoder_thread_options,
-                            )
-                        }
-                        _ => {
-                            error!("Invalid video decoder provided, expected H264");
-                            break;
-                        }
-                    };
-
-                    match handle {
-                        Ok(handle) => {
-                            let track = Track {
-                                index: stream.index(),
-                                handle,
-                                state,
-                            };
-                            video_track = Some(track)
-                        }
-                        Err(err) => {
-                            error!("Failed to initialize video track: {err:?}");
-                            break;
-                        }
-                    }
-                }
-
-                run_demuxer_loop(input_ctx, audio_track.as_mut(), video_track.as_mut());
+                run_demuxer_loop(input_ctx, audio_track, video_track);
 
                 warn!("RTMP connection lost, reconnecting possible in 3s...");
                 std::thread::sleep(Duration::from_secs(3));
             }
 
-            if let Some(Track { handle, .. }) = &audio_track
-                && handle.chunk_sender.send(PipelineEvent::EOS).is_err()
-            {
-                debug!("Channel closed. Failed to send audio EOS.")
+            if frame_sender.send(PipelineEvent::EOS).is_err() {
+                debug!("Channel closed. Failed to send video EOS.")
             }
 
-            if let Some(Track { handle, .. }) = &video_track
-                && handle.chunk_sender.send(PipelineEvent::EOS).is_err()
-            {
-                debug!("Channel closed. Failed to send video EOS.")
+            if samples_sender.send(PipelineEvent::EOS).is_err() {
+                debug!("Channel closed. Failed to send audio EOS.")
+            }
+        })
+        .unwrap();
+}
+
+fn setup_audio_track(
+    ctx: &Arc<PipelineCtx>,
+    input_ctx: &FfmpegInputContext,
+    input_ref: &Ref<InputId>,
+    buffer: &InputBuffer,
+    samples_sender: &Sender<PipelineEvent<InputAudioSamples>>,
+) -> Option<Track> {
+    let stream = input_ctx.audio_stream()?;
+    let asc = read_extra_data(&stream);
+    let state = StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer.clone());
+
+    let (decoder_sender, decoder_receiver) = bounded(10);
+    spawn_forwarder(
+        input_ref.clone(),
+        decoder_receiver,
+        samples_sender.clone(),
+        "Audio",
+    );
+
+    let handle = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
+        input_ref.clone(),
+        AudioDecoderThreadOptions {
+            ctx: ctx.clone(),
+            decoder_options: FdkAacDecoderOptions { asc },
+            samples_sender: decoder_sender.clone(),
+            input_buffer_size: 10,
+        },
+    );
+
+    match handle {
+        Ok(handle) => Some(Track {
+            index: stream.index(),
+            handle,
+            state,
+        }),
+        Err(err) => {
+            error!("Failed to initialize audio track: {err:?}");
+            None
+        }
+    }
+}
+
+fn setup_video_track(
+    ctx: &Arc<PipelineCtx>,
+    input_ctx: &FfmpegInputContext,
+    input_ref: &Ref<InputId>,
+    opts: &RtmpServerInputOptions,
+    buffer: &InputBuffer,
+    frame_sender: &Sender<PipelineEvent<Frame>>,
+) -> Option<Track> {
+    let stream = input_ctx.video_stream()?;
+    let state = StreamState::new(ctx.queue_sync_point, stream.time_base(), buffer.clone());
+
+    let extra_data = read_extra_data(&stream);
+    let h264_config = extra_data
+        .map(H264AvcDecoderConfig::parse)
+        .transpose()
+        .unwrap_or_else(|e| match e {
+            H264AvcDecoderConfigError::NotAVCC => None,
+            _ => {
+                warn!("Could not parse extra data: {e}");
+                None
+            }
+        });
+
+    let (decoder_sender, decoder_receiver) = bounded(10);
+    spawn_forwarder(
+        input_ref.clone(),
+        decoder_receiver,
+        frame_sender.clone(),
+        "Video",
+    );
+
+    let decoder_thread_options = VideoDecoderThreadOptions {
+        ctx: ctx.clone(),
+        transformer: h264_config.map(H264AvccToAnnexB::new),
+        frame_sender: decoder_sender.clone(),
+        input_buffer_size: 10,
+    };
+
+    let vulkan_supported = ctx.graphics_context.has_vulkan_decoder_support();
+    let h264_decoder = opts.video_decoders.h264.unwrap_or({
+        match vulkan_supported {
+            true => VideoDecoderOptions::VulkanH264,
+            false => VideoDecoderOptions::FfmpegH264,
+        }
+    });
+
+    let handle = match h264_decoder {
+        VideoDecoderOptions::FfmpegH264 => {
+            VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
+                input_ref.clone(),
+                decoder_thread_options,
+            )
+        }
+        VideoDecoderOptions::VulkanH264 => {
+            VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
+                input_ref.clone(),
+                decoder_thread_options,
+            )
+        }
+        _ => {
+            error!("Invalid video decoder provided, expected H264");
+            return None;
+        }
+    };
+
+    match handle {
+        Ok(handle) => Some(Track {
+            index: stream.index(),
+            handle,
+            state,
+        }),
+        Err(err) => {
+            error!("Failed to initialize video track: {err:?}");
+            None
+        }
+    }
+}
+
+fn spawn_forwarder<T: Send + 'static>(
+    input_ref: Ref<InputId>,
+    receiver: Receiver<PipelineEvent<T>>,
+    sender: Sender<PipelineEvent<T>>,
+    media_kind: &str,
+) {
+    std::thread::Builder::new()
+        .name(format!("{media_kind} forwarder for input {input_ref}"))
+        .spawn(move || {
+            for event in receiver {
+                if let PipelineEvent::EOS = event {
+                    break;
+                }
+                if sender.send(event).is_err() {
+                    break;
+                }
             }
         })
         .unwrap();

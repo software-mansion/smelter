@@ -22,7 +22,7 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
             core::QueueInputOptions {
                 required: false,
                 offset: None,
-            } => core::InputBufferOptions::Adaptive,
+            } => core::InputBufferOptions::Const(None),
             _ => core::InputBufferOptions::None,
         };
 

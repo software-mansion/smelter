@@ -13,8 +13,8 @@ use crate::{
 };
 use smelter_api::{
     DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId,
-    RtmpInput, RtmpOutput, RtpInput, RtpOutput, ShaderSpec, V4l2Input, WebRendererSpec, WhepInput, WhepOutput,
-    WhipInput, WhipOutput,
+    RtmpInput, RtmpOutput, RtpInput, RtpOutput, ShaderSpec, V4l2Input, WebRendererSpec, WhepInput,
+    WhepOutput, WhipInput, WhipOutput,
 };
 
 use super::ApiState;
