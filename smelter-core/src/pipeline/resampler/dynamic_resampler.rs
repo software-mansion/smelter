@@ -32,14 +32,16 @@ pub(crate) struct DynamicResampler {
     state: Option<State>,
     first_batch_pts: Option<Duration>,
     output_sample_rate: u32,
+    force_resampling: bool,
 }
 
 impl DynamicResampler {
-    pub fn new(output_sample_rate: u32) -> Self {
+    pub fn new(output_sample_rate: u32, force_resampling: bool) -> Self {
         Self {
             state: None,
             first_batch_pts: None,
             output_sample_rate,
+            force_resampling,
         }
     }
 
@@ -112,7 +114,7 @@ impl DynamicResampler {
         &mut self,
         batch: DynamicResamplerBatch,
     ) -> Result<Vec<DynamicResamplerBatch>, rubato::ResamplerConstructionError> {
-        if batch.sample_rate == self.output_sample_rate {
+        if !self.force_resampling && batch.sample_rate == self.output_sample_rate {
             self.state = None;
             Ok(vec![batch])
         } else {

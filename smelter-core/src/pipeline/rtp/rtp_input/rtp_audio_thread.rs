@@ -64,7 +64,8 @@ impl<Decoder: AudioDecoder + 'static> InitializableThread for RtpAudioThread<Dec
         )?;
 
         let resampled_stream =
-            ResampledDecoderStream::new(mixing_sample_rate, decoder_stream.flatten()).flatten();
+            ResampledDecoderStream::new(mixing_sample_rate, decoder_stream.flatten(), false)
+                .flatten();
 
         let state = Self {
             stream: Box::new(resampled_stream),

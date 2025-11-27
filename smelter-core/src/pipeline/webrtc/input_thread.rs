@@ -132,7 +132,7 @@ impl InitializableThread for AudioTrackThread {
             AudioDecoderStream::<OpusDecoder, _>::new(ctx, (), depayloader_stream)?.flatten();
 
         let resampled_stream =
-            ResampledDecoderStream::new(output_sample_rate, decoded_stream).flatten();
+            ResampledDecoderStream::new(output_sample_rate, decoded_stream, false).flatten();
 
         let result_stream = resampled_stream
             .filter_map(|event| match event {

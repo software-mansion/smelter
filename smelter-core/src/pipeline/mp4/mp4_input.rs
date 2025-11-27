@@ -128,6 +128,7 @@ impl Mp4Input {
                                 },
                                 samples_sender: sender,
                                 input_buffer_size: 5,
+                                force_resampling: false,
                             },
                         )?
                     }
