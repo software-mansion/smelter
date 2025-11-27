@@ -3,20 +3,20 @@ use tracing::error;
 use crate::{
     RenderingMode, Resolution,
     state::node_texture::NodeTextureState,
-    wgpu::{WgpuCtx, texture::InterleavedYuv422Texture},
+    wgpu::{WgpuCtx, texture::InterleavedUyvy422Texture},
 };
 
 use super::convert_linear_to_srgb::RgbToSrgbConverter;
 
-pub(super) struct InterleavedYuv422Input {
-    upload_textures: InterleavedYuv422Texture,
+pub(super) struct InterleavedUyvy422Input {
+    upload_textures: InterleavedUyvy422Texture,
     yuv_bind_group: wgpu::BindGroup,
     color_space_converter: Option<RgbToSrgbConverter>,
 }
 
-impl InterleavedYuv422Input {
+impl InterleavedUyvy422Input {
     pub fn new(ctx: &WgpuCtx) -> Self {
-        let upload_textures = InterleavedYuv422Texture::new(ctx, Resolution::MIN_2X2);
+        let upload_textures = InterleavedUyvy422Texture::new(ctx, Resolution::MIN_2X2);
         let yuv_bind_group = upload_textures.new_bind_group(ctx);
 
         Self {
@@ -39,14 +39,14 @@ impl InterleavedYuv422Input {
         match dest {
             NodeTextureState::GpuOptimized { texture, .. } => {
                 // write to sRGB texture as if it was linear
-                ctx.format.interleaved_yuv_to_rgba_linear.convert(
+                ctx.format.interleaved_uyvy_to_rgba_linear.convert(
                     ctx,
                     &self.yuv_bind_group,
                     texture.linear_view(),
                 );
             }
             NodeTextureState::CpuOptimized { texture, .. } => {
-                ctx.format.interleaved_yuv_to_rgba_linear.convert(
+                ctx.format.interleaved_uyvy_to_rgba_linear.convert(
                     ctx,
                     &self.yuv_bind_group,
                     texture.view(),
@@ -57,7 +57,7 @@ impl InterleavedYuv422Input {
                     error!("Missing color space converter");
                     return;
                 };
-                ctx.format.interleaved_yuv_to_rgba_linear.convert(
+                ctx.format.interleaved_uyvy_to_rgba_linear.convert(
                     ctx,
                     &self.yuv_bind_group,
                     color_space_converter.texture.view(),
@@ -72,7 +72,7 @@ impl InterleavedYuv422Input {
         if resolution == self.upload_textures.resolution {
             return;
         }
-        self.upload_textures = InterleavedYuv422Texture::new(ctx, resolution);
+        self.upload_textures = InterleavedUyvy422Texture::new(ctx, resolution);
         self.yuv_bind_group = self.upload_textures.new_bind_group(ctx);
         if ctx.mode == RenderingMode::WebGl {
             self.color_space_converter = Some(RgbToSrgbConverter::new(ctx, resolution))

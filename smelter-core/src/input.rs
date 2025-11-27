@@ -15,6 +15,8 @@ pub enum ProtocolInputOptions {
     Hls(HlsInputOptions),
     Whip(WhipInputOptions),
     Whep(WhepInputOptions),
+    #[cfg(target_os = "linux")]
+    V4l2(V4l2InputOptions),
     #[cfg(feature = "decklink")]
     DeckLink(DeckLinkInputOptions),
 }
@@ -53,6 +55,7 @@ pub enum InputProtocolKind {
     Hls,
     Whip,
     Whep,
+    V4l2,
     DeckLink,
     RawDataChannel,
 }

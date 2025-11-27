@@ -30,9 +30,11 @@ pub enum FrameData {
     PlanarYuv422(YuvPlanes),
     PlanarYuv444(YuvPlanes),
     PlanarYuvJ420(YuvPlanes),
-    InterleavedYuv422(bytes::Bytes),
+    InterleavedUyvy422(bytes::Bytes),
+    InterleavedYuyv422(bytes::Bytes),
     Rgba8UnormWgpuTexture(Arc<wgpu::Texture>),
     Nv12WgpuTexture(Arc<wgpu::Texture>),
+    Nv12(NvPlanes),
 }
 
 #[derive(Clone)]
@@ -48,6 +50,21 @@ impl fmt::Debug for YuvPlanes {
             .field("y_plane", &format!("len={}", self.y_plane.len()))
             .field("u_plane", &format!("len={}", self.u_plane.len()))
             .field("v_plane", &format!("len={}", self.v_plane.len()))
+            .finish()
+    }
+}
+
+#[derive(Clone)]
+pub struct NvPlanes {
+    pub y_plane: bytes::Bytes,
+    pub uv_planes: bytes::Bytes,
+}
+
+impl fmt::Debug for NvPlanes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Planar NV data")
+            .field("y_plane", &format!("len={}", self.y_plane.len()))
+            .field("uv_planes", &format!("len={}", self.uv_planes.len()))
             .finish()
     }
 }

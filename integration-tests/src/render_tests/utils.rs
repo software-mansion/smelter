@@ -17,9 +17,11 @@ pub(super) fn frame_to_rgba(frame: &Frame) -> Vec<u8> {
         FrameData::PlanarYuv422(planes) => yuv_frame_to_rgba(frame, planes),
         FrameData::PlanarYuv444(planes) => yuv_frame_to_rgba(frame, planes),
         FrameData::PlanarYuvJ420(_) => panic!("unsupported"),
-        FrameData::InterleavedYuv422(_) => panic!("unsupported"),
+        FrameData::InterleavedUyvy422(_) => panic!("unsupported"),
+        FrameData::InterleavedYuyv422(_) => panic!("unsupported"),
         FrameData::Rgba8UnormWgpuTexture(texture) => read_rgba_texture(texture).to_vec(),
         FrameData::Nv12WgpuTexture(_) => panic!("unsupported"),
+        FrameData::Nv12(_) => panic!("unsupported"),
     }
 }
 

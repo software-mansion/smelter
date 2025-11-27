@@ -148,7 +148,7 @@ impl ChannelCallbackAdapter {
             data
         };
         Frame {
-            data: FrameData::InterleavedYuv422(data),
+            data: FrameData::InterleavedUyvy422(data),
             resolution: Resolution { width, height },
             pts,
         }

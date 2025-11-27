@@ -3,29 +3,29 @@ use crate::wgpu::common_pipeline::{PRIMITIVE_STATE, Sampler, Vertex};
 use super::WgpuCtx;
 
 #[derive(Debug)]
-pub struct InterleavedYuv422ToRgbaConverter {
+pub struct InterleavedYuyv422ToRgbaConverter {
     pipeline: wgpu::RenderPipeline,
     sampler: Sampler,
 }
 
-impl InterleavedYuv422ToRgbaConverter {
+impl InterleavedYuyv422ToRgbaConverter {
     pub fn new(
         device: &wgpu::Device,
         yuv_textures_bind_group_layout: &wgpu::BindGroupLayout,
         dst_view_format: wgpu::TextureFormat,
     ) -> Self {
         let shader_module =
-            device.create_shader_module(wgpu::include_wgsl!("interleaved_yuv_to_rgba.wgsl"));
+            device.create_shader_module(wgpu::include_wgsl!("interleaved_yuyv_to_rgba.wgsl"));
         let sampler = Sampler::new(device);
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Interleaved YUV 4:2:2 to RGBA color converter render pipeline layout"),
+            label: Some("Interleaved YUYV 4:2:2 to RGBA color converter render pipeline layout"),
             bind_group_layouts: &[yuv_textures_bind_group_layout, &sampler.bind_group_layout],
             push_constant_ranges: &[],
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Interleaved YUV 4:2:2 to RGBA color converter render pipeline"),
+            label: Some("Interleaved YUYV 4:2:2 to RGBA color converter render pipeline"),
             layout: Some(&pipeline_layout),
             primitive: PRIMITIVE_STATE,
 
@@ -64,12 +64,12 @@ impl InterleavedYuv422ToRgbaConverter {
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Interleaved YUV 4:2:2 to RGBA color converter encoder"),
+                label: Some("Interleaved YUYV 4:2:2 to RGBA color converter encoder"),
             });
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Interleaved YUV 4:2:2 to RGBA color converter render pass"),
+                label: Some("Interleaved YUYV 4:2:2 to RGBA color converter render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),

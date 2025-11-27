@@ -24,6 +24,9 @@ mod ffmpeg_utils;
 #[cfg(feature = "decklink")]
 mod decklink;
 
+#[cfg(target_os = "linux")]
+mod v4l2;
+
 mod channel;
 mod hls;
 mod mp4;

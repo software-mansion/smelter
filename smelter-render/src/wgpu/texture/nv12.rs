@@ -1,10 +1,17 @@
 use std::sync::Arc;
 
-use crate::wgpu::WgpuCtx;
+use crate::{
+    NvPlanes, Resolution,
+    wgpu::{
+        WgpuCtx,
+        texture::{TextureExt, base::new_texture},
+    },
+};
 
 #[derive(Debug)]
 pub struct NV12Texture {
     texture: Arc<wgpu::Texture>,
+    secondary_texture: Option<Arc<wgpu::Texture>>,
     view_y: wgpu::TextureView,
     view_uv: wgpu::TextureView,
 }
@@ -48,9 +55,66 @@ impl NV12Texture {
 
         Ok(Self {
             texture,
+            secondary_texture: None,
             view_y,
             view_uv,
         })
+    }
+
+    pub fn new_uploadable(ctx: &WgpuCtx, resolution: Resolution) -> Self {
+        let usage = wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::TEXTURE_BINDING;
+
+        let texture = new_texture(
+            &ctx.device,
+            Some("nv12 y plane texture"),
+            wgpu::Extent3d {
+                width: resolution.width as u32,
+                height: resolution.height as u32,
+                ..Default::default()
+            },
+            wgpu::TextureFormat::R8Unorm,
+            usage,
+            &[],
+        );
+
+        let view_y = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let secondary_texture = new_texture(
+            &ctx.device,
+            Some("nv12 uv plane texture"),
+            wgpu::Extent3d {
+                width: resolution.width as u32 / 2,
+                height: resolution.height as u32 / 2,
+                ..Default::default()
+            },
+            wgpu::TextureFormat::Rg8Unorm,
+            usage,
+            &[],
+        );
+
+        let view_uv = secondary_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        Self {
+            texture: texture.into(),
+            secondary_texture: Some(secondary_texture.into()),
+            view_y,
+            view_uv,
+        }
+    }
+
+    pub fn uploadable(&self) -> bool {
+        self.secondary_texture.is_some()
+    }
+
+    pub fn upload(&self, ctx: &WgpuCtx, planes: &NvPlanes) {
+        self.texture.upload_data(&ctx.queue, &planes.y_plane, 1);
+        self.secondary_texture
+            .as_ref()
+            .unwrap()
+            .upload_data(&ctx.queue, &planes.uv_planes, 2);
     }
 
     pub fn texture(&self) -> &wgpu::Texture {

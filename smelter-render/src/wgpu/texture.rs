@@ -22,7 +22,8 @@ pub type RgbaLinearTexture = rgba_linear::RgbaLinearTexture;
 pub type RgbaSrgbTexture = rgba_srgb::RgbaSrgbTexture;
 
 pub type PlanarYuvTextures = planar_yuv::PlanarYuvTextures;
-pub type InterleavedYuv422Texture = interleaved_yuv422::InterleavedYuv422Texture;
+pub type InterleavedUyvy422Texture = interleaved_yuv422::InterleavedYuv422Texture;
+pub type InterleavedYuyv422Texture = interleaved_yuv422::InterleavedYuv422Texture;
 pub type NV12Texture = nv12::NV12Texture;
 
 pub type PlanarYuvVariant = planar_yuv::YuvVariant;
