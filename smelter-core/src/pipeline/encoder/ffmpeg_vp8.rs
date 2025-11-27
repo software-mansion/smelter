@@ -62,6 +62,10 @@ impl VideoEncoder for FfmpegVp8Encoder {
             ("threads", "0"),
             // Zero-latency. Disables frame reordering.
             ("lag-in-frames", "0"),
+            // Min QP
+            ("qmin", "4"),
+            // Max QP
+            ("qmax", "63"),
         ]);
         if let Some(bitrate) = options.bitrate {
             let b = bitrate.average_bitrate;
