@@ -60,6 +60,7 @@ fn main() {
             },
             video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                 preset: FfmpegH264EncoderPreset::Ultrafast,
+                bitrate: None,
                 resolution: Resolution {
                     width: 1280,
                     height: 720,
