@@ -37,6 +37,9 @@ pub enum RtmpClientVideoEncoderOptions {
         /// (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
         preset: Option<H264EncoderPreset>,
 
+        /// TODO: descr
+        bitrate: Option<VideoEncoderBitrate>,
+
         /// (**default=`"yuv420p"`**) Encoder pixel format
         pixel_format: Option<PixelFormat>,
 

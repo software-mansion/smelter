@@ -39,6 +39,9 @@ pub enum WhipVideoEncoderOptions {
         /// (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
         preset: Option<H264EncoderPreset>,
 
+        /// TODO: descr
+        bitrate: Option<VideoEncoderBitrate>,
+
         /// (**default=`"yuv420p"`**) Encoder pixel format
         pixel_format: Option<PixelFormat>,
 
@@ -47,6 +50,9 @@ pub enum WhipVideoEncoderOptions {
     },
     #[serde(rename = "ffmpeg_vp8")]
     FfmpegVp8 {
+        /// TODO: descr
+        bitrate: Option<VideoEncoderBitrate>,
+
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
@@ -54,6 +60,9 @@ pub enum WhipVideoEncoderOptions {
     FfmpegVp9 {
         /// (**default=`"yuv420p"`**) Encoder pixel format
         pixel_format: Option<PixelFormat>,
+
+        /// TODO: descr
+        bitrate: Option<VideoEncoderBitrate>,
 
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
