@@ -88,13 +88,13 @@ export async function resolveNodeOptions(): Promise<NodeOptions> {
     {
       title: 'Express.js + Zustand',
       description:
-        'A Node.js application that streams composed video to an RTMP server. An HTTP API controls the stream, enabling dynamic layout changes and adding MP4 files.',
+        'A Node.js application that streams composed video to an RTMP server. An HTTP API controls the stream layout, enables dynamic layout changes and adding MP4 files.',
       value: 'node-express-zustand',
     },
     {
       title: 'Generate simple MP4 file',
       description:
-        'A Node.js application that generates an MP4 file, rendering a single, simple static layout',
+        'A Node.js application that generates an MP4 file, rendering a single, simple static layout.',
       value: 'node-offline-minimal',
     },
     {
