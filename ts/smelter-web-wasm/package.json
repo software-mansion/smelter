@@ -1,6 +1,6 @@
 {
   "name": "@swmansion/smelter-web-wasm",
-  "version": "0.3.0-rc.0",
+  "version": "0.3.0-rc.1",
   "author": "Software Mansion <contact@swmansion.com>",
   "license": "SEE LICENSE IN ./LICENSE",
   "description": "Smelter server running directlly in browser",
@@ -37,8 +37,8 @@
   },
   "dependencies": {
     "@datastructures-js/queue": "^4.2.3",
-    "@swmansion/smelter-browser-render": "workspace:0.3.0-rc.0",
-    "@swmansion/smelter-core": "workspace:0.3.0-rc.0",
+    "@swmansion/smelter-browser-render": "workspace:0.3.0-rc.1",
+    "@swmansion/smelter-core": "workspace:0.3.0-rc.1",
     "mp4box": "^0.5.2",
     "path-parser": "^6.1.0",
     "pino": "^9.5.0"
@@ -52,6 +52,6 @@
     "rollup-plugin-dts": "^6.1.1"
   },
   "peerDependencies": {
-    "@swmansion/smelter": "workspace:0.3.0-rc.0"
+    "@swmansion/smelter": "workspace:0.3.0-rc.1"
   }
 }

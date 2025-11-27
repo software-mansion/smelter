@@ -1,6 +1,6 @@
 {
   "name": "@swmansion/smelter-node",
-  "version": "0.3.0-rc.0",
+  "version": "0.3.0-rc.1",
   "author": "Software Mansion <contact@swmansion.com>",
   "license": "MIT",
   "description": "Node runtime for @swmansion/smelter",
@@ -29,7 +29,7 @@
     "@types/react": "^18.3.3"
   },
   "dependencies": {
-    "@swmansion/smelter-core": "workspace:0.3.0-rc.0",
+    "@swmansion/smelter-core": "workspace:0.3.0-rc.1",
     "fs-extra": "^11.2.0",
     "node-fetch": "^2.6.7",
     "form-data": "^4.0.4",
@@ -40,6 +40,6 @@
     "ws": "^8.18.0"
   },
   "peerDependencies": {
-    "@swmansion/smelter": "workspace:0.3.0-rc.0"
+    "@swmansion/smelter": "workspace:0.3.0-rc.1"
   }
 }

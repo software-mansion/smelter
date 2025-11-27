@@ -20,7 +20,7 @@ import { smelterInstanceLoggerOptions } from '../logger';
 import { getSmelterStatus } from '../getSmelterStatus';
 
 // TODO: This should be changed to `software-mansion/smelter` repo with proper version on ts-sdk release
-const VERSION = `6e118f3f`;
+const VERSION = `62d73800`;
 const REPO = `smelter-labs/smelter-rc`;
 
 // const VERSION = `v0.4.1`;
