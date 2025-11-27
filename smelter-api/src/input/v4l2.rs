@@ -22,7 +22,7 @@ pub struct V4l2Input {
     /// The resolution that will be negotiated with the device.
     pub resolution: Resolution,
     /// The format that will be negotiated with the device.
-    pub format: Format,
+    pub format: V4l2InputFormat,
     /// The framerate that will be negotiated with the device.
     ///
     /// Must by either an unsigned integer, or a string in the \"NUM/DEN\" format, where NUM
@@ -35,7 +35,7 @@ pub struct V4l2Input {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub enum Format {
+pub enum V4l2InputFormat {
     /// Interleaved YUYV 4:2:2
     Yuyv,
     /// Planar NV12 (Y/UV 4:2:0)

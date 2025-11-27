@@ -1,7 +1,10 @@
-use std::sync::{Arc, atomic::AtomicBool};
+use std::{
+    sync::{Arc, atomic::AtomicBool},
+    time::Duration,
+};
 
-use smelter_render::{Frame, Framerate, InputId, Resolution};
-use tracing::{Level, debug, error, info, warn};
+use smelter_render::{Frame, FrameData, Framerate, InputId, NvPlanes, Resolution};
+use tracing::{Level, debug, error, info, span, warn};
 
 use crate::{pipeline::input::Input, prelude::*, queue::QueueDataReceiver};
 
@@ -46,6 +49,78 @@ impl V4l2Input {
         input_ref: Ref<InputId>,
         opts: V4l2InputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
+        let device_config = V4l2DeviceConfig::initialize(&opts)?;
+
+        let mut stream =
+            MmapStream::with_buffers(&device_config.device, v4l::buffer::Type::VideoCapture, 4)
+                .map_err(V4l2InputError::IoError)?;
+        // the library recommends to skip the first frame
+        stream.next().map_err(V4l2InputError::IoError)?;
+
+        let (frame_sender, frame_receiver) = crossbeam_channel::bounded(10);
+        let should_close = Arc::new(AtomicBool::new(false));
+
+        let mut state = InputState {
+            config: device_config,
+            ctx,
+            sender: frame_sender,
+            should_close: should_close.clone(),
+            stream,
+        };
+
+        std::thread::Builder::new()
+            .name(format!("V4L2 reader thread for input {input_ref}"))
+            .spawn(move || {
+                let _span = span!(Level::INFO, "V4L2", input_id = input_ref.to_string()).entered();
+                state.run();
+                info!("Stopping input.");
+            })
+            .unwrap();
+
+        Ok((
+            Input::V4l2(Self { should_close }),
+            InputInitInfo::Other,
+            QueueDataReceiver {
+                video: Some(frame_receiver),
+                audio: None,
+            },
+        ))
+    }
+}
+
+impl Drop for V4l2Input {
+    fn drop(&mut self) {
+        self.should_close
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+struct V4l2DeviceConfig {
+    device: Device,
+    resolution: Resolution,
+    format: V4l2Format,
+}
+
+impl V4l2DeviceConfig {
+    fn refresh_format(&mut self) -> Result<(), V4l2InputError> {
+        let new_format = self.device.format()?;
+
+        self.format = new_format.fourcc.try_into()?;
+        self.resolution = Resolution {
+            width: new_format.width as usize,
+            height: new_format.height as usize,
+        };
+
+        info!(
+            new_format = new_format.fourcc.str().unwrap_or("<unknown format>"),
+            new_resolution = ?self.resolution,
+            "Format changed.",
+        );
+
+        Ok(())
+    }
+
+    fn initialize(opts: &V4l2InputOptions) -> Result<V4l2DeviceConfig, V4l2InputError> {
         let device = Device::with_path(&opts.path)
             .map_err(|e| V4l2InputError::OpeningDeviceFailed(opts.path.clone(), e))?;
 
@@ -54,19 +129,17 @@ impl V4l2Input {
             .capabilities
             .contains(v4l::capability::Flags::VIDEO_CAPTURE)
         {
-            return Err(V4l2InputError::CaptureNotSupported.into());
+            return Err(V4l2InputError::CaptureNotSupported);
         }
 
         let requested_fourcc = opts.format.into();
-        let format = device.format().map_err(V4l2InputError::IoError)?;
-        let format = device
-            .set_format(&Format {
-                width: opts.resolution.width as u32,
-                height: opts.resolution.height as u32,
-                fourcc: requested_fourcc,
-                ..format
-            })
-            .map_err(V4l2InputError::IoError)?;
+        let format = device.format()?;
+        let format = device.set_format(&Format {
+            width: opts.resolution.width as u32,
+            height: opts.resolution.height as u32,
+            fourcc: requested_fourcc,
+            ..format
+        })?;
 
         if format.fourcc != requested_fourcc {
             warn!(
@@ -90,16 +163,14 @@ impl V4l2Input {
             );
         }
 
-        let negotiated_parameters = device
-            .set_params(&v4l::video::capture::Parameters {
-                capabilities: Capabilities::TIME_PER_FRAME,
-                modes: Modes::empty(),
-                interval: v4l::Fraction {
-                    numerator: opts.framerate.den,
-                    denominator: opts.framerate.num,
-                },
-            })
-            .map_err(V4l2InputError::IoError)?;
+        let negotiated_parameters = device.set_params(&v4l::video::capture::Parameters {
+            capabilities: Capabilities::TIME_PER_FRAME,
+            modes: Modes::empty(),
+            interval: v4l::Fraction {
+                numerator: opts.framerate.den,
+                denominator: opts.framerate.num,
+            },
+        })?;
 
         if opts.framerate.num != negotiated_parameters.interval.denominator
             || opts.framerate.den != negotiated_parameters.interval.numerator
@@ -116,55 +187,16 @@ impl V4l2Input {
             );
         }
 
-        let mut stream = MmapStream::with_buffers(&device, v4l::buffer::Type::VideoCapture, 4)
-            .map_err(V4l2InputError::IoError)?;
-        // the library recommends to skip the first frame
-        stream.next().map_err(V4l2InputError::IoError)?;
-
-        let (tx, rx) = crossbeam_channel::bounded(10);
-        let should_close = Arc::new(AtomicBool::new(false));
-
-        let mut state = InputState {
+        Ok(V4l2DeviceConfig {
+            device,
             resolution: negotiated_resolution,
             format: negotiated_format,
-            v4l_device: device,
-            ctx,
-            sender: tx,
-            should_close: should_close.clone(),
-            stream,
-        };
-
-        std::thread::Builder::new()
-            .name(format!("V4L2 reader thread for input {input_ref}"))
-            .spawn(move || {
-                let _span =
-                    tracing::span!(Level::INFO, "V4L2", input_id = input_ref.to_string()).entered();
-                state.run()
-            })
-            .unwrap();
-
-        Ok((
-            Input::V4l2(Self { should_close }),
-            InputInitInfo::Other,
-            QueueDataReceiver {
-                video: Some(rx),
-                audio: None,
-            },
-        ))
-    }
-}
-
-impl Drop for V4l2Input {
-    fn drop(&mut self) {
-        self.should_close
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        })
     }
 }
 
 struct InputState<'a> {
-    v4l_device: Device,
-    resolution: Resolution,
-    format: V4l2Format,
+    config: V4l2DeviceConfig,
     ctx: Arc<PipelineCtx>,
     should_close: Arc<AtomicBool>,
     sender: crossbeam_channel::Sender<PipelineEvent<Frame>>,
@@ -181,17 +213,21 @@ impl InputState<'_> {
 
             let frame = match self.stream.next() {
                 Ok((frame, _)) => frame,
-                Err(e) => {
-                    warn!(error = %e, "Cannot receive frame.");
+                Err(err) => {
+                    warn!(%err, "Cannot receive frame.");
                     continue;
                 }
             };
 
-            let data = match self.format {
+            let V4l2DeviceConfig {
+                resolution, format, ..
+            } = &self.config;
+
+            let data = match format {
                 V4l2Format::Yuyv => {
-                    if frame.len() != self.resolution.width * self.resolution.height * 2 {
-                        if let Err(e) = self.refresh_format() {
-                            error!(error= %e, "Fatal error when trying to refresh parameters.");
+                    if frame.len() != resolution.width * resolution.height * 2 {
+                        if let Err(err) = self.config.refresh_format() {
+                            error!(%err, "Error when trying to refresh parameters.");
                             self.send_eos();
                             return;
                         }
@@ -199,15 +235,13 @@ impl InputState<'_> {
                         continue;
                     }
 
-                    smelter_render::FrameData::InterleavedYuyv422(bytes::Bytes::copy_from_slice(
-                        frame,
-                    ))
+                    FrameData::InterleavedYuyv422(bytes::Bytes::copy_from_slice(frame))
                 }
                 V4l2Format::Nv12 => {
-                    let y_length = self.resolution.width * self.resolution.height;
+                    let y_length = resolution.width * resolution.height;
                     if frame.len() != y_length * 3 / 2 {
-                        if let Err(e) = self.refresh_format() {
-                            error!(error = %e, "Fatal error when trying to refresh parameters.");
+                        if let Err(err) = self.config.refresh_format() {
+                            error!(%err, "Fatal error when trying to refresh parameters.");
                             self.send_eos();
                             return;
                         }
@@ -215,7 +249,7 @@ impl InputState<'_> {
                         continue;
                     }
 
-                    smelter_render::FrameData::Nv12(smelter_render::NvPlanes {
+                    FrameData::Nv12(NvPlanes {
                         y_plane: bytes::Bytes::copy_from_slice(&frame[..y_length]),
                         uv_planes: bytes::Bytes::copy_from_slice(&frame[y_length..]),
                     })
@@ -223,38 +257,20 @@ impl InputState<'_> {
             };
 
             let frame = Frame {
-                pts: self.ctx.queue_sync_point.elapsed() + std::time::Duration::from_millis(20),
+                pts: self.ctx.queue_sync_point.elapsed() + Duration::from_millis(20),
                 data,
-                resolution: self.resolution,
+                resolution: self.config.resolution,
             };
 
-            if let Err(e) = self.sender.send(PipelineEvent::Data(frame)) {
-                debug!(error = %e, "Failed to send video chunk.");
+            if self.sender.send(PipelineEvent::Data(frame)).is_err() {
+                debug!("Failed to send video chunk. Channel closed.");
             }
         }
     }
 
     fn send_eos(&self) {
-        if let Err(e) = self.sender.send(PipelineEvent::EOS) {
-            warn!(error = %e, "Cannot send EOS.");
+        if self.sender.send(PipelineEvent::EOS).is_err() {
+            debug!("Cannot send EOS. Channel closed.");
         }
-    }
-
-    fn refresh_format(&mut self) -> Result<(), V4l2InputError> {
-        let new_format = self.v4l_device.format()?;
-
-        self.format = new_format.fourcc.try_into()?;
-        self.resolution = Resolution {
-            width: new_format.width as usize,
-            height: new_format.height as usize,
-        };
-
-        info!(
-            new_format = new_format.fourcc.str().unwrap_or("<unknown format>"),
-            new_resolution = ?self.resolution,
-            "Format changed.",
-        );
-
-        Ok(())
     }
 }

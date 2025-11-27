@@ -25,16 +25,16 @@ impl TryFrom<V4l2Input> for core::RegisterInputOptions {
     #[cfg(not(target_os = "linux"))]
     fn try_from(_value: V4l2Input) -> Result<Self, Self::Error> {
         Err(TypeError::new(
-            "The platform that Smelter is running on does not support Video for Linux.",
+            "Unsupported platform. \"v4l2\" inputs are only available on Linux.",
         ))
     }
 }
 
-impl From<Format> for core::V4l2Format {
-    fn from(value: Format) -> Self {
+impl From<V4l2InputFormat> for core::V4l2Format {
+    fn from(value: V4l2InputFormat) -> Self {
         match value {
-            Format::Yuyv => core::V4l2Format::Yuyv,
-            Format::Nv12 => core::V4l2Format::Nv12,
+            V4l2InputFormat::Yuyv => core::V4l2Format::Yuyv,
+            V4l2InputFormat::Nv12 => core::V4l2Format::Nv12,
         }
     }
 }
