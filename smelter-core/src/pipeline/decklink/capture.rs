@@ -65,7 +65,7 @@ impl ChannelCallbackAdapter {
                 video_sender: Some(video_sender),
                 audio_sender,
                 span,
-                audio_resampler: Mutex::new(DynamicResampler::new(ctx.mixing_sample_rate)),
+                audio_resampler: Mutex::new(DynamicResampler::new(ctx.mixing_sample_rate, false)),
                 input,
                 // 15 ms is a buffer that should be enough for frame to be delivered to queue
                 sync_point: ctx.queue_sync_point + Duration::from_millis(15),

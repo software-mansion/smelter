@@ -103,6 +103,7 @@ fn setup_audio_track(
             decoder_options: FdkAacDecoderOptions { asc },
             samples_sender: decoder_sender.clone(),
             input_buffer_size: 10,
+            force_resampling: true,
         },
     );
 

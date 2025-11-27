@@ -17,7 +17,7 @@ impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>> ResampledForEnc
     pub fn new(source: Source, input_sample_rate: u32, output_sample_rate: u32) -> Self {
         Self {
             input_sample_rate,
-            resampler: DynamicResampler::new(output_sample_rate),
+            resampler: DynamicResampler::new(output_sample_rate, false),
             source,
             eos_sent: false,
         }
