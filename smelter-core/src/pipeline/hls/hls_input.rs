@@ -106,18 +106,11 @@ impl HlsInput {
         stream: &Stream<'_>,
         buffer: InputBuffer,
     ) -> Result<(Track, Receiver<PipelineEvent<InputAudioSamples>>), InputInitError> {
-        let stats_sender =
-            HlsInputTrackStatsSender::new(input_ref, &ctx.stats_sender, HlsTrack::Audio);
         // not tested it was always null, but audio is in ADTS, so config is not
         // necessary
         let asc = read_extra_data(stream);
         let (samples_sender, samples_receiver) = bounded(5);
-        let state = StreamState::new(
-            ctx.queue_sync_point,
-            stream.time_base(),
-            buffer,
-            stats_sender,
-        );
+        let state = StreamState::new(ctx, input_ref, stream.time_base(), buffer, TrackKind::Audio);
         let handle = AudioDecoderThread::<fdk_aac::FdkAacDecoder>::spawn(
             input_ref.clone(),
             AudioDecoderThreadOptions {
@@ -145,15 +138,8 @@ impl HlsInput {
         video_decoders: HlsInputVideoDecoders,
         buffer: InputBuffer,
     ) -> Result<(Track, Receiver<PipelineEvent<Frame>>), InputInitError> {
-        let stats_sender =
-            HlsInputTrackStatsSender::new(input_ref, &ctx.stats_sender, HlsTrack::Video);
         let (frame_sender, frame_receiver) = bounded(5);
-        let state = StreamState::new(
-            ctx.queue_sync_point,
-            stream.time_base(),
-            buffer,
-            stats_sender,
-        );
+        let state = StreamState::new(ctx, input_ref, stream.time_base(), buffer, TrackKind::Video);
 
         let extra_data = read_extra_data(stream);
         let h264_config = extra_data
@@ -354,13 +340,15 @@ struct StreamState {
 
 impl StreamState {
     fn new(
-        queue_sync_point: Instant,
+        ctx: &Arc<PipelineCtx>,
+        input_ref: &Ref<InputId>,
         time_base: ffmpeg_next::Rational,
         buffer: InputBuffer,
-        stats_sender: HlsInputTrackStatsSender,
+        track_kind: TrackKind,
     ) -> Self {
+        let stats_sender = HlsInputTrackStatsSender::new(input_ref, &ctx.stats_sender, track_kind);
         Self {
-            queue_sync_point,
+            queue_sync_point: ctx.queue_sync_point,
             time_base,
             buffer,
 
@@ -548,7 +536,7 @@ where
 }
 
 #[derive(Clone, Copy)]
-enum HlsTrack {
+enum TrackKind {
     Audio,
     Video,
 }
@@ -557,11 +545,11 @@ enum HlsTrack {
 struct HlsInputTrackStatsSender {
     input_ref: Ref<InputId>,
     stats_sender: StatsSender,
-    track: HlsTrack,
+    track: TrackKind,
 }
 
 impl HlsInputTrackStatsSender {
-    fn new(input_ref: &Ref<InputId>, stats_sender: &StatsSender, track: HlsTrack) -> Self {
+    fn new(input_ref: &Ref<InputId>, stats_sender: &StatsSender, track: TrackKind) -> Self {
         Self {
             input_ref: input_ref.clone(),
             stats_sender: stats_sender.clone(),
@@ -587,8 +575,8 @@ impl HlsInputTrackStatsSender {
         let events = events
             .into_iter()
             .map(|e| match self.track {
-                HlsTrack::Video => HlsInputStatsEvent::Video(e).into_event(&self.input_ref),
-                HlsTrack::Audio => HlsInputStatsEvent::Audio(e).into_event(&self.input_ref),
+                TrackKind::Video => HlsInputStatsEvent::Video(e).into_event(&self.input_ref),
+                TrackKind::Audio => HlsInputStatsEvent::Audio(e).into_event(&self.input_ref),
             })
             .collect::<Vec<_>>();
         self.stats_sender.send(events);
@@ -596,8 +584,8 @@ impl HlsInputTrackStatsSender {
 
     fn send(&self, event: HlsInputTrackStatsEvent) {
         let event = match self.track {
-            HlsTrack::Video => HlsInputStatsEvent::Video(event),
-            HlsTrack::Audio => HlsInputStatsEvent::Audio(event),
+            TrackKind::Video => HlsInputStatsEvent::Video(event),
+            TrackKind::Audio => HlsInputStatsEvent::Audio(event),
         };
         self.stats_sender.send(event.into_event(&self.input_ref));
     }
