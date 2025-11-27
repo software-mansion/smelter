@@ -4,6 +4,7 @@ use crate::{
     pipeline::{
         hls::HlsInput,
         mp4::Mp4Input,
+        rtmp::RtmpServerInput,
         rtp::RtpInput,
         webrtc::{WhepInput, WhipInput},
     },
@@ -25,6 +26,7 @@ pub struct PipelineInput {
 
 pub enum Input {
     Rtp(RtpInput),
+    RtmpServer(RtmpServerInput),
     Mp4(Mp4Input),
     Whip(WhipInput),
     Whep(WhepInput),
@@ -40,6 +42,7 @@ impl Input {
     pub fn kind(&self) -> InputProtocolKind {
         match self {
             Input::Rtp(_input) => InputProtocolKind::Rtp,
+            Input::RtmpServer(_input) => InputProtocolKind::Rtmp,
             Input::Mp4(_input) => InputProtocolKind::Mp4,
             Input::Whip(_input) => InputProtocolKind::Whip,
             Input::Whep(_input) => InputProtocolKind::Whep,
@@ -60,6 +63,7 @@ pub(super) fn new_external_input(
 ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
     match options {
         ProtocolInputOptions::Rtp(opts) => RtpInput::new_input(ctx, input_ref, opts),
+        ProtocolInputOptions::RtmpServer(opts) => RtmpServerInput::new_input(ctx, input_ref, opts),
         ProtocolInputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_ref, opts),
         ProtocolInputOptions::Hls(opts) => HlsInput::new_input(ctx, input_ref, opts),
         ProtocolInputOptions::Whip(opts) => WhipInput::new_input(ctx, input_ref, opts),

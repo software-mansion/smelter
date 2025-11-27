@@ -13,8 +13,8 @@ use crate::{
 };
 use smelter_api::{
     DeckLink, HlsInput, HlsOutput, ImageSpec, InputId, Mp4Input, Mp4Output, OutputId, RendererId,
-    RtmpOutput, RtpInput, RtpOutput, ShaderSpec, V4l2Input, WebRendererSpec, WhepInput, WhepOutput,
-    WhipInput, WhipOutput,
+    RtmpInput, RtmpOutput, RtpInput, RtpOutput, ShaderSpec, V4l2Input, WebRendererSpec, WhepInput,
+    WhepOutput, WhipInput, WhipOutput,
 };
 
 use super::ApiState;
@@ -23,6 +23,7 @@ use super::ApiState;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RegisterInput {
     RtpStream(RtpInput),
+    RtmpServer(RtmpInput),
     Mp4(Mp4Input),
     WhipServer(WhipInput),
     WhepClient(WhepInput),
@@ -53,6 +54,9 @@ pub(super) async fn handle_input(
         let response = match request {
             RegisterInput::RtpStream(rtp) => {
                 Pipeline::register_input(&api.pipeline()?, input_id.into(), rtp.try_into()?)?
+            }
+            RegisterInput::RtmpServer(rtmp) => {
+                Pipeline::register_input(&api.pipeline()?, input_id.into(), rtmp.try_into()?)?
             }
             RegisterInput::Mp4(mp4) => {
                 Pipeline::register_input(&api.pipeline()?, input_id.into(), mp4.try_into()?)?
