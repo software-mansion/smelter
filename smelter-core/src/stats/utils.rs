@@ -25,6 +25,10 @@ impl<Value: Copy> SlidingWindowValue<Value> {
         self.buffer.push_back((now, val));
     }
 
+    pub fn window_size(&self) -> Duration {
+        self.window_size
+    }
+
     fn drop_older(&mut self, instant: Instant) {
         while let Some((first, _)) = self.buffer.front()
             && *first + self.window_size < instant

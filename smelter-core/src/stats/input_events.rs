@@ -8,6 +8,7 @@ use crate::{InputProtocolKind, Ref, stats::state::StatsEvent};
 pub(crate) enum InputStatsEvent {
     Whip(WhipInputStatsEvent),
     Whep(WhepInputStatsEvent),
+    Hls(HlsInputStatsEvent),
 }
 
 impl From<&InputStatsEvent> for InputProtocolKind {
@@ -15,6 +16,7 @@ impl From<&InputStatsEvent> for InputProtocolKind {
         match value {
             InputStatsEvent::Whip(_) => InputProtocolKind::Whip,
             InputStatsEvent::Whep(_) => InputProtocolKind::Whep,
+            InputStatsEvent::Hls(_) => InputProtocolKind::Hls,
         }
     }
 }
@@ -53,6 +55,31 @@ impl WhepInputStatsEvent {
 pub(crate) enum RtpJitterBufferStatsEvent {
     RtpPacketLost,
     RtpPacketReceived,
+    EffectiveBuffer(Duration),
+    InputBufferSize(Duration),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum HlsInputStatsEvent {
+    Video(HlsInputTrackStatsEvent),
+    Audio(HlsInputTrackStatsEvent),
+    CorruptedPacketReceived,
+}
+
+impl HlsInputStatsEvent {
+    pub fn into_event(self, input_ref: &Ref<InputId>) -> StatsEvent {
+        StatsEvent::Input {
+            input_ref: input_ref.clone(),
+            event: InputStatsEvent::Hls(self),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum HlsInputTrackStatsEvent {
+    PacketReceived,
+    DiscontinuityDetected,
+    ChunkSize(u64),
     EffectiveBuffer(Duration),
     InputBufferSize(Duration),
 }

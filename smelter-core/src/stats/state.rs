@@ -23,6 +23,15 @@ pub(crate) enum StatsEvent {
     },
 }
 
+impl IntoIterator for StatsEvent {
+    type Item = Self;
+    type IntoIter = std::array::IntoIter<Self::Item, 1>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        [self].into_iter()
+    }
+}
+
 impl StatsState {
     pub fn new() -> Self {
         Self {
