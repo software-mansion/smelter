@@ -105,5 +105,7 @@ pub fn init_logger(opts: LoggerConfig) {
 
     unsafe {
         ffmpeg_next::sys::av_log_set_callback(Some(ffmpeg_log_callback));
+        // TODO: #remove
+        ffmpeg_next::sys::av_log_set_level(100);
     }
 }

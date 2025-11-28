@@ -166,6 +166,15 @@ impl VideoEncoder {
                     "thread_type": "slice",
                 },
             }),
+            // #remove
+            Self::FfmpegVp9 => json!({
+                "type": "ffmpeg_vp9",
+                "bitrate": 500_000,
+            }),
+            Self::FfmpegVp8 => json!({
+                "type": "ffmpeg_vp8",
+                "bitrate": 500_000,
+            }),
             _ => json!({
                 "type": self.to_string(),
             }),

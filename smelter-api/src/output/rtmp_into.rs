@@ -80,10 +80,12 @@ impl RtmpClientVideoEncoderOptions {
         let encoder_options = match self {
             RtmpClientVideoEncoderOptions::FfmpegH264 {
                 preset,
+                bitrate,
                 pixel_format,
                 ffmpeg_options,
             } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
+                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
                 resolution: resolution.into(),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
