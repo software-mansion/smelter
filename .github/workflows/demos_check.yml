@@ -35,14 +35,18 @@ jobs:
               with:
                   node-version: "20"
 
-            - name: Check vite+react demo
-              working-directory: ./demos/vite-demo
+            - name: Check vite+react WASM demo
+              working-directory: ./demos/vite-web-wasm
               run: pnpm install --frozen-lockfile && pnpm run build && pnpm run lint
 
-            - name: Check react-router demo
-              working-directory: ./demos/vite-react-router-demo
+            - name: Check vite+react web client demo
+              working-directory: ./demos/vite-web-client
+              run: pnpm install --frozen-lockfile && pnpm run build && pnpm run lint
+
+            - name: Check react-router WASM demo
+              working-directory: ./demos/vite-react-router-web-wasm
               run: pnpm install --frozen-lockfile && pnpm run build && pnpm run typecheck
 
-            - name: Check Next.js demo
-              working-directory: ./demos/nextjs-demo
+            - name: Check Next.js WASM demo
+              working-directory: ./demos/nextjs-web-wasm
               run: pnpm install --frozen-lockfile && pnpm run build && pnpm run lint
