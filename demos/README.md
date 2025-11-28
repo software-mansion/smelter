@@ -40,4 +40,4 @@ Go to `./vite-react-router-web-wasm` and run `pnpm install && pnpm dev`.
 
 The project was generated using `pnpm create next-app@14.2.24`. Next.js version 14.2.24 was chosen to ensure compatibility with the version of React used in Smelter, as newer Next.js releases are not fully compatible.
 
-Go to `./nextjs-demo` and run `pnpm install && pnpm dev`.
+Go to `./nextjs-web-wasm` and run `pnpm install && pnpm dev`.
