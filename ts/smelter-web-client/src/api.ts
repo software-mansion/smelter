@@ -11,6 +11,7 @@ import type {
   RegisterWhepServerOutput,
   RegisterWhipServerInput,
   RegisterWhipClientOutput,
+  RegisterV4l2Input,
 } from '@swmansion/smelter';
 
 export type RegisterOutput =
@@ -27,7 +28,8 @@ export type RegisterInput =
   | ({ type: 'hls' } & RegisterHlsInput)
   | ({ type: 'whip_server' } & RegisterWhipServerInput)
   | ({ type: 'whep_client' } & RegisterWhepClientInput)
-  | ({ type: 'rtmp_server' } & RegisterRtmpServerInput);
+  | ({ type: 'rtmp_server' } & RegisterRtmpServerInput)
+  | ({ type: 'v4l2' } & RegisterV4l2Input);
 
 export type RegisterWhepServerOutputResponse = {
   endpointRoute: string;

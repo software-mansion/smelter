@@ -166,3 +166,38 @@ export type RegisterRtmpServerInput = {
    */
   decoderMap?: InputRtmpDecoderMap | null;
 };
+
+export type RegisterV4l2Input = {
+  type: 'v4l2';
+  /**
+   * Path to the V4L2 device.
+   *
+   * Typically looks like either of:
+   *  - `/dev/video[N]`, where `[N]` is the OS-assigned device number
+   *  - `/dev/v4l/by-id/[ID]`, where `[ID]` is the unique device id
+   *  - `/dev/v4l/by-path/[PATH]`, where `[PATH]` is the PCI/USB device path
+   *
+   * While the numbers assigned in `/dev/video<N>` paths can differ depending on device
+   * detection order, the `by-id` paths are always the same for a given device, and
+   * the `by-path` paths should be the same for specific ports.
+   */
+  path: string;
+  /**
+   * The resolution that will be negotiated with the device.
+   */
+  resolution: Api.Resolution;
+  /**
+   * The format that will be negotiated with the device.
+   */
+  format: Api.V4L2InputFormat;
+  /**
+   * The framerate that will be negotiated with the device.
+   *
+   * Must by either an unsigned integer, or a string in the \"NUM/DEN\" format, where NUM and DEN are both unsigned integers.
+   */
+  framerate: Api.Framerate;
+  /**
+   * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
+   */
+  required?: boolean | null;
+};
