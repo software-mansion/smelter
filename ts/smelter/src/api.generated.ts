@@ -155,6 +155,35 @@ export type RegisterInput =
       } | null;
     }
   | {
+      type: "v4l2";
+      /**
+       * Path to the V4L2 device.
+       *
+       * Typically looks like either of: - `/dev/video[N]`, where `[N]` is the OS-assigned device number - `/dev/v4l/by-id/[ID]`, where `[ID]` is the unique device id - `/dev/v4l/by-path/[PATH]`, where `[PATH]` is the PCI/USB device path
+       *
+       * While the numbers assigned in `/dev/video<N>` paths can differ depending on device detection order, the `by-id` paths are always the same for a given device, and the `by-path` paths should be the same for specific ports.
+       */
+      path: string;
+      /**
+       * The resolution that will be negotiated with the device.
+       */
+      resolution: Resolution;
+      /**
+       * The format that will be negotiated with the device.
+       */
+      format: V4L2InputFormat;
+      /**
+       * The framerate that will be negotiated with the device.
+       *
+       * Must by either an unsigned integer, or a string in the \"NUM/DEN\" format, where NUM and DEN are both unsigned integers.
+       */
+      framerate: Framerate;
+      /**
+       * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
+       */
+      required?: boolean | null;
+    }
+  | {
       type: "decklink";
       /**
        * Single DeckLink device can consist of multiple sub-devices. This field defines index of sub-device that should be used.
@@ -213,6 +242,8 @@ export type Mp4VideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
 export type WhipVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type WhepVideoDecoderOptions = "any" | "ffmpeg_h264" | "ffmpeg_vp8" | "ffmpeg_vp9" | "vulkan_h264";
 export type HlsVideoDecoderOptions = "ffmpeg_h264" | "vulkan_h264";
+export type V4L2InputFormat = "yuyv" | "nv12";
+export type Framerate = string | number;
 export type RegisterOutput =
   | {
       type: "rtp_stream";
@@ -1136,6 +1167,16 @@ export interface InputWhipVideoOptions {
 export interface InputWhepVideoOptions {
   decoder_preferences?: WhepVideoDecoderOptions[] | null;
 }
+export interface Resolution {
+  /**
+   * Width in pixels.
+   */
+  width: number;
+  /**
+   * Height in pixels.
+   */
+  height: number;
+}
 export interface OutputRtpVideoOptions {
   /**
    * Output resolution in pixels.
@@ -1153,16 +1194,6 @@ export interface OutputRtpVideoOptions {
    * Root of a component tree/scene that should be rendered for the output. Use [`update_output` request](../routes.md#update-output) to update this value after registration. [Learn more](../../concept/component.md).
    */
   initial: VideoScene;
-}
-export interface Resolution {
-  /**
-   * Width in pixels.
-   */
-  width: number;
-  /**
-   * Height in pixels.
-   */
-  height: number;
 }
 /**
  * This type defines when end of an input stream should trigger end of the output stream. Only one of those fields can be set at the time. Unless specified otherwise the input stream is considered finished/ended when: - TCP connection was dropped/closed. - RTCP Goodbye packet (`BYE`) was received. - Mp4 track has ended. - Input was unregistered already (or never registered).

@@ -25,6 +25,7 @@ export {
   RegisterWhipServerInput,
   RegisterWhepClientInput,
   RegisterRtmpServerInput,
+  RegisterV4l2Input,
 } from './types/input.js';
 export {
   RegisterRtpOutput,

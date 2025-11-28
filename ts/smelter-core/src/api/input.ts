@@ -21,6 +21,7 @@ export type RegisterInputRequest =
   | RegisterWhipServerInputRequest
   | RegisterWhepClientInputRequest
   | RegisterRtmpServerInputRequest
+  | RegisterV4l2InputRequest
   | RegisterDecklinkInputRequest
   | { type: 'camera' }
   | { type: 'screen_capture' }
@@ -33,6 +34,7 @@ export type RegisterHlsInputRequest = Extract<Api.RegisterInput, { type: 'hls' }
 export type RegisterWhipServerInputRequest = Extract<Api.RegisterInput, { type: 'whip_server' }>;
 export type RegisterWhepClientInputRequest = Extract<Api.RegisterInput, { type: 'whep_client' }>;
 export type RegisterRtmpServerInputRequest = Extract<Api.RegisterInput, { type: 'rtmp_server' }>;
+export type RegisterV4l2InputRequest = Extract<Api.RegisterInput, { type: 'v4l2' }>;
 export type RegisterDecklinkInputRequest = Extract<Api.RegisterInput, { type: 'decklink' }>;
 
 export type InputRef = _smelterInternals.InputRef;
@@ -46,6 +48,7 @@ export type RegisterInput =
   | ({ type: 'whip_server' } & RegisterWhipServerInput)
   | ({ type: 'whep_client' } & RegisterWhepClientInput)
   | ({ type: 'rtmp_server' } & RegisterRtmpServerInput)
+  | ({ type: 'v4l2' } & RegisterV4l2InputRequest)
   | { type: 'camera' }
   | { type: 'screen_capture' }
   | { type: 'stream'; stream: any }
@@ -68,6 +71,8 @@ export function intoRegisterInput(inputId: string, input: RegisterInput): Regist
     return intoWhepRegisterInput(input);
   } else if (input.type === 'rtmp_server') {
     return intoRtmpRegisterInput(input);
+  } else if (input.type === 'v4l2') {
+    return intoV4l2RegisterInput(input);
   } else if (input.type === 'camera') {
     return { type: 'camera' };
   } else if (input.type === 'screen_capture') {
@@ -145,13 +150,24 @@ function intoWhepRegisterInput(input: Inputs.RegisterWhepClientInput): RegisterI
   };
 }
 
-function intoRtmpRegisterInput(input: Inputs.RegisterHlsInput): RegisterInputRequest {
+function intoRtmpRegisterInput(input: Inputs.RegisterRtmpServerInput): RegisterInputRequest {
   return {
     type: 'rtmp_server',
     url: input.url,
     required: input.required,
     offset_ms: input.offsetMs,
     decoder_map: input.decoderMap,
+  };
+}
+
+function intoV4l2RegisterInput(input: Inputs.RegisterV4l2Input): RegisterInputRequest {
+  return {
+    type: 'v4l2',
+    path: input.path,
+    resolution: input.resolution,
+    format: input.format,
+    framerate: input.framerate,
+    required: input.required,
   };
 }
 
