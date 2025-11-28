@@ -1,12 +1,12 @@
-## Smelter demos
+# Smelter demos
 
-### `@swmansion/smelter-web-client`
+## `@swmansion/smelter-web-client`
 
 Following examples show how to control Smelter server instance from the browser. In those examples,
 browser will execute React code via the `@swmansion/smelter-web-client` package and send scene update
 requests to the Smelter server
 
-### `vite-web-client`
+#### `vite-web-client`
 
 Project generated with `pnpm create vite` from `React`+`SWC` template.
 
@@ -15,7 +15,7 @@ To run this project:
 - Go to `./vite-web-client`.
 - Run `pnpm install && pnpm dev`.
 
-### `@swmansion/smelter-web-wasm`
+## `@swmansion/smelter-web-wasm`
 
 Following examples show how you can use Smelter to render video inside the browser. All of them
 do not require any additional infrastructure, and are fully self-contained.
@@ -36,7 +36,7 @@ in a `<video />` tag. You can add camera and screen share to the scene.
 
 Go to `./vite-react-router-web-wasm` and run `pnpm install && pnpm dev`.
 
-#### `nextjs-web-wasm`
+##### `nextjs-web-wasm`
 
 The project was generated using `pnpm create next-app@14.2.24`. Next.js version 14.2.24 was chosen to ensure compatibility with the version of React used in Smelter, as newer Next.js releases are not fully compatible.
 
