@@ -13,6 +13,10 @@ export default async function () {
   console.log();
   console.log(chalk.green('Project created successfully.'));
   console.log();
-  console.log(`To get started go to project directory and run:`);
-  console.log(chalk.bold(`$ ${options.packageManager} run build && node ./dist/index.js`));
+  console.log(`To get started run:`);
+  console.log(
+    chalk.bold(
+      `$ cd ${options.projectName} && ${options.packageManager} run build && node ./dist/index.js`
+    )
+  );
 }
