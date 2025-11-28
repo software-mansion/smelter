@@ -78,6 +78,24 @@ impl VideoEncoder for FfmpegVp9Encoder {
             // Maximum number of frames to lag
             ("lag-in-frames", "0"),
         ]);
+        if let Some(bitrate) = options.bitrate {
+            let b = bitrate.average_bitrate;
+            let maxrate = bitrate.max_bitrate;
+            error!(b, maxrate);
+
+            // FFmpeg takes bufsize as bits. Setting it to the same value as `average_bitrate`
+            // will make it to be set to 1000ms.
+            let bufsize = bitrate.average_bitrate;
+            ffmpeg_options.append(&[
+                // Bitrate in b/s
+                ("b", &b.to_string()),
+                // Maximum bitrate allowed at spikes for vbr mode
+                ("maxrate", &maxrate.to_string()),
+                // Time period to calculate average bitrate from calculated as
+                // bufsize * 1000 / bitrate
+                ("bufsize", &bufsize.to_string()),
+            ]);
+        }
         ffmpeg_options.append(&options.raw_options);
 
         let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
