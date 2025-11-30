@@ -26,7 +26,7 @@ const REPO = `smelter-labs/smelter-rc`;
 // const VERSION = `v0.4.1`;
 // const REPO = `software-mansion/smelter`;
 
-type ManagedInstanceOptions = {
+export type LocallySpawnedInstanceOptions = {
   port: number;
   workingdir?: string;
   mainExecutablePath?: string;
@@ -51,7 +51,7 @@ class LocallySpawnedInstanceManager implements SmelterManager {
   private enableWebRenderer?: boolean;
   private childSpawnPromise?: SpawnPromise;
 
-  constructor(opts: ManagedInstanceOptions) {
+  constructor(opts: LocallySpawnedInstanceOptions) {
     this.port = opts.port;
     this.workingdir = opts.workingdir ?? path.join(os.tmpdir(), `smelter-${uuidv4()}`);
     this.mainExecutablePath = opts.mainExecutablePath;

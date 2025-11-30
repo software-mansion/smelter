@@ -8,14 +8,14 @@ import type {
   RegisterOutput,
   RegisterWhipServerInputResponse,
 } from '../api';
-import type { InstanceOptions } from '../manager';
+import type { SmelterOptions } from '../manager';
 import RemoteInstanceManager from '../manager';
 
 export default class OfflineSmelter {
   private coreSmelter: CoreSmelter;
   private scheduler: StateGuard;
 
-  public constructor(opts: InstanceOptions) {
+  public constructor(opts: SmelterOptions) {
     const logger = pino({
       level: 'warn',
       browser: {
