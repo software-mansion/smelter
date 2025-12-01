@@ -4,7 +4,10 @@
 
 To release a new compositor version:
 
-- Go to `Actions` -> [`package for release`](https://github.com/software-mansion/smelter/actions/workflows/package_for_release.yml) -> Trigger build on master using "Run workflow" drop-down menu.
+- Go to `Actions`
+- Start following actions:
+  - [`rust_release_build`](https://github.com/software-mansion/smelter/actions/workflows/rust_release_build.yml)
+  - [`docker_publish`](https://github.com/software-mansion/smelter/actions/workflows/docker_publish.yml)
 - Wait for a job to finish.
 - Run `gh run list --workflow "package for release"` and find an ID of the workflow run that packaged release binaries. Running `./tools/release.sh` without necessary environment variables will also display that list.
 - Run
