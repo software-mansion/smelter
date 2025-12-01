@@ -1,6 +1,6 @@
 use std::{iter, sync::Arc};
 
-use ffmpeg_next::codec::Id;
+// use ffmpeg_next::codec::Id;
 use ffmpeg_next::{Rational, codec::Context};
 use smelter_render::{Frame, OutputFrameFormat};
 use tracing::{error, info, trace, warn};
@@ -30,7 +30,9 @@ impl VideoEncoder for FfmpegH264Encoder {
         options: FfmpegH264EncoderOptions,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
         info!(?options, "Initialize FFmpeg H264 encoder");
-        let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
+        // let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
+        let codec = ffmpeg_next::codec::encoder::find_by_name("libopenh264")
+            .ok_or(EncoderInitError::NoCodec)?;
         let codec_name = codec.name();
 
         let mut encoder = Context::new().encoder().video()?;
@@ -57,10 +59,32 @@ impl VideoEncoder for FfmpegH264Encoder {
             ("threads", "0"),
         ]);
 
+        if codec_name == "libopenh264" {
+            ffmpeg_options.append(&[
+                // Min QP
+                ("qmin", "0"),
+                // Max QP
+                ("qmax", "51"),
+                // Rate control mode (0 - quality, 1 - bitrate)
+                ("rc_mode", "0"),
+                // GOP size
+                ("g", "250"),
+            ]);
+            if let Some(bitrate) = options.bitrate {
+                let b = bitrate.average_bitrate;
+                let maxrate = bitrate.max_bitrate;
+
+                ffmpeg_options.append(&[
+                    // Bitrate in b/s
+                    ("b", &b.to_string()),
+                    // Maximum bitrate allowed at spikes for vbr mode
+                    ("maxrate", &maxrate.to_string()),
+                ]);
+            }
+        }
+
         if codec_name != "libopenh264" && codec_name != "h264_videotoolbox" {
             ffmpeg_options.append(&[
-                // Quality-based VBR (0-51)
-                ("crf", "23"),
                 // QP curve compression
                 ("qcomp", "0.6"),
                 //  Maximum motion vector search range
@@ -82,29 +106,30 @@ impl VideoEncoder for FfmpegH264Encoder {
                 // Subpixel motion estimation and mode decision (decision quality: 1=fast, 11=best)
                 ("subq", default_subq_mode_for_preset(options.preset)),
             ]);
-        };
-        match options.bitrate {
-            Some(bitrate) => {
-                let b = bitrate.average_bitrate;
-                let maxrate = bitrate.max_bitrate;
+            match options.bitrate {
+                Some(bitrate) => {
+                    let b = bitrate.average_bitrate;
+                    let maxrate = bitrate.max_bitrate;
 
-                // FFmpeg takes bufsize as bits. Setting it to the same value as `average_bitrate`
-                // will make it to be set to 1000ms.
-                let bufsize = bitrate.average_bitrate;
-                ffmpeg_options.append(&[
-                    // Bitrate in b/s
-                    ("b", &b.to_string()),
-                    // Maximum bitrate allowed at spikes for vbr mode
-                    ("maxrate", &maxrate.to_string()),
-                    // Time period to calculate average bitrate from calculated as
-                    // bufsize * 1000 / bitrate
-                    ("bufsize", &bufsize.to_string()),
-                ]);
+                    // FFmpeg takes bufsize as bits. Setting it to the same value as `average_bitrate`
+                    // will make it to be set to 1000ms.
+                    let bufsize = bitrate.average_bitrate;
+                    ffmpeg_options.append(&[
+                        // Bitrate in b/s
+                        ("b", &b.to_string()),
+                        // Maximum bitrate allowed at spikes for vbr mode
+                        ("maxrate", &maxrate.to_string()),
+                        // Time period to calculate average bitrate from calculated as
+                        // bufsize * 1000 / bitrate
+                        ("bufsize", &bufsize.to_string()),
+                    ]);
+                }
+                None => {
+                    // Quality-based VBR (0-51)
+                    ffmpeg_options.append(&[("crf", "23")]);
+                }
             }
-            None => {
-                ffmpeg_options.append(&[("crf", "23")]);
-            }
-        }
+        };
         ffmpeg_options.append(&options.raw_options);
 
         let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
