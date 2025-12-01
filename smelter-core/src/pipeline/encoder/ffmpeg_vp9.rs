@@ -57,8 +57,7 @@ impl VideoEncoder for FfmpegVp9Encoder {
 
         // configuration based on https://developers.google.com/media/vp9/live-encoding
         let mut ffmpeg_options = FfmpegOptions::from(&[
-            // TODO: This is temporary value and requires more research on
-            // what the default should be, definitely not fixed size, rather fixed time
+            // TODO: This will be properly set in followup PR with gop size option in api
             ("g", "250"),
             // Quality/Speed ratio modifier
             ("speed", "5"),

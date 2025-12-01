@@ -54,8 +54,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
         }
 
         let mut ffmpeg_options = FfmpegOptions::from(&[
-            // TODO: This is temporary value and requires more research on
-            // what the default should be, definitely not fixed size, rather fixed time
+            // TODO: This will be properly set in followup PR with gop size option in api
             ("g", "250"),
             // Quality/Speed ratio modifier
             ("cpu-used", "0"),
