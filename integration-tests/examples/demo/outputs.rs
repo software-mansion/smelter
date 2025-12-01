@@ -166,6 +166,10 @@ impl VideoEncoder {
                     "thread_type": "slice",
                 },
             }),
+            Self::FfmpegH264 => json!({
+                "type": "ffmpeg_h264",
+                "bitrate": 500_000,
+            }),
             _ => json!({
                 "type": self.to_string(),
             }),

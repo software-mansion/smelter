@@ -31,7 +31,7 @@ impl VideoEncoder for FfmpegH264Encoder {
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
         info!(?options, "Initialize FFmpeg H264 encoder");
         // let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
-        let codec = ffmpeg_next::codec::encoder::find_by_name("libopenh264")
+        let codec = ffmpeg_next::codec::encoder::find_by_name("h264_videotoolbox")
             .ok_or(EncoderInitError::NoCodec)?;
         let codec_name = codec.name();
 
@@ -59,28 +59,52 @@ impl VideoEncoder for FfmpegH264Encoder {
             ("threads", "0"),
         ]);
 
-        if codec_name == "libopenh264" {
-            ffmpeg_options.append(&[
-                // Min QP
-                ("qmin", "0"),
-                // Max QP
-                ("qmax", "51"),
-                // Rate control mode (0 - quality, 1 - bitrate)
-                ("rc_mode", "0"),
-                // GOP size
-                ("g", "250"),
-            ]);
-            if let Some(bitrate) = options.bitrate {
-                let b = bitrate.average_bitrate;
-                let maxrate = bitrate.max_bitrate;
-
+        match codec_name {
+            "libopenh264" => {
                 ffmpeg_options.append(&[
-                    // Bitrate in b/s
-                    ("b", &b.to_string()),
-                    // Maximum bitrate allowed at spikes for vbr mode
-                    ("maxrate", &maxrate.to_string()),
+                    // Min QP
+                    ("qmin", "0"),
+                    // Max QP
+                    ("qmax", "51"),
+                    // Rate control mode (0 - quality, 1 - bitrate)
+                    ("rc_mode", "0"),
+                    // GOP size
+                    ("g", "250"),
                 ]);
+                if let Some(bitrate) = options.bitrate {
+                    let b = bitrate.average_bitrate;
+                    let maxrate = bitrate.max_bitrate;
+
+                    ffmpeg_options.append(&[
+                        // Bitrate in b/s
+                        ("b", &b.to_string()),
+                        // Maximum bitrate allowed at spikes for vbr mode
+                        ("maxrate", &maxrate.to_string()),
+                    ]);
+                }
             }
+            "h264_videotoolbox" => {
+                ffmpeg_options.append(&[
+                    // Min QP
+                    ("qmin", "0"),
+                    // Max QP
+                    ("qmax", "51"),
+                    // GOP size
+                    ("g", "250"),
+                ]);
+                if let Some(bitrate) = options.bitrate {
+                    let b = bitrate.average_bitrate;
+                    let maxrate = bitrate.max_bitrate;
+
+                    ffmpeg_options.append(&[
+                        // Bitrate in b/s
+                        ("b", &b.to_string()),
+                        // Max allowed bitrate
+                        ("maxrate", &maxrate.to_string()),
+                    ]);
+                }
+            }
+            _ => {}
         }
 
         if codec_name != "libopenh264" && codec_name != "h264_videotoolbox" {
