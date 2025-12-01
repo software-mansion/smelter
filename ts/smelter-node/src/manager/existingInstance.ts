@@ -10,7 +10,7 @@ import { retry, sleep } from '../utils';
 import { WebSocketConnection } from '../ws';
 import { getSmelterStatus } from '../getSmelterStatus';
 
-type CreateInstanceOptions = {
+export type ExistingInstanceOptions = {
   url: string | URL;
 };
 
@@ -21,7 +21,7 @@ class ExistingInstanceManager implements SmelterManager {
   private url: URL;
   private wsConnection: WebSocketConnection;
 
-  constructor(opts: CreateInstanceOptions) {
+  constructor(opts: ExistingInstanceOptions) {
     let url: URL;
     if (opts.url instanceof URL) {
       url = opts.url;
