@@ -3,20 +3,29 @@
 ## unreleased
 
 ### 💥 Breaking changes
-- Replace `vulkan_video` option with `vulkan_h264`. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
-- Remove `video_decoder` option in MP4 input. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
+- Rename decoder `vulkan_video` to `vulkan_h264`. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
+- Replace `video_decoder` with codec specific `decoder_map` option in MP4 input. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
 - Remove `audio` field in WHIP input ([#997](https://github.com/software-mansion/smelter/pull/997) by [@wkazmierczak](https://github.com/wkazmierczak))
-- Remove `decoder` options in WHIP input and `encoder` in WHIP output. ([#1061](https://github.com/software-mansion/smelter/pull/1061), [#1084](https://github.com/software-mansion/smelter/pull/1084) by [@wkazmierczak](https://github.com/wkazmierczak))
+- Remove `decoder`/`encoder` options in WHIP input/output with `decoder_preferences`/`encoder_preferences`. ([#1061](https://github.com/software-mansion/smelter/pull/1061), [#1084](https://github.com/software-mansion/smelter/pull/1084) by [@wkazmierczak](https://github.com/wkazmierczak))
 - Move `channels` field from `encoder` to `audio` options. ([#1067](https://github.com/software-mansion/smelter/pull/1067) by [@wkazmierczak](https://github.com/wkazmierczak))
 - Remove `forward_error_correction` option for OPUS in RTP and WHIP inputs. ([#1156](https://github.com/software-mansion/smelter/pull/1156) by [@JBRS307](https://github.com/JBRS307))
 - Rename `whip` input name to `whip_server` and `whip` output name with `whip_client`. ([#1245](https://github.com/software-mansion/smelter/pull/1245) by [@wkazmierczak](https://github.com/wkazmierczak))
 
 ### ✨ New features
 
-- Add RTMP output. ([#1051](https://github.com/software-mansion/live-compositor/pull/1051) by [@WojciechBarczynski](https://github.com/WojciechBarczynski), [@wkozyra95](https://github.com/wkozyra95))
+- Add RTMP client output. ([#1051](https://github.com/software-mansion/live-compositor/pull/1051) by [@WojciechBarczynski](https://github.com/WojciechBarczynski), [@wkozyra95](https://github.com/wkozyra95))
 - Add support for VP8 and VP9 codecs. ([#988](https://github.com/software-mansion/smelter/pull/988), [#1040](https://github.com/software-mansion/smelter/pull/1040), [#1043](https://github.com/software-mansion/smelter/pull/1043), [#1093](https://github.com/software-mansion/smelter/pull/1093) by [@wkazmierczak](https://github.com/wkazmierczak))
 - Add decoder/encoder preferences on WHIP input/output ([#997](https://github.com/software-mansion/smelter/pull/997), [#1061](https://github.com/software-mansion/smelter/pull/1061), [#1070](https://github.com/software-mansion/smelter/pull/1070), [#1084](https://github.com/software-mansion/smelter/pull/1084) by [@wkazmierczak](https://github.com/wkazmierczak))
 - Add forward error correction option for Opus encoder in RTP and WHIP outputs ([#1159](https://github.com/software-mansion/smelter/pull/1159), [#1176](https://github.com/software-mansion/smelter/pull/1176) by [@JBRS307](https://github.com/JBRS307))
+- Add HLS input. ([#1158](https://github.com/software-mansion/smelter/pull/1158) by [@noituri](https://github.com/noituri))
+- Add HLS output. ([#1167](https://github.com/software-mansion/smelter/pull/1167) by [@noituri](https://github.com/noituri))
+- Add WHEP server output. ([#1196](https://github.com/software-mansion/smelter/pull/1196) by [@wkazmierczak](https://github.com/wkazmierczak))
+- Add support for Vulkan-based H264 encoder (via `vk-video`). ([#1244](https://github.com/software-mansion/smelter/pull/1244) by [@noituri](https://github.com/noituri))
+- Add WHEP client input. ([#1376](https://github.com/software-mansion/smelter/pull/1376) by [@wkazmierczak](https://github.com/wkazmierczak))
+- Add jitter buffer to RTP, WHIP and WHEP inputs ([#1489](https://github.com/software-mansion/smelter/pull/1489) by [@wkozyra95](https://github.com/wkozyra95))
+- Add experimental support for RTMP server input. ([#1525](https://github.com/software-mansion/smelter/pull/1525) by [@wkazmierczak](https://github.com/wkazmierczak))
+- Add experimental support for V4L2 API. ([#1560](https://github.com/software-mansion/smelter/pull/1560) by [@jerzywilczek](https://github.com/jerzywilczek))
+
 
 ### 🐛 Bug fixes
 
