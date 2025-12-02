@@ -1,6 +1,6 @@
 {
   "name": "@swmansion/smelter-node",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "author": "Software Mansion <contact@swmansion.com>",
   "license": "MIT",
   "description": "Node runtime for @swmansion/smelter",
