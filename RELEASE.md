@@ -24,8 +24,25 @@ To release a new compositor version:
 
 ## TypeScript SDK
 
-Publishing packages is not automated, when releasing you need to update versions across the repository and run `pnpm publish` in
-packages you want to publish in the appropriate order
+Publishing packages is not automated. Follow this steps when releasing a new version.
+
+- Run `pnpm bump-types`
+  - When releasing first RC version `.pre-release.json` will be created. You need to commit it.
+  - When releasing first regular version after RC version, the `.pre-release.json` will be removed. You need to commit that change.
+- Update url in `locallySpawnedInstance.ts` in `@swmansion/smelter-node`
+- Commit changes
+- Run `pnpm publish --tag next` in all packages in this order:
+  - `@swmansion/smelter`
+  - `@swmansion/smelter-core`
+  - `@swmansion/smelter-node`
+  - `@swmansion/smelter-web-client`
+  - `@swmansion/smelter-browser-render`
+  - `@swmansion/smelter-web-wasm`
+  - `create-smelter-app`
+- Test if everything works:
+  - Update projects in `/demos` directory.
+  - ...
+- Mark all packages as latest with e.g. `npm dist-tag add @swmansion/smelter@0.3.0 latest`
 
 ## Versioning
 
