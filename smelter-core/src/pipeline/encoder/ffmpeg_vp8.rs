@@ -1,4 +1,4 @@
-use std::{iter, sync::Arc};
+use std::{iter, num::NonZero, sync::Arc};
 
 use ffmpeg_next::{
     Rational,
@@ -33,12 +33,31 @@ impl VideoEncoder for FfmpegVp8Encoder {
         options: Self::Options,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
         info!(?options, "Initializing FFmpeg VP8 encoder");
+
+        let width = NonZero::new(u32::max(options.resolution.width as u32, 1)).unwrap();
+        let height = NonZero::new(u32::max(options.resolution.height as u32, 1)).unwrap();
+        let framerate = ctx.output_framerate;
+        let bitrate = options.bitrate.unwrap_or_else(|| {
+            let precision = 500_000.0; // 500kb
+            let bpp = 0.08;
+
+            let average_bitrate = (width.get() * height.get()) as f64
+                * (framerate.num as f64 / framerate.den as f64)
+                * bpp;
+            let average_bitrate = (average_bitrate / precision).ceil() * precision;
+            let max_bitrate = average_bitrate * 1.25;
+
+            VideoEncoderBitrate {
+                average_bitrate: average_bitrate as u64,
+                max_bitrate: max_bitrate as u64,
+            }
+        });
+
         let codec = ffmpeg_next::codec::encoder::find(Id::VP8).ok_or(EncoderInitError::NoCodec)?;
 
         let mut encoder = Context::new().encoder().video()?;
 
         let pts_unit_secs = Rational::new(1, TIME_BASE);
-        let framerate = ctx.output_framerate;
         encoder.set_time_base(pts_unit_secs);
         encoder.set_format(Pixel::YUV420P);
         encoder.set_width(options.resolution.width as u32);
@@ -69,23 +88,21 @@ impl VideoEncoder for FfmpegVp8Encoder {
             // Max QP
             ("qmax", "63"),
         ]);
-        if let Some(bitrate) = options.bitrate {
-            let b = bitrate.average_bitrate;
-            let maxrate = bitrate.max_bitrate;
+        let b = bitrate.average_bitrate;
+        let maxrate = bitrate.max_bitrate;
 
-            // FFmpeg takes bufsize as bits. Setting it to the same value as `average_bitrate`
-            // will make it to be set to 1000ms.
-            let bufsize = bitrate.average_bitrate;
-            ffmpeg_options.append(&[
-                // Bitrate in b/s
-                ("b", &b.to_string()),
-                // Maximum bitrate allowed at spikes for vbr mode
-                ("maxrate", &maxrate.to_string()),
-                // Time period to calculate average bitrate from calculated as
-                // bufsize * 1000 / bitrate
-                ("bufsize", &bufsize.to_string()),
-            ]);
-        }
+        // FFmpeg takes bufsize as bits. Setting it to the same value as `average_bitrate`
+        // will make it to be set to 1000ms.
+        let bufsize = bitrate.average_bitrate;
+        ffmpeg_options.append(&[
+            // Bitrate in b/s
+            ("b", &b.to_string()),
+            // Maximum bitrate allowed at spikes for vbr mode
+            ("maxrate", &maxrate.to_string()),
+            // Time period to calculate average bitrate from calculated as
+            // bufsize * 1000 / bitrate
+            ("bufsize", &bufsize.to_string()),
+        ]);
         ffmpeg_options.append(&options.raw_options);
 
         let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
