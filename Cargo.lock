@@ -4507,7 +4507,7 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "smelter"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -4545,7 +4545,7 @@ dependencies = [
 
 [[package]]
 name = "smelter-api"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "itertools 0.14.0",
@@ -4558,7 +4558,7 @@ dependencies = [
 
 [[package]]
 name = "smelter-core"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -4596,7 +4596,7 @@ dependencies = [
 
 [[package]]
 name = "smelter-render"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "bytemuck",
  "bytes",
@@ -4620,7 +4620,7 @@ dependencies = [
 
 [[package]]
 name = "smelter-render-wasm"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "console_error_panic_hook",
