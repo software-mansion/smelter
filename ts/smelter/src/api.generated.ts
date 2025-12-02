@@ -363,6 +363,10 @@ export type RtpVideoEncoderOptions =
        */
       preset?: H264EncoderPreset | null;
       /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
       pixel_format?: PixelFormat | null;
@@ -376,6 +380,10 @@ export type RtpVideoEncoderOptions =
   | {
       type: "ffmpeg_vp8";
       /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
        * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
        */
       ffmpeg_options?: {
@@ -384,6 +392,10 @@ export type RtpVideoEncoderOptions =
     }
   | {
       type: "ffmpeg_vp9";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
@@ -400,7 +412,7 @@ export type RtpVideoEncoderOptions =
       /**
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
-      bitrate?: VulkanH264EncoderBitrate | null;
+      bitrate?: VideoEncoderBitrate | null;
     };
 export type H264EncoderPreset =
   | "ultrafast"
@@ -413,8 +425,7 @@ export type H264EncoderPreset =
   | "slower"
   | "veryslow"
   | "placebo";
-export type PixelFormat = "yuv420p" | "yuv422p" | "yuv444p";
-export type VulkanH264EncoderBitrate =
+export type VideoEncoderBitrate =
   | number
   | {
       /**
@@ -426,6 +437,7 @@ export type VulkanH264EncoderBitrate =
        */
       max_bitrate: number;
     };
+export type PixelFormat = "yuv420p" | "yuv422p" | "yuv444p";
 export type Component =
   | {
       type: "input_stream";
@@ -903,6 +915,10 @@ export type RtmpClientVideoEncoderOptions =
        */
       preset?: H264EncoderPreset | null;
       /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
       pixel_format?: PixelFormat | null;
@@ -918,7 +934,7 @@ export type RtmpClientVideoEncoderOptions =
       /**
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
-      bitrate?: VulkanH264EncoderBitrate | null;
+      bitrate?: VideoEncoderBitrate | null;
     };
 export type RtmpClientAudioEncoderOptions = {
   type: "aac";
@@ -935,6 +951,10 @@ export type Mp4VideoEncoderOptions =
        */
       preset?: H264EncoderPreset | null;
       /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
       pixel_format?: PixelFormat | null;
@@ -950,7 +970,7 @@ export type Mp4VideoEncoderOptions =
       /**
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
-      bitrate?: VulkanH264EncoderBitrate | null;
+      bitrate?: VideoEncoderBitrate | null;
     };
 export type Mp4AudioEncoderOptions = {
   type: "aac";
@@ -967,6 +987,10 @@ export type WhipVideoEncoderOptions =
        */
       preset?: H264EncoderPreset | null;
       /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
       pixel_format?: PixelFormat | null;
@@ -979,6 +1003,10 @@ export type WhipVideoEncoderOptions =
     }
   | {
       type: "ffmpeg_vp8";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
@@ -993,6 +1021,10 @@ export type WhipVideoEncoderOptions =
        */
       pixel_format?: PixelFormat | null;
       /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
       ffmpeg_options?: {
@@ -1004,7 +1036,7 @@ export type WhipVideoEncoderOptions =
       /**
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
-      bitrate?: VulkanH264EncoderBitrate | null;
+      bitrate?: VideoEncoderBitrate | null;
     }
   | {
       type: "any";
@@ -1036,6 +1068,10 @@ export type WhepVideoEncoderOptions =
        */
       preset?: H264EncoderPreset | null;
       /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
       pixel_format?: PixelFormat | null;
@@ -1049,6 +1085,10 @@ export type WhepVideoEncoderOptions =
   | {
       type: "ffmpeg_vp8";
       /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
        * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
        */
       ffmpeg_options?: {
@@ -1057,6 +1097,10 @@ export type WhepVideoEncoderOptions =
     }
   | {
       type: "ffmpeg_vp9";
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
@@ -1073,7 +1117,7 @@ export type WhepVideoEncoderOptions =
       /**
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
-      bitrate?: VulkanH264EncoderBitrate | null;
+      bitrate?: VideoEncoderBitrate | null;
     };
 export type WhepAudioEncoderOptions = {
   type: "opus";
@@ -1102,6 +1146,10 @@ export type HlsVideoEncoderOptions =
        */
       preset?: H264EncoderPreset | null;
       /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate | null;
+      /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
       pixel_format?: PixelFormat | null;
@@ -1117,7 +1165,7 @@ export type HlsVideoEncoderOptions =
       /**
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
-      bitrate?: VulkanH264EncoderBitrate | null;
+      bitrate?: VideoEncoderBitrate | null;
     };
 export type HlsAudioEncoderOptions = {
   type: "aac";
