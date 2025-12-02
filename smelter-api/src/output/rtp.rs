@@ -43,7 +43,7 @@ pub enum RtpVideoEncoderOptions {
         /// (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
         preset: Option<H264EncoderPreset>,
 
-        /// TODO: (@jbrs) description
+        /// Encoding bitrate. Default value depends on chosen encoder.
         bitrate: Option<VideoEncoderBitrate>,
 
         /// (**default=`"yuv420p"`**) Encoder pixel format.
