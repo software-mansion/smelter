@@ -1,6 +1,6 @@
 use std::{iter, sync::Arc};
 
-// use ffmpeg_next::codec::Id;
+use ffmpeg_next::codec::Id;
 use ffmpeg_next::{Rational, codec::Context};
 use smelter_render::{Frame, OutputFrameFormat};
 use tracing::{error, info, trace, warn};
@@ -30,9 +30,7 @@ impl VideoEncoder for FfmpegH264Encoder {
         options: FfmpegH264EncoderOptions,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
         info!(?options, "Initialize FFmpeg H264 encoder");
-        // let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
-        let codec = ffmpeg_next::codec::encoder::find_by_name("h264_videotoolbox")
-            .ok_or(EncoderInitError::NoCodec)?;
+        let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
         let codec_name = codec.name();
 
         let mut encoder = Context::new().encoder().video()?;
@@ -53,23 +51,19 @@ impl VideoEncoder for FfmpegH264Encoder {
             (*encoder).color_trc = ffi::AVColorTransferCharacteristic::AVCOL_TRC_BT709;
         }
 
-        let mut ffmpeg_options = FfmpegOptions::from(&[
-            ("preset", preset_to_str(options.preset)),
-            // Auto number of threads
-            ("threads", "0"),
-        ]);
-
-        match codec_name {
+        let mut ffmpeg_options = match codec_name {
             "libopenh264" => {
-                ffmpeg_options.append(&[
+                let mut ffmpeg_options = FfmpegOptions::from(&[
                     // Min QP
-                    ("qmin", "0"),
+                    ("qmin", "4"),
                     // Max QP
                     ("qmax", "51"),
                     // Rate control mode (0 - quality, 1 - bitrate)
                     ("rc_mode", "0"),
                     // GOP size
                     ("g", "250"),
+                    // Auto number of threads
+                    ("threads", "0"),
                 ]);
                 if let Some(bitrate) = options.bitrate {
                     let b = bitrate.average_bitrate;
@@ -82,15 +76,20 @@ impl VideoEncoder for FfmpegH264Encoder {
                         ("maxrate", &maxrate.to_string()),
                     ]);
                 }
+                ffmpeg_options
             }
             "h264_videotoolbox" => {
-                ffmpeg_options.append(&[
+                let mut ffmpeg_options = FfmpegOptions::from(&[
                     // Min QP
-                    ("qmin", "0"),
+                    ("qmin", "4"),
                     // Max QP
                     ("qmax", "51"),
                     // GOP size
                     ("g", "250"),
+                    // Disable b frames
+                    ("bf", "0"),
+                    // Information to encoder, that encoding should happen in real time or faster
+                    ("realtime", "1"),
                 ]);
                 if let Some(bitrate) = options.bitrate {
                     let b = bitrate.average_bitrate;
@@ -99,59 +98,62 @@ impl VideoEncoder for FfmpegH264Encoder {
                     ffmpeg_options.append(&[
                         // Bitrate in b/s
                         ("b", &b.to_string()),
-                        // Max allowed bitrate
-                        ("maxrate", &maxrate.to_string()),
-                    ]);
-                }
-            }
-            _ => {}
-        }
-
-        if codec_name != "libopenh264" && codec_name != "h264_videotoolbox" {
-            ffmpeg_options.append(&[
-                // QP curve compression
-                ("qcomp", "0.6"),
-                //  Maximum motion vector search range
-                ("me_range", "16"),
-                // Max QP step
-                ("qdiff", "4"),
-                // Min QP
-                ("qmin", "0"),
-                // Max QP
-                ("qmax", "69"),
-                // Maximum GOP (Group of Pictures) size - number of frames between keyframe
-                ("g", "250"),
-                // QP factor between I and P frames
-                ("i_qfactor", "1.4"),
-                // QP factor between P and B frames
-                ("f_pb_factor", "1.3"),
-                // A comma-separated list of partitions to consider. Possible values: p8x8, p4x4, b8x8, i8x8, i4x4, none, all
-                ("partitions", default_partitions_for_preset(options.preset)),
-                // Subpixel motion estimation and mode decision (decision quality: 1=fast, 11=best)
-                ("subq", default_subq_mode_for_preset(options.preset)),
-            ]);
-            match options.bitrate {
-                Some(bitrate) => {
-                    let b = bitrate.average_bitrate;
-                    let maxrate = bitrate.max_bitrate;
-
-                    // FFmpeg takes bufsize as bits. Setting it to the same value as `average_bitrate`
-                    // will make it to be set to 1000ms.
-                    let bufsize = bitrate.average_bitrate;
-                    ffmpeg_options.append(&[
-                        // Bitrate in b/s
-                        ("b", &b.to_string()),
                         // Maximum bitrate allowed at spikes for vbr mode
                         ("maxrate", &maxrate.to_string()),
-                        // Time period to calculate average bitrate from calculated as
-                        // bufsize * 1000 / bitrate
-                        ("bufsize", &bufsize.to_string()),
                     ]);
                 }
-                None => {
-                    // Quality-based VBR (0-51)
-                    ffmpeg_options.append(&[("crf", "23")]);
+                ffmpeg_options
+            }
+            _ => {
+                let mut ffmpeg_options = FfmpegOptions::from(&[
+                    ("preset", preset_to_str(options.preset)),
+                    // QP curve compression
+                    ("qcomp", "0.6"),
+                    //  Maximum motion vector search range
+                    ("me_range", "16"),
+                    // Max QP step
+                    ("qdiff", "4"),
+                    // Min QP
+                    ("qmin", "4"),
+                    // Max QP
+                    ("qmax", "69"),
+                    // Maximum GOP (Group of Pictures) size - number of frames between keyframe
+                    ("g", "250"),
+                    // QP factor between I and P frames
+                    ("i_qfactor", "1.4"),
+                    // QP factor between P and B frames
+                    ("f_pb_factor", "1.3"),
+                    // A comma-separated list of partitions to consider. Possible values: p8x8, p4x4, b8x8, i8x8, i4x4, none, all
+                    ("partitions", default_partitions_for_preset(options.preset)),
+                    // Subpixel motion estimation and mode decision (decision quality: 1=fast, 11=best)
+                    ("subq", default_subq_mode_for_preset(options.preset)),
+                    // Auto number of threads
+                    ("threads", "0"),
+                ]);
+                match options.bitrate {
+                    Some(bitrate) => {
+                        let b = bitrate.average_bitrate;
+                        let maxrate = bitrate.max_bitrate;
+
+                        // FFmpeg takes bufsize as bits. Setting it to the same value as `average_bitrate`
+                        // will make it to be set to 1000ms.
+                        let bufsize = bitrate.average_bitrate;
+                        ffmpeg_options.append(&[
+                            // Bitrate in b/s
+                            ("b", &b.to_string()),
+                            // Maximum bitrate allowed at spikes for vbr mode
+                            ("maxrate", &maxrate.to_string()),
+                            // Time period to calculate average bitrate from calculated as
+                            // bufsize * 1000 / bitrate
+                            ("bufsize", &bufsize.to_string()),
+                        ]);
+                    }
+                    None => {
+                        // Quality-based VBR (0-51), default if bitrate is not set
+                        ffmpeg_options.append(&[("crf", "23")]);
+                    }
                 }
+                ffmpeg_options
             }
         };
         ffmpeg_options.append(&options.raw_options);
