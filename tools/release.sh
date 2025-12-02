@@ -47,6 +47,9 @@ gh run download "$WORKFLOW_RUN_ID" -n smelter_with_web_renderer_darwin_x86_64.ta
 gh run download "$WORKFLOW_RUN_ID" -n smelter_with_web_renderer_darwin_aarch64.tar.gz
 
 IMAGE_NAME="ghcr.io/software-mansion/smelter"
+# Make sure docker is authenticated
+# - generate token here https://github.com/settings/tokens
+# - Run `docker login ghcr.io -u <username>` to authenticate
 docker buildx imagetools create -t "${IMAGE_NAME}:${RELEASE_TAG}-web-renderer" "${IMAGE_NAME}:${COMMIT_HASH}-web-renderer"
 docker buildx imagetools create -t "${IMAGE_NAME}:${RELEASE_TAG}" "${IMAGE_NAME}:${COMMIT_HASH}"
 docker buildx imagetools create -t "${IMAGE_NAME}:latest" "${IMAGE_NAME}:${COMMIT_HASH}"

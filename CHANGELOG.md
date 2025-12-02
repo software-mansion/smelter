@@ -3,6 +3,14 @@
 ## unreleased
 
 ### 💥 Breaking changes
+
+### ✨ New features
+
+### 🐛 Bug fixes
+
+## [v0.5.0](https://github.com/software-mansion/smelter/releases/tag/v0.5.0)
+
+### 💥 Breaking changes
 - Rename decoder `vulkan_video` to `vulkan_h264`. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
 - Replace `video_decoder` with codec specific `decoder_map` option in MP4 input. ([#1032](https://github.com/software-mansion/live-compositor/pull/1032) by [@wkozyra95](https://github.com/wkozyra95))
 - Remove `audio` field in WHIP input ([#997](https://github.com/software-mansion/smelter/pull/997) by [@wkazmierczak](https://github.com/wkazmierczak))
