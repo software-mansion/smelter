@@ -36,10 +36,10 @@ impl VideoEncoder for FfmpegVp9Encoder {
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
         info!(?options, "Initializing FFmpeg VP9 encoder");
 
-        let width = NonZero::new(u32::max(options.resolution.width as u32, 1)).unwrap();
-        let height = NonZero::new(u32::max(options.resolution.height as u32, 1)).unwrap();
         let framerate = ctx.output_framerate;
         let bitrate = options.bitrate.unwrap_or_else(|| {
+            let width = NonZero::new(u32::max(options.resolution.width as u32, 1)).unwrap();
+            let height = NonZero::new(u32::max(options.resolution.height as u32, 1)).unwrap();
             let precision = 500_000.0; // 500kb
             let bpp = 0.08;
 
