@@ -38,7 +38,7 @@ pub enum WhepVideoEncoderOptions {
         /// (**default=`"fast"`**) Video output encoder preset. Visit `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
         preset: Option<H264EncoderPreset>,
 
-        /// TODO: descr
+        /// TODO: (@jbrs) description
         bitrate: Option<VideoEncoderBitrate>,
 
         /// (**default=`"yuv420p"`**) Encoder pixel format.
@@ -49,7 +49,8 @@ pub enum WhepVideoEncoderOptions {
     },
     #[serde(rename = "ffmpeg_vp8")]
     FfmpegVp8 {
-        /// TODO: descr
+        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+        /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
         bitrate: Option<VideoEncoderBitrate>,
 
         /// Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
@@ -57,7 +58,8 @@ pub enum WhepVideoEncoderOptions {
     },
     #[serde(rename = "ffmpeg_vp9")]
     FfmpegVp9 {
-        /// TODO: descr
+        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+        /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
         bitrate: Option<VideoEncoderBitrate>,
 
         /// (**default=`"yuv420p"`**) Encoder pixel format.
