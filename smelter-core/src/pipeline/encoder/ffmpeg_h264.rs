@@ -1,3 +1,4 @@
+use std::num::NonZero;
 use std::{iter, sync::Arc};
 
 use ffmpeg_next::codec::Id;
@@ -51,6 +52,24 @@ impl VideoEncoder for FfmpegH264Encoder {
             (*encoder).color_trc = ffi::AVColorTransferCharacteristic::AVCOL_TRC_BT709;
         }
 
+        let default_bitrate = {
+            let width = NonZero::new(u32::max(options.resolution.width as u32, 1)).unwrap();
+            let height = NonZero::new(u32::max(options.resolution.height as u32, 1)).unwrap();
+            let precision = 500_000.0; // 500kb
+            let bpp = 0.08;
+
+            let average_bitrate = (width.get() * height.get()) as f64
+                * (framerate.num as f64 / framerate.den as f64)
+                * bpp;
+            let average_bitrate = (average_bitrate / precision).ceil() * precision;
+            let max_bitrate = average_bitrate * 1.25;
+
+            VideoEncoderBitrate {
+                average_bitrate: average_bitrate as u64,
+                max_bitrate: max_bitrate as u64,
+            }
+        };
+
         let mut ffmpeg_options = match codec_name {
             "libopenh264" => {
                 let mut ffmpeg_options = FfmpegOptions::from(&[
@@ -65,17 +84,16 @@ impl VideoEncoder for FfmpegH264Encoder {
                     // Auto number of threads
                     ("threads", "0"),
                 ]);
-                if let Some(bitrate) = options.bitrate {
-                    let b = bitrate.average_bitrate;
-                    let maxrate = bitrate.max_bitrate;
+                let bitrate = options.bitrate.unwrap_or(default_bitrate);
+                let b = bitrate.average_bitrate;
+                let maxrate = bitrate.max_bitrate;
 
-                    ffmpeg_options.append(&[
-                        // Bitrate in b/s
-                        ("b", &b.to_string()),
-                        // Maximum bitrate allowed at spikes for vbr mode
-                        ("maxrate", &maxrate.to_string()),
-                    ]);
-                }
+                ffmpeg_options.append(&[
+                    // Bitrate in b/s
+                    ("b", &b.to_string()),
+                    // Maximum bitrate allowed at spikes for vbr mode
+                    ("maxrate", &maxrate.to_string()),
+                ]);
                 ffmpeg_options
             }
             "h264_videotoolbox" => {
@@ -91,21 +109,22 @@ impl VideoEncoder for FfmpegH264Encoder {
                     // Information to encoder, that encoding should happen in real time or faster
                     ("realtime", "1"),
                 ]);
-                if let Some(bitrate) = options.bitrate {
-                    let b = bitrate.average_bitrate;
-                    let maxrate = bitrate.max_bitrate;
+                let bitrate = options.bitrate.unwrap_or(default_bitrate);
+                let b = bitrate.average_bitrate;
+                let maxrate = bitrate.max_bitrate;
 
-                    ffmpeg_options.append(&[
-                        // Bitrate in b/s
-                        ("b", &b.to_string()),
-                        // Maximum bitrate allowed at spikes for vbr mode
-                        ("maxrate", &maxrate.to_string()),
-                    ]);
-                }
+                ffmpeg_options.append(&[
+                    // Bitrate in b/s
+                    ("b", &b.to_string()),
+                    // Maximum bitrate allowed at spikes for vbr mode
+                    ("maxrate", &maxrate.to_string()),
+                ]);
                 ffmpeg_options
             }
             _ => {
                 let mut ffmpeg_options = FfmpegOptions::from(&[
+                    // TODO: Set it to 5 seconds based on framerate (followup PR)
+                    ("g", "250"),
                     ("preset", preset_to_str(options.preset)),
                     // QP curve compression
                     ("qcomp", "0.6"),
@@ -117,8 +136,6 @@ impl VideoEncoder for FfmpegH264Encoder {
                     ("qmin", "4"),
                     // Max QP
                     ("qmax", "69"),
-                    // Maximum GOP (Group of Pictures) size - number of frames between keyframe
-                    ("g", "250"),
                     // QP factor between I and P frames
                     ("i_qfactor", "1.4"),
                     // QP factor between P and B frames
