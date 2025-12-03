@@ -125,9 +125,9 @@ impl VideoEncoder for FfmpegH264Encoder {
                     // QP factor between P and B frames
                     ("f_pb_factor", "1.3"),
                     // A comma-separated list of partitions to consider. Possible values: p8x8, p4x4, b8x8, i8x8, i4x4, none, all
-                    ("partitions", default_partitions_for_preset(options.preset)),
+                    ("partitions", partitions_for_preset(options.preset)),
                     // Subpixel motion estimation and mode decision (decision quality: 1=fast, 11=best)
-                    ("subq", default_subq_mode_for_preset(options.preset)),
+                    ("subq", subq_mode_for_preset(options.preset)),
                     // Auto number of threads
                     ("threads", "0"),
                 ]);
@@ -258,7 +258,8 @@ fn preset_to_str(preset: FfmpegH264EncoderPreset) -> &'static str {
     }
 }
 
-fn default_partitions_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str {
+// Defaults the same as in libx264
+fn partitions_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str {
     match preset {
         FfmpegH264EncoderPreset::Ultrafast => "none",
         FfmpegH264EncoderPreset::Superfast => "i8x8,i4x4",
@@ -273,7 +274,8 @@ fn default_partitions_for_preset(preset: FfmpegH264EncoderPreset) -> &'static st
     }
 }
 
-fn default_subq_mode_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str {
+// Defaults the same as in libx264
+fn subq_mode_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str {
     match preset {
         FfmpegH264EncoderPreset::Ultrafast => "0",
         FfmpegH264EncoderPreset::Superfast => "1",
