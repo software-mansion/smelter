@@ -5,6 +5,7 @@
 ### 💥 Breaking changes
 
 ### ✨ New features
+- Add `bitrate` option to software encoders ([#1564](https://github.com/software-mansion/smelter/pull/1567) by [@JBRS307](https://github.com/JBRS307))
 
 ### 🐛 Bug fixes
 
