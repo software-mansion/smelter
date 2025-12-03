@@ -1,6 +1,6 @@
 # `@swmansion/smelter-web-client`
 
-Provides API to connect to Smelter instance from a web browser.
+Provides API to manage a Smelter instance from a web browser.
 
 When you call `registerOutput` on the Smelter instance, you can pass a `ReactElement` that represents a component tree built from components included in `@swmansion/smelter` package. Those components will define what will be rendered on the output stream.
 
@@ -28,20 +28,14 @@ function BrowserApp() {
 }
 
 async function startSmelter() {
-  const smelter = new Smelter({
-    ip: '192.168.1.30',
-    port: 8080,
-    protocol: 'http',
-  });
+  const smelter = new Smelter({ url: "http://127.0.0.1:8081" });
   await smelter.init();
 
   // register input/outputs/images/shaders/...
 
   await smelter.registerOutput('example_output', <SmelterApp />, {
-    type: 'rtp_stream',
-    port: 8001,
-    ip: '127.0.0.1',
-    transportProtocol: 'udp',
+    type: 'rtmp_client',
+    url: 'rtmp://127.0.0.1:8000/'
     video: {
       encoder: { type: 'ffmpeg_h264', preset: 'ultrafast' },
       resolution: { width: 1920, height: 1080 },
@@ -55,9 +49,13 @@ async function startSmelter() {
 }
 ```
 
+Before running above code:
+- Start smelter server on port 8081.
+- Listen on port 8000 for incoming RTMP stream e.g. `ffmpeg -f flv -listen 1 -i rtmp://0.0.0.0:8000 -vcodec copy  -f flv - | ffplay -f flv -i -`,
+
 ## License
 
-`@swmansion/smelter-web-client` is MIT licensed, but internally it is using Smelter server that is licensed under a [custom license](https://github.com/software-mansion/smelter/blob/master/LICENSE).
+`@swmansion/smelter-web-client` is MIT licensed, but it is managing Smelter server that is licensed under a [custom license](https://github.com/software-mansion/smelter/blob/master/LICENSE).
 
 ## Smelter is created by Software Mansion
 

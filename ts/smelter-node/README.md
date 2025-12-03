@@ -24,11 +24,9 @@ async function run() {
 
   // register input/outputs/images/shaders/...
 
-  await smelter.registerOutput('example_output', <ExampleApp />, {
-    type: 'rtp_stream',
-    port: 8001,
-    ip: '127.0.0.1',
-    transportProtocol: 'udp',
+  await smelter.registerOutput('example_output', <SmelterApp />, {
+    type: 'rtmp_client',
+    url: 'rtmp://127.0.0.1:8000/'
     video: {
       encoder: { type: 'ffmpeg_h264', preset: 'ultrafast' },
       resolution: { width: 1920, height: 1080 },
@@ -42,6 +40,9 @@ async function run() {
 }
 run();
 ```
+
+Before running above code start listening on port 8000 for incoming RTMP stream
+e.g. `ffmpeg -f flv -listen 1 -i rtmp://0.0.0.0:8000 -vcodec copy  -f flv - | ffplay -f flv -i -`.
 
 See our [docs](https://smelter.dev/docs) to learn more.
 

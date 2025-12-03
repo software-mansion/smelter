@@ -9,7 +9,7 @@ Smelter components should not be mixed with other React or React Native componen
 To try smelter, generate a new project by running:
 
 ```
-npm create smelter-app
+npx create-smelter-app
 ```
 
 ## Usage
@@ -29,7 +29,12 @@ function ExampleApp() {
 }
 ```
 
-Check out [@swmansion/smelter-node](https://www.npmjs.com/package/@swmansion/smelter-node) to learn how to use those components for video composition.
+Check out:
+- [@swmansion/smelter-node](https://www.npmjs.com/package/@swmansion/smelter-node)
+- [@swmansion/smelter-web-client](https://www.npmjs.com/package/@swmansion/smelter-web-client)
+- [@swmansion/smelter-web-wasm](https://www.npmjs.com/package/@swmansion/smelter-web-wasm)
+
+to learn how to use it in different environments.
 
 See our [docs](https://smelter.dev/docs) to learn more.
 
