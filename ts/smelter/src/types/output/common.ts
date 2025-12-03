@@ -26,7 +26,7 @@ export type OutputEndCondition =
       allInputs: boolean;
     };
 
-export type VulkanH264EncoderBitrate =
+export type VideoEncoderBitrate =
   | number
   | {
       /**
