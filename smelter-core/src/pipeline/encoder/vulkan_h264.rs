@@ -7,7 +7,10 @@ use vk_video::{
     parameters::{RateControl, Rational, VideoParameters},
 };
 
-use crate::{graphics_context::GraphicsContext, prelude::*};
+use crate::{
+    graphics_context::GraphicsContext, pipeline::encoder::utils::bitrate_from_resolution_framerate,
+    prelude::*,
+};
 
 use super::{VideoEncoder, VideoEncoderConfig};
 
@@ -33,21 +36,10 @@ impl VideoEncoder for VulkanH264Encoder {
         let width = NonZero::new(u32::max(options.resolution.width as u32, 1)).unwrap();
         let height = NonZero::new(u32::max(options.resolution.height as u32, 1)).unwrap();
         let framerate = ctx.output_framerate;
-        let bitrate = options.bitrate.unwrap_or_else(|| {
-            let precision = 500_000.0; // 500kb
-            let bpp = 0.08;
+        let bitrate = options
+            .bitrate
+            .unwrap_or_else(|| bitrate_from_resolution_framerate(options.resolution, framerate));
 
-            let average_bitrate = (width.get() * height.get()) as f64
-                * (framerate.num as f64 / framerate.den as f64)
-                * bpp;
-            let average_bitrate = (average_bitrate / precision).ceil() * precision;
-            let max_bitrate = average_bitrate * 1.25;
-
-            VideoEncoderBitrate {
-                average_bitrate: average_bitrate as u64,
-                max_bitrate: max_bitrate as u64,
-            }
-        });
         let rate_control = RateControl::VariableBitrate {
             average_bitrate: bitrate.average_bitrate,
             max_bitrate: bitrate.max_bitrate,
