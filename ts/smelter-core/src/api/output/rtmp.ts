@@ -40,6 +40,7 @@ function intoRtmpClientVideoEncoderOptions(
     case 'ffmpeg_h264':
       return {
         type: 'ffmpeg_h264',
+        bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
         preset: encoder.preset,
         pixel_format: encoder.pixelFormat,
         ffmpeg_options: encoder.ffmpegOptions,
