@@ -1,4 +1,4 @@
-use std::{iter, num::NonZero, sync::Arc};
+use std::{iter, sync::Arc};
 
 use ffmpeg_next::{
     Rational,
@@ -9,7 +9,10 @@ use smelter_render::{Frame, OutputFrameFormat};
 use tracing::{error, info, trace, warn};
 
 use crate::pipeline::{
-    encoder::ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet},
+    encoder::{
+        ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet},
+        utils::bitrate_from_resolution_framerate,
+    },
     ffmpeg_utils::FfmpegOptions,
 };
 use crate::prelude::*;
@@ -35,23 +38,6 @@ impl VideoEncoder for FfmpegVp8Encoder {
         info!(?options, "Initializing FFmpeg VP8 encoder");
 
         let framerate = ctx.output_framerate;
-        let bitrate = options.bitrate.unwrap_or_else(|| {
-            let width = NonZero::new(u32::max(options.resolution.width as u32, 1)).unwrap();
-            let height = NonZero::new(u32::max(options.resolution.height as u32, 1)).unwrap();
-            let precision = 500_000.0; // 500kb
-            let bpp = 0.08;
-
-            let average_bitrate = (width.get() * height.get()) as f64
-                * (framerate.num as f64 / framerate.den as f64)
-                * bpp;
-            let average_bitrate = (average_bitrate / precision).ceil() * precision;
-            let max_bitrate = average_bitrate * 1.25;
-
-            VideoEncoderBitrate {
-                average_bitrate: average_bitrate as u64,
-                max_bitrate: max_bitrate as u64,
-            }
-        });
 
         let codec = ffmpeg_next::codec::encoder::find(Id::VP8).ok_or(EncoderInitError::NoCodec)?;
 
@@ -88,6 +74,9 @@ impl VideoEncoder for FfmpegVp8Encoder {
             // Max QP
             ("qmax", "63"),
         ]);
+        let bitrate = options.bitrate.unwrap_or_else(|| {
+            bitrate_from_resolution_framerate(options.resolution, ctx.output_framerate)
+        });
         let b = bitrate.average_bitrate;
         let maxrate = bitrate.max_bitrate;
 

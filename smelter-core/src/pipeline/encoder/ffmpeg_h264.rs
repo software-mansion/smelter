@@ -1,4 +1,3 @@
-use std::num::NonZero;
 use std::{iter, sync::Arc};
 
 use ffmpeg_next::codec::Id;
@@ -9,6 +8,7 @@ use tracing::{error, info, trace, warn};
 use crate::pipeline::encoder::ffmpeg_utils::{
     create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format, read_extradata,
 };
+use crate::pipeline::encoder::utils::bitrate_from_resolution_framerate;
 use crate::pipeline::ffmpeg_utils::FfmpegOptions;
 use crate::prelude::*;
 
@@ -52,24 +52,6 @@ impl VideoEncoder for FfmpegH264Encoder {
             (*encoder).color_trc = ffi::AVColorTransferCharacteristic::AVCOL_TRC_BT709;
         }
 
-        let default_bitrate = || {
-            let width = NonZero::new(u32::max(options.resolution.width as u32, 1)).unwrap();
-            let height = NonZero::new(u32::max(options.resolution.height as u32, 1)).unwrap();
-            let precision = 500_000.0; // 500kb
-            let bpp = 0.08;
-
-            let average_bitrate = (width.get() * height.get()) as f64
-                * (framerate.num as f64 / framerate.den as f64)
-                * bpp;
-            let average_bitrate = (average_bitrate / precision).ceil() * precision;
-            let max_bitrate = average_bitrate * 1.25;
-
-            VideoEncoderBitrate {
-                average_bitrate: average_bitrate as u64,
-                max_bitrate: max_bitrate as u64,
-            }
-        };
-
         let mut ffmpeg_options = match codec_name {
             "libopenh264" => {
                 let mut ffmpeg_options = FfmpegOptions::from(&[
@@ -84,7 +66,9 @@ impl VideoEncoder for FfmpegH264Encoder {
                     // Auto number of threads
                     ("threads", "0"),
                 ]);
-                let bitrate = options.bitrate.unwrap_or_else(default_bitrate);
+                let bitrate = options.bitrate.unwrap_or_else(|| {
+                    bitrate_from_resolution_framerate(options.resolution, ctx.output_framerate)
+                });
                 let b = bitrate.average_bitrate;
                 let maxrate = bitrate.max_bitrate;
 
@@ -109,7 +93,9 @@ impl VideoEncoder for FfmpegH264Encoder {
                     // Information to encoder, that encoding should happen in real time or faster
                     ("realtime", "1"),
                 ]);
-                let bitrate = options.bitrate.unwrap_or_else(default_bitrate);
+                let bitrate = options.bitrate.unwrap_or_else(|| {
+                    bitrate_from_resolution_framerate(options.resolution, ctx.output_framerate)
+                });
                 let b = bitrate.average_bitrate;
                 let maxrate = bitrate.max_bitrate;
 
