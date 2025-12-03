@@ -41,17 +41,20 @@ function intoWhipVideoEncoderPreferences(
       case 'ffmpeg_vp9':
         return {
           type: 'ffmpeg_vp9',
+          bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
           pixel_format: encoder.pixelFormat,
           ffmpeg_options: encoder.ffmpegOptions,
         };
       case 'ffmpeg_vp8':
         return {
           type: 'ffmpeg_vp8',
+          bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
           ffmpeg_options: encoder.ffmpegOptions,
         };
       case 'ffmpeg_h264':
         return {
           type: 'ffmpeg_h264',
+          bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
           preset: encoder.preset,
           pixel_format: encoder.pixelFormat,
           ffmpeg_options: encoder.ffmpegOptions,
