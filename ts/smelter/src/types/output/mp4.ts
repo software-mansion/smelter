@@ -20,6 +20,10 @@ export type Mp4VideoEncoderOptions =
   | {
       type: 'ffmpeg_h264';
       /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate;
+      /**
        * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
        */
       preset?: Api.H264EncoderPreset;

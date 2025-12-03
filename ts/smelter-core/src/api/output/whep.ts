@@ -38,6 +38,7 @@ export function intoWhepVideoEncoderOptions(
     case 'ffmpeg_vp9':
       return {
         type: 'ffmpeg_vp9',
+        bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
         pixel_format: encoder.pixelFormat,
         ffmpeg_options: encoder.ffmpegOptions,
       };
