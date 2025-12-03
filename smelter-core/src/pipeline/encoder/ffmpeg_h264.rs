@@ -52,7 +52,7 @@ impl VideoEncoder for FfmpegH264Encoder {
             (*encoder).color_trc = ffi::AVColorTransferCharacteristic::AVCOL_TRC_BT709;
         }
 
-        let default_bitrate = {
+        let default_bitrate = || {
             let width = NonZero::new(u32::max(options.resolution.width as u32, 1)).unwrap();
             let height = NonZero::new(u32::max(options.resolution.height as u32, 1)).unwrap();
             let precision = 500_000.0; // 500kb
@@ -84,7 +84,7 @@ impl VideoEncoder for FfmpegH264Encoder {
                     // Auto number of threads
                     ("threads", "0"),
                 ]);
-                let bitrate = options.bitrate.unwrap_or(default_bitrate);
+                let bitrate = options.bitrate.unwrap_or_else(default_bitrate);
                 let b = bitrate.average_bitrate;
                 let maxrate = bitrate.max_bitrate;
 
@@ -109,7 +109,7 @@ impl VideoEncoder for FfmpegH264Encoder {
                     // Information to encoder, that encoding should happen in real time or faster
                     ("realtime", "1"),
                 ]);
-                let bitrate = options.bitrate.unwrap_or(default_bitrate);
+                let bitrate = options.bitrate.unwrap_or_else(default_bitrate);
                 let b = bitrate.average_bitrate;
                 let maxrate = bitrate.max_bitrate;
 
