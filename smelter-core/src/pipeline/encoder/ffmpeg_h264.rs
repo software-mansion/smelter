@@ -90,8 +90,6 @@ impl VideoEncoder for FfmpegH264Encoder {
                     ("g", "250"),
                     // Disable b frames
                     ("bf", "0"),
-                    // Information to encoder, that encoding should happen in real time or faster
-                    ("realtime", "1"),
                 ]);
                 let bitrate = options.bitrate.unwrap_or_else(|| {
                     bitrate_from_resolution_framerate(options.resolution, ctx.output_framerate)
