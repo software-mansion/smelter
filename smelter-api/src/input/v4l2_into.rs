@@ -14,9 +14,12 @@ impl TryFrom<V4l2Input> for core::RegisterInputOptions {
         Ok(core::RegisterInputOptions {
             input_options: core::ProtocolInputOptions::V4l2(core::V4l2InputOptions {
                 path: value.path,
-                resolution: value.resolution.into(),
                 format: value.format.into(),
-                framerate: value.framerate.try_into()?,
+                resolution: value.resolution.map(Into::into),
+                framerate: value
+                    .framerate
+                    .map(smelter_render::Framerate::try_from)
+                    .transpose()?,
             }),
             queue_options,
         })
