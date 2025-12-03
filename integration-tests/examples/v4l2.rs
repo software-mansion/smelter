@@ -71,7 +71,6 @@ fn client_code() -> Result<()> {
         }),
     )?;
 
-    // file:///home/jerzywilczek/Repos/live-compositor/integration-tests/examples/demo/whep.html?url=http://127.0.0.1:9000/whep/output_1&token=example
     let url = format!(
         "file://{}/examples/demo/whep.html?url=http://127.0.0.1:9000/whep/output_1&token=example",
         env!("CARGO_MANIFEST_DIR")

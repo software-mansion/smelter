@@ -5,12 +5,12 @@ use smelter_render::{Framerate, Resolution};
 #[derive(Debug, Clone)]
 pub struct V4l2InputOptions {
     pub path: Arc<std::path::Path>,
-    pub resolution: Resolution,
+    pub resolution: Option<Resolution>,
     pub format: V4l2Format,
-    pub framerate: Framerate,
+    pub framerate: Option<Framerate>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum V4l2Format {
     Yuyv,
     Nv12,
