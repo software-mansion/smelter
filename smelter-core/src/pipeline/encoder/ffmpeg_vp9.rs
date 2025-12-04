@@ -195,7 +195,7 @@ impl FfmpegVp9Encoder {
 }
 
 fn crf_from_frame_height(height: u32) -> u32 {
-    // This settings are defaults recommended by https://developers.google.com/media/vp9/settings/vod/#quality
+    // Settings recommended by https://developers.google.com/media/vp9/settings/vod/#quality
     match height {
         0..=240 => 37,
         241..=360 => 36,
