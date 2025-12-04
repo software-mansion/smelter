@@ -9,9 +9,8 @@ use tracing::{error, info, trace, warn};
 
 use crate::pipeline::{
     PipelineCtx,
-    encoder::{
-        ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format},
-        utils::bitrate_from_resolution_framerate,
+    encoder::ffmpeg_utils::{
+        create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format,
     },
     ffmpeg_utils::FfmpegOptions,
 };
@@ -83,24 +82,33 @@ impl VideoEncoder for FfmpegVp9Encoder {
             // Maximum number of frames to lag
             ("lag-in-frames", "0"),
         ]);
-        let bitrate = options.bitrate.unwrap_or_else(|| {
-            bitrate_from_resolution_framerate(options.resolution, ctx.output_framerate)
-        });
-        let b = bitrate.average_bitrate;
-        let maxrate = bitrate.max_bitrate;
-
-        // FFmpeg takes bufsize as bits. Setting it to the same value as `average_bitrate`
-        // will make it to be set to 1000ms.
-        let bufsize = bitrate.average_bitrate;
-        ffmpeg_options.append(&[
-            // Bitrate in b/s
-            ("b", &b.to_string()),
-            // Maximum bitrate allowed at spikes for vbr mode
-            ("maxrate", &maxrate.to_string()),
-            // Time period to calculate average bitrate from calculated as
-            // bufsize * 1000 / bitrate
-            ("bufsize", &bufsize.to_string()),
-        ]);
+        match options.bitrate {
+            Some(bitrate) => {
+                let b = bitrate.average_bitrate;
+                let maxrate = bitrate.max_bitrate;
+                // FFmpeg takes bufsize as bits. Setting it to the same value as `average_bitrate`
+                // will make it to be set to 1000ms.
+                let bufsize = bitrate.average_bitrate;
+                ffmpeg_options.append(&[
+                    // Bitrate in b/s
+                    ("b", &b.to_string()),
+                    // Maximum bitrate allowed at spikes for vbr mode
+                    ("maxrate", &maxrate.to_string()),
+                    // Time period to calculate average bitrate from calculated as
+                    // bufsize * 1000 / bitrate
+                    ("bufsize", &bufsize.to_string()),
+                ]);
+            }
+            None => {
+                let crf = crf_from_frame_height(options.resolution.height as u32);
+                ffmpeg_options.append(&[
+                    // Constant rate factor, set based on resolution
+                    ("crf", &crf.to_string()),
+                    // Bitrate set to 0 to enable constant quality rate control mode
+                    ("b", "0"),
+                ]);
+            }
+        }
         ffmpeg_options.append(&options.raw_options);
 
         let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
@@ -183,5 +191,18 @@ impl FfmpegVp9Encoder {
                 }
             }
         }).collect()
+    }
+}
+
+fn crf_from_frame_height(height: u32) -> u32 {
+    // This settings are defaults recommended by https://developers.google.com/media/vp9/settings/vod/#quality
+    match height {
+        0..=240 => 37,
+        241..=360 => 36,
+        361..=480 => 34,
+        481..=720 => 32,
+        721..=1080 => 31,
+        1081..=1440 => 24,
+        1441.. => 15,
     }
 }
