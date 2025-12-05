@@ -40,6 +40,7 @@ mod output;
 mod utils;
 
 pub use instance::Pipeline;
+pub use v4l2::{V4l2DeviceInfo, V4l2FormatInfo, V4l2ResolutionInfo, list_v4l2_devices};
 
 #[derive(Debug)]
 pub struct PipelineOptions {

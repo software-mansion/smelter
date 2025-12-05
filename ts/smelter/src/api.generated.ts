@@ -165,19 +165,19 @@ export type RegisterInput =
        */
       path: string;
       /**
-       * The resolution that will be negotiated with the device.
-       */
-      resolution: Resolution;
-      /**
        * The format that will be negotiated with the device.
        */
       format: V4L2InputFormat;
       /**
+       * The resolution that will be negotiated with the device. If not provided, the input will use the default resolution for the given format.
+       */
+      resolution?: Resolution | null;
+      /**
        * The framerate that will be negotiated with the device.
        *
-       * Must by either an unsigned integer, or a string in the \"NUM/DEN\" format, where NUM and DEN are both unsigned integers.
+       * Must be either an unsigned integer, or a string in the \"NUM/DEN\" format, where NUM and DEN are both unsigned integers. If not provided, the input will use the default framerate for the given format and resolution.
        */
-      framerate: Framerate;
+      framerate?: Framerate | null;
       /**
        * (**default=`false`**) If input is required and frames are not processed on time, then Smelter will delay producing output frames.
        */
