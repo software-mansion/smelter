@@ -216,7 +216,7 @@ fn initialize_ffmpeg_h264_options(
             ffmpeg_options.append(&[
                 // Bitrate in b/s
                 ("b", &b.to_string()),
-                // Maximum bitrate allowed at spikes for vbr mode
+                // Maximum bitrate. Higher values allow short spikes of bitrate.
                 ("maxrate", &maxrate.to_string()),
             ]);
         }
@@ -239,7 +239,7 @@ fn initialize_ffmpeg_h264_options(
             ffmpeg_options.append(&[
                 // Bitrate in b/s
                 ("b", &b.to_string()),
-                // Maximum bitrate allowed at spikes for vbr mode
+                // Maximum bitrate. Higher values allow short spikes of bitrate.
                 ("maxrate", &maxrate.to_string()),
             ]);
         }
@@ -277,7 +277,7 @@ fn initialize_ffmpeg_h264_options(
                     ffmpeg_options.append(&[
                         // Bitrate in b/s
                         ("b", &b.to_string()),
-                        // Maximum bitrate allowed at spikes for vbr mode
+                        // Maximum bitrate. Higher values allow short spikes of bitrate.
                         ("maxrate", &maxrate.to_string()),
                         // Buffer to calculate average bitrate from.
                         ("bufsize", &bufsize.to_string()),
