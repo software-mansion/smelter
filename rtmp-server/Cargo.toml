@@ -1,0 +1,11 @@
+[package]
+name = "rtmp_server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1.43"
+tracing-subscriber = "0.3.22"
+thiserror = "2"
+rand = "0.9"
