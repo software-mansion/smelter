@@ -16,9 +16,9 @@ export function intoOutputEosCondition(
   }
 }
 
-export function intoVulkanH264EncoderBitrate(
-  bitrate: Outputs.VulkanH264EncoderBitrate
-): Api.VulkanH264EncoderBitrate {
+export function intoVideoEncoderBitrate(
+  bitrate: Outputs.VideoEncoderBitrate
+): Api.VideoEncoderBitrate {
   if (typeof bitrate === 'number') {
     return bitrate;
   }

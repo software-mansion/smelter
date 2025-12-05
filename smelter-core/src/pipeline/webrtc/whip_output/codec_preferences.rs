@@ -53,11 +53,13 @@ pub(super) fn resolve_video_preferences(
                 vec![
                     VideoEncoderOptions::FfmpegVp9(FfmpegVp9EncoderOptions {
                         resolution,
+                        bitrate: None,
                         pixel_format: OutputPixelFormat::YUV420P,
                         raw_options: Vec::new(),
                     }),
                     VideoEncoderOptions::FfmpegVp8(FfmpegVp8EncoderOptions {
                         resolution,
+                        bitrate: None,
                         raw_options: Vec::new(),
                     }),
                     if vulkan_supported {
@@ -69,6 +71,7 @@ pub(super) fn resolve_video_preferences(
                         VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                             preset: FfmpegH264EncoderPreset::Fast,
                             resolution,
+                            bitrate: None,
                             pixel_format: OutputPixelFormat::YUV420P,
                             raw_options: Vec::new(),
                         })

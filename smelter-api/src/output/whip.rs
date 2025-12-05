@@ -39,6 +39,9 @@ pub enum WhipVideoEncoderOptions {
         /// (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
         preset: Option<H264EncoderPreset>,
 
+        /// Encoding bitrate. Default value depends on chosen encoder.
+        bitrate: Option<VideoEncoderBitrate>,
+
         /// (**default=`"yuv420p"`**) Encoder pixel format
         pixel_format: Option<PixelFormat>,
 
@@ -47,6 +50,10 @@ pub enum WhipVideoEncoderOptions {
     },
     #[serde(rename = "ffmpeg_vp8")]
     FfmpegVp8 {
+        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+        /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+        bitrate: Option<VideoEncoderBitrate>,
+
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
@@ -55,6 +62,10 @@ pub enum WhipVideoEncoderOptions {
         /// (**default=`"yuv420p"`**) Encoder pixel format
         pixel_format: Option<PixelFormat>,
 
+        /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+        /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+        bitrate: Option<VideoEncoderBitrate>,
+
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
@@ -62,7 +73,7 @@ pub enum WhipVideoEncoderOptions {
     VulkanH264 {
         /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
         /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
-        bitrate: Option<VulkanH264EncoderBitrate>,
+        bitrate: Option<VideoEncoderBitrate>,
     },
     #[serde(rename = "any")]
     Any,

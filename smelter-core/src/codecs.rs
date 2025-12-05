@@ -49,6 +49,12 @@ pub enum VideoEncoderOptions {
     VulkanH264(VulkanH264EncoderOptions),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VideoEncoderBitrate {
+    pub average_bitrate: u64,
+    pub max_bitrate: u64,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum AudioEncoderOptions {
     Opus(OpusEncoderOptions),

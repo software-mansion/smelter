@@ -13,7 +13,7 @@ pub enum PixelFormat {
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Copy)]
 #[serde(untagged)]
-pub enum VulkanH264EncoderBitrate {
+pub enum VideoEncoderBitrate {
     /// Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,
     /// but may temporarily increase it by 25%.
     AverageBitrate(u64),

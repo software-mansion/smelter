@@ -84,18 +84,16 @@ impl From<PixelFormat> for core::OutputPixelFormat {
     }
 }
 
-impl TryFrom<VulkanH264EncoderBitrate> for core::VulkanH264EncoderBitrate {
+impl TryFrom<VideoEncoderBitrate> for core::VideoEncoderBitrate {
     type Error = TypeError;
 
-    fn try_from(value: VulkanH264EncoderBitrate) -> Result<Self, Self::Error> {
+    fn try_from(value: VideoEncoderBitrate) -> Result<Self, Self::Error> {
         match value {
-            VulkanH264EncoderBitrate::AverageBitrate(average_bitrate) => {
-                Ok(core::VulkanH264EncoderBitrate {
-                    average_bitrate,
-                    max_bitrate: (average_bitrate as f64 * 1.25) as u64,
-                })
-            }
-            VulkanH264EncoderBitrate::Vbr {
+            VideoEncoderBitrate::AverageBitrate(average_bitrate) => Ok(core::VideoEncoderBitrate {
+                average_bitrate,
+                max_bitrate: (average_bitrate as f64 * 1.25) as u64,
+            }),
+            VideoEncoderBitrate::Vbr {
                 average_bitrate,
                 max_bitrate,
             } => {
@@ -105,7 +103,7 @@ impl TryFrom<VulkanH264EncoderBitrate> for core::VulkanH264EncoderBitrate {
                     ));
                 }
 
-                Ok(core::VulkanH264EncoderBitrate {
+                Ok(core::VideoEncoderBitrate {
                     average_bitrate,
                     max_bitrate,
                 })
