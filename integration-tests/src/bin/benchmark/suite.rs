@@ -114,12 +114,12 @@ pub fn full_benchmark_suite(ctx: &GraphicsContext) -> Vec<Benchmark> {
         // - different encoder presets
         // - different input/output ratios
         benchmark_set_constant_input_output_ratio(ctx),
-        // rendering only / multiple outputs no encoder / single input no decoder
-        benchmark_set_renderer_only(ctx),
-        // decoder only tests / one output low resolution no encoder blank scene
-        benchmark_set_decoder_only(ctx),
-        // encoder only tests / one input passthrough scene
-        benchmark_set_encoder_only(ctx),
+        //// rendering only / multiple outputs no encoder / single input no decoder
+        //benchmark_set_renderer_only(ctx),
+        //// decoder only tests / one output low resolution no encoder blank scene
+        //benchmark_set_decoder_only(ctx),
+        //// encoder only tests / one input passthrough scene
+        //benchmark_set_encoder_only(ctx),
     ]
     .concat()
 }
@@ -288,17 +288,29 @@ pub fn minimal_benchmark_suite(ctx: &GraphicsContext) -> Vec<Benchmark> {
 fn benchmark_set_constant_input_output_ratio(
     ctx: &'static BenchmarkSuiteContext,
 ) -> Vec<Benchmark> {
-    let scenes: [(&'static str, SceneBuilderFn, u64); 3] = [
-        ("1 input per output", single_video_layout, 1),
+    let scenes: [(&'static str, SceneBuilderFn, u64); 1] = [
+        // ("1 input per output", single_video_layout, 1),
         (
             "2 inputs per output",
             two_video_picture_in_picture_layout,
             2,
         ),
-        ("4 inputs per output", four_video_layout, 4),
+        //("4 inputs per output", four_video_layout, 4),
     ];
     let codecs = vec![
         (EncoderOptions::VulkanH264, VideoDecoderOptions::VulkanH264),
+        (
+            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Fast),
+            VideoDecoderOptions::VulkanH264,
+        ),
+        (
+            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Veryfast),
+            VideoDecoderOptions::VulkanH264,
+        ),
+        (
+            EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Ultrafast),
+            VideoDecoderOptions::VulkanH264,
+        ),
         (
             EncoderOptions::FfmpegH264(FfmpegH264EncoderPreset::Fast),
             VideoDecoderOptions::FfmpegH264,
@@ -314,25 +326,25 @@ fn benchmark_set_constant_input_output_ratio(
     ];
 
     let inputs = [
-        (
-            "bbb_mp4_720p24fps",
-            InputFile::Mp4(ctx.bbb_mp4_720p24fps.clone()),
-        ),
+        //(
+        //    "bbb_mp4_720p24fps",
+        //    InputFile::Mp4(ctx.bbb_mp4_720p24fps.clone()),
+        //),
         (
             "bbb_mp4_1080p30fps",
             InputFile::Mp4(ctx.bbb_mp4_1080p30fps.clone()),
         ),
-        (
-            "bbb_mp4_2160p30fps",
-            InputFile::Mp4(ctx.bbb_mp4_2160p30fps.clone()),
-        ),
+        //(
+        //    "bbb_mp4_2160p30fps",
+        //    InputFile::Mp4(ctx.bbb_mp4_2160p30fps.clone()),
+        //),
     ];
 
     let output_resolutions = [
-        ResolutionPreset::Res720p,
+        //ResolutionPreset::Res720p,
         ResolutionPreset::Res1080p,
-        ResolutionPreset::Res1440p,
-        ResolutionPreset::Res2160p,
+        //ResolutionPreset::Res1440p,
+        //ResolutionPreset::Res2160p,
     ];
 
     scenes
