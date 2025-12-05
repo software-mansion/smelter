@@ -71,7 +71,8 @@ impl VideoEncoder for FfmpegVp8Encoder {
             ("lag-in-frames", "0"),
             // Min QP
             ("qmin", "4"),
-            // Max QP
+            // Max QP. Range increased compared to defaults
+            // to allow low bitrate without dropping frames.
             ("qmax", "63"),
         ]);
         let bitrate = options.bitrate.unwrap_or_else(|| {

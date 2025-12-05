@@ -199,7 +199,8 @@ fn initialize_ffmpeg_h264_options(
             ffmpeg_options.append(&[
                 // Min QP
                 ("qmin", "4"),
-                // Max QP
+                // Max QP. Range is increased compared to encoder defaults to allow
+                // low bitrate without dropping frames.
                 ("qmax", "51"),
                 // Rate control mode (0 - quality, 1 - bitrate)
                 ("rc_mode", "0"),
@@ -223,7 +224,8 @@ fn initialize_ffmpeg_h264_options(
             ffmpeg_options.append(&[
                 // Min QP
                 ("qmin", "4"),
-                // Max QP
+                // Max QP. Range is increased compared to encoder defaults to allow
+                // low bitrate without dropping frames.
                 ("qmax", "51"),
                 // Disable b frames
                 ("bf", "0"),

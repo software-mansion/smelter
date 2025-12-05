@@ -71,9 +71,10 @@ impl VideoEncoder for FfmpegVp9Encoder {
             ("frame-parallel", "1"),
             // Auto number of threads to use.
             ("threads", "0"),
-            // Minimum value for the quantizer.
+            // Min QP
             ("qmin", "4"),
-            // Maximum value for the quantizer.
+            // Max QP. Range increased compared to defaults
+            // to allow low bitrate without dropping frames.
             ("qmax", "63"),
             // Enable row-multithreading. Allows use of up to 2x thread as tile columns. 0 = off, 1 = on.
             ("row-mt", "1"),
