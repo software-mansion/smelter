@@ -87,16 +87,14 @@ impl VideoEncoder for FfmpegVp9Encoder {
             Some(bitrate) => {
                 let b = bitrate.average_bitrate;
                 let maxrate = bitrate.max_bitrate;
-                // FFmpeg takes bufsize as bits. Setting it to the same value as `average_bitrate`
-                // will make it to be set to 1000ms.
+                // Since FFmpeg takes bits, setting this to average_bitrate results in a 1000ms buffer.
                 let bufsize = bitrate.average_bitrate;
                 ffmpeg_options.append(&[
                     // Bitrate in b/s
                     ("b", &b.to_string()),
                     // Maximum bitrate allowed at spikes for vbr mode
                     ("maxrate", &maxrate.to_string()),
-                    // Time period to calculate average bitrate from calculated as
-                    // bufsize * 1000 / bitrate
+                    // Buffer to calculate average bitrate from.
                     ("bufsize", &bufsize.to_string()),
                 ]);
             }
