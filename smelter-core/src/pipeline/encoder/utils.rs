@@ -21,3 +21,9 @@ pub(super) fn bitrate_from_resolution_framerate(
         max_bitrate: max_bitrate as u64,
     }
 }
+
+pub(super) fn gop_size_from_ms_framerate(keyframe_interval_ms: u64, framerate: Framerate) -> u64 {
+    let framerate = framerate.num as f64 / framerate.den as f64;
+    let keyframe_interval = keyframe_interval_ms as f64 / 1000.0;
+    (framerate * keyframe_interval).round() as u64
+}
