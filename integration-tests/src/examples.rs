@@ -341,8 +341,7 @@ pub fn get_asset_path(asset: TestSample) -> Result<PathBuf> {
 fn ensure_asset_available(asset_path: &PathBuf) -> Result<()> {
     if !asset_path.exists() {
         return Err(anyhow!(
-            "asset under path {:?} does not exist, try downloading it again",
-            asset_path
+            "asset under path {asset_path:?} does not exist, try downloading it again"
         ));
     }
     Ok(())

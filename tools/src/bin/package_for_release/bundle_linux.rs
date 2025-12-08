@@ -158,7 +158,7 @@ fn bundle_app(
         .status()?
         .code();
     if exit_code != Some(0) {
-        return Err(anyhow!("Command tar failed with exit code {:?}", exit_code));
+        return Err(anyhow!("Command tar failed with exit code {exit_code:?}"));
     }
 
     Ok(())
