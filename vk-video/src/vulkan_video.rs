@@ -199,8 +199,20 @@ impl WgpuTexturesDecoder {
     ///
     /// Make sure that this is done when you have the knowledge that no more frames will be coming
     /// that need to be presented before the already decoded frames.
-    pub fn flush(&mut self) -> Vec<Frame<wgpu::Texture>> {
-        self.frame_sorter.flush()
+    pub fn flush(&mut self) -> Result<Vec<Frame<wgpu::Texture>>, DecoderError> {
+        let nalus = self.parser.flush()?;
+        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, nalus)?;
+        let unsorted_frames = self.vulkan_decoder.decode_to_wgpu_textures(&instructions)?;
+
+        let mut result = Vec::new();
+        for unsorted_frame in unsorted_frames {
+            let mut sorted_frames = self.frame_sorter.put(unsorted_frame);
+            result.append(&mut sorted_frames);
+        }
+
+        result.append(&mut self.frame_sorter.flush());
+
+        Ok(result)
     }
 
     /// Notify the decoder that a chunk of the bitstream was lost.
@@ -248,8 +260,20 @@ impl BytesDecoder {
     ///
     /// Make sure that this is done when you have the knowledge that no more frames will be coming
     /// that need to be presented before the already decoded frames.
-    pub fn flush(&mut self) -> Vec<Frame<RawFrameData>> {
-        self.frame_sorter.flush()
+    pub fn flush(&mut self) -> Result<Vec<Frame<RawFrameData>>, DecoderError> {
+        let nalus = self.parser.flush()?;
+        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, nalus)?;
+        let unsorted_frames = self.vulkan_decoder.decode_to_bytes(&instructions)?;
+
+        let mut result = Vec::new();
+        for unsorted_frame in unsorted_frames {
+            let mut sorted_frames = self.frame_sorter.put(unsorted_frame);
+            result.append(&mut sorted_frames);
+        }
+
+        result.append(&mut self.frame_sorter.flush());
+
+        Ok(result)
     }
 
     /// Notify the decoder that a chunk of the bitstream was lost.

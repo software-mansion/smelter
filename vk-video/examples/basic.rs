@@ -50,7 +50,7 @@ fn main() {
         }
     }
 
-    let remaining_frames = decoder.flush();
+    let remaining_frames = decoder.flush().unwrap();
     for Frame { data, .. } in remaining_frames {
         output_file.write_all(&data.frame).unwrap();
     }

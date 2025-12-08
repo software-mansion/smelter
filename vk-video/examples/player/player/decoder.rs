@@ -52,7 +52,7 @@ pub fn run_decoder(
         }
     }
 
-    for f in decoder.flush() {
+    for f in decoder.flush().unwrap() {
         if send_frame(f, &mut frame_number).is_err() {
             return;
         }

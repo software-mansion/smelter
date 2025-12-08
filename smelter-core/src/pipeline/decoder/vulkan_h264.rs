@@ -79,11 +79,13 @@ impl VideoDecoderInstance for VulkanH264Decoder {
     }
 
     fn flush(&mut self) -> Vec<Frame> {
-        self.decoder
-            .flush()
-            .into_iter()
-            .map(from_vk_frame)
-            .collect()
+        match self.decoder.flush() {
+            Ok(frames) => frames.into_iter().map(from_vk_frame).collect(),
+            Err(err) => {
+                warn!("Failed to flush the decoder: {err}");
+                Vec::new()
+            }
+        }
     }
 }
 

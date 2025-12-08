@@ -53,7 +53,7 @@ fn main() {
         }
     }
 
-    let remaining_frames = decoder.flush();
+    let remaining_frames = decoder.flush().unwrap();
     for Frame { data, .. } in remaining_frames {
         let decoded_frame = download_wgpu_texture(&device, queue, data);
         output_file.write_all(&decoded_frame).unwrap();
