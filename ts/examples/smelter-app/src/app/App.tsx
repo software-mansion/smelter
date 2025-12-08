@@ -1,12 +1,17 @@
-import { View, Tiles, Rescaler } from '@swmansion/smelter';
+import { View } from '@swmansion/smelter';
 
-import { createRoomStore, type RoomStore } from './store';
+import type { RoomStore } from './store';
 import type { StoreApi } from 'zustand';
 import { useStore } from 'zustand';
-import { createContext, useContext } from 'react';
-import { Input, SmallInput } from '../inputs/inputs';
-
-export const StoreContext = createContext<StoreApi<RoomStore>>(createRoomStore());
+import { useContext } from 'react';
+import { StoreContext } from './store';
+import {
+  GridLayout,
+  PrimaryOnTopLayout,
+  PrimaryOnLeftLayout,
+  PictureInPictureLayout,
+  TransitionLayout,
+} from './layouts';
 
 export default function App({ store }: { store: StoreApi<RoomStore> }) {
   return (
@@ -30,96 +35,8 @@ function OutputScene() {
         <PrimaryOnLeftLayout />
       ) : layout === 'picture-in-picture' ? (
         <PictureInPictureLayout />
-      ) : null}
-    </View>
-  );
-}
-
-function GridLayout() {
-  const store = useContext(StoreContext);
-  const inputs = useStore(store, state => state.inputs);
-
-  return (
-    <Tiles transition={{ durationMs: 300 }} style={{ padding: 20, tileAspectRatio: '1920:1210' }}>
-      {Object.values(inputs).map(input => (
-        <Input key={input.inputId} input={input} />
-      ))}
-    </Tiles>
-  );
-}
-
-function PrimaryOnLeftLayout() {
-  const store = useContext(StoreContext);
-  const inputs = useStore(store, state => state.inputs);
-  const firstInput = inputs[0];
-  if (!firstInput) {
-    return <View />;
-  }
-  return (
-    <View style={{ direction: 'row' }}>
-      <Rescaler style={{ width: 1500 }}>
-        <Input input={firstInput} />
-      </Rescaler>
-      <Tiles transition={{ durationMs: 300 }} style={{ padding: 10 }}>
-        {Object.values(inputs)
-          .filter(input => input.inputId != firstInput.inputId)
-          .map(input => (
-            <SmallInput key={input.inputId} input={input} />
-          ))}
-      </Tiles>
-    </View>
-  );
-}
-
-function PrimaryOnTopLayout() {
-  const store = useContext(StoreContext);
-  const inputs = useStore(store, state => state.inputs);
-  const firstInput = inputs[0];
-  if (!firstInput) {
-    return <View />;
-  }
-
-  return (
-    <View style={{ direction: 'column' }}>
-      <Rescaler style={{ height: 800 }}>
-        <Input input={firstInput} />
-      </Rescaler>
-      <Tiles transition={{ durationMs: 300 }} style={{ padding: 10 }}>
-        {Object.values(inputs)
-          .filter(input => input.inputId != firstInput.inputId)
-          .map(input => (
-            <SmallInput key={input.inputId} input={input} />
-          ))}
-      </Tiles>
-    </View>
-  );
-}
-
-function PictureInPictureLayout() {
-  const store = useContext(StoreContext);
-  const inputs = useStore(store, state => state.inputs);
-  const firstInput = inputs[0];
-  const secondInput = inputs[1];
-  if (!firstInput) {
-    return <View />;
-  }
-  return (
-    <View style={{ direction: 'column' }}>
-      <Rescaler transition={{ durationMs: 300 }}>
-        <Input input={firstInput} />
-      </Rescaler>
-      {secondInput ? (
-        <Rescaler style={{ top: 60, right: 60, width: 640, height: 1080 }}>
-          <View style={{ direction: 'column' }}>
-            <Tiles transition={{ durationMs: 300 }} style={{ padding: 10, verticalAlign: 'top' }}>
-              {Object.values(inputs)
-                .filter(input => input.inputId != firstInput.inputId)
-                .map(input => (
-                  <SmallInput key={input.inputId} input={input} showTitle={false} />
-                ))}
-            </Tiles>
-          </View>
-        </Rescaler>
+      ) : layout === 'transition' ? (
+        <TransitionLayout />
       ) : null}
     </View>
   );

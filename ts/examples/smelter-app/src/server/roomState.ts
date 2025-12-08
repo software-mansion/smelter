@@ -15,6 +15,7 @@ export type RoomInputState = {
   type: 'local-mp4' | 'twitch-channel' | 'kick-channel' | 'whip';
   status: 'disconnected' | 'pending' | 'connected';
   volume: number;
+  showTitle: boolean;
   shaders: ShaderConfig[];
   metadata: {
     title: string;
@@ -30,6 +31,7 @@ type TypeSpecificState =
 
 type UpdateInputOptions = {
   volume: number;
+  showTitle: boolean;
   shaders: ShaderConfig[];
 };
 
@@ -109,6 +111,7 @@ export class RoomState {
             inputId: `${idPrefix}::local::sample_streamer::${i}`,
             type: 'local-mp4',
             status: 'disconnected',
+            showTitle: true,
             shaders: [],
             metadata: {
               title: `[MP4] ${formatMp4Name(randomMp4)}`,
@@ -142,6 +145,7 @@ export class RoomState {
       inputId,
       type: 'whip',
       status: 'disconnected',
+      showTitle: true,
       shaders: [],
       monitor: monitor,
       metadata: {
@@ -172,6 +176,7 @@ export class RoomState {
         inputId,
         type: `twitch-channel`,
         status: 'disconnected',
+        showTitle: true,
         shaders: [],
         metadata: {
           title: '', // will be populated on update
@@ -202,6 +207,7 @@ export class RoomState {
         inputId,
         type: `kick-channel`,
         status: 'disconnected',
+        showTitle: true,
         metadata: {
           title: '', // will be populated on update
           description: '',
@@ -232,6 +238,7 @@ export class RoomState {
           inputId,
           type: 'local-mp4',
           status: 'disconnected',
+          showTitle: true,
           shaders: [],
           metadata: {
             title: `[MP4] ${formatMp4Name(mp4Name)}`,
@@ -332,6 +339,7 @@ export class RoomState {
     const input = this.getInput(inputId);
     input.volume = options.volume ?? input.volume;
     input.shaders = options.shaders ?? input.shaders;
+    input.showTitle = options.showTitle ?? input.showTitle;
     this.updateStoreWithState();
   }
 
@@ -389,6 +397,7 @@ export class RoomState {
         inputId: input.inputId,
         title: input.metadata.title,
         description: input.metadata.description,
+        showTitle: input.showTitle,
         volume: input.volume,
         shaders: input.shaders,
       }));
