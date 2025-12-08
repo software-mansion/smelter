@@ -272,9 +272,13 @@ impl InputState<'_> {
                 resolution, format, ..
             } = &self.config;
 
+            // Some devices, most notably the OBS virtual camera, stuck extra bytes at the
+            // end of the data they send. Because of this, we allow up to a 1% mismatch
+            // between the expected and actual data lengths in both the YUYV and NV12 implementations.
             let data = match format {
                 V4l2Format::Yuyv => {
-                    if frame.len() != resolution.width * resolution.height * 2 {
+                    let expected_length = (resolution.width * resolution.height * 2) as f64;
+                    if (frame.len() as f64 - expected_length).abs() > expected_length * 0.01 {
                         if let Err(err) = self.config.refresh_format() {
                             error!(%err, "Error when trying to refresh parameters.");
                             self.send_eos();
@@ -288,7 +292,8 @@ impl InputState<'_> {
                 }
                 V4l2Format::Nv12 => {
                     let y_length = resolution.width * resolution.height;
-                    if frame.len() != y_length * 3 / 2 {
+                    let expected_length = y_length as f64 * 1.5;
+                    if (frame.len() as f64 - expected_length).abs() > expected_length * 0.01 {
                         if let Err(err) = self.config.refresh_format() {
                             error!(%err, "Fatal error when trying to refresh parameters.");
                             self.send_eos();
