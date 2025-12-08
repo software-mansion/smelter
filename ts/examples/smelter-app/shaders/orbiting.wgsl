@@ -16,19 +16,19 @@ struct BaseShaderParameters {
 };
 
 struct ShaderOptions {
-    opacity: f32,           // 0
-    sprite_scale: f32,      // 4
-    orbit_radius: f32,      // 8
-    orbit_speed: f32,       // 12
+    opacity: f32,
+    sprite_scale: f32,
+    orbit_radius: f32,
+    orbit_speed: f32,
 
-    copies_f32: f32,        // 16
-    colorize_amount: f32,   // 20
+    copies_f32: f32,
+    colorize_amount: f32,
 
-    sun_rays: f32,          // 24
-    sun_anim_speed: f32,    // 28
-    sun_base_radius: f32,   // 32
-    sun_ray_amp: f32,       // 36
-    sun_softness: f32,      // 40
+    sun_rays: f32,
+    sun_anim_speed: f32,
+    sun_base_radius: f32,
+    sun_ray_amp: f32,
+    sun_softness: f32,
 
 };
 
@@ -54,13 +54,11 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     return out;
 }
 
-// -------------------- MASKA SŁONECZKA --------------------
 fn sunMask(local_uv: vec2<f32>, time: f32) -> f32 {
     let p = local_uv - vec2<f32>(0.5, 0.5);
     let r = length(p);
     let angle = atan2(p.y, p.x);
 
-    // Parametry z ShaderOptions
     let rays = shader_options.sun_rays;
     let anim_speed = shader_options.sun_anim_speed;
     let base_radius = shader_options.sun_base_radius;
@@ -75,9 +73,8 @@ fn sunMask(local_uv: vec2<f32>, time: f32) -> f32 {
 }
 
 
-// -------------------- HUE -> RGB (koło barw) --------------------
 fn hueToRgb(h_in: f32) -> vec3<f32> {
-    let h = fract(h_in);              // 0..1
+    let h = fract(h_in);
     let h6 = h * 6.0;
 
     let r = clamp(abs(h6 - 3.0) - 1.0, 0.0, 1.0);
@@ -87,7 +84,6 @@ fn hueToRgb(h_in: f32) -> vec3<f32> {
     return vec3<f32>(r, g, b);
 }
 
-// -------------------- SPRITE Z MASKĄ SŁONECZKA --------------------
 fn sampleSprite(center_uv: vec2<f32>, uv: vec2<f32>, scale: f32, time: f32) -> vec4<f32> {
     let local = (uv - center_uv) / scale + vec2<f32>(0.5, 0.5);
 
@@ -115,7 +111,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let time = base_params.time;
     let colorize = clamp(shader_options.colorize_amount, 0.0, 1.0);
 
-    // liczba kopii (z float)
     let copies_raw = shader_options.copies_f32;
     let copies_u32 = max(u32(floor(max(copies_raw, 0.0))), 1u);
 
@@ -144,21 +139,17 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         let offset = vec2<f32>(cos(angle), sin(angle)) * orbit_radius;
         let pos = center + offset;
 
-        // próbkuj słoneczko
         var s = sampleSprite(pos, uv, sprite_scale, time);
 
-        // kolor z koła barw dla tej kopii
-        let hue = fi / fc;                 // 0..1
-        let tint = hueToRgb(hue);          // vec3
+        let hue = fi / fc;
+        let tint = hueToRgb(hue);
 
-        // mieszanie: 0 → oryginał, 1 → pełne przefiltrowanie przez tint
         let base_rgb = s.xyz;
         let tinted_rgb = base_rgb * tint;
         let final_rgb = base_rgb * (1.0 - colorize) + tinted_rgb * colorize;
 
         s = vec4<f32>(final_rgb, s.w);
 
-        // max-blend z dotychczasowym kolorem
         col = vec4<f32>(
             max(col.x, s.x),
             max(col.y, s.y),

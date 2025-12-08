@@ -15,10 +15,9 @@ struct BaseShaderParameters {
     texture_count: u32,
 };
 
-// ShaderOptions — TYLKO brightness i contrast
 struct ShaderOptions {
-    brightness: f32,  // -1..1
-    contrast: f32,    // 0..n (1.0 = normalnie)
+    brightness: f32,
+    contrast: f32,
 };
 
 @group(0) @binding(0)
@@ -54,13 +53,10 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let brightness = shader_options.brightness;
     let contrast   = shader_options.contrast;
 
-    // kontrast wokół 0.5
     rgb = (rgb - vec3<f32>(0.5)) * contrast + vec3<f32>(0.5);
 
-    // jasność
     rgb = rgb + vec3<f32>(brightness);
 
-    // final
     rgb = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
 
     return vec4<f32>(rgb, c.w);
