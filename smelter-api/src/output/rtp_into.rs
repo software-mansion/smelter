@@ -113,6 +113,7 @@ impl RtpVideoEncoderOptions {
             RtpVideoEncoderOptions::FfmpegH264 {
                 preset,
                 bitrate,
+                keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
             } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
@@ -134,6 +135,7 @@ impl RtpVideoEncoderOptions {
             }
             RtpVideoEncoderOptions::FfmpegVp8 {
                 bitrate,
+                keyframe_interval_ms,
                 ffmpeg_options,
             } => core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
                 resolution: resolution.into(),
@@ -145,8 +147,9 @@ impl RtpVideoEncoderOptions {
                     .collect(),
             }),
             RtpVideoEncoderOptions::FfmpegVp9 {
-                pixel_format,
                 bitrate,
+                keyframe_interval_ms,
+                pixel_format,
                 ffmpeg_options,
             } => core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
                 resolution: resolution.into(),

@@ -83,6 +83,7 @@ impl Mp4VideoEncoderOptions {
             Mp4VideoEncoderOptions::FfmpegH264 {
                 preset,
                 bitrate,
+                keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
             } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {

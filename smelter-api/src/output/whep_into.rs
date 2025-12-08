@@ -79,6 +79,7 @@ impl WhepVideoEncoderOptions {
             WhepVideoEncoderOptions::FfmpegH264 {
                 preset,
                 bitrate,
+                keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
             } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
@@ -100,6 +101,7 @@ impl WhepVideoEncoderOptions {
             }
             WhepVideoEncoderOptions::FfmpegVp8 {
                 bitrate,
+                keyframe_interval_ms,
                 ffmpeg_options,
             } => core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
                 resolution: resolution.into(),
@@ -112,6 +114,7 @@ impl WhepVideoEncoderOptions {
             }),
             WhepVideoEncoderOptions::FfmpegVp9 {
                 bitrate,
+                keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
             } => core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {

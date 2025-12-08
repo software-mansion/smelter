@@ -105,6 +105,7 @@ impl WhipVideoEncoderOptions {
             WhipVideoEncoderOptions::FfmpegH264 {
                 preset,
                 bitrate,
+                keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
             } => core::WhipVideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
@@ -126,6 +127,7 @@ impl WhipVideoEncoderOptions {
             }
             WhipVideoEncoderOptions::FfmpegVp8 {
                 bitrate,
+                keyframe_interval_ms,
                 ffmpeg_options,
             } => core::WhipVideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
                 resolution: resolution.into(),
@@ -138,6 +140,7 @@ impl WhipVideoEncoderOptions {
             }),
             WhipVideoEncoderOptions::FfmpegVp9 {
                 bitrate,
+                keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
             } => core::WhipVideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
