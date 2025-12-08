@@ -77,7 +77,6 @@ routes.get<RoomIdParams>('/room/:roomId', async (req, res) => {
   });
 });
 
-
 routes.get('/rooms', async (_req, res) => {
   const adminKey = _req.headers['x-admin-key'];
   if (!adminKey || adminKey !== 'super-secret-hardcode-admin-key') {
