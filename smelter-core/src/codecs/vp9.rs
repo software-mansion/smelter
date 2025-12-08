@@ -8,7 +8,7 @@ use crate::codecs::{OutputPixelFormat, VideoEncoderBitrate};
 pub struct FfmpegVp9EncoderOptions {
     pub resolution: Resolution,
     pub bitrate: Option<VideoEncoderBitrate>,
-    pub keyframe_interval: Option<u64>,
+    pub keyframe_interval: u64,
     pub pixel_format: OutputPixelFormat,
     pub raw_options: Vec<(Arc<str>, Arc<str>)>,
 }

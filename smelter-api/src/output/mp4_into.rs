@@ -1,4 +1,5 @@
 use crate::common_core::prelude as core;
+use crate::output::DEFAULT_KEYFRAME_INTERVAL;
 use crate::*;
 
 impl TryFrom<Mp4Output> for core::RegisterOutputOptions {
@@ -90,6 +91,7 @@ impl Mp4VideoEncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                keyframe_interval: keyframe_interval_ms.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
                     .clone()

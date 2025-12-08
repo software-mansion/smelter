@@ -1,4 +1,5 @@
 use crate::common_core::prelude as core;
+use crate::output::DEFAULT_KEYFRAME_INTERVAL;
 use crate::*;
 
 impl TryFrom<RtpOutput> for core::RegisterOutputOptions {
@@ -119,6 +120,7 @@ impl RtpVideoEncoderOptions {
             } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                keyframe_interval: keyframe_interval_ms.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
                 resolution: resolution.into(),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
@@ -140,6 +142,7 @@ impl RtpVideoEncoderOptions {
             } => core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                keyframe_interval: keyframe_interval_ms.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
                 raw_options: ffmpeg_options
                     .clone()
                     .unwrap_or_default()
@@ -154,6 +157,7 @@ impl RtpVideoEncoderOptions {
             } => core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                keyframe_interval: keyframe_interval_ms.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
                     .clone()

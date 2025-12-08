@@ -196,6 +196,7 @@ impl SingleBenchmarkPass {
                     video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                         preset,
                         bitrate: None,
+                        keyframe_interval: 5000,
                         resolution: smelter_render::Resolution {
                             width: self.output_resolution.width,
                             height: self.output_resolution.height,
