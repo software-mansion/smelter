@@ -197,7 +197,7 @@ fn initialize_ffmpeg_h264_options(
     match encoder_name {
         "libopenh264" => {
             ffmpeg_options.append(&[
-                // Min QP
+                // Min QP. QP represents the video quality.
                 ("qmin", "4"),
                 // Max QP. Range is increased compared to encoder defaults to allow
                 // low bitrate without dropping frames.
@@ -222,7 +222,7 @@ fn initialize_ffmpeg_h264_options(
         }
         "h264_videotoolbox" => {
             ffmpeg_options.append(&[
-                // Min QP
+                // Min QP. QP represents the video quality.
                 ("qmin", "4"),
                 // Max QP. Range is increased compared to encoder defaults to allow
                 // low bitrate without dropping frames.

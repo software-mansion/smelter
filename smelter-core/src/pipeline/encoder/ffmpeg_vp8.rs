@@ -69,7 +69,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
             ("threads", "0"),
             // Zero-latency. Disables frame reordering.
             ("lag-in-frames", "0"),
-            // Min QP
+            // Min QP. QP represents the video quality.
             ("qmin", "4"),
             // Max QP. Range increased compared to defaults
             // to allow low bitrate without dropping frames.

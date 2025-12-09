@@ -71,7 +71,7 @@ impl VideoEncoder for FfmpegVp9Encoder {
             ("frame-parallel", "1"),
             // Auto number of threads to use.
             ("threads", "0"),
-            // Min QP
+            // Min QP. QP represents the video quality.
             ("qmin", "4"),
             // Max QP. Range increased compared to defaults
             // to allow low bitrate without dropping frames.
