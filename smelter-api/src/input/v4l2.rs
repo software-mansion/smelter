@@ -19,15 +19,18 @@ pub struct V4l2Input {
     /// detection order, the `by-id` paths are always the same for a given device, and the
     /// `by-path` paths should be the same for specific ports.
     pub path: Arc<Path>,
-    /// The resolution that will be negotiated with the device.
-    pub resolution: Resolution,
     /// The format that will be negotiated with the device.
     pub format: V4l2InputFormat,
+    /// The requested resolution that will be negotiated with the device.
+    /// If not provided, the input will use the default resolution for the given format.
+    pub resolution: Option<Resolution>,
     /// The framerate that will be negotiated with the device.
     ///
-    /// Must by either an unsigned integer, or a string in the \"NUM/DEN\" format, where NUM
+    /// Must be either an unsigned integer, or a string in the \"NUM/DEN\" format, where NUM
     /// and DEN are both unsigned integers.
-    pub framerate: Framerate,
+    /// If not provided, the input will use the default framerate for the given format and
+    /// resolution.
+    pub framerate: Option<Framerate>,
     /// (**default=`false`**) If input is required and frames are not processed
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,

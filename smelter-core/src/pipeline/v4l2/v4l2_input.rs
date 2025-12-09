@@ -1,4 +1,5 @@
 use std::{
+    path::Path,
     sync::{Arc, atomic::AtomicBool},
     time::Duration,
 };
@@ -10,10 +11,10 @@ use crate::{pipeline::input::Input, prelude::*, queue::QueueDataReceiver};
 
 use v4l::{
     Format, FourCC,
+    frameinterval::FrameIntervalEnum,
     io::traits::CaptureStream,
-    parameters::Capabilities,
     prelude::*,
-    video::{Capture, capture::parameters::Modes},
+    video::{Capture, capture::Parameters},
 };
 
 impl From<V4l2Format> for FourCC {
@@ -132,66 +133,114 @@ impl V4l2DeviceConfig {
             return Err(V4l2InputError::CaptureNotSupported);
         }
 
-        let requested_fourcc = opts.format.into();
-        let format = device.format()?;
-        let format = device.set_format(&Format {
-            width: opts.resolution.width as u32,
-            height: opts.resolution.height as u32,
-            fourcc: requested_fourcc,
-            ..format
+        let format = Self::try_set_format(&device, opts.format)?;
+
+        let resolution = match opts.resolution {
+            Some(resolution) => Self::try_set_resolution(&device, resolution)?,
+            None => {
+                let format = device.format()?;
+                Resolution {
+                    width: format.width as usize,
+                    height: format.height as usize,
+                }
+            }
+        };
+
+        if let Some(framerate) = opts.framerate {
+            Self::try_set_framerate(&device, framerate, &opts.path)?;
+        }
+
+        Ok(Self {
+            device,
+            resolution,
+            format,
+        })
+    }
+
+    fn try_set_format(device: &Device, format: V4l2Format) -> Result<V4l2Format, V4l2InputError> {
+        let requested_fourcc = format.into();
+        let current_format = device.format()?;
+
+        let negotiated_format = device.set_format(&Format {
+            fourcc: format.into(),
+            ..current_format
         })?;
 
-        if format.fourcc != requested_fourcc {
+        if negotiated_format.fourcc != requested_fourcc {
             warn!(
                 requested_format = requested_fourcc.str().unwrap_or("<unknown format>"),
-                configured_format = format.fourcc.str().unwrap_or("<unknown format>"),
+                configured_format = negotiated_format.fourcc.str().unwrap_or("<unknown format>"),
                 "Failed to configure requested format.",
             );
         }
 
-        let negotiated_format = format.fourcc.try_into()?;
+        negotiated_format.fourcc.try_into()
+    }
+
+    fn try_set_resolution(
+        device: &Device,
+        resolution: Resolution,
+    ) -> Result<Resolution, V4l2InputError> {
+        let current_format = device.format()?;
+
+        let negotiated_format = device.set_format(&Format {
+            width: resolution.width as u32,
+            height: resolution.height as u32,
+            ..current_format
+        })?;
+
         let negotiated_resolution = Resolution {
-            width: format.width as usize,
-            height: format.height as usize,
+            width: negotiated_format.width as usize,
+            height: negotiated_format.height as usize,
         };
 
-        if opts.resolution != negotiated_resolution {
+        if negotiated_resolution != resolution {
             warn!(
-                requested_resolution = ?opts.resolution,
+                requested_resolution = ?resolution,
                 configured_resolution = ?negotiated_resolution,
                 "Failed to configure requested resolution.",
             );
         }
 
-        let negotiated_parameters = device.set_params(&v4l::video::capture::Parameters {
-            capabilities: Capabilities::TIME_PER_FRAME,
-            modes: Modes::empty(),
+        Ok(resolution)
+    }
+
+    fn try_set_framerate(
+        device: &Device,
+        framerate: Framerate,
+        path: &Path,
+    ) -> Result<Framerate, V4l2InputError> {
+        let current_params = device.params()?;
+
+        if !current_params
+            .capabilities
+            .contains(v4l::parameters::Capabilities::TIME_PER_FRAME)
+        {
+            warn!(device_path=?path, "Device does not support setting the framerate.");
+        }
+
+        let negotiated_params = device.set_params(&Parameters {
             interval: v4l::Fraction {
-                numerator: opts.framerate.den,
-                denominator: opts.framerate.num,
+                numerator: framerate.den,
+                denominator: framerate.num,
             },
+            ..current_params
         })?;
 
-        if opts.framerate.num != negotiated_parameters.interval.denominator
-            || opts.framerate.den != negotiated_parameters.interval.numerator
-        {
-            let negotiated_framerate = Framerate {
-                num: negotiated_parameters.interval.denominator,
-                den: negotiated_parameters.interval.numerator,
-            };
+        let negotiated_framerate = Framerate {
+            num: negotiated_params.interval.denominator,
+            den: negotiated_params.interval.numerator,
+        };
 
+        if negotiated_framerate.num != framerate.num || negotiated_framerate.den != framerate.den {
             warn!(
-                requested_framerate = ?opts.framerate,
+                requested_framerate = ?framerate,
                 configured_framerate = ?negotiated_framerate,
-                "Failed to configure requested framerate.",
+                "Failed to configure requested resolution.",
             );
         }
 
-        Ok(V4l2DeviceConfig {
-            device,
-            resolution: negotiated_resolution,
-            format: negotiated_format,
-        })
+        Ok(negotiated_framerate)
     }
 }
 
@@ -273,4 +322,152 @@ impl InputState<'_> {
             debug!("Cannot send EOS. Channel closed.");
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct V4l2DeviceInfo {
+    pub path: Arc<Path>,
+    pub name: String,
+    pub formats: Vec<V4l2FormatInfo>,
+}
+
+#[derive(Debug, Clone)]
+pub struct V4l2FormatInfo {
+    pub format: V4l2Format,
+    pub resolutions: Vec<V4l2ResolutionInfo>,
+}
+
+#[derive(Debug, Clone)]
+pub struct V4l2ResolutionInfo {
+    pub resolution: Resolution,
+    pub framerates: Vec<Framerate>,
+}
+
+/// List Video for Linux 2 devices that have the `VIDEO_CAPTURE` capability. The devices will also
+/// be queried for supported parameters.
+pub fn list_v4l2_devices(
+    directory_path: impl AsRef<Path>,
+) -> Result<Vec<V4l2DeviceInfo>, V4l2InputError> {
+    let dir = std::fs::read_dir(directory_path)?;
+    let mut devices = Vec::new();
+
+    for entry in dir {
+        let entry = entry?;
+        let path: Arc<Path> = entry.path().into();
+
+        if let Some(device_info) = read_device(path)? {
+            devices.push(device_info);
+        }
+    }
+
+    Ok(devices)
+}
+
+fn read_device(path: Arc<Path>) -> Result<Option<V4l2DeviceInfo>, V4l2InputError> {
+    let Ok(device) = v4l::Device::with_path(&path) else {
+        return Ok(None);
+    };
+    let Ok(caps) = device.query_caps() else {
+        return Ok(None);
+    };
+
+    if !caps
+        .capabilities
+        .contains(v4l::capability::Flags::VIDEO_CAPTURE)
+    {
+        return Ok(None);
+    }
+
+    let mut formats = Vec::new();
+
+    for format in device.enum_formats()? {
+        if let Some(format) = read_format(&device, &path, format)? {
+            formats.push(format);
+        }
+    }
+
+    Ok(Some(V4l2DeviceInfo {
+        path,
+        name: caps.card,
+        formats,
+    }))
+}
+
+fn read_format(
+    device: &Device,
+    path: &Path,
+    desc: v4l::format::Description,
+) -> Result<Option<V4l2FormatInfo>, V4l2InputError> {
+    let fourcc = desc.fourcc;
+    let Ok(format) = fourcc.try_into() else {
+        return Ok(None);
+    };
+
+    let mut resolutions = Vec::new();
+
+    for framesize in device.enum_framesizes(fourcc)? {
+        for framesize in framesize.size.to_discrete() {
+            if let Some(resolution_info) = read_framesize(device, path, fourcc, framesize)? {
+                resolutions.push(resolution_info);
+            }
+        }
+    }
+
+    Ok(Some(V4l2FormatInfo {
+        format,
+        resolutions,
+    }))
+}
+
+fn read_framesize(
+    device: &Device,
+    path: &Path,
+    fourcc: v4l::FourCC,
+    framesize: v4l::framesize::Discrete,
+) -> Result<Option<V4l2ResolutionInfo>, V4l2InputError> {
+    let mut framerates = Vec::new();
+
+    for framerate in device.enum_frameintervals(fourcc, framesize.width, framesize.height)? {
+        match framerate.interval {
+            FrameIntervalEnum::Discrete(interval) => framerates.push(Framerate {
+                num: interval.denominator,
+                den: interval.numerator,
+            }),
+
+            FrameIntervalEnum::Stepwise(stepwise) => {
+                if let Some(framerates_iter) = read_stepwise_frame_interval(path, stepwise) {
+                    framerates.extend(framerates_iter)
+                }
+            }
+        }
+    }
+
+    Ok(Some(V4l2ResolutionInfo {
+        resolution: Resolution {
+            width: framesize.width as usize,
+            height: framesize.height as usize,
+        },
+        framerates,
+    }))
+}
+
+fn read_stepwise_frame_interval(
+    path: &Path,
+    stepwise: v4l::frameinterval::Stepwise,
+) -> Option<impl Iterator<Item = Framerate>> {
+    if stepwise.min.denominator != stepwise.max.denominator
+        || stepwise.min.denominator != stepwise.step.denominator
+    {
+        warn!(device=?path, "Cannot read frame interval.");
+        return None;
+    }
+
+    Some(
+        (stepwise.min.numerator..=stepwise.max.numerator)
+            .step_by(stepwise.step.numerator as usize)
+            .map(move |interval_num| Framerate {
+                num: stepwise.min.denominator,
+                den: interval_num,
+            }),
+    )
 }
