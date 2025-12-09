@@ -49,9 +49,7 @@ mod main_module {
         let input_id = InputId("input_1".into());
 
         Pipeline::register_input(&pipeline, input_id.clone(), v4l2_input_options()).unwrap();
-
         Pipeline::register_output(&pipeline, output_id, output_options(input_id.clone())).unwrap();
-
         Pipeline::start(&pipeline);
 
         std::thread::sleep(Duration::from_secs(30));
