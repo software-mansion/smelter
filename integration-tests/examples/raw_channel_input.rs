@@ -61,7 +61,7 @@ fn main() {
             video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                 preset: FfmpegH264EncoderPreset::Ultrafast,
                 bitrate: None,
-                keyframe_interval: 5000,
+                keyframe_interval_ms: 5000,
                 resolution: Resolution {
                     width: 1280,
                     height: 720,

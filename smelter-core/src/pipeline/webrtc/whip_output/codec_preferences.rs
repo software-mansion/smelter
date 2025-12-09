@@ -56,27 +56,28 @@ pub(super) fn resolve_video_preferences(
                     VideoEncoderOptions::FfmpegVp9(FfmpegVp9EncoderOptions {
                         resolution,
                         bitrate: None,
-                        keyframe_interval: KEYFRAME_INTERVAL,
+                        keyframe_interval_ms: KEYFRAME_INTERVAL,
                         pixel_format: OutputPixelFormat::YUV420P,
                         raw_options: Vec::new(),
                     }),
                     VideoEncoderOptions::FfmpegVp8(FfmpegVp8EncoderOptions {
                         resolution,
                         bitrate: None,
-                        keyframe_interval: KEYFRAME_INTERVAL,
+                        keyframe_interval_ms: KEYFRAME_INTERVAL,
                         raw_options: Vec::new(),
                     }),
                     if vulkan_supported {
                         VideoEncoderOptions::VulkanH264(VulkanH264EncoderOptions {
                             resolution,
                             bitrate: None,
+                            keyframe_interval_ms: KEYFRAME_INTERVAL,
                         })
                     } else {
                         VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                             preset: FfmpegH264EncoderPreset::Fast,
                             resolution,
                             bitrate: None,
-                            keyframe_interval: KEYFRAME_INTERVAL,
+                            keyframe_interval_ms: KEYFRAME_INTERVAL,
                             pixel_format: OutputPixelFormat::YUV420P,
                             raw_options: Vec::new(),
                         })

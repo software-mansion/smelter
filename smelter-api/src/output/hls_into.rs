@@ -91,7 +91,7 @@ impl HlsVideoEncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: keyframe_interval_ms.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
+                keyframe_interval_ms: keyframe_interval_ms.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
                     .clone()
@@ -99,12 +99,14 @@ impl HlsVideoEncoderOptions {
                     .into_iter()
                     .collect(),
             }),
-            HlsVideoEncoderOptions::VulkanH264 { bitrate } => {
-                core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
-                    resolution: resolution.into(),
-                    bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
-                })
-            }
+            HlsVideoEncoderOptions::VulkanH264 {
+                bitrate,
+                keyframe_interval_ms,
+            } => core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
+                resolution: resolution.into(),
+                bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
+                keyframe_interval_ms: keyframe_interval_ms.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
+            }),
         };
         Ok(encoder_options)
     }
