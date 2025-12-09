@@ -59,7 +59,7 @@ pub enum HlsVideoEncoderOptions {
         bitrate: Option<VideoEncoderBitrate>,
 
         /// (**default=`5000`**) Interval between keyframes, in milliseconds.
-        keyframe_interval_ms: Option<u64>,
+        keyframe_interval_ms: Option<u32>,
     },
 }
 

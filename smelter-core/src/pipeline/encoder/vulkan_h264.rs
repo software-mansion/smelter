@@ -8,7 +8,8 @@ use vk_video::{
 };
 
 use crate::{
-    graphics_context::GraphicsContext, pipeline::encoder::utils::bitrate_from_resolution_framerate,
+    graphics_context::GraphicsContext,
+    pipeline::encoder::utils::{bitrate_from_resolution_framerate, gop_size_from_ms_framerate},
     prelude::*,
 };
 
@@ -56,7 +57,19 @@ impl VideoEncoder for VulkanH264Encoder {
             },
         };
 
-        let encoder_params = device.encoder_parameters_high_quality(video_params, rate_control)?;
+        let mut encoder_params =
+            device.encoder_parameters_high_quality(video_params, rate_control)?;
+
+        let gop_size_raw =
+            gop_size_from_ms_framerate(options.keyframe_interval_ms as u64, framerate) as u32;
+        let gop_size = if gop_size_raw == 0 {
+            NonZero::new(1u32).unwrap()
+        } else {
+            NonZero::new(gop_size_raw).unwrap()
+        };
+
+        encoder_params.idr_period = Some(gop_size);
+
         let encoder = device.create_wgpu_textures_encoder(encoder_params)?;
 
         Ok((

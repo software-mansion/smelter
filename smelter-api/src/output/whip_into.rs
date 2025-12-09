@@ -127,7 +127,8 @@ impl WhipVideoEncoderOptions {
             } => core::WhipVideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval_ms: keyframe_interval_ms.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
+                keyframe_interval_ms: keyframe_interval_ms
+                    .unwrap_or(DEFAULT_KEYFRAME_INTERVAL as u32),
             }),
             WhipVideoEncoderOptions::FfmpegVp8 {
                 bitrate,

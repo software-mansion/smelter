@@ -32,7 +32,7 @@ pub struct FfmpegH264EncoderOptions {
 pub struct VulkanH264EncoderOptions {
     pub resolution: Resolution,
     pub bitrate: Option<VideoEncoderBitrate>,
-    pub keyframe_interval_ms: u64,
+    pub keyframe_interval_ms: u32,
 }
 
 #[derive(Debug, thiserror::Error)]

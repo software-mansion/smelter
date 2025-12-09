@@ -236,7 +236,7 @@ impl SingleBenchmarkPass {
                             height: self.output_resolution.height,
                         },
                         bitrate: None,
-                        keyframe_interval_ms: KEYFRAME_INTERVAL,
+                        keyframe_interval_ms: KEYFRAME_INTERVAL as u32,
                     })),
                 },
             },

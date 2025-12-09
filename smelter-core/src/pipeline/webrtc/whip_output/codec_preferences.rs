@@ -70,7 +70,7 @@ pub(super) fn resolve_video_preferences(
                         VideoEncoderOptions::VulkanH264(VulkanH264EncoderOptions {
                             resolution,
                             bitrate: None,
-                            keyframe_interval_ms: KEYFRAME_INTERVAL,
+                            keyframe_interval_ms: KEYFRAME_INTERVAL as u32,
                         })
                     } else {
                         VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
