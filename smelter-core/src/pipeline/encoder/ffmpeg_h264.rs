@@ -8,7 +8,9 @@ use tracing::{error, info, trace, warn};
 use crate::pipeline::encoder::ffmpeg_utils::{
     create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format, read_extradata,
 };
-use crate::pipeline::encoder::utils::bitrate_from_resolution_framerate;
+use crate::pipeline::encoder::utils::{
+    bitrate_from_resolution_framerate, gop_size_from_ms_framerate,
+};
 use crate::pipeline::ffmpeg_utils::FfmpegOptions;
 use crate::prelude::*;
 
@@ -190,10 +192,7 @@ fn initialize_ffmpeg_h264_options(
     options: &FfmpegH264EncoderOptions,
     encoder_name: &str,
 ) -> FfmpegOptions {
-    let mut ffmpeg_options = FfmpegOptions::from(&[
-        // TODO: (@jbrs) This should be based on framerate and set to 5000ms by default
-        ("g", "250"),
-    ]);
+    let mut ffmpeg_options = FfmpegOptions::default();
     match encoder_name {
         "libopenh264" => {
             ffmpeg_options.append(&[
@@ -290,6 +289,11 @@ fn initialize_ffmpeg_h264_options(
             }
         }
     }
+    let gop_size = gop_size_from_ms_framerate(options.keyframe_interval, ctx.output_framerate);
+    ffmpeg_options.append(&[
+        // Max distance between keyframes in bits, default is equivalent of 5000 ms.
+        ("g", &gop_size.to_string()),
+    ]);
     ffmpeg_options.append(&options.raw_options);
     ffmpeg_options
 }
