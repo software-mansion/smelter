@@ -9,7 +9,10 @@ use smelter_render::{Frame, OutputFrameFormat};
 use tracing::{error, info, trace, warn};
 
 use crate::pipeline::{
-    encoder::ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet},
+    encoder::{
+        ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet},
+        utils::bitrate_from_resolution_framerate,
+    },
     ffmpeg_utils::FfmpegOptions,
 };
 use crate::prelude::*;
@@ -33,12 +36,14 @@ impl VideoEncoder for FfmpegVp8Encoder {
         options: Self::Options,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
         info!(?options, "Initializing FFmpeg VP8 encoder");
+
+        let framerate = ctx.output_framerate;
+
         let codec = ffmpeg_next::codec::encoder::find(Id::VP8).ok_or(EncoderInitError::NoCodec)?;
 
         let mut encoder = Context::new().encoder().video()?;
 
         let pts_unit_secs = Rational::new(1, TIME_BASE);
-        let framerate = ctx.output_framerate;
         encoder.set_time_base(pts_unit_secs);
         encoder.set_format(Pixel::YUV420P);
         encoder.set_width(options.resolution.width as u32);
@@ -54,6 +59,8 @@ impl VideoEncoder for FfmpegVp8Encoder {
         }
 
         let mut ffmpeg_options = FfmpegOptions::from(&[
+            // TODO: This will be properly set in followup PR with gop size option in api
+            ("g", "250"),
             // Quality/Speed ratio modifier
             ("cpu-used", "0"),
             // Time to spend encoding.
@@ -62,6 +69,26 @@ impl VideoEncoder for FfmpegVp8Encoder {
             ("threads", "0"),
             // Zero-latency. Disables frame reordering.
             ("lag-in-frames", "0"),
+            // Min QP. QP represents the video quality.
+            ("qmin", "4"),
+            // Max QP. Range increased compared to defaults
+            // to allow low bitrate without dropping frames.
+            ("qmax", "63"),
+        ]);
+        let bitrate = options.bitrate.unwrap_or_else(|| {
+            bitrate_from_resolution_framerate(options.resolution, ctx.output_framerate)
+        });
+        let b = bitrate.average_bitrate;
+        let maxrate = bitrate.max_bitrate;
+        // Since FFmpeg takes bits, setting this to average_bitrate results in a 1000ms buffer.
+        let bufsize = bitrate.average_bitrate;
+        ffmpeg_options.append(&[
+            // Bitrate in b/s
+            ("b", &b.to_string()),
+            // Maximum bitrate. Higher values allow short spikes of bitrate.
+            ("maxrate", &maxrate.to_string()),
+            // Buffer to calculate average bitrate from.
+            ("bufsize", &bufsize.to_string()),
         ]);
         ffmpeg_options.append(&options.raw_options);
 

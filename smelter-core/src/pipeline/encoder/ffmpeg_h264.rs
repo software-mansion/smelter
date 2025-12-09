@@ -8,6 +8,7 @@ use tracing::{error, info, trace, warn};
 use crate::pipeline::encoder::ffmpeg_utils::{
     create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format, read_extradata,
 };
+use crate::pipeline::encoder::utils::bitrate_from_resolution_framerate;
 use crate::pipeline::ffmpeg_utils::FfmpegOptions;
 use crate::prelude::*;
 
@@ -51,39 +52,7 @@ impl VideoEncoder for FfmpegH264Encoder {
             (*encoder).color_trc = ffi::AVColorTransferCharacteristic::AVCOL_TRC_BT709;
         }
 
-        let mut ffmpeg_options = FfmpegOptions::from(&[
-            ("preset", preset_to_str(options.preset)),
-            // Auto number of threads
-            ("threads", "0"),
-        ]);
-
-        if codec_name != "libopenh264" && codec_name != "h264_videotoolbox" {
-            ffmpeg_options.append(&[
-                // Quality-based VBR (0-51)
-                ("crf", "23"),
-                // QP curve compression
-                ("qcomp", "0.6"),
-                //  Maximum motion vector search range
-                ("me_range", "16"),
-                // Max QP step
-                ("qdiff", "4"),
-                // Min QP
-                ("qmin", "0"),
-                // Max QP
-                ("qmax", "69"),
-                // Maximum GOP (Group of Pictures) size - number of frames between keyframe
-                ("g", "250"),
-                // QP factor between I and P frames
-                ("i_qfactor", "1.4"),
-                // QP factor between P and B frames
-                ("f_pb_factor", "1.3"),
-                // A comma-separated list of partitions to consider. Possible values: p8x8, p4x4, b8x8, i8x8, i4x4, none, all
-                ("partitions", default_partitions_for_preset(options.preset)),
-                // Subpixel motion estimation and mode decision (decision quality: 1=fast, 11=best)
-                ("subq", default_subq_mode_for_preset(options.preset)),
-            ]);
-        };
-        ffmpeg_options.append(&options.raw_options);
+        let ffmpeg_options = initialize_ffmpeg_h264_options(ctx, &options, codec_name);
 
         let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
         let extradata = read_extradata(&encoder);
@@ -184,7 +153,8 @@ fn preset_to_str(preset: FfmpegH264EncoderPreset) -> &'static str {
     }
 }
 
-fn default_partitions_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str {
+// Defaults the same as in libx264
+fn partitions_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str {
     match preset {
         FfmpegH264EncoderPreset::Ultrafast => "none",
         FfmpegH264EncoderPreset::Superfast => "i8x8,i4x4",
@@ -199,7 +169,8 @@ fn default_partitions_for_preset(preset: FfmpegH264EncoderPreset) -> &'static st
     }
 }
 
-fn default_subq_mode_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str {
+// Defaults the same as in libx264
+fn subq_mode_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str {
     match preset {
         FfmpegH264EncoderPreset::Ultrafast => "0",
         FfmpegH264EncoderPreset::Superfast => "1",
@@ -212,4 +183,113 @@ fn default_subq_mode_for_preset(preset: FfmpegH264EncoderPreset) -> &'static str
         FfmpegH264EncoderPreset::Veryslow => "10",
         FfmpegH264EncoderPreset::Placebo => "11",
     }
+}
+
+fn initialize_ffmpeg_h264_options(
+    ctx: &Arc<PipelineCtx>,
+    options: &FfmpegH264EncoderOptions,
+    encoder_name: &str,
+) -> FfmpegOptions {
+    let mut ffmpeg_options = FfmpegOptions::from(&[
+        // TODO: (@jbrs) This should be based on framerate and set to 5000ms by default
+        ("g", "250"),
+    ]);
+    match encoder_name {
+        "libopenh264" => {
+            ffmpeg_options.append(&[
+                // Min QP. QP represents the video quality.
+                ("qmin", "4"),
+                // Max QP. Range is increased compared to encoder defaults to allow
+                // low bitrate without dropping frames.
+                ("qmax", "51"),
+                // Rate control mode (0 - quality, 1 - bitrate)
+                ("rc_mode", "0"),
+                // Auto number of threads
+                ("threads", "0"),
+            ]);
+            let bitrate = options.bitrate.unwrap_or_else(|| {
+                bitrate_from_resolution_framerate(options.resolution, ctx.output_framerate)
+            });
+            let b = bitrate.average_bitrate;
+            let maxrate = bitrate.max_bitrate;
+
+            ffmpeg_options.append(&[
+                // Bitrate in b/s
+                ("b", &b.to_string()),
+                // Maximum bitrate. Higher values allow short spikes of bitrate.
+                ("maxrate", &maxrate.to_string()),
+            ]);
+        }
+        "h264_videotoolbox" => {
+            ffmpeg_options.append(&[
+                // Min QP. QP represents the video quality.
+                ("qmin", "4"),
+                // Max QP. Range is increased compared to encoder defaults to allow
+                // low bitrate without dropping frames.
+                ("qmax", "51"),
+                // Disable b frames
+                ("bf", "0"),
+            ]);
+            let bitrate = options.bitrate.unwrap_or_else(|| {
+                bitrate_from_resolution_framerate(options.resolution, ctx.output_framerate)
+            });
+            let b = bitrate.average_bitrate;
+            let maxrate = bitrate.max_bitrate;
+
+            ffmpeg_options.append(&[
+                // Bitrate in b/s
+                ("b", &b.to_string()),
+                // Maximum bitrate. Higher values allow short spikes of bitrate.
+                ("maxrate", &maxrate.to_string()),
+            ]);
+        }
+        _ => {
+            // Defaults the same as in x264 encoder
+            ffmpeg_options.append(&[
+                ("preset", preset_to_str(options.preset)),
+                // QP curve compression
+                ("qcomp", "0.6"),
+                //  Maximum motion vector search range
+                ("me_range", "16"),
+                // Max QP step
+                ("qdiff", "4"),
+                // Min QP
+                ("qmin", "4"),
+                // Max QP
+                ("qmax", "69"),
+                // QP factor between I and P frames
+                ("i_qfactor", "1.4"),
+                // QP factor between P and B frames
+                ("f_pb_factor", "1.3"),
+                // A comma-separated list of partitions to consider. Possible values: p8x8, p4x4, b8x8, i8x8, i4x4, none, all
+                ("partitions", partitions_for_preset(options.preset)),
+                // Subpixel motion estimation and mode decision (decision quality: 1=fast, 11=best)
+                ("subq", subq_mode_for_preset(options.preset)),
+                // Auto number of threads
+                ("threads", "0"),
+            ]);
+            match options.bitrate {
+                Some(bitrate) => {
+                    let b = bitrate.average_bitrate;
+                    let maxrate = bitrate.max_bitrate;
+                    // Since FFmpeg takes bits, setting this to average_bitrate results in a 1000ms buffer.
+                    let bufsize = bitrate.average_bitrate;
+                    ffmpeg_options.append(&[
+                        // Bitrate in b/s
+                        ("b", &b.to_string()),
+                        // Maximum bitrate. Higher values allow short spikes of bitrate.
+                        ("maxrate", &maxrate.to_string()),
+                        // Buffer to calculate average bitrate from.
+                        ("bufsize", &bufsize.to_string()),
+                    ]);
+                }
+                None => {
+                    // Quality-based VBR (0-51), default if bitrate is not set
+                    ffmpeg_options.append(&[("crf", "23")]);
+                }
+            }
+        }
+    }
+    ffmpeg_options.append(&options.raw_options);
+    ffmpeg_options
 }

@@ -102,6 +102,7 @@ mod main_module {
         RegisterOutputOptions {
             output_options: ProtocolOutputOptions::Rtmp(RtmpOutputOptions {
                 video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
+                    bitrate: None,
                     preset: FfmpegH264EncoderPreset::Ultrafast,
                     resolution: VIDEO_RESOLUTION,
                     pixel_format: OutputPixelFormat::YUV420P,

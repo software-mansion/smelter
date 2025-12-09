@@ -1,5 +1,5 @@
 import type * as Api from '../../api.js';
-import type { OutputEndCondition, VulkanH264EncoderBitrate } from './common.js';
+import type { OutputEndCondition, VideoEncoderBitrate } from './common.js';
 
 export type RtpVideoOptions = {
   /**
@@ -20,6 +20,10 @@ export type RtpVideoEncoderOptions =
   | {
       type: 'ffmpeg_h264';
       /**
+       * Encoding bitrate. Default value depends on chosen encoder.
+       */
+      bitrate?: VideoEncoderBitrate;
+      /**
        * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
        */
       preset?: Api.H264EncoderPreset;
@@ -35,12 +39,22 @@ export type RtpVideoEncoderOptions =
   | {
       type: 'ffmpeg_vp8';
       /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+       * For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate;
+      /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
       ffmpegOptions?: Record<string, string>;
     }
   | {
       type: 'ffmpeg_vp9';
+      /**
+       * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
+       * For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
+       */
+      bitrate?: VideoEncoderBitrate;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
@@ -56,7 +70,7 @@ export type RtpVideoEncoderOptions =
        * Encoding bitrate in bits/second. If not provided, bitrate is calculated based on resolution and framerate.
        * For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
-      bitrate?: VulkanH264EncoderBitrate;
+      bitrate?: VideoEncoderBitrate;
     };
 
 export type RtpAudioOptions = {

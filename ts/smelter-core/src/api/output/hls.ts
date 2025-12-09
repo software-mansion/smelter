@@ -1,6 +1,6 @@
 import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputRequest } from '../output';
-import { intoOutputEosCondition, intoVulkanH264EncoderBitrate } from './common';
+import { intoOutputEosCondition, intoVideoEncoderBitrate } from './common';
 
 export function intoRegisterHlsOutput(
   output: Outputs.RegisterHlsOutput,
@@ -34,6 +34,7 @@ function intoHlsVideoEncoderOptions(
     case 'ffmpeg_h264':
       return {
         type: 'ffmpeg_h264',
+        bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
         preset: encoder.preset,
         pixel_format: encoder.pixelFormat,
         ffmpeg_options: encoder.ffmpegOptions,
@@ -41,7 +42,7 @@ function intoHlsVideoEncoderOptions(
     case 'vulkan_h264':
       return {
         type: 'vulkan_h264',
-        bitrate: encoder.bitrate && intoVulkanH264EncoderBitrate(encoder.bitrate),
+        bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
       };
   }
 }

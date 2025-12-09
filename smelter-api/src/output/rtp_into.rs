@@ -112,10 +112,12 @@ impl RtpVideoEncoderOptions {
         let encoder_options = match self {
             RtpVideoEncoderOptions::FfmpegH264 {
                 preset,
+                bitrate,
                 pixel_format,
                 ffmpeg_options,
             } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
+                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
                 resolution: resolution.into(),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
@@ -130,21 +132,25 @@ impl RtpVideoEncoderOptions {
                     bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
                 })
             }
-            RtpVideoEncoderOptions::FfmpegVp8 { ffmpeg_options } => {
-                core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
-                    resolution: resolution.into(),
-                    raw_options: ffmpeg_options
-                        .clone()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .collect(),
-                })
-            }
+            RtpVideoEncoderOptions::FfmpegVp8 {
+                bitrate,
+                ffmpeg_options,
+            } => core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
+                resolution: resolution.into(),
+                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
+                raw_options: ffmpeg_options
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            }),
             RtpVideoEncoderOptions::FfmpegVp9 {
                 pixel_format,
+                bitrate,
                 ffmpeg_options,
             } => core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
                 resolution: resolution.into(),
+                bitrate: bitrate.map(|b| b.try_into()).transpose()?,
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
                     .clone()

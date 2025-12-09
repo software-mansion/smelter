@@ -1,6 +1,6 @@
 import type { Api, Outputs, _smelterInternals } from '@swmansion/smelter';
 import type { RegisterOutputRequest } from '../output';
-import { intoOutputEosCondition, intoVulkanH264EncoderBitrate } from './common';
+import { intoOutputEosCondition, intoVideoEncoderBitrate } from './common';
 
 export function intoRegisterWhipClientOutput(
   output: Outputs.RegisterWhipClientOutput,
@@ -41,17 +41,20 @@ function intoWhipVideoEncoderPreferences(
       case 'ffmpeg_vp9':
         return {
           type: 'ffmpeg_vp9',
+          bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
           pixel_format: encoder.pixelFormat,
           ffmpeg_options: encoder.ffmpegOptions,
         };
       case 'ffmpeg_vp8':
         return {
           type: 'ffmpeg_vp8',
+          bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
           ffmpeg_options: encoder.ffmpegOptions,
         };
       case 'ffmpeg_h264':
         return {
           type: 'ffmpeg_h264',
+          bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
           preset: encoder.preset,
           pixel_format: encoder.pixelFormat,
           ffmpeg_options: encoder.ffmpegOptions,
@@ -59,7 +62,7 @@ function intoWhipVideoEncoderPreferences(
       case 'vulkan_h264':
         return {
           type: 'vulkan_h264',
-          bitrate: encoder.bitrate && intoVulkanH264EncoderBitrate(encoder.bitrate),
+          bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
         };
       case 'any':
         return {

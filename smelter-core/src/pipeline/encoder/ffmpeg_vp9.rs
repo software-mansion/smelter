@@ -35,12 +35,14 @@ impl VideoEncoder for FfmpegVp9Encoder {
         options: Self::Options,
     ) -> Result<(Self, VideoEncoderConfig), EncoderInitError> {
         info!(?options, "Initializing FFmpeg VP9 encoder");
+
+        let framerate = ctx.output_framerate;
+
         let codec = ffmpeg_next::codec::encoder::find(Id::VP9).ok_or(EncoderInitError::NoCodec)?;
 
         let mut encoder = Context::new().encoder().video()?;
 
         let pts_unit_secs = Rational::new(1, TIME_BASE);
-        let framerate = ctx.output_framerate;
         encoder.set_time_base(pts_unit_secs);
         encoder.set_format(into_ffmpeg_pixel_format(options.pixel_format));
         encoder.set_width(options.resolution.width as u32);
@@ -57,6 +59,8 @@ impl VideoEncoder for FfmpegVp9Encoder {
 
         // configuration based on https://developers.google.com/media/vp9/live-encoding
         let mut ffmpeg_options = FfmpegOptions::from(&[
+            // TODO: This will be properly set in followup PR with gop size option in api
+            ("g", "250"),
             // Quality/Speed ratio modifier
             ("speed", "5"),
             // Time to spend encoding.
@@ -67,10 +71,11 @@ impl VideoEncoder for FfmpegVp9Encoder {
             ("frame-parallel", "1"),
             // Auto number of threads to use.
             ("threads", "0"),
-            // Minimum value for the quantizer.
+            // Min QP. QP represents the video quality.
             ("qmin", "4"),
-            // Mazimum value for the quantizer.
-            ("qmax", "48"),
+            // Max QP. Range increased compared to defaults
+            // to allow low bitrate without dropping frames.
+            ("qmax", "63"),
             // Enable row-multithreading. Allows use of up to 2x thread as tile columns. 0 = off, 1 = on.
             ("row-mt", "1"),
             // Enable error resiliency features.
@@ -78,6 +83,31 @@ impl VideoEncoder for FfmpegVp9Encoder {
             // Maximum number of frames to lag
             ("lag-in-frames", "0"),
         ]);
+        match options.bitrate {
+            Some(bitrate) => {
+                let b = bitrate.average_bitrate;
+                let maxrate = bitrate.max_bitrate;
+                // Since FFmpeg takes bits, setting this to average_bitrate results in a 1000ms buffer.
+                let bufsize = bitrate.average_bitrate;
+                ffmpeg_options.append(&[
+                    // Bitrate in b/s
+                    ("b", &b.to_string()),
+                    // Maximum bitrate. Higher values allow short spikes of bitrate.
+                    ("maxrate", &maxrate.to_string()),
+                    // Buffer to calculate average bitrate from.
+                    ("bufsize", &bufsize.to_string()),
+                ]);
+            }
+            None => {
+                let crf = crf_from_frame_height(options.resolution.height as u32);
+                ffmpeg_options.append(&[
+                    // Constant rate factor, set based on resolution
+                    ("crf", &crf.to_string()),
+                    // Bitrate set to 0 to enable constant quality rate control mode
+                    ("b", "0"),
+                ]);
+            }
+        }
         ffmpeg_options.append(&options.raw_options);
 
         let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
@@ -160,5 +190,18 @@ impl FfmpegVp9Encoder {
                 }
             }
         }).collect()
+    }
+}
+
+fn crf_from_frame_height(height: u32) -> u32 {
+    // Settings recommended by https://developers.google.com/media/vp9/settings/vod/#quality
+    match height {
+        0..=240 => 37,
+        241..=360 => 36,
+        361..=480 => 34,
+        481..=720 => 32,
+        721..=1080 => 31,
+        1081..=1440 => 24,
+        1441.. => 15,
     }
 }
