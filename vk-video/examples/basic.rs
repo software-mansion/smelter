@@ -1,7 +1,9 @@
 #[cfg(vulkan)]
 fn main() {
-    use std::io::Write;
+    use std::{io::Write, sync::Arc, thread, time::Duration};
 
+    use signal_hook::{consts, iterator::Signals};
+    use tokio::runtime::Runtime;
     use vk_video::{EncodedInputChunk, Frame, VulkanInstance, parameters::DecoderParameters};
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -35,25 +37,36 @@ fn main() {
         .create_bytes_decoder(DecoderParameters::default())
         .unwrap();
 
-    let mut output_file = std::fs::File::create("output.nv12").unwrap();
+    let runtime = Arc::new(Runtime::new().unwrap());
+    runtime.spawn(async move {
+        loop {
+            println!("Decode");
+            let mut output_file = std::fs::File::create("output.nv12").unwrap();
 
-    for chunk in h264_bytestream.chunks(256) {
-        let data = EncodedInputChunk {
-            data: chunk,
-            pts: None,
-        };
+            for chunk in h264_bytestream.chunks(256) {
+                let data = EncodedInputChunk {
+                    data: chunk,
+                    pts: None,
+                };
 
-        let frames = decoder.decode(data).unwrap();
+                let frames = decoder.decode(data).unwrap();
 
-        for Frame { data, .. } in frames {
-            output_file.write_all(&data.frame).unwrap();
+                for Frame { data, .. } in frames {
+                    output_file.write_all(&data.frame).unwrap();
+                }
+            }
+
+            let remaining_frames = decoder.flush().unwrap();
+            for Frame { data, .. } in remaining_frames {
+                output_file.write_all(&data.frame).unwrap();
+            }
         }
-    }
+    });
 
-    let remaining_frames = decoder.flush().unwrap();
-    for Frame { data, .. } in remaining_frames {
-        output_file.write_all(&data.frame).unwrap();
-    }
+    thread::sleep(Duration::from_secs(5));
+    println!("DONE");
+    // let mut signals = Signals::new([consts::SIGINT]).unwrap();
+    // signals.forever().next();
 }
 
 #[cfg(not(vulkan))]

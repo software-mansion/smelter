@@ -30,7 +30,7 @@ fn client_code() -> Result<()> {
             "type": "rtp_stream",
             "port": INPUT_PORT,
             "video": {
-                "decoder": "ffmpeg_h264"
+                "decoder": "vulkan_h264"
             }
         }),
     )?;
@@ -55,8 +55,7 @@ fn client_code() -> Result<()> {
                     "height": VIDEO_RESOLUTION.height,
                 },
                 "encoder": {
-                    "type": "ffmpeg_h264",
-                    "preset": "ultrafast"
+                    "type": "vulkan_h264",
                 },
                 "initial": {
                     "root": {

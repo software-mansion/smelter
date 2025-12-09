@@ -4,6 +4,7 @@ use smelter_render::error::ErrorStack;
 use tracing::error;
 use tracing::info;
 
+use std::time::Duration;
 use std::{net::SocketAddr, process, sync::Arc, thread};
 use tokio::runtime::Runtime;
 
@@ -36,8 +37,10 @@ pub fn run() {
         .unwrap();
     match chromium_context {
         None => {
+            println!("Using signal");
             let mut signals = Signals::new([consts::SIGINT]).unwrap();
             signals.forever().next();
+            // println!("Using signal2");
         }
         Some(chromium_context) => {
             if let Err(err) = chromium_context.run_event_loop() {
@@ -46,8 +49,18 @@ pub fn run() {
                     ErrorStack::new(&err).into_string()
                 )
             }
+
+            println!("HRER");
         }
     }
+
+    // thread::sleep(Duration::from_secs(15));
+    // process::exit(1);
+    // thread::sleep(Duration::from_secs(25));
+    // unsafe {
+    //     libc::exit(1);
+    // }
+    // panic!();
 }
 
 pub fn run_api(
