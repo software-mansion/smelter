@@ -70,6 +70,16 @@ impl<T> FrameSorter<T> {
         result
     }
 
+    pub(crate) fn put_frames(&mut self, frames: Vec<DecodeResult<T>>) -> Vec<Frame<T>> {
+        let mut result = Vec::new();
+        for unsorted_frame in frames {
+            let mut sorted_frames = self.put(unsorted_frame);
+            result.append(&mut sorted_frames);
+        }
+
+        result
+    }
+
     pub(crate) fn flush(&mut self) -> Vec<Frame<T>> {
         let mut result = Vec::with_capacity(self.frames.len());
 
