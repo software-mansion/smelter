@@ -39,6 +39,7 @@ export function intoWhepVideoEncoderOptions(
       return {
         type: 'ffmpeg_vp9',
         bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
+        keyframe_interval_ms: encoder.keyframeIntervalMs,
         pixel_format: encoder.pixelFormat,
         ffmpeg_options: encoder.ffmpegOptions,
       };
@@ -46,12 +47,14 @@ export function intoWhepVideoEncoderOptions(
       return {
         type: 'ffmpeg_vp8',
         bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
+        keyframe_interval_ms: encoder.keyframeIntervalMs,
         ffmpeg_options: encoder.ffmpegOptions,
       };
     case 'ffmpeg_h264':
       return {
         type: 'ffmpeg_h264',
         bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
+        keyframe_interval_ms: encoder.keyframeIntervalMs,
         preset: encoder.preset,
         pixel_format: encoder.pixelFormat,
         ffmpeg_options: encoder.ffmpegOptions,
@@ -60,6 +63,7 @@ export function intoWhepVideoEncoderOptions(
       return {
         type: 'vulkan_h264',
         bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
+        keyframe_interval_ms: encoder.keyframeIntervalMs,
       };
   }
 }

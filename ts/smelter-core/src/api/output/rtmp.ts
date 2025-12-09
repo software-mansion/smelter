@@ -41,6 +41,7 @@ function intoRtmpClientVideoEncoderOptions(
       return {
         type: 'ffmpeg_h264',
         bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
+        keyframe_interval_ms: encoder.keyframeIntervalMs,
         preset: encoder.preset,
         pixel_format: encoder.pixelFormat,
         ffmpeg_options: encoder.ffmpegOptions,
@@ -49,6 +50,7 @@ function intoRtmpClientVideoEncoderOptions(
       return {
         type: 'vulkan_h264',
         bitrate: encoder.bitrate && intoVideoEncoderBitrate(encoder.bitrate),
+        keyframe_interval_ms: encoder.keyframeIntervalMs,
       };
   }
 }
