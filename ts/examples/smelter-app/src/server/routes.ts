@@ -17,6 +17,7 @@ type InputState = {
   inputId: string;
   title: string;
   description: string;
+  showTitle: boolean;
   sourceState: 'live' | 'offline' | 'unknown' | 'always-live';
   status: 'disconnected' | 'pending' | 'connected';
   volume: number;
@@ -76,7 +77,6 @@ routes.get<RoomIdParams>('/room/:roomId', async (req, res) => {
   });
 });
 
-//for testing purposes only
 routes.get('/rooms', async (_req, res) => {
   const adminKey = _req.headers['x-admin-key'];
   if (!adminKey || adminKey !== 'super-secret-hardcode-admin-key') {
@@ -117,6 +117,7 @@ const UpdateRoomSchema = Type.Object({
       Type.Literal('primary-on-left'),
       Type.Literal('primary-on-top'),
       Type.Literal('picture-in-picture'),
+      Type.Literal('transition'),
     ])
   ),
 });
@@ -216,6 +217,7 @@ routes.post<RoomAndInputIdParams>('/room/:roomId/input/:inputId/disconnect', asy
 
 const UpdateInputSchema = Type.Object({
   volume: Type.Number({ maximum: 1, minimum: 0 }),
+  showTitle: Type.Optional(Type.Boolean()),
   shaders: Type.Optional(
     Type.Array(
       Type.Object({
@@ -260,6 +262,7 @@ function publicInputState(input: RoomInputState): InputState {
         inputId: input.inputId,
         title: input.metadata.title,
         description: input.metadata.description,
+        showTitle: input.showTitle,
         sourceState: 'always-live',
         status: input.status,
         volume: input.volume,
@@ -270,6 +273,7 @@ function publicInputState(input: RoomInputState): InputState {
         inputId: input.inputId,
         title: input.metadata.title,
         description: input.metadata.description,
+        showTitle: input.showTitle,
         sourceState: input.monitor.isLive() ? 'live' : 'offline',
         status: input.status,
         volume: input.volume,
@@ -281,6 +285,7 @@ function publicInputState(input: RoomInputState): InputState {
         inputId: input.inputId,
         title: input.metadata.title,
         description: input.metadata.description,
+        showTitle: input.showTitle,
         sourceState: input.monitor.isLive() ? 'live' : 'offline',
         status: input.status,
         volume: input.volume,
@@ -292,6 +297,7 @@ function publicInputState(input: RoomInputState): InputState {
         inputId: input.inputId,
         title: input.metadata.title,
         description: input.metadata.description,
+        showTitle: input.showTitle,
         sourceState: input.monitor.isLive() ? 'live' : 'offline',
         status: input.status,
         volume: input.volume,

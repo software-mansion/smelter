@@ -79,18 +79,23 @@ export function Input({ input }: { input: InputConfig }) {
         ) : (
           <View />
         )}
-        <View
-          style={{
-            backgroundColor: '#493880',
-            height: 90,
-            padding: 20,
-            borderRadius: 10,
-            direction: 'column',
-          }}>
-          <Text style={{ fontSize: 40, color: 'white' }}>{input?.title}</Text>
-          <View style={{ height: 10 }} />
-          <Text style={{ fontSize: 25, color: 'white' }}>{input?.description}</Text>
-        </View>
+        {input.showTitle !== false && (
+          <View
+            style={{
+              backgroundColor: '#493880',
+              height: 90,
+              padding: 20,
+              borderRadius: 0,
+              direction: 'column',
+              overflow: 'visible',
+              bottom: 0,
+              left: 0,
+            }}>
+            <Text style={{ fontSize: 40, color: 'white' }}>{input?.title}</Text>
+            <View style={{ height: 10 }} />
+            <Text style={{ fontSize: 25, color: 'white' }}>{input?.description}</Text>
+          </View>
+        )}
       </View>
     </Rescaler>
   );
@@ -103,27 +108,34 @@ export function Input({ input }: { input: InputConfig }) {
 export function SmallInput({
   input,
   resolution = { width: 640, height: 360 },
-  showTitle = true,
 }: {
   input: InputConfig;
   resolution?: Resolution;
-  showTitle?: boolean;
 }) {
   const activeShaders = input.shaders.filter(shader => shader.enabled);
 
   const smallInputComponent = (
-    <View style={{ width: resolution.width, height: resolution.height, direction: 'column' }}>
-      <Rescaler style={{ rescaleMode: 'fill' }}>
+    <View
+      style={{
+        width: resolution.width,
+        height: resolution.height,
+        direction: 'column',
+        overflow: 'visible',
+      }}>
+      <Rescaler style={{ rescaleMode: 'fit' }}>
         <InputStream inputId={input.inputId} volume={input.volume} />
       </Rescaler>
-      {showTitle && (
+      {input.showTitle !== false && (
         <View
           style={{
             backgroundColor: '#493880',
             height: 40,
             padding: 20,
-            borderRadius: 10,
+            borderRadius: 0,
             direction: 'column',
+            overflow: 'visible',
+            bottom: 0,
+            left: 0,
           }}>
           <Text style={{ fontSize: 30, color: 'white' }}>{input.title}</Text>
         </View>

@@ -34,7 +34,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         return vec4(0.0, 0.0, 0.0, 0.0);
     }
     let color = textureSample(textures[0], sampler_, input.tex_coords);
-    // Standard luminance formula for grayscale
     let gray = 0.3 * color.r + 0.59 * color.g + 0.11 * color.b;
     return vec4<f32>(gray, gray, gray, color.a);
 }

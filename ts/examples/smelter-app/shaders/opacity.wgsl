@@ -16,7 +16,7 @@ struct BaseShaderParameters {
 };
 
 struct ShaderOptions {
-    opacity: f32,     // 0..1
+    opacity: f32,
 
 };
 

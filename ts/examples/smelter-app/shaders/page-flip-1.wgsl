@@ -39,9 +39,9 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 }
 
 fn rotate_y(v: vec3<f32>, a: f32) -> vec3<f32> {
-    let c = cos(a);
-    let s = sin(a);
-    return vec3<f32>( c*v.x + s*v.z, v.y, -s*v.x + c*v.z );
+    let cos_a = cos(a);
+    let sin_a = sin(a);
+    return vec3<f32>( cos_a*v.x + sin_a*v.z, v.y, -sin_a*v.x + cos_a*v.z );
 }
 fn saturate(x: f32) -> f32 { return clamp(x, 0.0, 1.0); }
 

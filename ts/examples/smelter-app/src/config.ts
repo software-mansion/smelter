@@ -48,6 +48,8 @@ export const config: Config =
           ffmpegOptions: {
             tune: 'zerolatency',
             thread_type: 'slice',
+            preset: 'ultrafast',
+            bitrate: '20000000',
           },
         },
       };
