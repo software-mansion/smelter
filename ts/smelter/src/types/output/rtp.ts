@@ -24,7 +24,7 @@ export type RtpVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
       keyframeInterval?: number;
       /**
@@ -48,7 +48,7 @@ export type RtpVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
       keyframeInterval?: number;
       /**
@@ -64,7 +64,7 @@ export type RtpVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
       keyframeInterval?: number;
       /**

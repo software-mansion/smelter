@@ -24,7 +24,7 @@ export type Mp4VideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
       keyframeInterval?: number;
       /**
