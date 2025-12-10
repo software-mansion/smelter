@@ -367,9 +367,9 @@ export type RtpVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
@@ -388,9 +388,9 @@ export type RtpVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
       /**
        * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
        */
@@ -405,9 +405,9 @@ export type RtpVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
@@ -428,7 +428,7 @@ export type RtpVideoEncoderOptions =
       /**
        * (**default=`5000`**) Interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
     };
 export type H264EncoderPreset =
   | "ultrafast"
@@ -935,9 +935,9 @@ export type RtmpClientVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
@@ -958,7 +958,7 @@ export type RtmpClientVideoEncoderOptions =
       /**
        * (**default=`5000`**) Interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
     };
 export type RtmpClientAudioEncoderOptions = {
   type: "aac";
@@ -979,9 +979,9 @@ export type Mp4VideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
@@ -1002,7 +1002,7 @@ export type Mp4VideoEncoderOptions =
       /**
        * (**default=`5000`**) Interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
     };
 export type Mp4AudioEncoderOptions = {
   type: "aac";
@@ -1023,9 +1023,9 @@ export type WhipVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
@@ -1044,9 +1044,9 @@ export type WhipVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
@@ -1061,9 +1061,9 @@ export type WhipVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
@@ -1084,7 +1084,7 @@ export type WhipVideoEncoderOptions =
       /**
        * (**default=`5000`**) Interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
     }
   | {
       type: "any";
@@ -1120,9 +1120,9 @@ export type WhepVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
@@ -1141,9 +1141,9 @@ export type WhepVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
       /**
        * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
        */
@@ -1158,9 +1158,9 @@ export type WhepVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
@@ -1181,7 +1181,7 @@ export type WhepVideoEncoderOptions =
       /**
        * (**default=`5000`**) Interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
     };
 export type WhepAudioEncoderOptions = {
   type: "opus";
@@ -1214,9 +1214,9 @@ export type HlsVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
-       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
@@ -1237,7 +1237,7 @@ export type HlsVideoEncoderOptions =
       /**
        * (**default=`5000`**) Interval between keyframes, in milliseconds.
        */
-      keyframe_interval_ms?: number | null;
+      keyframe_interval?: number | null;
     };
 export type HlsAudioEncoderOptions = {
   type: "aac";
