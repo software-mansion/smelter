@@ -61,6 +61,9 @@ pub fn create_vulkan_graphics_ctx(
         })
         .next()
         .ok_or(CreateGraphicsContextError::NoAdapter)?;
+
+    let adapter_info = adapter.info();
+    info!("Using {} adapter with Vulkan backend", adapter_info.name);
     let device = adapter.create_device(vulkan_features, limits.clone())?;
 
     Ok(GraphicsContext {
