@@ -44,7 +44,7 @@ pub enum HlsVideoEncoderOptions {
         bitrate: Option<VideoEncoderBitrate>,
 
         /// (**default=`5000`**) Interval between keyframes, in milliseconds.
-        keyframe_interval_ms: Option<u64>,
+        keyframe_interval: Option<u64>,
 
         /// (**default=`"yuv420p"`**) Encoder pixel format
         pixel_format: Option<PixelFormat>,
@@ -59,7 +59,7 @@ pub enum HlsVideoEncoderOptions {
         bitrate: Option<VideoEncoderBitrate>,
 
         /// (**default=`5000`**) Interval between keyframes, in milliseconds.
-        keyframe_interval_ms: Option<u32>,
+        keyframe_interval: Option<u64>,
     },
 }
 
