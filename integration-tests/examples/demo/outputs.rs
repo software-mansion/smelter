@@ -166,10 +166,6 @@ impl VideoEncoder {
                     "thread_type": "slice",
                 },
             }),
-            Self::FfmpegH264 => json!({
-                "type": "ffmpeg_h264",
-                "keyframe_interval": 10_000.2137,
-            }),
             _ => json!({
                 "type": self.to_string(),
             }),
