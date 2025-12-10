@@ -27,7 +27,7 @@ use crate::{
     utils::benchmark_pipeline_options,
 };
 
-const KEYFRAME_INTERVAL: u64 = 5000;
+const KEYFRAME_INTERVAL: Duration = Duration::from_millis(5000);
 
 #[derive(Debug, Clone)]
 pub enum InputFile {
@@ -198,7 +198,7 @@ impl SingleBenchmarkPass {
                     video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                         preset,
                         bitrate: None,
-                        keyframe_interval_ms: KEYFRAME_INTERVAL,
+                        keyframe_interval: KEYFRAME_INTERVAL,
                         resolution: smelter_render::Resolution {
                             width: self.output_resolution.width,
                             height: self.output_resolution.height,
@@ -236,7 +236,7 @@ impl SingleBenchmarkPass {
                             height: self.output_resolution.height,
                         },
                         bitrate: None,
-                        keyframe_interval_ms: KEYFRAME_INTERVAL as u32,
+                        keyframe_interval: KEYFRAME_INTERVAL,
                     })),
                 },
             },

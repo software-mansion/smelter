@@ -110,7 +110,7 @@ impl VideoEncoder for FfmpegVp9Encoder {
 
         // NOTE: There is a bug in webrtc-rs causing every VP9 frame to be recognized as a
         // keyframe.
-        let gop_size = gop_size_from_ms_framerate(options.keyframe_interval_ms, framerate);
+        let gop_size = gop_size_from_ms_framerate(options.keyframe_interval, framerate);
         ffmpeg_options.append(&[
             // Max distance between keyframes in bits, default is equivalent of 5000 ms.
             ("g", &gop_size.to_string()),
