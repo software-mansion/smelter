@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::common_core::prelude as core;
 use crate::output::DEFAULT_KEYFRAME_INTERVAL;
 use crate::*;
@@ -91,7 +93,9 @@ impl Mp4VideoEncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: keyframe_interval.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
+                keyframe_interval: Duration::from_millis(
+                    keyframe_interval.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
+                ),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
                     .clone()
@@ -105,7 +109,9 @@ impl Mp4VideoEncoderOptions {
             } => core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
-                keyframe_interval: keyframe_interval.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
+                keyframe_interval: Duration::from_millis(
+                    keyframe_interval.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
+                ),
             }),
         };
         Ok(encoder_options)
