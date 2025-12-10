@@ -101,7 +101,7 @@ impl WhepVideoEncoderOptions {
             } => core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
-                keyframe_interval: keyframe_interval.unwrap_or(DEFAULT_KEYFRAME_INTERVAL as u32),
+                keyframe_interval: keyframe_interval.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
             }),
             WhepVideoEncoderOptions::FfmpegVp8 {
                 bitrate,
