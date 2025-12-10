@@ -43,7 +43,7 @@ pub enum HlsVideoEncoderOptions {
         /// Encoding bitrate. Default value depends on chosen encoder.
         bitrate: Option<VideoEncoderBitrate>,
 
-        /// (**default=`5000`**) Interval between keyframes, in milliseconds.
+        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
         keyframe_interval: Option<f64>,
 
         /// (**default=`"yuv420p"`**) Encoder pixel format
