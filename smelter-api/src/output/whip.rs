@@ -43,7 +43,7 @@ pub enum WhipVideoEncoderOptions {
         bitrate: Option<VideoEncoderBitrate>,
 
         /// (**default=`5000`**) Interval between keyframes, in milliseconds.
-        keyframe_interval: Option<u64>,
+        keyframe_interval: Option<f64>,
 
         /// (**default=`"yuv420p"`**) Encoder pixel format
         pixel_format: Option<PixelFormat>,
@@ -58,7 +58,7 @@ pub enum WhipVideoEncoderOptions {
         bitrate: Option<VideoEncoderBitrate>,
 
         /// (**default=`5000`**) Interval between keyframes, in milliseconds.
-        keyframe_interval: Option<u64>,
+        keyframe_interval: Option<f64>,
 
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
@@ -70,7 +70,7 @@ pub enum WhipVideoEncoderOptions {
         bitrate: Option<VideoEncoderBitrate>,
 
         /// (**default=`5000`**) Interval between keyframes, in milliseconds.
-        keyframe_interval: Option<u64>,
+        keyframe_interval: Option<f64>,
 
         /// (**default=`"yuv420p"`**) Encoder pixel format
         pixel_format: Option<PixelFormat>,
@@ -85,7 +85,7 @@ pub enum WhipVideoEncoderOptions {
         bitrate: Option<VideoEncoderBitrate>,
 
         /// (**default=`5000`**) Interval between keyframes, in milliseconds.
-        keyframe_interval: Option<u64>,
+        keyframe_interval: Option<f64>,
     },
     #[serde(rename = "any")]
     Any,

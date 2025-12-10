@@ -1,7 +1,5 @@
-use std::time::Duration;
-
 use crate::common_core::prelude as core;
-use crate::output::DEFAULT_KEYFRAME_INTERVAL;
+use crate::output::common_into::duration_from_keyframe_interval;
 use crate::*;
 
 impl TryFrom<HlsOutput> for core::RegisterOutputOptions {
@@ -93,9 +91,7 @@ impl HlsVideoEncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: Duration::from_millis(
-                    keyframe_interval.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
-                ),
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
                     .clone()
@@ -109,9 +105,7 @@ impl HlsVideoEncoderOptions {
             } => core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
-                keyframe_interval: Duration::from_millis(
-                    keyframe_interval.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
-                ),
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval),
             }),
         };
         Ok(encoder_options)

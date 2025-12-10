@@ -1,7 +1,5 @@
-use std::time::Duration;
-
 use crate::common_core::prelude as core;
-use crate::output::DEFAULT_KEYFRAME_INTERVAL;
+use crate::output::common_into::duration_from_keyframe_interval;
 use crate::*;
 
 impl TryFrom<RtpOutput> for core::RegisterOutputOptions {
@@ -122,9 +120,7 @@ impl RtpVideoEncoderOptions {
             } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: Duration::from_millis(
-                    keyframe_interval.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
-                ),
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval),
                 resolution: resolution.into(),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
@@ -139,9 +135,7 @@ impl RtpVideoEncoderOptions {
             } => core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
-                keyframe_interval: Duration::from_millis(
-                    keyframe_interval.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
-                ),
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval),
             }),
             RtpVideoEncoderOptions::FfmpegVp8 {
                 bitrate,
@@ -150,9 +144,7 @@ impl RtpVideoEncoderOptions {
             } => core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: Duration::from_millis(
-                    keyframe_interval.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
-                ),
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval),
                 raw_options: ffmpeg_options
                     .clone()
                     .unwrap_or_default()
@@ -167,9 +159,7 @@ impl RtpVideoEncoderOptions {
             } => core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: Duration::from_millis(
-                    keyframe_interval.unwrap_or(DEFAULT_KEYFRAME_INTERVAL),
-                ),
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
                     .clone()
