@@ -26,7 +26,7 @@ export type RtpVideoEncoderOptions =
       /**
        * (**default=`5000`**) Interval between keyframes, in milliseconds.
        */
-      keyframeIntervalMs?: number;
+      keyframeInterval?: number;
       /**
        * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
        */
@@ -50,7 +50,7 @@ export type RtpVideoEncoderOptions =
       /**
        * (**default=`5000`**) Interval between keyframes, in milliseconds.
        */
-      keyframeIntervalMs?: number;
+      keyframeInterval?: number;
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
@@ -66,7 +66,7 @@ export type RtpVideoEncoderOptions =
       /**
        * (**default=`5000`**) Interval between keyframes, in milliseconds.
        */
-      keyframeIntervalMs?: number;
+      keyframeInterval?: number;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
@@ -86,7 +86,7 @@ export type RtpVideoEncoderOptions =
       /**
        * (**default=`5000`**) Interval between keyframes, in milliseconds.
        */
-      keyframeIntervalMs?: number;
+      keyframeInterval?: number;
     };
 
 export type RtpAudioOptions = {
