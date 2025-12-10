@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -76,4 +78,4 @@ pub enum OpusEncoderPreset {
 pub const NO_VULKAN_VIDEO: &str =
     "Requested `vulkan_h264` encoder, but this binary was compiled without the `vk-video` feature.";
 
-pub(super) const DEFAULT_KEYFRAME_INTERVAL: u64 = 5000;
+pub(super) const DEFAULT_KEYFRAME_INTERVAL: Duration = Duration::from_millis(5000);
