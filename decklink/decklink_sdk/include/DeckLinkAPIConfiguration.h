@@ -1,5 +1,5 @@
 /* -LICENSE-START-
-** Copyright (c) 2024 Blackmagic Design
+** Copyright (c) 2025 Blackmagic Design
 **
 ** Permission is hereby granted, free of charge, to any person or organization
 ** obtaining a copy of the software and accompanying documentation covered by
@@ -67,12 +67,15 @@ enum _BMDDeckLinkConfigurationID {
     bmdDeckLinkConfigHDMI3DPackingFormat                         = /* '3dpf' */ 0x33647066,
     bmdDeckLinkConfigBypass                                      = /* 'byps' */ 0x62797073,
     bmdDeckLinkConfigClockTimingAdjustment                       = /* 'ctad' */ 0x63746164,
+    bmdDeckLinkConfigAudioMeterType                              = /* 'aumt' */ 0x61756D74,
 
     /* Audio Input/Output Flags */
 
     bmdDeckLinkConfigAnalogAudioConsumerLevels                   = /* 'aacl' */ 0x6161636C,
     bmdDeckLinkConfigSwapHDMICh3AndCh4OnInput                    = /* 'hi34' */ 0x68693334,
     bmdDeckLinkConfigSwapHDMICh3AndCh4OnOutput                   = /* 'ho34' */ 0x686F3334,
+    bmdDeckLinkConfigAnalogAudioOutputChannelsMutedByHeadphone   = /* 'amhp' */ 0x616D6870,
+    bmdDeckLinkConfigAnalogAudioOutputChannelsMutedBySpeaker     = /* 'amsp' */ 0x616D7370,
 
     /* Video Output Flags */
 
@@ -86,11 +89,15 @@ enum _BMDDeckLinkConfigurationID {
     bmdDeckLinkConfigRec2020Output                               = /* 'rec2' */ 0x72656332,	// Ensure output is Rec.2020 colorspace
     bmdDeckLinkConfigQuadLinkSDIVideoOutputSquareDivisionSplit   = /* 'SDQS' */ 0x53445153,
     bmdDeckLinkConfigOutput1080pAsPsF                            = /* 'pfpr' */ 0x70667072,
+    bmdDeckLinkConfigOutputValidateEDIDForDolbyVision            = /* 'pred' */ 0x70726564,
+    bmdDeckLinkConfigExtendedDesktop                             = /* 'exdt' */ 0x65786474,
 
     /* Video Output Integers */
 
     bmdDeckLinkConfigVideoOutputConnection                       = /* 'vocn' */ 0x766F636E,
     bmdDeckLinkConfigVideoOutputConversionMode                   = /* 'vocm' */ 0x766F636D,
+    bmdDeckLinkConfigVideoOutputConversionColorspaceDestination  = /* 'vccd' */ 0x76636364,	// Parameter is of type BMDColorspace
+    bmdDeckLinkConfigVideoOutputConversionColorspaceSource       = /* 'vccs' */ 0x76636373,	// Parameter is of type BMDColorspace
     bmdDeckLinkConfigAnalogVideoOutputFlags                      = /* 'avof' */ 0x61766F66,
     bmdDeckLinkConfigReferenceInputTimingOffset                  = /* 'glot' */ 0x676C6F74,
     bmdDeckLinkConfigReferenceOutputMode                         = /* 'glOm' */ 0x676C4F6D,
@@ -110,6 +117,9 @@ enum _BMDDeckLinkConfigurationID {
     bmdDeckLinkConfigVideoOutputCompositeChromaGain              = /* 'oicg' */ 0x6F696367,
     bmdDeckLinkConfigVideoOutputSVideoLumaGain                   = /* 'oslg' */ 0x6F736C67,
     bmdDeckLinkConfigVideoOutputSVideoChromaGain                 = /* 'oscg' */ 0x6F736367,
+    bmdDeckLinkConfigDolbyVisionCMVersion                        = /* 'dvvr' */ 0x64767672,
+    bmdDeckLinkConfigDolbyVisionMasterMinimumNits                = /* 'mnnt' */ 0x6D6E6E74,
+    bmdDeckLinkConfigDolbyVisionMasterMaximumNits                = /* 'mxnt' */ 0x6D786E74,
 
     /* Video Input Flags */
 
@@ -129,6 +139,10 @@ enum _BMDDeckLinkConfigurationID {
     bmdDeckLinkConfigVANCSourceLine3Mapping                      = /* 'vsl3' */ 0x76736C33,
     bmdDeckLinkConfigCapturePassThroughMode                      = /* 'cptm' */ 0x6370746D,
     bmdDeckLinkConfigCaptureGroup                                = /* 'cpgr' */ 0x63706772,
+    bmdDeckLinkConfigHANCInputFilter1                            = /* 'hif1' */ 0x68696631,
+    bmdDeckLinkConfigHANCInputFilter2                            = /* 'hif2' */ 0x68696632,
+    bmdDeckLinkConfigHANCInputFilter3                            = /* 'hif3' */ 0x68696633,
+    bmdDeckLinkConfigHANCInputFilter4                            = /* 'hif4' */ 0x68696634,
 
     /* Video Input Floats */
 
@@ -160,10 +174,13 @@ enum _BMDDeckLinkConfigurationID {
     bmdDeckLinkConfigAnalogAudioInputScaleChannel4               = /* 'ais4' */ 0x61697334,
     bmdDeckLinkConfigDigitalAudioInputScale                      = /* 'dais' */ 0x64616973,
     bmdDeckLinkConfigMicrophoneInputGain                         = /* 'micg' */ 0x6D696367,
+    bmdDeckLinkConfigAudioOutputXLRDelayFrames                   = /* 'xdfr' */ 0x78646672,
 
     /* Audio Output Integers */
 
     bmdDeckLinkConfigAudioOutputAESAnalogSwitch                  = /* 'aoaa' */ 0x616F6161,
+    bmdDeckLinkConfigAudioOutputXLRDelayTime                     = /* 'xdms' */ 0x78646D73,
+    bmdDeckLinkConfigAudioOutputXLRDelayType                     = /* 'xdty' */ 0x78647479,
 
     /* Audio Output Floats */
 
@@ -173,6 +190,7 @@ enum _BMDDeckLinkConfigurationID {
     bmdDeckLinkConfigAnalogAudioOutputScaleChannel4              = /* 'aos4' */ 0x616F7334,
     bmdDeckLinkConfigDigitalAudioOutputScale                     = /* 'daos' */ 0x64616F73,
     bmdDeckLinkConfigHeadphoneVolume                             = /* 'hvol' */ 0x68766F6C,
+    bmdDeckLinkConfigSpeakerVolume                               = /* 'svol' */ 0x73766F6C,
 
     /* Network Flags */
 
@@ -185,6 +203,7 @@ enum _BMDDeckLinkConfigurationID {
     bmdDeckLinkConfigEthernetPTPPriority1                        = /* 'PTP1' */ 0x50545031,
     bmdDeckLinkConfigEthernetPTPPriority2                        = /* 'PTP2' */ 0x50545032,
     bmdDeckLinkConfigEthernetPTPDomain                           = /* 'PTPD' */ 0x50545044,
+    bmdDeckLinkConfigEthernetPTPLogAnnounceInterval              = /* 'PTPA' */ 0x50545041,
 
     /* Network Strings */
 
@@ -209,7 +228,11 @@ enum _BMDDeckLinkConfigurationID {
 
     /* Deck Control Integers */
 
-    bmdDeckLinkConfigDeckControlConnection                       = /* 'dcco' */ 0x6463636F
+    bmdDeckLinkConfigDeckControlConnection                       = /* 'dcco' */ 0x6463636F,
+
+    /* UI/UX Integers */
+
+    bmdDeckLinkConfigDisplayLanguage                             = /* 'lang' */ 0x6C616E67
 };
 
 /* Enum BMDDeckLinkEncoderConfigurationID - DeckLink Encoder Configuration ID */

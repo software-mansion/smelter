@@ -9,7 +9,7 @@
 ** accordance with:
 ** 
 ** (1) if the Software is obtained from Blackmagic Design, the End User License 
-** Agreement for the Software Development Kit (“EULA”) available at 
+** Agreement for the Software Development Kit ("EULA") available at 
 ** https://www.blackmagicdesign.com/EULA/DeckLinkSDK; or
 ** 
 ** (2) if the Software is obtained from any third party, such licensing terms 
@@ -42,6 +42,7 @@
 #define BMD_DECKLINKAPIVIDEOINPUT_v11_5_1_H
 
 #include "DeckLinkAPI.h"
+#include "DeckLinkAPIVideoInput_v14_2_1.h"
 
 // Type Declarations
 
@@ -54,7 +55,7 @@ class BMD_PUBLIC IDeckLinkInputCallback_v11_5_1 : public IUnknown
 {
 public:
     virtual HRESULT VideoInputFormatChanged (/* in */ BMDVideoInputFormatChangedEvents notificationEvents, /* in */ IDeckLinkDisplayMode* newDisplayMode, /* in */ BMDDetectedVideoInputFormatFlags detectedSignalFlags) = 0;
-    virtual HRESULT VideoInputFrameArrived (/* in */ IDeckLinkVideoInputFrame* videoFrame, /* in */ IDeckLinkAudioInputPacket* audioPacket) = 0;
+    virtual HRESULT VideoInputFrameArrived (/* in */ IDeckLinkVideoInputFrame_v14_2_1* videoFrame, /* in */ IDeckLinkAudioInputPacket* audioPacket) = 0;
 
 protected:
     virtual ~IDeckLinkInputCallback_v11_5_1 () {} // call Release method to drop reference count
@@ -68,14 +69,14 @@ public:
     virtual HRESULT DoesSupportVideoMode (/* in */ BMDVideoConnection connection /* If a value of bmdVideoConnectionUnspecified is specified, the caller does not care about the connection */, /* in */ BMDDisplayMode requestedMode, /* in */ BMDPixelFormat requestedPixelFormat, /* in */ BMDVideoInputConversionMode conversionMode, /* in */ BMDSupportedVideoModeFlags flags, /* out */ BMDDisplayMode* actualMode, /* out */ bool* supported) = 0;
     virtual HRESULT GetDisplayMode (/* in */ BMDDisplayMode displayMode, /* out */ IDeckLinkDisplayMode** resultDisplayMode) = 0;
     virtual HRESULT GetDisplayModeIterator (/* out */ IDeckLinkDisplayModeIterator** iterator) = 0;
-    virtual HRESULT SetScreenPreviewCallback (/* in */ IDeckLinkScreenPreviewCallback* previewCallback) = 0;
+    virtual HRESULT SetScreenPreviewCallback (/* in */ IDeckLinkScreenPreviewCallback_v14_2_1* previewCallback) = 0;
 
     /* Video Input */
 
     virtual HRESULT EnableVideoInput (/* in */ BMDDisplayMode displayMode, /* in */ BMDPixelFormat pixelFormat, /* in */ BMDVideoInputFlags flags) = 0;
     virtual HRESULT DisableVideoInput (void) = 0;
     virtual HRESULT GetAvailableVideoFrameCount (/* out */ uint32_t* availableFrameCount) = 0;
-    virtual HRESULT SetVideoInputFrameMemoryAllocator (/* in */ IDeckLinkMemoryAllocator* theAllocator) = 0;
+    virtual HRESULT SetVideoInputFrameMemoryAllocator (/* in */ IDeckLinkMemoryAllocator_v14_2_1* theAllocator) = 0;
 
     /* Audio Input */
 

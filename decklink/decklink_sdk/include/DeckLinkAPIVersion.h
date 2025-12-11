@@ -9,7 +9,7 @@
  * ** accordance with:
  * ** 
  * ** (1) if the Software is obtained from Blackmagic Design, the End User License 
- * ** Agreement for the Software Development Kit (“EULA”) available at 
+ * ** Agreement for the Software Development Kit ("EULA") available at 
  * ** https://www.blackmagicdesign.com/EULA/DeckLinkSDK; or
  * ** 
  * ** (2) if the Software is obtained from any third party, such licensing terms 
@@ -43,8 +43,8 @@
 #ifndef __DeckLink_API_Version_h__
 #define __DeckLink_API_Version_h__
 
-#define BLACKMAGIC_DECKLINK_API_VERSION					0x0e000000
-#define BLACKMAGIC_DECKLINK_API_VERSION_STRING			"14.0"
+#define BLACKMAGIC_DECKLINK_API_VERSION					0x0f030000
+#define BLACKMAGIC_DECKLINK_API_VERSION_STRING			"15.3"
 
 #endif	// __DeckLink_API_Version_h__
 

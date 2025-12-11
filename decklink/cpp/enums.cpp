@@ -12,7 +12,7 @@ REFIID declare_id(DeclarationId id) {
     CASE(VideoOutputCallback)
     CASE(InputCallback)
     CASE(EncoderInputCallback)
-    CASE(MemoryAllocator)
+    CASE(VideoBufferAllocator)
     CASE(AudioOutputCallback)
     CASE(Iterator)
     CASE(APIInformation)

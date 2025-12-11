@@ -1,5 +1,5 @@
 /* -LICENSE-START-
- ** Copyright (c) 2024 Blackmagic Design
+ ** Copyright (c) 2025 Blackmagic Design
  **  
  ** Permission is hereby granted, free of charge, to any person or organization 
  ** obtaining a copy of the software and accompanying documentation (the 
@@ -77,33 +77,42 @@
 
 // Interface ID Declarations
 
-BMD_CONST REFIID IID_IDeckLinkVideoOutputCallback                 = /* 20AA5225-1958-47CB-820B-80A8D521A6EE */ { 0x20,0xAA,0x52,0x25,0x19,0x58,0x47,0xCB,0x82,0x0B,0x80,0xA8,0xD5,0x21,0xA6,0xEE };
-BMD_CONST REFIID IID_IDeckLinkInputCallback                       = /* C6FCE4C9-C4E4-4047-82FB-5D238232A902 */ { 0xC6,0xFC,0xE4,0xC9,0xC4,0xE4,0x40,0x47,0x82,0xFB,0x5D,0x23,0x82,0x32,0xA9,0x02 };
+BMD_CONST REFIID IID_IDeckLinkVideoOutputCallback                 = /* 5BE6DF26-02CE-433E-99D9-9A87C3AC171F */ { 0x5B,0xE6,0xDF,0x26,0x02,0xCE,0x43,0x3E,0x99,0xD9,0x9A,0x87,0xC3,0xAC,0x17,0x1F };
+BMD_CONST REFIID IID_IDeckLinkInputCallback                       = /* 3A94F075-C37D-4BA8-BCC0-1D778C8F881B */ { 0x3A,0x94,0xF0,0x75,0xC3,0x7D,0x4B,0xA8,0xBC,0xC0,0x1D,0x77,0x8C,0x8F,0x88,0x1B };
 BMD_CONST REFIID IID_IDeckLinkEncoderInputCallback                = /* ACF13E61-F4A0-4974-A6A7-59AFF6268B31 */ { 0xAC,0xF1,0x3E,0x61,0xF4,0xA0,0x49,0x74,0xA6,0xA7,0x59,0xAF,0xF6,0x26,0x8B,0x31 };
-BMD_CONST REFIID IID_IDeckLinkMemoryAllocator                     = /* B36EB6E7-9D29-4AA8-92EF-843B87A289E8 */ { 0xB3,0x6E,0xB6,0xE7,0x9D,0x29,0x4A,0xA8,0x92,0xEF,0x84,0x3B,0x87,0xA2,0x89,0xE8 };
+BMD_CONST REFIID IID_IDeckLinkVideoBufferAllocator                = /* 3481A4DF-2B11-4E55-AC61-836B87985E9A */ { 0x34,0x81,0xA4,0xDF,0x2B,0x11,0x4E,0x55,0xAC,0x61,0x83,0x6B,0x87,0x98,0x5E,0x9A };
+BMD_CONST REFIID IID_IDeckLinkVideoBufferAllocatorProvider        = /* 08B80403-BFF2-49D0-B448-8C908B9E9FC9 */ { 0x08,0xB8,0x04,0x03,0xBF,0xF2,0x49,0xD0,0xB4,0x48,0x8C,0x90,0x8B,0x9E,0x9F,0xC9 };
 BMD_CONST REFIID IID_IDeckLinkAudioOutputCallback                 = /* 403C681B-7F46-4A12-B993-2BB127084EE6 */ { 0x40,0x3C,0x68,0x1B,0x7F,0x46,0x4A,0x12,0xB9,0x93,0x2B,0xB1,0x27,0x08,0x4E,0xE6 };
 BMD_CONST REFIID IID_IDeckLinkIterator                            = /* 50FB36CD-3063-4B73-BDBB-958087F2D8BA */ { 0x50,0xFB,0x36,0xCD,0x30,0x63,0x4B,0x73,0xBD,0xBB,0x95,0x80,0x87,0xF2,0xD8,0xBA };
 BMD_CONST REFIID IID_IDeckLinkAPIInformation                      = /* 7BEA3C68-730D-4322-AF34-8A7152B532A4 */ { 0x7B,0xEA,0x3C,0x68,0x73,0x0D,0x43,0x22,0xAF,0x34,0x8A,0x71,0x52,0xB5,0x32,0xA4 };
-BMD_CONST REFIID IID_IDeckLinkOutput                              = /* BE2D9020-461E-442F-84B7-E949CB953B9D */ { 0xBE,0x2D,0x90,0x20,0x46,0x1E,0x44,0x2F,0x84,0xB7,0xE9,0x49,0xCB,0x95,0x3B,0x9D };
-BMD_CONST REFIID IID_IDeckLinkInput                               = /* C21CDB6E-F414-46E4-A636-80A566E0ED37 */ { 0xC2,0x1C,0xDB,0x6E,0xF4,0x14,0x46,0xE4,0xA6,0x36,0x80,0xA5,0x66,0xE0,0xED,0x37 };
+BMD_CONST REFIID IID_IDeckLinkIPFlowAttributes                    = /* CDA938DA-6479-40C6-B2EC-A3579B3AEECD */ { 0xCD,0xA9,0x38,0xDA,0x64,0x79,0x40,0xC6,0xB2,0xEC,0xA3,0x57,0x9B,0x3A,0xEE,0xCD };
+BMD_CONST REFIID IID_IDeckLinkIPFlowStatus                        = /* 31C41656-4992-4396-BBE9-5F8406AAB5AF */ { 0x31,0xC4,0x16,0x56,0x49,0x92,0x43,0x96,0xBB,0xE9,0x5F,0x84,0x06,0xAA,0xB5,0xAF };
+BMD_CONST REFIID IID_IDeckLinkIPFlowSetting                       = /* 86DD9174-27D3-4032-B2AD-6067C3BB2424 */ { 0x86,0xDD,0x91,0x74,0x27,0xD3,0x40,0x32,0xB2,0xAD,0x60,0x67,0xC3,0xBB,0x24,0x24 };
+BMD_CONST REFIID IID_IDeckLinkIPFlow                              = /* C5FC83C7-5B8E-42A7-9A40-7C065955D4E1 */ { 0xC5,0xFC,0x83,0xC7,0x5B,0x8E,0x42,0xA7,0x9A,0x40,0x7C,0x06,0x59,0x55,0xD4,0xE1 };
+BMD_CONST REFIID IID_IDeckLinkIPFlowIterator                      = /* BD296AB2-A5C5-4153-888F-AAB1FDBD8A5C */ { 0xBD,0x29,0x6A,0xB2,0xA5,0xC5,0x41,0x53,0x88,0x8F,0xAA,0xB1,0xFD,0xBD,0x8A,0x5C };
+BMD_CONST REFIID IID_IDeckLinkOutput                              = /* 1A8077F1-9FE2-4533-8147-2294305E253F */ { 0x1A,0x80,0x77,0xF1,0x9F,0xE2,0x45,0x33,0x81,0x47,0x22,0x94,0x30,0x5E,0x25,0x3F };
+BMD_CONST REFIID IID_IDeckLinkInput                               = /* 4095DB82-E294-4B8C-AAA8-3B9E80C49336 */ { 0x40,0x95,0xDB,0x82,0xE2,0x94,0x4B,0x8C,0xAA,0xA8,0x3B,0x9E,0x80,0xC4,0x93,0x36 };
+BMD_CONST REFIID IID_IDeckLinkIPExtensions                        = /* 46CF7903-A9FD-4D0B-8FFC-0103722AB442 */ { 0x46,0xCF,0x79,0x03,0xA9,0xFD,0x4D,0x0B,0x8F,0xFC,0x01,0x03,0x72,0x2A,0xB4,0x42 };
 BMD_CONST REFIID IID_IDeckLinkHDMIInputEDID                       = /* ABBBACBC-45BC-4665-9D92-ACE6E5A97902 */ { 0xAB,0xBB,0xAC,0xBC,0x45,0xBC,0x46,0x65,0x9D,0x92,0xAC,0xE6,0xE5,0xA9,0x79,0x02 };
-BMD_CONST REFIID IID_IDeckLinkEncoderInput                        = /* F222551D-13DF-4FD8-B587-9D4F19EC12C9 */ { 0xF2,0x22,0x55,0x1D,0x13,0xDF,0x4F,0xD8,0xB5,0x87,0x9D,0x4F,0x19,0xEC,0x12,0xC9 };
-BMD_CONST REFIID IID_IDeckLinkVideoFrame                          = /* 3F716FE0-F023-4111-BE5D-EF4414C05B17 */ { 0x3F,0x71,0x6F,0xE0,0xF0,0x23,0x41,0x11,0xBE,0x5D,0xEF,0x44,0x14,0xC0,0x5B,0x17 };
-BMD_CONST REFIID IID_IDeckLinkMutableVideoFrame                   = /* 69E2639F-40DA-4E19-B6F2-20ACE815C390 */ { 0x69,0xE2,0x63,0x9F,0x40,0xDA,0x4E,0x19,0xB6,0xF2,0x20,0xAC,0xE8,0x15,0xC3,0x90 };
-BMD_CONST REFIID IID_IDeckLinkVideoFrame3DExtensions              = /* DA0F7E4A-EDC7-48A8-9CDD-2DB51C729CD7 */ { 0xDA,0x0F,0x7E,0x4A,0xED,0xC7,0x48,0xA8,0x9C,0xDD,0x2D,0xB5,0x1C,0x72,0x9C,0xD7 };
+BMD_CONST REFIID IID_IDeckLinkEncoderInput                        = /* 46C1332E-6FD9-472A-8591-FE59C22192E1 */ { 0x46,0xC1,0x33,0x2E,0x6F,0xD9,0x47,0x2A,0x85,0x91,0xFE,0x59,0xC2,0x21,0x92,0xE1 };
+BMD_CONST REFIID IID_IDeckLinkVideoBuffer                         = /* CCB4B64A-5C86-4E02-B778-885D352709FE */ { 0xCC,0xB4,0xB6,0x4A,0x5C,0x86,0x4E,0x02,0xB7,0x78,0x88,0x5D,0x35,0x27,0x09,0xFE };
+BMD_CONST REFIID IID_IDeckLinkVideoFrame                          = /* 6502091C-615F-4F51-BAF6-45C4256DD5B0 */ { 0x65,0x02,0x09,0x1C,0x61,0x5F,0x4F,0x51,0xBA,0xF6,0x45,0xC4,0x25,0x6D,0xD5,0xB0 };
+BMD_CONST REFIID IID_IDeckLinkMutableVideoFrame                   = /* CF9EB134-0374-4C5B-95FA-1EC14819FF62 */ { 0xCF,0x9E,0xB1,0x34,0x03,0x74,0x4C,0x5B,0x95,0xFA,0x1E,0xC1,0x48,0x19,0xFF,0x62 };
+BMD_CONST REFIID IID_IDeckLinkVideoFrame3DExtensions              = /* D4DBE9C6-B4D2-49D3-ABF2-B4E86C7391B0 */ { 0xD4,0xDB,0xE9,0xC6,0xB4,0xD2,0x49,0xD3,0xAB,0xF2,0xB4,0xE8,0x6C,0x73,0x91,0xB0 };
 BMD_CONST REFIID IID_IDeckLinkVideoFrameMetadataExtensions        = /* E232A5B7-4DB4-44C9-9152-F47C12E5F051 */ { 0xE2,0x32,0xA5,0xB7,0x4D,0xB4,0x44,0xC9,0x91,0x52,0xF4,0x7C,0x12,0xE5,0xF0,0x51 };
-BMD_CONST REFIID IID_IDeckLinkVideoInputFrame                     = /* 05CFE374-537C-4094-9A57-680525118F44 */ { 0x05,0xCF,0xE3,0x74,0x53,0x7C,0x40,0x94,0x9A,0x57,0x68,0x05,0x25,0x11,0x8F,0x44 };
-BMD_CONST REFIID IID_IDeckLinkAncillaryPacket                     = /* CC5BBF7E-029C-4D3B-9158-6000EF5E3670 */ { 0xCC,0x5B,0xBF,0x7E,0x02,0x9C,0x4D,0x3B,0x91,0x58,0x60,0x00,0xEF,0x5E,0x36,0x70 };
-BMD_CONST REFIID IID_IDeckLinkAncillaryPacketIterator             = /* 3FC8994B-88FB-4C17-968F-9AAB69D964A7 */ { 0x3F,0xC8,0x99,0x4B,0x88,0xFB,0x4C,0x17,0x96,0x8F,0x9A,0xAB,0x69,0xD9,0x64,0xA7 };
-BMD_CONST REFIID IID_IDeckLinkVideoFrameAncillaryPackets          = /* 6C186C0F-459E-41D8-AEE2-4812D81AEE68 */ { 0x6C,0x18,0x6C,0x0F,0x45,0x9E,0x41,0xD8,0xAE,0xE2,0x48,0x12,0xD8,0x1A,0xEE,0x68 };
+BMD_CONST REFIID IID_IDeckLinkVideoFrameMutableMetadataExtensions = /* CC198FC6-8298-4419-942D-8357EC355E58 */ { 0xCC,0x19,0x8F,0xC6,0x82,0x98,0x44,0x19,0x94,0x2D,0x83,0x57,0xEC,0x35,0x5E,0x58 };
+BMD_CONST REFIID IID_IDeckLinkVideoInputFrame                     = /* C9ADD3D2-BE52-488D-AB2D-7FDEF7AF0C95 */ { 0xC9,0xAD,0xD3,0xD2,0xBE,0x52,0x48,0x8D,0xAB,0x2D,0x7F,0xDE,0xF7,0xAF,0x0C,0x95 };
+BMD_CONST REFIID IID_IDeckLinkAncillaryPacket                     = /* F5C0D498-5CD3-4C77-9773-8EFA20BB334B */ { 0xF5,0xC0,0xD4,0x98,0x5C,0xD3,0x4C,0x77,0x97,0x73,0x8E,0xFA,0x20,0xBB,0x33,0x4B };
+BMD_CONST REFIID IID_IDeckLinkAncillaryPacketIterator             = /* 10F1AA88-54BE-42F7-B9F8-EC2F5F099551 */ { 0x10,0xF1,0xAA,0x88,0x54,0xBE,0x42,0xF7,0xB9,0xF8,0xEC,0x2F,0x5F,0x09,0x95,0x51 };
+BMD_CONST REFIID IID_IDeckLinkVideoFrameAncillaryPackets          = /* 8A72D630-8070-4D05-8A93-E60C40EE088A */ { 0x8A,0x72,0xD6,0x30,0x80,0x70,0x4D,0x05,0x8A,0x93,0xE6,0x0C,0x40,0xEE,0x08,0x8A };
 BMD_CONST REFIID IID_IDeckLinkVideoFrameAncillary                 = /* 732E723C-D1A4-4E29-9E8E-4A88797A0004 */ { 0x73,0x2E,0x72,0x3C,0xD1,0xA4,0x4E,0x29,0x9E,0x8E,0x4A,0x88,0x79,0x7A,0x00,0x04 };
 BMD_CONST REFIID IID_IDeckLinkEncoderPacket                       = /* B693F36C-316E-4AF1-B6C2-F389A4BCA620 */ { 0xB6,0x93,0xF3,0x6C,0x31,0x6E,0x4A,0xF1,0xB6,0xC2,0xF3,0x89,0xA4,0xBC,0xA6,0x20 };
 BMD_CONST REFIID IID_IDeckLinkEncoderVideoPacket                  = /* 4E7FD944-E8C7-4EAC-B8C0-7B77F80F5AE0 */ { 0x4E,0x7F,0xD9,0x44,0xE8,0xC7,0x4E,0xAC,0xB8,0xC0,0x7B,0x77,0xF8,0x0F,0x5A,0xE0 };
 BMD_CONST REFIID IID_IDeckLinkEncoderAudioPacket                  = /* 49E8EDC8-693B-4E14-8EF6-12C658F5A07A */ { 0x49,0xE8,0xED,0xC8,0x69,0x3B,0x4E,0x14,0x8E,0xF6,0x12,0xC6,0x58,0xF5,0xA0,0x7A };
 BMD_CONST REFIID IID_IDeckLinkH265NALPacket                       = /* 639C8E0B-68D5-4BDE-A6D4-95F3AEAFF2E7 */ { 0x63,0x9C,0x8E,0x0B,0x68,0xD5,0x4B,0xDE,0xA6,0xD4,0x95,0xF3,0xAE,0xAF,0xF2,0xE7 };
 BMD_CONST REFIID IID_IDeckLinkAudioInputPacket                    = /* E43D5870-2894-11DE-8C30-0800200C9A66 */ { 0xE4,0x3D,0x58,0x70,0x28,0x94,0x11,0xDE,0x8C,0x30,0x08,0x00,0x20,0x0C,0x9A,0x66 };
-BMD_CONST REFIID IID_IDeckLinkScreenPreviewCallback               = /* B1D3F49A-85FE-4C5D-95C8-0B5D5DCCD438 */ { 0xB1,0xD3,0xF4,0x9A,0x85,0xFE,0x4C,0x5D,0x95,0xC8,0x0B,0x5D,0x5D,0xCC,0xD4,0x38 };
-BMD_CONST REFIID IID_IDeckLinkGLScreenPreviewHelper               = /* 504E2209-CAC7-4C1A-9FB4-C5BB6274D22F */ { 0x50,0x4E,0x22,0x09,0xCA,0xC7,0x4C,0x1A,0x9F,0xB4,0xC5,0xBB,0x62,0x74,0xD2,0x2F };
+BMD_CONST REFIID IID_IDeckLinkScreenPreviewCallback               = /* D4FA2345-9FBA-4497-95C3-C0C3CED3CDA8 */ { 0xD4,0xFA,0x23,0x45,0x9F,0xBA,0x44,0x97,0x95,0xC3,0xC0,0xC3,0xCE,0xD3,0xCD,0xA8 };
+BMD_CONST REFIID IID_IDeckLinkGLScreenPreviewHelper               = /* CEB778E2-C202-4EC8-9085-0CD285CC5522 */ { 0xCE,0xB7,0x78,0xE2,0xC2,0x02,0x4E,0xC8,0x90,0x85,0x0C,0xD2,0x85,0xCC,0x55,0x22 };
 BMD_CONST REFIID IID_IDeckLinkNotificationCallback                = /* B002A1EC-070D-4288-8289-BD5D36E5FF0D */ { 0xB0,0x02,0xA1,0xEC,0x07,0x0D,0x42,0x88,0x82,0x89,0xBD,0x5D,0x36,0xE5,0xFF,0x0D };
 BMD_CONST REFIID IID_IDeckLinkNotification                        = /* B85DF4C8-BDF5-47C1-8064-28162EBDD4EB */ { 0xB8,0x5D,0xF4,0xC8,0xBD,0xF5,0x47,0xC1,0x80,0x64,0x28,0x16,0x2E,0xBD,0xD4,0xEB };
 BMD_CONST REFIID IID_IDeckLinkProfileAttributes                   = /* 17D4BF8E-4911-473A-80A0-731CF6FF345B */ { 0x17,0xD4,0xBF,0x8E,0x49,0x11,0x47,0x3A,0x80,0xA0,0x73,0x1C,0xF6,0xFF,0x34,0x5B };
@@ -113,9 +122,18 @@ BMD_CONST REFIID IID_IDeckLinkProfileCallback                     = /* A4F9341E-
 BMD_CONST REFIID IID_IDeckLinkProfileManager                      = /* 30D41429-3998-4B6D-84F8-78C94A797C6E */ { 0x30,0xD4,0x14,0x29,0x39,0x98,0x4B,0x6D,0x84,0xF8,0x78,0xC9,0x4A,0x79,0x7C,0x6E };
 BMD_CONST REFIID IID_IDeckLinkStatus                              = /* 5F558200-4028-49BC-BEAC-DB3FA4A96E46 */ { 0x5F,0x55,0x82,0x00,0x40,0x28,0x49,0xBC,0xBE,0xAC,0xDB,0x3F,0xA4,0xA9,0x6E,0x46 };
 BMD_CONST REFIID IID_IDeckLinkKeyer                               = /* 89AFCAF5-65F8-421E-98F7-96FE5F5BFBA3 */ { 0x89,0xAF,0xCA,0xF5,0x65,0xF8,0x42,0x1E,0x98,0xF7,0x96,0xFE,0x5F,0x5B,0xFB,0xA3 };
-BMD_CONST REFIID IID_IDeckLinkVideoConversion                     = /* 3BBCB8A2-DA2C-42D9-B5D8-88083644E99A */ { 0x3B,0xBC,0xB8,0xA2,0xDA,0x2C,0x42,0xD9,0xB5,0xD8,0x88,0x08,0x36,0x44,0xE9,0x9A };
+BMD_CONST REFIID IID_IDeckLinkVideoConversion                     = /* A48755D9-8BD5-4727-A1E9-069FDEDBA6E9 */ { 0xA4,0x87,0x55,0xD9,0x8B,0xD5,0x47,0x27,0xA1,0xE9,0x06,0x9F,0xDE,0xDB,0xA6,0xE9 };
 BMD_CONST REFIID IID_IDeckLinkDeviceNotificationCallback          = /* 4997053B-0ADF-4CC8-AC70-7A50C4BE728F */ { 0x49,0x97,0x05,0x3B,0x0A,0xDF,0x4C,0xC8,0xAC,0x70,0x7A,0x50,0xC4,0xBE,0x72,0x8F };
 BMD_CONST REFIID IID_IDeckLinkDiscovery                           = /* CDBF631C-BC76-45FA-B44D-C55059BC6101 */ { 0xCD,0xBF,0x63,0x1C,0xBC,0x76,0x45,0xFA,0xB4,0x4D,0xC5,0x50,0x59,0xBC,0x61,0x01 };
+
+/* Enum BMDBufferAccessFlags - Flags to describe access requirements to a video frame buffer */
+
+typedef uint32_t BMDBufferAccessFlags;
+enum _BMDBufferAccessFlags {
+    bmdBufferAccessReadAndWrite                                  = 1 << 0 | 1 << 1,
+    bmdBufferAccessRead                                          = 1 << 0,
+    bmdBufferAccessWrite                                         = 1 << 1
+};
 
 /* Enum BMDVideoOutputFlags - Flags to control the output of ancillary data along with video. */
 
@@ -126,7 +144,8 @@ enum _BMDVideoOutputFlags {
     bmdVideoOutputVITC                                           = 1 << 1,
     bmdVideoOutputRP188                                          = 1 << 2,
     bmdVideoOutputDualStream3D                                   = 1 << 4,
-    bmdVideoOutputSynchronizeToPlaybackGroup                     = 1 << 6
+    bmdVideoOutputSynchronizeToPlaybackGroup                     = 1 << 6,
+    bmdVideoOutputDolbyVision                                    = 1 << 7
 };
 
 /* Enum BMDSupportedVideoModeFlags - Flags to describe supported video modes */
@@ -140,7 +159,8 @@ enum _BMDSupportedVideoModeFlags {
     bmdSupportedVideoModeSDIDualLink                             = 1 << 3,
     bmdSupportedVideoModeSDIQuadLink                             = 1 << 4,
     bmdSupportedVideoModeInAnyProfile                            = 1 << 5,
-    bmdSupportedVideoModePsF                                     = 1 << 6
+    bmdSupportedVideoModePsF                                     = 1 << 6,
+    bmdSupportedVideoModeDolbyVision                             = 1 << 7
 };
 
 /* Enum BMDPacketType - Type of packet */
@@ -159,6 +179,7 @@ enum _BMDFrameFlags {
     bmdFrameFlagFlipVertical                                     = 1 << 0,
     bmdFrameFlagMonitorOutOnly                                   = 1 << 3,
     bmdFrameContainsHDRMetadata                                  = 1 << 1,
+    bmdFrameContainsDolbyVisionMetadata                          = 1 << 4,
 
     /* Flags that are applicable only to instances of IDeckLinkVideoInputFrame */
 
@@ -391,7 +412,10 @@ typedef uint32_t BMDColorspace;
 enum _BMDColorspace {
     bmdColorspaceRec601                                          = /* 'r601' */ 0x72363031,
     bmdColorspaceRec709                                          = /* 'r709' */ 0x72373039,
-    bmdColorspaceRec2020                                         = /* '2020' */ 0x32303230
+    bmdColorspaceRec2020                                         = /* '2020' */ 0x32303230,
+    bmdColorspaceDolbyVisionNative                               = /* 'DoVi' */ 0x446F5669,	// For bmdDeckLinkConfigVideoOutputConversionColorspaceDestination with 12-bit RGB
+    bmdColorspaceP3D65                                           = /* 'P3D6' */ 0x50334436,	// For bmdDeckLinkConfigVideoOutputConversionColorspaceSource only
+    bmdColorspaceUnknown                                         = /* 'Ncol' */ 0x4E636F6C	// For disabling bmdDeckLinkConfigVideoOutputConversionColorspaceDestination
 };
 
 /* Enum BMDDynamicRange - SDR or HDR */
@@ -429,15 +453,16 @@ enum _BMDDeckLinkHDMIInputEDIDID {
 typedef uint32_t BMDDeckLinkFrameMetadataID;
 enum _BMDDeckLinkFrameMetadataID {
 
-    /* Colorspace Metadata - Integers */
+    /* Integers */
 
     bmdDeckLinkFrameMetadataColorspace                           = /* 'cspc' */ 0x63737063,	// Colorspace of video frame (see BMDColorspace)
-
-    /* HDR Metadata - Integers */
-
     bmdDeckLinkFrameMetadataHDRElectroOpticalTransferFunc        = /* 'eotf' */ 0x656F7466,	// EOTF in range 0-7 as per CEA 861.3
 
-    /* HDR Metadata - Floats */
+    /* Dolby Vision only - Bytes */
+
+    bmdDeckLinkFrameMetadataDolbyVision                          = /* 'dovi' */ 0x646F7669,	// Dolby Vision Metadata
+
+    /* CEA/SMPTE only - HDR Metadata Floats */
 
     bmdDeckLinkFrameMetadataHDRDisplayPrimariesRedX              = /* 'hdrx' */ 0x68647278,	// Red display primaries in range 0.0 - 1.0
     bmdDeckLinkFrameMetadataHDRDisplayPrimariesRedY              = /* 'hdry' */ 0x68647279,	// Red display primaries in range 0.0 - 1.0
@@ -490,6 +515,43 @@ enum _BMDInternalKeyingAncillaryDataSource {
     bmdInternalKeyingUsesAncillaryDataFromKeyFrame               = /* 'ikak' */ 0x696B616B
 };
 
+/* Enum BMDAudioOutputXLRDelayType - Audio output XLR delay types */
+
+typedef uint32_t BMDAudioOutputXLRDelayType;
+enum _BMDAudioOutputXLRDelayType {
+    bmdAudioOutputXLRDelayTypeTime                               = /* 'dtms' */ 0x64746D73,
+    bmdAudioOutputXLRDelayTypeFrames                             = /* 'dtfr' */ 0x64746672
+};
+
+/* Enum BMDLanguage - Languages */
+
+typedef uint32_t BMDLanguage;
+enum _BMDLanguage {
+    bmdLanguageEnglish                                           = /* 'enUS' */ 0x656E5553,
+    bmdLanguageSimplifiedChinese                                 = /* 'zhCN' */ 0x7A68434E,
+    bmdLanguageJapanese                                          = /* 'jaJP' */ 0x6A614A50,
+    bmdLanguageKorean                                            = /* 'koKR' */ 0x6B6F4B52,
+    bmdLanguageSpanish                                           = /* 'esES' */ 0x65734553,
+    bmdLanguageGerman                                            = /* 'deDE' */ 0x64654445,
+    bmdLanguageFrench                                            = /* 'frFR' */ 0x66724652,
+    bmdLanguageRussian                                           = /* 'ruRU' */ 0x72755255,
+    bmdLanguageItalian                                           = /* 'itIT' */ 0x69744954,
+    bmdLanguagePortuguese                                        = /* 'ptBR' */ 0x70744252,
+    bmdLanguageTurkish                                           = /* 'trTR' */ 0x74725452,
+    bmdLanguagePolish                                            = /* 'plPL' */ 0x706C504C,
+    bmdLanguageUkrainian                                         = /* 'ukUA' */ 0x756B5541
+};
+
+/* Enum BMDAudioMeterType - Audio meter type */
+
+typedef uint32_t BMDAudioMeterType;
+enum _BMDAudioMeterType {
+    bmdAudioMeterTypeVUMinus18db                                 = /* 'vu18' */ 0x76753138,
+    bmdAudioMeterTypeVUMinus20db                                 = /* 'vu20' */ 0x76753230,
+    bmdAudioMeterTypePPMMinus18db                                = /* 'pm18' */ 0x706D3138,
+    bmdAudioMeterTypePPMMinus20db                                = /* 'pm20' */ 0x706D3230
+};
+
 /* Enum BMDDeckLinkAttributeID - DeckLink Attribute ID */
 
 typedef uint32_t BMDDeckLinkAttributeID;
@@ -522,6 +584,10 @@ enum _BMDDeckLinkAttributeID {
     BMDDeckLinkSupportsSynchronizeToCaptureGroup                 = /* 'stcg' */ 0x73746367,
     BMDDeckLinkSupportsSynchronizeToPlaybackGroup                = /* 'stpg' */ 0x73747067,
     BMDDeckLinkHasMonitorOut                                     = /* 'fmoo' */ 0x666D6F6F,
+    BMDDeckLinkSupportsExtendedDesktop                           = /* 'dtop' */ 0x64746F70,
+    BMDDeckLinkHANCRequiresInputFilterConfiguration              = /* 'hrif' */ 0x68726966,
+    BMDDeckLinkSupportsHANCOutput                                = /* 'dsho' */ 0x6473686F,
+    BMDDeckLinkSupportsHANCInput                                 = /* 'dshi' */ 0x64736869,
 
     /* Integers */
 
@@ -550,6 +616,10 @@ enum _BMDDeckLinkAttributeID {
     BMDDeckLinkMinimumPrerollFrames                              = /* 'mprf' */ 0x6D707266,
     BMDDeckLinkSupportedDynamicRange                             = /* 'sudr' */ 0x73756472,
     BMDDeckLinkMezzanineType                                     = /* 'mezt' */ 0x6D657A74,
+    BMDDeckLinkXLRDelayMsMaximum                                 = /* 'xdtx' */ 0x78647478,
+    BMDDeckLinkXLRDelayFramesMaximum                             = /* 'xdfx' */ 0x78646678,
+    BMDDeckLinkOutputHANCUserDataWordsLimit                      = /* 'mhow' */ 0x6D686F77,
+    BMDDeckLinkInputHANCUserDataWordsLimit                       = /* 'mhiw' */ 0x6D686977,
 
     /* Floats */
 
@@ -608,6 +678,15 @@ enum _BMDDeckLinkStatusID {
     bmdDeckLinkStatusBusy                                        = /* 'busy' */ 0x62757379,
     bmdDeckLinkStatusInterchangeablePanelType                    = /* 'icpt' */ 0x69637074,
     bmdDeckLinkStatusDeviceTemperature                           = /* 'dtmp' */ 0x64746D70,
+    bmdDeckLinkStatusHDMIOutputActualMode                        = /* 'hiam' */ 0x6869616D,
+    bmdDeckLinkStatusHDMIOutputActualFormatFlags                 = /* 'hiaf' */ 0x68696166,
+    bmdDeckLinkStatusHDMIOutputFRLRate                           = /* 'hiof' */ 0x68696F66,
+    bmdDeckLinkStatusHDMIInputFRLRate                            = /* 'hiif' */ 0x68696966,
+    bmdDeckLinkStatusHDMIOutputTMDSLineRate                      = /* 'hilr' */ 0x68696C72,
+
+    /* Floats */
+
+    bmdDeckLinkStatusSinkSupportsDolbyVision                     = /* 'dvvr' */ 0x64767672,
 
     /* Flags */
 
@@ -658,6 +737,19 @@ enum _BMDPanelType {
     bmdPanelTeranexMiniSmartPanel                                = /* 'tmsm' */ 0x746D736D
 };
 
+/* Enum BMDFormatFlags - Flags to describe the video signal */
+
+typedef uint32_t BMDFormatFlags;
+enum _BMDFormatFlags {
+    bmdFormatRGB444                                              = 1 << 0,
+    bmdFormatYUV444                                              = 1 << 1,
+    bmdFormatYUV422                                              = 1 << 2,
+    bmdFormatYUV420                                              = 1 << 3,
+    bmdFormat8BitDepth                                           = 1 << 4,
+    bmdFormat10BitDepth                                          = 1 << 5,
+    bmdFormat12BitDepth                                          = 1 << 6
+};
+
 /* Enum BMDDeviceBusyState - Current device busy state */
 
 typedef uint32_t BMDDeviceBusyState;
@@ -686,12 +778,66 @@ enum _BMD3DPreviewFormat {
     bmd3DPreviewFormatTopBottom                                  = /* 'topb' */ 0x746F7062
 };
 
+/* Enum BMDAncillaryDataSpace - BMDAncillaryDataSpace enumerates the location of an ancillary packet. */
+
+typedef uint32_t BMDAncillaryDataSpace;
+enum _BMDAncillaryDataSpace {
+    bmdAncillaryDataSpaceVANC                                    = 0,
+    bmdAncillaryDataSpaceHANC                                    = 1
+};
+
+/* Enum BMDIPFlowDirection - BMDIPFlowDirection enumerates the direction of the IP flow. */
+
+enum BMDIPFlowDirection {
+    bmdDeckLinkIPFlowDirectionOutput                             = 0,
+    bmdDeckLinkIPFlowDirectionInput                              = 1
+};
+
+/* Enum BMDIPFlowType - BMDIPFlowType enumerates the IP flow type. */
+
+enum BMDIPFlowType {
+    bmdDeckLinkIPFlowTypeVideo                                   = 0,
+    bmdDeckLinkIPFlowTypeAudio                                   = 1,
+    bmdDeckLinkIPFlowTypeAncillary                               = 2
+};
+
+/* Enum BMDDeckLinkIPFlowAttributeID - DeckLink IP Flow Attribute ID */
+
+enum BMDDeckLinkIPFlowAttributeID {
+
+    /* DeckLink IP Flow Attribute Integers */
+
+    bmdDeckLinkIPFlowID                                          = /* '2fai' */ 0x32666169,
+    bmdDeckLinkIPFlowDirection                                   = /* '2fad' */ 0x32666164,
+    bmdDeckLinkIPFlowType                                        = /* '2fat' */ 0x32666174
+};
+
+/* Enum BMDDeckLinkIPFlowStatusID - DeckLink IP Flow Attribute ID */
+
+enum BMDDeckLinkIPFlowStatusID {
+
+    /* DeckLink IP Flow Status Strings */
+
+    bmdDeckLinkIPFlowSDP                                         = /* '2fas' */ 0x32666173
+};
+
+/* Enum BMDDeckLinkIPFlowSettingID - DeckLink IP Flow Setting ID */
+
+enum BMDDeckLinkIPFlowSettingID {
+
+    /* DeckLink IP Flow Setting Strings */
+
+    bmdDeckLinkIPFlowPeerSDP                                     = /* '2fps' */ 0x32667073	// The peer's SDP. Must not be over 1000 bytes large.
+};
+
 /* Enum BMDNotifications - Events that can be subscribed through IDeckLinkNotification */
 
 typedef uint32_t BMDNotifications;
 enum _BMDNotifications {
     bmdPreferencesChanged                                        = /* 'pref' */ 0x70726566,
-    bmdStatusChanged                                             = /* 'stat' */ 0x73746174
+    bmdStatusChanged                                             = /* 'stat' */ 0x73746174,
+    bmdIPFlowStatusChanged                                       = /* 'bfsc' */ 0x62667363,
+    bmdIPFlowSettingChanged                                      = /* 'bfcc' */ 0x62666363
 };
 
 #if defined(__cplusplus)
@@ -701,18 +847,27 @@ enum _BMDNotifications {
 class IDeckLinkVideoOutputCallback;
 class IDeckLinkInputCallback;
 class IDeckLinkEncoderInputCallback;
-class IDeckLinkMemoryAllocator;
+class IDeckLinkVideoBufferAllocator;
+class IDeckLinkVideoBufferAllocatorProvider;
 class IDeckLinkAudioOutputCallback;
 class IDeckLinkIterator;
 class IDeckLinkAPIInformation;
+class IDeckLinkIPFlowAttributes;
+class IDeckLinkIPFlowStatus;
+class IDeckLinkIPFlowSetting;
+class IDeckLinkIPFlow;
+class IDeckLinkIPFlowIterator;
 class IDeckLinkOutput;
 class IDeckLinkInput;
+class IDeckLinkIPExtensions;
 class IDeckLinkHDMIInputEDID;
 class IDeckLinkEncoderInput;
+class IDeckLinkVideoBuffer;
 class IDeckLinkVideoFrame;
 class IDeckLinkMutableVideoFrame;
 class IDeckLinkVideoFrame3DExtensions;
 class IDeckLinkVideoFrameMetadataExtensions;
+class IDeckLinkVideoFrameMutableMetadataExtensions;
 class IDeckLinkVideoInputFrame;
 class IDeckLinkAncillaryPacket;
 class IDeckLinkAncillaryPacketIterator;
@@ -775,15 +930,26 @@ protected:
     virtual ~IDeckLinkEncoderInputCallback () {} // call Release method to drop reference count
 };
 
-/* Interface IDeckLinkMemoryAllocator - Memory allocator for video frames. */
+/* Interface IDeckLinkVideoBufferAllocator - Buffer allocator for video. */
 
-class BMD_PUBLIC IDeckLinkMemoryAllocator : public IUnknown
+class BMD_PUBLIC IDeckLinkVideoBufferAllocator : public IUnknown
 {
 public:
-    virtual HRESULT AllocateBuffer (/* in */ uint32_t bufferSize, /* out */ void** allocatedBuffer) = 0;
-    virtual HRESULT ReleaseBuffer (/* in */ void* buffer) = 0;
-    virtual HRESULT Commit (void) = 0;
-    virtual HRESULT Decommit (void) = 0;
+    virtual HRESULT AllocateVideoBuffer (/* out */ IDeckLinkVideoBuffer** allocatedBuffer) = 0;
+
+protected:
+    virtual ~IDeckLinkVideoBufferAllocator () {} // call Release method to drop reference count
+};
+
+/* Interface IDeckLinkVideoBufferAllocatorProvider - Allows EnableVideoInputWithAllocatorProvider to obtain allocators */
+
+class BMD_PUBLIC IDeckLinkVideoBufferAllocatorProvider : public IUnknown
+{
+public:
+    virtual HRESULT GetVideoBufferAllocator (/* in */ uint32_t bufferSize, /* in */ uint32_t width, /* in */ uint32_t height, /* in */ uint32_t rowBytes, /* in */ BMDPixelFormat pixelFormat, /* out */ IDeckLinkVideoBufferAllocator** allocator) = 0;
+
+protected:
+    virtual ~IDeckLinkVideoBufferAllocatorProvider () {} // call Release method to drop reference count
 };
 
 /* Interface IDeckLinkAudioOutputCallback - Optional callback to allow audio samples to be pulled as required. */
@@ -816,6 +982,75 @@ protected:
     virtual ~IDeckLinkAPIInformation () {} // call Release method to drop reference count
 };
 
+/* Interface IDeckLinkIPFlowAttributes -  */
+
+class BMD_PUBLIC IDeckLinkIPFlowAttributes : public IUnknown
+{
+public:
+    virtual HRESULT GetInt (/* in */ BMDDeckLinkIPFlowAttributeID attrID, /* out */ int64_t* value) = 0;
+    virtual HRESULT GetFlag (/* in */ BMDDeckLinkIPFlowAttributeID attrID, /* out */ bool* value) = 0;
+    virtual HRESULT GetFloat (/* in */ BMDDeckLinkIPFlowAttributeID attrID, /* out */ double* value) = 0;
+    virtual HRESULT GetString (/* in */ BMDDeckLinkIPFlowAttributeID attrID, /* out */ const char** value) = 0;
+
+protected:
+    virtual ~IDeckLinkIPFlowAttributes () {} // call Release method to drop reference count
+};
+
+/* Interface IDeckLinkIPFlowStatus -  */
+
+class BMD_PUBLIC IDeckLinkIPFlowStatus : public IUnknown
+{
+public:
+    virtual HRESULT GetInt (/* in */ BMDDeckLinkIPFlowStatusID statusID, /* out */ int64_t* value) = 0;
+    virtual HRESULT GetFlag (/* in */ BMDDeckLinkIPFlowStatusID statusID, /* out */ bool* value) = 0;
+    virtual HRESULT GetFloat (/* in */ BMDDeckLinkIPFlowStatusID statusID, /* out */ double* value) = 0;
+    virtual HRESULT GetString (/* in */ BMDDeckLinkIPFlowStatusID statusID, /* out */ const char** value) = 0;
+
+protected:
+    virtual ~IDeckLinkIPFlowStatus () {} // call Release method to drop reference count
+};
+
+/* Interface IDeckLinkIPFlowSetting -  */
+
+class BMD_PUBLIC IDeckLinkIPFlowSetting : public IUnknown
+{
+public:
+    virtual HRESULT GetInt (/* in */ BMDDeckLinkIPFlowSettingID settingID, /* out */ int64_t* value) = 0;
+    virtual HRESULT GetFlag (/* in */ BMDDeckLinkIPFlowSettingID settingID, /* out */ bool* value) = 0;
+    virtual HRESULT GetFloat (/* in */ BMDDeckLinkIPFlowSettingID settingID, /* out */ double* value) = 0;
+    virtual HRESULT GetString (/* in */ BMDDeckLinkIPFlowSettingID settingID, /* out */ const char** value) = 0;
+    virtual HRESULT SetInt (/* in */ BMDDeckLinkIPFlowSettingID settingID, /* in */ int64_t value) = 0;
+    virtual HRESULT SetFlag (/* in */ BMDDeckLinkIPFlowSettingID settingID, /* in */ bool value) = 0;
+    virtual HRESULT SetFloat (/* in */ BMDDeckLinkIPFlowSettingID settingID, /* in */ double value) = 0;
+    virtual HRESULT SetString (/* in */ BMDDeckLinkIPFlowSettingID settingID, /* in */ const char* value) = 0;
+
+protected:
+    virtual ~IDeckLinkIPFlowSetting () {} // call Release method to drop reference count
+};
+
+/* Interface IDeckLinkIPFlow -  */
+
+class BMD_PUBLIC IDeckLinkIPFlow : public IUnknown
+{
+public:
+    virtual HRESULT Enable (void) = 0;	// Enables an IP flow to start sending or receiving.
+    virtual HRESULT Disable (void) = 0;	// Disables an IP flow to stop sending or receiving.
+
+protected:
+    virtual ~IDeckLinkIPFlow () {} // call Release method to drop reference count
+};
+
+/* Interface IDeckLinkIPFlowIterator - Enumerates DeckLink IP Flows */
+
+class BMD_PUBLIC IDeckLinkIPFlowIterator : public IUnknown
+{
+public:
+    virtual HRESULT Next (/* out */ IDeckLinkIPFlow** deckLinkIPFlowInstance) = 0;
+
+protected:
+    virtual ~IDeckLinkIPFlowIterator () {} // call Release method to drop reference count
+};
+
 /* Interface IDeckLinkOutput - Created by QueryInterface from IDeckLink. */
 
 class BMD_PUBLIC IDeckLinkOutput : public IUnknown
@@ -830,8 +1065,9 @@ public:
 
     virtual HRESULT EnableVideoOutput (/* in */ BMDDisplayMode displayMode, /* in */ BMDVideoOutputFlags flags) = 0;
     virtual HRESULT DisableVideoOutput (void) = 0;
-    virtual HRESULT SetVideoOutputFrameMemoryAllocator (/* in */ IDeckLinkMemoryAllocator* theAllocator) = 0;
     virtual HRESULT CreateVideoFrame (/* in */ int32_t width, /* in */ int32_t height, /* in */ int32_t rowBytes, /* in */ BMDPixelFormat pixelFormat, /* in */ BMDFrameFlags flags, /* out */ IDeckLinkMutableVideoFrame** outFrame) = 0;
+    virtual HRESULT CreateVideoFrameWithBuffer (/* in */ int32_t width, /* in */ int32_t height, /* in */ int32_t rowBytes, /* in */ BMDPixelFormat pixelFormat, /* in */ BMDFrameFlags flags, /* in */ IDeckLinkVideoBuffer* buffer, /* out */ IDeckLinkMutableVideoFrame** outFrame) = 0;
+    virtual HRESULT RowBytesForPixelFormat (/* in */ BMDPixelFormat pixelFormat, /* in */ int32_t width, /* out */ int32_t* rowBytes) = 0;
     virtual HRESULT CreateAncillaryData (/* in */ BMDPixelFormat pixelFormat, /* out */ IDeckLinkVideoFrameAncillary** outBuffer) = 0;	// Use of IDeckLinkVideoFrameAncillaryPackets is preferred
     virtual HRESULT DisplayVideoFrameSync (/* in */ IDeckLinkVideoFrame* theFrame) = 0;
     virtual HRESULT ScheduleVideoFrame (/* in */ IDeckLinkVideoFrame* theFrame, /* in */ BMDTimeValue displayTime, /* in */ BMDTimeValue displayDuration, /* in */ BMDTimeScale timeScale) = 0;
@@ -880,9 +1116,9 @@ public:
     /* Video Input */
 
     virtual HRESULT EnableVideoInput (/* in */ BMDDisplayMode displayMode, /* in */ BMDPixelFormat pixelFormat, /* in */ BMDVideoInputFlags flags) = 0;
+    virtual HRESULT EnableVideoInputWithAllocatorProvider (/* in */ BMDDisplayMode displayMode, /* in */ BMDPixelFormat pixelFormat, /* in */ BMDVideoInputFlags flags, /* in */ IDeckLinkVideoBufferAllocatorProvider* allocatorProvider) = 0;
     virtual HRESULT DisableVideoInput (void) = 0;
     virtual HRESULT GetAvailableVideoFrameCount (/* out */ uint32_t* availableFrameCount) = 0;
-    virtual HRESULT SetVideoInputFrameMemoryAllocator (/* in */ IDeckLinkMemoryAllocator* theAllocator) = 0;
 
     /* Audio Input */
 
@@ -904,6 +1140,18 @@ public:
 
 protected:
     virtual ~IDeckLinkInput () {} // call Release method to drop reference count
+};
+
+/* Interface IDeckLinkIPExtensions -  */
+
+class BMD_PUBLIC IDeckLinkIPExtensions : public IUnknown
+{
+public:
+    virtual HRESULT GetDeckLinkIPFlowIterator (/* out */ IDeckLinkIPFlowIterator** iterator) = 0;
+    virtual HRESULT GetIPFlowByID (/* in */ BMDIPFlowID id, /* out */ IDeckLinkIPFlow** flow) = 0;
+
+protected:
+    virtual ~IDeckLinkIPExtensions () {} // call Release method to drop reference count
 };
 
 /* Interface IDeckLinkHDMIInputEDID - Created by QueryInterface from IDeckLink. Releasing all references will restore EDID to default */
@@ -933,7 +1181,6 @@ public:
     virtual HRESULT EnableVideoInput (/* in */ BMDDisplayMode displayMode, /* in */ BMDPixelFormat pixelFormat, /* in */ BMDVideoInputFlags flags) = 0;
     virtual HRESULT DisableVideoInput (void) = 0;
     virtual HRESULT GetAvailablePacketsCount (/* out */ uint32_t* availablePacketsCount) = 0;
-    virtual HRESULT SetMemoryAllocator (/* in */ IDeckLinkMemoryAllocator* theAllocator) = 0;
 
     /* Audio Input */
 
@@ -957,6 +1204,19 @@ protected:
     virtual ~IDeckLinkEncoderInput () {} // call Release method to drop reference count
 };
 
+/* Interface IDeckLinkVideoBuffer - Interface to encapsulate a video frame buffer; can be caller-implemented. */
+
+class BMD_PUBLIC IDeckLinkVideoBuffer : public IUnknown
+{
+public:
+    virtual HRESULT GetBytes (/* out */ void** buffer) = 0;
+    virtual HRESULT StartAccess (/* in */ BMDBufferAccessFlags flags) = 0;
+    virtual HRESULT EndAccess (/* in */ BMDBufferAccessFlags flags) = 0;
+
+protected:
+    virtual ~IDeckLinkVideoBuffer () {} // call Release method to drop reference count
+};
+
 /* Interface IDeckLinkVideoFrame - Interface to encapsulate a video frame; can be caller-implemented. */
 
 class BMD_PUBLIC IDeckLinkVideoFrame : public IUnknown
@@ -967,7 +1227,6 @@ public:
     virtual long GetRowBytes (void) = 0;
     virtual BMDPixelFormat GetPixelFormat (void) = 0;
     virtual BMDFrameFlags GetFlags (void) = 0;
-    virtual HRESULT GetBytes (/* out */ void** buffer) = 0;
     virtual HRESULT GetTimecode (/* in */ BMDTimecodeFormat format, /* out */ IDeckLinkTimecode** timecode) = 0;
     virtual HRESULT GetAncillaryData (/* out */ IDeckLinkVideoFrameAncillary** ancillary) = 0;	// Use of IDeckLinkVideoFrameAncillaryPackets is preferred
 
@@ -985,12 +1244,13 @@ public:
     virtual HRESULT SetTimecodeFromComponents (/* in */ BMDTimecodeFormat format, /* in */ uint8_t hours, /* in */ uint8_t minutes, /* in */ uint8_t seconds, /* in */ uint8_t frames, /* in */ BMDTimecodeFlags flags) = 0;
     virtual HRESULT SetAncillaryData (/* in */ IDeckLinkVideoFrameAncillary* ancillary) = 0;
     virtual HRESULT SetTimecodeUserBits (/* in */ BMDTimecodeFormat format, /* in */ BMDTimecodeUserBits userBits) = 0;
+    virtual HRESULT SetInterfaceProvider (/* in */ REFIID iid, /* in */ IUnknown* iface) = 0;
 
 protected:
     virtual ~IDeckLinkMutableVideoFrame () {} // call Release method to drop reference count
 };
 
-/* Interface IDeckLinkVideoFrame3DExtensions - Optional interface implemented on IDeckLinkVideoFrame to support 3D frames */
+/* Interface IDeckLinkVideoFrame3DExtensions - Optional interface to support 3D frames. */
 
 class BMD_PUBLIC IDeckLinkVideoFrame3DExtensions : public IUnknown
 {
@@ -1002,7 +1262,7 @@ protected:
     virtual ~IDeckLinkVideoFrame3DExtensions () {} // call Release method to drop reference count
 };
 
-/* Interface IDeckLinkVideoFrameMetadataExtensions - Optional interface implemented on IDeckLinkVideoFrame to support frame metadata such as HDR information */
+/* Interface IDeckLinkVideoFrameMetadataExtensions - Get frame metadata */
 
 class BMD_PUBLIC IDeckLinkVideoFrameMetadataExtensions : public IUnknown
 {
@@ -1015,6 +1275,21 @@ public:
 
 protected:
     virtual ~IDeckLinkVideoFrameMetadataExtensions () {} // call Release method to drop reference count
+};
+
+/* Interface IDeckLinkVideoFrameMutableMetadataExtensions - Set frame metadata */
+
+class BMD_PUBLIC IDeckLinkVideoFrameMutableMetadataExtensions : public IDeckLinkVideoFrameMetadataExtensions
+{
+public:
+    virtual HRESULT SetInt (/* in */ BMDDeckLinkFrameMetadataID metadataID, /* in */ int64_t value) = 0;
+    virtual HRESULT SetFloat (/* in */ BMDDeckLinkFrameMetadataID metadataID, /* in */ double value) = 0;
+    virtual HRESULT SetFlag (/* in */ BMDDeckLinkFrameMetadataID metadataID, /* in */ bool value) = 0;
+    virtual HRESULT SetString (/* in */ BMDDeckLinkFrameMetadataID metadataID, /* in */ const char* value) = 0;
+    virtual HRESULT SetBytes (/* in */ BMDDeckLinkFrameMetadataID metadataID, /* in */ void* buffer, /* in */ uint32_t bufferSize) = 0;
+
+protected:
+    virtual ~IDeckLinkVideoFrameMutableMetadataExtensions () {} // call Release method to drop reference count
 };
 
 /* Interface IDeckLinkVideoInputFrame - Provided by the IDeckLinkVideoInput frame arrival callback. */
@@ -1039,6 +1314,7 @@ public:
     virtual uint8_t GetSDID (void) = 0;
     virtual uint32_t GetLineNumber (void) = 0;	// On output, zero is auto
     virtual uint8_t GetDataStreamIndex (void) = 0;	// Usually zero. Can only be 1 if non-SD and the first data stream is completely full
+    virtual BMDAncillaryDataSpace GetDataSpace (void) = 0;
 
 protected:
     virtual ~IDeckLinkAncillaryPacket () {} // call Release method to drop reference count
@@ -1295,6 +1571,7 @@ class BMD_PUBLIC IDeckLinkVideoConversion : public IUnknown
 {
 public:
     virtual HRESULT ConvertFrame (/* in */ IDeckLinkVideoFrame* srcFrame, /* in */ IDeckLinkVideoFrame* dstFrame) = 0;
+    virtual HRESULT ConvertNewFrame (/* in */ IDeckLinkVideoFrame* srcFrame, /* in */ BMDPixelFormat dstPixelFormat, /* in */ BMDColorspace dstColorspace, /* in */ IDeckLinkVideoBuffer* dstBuffer, /* out */ IDeckLinkVideoFrame** dstFrame) = 0;
 
 protected:
     virtual ~IDeckLinkVideoConversion () {} // call Release method to drop reference count

@@ -9,7 +9,7 @@
 ** accordance with:
 ** 
 ** (1) if the Software is obtained from Blackmagic Design, the End User License 
-** Agreement for the Software Development Kit (“EULA”) available at 
+** Agreement for the Software Development Kit ("EULA") available at 
 ** https://www.blackmagicdesign.com/EULA/DeckLinkSDK; or
 ** 
 ** (2) if the Software is obtained from any third party, such licensing terms 
@@ -43,6 +43,7 @@
 
 #include "DeckLinkAPI.h"
 #include "DeckLinkAPI_v10_11.h"
+#include "DeckLinkAPIMemoryAllocator_v14_2_1.h"
 #include "DeckLinkAPIVideoInput_v11_5_1.h"
 
 // Type Declarations
@@ -56,14 +57,14 @@ public:
     virtual HRESULT DoesSupportVideoMode (/* in */ BMDDisplayMode displayMode, /* in */ BMDPixelFormat pixelFormat, /* in */ BMDVideoInputFlags flags, /* out */ BMDDisplayModeSupport_v10_11 *result, /* out */ IDeckLinkDisplayMode **resultDisplayMode) = 0;
     virtual HRESULT GetDisplayModeIterator (/* out */ IDeckLinkDisplayModeIterator **iterator) = 0;
 
-    virtual HRESULT SetScreenPreviewCallback (/* in */ IDeckLinkScreenPreviewCallback *previewCallback) = 0;
+    virtual HRESULT SetScreenPreviewCallback (/* in */ IDeckLinkScreenPreviewCallback_v14_2_1 *previewCallback) = 0;
 
     /* Video Input */
 
     virtual HRESULT EnableVideoInput (/* in */ BMDDisplayMode displayMode, /* in */ BMDPixelFormat pixelFormat, /* in */ BMDVideoInputFlags flags) = 0;
     virtual HRESULT DisableVideoInput (void) = 0;
     virtual HRESULT GetAvailableVideoFrameCount (/* out */ uint32_t *availableFrameCount) = 0;
-    virtual HRESULT SetVideoInputFrameMemoryAllocator (/* in */ IDeckLinkMemoryAllocator *theAllocator) = 0;
+    virtual HRESULT SetVideoInputFrameMemoryAllocator (/* in */ IDeckLinkMemoryAllocator_v14_2_1 *theAllocator) = 0;
 
     /* Audio Input */
 
