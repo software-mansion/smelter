@@ -170,8 +170,9 @@ struct AudioQueueInput {
 
 impl AudioQueueInput {
     /// Get batches that have samples in range `range` and remove them from the queue.
-    /// Batches that are partially in range will still be returned, but they won't be
-    /// removed from the queue.
+    /// Batches that are partially in range will still be returned. Single batch can
+    /// be returned only once, elements downstream (audio mixer) is responsible for
+    /// storing partially overlapping batches.
     fn pop_samples(
         &mut self,
         pts_range: (Duration, Duration),
@@ -180,22 +181,13 @@ impl AudioQueueInput {
         // ignore result, we only need to ensure samples are enqueued
         self.try_enqueue_until_ready_for_pts(pts_range, queue_start_pts);
 
-        let (start_pts, end_pts) = pts_range;
+        let (_start_pts, end_pts) = pts_range;
 
-        let popped_samples = self
-            .queue
-            .iter()
-            .filter(|batch| batch.start_pts <= end_pts && batch.end_pts >= start_pts)
-            .cloned()
-            .collect::<Vec<InputAudioSamples>>();
-
-        // Drop all batches older than `end_pts`. Entire batch (all samples inside) has to be older.
-        while self
-            .queue
-            .front()
-            .is_some_and(|batch| batch.end_pts < end_pts)
+        let mut popped_samples = vec![];
+        while let Some(batch) = self.queue.front()
+            && batch.start_pts <= end_pts + Duration::from_millis(40)
         {
-            self.queue.pop_front();
+            popped_samples.push(self.queue.pop_front().unwrap());
         }
 
         if self.eos_received
@@ -235,7 +227,7 @@ impl AudioQueueInput {
             range_end_pts: Duration,
         ) -> bool {
             match queue.back() {
-                Some(batch) => batch.end_pts >= range_end_pts,
+                Some(batch) => batch.end_pts() >= range_end_pts + Duration::from_millis(40),
                 None => false,
             }
         }
@@ -260,7 +252,7 @@ impl AudioQueueInput {
                 return;
             };
             // If batch end is still in the future then do not drop.
-            if self.sync_point + first_batch.end_pts >= Instant::now() {
+            if self.sync_point + first_batch.end_pts() >= Instant::now() {
                 return;
             }
             self.queue.pop_front();
@@ -295,7 +287,6 @@ impl AudioQueueInput {
                 PipelineEvent::Data(mut batch) => {
                     let first_pts = self.shared_state.get_or_init_first_pts(batch.start_pts);
                     batch.start_pts = offset_pts + batch.start_pts - first_pts;
-                    batch.end_pts = offset_pts + batch.end_pts - first_pts;
                     self.queue.push_back(batch);
                 }
                 PipelineEvent::EOS => self.eos_received = true,

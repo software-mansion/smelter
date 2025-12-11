@@ -6,7 +6,6 @@ use tracing::warn;
 use crate::{
     pipeline::{
         decoder::{AudioDecoder, AudioDecoderStream},
-        resampler::decoder_resampler::ResampledDecoderStream,
         rtp::{
             RtpInputEvent,
             depayloader::{DepayloaderOptions, DepayloaderStream},
@@ -51,7 +50,6 @@ impl<Decoder: AudioDecoder + 'static> InitializableThread for RtpAudioThread<Dec
             sample_rate,
         } = options;
 
-        let mixing_sample_rate = ctx.mixing_sample_rate;
         let (rtp_packet_sender, rtp_packet_receiver) = crossbeam_channel::bounded(5);
 
         let depayloader_stream =
@@ -63,12 +61,8 @@ impl<Decoder: AudioDecoder + 'static> InitializableThread for RtpAudioThread<Dec
             depayloader_stream.flatten(),
         )?;
 
-        let resampled_stream =
-            ResampledDecoderStream::new(mixing_sample_rate, decoder_stream.flatten(), false)
-                .flatten();
-
         let state = Self {
-            stream: Box::new(resampled_stream),
+            stream: Box::new(decoder_stream.flatten()),
             samples_sender: decoded_samples_sender,
             _decoder: PhantomData,
         };

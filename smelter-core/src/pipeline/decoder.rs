@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use crossbeam_channel::Sender;
 use smelter_render::Frame;
@@ -32,15 +31,6 @@ pub mod vulkan_h264;
 
 pub mod fdk_aac;
 pub mod libopus;
-
-/// Raw samples produced by a decoder or received from external source.
-/// They still need to be resampled before passing them to the queue.
-#[derive(Debug)]
-pub(crate) struct DecodedSamples {
-    pub samples: AudioSamples,
-    pub start_pts: Duration,
-    pub sample_rate: u32,
-}
 
 #[derive(Debug)]
 pub(crate) enum EncodedInputEvent {
@@ -77,8 +67,9 @@ pub(crate) trait AudioDecoder: Sized {
     type Options: Send + 'static;
 
     fn new(ctx: &Arc<PipelineCtx>, options: Self::Options) -> Result<Self, DecoderInitError>;
-    fn decode(&mut self, chunk: EncodedInputChunk) -> Result<Vec<DecodedSamples>, DecodingError>;
-    fn flush(&mut self) -> Vec<DecodedSamples>;
+    fn decode(&mut self, chunk: EncodedInputChunk)
+    -> Result<Vec<InputAudioSamples>, DecodingError>;
+    fn flush(&mut self) -> Vec<InputAudioSamples>;
 }
 
 pub struct BytestreamTransformStream<Source, Transformer>

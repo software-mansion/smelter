@@ -8,7 +8,7 @@ use std::{
 use crossbeam_channel::{Receiver, bounded};
 use glyphon::fontdb;
 use tokio::runtime::Runtime;
-use tracing::{error, info, trace, warn};
+use tracing::{Level, error, info, span, trace, warn};
 
 use smelter_render::{
     FrameSet, InputId, OutputId, RegistryType, Renderer, RendererId, RendererOptions, RendererSpec,
@@ -102,6 +102,7 @@ impl Pipeline {
         self.inputs.remove(input_id);
         self.queue.remove_input(input_id);
         self.renderer.unregister_input(input_id);
+        self.audio_mixer.unregister_input(input_id);
         for output in self.outputs.values_mut() {
             if let Some(ref mut cond) = output.audio_end_condition {
                 cond.on_input_unregistered(input_id);
@@ -441,10 +442,14 @@ fn run_audio_mixer_thread(
         }
     };
 
+    let _span = span!(Level::INFO, "AudioMixer").entered();
     for mut samples in audio_receiver.iter() {
+        trace!(?samples, "Received samples from queue");
         let Some(pipeline) = pipeline.upgrade() else {
             break;
         };
+
+        trace!("Handle potential EOS");
         for (input_id, event) in samples.samples.iter_mut() {
             if let PipelineEvent::EOS = event {
                 let mut guard = pipeline.lock().unwrap();
@@ -460,6 +465,7 @@ fn run_audio_mixer_thread(
             }
         }
 
+        trace!("Prepare output senders");
         let output_samples_senders: HashMap<_, _> =
             Pipeline::all_output_audio_senders_iter(&pipeline)
                 .filter_map(|(output_id, sender)| match sender {
@@ -471,9 +477,11 @@ fn run_audio_mixer_thread(
                 })
                 .collect();
 
+        trace!("Mix audio");
         let mixed_samples = audio_mixer.mix_samples(samples.into());
 
         for (output_id, batch) in mixed_samples.0 {
+            trace!(?output_id, ?batch, "Send batch");
             let Some(samples_sender) = output_samples_senders.get(&output_id) else {
                 warn!(?output_id, "Received new mixed samples after EOS.");
                 continue;

@@ -1,5 +1,4 @@
-use core::fmt;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use crossbeam_channel::Sender;
 
@@ -27,46 +26,36 @@ pub struct RawDataInputOptions {
     pub buffer_duration: Option<Duration>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct InputAudioSamples {
-    pub samples: Arc<Vec<(f64, f64)>>,
+    pub samples: AudioSamples,
     pub start_pts: Duration,
-    pub end_pts: Duration,
+    pub sample_rate: u32,
 }
 
 impl InputAudioSamples {
-    pub fn new(
-        samples: Arc<Vec<(f64, f64)>>,
-        start_pts: Duration,
-        mixing_sample_rate: u32,
-    ) -> Self {
-        let end_pts =
-            start_pts + Duration::from_secs_f64(samples.len() as f64 / mixing_sample_rate as f64);
-
+    pub fn new(samples: AudioSamples, start_pts: Duration, sample_rate: u32) -> Self {
         Self {
             samples,
             start_pts,
-            end_pts,
+            sample_rate,
         }
     }
 
-    pub fn duration(&self) -> Duration {
-        self.end_pts.saturating_sub(self.start_pts)
+    pub fn pts_range(&self) -> (Duration, Duration) {
+        (self.start_pts, self.end_pts())
     }
 
-    pub(crate) fn len(&self) -> usize {
+    pub fn end_pts(&self) -> Duration {
+        self.start_pts
+            + Duration::from_secs_f64(self.samples.len() as f64 / self.sample_rate as f64)
+    }
+
+    pub fn len(&self) -> usize {
         self.samples.len()
     }
-}
 
-impl fmt::Debug for InputAudioSamples {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let len = self.samples.len();
-        let first_samples = &self.samples[0..usize::min(10, len)];
-        f.debug_struct("InputSamples")
-            .field("samples", &format!("len={len}, {first_samples:?}"))
-            .field("start_pts", &self.start_pts)
-            .field("end_pts", &self.end_pts)
-            .finish()
+    pub fn is_empty(&self) -> bool {
+        self.samples.len() == 0
     }
 }

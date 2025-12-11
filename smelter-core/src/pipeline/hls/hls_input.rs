@@ -118,7 +118,6 @@ impl HlsInput {
                 decoder_options: FdkAacDecoderOptions { asc },
                 samples_sender,
                 input_buffer_size: 2000,
-                force_resampling: false,
             },
         )?;
 

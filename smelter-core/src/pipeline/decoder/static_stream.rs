@@ -3,7 +3,7 @@ use tracing::warn;
 
 use smelter_render::{Frame, error::ErrorStack};
 
-use crate::pipeline::decoder::{AudioDecoder, DecodedSamples, EncodedInputEvent, VideoDecoder};
+use crate::pipeline::decoder::{AudioDecoder, EncodedInputEvent, VideoDecoder};
 
 use crate::prelude::*;
 
@@ -93,7 +93,7 @@ where
     Decoder: AudioDecoder,
     Source: Iterator<Item = PipelineEvent<EncodedInputEvent>>,
 {
-    type Item = Vec<PipelineEvent<DecodedSamples>>;
+    type Item = Vec<PipelineEvent<InputAudioSamples>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.source.next() {

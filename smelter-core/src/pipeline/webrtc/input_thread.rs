@@ -10,7 +10,6 @@ use crate::{
             AudioDecoderStream, DynamicVideoDecoderStream, KeyframeRequestSender,
             VideoDecoderMapping, libopus::OpusDecoder,
         },
-        resampler::decoder_resampler::ResampledDecoderStream,
         rtp::{
             RtpInputEvent,
             depayloader::{
@@ -119,7 +118,6 @@ impl InitializableThread for AudioTrackThread {
         let (ctx, samples_sender) = options;
 
         let (rtp_packet_sender, rtp_packet_receiver) = tokio::sync::mpsc::channel(5000);
-        let output_sample_rate = ctx.mixing_sample_rate;
 
         let packet_stream = AsyncReceiverIter {
             receiver: rtp_packet_receiver,
@@ -131,10 +129,7 @@ impl InitializableThread for AudioTrackThread {
         let decoded_stream =
             AudioDecoderStream::<OpusDecoder, _>::new(ctx, (), depayloader_stream)?.flatten();
 
-        let resampled_stream =
-            ResampledDecoderStream::new(output_sample_rate, decoded_stream, false).flatten();
-
-        let result_stream = resampled_stream
+        let result_stream = decoded_stream
             .filter_map(|event| match event {
                 PipelineEvent::Data(batch) => Some(PipelineEvent::Data(batch)),
                 // Do not send EOS to queue

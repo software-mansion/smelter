@@ -4,10 +4,7 @@ use crossbeam_channel::Sender;
 use tracing::warn;
 
 use crate::{
-    pipeline::{
-        decoder::{AudioDecoderStream, DecoderThreadHandle, EncodedInputEvent},
-        resampler::decoder_resampler::ResampledDecoderStream,
-    },
+    pipeline::decoder::{AudioDecoderStream, DecoderThreadHandle, EncodedInputEvent},
     thread_utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -20,7 +17,6 @@ pub(crate) struct AudioDecoderThreadOptions<Decoder: AudioDecoder> {
     pub decoder_options: Decoder::Options,
     pub samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
     pub input_buffer_size: usize,
-    pub force_resampling: bool,
 }
 
 pub(crate) struct AudioDecoderThread<Decoder: AudioDecoder> {
@@ -44,11 +40,9 @@ where
             decoder_options,
             samples_sender,
             input_buffer_size: buffer_size,
-            force_resampling,
         } = options;
 
         let (chunk_sender, chunk_receiver) = crossbeam_channel::bounded(buffer_size);
-        let output_sample_rate = ctx.mixing_sample_rate;
 
         let chunk_stream = chunk_receiver.into_iter().map(|event| match event {
             PipelineEvent::Data(chunk) => PipelineEvent::Data(EncodedInputEvent::Chunk(chunk)),
@@ -58,15 +52,8 @@ where
         let decoded_stream =
             AudioDecoderStream::<Decoder, _>::new(ctx, decoder_options, chunk_stream)?;
 
-        let resampled_stream = ResampledDecoderStream::new(
-            output_sample_rate,
-            decoded_stream.flatten(),
-            force_resampling,
-        )
-        .flatten();
-
         let state = Self {
-            stream: Box::new(resampled_stream),
+            stream: Box::new(decoded_stream.flatten()),
             samples_sender,
             _decoder: PhantomData,
         };

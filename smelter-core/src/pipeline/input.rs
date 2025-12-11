@@ -135,6 +135,7 @@ where
 
     guard.inputs.insert(input_id.clone(), pipeline_input);
     guard.queue.add_input(&input_id, receiver, queue_options);
+    guard.audio_mixer.register_input(input_id.clone());
     guard.renderer.register_input(input_id);
 
     Ok(input_result)

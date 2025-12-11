@@ -40,10 +40,23 @@ impl AudioSamples {
 
 impl fmt::Debug for AudioSamples {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let len = self.len();
         match self {
-            AudioSamples::Mono(samples) => write!(f, "AudioSamples::Mono(len={})", samples.len()),
+            AudioSamples::Mono(samples) => {
+                let first_samples = &samples[0..usize::min(5, len)];
+                let last_samples = &samples[len.saturating_sub(5)..];
+                write!(
+                    f,
+                    "AudioSamples::Mono(len={len}, {first_samples:?}..{last_samples:?})",
+                )
+            }
             AudioSamples::Stereo(samples) => {
-                write!(f, "AudioSamples::Stereo(len={})", samples.len())
+                let first_samples = &samples[0..usize::min(5, len)];
+                let last_samples = &samples[len.saturating_sub(5)..];
+                write!(
+                    f,
+                    "AudioSamples::Stereo(len={len}, {first_samples:?}..{last_samples:?})"
+                )
             }
         }
     }
