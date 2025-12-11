@@ -83,14 +83,14 @@ impl Mp4VideoEncoderOptions {
             Mp4VideoEncoderOptions::FfmpegH264 {
                 preset,
                 bitrate,
-                keyframe_interval,
+                keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
             } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval)?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
                     .clone()
@@ -100,11 +100,11 @@ impl Mp4VideoEncoderOptions {
             }),
             Mp4VideoEncoderOptions::VulkanH264 {
                 bitrate,
-                keyframe_interval,
+                keyframe_interval_ms,
             } => core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval)?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
             }),
         };
         Ok(encoder_options)

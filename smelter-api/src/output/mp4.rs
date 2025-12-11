@@ -43,7 +43,7 @@ pub enum Mp4VideoEncoderOptions {
         bitrate: Option<VideoEncoderBitrate>,
 
         /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
-        keyframe_interval: Option<f64>,
+        keyframe_interval_ms: Option<f64>,
 
         /// (**default=`"yuv420p"`**) Encoder pixel format.
         pixel_format: Option<PixelFormat>,
@@ -58,7 +58,7 @@ pub enum Mp4VideoEncoderOptions {
         bitrate: Option<VideoEncoderBitrate>,
 
         /// (**default=`5000`**) Interval between keyframes, in milliseconds.
-        keyframe_interval: Option<f64>,
+        keyframe_interval_ms: Option<f64>,
     },
 }
 

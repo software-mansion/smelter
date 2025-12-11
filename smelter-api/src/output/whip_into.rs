@@ -105,14 +105,14 @@ impl WhipVideoEncoderOptions {
             WhipVideoEncoderOptions::FfmpegH264 {
                 preset,
                 bitrate,
-                keyframe_interval,
+                keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
             } => core::WhipVideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval)?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
                     .clone()
@@ -122,20 +122,20 @@ impl WhipVideoEncoderOptions {
             }),
             WhipVideoEncoderOptions::VulkanH264 {
                 bitrate,
-                keyframe_interval,
+                keyframe_interval_ms,
             } => core::WhipVideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval)?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
             }),
             WhipVideoEncoderOptions::FfmpegVp8 {
                 bitrate,
-                keyframe_interval,
+                keyframe_interval_ms,
                 ffmpeg_options,
             } => core::WhipVideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval)?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
                 raw_options: ffmpeg_options
                     .clone()
                     .unwrap_or_default()
@@ -144,13 +144,13 @@ impl WhipVideoEncoderOptions {
             }),
             WhipVideoEncoderOptions::FfmpegVp9 {
                 bitrate,
-                keyframe_interval,
+                keyframe_interval_ms,
                 pixel_format,
                 ffmpeg_options,
             } => core::WhipVideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval)?,
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
                     .clone()
