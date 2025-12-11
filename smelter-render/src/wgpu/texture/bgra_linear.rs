@@ -6,6 +6,7 @@ use super::{TextureExt, base::new_texture};
 pub struct BgraLinearTexture {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
+    resolution: Resolution,
 }
 
 impl BgraLinearTexture {
@@ -23,13 +24,33 @@ impl BgraLinearTexture {
             &[wgpu::TextureFormat::Rgba8Unorm],
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        Self { texture, view }
+        Self {
+            texture,
+            view,
+            resolution,
+        }
+    }
+
+    pub fn resolution(&self) -> Resolution {
+        self.resolution
+    }
+
+    pub fn new_bind_group(&self, ctx: &WgpuCtx) -> wgpu::BindGroup {
+        ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("texture bind group"),
+            layout: &ctx.format.single_texture_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&self.view),
+            }],
+        })
     }
 
     pub fn upload(&self, ctx: &WgpuCtx, data: &[u8]) {
         self.texture.upload_data(&ctx.queue, data, 4);
     }
 
+    #[cfg(feature = "web-renderer")]
     pub fn view(&self) -> &wgpu::TextureView {
         &self.view
     }
