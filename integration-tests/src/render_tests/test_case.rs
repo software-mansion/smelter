@@ -69,8 +69,8 @@ impl TestCase {
                 .unwrap();
         }
 
-        for (index, _) in self.inputs.iter().enumerate() {
-            renderer.register_input(InputId(format!("input_{}", index + 1).into()))
+        for input in self.inputs.iter() {
+            renderer.register_input(InputId(Arc::from(input.name.clone())))
         }
 
         renderer

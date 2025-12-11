@@ -35,6 +35,7 @@ pub enum FrameData {
     Rgba8UnormWgpuTexture(Arc<wgpu::Texture>),
     Nv12WgpuTexture(Arc<wgpu::Texture>),
     Nv12(NvPlanes),
+    Bgra(bytes::Bytes),
 }
 
 #[derive(Clone)]

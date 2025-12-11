@@ -16,6 +16,7 @@ mod test_case;
 mod utils;
 
 mod image_tests;
+mod pixel_input_format_tests;
 mod rescaler_tests;
 mod shader_tests;
 mod simple_tests;
