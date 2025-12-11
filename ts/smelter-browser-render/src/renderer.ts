@@ -27,7 +27,7 @@ export type InputFrame = {
 
 export type OutputFrame = {
   resolution: Api.Resolution;
-  data: Uint8ClampedArray;
+  data: Uint8ClampedArray<ArrayBuffer>;
 };
 
 export class Renderer {
@@ -56,7 +56,15 @@ export class Renderer {
     });
     return {
       ptsMs: output.ptsMs,
-      frames: Object.fromEntries(output.frames.map(({ outputId, ...value }) => [outputId, value])),
+      frames: Object.fromEntries(
+        output.frames.map(({ outputId, resolution, data }) => [
+          outputId,
+          {
+            resolution,
+            data: data as Uint8ClampedArray<ArrayBuffer>,
+          },
+        ])
+      ),
     };
   }
 
