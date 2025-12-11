@@ -114,7 +114,7 @@ impl TryFrom<VideoEncoderBitrate> for core::VideoEncoderBitrate {
     }
 }
 
-pub(super) fn duration_from_keyframe_interval(
+pub(crate) fn duration_from_keyframe_interval(
     keyframe_interval: &Option<f64>,
 ) -> Result<Duration, TypeError> {
     const DEFAULT_KEYFRAME_INTERVAL: Duration = Duration::from_millis(5000);
