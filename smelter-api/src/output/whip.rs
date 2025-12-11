@@ -42,6 +42,9 @@ pub enum WhipVideoEncoderOptions {
         /// Encoding bitrate. Default value depends on chosen encoder.
         bitrate: Option<VideoEncoderBitrate>,
 
+        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+        keyframe_interval_ms: Option<f64>,
+
         /// (**default=`"yuv420p"`**) Encoder pixel format
         pixel_format: Option<PixelFormat>,
 
@@ -54,17 +57,23 @@ pub enum WhipVideoEncoderOptions {
         /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
         bitrate: Option<VideoEncoderBitrate>,
 
+        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+        keyframe_interval_ms: Option<f64>,
+
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
     },
     #[serde(rename = "ffmpeg_vp9")]
     FfmpegVp9 {
-        /// (**default=`"yuv420p"`**) Encoder pixel format
-        pixel_format: Option<PixelFormat>,
-
         /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
         /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
         bitrate: Option<VideoEncoderBitrate>,
+
+        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+        keyframe_interval_ms: Option<f64>,
+
+        /// (**default=`"yuv420p"`**) Encoder pixel format
+        pixel_format: Option<PixelFormat>,
 
         /// Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
         ffmpeg_options: Option<HashMap<Arc<str>, Arc<str>>>,
@@ -74,6 +83,9 @@ pub enum WhipVideoEncoderOptions {
         /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
         /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
         bitrate: Option<VideoEncoderBitrate>,
+
+        /// (**default=`5000`**) Interval between keyframes, in milliseconds.
+        keyframe_interval_ms: Option<f64>,
     },
     #[serde(rename = "any")]
     Any,

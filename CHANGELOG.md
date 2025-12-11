@@ -6,6 +6,7 @@
 
 ### ✨ New features
 - Add `bitrate` option to software encoders ([#1567](https://github.com/software-mansion/smelter/pull/1567) by [@JBRS307](https://github.com/JBRS307))
+- Add `keyframe_interval_ms` option to all encoders ([#1591](https://github.com/software-mansion/smelter/pull/1591) by [@JBRS307](https://github.com/JBRS307))
 
 ### 🐛 Bug fixes
 

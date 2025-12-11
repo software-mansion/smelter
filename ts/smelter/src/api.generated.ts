@@ -169,7 +169,7 @@ export type RegisterInput =
        */
       format: V4L2InputFormat;
       /**
-       * The resolution that will be negotiated with the device. If not provided, the input will use the default resolution for the given format.
+       * The requested resolution that will be negotiated with the device. If not provided, the input will use the default resolution for the given format.
        */
       resolution?: Resolution | null;
       /**
@@ -367,6 +367,10 @@ export type RtpVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
       pixel_format?: PixelFormat | null;
@@ -384,6 +388,10 @@ export type RtpVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
        * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
        */
       ffmpeg_options?: {
@@ -396,6 +404,10 @@ export type RtpVideoEncoderOptions =
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
@@ -413,6 +425,10 @@ export type RtpVideoEncoderOptions =
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
     };
 export type H264EncoderPreset =
   | "ultrafast"
@@ -919,6 +935,10 @@ export type RtmpClientVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
       pixel_format?: PixelFormat | null;
@@ -935,6 +955,10 @@ export type RtmpClientVideoEncoderOptions =
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
     };
 export type RtmpClientAudioEncoderOptions = {
   type: "aac";
@@ -955,6 +979,10 @@ export type Mp4VideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
       pixel_format?: PixelFormat | null;
@@ -971,6 +999,10 @@ export type Mp4VideoEncoderOptions =
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
     };
 export type Mp4AudioEncoderOptions = {
   type: "aac";
@@ -991,6 +1023,10 @@ export type WhipVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
       pixel_format?: PixelFormat | null;
@@ -1008,6 +1044,10 @@ export type WhipVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
       ffmpeg_options?: {
@@ -1017,13 +1057,17 @@ export type WhipVideoEncoderOptions =
   | {
       type: "ffmpeg_vp9";
       /**
-       * (**default=`"yuv420p"`**) Encoder pixel format
-       */
-      pixel_format?: PixelFormat | null;
-      /**
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
+       * (**default=`"yuv420p"`**) Encoder pixel format
+       */
+      pixel_format?: PixelFormat | null;
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
@@ -1037,6 +1081,10 @@ export type WhipVideoEncoderOptions =
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
     }
   | {
       type: "any";
@@ -1072,6 +1120,10 @@ export type WhepVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
       pixel_format?: PixelFormat | null;
@@ -1089,6 +1141,10 @@ export type WhepVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
        * Raw FFmpeg encoder options. Visit [docs](https://ffmpeg.org/ffmpeg-codecs.html) to learn more.
        */
       ffmpeg_options?: {
@@ -1101,6 +1157,10 @@ export type WhepVideoEncoderOptions =
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format.
        */
@@ -1118,6 +1178,10 @@ export type WhepVideoEncoderOptions =
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
     };
 export type WhepAudioEncoderOptions = {
   type: "opus";
@@ -1150,6 +1214,10 @@ export type HlsVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate | null;
       /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
+      /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
       pixel_format?: PixelFormat | null;
@@ -1166,6 +1234,10 @@ export type HlsVideoEncoderOptions =
        * Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate. For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VideoEncoderBitrate | null;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframe_interval_ms?: number | null;
     };
 export type HlsAudioEncoderOptions = {
   type: "aac";

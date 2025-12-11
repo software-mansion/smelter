@@ -24,6 +24,10 @@ export type Mp4VideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate;
       /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframeIntervalMs?: number;
+      /**
        * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
        */
       preset?: Api.H264EncoderPreset;
@@ -43,6 +47,10 @@ export type Mp4VideoEncoderOptions =
        * For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VideoEncoderBitrate;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframeIntervalMs?: number;
     };
 
 export type Mp4AudioOptions = {

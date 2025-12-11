@@ -3,12 +3,14 @@ use std::{iter, sync::Arc};
 use ffmpeg_next::codec::Id;
 use ffmpeg_next::{Rational, codec::Context};
 use smelter_render::{Frame, OutputFrameFormat};
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::pipeline::encoder::ffmpeg_utils::{
     create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format, read_extradata,
 };
-use crate::pipeline::encoder::utils::bitrate_from_resolution_framerate;
+use crate::pipeline::encoder::utils::{
+    bitrate_from_resolution_framerate, gop_size_from_ms_framerate,
+};
 use crate::pipeline::ffmpeg_utils::FfmpegOptions;
 use crate::prelude::*;
 
@@ -33,6 +35,7 @@ impl VideoEncoder for FfmpegH264Encoder {
         info!(?options, "Initialize FFmpeg H264 encoder");
         let codec = ffmpeg_next::codec::encoder::find(Id::H264).ok_or(EncoderInitError::NoCodec)?;
         let codec_name = codec.name();
+        debug!(h264_encoder = codec_name);
 
         let mut encoder = Context::new().encoder().video()?;
 
@@ -190,10 +193,7 @@ fn initialize_ffmpeg_h264_options(
     options: &FfmpegH264EncoderOptions,
     encoder_name: &str,
 ) -> FfmpegOptions {
-    let mut ffmpeg_options = FfmpegOptions::from(&[
-        // TODO: (@jbrs) This should be based on framerate and set to 5000ms by default
-        ("g", "250"),
-    ]);
+    let mut ffmpeg_options = FfmpegOptions::default();
     match encoder_name {
         "libopenh264" => {
             ffmpeg_options.append(&[
@@ -290,6 +290,11 @@ fn initialize_ffmpeg_h264_options(
             }
         }
     }
+    let gop_size = gop_size_from_ms_framerate(options.keyframe_interval, ctx.output_framerate);
+    ffmpeg_options.append(&[
+        // Max distance between keyframes in bits, default is equivalent of 5000 ms.
+        ("g", &gop_size.to_string()),
+    ]);
     ffmpeg_options.append(&options.raw_options);
     ffmpeg_options
 }

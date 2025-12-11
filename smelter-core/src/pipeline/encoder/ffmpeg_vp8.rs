@@ -11,7 +11,7 @@ use tracing::{error, info, trace, warn};
 use crate::pipeline::{
     encoder::{
         ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet},
-        utils::bitrate_from_resolution_framerate,
+        utils::{bitrate_from_resolution_framerate, gop_size_from_ms_framerate},
     },
     ffmpeg_utils::FfmpegOptions,
 };
@@ -59,8 +59,6 @@ impl VideoEncoder for FfmpegVp8Encoder {
         }
 
         let mut ffmpeg_options = FfmpegOptions::from(&[
-            // TODO: This will be properly set in followup PR with gop size option in api
-            ("g", "250"),
             // Quality/Speed ratio modifier
             ("cpu-used", "0"),
             // Time to spend encoding.
@@ -75,6 +73,7 @@ impl VideoEncoder for FfmpegVp8Encoder {
             // to allow low bitrate without dropping frames.
             ("qmax", "63"),
         ]);
+
         let bitrate = options.bitrate.unwrap_or_else(|| {
             bitrate_from_resolution_framerate(options.resolution, ctx.output_framerate)
         });
@@ -89,6 +88,12 @@ impl VideoEncoder for FfmpegVp8Encoder {
             ("maxrate", &maxrate.to_string()),
             // Buffer to calculate average bitrate from.
             ("bufsize", &bufsize.to_string()),
+        ]);
+
+        let gop_size = gop_size_from_ms_framerate(options.keyframe_interval, framerate);
+        ffmpeg_options.append(&[
+            // Max distance between keyframes in bits, default is equivalent of 5000 ms.
+            ("g", &gop_size.to_string()),
         ]);
         ffmpeg_options.append(&options.raw_options);
 

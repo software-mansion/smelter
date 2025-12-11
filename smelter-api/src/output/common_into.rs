@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::common_core::prelude as core;
 use crate::*;
 
@@ -109,5 +111,20 @@ impl TryFrom<VideoEncoderBitrate> for core::VideoEncoderBitrate {
                 })
             }
         }
+    }
+}
+
+pub(crate) fn duration_from_keyframe_interval(
+    keyframe_interval: &Option<f64>,
+) -> Result<Duration, TypeError> {
+    const DEFAULT_KEYFRAME_INTERVAL: Duration = Duration::from_millis(5000);
+
+    match keyframe_interval {
+        Some(ki) if *ki < 0.0 => Err(TypeError::new("Keyframe interval cannot be negative.")),
+        Some(ki) => {
+            let ki = ki.round() as u64;
+            Ok(Duration::from_millis(ki))
+        }
+        None => Ok(DEFAULT_KEYFRAME_INTERVAL),
     }
 }

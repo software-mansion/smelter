@@ -43,6 +43,9 @@ pub enum HlsVideoEncoderOptions {
         /// Encoding bitrate. Default value depends on chosen encoder.
         bitrate: Option<VideoEncoderBitrate>,
 
+        /// (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+        keyframe_interval_ms: Option<f64>,
+
         /// (**default=`"yuv420p"`**) Encoder pixel format
         pixel_format: Option<PixelFormat>,
 
@@ -54,6 +57,9 @@ pub enum HlsVideoEncoderOptions {
         /// Encoding bitrate. If not provided, bitrate is calculated based on resolution and framerate.
         /// For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
         bitrate: Option<VideoEncoderBitrate>,
+
+        /// (**default=`5000`**) Interval between keyframes, in milliseconds.
+        keyframe_interval_ms: Option<f64>,
     },
 }
 

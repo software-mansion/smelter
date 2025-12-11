@@ -24,6 +24,10 @@ export type WhepVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate;
       /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframeIntervalMs?: number;
+      /**
        * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
        */
       preset?: Api.H264EncoderPreset;
@@ -44,6 +48,10 @@ export type WhepVideoEncoderOptions =
        */
       bitrate?: VideoEncoderBitrate;
       /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframeIntervalMs?: number;
+      /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
       ffmpegOptions?: Record<string, string>;
@@ -55,6 +63,10 @@ export type WhepVideoEncoderOptions =
        * For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VideoEncoderBitrate;
+      /**
+       * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
+       */
+      keyframeIntervalMs?: number;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
@@ -71,6 +83,10 @@ export type WhepVideoEncoderOptions =
        * For example at 1080p 30 FPS the average bitrate is 5000 kbit/s and max bitrate is 6250 kbit/s.
        */
       bitrate?: VideoEncoderBitrate;
+      /**
+       * (**default=`5000`**) Interval between keyframes, in milliseconds.
+       */
+      keyframeIntervalMs?: number;
     };
 
 export type WhepAudioOptions = {

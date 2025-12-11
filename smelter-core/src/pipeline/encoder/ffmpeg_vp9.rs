@@ -9,8 +9,9 @@ use tracing::{error, info, trace, warn};
 
 use crate::pipeline::{
     PipelineCtx,
-    encoder::ffmpeg_utils::{
-        create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format,
+    encoder::{
+        ffmpeg_utils::{create_av_frame, encoded_chunk_from_av_packet, into_ffmpeg_pixel_format},
+        utils::gop_size_from_ms_framerate,
     },
     ffmpeg_utils::FfmpegOptions,
 };
@@ -59,8 +60,6 @@ impl VideoEncoder for FfmpegVp9Encoder {
 
         // configuration based on https://developers.google.com/media/vp9/live-encoding
         let mut ffmpeg_options = FfmpegOptions::from(&[
-            // TODO: This will be properly set in followup PR with gop size option in api
-            ("g", "250"),
             // Quality/Speed ratio modifier
             ("speed", "5"),
             // Time to spend encoding.
@@ -108,6 +107,15 @@ impl VideoEncoder for FfmpegVp9Encoder {
                 ]);
             }
         }
+
+        // NOTE: There is a bug in webrtc-rs causing every VP9 frame to be recognized as a
+        // keyframe.
+        let gop_size = gop_size_from_ms_framerate(options.keyframe_interval, framerate);
+        ffmpeg_options.append(&[
+            // Max distance between keyframes in bits, default is equivalent of 5000 ms.
+            ("g", &gop_size.to_string()),
+        ]);
+
         ffmpeg_options.append(&options.raw_options);
 
         let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
