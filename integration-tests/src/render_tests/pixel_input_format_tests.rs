@@ -59,7 +59,6 @@ fn test_bgra_pixel_format_input() {
         steps: vec![
             Step::UpdateScene(view_component),
             Step::RenderWithSnapshot(Duration::ZERO),
-            Step::RenderWithSnapshot(Duration::ZERO),
         ],
         inputs: vec![input_frame],
         ..Default::default()
@@ -85,6 +84,68 @@ fn test_bgra_pixel_format_input() {
             55, 54, 53, 56, 
             59, 58, 57, 60,
             63, 62, 61, 64
+        ],
+    );
+}
+
+#[test]
+fn test_argb_pixel_format_input() {
+    let width = 8;
+    let height = 2;
+    let input_id = "input";
+
+    #[rustfmt::skip]
+    let input_data = &[
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+        33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
+    ];
+
+    let input_component = Component::InputStream(InputStreamComponent {
+        id: None,
+        input_id: InputId::from(Arc::from(input_id)),
+    });
+
+    let view_component = Component::View(ViewComponent {
+        children: vec![input_component],
+        ..Default::default()
+    });
+
+    let input_frame = TestInput {
+        name: input_id.to_string(),
+        resolution: Resolution { width, height },
+        data: FrameData::Argb(Bytes::from_static(input_data)),
+    };
+    let case = TestCase {
+        output_format: OutputFrameFormat::RgbaWgpuTexture,
+        resolution: Resolution { width, height },
+        steps: vec![
+            Step::UpdateScene(view_component),
+            Step::RenderWithSnapshot(Duration::ZERO),
+        ],
+        inputs: vec![input_frame],
+        ..Default::default()
+    };
+
+    #[rustfmt::skip]
+    run_case(case,
+        &[
+            4, 1, 2, 3,
+            8, 5, 6, 7,
+            12, 9, 10, 11,
+            16, 13, 14, 15,
+            20, 17, 18, 19,
+            24, 21, 22, 23,
+            28, 25, 26, 27,
+            32, 29, 30, 31,
+            
+            36, 33, 34, 35,
+            40, 37, 38, 39,
+            44, 41, 42, 43,
+            48, 45, 46, 47,
+            52, 49, 50, 51,
+            56, 53, 54, 55,
+            60, 57, 58, 59,
+            64, 61, 62, 63
         ],
     );
 }

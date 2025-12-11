@@ -5,7 +5,9 @@ use rgba_texture::RgbaTextureInput;
 
 use crate::{
     Frame, FrameData, Resolution,
-    state::input_texture::{bgra::BgraInput, interleaved_yuyv422::InterleavedYuyv422Input},
+    state::input_texture::{
+        argb::ArgbInput, bgra::BgraInput, interleaved_yuyv422::InterleavedYuyv422Input,
+    },
     wgpu::{WgpuCtx, texture::PlanarYuvVariant},
 };
 
@@ -15,6 +17,7 @@ use super::node_texture::NodeTexture;
 // CPU - connect as linear(default) view
 // WebGl - create temporary rgb texture, write to it convert from srg to rgb
 
+mod argb;
 mod bgra;
 mod interleaved_uyvy422;
 mod interleaved_yuyv422;
@@ -30,6 +33,7 @@ enum InputTextureState {
     InterleavedYuyv422(InterleavedYuyv422Input),
     Nv12(NV12Input),
     Bgra(BgraInput),
+    Argb(ArgbInput),
     /// Depending on rendering mode
     /// - GPU - Rgba8UnormSrgb
     /// - CPU optimized - Rgba8Unorm (but data is in sRGB color space)
@@ -46,6 +50,7 @@ impl InputTextureState {
             InputTextureState::Rgba8Unorm(input) => input.resolution(),
             InputTextureState::Nv12(input) => input.resolution(),
             InputTextureState::Bgra(input) => input.resolution(),
+            InputTextureState::Argb(input) => input.resolution(),
         }
     }
 }
@@ -180,6 +185,18 @@ impl InputTexture {
                     }
                 };
             }
+            FrameData::Argb(data) => {
+                match &mut self.0 {
+                    Some(InputTextureState::Argb(input)) => {
+                        input.upload(ctx, &data, frame.resolution);
+                    }
+                    state => {
+                        let mut input = ArgbInput::new(ctx);
+                        input.upload(ctx, &data, frame.resolution);
+                        *state = Some(InputTextureState::Argb(input));
+                    }
+                };
+            }
         }
     }
 
@@ -194,6 +211,7 @@ impl InputTexture {
                     InputTextureState::Rgba8Unorm(state) => state.convert(ctx, dst_state),
                     InputTextureState::Nv12(state) => state.convert(ctx, dst_state),
                     InputTextureState::Bgra(state) => state.convert(ctx, dst_state),
+                    InputTextureState::Argb(state) => state.convert(ctx, dst_state),
                 }
             }
             None => dest.clear(),
