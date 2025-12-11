@@ -9,7 +9,7 @@
 ** accordance with:
 ** 
 ** (1) if the Software is obtained from Blackmagic Design, the End User License 
-** Agreement for the Software Development Kit (“EULA”) available at 
+** Agreement for the Software Development Kit ("EULA") available at 
 ** https://www.blackmagicdesign.com/EULA/DeckLinkSDK; or
 ** 
 ** (2) if the Software is obtained from any third party, such licensing terms 
@@ -43,6 +43,7 @@
 
 #include "DeckLinkAPI.h"
 #include "DeckLinkAPI_v10_11.h"
+#include "DeckLinkAPIMemoryAllocator_v14_2_1.h"
 
 // Type Declarations
 BMD_CONST REFIID IID_IDeckLinkEncoderInput_v10_11                        = /* 270587DA-6B7D-42E7-A1F0-6D853F581185 */ {0x27,0x05,0x87,0xDA,0x6B,0x7D,0x42,0xE7,0xA1,0xF0,0x6D,0x85,0x3F,0x58,0x11,0x85};
@@ -60,7 +61,7 @@ public:
     virtual HRESULT EnableVideoInput (/* in */ BMDDisplayMode displayMode, /* in */ BMDPixelFormat pixelFormat, /* in */ BMDVideoInputFlags flags) = 0;
     virtual HRESULT DisableVideoInput (void) = 0;
     virtual HRESULT GetAvailablePacketsCount (/* out */ uint32_t *availablePacketsCount) = 0;
-    virtual HRESULT SetMemoryAllocator (/* in */ IDeckLinkMemoryAllocator *theAllocator) = 0;
+    virtual HRESULT SetMemoryAllocator (/* in */ IDeckLinkMemoryAllocator_v14_2_1 *theAllocator) = 0;
 
     /* Audio Input */
 

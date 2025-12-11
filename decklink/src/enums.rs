@@ -7,7 +7,7 @@ pub mod ffi {
         VideoOutputCallback,
         InputCallback,
         EncoderInputCallback,
-        MemoryAllocator,
+        VideoBufferAllocator,
         AudioOutputCallback,
         Iterator,
         APIInformation,

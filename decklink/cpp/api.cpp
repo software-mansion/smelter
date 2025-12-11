@@ -274,10 +274,24 @@ long video_input_frame_row_bytes(IDeckLinkVideoInputFrame *frame) {
 }
 
 uint8_t *video_input_frame_bytes(IDeckLinkVideoInputFrame *frame) {
+  IDeckLinkVideoBuffer *videoBuffer = nullptr;
+  if (frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void **)&videoBuffer) != S_OK) {
+    throw std::runtime_error("IDeckLinkVideoInputFrame::QueryInterface(IID_IDeckLinkVideoBuffer) failed.");
+  }
+
+  if (videoBuffer->StartAccess(bmdBufferAccessRead) != S_OK) {
+    videoBuffer->Release();
+    throw std::runtime_error("IDeckLinkVideoBuffer::StartAccess failed.");
+  }
+
   void *buffer = nullptr;
-  auto result = frame->GetBytes(&buffer);
+  auto result = videoBuffer->GetBytes(&buffer);
+
+  videoBuffer->EndAccess(bmdBufferAccessRead);
+  videoBuffer->Release();
+
   if (result != S_OK) {
-    throw std::runtime_error("IDeckLinkVideoInputFrame::GetBytes failed.");
+    throw std::runtime_error("IDeckLinkVideoBuffer::GetBytes failed.");
   }
   return reinterpret_cast<uint8_t *>(buffer);
 }

@@ -9,7 +9,7 @@
 ** accordance with:
 ** 
 ** (1) if the Software is obtained from Blackmagic Design, the End User License 
-** Agreement for the Software Development Kit (“EULA”) available at 
+** Agreement for the Software Development Kit ("EULA") available at 
 ** https://www.blackmagicdesign.com/EULA/DeckLinkSDK; or
 ** 
 ** (2) if the Software is obtained from any third party, such licensing terms 
