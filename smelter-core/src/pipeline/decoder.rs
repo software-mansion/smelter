@@ -39,6 +39,7 @@ pub mod libopus;
 pub(crate) struct DecodedSamples {
     pub samples: AudioSamples,
     pub start_pts: Duration,
+    pub end_pts: Duration,
     pub sample_rate: u32,
 }
 
