@@ -26,7 +26,7 @@ export type WhipVideoEncoderOptions =
       /**
        * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframeInterval?: number;
+      keyframeIntervalMs?: number;
       /**
        * (**default=`"fast"`**) Preset for an encoder. See `FFmpeg` [docs](https://trac.ffmpeg.org/wiki/Encode/H.264#Preset) to learn more.
        */
@@ -50,7 +50,7 @@ export type WhipVideoEncoderOptions =
       /**
        * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframeInterval?: number;
+      keyframeIntervalMs?: number;
       /**
        * Raw FFmpeg encoder options. See [docs](https://ffmpeg.org/ffmpeg-codecs.html) for more.
        */
@@ -66,7 +66,7 @@ export type WhipVideoEncoderOptions =
       /**
        * (**default=`5000`**) Maximal interval between keyframes, in milliseconds.
        */
-      keyframeInterval?: number;
+      keyframeIntervalMs?: number;
       /**
        * (**default=`"yuv420p"`**) Encoder pixel format
        */
@@ -86,7 +86,7 @@ export type WhipVideoEncoderOptions =
       /**
        * (**default=`5000`**) Interval between keyframes, in milliseconds.
        */
-      keyframeInterval?: number;
+      keyframeIntervalMs?: number;
     }
   | {
       type: 'any';
