@@ -2,7 +2,7 @@ use interleaved_uyvy_to_rgba::InterleavedUyvy422ToRgbaConverter;
 use interleaved_yuyv_to_rgba::InterleavedYuyv422ToRgbaConverter;
 use nv12_to_rgba::Nv12ToRgbaConverter;
 
-use crate::wgpu::format::bgra_to_rgba::BgraToRgbaConverter;
+use crate::wgpu::format::{argb_to_rgba::ArgbToRgbaConverter, bgra_to_rgba::BgraToRgbaConverter};
 
 use self::{planar_yuv_to_rgba::PlanarYuvToRgbaConverter, rgba_to_yuv::RgbaToYuvConverter};
 
@@ -11,6 +11,7 @@ use super::{
     texture::{NV12Texture, PlanarYuvTextures},
 };
 
+mod argb_to_rgba;
 mod bgra_to_rgba;
 mod interleaved_uyvy_to_rgba;
 mod interleaved_yuyv_to_rgba;
@@ -25,6 +26,7 @@ pub struct TextureFormat {
     pub interleaved_yuyv_to_rgba_linear: InterleavedYuyv422ToRgbaConverter,
     pub nv12_to_rgba_linear: Nv12ToRgbaConverter,
     pub bgra_to_rgba_linear: BgraToRgbaConverter,
+    pub argb_to_rgba_linear: ArgbToRgbaConverter,
 
     pub rgba_to_yuv: RgbaToYuvConverter,
 
@@ -63,6 +65,11 @@ impl TextureFormat {
             &single_texture_layout,
             wgpu::TextureFormat::Rgba8Unorm,
         );
+        let argb_to_rgba_linear = ArgbToRgbaConverter::new(
+            device,
+            &single_texture_layout,
+            wgpu::TextureFormat::Rgba8Unorm,
+        );
 
         let rgba_to_yuv = RgbaToYuvConverter::new(device, &single_texture_layout);
 
@@ -72,6 +79,7 @@ impl TextureFormat {
             interleaved_yuyv_to_rgba_linear,
             nv12_to_rgba_linear,
             bgra_to_rgba_linear,
+            argb_to_rgba_linear,
 
             rgba_to_yuv,
 

@@ -23,6 +23,7 @@ pub(super) fn frame_to_rgba(frame: &Frame) -> Vec<u8> {
         FrameData::Nv12WgpuTexture(_) => panic!("unsupported"),
         FrameData::Nv12(_) => panic!("unsupported"),
         FrameData::Bgra(_) => panic!("unsupported"),
+        FrameData::Argb(_) => panic!("unsupported"),
     }
 }
 

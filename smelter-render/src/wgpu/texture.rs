@@ -1,3 +1,4 @@
+mod argb_linear;
 mod base;
 mod bgra_linear;
 mod interleaved_yuv422;
@@ -16,6 +17,7 @@ mod bgra_srgb;
 pub type BgraSrgbTexture = bgra_srgb::BgraSrgbTexture;
 
 pub type BgraLinearTexture = bgra_linear::BgraLinearTexture;
+pub type ArgbLinearTexture = argb_linear::ArgbLinearTexture;
 pub type RgbaMultiViewTexture = rgba_multiview::RgbaMultiViewTexture;
 pub type RgbaLinearTexture = rgba_linear::RgbaLinearTexture;
 pub type RgbaSrgbTexture = rgba_srgb::RgbaSrgbTexture;
