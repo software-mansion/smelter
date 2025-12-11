@@ -86,7 +86,7 @@ impl WhepVideoEncoderOptions {
             } => core::VideoEncoderOptions::FfmpegH264(core::FfmpegH264EncoderOptions {
                 preset: preset.unwrap_or(H264EncoderPreset::Fast).into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval),
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval)?,
                 resolution: resolution.into(),
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
@@ -101,7 +101,7 @@ impl WhepVideoEncoderOptions {
             } => core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval),
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval)?,
             }),
             WhepVideoEncoderOptions::FfmpegVp8 {
                 bitrate,
@@ -110,7 +110,7 @@ impl WhepVideoEncoderOptions {
             } => core::VideoEncoderOptions::FfmpegVp8(core::FfmpegVp8EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval),
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval)?,
                 raw_options: ffmpeg_options
                     .clone()
                     .unwrap_or_default()
@@ -125,7 +125,7 @@ impl WhepVideoEncoderOptions {
             } => core::VideoEncoderOptions::FfmpegVp9(core::FfmpegVp9EncoderOptions {
                 resolution: resolution.into(),
                 bitrate: bitrate.map(|b| b.try_into()).transpose()?,
-                keyframe_interval: duration_from_keyframe_interval(keyframe_interval),
+                keyframe_interval: duration_from_keyframe_interval(keyframe_interval)?,
                 pixel_format: pixel_format.unwrap_or(PixelFormat::Yuv420p).into(),
                 raw_options: ffmpeg_options
                     .clone()
