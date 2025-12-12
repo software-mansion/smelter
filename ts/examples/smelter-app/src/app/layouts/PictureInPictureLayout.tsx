@@ -15,10 +15,9 @@ export function PictureInPictureLayout() {
     return <View />;
   }
 
-  // Periodic sine-wave effect controller (smooth fade in/out)
   const [waveAmpPx, setWaveAmpPx] = useState(0);
   const [waveSpeed, setWaveSpeed] = useState(0);
-  const [marqueeLeft, setMarqueeLeft] = useState(0);
+  const [marqueeLeft, setMarqueeLeft] = useState(2560);
   useEffect(() => {
     let mounted = true;
     let tweenId: ReturnType<typeof setInterval> | null = null;
@@ -49,16 +48,14 @@ export function PictureInPictureLayout() {
       if (!mounted) {
         return;
       }
-      // Idle phase (no wave)
       setWaveSpeed(0);
       setWaveAmpPx(0);
-      // Start/continue marquee
       if (!marqueeId) {
-        const pxPerSec = 200;
+        const pxPerSec = 240;
         const intervalMs = 10;
         const step = (pxPerSec * intervalMs) / 1000;
         const resetRight = 2560;
-        const minLeft = -1920;
+        const minLeft = -2120;
         marqueeId = setInterval(() => {
           if (!mounted) {
             return;
@@ -73,24 +70,21 @@ export function PictureInPictureLayout() {
         if (!mounted) {
           return;
         }
-        // Ramp in
-        setWaveSpeed(6); // rad/s
+        setWaveSpeed(6);
         tween(0, 25, 500);
-        // Hold wave
         timerId = setTimeout(() => {
           if (!mounted) {
             return;
           }
-          // Ramp out
           tween(25, 0, 500);
           timerId = setTimeout(() => {
             if (!mounted) {
               return;
             }
             runCycle();
-          }, 4000); // pause before next wave
-        }, 2000); // wave active duration
-      }, 3000); // idle before next activation
+          }, 4000);
+        }, 2000);
+      }, 3000);
     };
     runCycle();
     return () => {
@@ -101,14 +95,11 @@ export function PictureInPictureLayout() {
       if (timerId) {
         clearTimeout(timerId);
       }
-      // marquee stops automatically with unmount; clear if present
     };
   }, []);
 
   return (
     <View style={{ direction: 'column' }}>
-      {/* Full-width news strip above main video */}
-
       <Rescaler
         transition={{ durationMs: 300 }}
         style={{
@@ -116,7 +107,7 @@ export function PictureInPictureLayout() {
           horizontalAlign: 'left',
           verticalAlign: 'top',
           width: 2560,
-          height: 1440, // main area + banner area height to cover full output
+          height: 1440,
           top: 0,
           left: 0,
         }}>
@@ -142,7 +133,7 @@ export function PictureInPictureLayout() {
           horizontalAlign: 'left',
           verticalAlign: 'top',
           width: 2560,
-          height: 450, // main area + banner area height to cover full output
+          height: 450,
           top: 1000,
           left: 0,
         }}>
@@ -180,7 +171,7 @@ export function PictureInPictureLayout() {
                 }}>
                 <Shader
                   shaderId="soft-shadow"
-                  resolution={{ width: 2560, height: 80 }}
+                  resolution={{ width: 1920, height: 80 }}
                   shaderParam={{
                     type: 'struct',
                     value: [
@@ -199,9 +190,9 @@ export function PictureInPictureLayout() {
                     style={{
                       fontSize: 80,
                       color: '#7ecbff',
-                      fontFamily: 'Roboto',
+                      fontFamily: 'Roboto Sans',
                     }}>
-                    This video is composing multiple streams in real-time by Smelter.{' '}
+                    This video is composing multiple live streams in real-time by Smelter.{' '}
                   </Text>
                 </Shader>
               </View>

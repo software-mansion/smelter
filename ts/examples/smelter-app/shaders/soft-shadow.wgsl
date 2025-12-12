@@ -15,13 +15,6 @@ struct BaseShaderParameters {
     texture_count: u32,
 };
 
-// A soft, slightly animated drop shadow rendered behind the source.
-// color      -> shadow color (RGB floats 0..1)
-// opacity    -> 0..1 strength
-// offset_*   -> base offset in pixels
-// blur_px    -> blur radius in pixels (sampling kernel size depends on this)
-// anim_amp_px-> animation amplitude in pixels (applied to offsets)
-// anim_speed -> radians per second for wiggle animation
 struct ShaderOptions {
     shadow_r: f32,
     shadow_g: f32,
@@ -63,35 +56,29 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let src = textureSample(textures[0], sampler_, uv);
     let src_a = clamp(src.a, 0.0, 1.0);
 
-    // Parameters
     let shadow_col = vec3<f32>(shader_options.shadow_r, shader_options.shadow_g, shader_options.shadow_b);
     let opacity = clamp(shader_options.opacity, 0.0, 1.0);
     let blur_px = max(0.0, shader_options.blur_px);
     let base_off_px = vec2<f32>(shader_options.offset_x_px, shader_options.offset_y_px);
 
-    // Animation: small wiggle on the offset
     let t = base_params.time;
     let amp = shader_options.anim_amp_px;
     let w = shader_options.anim_speed;
     let anim_off_px = amp * vec2<f32>(sin(w * t), cos(w * t) * 0.5);
 
     let total_off_px = base_off_px + anim_off_px;
-    let off_uv = total_off_px / res; // convert px -> UV
+    let off_uv = total_off_px / res;
 
-    // Soft blur sampling around the offset-UV
-    // Kernel: center + 8 ring samples
-    let blur_uv = blur_px / res; // radius in UV
+    let blur_uv = blur_px / res;
     var shadow_acc = 0.0;
     var weight_acc = 0.0;
 
-    // center
     {
         let a = sample_alpha(clamp(uv + off_uv, vec2<f32>(0.0), vec2<f32>(1.0)));
         let w0 = 0.4;
         shadow_acc += a * w0;
         weight_acc += w0;
     }
-    // ring samples
     let ring = array<vec2<f32>, 8>(
         vec2<f32>( 1.0,  0.0), vec2<f32>(-1.0,  0.0),
         vec2<f32>( 0.0,  1.0), vec2<f32>( 0.0, -1.0),
@@ -102,13 +89,11 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         let dir = ring[i];
         let uv_s = clamp(uv + off_uv + dir * blur_uv, vec2<f32>(0.0), vec2<f32>(1.0));
         let a = sample_alpha(uv_s);
-        let wi = 0.075; // each ring tap
+        let wi = 0.075;
         shadow_acc += a * wi;
         weight_acc += wi;
     }
     let shadow_alpha = (shadow_acc / max(0.0001, weight_acc)) * opacity;
-    // Composite: draw shadow "behind" the source
-    // Simple over composite: shadow contributes where source alpha is lower
     let inv_src = 1.0 - src_a;
     let out_rgb = shadow_col * shadow_alpha * inv_src + src.rgb;
     let out_a = clamp(src_a + shadow_alpha * inv_src, 0.0, 1.0);

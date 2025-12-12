@@ -15,11 +15,6 @@ struct BaseShaderParameters {
     texture_count: u32,
 };
 
-// Parameters:
-//  - amplitude_px: vertical offset amplitude in pixels
-//  - wavelength_px: length of one wave cycle in pixels (along X)
-//  - speed: radians per second added to the phase (can be negative)
-//  - phase: base phase offset in radians
 struct ShaderOptions {
     amplitude_px: f32,
     wavelength_px: f32,
@@ -48,20 +43,15 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let res = vec2<f32>(f32(base_params.output_resolution.x), f32(base_params.output_resolution.y));
     let uv = input.tex_coords;
 
-    // Parameters and sanity clamps
     let amp_px = max(0.0, shader_options.amplitude_px);
     let lambda_px = max(1.0, shader_options.wavelength_px);
     let speed = shader_options.speed;
     let phase = shader_options.phase;
 
-    // Convert amplitude in px to UV space
     let amp_uv = amp_px / res.y;
-    // Spatial frequency in radians per pixel along X
     let k = 2.0 * 3.141592653589793 * (1.0 / lambda_px);
-    // Phase accumulation over time
     let wt = speed * base_params.time + phase;
 
-    // Sample position after vertical displacement based on X
     let offset_y = amp_uv * sin(k * (uv.x * res.x) + wt);
     let uv_distorted = vec2<f32>(uv.x, clamp(uv.y + offset_y, 0.0, 1.0));
 
