@@ -1,5 +1,4 @@
 use crate::{cef_ref::CefRc, cef_string::CefString, validated::ValidatedError};
-use tracing::error;
 
 use super::{
     V8ContextEntered, V8FunctionError,

@@ -1,7 +1,6 @@
 use shared_memory::{Shmem, ShmemConf, ShmemError};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use tracing::error;
 
 pub struct SharedMemory {
     inner: Option<Shmem>,

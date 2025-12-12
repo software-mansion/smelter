@@ -4,7 +4,6 @@ use ash::vk;
 
 use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 use session_resources::VideoSessionResources;
-use tracing::error;
 
 use crate::{
     RawFrameData,
