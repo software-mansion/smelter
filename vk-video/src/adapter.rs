@@ -135,20 +135,22 @@ impl<'a> VulkanAdapter<'a> {
             })
             .map(|(i, _)| i)?;
 
-        let decode_queue_idx = match has_decode_extensions {
-            true => Some(find_video_queue_idx(
+        let decode_queue_indices = match has_decode_extensions {
+            true => Some(find_video_queue_indices(
                 &queues,
                 vk::QueueFlags::VIDEO_DECODE_KHR,
                 vk::VideoCodecOperationFlagsKHR::DECODE_H264,
             )?),
             false => None,
         };
-        let encode_queue_idx = match has_encode_extensions {
-            true => Some(find_video_queue_idx(
+        let encode_queue_indices = match has_encode_extensions {
+            true => find_video_queue_indices(
                 &queues,
                 vk::QueueFlags::VIDEO_ENCODE_KHR,
                 vk::VideoCodecOperationFlagsKHR::ENCODE_H264,
-            )?),
+            )?
+            .first()
+            .cloned(),
             false => None,
         };
 
@@ -219,12 +221,17 @@ impl<'a> VulkanAdapter<'a> {
                     query_result_status_properties: query_result_status_properties
                         [transfer_queue_idx],
                 },
-                h264_decode: decode_queue_idx.map(|idx| QueueIndex {
-                    idx,
-                    video_properties: video_properties[idx],
-                    query_result_status_properties: query_result_status_properties[idx],
+                h264_decode: decode_queue_indices.map(|indices| {
+                    indices
+                        .into_iter()
+                        .map(|idx| QueueIndex {
+                            idx,
+                            video_properties: video_properties[idx],
+                            query_result_status_properties: query_result_status_properties[idx],
+                        })
+                        .collect()
                 }),
-                h264_encode: encode_queue_idx.map(|idx| QueueIndex {
+                h264_encode: encode_queue_indices.map(|idx| QueueIndex {
                     idx,
                     video_properties: video_properties[idx],
                     query_result_status_properties: query_result_status_properties[idx],
@@ -356,11 +363,12 @@ fn contains_extensions(
     })
 }
 
-fn find_video_queue_idx(
+fn find_video_queue_indices(
     queues: &[vk::QueueFamilyProperties2<'_>],
     queue_flag: vk::QueueFlags,
     video_codec_operation: vk::VideoCodecOperationFlagsKHR,
-) -> Option<usize> {
+) -> Option<Vec<usize>> {
+    let mut indices = Vec::new();
     for (i, queue) in queues.iter().enumerate() {
         if !queue
             .queue_family_properties
@@ -376,11 +384,14 @@ fn find_video_queue_idx(
                     .video_codec_operations
                     .contains(video_codec_operation)
                 {
-                    return Some(i);
+                    indices.push(i);
                 }
             );
         }
     }
 
-    None
+    if indices.is_empty() {
+        return None;
+    }
+    Some(indices)
 }

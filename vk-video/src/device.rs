@@ -11,7 +11,7 @@ use crate::device::caps::{
     DecodeCapabilities, EncodeCapabilities, NativeDecodeCapabilities,
     NativeDecodeProfileCapabilities, NativeEncodeCapabilities,
 };
-use crate::device::queues::{Queue, Queues};
+use crate::device::queues::{Queue, QueueSet, Queues};
 use crate::parameters::{
     EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, RateControl,
 };
@@ -216,11 +216,16 @@ impl VulkanDevice {
             _instance: instance.instance.clone(),
         });
 
-        let h264_decode_queue = queue_indices.h264_decode.map(|queue_index| {
-            (
-                unsafe { device.get_device_queue(queue_index.idx as u32, 0) },
-                queue_index,
-            )
+        let h264_decode_queue = queue_indices.h264_decode.map(|indices| {
+            indices
+                .into_iter()
+                .map(|queue_index| {
+                    (
+                        unsafe { device.get_device_queue(queue_index.idx as u32, 0) },
+                        queue_index,
+                    )
+                })
+                .collect::<Vec<_>>()
         });
         let h264_encode_queue = queue_indices.h264_encode.map(|queue_index| {
             (
@@ -244,12 +249,18 @@ impl VulkanDevice {
                     .query_result_status_properties,
                 device: device.clone(),
             },
-            h264_decode: h264_decode_queue.map(|(queue, queue_index)| Queue {
-                queue: Arc::new(queue.into()),
-                idx: queue_index.idx,
-                _video_properties: queue_index.video_properties,
-                query_result_status_properties: queue_index.query_result_status_properties,
-                device: device.clone(),
+            h264_decode: h264_decode_queue.map(|queues| {
+                let queues = queues
+                    .into_iter()
+                    .map(|(queue, queue_index)| Queue {
+                        queue: Arc::new(queue.into()),
+                        idx: queue_index.idx,
+                        _video_properties: queue_index.video_properties,
+                        query_result_status_properties: queue_index.query_result_status_properties,
+                        device: device.clone(),
+                    })
+                    .collect();
+                QueueSet::new(queues)
             }),
             h264_encode: h264_encode_queue.map(|(queue, queue_index)| Queue {
                 queue: Arc::new(queue.into()),
@@ -336,7 +347,8 @@ impl VulkanDevice {
             h264_decode_queue: self
                 .queues
                 .h264_decode
-                .clone()
+                .as_ref()
+                .and_then(|queues| queues.next_queue())
                 .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?,
             profile_capabilities: decode_caps
                 .profile(max_profile)
@@ -372,7 +384,8 @@ impl VulkanDevice {
             h264_decode_queue: self
                 .queues
                 .h264_decode
-                .clone()
+                .as_ref()
+                .and_then(|queues| queues.next_queue())
                 .ok_or(VulkanDecoderError::VulkanDecoderUnsupported)?,
             profile_capabilities: decode_caps
                 .profile(max_profile)

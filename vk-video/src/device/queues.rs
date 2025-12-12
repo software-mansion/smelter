@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use ash::vk;
@@ -78,9 +79,29 @@ impl Queue {
 
 pub(crate) struct Queues {
     pub(crate) transfer: Queue,
-    pub(crate) h264_decode: Option<Queue>,
+    pub(crate) h264_decode: Option<QueueSet>,
+    // TODO: Store multiple encode queues?
     pub(crate) h264_encode: Option<Queue>,
     pub(crate) wgpu: Queue,
+}
+
+pub(crate) struct QueueSet {
+    pub(crate) queues: Vec<Queue>,
+    pub(crate) next_queue_offset: AtomicUsize,
+}
+
+impl QueueSet {
+    pub(crate) fn new(queues: Vec<Queue>) -> Self {
+        Self {
+            queues,
+            next_queue_offset: AtomicUsize::new(0),
+        }
+    }
+
+    pub(crate) fn next_queue(&self) -> Option<Queue> {
+        let offset = self.next_queue_offset.fetch_add(1, Ordering::Relaxed) % self.queues.len();
+        self.queues.get(offset).cloned()
+    }
 }
 
 pub(crate) struct QueueIndex<'a> {
@@ -91,28 +112,34 @@ pub(crate) struct QueueIndex<'a> {
 
 pub(crate) struct QueueIndices<'a> {
     pub(crate) transfer: QueueIndex<'a>,
-    pub(crate) h264_decode: Option<QueueIndex<'a>>,
+    pub(crate) h264_decode: Option<Vec<QueueIndex<'a>>>,
+    // TODO: Store multiple encode queues?
     pub(crate) h264_encode: Option<QueueIndex<'a>>,
     pub(crate) graphics_transfer_compute: QueueIndex<'a>,
 }
 
 impl QueueIndices<'_> {
     pub(crate) fn queue_create_infos(&self) -> Vec<vk::DeviceQueueCreateInfo<'_>> {
-        [
-            self.h264_decode.as_ref().map(|q| q.idx),
+        let decode_queues = self.h264_decode.as_ref().map_or(Vec::new(), |indices| {
+            indices.iter().map(|q| q.idx).collect()
+        });
+        let queues = vec![
             self.h264_encode.as_ref().map(|q| q.idx),
             Some(self.transfer.idx),
             Some(self.graphics_transfer_compute.idx),
         ]
         .into_iter()
         .flatten()
-        .collect::<std::collections::HashSet<usize>>()
-        .into_iter()
-        .map(|i| {
-            vk::DeviceQueueCreateInfo::default()
-                .queue_family_index(i as u32)
-                .queue_priorities(&[1.0])
-        })
-        .collect::<Vec<_>>()
+        .chain(decode_queues)
+        .collect::<std::collections::HashSet<usize>>();
+
+        queues
+            .into_iter()
+            .map(|i| {
+                vk::DeviceQueueCreateInfo::default()
+                    .queue_family_index(i as u32)
+                    .queue_priorities(&[1.0])
+            })
+            .collect::<Vec<_>>()
     }
 }
