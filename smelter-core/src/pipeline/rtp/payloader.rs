@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use tracing::{error, info};
+use tracing::info;
 
 use rand::Rng;
 use webrtc::rtp::{
