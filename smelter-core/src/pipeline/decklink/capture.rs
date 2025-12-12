@@ -103,10 +103,11 @@ impl ChannelCallbackAdapter {
             PixelFormat::Format8BitYUV => {
                 Self::frame_from_yuv_422(width, height, bytes_per_row, data, pts)
             }
-            // TODO just for testing
-            PixelFormat::Format10BitRGB => {
-                warn!(?pixel_format, "Unsupported pixel format");
-                Self::frame_from_yuv_422(width, height, bytes_per_row, data, pts)
+            PixelFormat::Format8BitARGB => {
+                Self::frame_from_argb(width, height, bytes_per_row, data, pts)
+            }
+            PixelFormat::Format8BitBGRA => {
+                Self::frame_from_bgra(width, height, bytes_per_row, data, pts)
             }
             pixel_format => {
                 warn!(?pixel_format, "Unsupported pixel format");
@@ -136,7 +137,7 @@ impl ChannelCallbackAdapter {
         data: bytes::Bytes,
         pts: Duration,
     ) -> Frame {
-        let data = if width != bytes_per_row * 2 {
+        let data = if width * 2 != bytes_per_row {
             let mut output_buffer = bytes::BytesMut::with_capacity(width * 2 * height);
 
             data.chunks(bytes_per_row)
@@ -149,6 +150,56 @@ impl ChannelCallbackAdapter {
         };
         Frame {
             data: FrameData::InterleavedUyvy422(data),
+            resolution: Resolution { width, height },
+            pts,
+        }
+    }
+
+    fn frame_from_argb(
+        width: usize,
+        height: usize,
+        bytes_per_row: usize,
+        data: bytes::Bytes,
+        pts: Duration,
+    ) -> Frame {
+        let data = if width * 4 != bytes_per_row {
+            let mut output_buffer = bytes::BytesMut::with_capacity(width * 4 * height);
+
+            data.chunks(bytes_per_row)
+                .map(|chunk| &chunk[..(width * 4)])
+                .for_each(|chunk| output_buffer.extend_from_slice(chunk));
+
+            output_buffer.freeze()
+        } else {
+            data
+        };
+        Frame {
+            data: FrameData::Argb(data),
+            resolution: Resolution { width, height },
+            pts,
+        }
+    }
+
+    fn frame_from_bgra(
+        width: usize,
+        height: usize,
+        bytes_per_row: usize,
+        data: bytes::Bytes,
+        pts: Duration,
+    ) -> Frame {
+        let data = if width * 4 != bytes_per_row {
+            let mut output_buffer = bytes::BytesMut::with_capacity(width * 4 * height);
+
+            data.chunks(bytes_per_row)
+                .map(|chunk| &chunk[..(width * 4)])
+                .for_each(|chunk| output_buffer.extend_from_slice(chunk));
+
+            output_buffer.freeze()
+        } else {
+            data
+        };
+        Frame {
+            data: FrameData::Bgra(data),
             resolution: Resolution { width, height },
             pts,
         }

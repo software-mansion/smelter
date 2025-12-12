@@ -34,6 +34,9 @@ impl DeckLink {
                 .input()
                 .map_err(DeckLinkInputError::DecklinkError)?,
         );
+        let initial_pixel_format = opts
+            .pixel_format
+            .unwrap_or(decklink::PixelFormat::Format8BitYUV);
 
         // Initial options, real config should be set based on detected format, thanks
         // to the `enable_format_detection` option. When enabled it will call
@@ -41,7 +44,7 @@ impl DeckLink {
         input
             .enable_video(
                 decklink::DisplayModeType::ModeHD720p50,
-                decklink::PixelFormat::Format8BitYUV,
+                initial_pixel_format,
                 decklink::VideoInputFlags {
                     enable_format_detection: true,
                     ..Default::default()
@@ -60,7 +63,7 @@ impl DeckLink {
             Arc::<decklink::Input>::downgrade(&input),
             (
                 decklink::DisplayModeType::ModeHD720p50,
-                decklink::PixelFormat::Format8BitYUV,
+                initial_pixel_format,
             ),
         );
         input
