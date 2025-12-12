@@ -10,6 +10,7 @@ import {
   PrimaryOnTopLayout,
   PrimaryOnLeftLayout,
   PictureInPictureLayout,
+  MultiplePicturesLayout,
   TransitionLayout,
 } from './layouts';
 
@@ -35,6 +36,8 @@ function OutputScene() {
         <PrimaryOnLeftLayout />
       ) : layout === 'picture-in-picture' ? (
         <PictureInPictureLayout />
+      ) : layout === 'multiple-pictures' ? (
+        <MultiplePicturesLayout />
       ) : layout === 'transition' ? (
         <TransitionLayout />
       ) : null}

@@ -19,6 +19,7 @@ export type RegisterSmelterInputOptions =
   | {
       type: 'mp4';
       filePath: string;
+      loop?: boolean;
     }
   | {
       type: 'hls';
@@ -50,6 +51,10 @@ export class SmelterManager {
       serverPath: path.join(__dirname, '../loading.gif'),
       assetType: 'gif',
     });
+    await SmelterInstance['instance'].registerImage('news_strip', {
+      serverPath: path.join(process.cwd(), 'mp4s', 'news_strip', 'news_strip.png'),
+      assetType: 'png',
+    });
 
     for (const shader of shadersController.shaders) {
       await this.registerShaderFromFile(
@@ -58,11 +63,9 @@ export class SmelterManager {
         path.join(__dirname, `../shaders/${shader.shaderFile}`)
       );
     }
-
-    setInterval(async () => {
-      const smelterState = await SmelterInstance['instance'].status();
-      console.log(JSON.stringify(smelterState, null, 2));
-    }, 60_000 * 5);
+    await SmelterInstance['instance'].registerFont(
+      'https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap'
+    );
   }
 
   public async registerOutput(roomId: string): Promise<SmelterOutput> {
@@ -113,7 +116,7 @@ export class SmelterManager {
           type: 'mp4',
           serverPath: opts.filePath,
           decoderMap: MP4_DECODER_MAP,
-          loop: true,
+          loop: opts.loop ?? true,
         });
       } else if (opts.type === 'hls') {
         await this.instance.registerInput(inputId, {
