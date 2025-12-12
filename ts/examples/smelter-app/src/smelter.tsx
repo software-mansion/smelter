@@ -66,23 +66,6 @@ export class SmelterManager {
     await SmelterInstance['instance'].registerFont(
       'https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap'
     );
-
-    // Register a global MP4 input for the news strip overlay (used in PiP layout)
-    try {
-      const newsStripPath = path.join(process.cwd(), 'mp4s', 'news_strip', 'news_strip.mp4');
-      await this.registerInput('news_strip', {
-        type: 'mp4',
-        filePath: newsStripPath,
-        loop: true,
-      });
-    } catch (_err) {
-      // Ignore if already registered or unavailable
-    }
-
-    setInterval(async () => {
-      const smelterState = await SmelterInstance['instance'].status();
-      console.log(JSON.stringify(smelterState, null, 2));
-    }, 60_000 * 5);
   }
 
   public async registerOutput(roomId: string): Promise<SmelterOutput> {
