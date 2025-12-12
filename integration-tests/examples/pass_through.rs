@@ -1,11 +1,10 @@
 use anyhow::Result;
 use serde_json::json;
 use smelter_api::Resolution;
-use std::time::Duration;
 
 use integration_tests::{
     examples::{self, TestSample, run_example},
-    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
+    ffmpeg::{start_ffmpeg_rtmp_receive, start_ffmpeg_send},
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -22,7 +21,7 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    start_ffmpeg_receive_h264(Some(OUTPUT_PORT), None)?;
+    start_ffmpeg_rtmp_receive(OUTPUT_PORT)?;
 
     examples::post(
         "input/input_1/register",
@@ -38,9 +37,8 @@ fn client_code() -> Result<()> {
     examples::post(
         "output/output_1/register",
         &json!({
-            "type": "rtp_stream",
-            "ip": IP,
-            "port": OUTPUT_PORT,
+            "type": "rtmp_client",
+            "url": format!("rtmp://127.0.0.1:{OUTPUT_PORT}"),
             "video": {
                 "resolution": {
                     "width": VIDEO_RESOLUTION.width,
@@ -60,8 +58,6 @@ fn client_code() -> Result<()> {
             }
         }),
     )?;
-
-    std::thread::sleep(Duration::from_millis(500));
 
     examples::post("start", &json!({}))?;
 

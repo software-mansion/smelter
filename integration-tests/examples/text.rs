@@ -4,7 +4,7 @@ use smelter_api::Resolution;
 
 use integration_tests::{
     examples::{self, run_example},
-    ffmpeg::start_ffmpeg_receive_h264,
+    ffmpeg::start_ffmpeg_rtmp_receive,
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -12,7 +12,6 @@ const VIDEO_RESOLUTION: Resolution = Resolution {
     height: 1080,
 };
 
-const IP: &str = "127.0.0.1";
 const OUTPUT_PORT: u16 = 8002;
 
 fn main() {
@@ -20,14 +19,13 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    start_ffmpeg_receive_h264(Some(OUTPUT_PORT), None)?;
+    start_ffmpeg_rtmp_receive(OUTPUT_PORT)?;
 
     examples::post(
         "output/output_1/register",
         &json!({
-            "type": "rtp_stream",
-            "ip": IP,
-            "port": OUTPUT_PORT,
+            "type": "rtmp_client",
+            "url": format!("rtmp://127.0.0.1:{OUTPUT_PORT}"),
             "video": {
                 "resolution": {
                     "width": VIDEO_RESOLUTION.width,
