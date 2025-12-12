@@ -31,7 +31,7 @@ impl Format {
             PixelFormat::Format10BitRGBXLE => (BitDepth::Depth10Bit, Colorspace::RGB444),
             PixelFormat::Format12BitRGB => (BitDepth::Depth12Bit, Colorspace::RGB444),
             PixelFormat::Format12BitRGBLE => (BitDepth::Depth12Bit, Colorspace::RGB444),
-            PixelFormat::Format8BitYUV => (BitDepth::Depth10Bit, Colorspace::YCbCr422),
+            PixelFormat::Format8BitYUV => (BitDepth::Depth8Bit, Colorspace::YCbCr422),
             PixelFormat::Format10BitYUV => (BitDepth::Depth10Bit, Colorspace::YCbCr422),
             PixelFormat::Format10BitYUVA => (BitDepth::Depth10Bit, Colorspace::YCbCr422),
             _ => (BitDepth::Unknown, Colorspace::Unknown),
@@ -57,7 +57,7 @@ impl Format {
             BitDepth::Unknown
         };
 
-        let colorspace = if flags.format_rgb_444 {
+        let colorspace = if flags.format_y_cb_cr_422 {
             Colorspace::YCbCr422
         } else if flags.format_rgb_444 {
             Colorspace::RGB444
