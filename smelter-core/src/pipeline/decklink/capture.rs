@@ -271,6 +271,7 @@ impl ChannelCallbackAdapter {
             // in the loop
             return Ok(());
         }
+        *self.last_format.lock().unwrap() = new_format;
 
         let pixel_format = match new_format.colorspace {
             Colorspace::YCbCr422 => {
@@ -294,7 +295,6 @@ impl ChannelCallbackAdapter {
             Colorspace::Unknown => return Ok(()),
         };
 
-        *self.last_format.lock().unwrap() = new_format;
         info!(?pixel_format, ?flags, ?mode, "Detected new input format");
 
         input.pause_streams()?;
