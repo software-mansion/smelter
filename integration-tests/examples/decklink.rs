@@ -1,11 +1,10 @@
 use anyhow::Result;
 use serde_json::json;
 use smelter_api::Resolution;
-use std::time::Duration;
 
 use integration_tests::{
     examples::{self, run_example},
-    gstreamer::start_gst_receive_tcp_h264,
+    ffmpeg::start_ffmpeg_rtmp_receive,
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -13,14 +12,15 @@ const VIDEO_RESOLUTION: Resolution = Resolution {
     height: 720,
 };
 
-const IP: &str = "127.0.0.1";
-const OUTPUT_VIDEO_PORT: u16 = 8002;
+const OUTPUT_PORT: u16 = 8002;
 
 fn main() {
     run_example(client_code);
 }
 
 fn client_code() -> Result<()> {
+    start_ffmpeg_rtmp_receive(OUTPUT_PORT)?;
+
     examples::post(
         "input/input_1/register",
         &json!({
@@ -33,9 +33,8 @@ fn client_code() -> Result<()> {
     examples::post(
         "output/output_1/register",
         &json!({
-            "type": "rtp_stream",
-            "transport_protocol": "tcp_server",
-            "port": OUTPUT_VIDEO_PORT,
+            "type": "rtmp_client",
+            "url": format!("rtmp://127.0.0.1:{OUTPUT_PORT}"),
             "video": {
                 "resolution": {
                     "width": VIDEO_RESOLUTION.width,
@@ -74,15 +73,11 @@ fn client_code() -> Result<()> {
                 },
                 "channels": "stereo",
                 "encoder": {
-                    "type": "opus",
+                    "type": "aac",
                 }
             }
         }),
     )?;
-
-    start_gst_receive_tcp_h264(IP, OUTPUT_VIDEO_PORT, false)?;
-
-    std::thread::sleep(Duration::from_millis(1000));
 
     examples::post("start", &json!({}))?;
 

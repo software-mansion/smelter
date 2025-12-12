@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use integration_tests::{gstreamer::start_gst_receive_tcp_h264, test_input::TestInput};
+use integration_tests::{ffmpeg::start_ffmpeg_rtmp_receive, test_input::TestInput};
 use smelter::{
     config::read_config,
     logger::{self},
@@ -24,7 +24,7 @@ use smelter_render::{
 };
 use tokio::runtime::Runtime;
 
-const VIDEO_OUTPUT_PORT: u16 = 8002;
+const OUTPUT_PORT: u16 = 8002;
 
 // Start simple pipeline with input that sends PCM audio and wgpu::Textures via Rust channel.
 fn main() {
@@ -53,11 +53,12 @@ fn main() {
     let output_id = OutputId("output_1".into());
     let input_id = InputId("input_1".into());
 
+    #[allow(clippy::zombie_processes)]
+    let _ = start_ffmpeg_rtmp_receive(OUTPUT_PORT).unwrap();
+
     let output_options = RegisterOutputOptions {
-        output_options: ProtocolOutputOptions::Rtp(RtpOutputOptions {
-            connection_options: RtpOutputConnectionOptions::TcpServer {
-                port: PortOrRange::Exact(VIDEO_OUTPUT_PORT),
-            },
+        output_options: ProtocolOutputOptions::Rtmp(RtmpOutputOptions {
+            url: format!("rtmp://127.0.0.1:{OUTPUT_PORT}").into(),
             video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                 preset: FfmpegH264EncoderPreset::Ultrafast,
                 bitrate: None,
@@ -99,10 +100,6 @@ fn main() {
     Pipeline::register_output(&pipeline, output_id.clone(), output_options).unwrap();
 
     let frames = generate_frames(&wgpu_device, &wgpu_queue);
-
-    // TODO: This should be handled properly in future
-    #[allow(clippy::zombie_processes)]
-    start_gst_receive_tcp_h264("127.0.0.1", VIDEO_OUTPUT_PORT, false).unwrap();
 
     Pipeline::start(&pipeline);
 

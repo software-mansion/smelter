@@ -1,11 +1,10 @@
 use anyhow::Result;
 use serde_json::json;
 use smelter_api::Resolution;
-use std::time::Duration;
 
 use integration_tests::{
-    examples::{self, TestSample, run_example},
-    ffmpeg::{start_ffmpeg_receive_h264, start_ffmpeg_send},
+    examples::{self, TestSample, download_all_assets, get_asset_path, run_example},
+    ffmpeg::start_ffmpeg_rtmp_receive,
 };
 
 const VIDEO_RESOLUTION: Resolution = Resolution {
@@ -13,8 +12,6 @@ const VIDEO_RESOLUTION: Resolution = Resolution {
     height: 720,
 };
 
-const IP: &str = "127.0.0.1";
-const INPUT_PORT: u16 = 8002;
 const OUTPUT_PORT: u16 = 8004;
 
 fn main() {
@@ -22,16 +19,14 @@ fn main() {
 }
 
 fn client_code() -> Result<()> {
-    start_ffmpeg_receive_h264(Some(OUTPUT_PORT), None)?;
+    download_all_assets()?;
+    start_ffmpeg_rtmp_receive(OUTPUT_PORT)?;
 
     examples::post(
         "input/input_1/register",
         &json!({
-            "type": "rtp_stream",
-            "port": INPUT_PORT,
-            "video": {
-                "decoder": "ffmpeg_h264"
-            }
+            "type": "mp4",
+            "path": get_asset_path(TestSample::BigBuckBunnyH264AAC)?
         }),
     )?;
 
@@ -46,9 +41,8 @@ fn client_code() -> Result<()> {
     examples::post(
         "output/output_1/register",
         &json!({
-            "type": "rtp_stream",
-            "port": OUTPUT_PORT,
-            "ip": IP,
+            "type": "rtmp_client",
+            "url": format!("rtmp://127.0.0.1:{OUTPUT_PORT}"),
             "video": {
                 "resolution": {
                     "width": VIDEO_RESOLUTION.width,
@@ -73,14 +67,22 @@ fn client_code() -> Result<()> {
                         "resolution": { "width": VIDEO_RESOLUTION.width, "height": VIDEO_RESOLUTION.height },
                     }
                 }
+            },
+            "audio": {
+                "initial": {
+                    "inputs": [
+                        {"input_id": "input_1"}
+                    ]
+                },
+                "channels": "stereo",
+                "encoder": {
+                    "type": "aac",
+                }
             }
         }),
     )?;
 
-    std::thread::sleep(Duration::from_millis(500));
-
     examples::post("start", &json!({}))?;
 
-    start_ffmpeg_send(IP, Some(INPUT_PORT), None, TestSample::SampleLoopH264)?;
     Ok(())
 }
