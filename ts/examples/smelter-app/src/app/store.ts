@@ -18,6 +18,7 @@ export const LayoutValues = [
   'primary-on-left',
   'primary-on-top',
   'picture-in-picture',
+  'multiple-pictures',
   'transition',
 ] as const;
 
@@ -26,6 +27,7 @@ export type Layout =
   | 'primary-on-left'
   | 'primary-on-top'
   | 'picture-in-picture'
+  | 'multiple-pictures'
   | 'transition';
 
 export type RoomStore = {

@@ -58,7 +58,7 @@ export type RegisterInputOptions =
 
 export class RoomState {
   private inputs: RoomInputState[];
-  private layout: Layout = 'grid';
+  private layout: Layout = 'picture-in-picture';
   public idPrefix: string;
 
   private mp4sDir: string;
@@ -111,7 +111,7 @@ export class RoomState {
             inputId: `${idPrefix}::local::sample_streamer::${i}`,
             type: 'local-mp4',
             status: 'disconnected',
-            showTitle: true,
+            showTitle: false,
             shaders: [],
             metadata: {
               title: `[MP4] ${formatMp4Name(randomMp4)}`,
@@ -145,7 +145,7 @@ export class RoomState {
       inputId,
       type: 'whip',
       status: 'disconnected',
-      showTitle: true,
+      showTitle: false,
       shaders: [],
       monitor: monitor,
       metadata: {
@@ -176,7 +176,7 @@ export class RoomState {
         inputId,
         type: `twitch-channel`,
         status: 'disconnected',
-        showTitle: true,
+        showTitle: false,
         shaders: [],
         metadata: {
           title: '', // will be populated on update
@@ -207,7 +207,7 @@ export class RoomState {
         inputId,
         type: `kick-channel`,
         status: 'disconnected',
-        showTitle: true,
+        showTitle: false,
         metadata: {
           title: '', // will be populated on update
           description: '',
@@ -238,7 +238,7 @@ export class RoomState {
           inputId,
           type: 'local-mp4',
           status: 'disconnected',
-          showTitle: true,
+          showTitle: false,
           shaders: [],
           metadata: {
             title: `[MP4] ${formatMp4Name(mp4Name)}`,

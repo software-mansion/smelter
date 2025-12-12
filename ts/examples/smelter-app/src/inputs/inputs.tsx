@@ -11,6 +11,7 @@ import {
 } from '@swmansion/smelter';
 
 import type { ReactElement } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ShaderConfig, ShaderParamConfig } from '../shaders/shaders';
 
 type Resolution = { width: number; height: number };
@@ -57,6 +58,18 @@ export function Input({ input }: { input: InputConfig }) {
   const streamState = streams[input.inputId]?.videoState ?? 'finished';
   const resolution = { width: 1920, height: 1080 };
 
+  // Log when the video input reaches EOS (finished)
+  const prevStateRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevStateRef.current;
+    if (prev !== 'finished' && streamState === 'finished') {
+      console.log('[Smelter Event] VIDEO_INPUT_EOS', { inputId: input.inputId });
+    }
+    prevStateRef.current = streamState;
+  }, [streamState, input.inputId]);
+
+  // Removed marquee animation from inputs; static title/description only
+
   const inputComponent = (
     <Rescaler style={resolution}>
       <View style={{ ...resolution, direction: 'column' }}>
@@ -93,7 +106,15 @@ export function Input({ input }: { input: InputConfig }) {
             }}>
             <Text style={{ fontSize: 40, color: 'white' }}>{input?.title}</Text>
             <View style={{ height: 10 }} />
-            <Text style={{ fontSize: 25, color: 'white' }}>{input?.description}</Text>
+            <View
+              style={{
+                direction: 'column',
+                height: 90,
+                padding: 0,
+                bottom: 0,
+              }}>
+              <Text style={{ fontSize: 25, color: 'white' }}>{input?.description}</Text>
+            </View>
           </View>
         )}
       </View>
