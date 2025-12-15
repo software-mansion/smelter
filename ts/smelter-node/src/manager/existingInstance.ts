@@ -5,7 +5,7 @@ import type {
   SetupInstanceOptions,
 } from '@swmansion/smelter-core';
 
-import { sendRequest, sendMultipartRequest } from '../fetch';
+import { sendRequest, sendMultipartRequest, joinUrl } from '../fetch';
 import { retry, sleep } from '../utils';
 import { WebSocketConnection } from '../ws';
 import { getSmelterStatus } from '../getSmelterStatus';
@@ -35,7 +35,7 @@ class ExistingInstanceManager implements SmelterManager {
 
     this.url = url;
 
-    const wsUrl = new URL('ws', url);
+    const wsUrl = joinUrl(url, 'ws');
     wsUrl.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     this.wsConnection = new WebSocketConnection(wsUrl);
   }
@@ -69,16 +69,12 @@ class ExistingInstanceManager implements SmelterManager {
       return smelterStatus;
     }, 10);
 
-    try {
-      await this.sendRequest({
-        method: 'POST',
-        route: '/api/reset',
-        body: {},
-      });
-      opts.logger.info('Sent reset request to existing Smelter instance.');
-    } catch (err) {
-      opts.logger.warn({ err }, 'Failed to reset existing Smelter instance.');
-    }
+    await this.sendRequest({
+      method: 'POST',
+      route: '/api/reset',
+      body: {},
+    });
+    opts.logger.info('Sent reset request to the Smelter instance.');
 
     await this.wsConnection.connect(opts.logger);
   }
