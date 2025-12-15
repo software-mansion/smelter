@@ -11,7 +11,7 @@ use crate::device::caps::{
     DecodeCapabilities, EncodeCapabilities, NativeDecodeCapabilities,
     NativeDecodeProfileCapabilities, NativeEncodeCapabilities,
 };
-use crate::device::queues::{Queue, Queues};
+use crate::device::queues::{Queue, QueueIndex, Queues, VideoQueues};
 use crate::parameters::{
     EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, RateControl,
 };
@@ -180,6 +180,10 @@ impl VulkanDevice {
             .collect::<Vec<_>>();
 
         let queue_create_infos = queue_indices.queue_create_infos();
+        let queue_create_infos = queue_create_infos
+            .iter()
+            .map(|q| q.info)
+            .collect::<Vec<_>>();
 
         let mut wgpu_physical_device_features = wgpu_adapter
             .adapter
@@ -201,6 +205,7 @@ impl VulkanDevice {
                 .instance
                 .create_device(physical_device, &device_create_info, None)?
         };
+
         let video_queue_ext = ash::khr::video_queue::Device::new(&instance.instance, &device);
         let video_decode_queue_ext =
             ash::khr::video_decode_queue::Device::new(&instance.instance, &device);
@@ -216,57 +221,33 @@ impl VulkanDevice {
             _instance: instance.instance.clone(),
         });
 
-        let h264_decode_queue = queue_indices.h264_decode.map(|queue_index| {
-            (
-                unsafe { device.get_device_queue(queue_index.idx as u32, 0) },
-                queue_index,
-            )
-        });
-        let h264_encode_queue = queue_indices.h264_encode.map(|queue_index| {
-            (
-                unsafe { device.get_device_queue(queue_index.idx as u32, 0) },
-                queue_index,
-            )
-        });
-        let transfer_queue =
-            unsafe { device.get_device_queue(queue_indices.transfer.idx as u32, 0) };
-        let wgpu_queue = unsafe {
-            device.get_device_queue(queue_indices.graphics_transfer_compute.idx as u32, 0)
-        };
+        let h264_decode_queues =
+            queue_indices
+                .h264_decode
+                .as_ref()
+                .map_or(Vec::new(), |queue_family_index| {
+                    (0..queue_family_index.queue_count)
+                        .map(|idx| queue_from_device(device.clone(), queue_family_index, idx))
+                        .collect::<Vec<_>>()
+                });
+        let h264_encode_queues =
+            queue_indices
+                .h264_encode
+                .as_ref()
+                .map_or(Vec::new(), |queue_family_index| {
+                    (0..queue_family_index.queue_count)
+                        .map(|idx| queue_from_device(device.clone(), queue_family_index, idx))
+                        .collect::<Vec<_>>()
+                });
+        let transfer_queue = queue_from_device(device.clone(), &queue_indices.transfer, 0);
+        let wgpu_queue =
+            queue_from_device(device.clone(), &queue_indices.graphics_transfer_compute, 0);
 
         let queues = Queues {
-            transfer: Queue {
-                queue: Arc::new(transfer_queue.into()),
-                idx: queue_indices.transfer.idx,
-                _video_properties: queue_indices.transfer.video_properties,
-                query_result_status_properties: queue_indices
-                    .transfer
-                    .query_result_status_properties,
-                device: device.clone(),
-            },
-            h264_decode: h264_decode_queue.map(|(queue, queue_index)| Queue {
-                queue: Arc::new(queue.into()),
-                idx: queue_index.idx,
-                _video_properties: queue_index.video_properties,
-                query_result_status_properties: queue_index.query_result_status_properties,
-                device: device.clone(),
-            }),
-            h264_encode: h264_encode_queue.map(|(queue, queue_index)| Queue {
-                queue: Arc::new(queue.into()),
-                idx: queue_index.idx,
-                _video_properties: queue_index.video_properties,
-                query_result_status_properties: queue_index.query_result_status_properties,
-                device: device.clone(),
-            }),
-            wgpu: Queue {
-                queue: Arc::new(wgpu_queue.into()),
-                idx: queue_indices.graphics_transfer_compute.idx,
-                _video_properties: queue_indices.graphics_transfer_compute.video_properties,
-                query_result_status_properties: queue_indices
-                    .graphics_transfer_compute
-                    .query_result_status_properties,
-                device: device.clone(),
-            },
+            transfer: transfer_queue,
+            h264_decode: VideoQueues::new(h264_decode_queues.into_boxed_slice()).map(Arc::new),
+            h264_encode: VideoQueues::new(h264_encode_queues.into_boxed_slice()).map(Arc::new),
+            wgpu: wgpu_queue,
         };
 
         let device_clone = device.clone();
@@ -280,7 +261,7 @@ impl VulkanDevice {
                 &required_extensions,
                 wgpu_features,
                 &wgpu::MemoryHints::default(),
-                queue_indices.graphics_transfer_compute.idx as u32,
+                queue_indices.graphics_transfer_compute.family_index as u32,
                 0,
             )?
         };
@@ -333,7 +314,7 @@ impl VulkanDevice {
         let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
-            h264_decode_queue: self
+            h264_decode_queues: self
                 .queues
                 .h264_decode
                 .clone()
@@ -369,7 +350,7 @@ impl VulkanDevice {
         let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
         let decoding_device = DecodingDevice {
             vulkan_device: self.clone(),
-            h264_decode_queue: self
+            h264_decode_queues: self
                 .queues
                 .h264_decode
                 .clone()
@@ -410,7 +391,7 @@ impl VulkanDevice {
         let parameters = self.validate_and_fill_encoder_parameters(parameters)?;
         let encoding_device = EncodingDevice {
             vulkan_device: self.clone(),
-            h264_encode_queue: self
+            h264_encode_queues: self
                 .queues
                 .h264_encode
                 .clone()
@@ -433,7 +414,7 @@ impl VulkanDevice {
         let parameters = self.validate_and_fill_encoder_parameters(parameters)?;
         let encoding_device = EncodingDevice {
             vulkan_device: self.clone(),
-            h264_encode_queue: self
+            h264_encode_queues: self
                 .queues
                 .h264_encode
                 .clone()
@@ -682,7 +663,7 @@ impl std::fmt::Debug for VulkanDevice {
 
 pub(crate) struct DecodingDevice {
     pub(crate) vulkan_device: Arc<VulkanDevice>,
-    pub(crate) h264_decode_queue: Queue,
+    pub(crate) h264_decode_queues: Arc<VideoQueues>,
     pub(crate) profile_capabilities: NativeDecodeProfileCapabilities,
 }
 
@@ -696,7 +677,7 @@ impl Deref for DecodingDevice {
 
 pub(crate) struct EncodingDevice {
     pub(crate) vulkan_device: Arc<VulkanDevice>,
-    pub(crate) h264_encode_queue: Queue,
+    pub(crate) h264_encode_queues: Arc<VideoQueues>,
     pub(crate) native_encode_capabilities: NativeEncodeCapabilities,
 }
 
@@ -705,5 +686,22 @@ impl Deref for EncodingDevice {
 
     fn deref(&self) -> &Self::Target {
         &self.vulkan_device
+    }
+}
+
+fn queue_from_device(
+    device: Arc<Device>,
+    queue_family_index: &QueueIndex<'static>,
+    queue_index: usize,
+) -> Queue {
+    let queue = unsafe {
+        device.get_device_queue(queue_family_index.family_index as u32, queue_index as u32)
+    };
+    Queue {
+        queue: Arc::new(queue.into()),
+        family_index: queue_family_index.family_index,
+        _video_properties: queue_family_index.video_properties,
+        query_result_status_properties: queue_family_index.query_result_status_properties,
+        device,
     }
 }

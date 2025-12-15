@@ -111,6 +111,11 @@ impl<'a> VulkanAdapter<'a> {
             false => None,
         };
 
+        let queue_counts = queues
+            .iter()
+            .map(|q| q.queue_family_properties.queue_count)
+            .collect::<Vec<_>>();
+
         let transfer_queue_idx = queues
             .iter()
             .enumerate()
@@ -214,23 +219,27 @@ impl<'a> VulkanAdapter<'a> {
             wgpu_adapter,
             queue_indices: QueueIndices {
                 transfer: QueueIndex {
-                    idx: transfer_queue_idx,
+                    family_index: transfer_queue_idx,
+                    queue_count: 1, // Currently we can only handle 1 queue
                     video_properties: video_properties[transfer_queue_idx],
                     query_result_status_properties: query_result_status_properties
                         [transfer_queue_idx],
                 },
                 h264_decode: decode_queue_idx.map(|idx| QueueIndex {
-                    idx,
+                    family_index: idx,
+                    queue_count: queue_counts[idx] as usize,
                     video_properties: video_properties[idx],
                     query_result_status_properties: query_result_status_properties[idx],
                 }),
                 h264_encode: encode_queue_idx.map(|idx| QueueIndex {
-                    idx,
+                    family_index: idx,
+                    queue_count: queue_counts[idx] as usize,
                     video_properties: video_properties[idx],
                     query_result_status_properties: query_result_status_properties[idx],
                 }),
                 graphics_transfer_compute: QueueIndex {
-                    idx: graphics_transfer_compute_queue_idx,
+                    family_index: graphics_transfer_compute_queue_idx,
+                    queue_count: 1, // Currently we can only handle 1 queue
                     video_properties: video_properties[graphics_transfer_compute_queue_idx],
                     query_result_status_properties: query_result_status_properties
                         [graphics_transfer_compute_queue_idx],

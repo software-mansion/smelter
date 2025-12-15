@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::ptr::NonNull;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use ash::vk;
@@ -8,7 +11,7 @@ use crate::wrappers::*;
 #[derive(Clone)]
 pub(crate) struct Queue {
     pub(crate) queue: Arc<Mutex<vk::Queue>>,
-    pub(crate) idx: usize,
+    pub(crate) family_index: usize,
     pub(crate) _video_properties: vk::QueueFamilyVideoPropertiesKHR<'static>,
     pub(crate) query_result_status_properties:
         vk::QueueFamilyQueryResultStatusPropertiesKHR<'static>,
@@ -78,13 +81,14 @@ impl Queue {
 
 pub(crate) struct Queues {
     pub(crate) transfer: Queue,
-    pub(crate) h264_decode: Option<Queue>,
-    pub(crate) h264_encode: Option<Queue>,
+    pub(crate) h264_decode: Option<Arc<VideoQueues>>,
+    pub(crate) h264_encode: Option<Arc<VideoQueues>>,
     pub(crate) wgpu: Queue,
 }
 
 pub(crate) struct QueueIndex<'a> {
-    pub(crate) idx: usize,
+    pub(crate) family_index: usize,
+    pub(crate) queue_count: usize,
     pub(crate) video_properties: vk::QueueFamilyVideoPropertiesKHR<'a>,
     pub(crate) query_result_status_properties: vk::QueueFamilyQueryResultStatusPropertiesKHR<'a>,
 }
@@ -97,22 +101,94 @@ pub(crate) struct QueueIndices<'a> {
 }
 
 impl QueueIndices<'_> {
-    pub(crate) fn queue_create_infos(&self) -> Vec<vk::DeviceQueueCreateInfo<'_>> {
+    pub(crate) fn queue_create_infos(&self) -> Vec<QueueCreateInfo<'_>> {
         [
-            self.h264_decode.as_ref().map(|q| q.idx),
-            self.h264_encode.as_ref().map(|q| q.idx),
-            Some(self.transfer.idx),
-            Some(self.graphics_transfer_compute.idx),
+            self.h264_decode
+                .as_ref()
+                .map(|q| (q.family_index, q.queue_count)),
+            self.h264_encode
+                .as_ref()
+                .map(|q| (q.family_index, q.queue_count)),
+            Some((self.transfer.family_index, self.transfer.queue_count)),
+            Some((
+                self.graphics_transfer_compute.family_index,
+                self.graphics_transfer_compute.queue_count,
+            )),
         ]
         .into_iter()
         .flatten()
-        .collect::<std::collections::HashSet<usize>>()
+        .collect::<HashSet<(usize, usize)>>()
         .into_iter()
-        .map(|i| {
-            vk::DeviceQueueCreateInfo::default()
-                .queue_family_index(i as u32)
-                .queue_priorities(&[1.0])
+        .map(|(family_idx, queue_count)| QueueCreateInfo::new(family_idx, vec![1.0; queue_count]))
+        .collect()
+    }
+}
+
+pub(crate) struct QueueCreateInfo<'a> {
+    pub(crate) info: vk::DeviceQueueCreateInfo<'a>,
+    priorities_ptr: NonNull<[f32]>,
+}
+
+impl QueueCreateInfo<'_> {
+    fn new(family_idx: usize, priorities: Vec<f32>) -> Self {
+        let priorities_ref = Box::leak(priorities.into_boxed_slice());
+        let priorities_ptr = NonNull::from(&mut *priorities_ref);
+        let info = vk::DeviceQueueCreateInfo::default()
+            .queue_family_index(family_idx as u32)
+            .queue_priorities(priorities_ref);
+
+        Self {
+            info,
+            priorities_ptr,
+        }
+    }
+}
+
+impl Drop for QueueCreateInfo<'_> {
+    fn drop(&mut self) {
+        let _ = unsafe { Box::from_raw(self.priorities_ptr.as_ptr()) };
+    }
+}
+
+pub(crate) struct VideoQueues {
+    queues: Box<[Queue]>,
+    current_queue_idx: AtomicUsize,
+    pub(crate) family_index: usize,
+}
+
+impl VideoQueues {
+    pub(crate) fn new(queues: Box<[Queue]>) -> Option<Self> {
+        if queues.is_empty() {
+            return None;
+        }
+
+        let family_index = queues[0].family_index;
+        Some(Self {
+            queues,
+            current_queue_idx: AtomicUsize::new(0),
+            family_index,
         })
-        .collect::<Vec<_>>()
+    }
+
+    fn next_queue(&self) -> &Queue {
+        let idx = self.current_queue_idx.fetch_add(1, Ordering::Relaxed);
+        &self.queues[idx % self.queues.len()]
+    }
+
+    pub(crate) fn supports_result_status_queries(&self) -> bool {
+        // All queues from the same family share the same properties
+        self.queues[0].supports_result_status_queries()
+    }
+
+    pub(crate) fn submit_chain_semaphore<K: TrackerKind>(
+        &self,
+        buffer: RecordedCommandBuffer,
+        tracker: &mut Tracker<K>,
+        wait_stages: vk::PipelineStageFlags2,
+        signal_stages: vk::PipelineStageFlags2,
+        new_wait_state: K::WaitState,
+    ) -> Result<(), VulkanCommonError> {
+        let queue = self.next_queue();
+        queue.submit_chain_semaphore(buffer, tracker, wait_stages, signal_stages, new_wait_state)
     }
 }

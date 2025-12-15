@@ -98,7 +98,7 @@ impl VideoSessionResources<'_> {
 
         let video_session = VideoSession::new(
             &encoding_device.vulkan_device,
-            &encoding_device.h264_encode_queue,
+            &encoding_device.h264_encode_queues,
             profile_info,
             extent,
             max_dpb_slots,
@@ -275,10 +275,14 @@ struct EncoderCommandBufferPools {
 
 impl EncoderCommandBufferPools {
     fn new(device: &EncodingDevice) -> Result<Self, VulkanEncoderError> {
-        let transfer =
-            CommandBufferPool::new(device.vulkan_device.clone(), device.queues.transfer.idx)?;
-        let encode =
-            CommandBufferPool::new(device.vulkan_device.clone(), device.h264_encode_queue.idx)?;
+        let transfer = CommandBufferPool::new(
+            device.vulkan_device.clone(),
+            device.queues.transfer.family_index,
+        )?;
+        let encode = CommandBufferPool::new(
+            device.vulkan_device.clone(),
+            device.h264_encode_queues.family_index,
+        )?;
 
         Ok(Self { transfer, encode })
     }
@@ -390,7 +394,7 @@ impl VulkanEncoder<'_> {
             &profile_info.profile_info,
         )?;
 
-        encoding_device.h264_encode_queue.submit_chain_semaphore(
+        encoding_device.h264_encode_queues.submit_chain_semaphore(
             buffer.end()?,
             &mut tracker,
             vk::PipelineStageFlags2::ALL_COMMANDS,
@@ -539,8 +543,8 @@ impl VulkanEncoder<'_> {
             .profiles(std::slice::from_ref(&self.profile_info.profile_info));
 
         let queue_family_indices = [
-            self.encoding_device.queues.transfer.idx as u32,
-            self.encoding_device.h264_encode_queue.idx as u32,
+            self.encoding_device.queues.transfer.family_index as u32,
+            self.encoding_device.h264_encode_queues.family_index as u32,
         ];
 
         let image_create_info = vk::ImageCreateInfo::default()
@@ -952,7 +956,7 @@ impl VulkanEncoder<'_> {
         }
 
         self.encoding_device
-            .h264_encode_queue
+            .h264_encode_queues
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
                 &mut self.tracker,
