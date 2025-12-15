@@ -17,6 +17,7 @@ members = [
     "vk-video",
     "libcef",
     "rtmp-server",
+    "rtmp-server/flv",
 
     # Tools/utils/tests
     "integration-tests",
