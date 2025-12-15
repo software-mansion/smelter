@@ -212,6 +212,40 @@ importers:
         specifier: ^5.5.3
         version: 5.7.2
 
+  examples/demo:
+    dependencies:
+      '@swmansion/smelter':
+        specifier: workspace:0.3.0
+        version: link:../../smelter
+      '@swmansion/smelter-node':
+        specifier: workspace:0.3.2
+        version: link:../../smelter-node
+      fs-extra:
+        specifier: ^11.2.0
+        version: 11.3.1
+      node-fetch:
+        specifier: ^2.6.7
+        version: 2.7.0
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@swc/core@1.15.3)(@types/node@20.17.10)(typescript@5.9.3)
+    devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.17.10
+      '@types/node-fetch':
+        specifier: ^2.6.11
+        version: 2.6.12
+      '@types/react':
+        specifier: ^18.3.3
+        version: 18.3.17
+
   examples/node-examples:
     dependencies:
       '@swmansion/smelter':
@@ -1548,9 +1582,6 @@ packages:
 
   '@types/react@18.3.17':
     resolution: {integrity: sha512-opAQ5no6LqJNo9TqnxBKsgnkIYHozW9KSTlFVoSUJYh1Fl/sswkEoqIugRSm7tbh6pABtYjGAjW+GOS23j8qbw==}
-
-  '@types/react@19.2.7':
-    resolution: {integrity: sha512-MWtvHrGZLFttgeEj28VXHxpmwYbor/ATPYbBfSFZEIRK0ecCFLl2Qo55z52Hss+UV9CRN7trSeq1zbgx7YDWWg==}
 
   '@types/resolve@1.20.2':
     resolution: {integrity: sha512-60BCwRFOZCQhDncwQdxxeOEEkbc5dIMccYLwbxsS4TUNeVECQ/pBJ0j09mrHOl/JJvpRPGwO9SvE4nR2Nb/a4Q==}
@@ -4708,15 +4739,11 @@ snapshots:
 
   '@types/react-reconciler@0.28.8':
     dependencies:
-      '@types/react': 19.2.7
+      '@types/react': 18.3.17
 
   '@types/react@18.3.17':
     dependencies:
       '@types/prop-types': 15.7.14
-      csstype: 3.2.3
-
-  '@types/react@19.2.7':
-    dependencies:
       csstype: 3.2.3
 
   '@types/resolve@1.20.2': {}
