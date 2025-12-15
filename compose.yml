@@ -1,0 +1,17 @@
+services:
+  server:
+    build: .
+    environment:
+      SMELTER_API_PORT: "9091"
+      SMELTER_WHIP_WHEP_SERVER_PORT: "9092"
+      SMELTER_LOGGER_FORMAT: compact
+      SMELTER_LOGGER_LEVEL: "debug,smelter_core=info,naga=info,cosmic_text=info,wgpu_hal=trace"
+      ENVIRONMENT: production
+    ports:
+      # Smelter API
+      - 9091:9091
+      # Smelter WebRTC
+      - 9092:9092
+    gpus: 'all'
+    runtime: 'nvidia'
+
