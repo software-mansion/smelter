@@ -21,12 +21,16 @@ mod session_resources;
 pub(crate) use frame_sorter::FrameSorter;
 
 pub struct VulkanDecoder<'a> {
+    id: DecoderId,
     video_session_resources: Option<VideoSessionResources<'a>>,
     tracker: DecoderTracker,
     reference_id_to_dpb_slot_index: std::collections::HashMap<ReferenceId, usize>,
     decoding_device: Arc<DecodingDevice>,
     usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
 }
+
+#[derive(Clone, Copy, Hash, Eq, PartialEq)]
+pub(crate) struct DecoderId(pub(crate) usize);
 
 pub(crate) enum DecoderTrackerWaitState {
     NewDecodingImagesLayoutTransition,
@@ -99,19 +103,28 @@ pub enum VulkanDecoderError {
     VulkanCommonError(#[from] VulkanCommonError),
 }
 
+impl Drop for VulkanDecoder<'_> {
+    fn drop(&mut self) {
+        self.decoding_device
+            .h264_decode_queue
+            .remove_stats(&self.id);
+    }
+}
+
 impl VulkanDecoder<'_> {
     pub fn new(
+        id: DecoderId,
         decoding_device: Arc<DecodingDevice>,
         usage_flags: crate::parameters::DecoderUsageFlags,
     ) -> Result<Self, VulkanDecoderError> {
         let command_buffer_pools = DecoderCommandBufferPools {
             transfer: CommandBufferPool::new(
                 decoding_device.vulkan_device.clone(),
-                decoding_device.vulkan_device.queues.transfer.idx,
+                decoding_device.vulkan_device.queues.transfer.family_index,
             )?,
             decode: CommandBufferPool::new(
                 decoding_device.vulkan_device.clone(),
-                decoding_device.h264_decode_queue.idx,
+                decoding_device.h264_decode_queue.family_index,
             )?,
         };
 
@@ -123,6 +136,7 @@ impl VulkanDecoder<'_> {
         let usage_info = vk::VideoDecodeUsageInfoKHR::default().video_usage_hints(usage_flags);
 
         Ok(Self {
+            id,
             decoding_device,
             video_session_resources: None,
             tracker,
@@ -229,6 +243,10 @@ impl VulkanDecoder<'_> {
     }
 
     fn process_sps(&mut self, sps: &SeqParameterSet) -> Result<(), VulkanDecoderError> {
+        self.decoding_device
+            .h264_decode_queue
+            .log_resolution_change(self.id, sps.size()?);
+
         match self.video_session_resources.as_mut() {
             Some(session) => session.process_sps(sps.clone(), self.usage_info)?,
             None => {
@@ -285,6 +303,10 @@ impl VulkanDecoder<'_> {
         is_idr: bool,
         is_reference: bool,
     ) -> Result<DecodeSubmission, VulkanDecoderError> {
+        self.decoding_device
+            .h264_decode_queue
+            .log_video_operation(self.id);
+
         let video_session_resources = self
             .video_session_resources
             .as_mut()
@@ -587,8 +609,8 @@ impl VulkanDecoder<'_> {
         };
 
         let queue_indices = [
-            self.decoding_device.queues.transfer.idx as u32,
-            self.decoding_device.queues.wgpu.idx as u32,
+            self.decoding_device.queues.transfer.family_index as u32,
+            self.decoding_device.queues.wgpu.family_index as u32,
         ];
 
         let create_info = vk::ImageCreateInfo::default()

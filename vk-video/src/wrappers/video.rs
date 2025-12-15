@@ -136,7 +136,7 @@ impl VideoSession {
         let format = vk::Format::G8_B8R8_2PLANE_420_UNORM;
 
         let session_create_info = vk::VideoSessionCreateInfoKHR::default()
-            .queue_family_index(queue.idx as u32)
+            .queue_family_index(queue.family_index as u32)
             .video_profile(profile_info)
             .picture_format(format)
             .flags(flags)
