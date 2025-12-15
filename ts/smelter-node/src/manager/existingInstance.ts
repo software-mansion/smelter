@@ -9,6 +9,7 @@ import { sendRequest, sendMultipartRequest, joinUrl } from '../fetch';
 import { retry, sleep } from '../utils';
 import { WebSocketConnection } from '../ws';
 import { getSmelterStatus } from '../getSmelterStatus';
+import path from 'path';
 
 export type ExistingInstanceOptions = {
   url: string | URL;
