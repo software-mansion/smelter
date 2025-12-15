@@ -3,17 +3,21 @@ import WebSocket from 'ws';
 
 export class WebSocketConnection {
   private url: string | URL;
+  private authorizationHeader?: string;
   private listeners: Set<(event: object) => void>;
   private ws: WebSocket | null = null;
   private donePromise?: Promise<void>;
 
-  constructor(url: string | URL) {
+  constructor(url: string | URL, authorizationHeader?: string) {
     this.url = url;
+    this.authorizationHeader = authorizationHeader;
     this.listeners = new Set();
   }
 
   public async connect(logger: Logger): Promise<void> {
-    const ws = new WebSocket(this.url);
+    const ws = new WebSocket(this.url, {
+      headers: this.authorizationHeader ? { Authorization: this.authorizationHeader } : {},
+    });
 
     let connected = false;
     await new Promise<void>((res, rej) => {

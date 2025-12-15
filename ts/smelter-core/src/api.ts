@@ -10,12 +10,14 @@ export type ApiRequest = {
   method: 'GET' | 'POST';
   route: string;
   body?: object;
+  headers?: Record<string, string>;
 };
 
 export type MultipartRequest = {
   method: 'POST';
   route: string;
   body: any; //FormData
+  headers?: Record<string, string>;
 };
 
 export type RegisterInputResponse = {

@@ -18,6 +18,7 @@ export async function sendRequest(baseUrl: string | URL, request: ApiRequest): P
     method: request.method,
     body: request.body && JSON.stringify(request.body),
     headers: {
+      ...request.headers,
       'Content-Type': 'application/json',
     },
     agent: url => (url.protocol === 'http:' ? httpAgent : httpsAgent),
@@ -39,6 +40,7 @@ export async function sendMultipartRequest(
     method: request.method,
     body: request.body as FormData,
     agent: url => (url.protocol === 'http:' ? httpAgent : httpsAgent),
+    headers: request.headers,
   });
   if (response.status >= 400) {
     const err: any = new Error(`Request to Smelter server failed.`);

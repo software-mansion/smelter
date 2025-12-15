@@ -9,10 +9,10 @@ import { sendRequest, sendMultipartRequest, joinUrl } from '../fetch';
 import { retry, sleep } from '../utils';
 import { WebSocketConnection } from '../ws';
 import { getSmelterStatus } from '../getSmelterStatus';
-import path from 'path';
 
 export type ExistingInstanceOptions = {
   url: string | URL;
+  authorizationHeader?: string;
 };
 
 /**
@@ -20,6 +20,7 @@ export type ExistingInstanceOptions = {
  */
 class ExistingInstanceManager implements SmelterManager {
   private url: URL;
+  private authorizationHeader?: string;
   private wsConnection: WebSocketConnection;
 
   constructor(opts: ExistingInstanceOptions) {
@@ -35,10 +36,11 @@ class ExistingInstanceManager implements SmelterManager {
     }
 
     this.url = url;
+    this.authorizationHeader = opts.authorizationHeader;
 
     const wsUrl = joinUrl(url, 'ws');
     wsUrl.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    this.wsConnection = new WebSocketConnection(wsUrl);
+    this.wsConnection = new WebSocketConnection(wsUrl, opts.authorizationHeader);
   }
 
   public async setupInstance(opts: SetupInstanceOptions): Promise<void> {
@@ -81,11 +83,19 @@ class ExistingInstanceManager implements SmelterManager {
   }
 
   public async sendRequest(request: ApiRequest): Promise<object> {
-    return await sendRequest(this.url, request);
+    let headers = {
+      ...request.headers,
+      ...(this.authorizationHeader ? { Authorization: this.authorizationHeader } : {}),
+    };
+    return await sendRequest(this.url, { ...request, headers });
   }
 
   async sendMultipartRequest(request: MultipartRequest): Promise<object> {
-    return await sendMultipartRequest(this.url, request);
+    let headers = {
+      ...request.headers,
+      ...(this.authorizationHeader ? { Authorization: this.authorizationHeader } : {}),
+    };
+    return await sendMultipartRequest(this.url, { ...request, headers });
   }
 
   public registerEventListener(cb: (event: object) => void): void {
