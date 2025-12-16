@@ -93,6 +93,7 @@ export function Input({ input }: { input: InputConfig }) {
             }}>
             <Text style={{ fontSize: 40, color: 'white' }}>{input?.title}</Text>
             <View style={{ height: 10 }} />
+
             <Text style={{ fontSize: 25, color: 'white' }}>{input?.description}</Text>
           </View>
         )}

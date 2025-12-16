@@ -61,7 +61,8 @@ routes.post('/room', async (_req, res) => {
 });
 
 routes.get('/shaders', async (_req, res) => {
-  res.status(200).send({ shaders: shadersController.shaders });
+  const visible = shadersController.shaders.filter(s => s.isVisible);
+  res.status(200).send({ shaders: visible });
 });
 
 routes.get<RoomIdParams>('/room/:roomId', async (req, res) => {
@@ -117,6 +118,7 @@ const UpdateRoomSchema = Type.Object({
       Type.Literal('primary-on-left'),
       Type.Literal('primary-on-top'),
       Type.Literal('picture-in-picture'),
+      Type.Literal('multiple-pictures'),
       Type.Literal('transition'),
     ])
   ),
