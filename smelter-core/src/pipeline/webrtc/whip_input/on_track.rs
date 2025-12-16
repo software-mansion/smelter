@@ -1,12 +1,15 @@
+use rand::Rng;
+use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::{Instrument, debug, info_span, trace, warn};
-use webrtc::rtp_transceiver::rtp_codec::RTPCodecType;
+use webrtc::{rtp, rtp_transceiver::rtp_codec::RTPCodecType};
+use webrtc_util::Marshal;
 
 use crate::{
     PipelineEvent,
     codecs::VideoDecoderOptions,
     pipeline::{
         decoder::VideoDecoderMapping,
-        rtp::{RtpJitterBuffer, depayloader::VideoPayloadTypeMapping},
+        rtp::{RtpInputEvent, RtpJitterBuffer, depayloader::VideoPayloadTypeMapping},
         webrtc::{
             error::WhipWhepServerError,
             input_rtp_reader::WebrtcRtpReader,
@@ -146,8 +149,27 @@ async fn process_video_track(
         ),
     )?;
 
+    let mut dump = File::create(format!(
+        "{}_{}.rtp",
+        rand::rng().random::<u32>(),
+        input_ref.to_unique_string()
+    ))
+    .await
+    .unwrap();
+
     while let Some(packet) = rtp_reader.read_packet().await {
         trace!(?packet, "Sending RTP packet");
+
+        match &packet {
+            RtpInputEvent::Packet(packet) => {
+                let data = packet.packet.marshal().unwrap();
+                dump.write_all(&u16::to_ne_bytes(data.len() as u16))
+                    .await
+                    .unwrap();
+                dump.write_all(&data).await.unwrap();
+            }
+            RtpInputEvent::LostPacket => (),
+        };
         if handle
             .rtp_packet_sender
             .send(PipelineEvent::Data(packet))

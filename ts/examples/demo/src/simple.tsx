@@ -50,16 +50,16 @@ async function run() {
     'https://puffer.fishjam.io/smelter-test/whep.html?url=https://puffer.fishjam.io/smelter-test/webrtc/whep/output_1&token=example'
   );
 
-  await smelter.registerInput('input_ffmpeg_h264', {
-    type: 'whip_server',
-    bearerToken: 'example',
-    video: {
-      decoderPreferences: ['ffmpeg_h264'],
-    },
-  });
-  console.log(
-    'https://puffer.fishjam.io/smelter-test/whip.html?url=https://puffer.fishjam.io/smelter-test/webrtc/whip/input_ffmpeg_h264&token=example'
-  );
+  //await smelter.registerInput('input_ffmpeg_h264', {
+  //  type: 'whip_server',
+  //  bearerToken: 'example',
+  //  video: {
+  //    decoderPreferences: ['ffmpeg_h264'],
+  //  },
+  //});
+  //console.log(
+  //  'https://puffer.fishjam.io/smelter-test/whip.html?url=https://puffer.fishjam.io/smelter-test/webrtc/whip/input_ffmpeg_h264&token=example'
+  //);
 
   await smelter.registerInput('input_vulkan_h264', {
     type: 'whip_server',
@@ -72,13 +72,13 @@ async function run() {
     'https://puffer.fishjam.io/smelter-test/whip.html?url=https://puffer.fishjam.io/smelter-test/webrtc/whip/input_vulkan_h264&token=example'
   );
 
-  await smelter.registerInput('mp4', {
-    type: 'mp4',
-    serverPath: '/bunny.mp4',
-    decoderMap: {
-      h264: 'vulkan_h264',
-    },
-    loop: true,
-  });
+  //await smelter.registerInput('mp4', {
+  //  type: 'mp4',
+  //  serverPath: '/bunny.mp4',
+  //  decoderMap: {
+  //    h264: 'vulkan_h264',
+  //  },
+  //  loop: true,
+  //});
 }
 void run();
