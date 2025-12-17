@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -9,8 +11,11 @@ pub enum RtmpError {
     InvalidVersion(u8),
 
     #[error("Handshake failed: {0}")]
-    HandshakeFailed(String),
+    HandshakeFailed(Arc<str>),
 
     #[error("Connection timeout")]
     Timeout,
+
+    #[error("Stream not registered")]
+    StreamNotRegistered,
 }

@@ -16,7 +16,7 @@ members = [
     "decklink",
     "vk-video",
     "libcef",
-    "rtmp-server",
+    "rtmp",
 
     # Tools/utils/tests
     "integration-tests",
