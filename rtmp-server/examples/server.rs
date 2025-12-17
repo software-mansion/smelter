@@ -1,7 +1,8 @@
 use rtmp_server::{RtmpServer, ServerConfig};
+use std::thread;
+use tracing::info;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     tracing_subscriber::fmt::init();
 
     let config = ServerConfig {
@@ -10,12 +11,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cert_file: None,
         key_file: None,
         ca_cert_file: None,
-        client_timeout_secs: 5,
+        client_timeout_secs: 30,
     };
 
-    let server = RtmpServer::new(config);
+    let mut server = RtmpServer::new(config);
 
-    server.run().await?;
+    server.on_connection(|conn, video_rx, _audio_rx| {
+        if conn.app == "app" && conn.stream_key == "stream_key" {
+            let stream_key = conn.stream_key.clone();
+            info!(?stream_key, "Received stream");
 
-    Ok(())
+            thread::spawn(move || {
+                while let Ok(data) = video_rx.recv() {
+                    info!(data_len=?data.len(), ?stream_key, "Received bytes");
+                }
+                info!(?stream_key, "End of stream");
+            });
+
+            return true;
+        }
+
+        false
+    });
+
+    server.run().unwrap();
 }

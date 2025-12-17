@@ -13,4 +13,7 @@ pub enum RtmpError {
 
     #[error("Connection timeout")]
     Timeout,
+
+    #[error("Stream not registered")]
+    StreamNotRegistered,
 }
