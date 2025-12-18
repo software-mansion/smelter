@@ -13,6 +13,9 @@ pub enum RtmpError {
     #[error("Handshake failed: {0}")]
     HandshakeFailed(Arc<str>),
 
+    #[error("Message too large: {0} bytes")]
+    MessageTooLarge(u32),
+
     #[error("Connection timeout")]
     Timeout,
 

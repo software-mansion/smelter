@@ -1,7 +1,7 @@
-use crate::{error::RtmpError, handshake::Handshake};
+use crate::{error::RtmpError, handshake::Handshake, message_reader::RtmpMessageReader};
 use bytes::Bytes;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     net::{SocketAddr, TcpListener, TcpStream},
     sync::{
         Arc, Mutex, RwLock,
@@ -9,7 +9,7 @@ use std::{
     },
     thread,
 };
-use tracing::{error, info};
+use tracing::{error, info, trace};
 use url::Url;
 
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
@@ -103,13 +103,14 @@ impl RtmpServer {
         Ok(())
     }
 }
+
 fn handle_client(
     mut stream: TcpStream,
     _state: Arc<ServerState>, // later, based on state there will be check if route available
     on_connection: Arc<Mutex<OnConnectionCallback>>,
 ) -> Result<(), RtmpError> {
     Handshake::perform(&mut stream)?;
-    let mut session = RtmpSession::new(stream);
+    let message_reader = RtmpMessageReader::new(stream);
     info!("Handshake complete");
 
     // connect with rtmp amf0 messages
@@ -136,8 +137,17 @@ fn handle_client(
 
     // send rtmp publish message
 
-    loop {
-        let msg = session.read_next_message()?;
+    for msg_result in message_reader {
+        let msg = match msg_result {
+            Ok(msg) => msg,
+            Err(error) => {
+                error!(?error, "Error reading RTMP message");
+                break;
+            }
+        };
+
+        trace!(msg_type=?msg.type_id,  "RTMP message received");
+
         match msg.type_id {
             8 => {
                 if audio_tx.send(msg.payload).is_err() {
@@ -154,42 +164,4 @@ fn handle_client(
     }
 
     Ok(())
-}
-
-struct RtmpMessage {
-    type_id: u8,
-    payload: Bytes,
-}
-
-// just schema of structs
-#[allow(unused)]
-struct ChunkHeader {
-    timestamp: u32,
-    length: u32,
-    type_id: u8,
-    stream_id: u32,
-}
-
-// just schema of structs
-#[allow(unused)]
-struct RtmpSession {
-    stream: TcpStream,
-    prev_headers: HashMap<u32, ChunkHeader>,
-    partial_payloads: HashMap<u32, Bytes>,
-    chunk_size: usize,
-}
-
-impl RtmpSession {
-    fn new(stream: TcpStream) -> Self {
-        Self {
-            stream,
-            prev_headers: HashMap::new(),
-            partial_payloads: HashMap::new(),
-            chunk_size: 128, // Default RTMP chunk size
-        }
-    }
-
-    fn read_next_message(&mut self) -> Result<RtmpMessage, RtmpError> {
-        unimplemented!()
-    }
 }
