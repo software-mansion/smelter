@@ -37,9 +37,11 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility
 
 RUN apt-get update -y -qq && \
   apt-get install -y \
-    sudo adduser ffmpeg build-essential curl ffmpeg \
+    sudo wget adduser ffmpeg build-essential curl ffmpeg \
     libegl1-mesa-dev libgl1-mesa-dri libxcb-xfixes0-dev mesa-vulkan-drivers && \
   rm -rf /var/lib/apt/lists/*
+
+RUN curl -L -o /bunny.mp4 https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny1080p30fps30s.mp4
 
 RUN useradd -ms /bin/bash $USERNAME && adduser $USERNAME sudo
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers

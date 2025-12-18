@@ -1,22 +1,15 @@
 use tracing::debug;
 use webrtc::{
     api::{
-        APIBuilder, interceptor_registry::register_default_interceptors, media_engine::MediaEngine,
-    },
-    ice_transport::{
+        interceptor_registry::register_default_interceptors, media_engine::MediaEngine, setting_engine::SettingEngine, APIBuilder
+    }, ice::network_type::NetworkType, ice_transport::{
         ice_connection_state::RTCIceConnectionState, ice_gatherer::OnLocalCandidateHdlrFn,
         ice_server::RTCIceServer,
-    },
-    interceptor::registry::Registry,
-    peer_connection::{
-        RTCPeerConnection, configuration::RTCConfiguration,
-        sdp::session_description::RTCSessionDescription,
-    },
-    rtp_transceiver::{
-        RTCRtpTransceiverInit, rtp_codec::RTPCodecType, rtp_sender::RTCRtpSender,
-        rtp_transceiver_direction::RTCRtpTransceiverDirection,
-    },
-    stats::StatsReport,
+    }, interceptor::registry::Registry, peer_connection::{
+        configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription, RTCPeerConnection
+    }, rtp_transceiver::{
+        rtp_codec::RTPCodecType, rtp_sender::RTCRtpSender, rtp_transceiver_direction::RTCRtpTransceiverDirection, RTCRtpTransceiverInit
+    }, stats::StatsReport
 };
 
 use std::sync::Arc;
@@ -41,11 +34,16 @@ impl PeerConnection {
             media_engine.register_codec(video_codec.clone(), RTPCodecType::Video)?;
         }
 
+        let mut setting_engine = SettingEngine::default();
+        setting_engine.set_network_types(vec![NetworkType::Udp4]);
+
+
         let registry = register_default_interceptors(Registry::new(), &mut media_engine)?;
 
         let api = APIBuilder::new()
             .with_media_engine(media_engine)
             .with_interceptor_registry(registry)
+            .with_setting_engine(setting_engine)
             .build();
 
         let config = RTCConfiguration {
