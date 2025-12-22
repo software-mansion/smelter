@@ -23,7 +23,7 @@ struct BaseShaderParameters {
     texture_count: u32,
 }
 
-var<push_constant> base_params: BaseShaderParameters;
+var<immediate> base_params: BaseShaderParameters;
 
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {

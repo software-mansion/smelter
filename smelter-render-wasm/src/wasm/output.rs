@@ -51,7 +51,10 @@ impl RendererOutputs {
             pending_downloads.push((id.clone(), map_complete_receiver));
         }
 
-        wgpu_ctx.device.poll(wgpu::PollType::Wait).unwrap();
+        wgpu_ctx
+            .device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .unwrap();
 
         let mut output_data = vec![];
         for (id, map_complete_receiver) in pending_downloads {

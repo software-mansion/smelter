@@ -151,10 +151,12 @@ impl TextRendererNode {
                         load: LoadOp::Clear(self.background_color),
                         store: wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             text_renderer.render(&atlas, &viewport, &mut pass).unwrap();
@@ -293,6 +295,7 @@ impl TextRendererCtx {
             &text_params.content,
             &text_params.attributes.as_attrs(),
             Shaping::Advanced,
+            None,
         );
         buffer.set_wrap(font_system, text_params.wrap);
 

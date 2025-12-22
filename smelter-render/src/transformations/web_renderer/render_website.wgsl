@@ -13,7 +13,7 @@ struct RenderInfo {
      transformation_matrix: mat4x4<f32>,
 }
 
-var<push_constant> render_info: RenderInfo;
+var<immediate> render_info: RenderInfo;
 
 @group(0) @binding(0) var texture: texture_2d<f32>;
 @group(1) @binding(0) var sampler_: sampler;

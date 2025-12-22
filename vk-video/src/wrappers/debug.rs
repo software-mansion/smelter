@@ -59,6 +59,13 @@ unsafe extern "system" fn debug_messenger_callback(
 ) -> vk::Bool32 {
     let callback_data = unsafe { *p_callback_data };
 
+    // FIXME: This is a bug in wgpu:
+    // https://github.com/gfx-rs/wgpu/issues/7696
+    // Until it's fixed upstream, let's silence `VUID-StandaloneSpirv-None-10684`.
+    if callback_data.message_id_number == 0xb210f7c2u32 as i32 {
+        return vk::FALSE;
+    }
+
     let message_id = unsafe {
         callback_data
             .message_id_name_as_c_str()

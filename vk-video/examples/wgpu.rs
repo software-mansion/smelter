@@ -23,7 +23,7 @@ fn main() {
         .create_device(
             wgpu::Features::empty(),
             wgpu::Limits {
-                max_push_constant_size: 128,
+                max_immediate_size: 128,
                 max_binding_array_elements_per_shader_stage: 128,
                 ..Default::default()
             },
@@ -177,7 +177,7 @@ fn download_wgpu_texture(
         },
     );
 
-    device.poll(wgpu::PollType::Wait).unwrap();
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
     let mut result = Vec::new();
     result.append(&mut y_rx.recv().unwrap());

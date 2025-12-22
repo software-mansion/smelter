@@ -37,14 +37,15 @@ pub async fn create_wgpu_context() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: None,
-            required_features: wgpu::Features::PUSH_CONSTANTS,
+            required_features: wgpu::Features::IMMEDIATES,
             required_limits: wgpu::Limits {
-                max_push_constant_size: 128,
+                max_immediate_size: 128,
                 max_color_attachments: 6,
                 ..wgpu::Limits::downlevel_webgl2_defaults()
             },
             memory_hints: wgpu::MemoryHints::default(),
             trace: wgpu::Trace::Off,
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
         })
         .await
         .map_err(to_js_error)?;

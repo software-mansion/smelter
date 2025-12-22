@@ -31,7 +31,7 @@ impl LayoutShader {
             .create_shader_module(wgpu::include_wgsl!("./apply_layouts.wgsl"));
         let result = Self::new_pipeline(wgpu_ctx, shader_module)?;
 
-        scope.pop(&wgpu_ctx.device)?;
+        scope.pop()?;
 
         Ok(result)
     }
@@ -54,10 +54,7 @@ impl LayoutShader {
                         &params_bind_groups.bind_group_2_layout,
                         &sampler.bind_group_layout,
                     ],
-                    push_constant_ranges: &[wgpu::PushConstantRange {
-                        stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        range: 0..16,
-                    }],
+                    immediate_size: 16,
                 });
 
         let pipeline = common_pipeline::create_render_pipeline(
@@ -109,11 +106,13 @@ impl LayoutShader {
                     },
                     view: target.view(),
                     resolve_target: None,
+                    depth_slice: None,
                 })],
                 // TODO: depth stencil attachments
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             for (index, (texture_bg, layout_info)) in input_texture_bgs
@@ -124,11 +123,7 @@ impl LayoutShader {
             {
                 render_pass.set_pipeline(&self.pipeline);
 
-                render_pass.set_push_constants(
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    0,
-                    &layout_info.to_bytes(),
-                );
+                render_pass.set_immediates(0, &layout_info.to_bytes());
 
                 render_pass.set_bind_group(0, texture_bg, &[]);
                 render_pass.set_bind_group(1, &self.params_bind_groups.bind_group_1, &[]);
