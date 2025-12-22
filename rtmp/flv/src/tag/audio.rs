@@ -1,14 +1,15 @@
 use bytes::Bytes;
 
-use crate::PacketType;
+use crate::tag::PacketType;
 
+/// Struct representing flv `AUDIODATA`.
 #[derive(Debug, Clone)]
 pub struct AudioTag {
     pub packet_type: PacketType,
     pub codec: AudioCodec,
     pub sound_rate: u32,
     pub sound_type: AudioChannels,
-    pub payload: Bytes,
+    pub data: Bytes,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -28,10 +29,8 @@ pub enum AudioCodec {
     DeviceSpecific,
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AudioChannels {
     Mono,
-
-    #[default]
     Stereo,
 }

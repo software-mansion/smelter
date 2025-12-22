@@ -1,15 +1,15 @@
 use bytes::Bytes;
 use thiserror::Error;
 
-use crate::{FrameType, PacketType, ParseError, VideoCodec, VideoTag};
+use crate::{FrameType, ParseError, VideoCodec, VideoTag, tag::PacketType};
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum VideoTagParseError {
     #[error("Invalid AvcPacketType header value: {0}")]
     InvalidAvcPacketType(u8),
 
-    #[error("Invalid frame type header value: {0}")]
-    InvalidFrameType(u8),
+    #[error("Unsupported frame type header value: {0}")]
+    UnsupportedFrameType(u8),
 }
 
 impl TryFrom<u8> for VideoCodec {
@@ -29,30 +29,57 @@ impl TryFrom<u8> for VideoCodec {
     }
 }
 
+impl From<VideoCodec> for u8 {
+    fn from(value: VideoCodec) -> Self {
+        use crate::VideoCodec::*;
+        match value {
+            SorensonH263 => 2,
+            ScreenVideo => 3,
+            Vp6 => 4,
+            Vp6WithAlpha => 5,
+            ScreenVideo2 => 6,
+            H264 => 7,
+        }
+    }
+}
+
 impl VideoTag {
-    pub fn parse(payload: &[u8]) -> Result<Self, ParseError> {
-        if payload.len() < 2 {
+    pub(super) fn parse(data: Bytes) -> Result<Self, ParseError> {
+        if data.len() < 2 {
             return Err(ParseError::NotEnoughData);
         }
 
-        let frame_type = (payload[0] >> 4) & 0x0F;
-        let codec_id = payload[0] & 0x0F;
+        let frame_type = (data[0] >> 4) & 0x0F;
+        let codec_id = data[0] & 0x0F;
+
+        let frame_type = match frame_type {
+            1 => FrameType::Keyframe,
+            2 => FrameType::Interframe,
+            _ => {
+                return Err(ParseError::Video(VideoTagParseError::UnsupportedFrameType(
+                    frame_type,
+                )));
+            }
+        };
 
         let codec = VideoCodec::try_from(codec_id)?;
-        // NOTE: This should be removed when support for more codecs is added
-        if codec != VideoCodec::H264 {
-            return Err(ParseError::UnsupportedCodec(codec_id));
-        } else if payload.len() < 5 {
+        match codec {
+            VideoCodec::H264 => Self::parse_h264(data, frame_type),
+            _ => Self::parse_codec(data, codec, frame_type),
+        }
+    }
+
+    fn parse_h264(mut data: Bytes, frame_type: FrameType) -> Result<Self, ParseError> {
+        if data.len() < 6 {
             return Err(ParseError::NotEnoughData);
         }
-
-        let avc_packet_type = payload[1];
-        let composition_time = i32::from_be_bytes([0, payload[2], payload[3], payload[4]]);
+        let avc_packet_type = data[1];
+        let composition_time = i32::from_be_bytes([0, data[2], data[3], data[4]]);
 
         let packet_type = match avc_packet_type {
-            0 => PacketType::VideoConfig,
-            1 => PacketType::Video,
-            2 => PacketType::Video,
+            0 => PacketType::Config,
+            1 => PacketType::Data,
+            2 => PacketType::Data,
             _ => {
                 return Err(ParseError::Video(VideoTagParseError::InvalidAvcPacketType(
                     avc_packet_type,
@@ -60,23 +87,23 @@ impl VideoTag {
             }
         };
 
-        let frame_type = match frame_type {
-            1 => FrameType::Keyframe,
-            2 => FrameType::Interframe,
-            _ => {
-                return Err(ParseError::Video(VideoTagParseError::InvalidFrameType(
-                    frame_type,
-                )));
-            }
-        };
-
-        let video_data = Bytes::copy_from_slice(&payload[5..]);
+        let video_data = data.split_to(5);
         Ok(Self {
             packet_type,
-            codec,
+            codec: VideoCodec::H264,
             composition_time: Some(composition_time),
             frame_type,
-            payload: video_data,
+            data: video_data,
         })
+    }
+
+    // This method will be properly implemented when support for codecs different than H.264 is
+    // added
+    fn parse_codec(
+        _data: Bytes,
+        codec: VideoCodec,
+        _frame_type: FrameType,
+    ) -> Result<Self, ParseError> {
+        Err(ParseError::UnsupportedCodec(codec.into()))
     }
 }
