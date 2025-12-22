@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use thiserror::Error;
 
-use crate::{AudioChannels, AudioCodec, AudioTag, PacketType, ParseError};
+use crate::{AudioChannels, AudioCodec, AudioTag, ParseError, tag::PacketType};
 
 impl TryFrom<u8> for AudioCodec {
     type Error = ParseError;
@@ -27,6 +27,27 @@ impl TryFrom<u8> for AudioCodec {
     }
 }
 
+impl From<AudioCodec> for u8 {
+    fn from(value: AudioCodec) -> Self {
+        use crate::AudioCodec::*;
+        match value {
+            Pcm => 0,
+            Adpcm => 1,
+            Mp3 => 2,
+            PcmLe => 3,
+            Nellymoser16kMono => 4,
+            Nellymoser8kMono => 5,
+            Nellymoser => 6,
+            G711ALaw => 7,
+            G711MuLaw => 8,
+            Aac => 10,
+            Speex => 11,
+            Mp3_8k => 14,
+            DeviceSpecific => 15,
+        }
+    }
+}
+
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum AudioTagParseError {
     #[error("Invalid sound rate header value: {0}")]
@@ -41,34 +62,14 @@ pub enum AudioTagParseError {
 
 impl AudioTag {
     // Currently only AAC audio codec is supported
-    pub fn parse(payload: &[u8]) -> Result<Self, ParseError> {
-        if payload.len() < 2 {
+    pub(super) fn parse(data: Bytes) -> Result<Self, ParseError> {
+        if data.len() < 2 {
             return Err(ParseError::NotEnoughData);
         }
 
-        let sound_format = (payload[0] >> 4) & 0x0F;
-        let sound_rate_opt = (payload[0] >> 2) & 0x03;
-        let sound_type = payload[0] & 0x01;
-
-        let codec = AudioCodec::try_from(sound_format)?;
-        // NOTE: This should be removed when support for more codecs is added
-        if codec != AudioCodec::Aac {
-            return Err(ParseError::UnsupportedCodec(sound_format));
-        }
-
-        let aac_packet_type = payload[1];
-
-        let sound_rate = match sound_rate_opt {
-            0 => 5500,
-            1 => 11_000,
-            2 => 22_050,
-            3 => 44_100,
-            _ => {
-                return Err(ParseError::Audio(AudioTagParseError::InvalidSoundRate(
-                    sound_rate_opt,
-                )));
-            }
-        };
+        let sound_format = (data[0] >> 4) & 0x0F;
+        let sound_rate = (data[0] >> 2) & 0x03;
+        let sound_type = data[0] & 0x01;
 
         let channels = match sound_type {
             0 => AudioChannels::Mono,
@@ -80,9 +81,39 @@ impl AudioTag {
             }
         };
 
+        let sound_rate = match sound_rate {
+            0 => 5500,
+            1 => 11_000,
+            2 => 22_050,
+            3 => 44_100,
+            _ => {
+                return Err(ParseError::Audio(AudioTagParseError::InvalidSoundRate(
+                    sound_rate,
+                )));
+            }
+        };
+
+        let codec = AudioCodec::try_from(sound_format)?;
+        match codec {
+            AudioCodec::Aac => Self::parse_aac(data, sound_rate, channels),
+            _ => Self::parse_codec(data, codec, sound_rate, channels),
+        }
+    }
+
+    fn parse_aac(
+        mut data: Bytes,
+        sound_rate: u32,
+        channels: AudioChannels,
+    ) -> Result<Self, ParseError> {
+        if data.len() < 3 {
+            return Err(ParseError::NotEnoughData);
+        }
+
+        let aac_packet_type = data[1];
+
         let packet_type = match aac_packet_type {
-            0 => PacketType::AudioConfig,
-            1 => PacketType::Audio,
+            0 => PacketType::Config,
+            1 => PacketType::Data,
             _ => {
                 return Err(ParseError::Audio(AudioTagParseError::InvalidAacPacketType(
                     aac_packet_type,
@@ -90,15 +121,23 @@ impl AudioTag {
             }
         };
 
-        // This is true only for AAC, for any other codec it should be payload[1..]
-        // Other codecs are not supported at the current time
-        let audio_data = Bytes::copy_from_slice(&payload[2..]);
+        let audio_data = data.split_to(2);
         Ok(Self {
             packet_type,
-            codec,
+            codec: AudioCodec::Aac,
             sound_rate,
             sound_type: channels,
-            payload: audio_data,
+            data: audio_data,
         })
+    }
+
+    // This function will be implemented when support for more audio codecs is added
+    fn parse_codec(
+        _data: Bytes,
+        codec: AudioCodec,
+        _sound_rate: u32,
+        _channels: AudioChannels,
+    ) -> Result<Self, ParseError> {
+        Err(ParseError::UnsupportedCodec(codec.into()))
     }
 }

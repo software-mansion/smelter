@@ -1,14 +1,17 @@
 use bytes::Bytes;
 
-use crate::PacketType;
+use crate::tag::PacketType;
 
+/// Struct representing flv `VIDEODATA`.
 #[derive(Debug, Clone)]
 pub struct VideoTag {
     pub packet_type: PacketType,
     pub codec: VideoCodec,
+
+    /// `AVC` config only. Composition time offset.
     pub composition_time: Option<i32>,
     pub frame_type: FrameType,
-    pub payload: Bytes,
+    pub data: Bytes,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
