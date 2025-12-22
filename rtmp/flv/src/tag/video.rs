@@ -6,7 +6,8 @@ use crate::PacketType;
 pub struct VideoTag {
     pub packet_type: PacketType,
     pub codec: VideoCodec,
-    pub codec_params: VideoCodecParams,
+    pub composition_time: Option<i32>,
+    pub frame_type: FrameType,
     pub payload: Bytes,
 }
 
@@ -18,12 +19,6 @@ pub enum VideoCodec {
     Vp6WithAlpha,
     ScreenVideo2,
     H264,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct VideoCodecParams {
-    pub composition_time: i32,
-    pub frame_type: FrameType,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]

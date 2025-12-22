@@ -6,7 +6,8 @@ use crate::PacketType;
 pub struct AudioTag {
     pub packet_type: PacketType,
     pub codec: AudioCodec,
-    pub codec_params: AudioCodecParams,
+    pub sound_rate: u32,
+    pub sound_type: AudioChannels,
     pub payload: Bytes,
 }
 
@@ -25,12 +26,6 @@ pub enum AudioCodec {
     Speex,
     Mp3_8k,
     DeviceSpecific,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct AudioCodecParams {
-    pub sound_rate: u32,
-    pub sound_type: AudioChannels,
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]

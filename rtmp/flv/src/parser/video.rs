@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use thiserror::Error;
 
-use crate::{FrameType, PacketType, ParseError, VideoCodec, VideoCodecParams, VideoTag};
+use crate::{FrameType, PacketType, ParseError, VideoCodec, VideoTag};
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum VideoTagParseError {
@@ -74,10 +74,8 @@ impl VideoTag {
         Ok(Self {
             packet_type,
             codec,
-            codec_params: VideoCodecParams {
-                composition_time,
-                frame_type,
-            },
+            composition_time: Some(composition_time),
+            frame_type,
             payload: video_data,
         })
     }
