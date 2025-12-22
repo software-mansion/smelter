@@ -275,10 +275,14 @@ struct EncoderCommandBufferPools {
 
 impl EncoderCommandBufferPools {
     fn new(device: &EncodingDevice) -> Result<Self, VulkanEncoderError> {
-        let transfer =
-            CommandBufferPool::new(device.vulkan_device.clone(), device.queues.transfer.idx)?;
-        let encode =
-            CommandBufferPool::new(device.vulkan_device.clone(), device.h264_encode_queue.idx)?;
+        let transfer = CommandBufferPool::new(
+            device.vulkan_device.clone(),
+            device.queues.transfer.family_index,
+        )?;
+        let encode = CommandBufferPool::new(
+            device.vulkan_device.clone(),
+            device.h264_encode_queue.family_index,
+        )?;
 
         Ok(Self { transfer, encode })
     }
@@ -301,7 +305,11 @@ impl TrackerKind for EncoderTrackerKind {
 
 type EncoderTracker = Tracker<EncoderTrackerKind>;
 
+#[derive(Clone, Copy, Hash, Eq, PartialEq)]
+pub(crate) struct EncoderId(pub(crate) usize);
+
 pub struct VulkanEncoder<'a> {
+    id: EncoderId,
     tracker: EncoderTracker,
     query_pool: EncodingQueryPool,
     profile: H264Profile,
@@ -334,14 +342,23 @@ pub struct FullEncoderParameters {
     pub(crate) content_flags: vk::VideoEncodeContentFlagsKHR,
 }
 
+impl Drop for VulkanEncoder<'_> {
+    fn drop(&mut self) {
+        self.encoding_device
+            .h264_encode_queue
+            .remove_stats(&self.id);
+    }
+}
+
 impl VulkanEncoder<'_> {
     const OUTPUT_BUFFER_LEN: u64 = 4 * MB;
 
     pub(crate) fn new_with_converter(
+        id: EncoderId,
         device: Arc<EncodingDevice>,
         parameters: FullEncoderParameters,
     ) -> Result<Self, VulkanEncoderError> {
-        let mut enc = Self::new(device.clone(), parameters)?;
+        let mut enc = Self::new(id, device.clone(), parameters)?;
 
         let conv = Converter::new(
             device.clone(),
@@ -358,6 +375,7 @@ impl VulkanEncoder<'_> {
     }
 
     pub(crate) fn new(
+        id: EncoderId,
         encoding_device: Arc<EncodingDevice>,
         parameters: FullEncoderParameters,
     ) -> Result<Self, VulkanEncoderError> {
@@ -398,7 +416,12 @@ impl VulkanEncoder<'_> {
             EncoderTrackerWaitState::InitializeEncoder,
         )?;
 
+        encoding_device
+            .h264_encode_queue
+            .log_resolution_change(id, session_resources.video_session.max_coded_extent);
+
         Ok(Self {
+            id,
             idr_period_counter: 0,
             idr_pic_id: 0,
             frame_num: 0,
@@ -539,8 +562,8 @@ impl VulkanEncoder<'_> {
             .profiles(std::slice::from_ref(&self.profile_info.profile_info));
 
         let queue_family_indices = [
-            self.encoding_device.queues.transfer.idx as u32,
-            self.encoding_device.h264_encode_queue.idx as u32,
+            self.encoding_device.queues.transfer.family_index as u32,
+            self.encoding_device.h264_encode_queue.family_index as u32,
         ];
 
         let image_create_info = vk::ImageCreateInfo::default()
@@ -644,6 +667,10 @@ impl VulkanEncoder<'_> {
         image: Arc<Image>,
         force_idr: bool,
     ) -> Result<Vec<u8>, VulkanEncoderError> {
+        self.encoding_device
+            .h264_encode_queue
+            .log_video_operation(self.id);
+
         let is_idr = force_idr || self.idr_period_counter == 0;
         let mut idr_pic_id = 0;
 
