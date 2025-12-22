@@ -33,7 +33,7 @@ fn main() {
         .create_device(
             wgpu::Features::empty(),
             wgpu::Limits {
-                max_push_constant_size: 128,
+                max_immediate_size: 128,
                 ..Default::default()
             },
         )

@@ -334,23 +334,14 @@ fn wgpu_features_from_str(s: &str) -> Result<WgpuFeatures, String> {
     let mut all_features = WgpuFeatures::default();
     for feature in s.split(',') {
         let feature = match feature {
-            "DEPTH_CLIP_CONTROL" => WgpuFeatures::DEPTH_CLIP_CONTROL,
-            "TIMESTAMP_QUERY" => WgpuFeatures::TIMESTAMP_QUERY,
-            "INDIRECT_FIRST_INSTANCE" => WgpuFeatures::INDIRECT_FIRST_INSTANCE,
-            "SHADER_F16" => WgpuFeatures::SHADER_F16,
-            "BGRA8UNORM_STORAGE" => WgpuFeatures::BGRA8UNORM_STORAGE,
-            "FLOAT32_FILTERABLE" => WgpuFeatures::FLOAT32_FILTERABLE,
-            "RG11B10UFLOAT_RENDERABLE" => WgpuFeatures::RG11B10UFLOAT_RENDERABLE,
-            "DEPTH32FLOAT_STENCIL8" => WgpuFeatures::DEPTH32FLOAT_STENCIL8,
-            "TEXTURE_COMPRESSION_BC" => WgpuFeatures::TEXTURE_COMPRESSION_BC,
-            "TEXTURE_COMPRESSION_ETC2" => WgpuFeatures::TEXTURE_COMPRESSION_ETC2,
-            "TEXTURE_COMPRESSION_ASTC" => WgpuFeatures::TEXTURE_COMPRESSION_ASTC,
+            "SHADER_FLOAT32_ATOMIC" => WgpuFeatures::SHADER_FLOAT32_ATOMIC,
             "TEXTURE_FORMAT_16BIT_NORM" => WgpuFeatures::TEXTURE_FORMAT_16BIT_NORM,
             "TEXTURE_COMPRESSION_ASTC_HDR" => WgpuFeatures::TEXTURE_COMPRESSION_ASTC_HDR,
             "TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES" => {
                 WgpuFeatures::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             }
             "PIPELINE_STATISTICS_QUERY" => WgpuFeatures::PIPELINE_STATISTICS_QUERY,
+            "TIMESTAMP_QUERY_INSIDE_ENCODERS" => WgpuFeatures::TIMESTAMP_QUERY_INSIDE_ENCODERS,
             "TIMESTAMP_QUERY_INSIDE_PASSES" => WgpuFeatures::TIMESTAMP_QUERY_INSIDE_PASSES,
             "MAPPABLE_PRIMARY_BUFFERS" => WgpuFeatures::MAPPABLE_PRIMARY_BUFFERS,
             "TEXTURE_BINDING_ARRAY" => WgpuFeatures::TEXTURE_BINDING_ARRAY,
@@ -363,9 +354,7 @@ fn wgpu_features_from_str(s: &str) -> Result<WgpuFeatures, String> {
                 WgpuFeatures::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
             }
             "PARTIALLY_BOUND_BINDING_ARRAY" => WgpuFeatures::PARTIALLY_BOUND_BINDING_ARRAY,
-            "MULTI_DRAW_INDIRECT" => WgpuFeatures::MULTI_DRAW_INDIRECT,
             "MULTI_DRAW_INDIRECT_COUNT" => WgpuFeatures::MULTI_DRAW_INDIRECT_COUNT,
-            "PUSH_CONSTANTS" => WgpuFeatures::PUSH_CONSTANTS,
             "ADDRESS_MODE_CLAMP_TO_ZERO" => WgpuFeatures::ADDRESS_MODE_CLAMP_TO_ZERO,
             "ADDRESS_MODE_CLAMP_TO_BORDER" => WgpuFeatures::ADDRESS_MODE_CLAMP_TO_BORDER,
             "POLYGON_MODE_LINE" => WgpuFeatures::POLYGON_MODE_LINE,
@@ -373,19 +362,61 @@ fn wgpu_features_from_str(s: &str) -> Result<WgpuFeatures, String> {
             "CONSERVATIVE_RASTERIZATION" => WgpuFeatures::CONSERVATIVE_RASTERIZATION,
             "VERTEX_WRITABLE_STORAGE" => WgpuFeatures::VERTEX_WRITABLE_STORAGE,
             "CLEAR_TEXTURE" => WgpuFeatures::CLEAR_TEXTURE,
-            "SPIRV_SHADER_PASSTHROUGH" => WgpuFeatures::SPIRV_SHADER_PASSTHROUGH,
             "MULTIVIEW" => WgpuFeatures::MULTIVIEW,
             "VERTEX_ATTRIBUTE_64BIT" => WgpuFeatures::VERTEX_ATTRIBUTE_64BIT,
+            "TEXTURE_ATOMIC" => WgpuFeatures::TEXTURE_ATOMIC,
             "TEXTURE_FORMAT_NV12" => WgpuFeatures::TEXTURE_FORMAT_NV12,
-            "EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE" => {
-                WgpuFeatures::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-            }
+            "TEXTURE_FORMAT_P010" => WgpuFeatures::TEXTURE_FORMAT_P010,
+            "EXTERNAL_TEXTURE" => WgpuFeatures::EXTERNAL_TEXTURE,
             "EXPERIMENTAL_RAY_QUERY" => WgpuFeatures::EXPERIMENTAL_RAY_QUERY,
             "SHADER_F64" => WgpuFeatures::SHADER_F64,
             "SHADER_I16" => WgpuFeatures::SHADER_I16,
             "SHADER_PRIMITIVE_INDEX" => WgpuFeatures::SHADER_PRIMITIVE_INDEX,
             "SHADER_EARLY_DEPTH_TEST" => WgpuFeatures::SHADER_EARLY_DEPTH_TEST,
+            "SHADER_INT64" => WgpuFeatures::SHADER_INT64,
+            "SUBGROUP" => WgpuFeatures::SUBGROUP,
+            "SUBGROUP_VERTEX" => WgpuFeatures::SUBGROUP_VERTEX,
+            "SUBGROUP_BARRIER" => WgpuFeatures::SUBGROUP_BARRIER,
+            "PIPELINE_CACHE" => WgpuFeatures::PIPELINE_CACHE,
+            "SHADER_INT64_ATOMIC_MIN_MAX" => WgpuFeatures::SHADER_INT64_ATOMIC_MIN_MAX,
+            "SHADER_INT64_ATOMIC_ALL_OPS" => WgpuFeatures::SHADER_INT64_ATOMIC_ALL_OPS,
+            "VULKAN_GOOGLE_DISPLAY_TIMING" => WgpuFeatures::VULKAN_GOOGLE_DISPLAY_TIMING,
+            "VULKAN_EXTERNAL_MEMORY_WIN32" => WgpuFeatures::VULKAN_EXTERNAL_MEMORY_WIN32,
+            "TEXTURE_INT64_ATOMIC" => WgpuFeatures::TEXTURE_INT64_ATOMIC,
+            "UNIFORM_BUFFER_BINDING_ARRAYS" => WgpuFeatures::UNIFORM_BUFFER_BINDING_ARRAYS,
+            "EXPERIMENTAL_MESH_SHADER" => WgpuFeatures::EXPERIMENTAL_MESH_SHADER,
+            "EXPERIMENTAL_RAY_HIT_VERTEX_RETURN" => {
+                WgpuFeatures::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN
+            }
+            "EXPERIMENTAL_MESH_SHADER_MULTIVIEW" => {
+                WgpuFeatures::EXPERIMENTAL_MESH_SHADER_MULTIVIEW
+            }
+            "EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS" => {
+                WgpuFeatures::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS
+            }
+            "EXPERIMENTAL_PASSTHROUGH_SHADERS" => WgpuFeatures::EXPERIMENTAL_PASSTHROUGH_SHADERS,
+            "SHADER_BARYCENTRICS" => WgpuFeatures::SHADER_BARYCENTRICS,
+            "SELECTIVE_MULTIVIEW" => WgpuFeatures::SELECTIVE_MULTIVIEW,
+            "EXPERIMENTAL_MESH_SHADER_POINTS" => WgpuFeatures::EXPERIMENTAL_MESH_SHADER_POINTS,
+            "MULTISAMPLE_ARRAY" => WgpuFeatures::MULTISAMPLE_ARRAY,
+            "DEPTH_CLIP_CONTROL" => WgpuFeatures::DEPTH_CLIP_CONTROL,
+            "DEPTH32FLOAT_STENCIL8" => WgpuFeatures::DEPTH32FLOAT_STENCIL8,
+            "TEXTURE_COMPRESSION_BC" => WgpuFeatures::TEXTURE_COMPRESSION_BC,
+            "TEXTURE_COMPRESSION_BC_SLICED_3D" => WgpuFeatures::TEXTURE_COMPRESSION_BC_SLICED_3D,
+            "TEXTURE_COMPRESSION_ETC2" => WgpuFeatures::TEXTURE_COMPRESSION_ETC2,
+            "TEXTURE_COMPRESSION_ASTC" => WgpuFeatures::TEXTURE_COMPRESSION_ASTC,
+            "TEXTURE_COMPRESSION_ASTC_SLICED_3D" => {
+                WgpuFeatures::TEXTURE_COMPRESSION_ASTC_SLICED_3D
+            }
+            "TIMESTAMP_QUERY" => WgpuFeatures::TIMESTAMP_QUERY,
+            "INDIRECT_FIRST_INSTANCE" => WgpuFeatures::INDIRECT_FIRST_INSTANCE,
+            "SHADER_F16" => WgpuFeatures::SHADER_F16,
+            "RG11B10UFLOAT_RENDERABLE" => WgpuFeatures::RG11B10UFLOAT_RENDERABLE,
+            "BGRA8UNORM_STORAGE" => WgpuFeatures::BGRA8UNORM_STORAGE,
+            "FLOAT32_FILTERABLE" => WgpuFeatures::FLOAT32_FILTERABLE,
             "DUAL_SOURCE_BLENDING" => WgpuFeatures::DUAL_SOURCE_BLENDING,
+            "CLIP_DISTANCES" => WgpuFeatures::CLIP_DISTANCES,
+            "IMMEDIATES" => WgpuFeatures::IMMEDIATES,
             "" => WgpuFeatures::default(),
             feature => {
                 return Err(format!("Unknown wgpu feature \"{feature}\""));

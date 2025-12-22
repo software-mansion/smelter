@@ -85,7 +85,7 @@ struct LayoutInfo {
 
 @group(3) @binding(0) var sampler_: sampler;
 
-var<push_constant> layout_info: LayoutInfo;
+var<immediate> layout_info: LayoutInfo;
 
 fn rotation_matrix(rotation: f32) -> mat4x4<f32> {
     // wgsl is column-major

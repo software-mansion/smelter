@@ -13,4 +13,4 @@ struct BaseShaderParameters {
 @group(0) @binding(0) var textures: binding_array<texture_2d<f32>, 16>;
 @group(2) @binding(0) var sampler_: sampler;
 
-var<push_constant> base_params: BaseShaderParameters;
+var<immediate> base_params: BaseShaderParameters;

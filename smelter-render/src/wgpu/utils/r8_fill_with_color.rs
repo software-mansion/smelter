@@ -1,5 +1,3 @@
-use wgpu::ShaderStages;
-
 use crate::wgpu::{
     WgpuCtx,
     common_pipeline::{PRIMITIVE_STATE, Vertex},
@@ -17,10 +15,7 @@ impl R8FillWithValue {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Fill with value render pipeline layout"),
             bind_group_layouts: &[],
-            push_constant_ranges: &[wgpu::PushConstantRange {
-                stages: wgpu::ShaderStages::FRAGMENT,
-                range: 0..4,
-            }],
+            immediate_size: 4,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -49,7 +44,7 @@ impl R8FillWithValue {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -73,14 +68,16 @@ impl R8FillWithValue {
                     },
                     view: dst,
                     resolve_target: None,
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&value));
+            render_pass.set_immediates(0, bytemuck::bytes_of(&value));
             ctx.plane.draw(&mut render_pass);
         }
 

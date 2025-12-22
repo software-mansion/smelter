@@ -86,9 +86,9 @@ impl WgpuCtx {
         let empty_rgba_linear_texture = RgbaLinearTexture::empty(&device);
         let empty_rgba_srgb_texture = RgbaSrgbTexture::empty(&device);
 
-        scope.pop(&device)?;
+        scope.pop()?;
 
-        device.on_uncaptured_error(Box::new(|e| {
+        device.on_uncaptured_error(Arc::new(|e| {
             error!("wgpu error: {:?}", e);
         }));
 
@@ -109,8 +109,8 @@ impl WgpuCtx {
 
 pub fn required_wgpu_features() -> wgpu::Features {
     match cfg!(target_arch = "wasm32") {
-        false => wgpu::Features::TEXTURE_BINDING_ARRAY | wgpu::Features::PUSH_CONSTANTS,
-        true => wgpu::Features::PUSH_CONSTANTS,
+        false => wgpu::Features::TEXTURE_BINDING_ARRAY | wgpu::Features::IMMEDIATES,
+        true => wgpu::Features::IMMEDIATES,
     }
 }
 
@@ -119,7 +119,7 @@ pub fn set_required_wgpu_limits(limits: wgpu::Limits) -> wgpu::Limits {
         max_binding_array_elements_per_shader_stage: limits
             .max_binding_array_elements_per_shader_stage
             .max(128),
-        max_push_constant_size: limits.max_push_constant_size.max(128),
+        max_immediate_size: limits.max_immediate_size.max(128),
         ..limits
     }
 }

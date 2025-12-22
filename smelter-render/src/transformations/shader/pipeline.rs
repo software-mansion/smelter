@@ -1,6 +1,6 @@
 use std::{borrow::Cow, num::NonZeroU32, sync::Arc, time::Duration};
 
-use wgpu::{ShaderStages, naga};
+use wgpu::naga;
 
 use crate::{
     scene::ShaderParam,
@@ -58,10 +58,7 @@ impl ShaderPipeline {
                         &wgpu_ctx.uniform_bgl,
                         &sampler.bind_group_layout,
                     ],
-                    push_constant_ranges: &[wgpu::PushConstantRange {
-                        stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        range: 0..BaseShaderParameters::push_constant_size(),
-                    }],
+                    immediate_size: BaseShaderParameters::push_constant_size(),
                 });
         let pipeline = common_pipeline::create_render_pipeline(
             "Shader node",
@@ -71,7 +68,7 @@ impl ShaderPipeline {
             wgpu_ctx.default_view_format(),
         );
 
-        scope.pop(&wgpu_ctx.device)?;
+        scope.pop()?;
 
         Ok(Self {
             pipeline,
@@ -112,19 +109,17 @@ impl ShaderPipeline {
                     },
                     view: target.view(),
                     resolve_target: None,
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.pipeline);
 
-            render_pass.set_push_constants(
-                ShaderStages::VERTEX_FRAGMENT,
-                0,
-                base_params.push_constant(),
-            );
+            render_pass.set_immediates(0, base_params.push_constant());
 
             render_pass.set_bind_group(0, &input_textures_bg, &[]);
             render_pass.set_bind_group(USER_DEFINED_BUFFER_GROUP, params, &[]);
