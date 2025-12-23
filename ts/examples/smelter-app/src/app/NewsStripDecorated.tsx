@@ -35,6 +35,7 @@ export function NewsStripDecorated({
       {children}
     </Shader>
   );
+  return children;
 
   const waved = (
     <Shader
@@ -56,7 +57,7 @@ export function NewsStripDecorated({
   if (!removeColorEnabled) {
     return waved;
   }
-
+return waved;
   return (
     <Shader
       shaderId="remove-color"

@@ -12,7 +12,7 @@ import { WhipInputMonitor } from '../whip/WhipInputMonitor';
 
 export type RoomInputState = {
   inputId: string;
-  type: 'local-mp4' | 'twitch-channel' | 'kick-channel' | 'whip';
+  type: 'local-mp4' | 'twitch-channel' | 'kick-channel' | 'whip' | 'image';
   status: 'disconnected' | 'pending' | 'connected';
   volume: number;
   showTitle: boolean;
@@ -27,7 +27,8 @@ type TypeSpecificState =
   | { type: 'local-mp4'; mp4FilePath: string }
   | { type: 'twitch-channel'; channelId: string; hlsUrl: string; monitor: TwitchChannelMonitor }
   | { type: 'kick-channel'; channelId: string; hlsUrl: string; monitor: KickChannelMonitor }
-  | { type: 'whip'; whipUrl: string; monitor: WhipInputMonitor };
+  | { type: 'whip'; whipUrl: string; monitor: WhipInputMonitor }
+  | { type: 'image'; imageId: string };
 
 type UpdateInputOptions = {
   volume: number;
@@ -54,7 +55,13 @@ export type RegisterInputOptions =
         fileName?: string;
         url?: string;
       };
+    }
+  | {
+      type: 'image';
+      fileName: string;
     };
+
+const PLACEHOLDER_LOGO_FILE = 'logo_Smelter.png';
 
 export class RoomState {
   private inputs: RoomInputState[];
@@ -101,10 +108,16 @@ export class RoomState {
         await this.addNewInput(input);
       }
     } else {
-      if (this.mp4Files.length > 0) {
-        const randomIndex = Math.floor(Math.random() * this.mp4Files.length);
+      // Filter out files starting with "logo_" or "wrapped_"
+      const eligibleMp4Files = this.mp4Files.filter(file => {
+        const lowerFile = file.toLowerCase();
+        return !lowerFile.startsWith('logo_') && !lowerFile.startsWith('wrapped_');
+      });
+      
+      if (eligibleMp4Files.length > 0) {
+        const randomIndex = Math.floor(Math.random() * eligibleMp4Files.length);
         for (let i = 0; i < 2; i++) {
-          const randomMp4 = this.mp4Files[(randomIndex + i) % this.mp4Files.length];
+          const randomMp4 = eligibleMp4Files[(randomIndex + i) % eligibleMp4Files.length];
           const mp4FilePath = path.join(this.mp4sDir, randomMp4);
 
           this.inputs.push({
@@ -123,6 +136,9 @@ export class RoomState {
         }
       }
     }
+    
+    // Ensure placeholder is added if no inputs exist
+    await this.ensurePlaceholder();
   }
 
   public getWhepUrl(): string {
@@ -135,6 +151,67 @@ export class RoomState {
   }
   public getInputs(): RoomInputState[] {
     return this.inputs;
+  }
+
+  private getPlaceholderId(): string {
+    return `${this.idPrefix}::placeholder::smelter-logo`;
+  }
+
+  private isPlaceholder(inputId: string): boolean {
+    return inputId === this.getPlaceholderId();
+  }
+
+  private async ensurePlaceholder(): Promise<void> {
+    // Check if there are any non-placeholder inputs
+    const nonPlaceholderInputs = this.inputs.filter(inp => !this.isPlaceholder(inp.inputId));
+    if (nonPlaceholderInputs.length > 0) {
+      return; // Don't add placeholder if there are real inputs
+    }
+
+    // Check if placeholder already exists
+    if (this.inputs.find(inp => this.isPlaceholder(inp.inputId))) {
+      return; // Placeholder already exists
+    }
+
+    // Add placeholder
+    const inputId = this.getPlaceholderId();
+    const picturesDir = path.join(process.cwd(), 'pictures');
+    const imagePath = path.join(picturesDir, PLACEHOLDER_LOGO_FILE);
+
+    if (await fs.pathExists(imagePath)) {
+      const imageId = `placeholder::smelter-logo`;
+      const assetType = 'png';
+
+      // Register image resource
+      try {
+        await SmelterInstance.registerImage(imageId, { serverPath: imagePath, assetType: assetType as any });
+      } catch (e) {
+        // ignore if already registered
+      }
+
+      this.inputs.push({
+        inputId,
+        type: 'image',
+        status: 'connected',
+        showTitle: false,
+        shaders: [],
+        metadata: {
+          title: 'Smelter',
+          description: '',
+        },
+        volume: 0,
+        imageId,
+      });
+      this.updateStoreWithState();
+    }
+  }
+
+  private async removePlaceholder(): Promise<void> {
+    const placeholder = this.inputs.find(inp => this.isPlaceholder(inp.inputId));
+    if (placeholder) {
+      this.inputs = this.inputs.filter(inp => !this.isPlaceholder(inp.inputId));
+      this.updateStoreWithState();
+    }
   }
 
   public async addNewWhipInput(username: string) {
@@ -160,6 +237,9 @@ export class RoomState {
   }
 
   public async addNewInput(opts: RegisterInputOptions) {
+    // Remove placeholder if it exists
+    await this.removePlaceholder();
+    
     if (opts.type === 'whip') {
       const inputId = await this.addNewWhipInput(opts.username);
       return inputId;
@@ -250,11 +330,64 @@ export class RoomState {
       }
 
       return inputId;
+    } else if (opts.type === 'image') {
+      console.log('Adding image');
+      const picturesDir = path.join(process.cwd(), 'pictures');
+      const imagePath = path.join(picturesDir, opts.fileName);
+      const inputId = `${this.idPrefix}::image::${Date.now()}`;
+
+      if (await fs.pathExists(imagePath)) {
+        const lower = opts.fileName.toLowerCase();
+        const exts = ['.jpg', '.jpeg', '.png', '.gif', '.svg'];
+        const ext = exts.find(x => lower.endsWith(x));
+        if (!ext) {
+          throw new Error(`Unsupported image format: ${opts.fileName}`);
+        }
+        const baseName = opts.fileName.replace(/\.(jpg|jpeg|png|gif|svg)$/i, '');
+        const imageId = `pictures::${baseName}`;
+        const assetType = ext === '.png' ? 'png' : ext === '.gif' ? 'gif' : ext === '.svg' ? 'svg' : 'jpeg';
+        
+        // Register image resource
+        try {
+          await SmelterInstance.registerImage(imageId, { serverPath: imagePath, assetType: assetType as any });
+        } catch (e) {
+          // ignore if already registered
+        }
+
+        this.inputs.push({
+          inputId,
+          type: 'image',
+          status: 'connected',
+          showTitle: false,
+          shaders: [],
+          metadata: {
+            title: formatImageName(opts.fileName),
+            description: '',
+          },
+          volume: 0,
+          imageId,
+        });
+        this.updateStoreWithState();
+      } else {
+        throw new Error(`Image file not found: ${opts.fileName}`);
+      }
+
+      return inputId;
     }
   }
 
   public async removeInput(inputId: string): Promise<void> {
     const input = this.getInput(inputId);
+    
+    // Check if this is the last non-placeholder input
+    const nonPlaceholderInputs = this.inputs.filter(inp => !this.isPlaceholder(inp.inputId));
+    const willBeEmpty = nonPlaceholderInputs.length === 1 && nonPlaceholderInputs[0].inputId === inputId;
+    
+    // If removing the last input, add placeholder first
+    if (willBeEmpty) {
+      await this.ensurePlaceholder();
+    }
+    
     this.inputs = this.inputs.filter(input => input.inputId !== inputId);
     this.updateStoreWithState();
     if (input.type === 'twitch-channel' || input.type === 'kick-channel') {
@@ -277,6 +410,12 @@ export class RoomState {
   public async connectInput(inputId: string): Promise<string> {
     const input = this.getInput(inputId);
     if (input.status !== 'disconnected') {
+      return '';
+    }
+    // Images are static resources, they don't need to be connected as stream inputs
+    if (input.type === 'image') {
+      input.status = 'connected';
+      this.updateStoreWithState();
       return '';
     }
     input.status = 'pending';
@@ -364,8 +503,18 @@ export class RoomState {
     this.updateStoreWithState();
   }
 
-  public updateLayout(layout: Layout) {
+  public async updateLayout(layout: Layout) {
     this.layout = layout;
+    // When switching to wrapped layout, remove wrapped-static image inputs and add wrapped MP4s
+    if (layout === 'wrapped') {
+      await this.removeWrappedStaticInputs();
+      void this.ensureWrappedMp4Inputs();
+    }
+    // When switching to wrapped-static layout, remove wrapped MP4 inputs and add wrapped images
+    if (layout === 'wrapped-static') {
+      await this.removeWrappedMp4Inputs();
+      void this.ensureWrappedImageInputs();
+    }
     this.updateStoreWithState();
   }
 
@@ -400,6 +549,7 @@ export class RoomState {
         showTitle: input.showTitle,
         volume: input.volume,
         shaders: input.shaders,
+        imageId: input.type === 'image' ? input.imageId : undefined,
       }));
     this.output.store.getState().updateState(inputs, this.layout);
   }
@@ -411,6 +561,120 @@ export class RoomState {
     }
     return input;
   }
+  // Remove all wrapped-static image inputs
+  private async removeWrappedStaticInputs(): Promise<void> {
+    const inputsToRemove = this.inputs.filter(
+      input => input.type === 'image' && input.imageId?.startsWith('wrapped::')
+    );
+    for (const input of inputsToRemove) {
+      await this.removeInput(input.inputId);
+    }
+  }
+
+  // Remove all wrapped MP4 inputs
+  private async removeWrappedMp4Inputs(): Promise<void> {
+    const inputsToRemove = this.inputs.filter(
+      input => input.type === 'local-mp4' && input.inputId.includes('::local::wrapped::')
+    );
+    for (const input of inputsToRemove) {
+      await this.removeInput(input.inputId);
+    }
+  }
+
+  // Add every MP4 from wrapped/ as an input (if not present).
+  private async ensureWrappedMp4Inputs(): Promise<void> {
+    const wrappedDir = path.join(process.cwd(), 'wrapped');
+    let entries: string[] = [];
+    try {
+      entries = await fs.readdir(wrappedDir);
+    } catch {
+      return;
+    }
+    // Keep deterministic order
+    entries.sort((a, b) => a.localeCompare(b, 'en'));
+    const mp4s = entries.filter(e => e.toLowerCase().endsWith('.mp4'));
+    
+    // Remove placeholder if we're adding inputs
+    if (mp4s.length > 0) {
+      await this.removePlaceholder();
+    }
+    
+    for (const fileName of mp4s) {
+      const absPath = path.join(wrappedDir, fileName);
+      const baseName = fileName.replace(/\.mp4$/i, '');
+      const inputId = `${this.idPrefix}::local::wrapped::${baseName}`;
+      if (this.inputs.find(inp => inp.inputId === inputId)) {
+        continue;
+      }
+      this.inputs.push({
+        inputId,
+        type: 'local-mp4',
+        status: 'disconnected',
+        showTitle: false,
+        shaders: [],
+        metadata: {
+          title: `[MP4] ${formatMp4Name(fileName)}`,
+          description: '[Wrapped MP4]',
+        },
+        mp4FilePath: absPath,
+        volume: 0,
+      });
+      // Connect the input
+      void this.connectInput(inputId);
+    }
+  }
+
+  // Add every image from wrapped/ as an input (if not present). Registers images on the fly.
+  private async ensureWrappedImageInputs(): Promise<void> {
+    const wrappedDir = path.join(process.cwd(), 'wrapped');
+    let entries: string[] = [];
+    try {
+      entries = await fs.readdir(wrappedDir);
+    } catch {
+      return;
+    }
+    // Keep deterministic order
+    entries.sort((a, b) => a.localeCompare(b, 'en'));
+    const exts = ['.jpg', '.jpeg', '.png', '.gif', '.svg'];
+    const images = entries.filter(e => exts.some(ext => e.toLowerCase().endsWith(ext)));
+    
+    // Remove placeholder if we're adding inputs
+    if (images.length > 0) {
+      await this.removePlaceholder();
+    }
+    
+    for (const fileName of images) {
+      const lower = fileName.toLowerCase();
+      const ext = exts.find(x => lower.endsWith(x))!;
+      const absPath = path.join(wrappedDir, fileName);
+      const baseName = fileName.replace(/\.(jpg|jpeg|png|gif|svg)$/i, '');
+      const imageId = `wrapped::${baseName}`;
+      const inputId = `${this.idPrefix}::image::${baseName}`;
+      // register image resource
+      const assetType = ext === '.png' ? 'png' : ext === '.gif' ? 'gif' : ext === '.svg' ? 'svg' : 'jpeg';
+      try {
+        await SmelterInstance.registerImage(imageId, { serverPath: absPath, assetType: assetType as any });
+      } catch (e) {
+        // ignore if already registered
+      }
+      if (this.inputs.find(inp => inp.inputId === inputId)) {
+        continue;
+      }
+      this.inputs.push({
+        inputId,
+        type: 'image',
+        status: 'connected',
+        showTitle: false,
+        shaders: [],
+        metadata: {
+          title: formatImageName(fileName),
+          description: '',
+        },
+        volume: 0,
+        imageId,
+      });
+    }
+  }
 }
 
 function registerOptionsFromInput(input: RoomInputState): RegisterSmelterInputOptions {
@@ -420,6 +684,10 @@ function registerOptionsFromInput(input: RoomInputState): RegisterSmelterInputOp
     return { type: 'hls', url: input.hlsUrl };
   } else if (input.type === 'whip') {
     return { type: 'whip', url: input.whipUrl };
+  } else if (input.type === 'image') {
+    // Images are static resources, they don't need to be registered as inputs
+    // They are already registered via registerImage and used directly in layouts
+    throw Error('Images cannot be connected as stream inputs');
   } else {
     throw Error('Unknown type');
   }
@@ -435,6 +703,14 @@ function inputIdForKickInput(idPrefix: string, kickChannelId: string): string {
 
 function formatMp4Name(fileName: string): string {
   const fileNameWithoutExt = fileName.replace(/\.mp4$/i, '');
+  return fileNameWithoutExt
+    .split(/[_\- ]+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function formatImageName(fileName: string): string {
+  const fileNameWithoutExt = fileName.replace(/\.(jpg|jpeg|png|gif|svg)$/i, '');
   return fileNameWithoutExt
     .split(/[_\- ]+/)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))

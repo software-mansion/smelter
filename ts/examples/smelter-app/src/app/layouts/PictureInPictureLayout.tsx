@@ -55,7 +55,7 @@ export function PictureInPictureLayout() {
         const intervalMs = 10;
         const step = (pxPerSec * intervalMs) / 1000;
         const resetRight = 2560;
-        const minLeft = -2120;
+        const minLeft = -3120;
         marqueeId = setInterval(() => {
           if (!mounted) {
             return;
@@ -134,67 +134,89 @@ export function PictureInPictureLayout() {
           verticalAlign: 'top',
           width: 2560,
           height: 450,
-          top: 1000,
+          top: 960,
           left: 0,
         }}>
         <NewsStripDecorated
           resolution={{ width: 2560, height: 450 }}
-          opacity={0.8}
+          opacity={1}
           amplitudePx={waveAmpPx}
           wavelengthPx={800}
           speed={waveSpeed}
           phase={0}
           removeColorTolerance={0.4}>
           <View style={{ width: 2560, height: 450, direction: 'column' }}>
-            {
-              <Rescaler style={{ rescaleMode: 'fill', width: 2560, height: 450 }}>
-                <Image imageId="news_strip" />
-              </Rescaler>
-            }
-
+            {/* left logo box */}
             <View
               style={{
-                width: 2560,
-                height: 80,
+                width: 240,
+                height: 72,
+                top: 114,
+                left: 0,
+                direction: 'column',
+                overflow: 'hidden',
+                backgroundColor: '#F24664',
+              }}>
+                <Text
+                  style={{
+                    fontSize: 40,
+                    lineHeight: 72,
+                    color: '#000000',
+                    fontFamily: 'Poppins',
+                    fontWeight: 'bold',
+                    align: 'center',
+                    width:240,
+                    height:72,
+                  }}>
+                    LIVE
+                  </Text>
+                </View>
+            <View
+              style={{
+                width: 240,
+                height: 192,
                 top: Math.round((450 - 80) / 2),
                 left: 0,
                 direction: 'column',
-                overflow: 'visible',
+                overflow: 'hidden',
+                backgroundColor: '#ffffff',
+              }}>
+              <Rescaler style={{ rescaleMode: 'fill', width: 150, height: 72, top: 56, left: 50 }}>
+                <Image imageId="smelter_logo" />
+              </Rescaler>
+            </View>
+            <View
+              style={{
+                width: 2320,
+                height: 192,
+                top: Math.round((450 - 80) / 2),
+                left: 240,
+                direction: 'column',
+                overflow: 'hidden',
+                backgroundColor: '#342956',
               }}>
               <View
                 style={{
                   direction: 'column',
-                  height: 80,
+                  height: 192,
+                  width: 3560,
+                  overflow: 'visible',
                   padding: 10,
-                  top: 0,
+                  top: 48,
                   left: Math.round(marqueeLeft),
                 }}>
-                <Shader
-                  shaderId="soft-shadow"
-                  resolution={{ width: 1920, height: 80 }}
-                  shaderParam={{
-                    type: 'struct',
-                    value: [
-                      { type: 'f32', fieldName: 'shadow_r', value: 0 },
-                      { type: 'f32', fieldName: 'shadow_g', value: 0 },
-                      { type: 'f32', fieldName: 'shadow_b', value: 0 },
-                      { type: 'f32', fieldName: 'opacity', value: 0.6 },
-                      { type: 'f32', fieldName: 'offset_x_px', value: -12 },
-                      { type: 'f32', fieldName: 'offset_y_px', value: -12 },
-                      { type: 'f32', fieldName: 'blur_px', value: 6 },
-                      { type: 'f32', fieldName: 'anim_amp_px', value: 1.5 },
-                      { type: 'f32', fieldName: 'anim_speed', value: 2 },
-                    ],
-                  }}>
+
                   <Text
                     style={{
-                      fontSize: 80,
-                      color: '#7ecbff',
-                      fontFamily: 'Roboto Sans',
+                      fontSize: 90,
+                      width: 3560,
+                      color: '#ffffff',
+                      fontFamily: 'Poppins',
+                      fontWeight: 'semi_bold',
+
                     }}>
-                    This video is composing multiple live streams in real-time by Smelter.{' '}
+                    { 'This video is composing multiple live streams in real time using smelter.'.toUpperCase() }
                   </Text>
-                </Shader>
               </View>
             </View>
           </View>

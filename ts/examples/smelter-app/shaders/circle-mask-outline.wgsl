@@ -24,8 +24,18 @@ struct ShaderOptions {
     outline_hue: f32,
     // Scale of the base circle and its content (uniform scale, >0)
     circle_scale: f32,
+    // Horizontal offset of the base circle center in pixels (applied after scaling)
+    circle_offset_x_px: f32,
     // Vertical offset of the base circle center in pixels (applied after scaling)
     circle_offset_y_px: f32,
+    // Free oscillation amplitude in X (pixels)
+    wobble_x_amp_px: f32,
+    // Free oscillation frequency in X (Hz)
+    wobble_x_freq: f32,
+    // Free oscillation amplitude in Y (pixels)
+    wobble_y_amp_px: f32,
+    // Free oscillation frequency in Y (Hz)
+    wobble_y_freq: f32,
     // Enable trail rings (0.0 disabled, >0 enabled)
     trail_enable: f32,
     // Seconds between spawns (>0 for visible effect)
@@ -85,37 +95,69 @@ fn draw_ring(distance_s: f32, radius: f32, width: f32) -> f32 {
     return 0.0;
 }
 
-@fragment
-fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    if (base_params.texture_count != 1u) {
-        return vec4(0.0, 0.0, 0.0, 0.0);
+// ---------------------- Helpers: geometry and space conversions ----------------------
+
+fn compute_min_dim(res: vec2<f32>) -> f32 {
+    return min(res.x, res.y);
+}
+
+fn to_scaled_space(uv: vec2<f32>, center: vec2<f32>, res: vec2<f32>) -> vec2<f32> {
+    let min_dim = compute_min_dim(res);
+    let scale = res / vec2<f32>(min_dim, min_dim);
+    return (uv - center) * scale;
+}
+
+fn pixel_offset_to_s_space(res: vec2<f32>, offset_px: vec2<f32>) -> vec2<f32> {
+    let min_dim = compute_min_dim(res);
+    return offset_px / vec2<f32>(min_dim, min_dim);
+}
+
+fn wobble_delta_s(res: vec2<f32>, time: f32) -> vec2<f32> {
+    let min_dim = compute_min_dim(res);
+    let wobble_x = (shader_options.wobble_x_amp_px / min_dim) * sin(6.28318530718 * shader_options.wobble_x_freq * time);
+    let wobble_y = (shader_options.wobble_y_amp_px / min_dim) * sin(6.28318530718 * shader_options.wobble_y_freq * time);
+    return vec2<f32>(wobble_x, wobble_y);
+}
+
+fn shifted_s(uv: vec2<f32>, center: vec2<f32>, res: vec2<f32>, time: f32) -> vec2<f32> {
+    let s = to_scaled_space(uv, center, res);
+    let offset_s = pixel_offset_to_s_space(res, vec2<f32>(shader_options.circle_offset_x_px, shader_options.circle_offset_y_px));
+    let wobble_s = wobble_delta_s(res, time);
+    return s - (offset_s + wobble_s);
+}
+
+// ---------------------- Helpers: circle metrics and sampling ----------------------
+
+fn base_radius() -> f32 {
+    let cd = clamp(shader_options.circle_diameter, 0.0, 1.0);
+    let circle_scale = max(shader_options.circle_scale, 0.001);
+    return 0.5 * cd * circle_scale;
+}
+
+fn sample_inside_circle(uv: vec2<f32>, center: vec2<f32>, res: vec2<f32>, time: f32) -> vec4<f32> {
+    // Convert the pixel offsets (including wobble) back to UV space
+    let delta_uv_x = (shader_options.circle_offset_x_px / res.x)
+        + (shader_options.wobble_x_amp_px / res.x) * sin(6.28318530718 * shader_options.wobble_x_freq * time);
+    let delta_uv_y = (shader_options.circle_offset_y_px / res.y)
+        + (shader_options.wobble_y_amp_px / res.y) * sin(6.28318530718 * shader_options.wobble_y_freq * time);
+    let uv_scaled = center + (uv - center - vec2<f32>(delta_uv_x, delta_uv_y)) / max(shader_options.circle_scale, 0.001);
+    return textureSample(textures[0], sampler_, uv_scaled);
+}
+
+// ---------------------- Helpers: trail rings and background ----------------------
+
+fn accumulate_trail_rings(
+    s_shifted: vec2<f32>,
+    radius: f32,
+    outline_w: f32,
+    time: f32,
+    outline_col: vec3<f32>
+) -> vec4<f32> {
+    var bg_color = vec4<f32>(0.0);
+    if (shader_options.trail_enable <= 0.0) {
+        return bg_color;
     }
 
-    let uv = input.tex_coords;
-    let res = vec2<f32>(f32(base_params.output_resolution.x), f32(base_params.output_resolution.y));
-    let min_dim = min(res.x, res.y);
-
-    // Scale UV differences so distance is computed in "min dimension" units -> circles remain circles.
-    let center = vec2<f32>(0.5, 0.5);
-    let scale = res / vec2<f32>(min_dim, min_dim);
-    // Convert to "min-dim" space and apply vertical offset (pixels -> s-units)
-    let s = (uv - center) * scale;
-    let offset_y_px = shader_options.circle_offset_y_px;
-    let delta_s_y = offset_y_px / min_dim;
-    let s_shifted = s - vec2<f32>(0.0, delta_s_y);
-    let d = length(s_shifted);
-
-    let base_radius = 0.5 * clamp(shader_options.circle_diameter, 0.0, 1.0);
-    let circle_scale = max(shader_options.circle_scale, 0.001);
-    let radius = base_radius * circle_scale;
-    let outline_w = clamp(shader_options.outline_width, 0.0, 1.0);
-    let outline_col = hue_to_rgb(shader_options.outline_hue);
-
-    // First, background composed of animated trail rings (they will be "under" the base circle)
-    var bg_color = vec4<f32>(0.0);
-
-    // Animated trail rings (same color as outline), moving upwards and shrinking.
-    if (shader_options.trail_enable > 0.0) {
         let spawn_interval = max(shader_options.trail_spawn_interval, 0.001);
         let speed = max(shader_options.trail_speed, 0.0);
         let shrink = max(shader_options.trail_shrink_speed, 0.0);
@@ -123,24 +165,21 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         let rings = i32(floor(rings_f32 + 0.5));
         let max_alpha = clamp(shader_options.trail_opacity, 0.0, 1.0);
 
-        // Use shifted center for rings so they spawn at the base circle position
-        let s = s_shifted;
+    if (rings <= 0 || shrink <= 0.0) {
+        return bg_color;
+    }
 
-        if (rings > 0 && shrink > 0.0) {
-            let t = base_params.time;
-            // Base age within the current interval
-            let age0 = t - floor(t / spawn_interval) * spawn_interval; // t % spawn_interval
+        let s = s_shifted;
+    let age0 = time - floor(time / spawn_interval) * spawn_interval; // t % spawn_interval
             let life_time = radius / shrink;
 
-            // Accumulate alpha for rings; simple "over" compositing onto out_color
             for (var i = 0; i < rings; i = i + 1) {
                 let age = age0 + f32(i) * spawn_interval;
                 if (age > life_time) {
                     continue;
                 }
-
                 let r_i = max(radius - shrink * age, 0.0);
-                // Spawn at the base circle position (age=0 => offset=0), then move upward with slight horizontal wobble.
+        // Horizontal wobble for ring centers as they travel upward
                 let x_amp = max(shader_options.trail_x_amplitude, 0.0);
                 let x_freq = max(shader_options.trail_x_frequency, 0.0);
                 let x_off = x_amp * sin(6.28318530718 * x_freq * age);
@@ -157,19 +196,40 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                     bg_color = ring_col + bg_color * (1.0 - ring_col.a);
                 }
             }
-        }
+    return bg_color;
+}
+
+// ---------------------- Main fragment routine ----------------------
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    if (base_params.texture_count != 1u) {
+        return vec4(0.0, 0.0, 0.0, 0.0);
     }
+
+    let uv = input.tex_coords;
+    let res = vec2<f32>(f32(base_params.output_resolution.x), f32(base_params.output_resolution.y));
+    let min_dim = min(res.x, res.y);
+
+    // Scale UV differences so distance is computed in "min dimension" units -> circles remain circles.
+    let center = vec2<f32>(0.5, 0.5);
+    let t = base_params.time;
+    let s_shifted = shifted_s(uv, center, res, t);
+    let d = length(s_shifted);
+
+    let radius = base_radius();
+    let outline_w = clamp(shader_options.outline_width, 0.0, 1.0);
+    let outline_col = hue_to_rgb(shader_options.outline_hue);
+
+    // First, background composed of animated trail rings (they will be "under" the base circle)
+    var bg_color = accumulate_trail_rings(s_shifted, radius, outline_w, t, outline_col);
 
     // Now draw the base circle and outline over the background (occluding rings beneath)
     var out_color = bg_color;
 
     // Inside circle: sample input, scaled together with the circle and re-centered by the same Y offset
     if (d < radius) {
-        // Convert the s-space Y offset back to UV space: delta_uv_y = offset_px / res.y
-        let delta_uv_y = offset_y_px / res.y;
-        let uv_scaled = center + (uv - center - vec2<f32>(0.0, delta_uv_y)) / circle_scale;
-        let c = textureSample(textures[0], sampler_, uv_scaled);
-        out_color = c;
+        out_color = sample_inside_circle(uv, center, res, t);
     }
 
     // Outline over everything beneath

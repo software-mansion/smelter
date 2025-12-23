@@ -10,25 +10,13 @@ export type InputConfig = {
   description: string;
   showTitle?: boolean;
   shaders: ShaderConfig[];
+  imageId?: string;
   replaceWith?: InputConfig;
 };
 
-export const LayoutValues = [
-  'grid',
-  'primary-on-left',
-  'primary-on-top',
-  'picture-in-picture',
-  'multiple-pictures',
-  'transition',
-] as const;
+export const Layouts = ['grid', 'primary-on-left', 'primary-on-top', 'picture-in-picture', 'wrapped', 'wrapped-static', 'transition'] as const;
 
-export type Layout =
-  | 'grid'
-  | 'primary-on-left'
-  | 'primary-on-top'
-  | 'picture-in-picture'
-  | 'multiple-pictures'
-  | 'transition';
+export type Layout = 'grid' | 'primary-on-left' | 'primary-on-top' | 'picture-in-picture' | 'wrapped' | 'wrapped-static' | 'transition';
 
 export type RoomStore = {
   inputs: InputConfig[];
