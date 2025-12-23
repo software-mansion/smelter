@@ -63,7 +63,12 @@ function Image(props: ImageProps) {
         ? { url: props.source }
         : { serverPath: props.source };
     const extension = props.source?.split('.').pop();
-    const assetType = extension && isValidImageType(extension) ? extension : undefined;
+    const assetType =
+      extension === 'jpg'
+        ? 'jpeg'
+        : extension && isValidImageType(extension)
+          ? extension
+          : undefined;
 
     let registerPromise: Promise<any>;
 
