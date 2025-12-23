@@ -45,7 +45,7 @@ impl From<VideoCodec> for u8 {
 
 impl VideoTag {
     pub(super) fn parse(data: Bytes) -> Result<Self, ParseError> {
-        if data.len() < 1 {
+        if data.is_empty() {
             return Err(ParseError::NotEnoughData);
         }
 
