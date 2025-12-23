@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use thiserror::Error;
 
-use crate::{AudioChannels, AudioCodec, AudioTag, ParseError, tag::PacketType};
+use crate::{AudioChannels, AudioCodec, AudioTag, parser::error::ParseError, tag::PacketType};
 
 impl TryFrom<u8> for AudioCodec {
     type Error = ParseError;

@@ -2,7 +2,7 @@ use std::mem;
 
 use bytes::Bytes;
 
-use crate::{AudioTag, ParseError, VideoTag, tag::PacketType};
+use crate::{AudioTag, VideoTag, parser::error::ParseError, tag::PacketType};
 
 pub mod audio;
 pub mod error;

@@ -2,7 +2,7 @@ use bytes::Bytes;
 
 use crate::tag::PacketType;
 
-/// Struct representing flv `VIDEODATA`.
+/// Struct representing flv VIDEODATA.
 #[derive(Debug, Clone)]
 pub struct VideoTag {
     pub packet_type: PacketType,

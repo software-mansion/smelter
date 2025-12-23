@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{AudioTagParseError, VideoTagParseError};
+use crate::parser::{audio::AudioTagParseError, video::VideoTagParseError};
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum ParseError {
