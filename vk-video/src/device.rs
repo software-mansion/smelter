@@ -26,7 +26,8 @@ use crate::{
 pub(crate) mod caps;
 pub(crate) mod queues;
 
-pub(crate) const REQUIRED_EXTENSIONS: &[&CStr] = &[vk::KHR_VIDEO_QUEUE_NAME];
+pub(crate) const REQUIRED_EXTENSIONS: &[&CStr] =
+    &[vk::KHR_VIDEO_QUEUE_NAME, vk::KHR_VIDEO_MAINTENANCE1_NAME];
 
 pub(crate) const DECODE_EXTENSIONS: &[&CStr] = &[
     vk::KHR_VIDEO_DECODE_QUEUE_NAME,
@@ -188,6 +189,8 @@ impl VulkanDevice {
 
         let mut vk_synch_2_feature =
             vk::PhysicalDeviceSynchronization2Features::default().synchronization2(true);
+        let mut vk_video_maintenance1_feature =
+            vk::PhysicalDeviceVideoMaintenance1FeaturesKHR::default().video_maintenance1(true);
 
         let device_create_info = vk::DeviceCreateInfo::default()
             .queue_create_infos(&queue_create_infos)
@@ -195,7 +198,8 @@ impl VulkanDevice {
 
         let device_create_info = wgpu_physical_device_features
             .add_to_device_create(device_create_info)
-            .push_next(&mut vk_synch_2_feature);
+            .push_next(&mut vk_synch_2_feature)
+            .push_next(&mut vk_video_maintenance1_feature);
 
         let device = unsafe {
             instance
@@ -445,7 +449,7 @@ impl VulkanDevice {
                 .clone()
                 .ok_or(VulkanEncoderError::VulkanEncoderUnsupported)?,
         };
-        let encoder = VulkanEncoder::new_with_converter(Arc::new(encoding_device), parameters)?;
+        let encoder = VulkanEncoder::new(Arc::new(encoding_device), parameters)?;
         Ok(WgpuTexturesEncoder {
             vulkan_encoder: encoder,
         })
