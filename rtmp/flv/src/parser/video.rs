@@ -45,7 +45,7 @@ impl From<VideoCodec> for u8 {
 
 impl VideoTag {
     pub(super) fn parse(data: Bytes) -> Result<Self, ParseError> {
-        if data.len() < 2 {
+        if data.len() < 1 {
             return Err(ParseError::NotEnoughData);
         }
 
@@ -70,7 +70,7 @@ impl VideoTag {
     }
 
     fn parse_h264(mut data: Bytes, frame_type: FrameType) -> Result<Self, ParseError> {
-        if data.len() < 6 {
+        if data.len() < 5 {
             return Err(ParseError::NotEnoughData);
         }
         let avc_packet_type = data[1];
@@ -87,7 +87,7 @@ impl VideoTag {
             }
         };
 
-        let video_data = data.split_to(5);
+        let video_data = data.split_off(5);
         Ok(Self {
             packet_type,
             codec: VideoCodec::H264,

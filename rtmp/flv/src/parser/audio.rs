@@ -63,7 +63,7 @@ pub enum AudioTagParseError {
 impl AudioTag {
     // Currently only AAC audio codec is supported
     pub(super) fn parse(data: Bytes) -> Result<Self, ParseError> {
-        if data.len() < 2 {
+        if data.len() < 1 {
             return Err(ParseError::NotEnoughData);
         }
 
@@ -105,7 +105,7 @@ impl AudioTag {
         sound_rate: u32,
         channels: AudioChannels,
     ) -> Result<Self, ParseError> {
-        if data.len() < 3 {
+        if data.len() < 2 {
             return Err(ParseError::NotEnoughData);
         }
 
@@ -121,7 +121,7 @@ impl AudioTag {
             }
         };
 
-        let audio_data = data.split_to(2);
+        let audio_data = data.split_off(2);
         Ok(Self {
             packet_type,
             codec: AudioCodec::Aac,
