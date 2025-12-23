@@ -26,7 +26,8 @@ use crate::{
 pub(crate) mod caps;
 pub(crate) mod queues;
 
-pub(crate) const REQUIRED_EXTENSIONS: &[&CStr] = &[vk::KHR_VIDEO_QUEUE_NAME];
+pub(crate) const REQUIRED_EXTENSIONS: &[&CStr] =
+    &[vk::KHR_VIDEO_QUEUE_NAME, vk::KHR_VIDEO_MAINTENANCE1_NAME];
 
 pub(crate) const DECODE_EXTENSIONS: &[&CStr] = &[
     vk::KHR_VIDEO_DECODE_QUEUE_NAME,

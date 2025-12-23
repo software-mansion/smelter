@@ -59,7 +59,7 @@ use crate::parser::{
     decoder_instructions::compile_to_decoder_instructions, h264::H264Parser,
     reference_manager::ReferenceContext,
 };
-use crate::vulkan_encoder::VulkanEncoder;
+use crate::vulkan_encoder::{NV12Texture, VulkanEncoder};
 use crate::wrappers::ImageKey;
 
 #[derive(Debug, thiserror::Error)]
@@ -332,7 +332,7 @@ impl WgpuTexturesEncoder {
     ///   ```
     pub unsafe fn encode(
         &mut self,
-        frame: Frame<wgpu::Texture>,
+        frame: Frame<NV12Texture>,
         force_keyframe: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         unsafe { self.vulkan_encoder.encode_texture(frame, force_keyframe) }

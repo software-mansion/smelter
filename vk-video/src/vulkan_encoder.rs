@@ -1,11 +1,13 @@
 use std::{
     collections::VecDeque,
     num::NonZeroU32,
+    ops::Deref,
     sync::{Arc, Mutex},
 };
 
 use ash::vk;
 use encode_parameter_sets::{pps, sps};
+use wgpu::hal::vulkan::Api as VkApi;
 use yuv_converter::Converter;
 
 use crate::{
@@ -264,7 +266,9 @@ struct EncodeFeedback {
 pub(crate) enum EncoderTrackerWaitState {
     InitializeEncoder,
     CopyBufferToImage,
+    // TODO: Remove
     Convert,
+    InitializeEncodeTexture,
     Encode,
 }
 
@@ -664,6 +668,7 @@ impl VulkanEncoder<'_> {
             }
         }
 
+        // TODO: Sync image access
         let mut cmd_buffer = self.tracker.command_buffer_pools.encode.begin_buffer()?;
 
         image.transition_layout_single_layer(
@@ -1031,19 +1036,11 @@ impl VulkanEncoder<'_> {
     /// - The texture has to be transitioned to [`wgpu::TextureUses::RESOURCE`] usage
     pub unsafe fn encode_texture(
         &mut self,
-        frame: Frame<wgpu::Texture>,
+        frame: Frame<NV12Texture>,
         force_idr: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        let convert_state = unsafe {
-            self.converter
-                .as_ref()
-                .unwrap()
-                .convert(frame.data, &mut self.tracker)
-        }
-        .unwrap();
-
         let is_keyframe = force_idr || self.idr_period_counter == 0;
-        let result = self.encode(convert_state.image, force_idr)?;
+        let result = self.encode(frame.data.image, force_idr)?;
 
         Ok(EncodedOutputChunk {
             data: result,
@@ -1211,5 +1208,133 @@ impl RateControl {
             RateControl::ConstantBitrate { .. } => vk::VideoEncodeRateControlModeFlagsKHR::CBR,
             RateControl::Disabled => vk::VideoEncodeRateControlModeFlagsKHR::DISABLED,
         }
+    }
+}
+
+// TODO: put it somewhere else
+#[derive(Clone)]
+pub struct NV12Texture {
+    image: Arc<Image>,
+    texture: wgpu::Texture,
+}
+
+impl Deref for NV12Texture {
+    type Target = wgpu::Texture;
+
+    fn deref(&self) -> &Self::Target {
+        &self.texture
+    }
+}
+
+impl NV12Texture {
+    pub(crate) fn new(
+        device: &EncodingDevice,
+        width: u32,
+        height: u32,
+        tracker: &mut Tracker<EncoderTrackerKind>,
+    ) -> Result<Self, VulkanEncoderError> {
+        let hal_device = unsafe { device.wgpu_device().as_hal::<VkApi>().unwrap() };
+        let extent = vk::Extent3D {
+            width,
+            height,
+            depth: 1,
+        };
+
+        let queue_indices =
+            [device.h264_encode_queue.idx, device.queues.wgpu.idx].map(|i| i as u32);
+
+        // TODO: maintenance1 remove codec specific images (and buffers?)
+        let create_info = vk::ImageCreateInfo::default()
+            .flags(
+                vk::ImageCreateFlags::MUTABLE_FORMAT
+                    | vk::ImageCreateFlags::EXTENDED_USAGE
+                    | vk::ImageCreateFlags::VIDEO_PROFILE_INDEPENDENT_KHR,
+            )
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
+            .extent(extent)
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(
+                vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    | vk::ImageUsageFlags::TRANSFER_DST
+                    | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR,
+            )
+            .sharing_mode(vk::SharingMode::CONCURRENT)
+            .queue_family_indices(&queue_indices)
+            .initial_layout(vk::ImageLayout::UNDEFINED);
+
+        let image = Image::new(
+            device.allocator.clone(),
+            &create_info,
+            tracker.image_layout_tracker.clone(),
+        )?;
+
+        // TODO: Why did YUV converter use WGPU's command encoder?
+        let mut command_buffer = tracker.command_buffer_pools.transfer.begin_buffer()?;
+        image.transition_layout_single_layer(
+            &mut command_buffer,
+            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::NONE,
+            vk::AccessFlags2::NONE..vk::AccessFlags2::NONE,
+            vk::ImageLayout::GENERAL,
+            0,
+        )?;
+
+        device.queues.transfer.submit_chain_semaphore(
+            command_buffer.end()?,
+            tracker,
+            vk::PipelineStageFlags2::NONE,
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            EncoderTrackerWaitState::InitializeEncoder,
+        )?;
+        tracker.wait(u64::MAX)?;
+
+        let image = Arc::new(image);
+        let image_clone = image.clone();
+
+        let size = wgpu::Extent3d {
+            width: width,
+            height: height,
+            depth_or_array_layers: 1,
+        };
+        let hal_texture = unsafe {
+            hal_device.texture_from_raw(
+                **image,
+                &wgpu::hal::TextureDescriptor {
+                    label: Some("vulkan encoder input texture"),
+                    size,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::NV12,
+                    usage: wgpu::TextureUses::COLOR_TARGET | wgpu::TextureUses::COPY_DST,
+                    memory_flags: wgpu::hal::MemoryFlags::empty(),
+                    view_formats: Vec::new(),
+                },
+                Some(Box::new(move || {
+                    drop(image_clone);
+                })),
+                wgpu::hal::vulkan::TextureMemory::External,
+            )
+        };
+        let texture = unsafe {
+            device.wgpu_device().create_texture_from_hal::<VkApi>(
+                hal_texture,
+                &wgpu::TextureDescriptor {
+                    label: Some("vulkan encoder input texture"),
+                    size,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::NV12,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                },
+            )
+        };
+
+        Ok(Self { image, texture })
     }
 }
