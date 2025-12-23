@@ -130,15 +130,15 @@ export function SmallInput({
         direction: 'column',
         overflow: 'visible',
       }}>
-        {  isImage ? (
-            <Rescaler style={{ rescaleMode: 'fit' }}>
-              <Image imageId={input.imageId!} />
-            </Rescaler>
-          ) : (
-            <Rescaler style={{ rescaleMode: 'fill' }}>
-              <InputStream inputId={input.inputId} volume={input.volume} />
-            </Rescaler>
-            )}
+      {isImage ? (
+        <Rescaler style={{ rescaleMode: 'fit' }}>
+          <Image imageId={input.imageId!} />
+        </Rescaler>
+      ) : (
+        <Rescaler style={{ rescaleMode: 'fill' }}>
+          <InputStream inputId={input.inputId} volume={input.volume} />
+        </Rescaler>
+      )}
       {input.showTitle !== false && (
         <View
           style={{

@@ -14,9 +14,24 @@ export type InputConfig = {
   replaceWith?: InputConfig;
 };
 
-export const Layouts = ['grid', 'primary-on-left', 'primary-on-top', 'picture-in-picture', 'wrapped', 'wrapped-static', 'transition'] as const;
+export const Layouts = [
+  'grid',
+  'primary-on-left',
+  'primary-on-top',
+  'picture-in-picture',
+  'wrapped',
+  'wrapped-static',
+  'transition',
+] as const;
 
-export type Layout = 'grid' | 'primary-on-left' | 'primary-on-top' | 'picture-in-picture' | 'wrapped' | 'wrapped-static' | 'transition';
+export type Layout =
+  | 'grid'
+  | 'primary-on-left'
+  | 'primary-on-top'
+  | 'picture-in-picture'
+  | 'wrapped'
+  | 'wrapped-static'
+  | 'transition';
 
 export type RoomStore = {
   inputs: InputConfig[];

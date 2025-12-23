@@ -1,4 +1,4 @@
-import { View, Tiles, Rescaler, Image, Text, Shader } from '@swmansion/smelter';
+import { View, Tiles, Rescaler, Image, Text } from '@swmansion/smelter';
 import React, { useContext, useEffect, useState } from 'react';
 import { useStore } from 'zustand';
 import { StoreContext } from '../store';
@@ -157,20 +157,20 @@ export function PictureInPictureLayout() {
                 overflow: 'hidden',
                 backgroundColor: '#F24664',
               }}>
-                <Text
-                  style={{
-                    fontSize: 40,
-                    lineHeight: 72,
-                    color: '#000000',
-                    fontFamily: 'Poppins',
-                    fontWeight: 'bold',
-                    align: 'center',
-                    width:240,
-                    height:72,
-                  }}>
-                    LIVE
-                  </Text>
-                </View>
+              <Text
+                style={{
+                  fontSize: 40,
+                  lineHeight: 72,
+                  color: '#000000',
+                  fontFamily: 'Poppins',
+                  fontWeight: 'bold',
+                  align: 'center',
+                  width: 240,
+                  height: 72,
+                }}>
+                LIVE
+              </Text>
+            </View>
             <View
               style={{
                 width: 240,
@@ -205,18 +205,16 @@ export function PictureInPictureLayout() {
                   top: 48,
                   left: Math.round(marqueeLeft),
                 }}>
-
-                  <Text
-                    style={{
-                      fontSize: 90,
-                      width: 3560,
-                      color: '#ffffff',
-                      fontFamily: 'Poppins',
-                      fontWeight: 'semi_bold',
-
-                    }}>
-                    { 'This video is composing multiple live streams in real time using smelter.'.toUpperCase() }
-                  </Text>
+                <Text
+                  style={{
+                    fontSize: 90,
+                    width: 3560,
+                    color: '#ffffff',
+                    fontFamily: 'Poppins',
+                    fontWeight: 'semi_bold',
+                  }}>
+                  {'This video is composing multiple live streams in real time using smelter.'.toUpperCase()}
+                </Text>
               </View>
             </View>
           </View>

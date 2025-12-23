@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+import { pathExists, readdir } from 'fs-extra';
 import path from 'node:path';
 import { SmelterInstance, type RegisterSmelterInputOptions, type SmelterOutput } from '../smelter';
 import { hlsUrlForKickChannel, hlsUrlForTwitchChannel } from '../streamlink';
@@ -113,7 +113,7 @@ export class RoomState {
         const lowerFile = file.toLowerCase();
         return !lowerFile.startsWith('logo_') && !lowerFile.startsWith('wrapped_');
       });
-      
+
       if (eligibleMp4Files.length > 0) {
         const randomIndex = Math.floor(Math.random() * eligibleMp4Files.length);
         for (let i = 0; i < 2; i++) {
@@ -136,7 +136,7 @@ export class RoomState {
         }
       }
     }
-    
+
     // Ensure placeholder is added if no inputs exist
     await this.ensurePlaceholder();
   }
@@ -178,14 +178,17 @@ export class RoomState {
     const picturesDir = path.join(process.cwd(), 'pictures');
     const imagePath = path.join(picturesDir, PLACEHOLDER_LOGO_FILE);
 
-    if (await fs.pathExists(imagePath)) {
+    if (await pathExists(imagePath)) {
       const imageId = `placeholder::smelter-logo`;
       const assetType = 'png';
 
       // Register image resource
       try {
-        await SmelterInstance.registerImage(imageId, { serverPath: imagePath, assetType: assetType as any });
-      } catch (e) {
+        await SmelterInstance.registerImage(imageId, {
+          serverPath: imagePath,
+          assetType: assetType as any,
+        });
+      } catch {
         // ignore if already registered
       }
 
@@ -239,7 +242,7 @@ export class RoomState {
   public async addNewInput(opts: RegisterInputOptions) {
     // Remove placeholder if it exists
     await this.removePlaceholder();
-    
+
     if (opts.type === 'whip') {
       const inputId = await this.addNewWhipInput(opts.username);
       return inputId;
@@ -313,7 +316,7 @@ export class RoomState {
       let mp4Name = opts.source.fileName;
       const inputId = `${this.idPrefix}::local::sample_streamer::${Date.now()}`;
 
-      if (await fs.pathExists(mp4Path)) {
+      if (await pathExists(mp4Path)) {
         this.inputs.push({
           inputId,
           type: 'local-mp4',
@@ -336,7 +339,7 @@ export class RoomState {
       const imagePath = path.join(picturesDir, opts.fileName);
       const inputId = `${this.idPrefix}::image::${Date.now()}`;
 
-      if (await fs.pathExists(imagePath)) {
+      if (await pathExists(imagePath)) {
         const lower = opts.fileName.toLowerCase();
         const exts = ['.jpg', '.jpeg', '.png', '.gif', '.svg'];
         const ext = exts.find(x => lower.endsWith(x));
@@ -345,12 +348,16 @@ export class RoomState {
         }
         const baseName = opts.fileName.replace(/\.(jpg|jpeg|png|gif|svg)$/i, '');
         const imageId = `pictures::${baseName}`;
-        const assetType = ext === '.png' ? 'png' : ext === '.gif' ? 'gif' : ext === '.svg' ? 'svg' : 'jpeg';
-        
+        const assetType =
+          ext === '.png' ? 'png' : ext === '.gif' ? 'gif' : ext === '.svg' ? 'svg' : 'jpeg';
+
         // Register image resource
         try {
-          await SmelterInstance.registerImage(imageId, { serverPath: imagePath, assetType: assetType as any });
-        } catch (e) {
+          await SmelterInstance.registerImage(imageId, {
+            serverPath: imagePath,
+            assetType: assetType as any,
+          });
+        } catch {
           // ignore if already registered
         }
 
@@ -378,16 +385,17 @@ export class RoomState {
 
   public async removeInput(inputId: string): Promise<void> {
     const input = this.getInput(inputId);
-    
+
     // Check if this is the last non-placeholder input
     const nonPlaceholderInputs = this.inputs.filter(inp => !this.isPlaceholder(inp.inputId));
-    const willBeEmpty = nonPlaceholderInputs.length === 1 && nonPlaceholderInputs[0].inputId === inputId;
-    
+    const willBeEmpty =
+      nonPlaceholderInputs.length === 1 && nonPlaceholderInputs[0].inputId === inputId;
+
     // If removing the last input, add placeholder first
     if (willBeEmpty) {
       await this.ensurePlaceholder();
     }
-    
+
     this.inputs = this.inputs.filter(input => input.inputId !== inputId);
     this.updateStoreWithState();
     if (input.type === 'twitch-channel' || input.type === 'kick-channel') {
@@ -586,19 +594,19 @@ export class RoomState {
     const wrappedDir = path.join(process.cwd(), 'wrapped');
     let entries: string[] = [];
     try {
-      entries = await fs.readdir(wrappedDir);
+      entries = await readdir(wrappedDir);
     } catch {
       return;
     }
     // Keep deterministic order
     entries.sort((a, b) => a.localeCompare(b, 'en'));
     const mp4s = entries.filter(e => e.toLowerCase().endsWith('.mp4'));
-    
+
     // Remove placeholder if we're adding inputs
     if (mp4s.length > 0) {
       await this.removePlaceholder();
     }
-    
+
     for (const fileName of mp4s) {
       const absPath = path.join(wrappedDir, fileName);
       const baseName = fileName.replace(/\.mp4$/i, '');
@@ -629,7 +637,7 @@ export class RoomState {
     const wrappedDir = path.join(process.cwd(), 'wrapped');
     let entries: string[] = [];
     try {
-      entries = await fs.readdir(wrappedDir);
+      entries = await readdir(wrappedDir);
     } catch {
       return;
     }
@@ -637,12 +645,12 @@ export class RoomState {
     entries.sort((a, b) => a.localeCompare(b, 'en'));
     const exts = ['.jpg', '.jpeg', '.png', '.gif', '.svg'];
     const images = entries.filter(e => exts.some(ext => e.toLowerCase().endsWith(ext)));
-    
+
     // Remove placeholder if we're adding inputs
     if (images.length > 0) {
       await this.removePlaceholder();
     }
-    
+
     for (const fileName of images) {
       const lower = fileName.toLowerCase();
       const ext = exts.find(x => lower.endsWith(x))!;
@@ -651,10 +659,14 @@ export class RoomState {
       const imageId = `wrapped::${baseName}`;
       const inputId = `${this.idPrefix}::image::${baseName}`;
       // register image resource
-      const assetType = ext === '.png' ? 'png' : ext === '.gif' ? 'gif' : ext === '.svg' ? 'svg' : 'jpeg';
+      const assetType =
+        ext === '.png' ? 'png' : ext === '.gif' ? 'gif' : ext === '.svg' ? 'svg' : 'jpeg';
       try {
-        await SmelterInstance.registerImage(imageId, { serverPath: absPath, assetType: assetType as any });
-      } catch (e) {
+        await SmelterInstance.registerImage(imageId, {
+          serverPath: absPath,
+          assetType: assetType as any,
+        });
+      } catch {
         // ignore if already registered
       }
       if (this.inputs.find(inp => inp.inputId === inputId)) {

@@ -18,4 +18,3 @@ class PictureSuggestionMonitor {
 }
 const pictureSuggestionsMonitor = new PictureSuggestionMonitor();
 export default pictureSuggestionsMonitor;
-

@@ -137,7 +137,7 @@ routes.post<RoomIdParams & { Body: Static<typeof UpdateRoomSchema> }>(
   '/room/:roomId',
   { schema: { body: UpdateRoomSchema } },
   async (req, res) => {
-  const { roomId } = req.params;
+    const { roomId } = req.params;
     console.log('[request] Update room', { body: req.body, roomId });
     const room = state.getRoom(roomId);
 

@@ -6,7 +6,7 @@ import App from './app/App';
 import type { RoomStore } from './app/store';
 import { createRoomStore } from './app/store';
 import { config } from './config';
-import fs from 'fs-extra';
+import { readFile } from 'fs-extra';
 import shadersController from './shaders/shaders';
 
 export type SmelterOutput = {
@@ -172,7 +172,7 @@ export class SmelterManager {
   }
 
   private async registerShaderFromFile(smelter: Smelter, shaderId: string, file: string) {
-    const source = await fs.readFile(file, { encoding: 'utf-8' });
+    const source = await readFile(file, { encoding: 'utf-8' });
 
     await smelter.registerShader(shaderId, {
       source,

@@ -14,10 +14,13 @@ function easeInOutCubic(t: number): number {
 
 function computeDesiredIds(inputs: Array<InputConfig>): string[] {
   return inputs.map(i => i.inputId);
-
 }
 
-function buildYOffsetMap(ids: string[], baseYOffset: number, stepYOffset: number): Record<string, number> {
+function buildYOffsetMap(
+  ids: string[],
+  baseYOffset: number,
+  stepYOffset: number
+): Record<string, number> {
   const out: Record<string, number> = {};
   for (let idx = 0; idx < ids.length; idx++) {
     out[ids[idx]] = baseYOffset - idx * stepYOffset;
@@ -26,7 +29,9 @@ function buildYOffsetMap(ids: string[], baseYOffset: number, stepYOffset: number
 }
 
 function xPatternOffset(index: number, stepPx: number): number {
-  if (index === 0) return 0;
+  if (index === 0) {
+    return 0;
+  }
   const magnitude = Math.ceil(index / 2) * stepPx;
   const sign = index % 2 === 1 ? -1 : 1; // 1:-x, 2:+x, 3:-2x, 4:+2x, ...
   return sign * magnitude;
@@ -40,47 +45,15 @@ function buildXOffsetMap(ids: string[], xStepPx: number): Record<string, number>
   return out;
 }
 
-function buildScaleMap(ids: string[], baseScale: number, shrinkPercent: number): Record<string, number> {
-  const out: Record<string, number> = {};
-  const factor = Math.max(0, 1 - shrinkPercent);
-  for (let idx = 0; idx < ids.length; idx++) {
-    out[ids[idx]] = baseScale * Math.pow(factor, idx);
-  }
-  return out;
-}
-
-function buildYOffsetMapFromIndices(
-  indexById: Record<string, number>,
-  baseYOffset: number,
-  stepYOffset: number
-): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const [id, idx] of Object.entries(indexById)) {
-    out[id] = baseYOffset - idx * stepYOffset;
-  }
-  return out;
-}
-
-function buildXOffsetMapFromIndices(
-  indexById: Record<string, number>,
-  xStepPx: number
-): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const [id, idx] of Object.entries(indexById)) {
-    out[id] = xPatternOffset(idx, xStepPx);
-  }
-  return out;
-}
-
-function buildScaleMapFromIndices(
-  indexById: Record<string, number>,
+function buildScaleMap(
+  ids: string[],
   baseScale: number,
   shrinkPercent: number
 ): Record<string, number> {
   const out: Record<string, number> = {};
   const factor = Math.max(0, 1 - shrinkPercent);
-  for (const [id, idx] of Object.entries(indexById)) {
-    out[id] = baseScale * Math.pow(factor, idx);
+  for (let idx = 0; idx < ids.length; idx++) {
+    out[ids[idx]] = baseScale * Math.pow(factor, idx);
   }
   return out;
 }
@@ -130,48 +103,10 @@ function buildWobbleMaps(
 }
 
 function wrapHue(hue: number): number {
-  while (hue > 1) hue -= 1;
+  while (hue > 1) {
+    hue -= 1;
+  }
   return hue;
-}
-
-function assignMissingHues(
-  prev: Record<string, number>,
-  ids: string[],
-  baseHue: number,
-  hueStep: number
-): Record<string, number> {
-  const next = { ...prev };
-  for (let idx = 0; idx < ids.length; idx++) {
-    const id = ids[idx];
-    if (!(id in next)) {
-      next[id] = wrapHue(baseHue + idx * hueStep);
-    }
-  }
-  // drop removed ids
-  for (const id of Object.keys(next)) {
-    if (!ids.includes(id)) {
-      delete next[id];
-    }
-  }
-  return next;
-}
-
-function ensureStateMatchesTargets(
-  prev: Record<string, number>,
-  targets: Record<string, number>
-): Record<string, number> {
-  const next = { ...prev };
-  for (const id of Object.keys(targets)) {
-    if (!(id in next)) {
-      next[id] = targets[id];
-    }
-  }
-  for (const id of Object.keys(next)) {
-    if (!(id in targets)) {
-      delete next[id];
-    }
-  }
-  return next;
 }
 
 export function WrappedLayout() {
@@ -181,12 +116,10 @@ export function WrappedLayout() {
     return <View />;
   }
 
-  // Stable render order: do not actually reorder elements, animate Y offsets instead
-  const displayOrderRef = useRef<string[]>([]);
   // Compute desired ids based only on inputs to avoid unstable deps
   const desiredIds = useMemo(() => computeDesiredIds(inputs), [inputs]);
   const inputById = useMemo(() => {
-    const map: Record<string, typeof inputs[number]> = {};
+    const map: Record<string, (typeof inputs)[number]> = {};
     for (const i of inputs) {
       map[i.inputId] = i;
     }
@@ -213,7 +146,6 @@ export function WrappedLayout() {
     []
   );
 
-
   // Animate per-input Y offsets to their desired positions (based on desired order)
   const baseYOffset = 360;
   const stepYOffset = 100;
@@ -229,7 +161,7 @@ export function WrappedLayout() {
   const baseWobbleYFreq = 0.5;
 
   // Persistent arrival index per input: used to compute offsets/scale based on count at join time
-  const [arrivalIndexById, setArrivalIndexById] = useState<Record<string, number>>({});
+  const [, setArrivalIndexById] = useState<Record<string, number>>({});
   const nextArrivalIndexRef = useRef<number>(0);
   useEffect(() => {
     setArrivalIndexById(prev => {
@@ -268,12 +200,16 @@ export function WrappedLayout() {
     () => buildScaleMap(desiredIds, baseCircleScale, shrinkPercent),
     [desiredIds, baseCircleScale, shrinkPercent]
   );
-  const { wobbleXAmp: targetWobbleXAmpById, wobbleYAmp: targetWobbleYAmpById, wobbleXFreq: targetWobbleXFreqById, wobbleYFreq: targetWobbleYFreqById } =
-    useMemo(
-      () =>
-        buildWobbleMaps(desiredIds, baseWobbleXAmp, baseWobbleYAmp, baseWobbleXFreq, baseWobbleYFreq),
-      [desiredIds]
-    );
+  const {
+    wobbleXAmp: targetWobbleXAmpById,
+    wobbleYAmp: targetWobbleYAmpById,
+    wobbleXFreq: targetWobbleXFreqById,
+    wobbleYFreq: targetWobbleYFreqById,
+  } = useMemo(
+    () =>
+      buildWobbleMaps(desiredIds, baseWobbleXAmp, baseWobbleYAmp, baseWobbleXFreq, baseWobbleYFreq),
+    [desiredIds]
+  );
   // Persistent hue per input: assign once on first sight, keep even if order changes
   const baseOutlineHue = 0.44;
   const hueStep = 0.1;
@@ -488,77 +424,120 @@ export function WrappedLayout() {
               { type: 'f32', fieldName: 'brightness', value: 0.26 },
             ],
           }}>
-          <View style={{ width: 2560, height: 1440, backgroundColor: '#000000', direction: 'column' }} />
+          <View
+            style={{ width: 2560, height: 1440, backgroundColor: '#000000', direction: 'column' }}
+          />
         </Shader>
       </Rescaler>
-      
+
       {desiredIds.map((id, renderIdx) => {
         const input = inputById[id];
         if (!input) {
           return null;
         }
         // Prefer animated state; fallback to targets (dependent on current order)
-        const yOffset = (id in yOffsetById ? yOffsetById[id] : targetYOffsetById[id]) ?? baseYOffset - renderIdx * stepYOffset;
+        const yOffset =
+          (id in yOffsetById ? yOffsetById[id] : targetYOffsetById[id]) ??
+          baseYOffset - renderIdx * stepYOffset;
         const xOffset = (id in xOffsetById ? xOffsetById[id] : targetXOffsetById[id]) ?? 0;
-        const circleScale = (id in scaleById ? scaleById[id] : targetScaleById[id]) ?? baseCircleScale;
+        const circleScale =
+          (id in scaleById ? scaleById[id] : targetScaleById[id]) ?? baseCircleScale;
         return (
-        <Rescaler
-          key={input.inputId}
-          style={{
-            rescaleMode: 'fill',
-            horizontalAlign: 'left',
-            verticalAlign: 'top',
-            width: Math.round(2560),
-            height: Math.round(1440),
-            top: 0,
-            left: 0,
-          }}>
-          <Shader
-            shaderId="circle-mask-outline"
-            resolution={{ width: 1920, height: 1080 }}
-            shaderParam={{
-              type: 'struct',
-              value: [
-                // Global, user-adjustable defaults (non-animated)
-                { type: 'f32', fieldName: 'circle_diameter', value: shaderDefaults.circle_diameter },
-                { type: 'f32', fieldName: 'outline_width', value: shaderDefaults.outline_width },
-                { type: 'f32', fieldName: 'outline_hue', value: hueById[id] ?? 0.44 },
-                { type: 'f32', fieldName: 'circle_scale', value: circleScale },
-                { type: 'f32', fieldName: 'circle_offset_x_px', value: xOffset },
-                // Animated per-input vertical offset
-                { type: 'f32', fieldName: 'circle_offset_y_px', value: yOffset },
-                // Free oscillation (organic per input)
-                { type: 'f32', fieldName: 'wobble_x_amp_px', value: targetWobbleXAmpById[id] ?? baseWobbleXAmp },
-                { type: 'f32', fieldName: 'wobble_x_freq', value: targetWobbleXFreqById[id] ?? baseWobbleXFreq },
-                { type: 'f32', fieldName: 'wobble_y_amp_px', value: targetWobbleYAmpById[id] ?? baseWobbleYAmp },
-                { type: 'f32', fieldName: 'wobble_y_freq', value: targetWobbleYFreqById[id] ?? baseWobbleYFreq },
-                // Trail defaults
-                { type: 'f32', fieldName: 'trail_enable', value: shaderDefaults.trail_enable },
-                { type: 'f32', fieldName: 'trail_spawn_interval', value: shaderDefaults.trail_spawn_interval },
-                { type: 'f32', fieldName: 'trail_speed', value: shaderDefaults.trail_speed },
-                { type: 'f32', fieldName: 'trail_shrink_speed', value: shaderDefaults.trail_shrink_speed },
-                { type: 'f32', fieldName: 'trail_x_amplitude', value: shaderDefaults.trail_x_amplitude },
-                { type: 'f32', fieldName: 'trail_x_frequency', value: shaderDefaults.trail_x_frequency },
-                { type: 'f32', fieldName: 'trail_count_f32', value: shaderDefaults.trail_count_f32 },
-                { type: 'f32', fieldName: 'trail_opacity', value: shaderDefaults.trail_opacity },
-              ],
-            }}>
-           
-            <View
+          <Rescaler
+            key={input.inputId}
             style={{
-              direction: 'column',
-              overflow: 'visible',
+              rescaleMode: 'fill',
+              horizontalAlign: 'left',
+              verticalAlign: 'top',
+              width: Math.round(2560),
+              height: Math.round(1440),
               top: 0,
               left: 0,
-              width: 1920,
-              height: 1080,
             }}>
-               <Input input={input} />
-            <Text style={{ fontSize: 80, color: '#ffffff' }}>420</Text>
-          </View>
-          </Shader>
-    
-        </Rescaler>
+            <Shader
+              shaderId="circle-mask-outline"
+              resolution={{ width: 1920, height: 1080 }}
+              shaderParam={{
+                type: 'struct',
+                value: [
+                  // Global, user-adjustable defaults (non-animated)
+                  {
+                    type: 'f32',
+                    fieldName: 'circle_diameter',
+                    value: shaderDefaults.circle_diameter,
+                  },
+                  { type: 'f32', fieldName: 'outline_width', value: shaderDefaults.outline_width },
+                  { type: 'f32', fieldName: 'outline_hue', value: hueById[id] ?? 0.44 },
+                  { type: 'f32', fieldName: 'circle_scale', value: circleScale },
+                  { type: 'f32', fieldName: 'circle_offset_x_px', value: xOffset },
+                  // Animated per-input vertical offset
+                  { type: 'f32', fieldName: 'circle_offset_y_px', value: yOffset },
+                  // Free oscillation (organic per input)
+                  {
+                    type: 'f32',
+                    fieldName: 'wobble_x_amp_px',
+                    value: targetWobbleXAmpById[id] ?? baseWobbleXAmp,
+                  },
+                  {
+                    type: 'f32',
+                    fieldName: 'wobble_x_freq',
+                    value: targetWobbleXFreqById[id] ?? baseWobbleXFreq,
+                  },
+                  {
+                    type: 'f32',
+                    fieldName: 'wobble_y_amp_px',
+                    value: targetWobbleYAmpById[id] ?? baseWobbleYAmp,
+                  },
+                  {
+                    type: 'f32',
+                    fieldName: 'wobble_y_freq',
+                    value: targetWobbleYFreqById[id] ?? baseWobbleYFreq,
+                  },
+                  // Trail defaults
+                  { type: 'f32', fieldName: 'trail_enable', value: shaderDefaults.trail_enable },
+                  {
+                    type: 'f32',
+                    fieldName: 'trail_spawn_interval',
+                    value: shaderDefaults.trail_spawn_interval,
+                  },
+                  { type: 'f32', fieldName: 'trail_speed', value: shaderDefaults.trail_speed },
+                  {
+                    type: 'f32',
+                    fieldName: 'trail_shrink_speed',
+                    value: shaderDefaults.trail_shrink_speed,
+                  },
+                  {
+                    type: 'f32',
+                    fieldName: 'trail_x_amplitude',
+                    value: shaderDefaults.trail_x_amplitude,
+                  },
+                  {
+                    type: 'f32',
+                    fieldName: 'trail_x_frequency',
+                    value: shaderDefaults.trail_x_frequency,
+                  },
+                  {
+                    type: 'f32',
+                    fieldName: 'trail_count_f32',
+                    value: shaderDefaults.trail_count_f32,
+                  },
+                  { type: 'f32', fieldName: 'trail_opacity', value: shaderDefaults.trail_opacity },
+                ],
+              }}>
+              <View
+                style={{
+                  direction: 'column',
+                  overflow: 'visible',
+                  top: 0,
+                  left: 0,
+                  width: 1920,
+                  height: 1080,
+                }}>
+                <Input input={input} />
+                <Text style={{ fontSize: 80, color: '#ffffff' }}>420</Text>
+              </View>
+            </Shader>
+          </Rescaler>
         );
       })}
     </View>
