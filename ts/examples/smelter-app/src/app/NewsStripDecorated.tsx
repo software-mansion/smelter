@@ -56,7 +56,6 @@ export function NewsStripDecorated({
   if (!removeColorEnabled) {
     return waved;
   }
-
   return (
     <Shader
       shaderId="remove-color"

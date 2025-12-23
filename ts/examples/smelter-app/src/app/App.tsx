@@ -10,7 +10,8 @@ import {
   PrimaryOnTopLayout,
   PrimaryOnLeftLayout,
   PictureInPictureLayout,
-  MultiplePicturesLayout,
+  WrappedLayout,
+  WrappedStaticLayout,
   TransitionLayout,
 } from './layouts';
 
@@ -27,7 +28,7 @@ function OutputScene() {
   const layout = useStore(store, state => state.layout);
 
   return (
-    <View style={{ backgroundColor: '#161127', padding: 0 }}>
+    <View style={{ backgroundColor: '#000000', padding: 0 }}>
       {layout === 'grid' ? (
         <GridLayout />
       ) : layout === 'primary-on-top' ? (
@@ -36,8 +37,10 @@ function OutputScene() {
         <PrimaryOnLeftLayout />
       ) : layout === 'picture-in-picture' ? (
         <PictureInPictureLayout />
-      ) : layout === 'multiple-pictures' ? (
-        <MultiplePicturesLayout />
+      ) : layout === 'wrapped' ? (
+        <WrappedLayout />
+      ) : layout === 'wrapped-static' ? (
+        <WrappedStaticLayout />
       ) : layout === 'transition' ? (
         <TransitionLayout />
       ) : null}

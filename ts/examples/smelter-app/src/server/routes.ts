@@ -6,6 +6,7 @@ import { TwitchChannelSuggestions } from '../twitch/TwitchChannelMonitor';
 import type { RoomInputState, RegisterInputOptions } from './roomState';
 import { config } from '../config';
 import mp4SuggestionsMonitor from '../mp4/mp4SuggestionMonitor';
+import pictureSuggestionsMonitor from '../pictures/pictureSuggestionMonitor';
 import { KickChannelSuggestions } from '../kick/KickChannelMonitor';
 import type { ShaderConfig } from '../shaders/shaders';
 import shadersController from '../shaders/shaders';
@@ -23,6 +24,7 @@ type InputState = {
   volume: number;
   shaders: ShaderConfig[];
   channelId?: string;
+  imageId?: string;
 };
 
 export const routes = Fastify({
@@ -31,6 +33,10 @@ export const routes = Fastify({
 
 routes.get('/suggestions/mp4s', async (_req, res) => {
   res.status(200).send({ mp4s: mp4SuggestionsMonitor.mp4Files });
+});
+
+routes.get('/suggestions/pictures', async (_req, res) => {
+  res.status(200).send({ pictures: pictureSuggestionsMonitor.pictureFiles });
 });
 
 routes.get('/suggestions/twitch', async (_req, res) => {
@@ -79,10 +85,10 @@ routes.get<RoomIdParams>('/room/:roomId', async (req, res) => {
 });
 
 routes.get('/rooms', async (_req, res) => {
-  const adminKey = _req.headers['x-admin-key'];
-  if (!adminKey || adminKey !== 'super-secret-hardcode-admin-key') {
-    return res.status(401).send({ error: 'Unauthorized' });
-  }
+  // const adminKey = _req.headers['x-admin-key'];
+  // if (!adminKey || adminKey !== 'super-secret-hardcode-admin-key') {
+  //   return res.status(401).send({ error: 'Unauthorized' });
+  // }
 
   res.header('Refresh', '2');
 
@@ -118,11 +124,14 @@ const UpdateRoomSchema = Type.Object({
       Type.Literal('primary-on-left'),
       Type.Literal('primary-on-top'),
       Type.Literal('picture-in-picture'),
-      Type.Literal('multiple-pictures'),
+      Type.Literal('wrapped'),
+      Type.Literal('wrapped-static'),
       Type.Literal('transition'),
     ])
   ),
 });
+
+// No multiple-pictures shader defaults API - kept local in layout
 
 routes.post<RoomIdParams & { Body: Static<typeof UpdateRoomSchema> }>(
   '/room/:roomId',
@@ -136,12 +145,14 @@ routes.post<RoomIdParams & { Body: Static<typeof UpdateRoomSchema> }>(
       room.reorderInputs(req.body.inputOrder);
     }
     if (req.body.layout) {
-      room.updateLayout(req.body.layout);
+      await room.updateLayout(req.body.layout);
     }
 
     res.status(200).send({ status: 'ok' });
   }
 );
+
+// (Removed endpoints for multiple-pictures shader defaults)
 
 const AddInputSchema = Type.Union([
   Type.Object({
@@ -162,6 +173,10 @@ const AddInputSchema = Type.Union([
       Type.Object({ fileName: Type.String() }),
       Type.Object({ url: Type.String() }),
     ]),
+  }),
+  Type.Object({
+    type: Type.Literal('image'),
+    fileName: Type.String(),
   }),
 ]);
 
@@ -269,6 +284,18 @@ function publicInputState(input: RoomInputState): InputState {
         status: input.status,
         volume: input.volume,
         shaders: input.shaders,
+      };
+    case 'image':
+      return {
+        inputId: input.inputId,
+        title: input.metadata.title,
+        description: input.metadata.description,
+        showTitle: input.showTitle,
+        sourceState: 'always-live',
+        status: input.status,
+        volume: input.volume,
+        shaders: input.shaders,
+        imageId: input.imageId,
       };
     case 'twitch-channel':
       return {

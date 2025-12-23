@@ -54,16 +54,23 @@ function wrapWithShaders(
 
 export function Input({ input }: { input: InputConfig }) {
   const streams = useInputStreams();
-  const streamState = streams[input.inputId]?.videoState ?? 'finished';
+  const isImage = !!input.imageId;
+  const streamState = isImage ? 'playing' : (streams[input.inputId]?.videoState ?? 'finished');
   const resolution = { width: 1920, height: 1080 };
 
   const inputComponent = (
     <Rescaler style={resolution}>
       <View style={{ ...resolution, direction: 'column' }}>
         {streamState === 'playing' ? (
-          <Rescaler style={{ rescaleMode: 'fill' }}>
-            <InputStream inputId={input.inputId} volume={input.volume} />
-          </Rescaler>
+          isImage ? (
+            <Rescaler style={{ rescaleMode: 'fit' }}>
+              <Image imageId={input.imageId!} />
+            </Rescaler>
+          ) : (
+            <Rescaler style={{ rescaleMode: 'fill' }}>
+              <InputStream inputId={input.inputId} volume={input.volume} />
+            </Rescaler>
+          )
         ) : streamState === 'ready' ? (
           <View style={{ padding: 300 }}>
             <Rescaler style={{ rescaleMode: 'fit' }}>
@@ -114,7 +121,7 @@ export function SmallInput({
   resolution?: Resolution;
 }) {
   const activeShaders = input.shaders.filter(shader => shader.enabled);
-
+  const isImage = !!input.imageId;
   const smallInputComponent = (
     <View
       style={{
@@ -123,9 +130,15 @@ export function SmallInput({
         direction: 'column',
         overflow: 'visible',
       }}>
-      <Rescaler style={{ rescaleMode: 'fit' }}>
-        <InputStream inputId={input.inputId} volume={input.volume} />
-      </Rescaler>
+      {isImage ? (
+        <Rescaler style={{ rescaleMode: 'fit' }}>
+          <Image imageId={input.imageId!} />
+        </Rescaler>
+      ) : (
+        <Rescaler style={{ rescaleMode: 'fill' }}>
+          <InputStream inputId={input.inputId} volume={input.volume} />
+        </Rescaler>
+      )}
       {input.showTitle !== false && (
         <View
           style={{
