@@ -25,6 +25,8 @@ pub enum FfmpegLogLevel {
 }
 
 impl From<FfmpegLogLevel> for i32 {
+    // Source for numeric logger level values:
+    // https://www.ffmpeg.org/doxygen/3.0/group__lavu__log__constants.html
     fn from(value: FfmpegLogLevel) -> Self {
         use self::FfmpegLogLevel::*;
         match value {
