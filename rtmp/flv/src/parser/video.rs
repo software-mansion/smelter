@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use thiserror::Error;
 
-use crate::{FrameType, ParseError, VideoCodec, VideoTag, tag::PacketType};
+use crate::{FrameType, VideoCodec, VideoTag, parser::error::ParseError, tag::PacketType};
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum VideoTagParseError {
