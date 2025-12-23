@@ -6,10 +6,12 @@ use std::{
 
 use ash::vk;
 use encode_parameter_sets::{pps, sps};
+use vk_mem::Alloc;
+use wgpu::hal::{CommandEncoder, Device, vulkan::Api as VkApi};
 use yuv_converter::Converter;
 
 use crate::{
-    EncodedOutputChunk, Frame, RawFrameData, VulkanCommonError,
+    EncodedOutputChunk, Frame, RawFrameData, VulkanCommonError, VulkanDevice, VulkanInitError,
     device::{EncodingDevice, Rational},
     parameters::H264Profile,
     wrappers::{
@@ -1211,5 +1213,123 @@ impl RateControl {
             RateControl::ConstantBitrate { .. } => vk::VideoEncodeRateControlModeFlagsKHR::CBR,
             RateControl::Disabled => vk::VideoEncodeRateControlModeFlagsKHR::DISABLED,
         }
+    }
+}
+
+// NOTE: Problems:
+// - We need to know the current image layout
+// - We need to synchronize rendering onto this texture
+//
+// I'm not sure if we can avoid making an extra copy
+pub struct NV12EncodeTexture {}
+
+impl NV12EncodeTexture {
+    pub(crate) fn new(
+        device: &EncodingDevice,
+        width: u32,
+        height: u32,
+        profile: &H264EncodeProfileInfo,
+    ) -> Result<Self, VulkanEncoderError> {
+        let extent = vk::Extent3D {
+            width,
+            height,
+            depth: 1,
+        };
+
+        let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
+            .profiles(std::slice::from_ref(&profile.profile_info));
+
+        let queue_indices =
+            [device.h264_encode_queue.idx, device.queues.wgpu.idx].map(|i| i as u32);
+
+        let create_info = vk::ImageCreateInfo::default()
+            .flags(vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE)
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
+            .extent(extent)
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(
+                vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR,
+            )
+            .sharing_mode(vk::SharingMode::CONCURRENT)
+            .queue_family_indices(&queue_indices)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .push_next(&mut profile_list_info);
+
+        let alloc_info = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::Auto,
+            ..Default::default()
+        };
+
+        let (image, allocation) =
+            unsafe { device.allocator.create_image(&create_info, &alloc_info)? };
+
+        let barrier = vk::ImageMemoryBarrier2::default()
+            .src_stage_mask(vk::PipelineStageFlags2::NONE)
+            .dst_stage_mask(vk::PipelineStageFlags2::NONE)
+            .src_access_mask(vk::AccessFlags2::NONE)
+            .dst_access_mask(vk::AccessFlags2::NONE)
+            .old_layout(vk::ImageLayout::UNDEFINED)
+            .new_layout(
+                vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL, // TODO: Need a way of creating TRANSFER_DST layout
+            )
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(image)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            });
+
+        let mut command_encoder = unsafe {
+            let wgpu_device = device.wgpu_device().as_hal::<VkApi>().unwrap();
+            let wgpu_queue = device.wgpu_queue().as_hal::<VkApi>().unwrap();
+            wgpu_device
+                .create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
+                    label: Some("YUV converter init command encoder"),
+                    queue: &wgpu_queue,
+                })
+                .unwrap() // TODO: Handle error 
+        };
+
+        unsafe {
+            command_encoder
+                .begin_encoding(Some("YUV converter init recording"))
+                .unwrap() // TODO: Handle error
+        };
+        let command_buffer = unsafe { command_encoder.raw_handle() };
+        unsafe {
+            device.device.cmd_pipeline_barrier2(
+                command_buffer,
+                &vk::DependencyInfo::default().image_memory_barriers(&[barrier]),
+            );
+        }
+
+        let wgpu_command_buffer = unsafe {
+            command_encoder.end_encoding().unwrap() // TODO: Error
+        };
+
+        unsafe {
+            self.device.wgpu_queue().as_hal::<VkApi>().unwrap().submit(
+                &[&wgpu_command_buffer],
+                &[],
+                (&mut wgpu_fence, signal_value),
+            )?;
+        }
+
+        let image = Arc::new(image);
+
+        let texture = unsafe {
+            let wgpu_device = device.wgpu_device().as_hal::<VkApi>().unwrap();
+            let wgpu_queue = device.wgpu_queue().as_hal::<VkApi>().unwrap();
+        };
+
+        Ok(Self {})
     }
 }

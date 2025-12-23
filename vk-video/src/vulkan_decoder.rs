@@ -7,7 +7,7 @@ use session_resources::VideoSessionResources;
 use wgpu::hal::api::Vulkan as VkApi;
 
 use crate::{
-    RawFrameData,
+    RawFrameData, VulkanDevice,
     device::DecodingDevice,
     parser::{
         decoder_instructions::DecoderInstruction,
