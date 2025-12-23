@@ -3,7 +3,7 @@ use integration_tests::ffmpeg::start_ffmpeg_rtmp_receive;
 use serde::{Deserialize, Serialize, ser::SerializeStruct};
 use std::process::Child;
 
-use inquire::{Confirm, Select};
+use inquire::{Confirm, Select, Text};
 use serde_json::json;
 use strum::{Display, IntoEnumIterator};
 use tracing::error;
@@ -32,7 +32,6 @@ pub enum RtmpRegisterOptions {
 #[serde(from = "RtmpOutputOptions")]
 pub struct RtmpOutput {
     pub name: String,
-    url: String,
     port: u16,
     options: RtmpOutputOptions,
     stream_handles: Vec<Child>,
@@ -44,6 +43,7 @@ pub struct RtmpOutput {
 // remaining fields are determined during conversion
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RtmpOutputOptions {
+    url: String,
     video: Option<RtmpOutputVideoOptions>,
     audio: Option<RtmpOutputAudioOptions>,
     player: OutputPlayer,
@@ -58,18 +58,20 @@ impl Serialize for RtmpOutput {
         state.serialize_field("video", &self.options.video)?;
         state.serialize_field("audio", &self.options.audio)?;
         state.serialize_field("player", &self.options.player)?;
+        state.serialize_field("url", &self.options.url)?;
         state.end()
     }
 }
 
 impl From<RtmpOutputOptions> for RtmpOutput {
-    fn from(value: RtmpOutputOptions) -> Self {
+    fn from(mut value: RtmpOutputOptions) -> Self {
         let port = get_free_port();
-        let name = format!("rtmp_output_{port}");
-        let url = format!("rtmp://127.0.0.1:{port}");
+        let name = format!("output_rtmp_{port}");
+        if value.url.starts_with("rtmp://localhost") || value.url.starts_with("rtmp://127.") {
+            value.url = format!("rtmp://127.0.0.1:{port}");
+        }
         Self {
             name,
-            url,
             port,
             options: value,
             stream_handles: vec![],
@@ -81,7 +83,7 @@ impl RtmpOutput {
     pub fn serialize_register(&self, inputs: &[InputHandle]) -> serde_json::Value {
         json!({
             "type": "rtmp_client",
-            "url": self.url,
+            "url": self.options.url,
             "video": self.options.video.as_ref().map(|v| v.serialize_register(inputs)),
             "audio": self.options.audio.as_ref().map(|a| a.serialize_register(inputs)),
         })
@@ -103,7 +105,10 @@ impl RtmpOutput {
                     self.port
                 );
 
-                println!("Start player: {cmd}");
+                println!("Start FFmpeg player: {cmd}");
+                println!(
+                    "If custom URL was provided, then watch the stream on the platform of you choice."
+                );
 
                 loop {
                     let confirmation = Confirm::new("Is player running? [Y/n]")
@@ -138,7 +143,7 @@ impl Drop for RtmpOutput {
 
 pub struct RtmpOutputBuilder {
     name: String,
-    url: String,
+    url: Option<String>,
     port: u16,
     video: Option<RtmpOutputVideoOptions>,
     audio: Option<RtmpOutputAudioOptions>,
@@ -148,18 +153,20 @@ pub struct RtmpOutputBuilder {
 impl RtmpOutputBuilder {
     pub fn new() -> Self {
         let port = get_free_port();
+        let name = format!("output_rtmp_{port}");
         Self {
-            name: format!("output_rtmp_{port}"),
-            url: format!("rtmp://127.0.0.1:{port}"),
+            name,
+            url: None,
             port,
             video: None,
             audio: None,
-            player: OutputPlayer::Ffmpeg,
+            player: OutputPlayer::Manual,
         }
     }
 
     pub fn prompt(self) -> Result<Self> {
         let mut builder = self;
+        builder = builder.prompt_url()?;
 
         loop {
             builder = builder.prompt_video()?.prompt_audio()?;
@@ -171,7 +178,19 @@ impl RtmpOutputBuilder {
             }
         }
 
-        builder.prompt_player()
+        match &builder.url {
+            Some(_) => Ok(builder),
+            None => builder.prompt_player(),
+        }
+    }
+
+    fn prompt_url(self) -> Result<Self> {
+        let url_input =
+            Text::new("Enter streaming URL (ESC for local FFmpeg server):").prompt_skippable()?;
+        match url_input {
+            Some(url) if !url.trim().is_empty() => Ok(self.with_url(url)),
+            Some(_) | None => Ok(self),
+        }
     }
 
     fn prompt_video(self) -> Result<Self> {
@@ -237,6 +256,11 @@ impl RtmpOutputBuilder {
         }
     }
 
+    pub fn with_url(mut self, url: String) -> Self {
+        self.url = Some(url);
+        self
+    }
+
     pub fn with_video(mut self, video: RtmpOutputVideoOptions) -> Self {
         self.video = Some(video);
         self
@@ -253,14 +277,17 @@ impl RtmpOutputBuilder {
     }
 
     pub fn build(self) -> RtmpOutput {
+        let stream_url = self
+            .url
+            .unwrap_or(format!("rtmp://127.0.0.1:{}", self.port));
         let options = RtmpOutputOptions {
             video: self.video,
             audio: self.audio,
             player: self.player,
+            url: stream_url,
         };
         RtmpOutput {
             name: self.name,
-            url: self.url,
             port: self.port,
             options,
             stream_handles: vec![],
