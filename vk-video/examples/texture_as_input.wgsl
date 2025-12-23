@@ -30,10 +30,21 @@ fn vs_main(@builtin(vertex_index) idx: u32) -> VertexOutput {
 }
 
 @fragment
-fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let color = vec4(input.color, 1.0);
+fn fs_main_y(input: VertexOutput) -> @location(0) f32 {
+    let conversion_weights = vec3<f32>(0.2126, 0.7152, 0.0722);
+    return clamp(dot(input.color, conversion_weights), 0.0, 1.0);
+}
 
-    return color;
+@fragment
+fn fs_main_uv(input: VertexOutput) -> @location(0) vec2<f32> {
+    let conversion_weights = mat3x2<f32>(
+        -0.1146,  0.5,
+        -0.3854, -0.4542,
+         0.5,    -0.0458,
+    );
+    let conversion_bias = vec2<f32>(0.5, 0.5);
+
+    return clamp(conversion_weights * input.color + conversion_bias, vec2(0.0, 0.0), vec2(1.0, 1.0));
 }
 
 

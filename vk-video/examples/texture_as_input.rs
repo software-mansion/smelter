@@ -86,9 +86,9 @@ fn main() {
 
 #[cfg(vulkan)]
 struct WgpuState {
-    pipeline: wgpu::RenderPipeline,
     texture: wgpu::Texture,
-    view: wgpu::TextureView,
+    y_renderer: PlaneRenderer,
+    uv_renderer: PlaneRenderer,
     device: wgpu::Device,
     queue: wgpu::Queue,
 }
@@ -110,23 +110,108 @@ impl WgpuState {
             immediate_size: 4,
         });
 
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("wgpu render target"),
+            format: wgpu::TextureFormat::NV12,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            dimension: wgpu::TextureDimension::D2,
+            sample_count: 1,
+            view_formats: &[],
+            mip_level_count: 1,
+            size: wgpu::Extent3d {
+                width: width.get(),
+                height: height.get(),
+                depth_or_array_layers: 1,
+            },
+        });
+
+        let y_renderer = PlaneRenderer::new(
+            &device,
+            &pipeline_layout,
+            &shader,
+            "fs_main_y",
+            &texture,
+            wgpu::TextureAspect::Plane0,
+        );
+        let uv_renderer = PlaneRenderer::new(
+            &device,
+            &pipeline_layout,
+            &shader,
+            "fs_main_uv",
+            &texture,
+            wgpu::TextureAspect::Plane1,
+        );
+
+        WgpuState {
+            texture,
+            y_renderer,
+            uv_renderer,
+            device,
+            queue,
+        }
+    }
+
+    fn render(&self, time: f32) {
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("wgpu encoder"),
+            });
+
+        self.y_renderer.render(&mut encoder, time);
+        self.uv_renderer.render(&mut encoder, time);
+
+        encoder.transition_resources(
+            [].into_iter(),
+            [wgpu::TextureTransition {
+                texture: &self.texture,
+                state: wgpu::TextureUses::COPY_SRC,
+                selector: None,
+            }]
+            .into_iter(),
+        );
+
+        let buffer = encoder.finish();
+
+        self.queue.submit([buffer]);
+    }
+}
+
+#[cfg(vulkan)]
+struct PlaneRenderer {
+    pipeline: wgpu::RenderPipeline,
+    plane: wgpu::TextureAspect,
+    plane_view: wgpu::TextureView,
+}
+
+#[cfg(vulkan)]
+impl PlaneRenderer {
+    fn new(
+        device: &wgpu::Device,
+        pipeline_layout: &wgpu::PipelineLayout,
+        shader: &wgpu::ShaderModule,
+        fragment_entry_point: &str,
+        texture: &wgpu::Texture,
+        plane: wgpu::TextureAspect,
+    ) -> Self {
+        let format = texture.format().aspect_specific_format(plane).unwrap();
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("wgpu pipeline"),
-            layout: Some(&pipeline_layout),
+            layout: Some(pipeline_layout),
             cache: None,
             vertex: wgpu::VertexState {
-                module: &shader,
+                module: shader,
                 buffers: &[],
                 entry_point: None,
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: None,
+                module: shader,
+                entry_point: Some(fragment_entry_point),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     blend: None,
-                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    format,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -148,85 +233,52 @@ impl WgpuState {
             depth_stencil: None,
         });
 
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("wgpu render target"),
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            dimension: wgpu::TextureDimension::D2,
-            sample_count: 1,
-            view_formats: &[],
-            mip_level_count: 1,
-            size: wgpu::Extent3d {
-                width: width.get(),
-                height: height.get(),
-                depth_or_array_layers: 1,
-            },
-        });
-
-        let view = texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("wgpu render target view"),
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count: None,
-            dimension: Some(wgpu::TextureViewDimension::D2),
+        let plane_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("wgpu render target plane view"),
+            aspect: plane,
             usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
-            format: Some(wgpu::TextureFormat::Rgba8Unorm),
-            aspect: wgpu::TextureAspect::All,
+            ..Default::default()
         });
 
-        WgpuState {
+        Self {
             pipeline,
-            texture,
-            view,
-            device,
-            queue,
+            plane,
+            plane_view,
         }
     }
 
-    fn render(&self, time: f32) {
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("wgpu encoder"),
-            });
+    fn render(&self, encoder: &mut wgpu::CommandEncoder, time: f32) {
+        let clear_color = match self.plane {
+            wgpu::TextureAspect::Plane0 => wgpu::Color::BLACK,
+            wgpu::TextureAspect::Plane1 => wgpu::Color {
+                r: 0.5,
+                g: 0.5,
+                b: 0.0,
+                a: 1.0,
+            },
+            _ => unreachable!(),
+        };
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("wgpu render pass"),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                depth_stencil_attachment: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.view,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    resolve_target: None,
-                    depth_slice: None,
-                })],
-                multiview_mask: None,
-            });
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("wgpu render pass"),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            depth_stencil_attachment: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &self.plane_view,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(clear_color),
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                depth_slice: None,
+            })],
+            multiview_mask: None,
+        });
 
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_immediates(0, &time.to_ne_bytes());
-            render_pass.draw(0..3, 0..1);
-        }
-
-        encoder.transition_resources(
-            [].into_iter(),
-            [wgpu::TextureTransition {
-                texture: &self.texture,
-                state: wgpu::TextureUses::RESOURCE,
-                selector: None,
-            }]
-            .into_iter(),
-        );
-
-        let buffer = encoder.finish();
-
-        self.queue.submit([buffer]);
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_immediates(0, &time.to_ne_bytes());
+        render_pass.draw(0..3, 0..1);
     }
 }
 

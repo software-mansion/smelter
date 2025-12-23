@@ -4,7 +4,6 @@ use ash::Entry;
 
 mod command;
 mod debug;
-mod graphics;
 mod mem;
 mod parameter_sets;
 mod sync;
@@ -13,7 +12,6 @@ mod vk_extensions;
 
 pub(crate) use command::*;
 pub(crate) use debug::*;
-pub(crate) use graphics::*;
 pub(crate) use mem::*;
 pub(crate) use parameter_sets::*;
 pub(crate) use sync::*;
