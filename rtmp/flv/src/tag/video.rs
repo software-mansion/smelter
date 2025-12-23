@@ -8,7 +8,7 @@ pub struct VideoTag {
     pub packet_type: PacketType,
     pub codec: VideoCodec,
 
-    /// `AVC` config only. Composition time offset.
+    /// AVC config only. Composition time offset.
     pub composition_time: Option<i32>,
     pub frame_type: FrameType,
     pub data: Bytes,
