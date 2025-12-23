@@ -57,4 +57,12 @@ impl RtmpParser {
     pub fn audio(&mut self) -> Vec<AudioTag> {
         mem::take(&mut self.audio)
     }
+
+    pub fn video_config(&self) -> &Option<VideoTag> {
+        &self.avc_video_config
+    }
+
+    pub fn audio_config(&self) -> &Option<AudioTag> {
+        &self.aac_audio_config
+    }
 }
