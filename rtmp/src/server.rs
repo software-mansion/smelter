@@ -5,6 +5,7 @@ use std::{
     net::{SocketAddr, TcpListener, TcpStream},
     sync::{
         Arc, Mutex, RwLock,
+        atomic::AtomicBool,
         mpsc::{Receiver, channel},
     },
     thread,
@@ -110,7 +111,7 @@ fn handle_client(
     on_connection: Arc<Mutex<OnConnectionCallback>>,
 ) -> Result<(), RtmpError> {
     Handshake::perform(&mut stream)?;
-    let message_reader = RtmpMessageReader::new(stream);
+    let message_reader = RtmpMessageReader::new(stream, Arc::new(AtomicBool::new(false)));
     info!("Handshake complete");
 
     // connect with rtmp amf0 messages

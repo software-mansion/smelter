@@ -21,4 +21,16 @@ pub enum RtmpError {
 
     #[error("Stream not registered")]
     StreamNotRegistered,
+
+    #[error("Socket closed")]
+    SocketClosed,
+
+    #[error("Incomplete data")]
+    IncompleteData,
+
+    #[error("Unexpected EOF")]
+    UnexpectedEof,
+
+    #[error("Would Block")]
+    WouldBlock,
 }
