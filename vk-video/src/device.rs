@@ -142,6 +142,7 @@ impl VulkanDevice {
     pub(crate) fn new(
         instance: &VulkanInstance,
         wgpu_features: wgpu::Features,
+        wgpu_experimental_features: wgpu::ExperimentalFeatures,
         wgpu_limits: wgpu::Limits,
         adapter: VulkanAdapter<'_>,
     ) -> Result<Self, VulkanInitError> {
@@ -301,7 +302,7 @@ impl VulkanDevice {
                     required_limits: wgpu_limits,
                     required_features: wgpu_features,
                     trace: wgpu::Trace::Off,
-                    experimental_features: wgpu::ExperimentalFeatures::enabled(),
+                    experimental_features: wgpu_experimental_features,
                 },
             )?
         };

@@ -40,14 +40,12 @@ impl Converter {
         profile: &H264EncodeProfileInfo,
         image_tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Result<Self, YuvConverterError> {
-        let mut fence = unsafe {
-            let device = device.wgpu_device().as_hal::<VkApi>().unwrap();
-            device.create_fence()?
-        };
+        let wgpu_device = unsafe { device.wgpu_device().as_hal::<VkApi>().unwrap() };
+        let wgpu_queue = unsafe { device.wgpu_queue().as_hal::<VkApi>().unwrap() };
+
+        let mut fence = unsafe { wgpu_device.create_fence()? };
 
         let mut command_encoder = unsafe {
-            let wgpu_device = device.wgpu_device().as_hal::<VkApi>().unwrap();
-            let wgpu_queue = device.wgpu_queue().as_hal::<VkApi>().unwrap();
             wgpu_device.create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
                 label: Some("YUV converter init command encoder"),
                 queue: &wgpu_queue,
@@ -199,7 +197,6 @@ impl Converter {
         let command_buffer = unsafe { command_encoder.end_encoding()? };
 
         unsafe {
-            let wgpu_queue = device.wgpu_queue().as_hal::<VkApi>().unwrap();
             wgpu_queue.submit(&[&command_buffer], &[], (&mut fence, 1))?;
         };
 
@@ -211,16 +208,10 @@ impl Converter {
 
         let mut done = false;
         while !done {
-            done = unsafe {
-                let wgpu_device = device.wgpu_device().as_hal::<VkApi>().unwrap();
-                wgpu_device.wait(&fence, 1, None)?
-            }
+            done = unsafe { wgpu_device.wait(&fence, 1, None)? }
         }
 
-        unsafe {
-            let wgpu_device = device.wgpu_device().as_hal::<VkApi>().unwrap();
-            wgpu_device.destroy_fence(fence)
-        }
+        unsafe { wgpu_device.destroy_fence(fence) }
 
         Ok(Self {
             device: device.vulkan_device.clone(),
@@ -241,9 +232,9 @@ impl Converter {
         texture: wgpu::Texture,
         tracker: &mut EncoderTracker,
     ) -> Result<ConvertState, YuvConverterError> {
+        let wgpu_device = unsafe { self.device.wgpu_device().as_hal::<VkApi>().unwrap() };
+        let wgpu_queue = unsafe { self.device.wgpu_queue().as_hal::<VkApi>().unwrap() };
         let mut command_encoder = unsafe {
-            let wgpu_device = self.device.wgpu_device().as_hal::<VkApi>().unwrap();
-            let wgpu_queue = self.device.wgpu_queue().as_hal::<VkApi>().unwrap();
             wgpu_device.create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
                 label: None,
                 queue: &wgpu_queue,
@@ -311,7 +302,7 @@ impl Converter {
         let signal_value = tracker.semaphore_tracker.next_sem_value();
 
         unsafe {
-            self.device.wgpu_queue().as_hal::<VkApi>().unwrap().submit(
+            wgpu_queue.submit(
                 &[&wgpu_command_buffer],
                 &[],
                 (&mut wgpu_fence, signal_value),

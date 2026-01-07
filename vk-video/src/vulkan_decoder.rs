@@ -581,6 +581,12 @@ impl VulkanDecoder<'_> {
         &mut self,
         decode_output: DecodeSubmission,
     ) -> Result<wgpu::Texture, VulkanDecoderError> {
+        let wgpu_device = unsafe {
+            self.decoding_device
+                .wgpu_device()
+                .as_hal::<VkApi>()
+                .unwrap()
+        };
         let copy_extent = vk::Extent3D {
             width: decode_output.dimensions.width,
             height: decode_output.dimensions.height,
@@ -724,11 +730,6 @@ impl VulkanDecoder<'_> {
         let image_clone = image.clone();
 
         let hal_texture = unsafe {
-            let wgpu_device = self
-                .decoding_device
-                .wgpu_device()
-                .as_hal::<VkApi>()
-                .unwrap();
             wgpu_device.texture_from_raw(
                 **image,
                 &wgpu::hal::TextureDescriptor {

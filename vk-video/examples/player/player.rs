@@ -47,7 +47,11 @@ pub fn run() {
 
     let vulkan_adapter = vulkan_instance.create_adapter(Some(&surface)).unwrap();
     let vulkan_device = vulkan_adapter
-        .create_device(wgpu::Features::empty(), wgpu::Limits::default())
+        .create_device(
+            wgpu::Features::empty(),
+            wgpu::ExperimentalFeatures::disabled(),
+            wgpu::Limits::default(),
+        )
         .unwrap();
 
     let (tx, rx) = mpsc::sync_channel(FRAMES_BUFFER_LEN);

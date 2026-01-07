@@ -255,9 +255,17 @@ impl<'a> VulkanAdapter<'a> {
     pub fn create_device(
         self,
         wgpu_features: wgpu::Features,
+        wgpu_experimental_features: wgpu::ExperimentalFeatures,
         wgpu_limits: wgpu::Limits,
     ) -> Result<Arc<VulkanDevice>, VulkanInitError> {
-        Ok(VulkanDevice::new(self.instance, wgpu_features, wgpu_limits, self)?.into())
+        Ok(VulkanDevice::new(
+            self.instance,
+            wgpu_features,
+            wgpu_experimental_features,
+            wgpu_limits,
+            self,
+        )?
+        .into())
     }
 
     pub fn info(&self) -> &AdapterInfo {
