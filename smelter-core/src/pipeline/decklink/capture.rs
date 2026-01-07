@@ -5,14 +5,17 @@ use std::{
 
 use crossbeam_channel::{Receiver, Sender, TrySendError, bounded};
 use decklink::{
-    AudioInputPacket, DetectedVideoInputFormatFlags, DisplayMode, DisplayModeType, InputCallback,
+    AudioInputPacket, DetectedVideoInputFormatFlags, DisplayMode, InputCallback,
     InputCallbackResult, PixelFormat, VideoInputFlags, VideoInputFormatChangedEvents,
     VideoInputFrame,
 };
 use smelter_render::{Frame, FrameData, Resolution, error::ErrorStack};
 use tracing::{Span, debug, info, trace, warn};
 
-use crate::pipeline::resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch};
+use crate::pipeline::{
+    decklink::format::{BitDepth, Colorspace, Format},
+    resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch},
+};
 use crate::prelude::*;
 
 use super::AUDIO_SAMPLE_RATE;
@@ -39,8 +42,7 @@ pub(super) struct ChannelCallbackAdapter {
     sync_point: Instant,
     audio_offset: Mutex<Option<Duration>>,
     video_offset: Mutex<Option<Duration>>,
-    pixel_format: Option<PixelFormat>,
-    last_format: Mutex<(DisplayModeType, PixelFormat)>,
+    last_format: Mutex<Format>,
 }
 
 impl ChannelCallbackAdapter {
@@ -48,9 +50,8 @@ impl ChannelCallbackAdapter {
         ctx: &Arc<PipelineCtx>,
         span: Span,
         enable_audio: bool,
-        pixel_format: Option<PixelFormat>,
         input: Weak<decklink::Input>,
-        initial_format: (DisplayModeType, PixelFormat),
+        initial_format: Format,
     ) -> (Self, DataReceivers) {
         let (video_sender, video_receiver) = bounded(1000);
         let (audio_sender, audio_receiver) = match enable_audio {
@@ -71,7 +72,6 @@ impl ChannelCallbackAdapter {
                 sync_point: ctx.queue_sync_point + Duration::from_millis(15),
                 audio_offset: Mutex::new(None),
                 video_offset: Mutex::new(None),
-                pixel_format,
                 last_format: Mutex::new(initial_format),
             },
             DataReceivers {
@@ -103,10 +103,11 @@ impl ChannelCallbackAdapter {
             PixelFormat::Format8BitYUV => {
                 Self::frame_from_yuv_422(width, height, bytes_per_row, data, pts)
             }
-            // TODO just for testing
-            PixelFormat::Format10BitRGB => {
-                warn!(?pixel_format, "Unsupported pixel format");
-                Self::frame_from_yuv_422(width, height, bytes_per_row, data, pts)
+            PixelFormat::Format8BitARGB => {
+                Self::frame_from_argb(width, height, bytes_per_row, data, pts)
+            }
+            PixelFormat::Format8BitBGRA => {
+                Self::frame_from_bgra(width, height, bytes_per_row, data, pts)
             }
             pixel_format => {
                 warn!(?pixel_format, "Unsupported pixel format");
@@ -136,7 +137,7 @@ impl ChannelCallbackAdapter {
         data: bytes::Bytes,
         pts: Duration,
     ) -> Frame {
-        let data = if width != bytes_per_row * 2 {
+        let data = if width * 2 != bytes_per_row {
             let mut output_buffer = bytes::BytesMut::with_capacity(width * 2 * height);
 
             data.chunks(bytes_per_row)
@@ -149,6 +150,56 @@ impl ChannelCallbackAdapter {
         };
         Frame {
             data: FrameData::InterleavedUyvy422(data),
+            resolution: Resolution { width, height },
+            pts,
+        }
+    }
+
+    fn frame_from_argb(
+        width: usize,
+        height: usize,
+        bytes_per_row: usize,
+        data: bytes::Bytes,
+        pts: Duration,
+    ) -> Frame {
+        let data = if width * 4 != bytes_per_row {
+            let mut output_buffer = bytes::BytesMut::with_capacity(width * 4 * height);
+
+            data.chunks(bytes_per_row)
+                .map(|chunk| &chunk[..(width * 4)])
+                .for_each(|chunk| output_buffer.extend_from_slice(chunk));
+
+            output_buffer.freeze()
+        } else {
+            data
+        };
+        Frame {
+            data: FrameData::Argb(data),
+            resolution: Resolution { width, height },
+            pts,
+        }
+    }
+
+    fn frame_from_bgra(
+        width: usize,
+        height: usize,
+        bytes_per_row: usize,
+        data: bytes::Bytes,
+        pts: Duration,
+    ) -> Frame {
+        let data = if width * 4 != bytes_per_row {
+            let mut output_buffer = bytes::BytesMut::with_capacity(width * 4 * height);
+
+            data.chunks(bytes_per_row)
+                .map(|chunk| &chunk[..(width * 4)])
+                .for_each(|chunk| output_buffer.extend_from_slice(chunk));
+
+            output_buffer.freeze()
+        } else {
+            data
+        };
+        Frame {
+            data: FrameData::Bgra(data),
             resolution: Resolution { width, height },
             pts,
         }
@@ -213,50 +264,38 @@ impl ChannelCallbackAdapter {
 
         let mode = display_mode.display_mode_type()?;
 
-        let detected_pixel_format = if flags.format_y_cb_cr_422 {
-            if flags.bit_depth_8 {
-                PixelFormat::Format8BitYUV
-            } else if flags.bit_depth_10 {
-                PixelFormat::Format10BitYUV
-            } else {
-                warn!("Unknown format, falling back to 8-bit YUV");
-                PixelFormat::Format8BitYUV
-            }
-        } else if flags.format_rgb_444 {
-            if flags.bit_depth_8 {
-                PixelFormat::Format8BitBGRA
-            } else if flags.bit_depth_10 {
-                PixelFormat::Format10BitRGB
-            } else if flags.bit_depth_12 {
-                PixelFormat::Format12BitRGB
-            } else {
-                warn!("Unknown format, falling back to 10-bit RGB");
-                PixelFormat::Format10BitRGB
-            }
-        } else {
-            warn!("Unknown format, skipping change");
-            return Ok(());
-        };
-
-        let pixel_format = self.pixel_format.unwrap_or(detected_pixel_format);
-        let (last_display_mode, last_pixel_format) = *self.last_format.lock().unwrap();
-        if pixel_format == last_pixel_format && mode == last_display_mode {
+        let new_format = Format::from_mode_change(mode, flags);
+        let last_format = *self.last_format.lock().unwrap();
+        if new_format == last_format {
             // skip if format is the same, otherwise this callback will be triggered
             // in the loop
             return Ok(());
         }
+        *self.last_format.lock().unwrap() = new_format;
 
-        *self.last_format.lock().unwrap() = (mode, pixel_format);
+        let pixel_format = match new_format.colorspace {
+            Colorspace::YCbCr422 => {
+                if new_format.bit_depth != BitDepth::Depth8Bit {
+                    warn!(
+                        "Format changed to {:?}. Forcing 8-bit.",
+                        new_format.bit_depth
+                    )
+                }
+                PixelFormat::Format8BitYUV
+            }
+            Colorspace::RGB444 => {
+                if new_format.bit_depth != BitDepth::Depth8Bit {
+                    warn!(
+                        "Format changed to {:?}. Forcing 8-bit.",
+                        new_format.bit_depth
+                    )
+                }
+                PixelFormat::Format8BitBGRA
+            }
+            Colorspace::Unknown => return Ok(()),
+        };
 
-        info!("Detected new input format {mode:?} {detected_pixel_format:?} {flags:?}");
-
-        if detected_pixel_format != pixel_format {
-            info!(
-                ?detected_pixel_format,
-                ?pixel_format,
-                "Specified pixel format does not match what was detected. Using {pixel_format:?}"
-            );
-        }
+        info!(?pixel_format, ?flags, ?mode, "Detected new input format");
 
         input.pause_streams()?;
         input.enable_video(

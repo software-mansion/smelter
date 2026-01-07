@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use tracing::{Level, error, span};
 
+use crate::pipeline::decklink::format::Format;
 use crate::{pipeline::input::Input, queue::QueueDataReceiver};
 
 use crate::prelude::*;
@@ -10,6 +11,7 @@ use self::{capture::ChannelCallbackAdapter, find_device::find_decklink};
 
 mod capture;
 mod find_device;
+mod format;
 
 // sample rate returned from DeckLink
 const AUDIO_SAMPLE_RATE: u32 = 48_000;
@@ -34,14 +36,18 @@ impl DeckLink {
                 .input()
                 .map_err(DeckLinkInputError::DecklinkError)?,
         );
+        let initial_mode = decklink::DisplayModeType::ModeHD720p50;
+        let initial_pixel_format = opts
+            .pixel_format
+            .unwrap_or(decklink::PixelFormat::Format8BitYUV);
 
         // Initial options, real config should be set based on detected format, thanks
         // to the `enable_format_detection` option. When enabled it will call
         // `video_input_format_changed` method with a detected format.
         input
             .enable_video(
-                decklink::DisplayModeType::ModeHD720p50,
-                decklink::PixelFormat::Format8BitYUV,
+                initial_mode,
+                initial_pixel_format,
                 decklink::VideoInputFlags {
                     enable_format_detection: true,
                     ..Default::default()
@@ -56,12 +62,8 @@ impl DeckLink {
             &ctx,
             span,
             opts.enable_audio,
-            opts.pixel_format,
             Arc::<decklink::Input>::downgrade(&input),
-            (
-                decklink::DisplayModeType::ModeHD720p50,
-                decklink::PixelFormat::Format8BitYUV,
-            ),
+            Format::new(initial_mode, initial_pixel_format),
         );
         input
             .set_callback(Box::new(callback))
