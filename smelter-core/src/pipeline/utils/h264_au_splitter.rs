@@ -2,7 +2,9 @@ use std::time::Duration;
 
 use bytes::BytesMut;
 use tracing::debug;
-use vk_video::parser::h264::{AccessUnit, H264Parser, ParsedNalu, nal_types::slice::SliceFamily};
+use vk_video::parser::h264::{
+    AccessUnit, H264Parser, ParsedNalu, nal_types::slice::DecRefPicMarking,
+};
 
 use crate::prelude::*;
 
@@ -92,8 +94,12 @@ impl H264AuSplitter {
             return Err(AuSplitterError::InvalidAccessUnit);
         };
 
-        match slice.header.slice_type.family {
-            SliceFamily::P | SliceFamily::B => {
+        match &slice.header.dec_ref_pic_marking {
+            Some(DecRefPicMarking::Idr { .. }) => {
+                self.prev_ref_frame_num = 0;
+                self.detected_missed_frames = false;
+            }
+            Some(_) => {
                 if self.detected_missed_frames {
                     return Err(AuSplitterError::MissingReferenceFrame);
                 }
@@ -112,12 +118,9 @@ impl H264AuSplitter {
 
                 self.prev_ref_frame_num = frame_num;
             }
-            SliceFamily::I => {
-                self.prev_ref_frame_num = slice.header.frame_num;
-                self.detected_missed_frames = false;
-            }
-            SliceFamily::SP | SliceFamily::SI => {} // Not supported
+            _ => {}
         }
+
         Ok(())
     }
 }
