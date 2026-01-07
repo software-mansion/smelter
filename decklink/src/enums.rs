@@ -292,7 +292,7 @@ pub mod ffi {
         Headphones,
     }
 
-    #[derive(Debug, Copy, Clone)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub enum DisplayModeType {
         /* SD Modes */
         ModeNTSC,
