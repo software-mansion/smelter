@@ -129,11 +129,12 @@ impl ReferenceContext {
         let pps = slices.last().unwrap().0.pps.clone();
         let pts = slices.last().unwrap().1;
 
-        let is_ref_frame = matches!(
-            header.slice_type.family,
-            h264_reader::nal::slice::SliceFamily::P | h264_reader::nal::slice::SliceFamily::B
+        let is_ref_frame = header.dec_ref_pic_marking.is_some();
+        let is_idr = matches!(
+            &header.dec_ref_pic_marking,
+            Some(DecRefPicMarking::Idr { .. })
         );
-        if is_ref_frame && self.missed_frame_handling == MissedFrameHandling::Strict {
+        if is_ref_frame && !is_idr && self.missed_frame_handling == MissedFrameHandling::Strict {
             self.verify_frame_num(&sps, &header)?;
         }
 
