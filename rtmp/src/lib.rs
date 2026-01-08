@@ -1,3 +1,4 @@
+pub mod buffered_stream_reader;
 pub mod chunk;
 pub mod error;
 pub mod handshake;

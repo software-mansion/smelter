@@ -25,12 +25,15 @@ pub enum RtmpError {
     #[error("Socket closed")]
     SocketClosed,
 
-    #[error("Incomplete data")]
-    IncompleteData,
+    #[error("Missing previous chunk header for CSID {0}")]
+    MissingHeader(u32),
 
     #[error("Unexpected EOF")]
     UnexpectedEof,
 
     #[error("Would Block")]
     WouldBlock,
+
+    #[error("Internal buffer error: {0}")]
+    InternalBufferError(&'static str),
 }
