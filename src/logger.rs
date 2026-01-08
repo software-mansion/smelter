@@ -24,18 +24,15 @@ pub enum FfmpegLogLevel {
     Trace,
 }
 
-impl From<FfmpegLogLevel> for i32 {
-    // Source of numeric logger level values:
-    // https://www.ffmpeg.org/doxygen/3.0/group__lavu__log__constants.html
-    fn from(value: FfmpegLogLevel) -> Self {
-        use self::FfmpegLogLevel::*;
-        match value {
-            Error => 16,
-            Warn => 24,
-            Info => 32,
-            Verbose => 40,
-            Debug => 48,
-            Trace => 56,
+impl FfmpegLogLevel {
+    fn into_i32(self) -> i32 {
+        match self {
+            FfmpegLogLevel::Error => 16,
+            FfmpegLogLevel::Warn => 24,
+            FfmpegLogLevel::Info => 32,
+            FfmpegLogLevel::Verbose => 40,
+            FfmpegLogLevel::Debug => 48,
+            FfmpegLogLevel::Trace => 56,
         }
     }
 }
@@ -98,6 +95,6 @@ pub fn init_logger(opts: LoggerConfig) {
     }
 
     unsafe {
-        ffmpeg_next::sys::av_log_set_level(ffmpeg_logger_level().into());
+        ffmpeg_next::sys::av_log_set_level(ffmpeg_logger_level().into_i32());
     }
 }
