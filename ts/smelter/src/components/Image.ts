@@ -6,7 +6,6 @@ import { imageRefIntoRawId } from '../types/refs/imageRef.js';
 import { newInternalImageId } from '../context/internalImageIdManager.js';
 import { newBlockingTask } from '../hooks.js';
 import { SmelterContext } from '../context/index.js';
-import { isValidImageType } from '../types/utils.js';
 import type { RegisterImage } from '../types/resource.js';
 
 export type ImageProps = Omit<ComponentBaseProps, 'children'> &
@@ -62,22 +61,15 @@ function Image(props: ImageProps) {
       props.source?.startsWith('http://') || props.source?.startsWith('https://')
         ? { url: props.source }
         : { serverPath: props.source };
-    const extension = props.source?.split('.').pop();
-    const assetType = extension && isValidImageType(extension) ? extension : undefined;
 
     let registerPromise: Promise<any>;
-
-    if (!assetType) {
-      throw new Error('Unsupported image type');
-    }
-
     const task = newBlockingTask(ctx);
     setInternalImageId(newImageId);
     void (async () => {
       try {
         registerPromise = ctx.registerImage(newImageId, {
           ...pathOrUrl,
-          assetType,
+          assetType: 'auto',
         });
         await registerPromise;
         setIsImageRegistered(true);
