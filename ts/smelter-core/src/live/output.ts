@@ -1,4 +1,4 @@
-import type { RegisterMp4Input } from '@swmansion/smelter';
+import type { RegisterMp4Input, Renderers } from '@swmansion/smelter';
 import { _smelterInternals } from '@swmansion/smelter';
 import type { ReactElement } from 'react';
 import { createElement } from 'react';
@@ -175,7 +175,7 @@ class OutputContext implements SmelterOutputContext {
       {}
     );
   }
-  public async registerImage(imageId: number, imageSpec: any) {
+  public async registerImage(imageId: number, imageSpec: Renderers.RegisterImage) {
     const imageRef = {
       type: 'output-specific-image',
       outputId: this.outputId,
@@ -184,6 +184,7 @@ class OutputContext implements SmelterOutputContext {
 
     await this.output.api.registerImage(imageRef, {
       url: imageSpec.url,
+      path: imageSpec.serverPath,
       asset_type: imageSpec.assetType,
     });
   }

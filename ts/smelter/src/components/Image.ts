@@ -6,19 +6,18 @@ import { imageRefIntoRawId } from '../types/refs/imageRef.js';
 import { newInternalImageId } from '../context/internalImageIdManager.js';
 import { newBlockingTask } from '../hooks.js';
 import { SmelterContext } from '../context/index.js';
-import { isValidImageType } from '../types/utils.js';
 import type { RegisterImage } from '../types/resource.js';
 
 export type ImageProps = Omit<ComponentBaseProps, 'children'> &
   (
     | {
-      imageId: Api.RendererId;
-      source?: never; // Ensuring 'source' cannot be used alongside 'imageId'
-    }
+        imageId: Api.RendererId;
+        source?: never; // Ensuring 'source' cannot be used alongside 'imageId'
+      }
     | {
-      source: string;
-      imageId?: never; // Ensuring 'imageId' cannot be used alongside 'source'
-    }
+        source: string;
+        imageId?: never; // Ensuring 'imageId' cannot be used alongside 'source'
+      }
   ) & {
     /**
      * Component styling properties.
@@ -65,7 +64,6 @@ function Image(props: ImageProps) {
     const assetType = 'auto';
 
     let registerPromise: Promise<any>;
-
     const task = newBlockingTask(ctx);
     setInternalImageId(newImageId);
     void (async () => {
@@ -84,7 +82,7 @@ function Image(props: ImageProps) {
     return () => {
       task.done();
       void (async () => {
-        await registerPromise.catch(() => { });
+        await registerPromise.catch(() => {});
         await ctx.unregisterImage(newImageId);
       })();
     };
