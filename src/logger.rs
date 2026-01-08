@@ -19,7 +19,22 @@ pub enum FfmpegLogLevel {
     Error,
     Warn,
     Info,
+    Verbose,
     Debug,
+    Trace,
+}
+
+impl FfmpegLogLevel {
+    fn into_i32(self) -> i32 {
+        match self {
+            FfmpegLogLevel::Error => 16,
+            FfmpegLogLevel::Warn => 24,
+            FfmpegLogLevel::Info => 32,
+            FfmpegLogLevel::Verbose => 40,
+            FfmpegLogLevel::Debug => 48,
+            FfmpegLogLevel::Trace => 56,
+        }
+    }
 }
 
 fn ffmpeg_logger_level() -> FfmpegLogLevel {
@@ -34,37 +49,13 @@ impl FromStr for FfmpegLogLevel {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "trace" => Ok(FfmpegLogLevel::Trace),
             "debug" => Ok(FfmpegLogLevel::Debug),
+            "verbose" => Ok(FfmpegLogLevel::Verbose),
             "info" => Ok(FfmpegLogLevel::Info),
             "warn" => Ok(FfmpegLogLevel::Warn),
             "error" => Ok(FfmpegLogLevel::Error),
             _ => Err("Invalid FFmpeg logger level."),
-        }
-    }
-}
-
-extern "C" fn ffmpeg_log_callback(
-    arg1: *mut libc::c_void,
-    log_level: libc::c_int,
-    fmt: *const libc::c_char,
-    #[cfg(not(target_arch = "aarch64"))] va_list_tag: *mut ffmpeg_next::sys::__va_list_tag,
-    #[cfg(target_arch = "aarch64")] va_list_tag: ffmpeg_next::sys::va_list,
-) {
-    unsafe {
-        match ffmpeg_logger_level() {
-            FfmpegLogLevel::Error if log_level <= 16 => {
-                ffmpeg_next::sys::av_log_default_callback(arg1, log_level, fmt, va_list_tag)
-            }
-            FfmpegLogLevel::Warn if log_level <= 24 => {
-                ffmpeg_next::sys::av_log_default_callback(arg1, log_level, fmt, va_list_tag)
-            }
-            FfmpegLogLevel::Info if log_level <= 32 => {
-                ffmpeg_next::sys::av_log_default_callback(arg1, log_level, fmt, va_list_tag)
-            }
-            FfmpegLogLevel::Debug if log_level <= 48 => {
-                ffmpeg_next::sys::av_log_default_callback(arg1, log_level, fmt, va_list_tag)
-            }
-            _ => (),
         }
     }
 }
@@ -104,6 +95,6 @@ pub fn init_logger(opts: LoggerConfig) {
     }
 
     unsafe {
-        ffmpeg_next::sys::av_log_set_callback(Some(ffmpeg_log_callback));
+        ffmpeg_next::sys::av_log_set_level(ffmpeg_logger_level().into_i32());
     }
 }
