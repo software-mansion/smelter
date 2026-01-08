@@ -55,7 +55,7 @@ impl RenderGraph {
             output_texture: OutputTexture::new(ctx.wgpu_ctx, output.resolution, output_format),
         };
 
-        scope.pop(&ctx.wgpu_ctx.device)?;
+        scope.pop()?;
 
         self.outputs.insert(output.output_id, output_tree);
 

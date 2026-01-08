@@ -15,7 +15,7 @@ const COLORS: array<vec3<f32>, 3> = array<vec3<f32>, 3>(
     vec3<f32>(0.0, 0.0, 1.0),
 );
 
-var<push_constant> time: f32;
+var<immediate> time: f32;
 
 @vertex
 fn vs_main(@builtin(vertex_index) idx: u32) -> VertexOutput {

@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 use tracing::{debug, warn};
-use wgpu::hal::DynAdapter;
+use wgpu::hal::{DynAdapter, vulkan::Api as VkApi};
 
 use crate::{
     VulkanDevice, VulkanInitError, VulkanInstance,
@@ -37,7 +37,7 @@ impl<'a> VulkanAdapter<'a> {
     ) -> Option<Self> {
         let instance = &vulkan_instance.instance;
         let wgpu_instance = &vulkan_instance.wgpu_instance;
-        let wgpu_instance = unsafe { wgpu_instance.as_hal::<wgpu::hal::vulkan::Api>() }.unwrap();
+        let wgpu_instance = unsafe { wgpu_instance.as_hal::<VkApi>() }.unwrap();
 
         let properties = unsafe { instance.get_physical_device_properties(device) };
         let device_name = properties
@@ -49,10 +49,12 @@ impl<'a> VulkanAdapter<'a> {
 
         if let Some(surface) = compatible_surface {
             unsafe {
-                (*surface).as_hal::<wgpu::hal::vulkan::Api, _, _>(|surface| {
-                    surface.and_then(|surface| wgpu_adapter.adapter.surface_capabilities(surface))
-                })?
-            };
+                surface.as_hal::<VkApi>().and_then(|surface| {
+                    wgpu_adapter
+                        .adapter
+                        .surface_capabilities(&surface as &wgpu::hal::vulkan::Surface)
+                })?;
+            }
         }
 
         let mut vk_13_features = vk::PhysicalDeviceVulkan13Features::default();
@@ -253,9 +255,17 @@ impl<'a> VulkanAdapter<'a> {
     pub fn create_device(
         self,
         wgpu_features: wgpu::Features,
+        wgpu_experimental_features: wgpu::ExperimentalFeatures,
         wgpu_limits: wgpu::Limits,
     ) -> Result<Arc<VulkanDevice>, VulkanInitError> {
-        Ok(VulkanDevice::new(self.instance, wgpu_features, wgpu_limits, self)?.into())
+        Ok(VulkanDevice::new(
+            self.instance,
+            wgpu_features,
+            wgpu_experimental_features,
+            wgpu_limits,
+            self,
+        )?
+        .into())
     }
 
     pub fn info(&self) -> &AdapterInfo {

@@ -30,7 +30,7 @@ struct PushConstantParams {
     pixel_format: u32,
 }
 
-var<push_constant> params: PushConstantParams;
+var<immediate> params: PushConstantParams;
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {

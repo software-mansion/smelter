@@ -71,7 +71,9 @@ impl EmbeddingHelper {
             pending_downloads.push(self.copy_buffer_to_shmem(source_idx, size, buffer.clone()));
         }
 
-        self.wgpu_ctx.device.poll(wgpu::PollType::Wait)?;
+        self.wgpu_ctx
+            .device
+            .poll(wgpu::PollType::wait_indefinitely())?;
 
         for pending in pending_downloads {
             pending()?;

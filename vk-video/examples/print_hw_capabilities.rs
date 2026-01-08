@@ -13,8 +13,9 @@ fn main() {
     let vulkan_device = vulkan_adapter
         .create_device(
             wgpu::Features::empty(),
+            wgpu::ExperimentalFeatures::disabled(),
             wgpu::Limits {
-                max_push_constant_size: 128,
+                max_immediate_size: 128,
                 ..Default::default()
             },
         )

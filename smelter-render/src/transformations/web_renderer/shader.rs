@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use wgpu::ShaderStages;
-
 use crate::{
     state::node_texture::NodeTextureState,
     wgpu::{
@@ -36,10 +34,7 @@ impl WebRendererShader {
                         &wgpu_ctx.format.single_texture_layout,
                         &sampler.bind_group_layout,
                     ],
-                    push_constant_ranges: &[wgpu::PushConstantRange {
-                        stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        range: 0..RenderInfo::size(),
-                    }],
+                    immediate_size: RenderInfo::size(),
                 });
 
         let pipeline = common_pipeline::create_render_pipeline(
@@ -50,7 +45,7 @@ impl WebRendererShader {
             wgpu_ctx.default_view_format(),
         );
 
-        scope.pop(&wgpu_ctx.device)?;
+        scope.pop()?;
 
         Ok(Self { pipeline, sampler })
     }
@@ -94,19 +89,17 @@ impl WebRendererShader {
                         },
                         view: target.view(),
                         resolve_target: None,
+                        depth_slice: None,
                     })],
                     depth_stencil_attachment: None,
                     timestamp_writes: None,
                     occlusion_query_set: None,
+                    multiview_mask: None,
                 });
 
                 render_pass.set_pipeline(&self.pipeline);
 
-                render_pass.set_push_constants(
-                    ShaderStages::VERTEX_FRAGMENT,
-                    0,
-                    &render_info.bytes(),
-                );
+                render_pass.set_immediates(0, &render_info.bytes());
                 render_pass.set_bind_group(0, &input_texture_bg, &[]);
                 render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
 

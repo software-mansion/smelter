@@ -3,6 +3,7 @@
 ## unreleased
 
 ### 💥 Breaking changes
+- Rename `var<push_constant>` to `var<immediate>` in user-provided shaders ([#1624](https://github.com/software-mansion/smelter/pull/1624) by [@noituri](https://github.com/noituri))
 
 ### ✨ New features
 - Add `bitrate` option to software encoders ([#1567](https://github.com/software-mansion/smelter/pull/1567) by [@JBRS307](https://github.com/JBRS307))

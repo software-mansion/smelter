@@ -23,9 +23,10 @@ fn main() {
     let vulkan_device = vulkan_adapter
         .create_device(
             wgpu::Features::empty(),
+            wgpu::ExperimentalFeatures::disabled(),
             wgpu::Limits {
                 max_binding_array_elements_per_shader_stage: 128,
-                max_push_constant_size: 128,
+                max_immediate_size: 128,
                 ..Default::default()
             },
         )
