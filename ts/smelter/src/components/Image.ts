@@ -12,13 +12,13 @@ import type { RegisterImage } from '../types/resource.js';
 export type ImageProps = Omit<ComponentBaseProps, 'children'> &
   (
     | {
-        imageId: Api.RendererId;
-        source?: never; // Ensuring 'source' cannot be used alongside 'imageId'
-      }
+      imageId: Api.RendererId;
+      source?: never; // Ensuring 'source' cannot be used alongside 'imageId'
+    }
     | {
-        source: string;
-        imageId?: never; // Ensuring 'imageId' cannot be used alongside 'source'
-      }
+      source: string;
+      imageId?: never; // Ensuring 'imageId' cannot be used alongside 'source'
+    }
   ) & {
     /**
      * Component styling properties.
@@ -62,19 +62,9 @@ function Image(props: ImageProps) {
       props.source?.startsWith('http://') || props.source?.startsWith('https://')
         ? { url: props.source }
         : { serverPath: props.source };
-    const extension = props.source?.split('.').pop();
-    const assetType =
-      extension === 'jpg'
-        ? 'jpeg'
-        : extension && isValidImageType(extension)
-          ? extension
-          : undefined;
+    const assetType = 'auto';
 
     let registerPromise: Promise<any>;
-
-    if (!assetType) {
-      throw new Error('Unsupported image type');
-    }
 
     const task = newBlockingTask(ctx);
     setInternalImageId(newImageId);
@@ -94,7 +84,7 @@ function Image(props: ImageProps) {
     return () => {
       task.done();
       void (async () => {
-        await registerPromise.catch(() => {});
+        await registerPromise.catch(() => { });
         await ctx.unregisterImage(newImageId);
       })();
     };
