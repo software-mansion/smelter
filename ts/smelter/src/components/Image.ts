@@ -61,7 +61,6 @@ function Image(props: ImageProps) {
       props.source?.startsWith('http://') || props.source?.startsWith('https://')
         ? { url: props.source }
         : { serverPath: props.source };
-    const assetType = 'auto';
 
     let registerPromise: Promise<any>;
     const task = newBlockingTask(ctx);
@@ -70,7 +69,7 @@ function Image(props: ImageProps) {
       try {
         registerPromise = ctx.registerImage(newImageId, {
           ...pathOrUrl,
-          assetType,
+          assetType: 'auto',
         });
         await registerPromise;
         setIsImageRegistered(true);
