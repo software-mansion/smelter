@@ -1,6 +1,10 @@
-use flv::parser::RtmpParser;
+use flv::{VideoTag, tag::PacketType};
 use rtmp::{RtmpServer, ServerConfig, server::RtmpConnection};
-use std::{fs, thread};
+use std::{
+    io::Write,
+    process::{Command, Stdio},
+    thread,
+};
 use tracing::info;
 
 use bytes::{Buf, Bytes, BytesMut};
@@ -26,27 +30,33 @@ fn main() {
         info!(?url_path, "Received stream");
         let url_path_clone = url_path.clone();
         thread::spawn(move || {
-            let mut flv_parser = RtmpParser::new();
+            let mut ffplay = Command::new("ffplay")
+                .args(["-autoexit", "-f", "h264", "-i", "-"])
+                .stdin(Stdio::piped())
+                .spawn()
+                .unwrap();
+            let mut ffplay_input = ffplay.stdin.take().unwrap();
+
+            let mut bsf = H264AvccToAnnexB::default();
             while let Ok(data) = video_rx.recv() {
                 info!(data_len=?data.len(), url_path=?url_path_clone, "Received video bytes");
-                flv_parser.parse_video(data).unwrap();
+                let video_tag = VideoTag::parse(data).unwrap();
+                match video_tag.packet_type {
+                    PacketType::Config => {
+                        let decoder_config = H264AvcDecoderConfig::parse(video_tag.data).unwrap();
+                        bsf = H264AvccToAnnexB::new(decoder_config);
+                    }
+                    PacketType::Data => {
+                        let annexb_data = bsf.transform(video_tag.data);
+                        ffplay_input.write_all(&annexb_data).unwrap();
+                        ffplay_input.flush().unwrap();
+                    }
+                }
             }
-            let video_config = flv_parser.video_config().clone().unwrap();
-            let video_data = flv_parser.video();
-
-            let decoder_config = H264AvcDecoderConfig::parse(video_config.data).unwrap();
-            let mut bsf = H264AvccToAnnexB::new(decoder_config);
-
-            let mut annexb_data = BytesMut::new();
-            for tag in video_data {
-                let annexb_bytes = bsf.transform(tag.data);
-                annexb_data.extend_from_slice(&annexb_bytes);
-            }
-            let annexb_data = annexb_data.freeze();
-
-            fs::write("./test.h264", &annexb_data).unwrap();
 
             info!(url_path=?url_path_clone, "End of video stream");
+            drop(ffplay_input);
+            ffplay.wait().unwrap();
         });
 
         thread::spawn(move || {
@@ -62,6 +72,7 @@ fn main() {
     server.run().unwrap();
 }
 
+#[derive(Default)]
 struct H264AvccToAnnexB {
     config: H264AvcDecoderConfig,
     sps_pps: Option<Bytes>,
@@ -122,7 +133,7 @@ impl H264AvccToAnnexB {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 struct H264AvcDecoderConfig {
     nalu_length_size: usize,
     spss: Vec<Bytes>,
