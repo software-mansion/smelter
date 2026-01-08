@@ -59,8 +59,11 @@ pub enum FrameType {
     Interframe,
 }
 
+// Currently only AVC video codec is supported
 impl VideoTag {
-    pub(crate) fn parse(data: Bytes) -> Result<Self, ParseError> {
+    /// Parses flv `VIDEODATA`. The `data` must be the contents of the `Data` field of
+    /// the flv tag with video `TagType`
+    pub fn parse(data: Bytes) -> Result<Self, ParseError> {
         if data.is_empty() {
             return Err(ParseError::NotEnoughData);
         }
