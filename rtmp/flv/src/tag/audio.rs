@@ -77,9 +77,11 @@ pub enum AudioChannels {
     Stereo,
 }
 
+// Currently only AAC audio codec is supported
 impl AudioTag {
-    // Currently only AAC audio codec is supported
-    pub(crate) fn parse(data: Bytes) -> Result<Self, ParseError> {
+    /// Parses flv `AUDIODATA`. The `data` must be the contents of the `Data` field of
+    /// the flv tag with audio `TagType`
+    pub fn parse(data: Bytes) -> Result<Self, ParseError> {
         if data.is_empty() {
             return Err(ParseError::NotEnoughData);
         }
