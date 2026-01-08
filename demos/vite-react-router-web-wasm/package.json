@@ -9,7 +9,7 @@
     "typecheck": "react-router typegen && tsc"
   },
   "dependencies": {
-    "@react-router/node": "^7.1.5",
+    "@react-router/node": "^7.9.4",
     "@react-router/serve": "^7.1.5",
     "@swmansion/smelter": "0.3.0",
     "@swmansion/smelter-web-wasm": "0.3.0",
