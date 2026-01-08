@@ -1,7 +1,5 @@
 use thiserror::Error;
 
-use crate::parser::audio::AudioTagParseError;
-
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum ParseError {
     #[error("Not enough data in FLV payload.")]
@@ -39,4 +37,16 @@ pub enum VideoTagParseError {
 
     #[error("Unsupported frame type header value: {0}")]
     UnsupportedFrameType(u8),
+}
+
+#[derive(Error, Debug, Clone, PartialEq)]
+pub enum AudioTagParseError {
+    #[error("Invalid sound rate header value: {0}")]
+    InvalidSoundRate(u8),
+
+    #[error("Invalid sound type header value: {0}")]
+    InvalidSoundType(u8),
+
+    #[error("Invalid AacPacketType header value: {0}")]
+    InvalidAacPacketType(u8),
 }

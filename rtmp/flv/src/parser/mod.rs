@@ -4,8 +4,6 @@ use bytes::Bytes;
 
 use crate::{AudioTag, VideoTag, error::ParseError, tag::PacketType};
 
-pub mod audio;
-
 /// Parser for RTMP payload.
 #[derive(Debug, Default)]
 pub struct RtmpParser {
