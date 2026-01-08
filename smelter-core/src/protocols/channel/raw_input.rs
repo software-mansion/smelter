@@ -61,8 +61,10 @@ impl InputAudioSamples {
 
 impl fmt::Debug for InputAudioSamples {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let len = self.samples.len();
+        let first_samples = &self.samples[0..usize::min(10, len)];
         f.debug_struct("InputSamples")
-            .field("samples", &format!("len={}", self.samples.len()))
+            .field("samples", &format!("len={len}, {first_samples:?}"))
             .field("start_pts", &self.start_pts)
             .field("end_pts", &self.end_pts)
             .finish()

@@ -1,6 +1,9 @@
 use std::{fmt, time::Duration};
 
-use rubato::{FftFixedOut, Resampler};
+use audioadapter_buffers::direct::InterleavedSlice;
+use rubato::{
+    FixedAsync, Resampler, SincInterpolationParameters, SincInterpolationType, WindowFunction,
+};
 use tracing::{debug, error, trace, warn};
 
 use crate::pipeline::resampler::SAMPLE_BATCH_DURATION;
@@ -10,7 +13,7 @@ pub(super) struct ChannelResampler {
     output_sample_rate: u32,
     input_buffer: Vec<f64>,
     output_buffer: Vec<f64>,
-    resampler: FftFixedOut<f64>,
+    resampler: rubato::Async<f64>,
     first_batch_pts: Duration,
     consumed_samples: u64,
     produced_samples: u64,
@@ -27,9 +30,6 @@ impl ChannelResampler {
         output_sample_rate: u32,
         first_batch_pts: Duration,
     ) -> Result<Box<Self>, rubato::ResamplerConstructionError> {
-        /// Not sure what should be here, but rubato example used 2
-        /// https://github.com/HEnquist/rubato/blob/master/examples/process_f64.rs#L174
-        const SUB_CHUNKS: usize = 2;
         let samples_in_batch = ((output_sample_rate as u128 * SAMPLE_BATCH_DURATION.as_nanos())
             / 1_000_000_000) as usize;
 
@@ -41,12 +41,28 @@ impl ChannelResampler {
             )
         }
 
-        let resampler = rubato::FftFixedOut::<f64>::new(
-            input_sample_rate as usize,
-            output_sample_rate as usize,
+        let resampler = rubato::Async::<f64>::new_sinc(
+            output_sample_rate as f64 / input_sample_rate as f64,
+            1.10,
+            #[cfg(debug_assertions)]
+            &SincInterpolationParameters {
+                sinc_len: 128,
+                f_cutoff: 0.95,
+                oversampling_factor: 128,
+                interpolation: SincInterpolationType::Linear,
+                window: WindowFunction::Blackman2,
+            },
+            #[cfg(not(debug_assertions))]
+            &SincInterpolationParameters {
+                sinc_len: 256,
+                f_cutoff: 0.95,
+                oversampling_factor: 128,
+                interpolation: SincInterpolationType::Cubic,
+                window: WindowFunction::Blackman2,
+            },
             samples_in_batch,
-            SUB_CHUNKS,
             1,
+            FixedAsync::Output,
         )?;
 
         // Input buffer is preallocated, to push input samples and fill missing samples between them.
@@ -77,17 +93,25 @@ impl ChannelResampler {
         while self.resampler.input_frames_next() <= self.input_buffer.len() {
             let start_pts = self.output_batch_pts();
 
-            let (consumed_samples, generated_samples) = match self.resampler.process_into_buffer(
-                &[&self.input_buffer],
-                &mut [&mut self.output_buffer],
-                None,
-            ) {
-                Ok(result) => result,
-                Err(err) => {
-                    error!("Resampling error: {}", err);
-                    break;
-                }
-            };
+            let input_buffer_len = self.input_buffer.len();
+            let output_buffer_len = self.output_buffer.len();
+
+            let input_buffer =
+                InterleavedSlice::new(&self.input_buffer, 1, input_buffer_len).unwrap();
+            let mut output_buffer =
+                InterleavedSlice::new_mut(&mut self.output_buffer, 1, output_buffer_len).unwrap();
+
+            let (consumed_samples, generated_samples) =
+                match self
+                    .resampler
+                    .process_into_buffer(&input_buffer, &mut output_buffer, None)
+                {
+                    Ok(result) => result,
+                    Err(err) => {
+                        error!("Resampling error: {}", err);
+                        break;
+                    }
+                };
 
             self.consumed_samples += consumed_samples as u64;
             self.input_buffer.drain(0..consumed_samples);
@@ -105,8 +129,8 @@ impl ChannelResampler {
         resampled_chunks
     }
 
-    // Write samples to input buffer. If there is a gap between last chunk and start_timestamp
-    // fill it with zeros.
+    /// Write samples to input buffer. If there is a gap between last chunk and start_timestamp
+    /// fill it with zeros.
     fn append_to_input_buffer(&mut self, batch: SingleChannelBatch) {
         let input_duration = batch.start_pts.saturating_sub(self.first_batch_pts);
         let expected_samples =

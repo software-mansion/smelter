@@ -28,7 +28,7 @@ reqwest = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 fdk-aac-sys = "0.5.0"
-rubato = "0.15.0"
+rubato = { workspace = true }
 wgpu = { workspace = true }
 vk-video = { workspace = true }
 glyphon = { workspace = true }
@@ -42,6 +42,7 @@ urlencoding = "2.1.3"
 itertools = { workspace = true }
 uuid = "1.17.0"
 pollster = { workspace = true }
+audioadapter-buffers = "2.0.0"
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 decklink = { path = "../decklink", optional = true }

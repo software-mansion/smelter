@@ -55,7 +55,7 @@ socket2 = "0.5.5"
 webrtc = "0.14.0"
 webrtc-util = "0.12.0"
 opus = "0.3.0"
-rubato = "0.15.0"
+rubato = "1.0.0"
 glyphon = { git = "https://github.com/grovesNL/glyphon", rev = "37b973d" }
 futures-util = "0.3.30"
 tokio = { version = "1", features = ["full"] }
