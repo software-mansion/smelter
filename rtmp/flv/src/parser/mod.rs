@@ -2,11 +2,9 @@ use std::mem;
 
 use bytes::Bytes;
 
-use crate::{AudioTag, VideoTag, parser::error::ParseError, tag::PacketType};
+use crate::{AudioTag, VideoTag, error::ParseError, tag::PacketType};
 
 pub mod audio;
-pub mod error;
-pub mod video;
 
 /// Parser for RTMP payload.
 #[derive(Debug, Default)]

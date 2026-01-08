@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::parser::{audio::AudioTagParseError, video::VideoTagParseError};
+use crate::parser::audio::AudioTagParseError;
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum ParseError {
@@ -30,4 +30,13 @@ pub enum ParseError {
 
     #[error("AAC decoder config received more than once in one stream.")]
     AacConfigDuplication,
+}
+
+#[derive(Error, Debug, Clone, PartialEq)]
+pub enum VideoTagParseError {
+    #[error("Invalid AvcPacketType header value: {0}")]
+    InvalidAvcPacketType(u8),
+
+    #[error("Unsupported frame type header value: {0}")]
+    UnsupportedFrameType(u8),
 }
