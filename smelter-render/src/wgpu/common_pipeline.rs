@@ -60,7 +60,7 @@ impl Sampler {
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             min_filter: wgpu::FilterMode::Linear,
             mag_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
 
@@ -132,7 +132,7 @@ pub fn create_render_pipeline(
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
-        multiview: None,
         cache: None,
+        multiview_mask: None,
     })
 }

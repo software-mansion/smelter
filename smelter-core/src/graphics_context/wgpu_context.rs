@@ -27,8 +27,7 @@ pub fn create_wgpu_graphics_ctx(
     #[cfg(not(target_arch = "wasm32"))]
     log_available_adapters(&instance, compatible_surface);
 
-    let adapter = instance
-        .enumerate_adapters(wgpu::Backends::all())
+    let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()))
         .into_iter()
         .filter(|adapter| match compatible_surface {
             Some(surface) => adapter.is_surface_supported(surface),
@@ -83,6 +82,7 @@ pub fn create_wgpu_graphics_ctx(
         required_features,
         memory_hints: wgpu::MemoryHints::default(),
         trace: wgpu::Trace::Off,
+        experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
     }))?;
 
     Ok(GraphicsContext {
@@ -97,8 +97,7 @@ pub fn create_wgpu_graphics_ctx(
 
 #[cfg(not(target_arch = "wasm32"))]
 fn log_available_adapters(instance: &wgpu::Instance, compatible_surface: Option<&wgpu::Surface>) {
-    let adapters: Vec<_> = instance
-        .enumerate_adapters(wgpu::Backends::all())
+    let adapters: Vec<_> = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()))
         .iter()
         .filter(|adapter| match compatible_surface {
             Some(surface) => adapter.is_surface_supported(surface),

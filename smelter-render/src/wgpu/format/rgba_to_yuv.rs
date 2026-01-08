@@ -21,10 +21,7 @@ impl RgbaToYuvConverter {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("RGBA to YUV color converter pipeline layout"),
             bind_group_layouts: &[single_texture_bind_group_layout, &sampler.bind_group_layout],
-            push_constant_ranges: &[wgpu::PushConstantRange {
-                stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                range: 0..4,
-            }],
+            immediate_size: 4,
         });
 
         let shader_module = device.create_shader_module(wgpu::include_wgsl!("rgba_to_yuv.wgsl"));
@@ -57,7 +54,7 @@ impl RgbaToYuvConverter {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -98,18 +95,16 @@ impl RgbaToYuvConverter {
                     },
                     view: dst.plane_view(plane),
                     resolve_target: None,
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_push_constants(
-                wgpu::ShaderStages::VERTEX_FRAGMENT,
-                0,
-                &(plane as u32).to_le_bytes(),
-            );
+            render_pass.set_immediates(0, &(plane as u32).to_le_bytes());
             render_pass.set_bind_group(0, src_bg, &[]);
             render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
             ctx.plane.draw(&mut render_pass);

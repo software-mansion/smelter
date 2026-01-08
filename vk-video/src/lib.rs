@@ -21,6 +21,7 @@
 //!     let device = adapter
 //!         .create_device(
 //!             wgpu::Features::empty(),
+//!             wgpu::ExperimentalFeatures::disabled(),
 //!             wgpu::Limits::default(),
 //!         )
 //!         .unwrap();

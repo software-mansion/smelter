@@ -27,9 +27,10 @@ fn main() {
     let vulkan_adapter = vulkan_instance.create_adapter(None).unwrap();
     let vulkan_device = vulkan_adapter
         .create_device(
-            wgpu::Features::PUSH_CONSTANTS,
+            wgpu::Features::IMMEDIATES,
+            wgpu::ExperimentalFeatures::disabled(),
             wgpu::Limits {
-                max_push_constant_size: 4,
+                max_immediate_size: 4,
                 ..Default::default()
             },
         )
@@ -106,10 +107,7 @@ impl WgpuState {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("wgpu pipeline layout"),
             bind_group_layouts: &[],
-            push_constant_ranges: &[wgpu::PushConstantRange {
-                range: 0..4,
-                stages: wgpu::ShaderStages::VERTEX,
-            }],
+            immediate_size: 4,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -141,7 +139,7 @@ impl WgpuState {
                 unclipped_depth: false,
                 strip_index_format: None,
             },
-            multiview: None,
+            multiview_mask: None,
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -206,11 +204,13 @@ impl WgpuState {
                         store: wgpu::StoreOp::Store,
                     },
                     resolve_target: None,
+                    depth_slice: None,
                 })],
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, &time.to_ne_bytes());
+            render_pass.set_immediates(0, &time.to_ne_bytes());
             render_pass.draw(0..3, 0..1);
         }
 

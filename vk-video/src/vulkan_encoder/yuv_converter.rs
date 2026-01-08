@@ -40,21 +40,15 @@ impl Converter {
         profile: &H264EncodeProfileInfo,
         image_tracker: Arc<Mutex<ImageLayoutTracker>>,
     ) -> Result<Self, YuvConverterError> {
-        let mut fence = unsafe {
-            device
-                .wgpu_device()
-                .as_hal::<VkApi, _, _>(|d| d.unwrap().create_fence())?
-        };
+        let wgpu_device = unsafe { device.wgpu_device().as_hal::<VkApi>().unwrap() };
+        let wgpu_queue = unsafe { device.wgpu_queue().as_hal::<VkApi>().unwrap() };
+
+        let mut fence = unsafe { wgpu_device.create_fence()? };
 
         let mut command_encoder = unsafe {
-            device.wgpu_device().as_hal::<VkApi, _, _>(|d| {
-                device.wgpu_queue().as_hal::<VkApi, _, _>(|q| {
-                    d.unwrap()
-                        .create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
-                            label: Some("YUV converter init command encoder"),
-                            queue: q.unwrap(),
-                        })
-                })
+            wgpu_device.create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
+                label: Some("YUV converter init command encoder"),
+                queue: &wgpu_queue,
             })?
         };
 
@@ -203,9 +197,7 @@ impl Converter {
         let command_buffer = unsafe { command_encoder.end_encoding()? };
 
         unsafe {
-            device.wgpu_queue().as_hal::<VkApi, _, _>(|q| {
-                q.unwrap().submit(&[&command_buffer], &[], (&mut fence, 1))
-            })?
+            wgpu_queue.submit(&[&command_buffer], &[], (&mut fence, 1))?;
         };
 
         image_tracker
@@ -216,18 +208,10 @@ impl Converter {
 
         let mut done = false;
         while !done {
-            done = unsafe {
-                device
-                    .wgpu_device()
-                    .as_hal::<VkApi, _, _>(|d| d.unwrap().wait(&fence, 1, u32::MAX))?
-            }
+            done = unsafe { wgpu_device.wait(&fence, 1, None)? }
         }
 
-        unsafe {
-            device
-                .wgpu_device()
-                .as_hal::<VkApi, _, _>(|d| d.unwrap().destroy_fence(fence));
-        }
+        unsafe { wgpu_device.destroy_fence(fence) }
 
         Ok(Self {
             device: device.vulkan_device.clone(),
@@ -248,24 +232,16 @@ impl Converter {
         texture: wgpu::Texture,
         tracker: &mut EncoderTracker,
     ) -> Result<ConvertState, YuvConverterError> {
+        let wgpu_device = unsafe { self.device.wgpu_device().as_hal::<VkApi>().unwrap() };
+        let wgpu_queue = unsafe { self.device.wgpu_queue().as_hal::<VkApi>().unwrap() };
         let mut command_encoder = unsafe {
-            self.device.wgpu_device().as_hal::<VkApi, _, _>(|d| {
-                self.device.wgpu_queue().as_hal::<VkApi, _, _>(|q| {
-                    d.unwrap()
-                        .create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
-                            label: None,
-                            queue: q.unwrap(),
-                        })
-                })
+            wgpu_device.create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
+                label: None,
+                queue: &wgpu_queue,
             })?
         };
 
-        let image = unsafe {
-            texture.as_hal::<VkApi, _, _>(|t| {
-                let t = t.unwrap();
-                t.raw_handle()
-            })
-        };
+        let image = unsafe { texture.as_hal::<VkApi>().unwrap().raw_handle() };
 
         let view_create_info = vk::ImageViewCreateInfo::default()
             .image(image)
@@ -326,13 +302,11 @@ impl Converter {
         let signal_value = tracker.semaphore_tracker.next_sem_value();
 
         unsafe {
-            self.device.wgpu_queue().as_hal::<VkApi, _, _>(|q| {
-                q.unwrap().submit(
-                    &[&wgpu_command_buffer],
-                    &[],
-                    (&mut wgpu_fence, signal_value),
-                )
-            })?;
+            wgpu_queue.submit(
+                &[&wgpu_command_buffer],
+                &[],
+                (&mut wgpu_fence, signal_value),
+            )?;
         }
 
         tracker.semaphore_tracker.wait_for = Some(TrackerWait {

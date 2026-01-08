@@ -1,5 +1,3 @@
-use wgpu::ShaderStages;
-
 use crate::wgpu::{
     common_pipeline::{PRIMITIVE_STATE, Sampler, Vertex},
     texture::PlanarYuvVariant,
@@ -26,10 +24,7 @@ impl PlanarYuvToRgbaConverter {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Planar YUV 4:2:0 to RGBA color converter render pipeline layout"),
             bind_group_layouts: &[yuv_textures_bind_group_layout, &sampler.bind_group_layout],
-            push_constant_ranges: &[wgpu::PushConstantRange {
-                stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                range: 0..YUVToRGBAPushConstants::push_constant_size(),
-            }],
+            immediate_size: YUVToRGBAPushConstants::push_constant_size(),
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -60,7 +55,7 @@ impl PlanarYuvToRgbaConverter {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            multiview: None,
+            multiview_mask: None,
             depth_stencil: None,
             cache: None,
         });
@@ -91,20 +86,18 @@ impl PlanarYuvToRgbaConverter {
                     },
                     view: dst_view,
                     resolve_target: None,
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, src_bg, &[]);
             render_pass.set_bind_group(1, &self.sampler.bind_group, &[]);
-            render_pass.set_push_constants(
-                ShaderStages::VERTEX_FRAGMENT,
-                0,
-                YUVToRGBAPushConstants::new(yuv_variant).push_constant(),
-            );
+            render_pass.set_immediates(0, YUVToRGBAPushConstants::new(yuv_variant).push_constant());
 
             ctx.plane.draw(&mut render_pass);
         }

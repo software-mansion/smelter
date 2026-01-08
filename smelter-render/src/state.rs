@@ -245,7 +245,7 @@ impl InnerRenderer {
         trace!("Download output textures");
         let frames = read_outputs(ctx, &mut self.render_graph, pts);
 
-        scope.pop(&ctx.wgpu_ctx.device)?;
+        scope.pop()?;
 
         Ok(FrameSet { frames, pts })
     }

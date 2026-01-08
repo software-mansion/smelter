@@ -20,7 +20,7 @@ impl Nv12ToRgbaConverter {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("NV12 to RGBA color converter render pipeline layout"),
             bind_group_layouts: &[nv12_texture_bind_group_layout, &sampler.bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -51,7 +51,7 @@ impl Nv12ToRgbaConverter {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            multiview: None,
+            multiview_mask: None,
             depth_stencil: None,
             cache: None,
         });
@@ -76,10 +76,12 @@ impl Nv12ToRgbaConverter {
                     },
                     view: dst_view,
                     resolve_target: None,
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&self.pipeline);
