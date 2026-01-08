@@ -20,6 +20,7 @@ impl RtmpParser {
     }
 
     /// Extracts codec data from payload of RTMP video message. Returns type of the parsed packet.
+    /// The `data` must be payload of a RTMP video message.
     pub fn parse_video(&mut self, data: Bytes) -> Result<PacketType, ParseError> {
         let video_tag = VideoTag::parse(data)?;
         match video_tag.packet_type {
@@ -35,6 +36,7 @@ impl RtmpParser {
     }
 
     /// Extracts codec data from payload of RTMP audio message. Returns type of the parsed packet.
+    /// The `data` must be payload of a RTMP audio message.
     pub fn parse_audio(&mut self, data: Bytes) -> Result<PacketType, ParseError> {
         let audio_tag = AudioTag::parse(data)?;
         match audio_tag.packet_type {
