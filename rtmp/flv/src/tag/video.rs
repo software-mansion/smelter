@@ -11,7 +11,7 @@ pub struct VideoTag {
     pub packet_type: PacketType,
     pub codec: VideoCodec,
 
-    /// AVC config only. Composition time offset.
+    /// This field is `Some` only for tag containing AVC config.
     pub composition_time: Option<i32>,
     pub frame_type: FrameType,
     pub data: Bytes,
