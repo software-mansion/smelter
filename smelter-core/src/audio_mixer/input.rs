@@ -1,95 +1,75 @@
 use std::time::Duration;
 
+use crossbeam_channel::{Receiver, Sender, bounded};
+use tracing::trace;
+
 use crate::prelude::*;
+
+mod input_thread;
+mod resampler;
 
 #[derive(Debug)]
 pub(super) struct AudioMixerInput {
-    mixing_sample_rate: u32,
-    last_batch_received_end: Option<Duration>,
-    last_batch_produced_end: Option<Duration>,
+    input_sender: Sender<AudioMixerInputEvent>,
+    result_receiver: Receiver<AudioMixerInputResult>,
+    next: Option<AudioMixerInputResult>,
+}
+
+#[derive(Debug)]
+enum AudioMixerInputEvent {
+    Samples(InputAudioSamples),
+    RangeRequest((Duration, Duration)),
+}
+
+#[derive(Debug)]
+struct AudioMixerInputResult {
+    samples: AudioSamples,
+    pts_range: (Duration, Duration),
 }
 
 const SHIFT_THRESHOLD: Duration = Duration::from_millis(5);
-const STRETCH_THRESHOLD: Duration = Duration::from_millis(100);
+const STRETCH_THRESHOLD: Duration = Duration::from_millis(500);
 
 impl AudioMixerInput {
     pub fn new(mixing_sample_rate: u32) -> Self {
+        let (input_sender, input_receiver) = bounded(100);
+        let (result_sender, result_receiver) = bounded(100);
         Self {
-            mixing_sample_rate,
-            last_batch_received_end: None,
-            last_batch_produced_end: None,
+            input_sender,
+            result_receiver,
+            next: None,
         }
     }
 
-    pub fn write_batch(&mut self, batch: InputAudioSamples) {
-
+    pub fn write_batch(&self, samples: InputAudioSamples) {
+        let result = self
+            .input_sender
+            .send(AudioMixerInputEvent::Samples(samples));
+        if result.is_err() {
+            trace!("Failed to send samples. Channel closed.")
+        }
     }
 
-    pub fn read_batch(&mut self, pts_range: (Duration, Duration)) -> AudioSamples {
-
+    pub fn request_samples(&self, pts_range: (Duration, Duration)) {
+        let result = self
+            .input_sender
+            .send(AudioMixerInputEvent::RangeRequest(pts_range));
+        if result.is_err() {
+            trace!("Failed to send range request. Channel closed.")
+        }
     }
 
-    pub fn has_batch(&mut self, pts_range: (Duration, Duration)) -> bool {
-
-    }
-
-    /// This function expects that timestamp of the batches will be in `pts_range`
-    /// or in the future (higher values).
-    ///
-    /// Batch that would start before the `pts_range` start should have been delivered in
-    /// the previous call. However, batch like that is still used if received too late,
-    /// but previous sample batch might have already been produced with a gap.
-    pub fn next_batch_set(
-        &mut self,
-        batches: Vec<InputAudioSamples>,
-        pts_range: (Duration, Duration),
-    ) -> Option<AudioSamples> {
-        let last_batch_produced_end = self.last_batch_produced_end.unwrap_or(pts_range.0);
-
-        let (last_batch_received_end, batches) = match self.last_batch_received_end {
-            Some(pts) => (pts, batches),
-            None => {
-                let batches: Vec<_> = batches
-                    .into_iter()
-                    .skip_while(|batch| batch.start_pts < pts_range.0)
-                    .collect();
-                match batches.first() {
-                    Some(batch) => (batch.start_pts, batches),
-                    None => {
-                        // no samples to init
-                        return None;
-                    }
-                }
+    pub fn get_samples(&mut self, pts_range: (Duration, Duration)) -> Option<AudioSamples> {
+        loop {
+            if self.next.is_none() {
+                let Ok(result) = self.result_receiver.recv() else {
+                    trace!("Failed to read samples. Channel closed.");
+                    return None;
+                };
+                self.next = Some(result)
             }
-        };
+            let next = self.next?;
 
-        for batch in batches {
-            let last_batch_received_end = self
-                .last_batch_received_end
-                .unwrap_or(last_batch_received_end);
-            self.write_next_batch(batch, last_batch_received_end);
-        }
-
-        // resample into output or maybe copy into output
-        // self.resample_input_buffer()
-
-        // maybe resample
-        // write resamples samples to buffer
-        // read samples for that range from the buffer
-        None
-    }
-
-    fn write_next_batch(&mut self, batch: InputAudioSamples, last_batch_received_end: Duration) {
-        if last_batch_received_end + STRETCH_THRESHOLD > batch.start_pts {
-            // fill zero reset
-        } else if last_batch_received_end + SHIFT_THRESHOLD > batch.start_pts {
-            // stretch + shift
-        } else if last_batch_received_end.saturating_sub(SHIFT_THRESHOLD) > batch.start_pts {
-            // shift
-        } else if last_batch_received_end.saturating_sub(STRETCH_THRESHOLD) > batch.start_pts {
-            // squeeze + shift
-        } else {
-            // drop/reset
         }
     }
 }

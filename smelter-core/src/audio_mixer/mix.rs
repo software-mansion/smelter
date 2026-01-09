@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use smelter_render::InputId;
 
-use crate::{audio_mixer::AudioOutputInfo, prelude::*};
+use crate::prelude::*;
 
 use tracing::{error, trace};
 

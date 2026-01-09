@@ -7,7 +7,10 @@ use smelter_render::{OutputId, error::UpdateSceneError};
 use tracing::trace;
 
 use crate::{
-    audio_mixer::{InputSamplesSet, OutputSamplesSet, input::AudioMixerInput, mix::SampleMixer},
+    audio_mixer::{
+        InputSamplesSet, OutputSamplesSet, input::AudioMixerInput, mix::SampleMixer,
+        prepare_inputs::expected_samples_count,
+    },
     prelude::OutputAudioSamples,
 };
 
@@ -116,14 +119,28 @@ impl InternalAudioMixer {
         }
     }
 
-    pub fn mix_samples(&mut self, samples_set: InputSamplesSet) -> OutputSamplesSet {
-        let start_pts = samples_set.start_pts;
+    pub fn mix_samples(&mut self, mut samples_set: InputSamplesSet) -> OutputSamplesSet {
+        let pts_range = (samples_set.start_pts, samples_set.end_pts);
+        for (input_id, input) in &mut self.inputs {
+            if let Some(batches) = samples_set.samples.remove(&input_id) {
+                batches
+                    .into_iter()
+                    .for_each(|batch| input.write_batch(batch));
+            }
+            input.request_samples(pts_range);
+        }
+
+        let input_samples = self
+            .inputs
+            .iter()
+            .map(|(input_id, input)| input.get_samples(pts_range))
+            .collect();
+
         let samples_count = expected_samples_count(
             samples_set.start_pts,
             samples_set.end_pts,
             self.mixing_sample_rate,
         );
-        let input_samples = prepare_input_samples(samples_set, self.mixing_sample_rate);
 
         OutputSamplesSet(
             self.outputs
@@ -132,7 +149,13 @@ impl InternalAudioMixer {
                     let samples =
                         self.sample_mixer
                             .mix_samples(&input_samples, output_info, samples_count);
-                    (output_id.clone(), OutputAudioSamples { samples, start_pts })
+                    (
+                        output_id.clone(),
+                        OutputAudioSamples {
+                            samples,
+                            start_pts: samples_set.start_pts,
+                        },
+                    )
                 })
                 .collect(),
         )

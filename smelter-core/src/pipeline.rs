@@ -17,7 +17,6 @@ use crate::prelude::*;
 
 mod decoder;
 mod encoder;
-mod resampler;
 
 mod ffmpeg_utils;
 
