@@ -108,6 +108,7 @@ impl CommandBufferPool {
             buffer,
             pool: self.0.clone(),
             image_layout_transitions: Default::default(),
+            reset_on_drop: true,
         }))
     }
 
@@ -122,22 +123,22 @@ struct UnfinishedCommandBuffer {
     buffer: vk::CommandBuffer,
     pool: Arc<Mutex<CommandBufferPoolInner>>,
     image_layout_transitions: FxHashMap<ImageKey, Box<[vk::ImageLayout]>>,
+    reset_on_drop: bool,
 }
 
 impl UnfinishedCommandBuffer {
     fn destroy_without_reset(mut self) {
-        // free the hashmap
-        drop(std::mem::take(&mut self.image_layout_transitions));
-
-        // but don't run our destructor
-        std::mem::forget(self);
+        self.reset_on_drop = false;
     }
 }
 
 impl Drop for UnfinishedCommandBuffer {
     fn drop(&mut self) {
-        let mut locked = self.pool.lock().unwrap();
+        if !self.reset_on_drop {
+            return;
+        }
 
+        let mut locked = self.pool.lock().unwrap();
         unsafe {
             if let Err(e) = locked
                 .command_pool
