@@ -1,11 +1,15 @@
-use crate::chunk::{ChunkType, RtmpChunk, RtmpChunkReader};
-use crate::error::RtmpError;
-use crate::message::RtmpMessage;
+use crate::{
+    chunk::{ChunkType, RtmpChunk, RtmpChunkReader},
+    error::RtmpError,
+    message::RtmpMessage,
+};
 use bytes::BytesMut;
-use std::cmp::min;
-use std::collections::HashMap;
 use std::net::TcpStream;
-use std::sync::{Arc, atomic::AtomicBool};
+use std::{
+    cmp::min,
+    collections::HashMap,
+    sync::{Arc, atomic::AtomicBool},
+};
 
 pub struct RtmpMessageReader {
     chunk_reader: RtmpChunkReader,
@@ -68,6 +72,11 @@ impl Iterator for RtmpMessageReader {
         loop {
             let chunk = match self.chunk_reader.read_chunk(&self.accumulators) {
                 Ok(chunk) => chunk,
+                Err(RtmpError::UnexpectedEof) => return None,
+                Err(RtmpError::Io(e)) if e.kind() == std::io::ErrorKind::ConnectionReset => {
+                    return None;
+                }
+                Err(RtmpError::Io(e)) if e.kind() == std::io::ErrorKind::BrokenPipe => return None,
                 Err(e) => return Some(Err(e)),
             };
             if let Err(e) = self.accumulate_chunk(&chunk) {
