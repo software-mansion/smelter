@@ -4,10 +4,13 @@ mod input;
 mod mix;
 mod mixer;
 mod prepare_inputs;
+mod resampler;
 
 pub(crate) use mixer::AudioMixer;
 
 use crate::prelude::*;
+
+pub(crate) const SAMPLE_BATCH_DURATION: Duration = Duration::from_millis(20);
 
 #[derive(Debug, Clone)]
 pub struct InputSamplesSet {
