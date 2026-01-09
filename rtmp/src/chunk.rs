@@ -4,7 +4,7 @@ use crate::{
 use bytes::Bytes;
 use std::{
     cmp::min,
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     net::TcpStream,
     sync::{Arc, atomic::AtomicBool},
 };
@@ -16,6 +16,11 @@ const DEFAULT_CHUNK_SIZE: usize = 128;
 pub(crate) struct RtmpChunk {
     pub header: ChunkHeader,
     pub payload: Bytes,
+}
+
+enum ParseChunkError {
+    NotEnoughData,
+    RtmpError(RtmpError),
 }
 
 #[allow(unused)]
@@ -69,133 +74,35 @@ impl RtmpChunkReader {
         &mut self,
         accumulators: &HashMap<u32, PayloadAccumulator>,
     ) -> Result<RtmpChunk, RtmpError> {
-        let required_size = loop {
-            match self.peek_chunk_size(accumulators)? {
-                Some(size) => {
-                    if self.reader.data().len() >= size {
-                        break size;
-                    }
-                    self.reader.read_until_buffer_size(size)?;
+        loop {
+            match self.try_parse_chunk(accumulators) {
+                Ok((chunk, len_to_read)) => {
+                    self.reader.read_bytes(len_to_read)?;
+                    return Ok(chunk);
                 }
-                None => {
-                    let current = self.reader.data().len();
-                    self.reader.read_until_buffer_size(current + 1)?;
+                Err(ParseChunkError::NotEnoughData) => {
+                    let current_len = self.reader.data().len();
+                    self.reader.read_until_buffer_size(current_len + 1)?;
                 }
+                Err(ParseChunkError::RtmpError(e)) => return Err(e),
             }
-        };
-
-        let chunk_data = self.reader.read_bytes(required_size)?;
-        self.parse_chunk_data(chunk_data, accumulators)
-    }
-
-    fn peek_chunk_size(
-        &self,
-        accumulators: &HashMap<u32, PayloadAccumulator>,
-    ) -> Result<Option<usize>, RtmpError> {
-        let buf = self.reader.data();
-        if buf.is_empty() {
-            return Ok(None);
         }
-
-        // basic header
-        let first_byte = buf[0];
-        let fmt_byte = first_byte >> 6;
-        let cs_id_initial = first_byte & 0x3F;
-
-        let basic_header_len = match cs_id_initial {
-            0 => 2,
-            1 => 3,
-            _ => 1,
-        };
-
-        if buf.len() < basic_header_len {
-            return Ok(None);
-        }
-
-        let cs_id = match cs_id_initial {
-            0 => 64 + (buf[1] as u32),
-            1 => 64 + (buf[1] as u32) + ((buf[2] as u32) * 256),
-            n => n as u32,
-        };
-
-        let fmt = ChunkType::from(fmt_byte);
-
-        // message header
-        let msg_header_len = match fmt {
-            ChunkType::Full => 11,
-            ChunkType::NoMessageStreamId => 7,
-            ChunkType::TimestampOnly => 3,
-            ChunkType::NoHeader => 0,
-        };
-
-        if buf.len() < basic_header_len + msg_header_len {
-            return Ok(None);
-        }
-
-        // check if extended
-        let has_extended_ts = if msg_header_len >= 3 {
-            let offset = basic_header_len;
-            let b0 = buf[offset];
-            let b1 = buf[offset + 1];
-            let b2 = buf[offset + 2];
-            b0 == 0xFF && b1 == 0xFF && b2 == 0xFF
-        } else if fmt == ChunkType::NoHeader {
-            if let Some(prev) = self.prev_headers.get(&cs_id) {
-                prev.timestamp_delta == 0xFFFFFF || prev.timestamp == 0xFFFFFF
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-
-        let extended_ts_len = if has_extended_ts { 4 } else { 0 };
-
-        if buf.len() < basic_header_len + msg_header_len + extended_ts_len {
-            return Ok(None);
-        }
-
-        // chunk payload size
-        let msg_len = if fmt == ChunkType::Full || fmt == ChunkType::NoMessageStreamId {
-            let offset = basic_header_len + 3; // skip timestamp
-            let b0 = buf[offset] as u32;
-            let b1 = buf[offset + 1] as u32;
-            let b2 = buf[offset + 2] as u32;
-            (b0 << 16) | (b1 << 8) | b2
-        } else {
-            self.prev_headers
-                .get(&cs_id)
-                .map(|h| h.msg_len)
-                .unwrap_or(0)
-        };
-
-        if msg_len as usize > MAX_MESSAGE_SIZE {
-            return Err(RtmpError::MessageTooLarge(msg_len));
-        }
-
-        let current_acc = accumulators
-            .get(&cs_id)
-            .map(|a| a.current_len())
-            .unwrap_or(0);
-
-        let remaining_for_message = (msg_len as usize).saturating_sub(current_acc);
-        let chunk_payload_size = min(remaining_for_message, self.chunk_size);
-
-        Ok(Some(
-            basic_header_len + msg_header_len + extended_ts_len + chunk_payload_size,
-        ))
     }
 
     pub fn set_chunk_size(&mut self, size: usize) {
         self.chunk_size = size;
     }
 
-    fn parse_chunk_data(
+    fn try_parse_chunk(
         &mut self,
-        data: Vec<u8>,
         accumulators: &HashMap<u32, PayloadAccumulator>,
-    ) -> Result<RtmpChunk, RtmpError> {
+    ) -> Result<(RtmpChunk, usize), ParseChunkError> {
+        let data = self.reader.data();
         let mut cursor = 0;
+
+        if data.is_empty() {
+            return Err(ParseChunkError::NotEnoughData);
+        }
 
         // basic header
         let first_byte = data[cursor];
@@ -206,11 +113,17 @@ impl RtmpChunkReader {
 
         let cs_id = match cs_id_marker {
             0 => {
+                if data.len() < cursor + 1 {
+                    return Err(ParseChunkError::NotEnoughData);
+                }
                 let b = data[cursor];
                 cursor += 1;
                 64 + (b as u32)
             }
             1 => {
+                if data.len() < cursor + 2 {
+                    return Err(ParseChunkError::NotEnoughData);
+                }
                 let b0 = data[cursor];
                 let b1 = data[cursor + 1];
                 cursor += 2;
@@ -238,11 +151,15 @@ impl RtmpChunkReader {
         match fmt {
             ChunkType::Full => {
                 // Type 0 (11 bytes)
+                if data.len() < cursor + 11 {
+                    return Err(ParseChunkError::NotEnoughData);
+                }
+
                 // [timestamp(3)] [msg_len(3)] [msg_type_id(1)] [msg_stream_id(4 LE)]
-                let ts_raw = read_u24(&data[cursor..]);
-                msg_len = read_u24(&data[cursor + 3..]);
+                let ts_raw = read_u24(data, cursor);
+                msg_len = read_u24(data, cursor + 3);
                 msg_type_id = data[cursor + 6];
-                msg_stream_id = read_u32_le(&data[cursor + 7..]);
+                msg_stream_id = read_u32_le(data, cursor + 7);
                 cursor += 11;
 
                 if ts_raw == 0xFFFFFF {
@@ -254,9 +171,13 @@ impl RtmpChunkReader {
             }
             ChunkType::NoMessageStreamId => {
                 // Type 1 (7 bytes)
+                if data.len() < cursor + 7 {
+                    return Err(ParseChunkError::NotEnoughData);
+                }
+
                 // [timestamp_delta(3)] [msg_len(3)] [msg_type_id(1)]
-                let ts_delta_raw = read_u24(&data[cursor..]);
-                msg_len = read_u24(&data[cursor + 3..]);
+                let ts_delta_raw = read_u24(data, cursor);
+                msg_len = read_u24(data, cursor + 3);
                 msg_type_id = data[cursor + 6];
                 cursor += 7;
 
@@ -268,8 +189,12 @@ impl RtmpChunkReader {
             }
             ChunkType::TimestampOnly => {
                 // Type 2 (3 bytes)
+                if data.len() < cursor + 3 {
+                    return Err(ParseChunkError::NotEnoughData);
+                }
+
                 // [timestamp_delta(3)]
-                let ts_delta_raw = read_u24(&data[cursor..]);
+                let ts_delta_raw = read_u24(data, cursor);
                 cursor += 3;
 
                 if ts_delta_raw == 0xFFFFFF {
@@ -288,7 +213,10 @@ impl RtmpChunkReader {
 
         // extended timestamp
         if has_extended_ts {
-            let extended_ts = read_u32_be(&data[cursor..]);
+            if data.len() < cursor + 4 {
+                return Err(ParseChunkError::NotEnoughData);
+            }
+            let extended_ts = read_u32_be(data, cursor);
             cursor += 4;
 
             match fmt {
@@ -300,6 +228,25 @@ impl RtmpChunkReader {
         // calculate timestamp
         if fmt != ChunkType::Full {
             timestamp = timestamp.wrapping_add(timestamp_delta);
+        }
+
+        if msg_len as usize > MAX_MESSAGE_SIZE {
+            return Err(ParseChunkError::RtmpError(RtmpError::MessageTooLarge(
+                msg_len,
+            )));
+        }
+
+        // paylaod
+        let current_acc = accumulators
+            .get(&cs_id)
+            .map(|a| a.current_len())
+            .unwrap_or(0);
+
+        let remaining_for_message = (msg_len as usize).saturating_sub(current_acc);
+        let chunk_payload_size = min(remaining_for_message, self.chunk_size);
+
+        if data.len() < cursor + chunk_payload_size {
+            return Err(ParseChunkError::NotEnoughData);
         }
 
         let header = ChunkHeader {
@@ -314,41 +261,36 @@ impl RtmpChunkReader {
 
         self.prev_headers.insert(cs_id, header.clone());
 
-        // paylaod
-        let current_acc = accumulators
-            .get(&cs_id)
-            .map(|a| a.current_len())
-            .unwrap_or(0);
+        let mut payload_vec = Vec::with_capacity(chunk_payload_size);
+        for i in 0..chunk_payload_size {
+            payload_vec.push(data[cursor + i]);
+        }
+        let payload = Bytes::from(payload_vec);
+        cursor += chunk_payload_size;
 
-        let remaining_for_message = (msg_len as usize).saturating_sub(current_acc);
-        let chunk_payload_size = min(remaining_for_message, self.chunk_size);
-
-        let payload_bytes = &data[cursor..cursor + chunk_payload_size];
-        let payload = Bytes::copy_from_slice(payload_bytes);
-
-        Ok(RtmpChunk { header, payload })
+        Ok((RtmpChunk { header, payload }, cursor))
     }
 }
 
-fn read_u24(s: &[u8]) -> u32 {
-    let b0 = s[0] as u32;
-    let b1 = s[1] as u32;
-    let b2 = s[2] as u32;
+fn read_u24(data: &VecDeque<u8>, start: usize) -> u32 {
+    let b0 = data[start] as u32;
+    let b1 = data[start + 1] as u32;
+    let b2 = data[start + 2] as u32;
     (b0 << 16) | (b1 << 8) | b2
 }
 
-fn read_u32_be(s: &[u8]) -> u32 {
-    let b0 = s[0] as u32;
-    let b1 = s[1] as u32;
-    let b2 = s[2] as u32;
-    let b3 = s[3] as u32;
+fn read_u32_be(data: &VecDeque<u8>, start: usize) -> u32 {
+    let b0 = data[start] as u32;
+    let b1 = data[start + 1] as u32;
+    let b2 = data[start + 2] as u32;
+    let b3 = data[start + 3] as u32;
     (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
 }
 
-fn read_u32_le(s: &[u8]) -> u32 {
-    let b0 = s[0] as u32;
-    let b1 = s[1] as u32;
-    let b2 = s[2] as u32;
-    let b3 = s[3] as u32;
+fn read_u32_le(data: &VecDeque<u8>, start: usize) -> u32 {
+    let b0 = data[start] as u32;
+    let b1 = data[start + 1] as u32;
+    let b2 = data[start + 2] as u32;
+    let b3 = data[start + 3] as u32;
     b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
 }
