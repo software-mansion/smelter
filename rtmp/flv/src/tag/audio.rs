@@ -80,7 +80,8 @@ pub enum AudioChannels {
 // Currently only AAC audio codec is supported
 impl AudioTag {
     /// Parses flv `AUDIODATA`. The `data` must be the contents of the `Data` field of
-    /// the flv tag with audio `TagType`
+    /// the flv tag with audio `TagType`.  
+    /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
     pub fn parse(data: Bytes) -> Result<Self, ParseError> {
         if data.is_empty() {
             return Err(ParseError::NotEnoughData);
