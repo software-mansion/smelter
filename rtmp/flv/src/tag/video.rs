@@ -62,7 +62,8 @@ pub enum FrameType {
 // Currently only AVC video codec is supported
 impl VideoTag {
     /// Parses flv `VIDEODATA`. The `data` must be the contents of the `Data` field of
-    /// the flv tag with video `TagType`
+    /// the flv tag with video `TagType`.  
+    /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
     pub fn parse(data: Bytes) -> Result<Self, ParseError> {
         if data.is_empty() {
             return Err(ParseError::NotEnoughData);
