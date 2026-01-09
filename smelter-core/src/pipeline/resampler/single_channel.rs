@@ -24,6 +24,24 @@ pub(super) struct SingleChannelBatch {
     pub samples: Vec<f64>,
 }
 
+#[cfg(debug_assertions)]
+const INTERPOLATION_PARAMS: SincInterpolationParameters = SincInterpolationParameters {
+    sinc_len: 128,
+    f_cutoff: 0.95,
+    oversampling_factor: 128,
+    interpolation: SincInterpolationType::Linear,
+    window: WindowFunction::Blackman2,
+};
+
+#[cfg(not(debug_assertions))]
+const INTERPOLATION_PARAMS: SincInterpolationParameters = SincInterpolationParameters {
+    sinc_len: 256,
+    f_cutoff: 0.95,
+    oversampling_factor: 128,
+    interpolation: SincInterpolationType::Cubic,
+    window: WindowFunction::Blackman2,
+};
+
 impl ChannelResampler {
     pub fn new(
         input_sample_rate: u32,
@@ -44,22 +62,7 @@ impl ChannelResampler {
         let resampler = rubato::Async::<f64>::new_sinc(
             output_sample_rate as f64 / input_sample_rate as f64,
             1.10,
-            #[cfg(debug_assertions)]
-            &SincInterpolationParameters {
-                sinc_len: 128,
-                f_cutoff: 0.95,
-                oversampling_factor: 128,
-                interpolation: SincInterpolationType::Linear,
-                window: WindowFunction::Blackman2,
-            },
-            #[cfg(not(debug_assertions))]
-            &SincInterpolationParameters {
-                sinc_len: 256,
-                f_cutoff: 0.95,
-                oversampling_factor: 128,
-                interpolation: SincInterpolationType::Cubic,
-                window: WindowFunction::Blackman2,
-            },
+            &INTERPOLATION_PARAMS,
             samples_in_batch,
             1,
             FixedAsync::Output,
@@ -108,7 +111,7 @@ impl ChannelResampler {
                 {
                     Ok(result) => result,
                     Err(err) => {
-                        error!("Resampling error: {}", err);
+                        error!("Resampling error: {err}");
                         break;
                     }
                 };
@@ -141,7 +144,7 @@ impl ChannelResampler {
         const SAMPLES_COMPARE_ERROR_MARGIN: u64 = 1;
         if expected_samples > actual_samples + SAMPLES_COMPARE_ERROR_MARGIN {
             let filling_samples = expected_samples - actual_samples;
-            debug!("Filling {} missing samples in resampler", filling_samples);
+            debug!("Filling {filling_samples} missing samples in resampler");
             for _ in 0..filling_samples {
                 self.input_buffer.push(0.0);
             }
