@@ -1,5 +1,6 @@
 use crate::{
-    buffered_stream_reader::BufferedReader, error::RtmpError, message_reader::PayloadAccumulator,
+    buffered_stream_reader::BufferedReader, error::RtmpError,
+    message::message_reader::PayloadAccumulator,
 };
 use bytes::Bytes;
 use std::{

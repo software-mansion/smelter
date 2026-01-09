@@ -1,17 +1,12 @@
-use crate::{error::RtmpError, handshake::Handshake, message_reader::RtmpMessageReader};
+use crate::{error::RtmpError, handle_client::handle_client};
 use bytes::Bytes;
 use std::{
     collections::HashSet,
-    net::{SocketAddr, TcpListener, TcpStream},
-    sync::{
-        Arc, Mutex, RwLock,
-        atomic::AtomicBool,
-        mpsc::{Receiver, channel},
-    },
+    net::{SocketAddr, TcpListener},
+    sync::{Arc, Mutex, RwLock, mpsc::Receiver},
     thread,
 };
-use tracing::{error, info, trace};
-use url::Url;
+use tracing::{error, info};
 
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
 pub type RtmpUrlPath = Arc<str>;
@@ -32,7 +27,7 @@ pub struct ServerConfig {
     pub client_timeout_secs: u64,
 }
 #[allow(unused)]
-struct ServerState {
+pub(crate) struct ServerState {
     active_streams: RwLock<HashSet<RtmpUrlPath>>,
 }
 
@@ -103,66 +98,4 @@ impl RtmpServer {
         }
         Ok(())
     }
-}
-
-fn handle_client(
-    mut stream: TcpStream,
-    _state: Arc<ServerState>, // later, based on state there will be check if route available
-    on_connection: Arc<Mutex<OnConnectionCallback>>,
-) -> Result<(), RtmpError> {
-    Handshake::perform(&mut stream)?;
-    let message_reader = RtmpMessageReader::new(stream, Arc::new(AtomicBool::new(false)));
-    info!("Handshake complete");
-
-    // connect with rtmp amf0 messages
-
-    // get rtmp url from `tcUrl` field
-    // hardcoded for now
-    let rtmp_url = Url::parse("rtmp://127.0.0.1:1935/app/stream_key").unwrap();
-
-    // check if another stream is not actively streaming on that route
-
-    let (video_tx, video_rx) = channel();
-    let (audio_tx, audio_rx) = channel();
-
-    let connection_ctx = RtmpConnection {
-        url_path: rtmp_url.path().into(),
-        video_rx,
-        audio_rx,
-    };
-
-    {
-        let mut cb = on_connection.lock().unwrap();
-        cb(connection_ctx);
-    }
-
-    // send rtmp publish message
-
-    for msg_result in message_reader {
-        let msg = match msg_result {
-            Ok(msg) => msg,
-            Err(error) => {
-                error!(?error, "Error reading RTMP message");
-                break;
-            }
-        };
-
-        trace!(msg_type=?msg.type_id,  "RTMP message received");
-
-        match msg.type_id {
-            8 => {
-                if audio_tx.send(msg.payload).is_err() {
-                    break;
-                }
-            }
-            9 => {
-                if video_tx.send(msg.payload).is_err() {
-                    break;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    Ok(())
 }
