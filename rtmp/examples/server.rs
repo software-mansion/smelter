@@ -17,13 +17,22 @@ fn main() {
     let on_connection = Box::new(|conn: RtmpConnection| {
         let url_path = conn.url_path;
         let video_rx = conn.video_rx;
+        let audio_rx = conn.audio_rx;
 
         info!(?url_path, "Received stream");
+        let url_path_clone = url_path.clone();
         thread::spawn(move || {
             while let Ok(data) = video_rx.recv() {
-                info!(data_len=?data.len(), ?url_path, "Received bytes");
+                info!(data_len=?data.len(), url_path=?url_path_clone, "Received video bytes");
             }
-            info!(?url_path, "End of stream");
+            info!(url_path=?url_path_clone, "End of video stream");
+        });
+
+        thread::spawn(move || {
+            while let Ok(data) = audio_rx.recv() {
+                info!(data_len=?data.len(), ?url_path, "Received audio bytes");
+            }
+            info!(?url_path, "End of audo stream");
         });
     });
 
