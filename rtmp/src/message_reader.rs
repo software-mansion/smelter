@@ -29,24 +29,27 @@ impl RtmpMessageReader {
         self.chunk_reader.set_chunk_size(size);
     }
 
-    fn accumulate_chunk(&mut self, chunk: &RtmpChunk) -> Result<(), RtmpError> {
+    fn accumulate_chunk(&mut self, chunk: &RtmpChunk) {
         let cs_id = chunk.header.cs_id;
-        let is_new_message = chunk.header.fmt != ChunkType::NoHeader;
 
-        if is_new_message {
-            self.accumulators.insert(
-                cs_id,
-                PayloadAccumulator::new(chunk.header.msg_len as usize),
-            );
+        match chunk.header.fmt {
+            ChunkType::Full | ChunkType::NoMessageStreamId => {
+                // types 0 and 1 start new message
+                self.accumulators.insert(
+                    cs_id,
+                    PayloadAccumulator::new(chunk.header.msg_len as usize),
+                );
+            }
+            ChunkType::TimestampOnly | ChunkType::NoHeader => {
+                // types 2 and 3 continue existing message or start new with inherited message length
+                self.accumulators
+                    .entry(cs_id)
+                    .or_insert_with(|| PayloadAccumulator::new(chunk.header.msg_len as usize));
+            }
         }
 
-        let acc = self
-            .accumulators
-            .get_mut(&cs_id)
-            .ok_or(RtmpError::MissingHeader(cs_id))?;
-
+        let acc = self.accumulators.get_mut(&cs_id).unwrap();
         acc.append(&chunk.payload);
-        Ok(())
     }
 
     fn try_complete_message(&mut self, chunk: &RtmpChunk) -> Option<RtmpMessage> {
@@ -79,9 +82,7 @@ impl Iterator for RtmpMessageReader {
                 Err(RtmpError::Io(e)) if e.kind() == std::io::ErrorKind::BrokenPipe => return None,
                 Err(e) => return Some(Err(e)),
             };
-            if let Err(e) = self.accumulate_chunk(&chunk) {
-                return Some(Err(e));
-            }
+            self.accumulate_chunk(&chunk);
             if let Some(msg) = self.try_complete_message(&chunk) {
                 return Some(Ok(msg));
             }
