@@ -18,6 +18,7 @@ use crate::{
 pub enum OutputTexture {
     PlanarYuvTextures(Box<PlanarYuvOutput>),
     Rgba8UnormWgpuTexture { resolution: Resolution },
+    Nv12WgpuTexture { resolution: Resolution },
 }
 
 impl OutputTexture {
@@ -33,6 +34,7 @@ impl OutputTexture {
                 PlanarYuvOutput::new(ctx, resolution, PlanarYuvVariant::YUV444),
             )),
             OutputFrameFormat::RgbaWgpuTexture => Self::Rgba8UnormWgpuTexture { resolution },
+            OutputFrameFormat::Nv12WgpuTexture => Self::Nv12WgpuTexture { resolution },
         }
     }
 }
