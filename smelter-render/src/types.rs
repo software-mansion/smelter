@@ -190,4 +190,5 @@ pub enum OutputFrameFormat {
     PlanarYuv422Bytes,
     PlanarYuv444Bytes,
     RgbaWgpuTexture,
+    Nv12WgpuTexture,
 }

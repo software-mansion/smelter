@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     NvPlanes, Resolution,
+    scene::RGBColor,
     wgpu::{
         WgpuCtx,
         texture::{TextureExt, base::new_texture},
@@ -10,6 +11,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct NV12Texture {
+    // TODO: Remove Arcs on wgpu textures. They are just handles which can be cloned around
     texture: Arc<wgpu::Texture>,
     secondary_texture: Option<Arc<wgpu::Texture>>,
     view_y: wgpu::TextureView,
@@ -24,41 +26,31 @@ pub struct NV12TextureViewCreateError {
 }
 
 impl NV12Texture {
-    pub fn from_wgpu_texture(
-        texture: Arc<wgpu::Texture>,
-    ) -> Result<Self, NV12TextureViewCreateError> {
-        let expected = (wgpu::TextureDimension::D2, wgpu::TextureFormat::NV12);
-        let actual = (texture.dimension(), texture.format());
+    pub fn new(ctx: &WgpuCtx, resolution: Resolution) -> Self {
+        let usage = wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::TEXTURE_BINDING;
+        let texture = new_texture(
+            &ctx.device,
+            None,
+            wgpu::Extent3d {
+                width: resolution.width as u32,
+                height: resolution.height as u32,
+                depth_or_array_layers: 1,
+            },
+            wgpu::TextureFormat::NV12,
+            usage,
+            &[],
+        );
+        let (view_y, view_uv) = create_plane_views(&texture);
 
-        if expected != actual {
-            return Err(NV12TextureViewCreateError {
-                expected: format!("{expected:?}"),
-                actual: format!("{actual:?}"),
-            });
-        }
-
-        let view_y = texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("y plane nv12 texture view"),
-            dimension: Some(wgpu::TextureViewDimension::D2),
-            format: Some(wgpu::TextureFormat::R8Unorm),
-            aspect: wgpu::TextureAspect::Plane0,
-            ..Default::default()
-        });
-
-        let view_uv = texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("uv plane nv12 texture view"),
-            dimension: Some(wgpu::TextureViewDimension::D2),
-            format: Some(wgpu::TextureFormat::Rg8Unorm),
-            aspect: wgpu::TextureAspect::Plane1,
-            ..Default::default()
-        });
-
-        Ok(Self {
-            texture,
+        Self {
+            texture: Arc::new(texture),
             secondary_texture: None,
             view_y,
             view_uv,
-        })
+        }
     }
 
     pub fn new_uploadable(ctx: &WgpuCtx, resolution: Resolution) -> Self {
@@ -105,6 +97,29 @@ impl NV12Texture {
         }
     }
 
+    pub fn from_wgpu_texture(
+        texture: Arc<wgpu::Texture>,
+    ) -> Result<Self, NV12TextureViewCreateError> {
+        let expected = (wgpu::TextureDimension::D2, wgpu::TextureFormat::NV12);
+        let actual = (texture.dimension(), texture.format());
+
+        if expected != actual {
+            return Err(NV12TextureViewCreateError {
+                expected: format!("{expected:?}"),
+                actual: format!("{actual:?}"),
+            });
+        }
+
+        let (view_y, view_uv) = create_plane_views(&texture);
+
+        Ok(Self {
+            texture,
+            secondary_texture: None,
+            view_y,
+            view_uv,
+        })
+    }
+
     pub fn uploadable(&self) -> bool {
         self.secondary_texture.is_some()
     }
@@ -119,6 +134,10 @@ impl NV12Texture {
 
     pub fn texture(&self) -> &wgpu::Texture {
         &self.texture
+    }
+
+    pub fn views(&self) -> (&wgpu::TextureView, &wgpu::TextureView) {
+        (&self.view_y, &self.view_uv)
     }
 
     pub fn new_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
@@ -165,4 +184,32 @@ impl NV12Texture {
             ],
         })
     }
+
+    pub fn fill_with_color(&self, ctx: &WgpuCtx, color: RGBColor) {
+        let (y, u, v) = color.to_yuv();
+        ctx.utils.r8_fill_with_value.fill(ctx, &self.view_y, y);
+        ctx.utils
+            .rg8_fill_with_value
+            .fill(ctx, &self.view_uv, [u, v]);
+    }
+}
+
+fn create_plane_views(texture: &wgpu::Texture) -> (wgpu::TextureView, wgpu::TextureView) {
+    let view_y = texture.create_view(&wgpu::TextureViewDescriptor {
+        label: Some("y plane nv12 texture view"),
+        dimension: Some(wgpu::TextureViewDimension::D2),
+        format: Some(wgpu::TextureFormat::R8Unorm),
+        aspect: wgpu::TextureAspect::Plane0,
+        ..Default::default()
+    });
+
+    let view_uv = texture.create_view(&wgpu::TextureViewDescriptor {
+        label: Some("uv plane nv12 texture view"),
+        dimension: Some(wgpu::TextureViewDimension::D2),
+        format: Some(wgpu::TextureFormat::Rg8Unorm),
+        aspect: wgpu::TextureAspect::Plane1,
+        ..Default::default()
+    });
+
+    (view_y, view_uv)
 }

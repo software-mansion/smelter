@@ -7,8 +7,8 @@ use crate::{
     scene::RGBColor,
     state::{RenderCtx, node::RenderNode, render_graph::RenderGraph},
     wgpu::texture::{
-        PlanarYuvPendingDownload, PlanarYuvVariant, RgbaLinearTexture, RgbaMultiViewTexture,
-        RgbaSrgbTexture, TextureExt,
+        NV12Texture, PlanarYuvPendingDownload, PlanarYuvVariant, RgbaLinearTexture,
+        RgbaMultiViewTexture, RgbaSrgbTexture, TextureExt,
     },
 };
 
@@ -83,7 +83,6 @@ pub(super) fn read_outputs(
                         RenderingMode::GpuOptimized => node.texture().clone_texture(
                             ctx.wgpu_ctx,
                             &[
-                                // Vulkan encoder needs texture with non srgb view
                                 wgpu::TextureFormat::Rgba8Unorm,
                                 wgpu::TextureFormat::Rgba8UnormSrgb,
                             ],
@@ -98,6 +97,24 @@ pub(super) fn read_outputs(
                     let frame = Frame {
                         resolution: texture.size().into(),
                         data: FrameData::Rgba8UnormWgpuTexture(texture.into()),
+                        pts,
+                    };
+                    partial_textures.push(PartialOutputFrame::CompleteFrame {
+                        output_id: output_id.clone(),
+                        frame,
+                    })
+                }
+                OutputTexture::Nv12WgpuTexture { resolution } => {
+                    let texture = NV12Texture::new(ctx.wgpu_ctx, *resolution);
+                    ctx.wgpu_ctx.format.rgba_to_nv12.convert(
+                        ctx.wgpu_ctx,
+                        node.output_texture_bind_group(),
+                        &texture,
+                    );
+
+                    let frame = Frame {
+                        resolution: *resolution,
+                        data: FrameData::Nv12WgpuTexture(texture.texture().clone().into()),
                         pts,
                     };
                     partial_textures.push(PartialOutputFrame::CompleteFrame {
@@ -140,6 +157,18 @@ pub(super) fn read_outputs(
                             pts,
                         },
                     })
+                }
+                OutputTexture::Nv12WgpuTexture { resolution } => {
+                    let texture = NV12Texture::new(ctx.wgpu_ctx, *resolution);
+                    texture.fill_with_color(ctx.wgpu_ctx, RGBColor::BLACK);
+                    partial_textures.push(PartialOutputFrame::CompleteFrame {
+                        output_id: output_id.clone(),
+                        frame: Frame {
+                            data: FrameData::Nv12WgpuTexture(Arc::new(texture.texture().clone())),
+                            resolution: *resolution,
+                            pts,
+                        },
+                    });
                 }
             },
         };
