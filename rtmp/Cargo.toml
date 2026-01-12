@@ -11,5 +11,8 @@ thiserror = "1.0.40"
 url = "2.5.2"
 rand = "0.9.2"
 
+[dev-dependencies]
+flv = { path = "./flv" }
+
 [lints]
 workspace = true
