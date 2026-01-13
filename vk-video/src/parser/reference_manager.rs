@@ -874,8 +874,8 @@ impl ReferenceContext {
         ref_pic_list_modifications: &[ModificationOfPicNums],
     ) -> Result<(), ReferenceManagementError> {
         // 0 is Subtract, 1 is Add, 2 is LongTermRef
-        let mut refIdxL0 = 0;
-        let mut picNumL0Pred = header.frame_num as i64;
+        let mut refIdxLX = 0;
+        let mut picNumLXPred = header.frame_num as i64;
 
         for ref_pic_list_modification in ref_pic_list_modifications {
             match ref_pic_list_modification {
@@ -885,8 +885,8 @@ impl ReferenceContext {
                         header,
                         reference_list,
                         ref_pic_list_modification,
-                        &mut refIdxL0,
-                        &mut picNumL0Pred,
+                        &mut refIdxLX,
+                        &mut picNumLXPred,
                     )?;
                 }
 
@@ -894,7 +894,7 @@ impl ReferenceContext {
                     self.modify_long_term_reference_picture_list(
                         reference_list,
                         *long_term_pic_num,
-                        &mut refIdxL0,
+                        &mut refIdxLX,
                     )?;
                 }
             }
@@ -924,13 +924,7 @@ impl ReferenceContext {
 
         if reference_list[shifted_picture_idx].non_existing {
             return Err(ReferenceManagementError::IncorrectData(
-                "a short-term reference picture marked for shifting in the reference list modification process is marked as non-existing".into()
-            ));
-        }
-
-        if reference_list[shifted_picture_idx].LongTermPicNum.is_none() {
-            return Err(ReferenceManagementError::IncorrectData(
-                "a short-term reference picture marked for shifting in the long-term reference list modification process".into()
+                "a reference picture marked for shifting in the long-term reference list modification process is marked as non-existing".into()
             ));
         }
 
@@ -994,7 +988,7 @@ impl ReferenceContext {
             ));
         }
 
-        if reference_list[shifted_picture_idx].LongTermPicNum.is_some() {
+        if reference_list[shifted_picture_idx].is_long_term() {
             return Err(ReferenceManagementError::IncorrectData(
                 "a long-term reference picture marked for shifting in the short-term reference list modification process".into()
             ));
@@ -1150,6 +1144,12 @@ pub(crate) struct ReferencePictureInfo {
     pub(crate) non_existing: bool,
     pub(crate) FrameNum: u16,
     pub(crate) PicOrderCnt: [i32; 2],
+}
+
+impl ReferencePictureInfo {
+    pub fn is_long_term(&self) -> bool {
+        self.LongTermPicNum.is_some()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
