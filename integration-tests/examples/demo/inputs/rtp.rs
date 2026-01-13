@@ -484,7 +484,27 @@ impl RtpInputBuilder {
 
         match audio_selection {
             Some(RtpRegisterOptions::SetAudioStream) => {
-                Ok(self.with_audio(RtpInputAudioOptions::default()))
+                let codec_options = AudioDecoder::iter().collect();
+                let codec_choice =
+                    Select::new("Select input audio codec:", codec_options).prompt_skippable()?;
+
+                match codec_choice {
+                    Some(AudioDecoder::Aac) => loop {
+                        let decoder_config_input =
+                            Text::new("Enter decoder config as hex string:").prompt_skippable()?;
+
+                        match decoder_config_input {
+                            Some(config) if !config.trim().is_empty() => {
+                                return Ok(self.with_audio(RtpInputAudioOptions {
+                                    decoder: AudioDecoder::Aac,
+                                    decoder_config: Some(config),
+                                }));
+                            }
+                            _ => error!("Please specify audio config for AAC."),
+                        }
+                    },
+                    Some(_) | None => Ok(self.with_audio(RtpInputAudioOptions::default())),
+                }
             }
             Some(RtpRegisterOptions::Skip) | None => Ok(self),
             _ => unreachable!(),
@@ -618,13 +638,22 @@ impl Default for RtpInputVideoOptions {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RtpInputAudioOptions {
     pub decoder: AudioDecoder,
+
+    /// AAC audio specific config
+    pub decoder_config: Option<String>,
 }
 
 impl RtpInputAudioOptions {
     pub fn serialize(&self) -> serde_json::Value {
-        json!({
-            "decoder": self.decoder.to_string(),
-        })
+        match self.decoder {
+            AudioDecoder::Opus => json!({
+                "decoder": self.decoder.to_string(),
+            }),
+            AudioDecoder::Aac => json!({
+                "decoder": self.decoder.to_string(),
+                "audio_specific_config": self.decoder_config.as_ref().unwrap(),
+            }),
+        }
     }
 }
 
@@ -632,6 +661,7 @@ impl Default for RtpInputAudioOptions {
     fn default() -> Self {
         Self {
             decoder: AudioDecoder::Opus,
+            decoder_config: None,
         }
     }
 }
@@ -695,6 +725,7 @@ fn build_gst_send_udp_cmd(
     let demuxer = match video_codec {
         Some(VideoDecoder::FfmpegVp8) | Some(VideoDecoder::FfmpegVp9) => "matroskademux",
         Some(VideoDecoder::FfmpegH264) => "qtdemux",
+        None => "",
         _ => unreachable!(),
     };
 

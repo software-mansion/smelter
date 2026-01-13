@@ -145,6 +145,9 @@ impl From<VideoDecoder> for ffmpeg::Video {
 pub enum AudioDecoder {
     #[strum(to_string = "opus")]
     Opus,
+
+    #[strum(to_string = "aac")]
+    Aac,
 }
 
 pub fn filter_video_inputs(inputs: &[InputHandle]) -> Vec<&InputHandle> {
