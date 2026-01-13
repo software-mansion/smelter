@@ -36,17 +36,15 @@ impl VulkanInstance {
             ..Default::default()
         };
 
-        let requested_layers = if cfg!(debug_assertions) {
-            let mut res = vec![c"VK_LAYER_KHRONOS_validation"];
+        let mut requested_layers = Vec::new();
 
-            if cfg!(feature = "vk_api_dump") {
-                res.push(c"VK_LAYER_LUNARG_api_dump");
-            }
+        if cfg!(feature = "vk_validation") {
+            requested_layers.push(c"VK_LAYER_KHRONOS_validation");
+        }
 
-            res
-        } else {
-            Vec::new()
-        };
+        if cfg!(feature = "vk_api_dump") {
+            requested_layers.push(c"VK_LAYER_LUNARG_api_dump");
+        }
 
         let instance_layer_properties = unsafe { entry.enumerate_instance_layer_properties()? };
         let instance_layer_names = instance_layer_properties

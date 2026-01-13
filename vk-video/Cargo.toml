@@ -16,6 +16,7 @@ keywords = ["vulkan", "video", "wgpu", "decoding", "h264"]
 [features]
 expose_parsers = []
 vk_api_dump = []
+vk_validation = []
 
 [dependencies]
 bytes = "1"
