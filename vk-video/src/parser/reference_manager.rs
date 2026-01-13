@@ -1076,7 +1076,7 @@ struct ReferencePictures {
 trait SliceHeaderExt {
     fn num_ref_idx_l0_active(&self, pps: &PicParameterSet) -> u32;
     fn num_ref_idx_l1_active(&self, pps: &PicParameterSet)
-        -> Result<u32, ReferenceManagementError>;
+    -> Result<u32, ReferenceManagementError>;
     fn includes_mmco_equal_5(&self) -> bool;
 }
 
