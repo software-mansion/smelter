@@ -321,6 +321,7 @@ pub fn start_ffmpeg_send_from_file(
     Ok((video_handle, audio_handle))
 }
 
+// Use only with files that are encoded with aac already
 fn start_ffmpeg_send_from_file_aac(
     ip: &str,
     video_port: Option<u16>,
@@ -345,9 +346,7 @@ fn start_ffmpeg_send_from_file_aac(
     };
 
     let audio_handle = match audio_port {
-        Some(port) => Some(start_ffmpeg_send_audio_from_file(
-            ip, port, path, "libopus",
-        )?),
+        Some(port) => Some(start_ffmpeg_send_audio_from_file(ip, port, path, "copy")?),
         None => None,
     };
 
