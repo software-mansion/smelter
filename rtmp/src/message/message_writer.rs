@@ -26,7 +26,8 @@ impl RtmpMessageWriter {
         let mut offset = 0;
         let total_len = msg.payload.len();
 
-        // negeotiaion usually on chunk stream id 2
+        // negeotiaion usually on chunk stream id 2 according to spec
+        // https://rtmp.veriskope.com/docs/spec/#54-protocol-control-messages
         const CS_ID: u8 = 2;
 
         while offset < total_len {
@@ -38,7 +39,7 @@ impl RtmpMessageWriter {
                 // message header
                 self.write_u24_be(msg.timestamp)?;
                 self.write_u24_be(total_len as u32)?;
-                self.stream.write_all(&[msg.type_id])?;
+                self.stream.write_all(&[msg.msg_type.into_id()])?;
                 self.write_u32_le(msg.stream_id)?;
             } else {
                 // header type 3
