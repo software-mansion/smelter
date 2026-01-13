@@ -243,7 +243,7 @@ impl ReferenceContext {
         }
 
         Err(ReferenceManagementError::IncorrectData(format!(
-            "cannot remove long term reference with pic num {pic_num_to_remove}, because it does not exist"
+            "cannot remove short term reference with pic num {pic_num_to_remove}, because it does not exist"
         )))
     }
 
