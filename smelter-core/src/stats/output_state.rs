@@ -3,6 +3,8 @@ use crate::{
     stats::{OutputStatsEvent, output_reports::OutputStatsReport},
 };
 
+pub mod whep;
+
 #[derive(Debug)]
 pub enum OutputStatsState {
     Whep,
