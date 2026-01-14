@@ -62,7 +62,11 @@ impl StatsMonitor {
                 .iter_mut()
                 .map(|(input_ref, (_, input))| (input_ref.to_unique_string(), input.report()))
                 .collect(),
-            outputs: todo!(),
+            outputs: guard
+                .outputs
+                .iter_mut()
+                .map(|(output_ref, (_, output))| (output_ref.to_unique_string(), output.report()))
+                .collect(),
         }
     }
 }
