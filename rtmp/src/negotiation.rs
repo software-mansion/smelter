@@ -1,5 +1,5 @@
 use crate::{
-    amf0::{Encoder, Parser, parser::AmfValue},
+    amf0::{AmfValue, decoding::decode_amf_values, encoding::encode_amf_values},
     error::RtmpError,
     message::{RtmpMessage, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
     protocol::{
@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use std::collections::HashMap;
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 
 pub const WINDOW_ACK_SIZE: u32 = 2_500_000;
 pub const PEER_BANDWIDTH: u32 = 2_500_000;
@@ -22,7 +22,6 @@ pub(crate) fn negotiate_rtmp_session(
     reader: &mut RtmpMessageReader,
     writer: &mut RtmpMessageWriter,
 ) -> Result<(String, String), RtmpError> {
-    let encoder = Encoder;
     let mut app_name = String::new();
     let current_stream_id = 0;
 
@@ -41,9 +40,9 @@ pub(crate) fn negotiate_rtmp_session(
                         msg.payload[1],
                         msg.payload[2],
                         msg.payload[3],
-                    ]) & 0x7FFFFFFF;
+                    ]) & 0x7F_FF_FF_FF;
                     reader.set_chunk_size(chunk_size as usize);
-                    trace!(chunk_size, "Client set chunk size during negotiation");
+                    debug!(chunk_size, "Client set chunk size during negotiation");
                 }
                 continue;
             }
@@ -52,13 +51,7 @@ pub(crate) fn negotiate_rtmp_session(
                 continue;
             }
             MessageType::CommandMessageAmf0 => {
-                match handle_command_message(
-                    &msg,
-                    &encoder,
-                    writer,
-                    &mut app_name,
-                    current_stream_id,
-                )? {
+                match handle_command_message(&msg, writer, &mut app_name, current_stream_id)? {
                     NegotiationStatus::InProgress => {}
                     NegotiationStatus::Completed { app, stream_key } => {
                         return Ok((app, stream_key));
@@ -73,12 +66,11 @@ pub(crate) fn negotiate_rtmp_session(
 // TODO(wkazmierczak) refator this function
 fn handle_command_message(
     msg: &RtmpMessage,
-    encoder: &Encoder,
     writer: &mut RtmpMessageWriter,
     app_name: &mut String,
     current_stream_id: u32,
 ) -> Result<NegotiationStatus, RtmpError> {
-    let args = Parser::parse(&msg.payload).unwrap_or_default();
+    let args = decode_amf_values(&msg.payload).unwrap_or_default();
     if args.is_empty() {
         return Ok(NegotiationStatus::InProgress);
     }
@@ -142,7 +134,7 @@ fn handle_command_message(
                 msg_type: MessageType::CommandMessageAmf0,
                 stream_id: 0,
                 timestamp: 0,
-                payload: encoder.encode(&response).unwrap_or_default().into(),
+                payload: encode_amf_values(&response).unwrap_or_default(),
             };
             writer.write(&message)?;
             trace!("Sent connect _result response");
@@ -160,7 +152,7 @@ fn handle_command_message(
                 msg_type: MessageType::CommandMessageAmf0,
                 stream_id: 0,
                 timestamp: 0,
-                payload: encoder.encode(&response).unwrap_or_default().into(),
+                payload: encode_amf_values(&response).unwrap_or_default(),
             };
             writer.write(&message)?;
             trace!(stream_id = current_stream_id, "Sent createStream _result");
@@ -199,7 +191,7 @@ fn handle_command_message(
                 msg_type: MessageType::CommandMessageAmf0,
                 stream_id: current_stream_id,
                 timestamp: 0,
-                payload: encoder.encode(&response).unwrap_or_default().into(),
+                payload: encode_amf_values(&response).unwrap_or_default(),
             };
             writer.write(&message)?;
             trace!(?stream_key, "Sent publish onStatus response");

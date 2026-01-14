@@ -5,10 +5,10 @@ use crate::{
     protocol::MessageType,
 };
 use bytes::BytesMut;
-use std::net::TcpStream;
 use std::{
     cmp::min,
     collections::HashMap,
+    net::TcpStream,
     sync::{Arc, atomic::AtomicBool},
 };
 

@@ -1,8 +1,5 @@
-use crate::error::RtmpError;
-use crate::message::RtmpMessage;
-use std::cmp::min;
-use std::io::Write;
-use std::net::TcpStream;
+use crate::{error::RtmpError, message::RtmpMessage};
+use std::{cmp::min, io::Write, net::TcpStream};
 
 pub struct RtmpMessageWriter {
     stream: TcpStream,
