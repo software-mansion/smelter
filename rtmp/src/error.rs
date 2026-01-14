@@ -16,6 +16,9 @@ pub enum RtmpError {
     #[error("Message too large: {0} bytes")]
     MessageTooLarge(u32),
 
+    #[error("Unsupported RTMP message type: {0}")]
+    UnsuportedMessageType(u8),
+
     #[error("Connection timeout")]
     Timeout,
 

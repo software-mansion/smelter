@@ -2,12 +2,13 @@ use crate::{
     chunk::{ChunkType, RtmpChunk, RtmpChunkReader},
     error::RtmpError,
     message::RtmpMessage,
+    protocol::MessageType,
 };
 use bytes::BytesMut;
-use std::net::TcpStream;
 use std::{
     cmp::min,
     collections::HashMap,
+    net::TcpStream,
     sync::{Arc, atomic::AtomicBool},
 };
 
@@ -24,7 +25,6 @@ impl RtmpMessageReader {
         }
     }
 
-    #[allow(unused)]
     pub fn set_chunk_size(&mut self, size: usize) {
         self.chunk_reader.set_chunk_size(size);
     }
@@ -59,9 +59,10 @@ impl RtmpMessageReader {
             return None;
         }
         let acc = self.accumulators.remove(&cs_id)?;
+        let msg_type = MessageType::try_from_id(chunk.header.msg_type_id).ok()?;
         Some(RtmpMessage {
             timestamp: chunk.header.timestamp,
-            type_id: chunk.header.msg_type_id,
+            msg_type,
             stream_id: chunk.header.msg_stream_id,
             payload: acc.buffer.freeze(),
         })
