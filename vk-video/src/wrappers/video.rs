@@ -223,7 +223,7 @@ impl From<ReferencePictureInfo> for vk::native::StdVideoDecodeH264ReferenceInfo 
                 _bitfield_1: vk::native::StdVideoDecodeH264ReferenceInfoFlags::new_bitfield_1(
                     0,
                     0,
-                    picture_info.LongTermPicNum.is_some().into(),
+                    picture_info.is_long_term().into(),
                     picture_info.non_existing.into(),
                 ),
             },
