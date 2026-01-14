@@ -14,7 +14,7 @@ use crate::{
             decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
             fdk_aac, ffmpeg_h264, vulkan_h264,
         },
-        rtmp::rtmp_input::{
+        rtmp::ffmpeg_rtmp_input::{
             StreamState, Track, demux::run_demuxer_loop, ffmpeg_context::FfmpegInputContext,
             ffmpeg_utils::read_extra_data,
         },
