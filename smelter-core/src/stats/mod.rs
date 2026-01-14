@@ -8,20 +8,27 @@ use crossbeam_channel::{Receiver, Sender, TrySendError, bounded};
 use serde::Serialize;
 use tracing::warn;
 
-use crate::stats::{input_reports::InputStatsReport, state::StatsState};
+use crate::stats::{
+    input_reports::InputStatsReport, output_reports::OutputStatsReport, state::StatsState,
+};
 
 mod input_events;
 mod input_reports;
 mod input_state;
+mod output_events;
+mod output_reports;
+mod output_state;
 mod state;
 mod utils;
 
 pub(crate) use input_events::*;
+pub(crate) use output_events::*;
 pub(crate) use state::StatsEvent;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct StatsReport {
     pub inputs: HashMap<String, InputStatsReport>,
+    pub outputs: HashMap<String, OutputStatsReport>,
 }
 
 pub(crate) struct StatsMonitor(Arc<Mutex<StatsState>>);
@@ -55,6 +62,7 @@ impl StatsMonitor {
                 .iter_mut()
                 .map(|(input_ref, (_, input))| (input_ref.to_unique_string(), input.report()))
                 .collect(),
+            outputs: todo!(),
         }
     }
 }
