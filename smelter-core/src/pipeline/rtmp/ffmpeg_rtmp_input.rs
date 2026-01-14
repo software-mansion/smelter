@@ -10,7 +10,7 @@ use crate::{
     pipeline::{
         decoder::DecoderThreadHandle,
         input::Input,
-        rtmp::rtmp_input::{input_loop::spawn_input_loop, stream_state::StreamState},
+        rtmp::ffmpeg_rtmp_input::{input_loop::spawn_input_loop, stream_state::StreamState},
         utils::input_buffer::InputBuffer,
     },
     queue::QueueDataReceiver,
