@@ -3,12 +3,13 @@ use std::time::{Duration, Instant};
 
 use smelter_render::InputId;
 
-use crate::stats::input_state::InputStatsState;
+use crate::stats::{input_state::InputStatsState, output_state::OutputStatsState};
 
 use crate::prelude::*;
 
 pub(crate) struct StatsState {
     pub inputs: HashMap<Ref<InputId>, (Instant, InputStatsState)>,
+    pub outputs: HashMap<Ref<OutputId>, (Instant, OutputStatsState)>,
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +21,14 @@ pub(crate) enum StatsEvent {
     NewInput {
         input_ref: Ref<InputId>,
         kind: InputProtocolKind,
+    },
+    Output {
+        output_ref: Ref<OutputId>,
+        event: OutputStatsEvent,
+    },
+    NewOutput {
+        output_ref: Ref<OutputId>,
+        kind: OutputProtocolKind,
     },
 }
 
@@ -36,6 +45,7 @@ impl StatsState {
     pub fn new() -> Self {
         Self {
             inputs: HashMap::new(),
+            outputs: HashMap::new(),
         }
     }
 
@@ -56,6 +66,21 @@ impl StatsState {
             StatsEvent::NewInput { input_ref, kind } => {
                 self.inputs
                     .insert(input_ref, (now, InputStatsState::new(kind)));
+            }
+            StatsEvent::Output { output_ref, event } => {
+                if !self.outputs.contains_key(&output_ref) {
+                    let kind = OutputProtocolKind::from(&event);
+                    self.outputs
+                        .insert(output_ref.clone(), (now, OutputStatsState::new(kind)));
+                }
+                if let Some((updated_at, output)) = self.outputs.get_mut(&output_ref) {
+                    *updated_at = now;
+                    output.handle_event(event);
+                }
+            }
+            StatsEvent::NewOutput { output_ref, kind } => {
+                self.outputs
+                    .insert(output_ref, (now, OutputStatsState::new(kind)));
             }
         }
 
