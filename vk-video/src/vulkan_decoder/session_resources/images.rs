@@ -62,8 +62,8 @@ impl<'a> DecodingImages<'a> {
         };
 
         let queue_indices = [
-            decoding_device.queues.transfer.idx as u32,
-            decoding_device.h264_decode_queue.idx as u32,
+            decoding_device.queues.transfer.family_index as u32,
+            decoding_device.h264_decode_queue.family_index as u32,
         ];
 
         let dpb = DecodedPicturesBuffer::new(
