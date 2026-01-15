@@ -11,10 +11,16 @@ use tracing::{error, info};
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
 pub type RtmpUrlPath = Arc<str>;
 
+#[derive(Debug, Clone)]
+pub struct RtmpMediaData {
+    pub data: Bytes,
+    pub timestamp_ms: u32,
+}
+
 pub struct RtmpConnection {
     pub url_path: RtmpUrlPath,
-    pub video_rx: Receiver<Bytes>, // replace Bytes with type containing parsed media
-    pub audio_rx: Receiver<Bytes>,
+    pub video_rx: Receiver<RtmpMediaData>,
+    pub audio_rx: Receiver<RtmpMediaData>,
 }
 
 #[allow(dead_code)] // TODO add SSL/TLS

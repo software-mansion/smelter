@@ -4,7 +4,7 @@ use crate::{
     message::{message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
     negotiation::negotiate_rtmp_session,
     protocol::MessageType,
-    server::{OnConnectionCallback, RtmpConnection, ServerState},
+    server::{OnConnectionCallback, RtmpConnection, RtmpMediaData, ServerState},
 };
 use std::{
     net::TcpStream,
@@ -49,16 +49,24 @@ pub(crate) fn handle_client(
             }
         };
 
-        trace!(msg_type=?msg.msg_type,  "RTMP message received");
+        trace!(msg_type=?msg.msg_type, timestamp=msg.timestamp, "RTMP message received");
 
         match msg.msg_type {
             MessageType::Audio => {
-                if audio_tx.send(msg.payload).is_err() {
+                let media = RtmpMediaData {
+                    data: msg.payload,
+                    timestamp_ms: msg.timestamp,
+                };
+                if audio_tx.send(media).is_err() {
                     break;
                 }
             }
             MessageType::Video => {
-                if video_tx.send(msg.payload).is_err() {
+                let media = RtmpMediaData {
+                    data: msg.payload,
+                    timestamp_ms: msg.timestamp,
+                };
+                if video_tx.send(media).is_err() {
                     break;
                 }
             }

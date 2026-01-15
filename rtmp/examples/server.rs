@@ -22,15 +22,15 @@ fn main() {
         info!(?url_path, "Received stream");
         let url_path_clone = url_path.clone();
         thread::spawn(move || {
-            while let Ok(data) = video_rx.recv() {
-                info!(data_len=?data.len(), url_path=?url_path_clone, "Received video bytes");
+            while let Ok(video) = video_rx.recv() {
+                info!(data_len=?video.data.len(), url_path=?url_path_clone, "Received video bytes");
             }
             info!(url_path=?url_path_clone, "End of video stream");
         });
 
         thread::spawn(move || {
-            while let Ok(data) = audio_rx.recv() {
-                info!(data_len=?data.len(), ?url_path, "Received audio bytes");
+            while let Ok(audio) = audio_rx.recv() {
+                info!(data_len=?audio.data.len(), ?url_path, "Received audio bytes");
             }
             info!(?url_path, "End of audo stream");
         });
