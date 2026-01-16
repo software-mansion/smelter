@@ -1,4 +1,4 @@
-//! A library for hardware video coding using Vulkan Video, with [`wgpu`] integration.
+//! A library for hardware video decoding and encoding using Vulkan Video, with [`wgpu`] integration.
 //!
 //! # Overview
 //!
