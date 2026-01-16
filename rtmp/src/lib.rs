@@ -8,6 +8,7 @@ mod negotiation;
 mod protocol;
 
 pub mod amf0;
+pub mod amf3;
 pub mod server;
 
 pub use server::{RtmpServer, ServerConfig};
