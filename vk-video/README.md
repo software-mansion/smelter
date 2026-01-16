@@ -1,6 +1,6 @@
 # vk-video
 
-A library for hardware video decoding (and soon encoding) using Vulkan Video, with [wgpu] integration.
+A library for hardware video decoding and encoding using Vulkan Video, with [wgpu] integration.
 
 [![Crates.io][crates-badge]][crates-url]
 [![docs.rs][docs-badge]][docs-url]
@@ -72,10 +72,10 @@ cargo run --example player -- output.h264 FRAMERATE
 
 ## Compatibility
 
-On Linux, the library should work on NVIDIA and AMD GPUs out of the box with recent Mesa drivers. For AMD GPUs with a bit older Mesa drivers, you may need to set the `RADV_PERFTEST=video_decode` environment variable:
+On Linux, the library should work on NVIDIA and AMD GPUs out of the box with recent Mesa drivers. For AMD GPUs with a bit older Mesa drivers, you may need to set the `RADV_PERFTEST=video_decode,video_encode` environment variable:
 
 ```sh
-RADV_PERFTEST=video_decode cargo run
+RADV_PERFTEST=video_decode,video_encode cargo run
 ```
 
 It should work on Windows with recent drivers out of the box. Be sure to submit an issue if it doesn't.
