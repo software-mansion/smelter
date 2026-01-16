@@ -48,6 +48,10 @@ fn decode_value(mut buf: Bytes) -> Result<(AmfValue, Bytes), DecodingError> {
 
             Ok((AmfValue::Integer(integer_value), buf))
         }
+        0x05 => {
+            let double_value = buf.get_f64();
+            Ok((AmfValue::Double(double_value), buf))
+        }
         _ => Err(DecodingError::UnknownType(marker)),
     }
 }
