@@ -26,6 +26,7 @@ use crate::{
         channel::{EncodedDataOutput, RawDataInput, RawDataOutput},
         input::{PipelineInput, new_external_input, register_pipeline_input},
         output::{OutputSender, PipelineOutput, new_external_output, register_pipeline_output},
+        rtmp::{RtmpPipelineState, RtmpServerHandle, spawn_rtmp_server},
         webrtc::{WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle},
     },
     queue::{Queue, QueueAudioOutput, QueueOptions, QueueVideoOutput},
@@ -50,6 +51,9 @@ pub struct Pipeline {
     #[allow(dead_code)]
     // triggers cleanup on drop
     whip_whep_handle: Option<WhipWhepServerHandle>,
+    #[allow(dead_code)]
+    // triggers cleanup on drop
+    rtmp_handle: Option<RtmpServerHandle>,
 }
 
 impl Pipeline {
@@ -548,10 +552,19 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
             }
             PipelineWhipWhepServerOptions::Disable => None,
         },
+        rtmp_state: match opts.rtmp_server {
+            PipelineRtmpServerOptions::Enable { port } => Some(RtmpPipelineState::new(port)),
+            PipelineRtmpServerOptions::Disable => None,
+        },
     });
 
     let whip_whep_handle = match &ctx.whip_whep_state {
         Some(state) => Some(WhipWhepServer::spawn(ctx.clone(), state)?),
+        None => None,
+    };
+
+    let rtmp_handle = match &ctx.rtmp_state {
+        Some(state) => Some(spawn_rtmp_server(state)?),
         None => None,
     };
 
@@ -565,6 +578,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         is_started: false,
         ctx,
         whip_whep_handle,
+        rtmp_handle,
     };
 
     Ok(pipeline)

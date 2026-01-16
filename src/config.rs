@@ -43,6 +43,9 @@ pub struct Config {
     pub whip_whep_stun_servers: Arc<Vec<String>>,
     pub whip_whep_server_port: u16,
     pub whip_whep_enable: bool,
+
+    pub rtmp_server_port: u16,
+    pub rtmp_enable: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -245,6 +248,18 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => true,
     };
 
+    let rtmp_server_port = match env::var("SMELTER_RTMP_SERVER_PORT") {
+        Ok(rtmp_port) => rtmp_port
+            .parse::<u16>()
+            .map_err(|_| "SMELTER_RTMP_SERVER_PORT has to be valid port number")?,
+        Err(_) => 1935,
+    };
+
+    let rtmp_enable = match env::var("SMELTER_START_RTMP_SERVER") {
+        Ok(enable) => bool_env_from_str(&enable).unwrap_or(true),
+        Err(_) => true,
+    };
+
     let log_file = match env::var("SMELTER_LOG_FILE") {
         Ok(path) => Some(Arc::from(PathBuf::from(path))),
         Err(_) => None,
@@ -301,6 +316,8 @@ fn try_read_config() -> Result<Config, String> {
         whip_whep_server_port,
         whip_whep_enable,
         rendering_mode,
+        rtmp_server_port,
+        rtmp_enable,
     };
     Ok(config)
 }

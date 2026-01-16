@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use axum::response::IntoResponse;
 use smelter_core::{
-    Pipeline, PipelineOptions, PipelineWgpuOptions, PipelineWhipWhepServerOptions,
-    error::InitPipelineError,
+    Pipeline, PipelineOptions, PipelineRtmpServerOptions, PipelineWgpuOptions,
+    PipelineWhipWhepServerOptions, error::InitPipelineError,
 };
 use smelter_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
 
@@ -129,6 +129,13 @@ pub fn pipeline_options_from_config(
                 port: opt.whip_whep_server_port,
             },
             false => PipelineWhipWhepServerOptions::Disable,
+        },
+
+        rtmp_server: match opt.rtmp_enable {
+            true => PipelineRtmpServerOptions::Enable {
+                port: opt.rtmp_server_port,
+            },
+            false => PipelineRtmpServerOptions::Disable,
         },
     }
 }

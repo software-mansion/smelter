@@ -4,13 +4,14 @@ use std::{
     time::{Duration, Instant},
 };
 
+use smelter_render::{Framerate, RenderingMode, WgpuFeatures, web_renderer::ChromiumContext};
 use tokio::runtime::Runtime;
 
-use smelter_render::{Framerate, RenderingMode, WgpuFeatures, web_renderer::ChromiumContext};
-
 use crate::{
-    event::EventEmitter, graphics_context::GraphicsContext,
-    pipeline::webrtc::WhipWhepPipelineState, stats::StatsSender,
+    event::EventEmitter,
+    graphics_context::GraphicsContext,
+    pipeline::{rtmp::RtmpPipelineState, webrtc::WhipWhepPipelineState},
+    stats::StatsSender,
 };
 
 use crate::prelude::*;
@@ -68,6 +69,8 @@ pub struct PipelineOptions {
 
     pub whip_whep_server: PipelineWhipWhepServerOptions,
     pub whip_whep_stun_servers: Arc<Vec<String>>,
+
+    pub rtmp_server: PipelineRtmpServerOptions,
 }
 
 #[derive(Debug)]
@@ -83,6 +86,12 @@ pub enum PipelineWgpuOptions {
 
 #[derive(Debug)]
 pub enum PipelineWhipWhepServerOptions {
+    Enable { port: u16 },
+    Disable,
+}
+
+#[derive(Debug)]
+pub enum PipelineRtmpServerOptions {
     Enable { port: u16 },
     Disable,
 }
@@ -104,6 +113,7 @@ pub(crate) struct PipelineCtx {
     pub stats_sender: StatsSender,
     tokio_rt: Arc<Runtime>,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
+    rtmp_state: Option<Arc<RtmpPipelineState>>,
 }
 
 impl std::fmt::Debug for PipelineCtx {

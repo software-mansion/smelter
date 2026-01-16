@@ -11,4 +11,4 @@ pub mod amf0;
 pub mod server;
 pub use flv;
 
-pub use server::{RtmpMediaData, RtmpServer, ServerConfig};
+pub use server::{RtmpConnection, RtmpMediaData, RtmpServer, ServerConfig};
