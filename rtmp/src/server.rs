@@ -1,5 +1,7 @@
 use crate::{error::RtmpError, handle_client::handle_client};
 use bytes::Bytes;
+use flv::tag::PacketType;
+use flv::{AudioChannels, AudioCodec, FrameType, VideoCodec};
 use std::{
     collections::HashSet,
     net::{SocketAddr, TcpListener},
@@ -12,15 +14,31 @@ pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
 pub type RtmpUrlPath = Arc<str>;
 
 #[derive(Debug, Clone)]
-pub struct RtmpMediaData {
+pub struct RtmpAudioData {
+    pub packet_type: PacketType,
+    pub pts: i64,
+    pub dts: i64,
+    pub codec: AudioCodec,
+    pub sound_rate: u32,
+    pub channels: AudioChannels,
     pub data: Bytes,
-    pub timestamp_ms: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct RtmpVideoData {
+    pub packet_type: PacketType,
+    pub pts: i64,
+    pub dts: i64,
+    pub codec: VideoCodec,
+    pub frame_type: FrameType,
+    pub composition_time: Option<i32>,
+    pub data: Bytes,
 }
 
 pub struct RtmpConnection {
     pub url_path: RtmpUrlPath,
-    pub video_rx: Receiver<RtmpMediaData>,
-    pub audio_rx: Receiver<RtmpMediaData>,
+    pub video_rx: Receiver<RtmpVideoData>,
+    pub audio_rx: Receiver<RtmpAudioData>,
 }
 
 #[allow(dead_code)] // TODO add SSL/TLS

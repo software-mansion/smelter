@@ -4,13 +4,14 @@ use crate::{
     message::{message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
     negotiation::negotiate_rtmp_session,
     protocol::MessageType,
-    server::{OnConnectionCallback, RtmpConnection, RtmpMediaData, ServerState},
+    server::{OnConnectionCallback, RtmpAudioData, RtmpConnection, RtmpVideoData, ServerState},
 };
+use flv::{AudioTag, VideoTag};
 use std::{
     net::TcpStream,
     sync::{Arc, Mutex, atomic::AtomicBool, mpsc::channel},
 };
-use tracing::{error, info, trace};
+use tracing::{error, info, trace, warn};
 
 pub(crate) fn handle_client(
     mut stream: TcpStream,
@@ -53,19 +54,56 @@ pub(crate) fn handle_client(
 
         match msg.msg_type {
             MessageType::Audio => {
-                let media = RtmpMediaData {
-                    data: msg.payload,
-                    timestamp_ms: msg.timestamp,
+                let parsed = match AudioTag::parse(msg.payload) {
+                    Ok(tag) => tag,
+                    Err(error) => {
+                        warn!(?error, "Failed to parse FLV audio tag");
+                        continue;
+                    }
                 };
+
+                let dts = msg.timestamp as i64;
+                let pts = dts;
+
+                let media = RtmpAudioData {
+                    packet_type: parsed.packet_type,
+                    pts,
+                    dts,
+                    codec: parsed.codec,
+                    sound_rate: parsed.sound_rate,
+                    channels: parsed.sound_type,
+                    data: parsed.data,
+                };
+
                 if audio_tx.send(media).is_err() {
                     break;
                 }
             }
             MessageType::Video => {
-                let media = RtmpMediaData {
-                    data: msg.payload,
-                    timestamp_ms: msg.timestamp,
+                let parsed = match VideoTag::parse(msg.payload) {
+                    Ok(tag) => tag,
+                    Err(error) => {
+                        warn!(?error, "Failed to parse FLV video tag");
+                        continue;
+                    }
                 };
+
+                let dts = msg.timestamp as i64;
+                let pts = parsed
+                    .composition_time
+                    .map(|cts| dts + (cts as i64))
+                    .unwrap_or(dts);
+
+                let media = RtmpVideoData {
+                    packet_type: parsed.packet_type,
+                    pts,
+                    dts,
+                    codec: parsed.codec,
+                    frame_type: parsed.frame_type,
+                    composition_time: parsed.composition_time,
+                    data: parsed.data,
+                };
+
                 if video_tx.send(media).is_err() {
                     break;
                 }

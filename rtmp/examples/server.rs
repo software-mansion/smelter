@@ -23,14 +23,26 @@ fn main() {
         let url_path_clone = url_path.clone();
         thread::spawn(move || {
             while let Ok(video) = video_rx.recv() {
-                info!(data_len=?video.data.len(), url_path=?url_path_clone, "Received video bytes");
+                info!(
+                    data_len=?video.data.len(),
+                    ?video.packet_type,
+                    ?video.codec,
+                    url_path=?url_path_clone,
+                    "Received video bytes"
+                );
             }
             info!(url_path=?url_path_clone, "End of video stream");
         });
 
         thread::spawn(move || {
             while let Ok(audio) = audio_rx.recv() {
-                info!(data_len=?audio.data.len(), ?url_path, "Received audio bytes");
+                info!(
+                    data_len=?audio.data.len(),
+                    ?audio.packet_type,
+                    ?audio.codec,
+                    ?url_path,
+                    "Received audio bytes"
+                );
             }
             info!(?url_path, "End of audo stream");
         });
