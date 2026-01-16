@@ -1,7 +1,7 @@
 use crate::{
     error::RtmpError,
     handshake::Handshake,
-    message::{message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
+    message::{RtmpMessage, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
     negotiation::negotiate_rtmp_session,
     protocol::MessageType,
     server::{OnConnectionCallback, RtmpAudioData, RtmpConnection, RtmpVideoData, ServerState},
@@ -11,7 +11,7 @@ use std::{
     net::TcpStream,
     sync::{Arc, Mutex, atomic::AtomicBool, mpsc::channel},
 };
-use tracing::{error, info, trace, warn};
+use tracing::{info, trace};
 
 pub(crate) fn handle_client(
     mut stream: TcpStream,
@@ -41,76 +41,50 @@ pub(crate) fn handle_client(
         cb(connection_ctx);
     }
 
-    for msg_result in message_reader {
-        let msg = match msg_result {
-            Ok(msg) => msg,
-            Err(error) => {
-                error!(?error, "Error reading RTMP message");
-                break;
-            }
-        };
-
+    // not sure where to break
+    message_reader.try_for_each(|msg_result| {
+        let msg = msg_result?;
         trace!(msg_type=?msg.msg_type, timestamp=msg.timestamp, "RTMP message received");
-
         match msg.msg_type {
             MessageType::Audio => {
-                let parsed = match AudioTag::parse(msg.payload) {
-                    Ok(tag) => tag,
-                    Err(error) => {
-                        warn!(?error, "Failed to parse FLV audio tag");
-                        continue;
-                    }
-                };
-
-                let dts = msg.timestamp as i64;
-                let pts = dts;
-
-                let media = RtmpAudioData {
-                    packet_type: parsed.packet_type,
-                    pts,
-                    dts,
-                    codec: parsed.codec,
-                    sound_rate: parsed.sound_rate,
-                    channels: parsed.sound_type,
-                    data: parsed.data,
-                };
-
-                if audio_tx.send(media).is_err() {
-                    break;
-                }
+                let data = parse_audio(msg)?;
+                audio_tx.send(data).map_err(|_| RtmpError::SocketClosed)?;
             }
             MessageType::Video => {
-                let parsed = match VideoTag::parse(msg.payload) {
-                    Ok(tag) => tag,
-                    Err(error) => {
-                        warn!(?error, "Failed to parse FLV video tag");
-                        continue;
-                    }
-                };
-
-                let dts = msg.timestamp as i64;
-                let pts = parsed
-                    .composition_time
-                    .map(|cts| dts + (cts as i64))
-                    .unwrap_or(dts);
-
-                let media = RtmpVideoData {
-                    packet_type: parsed.packet_type,
-                    pts,
-                    dts,
-                    codec: parsed.codec,
-                    frame_type: parsed.frame_type,
-                    composition_time: parsed.composition_time,
-                    data: parsed.data,
-                };
-
-                if video_tx.send(media).is_err() {
-                    break;
-                }
+                let data = parse_video(msg)?;
+                video_tx.send(data).map_err(|_| RtmpError::SocketClosed)?;
             }
             _ => {} // possible metadata
         }
-    }
+        Ok(())
+    })
+}
 
-    Ok(())
+fn parse_audio(msg: RtmpMessage) -> Result<RtmpAudioData, RtmpError> {
+    let tag = AudioTag::parse(msg.payload)?;
+    let dts = msg.timestamp as i64;
+    Ok(RtmpAudioData {
+        packet_type: tag.packet_type,
+        pts: dts,
+        dts,
+        codec: tag.codec,
+        sound_rate: tag.sound_rate,
+        channels: tag.sound_type,
+        data: tag.data,
+    })
+}
+
+fn parse_video(msg: RtmpMessage) -> Result<RtmpVideoData, RtmpError> {
+    let tag = VideoTag::parse(msg.payload)?;
+    let dts = msg.timestamp as i64;
+    let pts = tag.composition_time.map_or(dts, |cts| dts + cts as i64);
+    Ok(RtmpVideoData {
+        packet_type: tag.packet_type,
+        pts,
+        dts,
+        codec: tag.codec,
+        frame_type: tag.frame_type,
+        composition_time: tag.composition_time,
+        data: tag.data,
+    })
 }
