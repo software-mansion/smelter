@@ -62,23 +62,20 @@ fn decode_u29(buf: &mut Bytes) -> Result<u32, DecodingError> {
     }
 
     let mut u29 = 0u32;
-    for b in 0..4 {
+    for b in 0..3 {
         let byte = buf.get_u8();
-        if b < 3 {
-            let next_byte_present = (byte & 0x80) >> 7;
-            let byte = byte & 0x7F;
-            u29 <<= 7;
-            u29 |= byte as u32;
+        let next_byte_present = (byte & 0x80) >> 7;
+        let byte = byte & 0x7F;
+        u29 = (u29 << 7) | (byte as u32);
 
-            // Break early if flag indicating presence of the next byte is set to 0
-            if next_byte_present == 0 {
-                break;
-            }
-        } else {
-            u29 <<= 8;
-            u29 |= byte as u32;
+        // Break early if flag indicating presence of the next byte is set to 0
+        if next_byte_present == 0 {
+            return Ok(u29);
         }
     }
+
+    let byte = buf.get_u8();
+    u29 = (u29 << 8) | (byte as u32);
 
     Ok(u29)
 }
