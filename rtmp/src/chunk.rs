@@ -226,8 +226,15 @@ impl RtmpChunkReader {
             }
         }
 
-        // calculate timestamp
-        if fmt != ChunkType::Full {
+        // message length from previous chunks
+        let current_acc = accumulators
+            .get(&cs_id)
+            .map(|a| a.current_len())
+            .unwrap_or(0);
+        let is_continuation = current_acc > 0;
+
+        // calculate timestamp (only advance on new message)
+        if fmt != ChunkType::Full && !is_continuation {
             timestamp = timestamp.wrapping_add(timestamp_delta);
         }
 
@@ -236,12 +243,6 @@ impl RtmpChunkReader {
                 msg_len,
             )));
         }
-
-        // paylaod
-        let current_acc = accumulators
-            .get(&cs_id)
-            .map(|a| a.current_len())
-            .unwrap_or(0);
 
         let remaining_for_message = (msg_len as usize).saturating_sub(current_acc);
         let chunk_payload_size = min(remaining_for_message, self.chunk_size);
