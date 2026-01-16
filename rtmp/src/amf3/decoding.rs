@@ -13,46 +13,73 @@ pub enum DecodingError {
     InvalidUtf8,
 }
 
+#[derive(Default)]
+struct Decoder {
+    strings: Vec<String>,
+}
+
 pub(crate) fn decode_amf_values(rtmp_msg_payload: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
     let mut buf = Bytes::copy_from_slice(rtmp_msg_payload);
+
+    let mut decoder = Decoder::new();
 
     todo!()
 }
 
-fn decode_value(mut buf: Bytes) -> Result<(AmfValue, Bytes), DecodingError> {
-    if !buf.has_remaining() {
-        return Err(DecodingError::InsufficientData);
+impl Decoder {
+    fn new() -> Self {
+        Self::default()
     }
 
-    let marker = buf.get_u8();
+    fn decode_value(&mut self, mut buf: Bytes) -> Result<(AmfValue, Bytes), DecodingError> {
+        if !buf.has_remaining() {
+            return Err(DecodingError::InsufficientData);
+        }
 
-    match marker {
-        0x00 => Ok((AmfValue::Undefined, buf)),
-        0x01 => Ok((AmfValue::Null, buf)),
-        0x02 => Ok((AmfValue::False, buf)),
-        0x03 => Ok((AmfValue::True, buf)),
-        0x04 => {
-            if false {
-                todo!("I am not sure if it works this way, I assume U2 encoding");
+        let marker = buf.get_u8();
+
+        match marker {
+            0x00 => Ok((AmfValue::Undefined, buf)),
+            0x01 => Ok((AmfValue::Null, buf)),
+            0x02 => Ok((AmfValue::Bool(false), buf)),
+            0x03 => Ok((AmfValue::Bool(true), buf)),
+
+            // integer
+            0x04 => {
+                if false {
+                    todo!("I am not sure if it works this way, I assume U2 encoding");
+                }
+
+                let uint_value = decode_u29(&mut buf)?;
+                let abs_val = uint_value & 0x0F_FF_FF_FF;
+                let sign = (uint_value >> 28) & 0x01;
+
+                let integer_value = match sign {
+                    0 => abs_val as i32,
+                    1 => -(1 << 28) + (abs_val as i32),
+                    _ => unreachable!(),
+                };
+
+                Ok((AmfValue::Integer(integer_value), buf))
             }
 
-            let uint_value = decode_u29(&mut buf)?;
-            let abs_val = uint_value & 0x0F_FF_FF_FF;
-            let sign = (uint_value >> 28) & 0x01;
+            // double
+            0x05 => {
+                let double_value = buf.get_f64();
+                Ok((AmfValue::Double(double_value), buf))
+            }
 
-            let integer_value = match sign {
-                0 => abs_val as i32,
-                1 => -(1 << 28) + (abs_val as i32),
-                _ => unreachable!(),
-            };
+            // string
+            0x06 => {
+                let string_value = self.decode_string(&mut buf)?;
+                Ok((AmfValue::String(string_value), buf))
+            }
+            _ => Err(DecodingError::UnknownType(marker)),
+        }
+    }
 
-            Ok((AmfValue::Integer(integer_value), buf))
-        }
-        0x05 => {
-            let double_value = buf.get_f64();
-            Ok((AmfValue::Double(double_value), buf))
-        }
-        _ => Err(DecodingError::UnknownType(marker)),
+    fn decode_string(&mut self, buf: &mut Bytes) -> Result<String, DecodingError> {
+        todo!()
     }
 }
 

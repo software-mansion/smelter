@@ -4,8 +4,7 @@ mod decoding;
 pub(crate) enum AmfValue {
     Undefined,
     Null,
-    True,
-    False,
+    Bool(bool),
 
     // This is signed value, even though in spec it is known as U29
     Integer(i32),
