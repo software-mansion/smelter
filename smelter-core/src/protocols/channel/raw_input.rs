@@ -1,4 +1,3 @@
-use core::fmt;
 use std::{sync::Arc, time::Duration};
 
 use crossbeam_channel::Sender;
@@ -27,31 +26,26 @@ pub struct RawDataInputOptions {
     pub buffer_duration: Option<Duration>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct InputAudioSamples {
-    pub samples: Arc<Vec<(f64, f64)>>,
+    pub samples: Arc<AudioSamples>,
     pub start_pts: Duration,
-    pub end_pts: Duration,
+    pub sample_rate: u32,
 }
 
 impl InputAudioSamples {
-    pub fn new(
-        samples: Arc<Vec<(f64, f64)>>,
-        start_pts: Duration,
-        mixing_sample_rate: u32,
-    ) -> Self {
-        let end_pts =
-            start_pts + Duration::from_secs_f64(samples.len() as f64 / mixing_sample_rate as f64);
-
+    pub fn new(samples: Arc<AudioSamples>, start_pts: Duration, sample_rate: u32) -> Self {
         Self {
             samples,
             start_pts,
-            end_pts,
+            sample_rate,
         }
     }
 
-    pub fn duration(&self) -> Duration {
-        self.end_pts.saturating_sub(self.start_pts)
+    pub fn pts_range(&self) -> (Duration, Duration) {
+        let end_pts = self.start_pts
+            + Duration::from_secs_f64(self.samples.len() as f64 / self.sample_rate as f64);
+        (self.start_pts, end_pts)
     }
 
     pub(crate) fn len(&self) -> usize {
