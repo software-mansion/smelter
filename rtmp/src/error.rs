@@ -42,5 +42,5 @@ pub enum RtmpError {
     InternalBufferError(&'static str),
 
     #[error("FLV tag parsing failed: {0}")]
-    FLVParsingFailed(#[from] ParseError),
+    FlvParsingFailed(#[from] ParseError),
 }

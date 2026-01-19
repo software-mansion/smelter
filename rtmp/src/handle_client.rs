@@ -4,9 +4,12 @@ use crate::{
     message::{RtmpMessage, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
     negotiation::negotiate_rtmp_session,
     protocol::MessageType,
-    server::{OnConnectionCallback, RtmpAudioData, RtmpConnection, RtmpVideoData, ServerState},
+    server::{
+        AudioConfig, AudioData, OnConnectionCallback, RtmpConnection, RtmpMediaData, ServerState,
+        VideoConfig, VideoData,
+    },
 };
-use flv::{AudioTag, VideoTag};
+use flv::{AudioTag, VideoTag, tag::PacketType};
 use std::{
     net::TcpStream,
     sync::{Arc, Mutex, atomic::AtomicBool, mpsc::channel},
@@ -27,13 +30,11 @@ pub(crate) fn handle_client(
 
     info!(?app, ?stream_key, "Negotiation complete");
 
-    let (video_tx, video_rx) = channel();
-    let (audio_tx, audio_rx) = channel();
+    let (sender, receiver) = channel();
 
     let connection_ctx = RtmpConnection {
         url_path: format!("/{app}/{stream_key}").into(),
-        video_rx,
-        audio_rx,
+        receiver,
     };
 
     {
@@ -45,14 +46,19 @@ pub(crate) fn handle_client(
     message_reader.try_for_each(|msg_result| {
         let msg = msg_result?;
         trace!(msg_type=?msg.msg_type, timestamp=msg.timestamp, "RTMP message received");
+
         match msg.msg_type {
             MessageType::Audio => {
-                let data = parse_audio(msg)?;
-                audio_tx.send(data).map_err(|_| RtmpError::SocketClosed)?;
+                let audio_data = parse_audio(msg)?;
+                sender
+                    .send(audio_data)
+                    .map_err(|_| RtmpError::SocketClosed)?;
             }
             MessageType::Video => {
-                let data = parse_video(msg)?;
-                video_tx.send(data).map_err(|_| RtmpError::SocketClosed)?;
+                let video_data = parse_video(msg)?;
+                sender
+                    .send(video_data)
+                    .map_err(|_| RtmpError::SocketClosed)?;
             }
             _ => {} // possible metadata
         }
@@ -60,31 +66,47 @@ pub(crate) fn handle_client(
     })
 }
 
-fn parse_audio(msg: RtmpMessage) -> Result<RtmpAudioData, RtmpError> {
+fn parse_audio(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
     let tag = AudioTag::parse(msg.payload)?;
-    let dts = msg.timestamp as i64;
-    Ok(RtmpAudioData {
-        packet_type: tag.packet_type,
-        pts: dts,
-        dts,
-        codec: tag.codec,
-        sound_rate: tag.sound_rate,
-        channels: tag.sound_type,
-        data: tag.data,
-    })
+    match tag.packet_type {
+        PacketType::Config => Ok(RtmpMediaData::AudioConfig(AudioConfig {
+            codec: tag.codec,
+            sound_rate: tag.sound_rate,
+            channels: tag.sound_type,
+            data: tag.data,
+        })),
+        PacketType::Data => {
+            let dts = msg.timestamp as i64;
+            Ok(RtmpMediaData::Audio(AudioData {
+                pts: dts,
+                dts,
+                codec: tag.codec,
+                sound_rate: tag.sound_rate,
+                channels: tag.sound_type,
+                data: tag.data,
+            }))
+        }
+    }
 }
 
-fn parse_video(msg: RtmpMessage) -> Result<RtmpVideoData, RtmpError> {
+fn parse_video(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
     let tag = VideoTag::parse(msg.payload)?;
-    let dts = msg.timestamp as i64;
-    let pts = tag.composition_time.map_or(dts, |cts| dts + cts as i64);
-    Ok(RtmpVideoData {
-        packet_type: tag.packet_type,
-        pts,
-        dts,
-        codec: tag.codec,
-        frame_type: tag.frame_type,
-        composition_time: tag.composition_time,
-        data: tag.data,
-    })
+    match tag.packet_type {
+        PacketType::Config => Ok(RtmpMediaData::VideoConfig(VideoConfig {
+            codec: tag.codec,
+            data: tag.data,
+        })),
+        PacketType::Data => {
+            let dts = msg.timestamp as i64;
+            let pts = tag.composition_time.map_or(dts, |cts| dts + cts as i64);
+            Ok(RtmpMediaData::Video(VideoData {
+                pts,
+                dts,
+                codec: tag.codec,
+                frame_type: tag.frame_type,
+                composition_time: tag.composition_time,
+                data: tag.data,
+            }))
+        }
+    }
 }
