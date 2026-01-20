@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use flv::error::ParseError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -39,4 +40,7 @@ pub enum RtmpError {
 
     #[error("Internal buffer error: {0}")]
     InternalBufferError(&'static str),
+
+    #[error("FLV tag parsing failed: {0}")]
+    FlvParsingFailed(#[from] ParseError),
 }

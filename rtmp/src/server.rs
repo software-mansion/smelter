@@ -1,5 +1,6 @@
 use crate::{error::RtmpError, handle_client::handle_client};
 use bytes::Bytes;
+use flv::{AudioChannels, AudioCodec, FrameType, VideoCodec};
 use std::{
     collections::HashSet,
     net::{SocketAddr, TcpListener},
@@ -11,10 +12,50 @@ use tracing::{error, info};
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
 pub type RtmpUrlPath = Arc<str>;
 
+pub enum RtmpMediaData {
+    Video(VideoData),
+    VideoConfig(VideoConfig),
+    Audio(AudioData),
+    AudioConfig(AudioConfig),
+}
+
+#[derive(Debug, Clone)]
+pub struct AudioData {
+    pub pts: i64,
+    pub dts: i64,
+    pub codec: AudioCodec,
+    pub sound_rate: u32,
+    pub channels: AudioChannels,
+    pub data: Bytes,
+}
+
+#[derive(Debug, Clone)]
+pub struct AudioConfig {
+    pub codec: AudioCodec,
+    pub sound_rate: u32,
+    pub channels: AudioChannels,
+    pub data: Bytes,
+}
+
+#[derive(Debug, Clone)]
+pub struct VideoData {
+    pub pts: i64,
+    pub dts: i64,
+    pub codec: VideoCodec,
+    pub frame_type: FrameType,
+    pub composition_time: Option<i32>,
+    pub data: Bytes,
+}
+
+#[derive(Debug, Clone)]
+pub struct VideoConfig {
+    pub codec: VideoCodec,
+    pub data: Bytes,
+}
+
 pub struct RtmpConnection {
     pub url_path: RtmpUrlPath,
-    pub video_rx: Receiver<Bytes>, // replace Bytes with type containing parsed media
-    pub audio_rx: Receiver<Bytes>,
+    pub receiver: Receiver<RtmpMediaData>,
 }
 
 #[allow(dead_code)] // TODO add SSL/TLS

@@ -1,4 +1,4 @@
-use rtmp::{RtmpServer, ServerConfig, server::RtmpConnection};
+use rtmp::{RtmpMediaData, RtmpServer, ServerConfig, server::RtmpConnection};
 use std::thread;
 use tracing::info;
 
@@ -16,23 +16,42 @@ fn main() {
 
     let on_connection = Box::new(|conn: RtmpConnection| {
         let url_path = conn.url_path;
-        let video_rx = conn.video_rx;
-        let audio_rx = conn.audio_rx;
+        let receiver = conn.receiver;
 
         info!(?url_path, "Received stream");
         let url_path_clone = url_path.clone();
         thread::spawn(move || {
-            while let Ok(data) = video_rx.recv() {
-                info!(data_len=?data.len(), url_path=?url_path_clone, "Received video bytes");
+            while let Ok(media_data) = receiver.recv() {
+                match media_data {
+                    RtmpMediaData::VideoConfig(video_config) => {
+                        info!(?video_config, "video config")
+                    }
+                    RtmpMediaData::AudioConfig(audio_config) => {
+                        info!(?audio_config, "audio config")
+                    }
+                    RtmpMediaData::Video(video) => info!(
+                        data_len=?video.data.len(),
+                        pts=?video.pts,
+                        dts=?video.dts,
+                        codec=?video.codec,
+                        frame_type=?video.frame_type,
+                        cts=?video.composition_time,
+                        ?url_path,
+                        "Received video"
+                    ),
+                    RtmpMediaData::Audio(audio) => info!(
+                        data_len=?audio.data.len(),
+                        pts=?audio.pts,
+                        dts=?audio.dts,
+                        codec=?audio.codec,
+                        sound_rate=?audio.sound_rate,
+                        channels=?audio.channels,
+                        ?url_path,
+                        "Received audio"
+                    ),
+                };
             }
-            info!(url_path=?url_path_clone, "End of video stream");
-        });
-
-        thread::spawn(move || {
-            while let Ok(data) = audio_rx.recv() {
-                info!(data_len=?data.len(), ?url_path, "Received audio bytes");
-            }
-            info!(?url_path, "End of audo stream");
+            info!(url_path=?url_path_clone, "Stream connection closed");
         });
     });
 
