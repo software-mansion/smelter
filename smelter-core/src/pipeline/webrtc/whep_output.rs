@@ -56,6 +56,11 @@ impl WhepOutput {
         };
         let bearer_token = options.bearer_token.clone();
 
+        ctx.stats_sender.send(StatsEvent::NewOutput {
+            output_ref: output_ref.clone(),
+            kind: OutputProtocolKind::Whep,
+        });
+
         let video_options = options
             .video
             .as_ref()
