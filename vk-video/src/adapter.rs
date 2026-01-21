@@ -69,7 +69,7 @@ impl<'a> VulkanAdapter<'a> {
             }
         };
 
-        if vk_13_features.synchronization2 == 0 {
+        if vk_13_features.synchronization2 == vk::FALSE {
             warn!("device {device_name} does not support the required synchronization2 feature",);
         }
 
