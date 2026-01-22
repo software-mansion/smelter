@@ -108,11 +108,11 @@ impl VulkanDecoder<'_> {
         let command_buffer_pools = DecoderCommandBufferPools {
             transfer: CommandBufferPool::new(
                 decoding_device.vulkan_device.clone(),
-                decoding_device.vulkan_device.queues.transfer.idx,
+                decoding_device.vulkan_device.queues.transfer.family_index,
             )?,
             decode: CommandBufferPool::new(
                 decoding_device.vulkan_device.clone(),
-                decoding_device.h264_decode_queue.idx,
+                decoding_device.h264_decode_queues.family_index,
             )?,
         };
 
@@ -546,7 +546,7 @@ impl VulkanDecoder<'_> {
         };
 
         self.decoding_device
-            .h264_decode_queue
+            .h264_decode_queues
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
                 &mut self.tracker,
@@ -594,8 +594,8 @@ impl VulkanDecoder<'_> {
         };
 
         let queue_indices = [
-            self.decoding_device.queues.transfer.idx as u32,
-            self.decoding_device.queues.wgpu.idx as u32,
+            self.decoding_device.queues.transfer.family_index as u32,
+            self.decoding_device.queues.wgpu.family_index as u32,
         ];
 
         let create_info = vk::ImageCreateInfo::default()

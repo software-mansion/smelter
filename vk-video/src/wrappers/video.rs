@@ -4,7 +4,7 @@ use ash::vk;
 
 use crate::{
     VulkanCommonError, VulkanDevice,
-    device::queues::Queue,
+    device::queues::VideoQueues,
     parser::reference_manager::{PictureInfo, ReferencePictureInfo},
     wrappers::{ImageLayoutTracker, OpenCommandBuffer},
 };
@@ -123,7 +123,7 @@ impl VideoSession {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         vulkan_ctx: &VulkanDevice,
-        queue: &Queue,
+        queue: &VideoQueues,
         profile_info: &vk::VideoProfileInfoKHR,
         max_coded_extent: vk::Extent2D,
         max_dpb_slots: u32,
@@ -136,7 +136,7 @@ impl VideoSession {
         let format = vk::Format::G8_B8R8_2PLANE_420_UNORM;
 
         let session_create_info = vk::VideoSessionCreateInfoKHR::default()
-            .queue_family_index(queue.idx as u32)
+            .queue_family_index(queue.family_index as u32)
             .video_profile(profile_info)
             .picture_format(format)
             .flags(flags)

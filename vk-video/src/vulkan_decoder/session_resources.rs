@@ -90,7 +90,7 @@ impl<'a> VideoSessionResources<'a> {
 
         let video_session = VideoSession::new(
             &decoding_device.vulkan_device,
-            &decoding_device.h264_decode_queue,
+            &decoding_device.h264_decode_queues,
             &profile_info.profile_info.profile_info,
             max_coded_extent,
             max_dpb_slots,
@@ -118,7 +118,7 @@ impl<'a> VideoSessionResources<'a> {
 
         let sps = HashMap::from_iter([(sps.id().id(), sps)]);
         let decode_query_pool = if decoding_device
-            .h264_decode_queue
+            .h264_decode_queues
             .supports_result_status_queries()
         {
             Some(DecodingQueryPool::new(
@@ -224,7 +224,7 @@ impl<'a> VideoSessionResources<'a> {
 
         if self.parameters.profile_info != new_params.profile_info {
             self.decode_query_pool = match decoding_device
-                .h264_decode_queue
+                .h264_decode_queues
                 .supports_result_status_queries()
             {
                 true => Some(DecodingQueryPool::new(
@@ -241,7 +241,7 @@ impl<'a> VideoSessionResources<'a> {
 
         self.video_session = VideoSession::new(
             &decoding_device.vulkan_device,
-            &decoding_device.h264_decode_queue,
+            &decoding_device.h264_decode_queues,
             &new_params.profile_info.profile_info.profile_info,
             new_params.max_coded_extent,
             new_params.max_dpb_slots,
@@ -298,7 +298,7 @@ impl<'a> VideoSessionResources<'a> {
             max_dpb_slots,
         )?;
 
-        decoding_device.h264_decode_queue.submit_chain_semaphore(
+        decoding_device.h264_decode_queues.submit_chain_semaphore(
             decode_buffer.end()?,
             tracker,
             vk::PipelineStageFlags2::ALL_COMMANDS,

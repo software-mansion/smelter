@@ -64,8 +64,11 @@ impl Converter {
         let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
             .profiles(std::slice::from_ref(&profile.profile_info));
 
-        let queue_indices =
-            [device.h264_encode_queue.idx, device.queues.wgpu.idx].map(|i| i as u32);
+        let queue_indices = [
+            device.h264_encode_queues.family_index,
+            device.queues.wgpu.family_index,
+        ]
+        .map(|i| i as u32);
 
         let create_info = vk::ImageCreateInfo::default()
             .flags(vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE)
