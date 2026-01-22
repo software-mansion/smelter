@@ -8,8 +8,6 @@ pub(crate) use mixer::AudioMixer;
 
 use crate::prelude::*;
 
-pub(crate) const SAMPLE_BATCH_DURATION: Duration = Duration::from_millis(20);
-
 #[derive(Debug, Clone)]
 pub struct InputSamplesSet {
     pub samples: HashMap<InputId, Vec<InputAudioSamples>>,

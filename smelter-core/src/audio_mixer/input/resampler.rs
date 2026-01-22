@@ -7,9 +7,7 @@ use rubato::{
 };
 use tracing::{debug, error, trace, warn};
 
-use crate::{
-    AudioChannels, AudioSamples, audio_mixer::SAMPLE_BATCH_DURATION, prelude::InputAudioSamples,
-};
+use crate::{AudioChannels, AudioSamples, prelude::InputAudioSamples};
 
 /// Data flow:
 /// Initial data is appended to `resampler_input_buffer`. When we need to get samples for specific
@@ -93,16 +91,7 @@ impl InputResampler {
             ?channels,
             "Create input resampler"
         );
-        let samples_in_batch = ((output_sample_rate as u128 * SAMPLE_BATCH_DURATION.as_nanos())
-            / 1_000_000_000) as usize;
-
-        if !(output_sample_rate as u128 * SAMPLE_BATCH_DURATION.as_nanos())
-            .is_multiple_of(1_000_000_000)
-        {
-            warn!(
-                "Resampler cannot produce exactly {SAMPLE_BATCH_DURATION:?} chunks at sample rate {output_sample_rate}."
-            )
-        }
+        let samples_in_batch = 256;
 
         let original_resampler_ratio = output_sample_rate as f64 / input_sample_rate as f64;
         let resampler = rubato::Async::<f64>::new_sinc(
@@ -186,7 +175,12 @@ impl InputResampler {
     /// function will fill a gap with zeros or drop overlapping batches.
     pub fn write_batch(&mut self, batch: InputAudioSamples) {
         let (start_pts, end_pts) = batch.pts_range();
-        trace!(?start_pts, ?end_pts, "Resampler received a new batch");
+        trace!(
+            ?start_pts,
+            ?end_pts,
+            len = batch.len(),
+            "Resampler received a new batch"
+        );
 
         if start_pts > self.input_buffer_end_pts + CONTINUITY_THRESHOLD {
             let gap_duration = start_pts.saturating_sub(self.input_buffer_end_pts);
@@ -294,7 +288,6 @@ impl InputResampler {
         }
 
         let input_buffer_start_pts = self.input_buffer_start_pts();
-        warn!(?pts_range, ?input_buffer_start_pts);
 
         // if entire input buffer is in the future
         if pts_range.1 < self.input_buffer_start_pts() {
@@ -307,17 +300,18 @@ impl InputResampler {
         };
 
         if pts_range.0 < input_buffer_start_pts && input_buffer_start_pts < pts_range.1 {
-            let missing_duration = input_buffer_start_pts.saturating_sub(pts_range.0);
-            let zero_samples =
-                (missing_duration.as_secs_f64() * self.input_sample_rate as f64) as usize;
-            let samples = match self.channels {
-                AudioChannels::Mono => AudioSamples::Mono(vec![0.0; zero_samples]),
-                AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); zero_samples]),
+            let duration = input_buffer_start_pts.saturating_sub(pts_range.0);
+            let samples = (duration.as_secs_f64() * self.input_sample_rate as f64) as usize;
+            let batch = match self.channels {
+                AudioChannels::Mono => AudioSamples::Mono(vec![0.0; samples]),
+                AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); samples]),
             };
-            self.resampler_input_buffer.push_front(samples)
+            trace!(samples, ?duration, "Add zero samples before first resample");
+            self.resampler_input_buffer.push_front(batch)
         } else if pts_range.0 > input_buffer_start_pts {
-            let extra_duration = pts_range.0.saturating_sub(input_buffer_start_pts);
-            let samples = (extra_duration.as_secs_f64() * self.input_sample_rate as f64) as usize;
+            let duration = pts_range.0.saturating_sub(input_buffer_start_pts);
+            let samples = (duration.as_secs_f64() * self.input_sample_rate as f64) as usize;
+            trace!(samples, ?duration, "Drain samples before first resample");
             self.resampler_input_buffer.drain_samples(samples);
         }
 
@@ -332,7 +326,7 @@ impl InputResampler {
         let indexing = match is_partial_read {
             true => {
                 let partial_len = self.resampler_input_buffer.frames();
-                trace!("Input buffer to small, partial resampling");
+                trace!(partial_len, "Input buffer to small, partial resampling");
                 Some(Indexing {
                     input_offset: 0,
                     output_offset: 0,
