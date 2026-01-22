@@ -106,7 +106,7 @@ impl NativeEncodeCapabilities {
                 .as_ref()
                 .map(NativeEncodeProfileCapabilities::user_facing),
             high_profile: self
-                .baseline
+                .high
                 .as_ref()
                 .map(NativeEncodeProfileCapabilities::user_facing),
         }
