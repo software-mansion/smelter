@@ -121,8 +121,8 @@ pub enum VulkanCommonError {
     #[error("DPB can have at most 32 slots, {0} was requested")]
     DpbTooLong(u32),
 
-    #[error("Tried to create a semaphore submit that waits for an unsignaled value")]
-    SemaphoreSubmitWaitOnUnsignaledValue,
+    #[error("Tried to waits for an unsignaled semaphore value")]
+    SemaphoreWaitOnUnsignaledValue,
 
     #[error("Tried to register {0:x?} as a new image, while it already exists")]
     RegisteredNewImageTwice(ImageKey),
