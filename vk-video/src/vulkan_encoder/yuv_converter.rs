@@ -294,7 +294,7 @@ impl Converter {
 
         let wgpu_command_buffer = unsafe { command_encoder.end_encoding()? };
 
-        tracker.wait(u64::MAX)?;
+        tracker.wait_for_all(u64::MAX)?;
 
         let mut wgpu_fence = wgpu::hal::vulkan::Fence::TimelineSemaphore(
             tracker.semaphore_tracker.semaphore.semaphore,
@@ -305,7 +305,7 @@ impl Converter {
             wgpu_queue.submit(
                 &[&wgpu_command_buffer],
                 &[],
-                (&mut wgpu_fence, signal_value),
+                (&mut wgpu_fence, signal_value.0),
             )?;
         }
 

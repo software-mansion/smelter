@@ -1,5 +1,5 @@
 use std::{
-    collections::hash_map::Entry,
+    collections::{VecDeque, hash_map::Entry},
     sync::{Arc, Mutex},
 };
 
@@ -8,7 +8,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     VulkanCommonError, VulkanDevice,
-    wrappers::{ImageKey, ImageLayoutTracker},
+    wrappers::{ImageKey, ImageLayoutTracker, SemaphoreWaitValue},
 };
 
 struct CommandPool {
@@ -67,12 +67,17 @@ impl std::ops::Deref for CommandPool {
     }
 }
 
+pub(crate) struct SubmittedCommandBuffer {
+    semaphore_value: SemaphoreWaitValue,
+    buffer: vk::CommandBuffer,
+}
+
 pub(crate) struct CommandBufferPool(Arc<Mutex<CommandBufferPoolInner>>);
 
 pub(crate) struct CommandBufferPoolInner {
     command_pool: CommandPool,
     free: Vec<vk::CommandBuffer>,
-    submitted: Vec<vk::CommandBuffer>,
+    submitted: VecDeque<SubmittedCommandBuffer>,
 }
 
 impl CommandBufferPool {
@@ -85,7 +90,7 @@ impl CommandBufferPool {
         Ok(Self(Arc::new(Mutex::new(CommandBufferPoolInner {
             command_pool,
             free: Vec::new(),
-            submitted: Vec::new(),
+            submitted: VecDeque::new(),
         }))))
     }
 
@@ -112,10 +117,24 @@ impl CommandBufferPool {
         }))
     }
 
-    pub(crate) fn mark_submitted_as_free(&self) {
+    pub(crate) fn mark_submitted_as_free(&self, last_waited_semaphore: SemaphoreWaitValue) {
         let mut guard = self.0.lock().unwrap();
         let inner = &mut *guard;
-        inner.free.append(&mut inner.submitted);
+
+        let Some(last) = inner
+            .submitted
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.semaphore_value <= last_waited_semaphore)
+            .map(|(i, _)| i)
+            .last()
+        else {
+            return;
+        };
+
+        inner
+            .free
+            .extend(inner.submitted.drain(..=last).map(|b| b.buffer));
     }
 }
 
@@ -203,8 +222,16 @@ impl OpenCommandBuffer {
 pub(crate) struct RecordedCommandBuffer(UnfinishedCommandBuffer);
 
 impl RecordedCommandBuffer {
-    pub(crate) fn mark_submitted(mut self, tracker: &mut ImageLayoutTracker) {
-        self.0.pool.lock().unwrap().submitted.push(self.0.buffer);
+    pub(crate) fn mark_submitted(mut self, tracker: &mut ImageLayoutTracker, semaphore_value: SemaphoreWaitValue) {
+        self.0
+            .pool
+            .lock()
+            .unwrap()
+            .submitted
+            .push_back(SubmittedCommandBuffer {
+                semaphore_value,
+                buffer: self.0.buffer,
+            });
         tracker.map.extend(self.0.image_layout_transitions.drain());
         self.0.destroy_without_reset();
     }

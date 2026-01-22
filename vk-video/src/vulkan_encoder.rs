@@ -13,9 +13,7 @@ use crate::{
     device::{EncodingDevice, Rational},
     parameters::H264Profile,
     wrappers::{
-        Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
-        ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool, Tracker,
-        TrackerKind, VideoEncodeQueueExt, VideoQueueExt, VideoSession, VideoSessionParameters,
+        Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image, ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool, SemaphoreWaitValue, Tracker, TrackerKind, VideoEncodeQueueExt, VideoQueueExt, VideoSession, VideoSessionParameters
     },
 };
 
@@ -285,9 +283,9 @@ impl EncoderCommandBufferPools {
 }
 
 impl CommandBufferPoolStorage for EncoderCommandBufferPools {
-    fn mark_submitted_as_free(&mut self) {
-        self.transfer.mark_submitted_as_free();
-        self.encode.mark_submitted_as_free();
+    fn mark_submitted_as_free(&mut self, last_waited_for: SemaphoreWaitValue) {
+        self.transfer.mark_submitted_as_free(last_waited_for);
+        self.encode.mark_submitted_as_free(last_waited_for);
     }
 }
 
@@ -961,7 +959,7 @@ impl VulkanEncoder<'_> {
                 EncoderTrackerWaitState::Encode,
             )?;
 
-        self.tracker.wait(u64::MAX)?;
+        self.tracker.wait_for_all(u64::MAX)?;
 
         let feedback = self.query_pool.get_result_blocking()?;
 
