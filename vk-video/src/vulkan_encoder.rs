@@ -12,12 +12,7 @@ use crate::{
     EncodedOutputChunk, Frame, RawFrameData, VulkanCommonError,
     device::{EncodingDevice, Rational},
     parameters::H264Profile,
-    wrappers::{
-        Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
-        ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool, Tracker,
-        TrackerKind, TrackerWait, VideoEncodeQueueExt, VideoQueueExt, VideoSession,
-        VideoSessionParameters,
-    },
+    wrappers::{Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image, ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool, SemaphoreWaitValue, Tracker, TrackerKind, TrackerWait, VideoEncodeQueueExt, VideoQueueExt, VideoSession, VideoSessionParameters},
 };
 
 mod encode_parameter_sets;
@@ -300,9 +295,9 @@ impl EncoderCommandBufferPools {
 }
 
 impl CommandBufferPoolStorage for EncoderCommandBufferPools {
-    fn mark_submitted_as_free(&mut self) {
-        self.transfer.mark_submitted_as_free();
-        self.encode.mark_submitted_as_free();
+    fn mark_submitted_as_free(&mut self, last_waited_for: SemaphoreWaitValue) {
+        self.transfer.mark_submitted_as_free(last_waited_for);
+        self.encode.mark_submitted_as_free(last_waited_for);
     }
 }
 
@@ -774,7 +769,8 @@ impl VulkanEncoder<'_> {
             )
         };
 
-        self.tracker.wait(u64::MAX)?;
+        // TODO: dont wait for all here
+        self.tracker.wait_for_all(u64::MAX)?;
 
         let mut wgpu_fence = wgpu::hal::vulkan::Fence::TimelineSemaphore(
             self.tracker.semaphore_tracker.semaphore.semaphore,
@@ -785,7 +781,7 @@ impl VulkanEncoder<'_> {
             wgpu_queue.submit(
                 &[&encoder.end_encoding()?],
                 &[],
-                (&mut wgpu_fence, signal_value),
+                (&mut wgpu_fence, signal_value.0),
             )?;
         }
 
@@ -1126,7 +1122,7 @@ impl VulkanEncoder<'_> {
                 EncoderTrackerWaitState::Encode,
             )?;
 
-        self.tracker.wait(u64::MAX)?;
+        self.tracker.wait_for_all(u64::MAX)?;
 
         let feedback = self.query_pool.get_result_blocking()?;
 
