@@ -1,3 +1,11 @@
+use std::{
+    net::TcpStream,
+    sync::{Arc, Mutex, atomic::AtomicBool, mpsc::channel},
+};
+
+use flv::{AudioTag, VideoTag, tag::PacketType};
+use tracing::{info, trace};
+
 use crate::{
     error::RtmpError,
     handshake::Handshake,
@@ -5,20 +13,13 @@ use crate::{
     negotiation::negotiate_rtmp_session,
     protocol::MessageType,
     server::{
-        AudioConfig, AudioData, OnConnectionCallback, RtmpConnection, RtmpMediaData, ServerState,
-        VideoConfig, VideoData,
+        AudioConfig, AudioData, OnConnectionCallback, RtmpConnection, RtmpMediaData, VideoConfig,
+        VideoData,
     },
 };
-use flv::{AudioTag, VideoTag, tag::PacketType};
-use std::{
-    net::TcpStream,
-    sync::{Arc, Mutex, atomic::AtomicBool, mpsc::channel},
-};
-use tracing::{info, trace};
 
 pub(crate) fn handle_client(
     mut stream: TcpStream,
-    _state: Arc<ServerState>,
     on_connection: Arc<Mutex<OnConnectionCallback>>,
 ) -> Result<(), RtmpError> {
     Handshake::perform(&mut stream)?;

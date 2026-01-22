@@ -55,7 +55,6 @@ fn main() {
         });
     });
 
-    let server = RtmpServer::new(config, on_connection).unwrap();
-
-    server.run().unwrap();
+    let _server = RtmpServer::start(config, on_connection).unwrap();
+    thread::park()
 }

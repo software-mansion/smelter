@@ -1,28 +1,11 @@
-use std::{sync::Arc, thread};
+use std::sync::{Arc, Mutex};
 
 use rtmp::{RtmpConnection, RtmpServer, ServerConfig};
-use tokio::sync::oneshot;
-use tracing::{error, info};
+use tracing::error;
 
 use super::state::RtmpInputsState;
 
 use crate::prelude::*;
-
-#[derive(Debug)]
-pub struct RtmpServerHandle {
-    shutdown_sender: Option<oneshot::Sender<()>>,
-}
-
-impl Drop for RtmpServerHandle {
-    fn drop(&mut self) {
-        info!("Stopping RTMP server");
-        if let Some(sender) = self.shutdown_sender.take()
-            && sender.send(()).is_err()
-        {
-            error!("Cannot send shutdown signal to RTMP server")
-        }
-    }
-}
 
 pub struct RtmpPipelineState {
     pub port: u16,
@@ -38,10 +21,11 @@ impl RtmpPipelineState {
     }
 }
 
-pub fn spawn_rtmp_server(state: &RtmpPipelineState) -> Result<RtmpServerHandle, InitPipelineError> {
+pub fn spawn_rtmp_server(
+    state: &RtmpPipelineState,
+) -> Result<Arc<Mutex<RtmpServer>>, InitPipelineError> {
     let port = state.port;
     let inputs = state.inputs.clone();
-    let (shutdown_sender, _shutdown_receiver) = oneshot::channel();
 
     let config = ServerConfig {
         port,
@@ -59,16 +43,9 @@ pub fn spawn_rtmp_server(state: &RtmpPipelineState) -> Result<RtmpServerHandle, 
         }
     });
 
-    thread::Builder::new()
-        .name("RTMP server".to_string())
-        .spawn(move || {
-            let server = RtmpServer::new(config, on_connection)?;
-            info!(port, "RTMP server starting");
-            server.run()
-        })
-        .map_err(InitPipelineError::RtmpServerInitError)?;
+    // TODO add retry
+    let server =
+        RtmpServer::start(config, on_connection).map_err(InitPipelineError::RtmpServerInitError)?;
 
-    Ok(RtmpServerHandle {
-        shutdown_sender: Some(shutdown_sender),
-    })
+    Ok(server)
 }

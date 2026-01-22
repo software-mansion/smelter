@@ -1,14 +1,18 @@
 use std::{
-    collections::HashSet,
+    io::ErrorKind,
     net::{SocketAddr, TcpListener},
-    sync::{Arc, Mutex, RwLock, mpsc::Receiver},
+    sync::{
+        Arc, Mutex, Weak,
+        atomic::{AtomicBool, Ordering},
+        mpsc::Receiver,
+    },
     thread,
     time::Duration,
 };
 
 use bytes::Bytes;
 use flv::{AudioChannels, AudioCodec, FrameType, VideoCodec};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use crate::{error::RtmpError, handle_client::handle_client};
 
@@ -70,92 +74,72 @@ pub struct ServerConfig {
     pub ca_cert_file: Option<Arc<str>>,
     pub client_timeout_secs: u64,
 }
-#[allow(unused)]
-pub(crate) struct ServerState {
-    active_streams: RwLock<HashSet<RtmpUrlPath>>,
-}
-
-impl ServerState {
-    fn new() -> Self {
-        Self {
-            active_streams: RwLock::new(HashSet::new()),
-        }
-    }
-
-    #[allow(dead_code)]
-    fn try_register(&self, conn: RtmpUrlPath) -> bool {
-        let mut streams = self.active_streams.write().unwrap();
-        if streams.contains(&conn) {
-            return false;
-        }
-        streams.insert(conn);
-        true
-    }
-
-    #[allow(dead_code)]
-    fn unregister(&self, conn: &RtmpUrlPath) {
-        let mut streams = self.active_streams.write().unwrap();
-        streams.remove(conn);
-    }
-}
 
 pub struct RtmpServer {
-    config: ServerConfig,
-    state: Arc<ServerState>,
-    on_connection: Arc<Mutex<OnConnectionCallback>>,
-    listener: TcpListener,
+    pub config: ServerConfig,
+    shutdown: Arc<AtomicBool>,
 }
 
 impl RtmpServer {
-    pub fn new(
+    pub fn start(
         config: ServerConfig,
         on_connection: OnConnectionCallback,
-    ) -> Result<Self, RtmpError> {
+    ) -> Result<Arc<Mutex<Self>>, RtmpError> {
         let port = config.port;
         let addr = SocketAddr::from(([0, 0, 0, 0], port));
-        let mut last_error: Option<std::io::Error> = None;
-        for _ in 0..5 {
-            match TcpListener::bind(addr) {
-                Ok(listener) => {
-                    return Ok(Self {
-                        config,
-                        state: Arc::new(ServerState::new()),
-                        on_connection: Arc::new(Mutex::new(on_connection)),
-                        listener,
-                    });
+        let listener = TcpListener::bind(addr)?;
+        listener.set_nonblocking(true)?;
+        let on_connection = Arc::new(Mutex::new(on_connection));
+
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let server = Arc::new(Mutex::new(Self { config, shutdown }));
+
+        info!("RTMP server running on port {}", port);
+
+        let server_weak: Weak<Mutex<RtmpServer>> = Arc::downgrade(&server);
+
+        thread::Builder::new()
+            .name("RTMP server".to_string())
+            .spawn(move || {
+                loop {
+                    let Some(server) = server_weak.upgrade() else {
+                        break;
+                    };
+
+                    if server.lock().unwrap().shutdown.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    match listener.accept() {
+                        Ok((stream, peer_addr)) => {
+                            info!("New connection from: {:?}", peer_addr);
+
+                            let on_connection_clone = on_connection.clone();
+                            thread::spawn(move || {
+                                if let Err(err) = stream.set_nonblocking(false) {
+                                    error!(?err, "Failed to set stream blocking");
+                                    return;
+                                }
+                                if let Err(error) = handle_client(stream, on_connection_clone) {
+                                    error!(?error, "Client handler error");
+                                }
+                            });
+                        }
+                        Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                            thread::sleep(Duration::from_millis(50));
+                        }
+                        Err(error) => {
+                            error!(?error, "Accept error");
+                            thread::sleep(Duration::from_millis(50));
+                        }
+                    }
                 }
-                Err(err) => {
-                    warn!("Failed to bind to port {port}. Retrying ...");
-                    last_error = Some(err)
-                }
-            };
-            thread::sleep(Duration::from_millis(1000));
-        }
-        Err(last_error.unwrap().into())
+            })?;
+
+        Ok(server)
     }
 
-    pub fn run(self) -> Result<(), RtmpError> {
-        info!("RTMP server running on port {}", self.config.port);
-        for stream_result in self.listener.incoming() {
-            match stream_result {
-                Ok(stream) => {
-                    let peer_addr = stream.peer_addr().ok();
-                    info!("New connection from: {:?}", peer_addr);
-
-                    let state = self.state.clone();
-                    let on_connection = self.on_connection.clone();
-
-                    thread::spawn(move || {
-                        if let Err(error) = handle_client(stream, state, on_connection) {
-                            error!(?error, "Client handler error");
-                        }
-                    });
-                }
-                Err(error) => {
-                    error!(?error, "Accept error");
-                }
-            }
-        }
-        Ok(())
+    pub fn shutdown(self) {
+        self.shutdown.store(true, Ordering::Relaxed);
     }
 }

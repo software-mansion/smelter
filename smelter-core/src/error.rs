@@ -26,7 +26,7 @@ pub enum InitPipelineError {
     WhipWhepServerInitError(#[source] std::io::Error),
 
     #[error("Failed to initialize RTMP server.")]
-    RtmpServerInitError(#[source] std::io::Error),
+    RtmpServerInitError(#[source] rtmp::RtmpError),
 }
 
 #[derive(Debug, thiserror::Error)]

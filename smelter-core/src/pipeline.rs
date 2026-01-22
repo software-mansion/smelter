@@ -1,9 +1,10 @@
 use std::{
     path::Path,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
+use ::rtmp::RtmpServer;
 use smelter_render::{Framerate, RenderingMode, WgpuFeatures, web_renderer::ChromiumContext};
 use tokio::runtime::Runtime;
 
@@ -92,7 +93,7 @@ pub enum PipelineWhipWhepServerOptions {
 
 #[derive(Debug)]
 pub enum PipelineRtmpServerOptions {
-    Enable { port: u16 },
+    Enable { port: u16 }, // server config
     Disable,
 }
 
@@ -113,7 +114,10 @@ pub(crate) struct PipelineCtx {
     pub stats_sender: StatsSender,
     tokio_rt: Arc<Runtime>,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
+    #[allow(unused)]
     rtmp_state: Option<Arc<RtmpPipelineState>>,
+    #[allow(unused)]
+    rtmp_server: Option<Arc<Mutex<RtmpServer>>>,
 }
 
 impl std::fmt::Debug for PipelineCtx {
