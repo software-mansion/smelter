@@ -162,7 +162,7 @@ impl InputResampler {
     }
 
     fn set_resample_ratio_relative(&mut self, rel_ratio: f64) {
-        let rel_ratio = rel_ratio.clamp(0.9, 1.1);
+        let rel_ratio = rel_ratio.clamp(1.0 / 1.1, 1.1);
         let desired = self.original_resampler_ratio * rel_ratio;
         let current = self.resampler.resample_ratio();
         let should_update = (current == 1.0 && desired != 1.0) || (desired - current).abs() > 0.001;
