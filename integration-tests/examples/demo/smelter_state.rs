@@ -12,6 +12,7 @@ use tracing::{debug, error};
 use crate::inputs::InputHandle;
 use crate::inputs::hls::HlsInputBuilder;
 use crate::inputs::mp4::Mp4InputBuilder;
+use crate::inputs::rtmp::RtmpInputBuilder;
 use crate::inputs::whep::WhepInputBuilder;
 use crate::inputs::whip::WhipInputBuilder;
 
@@ -124,6 +125,11 @@ impl SmelterState {
                 let rtp_input = RtpInputBuilder::new().prompt()?.build();
                 let register_request = rtp_input.serialize_register();
                 (InputHandle::Rtp(rtp_input), register_request)
+            }
+            InputProtocol::Rtmp => {
+                let rtmp_input = RtmpInputBuilder::new().prompt()?.build();
+                let register_request = rtmp_input.serialize_register();
+                (InputHandle::Rtmp(rtmp_input), register_request)
             }
             InputProtocol::Whip => {
                 let whip_input = WhipInputBuilder::new().prompt()?.build();

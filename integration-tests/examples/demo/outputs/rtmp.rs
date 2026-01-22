@@ -54,7 +54,7 @@ impl Serialize for RtmpOutput {
     where
         S: serde::Serializer,
     {
-        let mut state = serializer.serialize_struct("RtmpOutput", 3)?;
+        let mut state = serializer.serialize_struct("RtmpOutput", 4)?;
         state.serialize_field("video", &self.options.video)?;
         state.serialize_field("audio", &self.options.audio)?;
         state.serialize_field("player", &self.options.player)?;

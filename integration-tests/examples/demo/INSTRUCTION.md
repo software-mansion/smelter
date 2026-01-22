@@ -25,6 +25,10 @@ Path at which `mp4` output file should be saved.
 
 Path to file that will be used as source of `RTP` stream.
 
+### `RTMP_INPUT_PATH`
+
+Path to file that will be used as source of `RTMP` stream.
+
 ### `WHIP_INPUT_BEARER_TOKEN`
 
 Sets the bearer token to be used when connecting to the `WHIP` server provided by Smelter.
