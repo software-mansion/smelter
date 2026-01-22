@@ -27,10 +27,10 @@ impl TimelineSemaphore {
         Ok(Self { semaphore, device })
     }
 
-    pub(crate) fn wait(&self, timeout: u64, value: u64) -> Result<(), VulkanCommonError> {
+    pub(crate) fn wait(&self, timeout: u64, value: SemaphoreWaitValue) -> Result<(), VulkanCommonError> {
         let wait_info = vk::SemaphoreWaitInfo::default()
             .semaphores(std::slice::from_ref(&self.semaphore))
-            .values(std::slice::from_ref(&value));
+            .values(std::slice::from_ref(&value.0));
 
         unsafe { self.device.wait_semaphores(&wait_info, timeout)? };
 
@@ -50,11 +50,14 @@ pub(crate) trait TrackerKind {
 }
 
 pub(crate) trait CommandBufferPoolStorage: Sized {
-    fn mark_submitted_as_free(&mut self);
+    fn mark_submitted_as_free(&mut self, last_waited_for: SemaphoreWaitValue);
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct SemaphoreWaitValue(pub(crate) u64);
+
 pub(crate) struct TrackerWait<S> {
-    pub(crate) value: u64,
+    pub(crate) value: SemaphoreWaitValue,
     pub(crate) _state: S,
 }
 
@@ -78,11 +81,19 @@ impl<K: TrackerKind> Tracker<K> {
         })
     }
 
-    pub(crate) fn wait(&mut self, timeout: u64) -> Result<(), VulkanCommonError> {
-        self.semaphore_tracker.wait(timeout)?;
+    pub(crate) fn wait_for_all(&mut self, timeout: u64) -> Result<(), VulkanCommonError> {
+        let waited_for = self.semaphore_tracker.wait_for_all(timeout)?;
 
-        self.command_buffer_pools.mark_submitted_as_free();
+        if let Some(waited_for) = waited_for {
+            self.command_buffer_pools.mark_submitted_as_free(waited_for);
+        }
 
+        Ok(())
+    }
+
+    pub(crate) fn wait_for(&mut self, value: SemaphoreWaitValue, timeout: u64) -> Result<(), VulkanCommonError> {
+        self.semaphore_tracker.wait_for(value, timeout)?;
+        self.command_buffer_pools.mark_submitted_as_free(value);
         Ok(())
     }
 }
@@ -91,6 +102,7 @@ pub(crate) struct SemaphoreTracker<S> {
     pub(crate) semaphore: TimelineSemaphore,
     next_value: u64,
     pub(crate) wait_for: Option<TrackerWait<S>>,
+    last_waited_for: Option<SemaphoreWaitValue>,
 }
 
 impl<S> SemaphoreTracker<S> {
@@ -98,22 +110,52 @@ impl<S> SemaphoreTracker<S> {
         Ok(Self {
             next_value: 1,
             wait_for: None,
+            last_waited_for: None,
             semaphore: TimelineSemaphore::new(device, 0)?,
         })
     }
 
-    pub(crate) fn next_sem_value(&mut self) -> u64 {
+    pub(crate) fn next_sem_value(&mut self) -> SemaphoreWaitValue {
         let val = self.next_value;
         self.next_value += 1;
-        val
+        SemaphoreWaitValue(val)
     }
 
     /// This is a noop if there's nothing to wait for
-    pub(crate) fn wait(&mut self, timeout: u64) -> Result<(), VulkanCommonError> {
+    pub(crate) fn wait_for_all(&mut self, timeout: u64) -> Result<Option<SemaphoreWaitValue>, VulkanCommonError> {
         if let Some(wait_for) = self.wait_for.as_ref() {
-            self.semaphore.wait(timeout, wait_for.value)?;
+            let waited_for = wait_for.value;
+            self.semaphore.wait(timeout, waited_for)?;
+            self.wait_for = None;
+
+            return Ok(Some(waited_for));
+        }
+
+        Ok(None)
+    }
+
+    pub(crate) fn wait_for(&mut self, value: SemaphoreWaitValue, timeout: u64) -> Result<(), VulkanCommonError> {
+        if let Some(last) = self.last_waited_for.as_ref()
+            && *last >= value
+        {
+            return Ok(());
+        }
+
+        let Some(final_wait_for) = self.wait_for.as_mut() else {
+            return Err(VulkanCommonError::SemaphoreWaitOnUnsignaledValue);
+        };
+
+        if final_wait_for.value < value {
+            return Err(VulkanCommonError::SemaphoreWaitOnUnsignaledValue);
+        }
+
+        self.semaphore.wait(timeout, value)?;
+
+        if final_wait_for.value == value {
             self.wait_for = None;
         }
+
+        self.last_waited_for = Some(value);
 
         Ok(())
     }

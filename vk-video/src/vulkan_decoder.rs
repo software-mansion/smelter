@@ -49,9 +49,9 @@ struct DecoderCommandBufferPools {
 }
 
 impl CommandBufferPoolStorage for DecoderCommandBufferPools {
-    fn mark_submitted_as_free(&mut self) {
-        self.decode.mark_submitted_as_free();
-        self.transfer.mark_submitted_as_free();
+    fn mark_submitted_as_free(&mut self, last_waited_for: SemaphoreWaitValue) {
+        self.decode.mark_submitted_as_free(last_waited_for);
+        self.transfer.mark_submitted_as_free(last_waited_for);
     }
 }
 
@@ -711,7 +711,7 @@ impl VulkanDecoder<'_> {
                 DecoderTrackerWaitState::DownloadImageToBuffer,
             )?;
 
-        self.tracker.wait(u64::MAX)?;
+        self.tracker.wait_for_all(u64::MAX)?;
 
         let result = self
             .video_session_resources
@@ -793,7 +793,7 @@ impl VulkanDecoder<'_> {
             decode_output.layer,
         )?;
 
-        self.tracker.wait(u64::MAX)?;
+        self.tracker.wait_for_all(u64::MAX)?;
 
         let output = unsafe {
             dst_buffer.download_data_from_buffer(
