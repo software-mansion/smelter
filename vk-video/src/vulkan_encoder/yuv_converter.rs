@@ -8,7 +8,7 @@ use crate::{
     device::EncodingDevice,
     vulkan_encoder::EncoderTracker,
     wrappers::{
-        DescriptorPool, DescriptorSetLayout, Framebuffer, Image, ImageLayoutTracker, ImageView,
+        DescriptorPool, DescriptorSetLayout, Framebuffer, ImageLayoutTracker, ImageView, NV12Image,
         Pipeline, PipelineLayout, RenderPass, Sampler, ShaderModule, TrackerWait,
     },
 };
@@ -26,7 +26,7 @@ pub enum YuvConverterError {
 
 pub(crate) struct Converter {
     device: Arc<VulkanDevice>,
-    image: Arc<Image>,
+    image: Arc<NV12Image>,
     pipeline_y: ConvertingPipeline,
     pipeline_uv: ConvertingPipeline,
     image_tracker: Arc<Mutex<ImageLayoutTracker>>,
@@ -70,26 +70,11 @@ impl Converter {
         ]
         .map(|i| i as u32);
 
-        let create_info = vk::ImageCreateInfo::default()
-            .flags(vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE)
-            .image_type(vk::ImageType::TYPE_2D)
-            .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
-            .extent(extent)
-            .mip_levels(1)
-            .array_layers(1)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(
-                vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR,
-            )
-            .sharing_mode(vk::SharingMode::CONCURRENT)
-            .queue_family_indices(&queue_indices)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .push_next(&mut profile_list_info);
-
-        let image = Image::new(
-            device.allocator.clone(),
-            &create_info,
+        let image = NV12Image::new(
+            &device.vulkan_device,
+            extent,
+            &queue_indices,
+            &mut profile_list_info,
             image_tracker.clone(),
         )?;
 
@@ -261,7 +246,7 @@ impl Converter {
 
         let view = ImageView::new(
             self.device.device.clone(),
-            self.image.clone(),
+            self.image.parent_image.clone(),
             &view_create_info,
         )?;
 
@@ -335,7 +320,7 @@ impl Converter {
 pub(crate) struct ConvertState {
     _encoder: wgpu::hal::vulkan::CommandEncoder,
     _buffer: wgpu::hal::vulkan::CommandBuffer,
-    pub(crate) image: Arc<Image>,
+    pub(crate) image: Arc<NV12Image>,
     pub(crate) _view: ImageView,
 }
 
@@ -360,7 +345,7 @@ impl ConvertingPipeline {
         vertex_info: ShaderInfo,
         fragment_info: ShaderInfo,
         common_state: Arc<CommonState>,
-        image: Arc<Image>,
+        image: Arc<NV12Image>,
         format: vk::Format,
     ) -> Result<Self, YuvConverterError> {
         let vertex = ShaderModule::new(device.device.clone(), &vertex_info.compiled_shader)?;
@@ -489,7 +474,7 @@ impl ConvertingPipeline {
 
         let view = Arc::new(ImageView::new(
             device.device.clone(),
-            image.clone(),
+            image.parent_image.clone(),
             &view_info,
         )?);
 

@@ -1047,7 +1047,7 @@ impl VulkanEncoder<'_> {
         .unwrap();
 
         let is_keyframe = force_idr || self.idr_period_counter == 0;
-        let result = self.encode(convert_state.image, force_idr)?;
+        let result = self.encode(convert_state.image.parent_image.clone(), force_idr)?;
 
         Ok(EncodedOutputChunk {
             data: result,

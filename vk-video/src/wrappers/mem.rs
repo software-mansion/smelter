@@ -1,10 +1,13 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    ops::Deref,
+    sync::{Arc, Mutex},
+};
 
 use ash::vk::{self, Handle};
 use vk_mem::Alloc;
 
 use crate::{
-    VulkanCommonError, VulkanDecoderError, VulkanInitError,
+    VulkanCommonError, VulkanDecoderError, VulkanDevice, VulkanInitError,
     vulkan_encoder::H264EncodeProfileInfo,
     wrappers::{ImageLayoutTracker, OpenCommandBuffer},
 };
@@ -288,7 +291,8 @@ impl std::ops::Deref for Buffer {
 
 pub(crate) struct Image {
     pub(crate) image: vk::Image,
-    allocation: vk_mem::Allocation,
+    // TODO: yeah, I don't have time work on a nicer solution
+    allocation: Option<vk_mem::Allocation>,
     allocator: Arc<Allocator>,
     tracker: Arc<Mutex<ImageLayoutTracker>>,
     pub(crate) device: Arc<Device>,
@@ -321,7 +325,7 @@ impl Image {
 
         Ok(Image {
             image,
-            allocation,
+            allocation: Some(allocation),
             device: allocator.device.clone(),
             allocator,
             tracker,
@@ -497,8 +501,11 @@ impl Drop for Image {
                 tracing::error!("Error while freeing image: {e}")
             }
 
-            self.allocator
-                .destroy_image(self.image, &mut self.allocation)
+            let Some(allocation) = self.allocation.as_mut() else {
+                println!("DROP IMAGE (NV12 owned)");
+                return;
+            };
+            self.allocator.destroy_image(self.image, allocation)
         };
     }
 }
@@ -528,5 +535,184 @@ impl ImageView {
 impl Drop for ImageView {
     fn drop(&mut self) {
         unsafe { self.device.destroy_image_view(self.view, None) };
+    }
+}
+
+// TODO: Maybe instead of blitting, compute shaders??
+// TODO: Transitions in transcoding should be batched together instead of multiple independent barriers
+pub(crate) struct NV12Image {
+    // TODO: This is not safe. This allows parent image to outlive MemoryAllocations
+    pub(crate) parent_image: Arc<Image>,
+
+    pub(crate) y_plane_image: vk::Image,
+    pub(crate) uv_plane_image: vk::Image,
+
+    _y_plane_alloc: MemoryAllocation,
+    _uv_plane_alloc: MemoryAllocation,
+
+    device: Arc<Device>,
+}
+
+impl Drop for NV12Image {
+    fn drop(&mut self) {
+        println!("DROP NV12");
+        unsafe {
+            self.device.device.destroy_image(self.y_plane_image, None);
+            self.device.device.destroy_image(self.uv_plane_image, None);
+        };
+    }
+}
+
+impl Deref for NV12Image {
+    type Target = Image;
+
+    fn deref(&self) -> &Self::Target {
+        &self.parent_image
+    }
+}
+
+impl NV12Image {
+    pub fn new(
+        device: &VulkanDevice,
+        parent_extent: vk::Extent3D,
+        queue_indices: &[u32],
+        // TODO: This is not needed once NV12 encoder API is merged
+        profile_list_info: &mut vk::VideoProfileListInfoKHR,
+        tracker: Arc<Mutex<ImageLayoutTracker>>,
+    ) -> Result<Self, VulkanCommonError> {
+        let create_info = vk::ImageCreateInfo::default()
+            .flags(
+                vk::ImageCreateFlags::MUTABLE_FORMAT
+                    | vk::ImageCreateFlags::EXTENDED_USAGE
+                    | vk::ImageCreateFlags::ALIAS
+                    | vk::ImageCreateFlags::DISJOINT,
+            )
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
+            .extent(parent_extent)
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(
+                // TODO: Usages should be provided
+                vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR,
+            )
+            .sharing_mode(vk::SharingMode::CONCURRENT)
+            .queue_family_indices(queue_indices)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .push_next(profile_list_info);
+
+        let parent_image = unsafe { device.device.create_image(&create_info, None)? };
+        tracker.lock().unwrap().register_image(
+            ImageKey(parent_image.as_raw()),
+            create_info.initial_layout,
+            create_info.array_layers as usize,
+        )?;
+
+        let [y_plane, uv_plane] = [vk::ImageAspectFlags::PLANE_0, vk::ImageAspectFlags::PLANE_1]
+            .map(|plane| {
+                Self::create_plane_image(device, parent_extent, parent_image, queue_indices, plane)
+            });
+        let (y_plane_image, y_plane_alloc) = y_plane?;
+        let (uv_plane_image, uv_plane_alloc) = uv_plane?;
+
+        let parent_image = Image {
+            image: parent_image,
+            allocation: None,
+            allocator: device.allocator.clone(),
+            tracker,
+            device: device.device.clone(),
+            extent: parent_extent,
+        };
+
+        Ok(Self {
+            parent_image: Arc::new(parent_image),
+            y_plane_image,
+            uv_plane_image,
+            _y_plane_alloc: y_plane_alloc,
+            _uv_plane_alloc: uv_plane_alloc,
+            device: device.device.clone(),
+        })
+    }
+
+    fn create_plane_image(
+        device: &VulkanDevice,
+        parent_extent: vk::Extent3D,
+        parent_image: vk::Image,
+        queue_indices: &[u32],
+        plane: vk::ImageAspectFlags,
+    ) -> Result<(vk::Image, MemoryAllocation), VulkanCommonError> {
+        let mut plane_req_info =
+            vk::ImagePlaneMemoryRequirementsInfo::default().plane_aspect(plane);
+        let mem_req_info = vk::ImageMemoryRequirementsInfo2::default()
+            .image(parent_image)
+            .push_next(&mut plane_req_info);
+
+        let mut mem_req = vk::MemoryRequirements2::default();
+        unsafe {
+            device
+                .device
+                .get_image_memory_requirements2(&mem_req_info, &mut mem_req)
+        };
+
+        let alloc_create_info = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::Unknown,
+            required_flags: vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            memory_type_bits: mem_req.memory_requirements.memory_type_bits,
+            ..Default::default()
+        };
+
+        let allocator = &device.allocator;
+        let plane_alloc = MemoryAllocation::new(
+            allocator.clone(),
+            &mem_req.memory_requirements,
+            &alloc_create_info,
+        )?;
+        let plane_bind_info = vk::BindImagePlaneMemoryInfo::default().plane_aspect(plane);
+        unsafe {
+            allocator.bind_image_memory2(
+                &plane_alloc,
+                0,
+                parent_image,
+                &raw const plane_bind_info as *const _,
+            )?;
+        }
+
+        let (format, extent) = match plane {
+            vk::ImageAspectFlags::PLANE_0 => (vk::Format::R8_UNORM, parent_extent),
+            vk::ImageAspectFlags::PLANE_1 => (
+                vk::Format::R8G8_UNORM,
+                vk::Extent3D {
+                    width: parent_extent.width / 2,
+                    height: parent_extent.height / 2,
+                    depth: 1,
+                },
+            ),
+            _ => unreachable!("Only PLANE_0 and PLANE_1 are allowed"),
+        };
+
+        let plane_image_info = vk::ImageCreateInfo::default()
+            .flags(vk::ImageCreateFlags::ALIAS)
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(format)
+            .extent(extent)
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(
+                // TODO: Usages should be provided
+                vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::TRANSFER_SRC,
+            )
+            .sharing_mode(vk::SharingMode::CONCURRENT)
+            .queue_family_indices(queue_indices)
+            .initial_layout(vk::ImageLayout::UNDEFINED);
+        let plane_image = unsafe { device.device.create_image(&plane_image_info, None)? };
+        unsafe {
+            allocator.bind_image_memory2(&plane_alloc, 0, plane_image, std::ptr::null())?;
+        }
+
+        Ok((plane_image, plane_alloc))
     }
 }
