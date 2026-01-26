@@ -7,7 +7,6 @@ mod message;
 mod negotiation;
 mod protocol;
 
-pub mod amf0;
 pub mod server;
 pub use flv;
 

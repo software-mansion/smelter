@@ -13,7 +13,7 @@ pub enum EncodingError {
     ArrayTooLong(usize),
 }
 
-pub(crate) fn encode_amf_values(amf_values: &[AmfValue]) -> Result<Bytes, EncodingError> {
+pub fn encode_amf_values(amf_values: &[AmfValue]) -> Result<Bytes, EncodingError> {
     let mut buf = BytesMut::new();
     for value in amf_values {
         encode_value(&mut buf, value)?;
