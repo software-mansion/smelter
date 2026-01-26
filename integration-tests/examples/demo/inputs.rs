@@ -5,11 +5,12 @@ use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
 use crate::inputs::{
-    hls::HlsInput, mp4::Mp4Input, rtp::RtpInput, whep::WhepInput, whip::WhipInput,
+    hls::HlsInput, mp4::Mp4Input, rtmp::RtmpInput, rtp::RtpInput, whep::WhepInput, whip::WhipInput,
 };
 
 pub mod hls;
 pub mod mp4;
+pub mod rtmp;
 pub mod rtp;
 pub mod whep;
 pub mod whip;
@@ -18,6 +19,7 @@ pub mod whip;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum InputHandle {
     Rtp(RtpInput),
+    Rtmp(RtmpInput),
     Mp4(Mp4Input),
     Hls(HlsInput),
     Whip(WhipInput),
@@ -28,6 +30,7 @@ impl InputHandle {
     pub fn name(&self) -> &str {
         match self {
             Self::Rtp(i) => &i.name,
+            Self::Rtmp(i) => &i.name,
             Self::Mp4(i) => &i.name,
             Self::Hls(i) => &i.name,
             Self::Whip(i) => &i.name,
@@ -38,6 +41,7 @@ impl InputHandle {
     pub fn serialize_register(&self) -> serde_json::Value {
         match self {
             Self::Rtp(i) => i.serialize_register(),
+            Self::Rtmp(i) => i.serialize_register(),
             Self::Mp4(i) => i.serialize_register(),
             Self::Hls(i) => i.serialize_register(),
             Self::Whip(i) => i.serialize_register(),
@@ -48,6 +52,7 @@ impl InputHandle {
     pub fn has_video(&self) -> bool {
         match self {
             Self::Rtp(i) => i.has_video(),
+            Self::Rtmp(i) => i.has_video(),
             Self::Whep(i) => i.has_video(),
             Self::Whip(i) => i.has_video(),
             _ => true,
@@ -71,6 +76,7 @@ impl InputHandle {
     pub fn on_after_registration(&mut self) -> Result<()> {
         match self {
             Self::Rtp(i) => i.on_after_registration(),
+            Self::Rtmp(i) => i.on_after_registration(),
             Self::Whip(i) => i.on_after_registration(),
             _ => Ok(()),
         }
@@ -87,6 +93,9 @@ impl std::fmt::Display for InputHandle {
 pub enum InputProtocol {
     #[strum(to_string = "rtp_stream")]
     Rtp,
+
+    #[strum(to_string = "rtmp_server")]
+    Rtmp,
 
     #[strum(to_string = "whip_server")]
     Whip,

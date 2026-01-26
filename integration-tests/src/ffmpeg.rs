@@ -35,6 +35,24 @@ pub fn start_ffmpeg_rtmp_receive(port: u16) -> Result<Child> {
     Ok(handle)
 }
 
+pub fn start_ffmpeg_rtmp_send(port: u16, asset_path: &Path) -> Result<Child> {
+    let input_address = format!("rtmp://127.0.0.1:{port}");
+    let asset_path = asset_path.to_string_lossy().to_string();
+
+    let handle = Command::new("bash")
+        .arg("-c")
+        .arg(format!(
+            "ffmpeg -re -i {asset_path} -c copy -f flv {input_address}"
+        ))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    thread::sleep(Duration::from_secs(2));
+
+    Ok(handle)
+}
+
 pub fn start_ffmpeg_receive_h264(
     video_port: Option<u16>,
     audio_port: Option<u16>,
