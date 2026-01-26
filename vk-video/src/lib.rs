@@ -89,6 +89,8 @@ mod vulkan_decoder;
 #[cfg(vulkan)]
 mod vulkan_encoder;
 #[cfg(vulkan)]
+mod vulkan_transcoder;
+#[cfg(vulkan)]
 pub(crate) mod wrappers;
 
 #[cfg(vulkan)]
