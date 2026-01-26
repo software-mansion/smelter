@@ -66,6 +66,14 @@ unsafe extern "system" fn debug_messenger_callback(
         return vk::FALSE;
     }
 
+    // This is an error about creating an image for video coding that has usage flags not
+    // advertised as supported by the GPU. We use this extensively on Nvidia and it works fine.
+    // Thread on Nvidia developer forum: https://forums.developer.nvidia.com/t/vkimagecreateflags-and-vulkan-encode/284369
+    // The VUID for this message is `VUID-VkImageCreateInfo-pNext-06811`.
+    if callback_data.message_id_number == 0x30f4ac70u32 as i32 {
+        return vk::FALSE;
+    }
+
     let message_id = unsafe {
         callback_data
             .message_id_name_as_c_str()

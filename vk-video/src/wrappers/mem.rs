@@ -443,7 +443,7 @@ impl Image {
         subresource_range: vk::ImageSubresourceRange,
     ) -> Result<(), VulkanCommonError> {
         let raw_buffer = command_buffer.buffer();
-        let layout = command_buffer.image_layout(self.key(), &self.tracker.lock().unwrap())?;
+        let layout = command_buffer.image_layout(self.key(), &self.tracker)?;
 
         self.transition_layout_raw(
             raw_buffer,
@@ -480,6 +480,38 @@ impl Image {
 
     pub(crate) fn key(&self) -> ImageKey {
         ImageKey(self.image.as_raw())
+    }
+
+    pub(crate) fn create_plane_view(
+        self: &Arc<Self>,
+        layer: u32,
+        plane: vk::ImageAspectFlags,
+        usage: vk::ImageUsageFlags,
+    ) -> Result<ImageView, VulkanCommonError> {
+        let mut view_usage_info = vk::ImageViewUsageCreateInfo::default().usage(usage);
+
+        let format = match plane {
+            vk::ImageAspectFlags::PLANE_0 => vk::Format::R8_UNORM,
+            vk::ImageAspectFlags::PLANE_1 => vk::Format::R8G8_UNORM,
+            aspect => return Err(VulkanCommonError::UnsupportedImageAspect(aspect)),
+        };
+
+        let view_create_info = vk::ImageViewCreateInfo::default()
+            .flags(vk::ImageViewCreateFlags::empty())
+            .image(self.image)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(format)
+            .components(vk::ComponentMapping::default())
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: plane,
+                base_array_layer: layer,
+                level_count: 1,
+                base_mip_level: 0,
+                layer_count: 1,
+            })
+            .push_next(&mut view_usage_info);
+
+        ImageView::new(self.device.clone(), self.clone(), &view_create_info)
     }
 }
 

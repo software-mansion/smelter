@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
 
-use ash::vk;
+use ash::vk::{self, ExtendsVideoProfileInfoKHR};
 use h264_reader::nal::sps::{FrameMbsFlags, SeqParameterSet};
 
 use crate::VulkanDecoderError;
@@ -467,7 +467,7 @@ unsafe impl<'a> Sync for ProfileInfo<'a> {}
 
 pub(crate) struct ProfileInfo<'a> {
     pub(crate) profile_info: vk::VideoProfileInfoKHR<'a>,
-    additional_infos_ptr: Vec<NonNull<dyn vk::ExtendsVideoProfileInfoKHR + 'a>>,
+    additional_infos_ptr: Vec<NonNull<dyn ExtendsVideoProfileInfoKHR + 'a>>,
 }
 
 impl<'a> ProfileInfo<'a> {

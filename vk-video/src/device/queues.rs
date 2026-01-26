@@ -36,26 +36,13 @@ impl Queue {
         let buffer_submit_info =
             [vk::CommandBufferSubmitInfo::default().command_buffer(buffer.buffer())];
 
-        let signal_value = tracker.semaphore_tracker.next_sem_value();
-        let signal_info = vk::SemaphoreSubmitInfo::default()
-            .semaphore(tracker.semaphore_tracker.semaphore.semaphore)
-            .value(signal_value.0)
-            .stage_mask(signal_stages);
-
-        let wait_info = match tracker.semaphore_tracker.wait_for.take() {
-            Some(wait_for) => Some(
-                vk::SemaphoreSubmitInfo::default()
-                    .semaphore(tracker.semaphore_tracker.semaphore.semaphore)
-                    .value(wait_for.value.0)
-                    .stage_mask(wait_stages),
-            ),
-            _ => None,
-        };
+        let semaphore_submit_info = tracker.semaphore_tracker.next_submit_info(new_wait_state);
+        let signal_info = semaphore_submit_info.signal_info(signal_stages);
+        let wait_info = semaphore_submit_info.wait_info(wait_stages);
 
         let mut submit_info = vk::SubmitInfo2::default()
             .signal_semaphore_infos(std::slice::from_ref(&signal_info))
             .command_buffer_infos(&buffer_submit_info);
-
         if let Some(wait_info) = wait_info.as_ref() {
             submit_info = submit_info.wait_semaphore_infos(std::slice::from_ref(wait_info));
         }
@@ -68,14 +55,10 @@ impl Queue {
             )?
         };
 
-        buffer.mark_submitted(&mut tracker.image_layout_tracker.lock().unwrap(), signal_value);
-
-        tracker.semaphore_tracker.wait_for = Some(TrackerWait {
-            value: signal_value,
-            _state: new_wait_state,
-        });
-
-        Ok(signal_value)
+        let value = semaphore_submit_info.signal_value();
+        buffer.mark_submitted(value);
+        semaphore_submit_info.mark_submitted();
+        Ok(value)
     }
 }
 
@@ -187,7 +170,7 @@ impl VideoQueues {
         wait_stages: vk::PipelineStageFlags2,
         signal_stages: vk::PipelineStageFlags2,
         new_wait_state: K::WaitState,
-    ) -> Result<(), VulkanCommonError> {
+    ) -> Result<SemaphoreWaitValue, VulkanCommonError> {
         let queue = self.next_queue();
         queue.submit_chain_semaphore(buffer, tracker, wait_stages, signal_stages, new_wait_state)
     }
