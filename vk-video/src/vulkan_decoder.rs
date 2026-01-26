@@ -59,7 +59,7 @@ type DecoderTracker = Tracker<DecoderTrackerKind>;
 
 /// this cannot outlive the image and semaphore it borrows, but it seems very hard to encode that
 /// in the lifetimes
-struct DecodeSubmission {
+pub(crate) struct DecodeSubmission {
     image: Arc<Image>,
     dimensions: vk::Extent2D,
     layer: u32,
@@ -67,6 +67,7 @@ struct DecodeSubmission {
     max_num_reorder_frames: u64,
     is_idr: bool,
     pts: Option<u64>,
+    semaphore_wait_value: SemaphoreWaitValue,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -186,7 +187,9 @@ impl VulkanDecoder<'_> {
         Ok(result)
     }
 
-    fn decode(
+    // pub fn decode_and_blit(&mut self, decoder_instructions: &[DecoderInstruction], ) -> Result<Vec<()>>
+
+    pub(crate) fn decode(
         &mut self,
         instruction: &DecoderInstruction,
     ) -> Result<Option<DecodeSubmission>, VulkanDecoderError> {
@@ -545,7 +548,7 @@ impl VulkanDecoder<'_> {
                 )
         };
 
-        self.decoding_device
+        let semaphore_wait_value = self.decoding_device
             .h264_decode_queues
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
@@ -574,6 +577,7 @@ impl VulkanDecoder<'_> {
             max_num_reorder_frames: video_session_resources.parameters.max_num_reorder_frames,
             is_idr,
             pts: decode_information.pts,
+            semaphore_wait_value,
         })
     }
 
@@ -700,7 +704,7 @@ impl VulkanDecoder<'_> {
 
         // TODO: why?? will something weaker, such as PipelineStageFlags2::TRANSFER suffice? this
         // just needs a test
-        self.decoding_device
+        let semaphore_wait_value = self.decoding_device
             .queues
             .transfer
             .submit_chain_semaphore(
@@ -711,7 +715,7 @@ impl VulkanDecoder<'_> {
                 DecoderTrackerWaitState::DownloadImageToBuffer,
             )?;
 
-        self.tracker.wait_for_all(u64::MAX)?;
+        self.tracker.wait_for(semaphore_wait_value, u64::MAX)?;
 
         let result = self
             .video_session_resources
@@ -787,13 +791,13 @@ impl VulkanDecoder<'_> {
         &mut self,
         decode_output: DecodeSubmission,
     ) -> Result<Vec<u8>, VulkanDecoderError> {
-        let mut dst_buffer = self.copy_image_to_buffer(
+        let (mut dst_buffer, wait_value) = self.copy_image_to_buffer(
             &decode_output.image,
             decode_output.dimensions,
             decode_output.layer,
         )?;
 
-        self.tracker.wait_for_all(u64::MAX)?;
+        self.tracker.wait_for(wait_value, u64::MAX)?;
 
         let output = unsafe {
             dst_buffer.download_data_from_buffer(
@@ -872,7 +876,7 @@ impl VulkanDecoder<'_> {
         image: &Image,
         dimensions: vk::Extent2D,
         layer: u32,
-    ) -> Result<Buffer, VulkanDecoderError> {
+    ) -> Result<(Buffer, SemaphoreWaitValue), VulkanDecoderError> {
         let mut cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
 
         image.transition_layout_single_layer(
@@ -940,7 +944,7 @@ impl VulkanDecoder<'_> {
         };
 
         // TODO: test if just putting COPY here works as well
-        self.decoding_device
+        let value = self.decoding_device
             .queues
             .transfer
             .submit_chain_semaphore(
@@ -951,6 +955,6 @@ impl VulkanDecoder<'_> {
                 DecoderTrackerWaitState::DownloadImageToBuffer,
             )?;
 
-        Ok(dst_buffer)
+        Ok((dst_buffer, value))
     }
 }

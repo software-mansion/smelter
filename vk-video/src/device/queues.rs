@@ -187,7 +187,7 @@ impl VideoQueues {
         wait_stages: vk::PipelineStageFlags2,
         signal_stages: vk::PipelineStageFlags2,
         new_wait_state: K::WaitState,
-    ) -> Result<(), VulkanCommonError> {
+    ) -> Result<SemaphoreWaitValue, VulkanCommonError> {
         let queue = self.next_queue();
         queue.submit_chain_semaphore(buffer, tracker, wait_stages, signal_stages, new_wait_state)
     }
