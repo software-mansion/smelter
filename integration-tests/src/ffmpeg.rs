@@ -42,7 +42,7 @@ pub fn start_ffmpeg_rtmp_send(port: u16, asset_path: &Path) -> Result<Child> {
     let handle = Command::new("bash")
         .arg("-c")
         .arg(format!(
-            "ffmpeg -re -i {asset_path} -c copy -f flv {output_address}"
+            "ffmpeg -re -i {asset_path} -c copy -f flv {input_address}"
         ))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
