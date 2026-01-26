@@ -36,13 +36,13 @@ pub fn start_ffmpeg_rtmp_receive(port: u16) -> Result<Child> {
 }
 
 pub fn start_ffmpeg_rtmp_send(port: u16, asset_path: &Path) -> Result<Child> {
-    let output_address = format!("rtmp://0.0.0.0:{port}");
+    let input_address = format!("rtmp://127.0.0.1:{port}");
     let asset_path = asset_path.to_string_lossy().to_string();
 
     let handle = Command::new("bash")
         .arg("-c")
         .arg(format!(
-            "ffmpeg -i {asset_path} -c copy -f flv {output_address}"
+            "ffmpeg -re -i {asset_path} -c copy -f flv {output_address}"
         ))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
