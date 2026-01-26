@@ -4,7 +4,7 @@ pub mod decoding;
 pub mod encoding;
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum AmfValue {
+pub enum AmfValue {
     Number(f64),
     Boolean(bool),
     String(String),

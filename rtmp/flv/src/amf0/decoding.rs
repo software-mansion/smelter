@@ -16,7 +16,7 @@ pub enum DecodingError {
 
 const OBJECT_END_MARKER: [u8; 3] = [0x00, 0x00, 0x09];
 
-pub(crate) fn decode_amf_values(rtmp_msg_payload: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
+pub fn decode_amf_values(rtmp_msg_payload: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
     let mut buf = Bytes::copy_from_slice(rtmp_msg_payload);
     let mut result = Vec::new();
 
