@@ -12,7 +12,7 @@ mod resampler;
 pub(super) struct AudioMixerInput {
     input_sender: Sender<AudioMixerInputEvent>,
     result_receiver: Receiver<AudioMixerInputResult>,
-    next: Option<AudioMixerInputResult>,
+    next_chunk: Option<AudioMixerInputResult>,
 }
 
 #[derive(Debug)]
@@ -35,7 +35,7 @@ impl AudioMixerInput {
         Self {
             input_sender,
             result_receiver,
-            next: None,
+            next_chunk: None,
         }
     }
 
@@ -50,7 +50,7 @@ impl AudioMixerInput {
 
     pub fn get_samples(&mut self, pts_range: (Duration, Duration)) -> Option<Vec<(f64, f64)>> {
         loop {
-            if self.next.is_none() {
+            if self.next_chunk.is_none() {
                 let Ok(result) = self
                     .result_receiver
                     .recv_timeout(Duration::from_millis(100))
@@ -59,11 +59,11 @@ impl AudioMixerInput {
                     error!("Failed to read samples.");
                     return None;
                 };
-                self.next = Some(result)
+                self.next_chunk = Some(result)
             }
-            let next = self.next.as_ref()?;
+            let next = self.next_chunk.as_ref()?;
             if next.pts_range == pts_range {
-                return Some(self.next.take()?.samples);
+                return Some(self.next_chunk.take()?.samples);
             }
             error!("Found batch for different range. This should not happen");
             if next.pts_range.0 > pts_range.0 || next.pts_range.1 > pts_range.1 {
@@ -72,7 +72,7 @@ impl AudioMixerInput {
                 return None;
             }
             // drop the old batch and wait for next
-            self.next = None
+            self.next_chunk = None
         }
     }
 }
