@@ -29,7 +29,7 @@ pub(crate) fn negotiate_rtmp_session(
         let msg = match reader.next() {
             Some(Ok(m)) => m,
             Some(Err(e)) => return Err(e),
-            None => return Err(RtmpError::SocketClosed),
+            None => return Err(RtmpError::ChannelClosed),
         };
 
         match msg.msg_type {

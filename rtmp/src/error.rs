@@ -26,8 +26,8 @@ pub enum RtmpError {
     #[error("Stream not registered")]
     StreamNotRegistered,
 
-    #[error("Socket closed")]
-    SocketClosed,
+    #[error("Channel closed")]
+    ChannelClosed,
 
     #[error("Missing previous chunk header for CSID {0}")]
     MissingHeader(u32),

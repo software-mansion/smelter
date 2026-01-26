@@ -54,13 +54,13 @@ pub(crate) fn handle_client(
                 let audio_data = parse_audio(msg)?;
                 sender
                     .send(audio_data)
-                    .map_err(|_| RtmpError::SocketClosed)?;
+                    .map_err(|_| RtmpError::ChannelClosed)?;
             }
             MessageType::Video => {
                 let video_data = parse_video(msg)?;
                 sender
                     .send(video_data)
-                    .map_err(|_| RtmpError::SocketClosed)?;
+                    .map_err(|_| RtmpError::ChannelClosed)?;
             }
             _ => {} // possible metadata
         }

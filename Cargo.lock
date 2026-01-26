@@ -1600,6 +1600,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "thiserror 1.0.69",
+ "tracing",
 ]
 
 [[package]]

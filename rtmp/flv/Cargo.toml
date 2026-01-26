@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-thiserror = { workspace = true }
-bytes = { workspace = true }
+thiserror = "1.0.40"
+bytes = "1"
+tracing = "0.1.40"
 
 [lints]
 workspace = true
