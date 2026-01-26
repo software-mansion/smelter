@@ -8,7 +8,7 @@ use smelter::{
     state::{ApiState, pipeline_options_from_config},
 };
 use smelter_core::{
-    Pipeline, PipelineWgpuOptions, PipelineWhipWhepServerOptions,
+    Pipeline, PipelineRtmpServerOptions, PipelineWgpuOptions, PipelineWhipWhepServerOptions,
     event::Event,
     graphics_context::{GraphicsContext, GraphicsContextOptions},
 };
@@ -48,6 +48,7 @@ impl CompositorInstance {
         options.ahead_of_time_processing = true;
         options.never_drop_output_frames = true;
         options.whip_whep_server = PipelineWhipWhepServerOptions::Disable;
+        options.rtmp_server = PipelineRtmpServerOptions::Disable;
         options.wgpu_options = PipelineWgpuOptions::Context(graphics_context());
 
         info!("Starting Smelter Integration Test with config:\n{config:#?}",);

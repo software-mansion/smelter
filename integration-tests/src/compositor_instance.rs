@@ -39,6 +39,7 @@ impl CompositorInstance {
         let mut config = config.unwrap_or(read_config());
         config.api_port = api_port;
         config.whip_whep_enable = false;
+        config.rtmp_enable = false;
 
         info!("Starting Smelter Integration Test with config:\n{config:#?}",);
 

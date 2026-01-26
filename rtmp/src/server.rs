@@ -140,7 +140,13 @@ impl RtmpServer {
         Ok(server)
     }
 
-    pub fn shutdown(self) {
+    pub fn shutdown(&self) {
         self.shutdown.store(true, Ordering::Relaxed);
+    }
+}
+
+impl Drop for RtmpServer {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
