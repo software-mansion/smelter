@@ -63,7 +63,6 @@
             yarn
 
             # Rust
-            rustup
             rustfmt
             clippy
             cargo-watch

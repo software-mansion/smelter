@@ -291,7 +291,8 @@ impl InputResampler {
 
         // if entire input buffer is in the future
         if pts_range.1 < self.input_buffer_start_pts() {
-            let zero_samples = (0.02 * self.output_sample_rate as f64) as usize;
+            let duration = pts_range.1.saturating_sub(pts_range.0);
+            let zero_samples = (duration.as_secs_f64() * self.output_sample_rate as f64) as usize;
             let samples = match self.channels {
                 AudioChannels::Mono => AudioSamples::Mono(vec![0.0; zero_samples]),
                 AudioChannels::Stereo => AudioSamples::Stereo(vec![(0.0, 0.0); zero_samples]),
