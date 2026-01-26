@@ -13,19 +13,20 @@ pub(crate) struct RtmpInputsState(Arc<Mutex<HashMap<Ref<InputId>, RtmpInputConne
 #[derive(Debug)]
 pub(crate) struct RtmpInputConnectionState {
     // audio/video decoder based on audioconfig/videoconfig
-    pub url_path: Arc<str>,
+    pub app: Arc<str>,
+    pub stream_key: Arc<str>,
     pub receiver: Option<Receiver<RtmpMediaData>>,
 }
 
-#[allow(unused)]
 pub struct RtmpInputStateOptions {
-    pub url_path: Arc<str>,
+    pub app: Arc<str>,
+    pub stream_key: Arc<str>,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum RtmpServerError {
-    #[error("Not registered URL path.")]
-    NotRegisteredUrlPath,
+    #[error("Not registered (app, stream_key) pair.")]
+    InvalidAppStreamKeyPair,
     #[error("Input {0} is already registered.")]
     InputAlreadyRegistered(InputId),
     #[error("Input {0} is not registered.")]
@@ -35,7 +36,8 @@ pub enum RtmpServerError {
 impl RtmpInputConnectionState {
     fn new(options: RtmpInputStateOptions) -> Self {
         Self {
-            url_path: options.url_path,
+            app: options.app,
+            stream_key: options.stream_key,
             receiver: None,
         }
     }
@@ -44,14 +46,15 @@ impl RtmpInputConnectionState {
 impl RtmpInputsState {
     pub(crate) fn update(
         &self,
-        url_path: Arc<str>,
+        app: Arc<str>,
+        stream_key: Arc<str>,
         receiver: Receiver<RtmpMediaData>,
     ) -> Result<(), RtmpServerError> {
         let mut guard = self.0.lock().unwrap();
         let (_, input_state) = guard
             .iter_mut()
-            .find(|(_, input)| input.url_path == url_path)
-            .ok_or(RtmpServerError::NotRegisteredUrlPath)?;
+            .find(|(_, input)| input.app == app && input.stream_key == stream_key)
+            .ok_or(RtmpServerError::InvalidAppStreamKeyPair)?;
         input_state.receiver = Some(receiver);
         Ok(())
     }

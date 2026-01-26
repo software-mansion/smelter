@@ -17,7 +17,6 @@ use tracing::{error, info};
 use crate::{error::RtmpError, handle_client::handle_client};
 
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
-pub type RtmpUrlPath = Arc<str>;
 
 pub enum RtmpMediaData {
     Video(VideoData),
@@ -61,11 +60,12 @@ pub struct VideoConfig {
 }
 
 pub struct RtmpConnection {
-    pub url_path: RtmpUrlPath,
+    pub app: Arc<str>,
+    pub stream_key: Arc<str>,
     pub receiver: Receiver<RtmpMediaData>,
 }
 
-#[allow(dead_code)] // TODO add SSL/TLS
+// TODO add SSL/TLS
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub port: u16,
@@ -77,11 +77,15 @@ pub struct ServerConfig {
 }
 
 pub struct RtmpServer {
-    pub config: ServerConfig,
+    config: ServerConfig,
     shutdown: Arc<AtomicBool>,
 }
 
 impl RtmpServer {
+    pub fn config(&self) -> ServerConfig {
+        self.config.clone()
+    }
+
     pub fn start(
         config: ServerConfig,
         on_connection: OnConnectionCallback,
@@ -110,6 +114,7 @@ impl RtmpServer {
                     if server.lock().unwrap().shutdown.load(Ordering::Relaxed) {
                         break;
                     }
+                    drop(server);
 
                     match listener.accept() {
                         Ok((stream, peer_addr)) => {
@@ -118,20 +123,20 @@ impl RtmpServer {
                             let on_connection_clone = on_connection.clone();
                             thread::spawn(move || {
                                 if let Err(err) = stream.set_nonblocking(false) {
-                                    error!(?err, "Failed to set stream blocking");
+                                    error!(%err, "Failed to set stream blocking");
                                     return;
                                 }
-                                if let Err(error) = handle_client(stream, on_connection_clone) {
-                                    error!(?error, "Client handler error");
+                                if let Err(err) = handle_client(stream, on_connection_clone) {
+                                    error!(%err, "Client handler error");
                                 }
                             });
                         }
                         Err(err) if err.kind() == ErrorKind::WouldBlock => {
-                            thread::sleep(Duration::from_millis(50));
+                            thread::sleep(Duration::from_millis(500));
                         }
-                        Err(error) => {
-                            error!(?error, "Accept error");
-                            thread::sleep(Duration::from_millis(50));
+                        Err(err) => {
+                            error!(%err, "Accept error");
+                            break;
                         }
                     }
                 }

@@ -24,7 +24,6 @@ enum ParseChunkError {
     RtmpError(RtmpError),
 }
 
-#[allow(unused)]
 #[derive(Debug, Clone)]
 pub(crate) struct ChunkHeader {
     pub fmt: ChunkType,

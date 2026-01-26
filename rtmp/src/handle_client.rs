@@ -34,8 +34,9 @@ pub(crate) fn handle_client(
     let (sender, receiver) = channel();
 
     let connection_ctx = RtmpConnection {
-        url_path: format!("/{app}/{stream_key}").into(),
-        receiver,
+        app: app.into(),
+        stream_key: stream_key.into(),
+        receiver, // TODO instead of returning a receiver, return custom iterator that exposes buffer details
     };
 
     {

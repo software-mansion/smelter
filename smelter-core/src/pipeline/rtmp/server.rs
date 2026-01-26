@@ -42,8 +42,8 @@ pub fn spawn_rtmp_server(
 
     let on_connection = Box::new(move |conn: RtmpConnection| {
         let inputs = inputs.clone();
-        if let Err(err) = inputs.update(conn.url_path, conn.receiver) {
-            error!(%err, "Failed to update RTMP input state");
+        if let Err(err) = inputs.update(conn.app, conn.stream_key, conn.receiver) {
+            error!(?err, "Failed to update RTMP input state");
         }
     });
 
