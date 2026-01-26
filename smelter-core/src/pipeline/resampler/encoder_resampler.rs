@@ -2,6 +2,7 @@ use smelter_render::error::ErrorStack;
 use tracing::warn;
 
 use crate::pipeline::resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch};
+
 use crate::prelude::*;
 
 pub(crate) struct ResampledForEncoderStream<
@@ -17,7 +18,7 @@ impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>> ResampledForEnc
     pub fn new(source: Source, input_sample_rate: u32, output_sample_rate: u32) -> Self {
         Self {
             input_sample_rate,
-            resampler: DynamicResampler::new(output_sample_rate, false),
+            resampler: DynamicResampler::new(output_sample_rate),
             source,
             eos_sent: false,
         }

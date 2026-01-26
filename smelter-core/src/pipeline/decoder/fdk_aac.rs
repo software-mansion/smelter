@@ -3,9 +3,8 @@ use std::sync::Arc;
 use tracing::{error, info};
 
 use crate::pipeline::decoder::AudioDecoder;
-use crate::prelude::*;
 
-use super::DecodedSamples;
+use crate::prelude::*;
 
 pub(crate) struct FdkAacDecoder {
     decoder: Option<Decoder>,
@@ -25,7 +24,10 @@ impl AudioDecoder for FdkAacDecoder {
         })
     }
 
-    fn decode(&mut self, chunk: EncodedInputChunk) -> Result<Vec<DecodedSamples>, DecodingError> {
+    fn decode(
+        &mut self,
+        chunk: EncodedInputChunk,
+    ) -> Result<Vec<InputAudioSamples>, DecodingError> {
         match &mut self.decoder {
             Some(decoder) => Ok(decoder.decode(chunk)?),
             None => {
@@ -37,7 +39,7 @@ impl AudioDecoder for FdkAacDecoder {
         }
     }
 
-    fn flush(&mut self) -> Vec<DecodedSamples> {
+    fn flush(&mut self) -> Vec<InputAudioSamples> {
         Vec::new()
     }
 }
@@ -85,7 +87,7 @@ impl Decoder {
     fn decode(
         &mut self,
         chunk: EncodedInputChunk,
-    ) -> Result<Vec<DecodedSamples>, FdkAacDecoderError> {
+    ) -> Result<Vec<InputAudioSamples>, FdkAacDecoderError> {
         if chunk.kind != MediaKind::Audio(AudioCodec::Aac) {
             return Err(FdkAacDecoderError::UnsupportedChunkKind(chunk.kind));
         }
@@ -162,7 +164,7 @@ impl Decoder {
                     0
                 };
 
-                decoded_samples.push(DecodedSamples {
+                decoded_samples.push(InputAudioSamples {
                     samples,
                     start_pts: chunk.pts,
                     sample_rate,

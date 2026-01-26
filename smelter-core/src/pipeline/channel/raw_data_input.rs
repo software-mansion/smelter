@@ -112,8 +112,6 @@ fn spawn_audio_repacking_thread(
                         let first_frame_pts = *first_frame_pts.get_or_insert(batch.start_pts);
                         batch.start_pts =
                             batch.start_pts + start_pts + buffer_duration - first_frame_pts;
-                        batch.end_pts =
-                            batch.end_pts + start_pts + buffer_duration - first_frame_pts;
                         PipelineEvent::Data(batch)
                     }
                     PipelineEvent::EOS => PipelineEvent::EOS,

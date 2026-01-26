@@ -17,7 +17,6 @@ use crate::prelude::*;
 
 mod decoder;
 mod encoder;
-mod resampler;
 
 mod ffmpeg_utils;
 
@@ -37,6 +36,7 @@ mod webrtc;
 mod input;
 mod instance;
 mod output;
+mod resampler;
 mod utils;
 
 pub use instance::Pipeline;

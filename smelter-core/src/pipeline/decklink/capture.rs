@@ -12,10 +12,8 @@ use decklink::{
 use smelter_render::{Frame, FrameData, Resolution, error::ErrorStack};
 use tracing::{Span, debug, info, trace, warn};
 
-use crate::pipeline::{
-    decklink::format::{BitDepth, Colorspace, Format},
-    resampler::dynamic_resampler::{DynamicResampler, DynamicResamplerBatch},
-};
+use crate::pipeline::decklink::format::{BitDepth, Colorspace, Format};
+
 use crate::prelude::*;
 
 use super::AUDIO_SAMPLE_RATE;
@@ -29,12 +27,6 @@ pub(super) struct ChannelCallbackAdapter {
     video_sender: Option<Sender<PipelineEvent<Frame>>>,
     audio_sender: Option<Sender<PipelineEvent<InputAudioSamples>>>,
     span: Span,
-
-    // TODO 1: I'm not sure if we can get mutable reference to this adapter, so
-    // wrapping it in mutex just in case
-    // TODO 2: It's possible that we can just configure output sample rate in DeckLink
-    // options instead of re-sampling ourselves.
-    audio_resampler: Mutex<DynamicResampler>,
 
     // I'm not sure, but I suspect that holding Arc here would create a circular
     // dependency
@@ -66,7 +58,6 @@ impl ChannelCallbackAdapter {
                 video_sender: Some(video_sender),
                 audio_sender,
                 span,
-                audio_resampler: Mutex::new(DynamicResampler::new(ctx.mixing_sample_rate, false)),
                 input,
                 // 15 ms is a buffer that should be enough for frame to be delivered to queue
                 sync_point: ctx.queue_sync_point + Duration::from_millis(15),
@@ -218,7 +209,7 @@ impl ChannelCallbackAdapter {
         let pts = packet_time + offset;
 
         let samples = audio_packet.as_32_bit_stereo()?;
-        let samples = DynamicResamplerBatch {
+        let samples = InputAudioSamples {
             samples: AudioSamples::Stereo(
                 samples
                     .into_iter()
@@ -229,25 +220,15 @@ impl ChannelCallbackAdapter {
             sample_rate: AUDIO_SAMPLE_RATE,
         };
         trace!(?samples, "Received audio samples from decklink");
-        let resampled = self.audio_resampler.lock().unwrap().resample(samples);
-        let resampled = match resampled {
-            Ok(resampled) => resampled,
-            Err(err) => {
-                warn!("Resampler error: {}", ErrorStack::new(&err).into_string());
-                return Ok(());
+        match sender.try_send(PipelineEvent::Data(samples)) {
+            Ok(_) => (),
+            Err(TrySendError::Full(_)) => {
+                warn!(
+                    "Failed to send samples from DeckLink. Channel is full, dropping samples pts={pts:?}."
+                )
             }
-        };
-        for batch in resampled {
-            match sender.try_send(PipelineEvent::Data(batch.into())) {
-                Ok(_) => (),
-                Err(TrySendError::Full(_)) => {
-                    warn!(
-                        "Failed to send samples from DeckLink. Channel is full, dropping samples pts={pts:?}."
-                    )
-                }
-                Err(TrySendError::Disconnected(_)) => {
-                    debug!("Failed to send samples from DeckLink. Channel closed.")
-                }
+            Err(TrySendError::Disconnected(_)) => {
+                debug!("Failed to send samples from DeckLink. Channel closed.")
             }
         }
         Ok(())

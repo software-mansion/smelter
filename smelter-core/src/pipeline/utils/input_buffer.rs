@@ -114,14 +114,14 @@ impl LatencyOptimizedBuffer {
         const STABLE_STATE_DURATION: Duration = Duration::from_secs(10);
 
         let next_pts = pts + self.dynamic_buffer;
-        trace!(effective_buffer=?next_pts.saturating_sub(self.sync_point.elapsed()));
+        trace!(effective_buffer=?next_pts.saturating_sub(self.sync_point.elapsed()), dynamic_buffer=?self.dynamic_buffer);
 
         if next_pts > self.sync_point.elapsed() + self.max_hard_threshold {
             let first_pts = self.state.set_too_large(next_pts);
             if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
                 self.dynamic_buffer = self
                     .dynamic_buffer
-                    .saturating_sub(self.dynamic_buffer / 100);
+                    .saturating_sub(self.dynamic_buffer / 200);
             }
         } else if next_pts > self.sync_point.elapsed() + self.max_soft_threshold {
             let first_pts = self.state.set_too_large(next_pts);

@@ -1,6 +1,10 @@
-use std::{collections::HashMap, fmt::Debug, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
-use smelter_render::{InputId, OutputId};
+mod input;
+mod mix;
+mod mixer;
+
+pub(crate) use mixer::AudioMixer;
 
 use crate::prelude::*;
 

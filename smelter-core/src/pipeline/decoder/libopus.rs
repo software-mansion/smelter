@@ -4,8 +4,6 @@ use tracing::{debug, info, trace};
 use crate::pipeline::decoder::AudioDecoder;
 use crate::prelude::*;
 
-use super::DecodedSamples;
-
 pub(crate) struct OpusDecoder {
     decoder: opus::Decoder,
     decoded_samples_buffer: Vec<i16>,
@@ -45,7 +43,7 @@ impl AudioDecoder for OpusDecoder {
     fn decode(
         &mut self,
         encoded_chunk: EncodedInputChunk,
-    ) -> Result<Vec<DecodedSamples>, DecodingError> {
+    ) -> Result<Vec<InputAudioSamples>, DecodingError> {
         trace!(?encoded_chunk, "libopus decoder received a chunk.");
         let stream_gap = self.calculate_stream_gap(encoded_chunk.pts);
         let use_fec = self.should_use_fec(stream_gap);
@@ -68,7 +66,7 @@ impl AudioDecoder for OpusDecoder {
         samples
     }
 
-    fn flush(&mut self) -> Vec<DecodedSamples> {
+    fn flush(&mut self) -> Vec<InputAudioSamples> {
         vec![]
     }
 }
@@ -85,7 +83,7 @@ impl OpusDecoder {
     }
 
     /// Calculates PTS of the last sample in the chunk and sets `last_decoded_pts` field to it
-    fn set_end_pts(&mut self, decoded_samples: &DecodedSamples) {
+    fn set_end_pts(&mut self, decoded_samples: &InputAudioSamples) {
         let samples_len = decoded_samples.samples.sample_count();
         let sample_rate = decoded_samples.sample_rate;
 
@@ -123,13 +121,13 @@ impl OpusDecoder {
     fn decode_chunk(
         &mut self,
         encoded_chunk: &EncodedInputChunk,
-    ) -> Result<DecodedSamples, DecodingError> {
+    ) -> Result<InputAudioSamples, DecodingError> {
         let decoded_samples_count =
             self.decoder
                 .decode(&encoded_chunk.data, &mut self.decoded_samples_buffer, false)?;
 
         let samples = Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
-        Ok(DecodedSamples {
+        Ok(InputAudioSamples {
             samples,
             start_pts: encoded_chunk.pts,
             sample_rate: self.decoded_sample_rate,
@@ -140,7 +138,7 @@ impl OpusDecoder {
         &mut self,
         encoded_chunk: &EncodedInputChunk,
         stream_gap: Duration,
-    ) -> Result<DecodedSamples, DecodingError> {
+    ) -> Result<InputAudioSamples, DecodingError> {
         debug!("FEC used!");
 
         let fec_buf_size = self.calculate_fec_buf_size(stream_gap);
@@ -154,7 +152,7 @@ impl OpusDecoder {
         debug!("Decoded FEC samples: {decoded_samples_count}");
 
         let samples = Self::read_buffer(&self.decoded_samples_buffer, decoded_samples_count);
-        Ok(DecodedSamples {
+        Ok(InputAudioSamples {
             samples,
             start_pts: encoded_chunk.pts - stream_gap,
             sample_rate: self.decoded_sample_rate,

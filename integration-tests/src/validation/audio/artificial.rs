@@ -96,7 +96,10 @@ fn compare(
 
         if !(frequency_match && value_match) {
             return Err(anyhow::anyhow!(
-                "Audio mismatch at sample {first_sample} on channel {channel}: actual = {actual_bins:#?}, expected = {expected_bins:#?}",
+                "Audio mismatch at sample {first_sample} on channel {channel}. (value_diff: {}, tolerance: {}, frequency_diff: {}",
+                value_diff,
+                tolerance.frequency_level,
+                actual.frequency - expected.frequency
             ));
         }
     }
