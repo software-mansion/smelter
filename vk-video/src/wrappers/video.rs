@@ -390,10 +390,14 @@ impl<'a> CodingImageBundle<'a> {
             }
         }
 
+        let mut image_view_usage_info = vk::ImageViewUsageCreateInfo::default()
+            .usage(image_usage & (!vk::ImageUsageFlags::STORAGE));
+
         let mut image_view_create_info = vk::ImageViewCreateInfo::default()
             .flags(vk::ImageViewCreateFlags::empty())
             .components(vk::ComponentMapping::default())
-            .format(format.format);
+            .format(format.format)
+            .push_next(&mut image_view_usage_info);
 
         let subresource_range = vk::ImageSubresourceRange {
             aspect_mask: vk::ImageAspectFlags::COLOR,
@@ -416,6 +420,12 @@ impl<'a> CodingImageBundle<'a> {
                         image_tracker.clone(),
                     )
                     .map(Arc::new)
+                    .and_then(|i| {
+                        vulkan_ctx
+                            .device
+                            .set_label(i.image, Some("decoding image"))?;
+                        Ok(i)
+                    })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
@@ -463,6 +473,10 @@ impl<'a> CodingImageBundle<'a> {
                 &image_create_info,
                 image_tracker.clone(),
             )?);
+
+            vulkan_ctx
+                .device
+                .set_label(image.image, Some("decoding image"))?;
 
             image_view_create_info = image_view_create_info
                 .image(image.image)

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use ash::vk;
 
 use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
+use rustc_hash::FxHashMap;
 use session_resources::VideoSessionResources;
 use wgpu::hal::api::Vulkan as VkApi;
 
@@ -23,19 +24,28 @@ pub(crate) use frame_sorter::FrameSorter;
 
 pub struct VulkanDecoder<'a> {
     video_session_resources: Option<VideoSessionResources<'a>>,
-    tracker: DecoderTracker,
-    reference_id_to_dpb_slot_index: std::collections::HashMap<ReferenceId, usize>,
+    pub(crate) tracker: DecoderTracker,
+    reference_id_to_dpb_slot_index: FxHashMap<ReferenceId, usize>,
     decoding_device: Arc<DecodingDevice>,
     usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
+    image_modifiers: ImageModifiers,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ImageModifiers {
+    pub(crate) create_flags: vk::ImageCreateFlags,
+    pub(crate) usage_flags: vk::ImageUsageFlags,
+    pub(crate) additional_queue_index: usize,
 }
 
 pub(crate) enum DecoderTrackerWaitState {
     NewDecodingImagesLayoutTransition,
     Decode,
     DownloadImageToBuffer,
+    ExternalProcessing,
 }
 
-struct DecoderTrackerKind {}
+pub(crate) struct DecoderTrackerKind {}
 
 impl TrackerKind for DecoderTrackerKind {
     type WaitState = DecoderTrackerWaitState;
@@ -43,7 +53,7 @@ impl TrackerKind for DecoderTrackerKind {
     type CommandBufferPools = DecoderCommandBufferPools;
 }
 
-struct DecoderCommandBufferPools {
+pub(crate) struct DecoderCommandBufferPools {
     decode: CommandBufferPool,
     transfer: CommandBufferPool,
 }
@@ -55,18 +65,55 @@ impl CommandBufferPoolStorage for DecoderCommandBufferPools {
     }
 }
 
-type DecoderTracker = Tracker<DecoderTrackerKind>;
+pub(crate) type DecoderTracker = Tracker<DecoderTrackerKind>;
 
-/// this cannot outlive the image and semaphore it borrows, but it seems very hard to encode that
-/// in the lifetimes
-struct DecodeSubmission {
-    image: Arc<Image>,
-    dimensions: vk::Extent2D,
-    layer: u32,
-    picture_order_cnt: i32,
-    max_num_reorder_frames: u64,
-    is_idr: bool,
-    pts: Option<u64>,
+pub(crate) struct DecodeSubmissionImageInfo {
+    pub(crate) image: Arc<Image>,
+    pub(crate) layer: u32,
+}
+
+pub(crate) struct DecodeResultMetadata {
+    pub(crate) pts: Option<u64>,
+    pub(crate) pic_order_cnt: i32,
+    pub(crate) max_num_reorder_frames: u64,
+    pub(crate) is_idr: bool,
+}
+
+pub(crate) struct DecodeResult<T> {
+    pub(crate) frame: T,
+    pub(crate) metadata: DecodeResultMetadata,
+}
+
+pub(crate) struct DecodeSubmission<'borrow, 'decoder> {
+    pub(crate) decode_result: DecodeResult<DecodeSubmissionImageInfo>,
+    pub(crate) semaphore_wait_value: SemaphoreWaitValue,
+    pub(crate) decoder: &'borrow mut VulkanDecoder<'decoder>,
+}
+
+impl<'a, 'b> DecodeSubmission<'a, 'b> {
+    fn download_output(self) -> Result<DecodeResult<RawFrameData>, VulkanDecoderError> {
+        let raw_frame_data = self.decoder.download_output(&self.decode_result.frame)?;
+
+        Ok(DecodeResult {
+            frame: RawFrameData {
+                frame: raw_frame_data,
+                width: self.decode_result.frame.image.extent.width,
+                height: self.decode_result.frame.image.extent.height,
+            },
+            metadata: self.decode_result.metadata,
+        })
+    }
+
+    fn output_to_wgpu_texture(self) -> Result<DecodeResult<wgpu::Texture>, VulkanDecoderError> {
+        let wgpu_texture = self
+            .decoder
+            .output_to_wgpu_texture(&self.decode_result.frame)?;
+
+        Ok(DecodeResult {
+            frame: wgpu_texture,
+            metadata: self.decode_result.metadata,
+        })
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -104,6 +151,7 @@ impl VulkanDecoder<'_> {
     pub fn new(
         decoding_device: Arc<DecodingDevice>,
         usage_flags: crate::parameters::DecoderUsageFlags,
+        image_modifiers: ImageModifiers,
     ) -> Result<Self, VulkanDecoderError> {
         let command_buffer_pools = DecoderCommandBufferPools {
             transfer: CommandBufferPool::new(
@@ -119,6 +167,7 @@ impl VulkanDecoder<'_> {
         let tracker = Tracker::new(
             decoding_device.vulkan_device.device.clone(),
             command_buffer_pools,
+            Some("decoder"),
         )?;
 
         let usage_info = vk::VideoDecodeUsageInfoKHR::default().video_usage_hints(usage_flags);
@@ -129,19 +178,12 @@ impl VulkanDecoder<'_> {
             tracker,
             reference_id_to_dpb_slot_index: Default::default(),
             usage_info,
+            image_modifiers,
         })
     }
 }
 
-pub(crate) struct DecodeResult<T> {
-    frame: T,
-    pts: Option<u64>,
-    pic_order_cnt: i32,
-    max_num_reorder_frames: u64,
-    is_idr: bool,
-}
-
-impl VulkanDecoder<'_> {
+impl<'a> VulkanDecoder<'a> {
     pub fn decode_to_bytes(
         &mut self,
         decoder_instructions: &[DecoderInstruction],
@@ -149,17 +191,7 @@ impl VulkanDecoder<'_> {
         let mut result = Vec::new();
         for instruction in decoder_instructions {
             if let Some(output) = self.decode(instruction)? {
-                result.push(DecodeResult {
-                    pts: output.pts,
-                    is_idr: output.is_idr,
-                    max_num_reorder_frames: output.max_num_reorder_frames,
-                    pic_order_cnt: output.picture_order_cnt,
-                    frame: RawFrameData {
-                        width: output.dimensions.width,
-                        height: output.dimensions.height,
-                        frame: self.download_output(output)?,
-                    },
-                })
+                result.push(output.download_output()?);
             }
         }
 
@@ -173,23 +205,17 @@ impl VulkanDecoder<'_> {
         let mut result = Vec::new();
         for instruction in decoder_instructions {
             if let Some(output) = self.decode(instruction)? {
-                result.push(DecodeResult {
-                    pts: output.pts,
-                    is_idr: output.is_idr,
-                    max_num_reorder_frames: output.max_num_reorder_frames,
-                    pic_order_cnt: output.picture_order_cnt,
-                    frame: self.output_to_wgpu_texture(output)?,
-                })
+                result.push(output.output_to_wgpu_texture()?);
             }
         }
 
         Ok(result)
     }
 
-    fn decode(
-        &mut self,
+    pub(crate) fn decode<'b>(
+        &'b mut self,
         instruction: &DecoderInstruction,
-    ) -> Result<Option<DecodeSubmission>, VulkanDecoderError> {
+    ) -> Result<Option<DecodeSubmission<'b, 'a>>, VulkanDecoderError> {
         match instruction {
             DecoderInstruction::Decode {
                 decode_info,
@@ -239,6 +265,7 @@ impl VulkanDecoder<'_> {
                     sps.clone(),
                     self.usage_info,
                     &mut self.tracker,
+                    self.image_modifiers,
                 )?)
             }
         }
@@ -263,29 +290,29 @@ impl VulkanDecoder<'_> {
         }
     }
 
-    fn process_idr(
-        &mut self,
+    fn process_idr<'b>(
+        &'b mut self,
         decode_information: &DecodeInformation,
         reference_id: ReferenceId,
-    ) -> Result<DecodeSubmission, VulkanDecoderError> {
+    ) -> Result<DecodeSubmission<'b, 'a>, VulkanDecoderError> {
         self.do_decode(decode_information, reference_id, true, true)
     }
 
-    fn process_reference_frame(
-        &mut self,
+    fn process_reference_frame<'b>(
+        &'b mut self,
         decode_information: &DecodeInformation,
         reference_id: ReferenceId,
-    ) -> Result<DecodeSubmission, VulkanDecoderError> {
+    ) -> Result<DecodeSubmission<'b, 'a>, VulkanDecoderError> {
         self.do_decode(decode_information, reference_id, false, true)
     }
 
-    fn do_decode(
-        &mut self,
-        decode_information: &DecodeInformation,
+    fn do_decode<'b>(
+        &'b mut self,
+        decode_information: &'_ DecodeInformation,
         reference_id: ReferenceId,
         is_idr: bool,
         is_reference: bool,
-    ) -> Result<DecodeSubmission, VulkanDecoderError> {
+    ) -> Result<DecodeSubmission<'b, 'a>, VulkanDecoderError> {
         let video_session_resources = self
             .video_session_resources
             .as_mut()
@@ -545,13 +572,14 @@ impl VulkanDecoder<'_> {
                 )
         };
 
-        self.decoding_device
+        let semaphore_wait_value = self
+            .decoding_device
             .h264_decode_queues
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
                 &mut self.tracker,
-                vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
-                vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
+                vk::PipelineStageFlags2::ALL_COMMANDS,
+                vk::PipelineStageFlags2::ALL_COMMANDS,
                 DecoderTrackerWaitState::Decode,
             )?;
 
@@ -559,27 +587,29 @@ impl VulkanDecoder<'_> {
         self.reference_id_to_dpb_slot_index
             .insert(reference_id, new_reference_slot_index);
 
-        let sps = video_session_resources
-            .sps
-            .get(&decode_information.sps_id)
-            .ok_or(VulkanDecoderError::NoSession)?;
-
-        let dimensions = sps.size()?;
-
         Ok(DecodeSubmission {
-            image: target_image,
-            layer: target_layer as u32,
-            dimensions,
-            picture_order_cnt: decode_information.picture_info.PicOrderCnt_for_decoding[0],
-            max_num_reorder_frames: video_session_resources.parameters.max_num_reorder_frames,
-            is_idr,
-            pts: decode_information.pts,
+            decode_result: DecodeResult {
+                frame: DecodeSubmissionImageInfo {
+                    image: target_image,
+                    layer: target_layer as u32,
+                },
+                metadata: DecodeResultMetadata {
+                    pic_order_cnt: decode_information.picture_info.PicOrderCnt_for_decoding[0],
+                    max_num_reorder_frames: video_session_resources
+                        .parameters
+                        .max_num_reorder_frames,
+                    is_idr,
+                    pts: decode_information.pts,
+                },
+            },
+            semaphore_wait_value,
+            decoder: self,
         })
     }
 
     fn output_to_wgpu_texture(
         &mut self,
-        decode_output: DecodeSubmission,
+        decode_output: &DecodeSubmissionImageInfo,
     ) -> Result<wgpu::Texture, VulkanDecoderError> {
         let wgpu_device = unsafe {
             self.decoding_device
@@ -588,8 +618,8 @@ impl VulkanDecoder<'_> {
                 .unwrap()
         };
         let copy_extent = vk::Extent3D {
-            width: decode_output.dimensions.width,
-            height: decode_output.dimensions.height,
+            width: decode_output.image.extent.width,
+            height: decode_output.image.extent.height,
             depth: 1,
         };
 
@@ -698,9 +728,8 @@ impl VulkanDecoder<'_> {
             0,
         )?;
 
-        // TODO: why?? will something weaker, such as PipelineStageFlags2::TRANSFER suffice? this
-        // just needs a test
-        self.decoding_device
+        let semaphore_wait_value = self
+            .decoding_device
             .queues
             .transfer
             .submit_chain_semaphore(
@@ -711,7 +740,7 @@ impl VulkanDecoder<'_> {
                 DecoderTrackerWaitState::DownloadImageToBuffer,
             )?;
 
-        self.tracker.wait_for_all(u64::MAX)?;
+        self.tracker.wait_for(semaphore_wait_value, u64::MAX)?;
 
         let result = self
             .video_session_resources
@@ -785,20 +814,20 @@ impl VulkanDecoder<'_> {
 
     fn download_output(
         &mut self,
-        decode_output: DecodeSubmission,
+        decode_output: &DecodeSubmissionImageInfo,
     ) -> Result<Vec<u8>, VulkanDecoderError> {
-        let mut dst_buffer = self.copy_image_to_buffer(
+        let (mut dst_buffer, wait_value) = self.copy_image_to_buffer(
             &decode_output.image,
-            decode_output.dimensions,
+            decode_output.image.extent,
             decode_output.layer,
         )?;
 
-        self.tracker.wait_for_all(u64::MAX)?;
+        self.tracker.wait_for(wait_value, u64::MAX)?;
 
         let output = unsafe {
             dst_buffer.download_data_from_buffer(
-                decode_output.dimensions.width as usize
-                    * decode_output.dimensions.height as usize
+                decode_output.image.extent.width as usize
+                    * decode_output.image.extent.height as usize
                     * 3
                     / 2,
             )?
@@ -828,13 +857,13 @@ impl VulkanDecoder<'_> {
             .collect::<Vec<_>>()
     }
 
-    fn prepare_reference_list_slot_info<'a>(
-        reference_id_to_dpb_slot_index: &std::collections::HashMap<ReferenceId, usize>,
-        reference_slots: &'a [vk::VideoReferenceSlotInfoKHR<'a>],
-        references_dpb_slot_info: &'a mut [vk::VideoDecodeH264DpbSlotInfoKHR<'a>],
-        decode_information: &'a DecodeInformation,
-    ) -> Result<Vec<vk::VideoReferenceSlotInfoKHR<'a>>, VulkanDecoderError> {
-        let mut pic_reference_slots: Vec<vk::VideoReferenceSlotInfoKHR<'a>> = Vec::new();
+    fn prepare_reference_list_slot_info<'b>(
+        reference_id_to_dpb_slot_index: &FxHashMap<ReferenceId, usize>,
+        reference_slots: &'b [vk::VideoReferenceSlotInfoKHR<'b>],
+        references_dpb_slot_info: &'b mut [vk::VideoDecodeH264DpbSlotInfoKHR<'b>],
+        decode_information: &'b DecodeInformation,
+    ) -> Result<Vec<vk::VideoReferenceSlotInfoKHR<'b>>, VulkanDecoderError> {
+        let mut pic_reference_slots: Vec<vk::VideoReferenceSlotInfoKHR<'b>> = Vec::new();
         for (ref_info, dpb_slot_info) in decode_information
             .reference_list_l0
             .iter()
@@ -870,9 +899,9 @@ impl VulkanDecoder<'_> {
     fn copy_image_to_buffer(
         &mut self,
         image: &Image,
-        dimensions: vk::Extent2D,
+        dimensions: vk::Extent3D,
         layer: u32,
-    ) -> Result<Buffer, VulkanDecoderError> {
+    ) -> Result<(Buffer, SemaphoreWaitValue), VulkanDecoderError> {
         let mut cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
 
         image.transition_layout_single_layer(
@@ -939,18 +968,18 @@ impl VulkanDecoder<'_> {
                 )
         };
 
-        // TODO: test if just putting COPY here works as well
-        self.decoding_device
+        let wait_value = self
+            .decoding_device
             .queues
             .transfer
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
                 &mut self.tracker,
-                vk::PipelineStageFlags2::COPY,
+                vk::PipelineStageFlags2::ALL_COMMANDS,
                 vk::PipelineStageFlags2::ALL_COMMANDS,
                 DecoderTrackerWaitState::DownloadImageToBuffer,
             )?;
 
-        Ok(dst_buffer)
+        Ok((dst_buffer, wait_value))
     }
 }

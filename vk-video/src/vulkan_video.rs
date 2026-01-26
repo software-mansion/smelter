@@ -121,7 +121,7 @@ pub enum VulkanCommonError {
     #[error("DPB can have at most 32 slots, {0} was requested")]
     DpbTooLong(u32),
 
-    #[error("Tried to waits for an unsignaled semaphore value")]
+    #[error("Tried to wait for an unsignaled semaphore value")]
     SemaphoreWaitOnUnsignaledValue,
 
     #[error("Tried to register {0:x?} as a new image, while it already exists")]
@@ -132,6 +132,9 @@ pub enum VulkanCommonError {
 
     #[error("Tried to unregister image {0:x?} that was not registered")]
     UnregisteredNonexistentImage(ImageKey),
+
+    #[error("Unsupported image aspect: {0:?}")]
+    UnsupportedImageAspect(vk::ImageAspectFlags),
 }
 
 /// Represents a chunk of encoded video data used for decoding.

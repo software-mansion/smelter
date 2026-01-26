@@ -62,11 +62,7 @@ impl VulkanInstance {
             .map(|layer| layer.as_ptr())
             .collect::<Vec<_>>();
 
-        let extensions = if cfg!(debug_assertions) {
-            vec![vk::EXT_DEBUG_UTILS_NAME]
-        } else {
-            Vec::new()
-        };
+        let extensions = vec![vk::EXT_DEBUG_UTILS_NAME];
 
         let wgpu_extensions = wgpu::hal::vulkan::Instance::desired_extensions(
             &entry,

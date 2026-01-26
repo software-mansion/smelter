@@ -6,7 +6,9 @@ use super::DecodeResult;
 
 impl<T> PartialEq for DecodeResult<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.pic_order_cnt.eq(&other.pic_order_cnt)
+        self.metadata
+            .pic_order_cnt
+            .eq(&other.metadata.pic_order_cnt)
     }
 }
 
@@ -20,7 +22,10 @@ impl<T> PartialOrd for DecodeResult<T> {
 
 impl<T> Ord for DecodeResult<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.pic_order_cnt.cmp(&other.pic_order_cnt).reverse()
+        self.metadata
+            .pic_order_cnt
+            .cmp(&other.metadata.pic_order_cnt)
+            .reverse()
     }
 }
 
@@ -36,8 +41,8 @@ impl<T> FrameSorter<T> {
     }
 
     pub(crate) fn put(&mut self, frame: DecodeResult<T>) -> Vec<Frame<T>> {
-        let max_num_reorder_frames = frame.max_num_reorder_frames as usize;
-        let is_idr = frame.is_idr;
+        let max_num_reorder_frames = frame.metadata.max_num_reorder_frames as usize;
+        let is_idr = frame.metadata.is_idr;
         let mut result = Vec::new();
 
         if is_idr {
@@ -46,13 +51,13 @@ impl<T> FrameSorter<T> {
 
                 result.push(Frame {
                     data: frame.frame,
-                    pts: frame.pts,
+                    pts: frame.metadata.pts,
                 });
             }
 
             result.push(Frame {
                 data: frame.frame,
-                pts: frame.pts,
+                pts: frame.metadata.pts,
             });
         } else {
             self.frames.push(frame);
@@ -62,7 +67,7 @@ impl<T> FrameSorter<T> {
 
                 result.push(Frame {
                     data: frame.frame,
-                    pts: frame.pts,
+                    pts: frame.metadata.pts,
                 });
             }
         }
@@ -87,7 +92,7 @@ impl<T> FrameSorter<T> {
             let frame = self.frames.pop().unwrap();
             result.push(Frame {
                 data: frame.frame,
-                pts: frame.pts,
+                pts: frame.metadata.pts,
             });
         }
 
