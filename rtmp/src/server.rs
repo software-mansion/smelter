@@ -66,6 +66,7 @@ pub struct RtmpConnection {
 }
 
 #[allow(dead_code)] // TODO add SSL/TLS
+#[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub port: u16,
     pub use_ssl: bool,
@@ -94,7 +95,7 @@ impl RtmpServer {
         let shutdown = Arc::new(AtomicBool::new(false));
         let server = Arc::new(Mutex::new(Self { config, shutdown }));
 
-        info!("RTMP server running on port {}", port);
+        info!("RTMP server running on port {port}");
 
         let server_weak: Weak<Mutex<RtmpServer>> = Arc::downgrade(&server);
 
@@ -112,7 +113,7 @@ impl RtmpServer {
 
                     match listener.accept() {
                         Ok((stream, peer_addr)) => {
-                            info!("New connection from: {:?}", peer_addr);
+                            info!("New connection from: {peer_addr:?}");
 
                             let on_connection_clone = on_connection.clone();
                             thread::spawn(move || {

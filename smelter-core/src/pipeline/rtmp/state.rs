@@ -17,7 +17,7 @@ pub(crate) struct RtmpInputConnectionState {
     pub receiver: Option<Receiver<RtmpMediaData>>,
 }
 
-#[allow(dead_code)]
+#[allow(unused)]
 pub struct RtmpInputStateOptions {
     pub url_path: Arc<str>,
 }
@@ -33,7 +33,6 @@ pub enum RtmpServerError {
 }
 
 impl RtmpInputConnectionState {
-    #[allow(dead_code)]
     fn new(options: RtmpInputStateOptions) -> Self {
         Self {
             url_path: options.url_path,

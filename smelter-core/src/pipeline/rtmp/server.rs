@@ -1,7 +1,11 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+};
 
-use rtmp::{RtmpConnection, RtmpServer, ServerConfig};
-use tracing::error;
+use rtmp::{RtmpConnection, RtmpError, RtmpServer, ServerConfig};
+use tracing::{error, warn};
 
 use super::state::RtmpInputsState;
 
@@ -43,9 +47,16 @@ pub fn spawn_rtmp_server(
         }
     });
 
-    // TODO add retry
-    let server =
-        RtmpServer::start(config, on_connection).map_err(InitPipelineError::RtmpServerInitError)?;
-
-    Ok(server)
+    let mut last_error: Option<RtmpError> = None;
+    for _ in 0..5 {
+        match RtmpServer::start(config.clone(), on_connection.clone()) {
+            Ok(server) => return Ok(server),
+            Err(err) => {
+                warn!("Failed to start RTMP server. Retrying ...");
+                last_error = Some(err)
+            }
+        }
+        thread::sleep(Duration::from_millis(1000));
+    }
+    Err(InitPipelineError::RtmpServerInitError(last_error.unwrap()))
 }
