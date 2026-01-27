@@ -62,6 +62,9 @@ pub(crate) fn handle_client(
                     .send(video_data)
                     .map_err(|_| RtmpError::ChannelClosed)?;
             }
+            MessageType::DataMessageAmf0 => {
+                todo!()
+            }
             _ => {} // possible metadata
         }
         Ok(())
@@ -111,4 +114,8 @@ fn parse_video(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
             }))
         }
     }
+}
+
+fn parse_data_message(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
+    todo!()
 }
