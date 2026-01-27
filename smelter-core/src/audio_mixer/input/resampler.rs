@@ -9,6 +9,8 @@ use tracing::{debug, error, trace, warn};
 
 use crate::{AudioChannels, AudioSamples, prelude::InputAudioSamples};
 
+const MAX_STRETCH_FACTOR: f64 = 1.05;
+
 /// Data flow:
 /// Initial data is appended to `resampler_input_buffer`. When we need to get samples for specific
 /// pts range, resampler is resampling data from `resampler_input_buffer` into `resampler_output_buffer`.
@@ -75,8 +77,15 @@ pub(super) const FAST_INTERPOLATION_PARAMS: SincInterpolationParameters =
     };
 
 const CONTINUITY_THRESHOLD: Duration = Duration::from_millis(80);
+
+/// Bellow this threshold we will not attempt to stretch/squash audio if
+/// the timestamps and number of samples is out of sync.
 const SHIFT_THRESHOLD: Duration = Duration::from_millis(2);
-const STRETCH_THRESHOLD: Duration = Duration::from_millis(400);
+
+/// This threshold defines at what point we should still try stretch audio
+/// and when to just drop packets. Consequence of that is also that this
+/// value defines de-sync between audio and video tracks.
+const STRETCH_THRESHOLD: Duration = Duration::from_millis(500);
 
 impl InputResampler {
     pub fn new(
@@ -96,7 +105,7 @@ impl InputResampler {
         let original_resampler_ratio = output_sample_rate as f64 / input_sample_rate as f64;
         let resampler = rubato::Async::<f64>::new_sinc(
             original_resampler_ratio,
-            1.10,
+            MAX_STRETCH_FACTOR,
             Self::interpolation_params(input_sample_rate, output_sample_rate),
             samples_in_batch,
             match channels {
@@ -158,7 +167,7 @@ impl InputResampler {
     }
 
     fn set_resample_ratio_relative(&mut self, rel_ratio: f64) {
-        let rel_ratio = rel_ratio.clamp(1.0 / 1.1, 1.1);
+        let rel_ratio = rel_ratio.clamp(1.0 / MAX_STRETCH_FACTOR, MAX_STRETCH_FACTOR);
         let desired = self.original_resampler_ratio * rel_ratio;
         let current = self.resampler.resample_ratio();
         let should_update = (current == 1.0 && desired != 1.0) || (desired - current).abs() > 0.01;
