@@ -114,7 +114,7 @@ impl LatencyOptimizedBuffer {
     }
 
     fn recalculate_buffer(&mut self, pts: Duration) {
-        // Increment duration is larger than decrement, because when buffer is to small
+        // Increment duration is larger than decrement, because when buffer is too small
         // we don't have much time to adjust to a difference.
         const INCREMENT_DURATION: Duration = Duration::from_micros(500);
         const SMALL_DECREMENT_DURATION: Duration = Duration::from_micros(200);
