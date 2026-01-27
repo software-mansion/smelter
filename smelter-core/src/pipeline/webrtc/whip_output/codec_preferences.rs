@@ -70,6 +70,7 @@ pub(super) fn resolve_video_preferences(
                         VideoEncoderOptions::VulkanH264(VulkanH264EncoderOptions {
                             resolution,
                             bitrate: None,
+                            preset: VulkanH264EncoderPreset::HighQuality,
                             keyframe_interval: KEYFRAME_INTERVAL,
                         })
                     } else {

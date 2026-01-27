@@ -31,8 +31,21 @@ pub struct FfmpegH264EncoderOptions {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VulkanH264EncoderOptions {
     pub resolution: Resolution,
-    pub bitrate: Option<VideoEncoderBitrate>,
+    pub bitrate: Option<VulkanH264EncoderRateControl>,
     pub keyframe_interval: Duration,
+    pub preset: VulkanH264EncoderPreset,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum VulkanH264EncoderRateControl {
+    VariableBitrate(VideoEncoderBitrate),
+    ConstantBitrate(u64),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum VulkanH264EncoderPreset {
+    HighQuality,
+    LowLatency,
 }
 
 #[derive(Debug, thiserror::Error)]

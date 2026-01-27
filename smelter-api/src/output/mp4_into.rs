@@ -103,8 +103,15 @@ impl Mp4VideoEncoderOptions {
                 keyframe_interval_ms,
             } => core::VideoEncoderOptions::VulkanH264(core::VulkanH264EncoderOptions {
                 resolution: resolution.into(),
-                bitrate: bitrate.map(|bitrate| bitrate.try_into()).transpose()?,
+                bitrate: bitrate
+                    .map(|bitrate| {
+                        Ok(core::VulkanH264EncoderRateControl::VariableBitrate(
+                            bitrate.try_into()?,
+                        ))
+                    })
+                    .transpose()?,
                 keyframe_interval: duration_from_keyframe_interval(keyframe_interval_ms)?,
+                preset: core::VulkanH264EncoderPreset::HighQuality,
             }),
         };
         Ok(encoder_options)
