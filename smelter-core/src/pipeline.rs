@@ -114,8 +114,8 @@ pub(crate) struct PipelineCtx {
     pub stats_sender: StatsSender,
     tokio_rt: Arc<Runtime>,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
-    _rtmp_state: Option<Arc<RtmpPipelineState>>,
-    _rtmp_server: Option<Arc<Mutex<RtmpServer>>>,
+    rtmp_state: Option<Arc<RtmpPipelineState>>,
+    rtmp_server: Option<Arc<Mutex<RtmpServer>>>,
 }
 
 impl std::fmt::Debug for PipelineCtx {

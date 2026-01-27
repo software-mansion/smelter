@@ -568,8 +568,8 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
             }
             PipelineWhipWhepServerOptions::Disable => None,
         },
-        _rtmp_state: rtmp_state,
-        _rtmp_server: rtmp_server,
+        rtmp_state,
+        rtmp_server,
     });
 
     let whip_whep_handle = match &ctx.whip_whep_state {

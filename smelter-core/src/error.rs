@@ -164,6 +164,9 @@ pub enum InputInitError {
     #[error(transparent)]
     Whep(#[from] Box<WebrtcClientError>),
 
+    #[error(transparent)]
+    Rtmp(#[from] RtmpServerError),
+
     #[cfg(feature = "decklink")]
     #[error(transparent)]
     DeckLink(#[from] DeckLinkInputError),

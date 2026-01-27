@@ -28,7 +28,7 @@ use crate::prelude::*;
 pub(super) fn spawn_input_loop(
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
-    opts: RtmpServerInputOptions,
+    opts: FFmpegRtmpServerInputOptions,
     should_close: Arc<AtomicBool>,
     buffer: InputBuffer,
     frame_sender: Sender<PipelineEvent<Frame>>,
@@ -123,7 +123,7 @@ fn setup_video_track(
     ctx: &Arc<PipelineCtx>,
     input_ctx: &FfmpegInputContext,
     input_ref: &Ref<InputId>,
-    opts: &RtmpServerInputOptions,
+    opts: &FFmpegRtmpServerInputOptions,
     buffer: &InputBuffer,
     frame_sender: &Sender<PipelineEvent<Frame>>,
 ) -> Option<Track> {

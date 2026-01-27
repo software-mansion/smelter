@@ -1,5 +1,7 @@
 mod decklink;
 mod decklink_into;
+mod ffmpeg_rtmp;
+mod ffmpeg_rtmp_into;
 mod hls;
 mod hls_into;
 mod mp4;
@@ -16,6 +18,7 @@ mod whip;
 mod whip_into;
 
 pub use decklink::*;
+pub use ffmpeg_rtmp::*;
 pub use hls::*;
 pub use mp4::*;
 pub use rtmp::*;
