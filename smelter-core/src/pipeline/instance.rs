@@ -23,9 +23,11 @@ use crate::{
     audio_mixer::AudioMixer,
     event::{Event, EventEmitter},
     pipeline::{
+        RtmpPipelineState,
         channel::{EncodedDataOutput, RawDataInput, RawDataOutput},
         input::{PipelineInput, new_external_input, register_pipeline_input},
         output::{OutputSender, PipelineOutput, new_external_output, register_pipeline_output},
+        rtmp::spawn_rtmp_server,
         webrtc::{WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle},
     },
     queue::{Queue, QueueAudioOutput, QueueOptions, QueueVideoOutput},
@@ -537,6 +539,16 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
 
     let (stats_monitor, stats_sender) = StatsMonitor::new();
 
+    let rtmp_state = match opts.rtmp_server {
+        PipelineRtmpServerOptions::Enable { port } => Some(RtmpPipelineState::new(port)),
+        PipelineRtmpServerOptions::Disable => None,
+    };
+
+    let rtmp_server = match rtmp_state.as_ref() {
+        Some(state) => Some(spawn_rtmp_server(state)?),
+        None => None,
+    };
+
     let ctx = Arc::new(PipelineCtx {
         queue_sync_point: Instant::now(),
         default_buffer_duration: opts.default_buffer_duration,
@@ -556,6 +568,8 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
             }
             PipelineWhipWhepServerOptions::Disable => None,
         },
+        _rtmp_state: rtmp_state,
+        _rtmp_server: rtmp_server,
     });
 
     let whip_whep_handle = match &ctx.whip_whep_state {

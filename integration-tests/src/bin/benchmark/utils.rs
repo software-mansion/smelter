@@ -1,8 +1,8 @@
 use anyhow::Result;
 use integration_tests::paths::integration_tests_root;
 use smelter_core::{
-    DEFAULT_BUFFER_DURATION, PipelineOptions, PipelineWgpuOptions, PipelineWhipWhepServerOptions,
-    graphics_context::GraphicsContext,
+    DEFAULT_BUFFER_DURATION, PipelineOptions, PipelineRtmpServerOptions, PipelineWgpuOptions,
+    PipelineWhipWhepServerOptions, graphics_context::GraphicsContext,
 };
 use std::{
     fs::{self, File},
@@ -40,6 +40,7 @@ pub fn benchmark_pipeline_options(
         whip_whep_stun_servers: Vec::new().into(),
         rendering_mode,
         whip_whep_server: PipelineWhipWhepServerOptions::Disable,
+        rtmp_server: PipelineRtmpServerOptions::Disable,
         wgpu_options: PipelineWgpuOptions::Context(graphics_context),
     }
 }

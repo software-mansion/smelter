@@ -4744,6 +4744,7 @@ dependencies = [
  "pollster",
  "rand 0.9.2",
  "reqwest",
+ "rtmp",
  "rubato",
  "serde",
  "serde_json",

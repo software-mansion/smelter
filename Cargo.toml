@@ -38,6 +38,7 @@ smelter-core = { path = "smelter-core" }
 smelter-render = { path = "smelter-render" }
 libcef = { path = "libcef" }
 vk-video = { path = "vk-video", features = ["expose_parsers"] }
+rtmp = { path = "rtmp" }
 bytes = "1.4.0"
 serde_json = { version = "1.0.99", features = ["preserve_order"] }
 serde = { version = "1.0.164", features = ["derive", "rc"] }

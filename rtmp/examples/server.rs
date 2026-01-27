@@ -15,11 +15,11 @@ fn main() {
     };
 
     let on_connection = Box::new(|conn: RtmpConnection| {
-        let url_path = conn.url_path;
+        let app = conn.app;
+        let stream_key = conn.stream_key;
         let receiver = conn.receiver;
 
-        info!(?url_path, "Received stream");
-        let url_path_clone = url_path.clone();
+        info!(?app, ?stream_key, "Received stream");
         thread::spawn(move || {
             while let Ok(media_data) = receiver.recv() {
                 match media_data {
@@ -36,7 +36,8 @@ fn main() {
                         codec=?video.codec,
                         frame_type=?video.frame_type,
                         cts=?video.composition_time,
-                        ?url_path,
+                        ?app,
+                        ?stream_key,
                         "Received video"
                     ),
                     RtmpMediaData::Audio(audio) => info!(
@@ -46,16 +47,16 @@ fn main() {
                         codec=?audio.codec,
                         sound_rate=?audio.sound_rate,
                         channels=?audio.channels,
-                        ?url_path,
+                        ?app,
+                        ?stream_key,
                         "Received audio"
                     ),
                 };
             }
-            info!(url_path=?url_path_clone, "Stream connection closed");
+            info!(?app, ?stream_key, "Stream connection closed");
         });
     });
 
-    let server = RtmpServer::new(config, on_connection);
-
-    server.run().unwrap();
+    let _server = RtmpServer::start(config, on_connection).unwrap();
+    thread::park()
 }

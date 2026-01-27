@@ -23,6 +23,7 @@ webrtc-util = { workspace = true }
 socket2 = { workspace = true }
 opus = { workspace = true }
 rand = { workspace = true }
+rtmp = { workspace = true }
 mp4 = { git = "https://github.com/smelter-labs/mp4-rust.git", branch = "preserve-asc" }
 reqwest = { workspace = true }
 tracing = { workspace = true }
