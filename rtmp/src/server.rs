@@ -13,7 +13,7 @@ use std::{
 use bytes::Bytes;
 use tracing::{error, info};
 
-use flv::{AudioChannels, AudioCodec, FrameType, ScriptData, VideoCodec};
+use flv::{AudioChannels, AudioCodec, ScriptData, VideoCodec, VideoFrameType};
 
 use crate::{error::RtmpError, handle_client::handle_client};
 
@@ -51,7 +51,7 @@ pub struct VideoData {
     pub pts: i64,
     pub dts: i64,
     pub codec: VideoCodec,
-    pub frame_type: FrameType,
+    pub frame_type: VideoFrameType,
     pub composition_time: Option<i32>,
     pub data: Bytes,
 }

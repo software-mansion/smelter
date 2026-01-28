@@ -13,7 +13,7 @@ pub struct VideoTag {
 
     /// This field is `Some` only for tag containing AVC config.
     pub composition_time: Option<i32>,
-    pub frame_type: FrameType,
+    pub frame_type: VideoFrameType,
     pub data: Bytes,
 }
 
@@ -53,7 +53,7 @@ impl VideoCodec {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub enum FrameType {
+pub enum VideoFrameType {
     #[default]
     Keyframe,
     Interframe,
@@ -73,8 +73,8 @@ impl VideoTag {
         let codec_id = data[0] & 0x0F;
 
         let frame_type = match frame_type {
-            1 => FrameType::Keyframe,
-            2 => FrameType::Interframe,
+            1 => VideoFrameType::Keyframe,
+            2 => VideoFrameType::Interframe,
             _ => {
                 return Err(ParseError::Video(VideoTagParseError::UnsupportedFrameType(
                     frame_type,
@@ -89,7 +89,7 @@ impl VideoTag {
         }
     }
 
-    fn parse_h264(mut data: Bytes, frame_type: FrameType) -> Result<Self, ParseError> {
+    fn parse_h264(mut data: Bytes, frame_type: VideoFrameType) -> Result<Self, ParseError> {
         if data.len() < 5 {
             return Err(ParseError::NotEnoughData);
         }
@@ -122,7 +122,7 @@ impl VideoTag {
     fn parse_codec(
         _data: Bytes,
         codec: VideoCodec,
-        _frame_type: FrameType,
+        _frame_type: VideoFrameType,
     ) -> Result<Self, ParseError> {
         Err(ParseError::UnsupportedCodec(codec.into_id()))
     }
