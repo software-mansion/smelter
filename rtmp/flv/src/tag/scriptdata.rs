@@ -28,7 +28,10 @@ pub enum ScriptDataValue {
         timezone_offset: i16,
     },
     LongString(String),
-    TypedObject(String, HashMap<String, ScriptDataValue>),
+    TypedObject {
+        class_name: String,
+        properties: HashMap<String, ScriptDataValue>,
+    },
 }
 
 impl ScriptData {
@@ -75,12 +78,18 @@ impl From<amf0::AmfValue> for ScriptDataValue {
                 timezone_offset,
             },
             amf0::AmfValue::LongString(s) => Self::LongString(s),
-            amf0::AmfValue::TypedObject(class_name, obj) => {
-                let tag_obj = obj
+            amf0::AmfValue::TypedObject {
+                class_name,
+                properties,
+            } => {
+                let tag_properties = properties
                     .into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect();
-                Self::TypedObject(class_name, tag_obj)
+                Self::TypedObject {
+                    class_name,
+                    properties: tag_properties,
+                }
             }
         }
     }

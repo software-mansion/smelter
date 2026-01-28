@@ -37,5 +37,8 @@ pub enum AmfValue {
         timezone_offset: i16,
     },
     LongString(String),
-    TypedObject(String, HashMap<String, AmfValue>),
+    TypedObject {
+        class_name: String,
+        properties: HashMap<String, AmfValue>,
+    },
 }

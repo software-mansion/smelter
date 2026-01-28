@@ -59,8 +59,11 @@ impl Decoder {
             }
             LONG_STRING => AmfValue::LongString(self.decode_long_string(buf)?),
             TYPED_OBJECT => {
-                let (class_name, pairs) = self.decode_typed_object(buf)?;
-                AmfValue::TypedObject(class_name, pairs)
+                let (class_name, properties) = self.decode_typed_object(buf)?;
+                AmfValue::TypedObject {
+                    class_name,
+                    properties,
+                }
             }
 
             // TODO add switch to AMF3 (0x11)
@@ -190,8 +193,10 @@ impl Decoder {
         let class_name = self.decode_string(buf)?;
         let pairs = self.decode_object_pairs(buf)?;
 
-        self.complexes
-            .push(AmfValue::TypedObject(class_name.clone(), pairs.clone()));
+        self.complexes.push(AmfValue::TypedObject {
+            class_name: class_name.clone(),
+            properties: pairs.clone(),
+        });
         Ok((class_name, pairs))
     }
 
