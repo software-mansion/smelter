@@ -1,18 +1,8 @@
 use bytes::{BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
-use thiserror::Error;
 use tracing::warn;
 
 use crate::amf0::*;
-
-#[derive(Error, Debug)]
-pub enum EncodingError {
-    #[error("String too long: {0} bytes (max {})", u16::MAX)]
-    StringTooLong(usize),
-
-    #[error("Array too long: {0} elements (max {})", u32::MAX)]
-    ArrayTooLong(usize),
-}
 
 pub fn encode_amf_values(amf_values: &[AmfValue]) -> Result<Bytes, EncodingError> {
     let mut buf = BytesMut::new();

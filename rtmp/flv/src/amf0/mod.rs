@@ -3,8 +3,11 @@ use std::collections::HashMap;
 mod decoding;
 mod encoding;
 
-pub use decoding::{DecodingError, decode_amf_values};
-pub use encoding::{EncodingError, encode_amf_values};
+mod error;
+
+pub use decoding::decode_amf_values;
+pub use encoding::encode_amf_values;
+pub use error::*;
 
 const NUMBER: u8 = 0x00;
 const BOOLEAN: u8 = 0x01;
