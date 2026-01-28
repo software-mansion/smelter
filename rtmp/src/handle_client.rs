@@ -7,7 +7,7 @@ use flv::{
     AudioTag, VideoTag,
     tag::{PacketType, scriptdata::ScriptData},
 };
-use tracing::{info, trace};
+use tracing::{debug, info, trace};
 
 use crate::{
     error::RtmpError,
@@ -71,6 +71,7 @@ pub(crate) fn handle_client(
                     .send(metadata)
                     .map_err(|_| RtmpError::ChannelClosed)?;
             }
+            MessageType::DataMessageAmf3 => debug!("Received amf3 encoded data message"),
             _ => {}
         }
         Ok(())

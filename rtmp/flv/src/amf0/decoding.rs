@@ -24,7 +24,7 @@ const OBJECT_END_MARKER: [u8; 3] = [0x00, 0x00, 0x09];
 
 /// Function used to decode `amf0` encoded messages. `amf_bytes` must be a payload of `rtmp` Data
 /// or Command message, encoded in `amf0`.
-pub fn decode_amf0_values(amf_bytes: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
+pub fn decode_amf0_values(amf_bytes: &[u8]) -> Result<Vec<Value>, DecodingError> {
     let mut buf = Bytes::copy_from_slice(amf_bytes);
     let mut result = Vec::new();
     let mut decoder = Decoder::new();

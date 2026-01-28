@@ -58,6 +58,7 @@ pub(crate) fn negotiate_rtmp_session(
                     }
                 }
             }
+            MessageType::CommandMessageAmf3 => debug!("Received amf3 encoded command message."),
             _ => continue,
         }
     }
