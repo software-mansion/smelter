@@ -71,7 +71,7 @@ pub(crate) fn handle_client(
                     .send(metadata)
                     .map_err(|_| RtmpError::ChannelClosed)?;
             }
-            _ => {} // possible metadata
+            _ => {}
         }
         Ok(())
     })
