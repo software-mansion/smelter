@@ -79,58 +79,78 @@ pub(crate) struct LatencyOptimizedBuffer {
 
     /// If effective_buffer is above this threshold for a period of time, aggressively shrink
     /// the buffer.
-    max_hard_threshold: Duration,
+    shrink_threshold_1: Duration,
+    /// If effective_buffer is above this threshold for a period of time, shrink the buffer
+    /// quickly
+    shrink_threshold_2: Duration,
     /// If effective_buffer is above this threshold for a period of time, slowly shrink the buffer.
-    max_soft_threshold: Duration,
+    max_desired_buffer: Duration,
     /// If effective_buffer is below this value, slowly increase the buffer with every packet.
-    desired_buffer: Duration,
+    min_desired_buffer: Duration,
     /// If effective_buffer is below this threshold, aggressively and immediately increase the buffer.
-    min_threshold: Duration,
+    grow_threshold: Duration,
 }
 
 impl LatencyOptimizedBuffer {
     fn new(ctx: &PipelineCtx) -> Self {
         // As a result for default numbers if effective_buffer is between 80ms and 240ms, no
         // adjustment/optimization will be triggered
-        let min_threshold = ctx.default_buffer_duration;
-        let desired_buffer = min_threshold + ctx.default_buffer_duration;
-        let max_soft_threshold = desired_buffer + ctx.default_buffer_duration;
-        let max_hard_threshold = max_soft_threshold + Duration::from_millis(500);
+        let grow_threshold = ctx.default_buffer_duration;
+        let min_desired_buffer = grow_threshold + ctx.default_buffer_duration;
+        let max_desired_buffer = min_desired_buffer + ctx.default_buffer_duration;
+        let shrink_threshold_2 = max_desired_buffer + Duration::from_millis(400);
+        let shrink_threshold_1 = shrink_threshold_2 + Duration::from_millis(400);
         Self {
             sync_point: ctx.queue_sync_point,
             dynamic_buffer: ctx.default_buffer_duration,
             state: LatencyOptimizedBufferState::Ok,
 
-            min_threshold,
-            desired_buffer,
-            max_soft_threshold,
-            max_hard_threshold,
+            grow_threshold,
+            min_desired_buffer,
+            max_desired_buffer,
+            shrink_threshold_1,
+            shrink_threshold_2,
         }
     }
 
     fn recalculate_buffer(&mut self, pts: Duration) {
-        const INCREMENT_DURATION: Duration = Duration::from_micros(200);
-        const DECREMENT_DURATION: Duration = Duration::from_micros(200);
+        // Increment duration is larger than decrement, because when buffer is too small
+        // we don't have much time to adjust to a difference.
+        const INCREMENT_DURATION: Duration = Duration::from_micros(500);
+        const SMALL_DECREMENT_DURATION: Duration = Duration::from_micros(200);
+        const LARGE_DECREMENT_DURATION: Duration = Duration::from_micros(500);
+
+        // Duration that defines at what point we can consider state stable enough
+        // to consider shrinking the buffer
         const STABLE_STATE_DURATION: Duration = Duration::from_secs(10);
 
         let next_pts = pts + self.dynamic_buffer;
-        trace!(effective_buffer=?next_pts.saturating_sub(self.sync_point.elapsed()), dynamic_buffer=?self.dynamic_buffer);
+        trace!(
+            effective_buffer=?next_pts.saturating_sub(self.sync_point.elapsed()),
+            dynamic_buffer=?self.dynamic_buffer,
+            ?pts
+        );
 
-        if next_pts > self.sync_point.elapsed() + self.max_hard_threshold {
+        if next_pts > self.sync_point.elapsed() + self.shrink_threshold_1 {
             let first_pts = self.state.set_too_large(next_pts);
             if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
                 self.dynamic_buffer = self
                     .dynamic_buffer
-                    .saturating_sub(self.dynamic_buffer / 200);
+                    .saturating_sub(self.dynamic_buffer / 1000);
             }
-        } else if next_pts > self.sync_point.elapsed() + self.max_soft_threshold {
+        } else if next_pts > self.sync_point.elapsed() + self.shrink_threshold_2 {
             let first_pts = self.state.set_too_large(next_pts);
             if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
-                self.dynamic_buffer = self.dynamic_buffer.saturating_sub(DECREMENT_DURATION);
+                self.dynamic_buffer = self.dynamic_buffer.saturating_sub(LARGE_DECREMENT_DURATION);
             }
-        } else if next_pts > self.sync_point.elapsed() + self.desired_buffer {
+        } else if next_pts > self.sync_point.elapsed() + self.max_desired_buffer {
+            let first_pts = self.state.set_too_large(next_pts);
+            if next_pts.saturating_sub(first_pts) > STABLE_STATE_DURATION {
+                self.dynamic_buffer = self.dynamic_buffer.saturating_sub(SMALL_DECREMENT_DURATION);
+            }
+        } else if next_pts > self.sync_point.elapsed() + self.min_desired_buffer {
             self.state.set_ok();
-        } else if next_pts > self.sync_point.elapsed() + self.min_threshold {
+        } else if next_pts > self.sync_point.elapsed() + self.grow_threshold {
             trace!(
                 old=?self.dynamic_buffer,
                 new=?self.dynamic_buffer + INCREMENT_DURATION,
@@ -139,7 +159,8 @@ impl LatencyOptimizedBuffer {
             self.state.set_too_small();
             self.dynamic_buffer += INCREMENT_DURATION;
         } else {
-            let new_buffer = (self.sync_point.elapsed() + self.desired_buffer).saturating_sub(pts);
+            let new_buffer =
+                (self.sync_point.elapsed() + self.max_desired_buffer).saturating_sub(pts);
             debug!(
                 old=?self.dynamic_buffer,
                 new=?new_buffer,
@@ -147,7 +168,7 @@ impl LatencyOptimizedBuffer {
             );
             self.state.set_too_small();
             // adjust buffer so:
-            // pts + self.dynamic_buffer == self.sync_point.elapsed() + self.desired_buffer
+            // pts + self.dynamic_buffer == self.sync_point.elapsed() + self.max_desired_buffer
             self.dynamic_buffer = new_buffer
         }
     }
