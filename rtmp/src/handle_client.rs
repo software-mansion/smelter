@@ -16,7 +16,7 @@ use crate::{
     negotiation::negotiate_rtmp_session,
     protocol::MessageType,
     server::{
-        AudioConfig, AudioData, OnConnectionCallback, RtmpConnection, RtmpMediaData, VideoConfig,
+        AudioConfig, AudioData, OnConnectionCallback, RtmpConnection, RtmpStreamData, VideoConfig,
         VideoData,
     },
 };
@@ -77,10 +77,10 @@ pub(crate) fn handle_client(
     })
 }
 
-fn parse_audio(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
+fn parse_audio(msg: RtmpMessage) -> Result<RtmpStreamData, RtmpError> {
     let tag = AudioTag::parse(msg.payload)?;
     match tag.packet_type {
-        PacketType::Config => Ok(RtmpMediaData::AudioConfig(AudioConfig {
+        PacketType::Config => Ok(RtmpStreamData::AudioConfig(AudioConfig {
             codec: tag.codec,
             sound_rate: tag.sound_rate,
             channels: tag.sound_type,
@@ -88,7 +88,7 @@ fn parse_audio(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
         })),
         PacketType::Data => {
             let dts = msg.timestamp as i64;
-            Ok(RtmpMediaData::Audio(AudioData {
+            Ok(RtmpStreamData::Audio(AudioData {
                 pts: dts,
                 dts,
                 codec: tag.codec,
@@ -100,17 +100,17 @@ fn parse_audio(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
     }
 }
 
-fn parse_video(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
+fn parse_video(msg: RtmpMessage) -> Result<RtmpStreamData, RtmpError> {
     let tag = VideoTag::parse(msg.payload)?;
     match tag.packet_type {
-        PacketType::Config => Ok(RtmpMediaData::VideoConfig(VideoConfig {
+        PacketType::Config => Ok(RtmpStreamData::VideoConfig(VideoConfig {
             codec: tag.codec,
             data: tag.data,
         })),
         PacketType::Data => {
             let dts = msg.timestamp as i64;
             let pts = tag.composition_time.map_or(dts, |cts| dts + cts as i64);
-            Ok(RtmpMediaData::Video(VideoData {
+            Ok(RtmpStreamData::Video(VideoData {
                 pts,
                 dts,
                 codec: tag.codec,
@@ -122,7 +122,7 @@ fn parse_video(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
     }
 }
 
-fn parse_data_message(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
+fn parse_data_message(msg: RtmpMessage) -> Result<RtmpStreamData, RtmpError> {
     let tag = ScriptData::parse(msg.payload)?;
-    Ok(RtmpMediaData::Metadata(tag))
+    Ok(RtmpStreamData::Metadata(tag))
 }

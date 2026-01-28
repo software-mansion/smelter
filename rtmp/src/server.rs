@@ -18,7 +18,7 @@ use crate::{error::RtmpError, handle_client::handle_client};
 
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
 
-pub enum RtmpMediaData {
+pub enum RtmpStreamData {
     Video(VideoData),
     VideoConfig(VideoConfig),
     Audio(AudioData),
@@ -64,7 +64,7 @@ pub struct VideoConfig {
 pub struct RtmpConnection {
     pub app: Arc<str>,
     pub stream_key: Arc<str>,
-    pub receiver: Receiver<RtmpMediaData>,
+    pub receiver: Receiver<RtmpStreamData>,
 }
 
 // TODO add SSL/TLS

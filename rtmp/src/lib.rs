@@ -11,4 +11,4 @@ pub mod server;
 pub use flv;
 
 pub use error::RtmpError;
-pub use server::{RtmpConnection, RtmpMediaData, RtmpServer, ServerConfig};
+pub use server::{RtmpConnection, RtmpServer, RtmpStreamData, ServerConfig};

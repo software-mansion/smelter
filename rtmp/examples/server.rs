@@ -1,4 +1,4 @@
-use rtmp::{RtmpMediaData, RtmpServer, ServerConfig, server::RtmpConnection};
+use rtmp::{RtmpServer, RtmpStreamData, ServerConfig, server::RtmpConnection};
 use std::thread;
 use tracing::info;
 
@@ -23,13 +23,13 @@ fn main() {
         thread::spawn(move || {
             while let Ok(media_data) = receiver.recv() {
                 match media_data {
-                    RtmpMediaData::VideoConfig(video_config) => {
+                    RtmpStreamData::VideoConfig(video_config) => {
                         info!(?video_config, "video config")
                     }
-                    RtmpMediaData::AudioConfig(audio_config) => {
+                    RtmpStreamData::AudioConfig(audio_config) => {
                         info!(?audio_config, "audio config")
                     }
-                    RtmpMediaData::Video(video) => info!(
+                    RtmpStreamData::Video(video) => info!(
                         data_len=?video.data.len(),
                         pts=?video.pts,
                         dts=?video.dts,
@@ -40,7 +40,7 @@ fn main() {
                         ?stream_key,
                         "Received video"
                     ),
-                    RtmpMediaData::Audio(audio) => info!(
+                    RtmpStreamData::Audio(audio) => info!(
                         data_len=?audio.data.len(),
                         pts=?audio.pts,
                         dts=?audio.dts,
@@ -51,7 +51,7 @@ fn main() {
                         ?stream_key,
                         "Received audio"
                     ),
-                    RtmpMediaData::Metadata(data) => {
+                    RtmpStreamData::Metadata(data) => {
                         info!("Metadata received");
                         println!("{data:#?}");
                     }
