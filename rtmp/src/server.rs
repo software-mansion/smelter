@@ -11,8 +11,10 @@ use std::{
 };
 
 use bytes::Bytes;
-use flv::{AudioChannels, AudioCodec, FrameType, VideoCodec, tag::scriptdata::ScriptData};
 use tracing::{error, info};
+
+pub use flv::tag::scriptdata::{ScriptData, ScriptDataValue};
+use flv::{AudioChannels, AudioCodec, FrameType, VideoCodec};
 
 use crate::{error::RtmpError, handle_client::handle_client};
 
