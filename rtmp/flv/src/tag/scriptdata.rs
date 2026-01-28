@@ -7,6 +7,7 @@ use crate::{
     error::ParseError,
 };
 
+/// Struct representing flv SCRIPTDATA.
 #[derive(Debug, Clone)]
 pub struct ScriptData {
     pub values: Vec<ScriptDataValue>,
