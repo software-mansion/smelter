@@ -1,6 +1,6 @@
 use crate::{
+    amf0::{AmfValue, decoding::decode_amf_values, encoding::encode_amf_values},
     error::RtmpError,
-    flv::amf0::{AmfValue, decoding::decode_amf_values, encoding::encode_amf_values},
     message::{RtmpMessage, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
     protocol::{
         MessageType,

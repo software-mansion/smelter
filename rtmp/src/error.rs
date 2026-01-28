@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use flv::error::ParseError;
+use flv::ParseError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
