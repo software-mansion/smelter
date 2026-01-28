@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use bytes::Bytes;
 
 use crate::{
-    amf0::{self, decoding::decode_amf_values},
+    amf0::{self, decoding::decode_amf0_values},
     error::ParseError,
 };
 
@@ -36,7 +36,7 @@ impl ScriptData {
             return Err(ParseError::NotEnoughData);
         }
 
-        let amf_values = decode_amf_values(&data).map_err(ParseError::Amf0)?;
+        let amf_values = decode_amf0_values(&data).map_err(ParseError::Amf0)?;
 
         let scriptdata_values = amf_values.into_iter().map(ScriptDataValue::from).collect();
         Ok(Self {
@@ -45,36 +45,36 @@ impl ScriptData {
     }
 }
 
-impl From<amf0::AmfValue> for ScriptDataValue {
-    fn from(value: amf0::AmfValue) -> Self {
+impl From<amf0::Value> for ScriptDataValue {
+    fn from(value: amf0::Value) -> Self {
         match value {
-            amf0::AmfValue::Number(n) => Self::Number(n),
-            amf0::AmfValue::Boolean(b) => Self::Boolean(b),
-            amf0::AmfValue::String(s) => Self::String(s),
-            amf0::AmfValue::Object(obj) => Self::Object(
+            amf0::Value::Number(n) => Self::Number(n),
+            amf0::Value::Boolean(b) => Self::Boolean(b),
+            amf0::Value::String(s) => Self::String(s),
+            amf0::Value::Object(obj) => Self::Object(
                 obj.into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect(),
             ),
-            amf0::AmfValue::Null => Self::Null,
-            amf0::AmfValue::Undefined => Self::Undefined,
-            amf0::AmfValue::EcmaArray(map) => Self::EcmaArray(
+            amf0::Value::Null => Self::Null,
+            amf0::Value::Undefined => Self::Undefined,
+            amf0::Value::EcmaArray(map) => Self::EcmaArray(
                 map.into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect(),
             ),
-            amf0::AmfValue::StrictArray(array) => {
+            amf0::Value::StrictArray(array) => {
                 Self::StrictArray(array.into_iter().map(Self::from).collect())
             }
-            amf0::AmfValue::Date {
+            amf0::Value::Date {
                 unix_time,
                 timezone_offset,
             } => Self::Date {
                 unix_time,
                 timezone_offset,
             },
-            amf0::AmfValue::LongString(s) => Self::LongString(s),
-            amf0::AmfValue::TypedObject(class_name, obj) => {
+            amf0::Value::LongString(s) => Self::LongString(s),
+            amf0::Value::TypedObject(class_name, obj) => {
                 let tag_obj = obj
                     .into_iter()
                     .map(|(key, value)| (key, Self::from(value)))

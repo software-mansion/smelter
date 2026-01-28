@@ -24,7 +24,7 @@ const OBJECT_END_MARKER: [u8; 3] = [0x00, 0x00, 0x09];
 
 /// Function used to decode `amf0` encoded messages. `amf_bytes` must be a payload of `rtmp` Data
 /// or Command message, encoded in `amf0`.
-pub fn decode_amf_values(amf_bytes: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
+pub fn decode_amf0_values(amf_bytes: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
     let mut buf = Bytes::copy_from_slice(amf_bytes);
     let mut result = Vec::new();
     let mut decoder = Decoder::new();
@@ -41,7 +41,7 @@ pub fn decode_amf_values(amf_bytes: &[u8]) -> Result<Vec<AmfValue>, DecodingErro
 struct Decoder {
     // According to spec (https://rtmp.veriskope.com/pdf/amf0-file-format-specification.pdf),
     // complex types are Object, ECMA Array, Strict Array and Typed Objext.
-    complexes: Vec<AmfValue>,
+    complexes: Vec<Value>,
 }
 
 impl Decoder {
@@ -49,7 +49,7 @@ impl Decoder {
         Self::default()
     }
 
-    fn decode_value(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_value(&mut self, buf: &mut Bytes) -> Result<Value, DecodingError> {
         if !buf.has_remaining() {
             return Err(DecodingError::InsufficientData);
         }
@@ -57,26 +57,26 @@ impl Decoder {
         let marker = buf.get_u8();
 
         let amf_value = match marker {
-            NUMBER => AmfValue::Number(self.decode_number(buf)?),
-            BOOLEAN => AmfValue::Boolean(self.decode_boolean(buf)?),
-            STRING => AmfValue::String(self.decode_string(buf)?),
-            OBJECT => AmfValue::Object(self.decode_object(buf)?),
-            NULL => AmfValue::Null,
-            UNDEFINED => AmfValue::Undefined,
+            NUMBER => Value::Number(self.decode_number(buf)?),
+            BOOLEAN => Value::Boolean(self.decode_boolean(buf)?),
+            STRING => Value::String(self.decode_string(buf)?),
+            OBJECT => Value::Object(self.decode_object(buf)?),
+            NULL => Value::Null,
+            UNDEFINED => Value::Undefined,
             REFERENCE => self.decode_reference(buf)?,
-            ECMA_ARRAY => AmfValue::EcmaArray(self.decode_ecma_array(buf)?),
-            STRICT_ARRAY => AmfValue::StrictArray(self.decode_strict_array(buf)?),
+            ECMA_ARRAY => Value::EcmaArray(self.decode_ecma_array(buf)?),
+            STRICT_ARRAY => Value::StrictArray(self.decode_strict_array(buf)?),
             DATE => {
                 let (unix_time, timezone_offset) = self.decode_date(buf)?;
-                AmfValue::Date {
+                Value::Date {
                     unix_time,
                     timezone_offset,
                 }
             }
-            LONG_STRING => AmfValue::LongString(self.decode_long_string(buf)?),
+            LONG_STRING => Value::LongString(self.decode_long_string(buf)?),
             TYPED_OBJECT => {
                 let (class_name, pairs) = self.decode_typed_object(buf)?;
-                AmfValue::TypedObject(class_name, pairs)
+                Value::TypedObject(class_name, pairs)
             }
 
             // TODO add switch to AMF3 (0x11)
@@ -115,16 +115,13 @@ impl Decoder {
         Ok(string)
     }
 
-    fn decode_object(
-        &mut self,
-        buf: &mut Bytes,
-    ) -> Result<HashMap<String, AmfValue>, DecodingError> {
+    fn decode_object(&mut self, buf: &mut Bytes) -> Result<HashMap<String, Value>, DecodingError> {
         let pairs = self.decode_object_pairs(buf)?;
-        self.complexes.push(AmfValue::Object(pairs.clone()));
+        self.complexes.push(Value::Object(pairs.clone()));
         Ok(pairs)
     }
 
-    fn decode_reference(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_reference(&mut self, buf: &mut Bytes) -> Result<Value, DecodingError> {
         if buf.remaining() < 2 {
             return Err(DecodingError::InsufficientData);
         }
@@ -140,17 +137,17 @@ impl Decoder {
     fn decode_ecma_array(
         &mut self,
         buf: &mut Bytes,
-    ) -> Result<HashMap<String, AmfValue>, DecodingError> {
+    ) -> Result<HashMap<String, Value>, DecodingError> {
         if buf.remaining() < 4 {
             return Err(DecodingError::InsufficientData);
         }
         let _array_size = buf.get_u32();
         let pairs = self.decode_object_pairs(buf)?;
-        self.complexes.push(AmfValue::EcmaArray(pairs.clone()));
+        self.complexes.push(Value::EcmaArray(pairs.clone()));
         Ok(pairs)
     }
 
-    fn decode_strict_array(&mut self, buf: &mut Bytes) -> Result<Vec<AmfValue>, DecodingError> {
+    fn decode_strict_array(&mut self, buf: &mut Bytes) -> Result<Vec<Value>, DecodingError> {
         if buf.remaining() < 4 {
             return Err(DecodingError::InsufficientData);
         }
@@ -162,7 +159,7 @@ impl Decoder {
             array.push(value);
         }
 
-        self.complexes.push(AmfValue::StrictArray(array.clone()));
+        self.complexes.push(Value::StrictArray(array.clone()));
         Ok(array)
     }
 
@@ -198,7 +195,7 @@ impl Decoder {
     fn decode_typed_object(
         &mut self,
         buf: &mut Bytes,
-    ) -> Result<(String, HashMap<String, AmfValue>), DecodingError> {
+    ) -> Result<(String, HashMap<String, Value>), DecodingError> {
         if buf.remaining() < 2 {
             return Err(DecodingError::InsufficientData);
         }
@@ -207,14 +204,14 @@ impl Decoder {
         let pairs = self.decode_object_pairs(buf)?;
 
         self.complexes
-            .push(AmfValue::TypedObject(class_name.clone(), pairs.clone()));
+            .push(Value::TypedObject(class_name.clone(), pairs.clone()));
         Ok((class_name, pairs))
     }
 
     fn decode_object_pairs(
         &mut self,
         buf: &mut Bytes,
-    ) -> Result<HashMap<String, AmfValue>, DecodingError> {
+    ) -> Result<HashMap<String, Value>, DecodingError> {
         let mut pairs = HashMap::new();
 
         loop {

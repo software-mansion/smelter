@@ -17,19 +17,19 @@ const LONG_STRING: u8 = 0x0C;
 const TYPED_OBJECT: u8 = 0x10;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AmfValue {
+pub enum Value {
     Number(f64),
     Boolean(bool),
     String(String),
-    Object(HashMap<String, AmfValue>),
+    Object(HashMap<String, Value>),
     Null,
     Undefined,
-    EcmaArray(HashMap<String, AmfValue>),
-    StrictArray(Vec<AmfValue>),
+    EcmaArray(HashMap<String, Value>),
+    StrictArray(Vec<Value>),
     Date {
         unix_time: f64,
         timezone_offset: i16,
     },
     LongString(String),
-    TypedObject(String, HashMap<String, AmfValue>),
+    TypedObject(String, HashMap<String, Value>),
 }
