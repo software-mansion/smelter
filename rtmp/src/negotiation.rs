@@ -1,5 +1,5 @@
 use crate::{
-    amf0::{AmfValue, decoding::decode_amf_values, encoding::encode_amf_values},
+    amf0::{AmfValue, decode_amf_values, encode_amf_values},
     error::RtmpError,
     message::{RtmpMessage, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
     protocol::{

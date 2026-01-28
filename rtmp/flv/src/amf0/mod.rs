@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
-pub mod decoding;
-pub mod encoding;
+mod decoding;
+mod encoding;
+
+pub use decoding::{DecodingError, decode_amf_values};
+pub use encoding::{EncodingError, encode_amf_values};
 
 const NUMBER: u8 = 0x00;
 const BOOLEAN: u8 = 0x01;

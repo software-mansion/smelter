@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::amf0::decoding::DecodingError;
+use crate::amf0::DecodingError;
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum ParseError {

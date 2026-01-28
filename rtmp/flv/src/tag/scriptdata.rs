@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use bytes::Bytes;
 
 use crate::{
-    amf0::{self, decoding::decode_amf_values},
+    amf0::{self, decode_amf_values},
     error::ParseError,
 };
 
