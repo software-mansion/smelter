@@ -13,10 +13,11 @@ use std::{
 use bytes::Bytes;
 use tracing::{error, info};
 
-pub use flv::tag::scriptdata::{ScriptData, ScriptDataValue};
 use flv::{AudioChannels, AudioCodec, FrameType, VideoCodec};
 
 use crate::{error::RtmpError, handle_client::handle_client};
+
+pub use flv::tag::scriptdata::{ScriptData, ScriptDataValue};
 
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
 
