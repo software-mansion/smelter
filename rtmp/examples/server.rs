@@ -51,6 +51,7 @@ fn main() {
                         ?stream_key,
                         "Received audio"
                     ),
+                    RtmpMediaData::Metadata(_) => todo!(),
                 };
             }
             info!(?app, ?stream_key, "Stream connection closed");

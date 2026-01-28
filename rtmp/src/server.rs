@@ -11,7 +11,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use flv::{AudioChannels, AudioCodec, FrameType, VideoCodec};
+use flv::{AudioChannels, AudioCodec, FrameType, VideoCodec, tag::scriptdata::ScriptData};
 use tracing::{error, info};
 
 use crate::{error::RtmpError, handle_client::handle_client};
@@ -23,6 +23,8 @@ pub enum RtmpMediaData {
     VideoConfig(VideoConfig),
     Audio(AudioData),
     AudioConfig(AudioConfig),
+
+    Metadata(ScriptData),
 }
 
 #[derive(Debug, Clone)]

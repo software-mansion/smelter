@@ -5,7 +5,7 @@ use tracing::warn;
 
 use crate::amf0::*;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum DecodingError {
     #[error("Unknown data type: {0}")]
     UnknownType(u8),
@@ -22,8 +22,8 @@ pub enum DecodingError {
 
 const OBJECT_END_MARKER: [u8; 3] = [0x00, 0x00, 0x09];
 
-pub fn decode_amf_values(rtmp_msg_payload: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
-    let mut buf = Bytes::copy_from_slice(rtmp_msg_payload);
+pub fn decode_amf_values(amf_encoded_payload: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
+    let mut buf = Bytes::copy_from_slice(amf_encoded_payload);
     let mut result = Vec::new();
     let mut decoder = Decoder::new();
 

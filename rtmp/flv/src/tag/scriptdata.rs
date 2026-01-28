@@ -1,25 +1,51 @@
 use std::collections::HashMap;
 
-use crate::amf0;
+use bytes::Bytes;
 
-pub enum ScriptDataTag {
+use crate::{
+    amf0::{self, decoding::decode_amf_values},
+    error::ParseError,
+};
+
+#[derive(Debug, Clone)]
+pub struct ScriptData {
+    pub values: Vec<ScriptDataValue>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ScriptDataValue {
     Number(f64),
     Boolean(bool),
     String(String),
-    Object(HashMap<String, ScriptDataTag>),
+    Object(HashMap<String, ScriptDataValue>),
     Null,
     Undefined,
-    EcmaArray(HashMap<String, ScriptDataTag>),
-    StrictArray(Vec<ScriptDataTag>),
+    EcmaArray(HashMap<String, ScriptDataValue>),
+    StrictArray(Vec<ScriptDataValue>),
     Date {
         unix_time: f64,
         timezone_offset: i16,
     },
     LongString(String),
-    TypedObject(String, HashMap<String, ScriptDataTag>),
+    TypedObject(String, HashMap<String, ScriptDataValue>),
 }
 
-impl From<amf0::AmfValue> for ScriptDataTag {
+impl ScriptData {
+    pub fn parse(data: Bytes) -> Result<Self, ParseError> {
+        if data.is_empty() {
+            return Err(ParseError::NotEnoughData);
+        }
+
+        let amf_values = decode_amf_values(&data).map_err(ParseError::Amf0)?;
+
+        let scriptdata_values = amf_values.into_iter().map(ScriptDataValue::from).collect();
+        Ok(Self {
+            values: scriptdata_values,
+        })
+    }
+}
+
+impl From<amf0::AmfValue> for ScriptDataValue {
     fn from(value: amf0::AmfValue) -> Self {
         match value {
             amf0::AmfValue::Number(n) => Self::Number(n),

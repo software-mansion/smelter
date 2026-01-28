@@ -3,7 +3,10 @@ use std::{
     sync::{Arc, Mutex, atomic::AtomicBool, mpsc::channel},
 };
 
-use flv::{AudioTag, VideoTag, tag::PacketType};
+use flv::{
+    AudioTag, VideoTag,
+    tag::{PacketType, scriptdata::ScriptData},
+};
 use tracing::{info, trace};
 
 use crate::{
@@ -63,7 +66,10 @@ pub(crate) fn handle_client(
                     .map_err(|_| RtmpError::ChannelClosed)?;
             }
             MessageType::DataMessageAmf0 => {
-                todo!()
+                let metadata = parse_data_message(msg)?;
+                sender
+                    .send(metadata)
+                    .map_err(|_| RtmpError::ChannelClosed)?;
             }
             _ => {} // possible metadata
         }
@@ -117,5 +123,6 @@ fn parse_video(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
 }
 
 fn parse_data_message(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
-    todo!()
+    let tag = ScriptData::parse(msg.payload)?;
+    Ok(RtmpMediaData::Metadata(tag))
 }
