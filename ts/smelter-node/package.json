@@ -22,20 +22,20 @@
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
-    "@types/node": "^20.14.10",
+    "@types/node": "^22.19.7",
     "@types/node-fetch": "^2.6.11",
+    "@types/react": "^18.3.3",
     "@types/uuid": "^10.0.0",
-    "@types/ws": "^8.5.12",
-    "@types/react": "^18.3.3"
+    "@types/ws": "^8.5.12"
   },
   "dependencies": {
     "@swmansion/smelter-core": "workspace:0.3.0",
+    "form-data": "^4.0.4",
     "fs-extra": "^11.2.0",
     "node-fetch": "^2.6.7",
-    "form-data": "^4.0.4",
     "pino": "^9.5.0",
     "pino-pretty": "^13.0.0",
-    "tar": "^7.4.3",
+    "tar": "^7.5.4",
     "uuid": "^10.0.0",
     "ws": "^8.18.0"
   },
