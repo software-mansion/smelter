@@ -12,7 +12,9 @@ use crate::{
     EncodedOutputChunk, Frame, RawFrameData, VulkanCommonError,
     device::{EncodingDevice, Rational},
     parameters::H264Profile,
-    wrappers::{Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image, ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool, SemaphoreWaitValue, Tracker, TrackerKind, TrackerWait, VideoEncodeQueueExt, VideoQueueExt, VideoSession, VideoSessionParameters},
+    wrappers::{
+        Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image, ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool, SemaphoreWaitValue, Tracker, TrackerKind, TrackerWait, VideoEncodeQueueExt, VideoQueueExt, VideoSession, VideoSessionParameters
+    },
 };
 
 mod encode_parameter_sets;
@@ -274,7 +276,7 @@ pub(crate) enum EncoderTrackerWaitState {
     Encode,
 }
 
-struct EncoderCommandBufferPools {
+pub(crate) struct EncoderCommandBufferPools {
     transfer: CommandBufferPool,
     encode: CommandBufferPool,
 }
@@ -301,7 +303,7 @@ impl CommandBufferPoolStorage for EncoderCommandBufferPools {
     }
 }
 
-struct EncoderTrackerKind {}
+pub(crate) struct EncoderTrackerKind {}
 
 impl TrackerKind for EncoderTrackerKind {
     type WaitState = EncoderTrackerWaitState;
@@ -309,13 +311,13 @@ impl TrackerKind for EncoderTrackerKind {
     type CommandBufferPools = EncoderCommandBufferPools;
 }
 
-type EncoderTracker = Tracker<EncoderTrackerKind>;
+pub(crate) type EncoderTracker = Tracker<EncoderTrackerKind>;
 
 pub struct VulkanEncoder<'a> {
-    tracker: EncoderTracker,
+    pub(crate) tracker: EncoderTracker,
     query_pool: EncodingQueryPool,
     profile: H264Profile,
-    profile_info: H264EncodeProfileInfo<'a>,
+    pub(crate) profile_info: H264EncodeProfileInfo<'a>,
     session_resources: VideoSessionResources<'a>,
     idr_period_counter: u32,
     idr_period: u32,
@@ -355,7 +357,7 @@ impl VulkanEncoder<'_> {
 
         let command_buffer_pools = EncoderCommandBufferPools::new(&encoding_device)?;
         let mut tracker =
-            EncoderTracker::new(encoding_device.device.clone(), command_buffer_pools)?;
+            EncoderTracker::new(encoding_device.device.clone(), command_buffer_pools, Some("encoder"))?;
 
         let query_pool = EncodingQueryPool::new(
             &encoding_device,
