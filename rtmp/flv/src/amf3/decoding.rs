@@ -192,32 +192,109 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_array(&mut self, buf: &mut Bytes) -> Result<Array, DecodingError> {
+    fn decode_array(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
         todo!()
     }
 
-    fn decode_object(&mut self, buf: &mut Bytes) -> Result<Object, DecodingError> {
+    fn decode_object(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
         todo!()
     }
 
-    fn decode_xml(&mut self, buf: &mut Bytes) -> Result<String, DecodingError> {
+    fn decode_xml(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+        let decode = |decoder: &mut Self, buf: &mut Bytes, size: usize| {
+            if buf.remaining() < size {
+                return Err(DecodingError::InsufficientData);
+            }
+
+            let utf8 = buf.split_to(size);
+            let xml = String::from_utf8(utf8.to_vec()).map_err(|_| DecodingError::InvalidUtf8)?;
+
+            let amf_value = AmfValue::XmlDoc(xml);
+            decoder.complexes.push(amf_value.clone());
+            Ok(amf_value)
+        };
+
+        self.decode_complex(buf, decode)
+    }
+
+    fn decode_byte_array(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+        let decode = |decoder: &mut Self, buf: &mut Bytes, size: usize| {
+            if buf.remaining() < size {
+                return Err(DecodingError::InsufficientData);
+            }
+
+            let byte_array = buf.split_to(size);
+            let amf_value = AmfValue::ByteArray(byte_array);
+
+            decoder.complexes.push(amf_value.clone());
+            Ok(amf_value)
+        };
+
+        self.decode_complex(buf, decode)
+    }
+
+    fn decode_int_vec(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
         todo!()
     }
 
-    fn decode_byte_array(&mut self, buf: &mut Bytes) -> Result<Bytes, DecodingError> {
-        todo!()
+    fn decode_uint_vec(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+        let decode = |decoder: &mut Self, buf: &mut Bytes, item_count: usize| {
+            const ITEM_SIZE: usize = 4;
+
+            if buf.remaining() < item_count * ITEM_SIZE + 1 {
+                return Err(DecodingError::InsufficientData);
+            }
+
+            let fixed_length = buf.get_u8() == 0x01;
+
+            let mut vec_buf = buf.split_to(item_count * ITEM_SIZE);
+            let mut values = Vec::with_capacity(item_count * ITEM_SIZE);
+
+            while vec_buf.has_remaining() {
+                let uint = decode_u29(&mut vec_buf)?;
+                values.push(uint);
+            }
+
+            let amf_value = AmfValue::VectorUInt {
+                fixed_length,
+                values,
+            };
+
+            decoder.complexes.push(amf_value.clone());
+            Ok(amf_value)
+        };
+
+        self.decode_complex(buf, decode)
     }
 
-    fn decode_int_vec(&mut self, buf: &mut Bytes) -> Result<VectorInt, DecodingError> {
-        todo!()
-    }
+    fn decode_double_vec(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+        let decode = |decoder: &mut Self, buf: &mut Bytes, item_count: usize| {
+            const ITEM_SIZE: usize = 8;
 
-    fn decode_uint_vec(&mut self, buf: &mut Bytes) -> Result<VectorUInt, DecodingError> {
-        todo!()
-    }
+            if buf.remaining() < item_count * ITEM_SIZE + 1 {
+                return Err(DecodingError::InsufficientData);
+            }
 
-    fn decode_double_vec(&mut self, buf: &mut Bytes) -> Result<VectorDouble, DecodingError> {
-        todo!()
+            let fixed_length = buf.get_u8() == 0x01;
+
+            let mut vec_buf = buf.split_to(item_count * ITEM_SIZE);
+            let mut values = Vec::with_capacity(item_count * ITEM_SIZE);
+
+            while vec_buf.has_remaining() {
+                let double = vec_buf.get_f64();
+                values.push(double);
+            }
+
+            let amf_value = AmfValue::VectorDouble {
+                fixed_length,
+                values,
+            };
+
+            decoder.complexes.push(amf_value.clone());
+            Ok(amf_value)
+        };
+
+        self.decode_complex(buf, decode)
     }
 
     fn decode_object_vec(&mut self, buf: &mut Bytes) -> Result<VectorObject, DecodingError> {
