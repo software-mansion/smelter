@@ -1,10 +1,9 @@
 use std::{
     path::Path,
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
-use ::rtmp::RtmpServer;
 use smelter_render::{Framerate, RenderingMode, WgpuFeatures, web_renderer::ChromiumContext};
 use tokio::runtime::Runtime;
 
@@ -115,7 +114,7 @@ pub(crate) struct PipelineCtx {
     tokio_rt: Arc<Runtime>,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
     rtmp_state: Option<Arc<RtmpPipelineState>>,
-    rtmp_server: Option<Arc<Mutex<RtmpServer>>>,
+    // rtmp_server: Option<Arc<Mutex<RtmpServer>>>,
 }
 
 impl std::fmt::Debug for PipelineCtx {

@@ -5,7 +5,8 @@ use crossbeam_channel::bounded;
 use crate::{
     pipeline::{
         input::Input,
-        rtmp::state::{RtmpInputStateOptions, RtmpInputsState},
+        rtmp::rtmp_input::state::{RtmpInputStateOptions, RtmpInputsState},
+        utils::input_buffer::InputBuffer,
     },
     queue::QueueDataReceiver,
 };
@@ -23,12 +24,13 @@ impl RtmpServerInput {
         input_ref: Ref<InputId>,
         options: RtmpServerInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
-        let (Some(state), Some(_server)) = (&ctx.rtmp_state, &ctx.rtmp_server) else {
+        let Some(state) = &ctx.rtmp_state else {
             return Err(RtmpServerError::ServerNotRunning.into());
         };
 
         let (frame_sender, frame_receiver) = bounded(5);
         let (input_samples_sender, input_samples_receiver) = bounded(5);
+        let buffer = InputBuffer::new(&ctx, options.buffer);
 
         state.inputs.add_input(
             &input_ref,
@@ -38,11 +40,9 @@ impl RtmpServerInput {
                 frame_sender,
                 input_samples_sender,
                 video_decoders: options.video_decoders,
-                ctx: Arc::downgrade(&ctx),
+                buffer,
             },
         )?;
-
-        state.inputs.set_ctx(Arc::downgrade(&ctx));
 
         Ok((
             Input::RtmpServer(Self {
@@ -60,6 +60,6 @@ impl RtmpServerInput {
 
 impl Drop for RtmpServerInput {
     fn drop(&mut self) {
-        todo!()
+        self.rtmp_inputs_state.remove_input(&self.input_ref);
     }
 }
