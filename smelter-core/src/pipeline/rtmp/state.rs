@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex, mpsc::Receiver},
 };
 
-use rtmp::RtmpMediaData;
+use rtmp::RtmpEvent;
 
 use crate::prelude::*;
 
@@ -15,7 +15,7 @@ pub(crate) struct RtmpInputConnectionState {
     // audio/video decoder based on audioconfig/videoconfig
     pub app: Arc<str>,
     pub stream_key: Arc<str>,
-    pub receiver: Option<Receiver<RtmpMediaData>>,
+    pub receiver: Option<Receiver<RtmpEvent>>,
 }
 
 pub struct RtmpInputStateOptions {
@@ -48,7 +48,7 @@ impl RtmpInputsState {
         &self,
         app: Arc<str>,
         stream_key: Arc<str>,
-        receiver: Receiver<RtmpMediaData>,
+        receiver: Receiver<RtmpEvent>,
     ) -> Result<(), RtmpServerError> {
         let mut guard = self.0.lock().unwrap();
         let (_, input_state) = guard
@@ -88,7 +88,7 @@ impl RtmpInputsState {
     pub(crate) fn take_receiver(
         &self,
         input_ref: &Ref<InputId>,
-    ) -> Result<Option<Receiver<RtmpMediaData>>, RtmpServerError> {
+    ) -> Result<Option<Receiver<RtmpEvent>>, RtmpServerError> {
         let mut guard = self.0.lock().unwrap();
         let input_state = guard
             .get_mut(input_ref)

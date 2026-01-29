@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::amf0::DecodingError;
+
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum ParseError {
     #[error("Not enough data in FLV payload.")]
@@ -22,6 +24,9 @@ pub enum ParseError {
 
     #[error("Error parsing video tag: {0}")]
     Video(VideoTagParseError),
+
+    #[error("Error decoding amf0: {0}")]
+    Amf0(DecodingError),
 
     #[error("AVC decoder config received more than once in one stream.")]
     AvcConfigDuplication,

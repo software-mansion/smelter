@@ -1,7 +1,13 @@
 use std::collections::HashMap;
 
-pub mod decoding;
-pub mod encoding;
+mod decoding;
+mod encoding;
+
+mod error;
+
+pub use decoding::decode_amf_values;
+pub use encoding::encode_amf_values;
+pub use error::*;
 
 const NUMBER: u8 = 0x00;
 const BOOLEAN: u8 = 0x01;
@@ -31,5 +37,8 @@ pub enum AmfValue {
         timezone_offset: i16,
     },
     LongString(String),
-    TypedObject(String, HashMap<String, AmfValue>),
+    TypedObject {
+        class_name: String,
+        properties: HashMap<String, AmfValue>,
+    },
 }

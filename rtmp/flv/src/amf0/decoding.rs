@@ -1,29 +1,15 @@
 use bytes::{Buf, Bytes};
 use std::collections::HashMap;
-use thiserror::Error;
 use tracing::warn;
 
 use crate::amf0::*;
 
-#[derive(Error, Debug)]
-pub enum DecodingError {
-    #[error("Unknown data type: {0}")]
-    UnknownType(u8),
-
-    #[error("Insufficient data")]
-    InsufficientData,
-
-    #[error("Invalid UTF-8 string")]
-    InvalidUtf8,
-
-    #[error("Complex type reference out of bounds")]
-    OutOfBoundsReference,
-}
-
 const OBJECT_END_MARKER: [u8; 3] = [0x00, 0x00, 0x09];
 
-pub fn decode_amf_values(rtmp_msg_payload: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
-    let mut buf = Bytes::copy_from_slice(rtmp_msg_payload);
+/// Function used to decode AMF0 encoded messages. `amf_bytes` must be a payload of `rtmp` Data
+/// or Command message, encoded in AMF0.
+pub fn decode_amf_values(amf_bytes: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
+    let mut buf = Bytes::copy_from_slice(amf_bytes);
     let mut result = Vec::new();
     let mut decoder = Decoder::new();
 
@@ -73,8 +59,11 @@ impl Decoder {
             }
             LONG_STRING => AmfValue::LongString(self.decode_long_string(buf)?),
             TYPED_OBJECT => {
-                let (class_name, pairs) = self.decode_typed_object(buf)?;
-                AmfValue::TypedObject(class_name, pairs)
+                let (class_name, properties) = self.decode_typed_object(buf)?;
+                AmfValue::TypedObject {
+                    class_name,
+                    properties,
+                }
             }
 
             // TODO add switch to AMF3 (0x11)
@@ -204,8 +193,10 @@ impl Decoder {
         let class_name = self.decode_string(buf)?;
         let pairs = self.decode_object_pairs(buf)?;
 
-        self.complexes
-            .push(AmfValue::TypedObject(class_name.clone(), pairs.clone()));
+        self.complexes.push(AmfValue::TypedObject {
+            class_name: class_name.clone(),
+            properties: pairs.clone(),
+        });
         Ok((class_name, pairs))
     }
 

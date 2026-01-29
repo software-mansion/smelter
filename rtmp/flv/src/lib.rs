@@ -1,5 +1,7 @@
-pub mod amf0;
-pub mod error;
-pub mod tag;
+mod error;
+mod tag;
 
-pub use tag::{audio::*, video::*};
+pub mod amf0;
+
+pub use error::*;
+pub use tag::{PacketType, audio::*, scriptdata::*, video::*};

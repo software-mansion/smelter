@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex, atomic::AtomicBool, mpsc::channel},
 };
 
-use flv::{AudioTag, VideoTag, tag::PacketType};
+use flv::{AudioTag, PacketType, ScriptData, VideoTag};
 use tracing::{info, trace};
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
     negotiation::negotiate_rtmp_session,
     protocol::MessageType,
     server::{
-        AudioConfig, AudioData, OnConnectionCallback, RtmpConnection, RtmpMediaData, VideoConfig,
+        AudioConfig, AudioData, OnConnectionCallback, RtmpConnection, RtmpEvent, VideoConfig,
         VideoData,
     },
 };
@@ -62,16 +62,22 @@ pub(crate) fn handle_client(
                     .send(video_data)
                     .map_err(|_| RtmpError::ChannelClosed)?;
             }
-            _ => {} // possible metadata
+            MessageType::DataMessageAmf0 => {
+                let metadata = parse_data_message(msg)?;
+                sender
+                    .send(metadata)
+                    .map_err(|_| RtmpError::ChannelClosed)?;
+            }
+            _ => {}
         }
         Ok(())
     })
 }
 
-fn parse_audio(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
+fn parse_audio(msg: RtmpMessage) -> Result<RtmpEvent, RtmpError> {
     let tag = AudioTag::parse(msg.payload)?;
     match tag.packet_type {
-        PacketType::Config => Ok(RtmpMediaData::AudioConfig(AudioConfig {
+        PacketType::Config => Ok(RtmpEvent::AudioConfig(AudioConfig {
             codec: tag.codec,
             sound_rate: tag.sound_rate,
             channels: tag.sound_type,
@@ -79,7 +85,7 @@ fn parse_audio(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
         })),
         PacketType::Data => {
             let dts = msg.timestamp as i64;
-            Ok(RtmpMediaData::Audio(AudioData {
+            Ok(RtmpEvent::Audio(AudioData {
                 pts: dts,
                 dts,
                 codec: tag.codec,
@@ -91,17 +97,17 @@ fn parse_audio(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
     }
 }
 
-fn parse_video(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
+fn parse_video(msg: RtmpMessage) -> Result<RtmpEvent, RtmpError> {
     let tag = VideoTag::parse(msg.payload)?;
     match tag.packet_type {
-        PacketType::Config => Ok(RtmpMediaData::VideoConfig(VideoConfig {
+        PacketType::Config => Ok(RtmpEvent::VideoConfig(VideoConfig {
             codec: tag.codec,
             data: tag.data,
         })),
         PacketType::Data => {
             let dts = msg.timestamp as i64;
             let pts = tag.composition_time.map_or(dts, |cts| dts + cts as i64);
-            Ok(RtmpMediaData::Video(VideoData {
+            Ok(RtmpEvent::Video(VideoData {
                 pts,
                 dts,
                 codec: tag.codec,
@@ -111,4 +117,9 @@ fn parse_video(msg: RtmpMessage) -> Result<RtmpMediaData, RtmpError> {
             }))
         }
     }
+}
+
+fn parse_data_message(msg: RtmpMessage) -> Result<RtmpEvent, RtmpError> {
+    let tag = ScriptData::parse(msg.payload)?;
+    Ok(RtmpEvent::Metadata(tag))
 }

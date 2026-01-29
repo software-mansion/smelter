@@ -11,18 +11,21 @@ use std::{
 };
 
 use bytes::Bytes;
-use flv::{AudioChannels, AudioCodec, FrameType, VideoCodec};
 use tracing::{error, info};
+
+use flv::{AudioChannels, AudioCodec, ScriptData, VideoCodec, VideoFrameType};
 
 use crate::{error::RtmpError, handle_client::handle_client};
 
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
 
-pub enum RtmpMediaData {
+pub enum RtmpEvent {
     Video(VideoData),
     VideoConfig(VideoConfig),
     Audio(AudioData),
     AudioConfig(AudioConfig),
+
+    Metadata(ScriptData),
 }
 
 #[derive(Debug, Clone)]
@@ -48,7 +51,7 @@ pub struct VideoData {
     pub pts: i64,
     pub dts: i64,
     pub codec: VideoCodec,
-    pub frame_type: FrameType,
+    pub frame_type: VideoFrameType,
     pub composition_time: Option<i32>,
     pub data: Bytes,
 }
@@ -62,7 +65,7 @@ pub struct VideoConfig {
 pub struct RtmpConnection {
     pub app: Arc<str>,
     pub stream_key: Arc<str>,
-    pub receiver: Receiver<RtmpMediaData>,
+    pub receiver: Receiver<RtmpEvent>,
 }
 
 // TODO add SSL/TLS
