@@ -6,7 +6,7 @@ use std::{
 
 use ash::vk;
 use encode_parameter_sets::{pps, sps};
-use yuv_converter::Converter;
+use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
 
 use crate::{
     EncodedOutputChunk, Frame, RawFrameData, VulkanCommonError,
@@ -15,12 +15,12 @@ use crate::{
     wrappers::{
         Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
         ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool, Tracker,
-        TrackerKind, VideoEncodeQueueExt, VideoQueueExt, VideoSession, VideoSessionParameters,
+        TrackerKind, TrackerWait, VideoEncodeQueueExt, VideoQueueExt, VideoSession,
+        VideoSessionParameters,
     },
 };
 
 mod encode_parameter_sets;
-pub(crate) mod yuv_converter;
 
 const MB: u64 = 1024 * 1024;
 
@@ -44,9 +44,17 @@ pub enum VulkanEncoderError {
     #[error(
         "The byte length of the provided frame ({bytes}) is not the same as the picture size calculated from the dimensions ({size_from_resolution})"
     )]
-    InconsistentPictureDimensions {
+    InconsistentPictureByteSize {
         bytes: usize,
         size_from_resolution: usize,
+    },
+
+    #[error(
+        "The dimensions of the provided frame ({provided_dimensions:?}) are not the same as the expected dimensions ({expected_dimensions:?})"
+    )]
+    InconsistentPictureDimensions {
+        provided_dimensions: wgpu::Extent3d,
+        expected_dimensions: wgpu::Extent3d,
     },
 
     #[error("The profile '{0:?}' is not supported by this device")]
@@ -63,6 +71,9 @@ pub enum VulkanEncoderError {
         field: &'static str,
         problem: String,
     },
+
+    #[error("Wgpu device error: {0}")]
+    WgpuDeviceError(#[from] wgpu::hal::DeviceError),
 }
 
 struct VideoSessionResources<'a> {
@@ -264,7 +275,7 @@ struct EncodeFeedback {
 pub(crate) enum EncoderTrackerWaitState {
     InitializeEncoder,
     CopyBufferToImage,
-    Convert,
+    CopyImageToImage,
     Encode,
 }
 
@@ -313,13 +324,13 @@ pub struct VulkanEncoder<'a> {
     session_resources: VideoSessionResources<'a>,
     idr_period_counter: u32,
     idr_period: u32,
+    input_image: Arc<Image>,
     output_buffer: Buffer,
     idr_pic_id: u16,
     frame_num: u32,
     pic_order_cnt: u8,
     active_reference_slots: VecDeque<(usize, vk::native::StdVideoEncodeH264ReferenceInfo)>,
     rate_control: RateControl,
-    converter: Option<Converter>,
     encoding_device: Arc<EncodingDevice>,
 }
 
@@ -340,26 +351,6 @@ pub struct FullEncoderParameters {
 
 impl VulkanEncoder<'_> {
     const OUTPUT_BUFFER_LEN: u64 = 4 * MB;
-
-    pub(crate) fn new_with_converter(
-        device: Arc<EncodingDevice>,
-        parameters: FullEncoderParameters,
-    ) -> Result<Self, VulkanEncoderError> {
-        let mut enc = Self::new(device.clone(), parameters)?;
-
-        let conv = Converter::new(
-            device.clone(),
-            parameters.width.get(),
-            parameters.height.get(),
-            &enc.profile_info,
-            enc.tracker.image_layout_tracker.clone(),
-        )
-        .unwrap();
-
-        enc.converter = Some(conv);
-
-        Ok(enc)
-    }
 
     pub(crate) fn new(
         encoding_device: Arc<EncodingDevice>,
@@ -402,6 +393,33 @@ impl VulkanEncoder<'_> {
             EncoderTrackerWaitState::InitializeEncoder,
         )?;
 
+        let queue_indices = [
+            encoding_device.h264_encode_queues.family_index as u32,
+            encoding_device.queues.wgpu.family_index as u32,
+        ];
+        let encode_image_info = vk::ImageCreateInfo::default()
+            .flags(
+                vk::ImageCreateFlags::MUTABLE_FORMAT
+                    | vk::ImageCreateFlags::EXTENDED_USAGE
+                    | vk::ImageCreateFlags::VIDEO_PROFILE_INDEPENDENT_KHR,
+            )
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
+            .extent(session_resources.video_session.max_coded_extent.into())
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR)
+            .sharing_mode(vk::SharingMode::CONCURRENT)
+            .queue_family_indices(&queue_indices)
+            .initial_layout(vk::ImageLayout::UNDEFINED);
+        let encode_image = Image::new(
+            encoding_device.allocator.clone(),
+            &encode_image_info,
+            tracker.image_layout_tracker.clone(),
+        )?;
+
         Ok(Self {
             idr_period_counter: 0,
             idr_pic_id: 0,
@@ -411,13 +429,13 @@ impl VulkanEncoder<'_> {
             profile: parameters.profile,
             profile_info,
             encoding_device,
+            input_image: Arc::new(encode_image),
             tracker,
             query_pool,
             session_resources,
             idr_period: parameters.idr_period.get(),
             output_buffer,
             rate_control: parameters.rate_control,
-            converter: None,
         })
     }
 
@@ -520,6 +538,7 @@ impl VulkanEncoder<'_> {
         self.session_resources.rate_control = rate_control;
     }
 
+    // TODO: Maybe we should reuse `input_image` here, instead of creating a new image
     fn transfer_buffer_to_image(
         &mut self,
         frame: &Frame<RawFrameData>,
@@ -532,7 +551,7 @@ impl VulkanEncoder<'_> {
 
         if frame.data.width as usize * frame.data.height as usize * 3 / 2 != frame.data.frame.len()
         {
-            return Err(VulkanEncoderError::InconsistentPictureDimensions {
+            return Err(VulkanEncoderError::InconsistentPictureByteSize {
                 bytes: frame.data.frame.len(),
                 size_from_resolution: frame.data.width as usize * frame.data.height as usize * 3
                     / 2,
@@ -641,6 +660,146 @@ impl VulkanEncoder<'_> {
             )?;
 
         Ok((image, buffer))
+    }
+
+    fn copy_wgpu_texture_to_image(
+        &mut self,
+        frame: &Frame<wgpu::Texture>,
+    ) -> Result<wgpu::hal::vulkan::CommandEncoder, VulkanEncoderError> {
+        let input_image_size = wgpu::Extent3d {
+            width: self.input_image.extent.width,
+            height: self.input_image.extent.height,
+            depth_or_array_layers: self.input_image.extent.depth,
+        };
+        if frame.data.size() != input_image_size {
+            return Err(VulkanEncoderError::InconsistentPictureDimensions {
+                provided_dimensions: frame.data.size(),
+                expected_dimensions: input_image_size,
+            });
+        }
+
+        let wgpu_device = unsafe {
+            self.encoding_device
+                .wgpu_device()
+                .as_hal::<VkApi>()
+                .unwrap()
+        };
+        let wgpu_queue = unsafe { self.encoding_device.wgpu_queue().as_hal::<VkApi>().unwrap() };
+        let frame_image = unsafe { frame.data.as_hal::<VkApi>().unwrap().raw_handle() };
+
+        let mut encoder = unsafe {
+            wgpu_device.create_command_encoder(&wgpu::hal::CommandEncoderDescriptor {
+                label: None,
+                queue: &wgpu_queue,
+            })
+        }?;
+
+        unsafe { encoder.begin_encoding(None)? }
+        let buffer = unsafe { encoder.raw_handle() };
+
+        // TODO: This should be abstracted away to some helper function
+        let mut layout = self
+            .tracker
+            .image_layout_tracker
+            .lock()
+            .unwrap()
+            .map
+            .get(&self.input_image.key())
+            .unwrap()
+            .clone();
+
+        self.input_image.transition_layout_raw(
+            buffer,
+            &mut layout,
+            vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::TRANSFER,
+            vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_WRITE,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            },
+        )?;
+
+        unsafe {
+            self.encoding_device.device.cmd_copy_image2(
+                buffer,
+                &vk::CopyImageInfo2::default()
+                    .src_image(frame_image)
+                    .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                    .dst_image(self.input_image.image)
+                    .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    .regions(&[
+                        vk::ImageCopy2::default()
+                            .src_subresource(
+                                vk::ImageSubresourceLayers::default()
+                                    .aspect_mask(vk::ImageAspectFlags::PLANE_0)
+                                    .mip_level(0)
+                                    .base_array_layer(0)
+                                    .layer_count(1),
+                            )
+                            .dst_subresource(
+                                vk::ImageSubresourceLayers::default()
+                                    .aspect_mask(vk::ImageAspectFlags::PLANE_0)
+                                    .mip_level(0)
+                                    .base_array_layer(0)
+                                    .layer_count(1),
+                            )
+                            .extent(self.input_image.extent),
+                        vk::ImageCopy2::default()
+                            .src_subresource(
+                                vk::ImageSubresourceLayers::default()
+                                    .aspect_mask(vk::ImageAspectFlags::PLANE_1)
+                                    .mip_level(0)
+                                    .base_array_layer(0)
+                                    .layer_count(1),
+                            )
+                            .dst_subresource(
+                                vk::ImageSubresourceLayers::default()
+                                    .aspect_mask(vk::ImageAspectFlags::PLANE_1)
+                                    .mip_level(0)
+                                    .base_array_layer(0)
+                                    .layer_count(1),
+                            )
+                            .extent(vk::Extent3D {
+                                width: self.input_image.extent.width / 2,
+                                height: self.input_image.extent.height / 2,
+                                depth: 1,
+                            }),
+                    ]),
+            )
+        };
+
+        self.tracker.wait(u64::MAX)?;
+
+        let mut wgpu_fence = wgpu::hal::vulkan::Fence::TimelineSemaphore(
+            self.tracker.semaphore_tracker.semaphore.semaphore,
+        );
+        let signal_value = self.tracker.semaphore_tracker.next_sem_value();
+
+        unsafe {
+            wgpu_queue.submit(
+                &[&encoder.end_encoding()?],
+                &[],
+                (&mut wgpu_fence, signal_value),
+            )?;
+        }
+
+        self.tracker.semaphore_tracker.wait_for = Some(TrackerWait {
+            value: signal_value,
+            _state: EncoderTrackerWaitState::CopyImageToImage,
+        });
+
+        self.tracker
+            .image_layout_tracker
+            .lock()
+            .unwrap()
+            .map
+            .insert(self.input_image.key(), layout);
+
+        Ok(encoder)
     }
 
     fn encode(
@@ -1032,22 +1191,16 @@ impl VulkanEncoder<'_> {
 
     /// # Safety
     /// - The texture cannot be a surface texture
-    /// - The texture has to be transitioned to [`wgpu::TextureUses::RESOURCE`] usage
+    /// - The texture has to be transitioned to [`wgpu::TextureUses::COPY_SRC`] usage
     pub unsafe fn encode_texture(
         &mut self,
         frame: Frame<wgpu::Texture>,
         force_idr: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        let convert_state = unsafe {
-            self.converter
-                .as_ref()
-                .unwrap()
-                .convert(frame.data, &mut self.tracker)
-        }
-        .unwrap();
+        let _cmd_encoder = self.copy_wgpu_texture_to_image(&frame)?;
 
         let is_keyframe = force_idr || self.idr_period_counter == 0;
-        let result = self.encode(convert_state.image, force_idr)?;
+        let result = self.encode(self.input_image.clone(), force_idr)?;
 
         Ok(EncodedOutputChunk {
             data: result,

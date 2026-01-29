@@ -759,7 +759,7 @@ impl VulkanDecoder<'_> {
         let wgpu_texture = unsafe {
             self.decoding_device
                 .wgpu_device
-                .create_texture_from_hal::<wgpu::hal::vulkan::Api>(
+                .create_texture_from_hal::<VkApi>(
                     hal_texture,
                     &wgpu::TextureDescriptor {
                         label: Some("vulkan video output texture"),

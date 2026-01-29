@@ -94,18 +94,20 @@ impl VideoEncoder for VulkanH264Encoder {
             },
             VideoEncoderConfig {
                 resolution: options.resolution,
-                output_format: OutputFrameFormat::RgbaWgpuTexture,
+                output_format: OutputFrameFormat::Nv12WgpuTexture,
                 extradata: None,
             },
         ))
     }
 
     fn encode(&mut self, frame: Frame, force_keyframe: bool) -> Vec<EncodedOutputChunk> {
-        let FrameData::Rgba8UnormWgpuTexture(texture) = frame.data else {
+        let FrameData::Nv12WgpuTexture(texture) = frame.data else {
             error!("Unsupported pixel format {:?}. Dropping frame.", frame.data);
             return Vec::new();
         };
 
+        // TODO: It would be better if we'd "transition texture" as part of the previous submit call (rgba to nv12 conversion, etc.)
+        // to reduce number of submits
         transition_texture(&self.ctx, &texture);
         let result = unsafe {
             self.encoder.encode(
@@ -148,7 +150,7 @@ fn transition_texture(ctx: &GraphicsContext, texture: &wgpu::Texture) {
         [].into_iter(),
         [wgpu::TextureTransition {
             texture,
-            state: wgpu::TextureUses::RESOURCE,
+            state: wgpu::TextureUses::COPY_SRC,
             selector: None,
         }]
         .into_iter(),
