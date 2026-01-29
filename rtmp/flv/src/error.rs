@@ -67,6 +67,9 @@ pub enum DecodingError {
 
     #[error("Complex type reference out of bounds")]
     OutOfBoundsReference,
+
+    #[error("Reference points to object of different amf type than expected.")]
+    InvalidReferenceType,
 }
 
 #[derive(Error, Debug)]
