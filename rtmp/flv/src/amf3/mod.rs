@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use bytes::Bytes;
+
 mod decoding;
 mod encoding;
 
@@ -40,7 +42,11 @@ pub enum AmfValue {
     },
     Object {
         class_name: Option<String>,
+        sealed_count: usize,
+        values: HashMap<String, AmfValue>,
     },
+    Xml(String),
+    ByteArray(Bytes),
     VectorInt {
         fixed_length: bool,
         values: Vec<i32>,
@@ -57,5 +63,9 @@ pub enum AmfValue {
         fixed_length: bool,
         class_name: String,
         values: Vec<AmfValue>,
+    },
+    Dictionary {
+        weak_references: bool,
+        values: Vec<(AmfValue, AmfValue)>,
     },
 }
