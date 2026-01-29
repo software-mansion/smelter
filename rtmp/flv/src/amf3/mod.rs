@@ -1,4 +1,3 @@
-#![allow(dead_code)] // XXX: Remove before merge
 use std::collections::HashMap;
 
 use bytes::Bytes;
