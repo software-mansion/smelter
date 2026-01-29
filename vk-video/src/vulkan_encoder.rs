@@ -662,7 +662,7 @@ impl VulkanEncoder<'_> {
         Ok((image, buffer))
     }
 
-    fn transfer_image_to_image(
+    fn copy_wgpu_texture_to_image(
         &mut self,
         frame: &Frame<wgpu::Texture>,
     ) -> Result<wgpu::hal::vulkan::CommandEncoder, VulkanEncoderError> {
@@ -697,6 +697,7 @@ impl VulkanEncoder<'_> {
         unsafe { encoder.begin_encoding(None)? }
         let buffer = unsafe { encoder.raw_handle() };
 
+        // TODO: This should be abstracted away to some helper function
         let mut layout = self
             .tracker
             .image_layout_tracker
@@ -1196,7 +1197,7 @@ impl VulkanEncoder<'_> {
         frame: Frame<wgpu::Texture>,
         force_idr: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        let _cmd_encoder = self.transfer_image_to_image(&frame)?;
+        let _cmd_encoder = self.copy_wgpu_texture_to_image(&frame)?;
 
         let is_keyframe = force_idr || self.idr_period_counter == 0;
         let result = self.encode(self.input_image.clone(), force_idr)?;
