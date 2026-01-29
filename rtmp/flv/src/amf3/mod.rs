@@ -1,11 +1,10 @@
+#![allow(dead_code)] // XXX: Remove before merge
 use std::collections::HashMap;
 
 use bytes::Bytes;
 
 mod decoding;
 mod encoding;
-
-mod error;
 
 const UNDEFINED: u8 = 0x00;
 const NULL: u8 = 0x01;
@@ -43,7 +42,7 @@ pub enum AmfValue {
     Object {
         class_name: Option<String>,
         sealed_count: usize,
-        values: HashMap<String, AmfValue>,
+        values: Vec<(String, AmfValue)>,
     },
     Xml(String),
     ByteArray(Bytes),

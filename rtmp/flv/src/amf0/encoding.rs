@@ -2,7 +2,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
 use tracing::warn;
 
-use crate::amf0::*;
+use crate::{EncodingError, amf0::*};
 
 pub fn encode_amf_values(amf_values: &[AmfValue]) -> Result<Bytes, EncodingError> {
     let mut buf = BytesMut::new();

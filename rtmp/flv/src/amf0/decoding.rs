@@ -2,7 +2,7 @@ use bytes::{Buf, Bytes};
 use std::collections::HashMap;
 use tracing::warn;
 
-use crate::amf0::*;
+use crate::{DecodingError, amf0::*};
 
 const OBJECT_END_MARKER: [u8; 3] = [0x00, 0x00, 0x09];
 
