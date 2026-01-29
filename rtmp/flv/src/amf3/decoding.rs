@@ -110,7 +110,9 @@ impl Decoder {
                     values,
                 }
             }
+            _ => return Err(DecodingError::UnknownType(marker)),
         };
+        Ok(amf_value)
     }
 
     fn decode_integer(&mut self, buf: &mut Bytes) -> Result<i32, DecodingError> {
@@ -168,4 +170,33 @@ impl Decoder {
     fn decode_dictionary(&mut self, buf: &mut Bytes) -> Result<Dictionary, DecodingError> {
         todo!()
     }
+}
+
+fn decode_u29(buf: &mut Bytes) -> Result<u32, DecodingError> {
+    let mut result: u32 = 0;
+    let mut next_byte_present = false;
+    for _ in 0..3 {
+        if buf.is_empty() {
+            return Err(DecodingError::InsufficientData);
+        }
+
+        let byte = buf.get_u8();
+        result <<= 8;
+        result |= (byte & 0x7F) as u32;
+        next_byte_present = ((byte >> 7) & 0b1) == 1;
+        if !next_byte_present {
+            break;
+        }
+    }
+    if next_byte_present {
+        if buf.is_empty() {
+            return Err(DecodingError::InsufficientData);
+        }
+
+        let byte = buf.get_u8();
+        result <<= 8;
+        result |= byte as u32;
+    }
+
+    Ok(result)
 }
