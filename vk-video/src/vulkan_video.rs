@@ -285,7 +285,7 @@ impl BytesEncoder {
     }
 }
 
-/// An encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::Rgba8Unorm`])
+/// An encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`])
 pub struct WgpuTexturesEncoder {
     pub(crate) vulkan_encoder: VulkanEncoder<'static>,
 }

@@ -15,30 +15,41 @@ A library for hardware video decoding and encoding using Vulkan Video, with [wgp
 
 ## Overview
 
-The goal of this library is to provide easy access to hardware video coding. You can use it to decode a video frame into a `Vec<u8>` with pixel data, or into a [`wgpu::Texture`]. Currently, we only support H.264 (aka AVC or MPEG 4 Part 10) decoding, but we plan to support at least H.264 encoding and hopefully other codecs supported by Vulkan Video.
+The goal of this library is to provide easy access to hardware video coding. You can use it to decode and encode a video frame to/from `Vec<u8>` with pixel data, or [`wgpu::Texture`]. Currently, we only support H.264 (aka AVC or MPEG 4 Part 10) but we plan to support other codecs supported by Vulkan Video.
 
 An advantage of using this library with wgpu is that decoded video frames never leave the GPU memory. There's no copying the frames to RAM and back to the GPU, so it should be quite fast if you want to use them for rendering.
 
 This library was developed as a part of [smelter, a tool for video composition](https://smelter.dev/).
 
-## Usage
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/software-mansion/smelter/f70f6087d53ec046824c0c41dc8a64a19bd943cf/tools/assets/smelter-logo-transparent.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/software-mansion/smelter/f70f6087d53ec046824c0c41dc8a64a19bd943cf/tools/assets/smelter-logo-background.svg">
+  <img height="60" alt="Smelter" src="https://raw.githubusercontent.com/software-mansion/smelter/f70f6087d53ec046824c0c41dc8a64a19bd943cf/tools/assets/smelter-logo-background.svg">
+</picture>
 
-```rs
+## Decode video frame to [`wgpu::Texture`]
+
+```rust
 fn decode_video(
     window: &winit::window::Window,
     mut encoded_video_reader: impl std::io::Read,
 ) {
     let instance = vk_video::VulkanInstance::new().unwrap();
-    let surface = instance.wgpu_instance.create_surface(window).unwrap();
-    let device = instance
+    let surface = instance.wgpu_instance().create_surface(window).unwrap();
+    let adapter = instance.create_adapter(Some(&surface)).unwrap();
+    let device = adapter
         .create_device(
             wgpu::Features::empty(),
+            wgpu::ExperimentalFeatures::disabled(),
             wgpu::Limits::default(),
-            Some(&surface),
         )
         .unwrap();
 
-    let mut decoder = device.create_wgpu_textures_decoder().unwrap();
+    let mut decoder = device
+        .create_wgpu_textures_decoder(
+            vk_video::parameters::DecoderParameters::default()
+        ).unwrap();
+
     let mut buffer = vec![0; 4096];
 
     while let Ok(n) = encoded_video_reader.read(&mut buffer) {
@@ -46,7 +57,10 @@ fn decode_video(
             return;
         }
 
-        let decoded_frames = decoder.decode(&buffer[..n], None).unwrap();
+        let decoded_frames = decoder.decode(vk_video::EncodedInputChunk {
+            data: &buffer[..n],
+            pts: None
+        }).unwrap();
 
         for frame in decoded_frames {
             // Each frame contains a wgpu::Texture you can sample for drawing.
@@ -56,6 +70,63 @@ fn decode_video(
     }
 }
 ```
+
+## Encode video frame from [`wgpu::Texture`]
+
+```rust
+fn encode_video(
+    window: &winit::window::Window,
+    frame_receiver: std::sync::mpsc::Receiver<wgpu::Texture>,
+) {
+    use std::num::NonZeroU32;
+
+    let instance = vk_video::VulkanInstance::new().unwrap();
+    let surface = instance.wgpu_instance().create_surface(window).unwrap();
+    let adapter = instance.create_adapter(Some(&surface)).unwrap();
+    let device = adapter
+        .create_device(
+            wgpu::Features::empty(),
+            wgpu::ExperimentalFeatures::disabled(),
+            wgpu::Limits::default(),
+        )
+        .unwrap();
+
+    let mut encoder = device
+        .create_wgpu_textures_encoder(
+            device
+                .encoder_parameters_high_quality(
+                    vk_video::parameters::VideoParameters {
+                        width: NonZeroU32::new(1920).unwrap(),
+                        height: NonZeroU32::new(1080).unwrap(),
+                        target_framerate: 30.into(),
+                    },
+                    vk_video::parameters::RateControl::VariableBitrate {
+                        average_bitrate: 500_000,
+                        max_bitrate: 2_000_000,
+                        virtual_buffer_size: std::time::Duration::from_secs(2),
+                    },
+                )
+                .unwrap(),
+        )
+        .unwrap();
+
+    for frame in frame_receiver.iter() {
+        // Encodes NV12 texture and returns encoded frame bytes
+        let encoded_frame = unsafe {
+            encoder
+                .encode(
+                    vk_video::Frame {
+                        data: frame,
+                        pts: None,
+                    },
+                    false,
+                )
+                .unwrap()
+        };
+    }
+}
+```
+
 Be sure to check out our examples, especially the `player` example, which is a simple video player built using this library and wgpu. Because the player is very simple, you need to extract the raw h264 data from a container before usage. Here's an example on how to extract the h264 bytestream out of an mp4 file using ffmpeg:
 
 ```sh
