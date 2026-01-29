@@ -120,6 +120,7 @@ impl VulkanDecoder<'_> {
         let tracker = Tracker::new(
             decoding_device.vulkan_device.device.clone(),
             command_buffer_pools,
+            Some("decoder"),
         )?;
 
         let usage_info = vk::VideoDecodeUsageInfoKHR::default().video_usage_hints(usage_flags);

@@ -132,6 +132,9 @@ pub enum VulkanCommonError {
 
     #[error("Tried to unregister image {0:x?} that was not registered")]
     UnregisteredNonexistentImage(ImageKey),
+
+    #[error("Unsupported image aspect: {0:?}")]
+    UnsupportedImageAspect(vk::ImageAspectFlags)
 }
 
 /// Represents a chunk of encoded video data used for decoding.

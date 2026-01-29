@@ -914,7 +914,7 @@ impl ReferenceContext {
             .iter()
             .enumerate()
             .find(|(_, pic)| match pic.LongTermPicNum {
-                Some(num) => num == picture_to_shift.into(),
+                Some(num) => num == picture_to_shift as u64,
                 None => false,
             })
             .map(|(i, _)| i)
