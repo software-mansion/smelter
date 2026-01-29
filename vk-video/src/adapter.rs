@@ -11,9 +11,7 @@ use crate::{
     VulkanDevice, VulkanInitError, VulkanInstance,
     capabilities::EncodeCapabilities,
     device::{
-        DECODE_EXTENSIONS, ENCODE_EXTENSIONS, REQUIRED_EXTENSIONS,
-        caps::{DecodeCapabilities, NativeDecodeCapabilities, NativeEncodeCapabilities},
-        queues::{QueueIndex, QueueIndices},
+        DEBUG_UTILS_EXTENSION, DECODE_EXTENSIONS, ENCODE_EXTENSIONS, REQUIRED_EXTENSIONS, caps::{DecodeCapabilities, NativeDecodeCapabilities, NativeEncodeCapabilities}, queues::{QueueIndex, QueueIndices}
     },
 };
 
@@ -83,6 +81,8 @@ impl<'a> VulkanAdapter<'a> {
         if !has_decode_extensions && !has_encode_extensions {
             return None;
         }
+
+        let has_debug_utils = contains_extensions(DEBUG_UTILS_EXTENSION, &extensions);
 
         let queues_len =
             unsafe { instance.get_physical_device_queue_family_properties2_len(device) };
@@ -198,6 +198,7 @@ impl<'a> VulkanAdapter<'a> {
             device_properties: properties,
             supports_decoding: has_decode_extensions,
             supports_encoding: has_encode_extensions,
+            supports_debug_utils: has_debug_utils,
             decode_capabilities: DecodeCapabilities {
                 h264: decode_capabilities
                     .as_ref()
@@ -280,6 +281,7 @@ pub struct AdapterInfo {
     pub device_type: wgpu::DeviceType,
     pub supports_decoding: bool,
     pub supports_encoding: bool,
+    pub supports_debug_utils: bool,
     pub device_properties: vk::PhysicalDeviceProperties,
     pub decode_capabilities: DecodeCapabilities,
     pub encode_capabilities: EncodeCapabilities,

@@ -1,9 +1,10 @@
 use std::{
     collections::hash_map::Entry,
+    ffi::CStr,
     sync::{Arc, Mutex},
 };
 
-use ash::vk;
+use ash::vk::{self, Handle};
 use rustc_hash::FxHashMap;
 
 use crate::{VulkanCommonError, wrappers::ImageKey};
@@ -16,18 +17,27 @@ pub(crate) struct TimelineSemaphore {
 }
 
 impl TimelineSemaphore {
-    pub(crate) fn new(device: Arc<Device>, initial_value: u64) -> Result<Self, VulkanCommonError> {
+    pub(crate) fn new(
+        device: Arc<Device>,
+        initial_value: u64,
+        label: Option<&str>,
+    ) -> Result<Self, VulkanCommonError> {
         let mut create_type_info = vk::SemaphoreTypeCreateInfo::default()
             .semaphore_type(vk::SemaphoreType::TIMELINE)
             .initial_value(initial_value);
         let create_info = vk::SemaphoreCreateInfo::default().push_next(&mut create_type_info);
-
         let semaphore = unsafe { device.create_semaphore(&create_info, None)? };
+
+        device.set_label(semaphore, label)?;
 
         Ok(Self { semaphore, device })
     }
 
-    pub(crate) fn wait(&self, timeout: u64, value: SemaphoreWaitValue) -> Result<(), VulkanCommonError> {
+    pub(crate) fn wait(
+        &self,
+        timeout: u64,
+        value: SemaphoreWaitValue,
+    ) -> Result<(), VulkanCommonError> {
         let wait_info = vk::SemaphoreWaitInfo::default()
             .semaphores(std::slice::from_ref(&self.semaphore))
             .values(std::slice::from_ref(&value.0));
@@ -71,8 +81,12 @@ impl<K: TrackerKind> Tracker<K> {
     pub(crate) fn new(
         device: Arc<Device>,
         command_buffer_pools: K::CommandBufferPools,
+        label: Option<&str>,
     ) -> Result<Self, VulkanCommonError> {
-        let semaphore_tracker = SemaphoreTracker::new(device)?;
+        let semaphore_tracker = SemaphoreTracker::new(
+            device,
+            label.map(|name| format!("{} semaphore", name)).as_deref(),
+        )?;
 
         Ok(Self {
             semaphore_tracker,
@@ -91,7 +105,11 @@ impl<K: TrackerKind> Tracker<K> {
         Ok(())
     }
 
-    pub(crate) fn wait_for(&mut self, value: SemaphoreWaitValue, timeout: u64) -> Result<(), VulkanCommonError> {
+    pub(crate) fn wait_for(
+        &mut self,
+        value: SemaphoreWaitValue,
+        timeout: u64,
+    ) -> Result<(), VulkanCommonError> {
         self.semaphore_tracker.wait_for(value, timeout)?;
         self.command_buffer_pools.mark_submitted_as_free(value);
         Ok(())
@@ -106,12 +124,12 @@ pub(crate) struct SemaphoreTracker<S> {
 }
 
 impl<S> SemaphoreTracker<S> {
-    pub(crate) fn new(device: Arc<Device>) -> Result<Self, VulkanCommonError> {
+    pub(crate) fn new(device: Arc<Device>, label: Option<&str>) -> Result<Self, VulkanCommonError> {
         Ok(Self {
             next_value: 1,
             wait_for: None,
             last_waited_for: None,
-            semaphore: TimelineSemaphore::new(device, 0)?,
+            semaphore: TimelineSemaphore::new(device, 0, label)?,
         })
     }
 
@@ -122,7 +140,10 @@ impl<S> SemaphoreTracker<S> {
     }
 
     /// This is a noop if there's nothing to wait for
-    pub(crate) fn wait_for_all(&mut self, timeout: u64) -> Result<Option<SemaphoreWaitValue>, VulkanCommonError> {
+    pub(crate) fn wait_for_all(
+        &mut self,
+        timeout: u64,
+    ) -> Result<Option<SemaphoreWaitValue>, VulkanCommonError> {
         if let Some(wait_for) = self.wait_for.as_ref() {
             let waited_for = wait_for.value;
             self.semaphore.wait(timeout, waited_for)?;
@@ -134,7 +155,11 @@ impl<S> SemaphoreTracker<S> {
         Ok(None)
     }
 
-    pub(crate) fn wait_for(&mut self, value: SemaphoreWaitValue, timeout: u64) -> Result<(), VulkanCommonError> {
+    pub(crate) fn wait_for(
+        &mut self,
+        value: SemaphoreWaitValue,
+        timeout: u64,
+    ) -> Result<(), VulkanCommonError> {
         if let Some(last) = self.last_waited_for.as_ref()
             && *last >= value
         {
