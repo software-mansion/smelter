@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct RtmpInput {
-    // TODO add description
-    pub app: Arc<str>,
-    pub stream_key: Arc<str>,
+pub struct FFmpegRtmpInput {
+    /// URL where the RTMP server will listen for incoming stream.
+    /// Format: `rtmp://<ip_address>:<port>`
+    pub url: Arc<str>,
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.
     pub required: Option<bool>,
@@ -17,18 +17,18 @@ pub struct RtmpInput {
     /// frames.
     pub offset_ms: Option<f64>,
     /// Assigns which decoder should be used for media encoded with a specific codec.
-    pub decoder_map: Option<HashMap<InputRtmpCodec, RtmpVideoDecoderOptions>>,
+    pub decoder_map: Option<HashMap<InputFFmpegRtmpCodec, FFmpegRtmpVideoDecoderOptions>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
-pub enum InputRtmpCodec {
+pub enum InputFFmpegRtmpCodec {
     H264,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub enum RtmpVideoDecoderOptions {
+pub enum FFmpegRtmpVideoDecoderOptions {
     /// Software H264 decoder based on FFmpeg.
     FfmpegH264,
 

@@ -4,12 +4,13 @@ use std::{
     time::Duration,
 };
 
-use rtmp::{RtmpConnection, RtmpError, RtmpServer, ServerConfig};
-use tracing::{error, warn};
+use rtmp::{RtmpError, RtmpServer, ServerConfig};
+use tracing::warn;
 
-use super::state::RtmpInputsState;
-
-use crate::prelude::*;
+use crate::{
+    pipeline::rtmp::rtmp_input::{handle_on_connection, state::RtmpInputsState},
+    prelude::*,
+};
 
 pub struct RtmpPipelineState {
     pub port: u16,
@@ -26,6 +27,7 @@ impl RtmpPipelineState {
 }
 
 pub fn spawn_rtmp_server(
+    ctx: Arc<PipelineCtx>,
     state: &RtmpPipelineState,
 ) -> Result<Arc<Mutex<RtmpServer>>, InitPipelineError> {
     let port = state.port;
@@ -40,11 +42,8 @@ pub fn spawn_rtmp_server(
         client_timeout_secs: 30,
     };
 
-    let on_connection = Box::new(move |conn: RtmpConnection| {
-        let inputs = inputs.clone();
-        if let Err(err) = inputs.update(conn.app, conn.stream_key, conn.receiver) {
-            error!(?err, "Failed to update RTMP input state");
-        }
+    let on_connection = Box::new(move |conn| {
+        handle_on_connection(ctx.clone(), inputs.clone(), conn);
     });
 
     let mut last_error: Option<RtmpError> = None;
