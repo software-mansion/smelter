@@ -1,23 +1,21 @@
-use rtmp::{
-    flv,
-    server::{AudioConfig, AudioData},
-};
+use rtmp::{self, AudioConfig, AudioData};
 use tracing::warn;
 
 use crate::{
     pipeline::{
-        decoder::{
-            decoder_thread_audio::{AudioDecoderThread, AudioDecoderThreadOptions},
-            fdk_aac::FdkAacDecoder,
+        decoder::fdk_aac::FdkAacDecoder,
+        rtmp::rtmp_input::{
+            RtmpConnectionContext,
+            decoder_thread::{AudioDecoderThread, AudioDecoderThreadOptions},
+            stream_state::RtmpStreamState,
         },
-        rtmp::rtmp_input::{RtmpConnectionContext, stream_state::RtmpStreamState},
     },
     prelude::*,
     thread_utils::InitializableThread,
 };
 
 pub(super) fn process_audio_config(ctx: &RtmpConnectionContext, config: AudioConfig) {
-    if config.codec != flv::AudioCodec::Aac {
+    if config.codec != rtmp::AudioCodec::Aac {
         warn!(?config.codec, "Unsupported audio codec");
         return;
     }
@@ -59,7 +57,7 @@ pub(super) fn process_audio(
     stream_state: &mut RtmpStreamState,
     audio: AudioData,
 ) {
-    if audio.codec != flv::AudioCodec::Aac {
+    if audio.codec != rtmp::AudioCodec::Aac {
         return;
     }
 

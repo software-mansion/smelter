@@ -1,6 +1,7 @@
 use crate::{pipeline::rtmp::rtmp_input::state::RtmpInputsState, prelude::*};
 use std::sync::Arc;
 
+mod decoder_thread;
 mod input;
 mod on_connection;
 mod process_audio;

@@ -1,4 +1,4 @@
-use rtmp::{RtmpConnection, RtmpMediaData};
+use rtmp::{RtmpConnection, RtmpEvent};
 use std::sync::Arc;
 use tracing::{error, info};
 
@@ -57,12 +57,13 @@ pub(crate) fn handle_on_connection(
 fn process_media(
     ctx: &RtmpConnectionContext,
     stream_state: &mut RtmpStreamState,
-    media_data: RtmpMediaData,
+    rtmp_event: RtmpEvent,
 ) {
-    match media_data {
-        RtmpMediaData::VideoConfig(config) => process_video_config(ctx, config),
-        RtmpMediaData::AudioConfig(config) => process_audio_config(ctx, config),
-        RtmpMediaData::Video(data) => process_video(ctx, stream_state, data),
-        RtmpMediaData::Audio(data) => process_audio(ctx, stream_state, data),
+    match rtmp_event {
+        RtmpEvent::VideoConfig(config) => process_video_config(ctx, config),
+        RtmpEvent::AudioConfig(config) => process_audio_config(ctx, config),
+        RtmpEvent::Video(data) => process_video(ctx, stream_state, data),
+        RtmpEvent::Audio(data) => process_audio(ctx, stream_state, data),
+        RtmpEvent::Metadata(metadata) => info!(?metadata, "Received metadata"), // TODO
     }
 }

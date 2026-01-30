@@ -1,23 +1,22 @@
+use rtmp::{self, VideoConfig, VideoData};
+use tracing::{error, info, warn};
+
 use crate::{
     pipeline::{
-        decoder::{
-            decoder_thread_video::{VideoDecoderThread, VideoDecoderThreadOptions},
-            ffmpeg_h264, vulkan_h264,
+        decoder::{ffmpeg_h264, vulkan_h264},
+        rtmp::rtmp_input::{
+            RtmpConnectionContext,
+            decoder_thread::{VideoDecoderThread, VideoDecoderThreadOptions},
+            stream_state::RtmpStreamState,
         },
-        rtmp::rtmp_input::{RtmpConnectionContext, stream_state::RtmpStreamState},
         utils::{H264AvcDecoderConfig, H264AvccToAnnexB},
     },
     prelude::*,
     thread_utils::InitializableThread,
 };
-use rtmp::{
-    flv,
-    server::{VideoConfig, VideoData},
-};
-use tracing::{error, info, warn};
 
 pub(super) fn process_video_config(ctx: &RtmpConnectionContext, config: VideoConfig) {
-    if config.codec != flv::VideoCodec::H264 {
+    if config.codec != rtmp::VideoCodec::H264 {
         warn!(?config.codec, "Unsupported video codec");
         return;
     }
@@ -38,7 +37,7 @@ pub(super) fn process_video(
     stream_state: &mut RtmpStreamState,
     video: VideoData,
 ) {
-    if video.codec != flv::VideoCodec::H264 {
+    if video.codec != rtmp::VideoCodec::H264 {
         warn!(?video.codec, "Unsupported video codec");
         return;
     }
