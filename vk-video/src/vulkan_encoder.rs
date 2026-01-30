@@ -320,7 +320,6 @@ pub struct VulkanEncoder<'a> {
     tracker: EncoderTracker,
     query_pool: EncodingQueryPool,
     profile: H264Profile,
-    profile_info: H264EncodeProfileInfo<'a>,
     session_resources: VideoSessionResources<'a>,
     idr_period_counter: u32,
     idr_period: u32,
@@ -427,7 +426,6 @@ impl VulkanEncoder<'_> {
             pic_order_cnt: 0,
             active_reference_slots: VecDeque::with_capacity(session_resources.dpb.len as usize),
             profile: parameters.profile,
-            profile_info,
             encoding_device,
             input_image: Arc::new(encode_image),
             tracker,
@@ -538,17 +536,10 @@ impl VulkanEncoder<'_> {
         self.session_resources.rate_control = rate_control;
     }
 
-    // TODO: Maybe we should reuse `input_image` here, instead of creating a new image
     fn transfer_buffer_to_image(
         &mut self,
         frame: &Frame<RawFrameData>,
-    ) -> Result<(Image, Buffer), VulkanEncoderError> {
-        let extent = vk::Extent3D {
-            width: frame.data.width,
-            height: frame.data.height,
-            depth: 1,
-        };
-
+    ) -> Result<Buffer, VulkanEncoderError> {
         if frame.data.width as usize * frame.data.height as usize * 3 / 2 != frame.data.frame.len()
         {
             return Err(VulkanEncoderError::InconsistentPictureByteSize {
@@ -558,38 +549,9 @@ impl VulkanEncoder<'_> {
             });
         }
 
-        let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
-            .profiles(std::slice::from_ref(&self.profile_info.profile_info));
-
-        let queue_family_indices = [
-            self.encoding_device.queues.transfer.family_index as u32,
-            self.encoding_device.h264_encode_queues.family_index as u32,
-        ];
-
-        let image_create_info = vk::ImageCreateInfo::default()
-            .flags(vk::ImageCreateFlags::empty())
-            .image_type(vk::ImageType::TYPE_2D)
-            .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
-            .extent(extent)
-            .mip_levels(1)
-            .array_layers(1)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR | vk::ImageUsageFlags::TRANSFER_DST)
-            .sharing_mode(vk::SharingMode::CONCURRENT)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .queue_family_indices(&queue_family_indices)
-            .push_next(&mut profile_list_info);
-
-        let image = Image::new(
-            self.encoding_device.allocator.clone(),
-            &image_create_info,
-            self.tracker.image_layout_tracker.clone(),
-        )?;
-
         let mut cmd_buffer = self.tracker.command_buffer_pools.transfer.begin_buffer()?;
 
-        image.transition_layout_single_layer(
+        self.input_image.transition_layout_single_layer(
             &mut cmd_buffer,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COPY,
             vk::AccessFlags2::NONE..vk::AccessFlags2::TRANSFER_WRITE,
@@ -609,7 +571,7 @@ impl VulkanEncoder<'_> {
                 .cmd_copy_buffer_to_image(
                     cmd_buffer.buffer(),
                     *buffer,
-                    *image,
+                    self.input_image.image,
                     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     &[
                         vk::BufferImageCopy::default()
@@ -659,7 +621,7 @@ impl VulkanEncoder<'_> {
                 EncoderTrackerWaitState::CopyBufferToImage,
             )?;
 
-        Ok((image, buffer))
+        Ok(buffer)
     }
 
     fn copy_wgpu_texture_to_image(
@@ -802,11 +764,7 @@ impl VulkanEncoder<'_> {
         Ok(encoder)
     }
 
-    fn encode(
-        &mut self,
-        image: Arc<Image>,
-        force_idr: bool,
-    ) -> Result<Vec<u8>, VulkanEncoderError> {
+    fn encode(&mut self, force_idr: bool) -> Result<Vec<u8>, VulkanEncoderError> {
         let is_idr = force_idr || self.idr_period_counter == 0;
         let mut idr_pic_id = 0;
 
@@ -829,7 +787,7 @@ impl VulkanEncoder<'_> {
 
         let mut cmd_buffer = self.tracker.command_buffer_pools.encode.begin_buffer()?;
 
-        image.transition_layout_single_layer(
+        self.input_image.transition_layout_single_layer(
             &mut cmd_buffer,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::VIDEO_ENCODE_KHR,
             vk::AccessFlags2::NONE..vk::AccessFlags2::VIDEO_ENCODE_READ_KHR,
@@ -842,7 +800,7 @@ impl VulkanEncoder<'_> {
 
         let view_create_info = vk::ImageViewCreateInfo::default()
             .flags(vk::ImageViewCreateFlags::empty())
-            .image(image.image)
+            .image(self.input_image.image)
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
             .components(vk::ComponentMapping::default())
@@ -857,7 +815,7 @@ impl VulkanEncoder<'_> {
 
         let view = ImageView::new(
             self.encoding_device.vulkan_device.device.clone(),
-            image.clone(),
+            self.input_image.clone(),
             &view_create_info,
         )?;
 
@@ -1068,7 +1026,7 @@ impl VulkanEncoder<'_> {
             .picture_resource(setup_reference_slot_video_resource_info)
             .push_next(&mut new_slot_reference_info);
 
-        let extent = image.extent;
+        let extent = self.input_image.extent;
 
         let src_picture_resource = vk::VideoPictureResourceInfoKHR::default()
             .coded_offset(vk::Offset2D::default())
@@ -1175,12 +1133,10 @@ impl VulkanEncoder<'_> {
         frame: &Frame<RawFrameData>,
         force_idr: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
-        let (image, _buffer) = self.transfer_buffer_to_image(frame)?;
-
-        let image = Arc::new(image);
+        let _buffer = self.transfer_buffer_to_image(frame)?;
 
         let is_keyframe = force_idr || self.idr_period_counter == 0;
-        let result = self.encode(image, force_idr)?;
+        let result = self.encode(force_idr)?;
 
         Ok(EncodedOutputChunk {
             data: result,
@@ -1200,7 +1156,7 @@ impl VulkanEncoder<'_> {
         let _cmd_encoder = self.copy_wgpu_texture_to_image(&frame)?;
 
         let is_keyframe = force_idr || self.idr_period_counter == 0;
-        let result = self.encode(self.input_image.clone(), force_idr)?;
+        let result = self.encode(force_idr)?;
 
         Ok(EncodedOutputChunk {
             data: result,
