@@ -7,7 +7,7 @@ export default function App() {
 
   return (
     <View>
-      <Rescaler style={{ rescaleMode: 'fit' }}>
+      <Rescaler style={{ rescaleMode: 'fill' }}>
         <InputStream inputId="input" />
       </Rescaler>
       <View
@@ -33,7 +33,7 @@ export default function App() {
         </Text>
         <View style={{ height: 40 }} />
         <Text style={{ fontSize: 30, width: 500, wrap: 'word', color: '#000000' }}>
-          Open App.tsx to modify layout of the video.
+          Open /server/src/app/App.tsx to modify layout of the video.
         </Text>
       </View>
     </View>

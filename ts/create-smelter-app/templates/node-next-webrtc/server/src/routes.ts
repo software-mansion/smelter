@@ -1,10 +1,13 @@
 import Fastify from 'fastify';
+import cors from '@fastify/cors';
 import { Type } from '@sinclair/typebox';
 import type { Static, TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 
 import { store } from './app/store';
 
 export const routes = Fastify().withTypeProvider<TypeBoxTypeProvider>();
+
+routes.register(cors);
 
 export const UpdateLayoutSchema = Type.Object({
   showInstructions: Type.Boolean(),
