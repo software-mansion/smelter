@@ -20,7 +20,10 @@ use crate::{
     },
 };
 
+pub use rgba_to_nv12_converter::{ConverterState, RgbaNV12Converter, RgbaNV12ConverterError};
+
 mod encode_parameter_sets;
+mod rgba_to_nv12_converter;
 
 const MB: u64 = 1024 * 1024;
 

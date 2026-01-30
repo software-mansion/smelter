@@ -53,7 +53,9 @@ pub use crate::device::VulkanDevice;
 pub use crate::instance::VulkanInstance;
 pub use crate::parser::{h264::H264ParserError, reference_manager::ReferenceManagementError};
 pub use crate::vulkan_decoder::VulkanDecoderError;
-pub use crate::vulkan_encoder::VulkanEncoderError;
+pub use crate::vulkan_encoder::{
+    ConverterState, RgbaNV12Converter, RgbaNV12ConverterError, VulkanEncoderError,
+};
 
 use crate::parser::{
     decoder_instructions::compile_to_decoder_instructions, h264::H264Parser,
