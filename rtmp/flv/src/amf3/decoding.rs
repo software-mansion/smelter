@@ -67,6 +67,10 @@ impl Decoder {
     }
 
     fn decode_string(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+        Ok(AmfValue::String(self.decode_string_raw(buf)?))
+    }
+
+    fn decode_string_raw(&mut self, buf: &mut Bytes) -> Result<String, DecodingError> {
         if buf.remaining() < 4 {
             return Err(DecodingError::InsufficientData);
         }
@@ -99,8 +103,7 @@ impl Decoder {
                     .clone()
             }
         };
-
-        Ok(AmfValue::String(string))
+        Ok(string)
     }
 
     fn decode_xml_doc(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
@@ -270,6 +273,20 @@ impl Decoder {
 
     fn decode_dictionary(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
         todo!()
+    }
+
+    fn decode_pairs(&mut self, buf: &mut Bytes) -> Result<Vec<(String, AmfValue)>, DecodingError> {
+        let mut pairs = vec![];
+        loop {
+            let key = self.decode_string_raw(buf)?;
+            if key.is_empty() {
+                return Ok(pairs);
+            }
+
+            let value = self.decode_value(buf)?;
+            let pair = (key, value);
+            pairs.push(pair);
+        }
     }
 
     fn decode_complex<F>(&mut self, buf: &mut Bytes, decode: F) -> Result<AmfValue, DecodingError>
