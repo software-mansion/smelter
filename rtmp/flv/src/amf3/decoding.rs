@@ -15,6 +15,12 @@ struct Decoder {
     complexes: Vec<AmfValue>,
 }
 
+enum DecoderValue {
+    Value(AmfValue),
+    StringRef(usize),
+    ComplexRef(usize),
+}
+
 impl Decoder {
     fn new() -> Self {
         Self::default()
@@ -27,32 +33,35 @@ impl Decoder {
 
         let marker = buf.get_u8();
 
-        let amf_value = match marker {
-            UNDEFINED => AmfValue::Undefined,
-            NULL => AmfValue::Null,
-            FALSE => AmfValue::Boolean(false),
-            TRUE => AmfValue::Boolean(true),
-            INTEGER => todo!(),
-            DOUBLE => todo!(),
-            STRING => todo!(),
-            XML_DOC => todo!(),
-            DATE => todo!(),
-            ARRAY => todo!(),
+        match marker {
+            UNDEFINED => Ok(AmfValue::Undefined),
+            NULL => Ok(AmfValue::Null),
+            FALSE => Ok(AmfValue::Boolean(false)),
+            TRUE => Ok(AmfValue::Boolean(true)),
+            INTEGER => self.decode_integer(buf),
+            DOUBLE => self.decode_double(buf),
+            STRING => self.decode_string(buf),
+            XML_DOC => self.decode_xml_doc(buf),
+            DATE => self.decode_date(buf),
+            ARRAY => self.decode_array(buf),
             OBJECT => todo!(),
-            XML => todo!(),
-            BYTE_ARRAY => todo!(),
-            VECTOR_INT => todo!(),
-            VECTOR_UINT => todo!(),
-            VECTOR_DOUBLE => todo!(),
+            XML => self.decode_xml(buf),
+            BYTE_ARRAY => self.decode_byte_array(buf),
+            VECTOR_INT => self.decode_int_vec(buf),
+            VECTOR_UINT => self.decode_uint_vec(buf),
+            VECTOR_DOUBLE => self.decode_double(buf),
             VECTOR_OBJECT => todo!(),
             DICTIONARY => todo!(),
-            _ => return Err(DecodingError::UnknownType(marker)),
-        };
-        Ok(amf_value)
+            _ => Err(DecodingError::UnknownType(marker)),
+        }
     }
 
     fn decode_integer(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
-        todo!()
+        if buf.is_empty() {
+            return Err(DecodingError::InsufficientData);
+        }
+
+        Ok(AmfValue::Integer(decode_i29(buf)?))
     }
 
     fn decode_double(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
@@ -170,7 +179,32 @@ impl Decoder {
     }
 
     fn decode_int_vec(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
-        todo!()
+        let decode = |decoder: &mut Self, buf: &mut Bytes, item_count: usize| {
+            const ITEM_SIZE: usize = 4;
+
+            if buf.remaining() < item_count * ITEM_SIZE + 1 {
+                return Err(DecodingError::InsufficientData);
+            }
+
+            let fixed_length = buf.get_u8() == 0x01;
+
+            let mut vec_buf = buf.split_to(item_count * ITEM_SIZE);
+            let mut values = Vec::with_capacity(item_count * ITEM_SIZE);
+
+            while vec_buf.has_remaining() {
+                let int = decode_i29(&mut vec_buf)?;
+                values.push(int);
+            }
+
+            let amf_value = AmfValue::VectorInt {
+                fixed_length,
+                values,
+            };
+            decoder.complexes.push(amf_value.clone());
+            Ok(amf_value)
+        };
+
+        self.decode_complex(buf, decode)
     }
 
     fn decode_uint_vec(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
@@ -195,7 +229,6 @@ impl Decoder {
                 fixed_length,
                 values,
             };
-
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
         };
@@ -271,6 +304,8 @@ impl Decoder {
     }
 }
 
+// https://github.com/q191201771/doc/blob/master/spec-amf-file-format-spec.pdf
+// Check amf3 spec sections 1.3.1 and 3.6 to learn more about how this serialization works
 fn decode_u29(buf: &mut Bytes) -> Result<(u32, usize), DecodingError> {
     let mut result: u32 = 0;
     let mut next_byte_present = false;
@@ -378,7 +413,7 @@ mod decode_test {
 
         // -92242091 in 29 bit U2
         let mut four_byte_neg =
-            Bytes::from(vec![0b1110_1010, 0b1000_0000, 0b1111_1111, 0b_0101_0101]);
+            Bytes::from(vec![0b1110_1010, 0b1000_0000, 0b1111_1111, 0b0101_0101]);
         let decoded_val =
             decode_i29(&mut four_byte_neg).expect("Failed to decode 4 bytes negative.");
         assert_eq!(decoded_val, -92242091);
