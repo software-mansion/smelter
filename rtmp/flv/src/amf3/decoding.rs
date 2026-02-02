@@ -149,10 +149,9 @@ impl Decoder {
                 .decode_pairs(buf)?
                 .into_iter()
                 .collect::<HashMap<_, _>>();
-            let mut dense = vec![];
-            for _ in 0..size {
-                dense.push(decoder.decode_value(buf)?);
-            }
+            let dense = (0..size)
+                .map(|_| decoder.decode_value(buf))
+                .collect::<Result<_, _>>()?;
 
             Ok(AmfValue::Array { associative, dense })
         };
@@ -164,11 +163,11 @@ impl Decoder {
         let decode = |decoder: &mut Self, buf: &mut Bytes, u28: usize| {
             let amf_trait = decoder.decode_object_trait(buf, u28)?;
             let sealed_count = amf_trait.field_names.len();
-            let mut fields = amf_trait
+            let mut fields: Vec<(String, AmfValue)> = amf_trait
                 .field_names
                 .into_iter()
                 .map(|key| Ok((key, decoder.decode_value(buf)?)))
-                .collect::<Result<Vec<_>, DecodingError>>()?;
+                .collect::<Result<_, DecodingError>>()?;
 
             if amf_trait.dynamic {
                 fields.extend(decoder.decode_pairs(buf)?);
@@ -209,10 +208,9 @@ impl Decoder {
                 None
             };
 
-            let mut field_names = vec![];
-            for _ in 0..sealed_members {
-                field_names.push(self.decode_string_raw(buf)?);
-            }
+            let field_names = (0..sealed_members)
+                .map(|_| self.decode_string_raw(buf))
+                .collect::<Result<_, _>>()?;
 
             let amf_trait = Trait {
                 class_name,
@@ -362,7 +360,7 @@ impl Decoder {
 
             let values = (0..item_count)
                 .map(|_| decoder.decode_value(buf))
-                .collect::<Result<Vec<_>, DecodingError>>()?;
+                .collect::<Result<_, _>>()?;
 
             let amf_value = AmfValue::VectorObject {
                 fixed_length,
