@@ -55,7 +55,7 @@ impl Decoder {
             return Err(DecodingError::InsufficientData);
         }
 
-        Ok(AmfValue::Integer(decode_i29(buf)?))
+        Ok(AmfValue::Integer(self.decode_i29(buf)?))
     }
 
     fn decode_double(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
@@ -75,7 +75,7 @@ impl Decoder {
             return Err(DecodingError::InsufficientData);
         }
 
-        let u29 = decode_u29(buf)?.0;
+        let u29 = self.decode_u29(buf)?.0;
         let has_value = (u29 & 0b1) == 1;
         let u28 = u29 >> 1;
 
@@ -210,7 +210,7 @@ impl Decoder {
             let mut values = Vec::with_capacity(item_count * ITEM_SIZE);
 
             while vec_buf.has_remaining() {
-                let int = decode_i29(&mut vec_buf)?;
+                let int = decoder.decode_i29(&mut vec_buf)?;
                 values.push(int);
             }
 
@@ -239,7 +239,7 @@ impl Decoder {
             let mut values = Vec::with_capacity(item_count * ITEM_SIZE);
 
             while vec_buf.has_remaining() {
-                let uint = decode_u29(&mut vec_buf)?.0;
+                let uint = decoder.decode_u29(&mut vec_buf)?.0;
                 values.push(uint);
             }
 
@@ -314,7 +314,7 @@ impl Decoder {
             return Err(DecodingError::InsufficientData);
         }
 
-        let u29 = decode_u29(buf)?.0;
+        let u29 = self.decode_u29(buf)?.0;
         let has_value = (u29 & 0b1) == 1;
         let u28 = u29 >> 1;
 
@@ -334,62 +334,62 @@ impl Decoder {
 
         Ok(amf_value)
     }
-}
 
-// https://github.com/q191201771/doc/blob/master/spec-amf-file-format-spec.pdf
-// Check amf3 spec sections 1.3.1 and 3.6 to learn more about how this serialization works
-fn decode_u29(buf: &mut Bytes) -> Result<(u32, usize), DecodingError> {
-    let mut result: u32 = 0;
-    let mut next_byte_present = false;
-    let mut bytes_used: usize = 0;
-    for _ in 0..3 {
-        if buf.is_empty() {
-            return Err(DecodingError::InsufficientData);
+    // https://github.com/q191201771/doc/blob/master/spec-amf-file-format-spec.pdf
+    // Check amf3 spec sections 1.3.1 and 3.6 to learn more about how this serialization works
+    fn decode_u29(&self, buf: &mut Bytes) -> Result<(u32, usize), DecodingError> {
+        let mut result: u32 = 0;
+        let mut next_byte_present = false;
+        let mut bytes_used: usize = 0;
+        for _ in 0..3 {
+            if buf.is_empty() {
+                return Err(DecodingError::InsufficientData);
+            }
+
+            let byte = buf.get_u8();
+            bytes_used += 1;
+            result <<= 7;
+            result |= (byte & 0x7F) as u32;
+            next_byte_present = ((byte >> 7) & 0b1) == 1;
+            if !next_byte_present {
+                break;
+            }
+        }
+        if next_byte_present {
+            if buf.is_empty() {
+                return Err(DecodingError::InsufficientData);
+            }
+
+            let byte = buf.get_u8();
+            bytes_used += 1;
+            result <<= 8;
+            result |= byte as u32;
         }
 
-        let byte = buf.get_u8();
-        bytes_used += 1;
-        result <<= 7;
-        result |= (byte & 0x7F) as u32;
-        next_byte_present = ((byte >> 7) & 0b1) == 1;
-        if !next_byte_present {
-            break;
-        }
+        Ok((result, bytes_used))
     }
-    if next_byte_present {
-        if buf.is_empty() {
-            return Err(DecodingError::InsufficientData);
-        }
 
-        let byte = buf.get_u8();
-        bytes_used += 1;
-        result <<= 8;
-        result |= byte as u32;
-    }
+    fn decode_i29(&self, buf: &mut Bytes) -> Result<i32, DecodingError> {
+        let (u29, bytes_used) = self.decode_u29(buf)?;
+        println!("{u29}");
 
-    Ok((result, bytes_used))
-}
+        let (sign_flag, value_mask): (u32, u32) = match bytes_used {
+            1 => (1 << 6, 0x3F),
+            2 => (1 << 13, 0x1F_FF),
+            3 => (1 << 20, 0x0F_FF_FF),
+            4 => (1 << 28, 0x0F_FF_FF_FF),
+            _ => unreachable!(),
+        };
 
-fn decode_i29(buf: &mut Bytes) -> Result<i32, DecodingError> {
-    let (u29, bytes_used) = decode_u29(buf)?;
-    println!("{u29}");
+        let int_val = (u29 & value_mask) as i32;
 
-    let (sign_flag, value_mask): (u32, u32) = match bytes_used {
-        1 => (1 << 6, 0x3F),
-        2 => (1 << 13, 0x1F_FF),
-        3 => (1 << 20, 0x0F_FF_FF),
-        4 => (1 << 28, 0x0F_FF_FF_FF),
-        _ => unreachable!(),
-    };
-
-    let int_val = (u29 & value_mask) as i32;
-
-    let negative = u29 & sign_flag > 0;
-    match negative {
-        false => Ok(int_val),
-        true => {
-            let min_val = -(sign_flag as i32);
-            Ok(min_val + int_val)
+        let negative = u29 & sign_flag > 0;
+        match negative {
+            false => Ok(int_val),
+            true => {
+                let min_val = -(sign_flag as i32);
+                Ok(min_val + int_val)
+            }
         }
     }
 }
@@ -398,56 +398,68 @@ fn decode_i29(buf: &mut Bytes) -> Result<i32, DecodingError> {
 mod decode_test {
     use bytes::Bytes;
 
-    use crate::amf3::decoding::decode_i29;
+    use crate::amf3::decoding::Decoder;
 
     #[test]
     fn test_decode_i29() {
+        let decoder = Decoder::new();
+
         // 32 in 7 bit U2
         let mut one_byte_pos = Bytes::from(vec![0b0010_0000]);
-        let decoded_val = decode_i29(&mut one_byte_pos).expect("Failed to decode 1 byte positive.");
+        let decoded_val = decoder
+            .decode_i29(&mut one_byte_pos)
+            .expect("Failed to decode 1 byte positive.");
         assert_eq!(decoded_val, 32);
 
         // -63 in 7 bit U2
         let mut one_byte_neg = Bytes::from(vec![0b0100_0001]);
-        let decoded_val = decode_i29(&mut one_byte_neg).expect("Failed to decode 1 byte negative.");
+        let decoded_val = decoder
+            .decode_i29(&mut one_byte_neg)
+            .expect("Failed to decode 1 byte negative.");
         assert_eq!(decoded_val, -63);
 
         // 143 in 14 bit U2
         let mut two_byte_pos = Bytes::from(vec![0b1000_0001, 0b0000_1111]);
-        let decoded_val =
-            decode_i29(&mut two_byte_pos).expect("Failed to decode 2 bytes positive.");
+        let decoded_val = decoder
+            .decode_i29(&mut two_byte_pos)
+            .expect("Failed to decode 2 bytes positive.");
         assert_eq!(decoded_val, 143);
 
         // -8189 in 14 bit U2
         let mut two_byte_neg = Bytes::from(vec![0b1100_0000, 0b0000_0011]);
-        let decoded_val =
-            decode_i29(&mut two_byte_neg).expect("Failed to decode 2 bytes negative.");
+        let decoded_val = decoder
+            .decode_i29(&mut two_byte_neg)
+            .expect("Failed to decode 2 bytes negative.");
         assert_eq!(decoded_val, -8189);
 
         // 16512 in 21 bit U2
         let mut three_byte_pos = Bytes::from(vec![0b1000_0001, 0b1000_0001, 0b0000_0000]);
-        let decoded_val =
-            decode_i29(&mut three_byte_pos).expect("Failed to decode 3 bytes positive.");
+        let decoded_val = decoder
+            .decode_i29(&mut three_byte_pos)
+            .expect("Failed to decode 3 bytes positive.");
         assert_eq!(decoded_val, 16512);
 
         // -1007172 in 21 bit U2
         let mut three_byte_neg = Bytes::from(vec![0b1100_0010, 0b1100_0011, 0b0011_1100]);
-        let decoded_val =
-            decode_i29(&mut three_byte_neg).expect("Failed to decode 3 bytes negative.");
+        let decoded_val = decoder
+            .decode_i29(&mut three_byte_neg)
+            .expect("Failed to decode 3 bytes negative.");
         assert_eq!(decoded_val, -1007172);
 
         // 176193365 in 29 bit U2
         let mut four_byte_pos =
             Bytes::from(vec![0b1010_1010, 0b1000_0000, 0b1111_1111, 0b_0101_0101]);
-        let decoded_val =
-            decode_i29(&mut four_byte_pos).expect("Failed to decode 4 bytes positive.");
+        let decoded_val = decoder
+            .decode_i29(&mut four_byte_pos)
+            .expect("Failed to decode 4 bytes positive.");
         assert_eq!(decoded_val, 176193365);
 
         // -92242091 in 29 bit U2
         let mut four_byte_neg =
             Bytes::from(vec![0b1110_1010, 0b1000_0000, 0b1111_1111, 0b0101_0101]);
-        let decoded_val =
-            decode_i29(&mut four_byte_neg).expect("Failed to decode 4 bytes negative.");
+        let decoded_val = decoder
+            .decode_i29(&mut four_byte_neg)
+            .expect("Failed to decode 4 bytes negative.");
         assert_eq!(decoded_val, -92242091);
     }
 }
