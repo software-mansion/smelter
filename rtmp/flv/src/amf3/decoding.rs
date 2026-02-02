@@ -376,7 +376,31 @@ impl Decoder {
     }
 
     fn decode_dictionary(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
-        todo!()
+        let decode = |decoder: &mut Self, buf: &mut Bytes, entries_count: usize| {
+            if buf.is_empty() {
+                return Err(DecodingError::InsufficientData);
+            }
+
+            let weak_references = buf.get_u8() == 0x01;
+
+            let entries = (0..entries_count)
+                .map(|_| {
+                    let key = decoder.decode_value(buf)?;
+                    let value = decoder.decode_value(buf)?;
+                    Ok((key, value))
+                })
+                .collect::<Result<_, _>>()?;
+
+            let amf_value = AmfValue::Dictionary {
+                weak_references,
+                entries,
+            };
+
+            decoder.complexes.push(amf_value.clone());
+            Ok(amf_value)
+        };
+
+        self.decode_complex(buf, decode)
     }
 
     fn decode_pairs(&mut self, buf: &mut Bytes) -> Result<Vec<(String, AmfValue)>, DecodingError> {

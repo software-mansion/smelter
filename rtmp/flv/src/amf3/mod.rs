@@ -64,6 +64,6 @@ pub enum AmfValue {
     },
     Dictionary {
         weak_references: bool,
-        values: Vec<(AmfValue, AmfValue)>,
+        entries: Vec<(AmfValue, AmfValue)>,
     },
 }
