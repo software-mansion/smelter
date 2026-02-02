@@ -15,12 +15,6 @@ struct Decoder {
     complexes: Vec<AmfValue>,
 }
 
-enum DecoderValue {
-    Value(AmfValue),
-    StringRef(usize),
-    ComplexRef(usize),
-}
-
 impl Decoder {
     fn new() -> Self {
         Self::default()
