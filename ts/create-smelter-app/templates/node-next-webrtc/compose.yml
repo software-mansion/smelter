@@ -1,0 +1,35 @@
+services:
+  next-app:
+    build:
+      context: client
+    profiles: [prod]
+    ports:
+      - 3000:3000
+
+  node-backend:
+    build:
+      context: server
+    profiles: [prod]
+    ports:
+      - 3001:3001
+    environment:
+      SMELTER_INSTANCE_URL: 'http://smelter-instance:8081'
+
+  smelter-instance:
+    image: ghcr.io/software-mansion/smelter:v0.5.0
+    ports:
+      # Smelter API
+      - 8081:8081
+      # Smelter WHIP/WHEP server
+      - 9000:9000
+    # Uncomment to enable GPU acceleration on Nvidia cards. You will need to install
+    # "NVIDIA container toolkit" https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+    #
+    # gpus: "all"
+    # runtime: "nvidia"
+
+    # Uncomment to enable GPU acceleration on AMD cards.
+    #
+    # devices:
+    #  - '/dev/dri'
+
