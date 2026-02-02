@@ -139,7 +139,24 @@ impl Decoder {
     }
 
     fn decode_array(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
-        todo!()
+        let decode = |decoder: &mut Self, buf: &mut Bytes, size: usize| {
+            if buf.remaining() < size {
+                return Err(DecodingError::InsufficientData);
+            }
+
+            let associative = decoder
+                .decode_pairs(buf)?
+                .into_iter()
+                .collect::<HashMap<_, _>>();
+            let mut dense = vec![];
+            for _ in 0..size {
+                dense.push(decoder.decode_value(buf)?);
+            }
+
+            Ok(AmfValue::Array { associative, dense })
+        };
+
+        self.decode_complex(buf, decode)
     }
 
     fn decode_object(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
