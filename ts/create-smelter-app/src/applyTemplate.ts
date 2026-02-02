@@ -1,27 +1,42 @@
 import * as fs from 'fs-extra';
 import path from 'path';
+import type { PackageManager } from './utils/packageManager';
 
 const TEMPLATES_ROOT = path.join(__dirname, '../templates');
 
-export async function applyTemplate(
-  destination: string,
-  templateName: string,
-  projectName: string
-): Promise<void> {
-  const templatePath = path.join(TEMPLATES_ROOT, templateName);
+export type TemplateProject = {
+  projectName: string;
+  // Relative from template root, defaults to root dir
+  dir?: string;
+  // Relative from root from root of the project
+  dirsToRemove?: string[];
+};
+
+export type Template = {
+  templateId: string;
+  projects: TemplateProject[];
+  usageInstructions: (directoryName: string, packageManage: PackageManager) => string;
+};
+
+export async function applyTemplate(template: Template, destination: string): Promise<void> {
+  const templatePath = path.join(TEMPLATES_ROOT, template.templateId);
   await fs.copy(templatePath, destination);
 
-  await fs.remove(path.join(destination, 'node_modules'));
-  await fs.remove(path.join(destination, 'dist'));
+  for (const project of template.projects) {
+    const projectDir = path.join(destination, project.dir ?? '.');
+    for (const dirToRemove of project.dirsToRemove ?? []) {
+      await fs.remove(path.join(projectDir, dirToRemove));
 
-  const packageJsonPath = path.join(destination, 'package.json');
-  const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
-  const transformedPackageJson = transformPackageJson(packageJson, projectName);
-  await fs.writeFile(
-    packageJsonPath,
-    JSON.stringify(transformedPackageJson, null, 2) + '\n',
-    'utf8'
-  );
+      const packageJsonPath = path.join(projectDir, 'package.json');
+      const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
+      const transformedPackageJson = transformPackageJson(packageJson, project.projectName);
+      await fs.writeFile(
+        packageJsonPath,
+        JSON.stringify(transformedPackageJson, null, 2) + '\n',
+        'utf8'
+      );
+    }
+  }
 }
 
 export function transformPackageJson(packageJson: any, projectName: string): any {
