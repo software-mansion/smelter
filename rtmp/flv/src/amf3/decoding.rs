@@ -78,14 +78,18 @@ impl Decoder {
         let string = match has_value {
             true => {
                 let size = u28 as usize;
-                if buf.remaining() < size {
-                    return Err(DecodingError::InsufficientData);
-                }
+                if size == 0 {
+                    "".to_string()
+                } else {
+                    if buf.remaining() < size {
+                        return Err(DecodingError::InsufficientData);
+                    }
 
-                let utf8 = buf.copy_to_bytes(size).to_vec();
-                let string = String::from_utf8(utf8).map_err(|_| DecodingError::InvalidUtf8)?;
-                self.strings.push(string.clone());
-                string
+                    let utf8 = buf.copy_to_bytes(size).to_vec();
+                    let string = String::from_utf8(utf8).map_err(|_| DecodingError::InvalidUtf8)?;
+                    self.strings.push(string.clone());
+                    string
+                }
             }
             false => {
                 let idx = u28 as usize;
