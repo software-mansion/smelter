@@ -1,11 +1,18 @@
-import Smelter from '@swmansion/smelter-node';
+import Smelter, { ExistingInstanceManager } from '@swmansion/smelter-node';
 import App from './app/App';
 
 class SmelterManager {
   private instance: Smelter;
 
   constructor() {
-    this.instance = new Smelter();
+    if (process.env.SMELTER_INSTANCE_URL) {
+      const manager = new ExistingInstanceManager({
+        url: process.env.SMELTER_INSTANCE_URL,
+      });
+      this.instance = new Smelter(manager);
+    } else {
+      this.instance = new Smelter();
+    }
   }
 
   public async init() {
