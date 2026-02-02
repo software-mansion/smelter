@@ -2,6 +2,19 @@ use bytes::{Buf, Bytes};
 
 use crate::{DecodingError, amf3::*};
 
+pub fn decode_amf3_value(amf_bytes: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
+    let mut buf = Bytes::copy_from_slice(amf_bytes);
+    let mut result = vec![];
+    let mut decoder = Decoder::new();
+
+    while buf.has_remaining() {
+        let amf_value = decoder.decode_value(&mut buf)?;
+        result.push(amf_value);
+    }
+
+    Ok(result)
+}
+
 #[derive(Clone)]
 struct Trait {
     class_name: Option<String>,
@@ -39,14 +52,14 @@ impl Decoder {
             XML_DOC => self.decode_xml_doc(buf),
             DATE => self.decode_date(buf),
             ARRAY => self.decode_array(buf),
-            OBJECT => todo!(),
+            OBJECT => self.decode_object(buf),
             XML => self.decode_xml(buf),
             BYTE_ARRAY => self.decode_byte_array(buf),
             VECTOR_INT => self.decode_int_vec(buf),
             VECTOR_UINT => self.decode_uint_vec(buf),
-            VECTOR_DOUBLE => self.decode_double(buf),
-            VECTOR_OBJECT => todo!(),
-            DICTIONARY => todo!(),
+            VECTOR_DOUBLE => self.decode_double_vec(buf),
+            VECTOR_OBJECT => self.decode_object_vec(buf),
+            DICTIONARY => self.decode_dictionary(buf),
             _ => Err(DecodingError::UnknownType(marker)),
         }
     }
