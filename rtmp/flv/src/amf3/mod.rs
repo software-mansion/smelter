@@ -59,7 +59,7 @@ pub enum AmfValue {
     },
     VectorObject {
         fixed_length: bool,
-        class_name: String,
+        class_name: Option<String>,
         values: Vec<AmfValue>,
     },
     Dictionary {

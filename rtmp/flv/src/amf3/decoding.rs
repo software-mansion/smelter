@@ -347,7 +347,34 @@ impl Decoder {
     }
 
     fn decode_object_vec(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
-        todo!()
+        let decode = |decoder: &mut Self, buf: &mut Bytes, item_count: usize| {
+            if buf.is_empty() {
+                return Err(DecodingError::InsufficientData);
+            }
+
+            let fixed_length = buf.get_u8() == 0x01;
+            let class_name = decoder.decode_string_raw(buf)?;
+            let class_name = if class_name == "*" {
+                None
+            } else {
+                Some(class_name)
+            };
+
+            let values = (0..item_count)
+                .map(|_| decoder.decode_value(buf))
+                .collect::<Result<Vec<_>, DecodingError>>()?;
+
+            let amf_value = AmfValue::VectorObject {
+                fixed_length,
+                class_name,
+                values,
+            };
+
+            decoder.complexes.push(amf_value.clone());
+            Ok(amf_value)
+        };
+
+        self.decode_complex(buf, decode)
     }
 
     fn decode_dictionary(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
