@@ -70,6 +70,9 @@ pub enum DecodingError {
 
     #[error("Reference points to object of different amf type than expected.")]
     InvalidReferenceType,
+
+    #[error("Handling of externalizable object traits is not implemented.")]
+    ExternalizableTrait,
 }
 
 #[derive(Error, Debug)]

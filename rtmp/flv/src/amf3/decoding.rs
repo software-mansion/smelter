@@ -2,6 +2,7 @@ use bytes::{Buf, Bytes};
 
 use crate::{DecodingError, amf3::*};
 
+#[derive(Clone)]
 struct Trait {
     class_name: Option<String>,
     dynamic: bool,
@@ -160,7 +161,68 @@ impl Decoder {
     }
 
     fn decode_object(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
-        todo!()
+        let decode = |decoder: &mut Self, buf: &mut Bytes, u28: usize| {
+            let amf_trait = decoder.decode_object_trait(buf, u28)?;
+            let sealed_count = amf_trait.field_names.len();
+            let mut fields = amf_trait
+                .field_names
+                .into_iter()
+                .map(|key| Ok((key, decoder.decode_value(buf)?)))
+                .collect::<Result<Vec<_>, DecodingError>>()?;
+
+            if amf_trait.dynamic {
+                fields.extend(decoder.decode_pairs(buf)?);
+            }
+
+            let amf_object = AmfValue::Object {
+                class_name: amf_trait.class_name,
+                sealed_count,
+                values: fields,
+            };
+
+            decoder.complexes.push(amf_object.clone());
+            Ok(amf_object)
+        };
+
+        self.decode_complex(buf, decode)
+    }
+
+    fn decode_object_trait(&mut self, buf: &mut Bytes, u28: usize) -> Result<Trait, DecodingError> {
+        if (u28 & 0b1) == 0 {
+            let trait_idx = u28 >> 1;
+            let amf_trait = self
+                .traits
+                .get(trait_idx)
+                .ok_or(DecodingError::OutOfBoundsReference)?
+                .clone();
+            Ok(amf_trait)
+        } else if (u28 & 0b11) != 0 {
+            Err(DecodingError::ExternalizableTrait)
+        } else {
+            let dynamic = (u28 & 0b100) != 0;
+            let sealed_members = u28 >> 3;
+
+            let class_name = self.decode_string_raw(buf)?;
+            let class_name = if !class_name.is_empty() {
+                Some(class_name)
+            } else {
+                None
+            };
+
+            let mut field_names = vec![];
+            for _ in 0..sealed_members {
+                field_names.push(self.decode_string_raw(buf)?);
+            }
+
+            let amf_trait = Trait {
+                class_name,
+                dynamic,
+                field_names,
+            };
+
+            self.traits.push(amf_trait.clone());
+            Ok(amf_trait)
+        }
     }
 
     fn decode_xml(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
