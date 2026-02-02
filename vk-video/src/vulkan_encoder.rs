@@ -666,6 +666,10 @@ impl VulkanEncoder<'_> {
         &mut self,
         frame: &Frame<wgpu::Texture>,
     ) -> Result<wgpu::hal::vulkan::CommandEncoder, VulkanEncoderError> {
+        if frame.data.format() != wgpu::TextureFormat::NV12 {
+            return Err(VulkanEncoderError::NotNV12Texture(frame.data.format()));
+        }
+
         let input_image_size = wgpu::Extent3d {
             width: self.input_image.extent.width,
             height: self.input_image.extent.height,
