@@ -1,9 +1,6 @@
 use bytes::{Buf, Bytes};
 
 use crate::{DecodingError, amf3::*};
-use wrappers::*;
-
-mod wrappers;
 
 struct Trait {
     class_name: Option<String>,
@@ -35,81 +32,20 @@ impl Decoder {
             NULL => AmfValue::Null,
             FALSE => AmfValue::Boolean(false),
             TRUE => AmfValue::Boolean(true),
-            INTEGER => AmfValue::Integer(self.decode_integer(buf)?),
-            DOUBLE => AmfValue::Double(self.decode_double(buf)?),
-            STRING => AmfValue::String(self.decode_string(buf)?),
-            XML_DOC => AmfValue::XmlDoc(self.decode_xml_doc(buf)?),
-            DATE => AmfValue::Date(self.decode_date(buf)?),
-            ARRAY => {
-                let Array { associative, dense } = self.decode_array(buf)?;
-                AmfValue::Array { associative, dense }
-            }
-            OBJECT => {
-                let Object {
-                    class_name,
-                    sealed_count,
-                    values,
-                } = self.decode_object(buf)?;
-                AmfValue::Object {
-                    class_name,
-                    sealed_count,
-                    values,
-                }
-            }
-            XML => AmfValue::Xml(self.decode_xml(buf)?),
-            BYTE_ARRAY => AmfValue::ByteArray(self.decode_byte_array(buf)?),
-            VECTOR_INT => {
-                let VectorInt {
-                    fixed_length,
-                    values,
-                } = self.decode_int_vec(buf)?;
-                AmfValue::VectorInt {
-                    fixed_length,
-                    values,
-                }
-            }
-            VECTOR_UINT => {
-                let VectorUInt {
-                    fixed_length,
-                    values,
-                } = self.decode_uint_vec(buf)?;
-                AmfValue::VectorUInt {
-                    fixed_length,
-                    values,
-                }
-            }
-            VECTOR_DOUBLE => {
-                let VectorDouble {
-                    fixed_length,
-                    values,
-                } = self.decode_double_vec(buf)?;
-                AmfValue::VectorDouble {
-                    fixed_length,
-                    values,
-                }
-            }
-            VECTOR_OBJECT => {
-                let VectorObject {
-                    fixed_length,
-                    class_name,
-                    values,
-                } = self.decode_object_vec(buf)?;
-                AmfValue::VectorObject {
-                    fixed_length,
-                    class_name,
-                    values,
-                }
-            }
-            DICTIONARY => {
-                let Dictionary {
-                    weak_references,
-                    values,
-                } = self.decode_dictionary(buf)?;
-                AmfValue::Dictionary {
-                    weak_references,
-                    values,
-                }
-            }
+            INTEGER => todo!(),
+            DOUBLE => todo!(),
+            STRING => todo!(),
+            XML_DOC => todo!(),
+            DATE => todo!(),
+            ARRAY => todo!(),
+            OBJECT => todo!(),
+            XML => todo!(),
+            BYTE_ARRAY => todo!(),
+            VECTOR_INT => todo!(),
+            VECTOR_UINT => todo!(),
+            VECTOR_DOUBLE => todo!(),
+            VECTOR_OBJECT => todo!(),
+            DICTIONARY => todo!(),
             _ => return Err(DecodingError::UnknownType(marker)),
         };
         Ok(amf_value)
@@ -132,7 +68,7 @@ impl Decoder {
             return Err(DecodingError::InsufficientData);
         }
 
-        let u29 = decode_u29(buf)?;
+        let u29 = decode_u29(buf)?.0;
         let has_value = (u29 & 0b1) == 1;
         let u28 = u29 >> 1;
 
@@ -251,7 +187,7 @@ impl Decoder {
             let mut values = Vec::with_capacity(item_count * ITEM_SIZE);
 
             while vec_buf.has_remaining() {
-                let uint = decode_u29(&mut vec_buf)?;
+                let uint = decode_u29(&mut vec_buf)?.0;
                 values.push(uint);
             }
 
@@ -297,11 +233,11 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_object_vec(&mut self, buf: &mut Bytes) -> Result<VectorObject, DecodingError> {
+    fn decode_object_vec(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
         todo!()
     }
 
-    fn decode_dictionary(&mut self, buf: &mut Bytes) -> Result<Dictionary, DecodingError> {
+    fn decode_dictionary(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
         todo!()
     }
 
@@ -313,7 +249,7 @@ impl Decoder {
             return Err(DecodingError::InsufficientData);
         }
 
-        let u29 = decode_u29(buf)?;
+        let u29 = decode_u29(buf)?.0;
         let has_value = (u29 & 0b1) == 1;
         let u28 = u29 >> 1;
 
@@ -335,16 +271,18 @@ impl Decoder {
     }
 }
 
-fn decode_u29(buf: &mut Bytes) -> Result<u32, DecodingError> {
+fn decode_u29(buf: &mut Bytes) -> Result<(u32, usize), DecodingError> {
     let mut result: u32 = 0;
     let mut next_byte_present = false;
+    let mut bytes_used: usize = 0;
     for _ in 0..3 {
         if buf.is_empty() {
             return Err(DecodingError::InsufficientData);
         }
 
         let byte = buf.get_u8();
-        result <<= 8;
+        bytes_used += 1;
+        result <<= 7;
         result |= (byte & 0x7F) as u32;
         next_byte_present = ((byte >> 7) & 0b1) == 1;
         if !next_byte_present {
@@ -357,9 +295,92 @@ fn decode_u29(buf: &mut Bytes) -> Result<u32, DecodingError> {
         }
 
         let byte = buf.get_u8();
+        bytes_used += 1;
         result <<= 8;
         result |= byte as u32;
     }
 
-    Ok(result)
+    Ok((result, bytes_used))
+}
+
+fn decode_i29(buf: &mut Bytes) -> Result<i32, DecodingError> {
+    let (u29, bytes_used) = decode_u29(buf)?;
+    println!("{u29}");
+
+    let (sign_flag, value_mask): (u32, u32) = match bytes_used {
+        1 => (1 << 6, 0x3F),
+        2 => (1 << 13, 0x1F_FF),
+        3 => (1 << 20, 0x0F_FF_FF),
+        4 => (1 << 28, 0x0F_FF_FF_FF),
+        _ => unreachable!(),
+    };
+
+    let int_val = (u29 & value_mask) as i32;
+
+    let negative = u29 & sign_flag > 0;
+    match negative {
+        false => Ok(int_val),
+        true => {
+            let min_val = -(sign_flag as i32);
+            Ok(min_val + int_val)
+        }
+    }
+}
+
+#[cfg(test)]
+mod decode_test {
+    use bytes::Bytes;
+
+    use crate::amf3::decoding::decode_i29;
+
+    #[test]
+    fn test_decode_i29() {
+        // 32 in 7 bit U2
+        let mut one_byte_pos = Bytes::from(vec![0b0010_0000]);
+        let decoded_val = decode_i29(&mut one_byte_pos).expect("Failed to decode 1 byte positive.");
+        assert_eq!(decoded_val, 32);
+
+        // -63 in 7 bit U2
+        let mut one_byte_neg = Bytes::from(vec![0b0100_0001]);
+        let decoded_val = decode_i29(&mut one_byte_neg).expect("Failed to decode 1 byte negative.");
+        assert_eq!(decoded_val, -63);
+
+        // 143 in 14 bit U2
+        let mut two_byte_pos = Bytes::from(vec![0b1000_0001, 0b0000_1111]);
+        let decoded_val =
+            decode_i29(&mut two_byte_pos).expect("Failed to decode 2 bytes positive.");
+        assert_eq!(decoded_val, 143);
+
+        // -8189 in 14 bit U2
+        let mut two_byte_neg = Bytes::from(vec![0b1100_0000, 0b0000_0011]);
+        let decoded_val =
+            decode_i29(&mut two_byte_neg).expect("Failed to decode 2 bytes negative.");
+        assert_eq!(decoded_val, -8189);
+
+        // 16512 in 21 bit U2
+        let mut three_byte_pos = Bytes::from(vec![0b1000_0001, 0b1000_0001, 0b0000_0000]);
+        let decoded_val =
+            decode_i29(&mut three_byte_pos).expect("Failed to decode 3 bytes positive.");
+        assert_eq!(decoded_val, 16512);
+
+        // -1007172 in 21 bit U2
+        let mut three_byte_neg = Bytes::from(vec![0b1100_0010, 0b1100_0011, 0b0011_1100]);
+        let decoded_val =
+            decode_i29(&mut three_byte_neg).expect("Failed to decode 3 bytes negative.");
+        assert_eq!(decoded_val, -1007172);
+
+        // 176193365 in 29 bit U2
+        let mut four_byte_pos =
+            Bytes::from(vec![0b1010_1010, 0b1000_0000, 0b1111_1111, 0b_0101_0101]);
+        let decoded_val =
+            decode_i29(&mut four_byte_pos).expect("Failed to decode 4 bytes positive.");
+        assert_eq!(decoded_val, 176193365);
+
+        // -92242091 in 29 bit U2
+        let mut four_byte_neg =
+            Bytes::from(vec![0b1110_1010, 0b1000_0000, 0b1111_1111, 0b_0101_0101]);
+        let decoded_val =
+            decode_i29(&mut four_byte_neg).expect("Failed to decode 4 bytes negative.");
+        assert_eq!(decoded_val, -92242091);
+    }
 }
