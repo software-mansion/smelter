@@ -35,7 +35,7 @@ impl Decoder {
     }
 
     fn decode_value(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
-        if !buf.has_remaining() {
+        if buf.is_empty() {
             return Err(DecodingError::InsufficientData);
         }
 
@@ -97,13 +97,13 @@ impl Decoder {
             true => {
                 let size = u28 as usize;
                 if size == 0 {
-                    "".to_string()
+                    String::new()
                 } else {
                     if buf.remaining() < size {
                         return Err(DecodingError::InsufficientData);
                     }
 
-                    let utf8 = buf.copy_to_bytes(size).to_vec();
+                    let utf8 = buf.split_to(size).to_vec();
                     let string = String::from_utf8(utf8).map_err(|_| DecodingError::InvalidUtf8)?;
                     self.strings.push(string.clone());
                     string
@@ -180,7 +180,7 @@ impl Decoder {
                 .field_names
                 .into_iter()
                 .map(|key| Ok((key, decoder.decode_value(buf)?)))
-                .collect::<Result<_, DecodingError>>()?;
+                .collect::<Result<_, _>>()?;
 
             if amf_trait.dynamic {
                 fields.extend(decoder.decode_pairs(buf)?);
@@ -495,7 +495,6 @@ impl Decoder {
 
     fn decode_i29(&self, buf: &mut Bytes) -> Result<i32, DecodingError> {
         let (u29, bytes_used) = self.decode_u29(buf)?;
-        println!("{u29}");
 
         let (sign_flag, value_mask): (u32, u32) = match bytes_used {
             1 => (1 << 6, 0x3F),
@@ -507,7 +506,7 @@ impl Decoder {
 
         let int_val = (u29 & value_mask) as i32;
 
-        let negative = u29 & sign_flag > 0;
+        let negative = (u29 & sign_flag) > 0;
         match negative {
             false => Ok(int_val),
             true => {
