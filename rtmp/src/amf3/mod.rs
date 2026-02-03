@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::collections::HashMap;
 
 use bytes::Bytes;
@@ -27,7 +28,7 @@ const VECTOR_OBJECT: u8 = 0x10;
 const DICTIONARY: u8 = 0x11;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AmfValue {
+pub enum Amf3Value {
     Undefined,
     Null,
     Boolean(bool),
@@ -37,13 +38,13 @@ pub enum AmfValue {
     XmlDoc(String),
     Date(f64),
     Array {
-        associative: HashMap<String, AmfValue>,
-        dense: Vec<AmfValue>,
+        associative: HashMap<String, Amf3Value>,
+        dense: Vec<Amf3Value>,
     },
     Object {
         class_name: Option<String>,
         sealed_count: usize,
-        values: Vec<(String, AmfValue)>,
+        values: Vec<(String, Amf3Value)>,
     },
     Xml(String),
     ByteArray(Bytes),
@@ -62,10 +63,10 @@ pub enum AmfValue {
     VectorObject {
         fixed_length: bool,
         class_name: Option<String>,
-        values: Vec<AmfValue>,
+        values: Vec<Amf3Value>,
     },
     Dictionary {
         weak_references: bool,
-        entries: Vec<(AmfValue, AmfValue)>,
+        entries: Vec<(Amf3Value, Amf3Value)>,
     },
 }

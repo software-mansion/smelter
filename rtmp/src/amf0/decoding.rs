@@ -2,7 +2,7 @@ use bytes::{Buf, Bytes};
 use std::collections::HashMap;
 use tracing::warn;
 
-use crate::{DecodingError, amf0::*};
+use crate::{AmfDecodingError, amf0::*};
 
 const OBJECT_END_MARKER: [u8; 3] = [0x00, 0x00, 0x09];
 
@@ -19,7 +19,7 @@ struct AmfDecoderState {
     buf: Bytes,
     // According to spec (https://rtmp.veriskope.com/pdf/amf0-file-format-specification.pdf),
     // complex types are Object, ECMA Array, Strict Array and Typed Objext.
-    complexes: Vec<AmfValue>,
+    complexes: Vec<Amf0Value>,
 }
 
 impl AmfDecoderState {
@@ -72,7 +72,7 @@ impl AmfDecoderState {
             }
 
             // TODO add switch to AMF3 (0x11)
-            _ => return Err(DecodingError::UnknownType(marker)),
+            _ => return Err(AmfDecodingError::UnknownType(marker)),
         };
         Ok(amf_value)
     }
@@ -103,7 +103,7 @@ impl AmfDecoderState {
         }
         let string_bytes = self.buf.split_to(size);
         let string =
-            String::from_utf8(string_bytes.to_vec()).map_err(|_| DecodingError::InvalidUtf8)?;
+            String::from_utf8(string_bytes.to_vec()).map_err(|_| AmfDecodingError::InvalidUtf8)?;
         Ok(string)
     }
 
@@ -121,7 +121,7 @@ impl AmfDecoderState {
         let idx = self.buf.get_u16() as usize;
         let complex = match self.complexes.get(idx) {
             Some(c) => c.clone(),
-            None => return Err(DecodingError::OutOfBoundsReference),
+            None => return Err(AmfDecodingError::OutOfBoundsReference),
         };
         Ok(complex)
     }
@@ -148,7 +148,7 @@ impl AmfDecoderState {
             array.push(value);
         }
 
-        self.complexes.push(AmfValue::StrictArray(array.clone()));
+        self.complexes.push(Amf0Value::StrictArray(array.clone()));
         Ok(array)
     }
 
@@ -177,7 +177,7 @@ impl AmfDecoderState {
         }
         let string_bytes = self.buf.split_to(size);
         let string =
-            String::from_utf8(string_bytes.to_vec()).map_err(|_| DecodingError::InvalidUtf8)?;
+            String::from_utf8(string_bytes.to_vec()).map_err(|_| AmfDecodingError::InvalidUtf8)?;
         Ok(string)
     }
 
@@ -191,7 +191,7 @@ impl AmfDecoderState {
         let class_name = self.decode_string()?;
         let pairs = self.decode_object_pairs()?;
 
-        self.complexes.push(AmfValue::TypedObject {
+        self.complexes.push(Amf0Value::TypedObject {
             class_name: class_name.clone(),
             properties: pairs.clone(),
         });
@@ -215,7 +215,7 @@ impl AmfDecoderState {
             }
             let key_bytes: Bytes = self.buf.split_to(key_size);
             let key =
-                String::from_utf8(key_bytes.to_vec()).map_err(|_| DecodingError::InvalidUtf8)?;
+                String::from_utf8(key_bytes.to_vec()).map_err(|_| AmfDecodingError::InvalidUtf8)?;
 
             let value = self.decode_value()?;
             pairs.insert(key, value);

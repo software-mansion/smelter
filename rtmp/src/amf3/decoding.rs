@@ -1,6 +1,6 @@
 use bytes::{Buf, Bytes};
 
-use crate::{DecodingError, amf3::*};
+use crate::{AmfDecodingError, amf3::*};
 
 /// Decode AMF3 encoded messages.
 ///
@@ -22,7 +22,7 @@ struct AmfDecoderState {
     buf: Bytes,
     strings: Vec<String>,
     traits: Vec<Trait>,
-    complexes: Vec<AmfValue>,
+    complexes: Vec<Amf3Value>,
 }
 
 impl AmfDecoderState {
@@ -100,7 +100,7 @@ impl AmfDecoderState {
             let utf8 = decoder.buf.split_to(size);
             let xml = String::from_utf8(utf8.to_vec()).map_err(|_| DecodingError::InvalidUtf8)?;
 
-            let amf_value = AmfValue::XmlDoc(xml);
+            let amf_value = Amf3Value::XmlDoc(xml);
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
         };
@@ -137,7 +137,7 @@ impl AmfDecoderState {
                 .map(|_| decoder.decode_value())
                 .collect::<Result<_, _>>()?;
 
-            Ok(AmfValue::Array { associative, dense })
+            Ok(Amf3Value::Array { associative, dense })
         };
 
         self.decode_complex(decode)
@@ -147,7 +147,7 @@ impl AmfDecoderState {
         let decode = |decoder: &mut Self, u28: usize| {
             let amf_trait = decoder.decode_object_trait(u28)?;
             let sealed_count = amf_trait.field_names.len();
-            let mut fields: Vec<(String, AmfValue)> = amf_trait
+            let mut fields: Vec<(String, Amf3Value)> = amf_trait
                 .field_names
                 .into_iter()
                 .map(|key| Ok((key, decoder.decode_value()?)))
@@ -157,7 +157,7 @@ impl AmfDecoderState {
                 fields.extend(decoder.decode_pairs()?);
             }
 
-            let amf_object = AmfValue::Object {
+            let amf_object = Amf3Value::Object {
                 class_name: amf_trait.class_name,
                 sealed_count,
                 values: fields,
@@ -179,7 +179,7 @@ impl AmfDecoderState {
             let utf8 = decoder.buf.split_to(size);
             let xml = String::from_utf8(utf8.to_vec()).map_err(|_| DecodingError::InvalidUtf8)?;
 
-            let amf_value = AmfValue::XmlDoc(xml);
+            let amf_value = Amf3Value::XmlDoc(xml);
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
         };
@@ -217,7 +217,7 @@ impl AmfDecoderState {
                 .map(|_| decoder.decode_i29())
                 .collect::<Result<_, _>>()?;
 
-            let amf_value = AmfValue::VectorInt {
+            let amf_value = Amf3Value::VectorInt {
                 fixed_length,
                 values,
             };
@@ -245,7 +245,7 @@ impl AmfDecoderState {
                 })
                 .collect::<Result<_, _>>()?;
 
-            let amf_value = AmfValue::VectorUInt {
+            let amf_value = Amf3Value::VectorUInt {
                 fixed_length,
                 values,
             };
@@ -271,7 +271,7 @@ impl AmfDecoderState {
                 .map(|_| decoder.buf.get_f64())
                 .collect();
 
-            let amf_value = AmfValue::VectorDouble {
+            let amf_value = Amf3Value::VectorDouble {
                 fixed_length,
                 values,
             };
@@ -301,7 +301,7 @@ impl AmfDecoderState {
                 .map(|_| decoder.decode_value())
                 .collect::<Result<_, _>>()?;
 
-            let amf_value = AmfValue::VectorObject {
+            let amf_value = Amf3Value::VectorObject {
                 fixed_length,
                 class_name,
                 values,
@@ -330,7 +330,7 @@ impl AmfDecoderState {
                 })
                 .collect::<Result<_, _>>()?;
 
-            let amf_value = AmfValue::Dictionary {
+            let amf_value = Amf3Value::Dictionary {
                 weak_references,
                 entries,
             };
@@ -363,7 +363,7 @@ impl AmfDecoderState {
                 let idx = u28 as usize;
                 self.complexes
                     .get(idx)
-                    .ok_or(DecodingError::OutOfBoundsReference)?
+                    .ok_or(AmfDecodingError::OutOfBoundsReference)?
                     .clone()
             }
         };
@@ -459,7 +459,7 @@ impl AmfDecoderState {
                 let idx = u28 as usize;
                 self.strings
                     .get(idx)
-                    .ok_or(DecodingError::OutOfBoundsReference)?
+                    .ok_or(AmfDecodingError::OutOfBoundsReference)?
                     .clone()
             }
         };
@@ -492,11 +492,11 @@ impl AmfDecoderState {
             let amf_trait = self
                 .traits
                 .get(trait_idx)
-                .ok_or(DecodingError::OutOfBoundsReference)?
+                .ok_or(AmfDecodingError::OutOfBoundsReference)?
                 .clone();
             Ok(amf_trait)
         } else if (u28 & TRAIT_EXTERNALIZABLE_FLAG) != 0 {
-            Err(DecodingError::ExternalizableTrait)
+            Err(AmfDecodingError::ExternalizableTrait)
         } else {
             const DYNAMIC_MEMBERS_FLAG: usize = 0b1;
 

@@ -1,8 +1,8 @@
 use bytes::Bytes;
 
 use crate::{
+    PacketType,
     error::{AudioTagParseError, ParseError},
-    tag::PacketType,
 };
 
 /// Struct representing flv AUDIODATA.

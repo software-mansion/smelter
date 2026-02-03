@@ -1,8 +1,8 @@
 use bytes::Bytes;
 
 use crate::{
+    PacketType,
     error::{ParseError, VideoTagParseError},
-    tag::PacketType,
 };
 
 /// Struct representing flv VIDEODATA.
