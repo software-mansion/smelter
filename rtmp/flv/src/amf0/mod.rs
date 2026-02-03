@@ -41,4 +41,5 @@ pub enum AmfValue {
         class_name: String,
         properties: HashMap<String, AmfValue>,
     },
+    Amf3Switch,
 }

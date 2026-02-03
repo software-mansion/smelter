@@ -66,6 +66,7 @@ impl Decoder {
                     properties,
                 }
             }
+            AMF3_SWITCH => AmfValue::Amf3Switch,
             _ => return Err(DecodingError::UnknownType(marker)),
         };
         Ok(amf_value)
