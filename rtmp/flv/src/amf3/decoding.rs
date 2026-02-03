@@ -474,7 +474,13 @@ impl Decoder {
     }
 
     fn decode_object_trait(&mut self, buf: &mut Bytes, u28: usize) -> Result<Trait, DecodingError> {
-        if (u28 & 0b1) == 0 {
+        // https://github.com/q191201771/doc/blob/master/spec-amf-file-format-spec.pdf
+        // Flags explained in section 3.12
+
+        const TRAIT_HAS_VALUE_FLAG: usize = 0b1;
+        const TRAIT_EXTERNALIZABLE_FLAG: usize = 0b11;
+
+        if (u28 & TRAIT_HAS_VALUE_FLAG) == 0 {
             let trait_idx = u28 >> 1;
             let amf_trait = self
                 .traits
@@ -482,11 +488,15 @@ impl Decoder {
                 .ok_or(DecodingError::OutOfBoundsReference)?
                 .clone();
             Ok(amf_trait)
-        } else if (u28 & 0b11) != 0 {
+        } else if (u28 & TRAIT_EXTERNALIZABLE_FLAG) != 0 {
             Err(DecodingError::ExternalizableTrait)
         } else {
-            let dynamic = (u28 & 0b100) != 0;
-            let sealed_members = u28 >> 3;
+            const DYNAMIC_MEMBERS_FLAG: usize = 0b1;
+
+            let trait_marker = u28 >> 2;
+            let dynamic = (trait_marker & DYNAMIC_MEMBERS_FLAG) != 0;
+
+            let sealed_members = trait_marker >> 1;
 
             let class_name = self.decode_string_raw(buf)?;
             let class_name = if class_name.is_empty() {
