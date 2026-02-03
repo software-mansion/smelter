@@ -370,31 +370,31 @@ impl Decoder {
     // Check amf3 spec sections 1.3.1 and 3.6 to learn more about how this serialization works
     fn decode_u29(&self, buf: &mut Bytes) -> Result<(u32, usize), DecodingError> {
         let mut result: u32 = 0;
-        let mut next_byte_present = false;
         let mut bytes_used: usize = 0;
-        for _ in 0..3 {
+
+        let mut decode_byte = |shift| {
             if buf.is_empty() {
                 return Err(DecodingError::InsufficientData);
             }
 
             let byte = buf.get_u8();
             bytes_used += 1;
-            result <<= 7;
+            result <<= shift;
             result |= (byte & 0x7F) as u32;
-            next_byte_present = ((byte >> 7) & 0b1) == 1;
+
+            let next_byte_present = ((byte >> 7) & 0b1) == 1;
+            Ok(next_byte_present)
+        };
+
+        let mut next_byte_present = false;
+        for _ in 0..3 {
+            next_byte_present = decode_byte(7)?;
             if !next_byte_present {
                 break;
             }
         }
         if next_byte_present {
-            if buf.is_empty() {
-                return Err(DecodingError::InsufficientData);
-            }
-
-            let byte = buf.get_u8();
-            bytes_used += 1;
-            result <<= 8;
-            result |= byte as u32;
+            decode_byte(8)?;
         }
 
         Ok((result, bytes_used))
