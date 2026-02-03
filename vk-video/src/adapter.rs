@@ -4,7 +4,7 @@ use std::{
     fmt::{self, Debug},
     sync::Arc,
 };
-use tracing::{debug, warn};
+use tracing::{debug, debug_span, warn};
 use wgpu::hal::{DynAdapter, vulkan::Api as VkApi};
 
 use crate::{
@@ -45,6 +45,8 @@ impl<'a> VulkanAdapter<'a> {
             .map(CStr::to_string_lossy)
             .unwrap_or("unknown".into());
 
+        let _span = debug_span!("creating adapter", device_name = %device_name).entered();
+
         let wgpu_adapter = wgpu_instance.expose_adapter(device)?;
 
         if let Some(surface) = compatible_surface {
@@ -70,17 +72,19 @@ impl<'a> VulkanAdapter<'a> {
         };
 
         if vk_13_features.synchronization2 == vk::FALSE {
-            warn!("device {device_name} does not support the required synchronization2 feature",);
-        }
-
-        if !contains_extensions(REQUIRED_EXTENSIONS, &extensions) {
-            warn!("device {device_name} does not support the required extensions",);
+            debug!("device does not support the required synchronization2 feature");
             return None;
         }
 
-        let has_decode_extensions = contains_extensions(DECODE_EXTENSIONS, &extensions);
-        let has_encode_extensions = contains_extensions(ENCODE_EXTENSIONS, &extensions);
+        if let Err(missing) = check_extensions(REQUIRED_EXTENSIONS, &extensions) {
+            debug!(missing_extensions = ?missing, "device is missing some required extensions",);
+            return None;
+        }
+
+        let has_decode_extensions = check_extensions(DECODE_EXTENSIONS, &extensions).is_ok();
+        let has_encode_extensions = check_extensions(ENCODE_EXTENSIONS, &extensions).is_ok();
         if !has_decode_extensions && !has_encode_extensions {
+            debug!("device does not support encoding or decoding extensions");
             return None;
         }
 
@@ -143,21 +147,26 @@ impl<'a> VulkanAdapter<'a> {
             .map(|(i, _)| i)?;
 
         let decode_queue_idx = match has_decode_extensions {
-            true => Some(find_video_queue_idx(
+            true => find_video_queue_idx(
                 &queues,
                 vk::QueueFlags::VIDEO_DECODE_KHR,
                 vk::VideoCodecOperationFlagsKHR::DECODE_H264,
-            )?),
+            ),
             false => None,
         };
         let encode_queue_idx = match has_encode_extensions {
-            true => Some(find_video_queue_idx(
+            true => find_video_queue_idx(
                 &queues,
                 vk::QueueFlags::VIDEO_ENCODE_KHR,
                 vk::VideoCodecOperationFlagsKHR::ENCODE_H264,
-            )?),
+            ),
             false => None,
         };
+
+        if decode_queue_idx.is_none() && encode_queue_idx.is_none() {
+            debug!("device does not have any queues that support video operations");
+            return None;
+        }
 
         debug!("decode capabilities: {decode_capabilities:#?}");
         debug!("encode capabilities: {encode_capabilities:#?}");
@@ -201,8 +210,8 @@ impl<'a> VulkanAdapter<'a> {
             driver_info,
             device_type,
             device_properties: properties,
-            supports_decoding: has_decode_extensions,
-            supports_encoding: has_encode_extensions,
+            supports_decoding: decode_queue_idx.is_some(),
+            supports_encoding: encode_queue_idx.is_some(),
             decode_capabilities: DecodeCapabilities {
                 h264: decode_capabilities
                     .as_ref()
@@ -356,23 +365,30 @@ pub(crate) fn iter_adapters<'a>(
         .filter_map(move |device| VulkanAdapter::new(vulkan_instance, compatible_surface, device)))
 }
 
-fn contains_extensions(
-    required_extensions: &[&CStr],
-    available_extensions: &[vk::ExtensionProperties],
-) -> bool {
-    required_extensions.iter().all(|&extension_name| {
-        available_extensions.iter().any(|ext| {
-            let Ok(name) = ext.extension_name_as_c_str() else {
-                return false;
-            };
+/// Returns the list of missing extensions
+fn check_extensions<'a>(
+    required_extensions: &'a [&'a CStr],
+    available_extensions: &'a [vk::ExtensionProperties],
+) -> Result<(), Vec<&'a CStr>> {
+    let missing = required_extensions
+        .iter()
+        .copied()
+        .filter(|&required_name| {
+            !available_extensions.iter().any(|ext| {
+                let Ok(name) = ext.extension_name_as_c_str() else {
+                    return false;
+                };
 
-            if name != extension_name {
-                return false;
-            };
-
-            true
+                name == required_name
+            })
         })
-    })
+        .collect::<Vec<_>>();
+
+    if !missing.is_empty() {
+        return Err(missing);
+    }
+
+    Ok(())
 }
 
 fn find_video_queue_idx(
