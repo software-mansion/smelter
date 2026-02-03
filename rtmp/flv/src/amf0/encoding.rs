@@ -27,6 +27,7 @@ fn encode_value(buf: &mut BytesMut, value: &AmfValue) -> Result<(), EncodingErro
             timezone_offset,
         } => put_date(buf, *unix_time, *timezone_offset),
         AmfValue::LongString(s) => put_long_string(buf, s)?,
+        AmfValue::XmlDoc(_s) => unimplemented!(),
         AmfValue::TypedObject {
             class_name: _class_name,
             properties: _properties,

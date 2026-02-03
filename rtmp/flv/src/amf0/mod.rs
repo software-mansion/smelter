@@ -17,6 +17,7 @@ const ECMA_ARRAY: u8 = 0x08;
 const STRICT_ARRAY: u8 = 0x0A;
 const DATE: u8 = 0x0B;
 const LONG_STRING: u8 = 0x0C;
+const XML_DOC: u8 = 0x0F;
 const TYPED_OBJECT: u8 = 0x10;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -34,6 +35,7 @@ pub enum AmfValue {
         timezone_offset: i16,
     },
     LongString(String),
+    XmlDoc(String),
     TypedObject {
         class_name: String,
         properties: HashMap<String, AmfValue>,

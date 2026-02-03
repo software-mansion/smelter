@@ -58,6 +58,7 @@ impl Decoder {
                 }
             }
             LONG_STRING => AmfValue::LongString(self.decode_long_string(buf)?),
+            XML_DOC => todo!(),
             TYPED_OBJECT => {
                 let (class_name, properties) = self.decode_typed_object(buf)?;
                 AmfValue::TypedObject {
