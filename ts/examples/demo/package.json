@@ -1,0 +1,31 @@
+{
+  "name": "node-examples",
+  "private": true,
+  "description": "",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "watch": "tsc --watch --preserveWatchOutput",
+    "build": "tsc",
+    "clean": "rimraf dist",
+    "ts-node": "ts-node"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@swmansion/smelter": "workspace:0.3.0",
+    "@swmansion/smelter-node": "workspace:0.3.2",
+    "fs-extra": "^11.2.0",
+    "node-fetch": "^2.6.7",
+    "react": "^18.3.1",
+    "ts-node": "^10.9.2"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.14.10",
+    "@types/node-fetch": "^2.6.11",
+    "@types/react": "^18.3.3"
+  }
+}
