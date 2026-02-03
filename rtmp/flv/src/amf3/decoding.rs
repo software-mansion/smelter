@@ -534,7 +534,7 @@ mod decode_test {
         let decoder = Decoder::new();
 
         // https://github.com/q191201771/doc/blob/master/spec-amf-file-format-spec.pdf
-        // Formatting of the test cases is explained in 1.3.1 and 3.6
+        // Tested integer representation is explained in 1.3.1 and 3.6
 
         // 32 in 7 bit U2
         let mut one_byte_pos = Bytes::from(vec![0b0010_0000]);
