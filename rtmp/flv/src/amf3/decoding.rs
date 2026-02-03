@@ -84,42 +84,6 @@ impl Decoder {
         Ok(AmfValue::String(self.decode_string_raw(buf)?))
     }
 
-    fn decode_string_raw(&mut self, buf: &mut Bytes) -> Result<String, DecodingError> {
-        if buf.remaining() < 4 {
-            return Err(DecodingError::InsufficientData);
-        }
-
-        let u29 = self.decode_u29(buf)?.0;
-        let has_value = (u29 & 0b1) == 1;
-        let u28 = u29 >> 1;
-
-        let string = match has_value {
-            true => {
-                let size = u28 as usize;
-                if size == 0 {
-                    String::new()
-                } else {
-                    if buf.remaining() < size {
-                        return Err(DecodingError::InsufficientData);
-                    }
-
-                    let utf8 = buf.split_to(size).to_vec();
-                    let string = String::from_utf8(utf8).map_err(|_| DecodingError::InvalidUtf8)?;
-                    self.strings.push(string.clone());
-                    string
-                }
-            }
-            false => {
-                let idx = u28 as usize;
-                self.strings
-                    .get(idx)
-                    .ok_or(DecodingError::OutOfBoundsReference)?
-                    .clone()
-            }
-        };
-        Ok(string)
-    }
-
     fn decode_xml_doc(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
         let decode = |decoder: &mut Decoder, buf: &mut Bytes, size: usize| {
             if buf.remaining() < size {
@@ -197,43 +161,6 @@ impl Decoder {
         };
 
         self.decode_complex(buf, decode)
-    }
-
-    fn decode_object_trait(&mut self, buf: &mut Bytes, u28: usize) -> Result<Trait, DecodingError> {
-        if (u28 & 0b1) == 0 {
-            let trait_idx = u28 >> 1;
-            let amf_trait = self
-                .traits
-                .get(trait_idx)
-                .ok_or(DecodingError::OutOfBoundsReference)?
-                .clone();
-            Ok(amf_trait)
-        } else if (u28 & 0b11) != 0 {
-            Err(DecodingError::ExternalizableTrait)
-        } else {
-            let dynamic = (u28 & 0b100) != 0;
-            let sealed_members = u28 >> 3;
-
-            let class_name = self.decode_string_raw(buf)?;
-            let class_name = if !class_name.is_empty() {
-                Some(class_name)
-            } else {
-                None
-            };
-
-            let field_names = (0..sealed_members)
-                .map(|_| self.decode_string_raw(buf))
-                .collect::<Result<_, _>>()?;
-
-            let amf_trait = Trait {
-                class_name,
-                dynamic,
-                field_names,
-            };
-
-            self.traits.push(amf_trait.clone());
-            Ok(amf_trait)
-        }
     }
 
     fn decode_xml(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
@@ -416,20 +343,6 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_pairs(&mut self, buf: &mut Bytes) -> Result<Vec<(String, AmfValue)>, DecodingError> {
-        let mut pairs = vec![];
-        loop {
-            let key = self.decode_string_raw(buf)?;
-            if key.is_empty() {
-                return Ok(pairs);
-            }
-
-            let value = self.decode_value(buf)?;
-            let pair = (key, value);
-            pairs.push(pair);
-        }
-    }
-
     fn decode_complex<F>(&mut self, buf: &mut Bytes, decode: F) -> Result<AmfValue, DecodingError>
     where
         F: FnOnce(&mut Self, &mut Bytes, usize) -> Result<AmfValue, DecodingError>,
@@ -513,6 +426,93 @@ impl Decoder {
                 let min_val = -(sign_flag as i32);
                 Ok(min_val + int_val)
             }
+        }
+    }
+
+    fn decode_string_raw(&mut self, buf: &mut Bytes) -> Result<String, DecodingError> {
+        if buf.remaining() < 4 {
+            return Err(DecodingError::InsufficientData);
+        }
+
+        let u29 = self.decode_u29(buf)?.0;
+        let has_value = (u29 & 0b1) == 1;
+        let u28 = u29 >> 1;
+
+        let string = match has_value {
+            true => {
+                let size = u28 as usize;
+                if size == 0 {
+                    String::new()
+                } else {
+                    if buf.remaining() < size {
+                        return Err(DecodingError::InsufficientData);
+                    }
+
+                    let utf8 = buf.split_to(size).to_vec();
+                    let string = String::from_utf8(utf8).map_err(|_| DecodingError::InvalidUtf8)?;
+                    self.strings.push(string.clone());
+                    string
+                }
+            }
+            false => {
+                let idx = u28 as usize;
+                self.strings
+                    .get(idx)
+                    .ok_or(DecodingError::OutOfBoundsReference)?
+                    .clone()
+            }
+        };
+        Ok(string)
+    }
+
+    fn decode_pairs(&mut self, buf: &mut Bytes) -> Result<Vec<(String, AmfValue)>, DecodingError> {
+        let mut pairs = vec![];
+        loop {
+            let key = self.decode_string_raw(buf)?;
+            if key.is_empty() {
+                return Ok(pairs);
+            }
+
+            let value = self.decode_value(buf)?;
+            let pair = (key, value);
+            pairs.push(pair);
+        }
+    }
+
+    fn decode_object_trait(&mut self, buf: &mut Bytes, u28: usize) -> Result<Trait, DecodingError> {
+        if (u28 & 0b1) == 0 {
+            let trait_idx = u28 >> 1;
+            let amf_trait = self
+                .traits
+                .get(trait_idx)
+                .ok_or(DecodingError::OutOfBoundsReference)?
+                .clone();
+            Ok(amf_trait)
+        } else if (u28 & 0b11) != 0 {
+            Err(DecodingError::ExternalizableTrait)
+        } else {
+            let dynamic = (u28 & 0b100) != 0;
+            let sealed_members = u28 >> 3;
+
+            let class_name = self.decode_string_raw(buf)?;
+            let class_name = if !class_name.is_empty() {
+                Some(class_name)
+            } else {
+                None
+            };
+
+            let field_names = (0..sealed_members)
+                .map(|_| self.decode_string_raw(buf))
+                .collect::<Result<_, _>>()?;
+
+            let amf_trait = Trait {
+                class_name,
+                dynamic,
+                field_names,
+            };
+
+            self.traits.push(amf_trait.clone());
+            Ok(amf_trait)
         }
     }
 }
