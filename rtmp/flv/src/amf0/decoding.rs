@@ -23,7 +23,7 @@ pub fn decode_amf0_values(amf_bytes: &[u8]) -> Result<Vec<AmfValue>, DecodingErr
 
 #[derive(Default)]
 struct Decoder {
-    // According to spec (https://rtmp.veriskope.com/pdf/amf0-file-format-specification.pdf),
+    // According to spec (https://github.com/q191201771/doc/blob/master/spec-amf0-file-format-specification.pdf),
     // complex types are Object, ECMA Array, Strict Array and Typed Objext.
     complexes: Vec<AmfValue>,
 }
