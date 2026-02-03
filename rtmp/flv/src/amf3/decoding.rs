@@ -2,6 +2,8 @@ use bytes::{Buf, Bytes};
 
 use crate::{DecodingError, amf3::*};
 
+/// Function used to decode AMF3 encoded messages. `amf_bytes` must be a payload of `rtmp` Data
+/// or Command message, encoded in AMF3.
 pub fn decode_amf3_value(amf_bytes: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
     let mut buf = Bytes::copy_from_slice(amf_bytes);
     let mut result = vec![];
