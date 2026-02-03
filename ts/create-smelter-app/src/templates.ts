@@ -1,5 +1,6 @@
 import type { Template } from './applyTemplate';
 import type { PackageManager } from './utils/packageManager';
+import chalk from 'chalk';
 
 export interface TemplateOption {
   title: string;
@@ -93,12 +94,14 @@ export const NodeNextWebRTCTemplate: TemplateOption = {
       {
         projectName,
         dir: 'client',
-        dirsToRemove: ['dist', 'node_modules'],
+        dirsToRemove: ['.next', 'next-env.d.ts', 'node_modules'],
       },
     ],
-    usageInstructions: (directoryName: string, packageManager: string) => (
-      'To get started run:\n' +
-      `$ cd ${directoryName} && ${packageManager} run build && node ./dist/index.js`+
-    ),
+    usageInstructions: (directoryName: string, packageManager: string) =>
+      'To get started:\n\n' +
+      '1. Start the Smelter server:\n' +
+      `   $ ${chalk.bold(`cd ${directoryName}/server && ${packageManager} run build && node ./dist/index.js`)}\n\n` +
+      '2. In a new terminal, start the Next.js client:\n' +
+      `   $ ${chalk.bold(`cd ${directoryName}/client && ${packageManager} run dev`)}`,
   }),
 };
