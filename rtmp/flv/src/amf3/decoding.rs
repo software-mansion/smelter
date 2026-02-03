@@ -206,13 +206,9 @@ impl Decoder {
 
             let fixed_length = buf.get_u8() == 0x01;
 
-            let mut vec_buf = buf.split_to(item_count * ITEM_SIZE);
-            let mut values = Vec::with_capacity(item_count * ITEM_SIZE);
-
-            while vec_buf.has_remaining() {
-                let int = decoder.decode_i29(&mut vec_buf)?;
-                values.push(int);
-            }
+            let values = (0..(item_count * ITEM_SIZE))
+                .map(|_| decoder.decode_i29(buf))
+                .collect::<Result<_, _>>()?;
 
             let amf_value = AmfValue::VectorInt {
                 fixed_length,
@@ -235,18 +231,18 @@ impl Decoder {
 
             let fixed_length = buf.get_u8() == 0x01;
 
-            let mut vec_buf = buf.split_to(item_count * ITEM_SIZE);
-            let mut values = Vec::with_capacity(item_count * ITEM_SIZE);
-
-            while vec_buf.has_remaining() {
-                let uint = decoder.decode_u29(&mut vec_buf)?.0;
-                values.push(uint);
-            }
+            let values = (0..(item_count * ITEM_SIZE))
+                .map(|_| {
+                    let uint = decoder.decode_u29(buf)?.0;
+                    Ok(uint)
+                })
+                .collect::<Result<_, _>>()?;
 
             let amf_value = AmfValue::VectorUInt {
                 fixed_length,
                 values,
             };
+
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
         };
@@ -264,13 +260,9 @@ impl Decoder {
 
             let fixed_length = buf.get_u8() == 0x01;
 
-            let mut vec_buf = buf.split_to(item_count * ITEM_SIZE);
-            let mut values = Vec::with_capacity(item_count * ITEM_SIZE);
-
-            while vec_buf.has_remaining() {
-                let double = vec_buf.get_f64();
-                values.push(double);
-            }
+            let values = (0..(item_count * ITEM_SIZE))
+                .map(|_| buf.get_f64())
+                .collect();
 
             let amf_value = AmfValue::VectorDouble {
                 fixed_length,
