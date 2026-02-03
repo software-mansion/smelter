@@ -58,7 +58,7 @@ impl Decoder {
                 }
             }
             LONG_STRING => AmfValue::LongString(self.decode_long_string(buf)?),
-            XML_DOC => todo!(),
+            XML_DOC => AmfValue::XmlDoc(self.decode_xml_doc(buf)?),
             TYPED_OBJECT => {
                 let (class_name, properties) = self.decode_typed_object(buf)?;
                 AmfValue::TypedObject {
@@ -66,8 +66,6 @@ impl Decoder {
                     properties,
                 }
             }
-
-            // TODO add switch to AMF3 (0x11)
             _ => return Err(DecodingError::UnknownType(marker)),
         };
         Ok(amf_value)
@@ -181,6 +179,10 @@ impl Decoder {
         let string =
             String::from_utf8(string_bytes.to_vec()).map_err(|_| DecodingError::InvalidUtf8)?;
         Ok(string)
+    }
+
+    fn decode_xml_doc(&mut self, buf: &mut Bytes) -> Result<String, DecodingError> {
+        self.decode_long_string(buf)
     }
 
     fn decode_typed_object(
