@@ -495,10 +495,10 @@ impl Decoder {
             let sealed_members = u28 >> 3;
 
             let class_name = self.decode_string_raw(buf)?;
-            let class_name = if !class_name.is_empty() {
-                Some(class_name)
-            } else {
+            let class_name = if class_name.is_empty() {
                 None
+            } else {
+                Some(class_name)
             };
 
             let field_names = (0..sealed_members)
