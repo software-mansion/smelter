@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
-mod decoding;
-mod encoding;
-
-pub use decoding::decode_amf0_values;
-pub use encoding::encode_amf_values;
+pub(super) mod decoding;
+pub(super) mod encoding;
 
 const NUMBER: u8 = 0x00;
 const BOOLEAN: u8 = 0x01;
@@ -22,15 +19,15 @@ const TYPED_OBJECT: u8 = 0x10;
 const AMF3_SWITCH: u8 = 0x11;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AmfValue {
+pub enum Amf0Value {
     Number(f64),
     Boolean(bool),
     String(String),
-    Object(HashMap<String, AmfValue>),
+    Object(HashMap<String, Amf0Value>),
     Null,
     Undefined,
-    EcmaArray(HashMap<String, AmfValue>),
-    StrictArray(Vec<AmfValue>),
+    EcmaArray(HashMap<String, Amf0Value>),
+    StrictArray(Vec<Amf0Value>),
     Date {
         unix_time: f64,
         timezone_offset: i16,
@@ -39,7 +36,7 @@ pub enum AmfValue {
     XmlDoc(String),
     TypedObject {
         class_name: String,
-        properties: HashMap<String, AmfValue>,
+        properties: HashMap<String, Amf0Value>,
     },
     Amf3Switch,
 }

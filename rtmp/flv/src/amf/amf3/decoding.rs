@@ -1,10 +1,13 @@
+use std::collections::HashMap;
+
 use bytes::{Buf, Bytes};
 
-use crate::{DecodingError, amf3::*};
+use super::*;
+use crate::{DecodingError, amf::Amf3Value};
 
 /// Function used to decode AMF3 encoded messages. `amf_bytes` must be a payload of `rtmp` Data
 /// or Command message, encoded in AMF3.
-pub fn decode_amf3_value(amf_bytes: &[u8]) -> Result<Vec<AmfValue>, DecodingError> {
+pub fn decode_amf3_value(amf_bytes: &[u8]) -> Result<Vec<Amf3Value>, DecodingError> {
     let mut buf = Bytes::copy_from_slice(amf_bytes);
     let mut result = vec![];
     let mut decoder = Decoder::new();
@@ -28,7 +31,7 @@ struct Trait {
 struct Decoder {
     strings: Vec<String>,
     traits: Vec<Trait>,
-    complexes: Vec<AmfValue>,
+    complexes: Vec<Amf3Value>,
 }
 
 impl Decoder {
@@ -36,7 +39,7 @@ impl Decoder {
         Self::default()
     }
 
-    fn decode_value(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_value(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         if buf.is_empty() {
             return Err(DecodingError::InsufficientData);
         }
@@ -44,10 +47,10 @@ impl Decoder {
         let marker = buf.get_u8();
 
         match marker {
-            UNDEFINED => Ok(AmfValue::Undefined),
-            NULL => Ok(AmfValue::Null),
-            FALSE => Ok(AmfValue::Boolean(false)),
-            TRUE => Ok(AmfValue::Boolean(true)),
+            UNDEFINED => Ok(Amf3Value::Undefined),
+            NULL => Ok(Amf3Value::Null),
+            FALSE => Ok(Amf3Value::Boolean(false)),
+            TRUE => Ok(Amf3Value::Boolean(true)),
             INTEGER => self.decode_integer(buf),
             DOUBLE => self.decode_double(buf),
             STRING => self.decode_string(buf),
@@ -66,27 +69,27 @@ impl Decoder {
         }
     }
 
-    fn decode_integer(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_integer(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         if buf.is_empty() {
             return Err(DecodingError::InsufficientData);
         }
 
-        Ok(AmfValue::Integer(self.decode_i29(buf)?))
+        Ok(Amf3Value::Integer(self.decode_i29(buf)?))
     }
 
-    fn decode_double(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_double(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         if buf.remaining() < 8 {
             return Err(DecodingError::InsufficientData);
         }
 
-        Ok(AmfValue::Double(buf.get_f64()))
+        Ok(Amf3Value::Double(buf.get_f64()))
     }
 
-    fn decode_string(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
-        Ok(AmfValue::String(self.decode_string_raw(buf)?))
+    fn decode_string(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
+        Ok(Amf3Value::String(self.decode_string_raw(buf)?))
     }
 
-    fn decode_xml_doc(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_xml_doc(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         let decode = |decoder: &mut Decoder, buf: &mut Bytes, size: usize| {
             if buf.remaining() < size {
                 return Err(DecodingError::InsufficientData);
@@ -95,7 +98,7 @@ impl Decoder {
             let utf8 = buf.split_to(size);
             let xml = String::from_utf8(utf8.to_vec()).map_err(|_| DecodingError::InvalidUtf8)?;
 
-            let amf_value = AmfValue::XmlDoc(xml);
+            let amf_value = Amf3Value::XmlDoc(xml);
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
         };
@@ -103,14 +106,14 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_date(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_date(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         let decode = |decoder: &mut Decoder, buf: &mut Bytes, _| {
             if buf.remaining() < 8 {
                 return Err(DecodingError::InsufficientData);
             }
 
             let double_date = buf.get_f64();
-            let amf_value = AmfValue::Date(double_date);
+            let amf_value = Amf3Value::Date(double_date);
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
         };
@@ -118,7 +121,7 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_array(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_array(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         let decode = |decoder: &mut Self, buf: &mut Bytes, size: usize| {
             if buf.remaining() < size {
                 return Err(DecodingError::InsufficientData);
@@ -132,17 +135,17 @@ impl Decoder {
                 .map(|_| decoder.decode_value(buf))
                 .collect::<Result<_, _>>()?;
 
-            Ok(AmfValue::Array { associative, dense })
+            Ok(Amf3Value::Array { associative, dense })
         };
 
         self.decode_complex(buf, decode)
     }
 
-    fn decode_object(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_object(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         let decode = |decoder: &mut Self, buf: &mut Bytes, u28: usize| {
             let amf_trait = decoder.decode_object_trait(buf, u28)?;
             let sealed_count = amf_trait.field_names.len();
-            let mut fields: Vec<(String, AmfValue)> = amf_trait
+            let mut fields: Vec<(String, Amf3Value)> = amf_trait
                 .field_names
                 .into_iter()
                 .map(|key| Ok((key, decoder.decode_value(buf)?)))
@@ -152,7 +155,7 @@ impl Decoder {
                 fields.extend(decoder.decode_pairs(buf)?);
             }
 
-            let amf_object = AmfValue::Object {
+            let amf_object = Amf3Value::Object {
                 class_name: amf_trait.class_name,
                 sealed_count,
                 values: fields,
@@ -165,7 +168,7 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_xml(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_xml(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         let decode = |decoder: &mut Self, buf: &mut Bytes, size: usize| {
             if buf.remaining() < size {
                 return Err(DecodingError::InsufficientData);
@@ -174,7 +177,7 @@ impl Decoder {
             let utf8 = buf.split_to(size);
             let xml = String::from_utf8(utf8.to_vec()).map_err(|_| DecodingError::InvalidUtf8)?;
 
-            let amf_value = AmfValue::XmlDoc(xml);
+            let amf_value = Amf3Value::XmlDoc(xml);
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
         };
@@ -182,14 +185,14 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_byte_array(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_byte_array(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         let decode = |decoder: &mut Self, buf: &mut Bytes, size: usize| {
             if buf.remaining() < size {
                 return Err(DecodingError::InsufficientData);
             }
 
             let byte_array = buf.split_to(size);
-            let amf_value = AmfValue::ByteArray(byte_array);
+            let amf_value = Amf3Value::ByteArray(byte_array);
 
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
@@ -198,7 +201,7 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_int_vec(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_int_vec(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         let decode = |decoder: &mut Self, buf: &mut Bytes, item_count: usize| {
             const ITEM_SIZE: usize = 4;
 
@@ -212,7 +215,7 @@ impl Decoder {
                 .map(|_| decoder.decode_i29(buf))
                 .collect::<Result<_, _>>()?;
 
-            let amf_value = AmfValue::VectorInt {
+            let amf_value = Amf3Value::VectorInt {
                 fixed_length,
                 values,
             };
@@ -223,7 +226,7 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_uint_vec(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_uint_vec(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         let decode = |decoder: &mut Self, buf: &mut Bytes, item_count: usize| {
             const ITEM_SIZE: usize = 4;
 
@@ -240,7 +243,7 @@ impl Decoder {
                 })
                 .collect::<Result<_, _>>()?;
 
-            let amf_value = AmfValue::VectorUInt {
+            let amf_value = Amf3Value::VectorUInt {
                 fixed_length,
                 values,
             };
@@ -252,7 +255,7 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_double_vec(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_double_vec(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         let decode = |decoder: &mut Self, buf: &mut Bytes, item_count: usize| {
             const ITEM_SIZE: usize = 8;
 
@@ -266,7 +269,7 @@ impl Decoder {
                 .map(|_| buf.get_f64())
                 .collect();
 
-            let amf_value = AmfValue::VectorDouble {
+            let amf_value = Amf3Value::VectorDouble {
                 fixed_length,
                 values,
             };
@@ -278,7 +281,7 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_object_vec(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_object_vec(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         let decode = |decoder: &mut Self, buf: &mut Bytes, item_count: usize| {
             if buf.is_empty() {
                 return Err(DecodingError::InsufficientData);
@@ -296,7 +299,7 @@ impl Decoder {
                 .map(|_| decoder.decode_value(buf))
                 .collect::<Result<_, _>>()?;
 
-            let amf_value = AmfValue::VectorObject {
+            let amf_value = Amf3Value::VectorObject {
                 fixed_length,
                 class_name,
                 values,
@@ -309,7 +312,7 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_dictionary(&mut self, buf: &mut Bytes) -> Result<AmfValue, DecodingError> {
+    fn decode_dictionary(&mut self, buf: &mut Bytes) -> Result<Amf3Value, DecodingError> {
         let decode = |decoder: &mut Self, buf: &mut Bytes, entries_count: usize| {
             if buf.is_empty() {
                 return Err(DecodingError::InsufficientData);
@@ -325,7 +328,7 @@ impl Decoder {
                 })
                 .collect::<Result<_, _>>()?;
 
-            let amf_value = AmfValue::Dictionary {
+            let amf_value = Amf3Value::Dictionary {
                 weak_references,
                 entries,
             };
@@ -337,9 +340,9 @@ impl Decoder {
         self.decode_complex(buf, decode)
     }
 
-    fn decode_complex<F>(&mut self, buf: &mut Bytes, decode: F) -> Result<AmfValue, DecodingError>
+    fn decode_complex<F>(&mut self, buf: &mut Bytes, decode: F) -> Result<Amf3Value, DecodingError>
     where
-        F: FnOnce(&mut Self, &mut Bytes, usize) -> Result<AmfValue, DecodingError>,
+        F: FnOnce(&mut Self, &mut Bytes, usize) -> Result<Amf3Value, DecodingError>,
     {
         if buf.remaining() < 4 {
             return Err(DecodingError::InsufficientData);
@@ -461,7 +464,7 @@ impl Decoder {
         Ok(string)
     }
 
-    fn decode_pairs(&mut self, buf: &mut Bytes) -> Result<Vec<(String, AmfValue)>, DecodingError> {
+    fn decode_pairs(&mut self, buf: &mut Bytes) -> Result<Vec<(String, Amf3Value)>, DecodingError> {
         let mut pairs = vec![];
         loop {
             let key = self.decode_string_raw(buf)?;
@@ -527,7 +530,7 @@ impl Decoder {
 mod decode_test {
     use bytes::Bytes;
 
-    use crate::amf3::decoding::Decoder;
+    use crate::amf::amf3::decoding::Decoder;
 
     #[test]
     fn test_decode_i29() {

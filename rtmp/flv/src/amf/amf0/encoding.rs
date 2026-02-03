@@ -2,9 +2,10 @@ use bytes::{BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
 use tracing::warn;
 
-use crate::{EncodingError, amf0::*};
+use super::*;
+use crate::{EncodingError, amf::Amf0Value};
 
-pub fn encode_amf_values(amf_values: &[AmfValue]) -> Result<Bytes, EncodingError> {
+pub fn encode_amf0_values(amf_values: &[Amf0Value]) -> Result<Bytes, EncodingError> {
     let mut buf = BytesMut::new();
     for value in amf_values {
         encode_value(&mut buf, value)?;
@@ -12,26 +13,27 @@ pub fn encode_amf_values(amf_values: &[AmfValue]) -> Result<Bytes, EncodingError
     Ok(buf.freeze())
 }
 
-fn encode_value(buf: &mut BytesMut, value: &AmfValue) -> Result<(), EncodingError> {
+fn encode_value(buf: &mut BytesMut, value: &Amf0Value) -> Result<(), EncodingError> {
     match value {
-        AmfValue::Number(n) => put_number(buf, *n),
-        AmfValue::Boolean(b) => put_bool(buf, *b),
-        AmfValue::String(s) => put_string(buf, s)?,
-        AmfValue::Object(map) => put_object(buf, map)?,
-        AmfValue::Null => put_null(buf),
-        AmfValue::Undefined => put_undefined(buf),
-        AmfValue::EcmaArray(map) => put_ecma_array(buf, map)?,
-        AmfValue::StrictArray(arr) => put_strict_array(buf, arr)?,
-        AmfValue::Date {
+        Amf0Value::Number(n) => put_number(buf, *n),
+        Amf0Value::Boolean(b) => put_bool(buf, *b),
+        Amf0Value::String(s) => put_string(buf, s)?,
+        Amf0Value::Object(map) => put_object(buf, map)?,
+        Amf0Value::Null => put_null(buf),
+        Amf0Value::Undefined => put_undefined(buf),
+        Amf0Value::EcmaArray(map) => put_ecma_array(buf, map)?,
+        Amf0Value::StrictArray(arr) => put_strict_array(buf, arr)?,
+        Amf0Value::Date {
             unix_time,
             timezone_offset,
         } => put_date(buf, *unix_time, *timezone_offset),
-        AmfValue::LongString(s) => put_long_string(buf, s)?,
-        AmfValue::XmlDoc(_s) => unimplemented!(),
-        AmfValue::TypedObject {
+        Amf0Value::LongString(s) => put_long_string(buf, s)?,
+        Amf0Value::XmlDoc(_s) => unimplemented!(),
+        Amf0Value::TypedObject {
             class_name: _class_name,
             properties: _properties,
         } => unimplemented!(),
+        Amf0Value::Amf3Switch => unimplemented!(),
     };
     Ok(())
 }
@@ -56,7 +58,7 @@ fn put_string(buf: &mut BytesMut, s: &str) -> Result<(), EncodingError> {
     Ok(())
 }
 
-fn put_object(buf: &mut BytesMut, map: &HashMap<String, AmfValue>) -> Result<(), EncodingError> {
+fn put_object(buf: &mut BytesMut, map: &HashMap<String, Amf0Value>) -> Result<(), EncodingError> {
     buf.put_u8(OBJECT);
     put_keyval_map(buf, map)?;
     Ok(())
@@ -72,7 +74,7 @@ fn put_undefined(buf: &mut BytesMut) {
 
 fn put_ecma_array(
     buf: &mut BytesMut,
-    map: &HashMap<String, AmfValue>,
+    map: &HashMap<String, Amf0Value>,
 ) -> Result<(), EncodingError> {
     buf.put_u8(ECMA_ARRAY);
     buf.put_u32(map.len() as u32);
@@ -80,7 +82,7 @@ fn put_ecma_array(
     Ok(())
 }
 
-fn put_strict_array(buf: &mut BytesMut, arr: &[AmfValue]) -> Result<(), EncodingError> {
+fn put_strict_array(buf: &mut BytesMut, arr: &[Amf0Value]) -> Result<(), EncodingError> {
     if arr.len() > u32::MAX as usize {
         return Err(EncodingError::ArrayTooLong(arr.len()));
     }
@@ -113,7 +115,7 @@ fn put_long_string(buf: &mut BytesMut, s: &str) -> Result<(), EncodingError> {
 
 fn put_keyval_map(
     buf: &mut BytesMut,
-    map: &HashMap<String, AmfValue>,
+    map: &HashMap<String, Amf0Value>,
 ) -> Result<(), EncodingError> {
     for (key, value) in map {
         if key.len() > u16::MAX as usize {

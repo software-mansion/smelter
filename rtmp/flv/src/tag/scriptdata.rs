@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use bytes::Bytes;
 
 use crate::{
-    amf0::{AmfValue, decode_amf0_values},
+    amf::{Amf0Value, decode_amf0_values},
     error::ParseError,
 };
 
@@ -50,37 +50,37 @@ impl ScriptData {
     }
 }
 
-impl From<AmfValue> for ScriptDataValue {
-    fn from(value: AmfValue) -> Self {
+impl From<Amf0Value> for ScriptDataValue {
+    fn from(value: Amf0Value) -> Self {
         match value {
-            AmfValue::Number(n) => Self::Number(n),
-            AmfValue::Boolean(b) => Self::Boolean(b),
-            AmfValue::String(s) => Self::String(s),
-            AmfValue::Object(obj) => Self::Object(
+            Amf0Value::Number(n) => Self::Number(n),
+            Amf0Value::Boolean(b) => Self::Boolean(b),
+            Amf0Value::String(s) => Self::String(s),
+            Amf0Value::Object(obj) => Self::Object(
                 obj.into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect(),
             ),
-            AmfValue::Null => Self::Null,
-            AmfValue::Undefined => Self::Undefined,
-            AmfValue::EcmaArray(map) => Self::EcmaArray(
+            Amf0Value::Null => Self::Null,
+            Amf0Value::Undefined => Self::Undefined,
+            Amf0Value::EcmaArray(map) => Self::EcmaArray(
                 map.into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect(),
             ),
-            AmfValue::StrictArray(array) => {
+            Amf0Value::StrictArray(array) => {
                 Self::StrictArray(array.into_iter().map(Self::from).collect())
             }
-            AmfValue::Date {
+            Amf0Value::Date {
                 unix_time,
                 timezone_offset,
             } => Self::Date {
                 unix_time,
                 timezone_offset,
             },
-            AmfValue::LongString(s) => Self::LongString(s),
-            AmfValue::XmlDoc(s) => Self::XmlDoc(s),
-            AmfValue::TypedObject {
+            Amf0Value::LongString(s) => Self::LongString(s),
+            Amf0Value::XmlDoc(s) => Self::XmlDoc(s),
+            Amf0Value::TypedObject {
                 class_name,
                 properties,
             } => {
@@ -93,6 +93,7 @@ impl From<AmfValue> for ScriptDataValue {
                     properties: tag_properties,
                 }
             }
+            Amf0Value::Amf3Switch => panic!(),
         }
     }
 }
