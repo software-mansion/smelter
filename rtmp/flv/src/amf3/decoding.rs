@@ -372,30 +372,32 @@ impl Decoder {
         let mut result: u32 = 0;
         let mut bytes_used: usize = 0;
 
-        let mut decode_byte = |shift| {
+        let mut decode_byte = || {
             if buf.is_empty() {
                 return Err(DecodingError::InsufficientData);
             }
 
             let byte = buf.get_u8();
             bytes_used += 1;
-            result <<= shift;
-            result |= (byte & 0x7F) as u32;
 
-            let next_byte_present = ((byte >> 7) & 0b1) == 1;
+            let (shift, value_mask) = match bytes_used {
+                1..4 => (7, 0x7F),
+                4 => (8, 0xFF),
+                _ => unreachable!(),
+            };
+
+            result <<= shift;
+            result |= (byte & value_mask) as u32;
+
+            let next_byte_present = match bytes_used {
+                1..4 => ((byte >> 7) & 0b1) == 1,
+                4 => false,
+                _ => unreachable!(),
+            };
             Ok(next_byte_present)
         };
 
-        let mut next_byte_present = false;
-        for _ in 0..3 {
-            next_byte_present = decode_byte(7)?;
-            if !next_byte_present {
-                break;
-            }
-        }
-        if next_byte_present {
-            decode_byte(8)?;
-        }
+        while decode_byte()? {}
 
         Ok((result, bytes_used))
     }
@@ -576,20 +578,20 @@ mod decode_test {
             .expect("Failed to decode 3 bytes negative.");
         assert_eq!(decoded_val, -1007172);
 
-        // 176193365 in 29 bit U2
+        // 176193493 in 29 bit U2
         let mut four_byte_pos =
-            Bytes::from(vec![0b1010_1010, 0b1000_0000, 0b1111_1111, 0b_0101_0101]);
+            Bytes::from(vec![0b1010_1010, 0b1000_0000, 0b1111_1111, 0b_1101_0101]);
         let decoded_val = decoder
             .decode_i29(&mut four_byte_pos)
             .expect("Failed to decode 4 bytes positive.");
-        assert_eq!(decoded_val, 176193365);
+        assert_eq!(decoded_val, 176193493);
 
-        // -92242091 in 29 bit U2
+        // -92241963 in 29 bit U2
         let mut four_byte_neg =
-            Bytes::from(vec![0b1110_1010, 0b1000_0000, 0b1111_1111, 0b0101_0101]);
+            Bytes::from(vec![0b1110_1010, 0b1000_0000, 0b1111_1111, 0b1101_0101]);
         let decoded_val = decoder
             .decode_i29(&mut four_byte_neg)
             .expect("Failed to decode 4 bytes negative.");
-        assert_eq!(decoded_val, -92242091);
+        assert_eq!(decoded_val, -92241963);
     }
 }
