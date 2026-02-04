@@ -1,10 +1,11 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::common_core::prelude as core;
 use crate::*;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TransportProtocol {
     /// UDP protocol.
@@ -22,7 +23,7 @@ impl From<TransportProtocol> for core::RtpInputTransportProtocol {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum PortOrPortRange {
     String(String),

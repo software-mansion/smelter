@@ -5,6 +5,7 @@ use glyphon::fontdb::Source;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use smelter_core::{InputInitInfo, Pipeline, protocols::Port};
+use utoipa::ToSchema;
 
 use crate::{
     error::ApiError,
@@ -19,7 +20,7 @@ use smelter_api::{
 
 use super::ApiState;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RegisterInput {
     RtpStream(RtpInput),
@@ -33,7 +34,7 @@ pub enum RegisterInput {
     DeckLink(DeckLink),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RegisterOutput {
     RtpStream(RtpOutput),

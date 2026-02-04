@@ -1,16 +1,17 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::common_core::prelude as core;
 use crate::*;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AudioScene {
     pub inputs: Vec<AudioSceneInput>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AudioSceneInput {
     pub input_id: InputId,
@@ -18,7 +19,7 @@ pub struct AudioSceneInput {
     pub volume: Option<f32>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum AudioMixingStrategy {
     /// Firstly, input samples are summed. If the result is outside the i16 PCM range, it gets clipped.
@@ -28,7 +29,7 @@ pub enum AudioMixingStrategy {
     SumScale,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum AudioChannels {
     /// Mono audio (single channel).

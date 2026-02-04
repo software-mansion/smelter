@@ -3,10 +3,11 @@ use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Parameters for an input stream for WHIP server.
 /// At least one of `video` and `audio` has to be defined.
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct WhipInput {
     /// Parameters of a video source included in the RTP stream.
@@ -27,13 +28,13 @@ pub struct WhipInput {
     pub offset_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct InputWhipVideoOptions {
     pub decoder_preferences: Option<Vec<WhipVideoDecoderOptions>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum WhipVideoDecoderOptions {
     /// Software H264 decoder based on FFmpeg.
