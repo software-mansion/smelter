@@ -5,8 +5,8 @@ use crate::{DecodingError, amf3::*};
 /// Decode AMF3 encoded messages.
 ///
 /// `amf_bytes` must include whole AMF3 values. It can be a payload of `rtmp` Data or Command message.
-pub fn decode_amf3_value(amf_bytes: Bytes) -> Result<Vec<AmfValue>, DecodingError> {
-    let decoder = Decoder::new(amf_bytes);
+pub fn decode_amf3_values(amf_bytes: Bytes) -> Result<Vec<AmfValue>, DecodingError> {
+    let decoder = AmfDecoderState::new(amf_bytes);
     decoder.decode_buf()
 }
 
@@ -18,14 +18,14 @@ struct Trait {
 }
 
 #[derive(Default)]
-struct Decoder {
+struct AmfDecoderState {
     buf: Bytes,
     strings: Vec<String>,
     traits: Vec<Trait>,
     complexes: Vec<AmfValue>,
 }
 
-impl Decoder {
+impl AmfDecoderState {
     fn new(amf_bytes: Bytes) -> Self {
         Self {
             buf: amf_bytes,
@@ -92,7 +92,7 @@ impl Decoder {
     }
 
     fn decode_xml_doc(&mut self) -> Result<AmfValue, DecodingError> {
-        let decode = |decoder: &mut Decoder, size: usize| {
+        let decode = |decoder: &mut AmfDecoderState, size: usize| {
             if decoder.buf.remaining() < size {
                 return Err(DecodingError::InsufficientData);
             }
@@ -109,7 +109,7 @@ impl Decoder {
     }
 
     fn decode_date(&mut self) -> Result<AmfValue, DecodingError> {
-        let decode = |decoder: &mut Decoder, _| {
+        let decode = |decoder: &mut AmfDecoderState, _| {
             if decoder.buf.remaining() < 8 {
                 return Err(DecodingError::InsufficientData);
             }
@@ -532,7 +532,7 @@ impl Decoder {
 mod decode_test {
     use bytes::Bytes;
 
-    use crate::amf3::decoding::Decoder;
+    use crate::amf3::decoding::AmfDecoderState;
 
     #[test]
     fn test_decode_i29() {
@@ -541,7 +541,7 @@ mod decode_test {
 
         // 32 in 7 bit U2
         let one_byte_pos = Bytes::from(vec![0b0010_0000]);
-        let mut decoder = Decoder::new(one_byte_pos);
+        let mut decoder = AmfDecoderState::new(one_byte_pos);
         let decoded_val = decoder
             .decode_i29()
             .expect("Failed to decode 1 byte positive.");
@@ -549,7 +549,7 @@ mod decode_test {
 
         // -63 in 7 bit U2
         let one_byte_neg = Bytes::from(vec![0b0100_0001]);
-        let mut decoder = Decoder::new(one_byte_neg);
+        let mut decoder = AmfDecoderState::new(one_byte_neg);
         let decoded_val = decoder
             .decode_i29()
             .expect("Failed to decode 1 byte negative.");
@@ -557,7 +557,7 @@ mod decode_test {
 
         // 143 in 14 bit U2
         let two_byte_pos = Bytes::from(vec![0b1000_0001, 0b0000_1111]);
-        let mut decoder = Decoder::new(two_byte_pos);
+        let mut decoder = AmfDecoderState::new(two_byte_pos);
         let decoded_val = decoder
             .decode_i29()
             .expect("Failed to decode 2 bytes positive.");
@@ -565,7 +565,7 @@ mod decode_test {
 
         // -8189 in 14 bit U2
         let two_byte_neg = Bytes::from(vec![0b1100_0000, 0b0000_0011]);
-        let mut decoder = Decoder::new(two_byte_neg);
+        let mut decoder = AmfDecoderState::new(two_byte_neg);
         let decoded_val = decoder
             .decode_i29()
             .expect("Failed to decode 2 bytes negative.");
@@ -573,7 +573,7 @@ mod decode_test {
 
         // 16512 in 21 bit U2
         let three_byte_pos = Bytes::from(vec![0b1000_0001, 0b1000_0001, 0b0000_0000]);
-        let mut decoder = Decoder::new(three_byte_pos);
+        let mut decoder = AmfDecoderState::new(three_byte_pos);
         let decoded_val = decoder
             .decode_i29()
             .expect("Failed to decode 3 bytes positive.");
@@ -581,7 +581,7 @@ mod decode_test {
 
         // -1007172 in 21 bit U2
         let three_byte_neg = Bytes::from(vec![0b1100_0010, 0b1100_0011, 0b0011_1100]);
-        let mut decoder = Decoder::new(three_byte_neg);
+        let mut decoder = AmfDecoderState::new(three_byte_neg);
         let decoded_val = decoder
             .decode_i29()
             .expect("Failed to decode 3 bytes negative.");
@@ -589,7 +589,7 @@ mod decode_test {
 
         // 176193493 in 29 bit U2
         let four_byte_pos = Bytes::from(vec![0b1010_1010, 0b1000_0000, 0b1111_1111, 0b_1101_0101]);
-        let mut decoder = Decoder::new(four_byte_pos);
+        let mut decoder = AmfDecoderState::new(four_byte_pos);
         let decoded_val = decoder
             .decode_i29()
             .expect("Failed to decode 4 bytes positive.");
@@ -597,7 +597,7 @@ mod decode_test {
 
         // -92241963 in 29 bit U2
         let four_byte_neg = Bytes::from(vec![0b1110_1010, 0b1000_0000, 0b1111_1111, 0b1101_0101]);
-        let mut decoder = Decoder::new(four_byte_neg);
+        let mut decoder = AmfDecoderState::new(four_byte_neg);
         let decoded_val = decoder
             .decode_i29()
             .expect("Failed to decode 4 bytes negative.");

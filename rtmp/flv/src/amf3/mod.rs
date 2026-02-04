@@ -5,7 +5,7 @@ use bytes::Bytes;
 mod decoding;
 mod encoding;
 
-pub use decoding::decode_amf3_value;
+pub use decoding::decode_amf3_values;
 
 const UNDEFINED: u8 = 0x00;
 const NULL: u8 = 0x01;
