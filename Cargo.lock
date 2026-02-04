@@ -5422,6 +5422,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "utoipa",
  "webrtc-util",
 ]
 
