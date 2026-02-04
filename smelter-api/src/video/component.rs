@@ -33,7 +33,9 @@ pub struct InputStream {
 pub struct View {
     /// Id of a component.
     pub id: Option<ComponentId>,
+
     /// List of component's children.
+    #[schema(no_recursion)]
     pub children: Option<Vec<Component>>,
 
     /// Width of a component in pixels (without a border). Exact behavior might be different
@@ -158,7 +160,9 @@ pub enum ViewDirection {
 pub struct Rescaler {
     /// Id of a component.
     pub id: Option<ComponentId>,
+
     /// List of component's children.
+    #[schema(no_recursion)]
     pub child: Box<Component>,
 
     /// (**default=`"fit"`**) Resize mode:
@@ -234,7 +238,9 @@ pub enum RescaleMode {
 pub struct WebView {
     /// Id of a component.
     pub id: Option<ComponentId>,
+
     /// List of component's children.
+    #[schema(no_recursion)]
     pub children: Option<Vec<Component>>,
 
     /// Id of a web renderer instance. It identifies an instance registered using a
@@ -269,7 +275,9 @@ pub struct Image {
 pub struct Shader {
     /// Id of a component.
     pub id: Option<ComponentId>,
+
     /// List of component's children.
+    #[schema(no_recursion)]
     pub children: Option<Vec<Component>>,
 
     /// Id of a shader. It identifies a shader registered using a [`register shader`](../routes.md#register-shader) request.
@@ -301,6 +309,8 @@ pub enum ShaderParam {
     F32(f32),
     U32(u32),
     I32(i32),
+
+    #[schema(no_recursion)]
     List(Vec<ShaderParam>),
     Struct(Vec<ShaderParamStructField>),
 }
@@ -309,6 +319,7 @@ pub enum ShaderParam {
 pub struct ShaderParamStructField {
     pub field_name: String,
     #[serde(flatten)]
+    #[schema(no_recursion)]
     pub value: ShaderParam,
 }
 
@@ -411,7 +422,9 @@ pub enum Interpolation {
 pub struct Tiles {
     /// Id of a component.
     pub id: Option<ComponentId>,
+
     /// List of component's children.
+    #[schema(no_recursion)]
     pub children: Option<Vec<Component>>,
 
     /// Width of a component in pixels. Exact behavior might be different based on the parent
