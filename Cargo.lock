@@ -1595,15 +1595,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "flv"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4086,7 +4077,6 @@ name = "rtmp"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "flv",
  "rand 0.9.2",
  "thiserror 1.0.69",
  "tracing",

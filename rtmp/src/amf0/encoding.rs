@@ -2,9 +2,9 @@ use bytes::{BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
 use tracing::warn;
 
-use crate::{EncodingError, amf0::*};
+use crate::{AmfEncodingError, amf0::*};
 
-pub fn encode_amf_values(amf_values: &[AmfValue]) -> Result<Bytes, EncodingError> {
+pub fn encode_amf_values(amf_values: &[Amf0Value]) -> Result<Bytes, AmfEncodingError> {
     let mut buf = BytesMut::new();
     for value in amf_values {
         encode_value(&mut buf, value)?;
@@ -12,22 +12,22 @@ pub fn encode_amf_values(amf_values: &[AmfValue]) -> Result<Bytes, EncodingError
     Ok(buf.freeze())
 }
 
-fn encode_value(buf: &mut BytesMut, value: &AmfValue) -> Result<(), EncodingError> {
+fn encode_value(buf: &mut BytesMut, value: &Amf0Value) -> Result<(), AmfEncodingError> {
     match value {
-        AmfValue::Number(n) => put_number(buf, *n),
-        AmfValue::Boolean(b) => put_bool(buf, *b),
-        AmfValue::String(s) => put_string(buf, s)?,
-        AmfValue::Object(map) => put_object(buf, map)?,
-        AmfValue::Null => put_null(buf),
-        AmfValue::Undefined => put_undefined(buf),
-        AmfValue::EcmaArray(map) => put_ecma_array(buf, map)?,
-        AmfValue::StrictArray(arr) => put_strict_array(buf, arr)?,
-        AmfValue::Date {
+        Amf0Value::Number(n) => put_number(buf, *n),
+        Amf0Value::Boolean(b) => put_bool(buf, *b),
+        Amf0Value::String(s) => put_string(buf, s)?,
+        Amf0Value::Object(map) => put_object(buf, map)?,
+        Amf0Value::Null => put_null(buf),
+        Amf0Value::Undefined => put_undefined(buf),
+        Amf0Value::EcmaArray(map) => put_ecma_array(buf, map)?,
+        Amf0Value::StrictArray(arr) => put_strict_array(buf, arr)?,
+        Amf0Value::Date {
             unix_time,
             timezone_offset,
         } => put_date(buf, *unix_time, *timezone_offset),
-        AmfValue::LongString(s) => put_long_string(buf, s)?,
-        AmfValue::TypedObject {
+        Amf0Value::LongString(s) => put_long_string(buf, s)?,
+        Amf0Value::TypedObject {
             class_name: _class_name,
             properties: _properties,
         } => unimplemented!(),
@@ -45,9 +45,9 @@ fn put_bool(buf: &mut BytesMut, b: bool) {
     buf.put_u8(b as u8);
 }
 
-fn put_string(buf: &mut BytesMut, s: &str) -> Result<(), EncodingError> {
+fn put_string(buf: &mut BytesMut, s: &str) -> Result<(), AmfEncodingError> {
     if s.len() > u16::MAX as usize {
-        return Err(EncodingError::StringTooLong(s.len()));
+        return Err(AmfEncodingError::StringTooLong(s.len()));
     }
     buf.put_u8(STRING);
     buf.put_u16(s.len() as u16);
@@ -55,7 +55,10 @@ fn put_string(buf: &mut BytesMut, s: &str) -> Result<(), EncodingError> {
     Ok(())
 }
 
-fn put_object(buf: &mut BytesMut, map: &HashMap<String, AmfValue>) -> Result<(), EncodingError> {
+fn put_object(
+    buf: &mut BytesMut,
+    map: &HashMap<String, Amf0Value>,
+) -> Result<(), AmfEncodingError> {
     buf.put_u8(OBJECT);
     put_keyval_map(buf, map)?;
     Ok(())
@@ -71,17 +74,17 @@ fn put_undefined(buf: &mut BytesMut) {
 
 fn put_ecma_array(
     buf: &mut BytesMut,
-    map: &HashMap<String, AmfValue>,
-) -> Result<(), EncodingError> {
+    map: &HashMap<String, Amf0Value>,
+) -> Result<(), AmfEncodingError> {
     buf.put_u8(ECMA_ARRAY);
     buf.put_u32(map.len() as u32);
     put_keyval_map(buf, map)?;
     Ok(())
 }
 
-fn put_strict_array(buf: &mut BytesMut, arr: &[AmfValue]) -> Result<(), EncodingError> {
+fn put_strict_array(buf: &mut BytesMut, arr: &[Amf0Value]) -> Result<(), AmfEncodingError> {
     if arr.len() > u32::MAX as usize {
-        return Err(EncodingError::ArrayTooLong(arr.len()));
+        return Err(AmfEncodingError::ArrayTooLong(arr.len()));
     }
     buf.put_u8(STRICT_ARRAY);
     buf.put_u32(arr.len() as u32);
@@ -100,9 +103,9 @@ fn put_date(buf: &mut BytesMut, unix_time: f64, timezone_offset: i16) {
     buf.put_i16(timezone_offset);
 }
 
-fn put_long_string(buf: &mut BytesMut, s: &str) -> Result<(), EncodingError> {
+fn put_long_string(buf: &mut BytesMut, s: &str) -> Result<(), AmfEncodingError> {
     if s.len() > u32::MAX as usize {
-        return Err(EncodingError::StringTooLong(s.len()));
+        return Err(AmfEncodingError::StringTooLong(s.len()));
     }
     buf.put_u8(LONG_STRING);
     buf.put_u32(s.len() as u32);
@@ -112,11 +115,11 @@ fn put_long_string(buf: &mut BytesMut, s: &str) -> Result<(), EncodingError> {
 
 fn put_keyval_map(
     buf: &mut BytesMut,
-    map: &HashMap<String, AmfValue>,
-) -> Result<(), EncodingError> {
+    map: &HashMap<String, Amf0Value>,
+) -> Result<(), AmfEncodingError> {
     for (key, value) in map {
         if key.len() > u16::MAX as usize {
-            return Err(EncodingError::StringTooLong(key.len()));
+            return Err(AmfEncodingError::StringTooLong(key.len()));
         }
         buf.put_u16(key.len() as u16);
         buf.put_slice(key.as_bytes());

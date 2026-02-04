@@ -49,36 +49,36 @@ impl ScriptData {
     }
 }
 
-impl From<amf0::AmfValue> for ScriptDataValue {
-    fn from(value: amf0::AmfValue) -> Self {
+impl From<amf0::Amf0Value> for ScriptDataValue {
+    fn from(value: amf0::Amf0Value) -> Self {
         match value {
-            amf0::AmfValue::Number(n) => Self::Number(n),
-            amf0::AmfValue::Boolean(b) => Self::Boolean(b),
-            amf0::AmfValue::String(s) => Self::String(s),
-            amf0::AmfValue::Object(obj) => Self::Object(
+            amf0::Amf0Value::Number(n) => Self::Number(n),
+            amf0::Amf0Value::Boolean(b) => Self::Boolean(b),
+            amf0::Amf0Value::String(s) => Self::String(s),
+            amf0::Amf0Value::Object(obj) => Self::Object(
                 obj.into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect(),
             ),
-            amf0::AmfValue::Null => Self::Null,
-            amf0::AmfValue::Undefined => Self::Undefined,
-            amf0::AmfValue::EcmaArray(map) => Self::EcmaArray(
+            amf0::Amf0Value::Null => Self::Null,
+            amf0::Amf0Value::Undefined => Self::Undefined,
+            amf0::Amf0Value::EcmaArray(map) => Self::EcmaArray(
                 map.into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect(),
             ),
-            amf0::AmfValue::StrictArray(array) => {
+            amf0::Amf0Value::StrictArray(array) => {
                 Self::StrictArray(array.into_iter().map(Self::from).collect())
             }
-            amf0::AmfValue::Date {
+            amf0::Amf0Value::Date {
                 unix_time,
                 timezone_offset,
             } => Self::Date {
                 unix_time,
                 timezone_offset,
             },
-            amf0::AmfValue::LongString(s) => Self::LongString(s),
-            amf0::AmfValue::TypedObject {
+            amf0::Amf0Value::LongString(s) => Self::LongString(s),
+            amf0::Amf0Value::TypedObject {
                 class_name,
                 properties,
             } => {

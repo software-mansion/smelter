@@ -13,9 +13,11 @@ use std::{
 use bytes::Bytes;
 use tracing::{error, info};
 
-use flv::{AudioChannels, AudioCodec, ScriptData, VideoCodec, VideoFrameType};
-
-use crate::{error::RtmpError, handle_client::handle_client};
+use crate::{
+    error::RtmpError,
+    flv::{AudioChannels, AudioCodec, ScriptData, VideoCodec, VideoFrameType},
+    handle_client::handle_client,
+};
 
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
 

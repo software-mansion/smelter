@@ -3,11 +3,11 @@ use std::{
     sync::{Arc, Mutex, atomic::AtomicBool, mpsc::channel},
 };
 
-use flv::{AudioTag, PacketType, ScriptData, VideoTag};
 use tracing::{info, trace};
 
 use crate::{
     error::RtmpError,
+    flv::{AudioTag, PacketType, ScriptData, VideoTag},
     handshake::Handshake,
     message::{RtmpMessage, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
     negotiation::negotiate_rtmp_session,

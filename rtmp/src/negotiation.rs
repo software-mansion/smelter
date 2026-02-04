@@ -1,5 +1,5 @@
 use crate::{
-    amf0::{AmfValue, decode_amf0_values, encode_amf_values},
+    amf0::{Amf0Value, decode_amf0_values, encode_amf_values},
     error::RtmpError,
     message::{RtmpMessage, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
     protocol::{
@@ -76,20 +76,20 @@ fn handle_command_message(
     }
 
     let cmd = match args.first() {
-        Some(AmfValue::String(s)) => s.as_str(),
+        Some(Amf0Value::String(s)) => s.as_str(),
         _ => return Ok(NegotiationStatus::InProgress),
     };
 
     let txn_id = match args.get(1) {
-        Some(AmfValue::Number(n)) => *n,
+        Some(Amf0Value::Number(n)) => *n,
         _ => 0.0,
     };
 
     match cmd {
         // https://rtmp.veriskope.com/docs/spec/#7211connect
         "connect" => {
-            if let Some(AmfValue::Object(map)) = args.get(2)
-                && let Some(AmfValue::String(app)) = map.get("app")
+            if let Some(Amf0Value::Object(map)) = args.get(2)
+                && let Some(Amf0Value::String(app)) = map.get("app")
             {
                 *app_name = app.clone();
             }
@@ -104,30 +104,30 @@ fn handle_command_message(
             let mut props = HashMap::new();
             props.insert(
                 "fmsVer".to_string(),
-                AmfValue::String("FMS/3,0,1,123".into()),
+                Amf0Value::String("FMS/3,0,1,123".into()),
             );
-            props.insert("capabilities".to_string(), AmfValue::Number(31.0));
+            props.insert("capabilities".to_string(), Amf0Value::Number(31.0));
 
             let mut info = HashMap::new();
-            info.insert("level".to_string(), AmfValue::String("status".into()));
+            info.insert("level".to_string(), Amf0Value::String("status".into()));
             info.insert(
                 "code".to_string(),
-                AmfValue::String("NetConnection.Connect.Success".into()),
+                Amf0Value::String("NetConnection.Connect.Success".into()),
             );
             info.insert(
                 "description".to_string(),
-                AmfValue::String("Connection succeeded.".into()),
+                Amf0Value::String("Connection succeeded.".into()),
             );
             info.insert(
                 "objectEncoding".to_string(),
-                AmfValue::Number(0.0), // AMF0 encoding
+                Amf0Value::Number(0.0), // AMF0 encoding
             );
 
             let response = vec![
-                AmfValue::String("_result".to_string()),
-                AmfValue::Number(txn_id),
-                AmfValue::Object(props),
-                AmfValue::Object(info),
+                Amf0Value::String("_result".to_string()),
+                Amf0Value::Number(txn_id),
+                Amf0Value::Object(props),
+                Amf0Value::Object(info),
             ];
 
             let message = RtmpMessage {
@@ -142,10 +142,10 @@ fn handle_command_message(
 
         "createStream" => {
             let response = vec![
-                AmfValue::String("_result".to_string()),
-                AmfValue::Number(txn_id),
-                AmfValue::Null,
-                AmfValue::Number(current_stream_id as f64),
+                Amf0Value::String("_result".to_string()),
+                Amf0Value::Number(txn_id),
+                Amf0Value::Null,
+                Amf0Value::Number(current_stream_id as f64),
             ];
 
             let message = RtmpMessage {
@@ -166,25 +166,25 @@ fn handle_command_message(
 
         "publish" => {
             let stream_key = match args.get(3) {
-                Some(AmfValue::String(s)) => s.clone(),
+                Some(Amf0Value::String(s)) => s.clone(),
                 _ => "default".to_string(),
             };
             let mut status_info = HashMap::new();
-            status_info.insert("level".to_string(), AmfValue::String("status".into()));
+            status_info.insert("level".to_string(), Amf0Value::String("status".into()));
             status_info.insert(
                 "code".to_string(),
-                AmfValue::String("NetStream.Publish.Start".into()),
+                Amf0Value::String("NetStream.Publish.Start".into()),
             );
             status_info.insert(
                 "description".to_string(),
-                AmfValue::String(format!("Publishing {stream_key}")),
+                Amf0Value::String(format!("Publishing {stream_key}")),
             );
 
             let response = vec![
-                AmfValue::String("onStatus".to_string()),
-                AmfValue::Number(0.0),
-                AmfValue::Null,
-                AmfValue::Object(status_info),
+                Amf0Value::String("onStatus".to_string()),
+                Amf0Value::Number(0.0),
+                Amf0Value::Null,
+                Amf0Value::Object(status_info),
             ];
 
             let message = RtmpMessage {
