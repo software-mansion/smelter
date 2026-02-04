@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use smelter_core::Pipeline;
 use smelter_render::error::ErrorStack;
 use tracing::error;
+use utoipa::ToSchema;
 
 use crate::{
     error::ApiError,
@@ -16,7 +17,7 @@ use smelter_api::{AudioScene, OutputId, VideoScene};
 
 use super::Json;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateOutputRequest {
     pub video: Option<VideoScene>,

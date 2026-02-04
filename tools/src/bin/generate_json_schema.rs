@@ -18,7 +18,7 @@ fn main() {
 
 /// This enum is used to generate JSON schema for all API types.
 /// This prevents repeating types in generated schema.
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(untagged)]
 #[allow(dead_code)]
 enum ApiTypes {

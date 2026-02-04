@@ -1,10 +1,11 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use smelter_render::scene;
+use utoipa::ToSchema;
 
 use crate::*;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq)]
 pub struct RGBAColor(pub String);
 
 impl TryFrom<RGBAColor> for scene::RGBAColor {

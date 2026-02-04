@@ -1,18 +1,19 @@
 use core::f64;
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Input stream from MP4 file.
 /// Exactly one of `url` and `path` has to be defined.
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Mp4Input {
     /// URL of the MP4 file.
     pub url: Option<Arc<str>>,
     /// Path to the MP4 file.
-    pub path: Option<Arc<Path>>,
+    pub path: Option<Arc<str>>,
     /// (**default=`false`**) If input should be played in the loop. <span class="badge badge--primary">Added in v0.4.0</span>
     #[serde(rename = "loop")]
     pub should_loop: Option<bool>,
@@ -26,13 +27,13 @@ pub struct Mp4Input {
     pub decoder_map: Option<HashMap<InputMp4Codec, Mp4VideoDecoderOptions>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum InputMp4Codec {
     H264,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum Mp4VideoDecoderOptions {
     /// Software H264 decoder based on FFmpeg.
