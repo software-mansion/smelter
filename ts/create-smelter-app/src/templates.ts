@@ -94,14 +94,20 @@ export const NodeNextWebRTCTemplate: TemplateOption = {
       {
         projectName,
         dir: 'client',
-        dirsToRemove: ['.next', 'next-env.d.ts', 'node_modules'],
+        dirsToRemove: [
+          '.next',
+          'next-env.d.ts',
+          'node_modules',
+          'pnpm-lock.yaml',
+          'pnpm-workspace.yaml',
+        ],
       },
     ],
     usageInstructions: (directoryName: string, packageManager: string) =>
       'To get started:\n\n' +
-      '1. Start the Smelter server:\n' +
+      '1. Start the Node.js server:\n' +
       `   $ ${chalk.bold(`cd ${directoryName}/server && ${packageManager} run build && node ./dist/index.js`)}\n\n` +
-      '2. In a new terminal, start the Next.js client:\n' +
+      '2. In a new terminal, start the Next.js app:\n' +
       `   $ ${chalk.bold(`cd ${directoryName}/client && ${packageManager} run dev`)}`,
   }),
 };

@@ -26,16 +26,16 @@ export async function applyTemplate(template: Template, destination: string): Pr
     const projectDir = path.join(destination, project.dir ?? '.');
     for (const dirToRemove of project.dirsToRemove ?? []) {
       await fs.remove(path.join(projectDir, dirToRemove));
-
-      const packageJsonPath = path.join(projectDir, 'package.json');
-      const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
-      const transformedPackageJson = transformPackageJson(packageJson, project.projectName);
-      await fs.writeFile(
-        packageJsonPath,
-        JSON.stringify(transformedPackageJson, null, 2) + '\n',
-        'utf8'
-      );
     }
+
+    const packageJsonPath = path.join(projectDir, 'package.json');
+    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
+    const transformedPackageJson = transformPackageJson(packageJson, project.projectName);
+    await fs.writeFile(
+      packageJsonPath,
+      JSON.stringify(transformedPackageJson, null, 2) + '\n',
+      'utf8'
+    );
   }
 }
 

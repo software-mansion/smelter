@@ -7,7 +7,6 @@
   "license": "MIT",
   "scripts": {
     "start": "ts-node ./src/index.ts",
-    "_start": "ts-node ./src/index.ts",
     "build": "tsc",
     "lint": "eslint ."
   },
