@@ -24,7 +24,7 @@ use self::{
 };
 use crate::middleware::body_logger_middleware;
 
-mod register_request;
+pub mod register_request;
 mod status;
 mod unregister_request;
 mod update_output;
@@ -99,7 +99,7 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
 }
 
 /// Wrap axum::Json to return serialization errors as json
-pub(super) struct Json<T>(pub T);
+pub struct Json<T>(pub T);
 
 #[async_trait]
 impl<S, T> FromRequest<S> for Json<T>
