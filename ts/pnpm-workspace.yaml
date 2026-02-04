@@ -13,3 +13,7 @@ packages:
   - 'create-smelter-app/templates/node-express-zustand'
   - 'create-smelter-app/templates/node-offline-minimal'
   - 'create-smelter-app/templates/node-offline-showcase'
+  # Client is not part of the workspace, it does not use SDK directlly and including
+  # it would cause problems with version of React
+  # - 'create-smelter-app/templates/node-next-webrtc/client'
+  - 'create-smelter-app/templates/node-next-webrtc/server'
