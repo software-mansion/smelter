@@ -171,11 +171,11 @@ importers:
         specifier: ^0.34.48
         version: 0.34.48
       '@swmansion/smelter':
-        specifier: ^0.3.0
-        version: 0.3.0(react@18.3.1)
+        specifier: workspace:^0.3.0
+        version: link:../../../../smelter
       '@swmansion/smelter-node':
-        specifier: ^0.3.2
-        version: 0.3.2(@swmansion/smelter@0.3.0(react@18.3.1))(react@18.3.1)
+        specifier: workspace:^0.3.2
+        version: link:../../../../smelter-node
       fastify:
         specifier: ^5.7.2
         version: 5.7.2
@@ -1583,22 +1583,6 @@ packages:
 
   '@swc/types@0.1.25':
     resolution: {integrity: sha512-iAoY/qRhNH8a/hBvm3zKj9qQ4oc2+3w1unPJa2XvTK3XjeLXtzcCingVPw/9e5mn1+0yPqxcBGp9Jf0pkfMb1g==}
-
-  '@swmansion/smelter-core@0.3.0':
-    resolution: {integrity: sha512-AESENSKzLgHBlyOkehY45wHuP3Q/+EF0ZmrK9ekBohito1lGUY8ZCMd5r4ocl+dUs0voDYmzJFr694O6f7Q55Q==}
-    peerDependencies:
-      '@swmansion/smelter': ^0.3.0
-      react: '*'
-
-  '@swmansion/smelter-node@0.3.2':
-    resolution: {integrity: sha512-Fbx1c01qFEaFEyyI2APFQ3AA+XvrEu0FQ69o47puwmjLvtt4n6WJd0OWapWIkfOcwgIB8Wr2MAJ+QmWUfbfFIA==}
-    peerDependencies:
-      '@swmansion/smelter': ^0.3.0
-
-  '@swmansion/smelter@0.3.0':
-    resolution: {integrity: sha512-rEMazi26MbLE6m6w/LyNn8LlTicDn9jqBe0A3fGRIJYGHrvGOJ3hlmVG8DO1VQ/fktn7r6APpbrGuHT/Jws48g==}
-    peerDependencies:
-      react: '*'
 
   '@tsconfig/node10@1.0.11':
     resolution: {integrity: sha512-DcRjDCujK/kCk/cUe8Xz8ZSpm8mS3mNNpta+jGCA6USEDfktlNvm1+IuZ9eTcDbNk41BHwpHHeW+N1lKCz4zOw==}
@@ -4957,34 +4941,6 @@ snapshots:
   '@swc/types@0.1.25':
     dependencies:
       '@swc/counter': 0.1.3
-
-  '@swmansion/smelter-core@0.3.0(@swmansion/smelter@0.3.0(react@18.3.1))(react@18.3.1)':
-    dependencies:
-      '@swmansion/smelter': 0.3.0(react@18.3.1)
-      react: 18.3.1
-      react-reconciler: 0.29.2(react@18.3.1)
-
-  '@swmansion/smelter-node@0.3.2(@swmansion/smelter@0.3.0(react@18.3.1))(react@18.3.1)':
-    dependencies:
-      '@swmansion/smelter': 0.3.0(react@18.3.1)
-      '@swmansion/smelter-core': 0.3.0(@swmansion/smelter@0.3.0(react@18.3.1))(react@18.3.1)
-      form-data: 4.0.4
-      fs-extra: 11.3.1
-      node-fetch: 2.7.0
-      pino: 9.5.0
-      pino-pretty: 13.0.0
-      tar: 7.5.7
-      uuid: 10.0.0
-      ws: 8.18.0
-    transitivePeerDependencies:
-      - bufferutil
-      - encoding
-      - react
-      - utf-8-validate
-
-  '@swmansion/smelter@0.3.0(react@18.3.1)':
-    dependencies:
-      react: 18.3.1
 
   '@tsconfig/node10@1.0.11': {}
 
