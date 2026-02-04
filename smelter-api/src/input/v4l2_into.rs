@@ -6,14 +6,17 @@ impl TryFrom<V4l2Input> for core::RegisterInputOptions {
 
     #[cfg(target_os = "linux")]
     fn try_from(value: V4l2Input) -> Result<Self, Self::Error> {
+        use std::{path::Path, sync::Arc};
+
         let queue_options = smelter_core::QueueInputOptions {
             required: value.required.unwrap_or(false),
             offset: None,
         };
 
+        let path = Arc::from(Path::new(value.path.as_ref()));
         Ok(core::RegisterInputOptions {
             input_options: core::ProtocolInputOptions::V4l2(core::V4l2InputOptions {
-                path: value.path,
+                path,
                 format: value.format.into(),
                 resolution: value.resolution.map(Into::into),
                 framerate: value
