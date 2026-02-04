@@ -40,7 +40,7 @@ impl ScriptData {
             return Err(ParseError::NotEnoughData);
         }
 
-        let amf_values = decode_amf0_values(&data).map_err(ParseError::Amf0)?;
+        let amf_values = decode_amf0_values(data).map_err(ParseError::Amf0)?;
 
         let scriptdata_values = amf_values.into_iter().map(ScriptDataValue::from).collect();
         Ok(Self {
