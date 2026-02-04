@@ -569,7 +569,6 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
             PipelineWhipWhepServerOptions::Disable => None,
         },
         rtmp_state: rtmp_state.clone(),
-        // rtmp_server,
     });
 
     let whip_whep_handle = match &ctx.whip_whep_state {

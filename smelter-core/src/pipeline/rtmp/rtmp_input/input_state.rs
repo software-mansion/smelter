@@ -52,23 +52,42 @@ impl RtmpInputState {
 }
 
 impl RtmpInputsState {
-    pub(crate) fn get_input_state(
+    pub(crate) fn add_input(
+        &self,
+        input_ref: &Ref<InputId>,
+        options: RtmpInputStateOptions,
+    ) -> Result<(), RtmpServerError> {
+        let mut guard = self.0.lock().unwrap();
+        if guard.contains_key(input_ref) {
+            return Err(RtmpServerError::InputAlreadyRegistered(
+                input_ref.id().clone(),
+            ));
+        }
+        guard.insert(input_ref.clone(), RtmpInputState::new(options));
+        Ok(())
+    }
+
+    pub(crate) fn remove_input(&self, input_ref: &Ref<InputId>) {
+        let mut guard = self.0.lock().unwrap();
+        if guard.remove(input_ref).is_none() {
+            error!(?input_ref, "Failed to remove input, ID not found");
+        }
+    }
+
+    pub(crate) fn find_by_app_stream_key(
         &self,
         app: Arc<str>,
         stream_key: Arc<str>,
     ) -> Result<(Ref<InputId>, RtmpInputState), RtmpServerError> {
         let guard = self.0.lock().unwrap();
-        let (_input_ref, input_state) = guard
+        let (input_ref, input_state) = guard
             .iter()
             .find(|(_, input)| input.app == app && input.stream_key == stream_key)
             .ok_or(RtmpServerError::InvalidAppStreamKeyPair)?;
-        Ok((_input_ref.clone(), input_state.clone()))
+        Ok((input_ref.clone(), input_state.clone()))
     }
 
-    pub(crate) fn get_input_state_by_ref(
-        &self,
-        input_ref: &Ref<InputId>,
-    ) -> Result<RtmpInputState, RtmpServerError> {
+    pub(crate) fn get(&self, input_ref: &Ref<InputId>) -> Result<RtmpInputState, RtmpServerError> {
         let guard = self.0.lock().unwrap();
         let input_state = guard
             .get(input_ref)
@@ -103,7 +122,7 @@ impl RtmpInputsState {
             .map(|handle| handle.chunk_sender.clone()))
     }
 
-    pub(crate) fn set_audio_decoder(
+    pub(crate) fn set_audio_decoder_handle(
         &self,
         input_ref: &Ref<InputId>,
         handle: DecoderThreadHandle,
@@ -128,27 +147,5 @@ impl RtmpInputsState {
             .audio_decoder_handle
             .as_ref()
             .map(|handle| handle.chunk_sender.clone()))
-    }
-
-    pub(crate) fn add_input(
-        &self,
-        input_ref: &Ref<InputId>,
-        options: RtmpInputStateOptions,
-    ) -> Result<(), RtmpServerError> {
-        let mut guard = self.0.lock().unwrap();
-        if guard.contains_key(input_ref) {
-            return Err(RtmpServerError::InputAlreadyRegistered(
-                input_ref.id().clone(),
-            ));
-        }
-        guard.insert(input_ref.clone(), RtmpInputState::new(options));
-        Ok(())
-    }
-
-    pub(crate) fn remove_input(&self, input_ref: &Ref<InputId>) {
-        let mut guard = self.0.lock().unwrap();
-        if guard.remove(input_ref).is_none() {
-            error!(?input_ref, "Failed to remove input, ID not found");
-        }
     }
 }

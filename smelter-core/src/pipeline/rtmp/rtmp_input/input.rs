@@ -5,7 +5,7 @@ use crossbeam_channel::bounded;
 use crate::{
     pipeline::{
         input::Input,
-        rtmp::rtmp_input::state::{RtmpInputStateOptions, RtmpInputsState},
+        rtmp::rtmp_input::input_state::{RtmpInputStateOptions, RtmpInputsState},
         utils::input_buffer::InputBuffer,
     },
     queue::QueueDataReceiver,

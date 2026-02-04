@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use rtmp::{self, AudioConfig, AudioData};
 use tracing::warn;
 
@@ -5,8 +7,8 @@ use crate::{
     pipeline::{
         decoder::fdk_aac::FdkAacDecoder,
         rtmp::rtmp_input::{
-            RtmpConnectionContext,
             decoder_thread::{AudioDecoderThread, AudioDecoderThreadOptions},
+            input_state::RtmpInputsState,
             stream_state::RtmpStreamState,
         },
     },
@@ -14,13 +16,18 @@ use crate::{
     thread_utils::InitializableThread,
 };
 
-pub(super) fn process_audio_config(ctx: &RtmpConnectionContext, config: AudioConfig) {
+pub(super) fn process_audio_config(
+    ctx: &Arc<PipelineCtx>,
+    inputs: &RtmpInputsState,
+    input_ref: &Ref<InputId>,
+    config: AudioConfig,
+) {
     if config.codec != rtmp::AudioCodec::Aac {
         warn!(?config.codec, "Unsupported audio codec");
         return;
     }
 
-    let input_state = match ctx.inputs.get_input_state_by_ref(&ctx.input_ref) {
+    let input_state = match inputs.get(input_ref) {
         Ok(state) => state,
         Err(err) => {
             warn!(?err, "Input state missing for AAC config");
@@ -33,18 +40,18 @@ pub(super) fn process_audio_config(ctx: &RtmpConnectionContext, config: AudioCon
     };
 
     let decoder_thread_options = AudioDecoderThreadOptions::<FdkAacDecoder> {
-        ctx: ctx.ctx.clone(),
+        ctx: ctx.clone(),
         decoder_options: options,
         samples_sender: input_state.input_samples_sender.clone(),
         input_buffer_size: 10,
     };
 
     let handle =
-        AudioDecoderThread::<FdkAacDecoder>::spawn(ctx.input_ref.clone(), decoder_thread_options);
+        AudioDecoderThread::<FdkAacDecoder>::spawn(input_ref.clone(), decoder_thread_options);
 
     match handle {
         Ok(handle) => {
-            if let Err(err) = ctx.inputs.set_audio_decoder(&ctx.input_ref, handle) {
+            if let Err(err) = inputs.set_audio_decoder_handle(input_ref, handle) {
                 warn!(?err, "Failed to store AAC decoder handle in state");
             }
         }
@@ -53,7 +60,8 @@ pub(super) fn process_audio_config(ctx: &RtmpConnectionContext, config: AudioCon
 }
 
 pub(super) fn process_audio(
-    ctx: &RtmpConnectionContext,
+    inputs: &RtmpInputsState,
+    input_ref: &Ref<InputId>,
     stream_state: &mut RtmpStreamState,
     audio: AudioData,
 ) {
@@ -61,7 +69,7 @@ pub(super) fn process_audio(
         return;
     }
 
-    let Ok(Some(sender)) = ctx.inputs.audio_chunk_sender(&ctx.input_ref) else {
+    let Ok(Some(sender)) = inputs.audio_chunk_sender(input_ref) else {
         warn!("Missing AAC decoder, skipping audio until config arrives");
         return;
     };
