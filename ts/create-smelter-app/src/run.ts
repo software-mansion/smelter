@@ -10,14 +10,12 @@ export default async function run() {
   const options = await resolveOptions();
   console.log(`Generating project in ${options.directory}`);
   await createNodeProject(options);
+
   console.log();
   console.log(chalk.green('Project created successfully.'));
   console.log();
-  console.log(`To get started run:`);
   console.log(
-    chalk.bold(
-      `$ cd ${path.basename(options.directory)} && ${options.packageManager} run build && node ./dist/index.js`
-    )
+    options.template.usageInstructions(path.basename(options.directory), options.packageManager)
   );
 }
 
