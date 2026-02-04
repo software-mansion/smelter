@@ -68,7 +68,7 @@ export const OfflineNodeShowcaseTemplate: TemplateOption = {
   description:
     'A Node.js application that generates an MP4 file by combining and composing multiple source MP4 files.',
   resolveTemplate: projectName => ({
-    templateId: 'node-offline-minimal',
+    templateId: 'node-offline-showcase',
     projects: [
       {
         projectName,
@@ -103,7 +103,7 @@ export const NodeNextWebRTCTemplate: TemplateOption = {
         ],
       },
     ],
-    usageInstructions: (directoryName: string, packageManager: string) =>
+    usageInstructions: (directoryName, packageManager) =>
       'To get started:\n\n' +
       '1. Start the Node.js server:\n' +
       `   $ ${chalk.bold(`cd ${directoryName}/server && ${packageManager} run build && node ./dist/index.js`)}\n\n` +
