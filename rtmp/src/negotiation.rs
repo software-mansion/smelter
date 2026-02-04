@@ -1,5 +1,5 @@
 use crate::{
-    amf0::{AmfValue, decode_amf_values, encode_amf_values},
+    amf0::{AmfValue, decode_amf0_values, encode_amf_values},
     error::RtmpError,
     message::{RtmpMessage, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
     protocol::{
@@ -51,7 +51,7 @@ pub(crate) fn negotiate_rtmp_session(
                 continue;
             }
             MessageType::CommandMessageAmf0 => {
-                match handle_command_message(&msg, writer, &mut app_name, current_stream_id)? {
+                match handle_command_message(msg, writer, &mut app_name, current_stream_id)? {
                     NegotiationStatus::InProgress => {}
                     NegotiationStatus::Completed { app, stream_key } => {
                         return Ok((app, stream_key));
@@ -65,12 +65,12 @@ pub(crate) fn negotiate_rtmp_session(
 
 // TODO(wkazmierczak) refator this function
 fn handle_command_message(
-    msg: &RtmpMessage,
+    msg: RtmpMessage,
     writer: &mut RtmpMessageWriter,
     app_name: &mut String,
     current_stream_id: u32,
 ) -> Result<NegotiationStatus, RtmpError> {
-    let args = decode_amf_values(&msg.payload).unwrap_or_default();
+    let args = decode_amf0_values(msg.payload).unwrap_or_default();
     if args.is_empty() {
         return Ok(NegotiationStatus::InProgress);
     }
