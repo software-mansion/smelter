@@ -55,6 +55,7 @@ pub enum RegisterOutput {
         (status = 400, description = "Bad request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
+    tags = ["register_reguest"],
 )]
 pub async fn handle_input(
     State(api): State<Arc<ApiState>>,
@@ -109,6 +110,18 @@ pub async fn handle_input(
     .unwrap()
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/output/{output_id}/register",
+    params(("output_id" = str, Path, description = "Output ID.")),
+    request_body = RegisterOutput,
+    responses(
+        (status = 200, description = "Output registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["register_reguest"],
+)]
 pub(super) async fn handle_output(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,

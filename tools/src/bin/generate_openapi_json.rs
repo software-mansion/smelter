@@ -12,7 +12,10 @@ use utoipa::OpenApi;
         DeckLink, HlsInput, Mp4Input, RtmpInput, RtpInput, V4l2Input, WhepInput, WhipInput,
         HlsOutput, Mp4Output, RtmpOutput, RtpOutput, WhepOutput, WhipOutput
     )),
-    paths(smelter::routes::register_request::handle_input)
+    paths(
+        smelter::routes::register_request::handle_input,
+        smelter::routes::register_request::handle_output,
+    )
 )]
 struct ApiDoc;
 
