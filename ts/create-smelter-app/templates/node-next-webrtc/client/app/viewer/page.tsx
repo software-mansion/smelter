@@ -1,20 +1,39 @@
+import Link from "next/link";
 import WhepClientVideo from "@/components/WhepClientVideo";
 
-// Base url of a WHIP/WHEP server. By default, Smelter exposes this server on
-// port 9000, but the value can be changed via SMELTER_WHIP_WHEP_SERVER_PORT
-// environment variable.
-const SMELTER_WHIP_WHEP_URL = new URL("http://127.0.0.1:9000")
+const WHEP_URL = "http://127.0.0.1:9000/whep/output";
 
-export default function Home() {
+export default function ViewerPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-800 font-sans">
-      <main className="flex flex-row min-h-screen justify-between py-32 px-16">
-        <WhepClientVideo
-          url={new URL("/whep/output", SMELTER_WHIP_WHEP_URL).toString()}
-          poster="https://placehold.co/1920x1080/000000/333333?text=Waiting+for+stream..."
-          playsInline autoPlay controls
-          className='min-w-0  min-h-0 w-full h-full object-cover bg-black'
-        />
+    <div className="page">
+      <header className="header">
+        <div className="container flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="back-link">← Back</Link>
+            <span className="text-border">|</span>
+            <h1 className="font-medium">Viewer</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="status-dot bg-accent animate-pulse" />
+            <span className="text-sm text-muted">Watching</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="container py-8">
+        <div className="card overflow-hidden">
+          <div className="video-container">
+            <WhepClientVideo
+              url={WHEP_URL}
+              poster="https://placehold.co/1920x1080/0f0f0f/27272a?text=Waiting..."
+              playsInline autoPlay controls
+              className="video"
+            />
+          </div>
+        </div>
+        <p className="mt-6 text-sm text-muted text-center">
+          Stream will appear when a broadcaster starts streaming
+        </p>
       </main>
     </div>
   );

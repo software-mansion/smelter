@@ -2,25 +2,38 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-800 font-sans">
-      <main className="flex flex-col gap-10 min-h-screen w-full max-w-3xl flex-col items-stretch justify-start py-32 px-16">
-        <div>
-          <p className="text-white">This is a simple demo application that:</p>
-          <ul className="text-white list-disc list-inside">
-            <li>Streams camera or screen share to the Smelter instance over WHIP.</li>
-            <li>Apply effects, adds overlay elements, ...</li>
-            <li>Broadcasts resulting stream over WHEP.</li>
-          </ul>
-        </div>
+    <div className="page">
+      <main className="max-w-2xl mx-auto px-6 py-24">
+        <header className="mb-12">
+          <h1 className="text-3xl font-semibold tracking-tight mb-2">Smelter Demo</h1>
+          <p className="text-muted">WebRTC streaming with real-time video processing</p>
+        </header>
 
-        <div className="flex flex-row gap-10">
-          <Link href="/viewer" className="flex-1 bg-purple-800 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded mb-10">
-            Open as a viewer
-          </Link>
-          <Link href="/streamer" className="flex-1 bg-purple-800 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded mb-10">
-            Open as a streamer
-          </Link>
-        </div>
+        <section className="mb-12">
+          <h2 className="section-title">About</h2>
+          <div className="card p-6">
+            <p className="text-foreground/90 mb-4">This demo application showcases Smelter&apos;s capabilities:</p>
+            <ul className="space-y-2 text-foreground/80">
+              <li className="flex gap-3"><span className="text-accent">•</span>Stream camera or screen share to Smelter over WHIP</li>
+              <li className="flex gap-3"><span className="text-accent">•</span>Apply effects and overlay elements in real-time</li>
+              <li className="flex gap-3"><span className="text-accent">•</span>Broadcast resulting stream over WHEP</li>
+            </ul>
+          </div>
+        </section>
+
+        <section>
+          <h2 className="section-title">Get Started</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <Link href="/viewer" className="card p-6 hover:border-accent/50 transition-all group">
+              <div className="text-lg font-medium mb-1 group-hover:text-accent transition-colors">Viewer</div>
+              <p className="text-sm text-muted">Watch the stream</p>
+            </Link>
+            <Link href="/streamer" className="bg-accent hover:bg-accent-hover rounded-lg p-6 transition-all">
+              <div className="text-lg font-medium mb-1">Streamer</div>
+              <p className="text-sm text-white/70">Start broadcasting</p>
+            </Link>
+          </div>
+        </section>
       </main>
     </div>
   );
