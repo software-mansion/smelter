@@ -8,7 +8,7 @@ use rtmp::{RtmpError, RtmpServer, ServerConfig};
 use tracing::warn;
 
 use crate::{
-    pipeline::rtmp::rtmp_input::{handle_on_connection, input_state::RtmpInputsState},
+    pipeline::rtmp::rtmp_input::{on_connection::handle_on_connection, state::RtmpInputsState},
     prelude::*,
 };
 

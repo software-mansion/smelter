@@ -1,14 +1,9 @@
-use rtmp::{RtmpConnection, RtmpEvent};
+use rtmp::RtmpConnection;
 use std::sync::Arc;
-use tracing::{error, info};
+use tracing::{Level, error, info, span};
 
 use crate::{
-    pipeline::rtmp::rtmp_input::{
-        input_state::RtmpInputsState,
-        process_audio::{process_audio, process_audio_config},
-        process_video::{process_video, process_video_config},
-        stream_state::RtmpStreamState,
-    },
+    pipeline::rtmp::rtmp_input::{connection_state::RtmpConnectionState, state::RtmpInputsState},
     prelude::*,
 };
 
@@ -17,47 +12,75 @@ pub(crate) fn handle_on_connection(
     inputs: RtmpInputsState,
     conn: RtmpConnection,
 ) {
-    let RtmpConnection {
-        app,
-        stream_key,
-        receiver,
-    } = conn;
+    let app = conn.app;
+    let stream_key = conn.stream_key;
+    let receiver = conn.receiver;
 
-    let (input_ref, input_state) =
-        match inputs.find_by_app_stream_key(app.clone(), stream_key.clone()) {
+    let input_ref = match inputs.find_by_app_stream_key(&app, &stream_key) {
+        Ok(state) => state,
+        Err(err) => {
+            error!(?err, "No input with provided app, stream_key found");
+            return;
+        }
+    };
+
+    if inputs.has_active_connection(&input_ref) {
+        error!(
+            ?app,
+            ?stream_key,
+            ?input_ref,
+            "Rejecting connection. Input stream is already active"
+        );
+        return;
+    }
+
+    let (input_buffer, frame_sender, samples_sender, video_decoders) =
+        match inputs.get_with(&input_ref, |input| {
+            Ok((
+                input.buffer.clone(),
+                input.frame_sender.clone(),
+                input.input_samples_sender.clone(),
+                input.video_decoders.clone(),
+            ))
+        }) {
             Ok(state) => state,
             Err(err) => {
-                error!(?err, "No input with provided app, stream_key found");
+                error!(?err, ?app, ?stream_key, "Failed to retrieve input buffer");
                 return;
             }
         };
 
-    let input_buffer = input_state.buffer.clone();
+    let input_ref_clone = input_ref.clone();
+    let handle = std::thread::Builder::new()
+        .name(format!("RTMP thread for input {input_ref}"))
+        .spawn(move || {
+            let _span = span!(
+                Level::INFO,
+                "RTMP thread",
+                input_id = input_ref_clone.id().to_string(),
+                app = app.to_string(),
+                stream_key = stream_key.to_string(),
+            )
+            .entered();
+            let mut connection_state = RtmpConnectionState::new(
+                ctx,
+                input_ref_clone,
+                frame_sender,
+                samples_sender,
+                video_decoders,
+                input_buffer,
+            );
+            info!("RTMP stream connection opened");
 
-    std::thread::spawn(move || {
-        let mut stream_state = RtmpStreamState::new(&ctx, input_buffer);
-        info!(?app, ?stream_key, "Stream connection opened");
+            while let Ok(rtmp_event) = receiver.recv() {
+                connection_state.handle_rtmp_event(rtmp_event);
+            }
 
-        while let Ok(rtmp_event) = receiver.recv() {
-            handle_rtmp_event(&ctx, &inputs, &input_ref, &mut stream_state, rtmp_event);
-        }
+            info!("RTMP stream connection closed");
+        })
+        .unwrap();
 
-        info!(?app, ?stream_key, "Stream connection closed");
-    });
-}
-
-fn handle_rtmp_event(
-    ctx: &Arc<PipelineCtx>,
-    inputs: &RtmpInputsState,
-    input_ref: &Ref<InputId>,
-    stream_state: &mut RtmpStreamState,
-    rtmp_event: RtmpEvent,
-) {
-    match rtmp_event {
-        RtmpEvent::VideoConfig(config) => process_video_config(ctx, inputs, input_ref, config),
-        RtmpEvent::AudioConfig(config) => process_audio_config(ctx, inputs, input_ref, config),
-        RtmpEvent::Video(data) => process_video(inputs, input_ref, stream_state, data),
-        RtmpEvent::Audio(data) => process_audio(inputs, input_ref, stream_state, data),
-        RtmpEvent::Metadata(metadata) => info!(?metadata, "Received metadata"), // TODO
+    if let Err(err) = inputs.set_connection_handle(&input_ref, handle) {
+        error!(?err, "Failed to store connection handle");
     }
 }

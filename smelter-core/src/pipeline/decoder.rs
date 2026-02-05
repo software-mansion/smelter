@@ -39,7 +39,7 @@ pub(crate) enum EncodedInputEvent {
     AuDelimiter,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct DecoderThreadHandle {
     pub chunk_sender: Sender<PipelineEvent<EncodedInputChunk>>,
 }

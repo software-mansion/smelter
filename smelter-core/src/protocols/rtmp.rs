@@ -45,9 +45,9 @@ pub enum RtmpServerError {
     #[error("Pipeline context is unavailable.")]
     PipelineContextUnavailable,
 
+    #[error("Input {0} not found.")]
+    InputNotFound(InputId),
+
     #[error("Input {0} is already registered.")]
     InputAlreadyRegistered(InputId),
-
-    #[error("Input {0} is not registered.")]
-    InputNotRegistered(InputId),
 }
