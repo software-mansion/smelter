@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use smelter_core::Pipeline;
 use smelter_render::{RegistryType, error::ErrorStack};
 use tracing::error;
+use utoipa::ToSchema;
 
 use crate::{
     error::ApiError,
@@ -15,28 +16,42 @@ use smelter_api::{InputId, OutputId, RendererId};
 
 use super::Json;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct UnregisterInput {
     /// Time in milliseconds when this request should be applied. Value `0` represents
     /// time of the start request.
     schedule_time_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct UnregisterOutput {
     /// Time in milliseconds when this request should be applied. Value `0` represents
     /// time of the start request.
     schedule_time_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct UnregisterRenderer {
     /// Time in milliseconds when this request should be applied. Value `0` represents
     /// time of the start request.
     schedule_time_ms: Option<f64>,
 }
 
-pub(super) async fn handle_input(
+#[utoipa::path(
+    post,
+    path = "/api/input/{input_id}/unregister",
+    operation_id = "unregister_input",
+    params(("input_id" = str, Path, description = "Input ID.")),
+    request_body = UnregisterInput,
+    responses(
+        (status = 200, description = "Input registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 404, description = "Input not found.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["unregister_reguest"],
+)]
+pub async fn handle_input(
     State(api): State<Arc<ApiState>>,
     Path(input_id): Path<InputId>,
     Json(request): Json<UnregisterInput>,
