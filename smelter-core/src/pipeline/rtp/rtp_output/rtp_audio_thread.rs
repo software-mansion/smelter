@@ -9,7 +9,7 @@ use crate::prelude::*;
 use crate::{
     error::EncoderInitError,
     pipeline::{
-        encoder::{AudioEncoder, AudioEncoderStream},
+        encoder::{AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream},
         rtp::payloader::{PayloaderOptions, PayloaderStream},
     },
     thread_utils::{InitializableThread, ThreadMetadata},
@@ -58,7 +58,8 @@ where
             sample_batch_receiver.into_iter(),
             ctx.mixing_sample_rate,
             encoder_options.sample_rate(),
-        )
+            encoder_options.channel(),
+        )?
         .flatten();
 
         let (encoded_stream, _encoder_ctx) =
