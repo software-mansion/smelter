@@ -1,106 +1,105 @@
-"use client"
+"use client";
 
+import Link from "next/link";
 import WhepClientVideo from "@/components/WhepClientVideo";
 import { WhipClient } from "@/utils/whip-client";
 import { useRef, useState } from "react";
 
-// Base url of a WHIP/WHEP server. By default, Smelter exposes this server on
-// port 9000, but the value can be changed via SMELTER_WHIP_WHEP_SERVER_PORT
-// environment variable.
-const SMELTER_WHIP_WHEP_URL = new URL("http://127.0.0.1:9000")
+const SMELTER_URL = "http://127.0.0.1:9000";
+const BACKEND_URL = "http://127.0.0.1:3001";
+const WHIP_AUTH_TOKEN = "example_token";
 
-const WHIP_AUTH_TOKEN = "example_token"
+type Connection = "camera" | "screen-share" | "none";
 
-// API of Node.js server from `/server` directory.
-const BACKEND_URL = new URL("http://127.0.0.1:3001")
+export default function StreamerPage() {
+  const clientRef = useRef<WhipClient>(new WhipClient());
+  const [connection, setConnection] = useState<Connection>("none");
+  const [showInstructions, setShowInstructions] = useState(true);
 
-export default function Home() {
+  const connect = async (type: "camera" | "screen-share") => {
+    setConnection("none");
+    await clientRef.current.close();
+    if (connection !== type) {
+      const stream = await navigator.mediaDevices[
+        type === "camera" ? "getUserMedia" : "getDisplayMedia"
+      ]({ video: true, audio: true });
+      await clientRef.current.connect(stream, new URL("/whip/input", SMELTER_URL), WHIP_AUTH_TOKEN);
+      setConnection(type);
+    }
+  };
+
+  const toggleInstructions = async () => {
+    setShowInstructions(!showInstructions);
+    await fetch(`${BACKEND_URL}/layout-update`, {
+      method: "POST",
+      mode: "cors",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ showInstructions: !showInstructions }),
+    });
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-800 font-sans">
-      <main className="flex flex-row min-h-screen justify-between py-32 px-16">
-        <WhepClientVideo
-          url={new URL("/whep/output", SMELTER_WHIP_WHEP_URL).toString()}
-          poster="https://placehold.co/1920x1080/000000/333333?text=Waiting+for+stream..."
-          playsInline autoPlay controls
-          className='min-w-0  min-h-0 w-full h-full object-cover bg-black'
-        />
-        <Controls />
+    <div className="page">
+      <header className="header">
+        <div className="container flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="back-link">← Back</Link>
+            <span className="text-border">|</span>
+            <h1 className="font-medium">Streamer</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`status-dot ${connection === "none" ? "bg-muted" : "bg-red-500 animate-pulse"}`} />
+            <span className="text-sm text-muted">
+              {connection === "none" ? "Not streaming" : connection === "camera" ? "Camera" : "Screen"}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      <main className="container py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <div className="card overflow-hidden">
+              <div className="video-container">
+                <WhepClientVideo
+                  url={`${SMELTER_URL}/whep/output`}
+                  poster="https://placehold.co/1920x1080/0f0f0f/27272a?text=Preview"
+                  playsInline autoPlay controls
+                  className="video"
+                />
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-muted text-center">Output preview</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="card p-5">
+              <h2 className="section-title">Source</h2>
+              <div className="space-y-3">
+                <button onClick={() => connect("screen-share")} className={`btn ${connection === "screen-share" ? "btn-danger" : ""}`}>
+                  {connection === "screen-share" ? "Stop" : "Start"} Screen Share
+                </button>
+                <button onClick={() => connect("camera")} className={`btn ${connection === "camera" ? "btn-danger" : ""}`}>
+                  {connection === "camera" ? "Stop" : "Start"} Camera
+                </button>
+              </div>
+            </div>
+
+            <div className="card p-5">
+              <h2 className="section-title">Overlay</h2>
+              <label className="flex items-center justify-between cursor-pointer">
+                <span>Show instructions</span>
+                <div
+                  className={`relative w-11 h-6 rounded-full transition-colors ${showInstructions ? "bg-accent" : "bg-border"}`}
+                  onClick={toggleInstructions}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${showInstructions ? "translate-x-6" : "translate-x-1"}`} />
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   );
 }
-
-function Controls() {
-  const clientRef = useRef<WhipClient>(new WhipClient());
-  const [connection, setConnection] = useState<'camera' | 'screen-share' | 'none'>('none');
-  const [showInstructions, setShowInstruction] = useState(true);
-
-  const toggleCamera = async () => {
-    setConnection('none')
-    await clientRef.current.close();
-    if (connection !== 'camera') {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      await clientRef.current.connect(stream, new URL("/whip/input", SMELTER_WHIP_WHEP_URL), WHIP_AUTH_TOKEN);
-      setConnection('camera')
-    }
-  }
-
-  const toggleScreenShare = async () => {
-    setConnection('none')
-    await clientRef.current.close();
-    if (connection !== 'screen-share') {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      await clientRef.current.connect(stream, new URL("/whip/input", SMELTER_WHIP_WHEP_URL), WHIP_AUTH_TOKEN);
-      setConnection('screen-share')
-    }
-  }
-
-  const toggleInstructions = async () => {
-    setShowInstruction(!showInstructions)
-    await fetch(new URL("/layout-update", BACKEND_URL), {
-      method: 'POST',
-      mode: 'cors',
-      headers: {
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ showInstructions: !showInstructions }),
-    });
-  }
-
-  return (
-    <div className="w-1/3 p-10 flex flex-col items-start">
-      <button className="bg-purple-800 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded mb-10 w-full" onClick={toggleScreenShare}>
-        {connection === 'screen-share' ? 'Stop' : 'Start'} screen share
-      </button>
-      <button className="bg-purple-800 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded mb-10 w-full" onClick={toggleCamera}>
-        {connection === 'camera' ? 'Stop' : 'Start'} camera
-      </button>
-      <Checkbox description="Show instructions" isChecked={showInstructions} onChange={toggleInstructions} />
-    </div>
-  )
-}
-
-function Checkbox(props: { description: string, isChecked: boolean, onChange: (update: boolean) => void }) {
-  return (
-    <div className="flex items-start gap-3 p-4 border border-slate-200 rounded-lg transition-colors cursor-pointer mb-10 w-full"
-      onClick={() => props.onChange(!props.isChecked)}>
-
-      <div className="flex items-center h-5">
-        <input
-          type="checkbox"
-          checked={props.isChecked}
-          onChange={() => props.onChange(!props.isChecked)}
-          className="w-4 h-4 text-purple-800 border-gray-300 rounded focus:ring-purple-700 cursor-pointer"
-        />
-      </div>
-
-      <div className="flex flex-col">
-        <label
-          className="font-medium text-slate-900 cursor-pointer text-white"
-        >
-          {props.description}
-        </label>
-      </div>
-    </div>
-  );
-};
