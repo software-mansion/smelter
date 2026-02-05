@@ -4,7 +4,7 @@ use crate::{
     pipeline::{
         hls::HlsInput,
         mp4::Mp4Input,
-        rtmp::{FFmpegRtmpServerInput, RtmpServerInput},
+        rtmp::{FfmpegRtmpServerInput, RtmpServerInput},
         rtp::RtpInput,
         webrtc::{WhepInput, WhipInput},
     },
@@ -26,7 +26,7 @@ pub struct PipelineInput {
 
 pub enum Input {
     Rtp(RtpInput),
-    FFmpegRtmpServer(FFmpegRtmpServerInput),
+    FfmpegRtmpServer(FfmpegRtmpServerInput),
     RtmpServer(RtmpServerInput),
     Mp4(Mp4Input),
     Whip(WhipInput),
@@ -43,7 +43,7 @@ impl Input {
     pub fn kind(&self) -> InputProtocolKind {
         match self {
             Input::Rtp(_input) => InputProtocolKind::Rtp,
-            Input::FFmpegRtmpServer(_input) => InputProtocolKind::Rtmp,
+            Input::FfmpegRtmpServer(_input) => InputProtocolKind::Rtmp,
             Input::RtmpServer(_input) => InputProtocolKind::Rtmp,
             Input::Mp4(_input) => InputProtocolKind::Mp4,
             Input::Whip(_input) => InputProtocolKind::Whip,
@@ -65,8 +65,8 @@ pub(super) fn new_external_input(
 ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
     match options {
         ProtocolInputOptions::Rtp(opts) => RtpInput::new_input(ctx, input_ref, opts),
-        ProtocolInputOptions::FFmpegRtmpServer(opts) => {
-            FFmpegRtmpServerInput::new_input(ctx, input_ref, opts)
+        ProtocolInputOptions::FfmpegRtmpServer(opts) => {
+            FfmpegRtmpServerInput::new_input(ctx, input_ref, opts)
         }
         ProtocolInputOptions::RtmpServer(opts) => RtmpServerInput::new_input(ctx, input_ref, opts),
         ProtocolInputOptions::Mp4(opts) => Mp4Input::new_input(ctx, input_ref, opts),

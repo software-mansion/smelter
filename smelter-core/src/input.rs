@@ -11,7 +11,7 @@ pub struct RegisterInputOptions {
 #[derive(Debug, Clone)]
 pub enum ProtocolInputOptions {
     Rtp(RtpInputOptions),
-    FFmpegRtmpServer(FFmpegRtmpServerInputOptions),
+    FfmpegRtmpServer(FfmpegRtmpServerInputOptions),
     RtmpServer(RtmpServerInputOptions),
     Mp4(Mp4InputOptions),
     Hls(HlsInputOptions),

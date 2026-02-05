@@ -2,11 +2,11 @@ use crate::common_core::prelude as core;
 use crate::*;
 use std::time::Duration;
 
-impl TryFrom<FFmpegRtmpInput> for core::RegisterInputOptions {
+impl TryFrom<FfmpegRtmpInput> for core::RegisterInputOptions {
     type Error = TypeError;
 
-    fn try_from(value: FFmpegRtmpInput) -> Result<Self, Self::Error> {
-        let FFmpegRtmpInput {
+    fn try_from(value: FfmpegRtmpInput) -> Result<Self, Self::Error> {
+        let FfmpegRtmpInput {
             url,
             required,
             offset_ms,
@@ -28,12 +28,12 @@ impl TryFrom<FFmpegRtmpInput> for core::RegisterInputOptions {
 
         let h264 = decoder_map
             .as_ref()
-            .and_then(|decoders| decoders.get(&InputFFmpegRtmpCodec::H264))
+            .and_then(|decoders| decoders.get(&InputFfmpegRtmpCodec::H264))
             .map(|decoder| match decoder {
-                FFmpegRtmpVideoDecoderOptions::FfmpegH264 => {
+                FfmpegRtmpVideoDecoderOptions::FfmpegH264 => {
                     Ok(core::VideoDecoderOptions::FfmpegH264)
                 }
-                FFmpegRtmpVideoDecoderOptions::VulkanH264 => {
+                FfmpegRtmpVideoDecoderOptions::VulkanH264 => {
                     Ok(core::VideoDecoderOptions::VulkanH264)
                 }
             })
@@ -41,14 +41,14 @@ impl TryFrom<FFmpegRtmpInput> for core::RegisterInputOptions {
 
         let video_decoders = core::RtmpServerInputVideoDecoders { h264 };
 
-        let input_options = core::FFmpegRtmpServerInputOptions {
+        let input_options = core::FfmpegRtmpServerInputOptions {
             url,
             video_decoders,
             buffer,
         };
 
         Ok(core::RegisterInputOptions {
-            input_options: core::ProtocolInputOptions::FFmpegRtmpServer(input_options),
+            input_options: core::ProtocolInputOptions::FfmpegRtmpServer(input_options),
             queue_options,
         })
     }

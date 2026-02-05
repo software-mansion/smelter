@@ -15,7 +15,7 @@ pub struct RtmpOutputOptions {
 }
 
 #[derive(Debug, Clone)]
-pub struct FFmpegRtmpServerInputOptions {
+pub struct FfmpegRtmpServerInputOptions {
     pub url: Arc<str>,
     pub video_decoders: RtmpServerInputVideoDecoders,
     pub buffer: InputBufferOptions,

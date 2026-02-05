@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct FFmpegRtmpInput {
+pub struct FfmpegRtmpInput {
     /// URL where the RTMP server will listen for incoming stream.
     /// Format: `rtmp://<ip_address>:<port>`
     pub url: Arc<str>,
@@ -17,18 +17,18 @@ pub struct FFmpegRtmpInput {
     /// frames.
     pub offset_ms: Option<f64>,
     /// Assigns which decoder should be used for media encoded with a specific codec.
-    pub decoder_map: Option<HashMap<InputFFmpegRtmpCodec, FFmpegRtmpVideoDecoderOptions>>,
+    pub decoder_map: Option<HashMap<InputFfmpegRtmpCodec, FfmpegRtmpVideoDecoderOptions>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
-pub enum InputFFmpegRtmpCodec {
+pub enum InputFfmpegRtmpCodec {
     H264,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub enum FFmpegRtmpVideoDecoderOptions {
+pub enum FfmpegRtmpVideoDecoderOptions {
     /// Software H264 decoder based on FFmpeg.
     FfmpegH264,
 

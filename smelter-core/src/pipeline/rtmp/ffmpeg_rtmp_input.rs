@@ -24,15 +24,15 @@ mod ffmpeg_utils;
 mod input_loop;
 mod stream_state;
 
-pub struct FFmpegRtmpServerInput {
+pub struct FfmpegRtmpServerInput {
     should_close: Arc<AtomicBool>,
 }
 
-impl FFmpegRtmpServerInput {
+impl FfmpegRtmpServerInput {
     pub fn new_input(
         ctx: Arc<PipelineCtx>,
         input_ref: Ref<InputId>,
-        opts: FFmpegRtmpServerInputOptions,
+        opts: FfmpegRtmpServerInputOptions,
     ) -> Result<(Input, InputInitInfo, QueueDataReceiver), InputInitError> {
         let should_close = Arc::new(AtomicBool::new(false));
         let buffer = InputBuffer::new(&ctx, opts.buffer);
@@ -56,14 +56,14 @@ impl FFmpegRtmpServerInput {
         );
 
         Ok((
-            Input::FFmpegRtmpServer(Self { should_close }),
+            Input::FfmpegRtmpServer(Self { should_close }),
             InputInitInfo::Other,
             receivers,
         ))
     }
 }
 
-impl Drop for FFmpegRtmpServerInput {
+impl Drop for FfmpegRtmpServerInput {
     fn drop(&mut self) {
         self.should_close
             .store(true, std::sync::atomic::Ordering::Relaxed);
