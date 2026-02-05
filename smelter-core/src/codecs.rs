@@ -70,6 +70,7 @@ pub enum OutputPixelFormat {
 
 pub(crate) trait AudioEncoderOptionsExt {
     fn sample_rate(&self) -> u32;
+    fn channel(&self) -> AudioChannels;
 }
 
 impl VideoEncoderOptions {

@@ -23,6 +23,7 @@ pub mod vulkan_h264;
 
 mod ffmpeg_utils;
 mod utils;
+mod resampler;
 
 #[derive(Debug, Clone)]
 pub(crate) struct VideoEncoderConfig {
