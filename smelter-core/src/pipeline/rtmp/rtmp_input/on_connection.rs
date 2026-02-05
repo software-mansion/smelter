@@ -19,7 +19,7 @@ pub(crate) fn handle_on_connection(
     let input_ref = match inputs.find_by_app_stream_key(&app, &stream_key) {
         Ok(state) => state,
         Err(err) => {
-            error!(?err, "No input with provided app, stream_key found");
+            error!(?err, "Failed to find input");
             return;
         }
     };
@@ -28,7 +28,7 @@ pub(crate) fn handle_on_connection(
         error!(
             ?app,
             ?stream_key,
-            ?input_ref,
+            input_id=?input_ref.id(),
             "Rejecting connection. Input stream is already active"
         );
         return;

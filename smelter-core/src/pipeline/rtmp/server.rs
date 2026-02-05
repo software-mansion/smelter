@@ -7,10 +7,11 @@ use std::{
 use rtmp::{RtmpError, RtmpServer, ServerConfig};
 use tracing::warn;
 
-use crate::{
-    pipeline::rtmp::rtmp_input::{on_connection::handle_on_connection, state::RtmpInputsState},
-    prelude::*,
+use crate::pipeline::rtmp::rtmp_input::{
+    on_connection::handle_on_connection, state::RtmpInputsState,
 };
+
+use crate::prelude::*;
 
 pub struct RtmpPipelineState {
     pub port: u16,

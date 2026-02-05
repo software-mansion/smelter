@@ -88,11 +88,13 @@ impl RtmpInputsState {
         app: &Arc<str>,
         stream_key: &Arc<str>,
     ) -> Result<Ref<InputId>, RtmpServerError> {
+        let app = app.clone();
+        let stream_key = stream_key.clone();
         let guard = self.0.lock().unwrap();
         let (input_ref, _) = guard
             .iter()
-            .find(|(_, input)| input.app == *app && input.stream_key == *stream_key)
-            .ok_or(RtmpServerError::InvalidAppStreamKeyPair)?;
+            .find(|(_, input)| input.app == app && input.stream_key == stream_key)
+            .ok_or(RtmpServerError::NotRegisteredAppStreamKeyPair { app, stream_key })?;
         Ok(input_ref.clone())
     }
 

@@ -192,11 +192,11 @@ impl RtmpConnectionState {
             warn!("Missing AAC decoder, skipping audio until config arrives");
             return;
         };
-        let (pts, _dts) = self.pts_dts_from_timestamps(audio.pts, audio.dts);
+        let (pts, dts) = self.pts_dts_from_timestamps(audio.pts, audio.dts);
         let chunk = EncodedInputChunk {
             data: audio.data.clone(),
             pts,
-            dts: None,
+            dts,
             kind: MediaKind::Audio(AudioCodec::Aac),
         };
 

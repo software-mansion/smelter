@@ -39,11 +39,8 @@ pub enum RtmpServerError {
     #[error("RTMP server is not running, cannot start RTMP input.")]
     ServerNotRunning,
 
-    #[error("Not registered (app, stream_key) pair.")]
-    InvalidAppStreamKeyPair,
-
-    #[error("Pipeline context is unavailable.")]
-    PipelineContextUnavailable,
+    #[error("Not registered app, stream_key pair (app={app}, stream_key={stream_key})")]
+    NotRegisteredAppStreamKeyPair { app: Arc<str>, stream_key: Arc<str> },
 
     #[error("Input {0} not found.")]
     InputNotFound(InputId),
