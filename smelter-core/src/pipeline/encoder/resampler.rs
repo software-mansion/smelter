@@ -61,9 +61,7 @@ impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>> Iterator
 // - It will receive continuous streams of data, without any gaps.
 // - It can produce chunks of any size, no downstream components require specific sizes.
 struct OutputResampler {
-    input_sample_rate: u32,
     output_sample_rate: u32,
-    channels: AudioChannels,
 
     resampler_input_buffer: ResamplerInputBuffer,
     resampler_output_buffer: ResamplerOutputBuffer,
@@ -107,9 +105,7 @@ impl OutputResampler {
         resampler_output_buffer.samples_to_drop = output_delay;
 
         Ok(Self {
-            input_sample_rate,
             output_sample_rate,
-            channels,
 
             resampler,
             resampler_input_buffer: ResamplerInputBuffer::new(channels),
@@ -186,10 +182,6 @@ impl ResamplerInputBuffer {
 
     fn push_back(&mut self, batch: AudioSamples) {
         self.buffer.push_back((batch, 0));
-    }
-
-    fn push_front(&mut self, batch: AudioSamples) {
-        self.buffer.push_front((batch, 0));
     }
 
     fn drain_samples(&mut self, mut samples_to_read: usize) {

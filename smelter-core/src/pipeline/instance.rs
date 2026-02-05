@@ -485,7 +485,7 @@ fn run_audio_mixer_thread(
                 .collect();
 
         trace!("Mix audio");
-        let mixed_samples = audio_mixer.mix_samples(samples.into());
+        let mixed_samples = audio_mixer.process_batch_set(samples.into());
 
         for (output_id, batch) in mixed_samples.0 {
             trace!(?output_id, ?batch, "Send batch");
