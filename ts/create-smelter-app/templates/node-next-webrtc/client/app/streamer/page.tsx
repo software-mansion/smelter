@@ -31,29 +31,7 @@ export default function Home() {
 }
 
 function Controls() {
-  const clientRef = useRef<WhipClient>(new WhipClient());
-  const [connection, setConnection] = useState<'camera' | 'screen-share' | 'none'>('none');
   const [showInstructions, setShowInstruction] = useState(true);
-
-  const toggleCamera = async () => {
-    setConnection('none')
-    await clientRef.current.close();
-    if (connection !== 'camera') {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      await clientRef.current.connect(stream, new URL("/whip/input", SMELTER_WHIP_WHEP_URL), WHIP_AUTH_TOKEN);
-      setConnection('camera')
-    }
-  }
-
-  const toggleScreenShare = async () => {
-    setConnection('none')
-    await clientRef.current.close();
-    if (connection !== 'screen-share') {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      await clientRef.current.connect(stream, new URL("/whip/input", SMELTER_WHIP_WHEP_URL), WHIP_AUTH_TOKEN);
-      setConnection('screen-share')
-    }
-  }
 
   const toggleInstructions = async () => {
     setShowInstruction(!showInstructions)
@@ -67,13 +45,21 @@ function Controls() {
     });
   }
 
+  const startStream = async () => {
+    await fetch(new URL("/start-rtmp-stream", BACKEND_URL), {
+      method: 'POST',
+      mode: 'cors',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ url: 'rtmp://x.rtmp.youtube.com/live2/<YOUR STREAM KEY>' }),
+    });
+  }
+
   return (
     <div className="w-1/3 p-10 flex flex-col items-start">
-      <button className="bg-purple-800 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded mb-10 w-full" onClick={toggleScreenShare}>
-        {connection === 'screen-share' ? 'Stop' : 'Start'} screen share
-      </button>
-      <button className="bg-purple-800 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded mb-10 w-full" onClick={toggleCamera}>
-        {connection === 'camera' ? 'Stop' : 'Start'} camera
+      <button className="bg-purple-800 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded mb-10 w-full" onClick={startStream}>
+        Start stream
       </button>
       <Checkbox description="Show instructions" isChecked={showInstructions} onChange={toggleInstructions} />
     </div>

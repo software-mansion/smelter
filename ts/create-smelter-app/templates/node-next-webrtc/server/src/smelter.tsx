@@ -18,7 +18,6 @@ class SmelterManager {
   public async init() {
     await SmelterInstance['instance'].init();
     await SmelterInstance['instance'].start();
-    await SmelterInstance.registerWhipInput();
     await SmelterInstance.registerWhepOutput();
   }
 
@@ -54,6 +53,27 @@ class SmelterManager {
           type: 'opus',
         },
       },
+    });
+  }
+
+  public async registerRtmpOutput(url: string): Promise<void> {
+    await this.instance.registerOutput('output-rtmp', <App />, {
+      type: 'rtmp_client',
+      url,
+      video: {
+        encoder: { type: 'ffmpeg_h264' },
+        resolution: { width: 1920, height: 1080 },
+      },
+      audio: {
+        encoder: { type: 'aac' },
+      },
+    });
+  }
+
+  public async registerRtmpInput(): Promise<void> {
+    await this.instance.registerInput('input-rtmp', {
+      type: 'rtmp_server',
+      url: 'rtmp://127.0.0.1:1935',
     });
   }
 
