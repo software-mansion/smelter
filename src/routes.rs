@@ -25,14 +25,14 @@ use self::{
 use crate::middleware::body_logger_middleware;
 
 pub mod register_request;
-mod status;
-mod unregister_request;
-mod update_output;
-mod ws;
+pub mod status;
+pub mod unregister_request;
+pub mod update_output;
+pub mod ws;
 
-pub use register_request::{RegisterInput, RegisterOutput};
-pub use unregister_request::{UnregisterInput, UnregisterOutput};
-pub use update_output::UpdateOutputRequest;
+// pub use register_request::{RegisterInput, RegisterOutput};
+// pub use unregister_request::{UnregisterInput, UnregisterOutput};
+// pub use update_output::UpdateOutputRequest;
 
 pub fn routes(state: Arc<ApiState>) -> Router {
     let inputs = Router::new()
