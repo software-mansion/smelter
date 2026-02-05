@@ -22,4 +22,8 @@ impl AudioEncoderOptionsExt for OpusEncoderOptions {
     fn sample_rate(&self) -> u32 {
         self.sample_rate
     }
+
+    fn channel(&self) -> AudioChannels {
+        self.channels
+    }
 }
