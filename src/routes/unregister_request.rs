@@ -42,14 +42,13 @@ pub struct UnregisterRenderer {
     path = "/api/input/{input_id}/unregister",
     operation_id = "unregister_input",
     params(("input_id" = str, Path, description = "Input ID.")),
-    request_body = UnregisterInput,
     responses(
         (status = 200, description = "Input registered successfully.", body = Response),
         (status = 400, description = "Bad request.", body = ApiError),
         (status = 404, description = "Input not found.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
-    tags = ["unregister_reguest"],
+    tags = ["unregister_request"],
 )]
 pub async fn handle_input(
     State(api): State<Arc<ApiState>>,
@@ -84,14 +83,13 @@ pub async fn handle_input(
     path = "/api/input/{output_id}/unregister",
     operation_id = "unregister_output",
     params(("output_id" = str, Path, description = "Output ID.")),
-    request_body = UnregisterOutput,
     responses(
         (status = 200, description = "Output registered successfully.", body = Response),
         (status = 400, description = "Bad request.", body = ApiError),
         (status = 404, description = "Output not found.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),
-    tags = ["unregister_reguest"],
+    tags = ["unregister_request"],
 )]
 pub async fn handle_output(
     State(api): State<Arc<ApiState>>,
@@ -121,7 +119,20 @@ pub async fn handle_output(
     Ok(Response::Ok {})
 }
 
-pub(super) async fn handle_shader(
+#[utoipa::path(
+    post,
+    path = "/api/input/{shader_id}/unregister",
+    operation_id = "unregister_shader",
+    params(("shader_id" = str, Path, description = "Shader ID.")),
+    responses(
+        (status = 200, description = "Output registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 404, description = "Shader not found.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["unregister_request"],
+)]
+pub async fn handle_shader(
     State(api): State<Arc<ApiState>>,
     Path(shader_id): Path<RendererId>,
     Json(request): Json<UnregisterRenderer>,

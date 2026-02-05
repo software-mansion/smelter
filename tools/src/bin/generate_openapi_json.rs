@@ -21,6 +21,7 @@ use utoipa::OpenApi;
         smelter::routes::register_request::handle_font,
         smelter::routes::unregister_request::handle_input,
         smelter::routes::unregister_request::handle_output,
+        smelter::routes::unregister_request::handle_shader,
     )
 )]
 struct ApiDoc;
