@@ -48,6 +48,7 @@ pub enum RegisterOutput {
 #[utoipa::path(
     post,
     path = "/api/input/{input_id}/register",
+    operation_id = "register_input",
     params(("input_id" = str, Path, description = "Input ID.")),
     request_body = RegisterInput,
     responses(
@@ -113,6 +114,7 @@ pub async fn handle_input(
 #[utoipa::path(
     post,
     path = "/api/output/{output_id}/register",
+    operation_id = "register_output",
     params(("output_id" = str, Path, description = "Output ID.")),
     request_body = RegisterOutput,
     responses(
@@ -161,6 +163,7 @@ pub(super) async fn handle_output(
 #[utoipa::path(
     post,
     path = "/api/shader/{shader_id}/register",
+    operation_id = "register_shader",
     params(("shader_id" = str, Path, description = "Shader ID.")),
     request_body = ShaderSpec,
     responses(
@@ -187,6 +190,7 @@ pub async fn handle_shader(
 #[utoipa::path(
     post,
     path = "/api/web-renderer/{instance_id}/register",
+    operation_id = "register_web_renderer",
     params(("instance_id" = str, Path, description = "Web renderer instance ID.")),
     request_body = WebRendererSpec,
     responses(
@@ -213,6 +217,7 @@ pub async fn handle_web_renderer(
 #[utoipa::path(
     post,
     path = "/api/image/{image_id}/register",
+    operation_id = "register_image",
     params(("image_id" = str, Path, description = "Image ID.")),
     request_body = ImageSpec,
     responses(
@@ -239,6 +244,7 @@ pub async fn handle_image(
 #[utoipa::path(
     post,
     path = "/api/font/register",
+    operation_id = "register_font",
     request_body(content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "Image registered successfully.", body = Response),
