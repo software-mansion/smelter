@@ -22,12 +22,12 @@ fn main() {
 #[serde(untagged)]
 #[allow(dead_code)]
 enum ApiTypes {
-    RegisterInput(routes::RegisterInput),
-    RegisterOutput(Box<routes::RegisterOutput>),
+    RegisterInput(routes::register_request::RegisterInput),
+    RegisterOutput(Box<routes::register_request::RegisterOutput>),
     RegisterImage(smelter_api::ImageSpec),
     RegisterWebRenderer(smelter_api::WebRendererSpec),
     RegisterShader(smelter_api::ShaderSpec),
-    UpdateOutput(Box<routes::UpdateOutputRequest>),
+    UpdateOutput(Box<routes::update_output::UpdateOutputRequest>),
 }
 
 pub fn generate_json_schema(check_flag: bool) {
@@ -36,7 +36,7 @@ pub fn generate_json_schema(check_flag: bool) {
         false => (SchemaAction::Update, SchemaAction::Update),
     };
     generate_schema(
-        schema_for!(routes::UpdateOutputRequest),
+        schema_for!(routes::update_output::UpdateOutputRequest),
         "./schemas/scene.schema.json",
         scene_schema_action,
     );

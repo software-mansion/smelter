@@ -11,12 +11,15 @@ use smelter_render::error::{
     ErrorStack, RegisterRendererError, RequestKeyframeError, UnregisterRendererError,
     UpdateSceneError,
 };
+use utoipa::ToSchema;
 
-#[derive(Debug)]
+#[derive(Debug, ToSchema)]
 pub struct ApiError {
     pub error_code: &'static str,
     pub message: String,
     pub stack: Vec<String>,
+
+    #[schema(value_type = u16)]
     pub http_status_code: StatusCode,
 }
 
