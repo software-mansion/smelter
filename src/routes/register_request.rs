@@ -158,7 +158,19 @@ pub(super) async fn handle_output(
     .unwrap()
 }
 
-pub(super) async fn handle_shader(
+#[utoipa::path(
+    post,
+    path = "/api/shader/{shader_id}/register",
+    params(("shader_id" = str, Path, description = "Shader ID.")),
+    request_body = ShaderSpec,
+    responses(
+        (status = 200, description = "Shader registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["register_reguest"],
+)]
+pub async fn handle_shader(
     State(api): State<Arc<ApiState>>,
     Path(shader_id): Path<RendererId>,
     Json(request): Json<ShaderSpec>,
@@ -172,7 +184,19 @@ pub(super) async fn handle_shader(
     .unwrap()
 }
 
-pub(super) async fn handle_web_renderer(
+#[utoipa::path(
+    post,
+    path = "/api/web-renderer/{instance_id}/register",
+    params(("instance_id" = str, Path, description = "Web renderer instance ID.")),
+    request_body = WebRendererSpec,
+    responses(
+        (status = 200, description = "Web renderer registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["register_reguest"],
+)]
+pub async fn handle_web_renderer(
     State(api): State<Arc<ApiState>>,
     Path(instance_id): Path<RendererId>,
     Json(request): Json<WebRendererSpec>,
@@ -186,7 +210,19 @@ pub(super) async fn handle_web_renderer(
     .unwrap()
 }
 
-pub(super) async fn handle_image(
+#[utoipa::path(
+    post,
+    path = "/api/image/{image_id}/register",
+    params(("image_id" = str, Path, description = "Image ID.")),
+    request_body = ImageSpec,
+    responses(
+        (status = 200, description = "Image registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["register_reguest"],
+)]
+pub async fn handle_image(
     State(api): State<Arc<ApiState>>,
     Path(image_id): Path<RendererId>,
     Json(request): Json<ImageSpec>,
@@ -200,7 +236,18 @@ pub(super) async fn handle_image(
     .unwrap()
 }
 
-pub(super) async fn handle_font(
+#[utoipa::path(
+    post,
+    path = "/api/font/register",
+    request_body(content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "Image registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["register_reguest"],
+)]
+pub async fn handle_font(
     State(api): State<Arc<ApiState>>,
     Multipart(mut multipart): Multipart,
 ) -> Result<Response, ApiError> {
