@@ -45,7 +45,18 @@ pub enum RegisterOutput {
     Hls(HlsOutput),
 }
 
-pub(super) async fn handle_input(
+#[utoipa::path(
+    post,
+    path = "/api/input/{input_id}/register",
+    params(("input_id" = str, Path, description = "Input ID.")),
+    request_body = RegisterInput,
+    responses(
+        (status = 200, description = "Input registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+)]
+pub async fn handle_input(
     State(api): State<Arc<ApiState>>,
     Path(input_id): Path<InputId>,
     Json(request): Json<RegisterInput>,

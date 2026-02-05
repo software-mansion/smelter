@@ -8,7 +8,7 @@ use super::{
 };
 
 use anyhow::Result;
-use smelter::routes::UpdateOutputRequest;
+use smelter::routes::update_output::UpdateOutputRequest;
 use smelter_render::{
     Frame, FrameSet, InputId, OutputFrameFormat, OutputId, Renderer, RendererId, RendererSpec,
     Resolution, scene::Component,

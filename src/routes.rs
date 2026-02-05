@@ -30,10 +30,6 @@ pub mod unregister_request;
 pub mod update_output;
 pub mod ws;
 
-// pub use register_request::{RegisterInput, RegisterOutput};
-// pub use unregister_request::{UnregisterInput, UnregisterOutput};
-// pub use update_output::UpdateOutputRequest;
-
 pub fn routes(state: Arc<ApiState>) -> Router {
     let inputs = Router::new()
         .route("/:id/register", post(register_request::handle_input))
