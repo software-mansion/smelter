@@ -79,7 +79,21 @@ pub async fn handle_input(
     Ok(Response::Ok {})
 }
 
-pub(super) async fn handle_output(
+#[utoipa::path(
+    post,
+    path = "/api/input/{output_id}/unregister",
+    operation_id = "unregister_output",
+    params(("output_id" = str, Path, description = "Output ID.")),
+    request_body = UnregisterOutput,
+    responses(
+        (status = 200, description = "Output registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 404, description = "Output not found.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["unregister_reguest"],
+)]
+pub async fn handle_output(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
     Json(request): Json<UnregisterOutput>,
