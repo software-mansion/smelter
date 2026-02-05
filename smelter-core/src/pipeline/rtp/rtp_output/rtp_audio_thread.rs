@@ -10,7 +10,6 @@ use crate::{
     error::EncoderInitError,
     pipeline::{
         encoder::{AudioEncoder, AudioEncoderStream},
-        resampler::encoder_resampler::ResampledForEncoderStream,
         rtp::payloader::{PayloaderOptions, PayloaderStream},
     },
     thread_utils::{InitializableThread, ThreadMetadata},
