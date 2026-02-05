@@ -15,6 +15,10 @@ use utoipa::OpenApi;
     paths(
         smelter::routes::register_request::handle_input,
         smelter::routes::register_request::handle_output,
+        smelter::routes::register_request::handle_shader,
+        smelter::routes::register_request::handle_web_renderer,
+        smelter::routes::register_request::handle_image,
+        smelter::routes::register_request::handle_font,
     )
 )]
 struct ApiDoc;

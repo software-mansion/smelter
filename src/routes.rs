@@ -123,7 +123,7 @@ where
     }
 }
 
-pub(super) struct Multipart(pub axum::extract::Multipart);
+pub struct Multipart(pub axum::extract::Multipart);
 
 #[async_trait]
 impl<S> FromRequest<S> for Multipart
