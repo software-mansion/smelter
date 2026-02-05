@@ -45,13 +45,7 @@ pub enum RegisterOutput {
     Hls(HlsOutput),
 }
 
-#[utoipa::path(
-    post,
-    path = "/{id}/register",
-    params(("id" = str, Path, description = "Input ID")),
-    request_body = RegisterInput,
-)]
-pub async fn handle_input(
+pub(super) async fn handle_input(
     State(api): State<Arc<ApiState>>,
     Path(input_id): Path<InputId>,
     Json(request): Json<RegisterInput>,
