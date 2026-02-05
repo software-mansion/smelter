@@ -36,6 +36,27 @@ impl AudioSamples {
             AudioSamples::Stereo(items) => items.len(),
         }
     }
+
+    pub(crate) fn merge(&mut self, samples: Self) {
+        match (self, samples) {
+            (AudioSamples::Mono(first), AudioSamples::Mono(mut second)) => {
+                first.append(&mut second);
+            }
+            (AudioSamples::Stereo(first), AudioSamples::Stereo(mut second)) => {
+                first.append(&mut second);
+            }
+            // Options below are clearly errors, but I think it's better to just
+            // handle it.
+            (AudioSamples::Mono(first), AudioSamples::Stereo(second)) => {
+                let mut second_mono = second.into_iter().map(|(l, r)| (l + r) / 2.0).collect();
+                first.append(&mut second_mono);
+            }
+            (AudioSamples::Stereo(first), AudioSamples::Mono(second)) => {
+                let mut second_stereo = second.into_iter().map(|value| (value, value)).collect();
+                first.append(&mut second_stereo);
+            }
+        }
+    }
 }
 
 impl fmt::Debug for AudioSamples {

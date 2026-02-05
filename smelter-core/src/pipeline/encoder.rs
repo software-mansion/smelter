@@ -22,6 +22,7 @@ pub mod vulkan_h264;
 pub mod vulkan_h264;
 
 mod ffmpeg_utils;
+pub(crate) mod resampler;
 mod utils;
 
 #[derive(Debug, Clone)]

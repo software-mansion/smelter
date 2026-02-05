@@ -5,10 +5,7 @@ use tracing::warn;
 
 use crate::prelude::*;
 use crate::{
-    pipeline::{
-        encoder::{AudioEncoder, AudioEncoderStream},
-        resampler::encoder_resampler::ResampledForEncoderStream,
-    },
+    pipeline::encoder::{AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream},
     thread_utils::{InitializableThread, ThreadMetadata},
 };
 
@@ -51,7 +48,8 @@ where
             sample_batch_receiver.into_iter(),
             ctx.mixing_sample_rate,
             encoder_options.sample_rate(),
-        )
+            encoder_options.channels(),
+        )?
         .flatten();
 
         let (encoded_stream, _encoder_ctx) =

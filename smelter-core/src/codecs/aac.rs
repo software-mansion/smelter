@@ -14,6 +14,10 @@ impl AudioEncoderOptionsExt for FdkAacEncoderOptions {
     fn sample_rate(&self) -> u32 {
         self.sample_rate
     }
+
+    fn channels(&self) -> AudioChannels {
+        self.channels
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
