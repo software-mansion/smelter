@@ -1,7 +1,6 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use crossbeam_channel::Sender;
-use smelter_render::Frame;
 use tracing::warn;
 
 use crate::{
@@ -11,9 +10,10 @@ use crate::{
         AudioDecoder, AudioDecoderStream, BytestreamTransformStream, BytestreamTransformer,
         DecoderThreadHandle, EncodedInputEvent, VideoDecoder, VideoDecoderStream,
     },
-    prelude::InputAudioSamples,
     thread_utils::{InitializableThread, ThreadMetadata},
 };
+
+use crate::prelude::*;
 
 pub(crate) struct VideoDecoderThreadOptions<Transformer: BytestreamTransformer> {
     pub ctx: Arc<PipelineCtx>,
@@ -62,6 +62,8 @@ where
 
         let result_stream = decoder_stream.flatten().filter_map(|event| match event {
             PipelineEvent::Data(frame) => Some(PipelineEvent::Data(frame)),
+            // Do not send EOS to queue to allow reconnects on the same input.
+            // TODO: maybe queue should be able to handle packets after EOS
             PipelineEvent::EOS => None,
         });
 
@@ -134,6 +136,8 @@ where
 
         let result_stream = decoded_stream.flatten().filter_map(|event| match event {
             PipelineEvent::Data(batch) => Some(PipelineEvent::Data(batch)),
+            // Do not send EOS to queue to allow reconnects on the same input.
+            // TODO: maybe queue should be able to handle packets after EOS
             PipelineEvent::EOS => None,
         });
 
