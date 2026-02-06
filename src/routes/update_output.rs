@@ -25,7 +25,19 @@ pub struct UpdateOutputRequest {
     pub schedule_time_ms: Option<f64>,
 }
 
-pub(super) async fn handle_output_update(
+#[utoipa::path(
+    post,
+    path = "/api/output/{output_id}/update",
+    operation_id = "update_output",
+    params(("output_id" = str, Path, description = "Output ID.")),
+    responses(
+        (status = 200, description = "Output updated successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["update_request"],
+)]
+pub async fn handle_output_update(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
     Json(request): Json<UpdateOutputRequest>,
