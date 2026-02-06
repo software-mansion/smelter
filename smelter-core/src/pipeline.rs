@@ -38,7 +38,8 @@ mod webrtc;
 mod input;
 mod instance;
 mod output;
-mod utils;
+
+pub(crate) mod utils;
 
 pub use instance::Pipeline;
 

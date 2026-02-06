@@ -1,10 +1,13 @@
-use std::{collections::VecDeque, time::Duration};
+use std::time::Duration;
 
 use audioadapter::{Adapter, AdapterMut};
 use rubato::{FixedSync, Resampler};
 use tracing::{error, info, trace};
 
-use crate::{AudioChannels, AudioSamples, PipelineEvent, prelude::OutputAudioSamples};
+use crate::{
+    AudioChannels, AudioSamples, PipelineEvent, prelude::OutputAudioSamples,
+    utils::AudioSamplesBuffer,
+};
 
 pub(crate) struct ResampledForEncoderStream<
     Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>,
@@ -39,12 +42,7 @@ impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>> Iterator
         match self.source.next() {
             Some(PipelineEvent::Data(samples)) => {
                 let resampled = self.resampler.resample(samples);
-                Some(
-                    resampled
-                        .into_iter()
-                        .map(|batch| PipelineEvent::Data(batch))
-                        .collect(),
-                )
+                Some(resampled.into_iter().map(PipelineEvent::Data).collect())
             }
             Some(PipelineEvent::EOS) | None => match self.eos_sent {
                 true => None,
@@ -63,7 +61,7 @@ impl<Source: Iterator<Item = PipelineEvent<OutputAudioSamples>>> Iterator
 struct OutputResampler {
     output_sample_rate: u32,
 
-    resampler_input_buffer: ResamplerInputBuffer,
+    resampler_input_buffer: AudioSamplesBuffer,
     resampler_output_buffer: ResamplerOutputBuffer,
     resampler: rubato::Fft<f64>,
 
@@ -108,7 +106,7 @@ impl OutputResampler {
             output_sample_rate,
 
             resampler,
-            resampler_input_buffer: ResamplerInputBuffer::new(channels),
+            resampler_input_buffer: AudioSamplesBuffer::new(channels),
             resampler_output_buffer,
 
             first_sample_pts: None,
@@ -131,11 +129,12 @@ impl OutputResampler {
             self.samples_produced += samples.len() as u64;
             result.push(OutputAudioSamples { samples, start_pts })
         }
+        trace!(?result, "Resampler produced samples");
         result
     }
 
     fn inner_resample(&mut self) -> Option<AudioSamples> {
-        if self.resampler.input_frames_next() < self.resampler_input_buffer.frames() {
+        if self.resampler.input_frames_next() > self.resampler_input_buffer.frames() {
             return None;
         }
 
@@ -162,82 +161,6 @@ impl OutputResampler {
         }
 
         Some(self.resampler_output_buffer.get_samples())
-    }
-}
-
-#[derive(Debug)]
-struct ResamplerInputBuffer {
-    /// oldest samples are at the front, newest at the back
-    buffer: VecDeque<(AudioSamples, usize)>,
-    channels: AudioChannels,
-}
-
-impl ResamplerInputBuffer {
-    fn new(channels: AudioChannels) -> Self {
-        Self {
-            buffer: VecDeque::new(),
-            channels,
-        }
-    }
-
-    fn push_back(&mut self, batch: AudioSamples) {
-        self.buffer.push_back((batch, 0));
-    }
-
-    fn drain_samples(&mut self, mut samples_to_read: usize) {
-        while let Some((batch, read_samples)) = self.buffer.front()
-            && batch.len() - read_samples <= samples_to_read
-        {
-            samples_to_read -= batch.len() - read_samples;
-            self.buffer.pop_front();
-        }
-
-        if let Some((_batch, read_samples)) = self.buffer.front_mut() {
-            *read_samples += samples_to_read;
-        }
-    }
-}
-
-impl Adapter<'_, f64> for ResamplerInputBuffer {
-    unsafe fn read_sample_unchecked(&self, channel: usize, frame: usize) -> f64 {
-        let mut samples_skipped: usize = 0;
-        for (batch, read_samples) in &self.buffer {
-            if batch.len() - read_samples <= frame - samples_skipped {
-                samples_skipped += batch.len() - read_samples;
-            } else {
-                match batch {
-                    AudioSamples::Mono(items) => {
-                        if channel != 0 {
-                            break;
-                        }
-                        return items[frame + read_samples - samples_skipped];
-                    }
-                    AudioSamples::Stereo(items) => match channel {
-                        0 => return items[frame + read_samples - samples_skipped].0,
-                        1 => return items[frame + read_samples - samples_skipped].1,
-                        _ => {
-                            break;
-                        }
-                    },
-                }
-            }
-        }
-        error!(?channel, ?frame, "Sample does not exists");
-        0.0
-    }
-
-    fn channels(&self) -> usize {
-        match self.channels {
-            AudioChannels::Mono => 1,
-            AudioChannels::Stereo => 2,
-        }
-    }
-
-    fn frames(&self) -> usize {
-        self.buffer
-            .iter()
-            .map(|(batch, read_samples)| batch.len() - read_samples)
-            .sum()
     }
 }
 
