@@ -13,6 +13,7 @@ web-renderer = ["smelter-core/web-renderer"]
 smelter-render = { workspace = true }
 serde = { workspace = true }
 schemars = { workspace = true }
+utoipa = { workspace = true }
 bytes = { workspace = true }
 tracing = { workspace = true }
 itertools = { workspace = true }

@@ -1,8 +1,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use smelter_render::scene;
+use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, Copy)]
 pub struct Resolution {
     /// Width in pixels.
     pub width: usize,

@@ -1,11 +1,12 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::*;
 
 /// Parameters for an input stream from RTP source.
 /// At least one of `video` and `audio` has to be defined.
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RtpInput {
     /// UDP port or port range on which the compositor should listen for the stream.
@@ -25,14 +26,14 @@ pub struct RtpInput {
     pub offset_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AacRtpMode {
     LowBitrate,
     HighBitrate,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(tag = "decoder", rename_all = "snake_case", deny_unknown_fields)]
 pub enum InputRtpAudioOptions {
     Opus,
@@ -58,13 +59,13 @@ pub enum InputRtpAudioOptions {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct InputRtpVideoOptions {
     pub decoder: RtpVideoDecoderOptions,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum RtpVideoDecoderOptions {
     /// Software H264 decoder based on FFmpeg.

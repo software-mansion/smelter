@@ -10,10 +10,11 @@ use smelter_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
 use reqwest::StatusCode;
 use serde::Serialize;
 use tokio::runtime::Runtime;
+use utoipa::ToSchema;
 
 use crate::{config::Config, error::ApiError};
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 #[serde(untagged)]
 pub enum Response {
     Ok {},

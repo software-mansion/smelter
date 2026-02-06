@@ -2,27 +2,27 @@ use std::{path::Path, sync::Arc};
 
 use axum::{extract::State, response::IntoResponse};
 use serde::Serialize;
-use serde_json::json;
 use smelter_core::{InputProtocolKind, OutputProtocolKind};
 use smelter_render::RenderingMode;
+use utoipa::ToSchema;
 
 use crate::error::ApiError;
 
 use super::ApiState;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 struct InputInfo {
     input_id: String,
     input_type: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 struct OutputInfo {
     output_id: String,
     output_type: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 struct InstanceConfiguration {
     api_port: u16,
 
@@ -33,6 +33,7 @@ struct InstanceConfiguration {
     never_drop_output_frames: bool,
     run_late_scheduled_events: bool,
 
+    #[schema(value_type = str)]
     download_root: Arc<Path>,
 
     web_renderer_enable: bool,
@@ -45,7 +46,25 @@ struct InstanceConfiguration {
     rendering_mode: &'static str,
 }
 
-pub(super) async fn status_handler(
+#[derive(Serialize, ToSchema)]
+struct InstanceStatus {
+    instance_id: String,
+    configuration: InstanceConfiguration,
+    inputs: Vec<InputInfo>,
+    outputs: Vec<OutputInfo>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/status",
+    operation_id = "get_status",
+    responses(
+        (status = 200, description = "Instance status fetched successfully.", body = InstanceStatus),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["status_request"],
+)]
+pub async fn status_handler(
     State(state): State<Arc<ApiState>>,
 ) -> Result<impl IntoResponse, ApiError> {
     let pipeline = state.pipeline()?;
@@ -113,12 +132,12 @@ pub(super) async fn status_handler(
         },
     };
 
-    Ok(axum::Json(json!({
-        "instance_id": state.config.instance_id,
-        "configuration": configuration,
-        "inputs": inputs,
-        "outputs": outputs
-    }))
+    Ok(axum::Json(InstanceStatus {
+        instance_id: state.config.instance_id.clone(),
+        configuration,
+        inputs,
+        outputs,
+    })
     .into_response())
 }
 

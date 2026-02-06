@@ -27,6 +27,7 @@ opus = { workspace = true }
 pitch-detection = "0.3.0"
 rand = { workspace = true }
 schemars = { workspace = true}
+utoipa = { workspace = true }
 tracing-subscriber = { version = "0.3.20", features = ["json", "env-filter"] }
 tokio = { workspace = true }
 regex = { workspace = true }
