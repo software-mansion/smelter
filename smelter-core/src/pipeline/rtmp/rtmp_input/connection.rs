@@ -1,15 +1,19 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, mpsc},
+    thread::JoinHandle,
+    time::Duration,
+};
 
 use crossbeam_channel::Sender;
 use rtmp::{AudioConfig, AudioData, RtmpEvent, VideoConfig, VideoData};
-use smelter_render::{Frame, InputId};
-use tracing::{error, info, warn};
+use smelter_render::{Frame, InputId, error::ErrorStack};
+use tracing::{Level, error, info, span, warn};
 
 use crate::{
     MediaKind, PipelineCtx, PipelineEvent, Ref,
     codecs::{AudioCodec, FdkAacDecoderOptions, VideoCodec, VideoDecoderOptions},
     pipeline::{
-        decoder::{fdk_aac::FdkAacDecoder, ffmpeg_h264, vulkan_h264},
+        decoder::{DecoderThreadHandle, fdk_aac::FdkAacDecoder, ffmpeg_h264, vulkan_h264},
         rtmp::rtmp_input::decoder_thread::{
             AudioDecoderThread, AudioDecoderThreadOptions, VideoDecoderThread,
             VideoDecoderThreadOptions,
@@ -21,7 +25,16 @@ use crate::{
 
 use crate::prelude::*;
 
-pub(super) struct RtmpConnectionState {
+pub(crate) struct RtmpConnectionOptions {
+    pub app: Arc<str>,
+    pub stream_key: Arc<str>,
+    pub frame_sender: Sender<PipelineEvent<Frame>>,
+    pub samples_sender: Sender<PipelineEvent<InputAudioSamples>>,
+    pub video_decoders: RtmpServerInputVideoDecoders,
+    pub buffer: InputBuffer,
+}
+
+struct RtmpConnectionState {
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
     frame_sender: Sender<PipelineEvent<Frame>>,
@@ -29,37 +42,28 @@ pub(super) struct RtmpConnectionState {
     video_decoders: RtmpServerInputVideoDecoders,
     buffer: InputBuffer,
 
-    video_chunk_sender: Option<Sender<PipelineEvent<EncodedInputChunk>>>,
-    audio_chunk_sender: Option<Sender<PipelineEvent<EncodedInputChunk>>>,
+    video_handle: Option<DecoderThreadHandle>,
+    audio_handle: Option<DecoderThreadHandle>,
 
     first_packet_offset: Option<Duration>,
 }
 
 impl RtmpConnectionState {
-    pub(super) fn new(
-        ctx: Arc<PipelineCtx>,
-        input_ref: Ref<InputId>,
-        video_sender: Sender<PipelineEvent<Frame>>,
-        audio_sender: Sender<PipelineEvent<InputAudioSamples>>,
-        video_decoders: RtmpServerInputVideoDecoders,
-        buffer: InputBuffer,
-    ) -> Self {
+    fn new(ctx: Arc<PipelineCtx>, input_ref: Ref<InputId>, options: RtmpConnectionOptions) -> Self {
         Self {
             ctx,
             input_ref,
-            frame_sender: video_sender,
-            samples_sender: audio_sender,
-            video_decoders,
-
-            video_chunk_sender: None,
-            audio_chunk_sender: None,
-
-            buffer,
+            frame_sender: options.frame_sender,
+            samples_sender: options.samples_sender,
+            video_decoders: options.video_decoders,
+            buffer: options.buffer,
+            video_handle: None,
+            audio_handle: None,
             first_packet_offset: None,
         }
     }
 
-    pub(super) fn handle_rtmp_event(&mut self, rtmp_event: RtmpEvent) {
+    fn handle_rtmp_event(&mut self, rtmp_event: RtmpEvent) {
         match rtmp_event {
             RtmpEvent::VideoConfig(config) => self.process_video_config(config),
             RtmpEvent::AudioConfig(config) => self.process_audio_config(config),
@@ -71,7 +75,7 @@ impl RtmpConnectionState {
 
     fn process_video_config(&mut self, config: VideoConfig) {
         if config.codec != rtmp::VideoCodec::H264 {
-            warn!(?config.codec, "Unsupported video codec");
+            error!(?config.codec, "Unsupported video codec");
             return;
         }
 
@@ -81,7 +85,10 @@ impl RtmpConnectionState {
                 self.init_h264_decoder(parsed_config);
             }
             Err(err) => {
-                warn!(?err, "Failed to parse H264 config");
+                warn!(
+                    "Failed to parse H264 config: {}",
+                    ErrorStack::new(&err).into_string()
+                );
             }
         }
     }
@@ -125,22 +132,25 @@ impl RtmpConnectionState {
 
         match handle {
             Ok(handle) => {
-                self.video_chunk_sender = Some(handle.chunk_sender);
+                self.video_handle = Some(handle);
             }
             Err(err) => {
-                error!(?err, "Failed to initialize H264 decoder");
+                error!(
+                    "Failed to initialize H264 decoder: {}",
+                    ErrorStack::new(&err).into_string()
+                );
             }
         }
     }
 
     fn process_video(&mut self, video: VideoData) {
         if video.codec != rtmp::VideoCodec::H264 {
-            warn!(?video.codec, "Unsupported video codec");
+            error!(?video.codec, "Unsupported video codec");
             return;
         }
 
-        let Some(sender) = self.video_chunk_sender.clone() else {
-            warn!("Missing H264 decoder, skipping video until config arrives");
+        let Some(sender) = self.video_handle.as_ref().map(|v| v.chunk_sender.clone()) else {
+            warn!("H264 decoder not yet initialized, skipping video until config arrives");
             return;
         };
         let (pts, dts) = self.pts_dts_from_timestamps(video.pts, video.dts);
@@ -158,7 +168,7 @@ impl RtmpConnectionState {
 
     fn process_audio_config(&mut self, config: AudioConfig) {
         if config.codec != rtmp::AudioCodec::Aac {
-            warn!(?config.codec, "Unsupported audio codec");
+            error!(?config.codec, "Unsupported audio codec");
             return;
         }
 
@@ -177,19 +187,23 @@ impl RtmpConnectionState {
         );
         match handle {
             Ok(handle) => {
-                self.audio_chunk_sender = Some(handle.chunk_sender);
+                self.audio_handle = Some(handle);
             }
-            Err(err) => warn!(?err, "Failed to init AAC decoder"),
+            Err(err) => error!(
+                "Failed to init AAC decoder: {}",
+                ErrorStack::new(&err).into_string()
+            ),
         }
     }
 
     fn process_audio(&mut self, audio: AudioData) {
         if audio.codec != rtmp::AudioCodec::Aac {
+            error!(?audio.codec, "Unsupported audio codec");
             return;
         }
 
-        let Some(sender) = self.audio_chunk_sender.clone() else {
-            warn!("Missing AAC decoder, skipping audio until config arrives");
+        let Some(sender) = self.audio_handle.as_ref().map(|a| a.chunk_sender.clone()) else {
+            warn!("AAC decoder not yet initialized, skipping audio until config arrives");
             return;
         };
         let (pts, dts) = self.pts_dts_from_timestamps(audio.pts, audio.dts);
@@ -223,4 +237,33 @@ impl RtmpConnectionState {
         self.buffer.recalculate_buffer(pts);
         (pts + self.buffer.size(), Some(dts))
     }
+}
+
+pub(crate) fn start_connection_thread(
+    ctx: Arc<PipelineCtx>,
+    input_ref: Ref<InputId>,
+    receiver: mpsc::Receiver<RtmpEvent>,
+    options: RtmpConnectionOptions,
+) -> JoinHandle<()> {
+    std::thread::Builder::new()
+        .name(format!("RTMP thread for input {input_ref}"))
+        .spawn(move || {
+            let _span = span!(
+                Level::INFO,
+                "RTMP thread",
+                input_id = input_ref.id().to_string(),
+                app = options.app.to_string(),
+                stream_key = options.stream_key.to_string(),
+            )
+            .entered();
+            let mut state = RtmpConnectionState::new(ctx, input_ref, options);
+            info!("RTMP stream connection opened");
+
+            while let Ok(rtmp_event) = receiver.recv() {
+                state.handle_rtmp_event(rtmp_event);
+            }
+
+            info!("RTMP stream connection closed");
+        })
+        .unwrap()
 }

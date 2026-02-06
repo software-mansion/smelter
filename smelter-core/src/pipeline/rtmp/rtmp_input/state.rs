@@ -100,15 +100,17 @@ impl RtmpInputsState {
 
     pub(crate) fn has_active_connection(&self, input_ref: &Ref<InputId>) -> bool {
         let mut guard = self.0.lock().unwrap();
-        if let Some(input) = guard.get_mut(input_ref) {
-            if let Some(handle) = &input.connection_handle
-                && !handle.is_finished()
-            {
-                return true;
+        let Some(input) = guard.get_mut(input_ref) else {
+            return false;
+        };
+        match &input.connection_handle {
+            Some(handle) if handle.is_finished() => {
+                input.connection_handle = None;
+                false
             }
-            input.connection_handle = None;
+            Some(_handle) => true,
+            None => false,
         }
-        false
     }
 
     pub(crate) fn set_connection_handle(

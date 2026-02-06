@@ -8,11 +8,11 @@ use serde::{Deserialize, Serialize};
 pub struct RtmpInput {
     /// The RTMP application name.
     /// This is the first path segment of the RTMP stream URL that Smelter listens on for incoming streams.
-    /// Example: `rtmp://<ip_address>:<port>/<app>/<stream_key`
+    /// Format: `rtmp://<ip_address>:<port>/<app>/<stream_key`
     pub app: Arc<str>,
     /// The RTMP stream key.
     /// This is the second path segment of the RTMP stream URL that Smelter listens on for incoming streams.
-    /// Example: `rtmp://<ip_address>:<port>/<app>/<stream_key`
+    /// Format: `rtmp://<ip_address>:<port>/<app>/<stream_key`
     pub stream_key: Arc<str>,
     /// (**default=`false`**) If input is required and the stream is not delivered
     /// on time, then Smelter will delay producing output frames.

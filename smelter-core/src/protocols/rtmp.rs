@@ -15,13 +15,6 @@ pub struct RtmpOutputOptions {
 }
 
 #[derive(Debug, Clone)]
-pub struct FfmpegRtmpServerInputOptions {
-    pub url: Arc<str>,
-    pub video_decoders: RtmpServerInputVideoDecoders,
-    pub buffer: InputBufferOptions,
-}
-
-#[derive(Debug, Clone)]
 pub struct RtmpServerInputOptions {
     pub app: Arc<str>,
     pub stream_key: Arc<str>,
@@ -47,4 +40,7 @@ pub enum RtmpServerError {
 
     #[error("Input {0} is already registered.")]
     InputAlreadyRegistered(InputId),
+
+    #[error("Input {0} already has an active connection.")]
+    ConnectionAlreadyActive(InputId),
 }
