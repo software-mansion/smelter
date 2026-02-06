@@ -13,7 +13,7 @@ use tower_http::cors::CorsLayer;
 
 use crate::{
     routes::{
-        control_requests::{handle_reset, handle_start},
+        control_request::{handle_reset, handle_start},
         status::{stats_handler, status_handler},
     },
     state::ApiState,
@@ -25,7 +25,7 @@ use self::{
 };
 use crate::middleware::body_logger_middleware;
 
-pub mod control_requests;
+pub mod control_request;
 pub mod register_request;
 pub mod status;
 pub mod unregister_request;
