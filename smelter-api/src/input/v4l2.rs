@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,8 @@ pub struct V4l2Input {
     /// While the numbers assigned in `/dev/video<N>` paths can differ depending on device
     /// detection order, the `by-id` paths are always the same for a given device, and the
     /// `by-path` paths should be the same for specific ports.
-    pub path: Arc<str>,
+    #[schema(value_type = str)]
+    pub path: Arc<Path>,
     /// The format that will be negotiated with the device.
     pub format: V4l2InputFormat,
     /// The requested resolution that will be negotiated with the device.
