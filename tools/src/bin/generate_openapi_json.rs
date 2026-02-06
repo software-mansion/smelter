@@ -4,6 +4,8 @@ use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(paths(
+    smelter::routes::control_request::handle_start,
+    smelter::routes::control_request::handle_reset,
     smelter::routes::register_request::handle_input,
     smelter::routes::register_request::handle_output,
     smelter::routes::register_request::handle_shader,
