@@ -5,9 +5,13 @@ use std::{
 };
 
 use rtmp::{RtmpConnection, RtmpError, RtmpServer, ServerConfig};
+use smelter_render::error::ErrorStack;
 use tracing::{error, warn};
 
-use super::state::RtmpInputsState;
+use crate::pipeline::rtmp::rtmp_input::{
+    connection::{RtmpConnectionOptions, start_connection_thread},
+    state::RtmpInputsState,
+};
 
 use crate::prelude::*;
 
@@ -26,6 +30,7 @@ impl RtmpPipelineState {
 }
 
 pub fn spawn_rtmp_server(
+    ctx: Arc<PipelineCtx>,
     state: &RtmpPipelineState,
 ) -> Result<Arc<Mutex<RtmpServer>>, InitPipelineError> {
     let port = state.port;
@@ -40,10 +45,12 @@ pub fn spawn_rtmp_server(
         client_timeout_secs: 30,
     };
 
-    let on_connection = Box::new(move |conn: RtmpConnection| {
-        let inputs = inputs.clone();
-        if let Err(err) = inputs.update(conn.app, conn.stream_key, conn.receiver) {
-            error!(?err, "Failed to update RTMP input state");
+    let on_connection = Box::new(move |conn| {
+        if let Err(err) = handle_incoming_connection(ctx.clone(), inputs.clone(), conn) {
+            error!(
+                "Failed to handle incoming RTMP connection: {}",
+                ErrorStack::new(&err).into_string()
+            );
         }
     });
 
@@ -59,4 +66,34 @@ pub fn spawn_rtmp_server(
         thread::sleep(Duration::from_millis(1000));
     }
     Err(InitPipelineError::RtmpServerInitError(last_error.unwrap()))
+}
+
+fn handle_incoming_connection(
+    ctx: Arc<PipelineCtx>,
+    inputs: RtmpInputsState,
+    conn: RtmpConnection,
+) -> Result<(), RtmpServerError> {
+    let input_ref = inputs.find_by_app_stream_key(&conn.app, &conn.stream_key)?;
+
+    if inputs.has_active_connection(&input_ref) {
+        return Err(RtmpServerError::ConnectionAlreadyActive(
+            input_ref.id().clone(),
+        ));
+    }
+
+    let options = inputs.get_with(&input_ref, |input| {
+        Ok(RtmpConnectionOptions {
+            app: input.app.clone(),
+            stream_key: input.stream_key.clone(),
+            frame_sender: input.frame_sender.clone(),
+            samples_sender: input.input_samples_sender.clone(),
+            video_decoders: input.video_decoders.clone(),
+            buffer: input.buffer.clone(),
+        })
+    })?;
+
+    let handle = start_connection_thread(ctx, input_ref.clone(), conn.receiver, options);
+    inputs.set_connection_handle(&input_ref, handle)?;
+
+    Ok(())
 }
