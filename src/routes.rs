@@ -2,20 +2,21 @@ use std::sync::Arc;
 
 use axum::{
     Router, async_trait,
-    extract::{FromRequest, Request, State, rejection::JsonRejection, ws::WebSocketUpgrade},
+    extract::{FromRequest, Request, rejection::JsonRejection, ws::WebSocketUpgrade},
     http::StatusCode,
     middleware,
     response::IntoResponse,
     routing::{get, post},
 };
 use serde_json::{Value, json};
-use smelter_core::Pipeline;
 use tower_http::cors::CorsLayer;
 
 use crate::{
-    error::ApiError,
-    routes::status::{stats_handler, status_handler},
-    state::{ApiState, Response},
+    routes::{
+        control_requests::{handle_reset, handle_start},
+        status::{stats_handler, status_handler},
+    },
+    state::ApiState,
 };
 
 use self::{
@@ -24,6 +25,7 @@ use self::{
 };
 use crate::middleware::body_logger_middleware;
 
+pub mod control_requests;
 pub mod register_request;
 pub mod status;
 pub mod unregister_request;
@@ -58,18 +60,6 @@ pub fn routes(state: Arc<ApiState>) -> Router {
 
     let font = Router::new().route("/register", post(register_request::handle_font));
 
-    async fn handle_start(State(state): State<Arc<ApiState>>) -> Result<Response, ApiError> {
-        Pipeline::start(&state.pipeline()?);
-        Ok(Response::Ok {})
-    }
-
-    async fn handle_reset(State(state): State<Arc<ApiState>>) -> Result<Response, ApiError> {
-        tokio::task::spawn_blocking(move || state.reset())
-            .await
-            .unwrap()?;
-        Ok(Response::Ok {})
-    }
-
     Router::new()
         .nest("/api/input", inputs)
         .nest("/api/output", outputs)
@@ -89,7 +79,7 @@ pub fn routes(state: Arc<ApiState>) -> Router {
         .with_state(state)
 }
 
-async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
+pub async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
     // finalize the upgrade process by returning upgrade callback.
     ws.on_upgrade(handle_ws_upgrade)
 }
