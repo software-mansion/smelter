@@ -242,7 +242,7 @@ pub async fn handle_image(
     operation_id = "register_font",
     request_body(content_type = "multipart/form-data"),
     responses(
-        (status = 200, description = "Image registered successfully.", body = Response),
+        (status = 200, description = "Font registered successfully.", body = Response),
         (status = 400, description = "Bad request.", body = ApiError),
         (status = 500, description = "Internal server error.", body = ApiError),
     ),

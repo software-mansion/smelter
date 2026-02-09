@@ -80,7 +80,7 @@ pub async fn handle_input(
 
 #[utoipa::path(
     post,
-    path = "/api/input/{output_id}/unregister",
+    path = "/api/output/{output_id}/unregister",
     operation_id = "unregister_output",
     params(("output_id" = str, Path, description = "Output ID.")),
     responses(
@@ -121,7 +121,7 @@ pub async fn handle_output(
 
 #[utoipa::path(
     post,
-    path = "/api/input/{shader_id}/unregister",
+    path = "/api/shader/{shader_id}/unregister",
     operation_id = "unregister_shader",
     params(("shader_id" = str, Path, description = "Shader ID.")),
     responses(
