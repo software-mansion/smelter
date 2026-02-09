@@ -7,7 +7,8 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
 
     fn try_from(value: RtmpInput) -> Result<Self, Self::Error> {
         let RtmpInput {
-            url,
+            app,
+            stream_key,
             required,
             offset_ms,
             decoder_map,
@@ -38,7 +39,8 @@ impl TryFrom<RtmpInput> for core::RegisterInputOptions {
         let video_decoders = core::RtmpServerInputVideoDecoders { h264 };
 
         let input_options = core::RtmpServerInputOptions {
-            url,
+            app,
+            stream_key,
             video_decoders,
             buffer,
         };

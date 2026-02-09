@@ -7,6 +7,7 @@ use std::{
 
 use crossbeam_channel::{Receiver, bounded};
 use glyphon::fontdb;
+use rtmp::RtmpServer;
 use tokio::runtime::Runtime;
 use tracing::{Level, error, info, span, trace, warn};
 
@@ -52,6 +53,10 @@ pub struct Pipeline {
     #[allow(dead_code)]
     // triggers cleanup on drop
     whip_whep_handle: Option<WhipWhepServerHandle>,
+
+    #[allow(dead_code)]
+    // triggers cleanup on drop
+    rtmp_server: Option<Arc<Mutex<RtmpServer>>>,
 }
 
 impl Pipeline {
@@ -544,11 +549,6 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         PipelineRtmpServerOptions::Disable => None,
     };
 
-    let rtmp_server = match rtmp_state.as_ref() {
-        Some(state) => Some(spawn_rtmp_server(state)?),
-        None => None,
-    };
-
     let ctx = Arc::new(PipelineCtx {
         queue_sync_point: Instant::now(),
         default_buffer_duration: opts.default_buffer_duration,
@@ -568,12 +568,16 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
             }
             PipelineWhipWhepServerOptions::Disable => None,
         },
-        _rtmp_state: rtmp_state,
-        _rtmp_server: rtmp_server,
+        rtmp_state: rtmp_state.clone(),
     });
 
     let whip_whep_handle = match &ctx.whip_whep_state {
         Some(state) => Some(WhipWhepServer::spawn(ctx.clone(), state)?),
+        None => None,
+    };
+
+    let rtmp_server = match rtmp_state.as_ref() {
+        Some(state) => Some(spawn_rtmp_server(ctx.clone(), state)?),
         None => None,
     };
 
@@ -587,6 +591,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         is_started: false,
         ctx,
         whip_whep_handle,
+        rtmp_server,
     };
 
     Ok(pipeline)
