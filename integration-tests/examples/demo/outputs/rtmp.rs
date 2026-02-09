@@ -99,6 +99,7 @@ impl RtmpOutput {
     pub fn on_before_registration(&mut self) -> Result<()> {
         match self.options.player {
             OutputPlayer::Ffmpeg => self.start_ffmpeg_recv(),
+            OutputPlayer::External => Ok(()),
             OutputPlayer::Manual => {
                 let cmd = format!(
                     "ffmpeg -f flv -listen 1 -i 'rtmp://0.0.0.0:{}' -vcodec copy -f flv - | ffplay -autoexit -f flv -i -",
@@ -188,7 +189,9 @@ impl RtmpOutputBuilder {
         let url_input =
             Text::new("Enter streaming URL (ESC for local FFmpeg server):").prompt_skippable()?;
         match url_input {
-            Some(url) if !url.trim().is_empty() => Ok(self.with_url(url)),
+            Some(url) if !url.trim().is_empty() => {
+                Ok(self.with_player(OutputPlayer::External).with_url(url))
+            }
             Some(_) | None => Ok(self),
         }
     }

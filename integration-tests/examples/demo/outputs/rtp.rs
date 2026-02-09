@@ -164,6 +164,7 @@ impl RtpOutput {
                         }
                     }
                 }
+                _ => unreachable!(),
             },
             TransportProtocol::TcpServer => Ok(()),
         }
@@ -426,7 +427,9 @@ impl RtpOutputBuilder {
             TransportProtocol::Udp => {
                 let player_options = match (&self.video, &self.audio) {
                     (Some(_), Some(_)) => vec![OutputPlayer::Manual],
-                    _ => OutputPlayer::iter().collect(),
+                    _ => OutputPlayer::iter()
+                        .filter(|p| *p != OutputPlayer::External)
+                        .collect(),
                 };
                 let player_selection =
                     Select::new("Select player (ESC for Manual):", player_options)
