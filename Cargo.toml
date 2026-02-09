@@ -61,7 +61,7 @@ glyphon = { git = "https://github.com/grovesNL/glyphon", rev = "37b973d" }
 futures-util = "0.3.30"
 tokio = { version = "1", features = ["full"] }
 schemars = { version = "0.8.22", features = ["preserve_order"] }
-utoipa = { version = "5.4.0", features = ["rc_schema", "preserve_order", "preserve_path_order"] }
+utoipa = { version = "5.4.0", features = ["rc_schema", "preserve_order", "preserve_path_order", "axum_extras"] }
 shared_memory = "0.12.4"
 h264-reader = "0.8.0"
 wgpu = { version = "28.0.0", default-features = false, features = [
