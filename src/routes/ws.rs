@@ -12,6 +12,15 @@ use smelter_render::event_handler::{Event, subscribe};
 use tokio::sync::mpsc::channel;
 use tracing::debug;
 
+#[utoipa::path(
+    get,
+    path = "/ws",
+    operation_id = "ws",
+    responses(
+        (status = 200, description = "WebSocket connection started succesfully."),
+    ),
+    tags = ["ws_request"],
+)]
 pub async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
     // finalize the upgrade process by returning upgrade callback.
     ws.on_upgrade(handle_ws_upgrade)
