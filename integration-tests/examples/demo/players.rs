@@ -10,6 +10,9 @@ pub enum OutputPlayer {
     #[strum(to_string = "GStreamer")]
     Gstreamer,
 
+    #[strum(to_string = "External")]
+    External,
+
     #[strum(to_string = "Manual")]
     Manual,
 }
