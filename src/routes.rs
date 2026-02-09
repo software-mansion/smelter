@@ -2,10 +2,9 @@ use std::sync::Arc;
 
 use axum::{
     Router, async_trait,
-    extract::{FromRequest, Request, rejection::JsonRejection, ws::WebSocketUpgrade},
+    extract::{FromRequest, Request, rejection::JsonRejection},
     http::StatusCode,
     middleware,
-    response::IntoResponse,
     routing::{get, post},
 };
 use serde_json::{Value, json};
@@ -15,14 +14,12 @@ use crate::{
     routes::{
         control_request::{handle_reset, handle_start},
         status::{stats_handler, status_handler},
+        ws::ws_handler,
     },
     state::ApiState,
 };
 
-use self::{
-    update_output::handle_keyframe_request, update_output::handle_output_update,
-    ws::handle_ws_upgrade,
-};
+use self::{update_output::handle_keyframe_request, update_output::handle_output_update};
 use crate::middleware::body_logger_middleware;
 
 pub mod control_request;
@@ -77,11 +74,6 @@ pub fn routes(state: Arc<ApiState>) -> Router {
         .layer(CorsLayer::permissive())
         .layer(middleware::from_fn(body_logger_middleware))
         .with_state(state)
-}
-
-pub async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
-    // finalize the upgrade process by returning upgrade callback.
-    ws.on_upgrade(handle_ws_upgrade)
 }
 
 /// Wrap axum::Json to return serialization errors as json
