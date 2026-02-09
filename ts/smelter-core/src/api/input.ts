@@ -153,7 +153,8 @@ function intoWhepRegisterInput(input: Inputs.RegisterWhepClientInput): RegisterI
 function intoRtmpRegisterInput(input: Inputs.RegisterRtmpServerInput): RegisterInputRequest {
   return {
     type: 'rtmp_server',
-    url: input.url,
+    app: input.app,
+    stream_key: input.streamKey,
     required: input.required,
     offset_ms: input.offsetMs,
     decoder_map: input.decoderMap,
