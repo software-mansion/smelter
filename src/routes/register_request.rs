@@ -122,7 +122,7 @@ pub async fn handle_input(
     ),
     tags = ["register_request"],
 )]
-pub(super) async fn handle_output(
+pub async fn handle_output(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
     Json(request): Json<RegisterOutput>,
