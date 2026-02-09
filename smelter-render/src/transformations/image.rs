@@ -1,4 +1,4 @@
-use std::{fs, io, str::Utf8Error, sync::Arc, time::Duration};
+use std::{fs, io, path::Path, str::Utf8Error, sync::Arc, time::Duration};
 
 use animated_image::{AnimatedAsset, AnimatedNodeState};
 use bitmap_image::{BitmapAsset, BitmapNodeState};
@@ -29,8 +29,8 @@ pub struct ImageSpec {
 
 #[derive(Debug, Clone)]
 pub enum ImageSource {
-    Url { url: String },
-    LocalPath { path: String },
+    Url { url: Arc<str> },
+    LocalPath { path: Arc<Path> },
     Bytes { bytes: Bytes },
 }
 
@@ -129,7 +129,7 @@ impl Image {
             }
             #[cfg(not(target_arch = "wasm32"))]
             ImageSource::Url { url } => {
-                let response = reqwest::blocking::get(url)?;
+                let response = reqwest::blocking::get(url.as_ref())?;
                 let response = response.error_for_status()?;
                 Ok(response.bytes()?)
             }

@@ -48,8 +48,8 @@ impl TryFrom<ImageSpec> for smelter_render::RendererSpec {
 
     fn try_from(spec: ImageSpec) -> Result<Self, Self::Error> {
         fn from_url_or_path(
-            url: Option<String>,
-            path: Option<String>,
+            url: Option<Arc<str>>,
+            path: Option<Arc<Path>>,
         ) -> Result<image::ImageSource, TypeError> {
             match (url, path) {
                 (None, None) => Err(TypeError::new(
