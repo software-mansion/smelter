@@ -18,6 +18,8 @@ use tracing::debug;
     operation_id = "ws",
     responses(
         (status = 200, description = "WebSocket connection started succesfully."),
+        (status = 400, description = "Bad request."),
+        (status = 500, description = "Internal server error."),
     ),
     tags = ["ws_request"],
 )]
