@@ -1,22 +1,29 @@
 import chalk from 'chalk';
+import type { ProjectOptions } from './options';
 import { resolveOptions } from './options';
-import { createNodeProject } from './createNodeProject';
+import { ensureProjectDir } from './utils/workingdir';
+import { applyTemplate } from './applyTemplate';
+import { runPackageManagerInstall } from './utils/packageManager';
+import path from 'path';
 
-export default async function () {
+export default async function run() {
   const options = await resolveOptions();
-  if (options.runtime.type === 'node') {
-    console.log('Generating Node.js Smelter project');
-    await createNodeProject(options);
-  } else {
-    throw new Error('Unknown project type.');
-  }
+  console.log(`Generating project in ${options.directory}`);
+  await createNodeProject(options);
+
   console.log();
   console.log(chalk.green('Project created successfully.'));
   console.log();
-  console.log(`To get started run:`);
   console.log(
-    chalk.bold(
-      `$ cd ${options.projectName} && ${options.packageManager} run build && node ./dist/index.js`
-    )
+    options.template.usageInstructions(path.basename(options.directory), options.packageManager)
   );
+}
+
+async function createNodeProject(options: ProjectOptions) {
+  await ensureProjectDir(options.directory);
+  await applyTemplate(options.template, options.directory);
+  for (const project of options.template.projects) {
+    const projectDir = path.join(options.directory, project.dir ?? '.');
+    await runPackageManagerInstall(options.packageManager, projectDir);
+  }
 }
