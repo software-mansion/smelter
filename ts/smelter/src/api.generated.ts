@@ -40,9 +40,13 @@ export type RegisterInput =
   | {
       type: "rtmp_server";
       /**
-       * URL where the RTMP server will listen for incoming stream. Format: `rtmp://<ip_address>:<port>`
+       * The RTMP application name. This is the first path segment of the RTMP stream URL that Smelter listens on for incoming streams. Format: `rtmp://<ip_address>:<port>/<app>/<stream_key`
        */
-      url: string;
+      app: string;
+      /**
+       * The RTMP stream key. This is the second path segment of the RTMP stream URL that Smelter listens on for incoming streams. Format: `rtmp://<ip_address>:<port>/<app>/<stream_key`
+       */
+      stream_key: string;
       /**
        * (**default=`false`**) If input is required and the stream is not delivered on time, then Smelter will delay producing output frames.
        */
