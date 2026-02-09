@@ -71,7 +71,19 @@ pub async fn handle_output_update(
     Ok(Response::Ok {})
 }
 
-pub(super) async fn handle_keyframe_request(
+#[utoipa::path(
+    post,
+    path = "/api/output/{output_id}/request_keyframe",
+    operation_id = "request_keyframe",
+    params(("output_id" = str, Path, description = "Output ID.")),
+    responses(
+        (status = 200, description = "Keyframe request successful.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["update_request"],
+)]
+pub async fn handle_keyframe_request(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
 ) -> Result<Response, ApiError> {
