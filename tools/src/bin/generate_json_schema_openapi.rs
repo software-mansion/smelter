@@ -117,7 +117,7 @@ enum SchemaAction {
     Nothing,
 }
 
-// OpenAPI generation
+// OpenAPI specification generation
 
 #[derive(OpenApi)]
 #[openapi(
@@ -153,7 +153,7 @@ enum SchemaAction {
 struct ApiDoc;
 
 fn generate_openapi() {
-    let schema_json = ApiDoc::openapi().to_pretty_json().unwrap();
+    let openapi_json = ApiDoc::openapi().to_pretty_json().unwrap();
     let gen_path = PathBuf::from(ROOT_DIR).join("schemas/openapi_specification.json");
-    fs::write(&gen_path, schema_json).unwrap();
+    fs::write(&gen_path, openapi_json).unwrap();
 }
