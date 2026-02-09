@@ -107,9 +107,6 @@ impl RtmpOutput {
                 );
 
                 println!("Start FFmpeg player: {cmd}");
-                println!(
-                    "If custom URL was provided, then watch the stream on the platform of you choice."
-                );
 
                 loop {
                     let confirmation = Confirm::new("Is player running? [Y/n]")
