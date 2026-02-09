@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use smelter_render::web_renderer;
@@ -9,7 +11,7 @@ use crate::*;
 #[serde(deny_unknown_fields)]
 pub struct WebRendererSpec {
     /// Url of a website that you want to render.
-    pub url: String,
+    pub url: Arc<str>,
     /// Resolution.
     pub resolution: Resolution,
     /// Mechanism used to render input frames on the website.
