@@ -1,7 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
 use crate::{
     InputBufferOptions,
@@ -18,7 +15,7 @@ pub struct Mp4InputOptions {
 
 #[derive(Debug, Clone)]
 pub struct Mp4OutputOptions {
-    pub output_path: PathBuf,
+    pub output_path: Arc<Path>,
     pub video: Option<VideoEncoderOptions>,
     pub audio: Option<AudioEncoderOptions>,
     pub raw_options: Vec<(Arc<str>, Arc<str>)>,
