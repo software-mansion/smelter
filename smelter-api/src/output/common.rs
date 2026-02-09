@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 
 use crate::*;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PixelFormat {
     Yuv420p,
@@ -12,7 +12,7 @@ pub enum PixelFormat {
     Yuv444p,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
 #[serde(untagged)]
 pub enum VideoEncoderBitrate {
     /// Average bitrate measured in bits/second. Encoder will try to keep the bitrate around the provided average,
@@ -46,7 +46,7 @@ pub struct OutputEndCondition {
     pub all_inputs: Option<bool>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum H264EncoderPreset {
     Ultrafast,
@@ -61,7 +61,7 @@ pub enum H264EncoderPreset {
     Placebo,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OpusEncoderPreset {
     /// Best for broadcast/high-fidelity application where the decoded audio
