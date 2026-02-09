@@ -151,4 +151,4 @@ jobs:
 
             - name: 📄 Generate JSON schema
               run: |
-                  cargo run -p tools --bin generate_json_schema -- --check
+                  cargo run -p tools --bin generate_json_schema_openapi -- --check
