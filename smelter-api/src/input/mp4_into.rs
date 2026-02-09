@@ -1,5 +1,3 @@
-use std::path::Path;
-use std::sync::Arc;
 use std::time::Duration;
 
 use crate::common_core::prelude as core;
@@ -38,7 +36,7 @@ impl TryFrom<Mp4Input> for core::RegisterInputOptions {
                 return Err(TypeError::new(BAD_URL_PATH_SPEC));
             }
             (Some(url), None) => core::Mp4InputSource::Url(url),
-            (None, Some(path)) => core::Mp4InputSource::File(Arc::from(Path::new(path.as_ref()))),
+            (None, Some(path)) => core::Mp4InputSource::File(path),
         };
 
         let h264 = decoder_map
