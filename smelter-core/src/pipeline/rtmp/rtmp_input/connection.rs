@@ -34,6 +34,13 @@ pub(crate) struct RtmpConnectionOptions {
     pub buffer: InputBuffer,
 }
 
+enum TrackState {
+    BeforeFirstEvent,
+    ConfigMissing,
+    UnsupportedCodec,
+    Ready(DecoderThreadHandle),
+}
+
 struct RtmpConnectionState {
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
@@ -42,8 +49,8 @@ struct RtmpConnectionState {
     video_decoders: RtmpServerInputVideoDecoders,
     buffer: InputBuffer,
 
-    video_handle: Option<DecoderThreadHandle>,
-    audio_handle: Option<DecoderThreadHandle>,
+    video_track_state: TrackState,
+    audio_track_state: TrackState,
 
     first_packet_offset: Option<Duration>,
 }
@@ -57,9 +64,9 @@ impl RtmpConnectionState {
             samples_sender: options.samples_sender,
             video_decoders: options.video_decoders,
             buffer: options.buffer,
-            video_handle: None,
-            audio_handle: None,
             first_packet_offset: None,
+            video_track_state: TrackState::BeforeFirstEvent,
+            audio_track_state: TrackState::BeforeFirstEvent,
         }
     }
 
@@ -76,24 +83,35 @@ impl RtmpConnectionState {
     fn process_video_config(&mut self, config: VideoConfig) {
         if config.codec != rtmp::VideoCodec::H264 {
             error!(?config.codec, "Unsupported video codec");
+            self.video_track_state = TrackState::UnsupportedCodec;
             return;
         }
 
-        match H264AvcDecoderConfig::parse(config.data) {
-            Ok(parsed_config) => {
-                info!("H264 config received");
-                self.init_h264_decoder(parsed_config);
-            }
+        let parsed_config = match H264AvcDecoderConfig::parse(config.data) {
+            Ok(config) => config,
             Err(err) => {
                 warn!(
                     "Failed to parse H264 config: {}",
                     ErrorStack::new(&err).into_string()
                 );
+                return;
             }
+        };
+
+        info!("H264 config received");
+        match self.init_h264_decoder(parsed_config) {
+            Ok(handle) => self.video_track_state = TrackState::Ready(handle),
+            Err(err) => error!(
+                "Failed to initialize H264 decoder: {}",
+                ErrorStack::new(&*err).into_string()
+            ),
         }
     }
 
-    fn init_h264_decoder(&mut self, h264_config: H264AvcDecoderConfig) {
+    fn init_h264_decoder(
+        &mut self,
+        h264_config: H264AvcDecoderConfig,
+    ) -> Result<DecoderThreadHandle, Box<dyn std::error::Error>> {
         let transformer = H264AvccToAnnexB::new(h264_config);
         let decoder_thread_options = VideoDecoderThreadOptions {
             ctx: self.ctx.clone(),
@@ -116,43 +134,33 @@ impl RtmpConnectionState {
                 VideoDecoderThread::<ffmpeg_h264::FfmpegH264Decoder, _>::spawn(
                     self.input_ref.clone(),
                     decoder_thread_options,
-                )
+                )?
             }
             VideoDecoderOptions::VulkanH264 => {
                 VideoDecoderThread::<vulkan_h264::VulkanH264Decoder, _>::spawn(
                     self.input_ref.clone(),
                     decoder_thread_options,
-                )
+                )?
             }
             _ => {
-                error!("Invalid video decoder provided, expected H264");
-                return;
+                return Err("Invalid video decoder provided, expected H264".into());
             }
         };
 
-        match handle {
-            Ok(handle) => {
-                self.video_handle = Some(handle);
-            }
-            Err(err) => {
-                error!(
-                    "Failed to initialize H264 decoder: {}",
-                    ErrorStack::new(&err).into_string()
-                );
-            }
-        }
+        Ok(handle)
     }
 
     fn process_video(&mut self, video: VideoData) {
-        if video.codec != rtmp::VideoCodec::H264 {
-            error!(?video.codec, "Unsupported video codec");
-            return;
-        }
-
-        let Some(sender) = self.video_handle.as_ref().map(|v| v.chunk_sender.clone()) else {
-            warn!("H264 decoder not yet initialized, skipping video until config arrives");
-            return;
+        let sender = match &self.video_track_state {
+            TrackState::Ready(handle) => handle.chunk_sender.clone(),
+            TrackState::BeforeFirstEvent => {
+                warn!("H264 decoder not yet initialized, skipping video until config arrives");
+                self.video_track_state = TrackState::ConfigMissing;
+                return;
+            }
+            TrackState::ConfigMissing | TrackState::UnsupportedCodec => return,
         };
+
         let (pts, dts) = self.pts_dts_from_timestamps(video.pts, video.dts);
         let chunk = EncodedInputChunk {
             data: video.data,
@@ -169,6 +177,7 @@ impl RtmpConnectionState {
     fn process_audio_config(&mut self, config: AudioConfig) {
         if config.codec != rtmp::AudioCodec::Aac {
             error!(?config.codec, "Unsupported audio codec");
+            self.audio_track_state = TrackState::UnsupportedCodec;
             return;
         }
 
@@ -187,7 +196,7 @@ impl RtmpConnectionState {
         );
         match handle {
             Ok(handle) => {
-                self.audio_handle = Some(handle);
+                self.audio_track_state = TrackState::Ready(handle);
             }
             Err(err) => error!(
                 "Failed to init AAC decoder: {}",
@@ -197,15 +206,16 @@ impl RtmpConnectionState {
     }
 
     fn process_audio(&mut self, audio: AudioData) {
-        if audio.codec != rtmp::AudioCodec::Aac {
-            error!(?audio.codec, "Unsupported audio codec");
-            return;
-        }
-
-        let Some(sender) = self.audio_handle.as_ref().map(|a| a.chunk_sender.clone()) else {
-            warn!("AAC decoder not yet initialized, skipping audio until config arrives");
-            return;
+        let sender = match &self.audio_track_state {
+            TrackState::Ready(handle) => handle.chunk_sender.clone(),
+            TrackState::BeforeFirstEvent => {
+                warn!("AAC decoder not yet initialized, skipping audio until config arrives");
+                self.audio_track_state = TrackState::ConfigMissing;
+                return;
+            }
+            TrackState::ConfigMissing | TrackState::UnsupportedCodec => return,
         };
+
         let (pts, dts) = self.pts_dts_from_timestamps(audio.pts, audio.dts);
         let chunk = EncodedInputChunk {
             data: audio.data.clone(),
