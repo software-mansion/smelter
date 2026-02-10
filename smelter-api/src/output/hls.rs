@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,8 @@ use crate::*;
 #[serde(deny_unknown_fields)]
 pub struct HlsOutput {
     /// Path to output HLS playlist.
-    pub path: String,
+    #[schema(value_type = str)]
+    pub path: Arc<Path>,
     /// Number of segments kept in the playlist. When the limit is reached the oldest segment is removed.
     /// If not specified, no segments will removed.
     pub max_playlist_size: Option<usize>,

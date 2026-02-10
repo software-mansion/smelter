@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use smelter_render::{
     RendererId, RendererSpec,
@@ -20,7 +20,7 @@ fn image_tests() {
         RendererId("image_jpeg".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::Url {
-                url: "https://www.rust-lang.org/static/images/rust-social.jpg".to_string(),
+                url: "https://www.rust-lang.org/static/images/rust-social.jpg".into(),
             },
             image_type: ImageType::Jpeg,
         }),
@@ -29,10 +29,7 @@ fn image_tests() {
         RendererId("image_svg".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
-                path: integration_tests_root()
-                    .join("assets/image.svg")
-                    .to_string_lossy()
-                    .to_string(),
+                path: integration_tests_root().join("assets/image.svg").into(),
             },
             image_type: ImageType::Svg,
         }),
@@ -41,10 +38,7 @@ fn image_tests() {
         RendererId("image_gif1".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
-                path: submodule_root_path()
-                    .join("demo_assets/donate.gif")
-                    .to_string_lossy()
-                    .to_string(),
+                path: submodule_root_path().join("demo_assets/donate.gif").into(),
             },
             image_type: ImageType::Gif,
         }),
@@ -53,10 +47,7 @@ fn image_tests() {
         RendererId("image_gif2".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
-                path: submodule_root_path()
-                    .join("assets/progress-bar.gif")
-                    .to_string_lossy()
-                    .to_string(),
+                path: submodule_root_path().join("assets/progress-bar.gif").into(),
             },
             image_type: ImageType::Gif,
         }),

@@ -34,7 +34,7 @@ pub use chromium_context::{ChromiumContext, ChromiumContextInitError};
 
 #[derive(Debug, Clone)]
 pub struct WebRendererSpec {
-    pub url: String,
+    pub url: Arc<str>,
     pub resolution: Resolution,
     pub embedding_method: WebEmbeddingMethod,
 }

@@ -182,5 +182,5 @@ pub enum CreateWebRendererError {
 #[derive(Debug, thiserror::Error)]
 pub enum RenderWebsiteError {
     #[error("Failed to embed source on the website \"{0}\": {1}")]
-    EmbeddingFailed(String, #[source] EmbedError),
+    EmbeddingFailed(Arc<str>, #[source] EmbedError),
 }

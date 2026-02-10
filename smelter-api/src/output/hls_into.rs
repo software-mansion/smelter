@@ -60,7 +60,7 @@ impl TryFrom<HlsOutput> for core::RegisterOutputOptions {
             None => (None, None),
         };
         let output_options = core::ProtocolOutputOptions::Hls(core::HlsOutputOptions {
-            output_path: path.into(),
+            output_path: path,
             max_playlist_size,
             video: video_encoder_options,
             audio: audio_encoder_options,

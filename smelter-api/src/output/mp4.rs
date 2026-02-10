@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,8 @@ use crate::*;
 #[serde(deny_unknown_fields)]
 pub struct Mp4Output {
     /// Path to output MP4 file.
-    pub path: String,
+    #[schema(value_type = str)]
+    pub path: Arc<Path>,
     /// Video stream configuration.
     pub video: Option<OutputMp4VideoOptions>,
     /// Audio stream configuration.

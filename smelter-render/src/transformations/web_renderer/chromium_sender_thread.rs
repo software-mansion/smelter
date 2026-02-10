@@ -22,7 +22,7 @@ use super::{browser_client::BrowserClient, chromium_context::ChromiumContext};
 
 pub(super) struct ChromiumSenderThread {
     chromium_context: Arc<ChromiumContext>,
-    url: String,
+    url: Arc<str>,
     web_renderer_id: RendererId,
     browser_client: BrowserClient,
 
