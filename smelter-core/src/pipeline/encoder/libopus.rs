@@ -11,6 +11,8 @@ use crate::{
 
 use crate::prelude::*;
 
+const SAMPLES_PER_BATCH: usize = 960;
+
 #[derive(Debug)]
 pub struct OpusEncoder {
     encoder: opus::Encoder,
@@ -78,8 +80,10 @@ impl AudioEncoder for OpusEncoder {
 impl OpusEncoder {
     fn inner_encode(&mut self, force: bool) -> Vec<EncodedOutputChunk> {
         let mut result = vec![];
-        while self.input_buffer.frames() >= 960 || (force && self.input_buffer.frames() > 0) {
-            let samples = self.input_buffer.read_samples(960);
+        while self.input_buffer.frames() >= SAMPLES_PER_BATCH
+            || (force && self.input_buffer.frames() > 0)
+        {
+            let samples = self.input_buffer.read_samples(SAMPLES_PER_BATCH);
             let raw_samples: Vec<_> = match samples {
                 AudioSamples::Mono(samples) => samples
                     .iter()
@@ -96,7 +100,7 @@ impl OpusEncoder {
             let data = match self.encoder.encode(&raw_samples, &mut self.output_buffer) {
                 Ok(len) => Bytes::copy_from_slice(&self.output_buffer[..len]),
                 Err(err) => {
-                    error!("Opus encoding error: {}", err);
+                    error!(%err, "Opus encoding error");
                     continue;
                 }
             };

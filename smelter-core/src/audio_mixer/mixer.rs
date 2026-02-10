@@ -14,11 +14,11 @@ use crate::{
 
 use crate::prelude::*;
 
-/// Audio mixer responsible for generating output samples from input samples.
+/// Audio mixer is responsible for generating output samples from input samples.
 ///
 /// It meets following constraints:
 /// - Input samples can change theirs sample rate and channel layout dynamically.
-/// - Input samples set PTS, should not have any numerical error. end pts of one set is the same
+/// - Input samples set PTS, should not have any numerical error. end_pts of one set is the same
 ///   as start_pts of the other set. There can be gaps, but they are always multiples of entire
 ///   sets.
 /// - Each input batch is only delivered once, it's responsibility of the AudioMixer to cache
@@ -189,11 +189,12 @@ impl InternalAudioMixer {
         let mixed_samples = self.mix_samples(input_samples, samples_count, samples_set.start_pts);
 
         self.last_processed_batch_end = Some(samples_set.end_pts);
-        if let Some(mut samples) = maybe_zero_samples {
-            samples.merge(mixed_samples);
-            samples
-        } else {
-            mixed_samples
+        match maybe_zero_samples {
+            Some(mut samples) => {
+                samples.merge(mixed_samples);
+                samples
+            }
+            None => mixed_samples,
         }
     }
 

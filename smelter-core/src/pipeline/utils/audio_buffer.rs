@@ -83,8 +83,8 @@ impl AudioSamplesBuffer {
             }
         }
 
-        // fill with zero if channel layouts would mismatch
-        let range = 0..sample_count - samples.len();
+        // Fill with zero samples if there is not enough data
+        let range = 0..(sample_count - samples.len());
         match &mut samples {
             AudioSamples::Mono(samples) => samples.extend(range.map(|_| 0.0)),
             AudioSamples::Stereo(samples) => samples.extend(range.map(|_| (0.0, 0.0))),

@@ -23,7 +23,7 @@ impl AudioEncoderOptionsExt for OpusEncoderOptions {
         self.sample_rate
     }
 
-    fn channel(&self) -> AudioChannels {
+    fn channels(&self) -> AudioChannels {
         self.channels
     }
 }

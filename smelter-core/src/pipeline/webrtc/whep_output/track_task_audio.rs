@@ -48,7 +48,7 @@ where
             sample_batch_receiver.into_iter(),
             ctx.mixing_sample_rate,
             encoder_options.sample_rate(),
-            encoder_options.channel(),
+            encoder_options.channels(),
         )?
         .flatten();
 
