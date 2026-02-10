@@ -2,10 +2,11 @@ use std::{path::Path, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::{Framerate, Resolution};
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct V4l2Input {
     /// Path to the V4L2 device.
@@ -18,6 +19,7 @@ pub struct V4l2Input {
     /// While the numbers assigned in `/dev/video<N>` paths can differ depending on device
     /// detection order, the `by-id` paths are always the same for a given device, and the
     /// `by-path` paths should be the same for specific ports.
+    #[schema(value_type = str)]
     pub path: Arc<Path>,
     /// The format that will be negotiated with the device.
     pub format: V4l2InputFormat,
@@ -36,7 +38,7 @@ pub struct V4l2Input {
     pub required: Option<bool>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum V4l2InputFormat {
     /// Interleaved YUYV 4:2:2

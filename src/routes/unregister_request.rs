@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use smelter_core::Pipeline;
 use smelter_render::{RegistryType, error::ErrorStack};
 use tracing::error;
+use utoipa::ToSchema;
 
 use crate::{
     error::ApiError,
@@ -15,28 +16,41 @@ use smelter_api::{InputId, OutputId, RendererId};
 
 use super::Json;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct UnregisterInput {
     /// Time in milliseconds when this request should be applied. Value `0` represents
     /// time of the start request.
     schedule_time_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct UnregisterOutput {
     /// Time in milliseconds when this request should be applied. Value `0` represents
     /// time of the start request.
     schedule_time_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct UnregisterRenderer {
     /// Time in milliseconds when this request should be applied. Value `0` represents
     /// time of the start request.
     schedule_time_ms: Option<f64>,
 }
 
-pub(super) async fn handle_input(
+#[utoipa::path(
+    post,
+    path = "/api/input/{input_id}/unregister",
+    operation_id = "unregister_input",
+    params(("input_id" = str, Path, description = "Input ID.")),
+    responses(
+        (status = 200, description = "Input unregistered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 404, description = "Input not found.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["unregister_request"],
+)]
+pub async fn handle_input(
     State(api): State<Arc<ApiState>>,
     Path(input_id): Path<InputId>,
     Json(request): Json<UnregisterInput>,
@@ -64,7 +78,20 @@ pub(super) async fn handle_input(
     Ok(Response::Ok {})
 }
 
-pub(super) async fn handle_output(
+#[utoipa::path(
+    post,
+    path = "/api/output/{output_id}/unregister",
+    operation_id = "unregister_output",
+    params(("output_id" = str, Path, description = "Output ID.")),
+    responses(
+        (status = 200, description = "Output unregistered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 404, description = "Output not found.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["unregister_request"],
+)]
+pub async fn handle_output(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
     Json(request): Json<UnregisterOutput>,
@@ -92,7 +119,20 @@ pub(super) async fn handle_output(
     Ok(Response::Ok {})
 }
 
-pub(super) async fn handle_shader(
+#[utoipa::path(
+    post,
+    path = "/api/shader/{shader_id}/unregister",
+    operation_id = "unregister_shader",
+    params(("shader_id" = str, Path, description = "Shader ID.")),
+    responses(
+        (status = 200, description = "Shader unregistered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 404, description = "Shader not found.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["unregister_request"],
+)]
+pub async fn handle_shader(
     State(api): State<Arc<ApiState>>,
     Path(shader_id): Path<RendererId>,
     Json(request): Json<UnregisterRenderer>,
@@ -122,7 +162,20 @@ pub(super) async fn handle_shader(
     Ok(Response::Ok {})
 }
 
-pub(super) async fn handle_web_renderer(
+#[utoipa::path(
+    post,
+    path = "/api/web-renderer/{instance_id}/unregister",
+    operation_id = "unregister_web_renderer",
+    params(("instance_id" = str, Path, description = "Web renderer ID.")),
+    responses(
+        (status = 200, description = "Web renderer unregistered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 404, description = "Web renderer not found.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["unregister_request"],
+)]
+pub async fn handle_web_renderer(
     State(api): State<Arc<ApiState>>,
     Path(instance_id): Path<RendererId>,
     Json(request): Json<UnregisterRenderer>,
@@ -152,7 +205,20 @@ pub(super) async fn handle_web_renderer(
     Ok(Response::Ok {})
 }
 
-pub(super) async fn handle_image(
+#[utoipa::path(
+    post,
+    path = "/api/image/{image_id}/unregister",
+    operation_id = "unregister_image",
+    params(("image_id" = str, Path, description = "Image ID.")),
+    responses(
+        (status = 200, description = "Image unregistered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 404, description = "Image not found.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["unregister_request"],
+)]
+pub async fn handle_image(
     State(api): State<Arc<ApiState>>,
     Path(image_id): Path<RendererId>,
     Json(request): Json<UnregisterRenderer>,

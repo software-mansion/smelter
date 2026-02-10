@@ -2,37 +2,32 @@ use std::sync::Arc;
 
 use axum::{
     Router, async_trait,
-    extract::{FromRequest, Request, State, rejection::JsonRejection, ws::WebSocketUpgrade},
+    extract::{FromRequest, Request, rejection::JsonRejection},
     http::StatusCode,
     middleware,
-    response::IntoResponse,
     routing::{get, post},
 };
 use serde_json::{Value, json};
-use smelter_core::Pipeline;
 use tower_http::cors::CorsLayer;
 
 use crate::{
-    error::ApiError,
-    routes::status::{stats_handler, status_handler},
-    state::{ApiState, Response},
+    routes::{
+        control_request::{handle_reset, handle_start},
+        status::{stats_handler, status_handler},
+        ws::ws_handler,
+    },
+    state::ApiState,
 };
 
-use self::{
-    update_output::handle_keyframe_request, update_output::handle_output_update,
-    ws::handle_ws_upgrade,
-};
+use self::{update_output::handle_keyframe_request, update_output::handle_output_update};
 use crate::middleware::body_logger_middleware;
 
-mod register_request;
-mod status;
-mod unregister_request;
-mod update_output;
-mod ws;
-
-pub use register_request::{RegisterInput, RegisterOutput};
-pub use unregister_request::{UnregisterInput, UnregisterOutput};
-pub use update_output::UpdateOutputRequest;
+pub mod control_request;
+pub mod register_request;
+pub mod status;
+pub mod unregister_request;
+pub mod update_output;
+pub mod ws;
 
 pub fn routes(state: Arc<ApiState>) -> Router {
     let inputs = Router::new()
@@ -62,18 +57,6 @@ pub fn routes(state: Arc<ApiState>) -> Router {
 
     let font = Router::new().route("/register", post(register_request::handle_font));
 
-    async fn handle_start(State(state): State<Arc<ApiState>>) -> Result<Response, ApiError> {
-        Pipeline::start(&state.pipeline()?);
-        Ok(Response::Ok {})
-    }
-
-    async fn handle_reset(State(state): State<Arc<ApiState>>) -> Result<Response, ApiError> {
-        tokio::task::spawn_blocking(move || state.reset())
-            .await
-            .unwrap()?;
-        Ok(Response::Ok {})
-    }
-
     Router::new()
         .nest("/api/input", inputs)
         .nest("/api/output", outputs)
@@ -93,13 +76,8 @@ pub fn routes(state: Arc<ApiState>) -> Router {
         .with_state(state)
 }
 
-async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
-    // finalize the upgrade process by returning upgrade callback.
-    ws.on_upgrade(handle_ws_upgrade)
-}
-
 /// Wrap axum::Json to return serialization errors as json
-pub(super) struct Json<T>(pub T);
+pub struct Json<T>(pub T);
 
 #[async_trait]
 impl<S, T> FromRequest<S> for Json<T>
@@ -127,7 +105,7 @@ where
     }
 }
 
-pub(super) struct Multipart(pub axum::extract::Multipart);
+pub struct Multipart(pub axum::extract::Multipart);
 
 #[async_trait]
 impl<S> FromRequest<S> for Multipart

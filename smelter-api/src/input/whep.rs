@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct WhepInput {
     /// WHEP server endpoint URL
@@ -19,13 +20,13 @@ pub struct WhepInput {
     pub offset_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct InputWhepVideoOptions {
     pub decoder_preferences: Option<Vec<WhepVideoDecoderOptions>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum WhepVideoDecoderOptions {
     /// Software H264 decoder based on FFmpeg.

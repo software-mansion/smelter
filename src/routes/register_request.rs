@@ -5,6 +5,7 @@ use glyphon::fontdb::Source;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use smelter_core::{InputInitInfo, Pipeline, protocols::Port};
+use utoipa::ToSchema;
 
 use crate::{
     error::ApiError,
@@ -19,7 +20,7 @@ use smelter_api::{
 
 use super::ApiState;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RegisterInput {
     RtpStream(RtpInput),
@@ -33,7 +34,7 @@ pub enum RegisterInput {
     DeckLink(DeckLink),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RegisterOutput {
     RtpStream(RtpOutput),
@@ -44,7 +45,19 @@ pub enum RegisterOutput {
     Hls(HlsOutput),
 }
 
-pub(super) async fn handle_input(
+#[utoipa::path(
+    post,
+    path = "/api/input/{input_id}/register",
+    operation_id = "register_input",
+    params(("input_id" = str, Path, description = "Input ID.")),
+    responses(
+        (status = 200, description = "Input registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["register_request"],
+)]
+pub async fn handle_input(
     State(api): State<Arc<ApiState>>,
     Path(input_id): Path<InputId>,
     Json(request): Json<RegisterInput>,
@@ -97,7 +110,19 @@ pub(super) async fn handle_input(
     .unwrap()
 }
 
-pub(super) async fn handle_output(
+#[utoipa::path(
+    post,
+    path = "/api/output/{output_id}/register",
+    operation_id = "register_output",
+    params(("output_id" = str, Path, description = "Output ID.")),
+    responses(
+        (status = 200, description = "Output registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["register_request"],
+)]
+pub async fn handle_output(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
     Json(request): Json<RegisterOutput>,
@@ -133,7 +158,19 @@ pub(super) async fn handle_output(
     .unwrap()
 }
 
-pub(super) async fn handle_shader(
+#[utoipa::path(
+    post,
+    path = "/api/shader/{shader_id}/register",
+    operation_id = "register_shader",
+    params(("shader_id" = str, Path, description = "Shader ID.")),
+    responses(
+        (status = 200, description = "Shader registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["register_request"],
+)]
+pub async fn handle_shader(
     State(api): State<Arc<ApiState>>,
     Path(shader_id): Path<RendererId>,
     Json(request): Json<ShaderSpec>,
@@ -147,7 +184,19 @@ pub(super) async fn handle_shader(
     .unwrap()
 }
 
-pub(super) async fn handle_web_renderer(
+#[utoipa::path(
+    post,
+    path = "/api/web-renderer/{instance_id}/register",
+    operation_id = "register_web_renderer",
+    params(("instance_id" = str, Path, description = "Web renderer instance ID.")),
+    responses(
+        (status = 200, description = "Web renderer registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["register_request"],
+)]
+pub async fn handle_web_renderer(
     State(api): State<Arc<ApiState>>,
     Path(instance_id): Path<RendererId>,
     Json(request): Json<WebRendererSpec>,
@@ -161,7 +210,19 @@ pub(super) async fn handle_web_renderer(
     .unwrap()
 }
 
-pub(super) async fn handle_image(
+#[utoipa::path(
+    post,
+    path = "/api/image/{image_id}/register",
+    operation_id = "register_image",
+    params(("image_id" = str, Path, description = "Image ID.")),
+    responses(
+        (status = 200, description = "Image registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["register_request"],
+)]
+pub async fn handle_image(
     State(api): State<Arc<ApiState>>,
     Path(image_id): Path<RendererId>,
     Json(request): Json<ImageSpec>,
@@ -175,7 +236,19 @@ pub(super) async fn handle_image(
     .unwrap()
 }
 
-pub(super) async fn handle_font(
+#[utoipa::path(
+    post,
+    path = "/api/font/register",
+    operation_id = "register_font",
+    request_body(content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "Font registered successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["register_request"],
+)]
+pub async fn handle_font(
     State(api): State<Arc<ApiState>>,
     Multipart(mut multipart): Multipart,
 ) -> Result<Response, ApiError> {

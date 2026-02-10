@@ -2,6 +2,7 @@ use smelter_render::scene;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 mod color;
 mod common;
@@ -17,7 +18,7 @@ pub use transition::*;
 
 use crate::*;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct VideoScene {
     pub root: Component,

@@ -7,6 +7,7 @@ use schemars::{
 };
 use serde::{Deserialize, Serialize};
 use smelter::routes;
+use utoipa::OpenApi;
 
 const ROOT_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
@@ -14,6 +15,7 @@ fn main() {
     tracing_subscriber::fmt().init();
     let check_flag = std::env::args().any(|arg| &arg == "--check");
     generate_json_schema(check_flag);
+    generate_openapi();
 }
 
 /// This enum is used to generate JSON schema for all API types.
@@ -22,12 +24,12 @@ fn main() {
 #[serde(untagged)]
 #[allow(dead_code)]
 enum ApiTypes {
-    RegisterInput(routes::RegisterInput),
-    RegisterOutput(Box<routes::RegisterOutput>),
+    RegisterInput(routes::register_request::RegisterInput),
+    RegisterOutput(Box<routes::register_request::RegisterOutput>),
     RegisterImage(smelter_api::ImageSpec),
     RegisterWebRenderer(smelter_api::WebRendererSpec),
     RegisterShader(smelter_api::ShaderSpec),
-    UpdateOutput(Box<routes::UpdateOutputRequest>),
+    UpdateOutput(Box<routes::update_output::UpdateOutputRequest>),
 }
 
 pub fn generate_json_schema(check_flag: bool) {
@@ -36,7 +38,7 @@ pub fn generate_json_schema(check_flag: bool) {
         false => (SchemaAction::Update, SchemaAction::Update),
     };
     generate_schema(
-        schema_for!(routes::UpdateOutputRequest),
+        schema_for!(routes::update_output::UpdateOutputRequest),
         "./schemas/scene.schema.json",
         scene_schema_action,
     );
@@ -113,4 +115,45 @@ enum SchemaAction {
     Update,
     CheckIfChanged,
     Nothing,
+}
+
+// OpenAPI specification generation
+
+#[derive(OpenApi)]
+#[openapi(
+    info(
+        title = "Smelter",
+        description = "Real-time video compositing software",
+        version = "0.5.0",
+        license(
+            name = "",
+            url = "https://github.com/software-mansion/smelter/blob/master/LICENSE",
+        ),
+    ),
+    paths(
+        smelter::routes::control_request::handle_start,
+        smelter::routes::control_request::handle_reset,
+        smelter::routes::register_request::handle_input,
+        smelter::routes::register_request::handle_output,
+        smelter::routes::register_request::handle_shader,
+        smelter::routes::register_request::handle_web_renderer,
+        smelter::routes::register_request::handle_image,
+        smelter::routes::register_request::handle_font,
+        smelter::routes::unregister_request::handle_input,
+        smelter::routes::unregister_request::handle_output,
+        smelter::routes::unregister_request::handle_shader,
+        smelter::routes::unregister_request::handle_web_renderer,
+        smelter::routes::unregister_request::handle_image,
+        smelter::routes::update_output::handle_output_update,
+        smelter::routes::update_output::handle_keyframe_request,
+        smelter::routes::status::status_handler,
+        smelter::routes::ws::ws_handler,
+    )
+)]
+struct ApiDoc;
+
+fn generate_openapi() {
+    let openapi_json = ApiDoc::openapi().to_pretty_json().unwrap();
+    let gen_path = PathBuf::from(ROOT_DIR).join("schemas/openapi_specification.json");
+    fs::write(&gen_path, openapi_json).unwrap();
 }

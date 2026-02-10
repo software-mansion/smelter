@@ -2,10 +2,11 @@ use std::{collections::HashMap, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::*;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RtpOutput {
     /// Depends on the value of the `transport_protocol` field:
@@ -22,7 +23,7 @@ pub struct RtpOutput {
     pub audio: Option<OutputRtpAudioOptions>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OutputRtpVideoOptions {
     /// Output resolution in pixels.
@@ -35,7 +36,7 @@ pub struct OutputRtpVideoOptions {
     pub initial: VideoScene,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RtpVideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
@@ -92,7 +93,7 @@ pub enum RtpVideoEncoderOptions {
         keyframe_interval_ms: Option<f64>,
     },
 }
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OutputRtpAudioOptions {
     /// (**default="sum_clip"**) Specifies how audio should be mixed.
@@ -107,7 +108,7 @@ pub struct OutputRtpAudioOptions {
     pub initial: AudioScene,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RtpAudioEncoderOptions {
     Opus {

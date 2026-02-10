@@ -2,10 +2,11 @@ use std::{collections::HashMap, sync::Arc};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::*;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct WhepOutput {
     /// Token used for authentication in WHEP protocol.
@@ -17,7 +18,7 @@ pub struct WhepOutput {
     pub audio: Option<OutputWhepAudioOptions>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OutputWhepVideoOptions {
     /// Output resolution in pixels.
@@ -30,7 +31,7 @@ pub struct OutputWhepVideoOptions {
     pub initial: VideoScene,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WhepVideoEncoderOptions {
     #[serde(rename = "ffmpeg_h264")]
@@ -88,7 +89,7 @@ pub enum WhepVideoEncoderOptions {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OutputWhepAudioOptions {
     /// (**default="sum_clip"**) Specifies how audio should be mixed.
@@ -103,7 +104,7 @@ pub struct OutputWhepAudioOptions {
     pub initial: AudioScene,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WhepAudioEncoderOptions {
     Opus {

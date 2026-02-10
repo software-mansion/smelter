@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use smelter_core::Pipeline;
 use smelter_render::error::ErrorStack;
 use tracing::error;
+use utoipa::ToSchema;
 
 use crate::{
     error::ApiError,
@@ -16,7 +17,7 @@ use smelter_api::{AudioScene, OutputId, VideoScene};
 
 use super::Json;
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateOutputRequest {
     pub video: Option<VideoScene>,
@@ -24,7 +25,19 @@ pub struct UpdateOutputRequest {
     pub schedule_time_ms: Option<f64>,
 }
 
-pub(super) async fn handle_output_update(
+#[utoipa::path(
+    post,
+    path = "/api/output/{output_id}/update",
+    operation_id = "update_output",
+    params(("output_id" = str, Path, description = "Output ID.")),
+    responses(
+        (status = 200, description = "Output updated successfully.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["update_request"],
+)]
+pub async fn handle_output_update(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
     Json(request): Json<UpdateOutputRequest>,
@@ -58,7 +71,19 @@ pub(super) async fn handle_output_update(
     Ok(Response::Ok {})
 }
 
-pub(super) async fn handle_keyframe_request(
+#[utoipa::path(
+    post,
+    path = "/api/output/{output_id}/request_keyframe",
+    operation_id = "request_keyframe",
+    params(("output_id" = str, Path, description = "Output ID.")),
+    responses(
+        (status = 200, description = "Keyframe request successful.", body = Response),
+        (status = 400, description = "Bad request.", body = ApiError),
+        (status = 500, description = "Internal server error.", body = ApiError),
+    ),
+    tags = ["update_request"],
+)]
+pub async fn handle_keyframe_request(
     State(api): State<Arc<ApiState>>,
     Path(output_id): Path<OutputId>,
 ) -> Result<Response, ApiError> {
