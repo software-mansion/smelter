@@ -25,7 +25,7 @@ pub fn example_image() -> (RendererId, RendererSpec) {
         RendererId(Arc::from("example_image")),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
-                path: example_image_path().to_string_lossy().to_string(),
+                path: Arc::from(example_image_path().as_path()),
             },
             image_type: ImageType::Png,
         }),
