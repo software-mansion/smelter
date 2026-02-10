@@ -125,10 +125,7 @@ enum SchemaAction {
         title = "Smelter",
         description = "Real-time video compositing software",
         version = "0.5.0",
-        license(
-            name = "",
-            url = "https://github.com/software-mansion/smelter/blob/master/LICENSE",
-        ),
+        license(name = "MIT",),
     ),
     paths(
         smelter::routes::control_request::handle_start,
