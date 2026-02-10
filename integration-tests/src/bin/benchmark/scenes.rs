@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use smelter_render::{
     InputId, OutputId, RendererId, RendererSpec,
     image::{ImageSource, ImageSpec, ImageType},

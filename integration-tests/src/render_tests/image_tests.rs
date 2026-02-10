@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use smelter_render::{
     RendererId, RendererSpec,
