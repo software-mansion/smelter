@@ -4,8 +4,7 @@
     "title": "Smelter",
     "description": "Real-time video compositing software",
     "license": {
-      "name": "",
-      "url": "https://github.com/software-mansion/smelter/blob/master/LICENSE"
+      "name": "MIT"
     },
     "version": "0.5.0"
   },
