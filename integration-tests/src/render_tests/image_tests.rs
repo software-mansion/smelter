@@ -20,7 +20,7 @@ fn image_tests() {
         RendererId("image_jpeg".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::Url {
-                url: Arc::from("https://www.rust-lang.org/static/images/rust-social.jpg"),
+                url: "https://www.rust-lang.org/static/images/rust-social.jpg".into(),
             },
             image_type: ImageType::Jpeg,
         }),
@@ -29,7 +29,7 @@ fn image_tests() {
         RendererId("image_svg".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
-                path: Arc::from(integration_tests_root().join("assets/image.svg").as_path()),
+                path: integration_tests_root().join("assets/image.svg").into(),
             },
             image_type: ImageType::Svg,
         }),
@@ -38,11 +38,7 @@ fn image_tests() {
         RendererId("image_gif1".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
-                path: Arc::from(
-                    submodule_root_path()
-                        .join("demo_assets/donate.gif")
-                        .as_path(),
-                ),
+                path: submodule_root_path().join("demo_assets/donate.gif").into(),
             },
             image_type: ImageType::Gif,
         }),
@@ -51,11 +47,7 @@ fn image_tests() {
         RendererId("image_gif2".into()),
         RendererSpec::Image(ImageSpec {
             src: ImageSource::LocalPath {
-                path: Arc::from(
-                    submodule_root_path()
-                        .join("assets/progress-bar.gif")
-                        .as_path(),
-                ),
+                path: submodule_root_path().join("assets/progress-bar.gif").into(),
             },
             image_type: ImageType::Gif,
         }),
