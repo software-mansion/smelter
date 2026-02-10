@@ -30,6 +30,7 @@ pub(crate) struct Converter {
     pipeline_y: ConvertingPipeline,
     pipeline_uv: ConvertingPipeline,
     image_tracker: Arc<Mutex<ImageLayoutTracker>>,
+    time: f32,
 }
 
 impl Converter {
@@ -222,6 +223,7 @@ impl Converter {
             pipeline_y,
             pipeline_uv,
             image_tracker,
+            time: 0.0,
         })
     }
 
@@ -231,10 +233,12 @@ impl Converter {
     /// - The texture can not be a surface texture
     /// - The texture has to be transitioned to [`wgpu::TextureUses::RESOURCE`] usage
     pub(super) unsafe fn convert(
-        &self,
+        &mut self,
         texture: wgpu::Texture,
         tracker: &mut EncoderTracker,
     ) -> Result<ConvertState, YuvConverterError> {
+        self.time += 1.0 / 30.0;
+
         let wgpu_device = unsafe { self.device.wgpu_device().as_hal::<VkApi>().unwrap() };
         let wgpu_queue = unsafe { self.device.wgpu_queue().as_hal::<VkApi>().unwrap() };
         let mut command_encoder = unsafe {
@@ -292,8 +296,8 @@ impl Converter {
             },
         )?;
 
-        self.pipeline_y.convert(command_buffer, &view);
-        self.pipeline_uv.convert(command_buffer, &view);
+        self.pipeline_y.convert(command_buffer, &view, self.time);
+        self.pipeline_uv.convert(command_buffer, &view, self.time);
 
         let wgpu_command_buffer = unsafe { command_encoder.end_encoding()? };
 
@@ -419,7 +423,7 @@ impl ConvertingPipeline {
             format,
             flags: vk::AttachmentDescriptionFlags::empty(),
             samples: vk::SampleCountFlags::TYPE_1,
-            load_op: vk::AttachmentLoadOp::DONT_CARE,
+            load_op: vk::AttachmentLoadOp::CLEAR,
             store_op: vk::AttachmentStoreOp::STORE,
             stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
             stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
@@ -547,7 +551,7 @@ impl ConvertingPipeline {
         })
     }
 
-    fn convert(&self, command_buffer: vk::CommandBuffer, view: &ImageView) {
+    fn convert(&self, command_buffer: vk::CommandBuffer, view: &ImageView, time: f32) {
         let descriptor_image_info = vk::DescriptorImageInfo {
             image_view: view.view,
             image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
@@ -568,7 +572,15 @@ impl ConvertingPipeline {
                 .update_descriptor_sets(&[write_descriptor_set], &[])
         };
 
+        let clear_values = [vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0., 0., 0., 0.],
+                // int32: [0, 0, 0, 0],
+                // uint32: [0, 0, 0, 0],
+            },
+        }];
         let render_pass_info = vk::RenderPassBeginInfo::default()
+            .clear_values(&clear_values)
             .render_pass(self.render_pass.render_pass)
             .framebuffer(self.framebuffer.framebuffer)
             .render_area(vk::Rect2D {
@@ -629,6 +641,13 @@ impl ConvertingPipeline {
                 .device
                 .cmd_set_scissor(command_buffer, 0, &[scissor]);
 
+            self.device.device.cmd_push_constants(
+                command_buffer,
+                self.pipeline.layout.pipeline_layout,
+                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                0,
+                &time.to_ne_bytes(),
+            );
             self.device.device.cmd_draw(command_buffer, 3, 1, 0, 0);
 
             self.device.device.cmd_end_render_pass(command_buffer);
@@ -682,8 +701,14 @@ impl CommonState {
             descriptor_set_layout_sampler.set_layout,
         ];
 
+        let push_constants = &[vk::PushConstantRange {
+            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: 4,
+        }];
         let create_info = vk::PipelineLayoutCreateInfo::default()
             .flags(vk::PipelineLayoutCreateFlags::empty())
+            .push_constant_ranges(push_constants)
             .set_layouts(&set_layouts);
 
         let pipeline_layout = Arc::new(PipelineLayout::new(device.device.clone(), &create_info)?);

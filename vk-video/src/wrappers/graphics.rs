@@ -112,7 +112,7 @@ impl Drop for RenderPass {
 pub(crate) struct Pipeline {
     pub(crate) pipeline: vk::Pipeline,
     _render_pass: Arc<RenderPass>,
-    _layout: Arc<PipelineLayout>,
+    pub layout: Arc<PipelineLayout>,
     device: Arc<Device>,
 }
 
@@ -136,7 +136,7 @@ impl Pipeline {
         Ok(Self {
             pipeline,
             _render_pass: render_pass,
-            _layout: layout,
+            layout: layout,
             device,
         })
     }

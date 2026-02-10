@@ -1040,7 +1040,7 @@ impl VulkanEncoder<'_> {
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         let convert_state = unsafe {
             self.converter
-                .as_ref()
+                .as_mut()
                 .unwrap()
                 .convert(frame.data, &mut self.tracker)
         }
