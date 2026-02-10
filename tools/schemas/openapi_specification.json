@@ -2043,9 +2043,6 @@
       "Mp4Input": {
         "type": "object",
         "description": "Input stream from MP4 file.\nExactly one of `url` and `path` has to be defined.",
-        "required": [
-          "path"
-        ],
         "properties": {
           "url": {
             "type": [
@@ -2055,7 +2052,10 @@
             "description": "URL of the MP4 file."
           },
           "path": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Path to the MP4 file."
           },
           "loop": {
