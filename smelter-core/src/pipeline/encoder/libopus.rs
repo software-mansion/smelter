@@ -115,7 +115,7 @@ impl OpusEncoder {
                 is_keyframe: false,
                 kind: MediaKind::Audio(AudioCodec::Opus),
             });
-            self.encoded_samples += 960;
+            self.encoded_samples += 960 as u64;
         }
         result
     }
