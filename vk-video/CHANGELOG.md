@@ -1,6 +1,14 @@
 # Changelog
 
-## unreleased
+## Unreleased
+
+### 💥 Breaking changes
+
+### ✨ New features
+
+### 🐛 Bug fixes
+
+## [v0.2.0](https://github.com/software-mansion/smelter/releases/tag/vk-video%2Fv0.2.0)
 
 ### 💥 Breaking changes
 - Most APIs have been refactored
