@@ -3,14 +3,14 @@ use std::{marker::PhantomData, sync::Arc};
 use crossbeam_channel::Sender;
 use tracing::warn;
 
-use crate::prelude::*;
 use crate::{
-    pipeline::{
-        encoder::{AudioEncoder, AudioEncoderConfig, AudioEncoderStream},
-        resampler::encoder_resampler::ResampledForEncoderStream,
+    pipeline::encoder::{
+        AudioEncoder, AudioEncoderConfig, AudioEncoderStream, resampler::ResampledForEncoderStream,
     },
     thread_utils::{InitializableThread, ThreadMetadata},
 };
+
+use crate::prelude::*;
 
 pub(crate) struct AudioEncoderThreadHandle {
     pub sample_batch_sender: Sender<PipelineEvent<OutputAudioSamples>>,
@@ -50,7 +50,8 @@ where
             sample_batch_receiver.into_iter(),
             ctx.mixing_sample_rate,
             encoder_options.sample_rate(),
-        )
+            encoder_options.channels(),
+        )?
         .flatten();
 
         let (encoded_stream, encoder_ctx) =
