@@ -39,6 +39,7 @@ enum TrackState {
     ConfigMissing,
     UnsupportedCodec,
     Ready(DecoderThreadHandle),
+    ChannelClosed,
 }
 
 struct RtmpConnectionState {
@@ -158,7 +159,9 @@ impl RtmpConnectionState {
                 self.video_track_state = TrackState::ConfigMissing;
                 return;
             }
-            TrackState::ConfigMissing | TrackState::UnsupportedCodec => return,
+            TrackState::ConfigMissing
+            | TrackState::UnsupportedCodec
+            | TrackState::ChannelClosed => return,
         };
 
         let (pts, dts) = self.pts_dts_from_timestamps(video.pts, video.dts);
@@ -171,6 +174,7 @@ impl RtmpConnectionState {
 
         if sender.send(PipelineEvent::Data(chunk)).is_err() {
             warn!("Video decoder channel closed");
+            self.video_track_state = TrackState::ChannelClosed;
         }
     }
 
@@ -213,7 +217,9 @@ impl RtmpConnectionState {
                 self.audio_track_state = TrackState::ConfigMissing;
                 return;
             }
-            TrackState::ConfigMissing | TrackState::UnsupportedCodec => return,
+            TrackState::ConfigMissing
+            | TrackState::UnsupportedCodec
+            | TrackState::ChannelClosed => return,
         };
 
         let (pts, dts) = self.pts_dts_from_timestamps(audio.pts, audio.dts);
@@ -226,6 +232,7 @@ impl RtmpConnectionState {
 
         if sender.send(PipelineEvent::Data(chunk)).is_err() {
             warn!("Audio decoder channel closed");
+            self.audio_track_state = TrackState::ChannelClosed;
         }
     }
 
