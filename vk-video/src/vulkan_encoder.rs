@@ -393,16 +393,13 @@ impl VulkanEncoder<'_> {
             EncoderTrackerWaitState::InitializeEncoder,
         )?;
 
+        let mut profile_list_info = vk::VideoProfileListInfoKHR::default()
+            .profiles(std::slice::from_ref(&profile_info.profile_info));
         let queue_indices = [
             encoding_device.h264_encode_queues.family_index as u32,
             encoding_device.queues.wgpu.family_index as u32,
         ];
         let encode_image_info = vk::ImageCreateInfo::default()
-            .flags(
-                vk::ImageCreateFlags::MUTABLE_FORMAT
-                    | vk::ImageCreateFlags::EXTENDED_USAGE
-                    | vk::ImageCreateFlags::VIDEO_PROFILE_INDEPENDENT_KHR,
-            )
             .image_type(vk::ImageType::TYPE_2D)
             .format(vk::Format::G8_B8R8_2PLANE_420_UNORM)
             .extent(session_resources.video_session.max_coded_extent.into())
@@ -413,7 +410,8 @@ impl VulkanEncoder<'_> {
             .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR)
             .sharing_mode(vk::SharingMode::CONCURRENT)
             .queue_family_indices(&queue_indices)
-            .initial_layout(vk::ImageLayout::UNDEFINED);
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .push_next(&mut profile_list_info);
         let encode_image = Image::new(
             encoding_device.allocator.clone(),
             &encode_image_info,

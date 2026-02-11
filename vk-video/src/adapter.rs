@@ -17,7 +17,7 @@ use crate::{
     },
 };
 
-/// Represents handle to a physical device.
+/// Represents a handle to a physical device.
 /// Can be used to create [`VulkanDevice`].
 pub struct VulkanAdapter<'a> {
     pub(crate) instance: &'a VulkanInstance,
