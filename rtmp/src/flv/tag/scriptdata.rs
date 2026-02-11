@@ -95,7 +95,9 @@ impl From<Amf0Value> for ScriptDataValue {
                     properties: tag_properties,
                 }
             }
-            Amf0Value::AvmPlus(_amf3_value) => todo!(),
+            Amf0Value::AvmPlus(amf3_value) => {
+                ScriptDataValue::ExtendedScriptData(amf3_value.into())
+            }
         }
     }
 }

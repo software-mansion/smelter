@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use bytes::Bytes;
 
+use crate::amf3::Amf3Value;
+
 #[derive(Debug, Clone)]
 pub enum ExtendedScriptDataValue {
     Undefined,
@@ -44,4 +46,90 @@ pub enum ExtendedScriptDataValue {
         weak_references: bool,
         entries: Vec<(ExtendedScriptDataValue, ExtendedScriptDataValue)>,
     },
+}
+
+impl From<Amf3Value> for ExtendedScriptDataValue {
+    fn from(value: Amf3Value) -> Self {
+        match value {
+            Amf3Value::Undefined => Self::Undefined,
+            Amf3Value::Null => Self::Null,
+            Amf3Value::Boolean(b) => Self::Boolean(b),
+            Amf3Value::Integer(i) => Self::Integer(i),
+            Amf3Value::Double(d) => Self::Double(d),
+            Amf3Value::String(s) => Self::String(s),
+            Amf3Value::XmlDoc(xd) => Self::String(xd),
+            Amf3Value::Date(d) => Self::Date(d),
+            Amf3Value::Array { associative, dense } => {
+                let dense = dense.into_iter().map(Self::from).collect();
+                let associative = associative
+                    .into_iter()
+                    .map(|(key, value)| (key, value.into()))
+                    .collect();
+                Self::Array { associative, dense }
+            }
+            Amf3Value::Object {
+                class_name,
+                sealed_count,
+                values,
+            } => {
+                let values = values
+                    .into_iter()
+                    .map(|(key, value)| (key, value.into()))
+                    .collect();
+                Self::Object {
+                    class_name,
+                    sealed_count,
+                    values,
+                }
+            }
+            Amf3Value::Xml(x) => Self::Xml(x),
+            Amf3Value::ByteArray(ba) => Self::ByteArray(ba),
+            Amf3Value::VectorInt {
+                fixed_length,
+                values,
+            } => Self::VectorInt {
+                fixed_length,
+                values,
+            },
+            Amf3Value::VectorUInt {
+                fixed_length,
+                values,
+            } => Self::VectorUInt {
+                fixed_length,
+                values,
+            },
+            Amf3Value::VectorDouble {
+                fixed_length,
+                values,
+            } => Self::VectorDouble {
+                fixed_length,
+                values,
+            },
+            Amf3Value::VectorObject {
+                fixed_length,
+                class_name,
+                values,
+            } => {
+                let values = values.into_iter().map(Self::from).collect();
+                Self::VectorObject {
+                    fixed_length,
+                    class_name,
+                    values,
+                }
+            }
+            Amf3Value::Dictionary {
+                weak_references,
+                entries,
+            } => {
+                let entries = entries
+                    .into_iter()
+                    .map(|(key, value)| (key.into(), value.into()))
+                    .collect();
+                Self::Dictionary {
+                    weak_references,
+                    entries,
+                }
+            }
+        }
+    }
 }
