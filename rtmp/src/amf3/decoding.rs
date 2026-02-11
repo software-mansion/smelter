@@ -2,6 +2,7 @@ use bytes::{Buf, Bytes};
 
 use crate::{AmfDecodingError, amf3::*};
 
+#[allow(dead_code)]
 /// Decode AMF3 encoded messages.
 ///
 /// `amf_bytes` must include whole AMF3 values. It can be a payload of `rtmp` Data or Command message.
