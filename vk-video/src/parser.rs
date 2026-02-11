@@ -63,8 +63,8 @@ pub mod h264 {
     }
 
     impl H264Parser {
-        /// Parses nalus in Annex B format.
-        /// Returns [`AccessUnit`]s representing whole frame
+        /// Parses NAL units in Annex B format.
+        /// Returns [`AccessUnit`]s representing whole frames
         pub fn parse(
             &mut self,
             bytes: &[u8],

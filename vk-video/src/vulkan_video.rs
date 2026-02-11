@@ -136,8 +136,8 @@ pub enum VulkanCommonError {
 
 /// Represents a chunk of encoded video data used for decoding.
 ///
-/// `pts` is the presentation timestamp -- a number, which describes when the given frame
-/// should be presented, used for synchronization with other tracks, e.g. with audio
+/// `pts` is the presentation timestamp -- a number which describes when the given frame
+/// should be presented, used for synchronization with other tracks, e.g., with audio.
 ///
 /// If `pts` is [`Option::Some`], it is inferred that the chunk contains bytestream that belongs to
 /// one output frame.
@@ -150,8 +150,8 @@ pub struct EncodedInputChunk<T> {
 
 /// Represents a chunk of encoded video data returned by the encoder.
 ///
-/// `pts` is the presentation timestamp -- a number, which describes when the given frame
-/// should be presented, used for synchronization with other tracks, e.g. with audio
+/// `pts` is the presentation timestamp -- a number which describes when the given frame
+/// should be presented, used for synchronization with other tracks, e.g., with audio.
 pub struct EncodedOutputChunk<T> {
     pub data: T,
     pub pts: Option<u64>,
@@ -170,7 +170,7 @@ pub struct RawFrameData {
     pub height: u32,
 }
 
-/// A decoder that outputs frames stored as [`wgpu::Texture`]s
+/// A decoder that outputs frames stored as [`wgpu::Texture`]s.
 pub struct WgpuTexturesDecoder {
     pub(crate) vulkan_decoder: VulkanDecoder<'static>,
     pub(crate) parser: H264Parser,
@@ -265,7 +265,7 @@ impl BytesDecoder {
     }
 }
 
-/// An encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12)
+/// An encoder that takes input frames as [`Vec<u8>`] with raw pixel data (in NV12).
 pub struct BytesEncoder {
     pub(crate) vulkan_encoder: VulkanEncoder<'static>,
 }
@@ -285,7 +285,7 @@ impl BytesEncoder {
     }
 }
 
-/// An encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`])
+/// An encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`]).
 pub struct WgpuTexturesEncoder {
     pub(crate) vulkan_encoder: VulkanEncoder<'static>,
 }

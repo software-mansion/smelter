@@ -104,7 +104,7 @@ impl DecodeInputBuffer {
         })
     }
 
-    /// size must be passed in here for alignment reasons
+    /// Size must be passed in here for alignment reasons
     pub(crate) fn upload_data(
         &mut self,
         data: &[u8],
@@ -237,7 +237,7 @@ impl Buffer {
     }
 
     /// ## Safety
-    /// the buffer has to be mappable and readable
+    /// The buffer has to be mappable and readable
     pub(crate) unsafe fn download_data_from_buffer(
         &mut self,
         size: usize,

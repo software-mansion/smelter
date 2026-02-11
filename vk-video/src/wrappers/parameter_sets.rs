@@ -376,8 +376,8 @@ pub(crate) fn vk_to_h264_level_idc(
     }
 }
 
-/// As per __Table A-1 Level limits__ in the H.264 spec
-/// `mbs` means macroblocks here
+/// As per __Table A-1 Level limits__ in the H.264 spec.
+/// Note: `mbs` means macroblocks here.
 pub(crate) fn h264_level_idc_to_max_dpb_mbs(level_idc: u8) -> Result<u64, VulkanDecoderError> {
     match level_idc {
         10 => Ok(396),

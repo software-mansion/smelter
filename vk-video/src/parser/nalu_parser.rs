@@ -148,7 +148,7 @@ pub enum ParsedNalu {
 
 /// H264 Network Abstraction Layer Unit
 pub struct Nalu {
-    /// Parsed nalu from [`Nalu::raw_bytes`]
+    /// Parsed NAL unit from [`Nalu::raw_bytes`]
     pub parsed: ParsedNalu,
     // Only used if parsers are exposed
     #[allow(dead_code)]

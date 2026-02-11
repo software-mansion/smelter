@@ -59,7 +59,7 @@ impl From<u32> for Rational {
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MissedFrameHandling {
     /// When missed frames are detected, error on every subsequent frame that depends on them
-    /// (i. e. fail on every frame until an IDR frame arrives)
+    /// (i.e., fail on every frame until an IDR frame arrives)
     #[default]
     Strict,
 

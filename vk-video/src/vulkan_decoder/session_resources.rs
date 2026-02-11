@@ -273,8 +273,8 @@ impl<'a> VideoSessionResources<'a> {
     /// Creates a new buffer of reference images used for decoding.
     ///
     /// If you're replacing existing decoding images, make sure the old references won't be used,
-    /// e.g. do it right before decoding IDR. Otherwise it may result in error because the decoder
-    /// could try to use references which no longer exist if there's a non IDR frame after SPS.
+    /// e.g., do it right before decoding IDR. Otherwise it may result in error because the decoder
+    /// could try to use references which no longer exist if there's a non-IDR frame after SPS.
     fn new_decoding_images(
         decoding_device: &DecodingDevice,
         profile: &H264DecodeProfileInfo,

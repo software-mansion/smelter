@@ -47,7 +47,7 @@ impl AUSplitter {
         ))
     }
 
-    /// returns `true` if `slice` is a first slice in an Access Unit
+    /// Returns `true` if `slice` is a first slice in an Access Unit
     fn is_new_au(&self, nalu: &Nalu) -> bool {
         let ParsedNalu::Slice(slice) = &nalu.parsed else {
             return false;
