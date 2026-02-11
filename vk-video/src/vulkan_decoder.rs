@@ -58,7 +58,7 @@ impl CommandBufferPoolStorage for DecoderCommandBufferPools {
 type DecoderTracker = Tracker<DecoderTrackerKind>;
 
 /// This cannot outlive the image and semaphore it borrows, but it seems very hard to encode that
-/// in the lifetimes
+/// in the lifetimes.
 struct DecodeSubmission {
     image: Arc<Image>,
     dimensions: vk::Extent2D,

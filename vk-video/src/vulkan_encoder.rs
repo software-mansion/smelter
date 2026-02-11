@@ -880,13 +880,13 @@ impl VulkanEncoder<'_> {
         // bugs in nvidia driver I encountered on this journey:
         //
         // bug1: if primary pic type is set to I instead of IDR, the encode command will submit
-        // successfully, the fence will trigger, signalling it has been executed, but if you then
+        // successfully, the fence will trigger, signaling it has been executed, but if you then
         // query the implementation for the status of the operation, it will behave as though the
         // operation never happened (which means it will not return an error!). The division
         // between I and IDR is invented in the vulkan spec, in h264 the values are equivalent.
         //
         // bug2: when rate control is disabled, you have to specify the temporal layer count to 0.
-        // You pass a table length and a pointer to a bable with temporal layer descriptions. Even
+        // You pass a table length and a pointer to a table with temporal layer descriptions. Even
         // when the length is set to 0, the pointer will be dereferenced. If you set it to NULL,
         // the program will (obviously) segfault.
         //

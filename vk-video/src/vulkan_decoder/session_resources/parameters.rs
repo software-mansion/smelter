@@ -66,7 +66,7 @@ impl VideoSessionParametersManager {
         Ok(())
     }
 
-    // it is probably not optimal to insert sps and pps searately. this could be optimized, so that
+    // It is probably not optimal to insert SPS and PPS separately. This could be optimized, so that
     // the insertion happens lazily when the parameters are bound to a session.
     pub(crate) fn put_sps(&mut self, sps: &SeqParameterSet) -> Result<(), VulkanDecoderError> {
         let key = sps.seq_parameter_set_id.id();
