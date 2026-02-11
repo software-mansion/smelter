@@ -23,6 +23,8 @@ use crate::utils::get_free_port;
 
 const RTMP_INPUT_PATH: &str = "RTMP_INPUT_PATH";
 
+const STREAM_KEY: &str = "example";
+
 #[derive(Debug, Deserialize)]
 #[serde(from = "RtmpInputOptions")]
 pub struct RtmpInput {
@@ -34,8 +36,6 @@ pub struct RtmpInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RtmpInputOptions {
     path: Option<PathBuf>,
-    app: String,
-    stream_key: String,
     player: InputPlayer,
 }
 
@@ -67,8 +67,8 @@ impl RtmpInput {
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "rtmp_server",
-            "app": &self.options.app,
-            "stream_key": &self.options.stream_key,
+            "app": &self.name,
+            "stream_key": STREAM_KEY,
         })
     }
 
@@ -88,12 +88,10 @@ impl RtmpInput {
 
     fn ffmpeg_transmit(&mut self) -> Result<()> {
         let handle = match &self.options.path {
-            Some(path) => {
-                start_ffmpeg_rtmp_send(path, &self.options.app, &self.options.stream_key)?
-            }
+            Some(path) => start_ffmpeg_rtmp_send(path, &self.name, STREAM_KEY)?,
             None => {
                 let asset_path = self.download_asset()?;
-                start_ffmpeg_rtmp_send(&asset_path, &self.options.app, &self.options.stream_key)?
+                start_ffmpeg_rtmp_send(&asset_path, &self.name, STREAM_KEY)?
             }
         };
         self.stream_handles.push(handle);
@@ -126,22 +124,15 @@ impl Drop for RtmpInput {
 pub struct RtmpInputBuilder {
     name: String,
     path: Option<PathBuf>,
-    app: String,
-    stream_key: String,
     player: InputPlayer,
 }
 
 impl RtmpInputBuilder {
     pub fn new() -> Self {
-        let port = get_free_port();
-        let name = format!("input_rtmp_{port}");
-        let app = Self::generate_app();
-        let stream_key = "example".to_string();
+        let name = Self::generate_name();
         Self {
             name,
             path: None,
-            app,
-            stream_key,
             player: InputPlayer::Manual,
         }
     }
@@ -150,7 +141,7 @@ impl RtmpInputBuilder {
         self.prompt_path()?.prompt_player()
     }
 
-    fn generate_app() -> String {
+    fn generate_name() -> String {
         static LAST_INPUT: OnceLock<AtomicU32> = OnceLock::new();
         let atomic_suffix = LAST_INPUT.get_or_init(|| AtomicU32::new(0));
         let suffix = atomic_suffix.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -209,8 +200,6 @@ impl RtmpInputBuilder {
         let options = RtmpInputOptions {
             path: self.path,
             player: self.player,
-            app: self.app,
-            stream_key: self.stream_key,
         };
         RtmpInput {
             name: self.name,
