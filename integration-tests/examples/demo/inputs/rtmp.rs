@@ -19,8 +19,6 @@ use tracing::error;
 
 use crate::{autocompletion::FilePathCompleter, players::InputPlayer, utils::resolve_path};
 
-use crate::utils::get_free_port;
-
 const RTMP_INPUT_PATH: &str = "RTMP_INPUT_PATH";
 
 const STREAM_KEY: &str = "example";
@@ -53,8 +51,7 @@ impl Serialize for RtmpInput {
 
 impl From<RtmpInputOptions> for RtmpInput {
     fn from(value: RtmpInputOptions) -> Self {
-        let port = get_free_port();
-        let name = format!("rtmp_input_{port}");
+        let name = RtmpInputBuilder::generate_name();
         Self {
             name,
             options: value,
