@@ -7,6 +7,9 @@ use crate::{
     error::ParseError,
 };
 
+mod extended;
+pub use extended::ExtendedScriptDataValue;
+
 /// Struct representing flv SCRIPTDATA.
 #[derive(Debug, Clone)]
 pub struct ScriptData {
@@ -34,9 +37,6 @@ pub enum ScriptDataValue {
     },
     ExtendedScriptData(ExtendedScriptDataValue),
 }
-
-#[derive(Debug, Clone)]
-pub enum ExtendedScriptDataValue {}
 
 impl ScriptData {
     pub fn parse(data: Bytes) -> Result<Self, ParseError> {
