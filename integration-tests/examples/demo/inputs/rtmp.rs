@@ -1,4 +1,9 @@
-use std::{env, path::PathBuf, process::Child};
+use std::{
+    env,
+    path::PathBuf,
+    process::Child,
+    sync::{OnceLock, atomic::AtomicU32},
+};
 
 use anyhow::Result;
 use inquire::{Select, Text};
@@ -22,7 +27,6 @@ const RTMP_INPUT_PATH: &str = "RTMP_INPUT_PATH";
 #[serde(from = "RtmpInputOptions")]
 pub struct RtmpInput {
     pub name: String,
-    port: u16,
     options: RtmpInputOptions,
     stream_handles: Vec<Child>,
 }
@@ -30,6 +34,8 @@ pub struct RtmpInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RtmpInputOptions {
     path: Option<PathBuf>,
+    app: String,
+    stream_key: String,
     player: InputPlayer,
 }
 
@@ -51,7 +57,6 @@ impl From<RtmpInputOptions> for RtmpInput {
         let name = format!("rtmp_input_{port}");
         Self {
             name,
-            port,
             options: value,
             stream_handles: vec![],
         }
@@ -62,7 +67,8 @@ impl RtmpInput {
     pub fn serialize_register(&self) -> serde_json::Value {
         json!({
             "type": "rtmp_server",
-            "url": format!("rtmp://127.0.0.1:{}", self.port),
+            "app": &self.options.app,
+            "stream_key": &self.options.stream_key,
         })
     }
 
@@ -82,10 +88,12 @@ impl RtmpInput {
 
     fn ffmpeg_transmit(&mut self) -> Result<()> {
         let handle = match &self.options.path {
-            Some(path) => start_ffmpeg_rtmp_send(self.port, path)?,
+            Some(path) => {
+                start_ffmpeg_rtmp_send(path, &self.options.app, &self.options.stream_key)?
+            }
             None => {
                 let asset_path = self.download_asset()?;
-                start_ffmpeg_rtmp_send(self.port, &asset_path)?
+                start_ffmpeg_rtmp_send(&asset_path, &self.options.app, &self.options.stream_key)?
             }
         };
         self.stream_handles.push(handle);
@@ -96,7 +104,7 @@ impl RtmpInput {
         let RtmpInputOptions { player, .. } = self.options;
         match player {
             InputPlayer::Ffmpeg => self.ffmpeg_transmit(),
-            InputPlayer::Gstreamer => unimplemented!(),
+            InputPlayer::Gstreamer => unreachable!(),
             InputPlayer::Manual => {
                 unimplemented!()
             }
@@ -117,8 +125,9 @@ impl Drop for RtmpInput {
 
 pub struct RtmpInputBuilder {
     name: String,
-    port: u16,
     path: Option<PathBuf>,
+    app: String,
+    stream_key: String,
     player: InputPlayer,
 }
 
@@ -126,16 +135,27 @@ impl RtmpInputBuilder {
     pub fn new() -> Self {
         let port = get_free_port();
         let name = format!("input_rtmp_{port}");
+        let app = Self::generate_app();
+        let stream_key = "example".to_string();
         Self {
             name,
-            port,
             path: None,
+            app,
+            stream_key,
             player: InputPlayer::Manual,
         }
     }
 
     pub fn prompt(self) -> Result<Self> {
         self.prompt_path()?.prompt_player()
+    }
+
+    fn generate_app() -> String {
+        static LAST_INPUT: OnceLock<AtomicU32> = OnceLock::new();
+        let atomic_suffix = LAST_INPUT.get_or_init(|| AtomicU32::new(0));
+        let suffix = atomic_suffix.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        format!("input_rtmp_{suffix}")
     }
 
     fn prompt_path(self) -> Result<Self> {
@@ -189,10 +209,11 @@ impl RtmpInputBuilder {
         let options = RtmpInputOptions {
             path: self.path,
             player: self.player,
+            app: self.app,
+            stream_key: self.stream_key,
         };
         RtmpInput {
             name: self.name,
-            port: self.port,
             options,
             stream_handles: vec![],
         }

@@ -35,8 +35,8 @@ pub fn start_ffmpeg_rtmp_receive(port: u16) -> Result<Child> {
     Ok(handle)
 }
 
-pub fn start_ffmpeg_rtmp_send(port: u16, asset_path: &Path) -> Result<Child> {
-    let input_address = format!("rtmp://127.0.0.1:{port}");
+pub fn start_ffmpeg_rtmp_send(asset_path: &Path, app: &str, stream_key: &str) -> Result<Child> {
+    let input_address = format!("rtmp://127.0.0.1:1935/{app}/{stream_key}");
     let asset_path = asset_path.to_string_lossy().to_string();
 
     let handle = Command::new("bash")
