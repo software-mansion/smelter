@@ -102,10 +102,28 @@ impl RtmpInput {
         let RtmpInputOptions { player, .. } = self.options;
         match player {
             InputPlayer::Ffmpeg => self.ffmpeg_transmit(),
-            InputPlayer::Gstreamer => unreachable!(),
             InputPlayer::Manual => {
-                unimplemented!()
+                let input_path = match &self.options.path {
+                    Some(path) => path.to_str().unwrap().to_string(),
+                    None => integration_tests_root()
+                        .join(BUNNY_H264_PATH)
+                        .to_str()
+                        .unwrap()
+                        .to_string(),
+                };
+
+                let cmd = format!(
+                    "ffmpeg -re -i {input_path} -c:v libx264 -tune zerolatency -c:a aac -ac 2 -f flv 'rtmp://127.0.0.1:1935/{}/{STREAM_KEY}'",
+                    self.name,
+                );
+
+                println!("Start streaming H264 encoded video and AAC encoded audio to Smelter:");
+                println!("{cmd}");
+                println!();
+
+                Ok(())
             }
+            _ => unreachable!(),
         }
     }
 }
@@ -133,7 +151,7 @@ impl RtmpInputBuilder {
         Self {
             name,
             path: None,
-            player: InputPlayer::Manual,
+            player: InputPlayer::Ffmpeg,
         }
     }
 
