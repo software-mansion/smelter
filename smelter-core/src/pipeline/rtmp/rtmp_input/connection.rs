@@ -38,6 +38,7 @@ enum TrackState {
     BeforeFirstEvent,
     ConfigMissing,
     Ready(DecoderThreadHandle),
+    ChannelClosed,
 }
 
 struct RtmpConnectionState {
@@ -165,6 +166,7 @@ impl RtmpConnectionState {
 
         if sender.send(PipelineEvent::Data(chunk)).is_err() {
             warn!("Video decoder channel closed");
+            self.video_track_state = TrackState::ChannelClosed;
         }
     }
 
@@ -214,6 +216,7 @@ impl RtmpConnectionState {
 
         if sender.send(PipelineEvent::Data(chunk)).is_err() {
             warn!("Audio decoder channel closed");
+            self.audio_track_state = TrackState::ChannelClosed;
         }
     }
 
