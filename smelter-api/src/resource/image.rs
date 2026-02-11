@@ -13,32 +13,32 @@ pub enum ImageSpec {
     Png {
         url: Option<Arc<str>>,
 
-        #[schema(value_type = str)]
+        #[schema(value_type = Option<str>)]
         path: Option<Arc<Path>>,
     },
     Jpeg {
         url: Option<Arc<str>>,
 
-        #[schema(value_type = str)]
+        #[schema(value_type = Option<str>)]
         path: Option<Arc<Path>>,
     },
     Svg {
         url: Option<Arc<str>>,
 
-        #[schema(value_type = str)]
+        #[schema(value_type = Option<str>)]
         path: Option<Arc<Path>>,
         resolution: Option<Resolution>,
     },
     Gif {
         url: Option<Arc<str>>,
 
-        #[schema(value_type = str)]
+        #[schema(value_type = Option<str>)]
         path: Option<Arc<Path>>,
     },
     Auto {
         url: Option<Arc<str>>,
 
-        #[schema(value_type = str)]
+        #[schema(value_type = Option<str>)]
         path: Option<Arc<Path>>,
     },
 }

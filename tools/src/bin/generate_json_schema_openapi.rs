@@ -15,7 +15,7 @@ fn main() {
     tracing_subscriber::fmt().init();
     let check_flag = std::env::args().any(|arg| &arg == "--check");
     generate_json_schema(check_flag);
-    generate_openapi();
+    generate_openapi(check_flag);
 }
 
 /// This enum is used to generate JSON schema for all API types.
@@ -96,7 +96,7 @@ fn generate_schema(mut current_schema: RootSchema, path: &'static str, action: S
     let json_from_disk = match fs::read_to_string(&schema_path) {
         Ok(json) => json,
         Err(err) if err.kind() == io::ErrorKind::NotFound => String::new(),
-        Err(err) => panic!("{}", err),
+        Err(err) => panic!("{err}"),
     };
     let json_current = serde_json::to_string_pretty(&current_schema).unwrap() + "\n";
 
@@ -125,10 +125,7 @@ enum SchemaAction {
         title = "Smelter",
         description = "Real-time video compositing software",
         version = "0.5.0",
-        license(
-            name = "",
-            url = "https://github.com/software-mansion/smelter/blob/master/LICENSE",
-        ),
+        license(name = "MIT",),
     ),
     paths(
         smelter::routes::control_request::handle_start,
@@ -152,8 +149,24 @@ enum SchemaAction {
 )]
 struct ApiDoc;
 
-fn generate_openapi() {
+fn generate_openapi(check_flag: bool) {
     let openapi_json = ApiDoc::openapi().to_pretty_json().unwrap();
-    let gen_path = PathBuf::from(ROOT_DIR).join("schemas/openapi_specification.json");
-    fs::write(&gen_path, openapi_json).unwrap();
+    let openapi_path = PathBuf::from(ROOT_DIR).join("schemas/openapi_specification.json");
+
+    match check_flag {
+        true => {
+            let openapi_json_disk = match fs::read_to_string(&openapi_path) {
+                Ok(json) => json,
+                Err(err) if err.kind() == io::ErrorKind::NotFound => String::new(),
+                Err(err) => panic!("{err}"),
+            };
+
+            if openapi_json_disk != openapi_json {
+                panic!("Schema changed. Rerun without --check arg to regenerate it.")
+            }
+        }
+        false => {
+            fs::write(&openapi_path, &openapi_json).unwrap();
+        }
+    }
 }
