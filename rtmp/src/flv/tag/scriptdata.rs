@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use bytes::Bytes;
 
 use crate::{
-    amf0::{self, decode_amf0_values},
+    amf0::{Amf0Value, decode_amf0_values},
     error::ParseError,
 };
 
@@ -32,7 +32,11 @@ pub enum ScriptDataValue {
         class_name: String,
         properties: HashMap<String, ScriptDataValue>,
     },
+    ExtendedScriptData(ExtendedScriptDataValue),
 }
+
+#[derive(Debug, Clone)]
+pub enum ExtendedScriptDataValue {}
 
 impl ScriptData {
     pub fn parse(data: Bytes) -> Result<Self, ParseError> {
@@ -49,36 +53,36 @@ impl ScriptData {
     }
 }
 
-impl From<amf0::Amf0Value> for ScriptDataValue {
-    fn from(value: amf0::Amf0Value) -> Self {
+impl From<Amf0Value> for ScriptDataValue {
+    fn from(value: Amf0Value) -> Self {
         match value {
-            amf0::Amf0Value::Number(n) => Self::Number(n),
-            amf0::Amf0Value::Boolean(b) => Self::Boolean(b),
-            amf0::Amf0Value::String(s) => Self::String(s),
-            amf0::Amf0Value::Object(obj) => Self::Object(
+            Amf0Value::Number(n) => Self::Number(n),
+            Amf0Value::Boolean(b) => Self::Boolean(b),
+            Amf0Value::String(s) => Self::String(s),
+            Amf0Value::Object(obj) => Self::Object(
                 obj.into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect(),
             ),
-            amf0::Amf0Value::Null => Self::Null,
-            amf0::Amf0Value::Undefined => Self::Undefined,
-            amf0::Amf0Value::EcmaArray(map) => Self::EcmaArray(
+            Amf0Value::Null => Self::Null,
+            Amf0Value::Undefined => Self::Undefined,
+            Amf0Value::EcmaArray(map) => Self::EcmaArray(
                 map.into_iter()
                     .map(|(key, value)| (key, Self::from(value)))
                     .collect(),
             ),
-            amf0::Amf0Value::StrictArray(array) => {
+            Amf0Value::StrictArray(array) => {
                 Self::StrictArray(array.into_iter().map(Self::from).collect())
             }
-            amf0::Amf0Value::Date {
+            Amf0Value::Date {
                 unix_time,
                 timezone_offset,
             } => Self::Date {
                 unix_time,
                 timezone_offset,
             },
-            amf0::Amf0Value::LongString(s) => Self::LongString(s),
-            amf0::Amf0Value::TypedObject {
+            Amf0Value::LongString(s) => Self::LongString(s),
+            Amf0Value::TypedObject {
                 class_name,
                 properties,
             } => {
@@ -91,6 +95,7 @@ impl From<amf0::Amf0Value> for ScriptDataValue {
                     properties: tag_properties,
                 }
             }
+            Amf0Value::AvmPlus(_amf3_value) => todo!(),
         }
     }
 }

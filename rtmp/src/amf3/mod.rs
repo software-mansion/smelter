@@ -6,6 +6,7 @@ use bytes::Bytes;
 mod decoding;
 mod encoding;
 
+pub(crate) use decoding::Amf3DecoderState;
 pub use decoding::decode_amf3_values;
 
 const UNDEFINED: u8 = 0x00;

@@ -31,6 +31,7 @@ fn encode_value(buf: &mut BytesMut, value: &Amf0Value) -> Result<(), AmfEncoding
             class_name: _class_name,
             properties: _properties,
         } => unimplemented!(),
+        Amf0Value::AvmPlus(_amf3_value) => unimplemented!(),
     };
     Ok(())
 }
