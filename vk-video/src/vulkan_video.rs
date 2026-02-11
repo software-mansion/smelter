@@ -136,6 +136,9 @@ pub enum VulkanCommonError {
 
 /// Represents a chunk of encoded video data used for decoding.
 ///
+/// `pts` is the presentation timestamp -- a number, which describes when the given frame
+/// should be presented, used for synchronization with other tracks, e.g. with audio
+///
 /// If `pts` is [`Option::Some`], it is inferred that the chunk contains bytestream that belongs to
 /// one output frame.
 /// If `pts` is [`Option::None`], the chunk can contain bytestream from multiple consecutive
@@ -146,6 +149,9 @@ pub struct EncodedInputChunk<T> {
 }
 
 /// Represents a chunk of encoded video data returned by the encoder.
+///
+/// `pts` is the presentation timestamp -- a number, which describes when the given frame
+/// should be presented, used for synchronization with other tracks, e.g. with audio
 pub struct EncodedOutputChunk<T> {
     pub data: T,
     pub pts: Option<u64>,
@@ -173,10 +179,7 @@ pub struct WgpuTexturesDecoder {
 }
 
 impl WgpuTexturesDecoder {
-    /// The produced textures have the [`wgpu::TextureFormat::NV12`] format and can be used as a copy source or a texture binding.
-    ///
-    /// `pts` is the presentation timestamp -- a number, which describes when the given frame
-    /// should be presented, used for synchronization with other tracks, e.g. with audio
+    /// The produced textures have the [`wgpu::TextureFormat::NV12`] format and can be used as a texture binding.
     pub fn decode(
         &mut self,
         frame: EncodedInputChunk<&[u8]>,
@@ -225,9 +228,6 @@ pub struct BytesDecoder {
 impl BytesDecoder {
     /// The result is a sequence of frames. The payload of each [`Frame`] struct is a [`Vec<u8>`]. Each [`Vec<u8>`] contains a single
     /// decoded frame in the [NV12 format](https://en.wikipedia.org/wiki/YCbCr#4:2:0).
-    ///
-    /// `pts` is the presentation timestamp -- a number, which describes when the given frame
-    /// should be presented, used for synchronization with other tracks, e.g. with audio
     pub fn decode(
         &mut self,
         frame: EncodedInputChunk<&[u8]>,
