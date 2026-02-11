@@ -27,7 +27,9 @@ This library was developed as a part of [smelter, a tool for video composition](
   <img height="60" alt="Smelter" src="https://raw.githubusercontent.com/software-mansion/smelter/f70f6087d53ec046824c0c41dc8a64a19bd943cf/tools/assets/smelter-logo-background.svg">
 </picture>
 
-## Decode video frame to [`wgpu::Texture`]
+## Code samples
+
+### Decode video frame to [`wgpu::Texture`]
 
 ```rust
 fn decode_video(
@@ -71,7 +73,7 @@ fn decode_video(
 }
 ```
 
-## Encode video frame from [`wgpu::Texture`]
+### Encode video frame from [`wgpu::Texture`]
 
 ```rust
 fn encode_video(

@@ -101,7 +101,7 @@ impl WgpuState {
         width: std::num::NonZeroU32,
         height: std::num::NonZeroU32,
     ) -> WgpuState {
-        let shader = wgpu::include_wgsl!("texture_as_input.wgsl");
+        let shader = wgpu::include_wgsl!("encode_wgpu.wgsl");
         let shader = device.create_shader_module(shader);
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
