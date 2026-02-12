@@ -247,7 +247,7 @@ where
 
             let values = (0..(item_count * ITEM_SIZE))
                 .map(|_| {
-                    let uint = decoder.decode_u29()?.0;
+                    let uint = decoder.decode_u29()?;
                     Ok(uint)
                 })
                 .collect::<Result<_, _>>()?;
@@ -357,7 +357,7 @@ where
             return Err(AmfDecodingError::InsufficientData);
         }
 
-        let u29 = self.decode_u29()?.0;
+        let u29 = self.decode_u29()?;
         let has_value = (u29 & 0b1) == 1;
         let u28 = u29 >> 1;
 
@@ -380,7 +380,7 @@ where
 
     // https://github.com/q191201771/doc/blob/master/spec-amf-file-format-spec.pdf
     // Check amf3 spec sections 1.3.1 and 3.6 to learn more about how this serialization works
-    fn decode_u29(&mut self) -> Result<(u32, usize), AmfDecodingError> {
+    fn decode_u29(&mut self) -> Result<u32, AmfDecodingError> {
         let mut result: u32 = 0;
         let mut bytes_used: usize = 0;
 
@@ -411,29 +411,15 @@ where
 
         while decode_byte()? {}
 
-        Ok((result, bytes_used))
+        Ok(result)
     }
 
     fn decode_i29(&mut self) -> Result<i32, AmfDecodingError> {
-        let (u29, bytes_used) = self.decode_u29()?;
-
-        let (sign_flag, value_mask): (u32, u32) = match bytes_used {
-            1 => (1 << 6, 0x3F),
-            2 => (1 << 13, 0x1F_FF),
-            3 => (1 << 20, 0x0F_FF_FF),
-            4 => (1 << 28, 0x0F_FF_FF_FF),
-            _ => unreachable!(),
-        };
-
-        let int_val = (u29 & value_mask) as i32;
-
-        let negative = (u29 & sign_flag) > 0;
-        match negative {
-            false => Ok(int_val),
-            true => {
-                let min_val = -(sign_flag as i32);
-                Ok(min_val + int_val)
-            }
+        let u29 = self.decode_u29()?;
+        if u29 & (1 << 28) != 0 {
+            Ok((u29 as i32) - (1 << 29))
+        } else {
+            Ok(u29 as i32)
         }
     }
 
@@ -442,7 +428,7 @@ where
             return Err(AmfDecodingError::InsufficientData);
         }
 
-        let u29 = self.decode_u29()?.0;
+        let u29 = self.decode_u29()?;
         let has_value = (u29 & 0b1) == 1;
         let u28 = u29 >> 1;
 
