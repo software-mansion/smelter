@@ -5,7 +5,7 @@ use std::{
 };
 
 use crossbeam_channel::Sender;
-use rtmp::{AudioConfig, AudioData, RtmpEvent, VideoConfig, VideoData};
+use rtmp::{AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpEvent};
 use smelter_render::{Frame, InputId, error::ErrorStack};
 use tracing::{Level, error, info, span, warn};
 
@@ -37,7 +37,6 @@ pub(crate) struct RtmpConnectionOptions {
 enum TrackState {
     BeforeFirstEvent,
     ConfigMissing,
-    UnsupportedCodec,
     Ready(DecoderThreadHandle),
 }
 
@@ -72,21 +71,16 @@ impl RtmpConnectionState {
 
     fn handle_rtmp_event(&mut self, rtmp_event: RtmpEvent) {
         match rtmp_event {
-            RtmpEvent::VideoConfig(config) => self.process_video_config(config),
-            RtmpEvent::AudioConfig(config) => self.process_audio_config(config),
-            RtmpEvent::Video(data) => self.process_video(data),
-            RtmpEvent::Audio(data) => self.process_audio(data),
+            RtmpEvent::H264Config(config) => self.process_video_config(config),
+            RtmpEvent::AacConfig(config) => self.process_audio_config(config),
+            RtmpEvent::H264Data(data) => self.process_video(data),
+            RtmpEvent::AacData(data) => self.process_audio(data),
             RtmpEvent::Metadata(metadata) => info!(?metadata, "Received metadata"), // TODO
+            _ => warn!("Unsupported message"),
         }
     }
 
-    fn process_video_config(&mut self, config: VideoConfig) {
-        if config.codec != rtmp::VideoCodec::H264 {
-            error!(?config.codec, "Unsupported video codec");
-            self.video_track_state = TrackState::UnsupportedCodec;
-            return;
-        }
-
+    fn process_video_config(&mut self, config: H264VideoConfig) {
         let parsed_config = match H264AvcDecoderConfig::parse(config.data) {
             Ok(config) => config,
             Err(err) => {
@@ -150,7 +144,7 @@ impl RtmpConnectionState {
         Ok(handle)
     }
 
-    fn process_video(&mut self, video: VideoData) {
+    fn process_video(&mut self, video: H264VideoData) {
         let sender = match &self.video_track_state {
             TrackState::Ready(handle) => handle.chunk_sender.clone(),
             TrackState::BeforeFirstEvent => {
@@ -158,14 +152,14 @@ impl RtmpConnectionState {
                 self.video_track_state = TrackState::ConfigMissing;
                 return;
             }
-            TrackState::ConfigMissing | TrackState::UnsupportedCodec => return,
+            TrackState::ConfigMissing => return,
         };
 
-        let (pts, dts) = self.pts_dts_from_timestamps(video.pts, video.dts);
+        let pts = self.shift_pts_to_queue_offset(video.pts);
         let chunk = EncodedInputChunk {
             data: video.data,
             pts,
-            dts,
+            dts: Some(video.dts),
             kind: MediaKind::Video(VideoCodec::H264),
         };
 
@@ -174,13 +168,7 @@ impl RtmpConnectionState {
         }
     }
 
-    fn process_audio_config(&mut self, config: AudioConfig) {
-        if config.codec != rtmp::AudioCodec::Aac {
-            error!(?config.codec, "Unsupported audio codec");
-            self.audio_track_state = TrackState::UnsupportedCodec;
-            return;
-        }
-
+    fn process_audio_config(&mut self, config: AacAudioConfig) {
         let options = FdkAacDecoderOptions {
             asc: Some(config.data.clone()),
         };
@@ -205,7 +193,7 @@ impl RtmpConnectionState {
         }
     }
 
-    fn process_audio(&mut self, audio: AudioData) {
+    fn process_audio(&mut self, audio: AacAudioData) {
         let sender = match &self.audio_track_state {
             TrackState::Ready(handle) => handle.chunk_sender.clone(),
             TrackState::BeforeFirstEvent => {
@@ -213,14 +201,14 @@ impl RtmpConnectionState {
                 self.audio_track_state = TrackState::ConfigMissing;
                 return;
             }
-            TrackState::ConfigMissing | TrackState::UnsupportedCodec => return,
+            TrackState::ConfigMissing => return,
         };
 
-        let (pts, dts) = self.pts_dts_from_timestamps(audio.pts, audio.dts);
+        let pts = self.shift_pts_to_queue_offset(audio.pts);
         let chunk = EncodedInputChunk {
             data: audio.data.clone(),
             pts,
-            dts,
+            dts: None,
             kind: MediaKind::Audio(AudioCodec::Aac),
         };
 
@@ -229,23 +217,14 @@ impl RtmpConnectionState {
         }
     }
 
-    fn pts_dts_from_timestamps(
-        &mut self,
-        pts_ms: i64,
-        dts_ms: i64,
-    ) -> (Duration, Option<Duration>) {
-        let pts = Duration::from_millis(pts_ms.max(0) as u64);
-        let dts = Duration::from_millis(dts_ms.max(0) as u64);
-
-        let offset = self
+    fn shift_pts_to_queue_offset(&mut self, pts: Duration) -> Duration {
+        let offset = *self
             .first_packet_offset
             .get_or_insert_with(|| self.ctx.queue_sync_point.elapsed().saturating_sub(pts));
 
-        let pts = pts + *offset;
-        let dts = dts + *offset;
-
+        let pts = pts + offset;
         self.buffer.recalculate_buffer(pts);
-        (pts + self.buffer.size(), Some(dts))
+        pts
     }
 }
 

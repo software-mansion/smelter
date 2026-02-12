@@ -23,37 +23,23 @@ fn main() {
         thread::spawn(move || {
             while let Ok(media_data) = receiver.recv() {
                 match media_data {
-                    RtmpEvent::VideoConfig(video_config) => {
+                    RtmpEvent::H264Config(video_config) => {
                         info!(?video_config, "video config")
                     }
-                    RtmpEvent::AudioConfig(audio_config) => {
+                    RtmpEvent::AacConfig(audio_config) => {
                         info!(?audio_config, "audio config")
                     }
-                    RtmpEvent::Video(video) => info!(
-                        data_len=?video.data.len(),
-                        pts=?video.pts,
-                        dts=?video.dts,
-                        codec=?video.codec,
-                        frame_type=?video.frame_type,
-                        cts=?video.composition_time,
-                        ?app,
-                        ?stream_key,
-                        "Received video"
-                    ),
-                    RtmpEvent::Audio(audio) => info!(
-                        data_len=?audio.data.len(),
-                        pts=?audio.pts,
-                        dts=?audio.dts,
-                        codec=?audio.codec,
-                        sound_rate=?audio.sound_rate,
-                        channels=?audio.channels,
-                        ?app,
-                        ?stream_key,
-                        "Received audio"
-                    ),
+                    RtmpEvent::H264Data(video) => {
+                        info!(?video, ?app, ?stream_key, "Received video")
+                    }
+                    RtmpEvent::AacData(audio) => info!(?audio, ?app, ?stream_key, "Received audio"),
                     RtmpEvent::Metadata(data) => {
                         info!("Metadata received");
                         println!("{data:#?}");
+                    }
+                    _ => {
+                        info!("Raw packets");
+                        println!("{media_data:#?}");
                     }
                 };
             }

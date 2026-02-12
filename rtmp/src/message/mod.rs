@@ -1,13 +1,30 @@
-use bytes::Bytes;
+use crate::{RtmpEvent, amf0::Amf0Value};
 
-use crate::protocol::MessageType;
+mod event;
+mod parse;
+mod serialize;
 
-pub(crate) mod message_reader;
-pub(crate) mod message_writer;
-
-pub struct RtmpMessage {
-    pub msg_type: MessageType,
-    pub stream_id: u32,
-    pub timestamp: u32,
-    pub payload: Bytes,
+#[derive(Debug)]
+pub(crate) enum RtmpMessage {
+    WindowAckSize {
+        window_size: u32,
+    },
+    SetPeerBandwidth {
+        bandwidth: u32,
+        limit_type: u8,
+    },
+    StreamBegin {
+        stream_id: u32,
+    },
+    CommandMessageAmf0 {
+        values: Vec<Amf0Value>,
+        stream_id: u32,
+    },
+    SetChunkSize {
+        chunk_size: u32,
+    },
+    Event {
+        event: RtmpEvent,
+        stream_id: u32,
+    },
 }

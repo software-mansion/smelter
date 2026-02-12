@@ -1,6 +1,19 @@
-use crate::error::RtmpError;
+use bytes::Bytes;
 
-pub(crate) mod control;
+use crate::ParseError;
+
+mod buffered_stream_reader;
+mod chunk;
+pub(crate) mod handshake;
+pub(crate) mod message_reader;
+pub(crate) mod message_writer;
+
+pub(crate) struct RawMessage {
+    pub msg_type: MessageType,
+    pub stream_id: u32,
+    pub timestamp: u32,
+    pub payload: Bytes,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageType {
@@ -21,8 +34,8 @@ pub enum MessageType {
 }
 
 impl MessageType {
-    pub(crate) fn try_from_id(id: u8) -> Result<Self, RtmpError> {
-        match id {
+    pub(crate) fn try_from_raw(value: u8) -> Result<Self, ParseError> {
+        match value {
             1 => Ok(MessageType::SetChunkSize),
             2 => Ok(MessageType::AbortMessage),
             3 => Ok(MessageType::Acknowledgement),
@@ -33,11 +46,11 @@ impl MessageType {
             9 => Ok(MessageType::Video),
             18 => Ok(MessageType::DataMessageAmf0),
             20 => Ok(MessageType::CommandMessageAmf0),
-            _ => Err(RtmpError::UnsuportedMessageType(id)),
+            _ => Err(ParseError::UnknownMessageType(value)),
         }
     }
 
-    pub(crate) fn into_id(self) -> u8 {
+    pub(crate) fn into_raw(self) -> u8 {
         match self {
             MessageType::SetChunkSize => 1,
             MessageType::AbortMessage => 2,

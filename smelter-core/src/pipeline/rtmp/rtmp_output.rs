@@ -3,7 +3,9 @@ use std::{net::ToSocketAddrs, sync::Arc};
 use crossbeam_channel::{Receiver, bounded};
 use tracing::{debug, error};
 
-use rtmp::{RtmpClient, RtmpClientConfig};
+use rtmp::{
+    AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpClient, RtmpClientConfig,
+};
 
 use crate::{
     event::Event,
@@ -255,13 +257,12 @@ fn run_rtmp_output_thread(
             AudioChannels::Mono => rtmp::AudioChannels::Mono,
             AudioChannels::Stereo => rtmp::AudioChannels::Stereo,
         };
-        let config = rtmp::AudioConfig {
-            codec: rtmp::AudioCodec::Aac,
-            sound_rate: audio_sample_rate,
+        let config = AacAudioConfig {
             channels,
+            sample_rate: audio_sample_rate,
             data: extradata.clone(),
         };
-        if let Err(err) = client.send_audio_config(&config) {
+        if let Err(err) = client.send(config) {
             error!(%err, "Failed to send audio config");
             return;
         }
@@ -274,13 +275,9 @@ fn run_rtmp_output_thread(
     for packet in packets_receiver {
         match packet {
             EncodedOutputEvent::Data(chunk) => {
-                if let Err(err) = send_chunk(
-                    &mut client,
-                    chunk,
-                    audio_channels,
-                    audio_sample_rate,
-                    &mut sent_video_config,
-                ) {
+                if let Err(err) =
+                    send_chunk(&mut client, chunk, audio_channels, &mut sent_video_config)
+                {
                     error!(%err, "Failed to send RTMP data");
                     break;
                 }
@@ -315,44 +312,28 @@ fn send_chunk(
     client: &mut RtmpClient,
     chunk: EncodedOutputChunk,
     audio_channels: AudioChannels,
-    audio_sample_rate: u32,
     sent_video_config: &mut bool,
 ) -> Result<(), rtmp::RtmpError> {
-    let dts_ms = chunk
-        .dts
-        .unwrap_or(chunk.pts)
-        .as_millis() as i64;
-    let pts_ms = chunk.pts.as_millis() as i64;
+    let dts = chunk.dts.unwrap_or(chunk.pts);
+    let pts = chunk.pts;
 
     match chunk.kind {
         MediaKind::Video(_) => {
             // Encoder produces Annex B. On the first keyframe extract SPS/PPS
             // and send the AVC decoder config before any video data.
-            if !*sent_video_config && chunk.is_keyframe {
-                if let Some(avc_config) = build_avc_decoder_config(&chunk.data) {
-                    let config = rtmp::VideoConfig {
-                        codec: rtmp::VideoCodec::H264,
-                        data: avc_config,
-                    };
-                    client.send_video_config(&config)?;
-                    *sent_video_config = true;
-                }
+            if !*sent_video_config
+                && chunk.is_keyframe
+                && let Some(avc_config) = build_avc_decoder_config(&chunk.data)
+            {
+                client.send(H264VideoConfig { data: avc_config })?;
+                *sent_video_config = true;
             }
-
-            let frame_type = if chunk.is_keyframe {
-                rtmp::VideoFrameType::Keyframe
-            } else {
-                rtmp::VideoFrameType::Interframe
-            };
-            let composition_time = Some((pts_ms - dts_ms) as i32);
             let avcc_data = annexb_to_avcc(&chunk.data);
-            client.send_video(&rtmp::VideoData {
-                pts: pts_ms,
-                dts: dts_ms,
-                codec: rtmp::VideoCodec::H264,
-                frame_type,
-                composition_time,
+            client.send(H264VideoData {
+                pts,
+                dts,
                 data: avcc_data,
+                is_keyframe: chunk.is_keyframe,
             })
         }
         MediaKind::Audio(_) => {
@@ -360,11 +341,8 @@ fn send_chunk(
                 AudioChannels::Mono => rtmp::AudioChannels::Mono,
                 AudioChannels::Stereo => rtmp::AudioChannels::Stereo,
             };
-            client.send_audio(&rtmp::AudioData {
-                pts: pts_ms,
-                dts: dts_ms,
-                codec: rtmp::AudioCodec::Aac,
-                sound_rate: audio_sample_rate,
+            client.send(AacAudioData {
+                pts,
                 channels,
                 data: chunk.data,
             })

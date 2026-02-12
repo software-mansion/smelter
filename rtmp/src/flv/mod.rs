@@ -1,3 +1,7 @@
-mod tag;
+mod audio;
+mod scriptdata;
+mod video;
 
-pub use tag::{PacketType, audio::*, scriptdata::*, video::*};
+pub use audio::*;
+pub use scriptdata::*;
+pub use video::*;
