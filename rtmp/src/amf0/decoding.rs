@@ -4,6 +4,8 @@ use tracing::warn;
 
 use crate::{AmfDecodingError, amf0::*, amf3::Amf3DecoderState};
 
+const OBJECT_END_MARKER: [u8; 3] = [0x00, 0x00, 0x09];
+
 /// Decode AMF0 encoded messages.
 ///
 /// `amf_bytes` must include whole AMF0 values. It can be a payload of `rtmp` Data or Command message.
@@ -12,21 +14,19 @@ pub fn decode_amf0_values(amf_bytes: Bytes) -> Result<Vec<Amf0Value>, AmfDecodin
     decoder.decode_buf()
 }
 
-struct Amf0DecoderState<T> {
-    buf: T,
+#[derive(Default)]
+struct Amf0DecoderState {
+    buf: Bytes,
     // According to spec (https://rtmp.veriskope.com/pdf/amf0-file-format-specification.pdf),
     // complex types are Object, ECMA Array, Strict Array and Typed Objext.
     complexes: Vec<Amf0Value>,
 }
 
-impl<T> Amf0DecoderState<T>
-where
-    T: Buf,
-{
-    fn new(amf_bytes: T) -> Self {
+impl Amf0DecoderState {
+    fn new(amf_bytes: Bytes) -> Self {
         Self {
             buf: amf_bytes,
-            complexes: vec![],
+            ..Default::default()
         }
     }
 
@@ -39,7 +39,7 @@ where
     }
 
     fn decode_value(&mut self) -> Result<Amf0Value, AmfDecodingError> {
-        if !self.buf.has_remaining() {
+        if self.buf.is_empty() {
             return Err(AmfDecodingError::InsufficientData);
         }
 
@@ -100,7 +100,7 @@ where
         if self.buf.remaining() < size {
             return Err(AmfDecodingError::InsufficientData);
         }
-        let string_bytes = self.buf.copy_to_bytes(size);
+        let string_bytes = self.buf.split_to(size);
         let string =
             String::from_utf8(string_bytes.to_vec()).map_err(|_| AmfDecodingError::InvalidUtf8)?;
         Ok(string)
@@ -174,7 +174,7 @@ where
         if self.buf.remaining() < size {
             return Err(AmfDecodingError::InsufficientData);
         }
-        let string_bytes = self.buf.copy_to_bytes(size);
+        let string_bytes = self.buf.split_to(size);
         let string =
             String::from_utf8(string_bytes.to_vec()).map_err(|_| AmfDecodingError::InvalidUtf8)?;
         Ok(string)
@@ -209,15 +209,18 @@ where
             if self.buf.remaining() < 3 {
                 return Err(AmfDecodingError::InsufficientData);
             }
-            let key = self.decode_string()?;
-            if key.is_empty() {
-                let marker = self.buf.get_u8();
-                if marker == OBJECT_END {
-                    return Ok(pairs);
-                } else {
-                    return Err(AmfDecodingError::InvalidObjectEnd);
-                }
+            if self.buf[..3] == OBJECT_END_MARKER {
+                self.buf.advance(3);
+                return Ok(pairs);
             }
+            let key_size = self.buf.get_u16() as usize;
+            if self.buf.remaining() < key_size {
+                return Err(AmfDecodingError::InsufficientData);
+            }
+            let key_bytes: Bytes = self.buf.split_to(key_size);
+            let key =
+                String::from_utf8(key_bytes.to_vec()).map_err(|_| AmfDecodingError::InvalidUtf8)?;
+
             let value = self.decode_value()?;
             pairs.insert(key, value);
         }

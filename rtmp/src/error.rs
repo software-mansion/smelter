@@ -100,19 +100,16 @@ pub enum AudioTagParseError {
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum AmfDecodingError {
-    #[error("Unknown data type: {0}.")]
+    #[error("Unknown data type: {0}")]
     UnknownType(u8),
 
-    #[error("Insufficient data.")]
+    #[error("Insufficient data")]
     InsufficientData,
 
-    #[error("Invalid UTF-8 string.")]
+    #[error("Invalid UTF-8 string")]
     InvalidUtf8,
 
-    #[error("Invalid object end marker.")]
-    InvalidObjectEnd,
-
-    #[error("Complex type reference out of bounds.")]
+    #[error("Complex type reference out of bounds")]
     OutOfBoundsReference,
 
     #[error("Reference points to object of different amf type than expected.")]

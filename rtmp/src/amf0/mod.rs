@@ -16,7 +16,6 @@ const NULL: u8 = 0x05;
 const UNDEFINED: u8 = 0x06;
 const REFERENCE: u8 = 0x07;
 const ECMA_ARRAY: u8 = 0x08;
-const OBJECT_END: u8 = 0x09;
 const STRICT_ARRAY: u8 = 0x0A;
 const DATE: u8 = 0x0B;
 const LONG_STRING: u8 = 0x0C;
