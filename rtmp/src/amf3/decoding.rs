@@ -186,7 +186,7 @@ where
             let xml =
                 String::from_utf8(utf8.to_vec()).map_err(|_| AmfDecodingError::InvalidUtf8)?;
 
-            let amf_value = Amf3Value::XmlDoc(xml);
+            let amf_value = Amf3Value::Xml(xml);
             decoder.complexes.push(amf_value.clone());
             Ok(amf_value)
         };
@@ -221,8 +221,8 @@ where
             let fixed_length = decoder.buf.get_u8() == 0x01;
 
             let values = (0..(item_count * ITEM_SIZE))
-                .map(|_| decoder.decode_i29())
-                .collect::<Result<_, _>>()?;
+                .map(|_| decoder.buf.get_i32())
+                .collect();
 
             let amf_value = Amf3Value::VectorInt {
                 fixed_length,
@@ -246,11 +246,8 @@ where
             let fixed_length = decoder.buf.get_u8() == 0x01;
 
             let values = (0..(item_count * ITEM_SIZE))
-                .map(|_| {
-                    let uint = decoder.decode_u29()?;
-                    Ok(uint)
-                })
-                .collect::<Result<_, _>>()?;
+                .map(|_| decoder.buf.get_u32())
+                .collect();
 
             let amf_value = Amf3Value::VectorUInt {
                 fixed_length,
@@ -424,7 +421,7 @@ where
     }
 
     fn decode_string_raw(&mut self) -> Result<String, AmfDecodingError> {
-        if self.buf.remaining() < 4 {
+        if !self.buf.has_remaining() {
             return Err(AmfDecodingError::InsufficientData);
         }
 
@@ -479,7 +476,7 @@ where
         // Flags explained in section 3.12
 
         const TRAIT_HAS_VALUE_FLAG: usize = 0b1;
-        const TRAIT_EXTERNALIZABLE_FLAG: usize = 0b11;
+        const TRAIT_EXTERNALIZABLE_FLAG: usize = 0b10;
 
         if (u28 & TRAIT_HAS_VALUE_FLAG) == 0 {
             let trait_idx = u28 >> 1;

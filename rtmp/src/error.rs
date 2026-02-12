@@ -123,9 +123,61 @@ pub enum AmfDecodingError {
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum AmfEncodingError {
-    #[error("String too long: {0} bytes (max {})", u16::MAX)]
+    #[error("String too long: {0} bytes (max {}).", u16::MAX)]
     StringTooLong(usize),
 
-    #[error("Array too long: {0} elements (max {})", u32::MAX)]
+    #[error("Array too long: {0} elements (max {}).", u32::MAX)]
     ArrayTooLong(usize),
+
+    #[error("Long string too long: {0} bytes (max {}).", u32::MAX)]
+    LongStringTooLong(usize),
+
+    #[error("AMF3 encoding error: {0}.")]
+    Amf3(Amf3EncodingError),
+}
+
+const U29_MAX: u32 = (1 << 29) - 1;
+const U28_MAX: u32 = (1 << 28) - 1;
+
+const I29_MAX: i32 = (1 << 28) - 1;
+const I29_MIN: i32 = -(1 << 28);
+
+const MAX_SEALED_COUNT: u32 = (1 << 25) - 1;
+
+#[derive(Error, Debug)]
+pub enum Amf3EncodingError {
+    #[error("String too long: {0} bytes (max {U28_MAX}).")]
+    StringTooLong(usize),
+
+    #[error("Array too long: {0} elements (max {U28_MAX}).")]
+    ArrayTooLong(usize),
+
+    #[error("Vector too long: {0} elements (max {U28_MAX}).")]
+    VectorTooLong(usize),
+
+    #[error(
+        "Sealed count larger than actual number of object members. (Sealed count: {sealed_count}, Actual members: {actual_members})."
+    )]
+    SealedCountTooLarge {
+        sealed_count: usize,
+        actual_members: usize,
+    },
+
+    #[error("Too many sealed members in an object: {0} elements (max {MAX_SEALED_COUNT}).")]
+    SealedMembersCountTooLarge(usize),
+
+    #[error("Dictionary too long: {0} entries (max {U28_MAX}).")]
+    DictionaryTooLong(usize),
+
+    #[error("Integer must be in range [{I29_MIN}, {I29_MAX}].")]
+    OutOfRangeInteger,
+
+    #[error("U29 must be in range [0, {U29_MAX}].")]
+    OutOfRangeU29,
+}
+
+impl From<Amf3EncodingError> for AmfEncodingError {
+    fn from(value: Amf3EncodingError) -> Self {
+        Self::Amf3(value)
+    }
 }
