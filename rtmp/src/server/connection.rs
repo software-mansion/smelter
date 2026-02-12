@@ -1,6 +1,6 @@
 use std::{
     net::TcpStream,
-    sync::{Arc, Mutex, atomic::AtomicBool, mpsc::channel},
+    sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
 use tracing::{debug, trace};
@@ -11,7 +11,10 @@ use crate::{
     protocol::{
         handshake::Handshake, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter,
     },
-    server::{OnConnectionCallback, RtmpConnection, negotiation::negotiate_rtmp_session},
+    server::{
+        OnConnectionCallback, RtmpConnection, negotiation::negotiate_rtmp_session,
+        rtmp_event_channel,
+    },
 };
 
 pub(crate) fn handle_connection(
@@ -28,12 +31,12 @@ pub(crate) fn handle_connection(
 
     debug!(?app, ?stream_key, "Negotiation complete");
 
-    let (sender, receiver) = channel();
+    let (sender, receiver) = rtmp_event_channel();
 
     let connection_ctx = RtmpConnection {
         app: app.into(),
         stream_key: stream_key.into(),
-        receiver, // TODO instead of returning a receiver, return custom iterator that exposes buffer details
+        receiver,
     };
 
     {
