@@ -10,14 +10,12 @@ use std::{
     time::Duration,
 };
 
-use bytes::Bytes;
 use tracing::{error, info};
 
-use crate::{
-    error::RtmpError,
-    flv::{AudioChannels, AudioCodec, ScriptData, VideoCodec, VideoFrameType},
-    handle_client::handle_client,
-};
+use crate::{AudioConfig, AudioData, VideoConfig, VideoData, error::RtmpError, flv::ScriptData};
+
+mod handle_connection;
+mod negotiation;
 
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
 
@@ -26,42 +24,7 @@ pub enum RtmpEvent {
     VideoConfig(VideoConfig),
     Audio(AudioData),
     AudioConfig(AudioConfig),
-
     Metadata(ScriptData),
-}
-
-#[derive(Debug, Clone)]
-pub struct AudioData {
-    pub pts: i64,
-    pub dts: i64,
-    pub codec: AudioCodec,
-    pub sound_rate: u32,
-    pub channels: AudioChannels,
-    pub data: Bytes,
-}
-
-#[derive(Debug, Clone)]
-pub struct AudioConfig {
-    pub codec: AudioCodec,
-    pub sound_rate: u32,
-    pub channels: AudioChannels,
-    pub data: Bytes,
-}
-
-#[derive(Debug, Clone)]
-pub struct VideoData {
-    pub pts: i64,
-    pub dts: i64,
-    pub codec: VideoCodec,
-    pub frame_type: VideoFrameType,
-    pub composition_time: Option<i32>,
-    pub data: Bytes,
-}
-
-#[derive(Debug, Clone)]
-pub struct VideoConfig {
-    pub codec: VideoCodec,
-    pub data: Bytes,
 }
 
 pub struct RtmpConnection {
@@ -131,7 +94,10 @@ impl RtmpServer {
                                     error!(%err, "Failed to set stream blocking");
                                     return;
                                 }
-                                if let Err(err) = handle_client(stream, on_connection_clone) {
+                                if let Err(err) = handle_connection::handle_connection(
+                                    stream,
+                                    on_connection_clone,
+                                ) {
                                     error!(%err, "Client handler error");
                                 }
                             });

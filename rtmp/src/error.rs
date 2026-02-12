@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
+use crate::{AudioCodec, VideoCodec};
+
 #[derive(Error, Debug)]
 pub enum RtmpError {
     #[error("IO error: {0}")]
@@ -40,8 +42,11 @@ pub enum RtmpError {
     #[error("Internal buffer error: {0}")]
     InternalBufferError(&'static str),
 
-    #[error("FLV tag parsing failed: {0}")]
-    FlvParsingFailed(#[from] ParseError),
+    #[error("Parsing error: {0}")]
+    ParsingError(#[from] ParseError),
+
+    #[error("Serialization error: {0}")]
+    SerializationError(#[from] SerializationError),
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -68,13 +73,25 @@ pub enum ParseError {
     Video(VideoTagParseError),
 
     #[error("Error decoding amf0: {0}")]
-    Amf0(AmfDecodingError),
+    Amf0Decoding(#[from] AmfDecodingError),
 
     #[error("AVC decoder config received more than once in one stream.")]
     AvcConfigDuplication,
 
     #[error("AAC decoder config received more than once in one stream.")]
     AacConfigDuplication,
+}
+
+#[derive(Error, Debug, Clone, PartialEq)]
+pub enum SerializationError {
+    #[error("Error encoding amf0: {0}")]
+    Amf0Encoding(#[from] AmfEncodingError),
+
+    #[error("Unsupported video codec: {0:?}")]
+    UnsupportedVideoCodec(VideoCodec),
+
+    #[error("Unsupported audio codec: {0:?}")]
+    UnsupportedAudioCodec(AudioCodec),
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -119,7 +136,7 @@ pub enum AmfDecodingError {
     ExternalizableTrait,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum AmfEncodingError {
     #[error("String too long: {0} bytes (max {})", u16::MAX)]
     StringTooLong(usize),
