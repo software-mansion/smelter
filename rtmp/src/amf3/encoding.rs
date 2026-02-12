@@ -44,23 +44,13 @@ where
             return Err(AmfEncodingError::OutOfRangeInteger);
         }
 
-        self.buf.put(self.encode_i29(i29)?);
-        Ok(())
-    }
-
-    fn encode_i29(&self, i29: i32) -> Result<Bytes, AmfEncodingError> {
-        if i29 >= 2i32.pow(28) || i29 < -(2i32.pow(28)) {
-            return Err(AmfEncodingError::OutOfRangeI29);
-        }
-
-        let u29: u32 = if i29 >= 0 {
-            i29 as u32
+        if i29 >= 0 {
+            self.buf.put(self.encode_u29(i29 as u32)?);
         } else {
-            match i29 {
-                n if n >= -(2i32.pow(6)) => 0x40 | (n as u32 & 0x3F),
-                _ => unreachable!(),
-            }
-        };
+            let u29 = ((i29 as u32) & 0x0F_FF_FF_FF) | 0x10_00_00_00;
+            self.buf.put(self.encode_u29(u29)?);
+        }
+        Ok(())
     }
 
     fn encode_u29(&self, mut u29: u32) -> Result<Bytes, AmfEncodingError> {
@@ -140,5 +130,29 @@ mod encode_test {
         let actual = encoder.encode_u29(four_byte).unwrap();
         assert_eq!(actual.len(), 4);
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn encode_integer_test() {
+        let mut encoder = Amf3EncoderState::new(BytesMut::new());
+        encoder.put_integer(-2137).unwrap();
+        let expected = Bytes::from_iter([0b11111111, 0b11111111, 0b11110111, 0b10100111]);
+        let actual = encoder.buf.freeze();
+        assert_eq!(actual, expected);
+
+        let mut encoder = Amf3EncoderState::new(BytesMut::new());
+        encoder.put_integer(-(1 << 28)).unwrap();
+        let expected = Bytes::from_iter([0b11000000, 0b10000000, 0b10000000, 0b00000000]);
+        let actual = encoder.buf.freeze();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    #[should_panic(expected = "OutOfRangeInteger")]
+    fn encode_integer_out_of_bounds_test() {
+        let mut encoder = Amf3EncoderState::new(BytesMut::new());
+
+        let too_large = (1 << 28) + 3;
+        encoder.put_integer(too_large).unwrap();
     }
 }
