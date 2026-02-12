@@ -1,13 +1,15 @@
-use crate::{
-    buffered_stream_reader::BufferedReader, error::RtmpError,
-    message::message_reader::PayloadAccumulator,
-};
-use bytes::Bytes;
 use std::{
     cmp::min,
     collections::{HashMap, VecDeque},
     net::TcpStream,
     sync::{Arc, atomic::AtomicBool},
+};
+
+use bytes::Bytes;
+
+use crate::{
+    RtmpError,
+    protocol::{buffered_stream_reader::BufferedReader, message_reader::PayloadAccumulator},
 };
 
 const MAX_MESSAGE_SIZE: usize = 5 * 1024 * 1024; // 5 MB

@@ -1,7 +1,7 @@
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{
-    PacketType,
+    PacketType, SerializationError,
     error::{ParseError, VideoTagParseError},
 };
 
@@ -69,8 +69,8 @@ impl VideoTag {
             return Err(ParseError::NotEnoughData);
         }
 
-        let frame_type = (data[0] >> 4) & 0x0F;
-        let codec_id = data[0] & 0x0F;
+        let frame_type = (data[0] & 0b11110000) >> 4;
+        let codec_id = data[0] & 0b00001111;
 
         let frame_type = match frame_type {
             1 => VideoFrameType::Keyframe,
@@ -125,5 +125,36 @@ impl VideoTag {
         _frame_type: VideoFrameType,
     ) -> Result<Self, ParseError> {
         Err(ParseError::UnsupportedCodec(codec.into_id()))
+    }
+
+    pub fn serialize(&self) -> Result<Bytes, SerializationError> {
+        let frame_type: u8 = match self.frame_type {
+            VideoFrameType::Keyframe => 1,
+            VideoFrameType::Interframe => 2,
+        };
+        let codec_id = self.codec.into_id();
+
+        let first_byte = (frame_type << 4) | codec_id;
+        match self.codec {
+            VideoCodec::H264 => Ok(self.serialize_h264(first_byte)),
+            _ => Err(SerializationError::UnsupportedVideoCodec(self.codec)),
+        }
+    }
+
+    fn serialize_h264(&self, first_byte: u8) -> Bytes {
+        let mut data = BytesMut::with_capacity(self.data.len() + 5);
+        data.put_u8(first_byte);
+        match self.packet_type {
+            PacketType::Data => {
+                data.put_u8(1);
+                data.put(&self.composition_time.unwrap_or(0).to_be_bytes()[1..3]);
+            }
+            PacketType::Config => {
+                data.put_u8(0);
+                data.put(&[0, 0, 0][..]);
+            }
+        };
+        data.put(&self.data[..]);
+        data.freeze()
     }
 }

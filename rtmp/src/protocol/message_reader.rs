@@ -1,15 +1,19 @@
-use crate::{
-    chunk::{ChunkType, RtmpChunk, RtmpChunkReader},
-    error::RtmpError,
-    message::RtmpMessage,
-    protocol::MessageType,
-};
-use bytes::BytesMut;
 use std::{
     cmp::min,
     collections::HashMap,
     net::TcpStream,
     sync::{Arc, atomic::AtomicBool},
+};
+
+use bytes::BytesMut;
+
+use crate::{
+    error::RtmpError,
+    message::RtmpMessage,
+    protocol::{
+        MessageType, RawMessage,
+        chunk::{ChunkType, RtmpChunk, RtmpChunkReader},
+    },
 };
 
 pub struct RtmpMessageReader {
@@ -52,7 +56,7 @@ impl RtmpMessageReader {
         acc.append(&chunk.payload);
     }
 
-    fn try_complete_message(&mut self, chunk: &RtmpChunk) -> Option<RtmpMessage> {
+    fn try_complete_message(&mut self, chunk: &RtmpChunk) -> Option<RawMessage> {
         let cs_id = chunk.header.cs_id;
         let acc = self.accumulators.get(&cs_id)?;
         if acc.buffer.len() < acc.expected_length {
@@ -60,7 +64,7 @@ impl RtmpMessageReader {
         }
         let acc = self.accumulators.remove(&cs_id)?;
         let msg_type = MessageType::try_from_id(chunk.header.msg_type_id).ok()?;
-        Some(RtmpMessage {
+        Some(RawMessage {
             timestamp: chunk.header.timestamp,
             msg_type,
             stream_id: chunk.header.msg_stream_id,
@@ -85,7 +89,10 @@ impl Iterator for RtmpMessageReader {
             };
             self.accumulate_chunk(&chunk);
             if let Some(msg) = self.try_complete_message(&chunk) {
-                return Some(Ok(msg));
+                return match RtmpMessage::try_from(msg) {
+                    Ok(msg) => Some(Ok(msg)),
+                    Err(err) => Some(Err(err.into())),
+                };
             }
         }
     }

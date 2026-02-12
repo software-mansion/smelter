@@ -1,6 +1,18 @@
+use bytes::Bytes;
+
 use crate::error::RtmpError;
 
-pub(crate) mod control;
+mod buffered_stream_reader;
+mod chunk;
+pub(crate) mod message_reader;
+pub(crate) mod message_writer;
+
+pub(crate) struct RawMessage {
+    pub msg_type: MessageType,
+    pub stream_id: u32,
+    pub timestamp: u32,
+    pub payload: Bytes,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageType {

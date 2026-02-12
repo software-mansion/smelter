@@ -1,7 +1,7 @@
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{
-    PacketType,
+    PacketType, SerializationError,
     error::{AudioTagParseError, ParseError},
 };
 
@@ -10,8 +10,8 @@ use crate::{
 pub struct AudioTag {
     pub packet_type: PacketType,
     pub codec: AudioCodec,
-    pub sound_rate: u32,
-    pub sound_type: AudioChannels,
+    pub sample_rate: u32,
+    pub channels: AudioChannels,
     pub data: Bytes,
 }
 
@@ -71,7 +71,7 @@ impl AudioCodec {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AudioChannels {
     Mono,
     Stereo,
@@ -87,9 +87,11 @@ impl AudioTag {
             return Err(ParseError::NotEnoughData);
         }
 
-        let sound_format = (data[0] >> 4) & 0x0F;
-        let sound_rate = (data[0] >> 2) & 0x03;
-        let sound_type = data[0] & 0x01;
+        let sound_format = (data[0] & 0b11110000) >> 4;
+        let sound_rate = (data[0] & 0b00001100) >> 2;
+        // assume 16
+        // let sample_size = (data[0] & 0b00000010) >> 1;
+        let sound_type = data[0] & 0b00000001;
 
         let channels = match sound_type {
             0 => AudioChannels::Mono,
@@ -101,6 +103,7 @@ impl AudioTag {
             }
         };
 
+        // TODO: incorrect, parse AudioSpecificConfig for real value for AAC
         let sound_rate = match sound_rate {
             0 => 5500,
             1 => 11_000,
@@ -122,7 +125,7 @@ impl AudioTag {
 
     fn parse_aac(
         mut data: Bytes,
-        sound_rate: u32,
+        sample_rate: u32,
         channels: AudioChannels,
     ) -> Result<Self, ParseError> {
         if data.len() < 2 {
@@ -130,7 +133,6 @@ impl AudioTag {
         }
 
         let aac_packet_type = data[1];
-
         let packet_type = match aac_packet_type {
             0 => PacketType::Config,
             1 => PacketType::Data,
@@ -145,8 +147,8 @@ impl AudioTag {
         Ok(Self {
             packet_type,
             codec: AudioCodec::Aac,
-            sound_rate,
-            sound_type: channels,
+            sample_rate,
+            channels,
             data: audio_data,
         })
     }
@@ -159,5 +161,38 @@ impl AudioTag {
         _channels: AudioChannels,
     ) -> Result<Self, ParseError> {
         Err(ParseError::UnsupportedCodec(codec.into_id()))
+    }
+
+    pub fn serialize(&self) -> Result<Bytes, SerializationError> {
+        let sound_type: u8 = match self.channels {
+            AudioChannels::Mono => 0,
+            AudioChannels::Stereo => 1,
+        };
+        let sound_rate = 3; // AAC always have 44100
+        let sample_size = 1; // 1 - 16bit, 0 - 8bit
+        let sound_format: u8 = AudioCodec::Aac.into_id();
+
+        //let sound_rate: u8 = match config.sound_rate {
+        //    5500 => 0,
+        //    11_000 => 1,
+        //    22_050 => 2,
+        //    44_100 => 3,
+        //    _ => 3,
+        //};
+
+        // 4 bits format, 2 bits sound rate, 1 bit sample size, 1 bity sound type
+        let first_byte = (sound_format << 4) | (sound_rate << 2) | (sample_size << 1) | sound_type;
+        Ok(self.serialize_aac(first_byte))
+    }
+
+    fn serialize_aac(&self, first_byte: u8) -> Bytes {
+        let mut data = BytesMut::with_capacity(self.data.len() + 2);
+        data.put_u8(first_byte);
+        match self.packet_type {
+            PacketType::Data => data.put_u8(1),
+            PacketType::Config => data.put_u8(0),
+        }
+        data.put(&self.data[..]);
+        data.freeze()
     }
 }

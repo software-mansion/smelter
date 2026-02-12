@@ -257,7 +257,7 @@ fn run_rtmp_output_thread(
         };
         let config = rtmp::AudioConfig {
             codec: rtmp::AudioCodec::Aac,
-            sound_rate: audio_sample_rate,
+            sample_rate: audio_sample_rate,
             channels,
             data: extradata.clone(),
         };
@@ -318,25 +318,23 @@ fn send_chunk(
     audio_sample_rate: u32,
     sent_video_config: &mut bool,
 ) -> Result<(), rtmp::RtmpError> {
-    let dts_ms = chunk
-        .dts
-        .unwrap_or(chunk.pts)
-        .as_millis() as i64;
+    let dts_ms = chunk.dts.unwrap_or(chunk.pts).as_millis() as i64;
     let pts_ms = chunk.pts.as_millis() as i64;
 
     match chunk.kind {
         MediaKind::Video(_) => {
             // Encoder produces Annex B. On the first keyframe extract SPS/PPS
             // and send the AVC decoder config before any video data.
-            if !*sent_video_config && chunk.is_keyframe {
-                if let Some(avc_config) = build_avc_decoder_config(&chunk.data) {
-                    let config = rtmp::VideoConfig {
-                        codec: rtmp::VideoCodec::H264,
-                        data: avc_config,
-                    };
-                    client.send_video_config(&config)?;
-                    *sent_video_config = true;
-                }
+            if !*sent_video_config
+                && chunk.is_keyframe
+                && let Some(avc_config) = build_avc_decoder_config(&chunk.data)
+            {
+                let config = rtmp::VideoConfig {
+                    codec: rtmp::VideoCodec::H264,
+                    data: avc_config,
+                };
+                client.send_video_config(&config)?;
+                *sent_video_config = true;
             }
 
             let frame_type = if chunk.is_keyframe {
@@ -364,7 +362,7 @@ fn send_chunk(
                 pts: pts_ms,
                 dts: dts_ms,
                 codec: rtmp::AudioCodec::Aac,
-                sound_rate: audio_sample_rate,
+                sample_rate: audio_sample_rate,
                 channels,
                 data: chunk.data,
             })
