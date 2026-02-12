@@ -46,7 +46,7 @@ impl Amf0EncoderState {
                 class_name: _class_name,
                 properties: _properties,
             } => unimplemented!(),
-            Amf0Value::AvmPlus(_amf3_value) => unimplemented!(),
+            Amf0Value::AvmPlus(amf3_value) => self.put_avmplus_object(amf3_value)?,
         };
         Ok(())
     }
@@ -119,6 +119,10 @@ impl Amf0EncoderState {
         self.buf.put_u32(s.len() as u32);
         self.buf.put_slice(s.as_bytes());
         Ok(())
+    }
+
+    fn put_avmplus_object(&mut self, amf3_value: &Amf3Value) -> Result<(), AmfEncodingError> {
+        todo!()
     }
 
     fn put_keyval_map(&mut self, map: &HashMap<String, Amf0Value>) -> Result<(), AmfEncodingError> {
