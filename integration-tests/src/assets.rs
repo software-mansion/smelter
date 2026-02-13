@@ -1,7 +1,7 @@
 pub const BUNNY_H264_URL: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/BigBuckBunny720p24fps30s.mp4";
 pub const BUNNY_H264_PATH: &str = "examples/assets/BigBuckBunny720p24fps30s.mp4";
 
-pub const ELEPHANT_H264_URL: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/95d3df1b9e76d61edd6855e924093f666c88f583/assets/ElephantsDream720p24fps60s.mp4";
+pub const ELEPHANT_H264_URL: &str = "https://github.com/smelter-labs/smelter-snapshot-tests/raw/refs/heads/main/assets/ElephantsDream720p24fps60s.mp4";
 pub const ELEPHANT_H264_PATH: &str = "examples/assets/ElephantsDream720p24fps60s.mp4";
 
 pub const OCEAN_H264_URL: &str = "https://filesamples.com/samples/video/mp4/sample_1280x720.mp4";
