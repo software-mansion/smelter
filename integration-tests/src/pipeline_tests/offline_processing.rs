@@ -11,10 +11,9 @@ use smelter::config::read_config;
 use tokio_tungstenite::tungstenite;
 use tracing::info;
 
-use crate::{CompositorInstance, pipeline_tests::start_server_msg_listener};
-
-const BUNNY_URL: &str =
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+use crate::{
+    CompositorInstance, assets::BUNNY_H264_URL, pipeline_tests::start_server_msg_listener,
+};
 
 #[test]
 pub fn offline_processing() -> Result<()> {
@@ -34,7 +33,7 @@ pub fn offline_processing() -> Result<()> {
         "input/input_1/register",
         json!({
             "type": "mp4",
-            "url": BUNNY_URL,
+            "url": BUNNY_H264_URL,
             "offset_ms": 0,
             "required": true
         }),
@@ -123,7 +122,7 @@ pub fn offline_processing() -> Result<()> {
     if !(1.9..=2.1).contains(&duration) {
         return Err(anyhow!("Invalid duration: {}", duration));
     }
-    if !(930_000..=1_000_000).contains(&bit_rate) {
+    if !(2_450_000..=2_530_000).contains(&bit_rate) {
         return Err(anyhow!("Invalid bit rate: {}", bit_rate));
     }
 
