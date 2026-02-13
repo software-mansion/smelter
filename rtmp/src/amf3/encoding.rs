@@ -1,4 +1,5 @@
 use bytes::{BufMut, Bytes};
+use rand::seq::IndexedRandom;
 
 use crate::{AmfEncodingError, amf3::*};
 
@@ -37,7 +38,7 @@ where
             Amf3Value::VectorInt {
                 fixed_length,
                 values,
-            } => todo!(),
+            } => self.put_vector_int(*fixed_length, values)?,
             Amf3Value::VectorUInt {
                 fixed_length,
                 values,
@@ -45,7 +46,7 @@ where
             Amf3Value::VectorDouble {
                 fixed_length,
                 values,
-            } => todo!(),
+            } => self.put_vector_double(*fixed_length, values)?,
             Amf3Value::VectorObject {
                 fixed_length,
                 class_name,
@@ -176,6 +177,25 @@ where
         Ok(())
     }
 
+    fn put_vector_int(
+        &mut self,
+        fixed_length: bool,
+        values: &[i32],
+    ) -> Result<(), AmfEncodingError> {
+        if values.len() > U28_MAX as usize {
+            return Err(AmfEncodingError::VectorTooLong(values.len()));
+        }
+
+        self.put_marker(VECTOR_INT);
+        let u29v = self.encode_u29(((values.len() as u32) << 1) | 0b1)?;
+        self.buf.put_slice(&u29v);
+        self.buf.put_u8(fixed_length.into());
+        for int in values {
+            self.buf.put_i32(*int);
+        }
+        Ok(())
+    }
+
     fn put_vector_uint(
         &mut self,
         fixed_length: bool,
@@ -191,6 +211,25 @@ where
         self.buf.put_u8(fixed_length.into());
         for uint in values {
             self.buf.put_u32(*uint);
+        }
+        Ok(())
+    }
+
+    fn put_vector_double(
+        &mut self,
+        fixed_length: bool,
+        values: &[f64],
+    ) -> Result<(), AmfEncodingError> {
+        if values.len() > U28_MAX as usize {
+            return Err(AmfEncodingError::VectorTooLong(values.len()));
+        }
+
+        self.put_marker(VECTOR_DOUBLE);
+        let u29v = self.encode_u29(((values.len() as u32) << 1) | 0b1)?;
+        self.buf.put_slice(&u29v);
+        self.buf.put_u8(fixed_length.into());
+        for double in values {
+            self.buf.put_f64(*double);
         }
         Ok(())
     }
