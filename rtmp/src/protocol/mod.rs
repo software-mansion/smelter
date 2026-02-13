@@ -6,6 +6,7 @@ mod buffered_stream_reader;
 mod chunk;
 pub(crate) mod message_reader;
 pub(crate) mod message_writer;
+pub(crate) mod handshake;
 
 pub(crate) struct RawMessage {
     pub msg_type: MessageType,

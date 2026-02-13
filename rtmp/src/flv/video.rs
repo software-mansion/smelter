@@ -54,9 +54,11 @@ impl VideoCodec {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum VideoFrameType {
-    #[default]
     Keyframe,
     Interframe,
+    DisposableInterframe, // H263 only
+    GeneratedKeyframe,
+    VideoInfoOrCommandFrame,
 }
 
 // Currently only AVC video codec is supported

@@ -26,6 +26,7 @@ pub enum AudioCodec {
     Nellymoser,
     G711ALaw,
     G711MuLaw,
+    // ExHeader (10) - for enhanced RTMP
     Aac,
     Speex,
     Mp3_8k,

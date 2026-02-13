@@ -3,14 +3,13 @@ mod amf3;
 mod client;
 mod error;
 mod flv;
-mod handshake;
 mod message;
 mod protocol;
 mod server;
-mod types;
+mod events;
 
 pub use client::*;
 pub use error::*;
 pub use flv::*;
 pub use server::*;
-pub use types::*;
+pub use events::*;
