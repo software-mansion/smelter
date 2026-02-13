@@ -1,18 +1,28 @@
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{
-    PacketType,
+    PacketType, SerializationError,
     error::{AudioTagParseError, ParseError},
 };
 
 /// Struct representing flv AUDIODATA.
 #[derive(Debug, Clone)]
 pub struct AudioTag {
-    pub packet_type: PacketType,
+    // AAC only
+    pub packet_type: Option<PacketType>,
+
     pub codec: AudioCodec,
-    pub sound_rate: u32,
-    pub sound_type: AudioChannels,
+    /// represetnts sample rate in FLV header
+    pub sample_rate: u32,
+    pub sample_size: SampleSize,
+    pub channels: AudioChannels,
     pub data: Bytes,
+}
+
+#[derive(Debug, Clone)]
+pub enum SampleSize {
+    Sample16Bit,
+    Sample8Bit, // PCM only
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -26,6 +36,7 @@ pub enum AudioCodec {
     Nellymoser,
     G711ALaw,
     G711MuLaw,
+    // ExHeader (10) - for enhanced RTMP
     Aac,
     Speex,
     Mp3_8k,
@@ -48,7 +59,7 @@ impl AudioCodec {
             11 => Ok(Self::Speex),
             14 => Ok(Self::Mp3_8k),
             15 => Ok(Self::DeviceSpecific),
-            _ => Err(ParseError::UnsupportedCodec(id)),
+            _ => Err(AudioTagParseError::UnknownCodecId(id).into()),
         }
     }
 
@@ -71,7 +82,7 @@ impl AudioCodec {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AudioChannels {
     Mono,
     Stereo,
@@ -87,9 +98,11 @@ impl AudioTag {
             return Err(ParseError::NotEnoughData);
         }
 
-        let sound_format = (data[0] >> 4) & 0x0F;
-        let sound_rate = (data[0] >> 2) & 0x03;
-        let sound_type = data[0] & 0x01;
+        let sound_format = (data[0] & 0b11110000) >> 4;
+        let sample_rate = (data[0] & 0b00001100) >> 2;
+        // assume 16
+        let sample_size = (data[0] & 0b00000010) >> 1;
+        let sound_type = data[0] & 0b00000001;
 
         let channels = match sound_type {
             0 => AudioChannels::Mono,
@@ -100,29 +113,40 @@ impl AudioTag {
                 )));
             }
         };
-
-        let sound_rate = match sound_rate {
+        let sample_rate = match sample_rate {
             0 => 5500,
             1 => 11_000,
             2 => 22_050,
             3 => 44_100,
             _ => {
                 return Err(ParseError::Audio(AudioTagParseError::InvalidSoundRate(
-                    sound_rate,
+                    sample_rate,
                 )));
             }
+        };
+        let sample_size = match sample_size {
+            0 => SampleSize::Sample8Bit,
+            _ => SampleSize::Sample16Bit,
         };
 
         let codec = AudioCodec::try_from_id(sound_format)?;
         match codec {
-            AudioCodec::Aac => Self::parse_aac(data, sound_rate, channels),
-            _ => Self::parse_codec(data, codec, sound_rate, channels),
+            AudioCodec::Aac => Ok(Self::parse_aac(data, sample_rate, sample_size, channels)?),
+            _ => Ok(Self {
+                packet_type: None,
+                codec,
+                sample_rate,
+                sample_size,
+                channels,
+                data,
+            }),
         }
     }
 
     fn parse_aac(
-        mut data: Bytes,
-        sound_rate: u32,
+        data: Bytes,
+        sample_rate: u32,
+        sample_size: SampleSize,
         channels: AudioChannels,
     ) -> Result<Self, ParseError> {
         if data.len() < 2 {
@@ -130,10 +154,9 @@ impl AudioTag {
         }
 
         let aac_packet_type = data[1];
-
         let packet_type = match aac_packet_type {
-            0 => PacketType::Config,
-            1 => PacketType::Data,
+            0 => Some(PacketType::Config),
+            1 => Some(PacketType::Data),
             _ => {
                 return Err(ParseError::Audio(AudioTagParseError::InvalidAacPacketType(
                     aac_packet_type,
@@ -141,23 +164,54 @@ impl AudioTag {
             }
         };
 
-        let audio_data = data.split_off(2);
+        let audio_data = data.slice(2..);
         Ok(Self {
             packet_type,
             codec: AudioCodec::Aac,
-            sound_rate,
-            sound_type: channels,
+            sample_size,
+            sample_rate,
+            channels,
             data: audio_data,
         })
     }
 
-    // This function will be implemented when support for more audio codecs is added
-    fn parse_codec(
-        _data: Bytes,
-        codec: AudioCodec,
-        _sound_rate: u32,
-        _channels: AudioChannels,
-    ) -> Result<Self, ParseError> {
-        Err(ParseError::UnsupportedCodec(codec.into_id()))
+    pub fn serialize(&self) -> Result<Bytes, SerializationError> {
+        let sound_type: u8 = match self.channels {
+            AudioChannels::Mono => 0,
+            AudioChannels::Stereo => 1,
+        };
+        let sound_rate = match self.sample_rate {
+            5500 => 0,
+            11_000 => 1,
+            22_050 => 2,
+            44_100 => 3,
+            _ => 3,
+        };
+        let sample_size = 1; // 1 - 16bit, 0 - 8bit
+        let sound_format: u8 = AudioCodec::Aac.into_id();
+
+        // 4 bits format, 2 bits sound rate, 1 bit sample size, 1 bity sound type
+        let first_byte = (sound_format << 4) | (sound_rate << 2) | (sample_size << 1) | sound_type;
+        match self.codec {
+            AudioCodec::Aac => Ok(self.serialize_aac(first_byte)?),
+            _ => {
+                let mut data = BytesMut::with_capacity(self.data.len() + 1);
+                data.put_u8(first_byte);
+                data.put(&self.data[..]);
+                Ok(data.freeze())
+            }
+        }
+    }
+
+    fn serialize_aac(&self, first_byte: u8) -> Result<Bytes, SerializationError> {
+        let mut data = BytesMut::with_capacity(self.data.len() + 2);
+        data.put_u8(first_byte);
+        match self.packet_type {
+            Some(PacketType::Data) => data.put_u8(1),
+            Some(PacketType::Config) => data.put_u8(0),
+            None => return Err(SerializationError::AacPacketTypeRequired),
+        }
+        data.put(&self.data[..]);
+        Ok(data.freeze())
     }
 }

@@ -19,7 +19,9 @@ impl RtmpMessageWriter {
         self.chunk_size = size;
     }
 
-    pub fn write(&mut self, msg: &RtmpMessage) -> Result<(), RtmpError> {
+    pub fn write(&mut self, msg: RtmpMessage) -> Result<(), RtmpError> {
+        let msg = msg.into_raw()?;
+
         let mut offset = 0;
         let total_len = msg.payload.len();
 
