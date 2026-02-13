@@ -70,3 +70,30 @@ pub enum Amf3Value {
         entries: Vec<(Amf3Value, Amf3Value)>,
     },
 }
+
+#[cfg(test)]
+mod amf3_tests {
+    use bytes::BytesMut;
+
+    use super::Amf3Value;
+    use crate::amf3::{Amf3DecoderState, Amf3EncoderState};
+
+    #[test]
+    fn test_string() {
+        let mut encoder = Amf3EncoderState::new(BytesMut::new());
+        let sample_string = "kremówki".to_string();
+
+        encoder
+            .put_value(&Amf3Value::String(sample_string.clone()))
+            .unwrap();
+        let encoded_string = encoder.buf.freeze();
+
+        let mut decoder = Amf3DecoderState::new(encoded_string);
+        let decoded_string = decoder.decode_value().unwrap();
+
+        match decoded_string {
+            Amf3Value::String(s) => assert_eq!(s, sample_string),
+            _ => panic!(),
+        }
+    }
+}

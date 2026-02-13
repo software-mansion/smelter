@@ -6,7 +6,7 @@ use crate::{AmfEncodingError, amf3::*};
 const U28_MAX: u32 = (1 << 28) - 1;
 
 pub(crate) struct Amf3EncoderState<T> {
-    buf: T,
+    pub(super) buf: T,
 }
 
 impl<T> Amf3EncoderState<T>
