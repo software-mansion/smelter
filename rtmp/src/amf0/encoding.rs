@@ -2,7 +2,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
 use tracing::warn;
 
-use crate::{AmfEncodingError, amf0::*};
+use crate::{AmfEncodingError, amf0::*, amf3::Amf3EncoderState};
 
 pub fn encode_amf_values(amf_values: &[Amf0Value]) -> Result<Bytes, AmfEncodingError> {
     let encoder = Amf0EncoderState::new();
@@ -122,7 +122,9 @@ impl Amf0EncoderState {
     }
 
     fn put_avmplus_object(&mut self, amf3_value: &Amf3Value) -> Result<(), AmfEncodingError> {
-        todo!()
+        self.buf.put_u8(AVMPLUS_OBJECT);
+        let mut amf3_encoder = Amf3EncoderState::new(&mut self.buf);
+        amf3_encoder.put_value(amf3_value)
     }
 
     fn put_keyval_map(&mut self, map: &HashMap<String, Amf0Value>) -> Result<(), AmfEncodingError> {

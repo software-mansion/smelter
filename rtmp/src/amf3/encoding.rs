@@ -140,7 +140,7 @@ where
         self.put_marker(ARRAY);
         let u29a = self.encode_u29(((dense.len() as u32) << 1) | 0b1)?;
         self.buf.put_slice(&u29a);
-        self.put_pairs(associative.into_iter().collect::<Vec<_>>())?;
+        self.put_pairs(associative.iter().collect::<Vec<_>>())?;
         self.buf.put_u8(0x01);
         for val in dense {
             self.put_value(val)?;
@@ -179,7 +179,7 @@ where
         };
 
         let (sealed_keys, sealed_values): (Vec<&str>, Vec<&Amf3Value>) =
-            sealed.into_iter().map(|(k, v)| (k.as_str(), v)).unzip();
+            sealed.iter().map(|(k, v)| (k.as_str(), v)).unzip();
         for k in sealed_keys {
             self.put_string(k)?;
         }
@@ -331,10 +331,10 @@ where
 
     fn encode_u29(&self, mut u29: u32) -> Result<Bytes, AmfEncodingError> {
         let n_bytes: usize = match u29 {
-            n if n <= 2u32.pow(7) - 1 => 1,
-            n if n <= 2u32.pow(14) - 1 => 2,
-            n if n <= 2u32.pow(21) - 1 => 3,
-            n if n <= 2u32.pow(29) - 1 => 4,
+            n if n < 2u32.pow(7) => 1,
+            n if n < 2u32.pow(14) => 2,
+            n if n < 2u32.pow(21) => 3,
+            n if n < 2u32.pow(29) => 4,
             _ => return Err(AmfEncodingError::OutOfRangeU29),
         };
 

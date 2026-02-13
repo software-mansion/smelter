@@ -6,6 +6,7 @@ mod decoding;
 mod encoding;
 
 pub(crate) use decoding::Amf3DecoderState;
+pub(crate) use encoding::Amf3EncoderState;
 
 const UNDEFINED: u8 = 0x00;
 const NULL: u8 = 0x01;
