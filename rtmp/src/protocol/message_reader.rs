@@ -16,7 +16,7 @@ use crate::{
     },
 };
 
-pub struct RtmpMessageReader {
+pub(crate) struct RtmpMessageReader {
     chunk_reader: RtmpChunkReader,
     accumulators: HashMap<u32, PayloadAccumulator>,
 }
@@ -89,7 +89,7 @@ impl Iterator for RtmpMessageReader {
             };
             self.accumulate_chunk(&chunk);
             if let Some(msg) = self.try_complete_message(&chunk) {
-                return match RtmpMessage::try_from(msg) {
+                return match RtmpMessage::from_raw(msg) {
                     Ok(msg) => Some(Ok(msg)),
                     Err(err) => Some(Err(err.into())),
                 };
@@ -98,13 +98,13 @@ impl Iterator for RtmpMessageReader {
     }
 }
 
-pub struct PayloadAccumulator {
+pub(crate) struct PayloadAccumulator {
     expected_length: usize,
     buffer: BytesMut,
 }
 
 impl PayloadAccumulator {
-    pub(crate) fn new(expected_length: usize) -> Self {
+    pub fn new(expected_length: usize) -> Self {
         let initial_cap = min(expected_length, 4096);
         Self {
             expected_length,
@@ -112,11 +112,11 @@ impl PayloadAccumulator {
         }
     }
 
-    pub(crate) fn append(&mut self, data: &[u8]) {
+    pub fn append(&mut self, data: &[u8]) {
         self.buffer.extend_from_slice(data);
     }
 
-    pub(crate) fn current_len(&self) -> usize {
+    pub fn current_len(&self) -> usize {
         self.buffer.len()
     }
 }

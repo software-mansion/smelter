@@ -57,9 +57,6 @@ pub enum ParseError {
     #[error("Data is not a valid FLV header or tag header")]
     InvalidHeader,
 
-    #[error("Unsupported codec header value: {0}")]
-    UnsupportedCodec(u8),
-
     #[error("Filtered FLV packets are not supported.")]
     UnsupportedFiltered,
 
@@ -67,10 +64,10 @@ pub enum ParseError {
     UnsupportedTagType(u8),
 
     #[error("Error parsing audio tag: {0}")]
-    Audio(AudioTagParseError),
+    Audio(#[from] AudioTagParseError),
 
     #[error("Error parsing video tag: {0}")]
-    Video(VideoTagParseError),
+    Video(#[from] VideoTagParseError),
 
     #[error("Error decoding amf0: {0}")]
     Amf0Decoding(#[from] AmfDecodingError),
@@ -92,6 +89,12 @@ pub enum SerializationError {
 
     #[error("Unsupported audio codec: {0:?}")]
     UnsupportedAudioCodec(AudioCodec),
+
+    #[error("Packet type is required for AAC")]
+    AacPacketTypeRequired,
+
+    #[error("Packet type is required for H264")]
+    H264PacketTypeRequired,
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -99,8 +102,11 @@ pub enum VideoTagParseError {
     #[error("Invalid AvcPacketType header value: {0}")]
     InvalidAvcPacketType(u8),
 
-    #[error("Unsupported frame type header value: {0}")]
-    UnsupportedFrameType(u8),
+    #[error("Unknown codec header value: {0}")]
+    UnknownCodecId(u8),
+
+    #[error("Unknown frame type header value: {0}")]
+    UnknownFrameType(u8),
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -113,6 +119,9 @@ pub enum AudioTagParseError {
 
     #[error("Invalid AacPacketType header value: {0}")]
     InvalidAacPacketType(u8),
+
+    #[error("Unknown codec header value: {0}")]
+    UnknownCodecId(u8),
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]

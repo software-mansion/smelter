@@ -7,14 +7,11 @@ use tracing::{debug, trace};
 
 use crate::{
     error::RtmpError,
-    flv::PacketType,
     message::RtmpMessage,
     protocol::{
         handshake::Handshake, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter,
     },
-    server::{
-        OnConnectionCallback, RtmpConnection, RtmpEvent, negotiation::negotiate_rtmp_session,
-    },
+    server::{OnConnectionCallback, RtmpConnection, negotiation::negotiate_rtmp_session},
 };
 
 pub(crate) fn handle_connection(
@@ -49,39 +46,8 @@ pub(crate) fn handle_connection(
         trace!(?msg, "RTMP message received");
 
         let event = match msg {
-            RtmpMessage::Audio { tag, timestamp, .. } => match tag.packet_type {
-                PacketType::Data => RtmpEvent::Audio(AudioData {
-                    pts: timestamp,
-                    dts: timestamp,
-                    codec: tag.codec,
-                    sample_rate: tag.sample_rate,
-                    channels: tag.channels,
-                    data: tag.data,
-                }),
-                PacketType::Config => RtmpEvent::AudioConfig(AudioConfig {
-                    codec: tag.codec,
-                    sample_rate: tag.sample_rate,
-                    channels: tag.channels,
-                    data: tag.data,
-                }),
-            },
-            RtmpMessage::Video { tag, timestamp, .. } => match tag.packet_type {
-                PacketType::Config => RtmpEvent::VideoConfig(VideoConfig {
-                    codec: tag.codec,
-                    data: tag.data,
-                }),
-                PacketType::Data => RtmpEvent::Video(VideoData {
-                    pts: tag
-                        .composition_time
-                        .map_or(timestamp, |cts| timestamp + cts as i64),
-                    dts: timestamp,
-                    codec: tag.codec,
-                    frame_type: tag.frame_type,
-                    data: tag.data,
-                }),
-            },
-            RtmpMessage::ScriptData(data) => RtmpEvent::Metadata(data),
-            _ => continue,
+            RtmpMessage::Event { event, .. } => event,
+            _ => todo!(),
         };
 
         sender.send(event).map_err(|_| RtmpError::ChannelClosed)?;

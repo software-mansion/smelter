@@ -1,16 +1,8 @@
-use std::{
-    io::ErrorKind,
-    net::{SocketAddr, TcpListener},
-    sync::{
-        Arc, Mutex, Weak,
-        atomic::{AtomicBool, Ordering},
-        mpsc::Receiver,
-    },
-    thread,
-    time::Duration,
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+    mpsc::Receiver,
 };
-
-use tracing::{error, info};
 
 use crate::{RtmpEvent, error::RtmpError, server::listen_thread::start_listener_thread};
 

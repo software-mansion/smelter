@@ -7,13 +7,13 @@ use std::{
 use tracing::{debug, info};
 
 use crate::{
-    AudioConfig, AudioData, AudioTag, PacketType, VideoConfig, VideoData, VideoTag,
+    RtmpEvent,
     amf0::Amf0Value,
     error::RtmpError,
-    flv::VideoFrameType,
-    handshake::Handshake,
     message::RtmpMessage,
-    protocol::{message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
+    protocol::{
+        handshake::Handshake, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter,
+    },
 };
 
 pub struct RtmpClientConfig {
@@ -53,58 +53,9 @@ impl RtmpClient {
         })
     }
 
-    pub fn send_video_config(&mut self, config: &VideoConfig) -> Result<(), RtmpError> {
-        self.writer.write(RtmpMessage::Video {
-            tag: VideoTag {
-                packet_type: PacketType::Config,
-                codec: config.codec,
-                composition_time: None,
-                frame_type: VideoFrameType::Keyframe,
-                data: config.data.clone(),
-            },
-            timestamp: 0,
-            stream_id: self.stream_id,
-        })
-    }
-
-    pub fn send_audio_config(&mut self, config: &AudioConfig) -> Result<(), RtmpError> {
-        self.writer.write(RtmpMessage::Audio {
-            tag: AudioTag {
-                packet_type: PacketType::Config,
-                codec: config.codec,
-                sample_rate: config.sample_rate,
-                channels: config.channels,
-                data: config.data.clone(),
-            },
-            timestamp: 0,
-            stream_id: self.stream_id,
-        })
-    }
-
-    pub fn send_video(&mut self, video: &VideoData) -> Result<(), RtmpError> {
-        self.writer.write(RtmpMessage::Video {
-            tag: VideoTag {
-                packet_type: PacketType::Data,
-                codec: video.codec,
-                composition_time: video.composition_time,
-                frame_type: video.frame_type,
-                data: video.data.clone(),
-            },
-            timestamp: video.dts,
-            stream_id: self.stream_id,
-        })
-    }
-
-    pub fn send_audio(&mut self, audio: &AudioData) -> Result<(), RtmpError> {
-        self.writer.write(RtmpMessage::Audio {
-            tag: AudioTag {
-                packet_type: PacketType::Data,
-                codec: audio.codec,
-                sample_rate: audio.sample_rate,
-                channels: audio.channels,
-                data: audio.data.clone(),
-            },
-            timestamp: audio.dts,
+    pub fn send<T: Into<RtmpEvent>>(&mut self, event: T) -> Result<(), RtmpError> {
+        self.writer.write(RtmpMessage::Event {
+            event: event.into(),
             stream_id: self.stream_id,
         })
     }

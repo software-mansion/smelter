@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 
-use crate::{AudioChannels, AudioCodec, ScriptData, VideoCodec, VideoFrameType};
+use crate::{AudioChannels, AudioCodec, SampleSize, ScriptData, VideoCodec, VideoFrameType};
 
 #[derive(Debug, Clone)]
 pub enum RtmpEvent {
@@ -22,6 +22,7 @@ pub enum RtmpEvent {
 pub struct AacAudioData {
     pub pts: Duration,
     pub data: Bytes,
+    pub channels: AudioChannels,
 }
 
 #[derive(Debug, Clone)]
@@ -37,7 +38,9 @@ pub struct GenericAudioData {
     pub timestamp: u32,
 
     /// This value might not represent real sample rate for some codecs
-    pub sound_rate: u32,
+    pub sample_rate: u32,
+    // Only applies to PCM formats
+    pub sample_size: Option<SampleSize>,
     pub codec: AudioCodec,
     pub channels: AudioChannels,
     pub data: Bytes,
@@ -66,3 +69,28 @@ pub struct GenericVideoData {
     pub frame_type: VideoFrameType,
     pub data: Bytes,
 }
+
+impl From<AacAudioConfig> for RtmpEvent {
+    fn from(value: AacAudioConfig) -> Self {
+        RtmpEvent::AacConfig(value)
+    }
+}
+
+impl From<AacAudioData> for RtmpEvent {
+    fn from(value: AacAudioData) -> Self {
+        RtmpEvent::AacData(value)
+    }
+}
+
+impl From<H264VideoConfig> for RtmpEvent {
+    fn from(value: H264VideoConfig) -> Self {
+        RtmpEvent::H264Config(value)
+    }
+}
+
+impl From<H264VideoData> for RtmpEvent {
+    fn from(value: H264VideoData) -> Self {
+        RtmpEvent::H264Data(value)
+    }
+}
+
