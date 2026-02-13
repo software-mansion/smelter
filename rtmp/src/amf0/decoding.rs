@@ -2,7 +2,7 @@ use bytes::{Buf, Bytes};
 use std::collections::HashMap;
 use tracing::warn;
 
-use crate::{AmfDecodingError, amf0::*};
+use crate::{AmfDecodingError, amf0::*, amf3::Amf3DecoderState};
 
 const OBJECT_END_MARKER: [u8; 3] = [0x00, 0x00, 0x09];
 
@@ -10,19 +10,19 @@ const OBJECT_END_MARKER: [u8; 3] = [0x00, 0x00, 0x09];
 ///
 /// `amf_bytes` must include whole AMF0 values. It can be a payload of `rtmp` Data or Command message.
 pub fn decode_amf0_values(amf_bytes: Bytes) -> Result<Vec<Amf0Value>, AmfDecodingError> {
-    let decoder = AmfDecoderState::new(amf_bytes);
+    let decoder = Amf0DecoderState::new(amf_bytes);
     decoder.decode_buf()
 }
 
 #[derive(Default)]
-struct AmfDecoderState {
+struct Amf0DecoderState {
     buf: Bytes,
     // According to spec (https://rtmp.veriskope.com/pdf/amf0-file-format-specification.pdf),
     // complex types are Object, ECMA Array, Strict Array and Typed Objext.
     complexes: Vec<Amf0Value>,
 }
 
-impl AmfDecoderState {
+impl Amf0DecoderState {
     fn new(amf_bytes: Bytes) -> Self {
         Self {
             buf: amf_bytes,
@@ -70,8 +70,7 @@ impl AmfDecoderState {
                     properties,
                 }
             }
-
-            // TODO add switch to AMF3 (0x11)
+            AVMPLUS_OBJECT => Amf0Value::AvmPlus(self.decode_avmplus_object()?),
             _ => return Err(AmfDecodingError::UnknownType(marker)),
         };
         Ok(amf_value)
@@ -196,6 +195,11 @@ impl AmfDecoderState {
             properties: pairs.clone(),
         });
         Ok((class_name, pairs))
+    }
+
+    fn decode_avmplus_object(&mut self) -> Result<Amf3Value, AmfDecodingError> {
+        let mut amf3_decoder = Amf3DecoderState::new(&mut self.buf);
+        amf3_decoder.decode_value()
     }
 
     fn decode_object_pairs(&mut self) -> Result<HashMap<String, Amf0Value>, AmfDecodingError> {

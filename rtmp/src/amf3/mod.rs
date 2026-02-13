@@ -1,4 +1,3 @@
-#![allow(unused)]
 use std::collections::HashMap;
 
 use bytes::Bytes;
@@ -6,7 +5,7 @@ use bytes::Bytes;
 mod decoding;
 mod encoding;
 
-pub use decoding::decode_amf3_values;
+pub(crate) use decoding::Amf3DecoderState;
 
 const UNDEFINED: u8 = 0x00;
 const NULL: u8 = 0x01;

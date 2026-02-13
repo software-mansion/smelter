@@ -6,6 +6,8 @@ mod encoding;
 pub use decoding::decode_amf0_values;
 pub use encoding::encode_amf_values;
 
+use crate::amf3::Amf3Value;
+
 const NUMBER: u8 = 0x00;
 const BOOLEAN: u8 = 0x01;
 const STRING: u8 = 0x02;
@@ -18,6 +20,7 @@ const STRICT_ARRAY: u8 = 0x0A;
 const DATE: u8 = 0x0B;
 const LONG_STRING: u8 = 0x0C;
 const TYPED_OBJECT: u8 = 0x10;
+const AVMPLUS_OBJECT: u8 = 0x11;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Amf0Value {
@@ -38,4 +41,5 @@ pub enum Amf0Value {
         class_name: String,
         properties: HashMap<String, Amf0Value>,
     },
+    AvmPlus(Amf3Value),
 }
