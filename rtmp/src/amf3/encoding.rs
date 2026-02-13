@@ -52,7 +52,10 @@ where
                 class_name,
                 values,
             } => todo!(),
-            _ => todo!(),
+            Amf3Value::Dictionary {
+                weak_references,
+                entries,
+            } => self.put_dictionary(*weak_references, entries)?,
         }
         Ok(())
     }
@@ -151,7 +154,10 @@ where
         sealed_count: usize,
         values: &[(String, Amf3Value)],
     ) -> Result<(), AmfEncodingError> {
-        todo!()
+        if sealed_count > (1 << 25) - 1 {
+            return Err(AmfEncodingError::SealedMembersCountTooLarge(sealed_count));
+        }
+        let sealed_count = usize::min(sealed_count, values.len())
     }
 
     fn put_xml(&mut self, x: &str) -> Result<(), AmfEncodingError> {
@@ -237,6 +243,26 @@ where
     fn put_pairs(&mut self, pairs: Vec<(&String, &Amf3Value)>) -> Result<(), AmfEncodingError> {
         for (key, value) in pairs {
             self.put_string(key)?;
+            self.put_value(value)?;
+        }
+        Ok(())
+    }
+
+    fn put_dictionary(
+        &mut self,
+        weak_references: bool,
+        entries: &[(Amf3Value, Amf3Value)],
+    ) -> Result<(), AmfEncodingError> {
+        if entries.len() > U28_MAX as usize {
+            return Err(AmfEncodingError::DictionaryTooLong(entries.len()));
+        }
+
+        self.put_marker(DICTIONARY);
+        let u29dict = self.encode_u29(((entries.len() as u32) << 1) | 0b1)?;
+        self.buf.put_slice(&u29dict);
+        self.buf.put_u8(weak_references.into());
+        for (key, value) in entries {
+            self.put_value(key)?;
             self.put_value(value)?;
         }
         Ok(())

@@ -133,6 +133,12 @@ pub enum AmfEncodingError {
     #[error("Vector too long: {0} elements (max {})", U28_MAX)]
     VectorTooLong(usize),
 
+    #[error("Too many sealed members in an object: {0} elements (max {})", (1 << 25) - 1)]
+    SealedMembersCountTooLarge(usize),
+
+    #[error("Dictionary too long: {0} entries (max {})", U28_MAX)]
+    DictionaryTooLong(usize),
+
     #[error("Integer must be in range [-(2^28), (2^28)-1]")]
     OutOfRangeInteger,
 
