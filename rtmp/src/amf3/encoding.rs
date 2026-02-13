@@ -1,6 +1,6 @@
 use bytes::{BufMut, Bytes};
 
-use crate::{AmfEncodingError, amf3::Amf3Value};
+use crate::{AmfEncodingError, amf3::*};
 
 pub(crate) struct Amf3EncoderState<T> {
     buf: T,
@@ -19,23 +19,29 @@ where
             Amf3Value::Undefined => self.puf_undefined(),
             Amf3Value::Null => self.put_null(),
             Amf3Value::Boolean(b) => self.put_boolean(*b),
+            Amf3Value::Integer(i) => self.put_integer(*i)?,
+            Amf3Value::Double(d) => self.put_double(*d),
+            Amf3Value::String(s) => self.put_string(s)?,
+            Amf3Value::XmlDoc(xd) => self.put_xml_doc(xd)?,
+            Amf3Value::Date(d) => self.put_date(*d)?,
+            Amf3Value::Array { associative, dense } => todo!(),
             _ => todo!(),
         }
         Ok(())
     }
 
     fn puf_undefined(&mut self) {
-        self.buf.put_u8(0x00);
+        self.buf.put_u8(UNDEFINED);
     }
 
     fn put_null(&mut self) {
-        self.buf.put_u8(0x01);
+        self.buf.put_u8(NULL);
     }
 
     fn put_boolean(&mut self, b: bool) {
         match b {
-            false => self.buf.put_u8(0x02),
-            true => self.buf.put_u8(0x03),
+            false => self.buf.put_u8(FALSE),
+            true => self.buf.put_u8(TRUE),
         }
     }
 
@@ -44,13 +50,58 @@ where
             return Err(AmfEncodingError::OutOfRangeInteger);
         }
 
+        self.buf.put_u8(INTEGER);
         if i29 >= 0 {
-            self.buf.put(self.encode_u29(i29 as u32)?);
+            self.buf.put_slice(&self.encode_u29(i29 as u32)?);
         } else {
             let u29 = ((i29 as u32) & 0x0F_FF_FF_FF) | 0x10_00_00_00;
-            self.buf.put(self.encode_u29(u29)?);
+            self.buf.put_slice(&self.encode_u29(u29)?);
         }
         Ok(())
+    }
+
+    fn put_double(&mut self, d: f64) {
+        self.buf.put_u8(DOUBLE);
+        self.buf.put_f64(d);
+    }
+
+    fn put_string(&mut self, s: &str) -> Result<(), AmfEncodingError> {
+        if s.len() > 2usize.pow(28) - 1 {
+            return Err(AmfEncodingError::StringTooLong(s.len()));
+        }
+        self.buf.put_u8(STRING);
+        let u29s = self.encode_u29(((s.len() as u32) << 1) | 0b1)?;
+        self.buf.put(u29s);
+        self.buf.put_slice(s.as_bytes());
+        Ok(())
+    }
+
+    fn put_xml_doc(&mut self, xd: &str) -> Result<(), AmfEncodingError> {
+        if xd.len() > 2usize.pow(28) - 1 {
+            return Err(AmfEncodingError::StringTooLong(xd.len()));
+        }
+        self.buf.put_u8(XML_DOC);
+        let u29x = self.encode_u29(((xd.len() as u32) << 1) | 0b1)?;
+        self.buf.put(u29x);
+        self.buf.put_slice(xd.as_bytes());
+        Ok(())
+    }
+
+    fn put_date(&mut self, d: f64) -> Result<(), AmfEncodingError> {
+        self.buf.put_u8(DATE);
+        self.buf.put_slice(&self.encode_u29(1)?);
+        self.buf.put_f64(d);
+        Ok(())
+    }
+
+    fn put_array(
+        &mut self,
+        associative: HashMap<String, Amf3Value>,
+        dense: Vec<Amf3Value>,
+    ) -> Result<(), AmfEncodingError> {
+        if dense.len() > 2usize.pow(28) - 1 {
+            return Err(AmfEncodingError::ArrayTooLong(dense.len()));
+        }
     }
 
     fn encode_u29(&self, mut u29: u32) -> Result<Bytes, AmfEncodingError> {
