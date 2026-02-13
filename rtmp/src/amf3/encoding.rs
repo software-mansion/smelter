@@ -14,7 +14,7 @@ where
         Self { buf }
     }
 
-    pub(crate) fn encode_value(&mut self, amf3_value: &Amf3Value) -> Result<(), AmfEncodingError> {
+    pub(crate) fn put_value(&mut self, amf3_value: &Amf3Value) -> Result<(), AmfEncodingError> {
         match amf3_value {
             Amf3Value::Undefined => self.puf_undefined(),
             Amf3Value::Null => self.put_null(),
@@ -24,7 +24,7 @@ where
             Amf3Value::String(s) => self.put_string(s)?,
             Amf3Value::XmlDoc(xd) => self.put_xml_doc(xd)?,
             Amf3Value::Date(d) => self.put_date(*d)?,
-            Amf3Value::Array { associative, dense } => todo!(),
+            Amf3Value::Array { associative, dense } => self.put_array(associative, dense)?,
             _ => todo!(),
         }
         Ok(())
@@ -96,12 +96,28 @@ where
 
     fn put_array(
         &mut self,
-        associative: HashMap<String, Amf3Value>,
-        dense: Vec<Amf3Value>,
+        associative: &HashMap<String, Amf3Value>,
+        dense: &Vec<Amf3Value>,
     ) -> Result<(), AmfEncodingError> {
         if dense.len() > 2usize.pow(28) - 1 {
             return Err(AmfEncodingError::ArrayTooLong(dense.len()));
         }
+
+        let u29a = self.encode_u29(((dense.len() as u32) << 1) | 0b1)?;
+        self.put_pairs(&associative.into_iter().collect::<Vec<_>>())?;
+        self.buf.put_u8(0x01);
+        for val in dense {
+            self.put_value(val)?;
+        }
+        Ok(())
+    }
+
+    fn put_pairs(&mut self, pairs: &[(&String, &Amf3Value)]) -> Result<(), AmfEncodingError> {
+        for (key, value) in pairs {
+            self.put_string(key)?;
+            self.put_value(value)?;
+        }
+        Ok(())
     }
 
     fn encode_u29(&self, mut u29: u32) -> Result<Bytes, AmfEncodingError> {
