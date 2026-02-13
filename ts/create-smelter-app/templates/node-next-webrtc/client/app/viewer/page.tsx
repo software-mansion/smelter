@@ -1,38 +1,33 @@
-import Link from "next/link";
+import PageHeader from "@/components/PageHeader";
 import WhepClientVideo from "@/components/WhepClientVideo";
 
-const WHEP_URL = "http://127.0.0.1:9000/whep/output";
+// Base url of a WHIP/WHEP server. By default, Smelter exposes this server on
+// port 9000, but the value can be changed via SMELTER_WHIP_WHEP_SERVER_PORT
+// environment variable.
+const SMELTER_WHIP_WHEP_URL = new URL("http://127.0.0.1:9000");
 
 export default function ViewerPage() {
   return (
-    <div className="page">
-      <header className="header">
-        <div className="container flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="back-link">← Back</Link>
-            <span className="text-border">|</span>
-            <h1 className="font-medium">Viewer</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="status-dot bg-accent animate-pulse" />
-            <span className="text-sm text-muted">Watching</span>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-background text-foreground font-sans">
+      <PageHeader
+        title="Viewer"
+        statusDot="bg-accent animate-pulse"
+        statusText="Watching"
+      />
 
-      <main className="container py-8">
-        <div className="card overflow-hidden">
-          <div className="video-container">
+      <main className="max-w-6xl mx-auto px-6 py-8">
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="aspect-video bg-black">
             <WhepClientVideo
-              url={WHEP_URL}
+              url={new URL("/whep/output", SMELTER_WHIP_WHEP_URL).toString()}
               poster="https://placehold.co/1920x1080/0f0f0f/27272a?text=Waiting..."
               playsInline autoPlay controls
-              className="video"
+              className="w-full h-full object-contain"
             />
           </div>
         </div>
         <p className="mt-6 text-sm text-muted text-center">
-          Stream will appear when a broadcaster starts streaming
+          Output stream from the Smelter server
         </p>
       </main>
     </div>

@@ -1,12 +1,18 @@
 "use client";
 
-import Link from "next/link";
+import PageHeader from "@/components/PageHeader";
 import WhepClientVideo from "@/components/WhepClientVideo";
 import { WhipClient } from "@/utils/whip-client";
 import { useRef, useState } from "react";
 
-const SMELTER_URL = "http://127.0.0.1:9000";
-const BACKEND_URL = "http://127.0.0.1:3001";
+// Base url of a WHIP/WHEP server. By default, Smelter exposes this server on
+// port 9000, but the value can be changed via SMELTER_WHIP_WHEP_SERVER_PORT
+// environment variable.
+const SMELTER_WHIP_WHEP_URL = new URL("http://127.0.0.1:9000");
+
+// API of Node.js server from `/server` directory.
+const BACKEND_URL = new URL("http://127.0.0.1:3001");
+
 const WHIP_AUTH_TOKEN = "example_token";
 
 type Connection = "camera" | "screen-share" | "none";
@@ -16,21 +22,29 @@ export default function StreamerPage() {
   const [connection, setConnection] = useState<Connection>("none");
   const [showInstructions, setShowInstructions] = useState(true);
 
-  const connect = async (type: "camera" | "screen-share") => {
+  const toggleCamera = async () => {
     setConnection("none");
     await clientRef.current.close();
-    if (connection !== type) {
-      const stream = await navigator.mediaDevices[
-        type === "camera" ? "getUserMedia" : "getDisplayMedia"
-      ]({ video: true, audio: true });
-      await clientRef.current.connect(stream, new URL("/whip/input", SMELTER_URL), WHIP_AUTH_TOKEN);
-      setConnection(type);
+    if (connection !== "camera") {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      await clientRef.current.connect(stream, new URL("/whip/input", SMELTER_WHIP_WHEP_URL), WHIP_AUTH_TOKEN);
+      setConnection("camera");
+    }
+  };
+
+  const toggleScreenShare = async () => {
+    setConnection("none");
+    await clientRef.current.close();
+    if (connection !== "screen-share") {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      await clientRef.current.connect(stream, new URL("/whip/input", SMELTER_WHIP_WHEP_URL), WHIP_AUTH_TOKEN);
+      setConnection("screen-share");
     }
   };
 
   const toggleInstructions = async () => {
     setShowInstructions(!showInstructions);
-    await fetch(`${BACKEND_URL}/layout-update`, {
+    await fetch(new URL("/layout-update", BACKEND_URL), {
       method: "POST",
       mode: "cors",
       headers: { "content-type": "application/json" },
@@ -39,33 +53,23 @@ export default function StreamerPage() {
   };
 
   return (
-    <div className="page">
-      <header className="header">
-        <div className="container flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="back-link">← Back</Link>
-            <span className="text-border">|</span>
-            <h1 className="font-medium">Streamer</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={`status-dot ${connection === "none" ? "bg-muted" : "bg-red-500 animate-pulse"}`} />
-            <span className="text-sm text-muted">
-              {connection === "none" ? "Not streaming" : connection === "camera" ? "Camera" : "Screen"}
-            </span>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-background text-foreground font-sans">
+      <PageHeader
+        title="Streamer"
+        statusDot={connection === "none" ? "bg-muted" : "bg-red-500 animate-pulse"}
+        statusText={connection === "none" ? "Not streaming" : connection === "camera" ? "Camera" : "Screen"}
+      />
 
-      <main className="container py-8">
+      <main className="max-w-6xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <div className="card overflow-hidden">
-              <div className="video-container">
+            <div className="bg-card border border-border rounded-lg overflow-hidden">
+              <div className="aspect-video bg-black">
                 <WhepClientVideo
-                  url={`${SMELTER_URL}/whep/output`}
+                  url={new URL("/whep/output", SMELTER_WHIP_WHEP_URL).toString()}
                   poster="https://placehold.co/1920x1080/0f0f0f/27272a?text=Preview"
                   playsInline autoPlay controls
-                  className="video"
+                  className="w-full h-full object-contain"
                 />
               </div>
             </div>
@@ -73,20 +77,20 @@ export default function StreamerPage() {
           </div>
 
           <div className="space-y-4">
-            <div className="card p-5">
-              <h2 className="section-title">Source</h2>
+            <div className="bg-card border border-border rounded-lg p-5">
+              <h2 className="text-sm font-medium text-muted uppercase tracking-wide mb-4">Source</h2>
               <div className="space-y-3">
-                <button onClick={() => connect("screen-share")} className={`btn ${connection === "screen-share" ? "btn-danger" : ""}`}>
+                <button onClick={toggleScreenShare} className={`w-full py-3 px-4 rounded-lg font-medium transition-all ${connection === "screen-share" ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" : "bg-accent hover:bg-accent-hover text-white"}`}>
                   {connection === "screen-share" ? "Stop" : "Start"} Screen Share
                 </button>
-                <button onClick={() => connect("camera")} className={`btn ${connection === "camera" ? "btn-danger" : ""}`}>
+                <button onClick={toggleCamera} className={`w-full py-3 px-4 rounded-lg font-medium transition-all ${connection === "camera" ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" : "bg-accent hover:bg-accent-hover text-white"}`}>
                   {connection === "camera" ? "Stop" : "Start"} Camera
                 </button>
               </div>
             </div>
 
-            <div className="card p-5">
-              <h2 className="section-title">Overlay</h2>
+            <div className="bg-card border border-border rounded-lg p-5">
+              <h2 className="text-sm font-medium text-muted uppercase tracking-wide mb-4">Overlay</h2>
               <label className="flex items-center justify-between cursor-pointer">
                 <span>Show instructions</span>
                 <div
