@@ -221,8 +221,8 @@ where
             let fixed_length = decoder.buf.get_u8() == 0x01;
 
             let values = (0..(item_count * ITEM_SIZE))
-                .map(|_| decoder.decode_i29())
-                .collect::<Result<_, _>>()?;
+                .map(|_| decoder.buf.get_i32())
+                .collect();
 
             let amf_value = Amf3Value::VectorInt {
                 fixed_length,
@@ -246,11 +246,8 @@ where
             let fixed_length = decoder.buf.get_u8() == 0x01;
 
             let values = (0..(item_count * ITEM_SIZE))
-                .map(|_| {
-                    let uint = decoder.decode_u29()?;
-                    Ok(uint)
-                })
-                .collect::<Result<_, _>>()?;
+                .map(|_| decoder.buf.get_u32())
+                .collect();
 
             let amf_value = Amf3Value::VectorUInt {
                 fixed_length,
