@@ -16,7 +16,7 @@ where
 
     pub(crate) fn put_value(&mut self, amf3_value: &Amf3Value) -> Result<(), AmfEncodingError> {
         match amf3_value {
-            Amf3Value::Undefined => self.puf_undefined(),
+            Amf3Value::Undefined => self.put_undefined(),
             Amf3Value::Null => self.put_null(),
             Amf3Value::Boolean(b) => self.put_boolean(*b),
             Amf3Value::Integer(i) => self.put_integer(*i)?,
@@ -25,23 +25,34 @@ where
             Amf3Value::XmlDoc(xd) => self.put_xml_doc(xd)?,
             Amf3Value::Date(d) => self.put_date(*d)?,
             Amf3Value::Array { associative, dense } => self.put_array(associative, dense)?,
+            Amf3Value::Object {
+                class_name,
+                sealed_count,
+                values,
+            } => todo!(),
+            Amf3Value::Xml(x) => todo!(),
+            Amf3Value::ByteArray(ba) => todo!(),
             _ => todo!(),
         }
         Ok(())
     }
 
-    fn puf_undefined(&mut self) {
-        self.buf.put_u8(UNDEFINED);
+    fn put_marker(&mut self, marker: u8) {
+        self.buf.put_u8(marker);
+    }
+
+    fn put_undefined(&mut self) {
+        self.put_marker(UNDEFINED);
     }
 
     fn put_null(&mut self) {
-        self.buf.put_u8(NULL);
+        self.put_marker(NULL);
     }
 
     fn put_boolean(&mut self, b: bool) {
         match b {
-            false => self.buf.put_u8(FALSE),
-            true => self.buf.put_u8(TRUE),
+            false => self.put_marker(FALSE),
+            true => self.put_marker(TRUE),
         }
     }
 
@@ -50,7 +61,7 @@ where
             return Err(AmfEncodingError::OutOfRangeInteger);
         }
 
-        self.buf.put_u8(INTEGER);
+        self.put_marker(INTEGER);
         if i29 >= 0 {
             self.buf.put_slice(&self.encode_u29(i29 as u32)?);
         } else {
@@ -61,7 +72,7 @@ where
     }
 
     fn put_double(&mut self, d: f64) {
-        self.buf.put_u8(DOUBLE);
+        self.put_marker(DOUBLE);
         self.buf.put_f64(d);
     }
 
@@ -69,7 +80,7 @@ where
         if s.len() > 2usize.pow(28) - 1 {
             return Err(AmfEncodingError::StringTooLong(s.len()));
         }
-        self.buf.put_u8(STRING);
+        self.put_marker(STRING);
         let u29s = self.encode_u29(((s.len() as u32) << 1) | 0b1)?;
         self.buf.put(u29s);
         self.buf.put_slice(s.as_bytes());
@@ -80,7 +91,7 @@ where
         if xd.len() > 2usize.pow(28) - 1 {
             return Err(AmfEncodingError::StringTooLong(xd.len()));
         }
-        self.buf.put_u8(XML_DOC);
+        self.put_marker(XML_DOC);
         let u29x = self.encode_u29(((xd.len() as u32) << 1) | 0b1)?;
         self.buf.put(u29x);
         self.buf.put_slice(xd.as_bytes());
@@ -88,7 +99,7 @@ where
     }
 
     fn put_date(&mut self, d: f64) -> Result<(), AmfEncodingError> {
-        self.buf.put_u8(DATE);
+        self.put_marker(DATE);
         self.buf.put_slice(&self.encode_u29(1)?);
         self.buf.put_f64(d);
         Ok(())
@@ -103,8 +114,9 @@ where
             return Err(AmfEncodingError::ArrayTooLong(dense.len()));
         }
 
+        self.put_marker(ARRAY);
         let u29a = self.encode_u29(((dense.len() as u32) << 1) | 0b1)?;
-        self.put_pairs(&associative.into_iter().collect::<Vec<_>>())?;
+        self.put_pairs(associative.into_iter().collect::<Vec<_>>())?;
         self.buf.put_u8(0x01);
         for val in dense {
             self.put_value(val)?;
@@ -112,7 +124,27 @@ where
         Ok(())
     }
 
-    fn put_pairs(&mut self, pairs: &[(&String, &Amf3Value)]) -> Result<(), AmfEncodingError> {
+    fn put_object(
+        &mut self,
+        class_name: Option<&str>,
+        sealed_count: usize,
+        values: &[(String, Amf3Value)],
+    ) -> Result<(), AmfEncodingError> {
+        todo!()
+    }
+
+    fn put_xml(&mut self, x: &str) -> Result<(), AmfEncodingError> {
+        if x.len() > 2usize.pow(28) - 1 {
+            return Err(AmfEncodingError::StringTooLong(x.len()));
+        }
+        self.put_marker(XML);
+        let u29x = self.encode_u29(((x.len() as u32) << 1) | 0b1)?;
+        self.buf.put(u29x);
+        self.buf.put_slice(x.as_bytes());
+        Ok(())
+    }
+
+    fn put_pairs(&mut self, pairs: Vec<(&String, &Amf3Value)>) -> Result<(), AmfEncodingError> {
         for (key, value) in pairs {
             self.put_string(key)?;
             self.put_value(value)?;
