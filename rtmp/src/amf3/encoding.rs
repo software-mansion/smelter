@@ -157,7 +157,44 @@ where
         if sealed_count > (1 << 25) - 1 {
             return Err(AmfEncodingError::SealedMembersCountTooLarge(sealed_count));
         }
-        let sealed_count = usize::min(sealed_count, values.len())
+        let sealed_count = usize::min(sealed_count, values.len());
+
+        let mut u29o = ((sealed_count as u32) << 4) | 0b0011;
+        if sealed_count < values.len() {
+            u29o |= 0b1000;
+        }
+
+        self.put_marker(OBJECT);
+        self.buf.put_slice(&self.encode_u29(u29o)?);
+        match class_name {
+            Some(s) => self.put_string(s)?,
+            None => self.put_string("")?,
+        }
+
+        let (sealed, dynamic) = if sealed_count < values.len() {
+            let (s, d) = values.split_at(sealed_count);
+            (s, Some(d))
+        } else {
+            (values, None)
+        };
+
+        let (sealed_keys, sealed_values): (Vec<&str>, Vec<&Amf3Value>) =
+            sealed.into_iter().map(|(k, v)| (k.as_str(), v)).unzip();
+        for k in sealed_keys {
+            self.put_string(k)?;
+        }
+        for v in sealed_values {
+            self.put_value(v)?;
+        }
+
+        if let Some(d) = dynamic {
+            for (k, v) in d {
+                self.put_string(k)?;
+                self.put_value(v)?;
+            }
+        }
+
+        Ok(())
     }
 
     fn put_xml(&mut self, x: &str) -> Result<(), AmfEncodingError> {
