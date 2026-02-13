@@ -80,7 +80,7 @@ where
     fn run(self) {
         for event in self.stream {
             if self.frame_sender.send(event).is_err() {
-                warn!("Failed to send decoded video chunk from decoder. Channel closed.");
+                warn!("Failed to send decoded video frame from decoder. Channel closed.");
                 return;
             }
         }
@@ -153,7 +153,7 @@ where
     fn run(self) {
         for event in self.stream {
             if self.samples_sender.send(event).is_err() {
-                warn!("Failed to send decoded audio chunk from decoder. Channel closed.");
+                warn!("Failed to send decoded audio samples from decoder. Channel closed.");
                 return;
             }
         }
