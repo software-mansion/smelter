@@ -51,7 +51,7 @@ where
                 fixed_length,
                 class_name,
                 values,
-            } => todo!(),
+            } => self.put_vector_object(*fixed_length, class_name.as_ref(), values)?,
             Amf3Value::Dictionary {
                 weak_references,
                 entries,
@@ -277,10 +277,26 @@ where
         Ok(())
     }
 
-    fn put_pairs(&mut self, pairs: Vec<(&String, &Amf3Value)>) -> Result<(), AmfEncodingError> {
-        for (key, value) in pairs {
-            self.put_string(key)?;
-            self.put_value(value)?;
+    fn put_vector_object(
+        &mut self,
+        fixed_length: bool,
+        class_name: Option<&String>,
+        values: &[Amf3Value],
+    ) -> Result<(), AmfEncodingError> {
+        if values.len() > U28_MAX as usize {
+            return Err(AmfEncodingError::VectorTooLong(values.len()));
+        }
+
+        self.put_marker(VECTOR_OBJECT);
+        let u29v = self.encode_u29(((values.len() as u32) << 1) | 0b1)?;
+        self.buf.put_slice(&u29v);
+        self.buf.put_u8(fixed_length.into());
+        match class_name {
+            Some(name) => self.put_string(name)?,
+            None => self.put_string("*")?,
+        }
+        for obj in values {
+            self.put_value(obj)?;
         }
         Ok(())
     }
@@ -300,6 +316,14 @@ where
         self.buf.put_u8(weak_references.into());
         for (key, value) in entries {
             self.put_value(key)?;
+            self.put_value(value)?;
+        }
+        Ok(())
+    }
+
+    fn put_pairs(&mut self, pairs: Vec<(&String, &Amf3Value)>) -> Result<(), AmfEncodingError> {
+        for (key, value) in pairs {
+            self.put_string(key)?;
             self.put_value(value)?;
         }
         Ok(())
