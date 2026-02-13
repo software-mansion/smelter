@@ -2,6 +2,8 @@ use bytes::{BufMut, Bytes};
 
 use crate::{AmfEncodingError, amf3::*};
 
+const U28_MAX: u32 = (1 << 28) - 1;
+
 pub(crate) struct Amf3EncoderState<T> {
     buf: T,
 }
@@ -29,9 +31,26 @@ where
                 class_name,
                 sealed_count,
                 values,
+            } => self.put_object(class_name.as_ref(), *sealed_count, values)?,
+            Amf3Value::Xml(x) => self.put_xml(x)?,
+            Amf3Value::ByteArray(ba) => self.put_byte_array(ba)?,
+            Amf3Value::VectorInt {
+                fixed_length,
+                values,
             } => todo!(),
-            Amf3Value::Xml(x) => todo!(),
-            Amf3Value::ByteArray(ba) => todo!(),
+            Amf3Value::VectorUInt {
+                fixed_length,
+                values,
+            } => self.put_vector_uint(*fixed_length, values)?,
+            Amf3Value::VectorDouble {
+                fixed_length,
+                values,
+            } => todo!(),
+            Amf3Value::VectorObject {
+                fixed_length,
+                class_name,
+                values,
+            } => todo!(),
             _ => todo!(),
         }
         Ok(())
@@ -77,23 +96,23 @@ where
     }
 
     fn put_string(&mut self, s: &str) -> Result<(), AmfEncodingError> {
-        if s.len() > 2usize.pow(28) - 1 {
+        if s.len() > U28_MAX as usize {
             return Err(AmfEncodingError::StringTooLong(s.len()));
         }
         self.put_marker(STRING);
         let u29s = self.encode_u29(((s.len() as u32) << 1) | 0b1)?;
-        self.buf.put(u29s);
+        self.buf.put_slice(&u29s);
         self.buf.put_slice(s.as_bytes());
         Ok(())
     }
 
     fn put_xml_doc(&mut self, xd: &str) -> Result<(), AmfEncodingError> {
-        if xd.len() > 2usize.pow(28) - 1 {
+        if xd.len() > U28_MAX as usize {
             return Err(AmfEncodingError::StringTooLong(xd.len()));
         }
         self.put_marker(XML_DOC);
         let u29x = self.encode_u29(((xd.len() as u32) << 1) | 0b1)?;
-        self.buf.put(u29x);
+        self.buf.put_slice(&u29x);
         self.buf.put_slice(xd.as_bytes());
         Ok(())
     }
@@ -110,12 +129,13 @@ where
         associative: &HashMap<String, Amf3Value>,
         dense: &Vec<Amf3Value>,
     ) -> Result<(), AmfEncodingError> {
-        if dense.len() > 2usize.pow(28) - 1 {
+        if dense.len() > U28_MAX as usize {
             return Err(AmfEncodingError::ArrayTooLong(dense.len()));
         }
 
         self.put_marker(ARRAY);
         let u29a = self.encode_u29(((dense.len() as u32) << 1) | 0b1)?;
+        self.buf.put_slice(&u29a);
         self.put_pairs(associative.into_iter().collect::<Vec<_>>())?;
         self.buf.put_u8(0x01);
         for val in dense {
@@ -126,7 +146,7 @@ where
 
     fn put_object(
         &mut self,
-        class_name: Option<&str>,
+        class_name: Option<&String>,
         sealed_count: usize,
         values: &[(String, Amf3Value)],
     ) -> Result<(), AmfEncodingError> {
@@ -134,13 +154,44 @@ where
     }
 
     fn put_xml(&mut self, x: &str) -> Result<(), AmfEncodingError> {
-        if x.len() > 2usize.pow(28) - 1 {
+        if x.len() > U28_MAX as usize {
             return Err(AmfEncodingError::StringTooLong(x.len()));
         }
         self.put_marker(XML);
         let u29x = self.encode_u29(((x.len() as u32) << 1) | 0b1)?;
-        self.buf.put(u29x);
+        self.buf.put_slice(&u29x);
         self.buf.put_slice(x.as_bytes());
+        Ok(())
+    }
+
+    fn put_byte_array(&mut self, ba: &Bytes) -> Result<(), AmfEncodingError> {
+        if ba.len() > U28_MAX as usize {
+            return Err(AmfEncodingError::ArrayTooLong(ba.len()));
+        }
+
+        self.put_marker(BYTE_ARRAY);
+        let u29b = self.encode_u29(((ba.len() as u32) << 1) | 0b1)?;
+        self.buf.put_slice(&u29b);
+        self.buf.put_slice(ba);
+        Ok(())
+    }
+
+    fn put_vector_uint(
+        &mut self,
+        fixed_length: bool,
+        values: &[u32],
+    ) -> Result<(), AmfEncodingError> {
+        if values.len() > U28_MAX as usize {
+            return Err(AmfEncodingError::VectorTooLong(values.len()));
+        }
+
+        self.put_marker(VECTOR_UINT);
+        let u29v = self.encode_u29(((values.len() as u32) << 1) | 0b1)?;
+        self.buf.put_slice(&u29v);
+        self.buf.put_u8(fixed_length.into());
+        for uint in values {
+            self.buf.put_u32(*uint);
+        }
         Ok(())
     }
 

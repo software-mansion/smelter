@@ -120,6 +120,8 @@ pub enum AmfDecodingError {
     ExternalizableTrait,
 }
 
+const U28_MAX: u32 = (1 << 28) - 1;
+// TODO: (@jbrs) Adjust errors for amf3
 #[derive(Error, Debug)]
 pub enum AmfEncodingError {
     #[error("String too long: {0} bytes (max {})", u16::MAX)]
@@ -127,6 +129,9 @@ pub enum AmfEncodingError {
 
     #[error("Array too long: {0} elements (max {})", u32::MAX)]
     ArrayTooLong(usize),
+
+    #[error("Vector too long: {0} elements (max {})", U28_MAX)]
+    VectorTooLong(usize),
 
     #[error("Integer must be in range [-(2^28), (2^28)-1]")]
     OutOfRangeInteger,
