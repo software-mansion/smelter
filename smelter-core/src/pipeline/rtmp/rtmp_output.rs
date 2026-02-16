@@ -1,8 +1,11 @@
-use std::{ops::Deref, ptr, sync::Arc};
+use std::{net::ToSocketAddrs, sync::Arc};
 
-use crossbeam_channel::{Receiver, Sender, bounded};
-use ffmpeg_next::{self as ffmpeg, Rational, Rescale};
+use crossbeam_channel::{Receiver, bounded};
 use tracing::{debug, error};
+
+use rtmp::{
+    AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpClient, RtmpClientConfig,
+};
 
 use crate::{
     event::Event,
@@ -18,19 +21,13 @@ use crate::{
             ffmpeg_h264::FfmpegH264Encoder,
             vulkan_h264::VulkanH264Encoder,
         },
-        ffmpeg_utils::{StreamMutExt, write_extradata},
         output::{Output, OutputAudio, OutputVideo},
+        utils::{annexb_to_avcc, build_avc_decoder_config},
     },
     thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;
-
-#[derive(Debug, Clone)]
-struct Stream {
-    index: usize,
-    time_base: Rational,
-}
 
 pub struct RtmpClientOutput {
     video: Option<VideoEncoderThreadHandle>,
@@ -43,76 +40,75 @@ impl RtmpClientOutput {
         output_ref: Ref<OutputId>,
         options: RtmpOutputOptions,
     ) -> Result<Self, OutputInitError> {
-        let mut output_ctx = ffmpeg::format::output_as(&options.url.deref(), "flv")
-            .map_err(OutputInitError::FfmpegError)?;
-
         let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1000);
 
-        let video = match options.video {
-            Some(video) => Some(Self::init_video_track(
-                &ctx,
-                &output_ref,
-                video,
-                &mut output_ctx,
-                encoded_chunks_sender.clone(),
-            )?),
-            None => None,
-        };
-        let audio = match options.audio {
-            Some(audio) => Some(Self::init_audio_track(
-                &ctx,
-                &output_ref,
-                audio,
-                &mut output_ctx,
-                encoded_chunks_sender.clone(),
-            )?),
+        let video_extradata = match &options.video {
+            Some(video) => {
+                let (encoder, extradata) = Self::init_video_encoder(
+                    &ctx,
+                    &output_ref,
+                    video.clone(),
+                    encoded_chunks_sender.clone(),
+                )?;
+                Some((encoder, extradata))
+            }
             None => None,
         };
 
-        // write header initializes time_base
-        output_ctx
-            .write_header()
-            .map_err(OutputInitError::FfmpegError)?;
-
-        let (video_encoder, video_stream) = match video {
-            Some((encoder, index)) => (
-                Some(encoder),
-                Some(Stream {
-                    index,
-                    time_base: output_ctx.stream(index).unwrap().time_base(),
-                }),
-            ),
-            None => (None, None),
+        let audio_extradata = match &options.audio {
+            Some(audio) => {
+                let (encoder, extradata) = Self::init_audio_encoder(
+                    &ctx,
+                    &output_ref,
+                    audio.clone(),
+                    encoded_chunks_sender.clone(),
+                )?;
+                Some((encoder, extradata))
+            }
+            None => None,
         };
 
-        let (audio_encoder, audio_stream) = match audio {
-            Some((encoder, index)) => (
-                Some(encoder),
-                Some(Stream {
-                    index,
-                    time_base: output_ctx.stream(index).unwrap().time_base(),
-                }),
-            ),
+        let (video_encoder, has_video) = match video_extradata {
+            Some((encoder, _extradata)) => (Some(encoder), true),
+            None => (None, false),
+        };
+        let (audio_encoder, audio_config) = match audio_extradata {
+            Some((encoder, extradata)) => (Some(encoder), Some(extradata)),
             None => (None, None),
         };
+        let audio_channels = options
+            .audio
+            .as_ref()
+            .map(|a| a.channels())
+            .unwrap_or(AudioChannels::Stereo);
+        let audio_sample_rate = options
+            .audio
+            .as_ref()
+            .map(|a| a.sample_rate())
+            .unwrap_or(44_100);
 
-        let output_ref = output_ref.clone();
-        let ctx = ctx.clone();
+        let url = options.url.clone();
+
+        let output_ref_clone = output_ref.clone();
+        let ctx_clone = ctx.clone();
         std::thread::Builder::new()
             .name(format!("RTMP sender thread for output {output_ref}"))
             .spawn(move || {
                 let _span =
-                    tracing::info_span!("RTMP sender  writer", output_id = output_ref.to_string())
+                    tracing::info_span!("RTMP sender", output_id = output_ref_clone.to_string())
                         .entered();
 
-                run_ffmpeg_output_thread(
-                    output_ctx,
-                    video_stream,
-                    audio_stream,
+                run_rtmp_output_thread(
+                    &url,
+                    has_video,
+                    audio_config,
+                    audio_channels,
+                    audio_sample_rate,
                     encoded_chunks_receiver,
                 );
-                ctx.event_emitter
-                    .emit(Event::OutputDone(output_ref.id().clone()));
+                ctx_clone
+                    .event_emitter
+                    .emit(Event::OutputDone(output_ref_clone.id().clone()));
                 debug!("Closing RTMP sender thread.");
             })
             .unwrap();
@@ -123,15 +119,12 @@ impl RtmpClientOutput {
         })
     }
 
-    fn init_video_track(
+    fn init_video_encoder(
         ctx: &Arc<PipelineCtx>,
         output_id: &Ref<OutputId>,
         options: VideoEncoderOptions,
-        output_ctx: &mut ffmpeg::format::context::Output,
-        encoded_chunks_sender: Sender<EncodedOutputEvent>,
-    ) -> Result<(VideoEncoderThreadHandle, usize), OutputInitError> {
-        let resolution = options.resolution();
-
+        encoded_chunks_sender: crossbeam_channel::Sender<EncodedOutputEvent>,
+    ) -> Result<(VideoEncoderThreadHandle, Option<bytes::Bytes>), OutputInitError> {
         let encoder = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 VideoEncoderThread::<FfmpegH264Encoder>::spawn(
@@ -166,36 +159,16 @@ impl RtmpClientOutput {
             }
         };
 
-        let mut stream = output_ctx
-            .add_stream(ffmpeg::codec::Id::H264)
-            .map_err(OutputInitError::FfmpegError)?;
-
-        stream.update_codecpar(|codecpar| {
-            if let Some(extradata) = encoder.encoder_context() {
-                write_extradata(codecpar, extradata);
-            }
-            codecpar.codec_id = ffmpeg::codec::Id::H264.into();
-            codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
-            codecpar.width = resolution.width as i32;
-            codecpar.height = resolution.height as i32;
-        });
-
-        Ok((encoder, stream.index()))
+        let extradata = encoder.encoder_context();
+        Ok((encoder, extradata))
     }
 
-    fn init_audio_track(
+    fn init_audio_encoder(
         ctx: &Arc<PipelineCtx>,
         output_id: &Ref<OutputId>,
         options: AudioEncoderOptions,
-        output_ctx: &mut ffmpeg::format::context::Output,
-        encoded_chunks_sender: Sender<EncodedOutputEvent>,
-    ) -> Result<(AudioEncoderThreadHandle, usize), OutputInitError> {
-        let channel_count = match options.channels() {
-            AudioChannels::Mono => 1,
-            AudioChannels::Stereo => 2,
-        };
-        let sample_rate = options.sample_rate();
-
+        encoded_chunks_sender: crossbeam_channel::Sender<EncodedOutputEvent>,
+    ) -> Result<(AudioEncoderThreadHandle, Option<bytes::Bytes>), OutputInitError> {
         let encoder = match options {
             AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
                 output_id.clone(),
@@ -210,28 +183,8 @@ impl RtmpClientOutput {
             }
         };
 
-        let mut stream = output_ctx
-            .add_stream(ffmpeg::codec::Id::AAC)
-            .map_err(OutputInitError::FfmpegError)?;
-
-        stream.update_codecpar(|codecpar| {
-            if let Some(extradata) = encoder.encoder_context() {
-                write_extradata(codecpar, extradata);
-            }
-            codecpar.codec_id = ffmpeg::codec::Id::AAC.into();
-            codecpar.codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_AUDIO;
-            codecpar.sample_rate = sample_rate as i32;
-            codecpar.ch_layout = ffmpeg::ffi::AVChannelLayout {
-                nb_channels: channel_count,
-                order: ffmpeg::ffi::AVChannelOrder::AV_CHANNEL_ORDER_UNSPEC,
-                // This value is ignored when order is AV_CHANNEL_ORDER_UNSPEC
-                u: ffmpeg::ffi::AVChannelLayout__bindgen_ty_1 { mask: 0 },
-                // Field doc: "For some private data of the user."
-                opaque: ptr::null_mut(),
-            };
-        });
-
-        Ok((encoder, stream.index()))
+        let extradata = encoder.encoder_context();
+        Ok((encoder, extradata))
     }
 }
 
@@ -256,19 +209,78 @@ impl Output for RtmpClientOutput {
     }
 }
 
-fn run_ffmpeg_output_thread(
-    mut output_ctx: ffmpeg::format::context::Output,
-    video_stream: Option<Stream>,
-    audio_stream: Option<Stream>,
+fn parse_rtmp_url(url: &str) -> Option<(std::net::SocketAddr, String, String)> {
+    let url = url::Url::parse(url).ok()?;
+    let host = url.host_str()?;
+    let port = url.port().unwrap_or(1935);
+    let addr = format!("{host}:{port}").to_socket_addrs().ok()?.next()?;
+
+    let mut path_segments: Vec<&str> = url.path().trim_start_matches('/').splitn(2, '/').collect();
+    let stream_key = path_segments.pop().unwrap_or("").to_string();
+    let app = path_segments.pop().unwrap_or("").to_string();
+
+    Some((addr, app, stream_key))
+}
+
+fn run_rtmp_output_thread(
+    url: &str,
+    has_video: bool,
+    audio_extradata: Option<Option<bytes::Bytes>>,
+    audio_channels: AudioChannels,
+    audio_sample_rate: u32,
     packets_receiver: Receiver<EncodedOutputEvent>,
 ) {
-    let mut received_video_eos = video_stream.as_ref().map(|_| false);
-    let mut received_audio_eos = audio_stream.as_ref().map(|_| false);
+    let (addr, app, stream_key) = match parse_rtmp_url(url) {
+        Some(parsed) => parsed,
+        None => {
+            error!("Failed to parse RTMP URL: {url}");
+            return;
+        }
+    };
+
+    let config = RtmpClientConfig {
+        addr,
+        app,
+        stream_key,
+    };
+
+    let mut client = match RtmpClient::connect(config) {
+        Ok(client) => client,
+        Err(err) => {
+            error!(%err, "Failed to connect RTMP client");
+            return;
+        }
+    };
+
+    if let Some(Some(extradata)) = &audio_extradata {
+        let channels = match audio_channels {
+            AudioChannels::Mono => rtmp::AudioChannels::Mono,
+            AudioChannels::Stereo => rtmp::AudioChannels::Stereo,
+        };
+        let config = AacAudioConfig {
+            channels,
+            sample_rate: audio_sample_rate,
+            data: extradata.clone(),
+        };
+        if let Err(err) = client.send(config) {
+            error!(%err, "Failed to send audio config");
+            return;
+        }
+    }
+
+    let mut received_video_eos = if has_video { Some(false) } else { None };
+    let mut received_audio_eos = audio_extradata.as_ref().map(|_| false);
+    let mut sent_video_config = false;
 
     for packet in packets_receiver {
         match packet {
             EncodedOutputEvent::Data(chunk) => {
-                write_chunk(chunk, &video_stream, &audio_stream, &mut output_ctx);
+                if let Err(err) =
+                    send_chunk(&mut client, chunk, audio_channels, &mut sent_video_config)
+                {
+                    error!(%err, "Failed to send RTMP data");
+                    break;
+                }
             }
             EncodedOutputEvent::VideoEOS => match received_video_eos {
                 Some(false) => received_video_eos = Some(true),
@@ -291,65 +303,49 @@ fn run_ffmpeg_output_thread(
         };
 
         if received_video_eos.unwrap_or(true) && received_audio_eos.unwrap_or(true) {
-            if let Err(err) = output_ctx.write_trailer() {
-                error!("Failed to write trailer to RTMP stream: {}.", err);
-            };
             break;
         }
     }
 }
 
-fn write_chunk(
+fn send_chunk(
+    client: &mut RtmpClient,
     chunk: EncodedOutputChunk,
-    video_stream: &Option<Stream>,
-    audio_stream: &Option<Stream>,
-    output_ctx: &mut ffmpeg::format::context::Output,
-) {
-    let (stream_id, time_base) = match chunk.kind {
-        MediaKind::Video(_) => match video_stream {
-            Some(Stream { index, time_base }) => (*index, *time_base),
-            None => {
-                error!(
-                    "Failed to create packet for video chunk. No video stream registered on init."
-                );
-                return;
-            }
-        },
-        MediaKind::Audio(_) => match audio_stream {
-            Some(Stream { index, time_base }) => (*index, *time_base),
-            None => {
-                error!(
-                    "Failed to create packet for audio chunk. No audio stream registered on init."
-                );
-                return;
-            }
-        },
-    };
-
-    const NS_TIME_BASE: Rational = Rational(1, 1_000_000_000);
-
-    let mut packet = ffmpeg::Packet::copy(&chunk.data);
-    packet.set_pts(Some(Rescale::rescale(
-        &(chunk.pts.as_nanos() as i64),
-        NS_TIME_BASE,
-        time_base,
-    )));
-
+    audio_channels: AudioChannels,
+    sent_video_config: &mut bool,
+) -> Result<(), rtmp::RtmpError> {
     let dts = chunk.dts.unwrap_or(chunk.pts);
-    packet.set_dts(Some(Rescale::rescale(
-        &(dts.as_nanos() as i64),
-        NS_TIME_BASE,
-        time_base,
-    )));
+    let pts = chunk.pts;
 
-    packet.set_time_base(time_base);
-    packet.set_stream(stream_id);
-
-    if chunk.is_keyframe {
-        packet.set_flags(ffmpeg_next::packet::Flags::KEY);
-    }
-
-    if let Err(err) = packet.write_interleaved(output_ctx) {
-        error!("Failed to write packet to RTMP stream: {}.", err);
+    match chunk.kind {
+        MediaKind::Video(_) => {
+            // Encoder produces Annex B. On the first keyframe extract SPS/PPS
+            // and send the AVC decoder config before any video data.
+            if !*sent_video_config
+                && chunk.is_keyframe
+                && let Some(avc_config) = build_avc_decoder_config(&chunk.data)
+            {
+                client.send(H264VideoConfig { data: avc_config })?;
+                *sent_video_config = true;
+            }
+            let avcc_data = annexb_to_avcc(&chunk.data);
+            client.send(H264VideoData {
+                pts,
+                dts,
+                data: avcc_data,
+                is_keyframe: chunk.is_keyframe,
+            })
+        }
+        MediaKind::Audio(_) => {
+            let channels = match audio_channels {
+                AudioChannels::Mono => rtmp::AudioChannels::Mono,
+                AudioChannels::Stereo => rtmp::AudioChannels::Stereo,
+            };
+            client.send(AacAudioData {
+                pts,
+                channels,
+                data: chunk.data,
+            })
+        }
     }
 }

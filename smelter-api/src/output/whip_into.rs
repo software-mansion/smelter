@@ -119,6 +119,7 @@ impl WhipVideoEncoderOptions {
                     .unwrap_or_default()
                     .into_iter()
                     .collect(),
+                output_format: core::H264BitstreamFormat::AnnexB,
             }),
             WhipVideoEncoderOptions::VulkanH264 {
                 bitrate,

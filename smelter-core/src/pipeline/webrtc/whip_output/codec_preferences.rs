@@ -81,6 +81,7 @@ pub(super) fn resolve_video_preferences(
                             keyframe_interval: KEYFRAME_INTERVAL,
                             pixel_format: OutputPixelFormat::YUV420P,
                             raw_options: Vec::new(),
+                            output_format: H264BitstreamFormat::AnnexB,
                         })
                     },
                 ]

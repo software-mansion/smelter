@@ -95,6 +95,7 @@ impl RtmpClientVideoEncoderOptions {
                     .unwrap_or_default()
                     .into_iter()
                     .collect(),
+                output_format: core::H264BitstreamFormat::Avcc,
             }),
             RtmpClientVideoEncoderOptions::VulkanH264 {
                 bitrate,
