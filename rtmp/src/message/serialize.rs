@@ -37,6 +37,7 @@ impl RtmpMessage {
                     .concat(),
                 ),
             },
+            RtmpMessage::CommandMessageAmf3 { values, stream_id } => todo!(),
             RtmpMessage::CommandMessageAmf0 { values, stream_id } => RawMessage {
                 msg_type: MessageType::CommandMessageAmf0,
                 stream_id,

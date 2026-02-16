@@ -48,8 +48,8 @@ pub enum ParseError {
     #[error("Error parsing video tag: {0}")]
     Video(#[from] VideoTagParseError),
 
-    #[error("Error decoding amf0: {0}")]
-    Amf0Decoding(#[from] AmfDecodingError),
+    #[error("Error decoding amf: {0}")]
+    AmfDecoding(#[from] AmfDecodingError),
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -104,6 +104,9 @@ pub enum AudioTagParseError {
 pub enum AmfDecodingError {
     #[error("Unknown data type: {0}")]
     UnknownType(u8),
+
+    #[error("Format selector must always be 0.")]
+    InvalidFormatSelector,
 
     #[error("Insufficient data")]
     InsufficientData,

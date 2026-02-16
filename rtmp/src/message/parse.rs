@@ -1,5 +1,7 @@
+use bytes::Buf;
+
 use crate::{
-    ParseError, RtmpEvent, ScriptData,
+    AmfDecodingError, ParseError, RtmpEvent, ScriptData,
     amf0::decode_amf0_values,
     message::{
         RtmpMessage,
@@ -9,13 +11,23 @@ use crate::{
 };
 
 impl RtmpMessage {
-    pub fn from_raw(msg: RawMessage) -> Result<Self, ParseError> {
+    pub fn from_raw(mut msg: RawMessage) -> Result<Self, ParseError> {
         let p = &msg.payload;
         let result = match msg.msg_type {
             MessageType::Audio => audio_event_from_raw(msg)?,
             MessageType::Video => video_event_from_raw(msg)?,
-            MessageType::DataMessageAmf3 => todo!(),
-            MessageType::CommandMessageAmf3 => todo!(),
+
+            MessageType::DataMessageAmf3 => {
+                let format_selector = msg.payload.get_u8();
+                if format_selector != 0 {
+                    return Err(AmfDecodingError::InvalidFormatSelector.into());
+                }
+
+                RtmpMessage::Event {
+                    event: RtmpEvent::Metadata(ScriptData::parse(msg.payload)?),
+                    stream_id: msg.stream_id,
+                }
+            }
             MessageType::DataMessageAmf0 => RtmpMessage::Event {
                 event: RtmpEvent::Metadata(ScriptData::parse(msg.payload)?),
                 stream_id: msg.stream_id,
@@ -41,6 +53,16 @@ impl RtmpMessage {
             }
             MessageType::SetPeerBandwidth => return Err(ParseError::NotEnoughData),
 
+            MessageType::CommandMessageAmf3 => {
+                let format_selector = msg.payload.get_u8();
+                if format_selector != 0 {
+                    return Err(AmfDecodingError::InvalidFormatSelector.into());
+                }
+                RtmpMessage::CommandMessageAmf3 {
+                    values: decode_amf0_values(msg.payload)?,
+                    stream_id: msg.stream_id,
+                }
+            }
             MessageType::CommandMessageAmf0 => RtmpMessage::CommandMessageAmf0 {
                 values: decode_amf0_values(msg.payload)?,
                 stream_id: msg.stream_id,
