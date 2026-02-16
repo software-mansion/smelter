@@ -4,7 +4,7 @@ use bytes::Bytes;
 
 use crate::{
     SerializationError,
-    amf0::{Amf0Value, decode_amf0_values, encode_amf_values},
+    amf0::{Amf0Value, decode_amf0_values, encode_amf0_values},
     amf3::Amf3Value,
     error::ParseError,
 };
@@ -94,7 +94,7 @@ impl ScriptData {
 
     pub fn serialize(&self) -> Result<Bytes, SerializationError> {
         let amf_values: Vec<_> = self.values.iter().cloned().map(Into::into).collect();
-        Ok(encode_amf_values(&amf_values)?)
+        Ok(encode_amf0_values(&amf_values)?)
     }
 }
 

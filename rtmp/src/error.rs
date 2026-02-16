@@ -144,7 +144,7 @@ const I29_MIN: i32 = -(1 << 28);
 
 const MAX_SEALED_COUNT: u32 = (1 << 25) - 1;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum Amf3EncodingError {
     #[error("String too long: {0} bytes (max {U28_MAX}).")]
     StringTooLong(usize),

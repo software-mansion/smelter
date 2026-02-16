@@ -14,6 +14,8 @@ impl RtmpMessage {
         let result = match msg.msg_type {
             MessageType::Audio => audio_event_from_raw(msg)?,
             MessageType::Video => video_event_from_raw(msg)?,
+            MessageType::DataMessageAmf3 => todo!(),
+            MessageType::CommandMessageAmf3 => todo!(),
             MessageType::DataMessageAmf0 => RtmpMessage::Event {
                 event: RtmpEvent::Metadata(ScriptData::parse(msg.payload)?),
                 stream_id: msg.stream_id,
