@@ -1,10 +1,3 @@
-use crate::{
-    chunk::{ChunkType, RtmpChunk, RtmpChunkReader},
-    error::RtmpError,
-    message::RtmpMessage,
-    protocol::MessageType,
-};
-use bytes::BytesMut;
 use std::{
     cmp::min,
     collections::HashMap,
@@ -12,7 +5,18 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 
-pub struct RtmpMessageReader {
+use bytes::BytesMut;
+
+use crate::{
+    error::RtmpError,
+    message::RtmpMessage,
+    protocol::{
+        MessageType, RawMessage,
+        chunk::{ChunkType, RtmpChunk, RtmpChunkReader},
+    },
+};
+
+pub(crate) struct RtmpMessageReader {
     chunk_reader: RtmpChunkReader,
     accumulators: HashMap<u32, PayloadAccumulator>,
 }
@@ -52,15 +56,15 @@ impl RtmpMessageReader {
         acc.append(&chunk.payload);
     }
 
-    fn try_complete_message(&mut self, chunk: &RtmpChunk) -> Option<RtmpMessage> {
+    fn try_complete_message(&mut self, chunk: &RtmpChunk) -> Option<RawMessage> {
         let cs_id = chunk.header.cs_id;
         let acc = self.accumulators.get(&cs_id)?;
         if acc.buffer.len() < acc.expected_length {
             return None;
         }
         let acc = self.accumulators.remove(&cs_id)?;
-        let msg_type = MessageType::try_from_id(chunk.header.msg_type_id).ok()?;
-        Some(RtmpMessage {
+        let msg_type = MessageType::try_from_raw(chunk.header.msg_type_id).ok()?;
+        Some(RawMessage {
             timestamp: chunk.header.timestamp,
             msg_type,
             stream_id: chunk.header.msg_stream_id,
@@ -85,19 +89,22 @@ impl Iterator for RtmpMessageReader {
             };
             self.accumulate_chunk(&chunk);
             if let Some(msg) = self.try_complete_message(&chunk) {
-                return Some(Ok(msg));
+                return match RtmpMessage::from_raw(msg) {
+                    Ok(msg) => Some(Ok(msg)),
+                    Err(err) => Some(Err(err.into())),
+                };
             }
         }
     }
 }
 
-pub struct PayloadAccumulator {
+pub(crate) struct PayloadAccumulator {
     expected_length: usize,
     buffer: BytesMut,
 }
 
 impl PayloadAccumulator {
-    pub(crate) fn new(expected_length: usize) -> Self {
+    pub fn new(expected_length: usize) -> Self {
         let initial_cap = min(expected_length, 4096);
         Self {
             expected_length,
@@ -105,11 +112,11 @@ impl PayloadAccumulator {
         }
     }
 
-    pub(crate) fn append(&mut self, data: &[u8]) {
+    pub fn append(&mut self, data: &[u8]) {
         self.buffer.extend_from_slice(data);
     }
 
-    pub(crate) fn current_len(&self) -> usize {
+    pub fn current_len(&self) -> usize {
         self.buffer.len()
     }
 }

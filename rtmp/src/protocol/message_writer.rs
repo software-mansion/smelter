@@ -19,7 +19,9 @@ impl RtmpMessageWriter {
         self.chunk_size = size;
     }
 
-    pub fn write(&mut self, msg: &RtmpMessage) -> Result<(), RtmpError> {
+    pub fn write(&mut self, msg: RtmpMessage) -> Result<(), RtmpError> {
+        let msg = msg.into_raw()?;
+
         let mut offset = 0;
         let total_len = msg.payload.len();
 
@@ -36,7 +38,7 @@ impl RtmpMessageWriter {
                 // message header
                 self.write_u24_be(msg.timestamp)?;
                 self.write_u24_be(total_len as u32)?;
-                self.stream.write_all(&[msg.msg_type.into_id()])?;
+                self.stream.write_all(&[msg.msg_type.into_raw()])?;
                 self.write_u32_le(msg.stream_id)?;
             } else {
                 // header type 3

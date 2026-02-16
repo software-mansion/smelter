@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use bytes::Bytes;
 
 use crate::{
-    amf0::{Amf0Value, decode_amf0_values},
+    SerializationError,
+    amf0::{Amf0Value, decode_amf0_values, encode_amf_values},
     amf3::Amf3Value,
     error::ParseError,
 };
@@ -86,12 +87,14 @@ impl ScriptData {
             return Err(ParseError::NotEnoughData);
         }
 
-        let amf_values = decode_amf0_values(data).map_err(ParseError::Amf0)?;
+        let amf_values = decode_amf0_values(data)?;
+        let values = amf_values.into_iter().map(ScriptDataValue::from).collect();
+        Ok(Self { values })
+    }
 
-        let scriptdata_values = amf_values.into_iter().map(ScriptDataValue::from).collect();
-        Ok(Self {
-            values: scriptdata_values,
-        })
+    pub fn serialize(&self) -> Result<Bytes, SerializationError> {
+        let amf_values: Vec<_> = self.values.iter().cloned().map(Into::into).collect();
+        Ok(encode_amf_values(&amf_values)?)
     }
 }
 
@@ -140,6 +143,54 @@ impl From<Amf0Value> for ScriptDataValue {
             Amf0Value::AvmPlus(amf3_value) => {
                 ScriptDataValue::ExtendedScriptData(amf3_value.into())
             }
+        }
+    }
+}
+
+impl From<ScriptDataValue> for Amf0Value {
+    fn from(value: ScriptDataValue) -> Self {
+        match value {
+            ScriptDataValue::Number(n) => Self::Number(n),
+            ScriptDataValue::Boolean(b) => Self::Boolean(b),
+            ScriptDataValue::String(s) => Self::String(s),
+            ScriptDataValue::Object(obj) => Self::Object(
+                obj.into_iter()
+                    .map(|(key, value)| (key, Self::from(value)))
+                    .collect(),
+            ),
+            ScriptDataValue::Null => Self::Null,
+            ScriptDataValue::Undefined => Self::Undefined,
+            ScriptDataValue::EcmaArray(map) => Self::EcmaArray(
+                map.into_iter()
+                    .map(|(key, value)| (key, Self::from(value)))
+                    .collect(),
+            ),
+            ScriptDataValue::StrictArray(array) => {
+                Self::StrictArray(array.into_iter().map(Self::from).collect())
+            }
+            ScriptDataValue::Date {
+                unix_time,
+                timezone_offset,
+            } => Self::Date {
+                unix_time,
+                timezone_offset,
+            },
+            ScriptDataValue::LongString(s) => Self::LongString(s),
+            ScriptDataValue::TypedObject {
+                class_name,
+                properties,
+            } => {
+                let tag_properties = properties
+                    .into_iter()
+                    .map(|(key, value)| (key, Self::from(value)))
+                    .collect();
+                Self::TypedObject {
+                    class_name,
+                    properties: tag_properties,
+                }
+            }
+            // TODO: implement
+            ScriptDataValue::ExtendedScriptData(_ex_script) => unimplemented!(),
         }
     }
 }
