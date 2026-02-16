@@ -133,7 +133,7 @@ pub enum AmfEncodingError {
     LongStringTooLong(usize),
 
     #[error("AMF3 encoding error: {0}.")]
-    Amf3(Amf3EncodingError),
+    Amf3(#[from] Amf3EncodingError),
 }
 
 const U29_MAX: u32 = (1 << 29) - 1;
@@ -174,10 +174,4 @@ pub enum Amf3EncodingError {
 
     #[error("U29 must be in range [0, {U29_MAX}].")]
     OutOfRangeU29,
-}
-
-impl From<Amf3EncodingError> for AmfEncodingError {
-    fn from(value: Amf3EncodingError) -> Self {
-        Self::Amf3(value)
-    }
 }
