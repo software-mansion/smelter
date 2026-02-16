@@ -59,7 +59,8 @@ impl TryFrom<RtmpOutput> for core::RegisterOutputOptions {
         };
 
         let output_options = core::ProtocolOutputOptions::Rtmp(core::RtmpOutputOptions {
-            url,
+            connection: core::RtmpConnectionOptions::from_url(&url)
+                .map_err(|err| TypeError::new(format!("Invalid url: {err}")))?,
             video: video_encoder_options,
             audio: audio_encoder_options,
         });

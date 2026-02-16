@@ -121,6 +121,9 @@ pub enum OutputInitError {
 
     #[error("WHIP WHEP server is not running, cannot start WHEP output")]
     WhipWhepServerNotRunning,
+
+    #[error(transparent)]
+    RtmpError(#[from] RtmpClientError),
 }
 
 #[derive(Debug, thiserror::Error)]
