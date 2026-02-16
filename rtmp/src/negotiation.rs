@@ -1,4 +1,5 @@
 use crate::{
+    AmfVersion,
     amf0::{Amf0Value, decode_amf0_values, encode_amf0_values},
     error::RtmpError,
     message::{RtmpMessage, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
@@ -15,13 +16,17 @@ pub const PEER_BANDWIDTH: u32 = 2_500_000;
 
 enum NegotiationStatus {
     InProgress,
-    Completed { app: String, stream_key: String },
+    Completed {
+        app: String,
+        stream_key: String,
+        amf_version: AmfVersion,
+    },
 }
 
 pub(crate) fn negotiate_rtmp_session(
     reader: &mut RtmpMessageReader,
     writer: &mut RtmpMessageWriter,
-) -> Result<(String, String), RtmpError> {
+) -> Result<(String, String, AmfVersion), RtmpError> {
     let mut app_name = String::new();
     let current_stream_id = 0;
 
@@ -53,8 +58,12 @@ pub(crate) fn negotiate_rtmp_session(
             MessageType::CommandMessageAmf0 => {
                 match handle_command_message(msg, writer, &mut app_name, current_stream_id)? {
                     NegotiationStatus::InProgress => {}
-                    NegotiationStatus::Completed { app, stream_key } => {
-                        return Ok((app, stream_key));
+                    NegotiationStatus::Completed {
+                        app,
+                        stream_key,
+                        amf_version,
+                    } => {
+                        return Ok((app, stream_key, amf_version));
                     }
                 }
             }
