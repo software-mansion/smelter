@@ -1,5 +1,3 @@
-use tracing::warn;
-
 use crate::{
     ParseError, RtmpEvent, ScriptData,
     amf0::decode_amf0_values,
@@ -23,7 +21,6 @@ impl RtmpMessage {
 
             MessageType::SetChunkSize if msg.payload.len() >= 4 => {
                 let chunk_size = u32::from_be_bytes([p[0] & 0x7F, p[1], p[2], p[3]]);
-                warn!(?chunk_size);
                 // TODO: double check p[0] or p[3]
                 RtmpMessage::SetChunkSize { chunk_size }
             }
