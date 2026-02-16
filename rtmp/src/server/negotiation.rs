@@ -121,7 +121,7 @@ fn handle_command_message(
             writer.write(RtmpMessage::CommandMessageAmf0 {
                 values: vec![
                     Amf0Value::String("_result".to_string()),
-                    Amf0Value::Number(txn_id),
+                    Amf0Value::Number(txn_id), // should be always 1 for connect response
                     Amf0Value::Object(props),
                     Amf0Value::Object(info),
                 ],

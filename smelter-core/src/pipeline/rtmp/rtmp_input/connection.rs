@@ -76,7 +76,7 @@ impl RtmpConnectionState {
             RtmpEvent::H264Data(data) => self.process_video(data),
             RtmpEvent::AacData(data) => self.process_audio(data),
             RtmpEvent::Metadata(metadata) => info!(?metadata, "Received metadata"), // TODO
-            _ => warn!("Unsupported message"),
+            _ => warn!(?rtmp_event, "Unsupported message"),
         }
     }
 

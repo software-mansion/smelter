@@ -143,18 +143,24 @@ fn send_connect(writer: &mut RtmpMessageWriter, app: &str) -> Result<(), RtmpErr
         ("app".to_string(), Amf0Value::String(app.to_string())),
         (
             "flashVer".to_string(),
-            Amf0Value::String("FMLE/3.0".to_string()),
+            Amf0Value::String("FMS/3,0,1,123".to_string()),
         ),
-        (
-            "tcUrl".to_string(),
-            Amf0Value::String(format!("rtmp://localhost/{app}")),
-        ),
+        // TODO: config option
+        // (
+        //     "tcUrl".to_string(),
+        //     Amf0Value::String(format!("rtmp://localhost/{app}")),
+        // ),
+
+        // True if proxy is being used
         ("fpad".to_string(), Amf0Value::Boolean(false)),
-        ("capabilities".to_string(), Amf0Value::Number(15.0)),
-        ("audioCodecs".to_string(), Amf0Value::Number(3191.0)),
-        ("videoCodecs".to_string(), Amf0Value::Number(252.0)),
-        ("videoFunction".to_string(), Amf0Value::Number(1.0)),
-        ("objectEncoding".to_string(), Amf0Value::Number(0.0)),
+        // TODO: add config option
+        ("audioCodecs".to_string(), Amf0Value::Number(0x0FFF as f64)), // all RTMP supported
+        // TODO: add config option
+        ("videoCodecs".to_string(), Amf0Value::Number(0x00FF as f64)), // all RTMP supported
+        ("videoFunction".to_string(), Amf0Value::Number(0.0)),
+        ("objectEncoding".to_string(), Amf0Value::Number(0.0)), // AMF0
+                                                                // AMF3
+                                                                // ("objectEncoding".to_string(), Amf0Value::Number(3.0)),
     ]);
 
     writer.write(RtmpMessage::CommandMessageAmf0 {
@@ -173,7 +179,7 @@ fn send_create_stream(writer: &mut RtmpMessageWriter) -> Result<(), RtmpError> {
     writer.write(RtmpMessage::CommandMessageAmf0 {
         values: vec![
             Amf0Value::String("createStream".to_string()),
-            Amf0Value::Number(2.0),
+            Amf0Value::Number(2.0), // Transaction ID
             Amf0Value::Null,
         ],
         stream_id: 0,
@@ -189,10 +195,10 @@ fn send_publish(
     writer.write(RtmpMessage::CommandMessageAmf0 {
         values: vec![
             Amf0Value::String("publish".to_string()),
-            Amf0Value::Number(0.0),
-            Amf0Value::Null,
+            Amf0Value::Number(0.0), // Transaction ID
+            Amf0Value::Null,        // Command information object
             Amf0Value::String(stream_key.to_string()),
-            Amf0Value::String("live".to_string()),
+            Amf0Value::String("live".to_string()), // "live" | "record" | "append"
         ],
         stream_id,
     })
