@@ -361,7 +361,7 @@ fn framerate_from_str(s: &str) -> Result<Framerate, &'static str> {
 
 fn port_range_from_str(s: &str) -> Result<(u16, u16), &'static str> {
     const ERROR_MESSAGE: &str =
-        "Port range needs to be in the \"START:END\" format, where START < END are both < 65535.";
+        "Port range needs to be in the \"START:END\" format, where START < END.";
     let Some((num_str, den_str)) = s.split_once(':') else {
         return Err(ERROR_MESSAGE);
     };
