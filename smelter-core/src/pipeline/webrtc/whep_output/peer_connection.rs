@@ -34,10 +34,12 @@ use webrtc::{
 };
 
 use crate::pipeline::webrtc::{
+    default_setting_engine,
     error::WhipWhepServerError,
     supported_codec_parameters::{h264_codec_params, vp8_codec_params, vp9_codec_params},
     whep_output::cleanup_session_handler::OnCleanupSessionHdlr,
 };
+
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
@@ -64,11 +66,12 @@ impl PeerConnection {
         let api = APIBuilder::new()
             .with_media_engine(media_engine)
             .with_interceptor_registry(registry)
+            .with_setting_engine(default_setting_engine(ctx))
             .build();
 
         let config = RTCConfiguration {
             ice_servers: vec![RTCIceServer {
-                urls: ctx.stun_servers.to_vec(),
+                urls: ctx.webrtc_stun_servers.to_vec(),
                 ..Default::default()
             }],
             ..Default::default()

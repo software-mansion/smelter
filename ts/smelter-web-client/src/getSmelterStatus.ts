@@ -13,8 +13,8 @@ type InstanceConfiguration = {
   downloadRoot: string;
 
   whipWhepServerPort: number;
-  whipWhepStunServers: string[];
   whipWhepEnable: boolean;
+  webrtcStunServers: string[];
 
   webRendererEnable: boolean;
   webRendererEnableGpu: boolean;
@@ -64,7 +64,7 @@ export async function getSmelterStatus(manager: SmelterManager): Promise<Smelter
 
       whipWhepServerPort: status.configuration.whip_whep_server_port,
       whipWhepEnable: status.configuration.whip_whep_enable,
-      whipWhepStunServers: status.configuration.whip_whep_stun_servers,
+      webrtcStunServers: status.configuration.webrtc_stun_servers,
 
       renderingMode: status.configuration.rendering_mode,
     },

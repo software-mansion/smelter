@@ -37,9 +37,11 @@ pub fn benchmark_pipeline_options(
         mixing_sample_rate: 48_000,
         stream_fallback_timeout: Duration::from_millis(500),
         tokio_rt: None,
-        whip_whep_stun_servers: Vec::new().into(),
         rendering_mode,
         whip_whep_server: PipelineWhipWhepServerOptions::Disable,
+        webrtc_stun_servers: Vec::new().into(),
+        webrtc_port_range: None,
+        webrtc_nat_1to1_ips: Arc::new(vec![]),
         rtmp_server: PipelineRtmpServerOptions::Disable,
         wgpu_options: PipelineWgpuOptions::Context(graphics_context),
     }
