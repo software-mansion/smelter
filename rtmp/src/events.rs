@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 
 use crate::{
-    AudioChannels, AudioCodec, AudioTagSampleSize, AudioTagSoundRate, ScriptData, VideoCodec,
-    VideoTagFrameType,
+    AudioChannels, AudioCodec, AudioSpecificConfigParseError, AudioTagSampleSize,
+    AudioTagSoundRate, ParseError, ScriptData, VideoCodec, VideoTagFrameType,
 };
 
 #[derive(Debug, Clone)]
@@ -30,9 +30,78 @@ pub struct AacAudioData {
 
 #[derive(Clone)]
 pub struct AacAudioConfig {
-    pub channels: AudioChannels,
-    pub sample_rate: u32,
-    pub data: Bytes, // TODO: Audio specific config
+    data: Bytes, // TODO: Audio specific config
+}
+
+impl AacAudioConfig {
+    pub fn new(data: Bytes) -> Self {
+        Self { data }
+    }
+
+    pub fn sample_rate(&self) -> Result<u32, ParseError> {
+        if self.data.remaining() < 2 {
+            return Err(ParseError::NotEnoughData);
+        }
+
+        let object_type = (self.data[0] >> 3) & 0x1F;
+        let frequency_index = match object_type {
+            31 => (self.data[1] >> 1) & 0xF,
+            _ => {
+                let high = self.data[0] & 0b111;
+                let low = (self.data[1] >> 7) & 0b1;
+                (high << 1) | low
+            }
+        };
+
+        let frequency: u32 = match frequency_index {
+            0 => 96000,
+            1 => 88200,
+            2 => 64000,
+            3 => 48000,
+            4 => 44100,
+            5 => 32000,
+            6 => 24000,
+            7 => 22050,
+            8 => 16000,
+            9 => 12000,
+            10 => 11025,
+            11 => 8000,
+            12 => 7350,
+            15 => match object_type {
+                31 => {
+                    let first_chunk = self.data[1] & 0x1;
+                    let second_chunk = self.data[2];
+                    let third_chunk = self.data[3];
+                    let fourth_chunk = self.data[4] >> 1;
+
+                    let first_byte = (first_chunk << 7) | (second_chunk >> 1);
+                    let second_byte = (second_chunk << 7) | (third_chunk >> 1);
+                    let third_byte = (third_chunk << 7) | fourth_chunk;
+
+                    u32::from_be_bytes([0, first_byte, second_byte, third_byte])
+                }
+                _ => {
+                    let first_chunk = self.data[1] >> 1;
+                    let second_chunk = self.data[2];
+                    let third_chunk = self.data[3];
+                    let fourth_chunk = self.data[4] >> 7;
+
+                    let first_byte = (first_chunk << 1) | (second_chunk >> 7);
+                    let second_byte = (second_chunk << 1) | (third_chunk >> 7);
+                    let third_byte = (third_chunk << 1) | fourth_chunk;
+
+                    u32::from_be_bytes([0, first_byte, second_byte, third_byte])
+                }
+            },
+            _ => {
+                return Err(
+                    AudioSpecificConfigParseError::InvalidFrequencyIndex(frequency_index).into(),
+                );
+            }
+        };
+
+        Ok(frequency)
+    }
 }
 
 // Raw RTMP message for codecs that we do not explicitly support.
@@ -128,9 +197,10 @@ impl std::fmt::Debug for AacAudioData {
 
 impl std::fmt::Debug for AacAudioConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let sample_rate = self.sample_rate().map_err(|_| std::fmt::Error)?;
         f.debug_struct("AacAudioConfig")
             .field("channels", &self.channels)
-            .field("sample_rate", &self.sample_rate)
+            .field("sample_rate", &sample_rate)
             .field("data", &bytes_debug(&self.data))
             .finish()
     }

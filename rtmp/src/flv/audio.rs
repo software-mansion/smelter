@@ -44,6 +44,8 @@ pub enum AudioCodec {
     DeviceSpecific,
 }
 
+pub struct AudioSpecificConfig {}
+
 impl AudioCodec {
     fn from_raw(id: u8) -> Result<Self, AudioTagParseError> {
         match id {

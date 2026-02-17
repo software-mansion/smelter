@@ -34,7 +34,7 @@ pub enum RtmpError {
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum ParseError {
-    #[error("Not enough data in FLV payload.")]
+    #[error("Not enough data.")]
     NotEnoughData,
 
     #[error("Unknown RTMP message type: {0}")]
@@ -45,6 +45,9 @@ pub enum ParseError {
 
     #[error("Error parsing audio tag: {0}")]
     Audio(#[from] AudioTagParseError),
+
+    #[error("Error parsing audio specific config: {0}")]
+    AudioConfig(#[from] AudioSpecificConfigParseError),
 
     #[error("Error parsing video tag: {0}")]
     Video(#[from] VideoTagParseError),
@@ -99,6 +102,12 @@ pub enum AudioTagParseError {
 
     #[error("Unknown codec header value: {0}")]
     UnknownCodecId(u8),
+}
+
+#[derive(Error, Debug, Clone, PartialEq)]
+pub enum AudioSpecificConfigParseError {
+    #[error("Invalid frequency index: {0}")]
+    InvalidFrequencyIndex(u8),
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
