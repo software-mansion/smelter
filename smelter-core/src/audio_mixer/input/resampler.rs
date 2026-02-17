@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, time::Duration};
+use std::time::Duration;
 
 use audioadapter::{Adapter, AdapterMut};
 use rubato::{
@@ -7,7 +7,7 @@ use rubato::{
 };
 use tracing::{debug, error, trace, warn};
 
-use crate::{AudioChannels, AudioSamples, prelude::InputAudioSamples};
+use crate::{AudioChannels, AudioSamples, prelude::InputAudioSamples, utils::AudioSamplesBuffer};
 
 const MAX_STRETCH_FACTOR: f64 = 1.05;
 
@@ -33,11 +33,11 @@ pub(super) struct InputResampler {
     channels: AudioChannels,
 
     /// Resampler input buffer
-    resampler_input_buffer: ResamplerInputBuffer,
+    resampler_input_buffer: AudioSamplesBuffer,
     /// Resampler output buffer
     resampler_output_buffer: ResamplerOutputBuffer,
 
-    output_buffer: OutputBuffer,
+    output_buffer: AudioSamplesBuffer,
 
     resampler: rubato::Async<f64>,
     original_output_delay: Duration,
@@ -128,9 +128,9 @@ impl InputResampler {
             channels,
 
             resampler,
-            resampler_input_buffer: ResamplerInputBuffer::new(channels),
+            resampler_input_buffer: AudioSamplesBuffer::new(channels),
             resampler_output_buffer,
-            output_buffer: OutputBuffer::new(channels),
+            output_buffer: AudioSamplesBuffer::new(channels),
 
             original_output_delay: default_output_delay,
             original_resampler_ratio,
@@ -285,7 +285,7 @@ impl InputResampler {
 
             self.resample();
         }
-        self.output_buffer.read_chunk(batch_size)
+        self.output_buffer.read_samples(batch_size)
     }
 
     fn maybe_prepare_before_resample(
@@ -378,86 +378,6 @@ impl InputResampler {
 }
 
 #[derive(Debug)]
-struct ResamplerInputBuffer {
-    /// oldest samples are at the front, newest at the back
-    buffer: VecDeque<(AudioSamples, usize)>,
-    channels: AudioChannels,
-}
-
-impl ResamplerInputBuffer {
-    fn new(channels: AudioChannels) -> Self {
-        Self {
-            buffer: VecDeque::new(),
-            channels,
-        }
-    }
-
-    fn push_back(&mut self, batch: AudioSamples) {
-        self.buffer.push_back((batch, 0));
-    }
-
-    fn push_front(&mut self, batch: AudioSamples) {
-        self.buffer.push_front((batch, 0));
-    }
-
-    fn drain_samples(&mut self, mut samples_to_read: usize) {
-        while let Some((batch, read_samples)) = self.buffer.front()
-            && batch.len() - read_samples <= samples_to_read
-        {
-            samples_to_read -= batch.len() - read_samples;
-            self.buffer.pop_front();
-        }
-
-        if let Some((_batch, read_samples)) = self.buffer.front_mut() {
-            *read_samples += samples_to_read;
-        }
-    }
-}
-
-impl Adapter<'_, f64> for ResamplerInputBuffer {
-    unsafe fn read_sample_unchecked(&self, channel: usize, frame: usize) -> f64 {
-        let mut samples_skipped: usize = 0;
-        for (batch, read_samples) in &self.buffer {
-            if batch.len() - read_samples <= frame - samples_skipped {
-                samples_skipped += batch.len() - read_samples;
-            } else {
-                match batch {
-                    AudioSamples::Mono(items) => {
-                        if channel != 0 {
-                            break;
-                        }
-                        return items[frame + read_samples - samples_skipped];
-                    }
-                    AudioSamples::Stereo(items) => match channel {
-                        0 => return items[frame + read_samples - samples_skipped].0,
-                        1 => return items[frame + read_samples - samples_skipped].1,
-                        _ => {
-                            break;
-                        }
-                    },
-                }
-            }
-        }
-        error!(?channel, ?frame, "Sample does not exists");
-        0.0
-    }
-
-    fn channels(&self) -> usize {
-        match self.channels {
-            AudioChannels::Mono => 1,
-            AudioChannels::Stereo => 2,
-        }
-    }
-
-    fn frames(&self) -> usize {
-        self.buffer
-            .iter()
-            .map(|(batch, read_samples)| batch.len() - read_samples)
-            .sum()
-    }
-}
-
-#[derive(Debug)]
 struct ResamplerOutputBuffer {
     buffer: AudioSamples,
 
@@ -541,83 +461,5 @@ impl Adapter<'_, f64> for ResamplerOutputBuffer {
 
     fn frames(&self) -> usize {
         self.buffer.len()
-    }
-}
-
-#[derive(Debug)]
-struct OutputBuffer {
-    // oldest samples on the front, newest at the back
-    buffer: VecDeque<(AudioSamples, usize)>,
-    channels: AudioChannels,
-}
-
-impl OutputBuffer {
-    fn new(channels: AudioChannels) -> Self {
-        Self {
-            buffer: VecDeque::new(),
-            channels,
-        }
-    }
-
-    fn frames(&self) -> usize {
-        self.buffer
-            .iter()
-            .map(|(batch, bytes_read)| batch.len() - bytes_read)
-            .sum()
-    }
-
-    fn push_back(&mut self, batch: AudioSamples) {
-        self.buffer.push_back((batch, 0));
-    }
-
-    /// pad with zero if there is not enough
-    fn read_chunk(&mut self, sample_count: usize) -> AudioSamples {
-        let mut samples = match self.channels {
-            AudioChannels::Mono => AudioSamples::Mono(Vec::with_capacity(sample_count)),
-            AudioChannels::Stereo => AudioSamples::Stereo(Vec::with_capacity(sample_count)),
-        };
-
-        let mut samples_to_read = sample_count;
-        while let Some((batch, read_samples)) = self.buffer.front()
-            && batch.len() - read_samples <= samples_to_read
-        {
-            samples_to_read -= batch.len() - read_samples;
-            let (batch, read_samples) = self.buffer.pop_front().unwrap();
-            match (batch, &mut samples) {
-                (AudioSamples::Mono(batch), AudioSamples::Mono(samples)) => {
-                    samples.extend_from_slice(&batch[read_samples..])
-                }
-                (AudioSamples::Stereo(batch), AudioSamples::Stereo(samples)) => {
-                    samples.extend_from_slice(&batch[read_samples..])
-                }
-                _ => {
-                    error!("Wrong channel layout");
-                }
-            }
-        }
-
-        if let Some((batch, read_samples)) = self.buffer.front_mut() {
-            let range = *read_samples..(*read_samples + samples_to_read);
-            *read_samples += samples_to_read;
-            match (batch, &mut samples) {
-                (AudioSamples::Mono(batch), AudioSamples::Mono(samples)) => {
-                    samples.extend_from_slice(&batch[range])
-                }
-                (AudioSamples::Stereo(batch), AudioSamples::Stereo(samples)) => {
-                    samples.extend_from_slice(&batch[range])
-                }
-                _ => {
-                    error!("Wrong channel layout");
-                }
-            }
-        }
-
-        // fill with zero if channel layouts would mismatch
-        let range = 0..sample_count - samples.len();
-        match &mut samples {
-            AudioSamples::Mono(samples) => samples.extend(range.map(|_| 0.0)),
-            AudioSamples::Stereo(samples) => samples.extend(range.map(|_| (0.0, 0.0))),
-        };
-        samples
     }
 }

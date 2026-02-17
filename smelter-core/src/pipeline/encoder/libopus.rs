@@ -1,15 +1,28 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use tracing::{error, info};
+use audioadapter::Adapter;
+use bytes::Bytes;
+use tracing::{error, info, trace};
+
+use crate::{
+    pipeline::encoder::{AudioEncoder, AudioEncoderConfig},
+    utils::AudioSamplesBuffer,
+};
 
 use crate::prelude::*;
 
-use super::{AudioEncoder, AudioEncoderConfig};
+const SAMPLES_PER_BATCH: usize = 960;
 
 #[derive(Debug)]
 pub struct OpusEncoder {
     encoder: opus::Encoder,
+    sample_rate: u32,
+    input_buffer: AudioSamplesBuffer,
     output_buffer: Vec<u8>,
+
+    // This logic relays on the fact that input samples will always be continuous.
+    first_input_pts: Option<Duration>,
+    encoded_samples: u64,
 }
 
 impl AudioEncoder for OpusEncoder {
@@ -35,7 +48,11 @@ impl AudioEncoder for OpusEncoder {
         Ok((
             Self {
                 encoder,
+                sample_rate: options.sample_rate,
+                input_buffer: AudioSamplesBuffer::new(options.channels),
                 output_buffer,
+                first_input_pts: None,
+                encoded_samples: 0,
             },
             AudioEncoderConfig { extradata: None },
         ))
@@ -48,34 +65,59 @@ impl AudioEncoder for OpusEncoder {
     }
 
     fn encode(&mut self, batch: OutputAudioSamples) -> Vec<EncodedOutputChunk> {
-        let raw_samples: Vec<_> = match batch.samples {
-            AudioSamples::Mono(raw_samples) => raw_samples
-                .iter()
-                .map(|val| (*val * i16::MAX as f64) as i16)
-                .collect(),
-            AudioSamples::Stereo(stereo_samples) => stereo_samples
-                .iter()
-                .flat_map(|(l, r)| [(*l * i16::MAX as f64) as i16, (*r * i16::MAX as f64) as i16])
-                .collect(),
-        };
-
-        match self.encoder.encode(&raw_samples, &mut self.output_buffer) {
-            Ok(len) => vec![EncodedOutputChunk {
-                data: bytes::Bytes::copy_from_slice(&self.output_buffer[..len]),
-                pts: batch.start_pts,
-                dts: None,
-                is_keyframe: false,
-                kind: MediaKind::Audio(AudioCodec::Opus),
-            }],
-            Err(err) => {
-                error!("Opus encoding error: {}", err);
-                vec![]
-            }
-        }
+        self.first_input_pts.get_or_insert(batch.start_pts);
+        trace!(?batch, "libopus encoder received samples.");
+        self.input_buffer.push_back(batch.samples);
+        self.inner_encode(false)
     }
 
     fn flush(&mut self) -> Vec<EncodedOutputChunk> {
-        vec![]
+        trace!("Flushing libopus encoder");
+        self.inner_encode(true)
+    }
+}
+
+impl OpusEncoder {
+    fn inner_encode(&mut self, force: bool) -> Vec<EncodedOutputChunk> {
+        let mut result = vec![];
+        while self.input_buffer.frames() >= SAMPLES_PER_BATCH
+            || (force && self.input_buffer.frames() > 0)
+        {
+            let samples = self.input_buffer.read_samples(SAMPLES_PER_BATCH);
+            let raw_samples: Vec<_> = match samples {
+                AudioSamples::Mono(samples) => samples
+                    .iter()
+                    .map(|val| (*val * i16::MAX as f64) as i16)
+                    .collect(),
+                AudioSamples::Stereo(samples) => samples
+                    .iter()
+                    .flat_map(|(l, r)| {
+                        [(*l * i16::MAX as f64) as i16, (*r * i16::MAX as f64) as i16]
+                    })
+                    .collect(),
+            };
+
+            let data = match self.encoder.encode(&raw_samples, &mut self.output_buffer) {
+                Ok(len) => Bytes::copy_from_slice(&self.output_buffer[..len]),
+                Err(err) => {
+                    error!(%err, "Opus encoding error");
+                    continue;
+                }
+            };
+
+            result.push(EncodedOutputChunk {
+                data,
+                pts: self.first_input_pts.unwrap_or_default()
+                    + Duration::from_secs_f64(
+                        self.encoded_samples as f64 / self.sample_rate as f64,
+                    ),
+                dts: None,
+                is_keyframe: false,
+                kind: MediaKind::Audio(AudioCodec::Opus),
+            });
+            self.encoded_samples += SAMPLES_PER_BATCH as u64;
+        }
+        result
     }
 }
 

@@ -5,7 +5,7 @@ use std::{
 };
 
 use smelter_render::{OutputId, error::UpdateSceneError};
-use tracing::trace;
+use tracing::{debug, trace};
 
 use crate::{
     audio_mixer::{InputSamplesSet, OutputSamplesSet, input::AudioMixerInput, mix::SampleMixer},
@@ -14,6 +14,27 @@ use crate::{
 
 use crate::prelude::*;
 
+/// Audio mixer is responsible for generating output samples from input samples.
+///
+/// It meets following constraints:
+/// - Input samples can change theirs sample rate and channel layout dynamically.
+/// - Input samples set PTS, should not have any numerical error. end_pts of one set is the same
+///   as start_pts of the other set. There can be gaps, but they are always multiples of entire
+///   sets.
+/// - Each input batch is only delivered once, it's responsibility of the AudioMixer to cache
+///   unused samples between calls.
+/// - Input samples need to be delivered a bit earlier than samples_set.start_pts. Resampler has
+///   it's own latency, so for correct synchronization we need that buffer. Additionally, we have
+///   more space to stretch audio if it's falling behind real time clock.
+///   - For example, if samples_set has start_pts=40ms and end_pts=60ms, then it's best that sample
+///     batches for each input already contain data for e.g. 80ms. Currently, queue enforces 40ms
+///     "buffer"
+/// - Output samples will always be continuous. Even if mix_samples won't be called
+///   for a specific range the zero output samples will be returned on output.
+///   - The consequence for downstream elements (encoder, resampler) is that they can
+///     ignore packet timestamps and just take into account sample count when processing data.
+/// - Output sample batches can have different sizes, nothing guarantees specific batch size.
+///   Encoders like libopus need to handle grouping bytes internally.
 #[derive(Debug, Clone)]
 pub(crate) struct AudioMixer(Arc<Mutex<InternalAudioMixer>>);
 
@@ -24,9 +45,9 @@ impl AudioMixer {
         ))))
     }
 
-    pub fn mix_samples(&self, samples_set: InputSamplesSet) -> OutputSamplesSet {
+    pub fn process_batch_set(&self, samples_set: InputSamplesSet) -> OutputSamplesSet {
         trace!(set=?samples_set, "Mixing samples");
-        self.0.lock().unwrap().mix_samples(samples_set)
+        self.0.lock().unwrap().process_batch_set(samples_set)
     }
 
     pub fn register_input(&self, input_id: InputId) {
@@ -85,6 +106,7 @@ pub(super) struct InternalAudioMixer {
     inputs: HashMap<InputId, AudioMixerInput>,
     mixing_sample_rate: u32,
     sample_mixer: SampleMixer,
+    last_processed_batch_end: Option<Duration>,
 }
 
 impl InternalAudioMixer {
@@ -99,6 +121,7 @@ impl InternalAudioMixer {
                 VOL_DOWN_INCREMENT,
                 VOL_UP_INCREMENT,
             ),
+            last_processed_batch_end: None,
         }
     }
 
@@ -121,7 +144,23 @@ impl InternalAudioMixer {
         }
     }
 
-    pub fn mix_samples(&mut self, mut samples_set: InputSamplesSet) -> OutputSamplesSet {
+    pub fn process_batch_set(&mut self, mut samples_set: InputSamplesSet) -> OutputSamplesSet {
+        let last_processed_batch_end = *self
+            .last_processed_batch_end
+            .get_or_insert(samples_set.start_pts);
+
+        let maybe_zero_samples = if last_processed_batch_end < samples_set.start_pts {
+            let missing_range = samples_set
+                .start_pts
+                .saturating_sub(last_processed_batch_end);
+            let missing_samples =
+                f64::floor(missing_range.as_secs_f64() * self.mixing_sample_rate as f64) as usize;
+            debug!(?missing_samples, "Detected gap, filling with zeros");
+            Some(self.mix_samples(HashMap::new(), missing_samples, last_processed_batch_end))
+        } else {
+            None
+        };
+
         let pts_range = (samples_set.start_pts, samples_set.end_pts);
         for (input_id, input) in &mut self.inputs {
             if let Some(batches) = samples_set.samples.remove(input_id) {
@@ -147,6 +186,24 @@ impl InternalAudioMixer {
             self.mixing_sample_rate,
         );
 
+        let mixed_samples = self.mix_samples(input_samples, samples_count, samples_set.start_pts);
+
+        self.last_processed_batch_end = Some(samples_set.end_pts);
+        match maybe_zero_samples {
+            Some(mut samples) => {
+                samples.merge(mixed_samples);
+                samples
+            }
+            None => mixed_samples,
+        }
+    }
+
+    fn mix_samples(
+        &mut self,
+        input_samples: HashMap<InputId, Vec<(f64, f64)>>,
+        samples_count: usize,
+        start_pts: Duration,
+    ) -> OutputSamplesSet {
         OutputSamplesSet(
             self.outputs
                 .iter()
@@ -154,13 +211,7 @@ impl InternalAudioMixer {
                     let samples =
                         self.sample_mixer
                             .mix_samples(&input_samples, output_info, samples_count);
-                    (
-                        output_id.clone(),
-                        OutputAudioSamples {
-                            samples,
-                            start_pts: samples_set.start_pts,
-                        },
-                    )
+                    (output_id.clone(), OutputAudioSamples { samples, start_pts })
                 })
                 .collect(),
         )

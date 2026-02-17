@@ -8,7 +8,7 @@ use std::{
 
 use bytes::Bytes;
 use fdk_aac_sys as fdk;
-use tracing::{error, info};
+use tracing::{error, info, trace};
 
 use crate::prelude::*;
 
@@ -22,9 +22,11 @@ pub struct FdkAacEncoder {
     input_buffer: Vec<i16>,
     output_buffer: Vec<u8>,
     sample_rate: u32,
-    start_pts: Option<Duration>,
-    sent_samples: u128,
     samples_per_frame: u32,
+
+    // This logic relays on the fact that input samples will always be continuous.
+    first_input_pts: Option<Duration>,
+    encoded_samples: u128,
 }
 
 impl AudioEncoder for FdkAacEncoder {
@@ -107,8 +109,8 @@ impl AudioEncoder for FdkAacEncoder {
                 input_buffer: Vec::new(),
                 output_buffer: vec![0; info.maxOutBufBytes as usize],
                 sample_rate: options.sample_rate,
-                start_pts: None,
-                sent_samples: 0,
+                first_input_pts: None,
+                encoded_samples: 0,
                 samples_per_frame: info.frameLength,
             },
             AudioEncoderConfig {
@@ -120,6 +122,7 @@ impl AudioEncoder for FdkAacEncoder {
     }
 
     fn encode(&mut self, output_samples: OutputAudioSamples) -> Vec<EncodedOutputChunk> {
+        trace!(?output_samples, "FDK AAC encoder received samples.");
         self.enqueue_samples(output_samples);
         self.call_fdk_encode(false).unwrap_or_else(|err| {
             error!("Encoding error: {:?}", err);
@@ -128,7 +131,7 @@ impl AudioEncoder for FdkAacEncoder {
     }
 
     fn flush(&mut self) -> Vec<EncodedOutputChunk> {
-        if self.start_pts.is_none() {
+        if self.first_input_pts.is_none() {
             return vec![];
         }
         self.call_fdk_encode(true).unwrap_or_else(|err| {
@@ -216,11 +219,13 @@ impl FdkAacEncoder {
 
             let encoded_bytes = out_args.numOutBytes as usize;
             if encoded_bytes > 0 {
-                let pts = self.start_pts.unwrap()
-                    + Duration::from_secs_f64(self.sent_samples as f64 / self.sample_rate as f64);
+                let pts = self.first_input_pts.unwrap_or_default()
+                    + Duration::from_secs_f64(
+                        self.encoded_samples as f64 / self.sample_rate as f64,
+                    );
 
                 // assume that encoder is always producing batches representing full frame
-                self.sent_samples += self.samples_per_frame as u128;
+                self.encoded_samples += self.samples_per_frame as u128;
 
                 output.push(EncodedOutputChunk {
                     data: Bytes::copy_from_slice(
@@ -239,8 +244,8 @@ impl FdkAacEncoder {
     }
 
     fn enqueue_samples(&mut self, samples: OutputAudioSamples) {
-        if self.start_pts.is_none() {
-            self.start_pts = Some(samples.start_pts);
+        if self.first_input_pts.is_none() {
+            self.first_input_pts = Some(samples.start_pts);
         };
 
         match samples.samples {
