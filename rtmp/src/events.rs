@@ -85,7 +85,7 @@ impl AacAudioConfig {
                     u32::from_be_bytes([0, first_byte, second_byte, third_byte])
                 }
                 _ => {
-                    let first_chunk = self.data[1] >> 1;
+                    let first_chunk = self.data[1] & 0x7F;
                     let second_chunk = self.data[2];
                     let third_chunk = self.data[3];
                     let fourth_chunk = self.data[4] >> 7;
@@ -259,15 +259,32 @@ mod asc_parser_test {
     use crate::AacAudioConfig;
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings)]
     fn test_sound_frequency() {
-        // Encoded with sample rate 44100 Hz
+        // Encoded with sample rate 44100 Hz.
         let asc_bytes = Bytes::from_iter([0b00010_010, 0b0_0000000]);
         let asc = AacAudioConfig::new(asc_bytes);
         assert_eq!(asc.sample_rate().unwrap(), 44_100);
 
-        // Encoded with sample rate 48000 Hz
+        // Encoded with sample rate 48000 Hz.
         let asc_bytes = Bytes::from_iter([0b00010_001, 0b1_0000000]);
         let asc = AacAudioConfig::new(asc_bytes);
         assert_eq!(asc.sample_rate().unwrap(), 48_000);
+
+        // Encoded with sample rate 48000 Hz. object_type == 31
+        let asc_bytes = Bytes::from_iter([0b11111_000, 0b000_0011_0]);
+        let asc = AacAudioConfig::new(asc_bytes);
+        assert_eq!(asc.sample_rate().unwrap(), 48_000);
+
+        // Encoded with custom sample rate (2137 Hz).
+        let asc_bytes = Bytes::from_iter([
+            0b00010_111,
+            0b1_0000000,
+            0b00000100,
+            0b00101100,
+            0b1_0000000,
+        ]);
+        let asc = AacAudioConfig::new(asc_bytes);
+        assert_eq!(asc.sample_rate().unwrap(), 2137);
     }
 }
