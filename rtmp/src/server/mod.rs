@@ -1,21 +1,26 @@
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
-    mpsc::Receiver,
 };
 
-use crate::{RtmpEvent, error::RtmpError, server::listen_thread::start_listener_thread};
+use crate::{error::RtmpError, server::listen_thread::start_listener_thread};
 
 mod connection;
+mod event_channel;
 mod listen_thread;
 mod negotiation;
+
+pub use event_channel::{
+    RtmpEventBufferSnapshot, RtmpEventReceiver, RtmpEventSendError, RtmpEventSender,
+    rtmp_event_channel,
+};
 
 pub type OnConnectionCallback = Box<dyn FnMut(RtmpConnection) + Send + 'static>;
 
 pub struct RtmpConnection {
     pub app: Arc<str>,
     pub stream_key: Arc<str>,
-    pub receiver: Receiver<RtmpEvent>,
+    pub receiver: RtmpEventReceiver,
 }
 
 // TODO add SSL/TLS

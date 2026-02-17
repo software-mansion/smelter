@@ -1,11 +1,9 @@
-use std::{
-    sync::{Arc, mpsc},
-    thread::JoinHandle,
-    time::Duration,
-};
+use std::{sync::Arc, thread::JoinHandle, time::Duration};
 
 use crossbeam_channel::Sender;
-use rtmp::{AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpEvent};
+use rtmp::{
+    AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpEvent, RtmpEventReceiver,
+};
 use smelter_render::{Frame, InputId, error::ErrorStack};
 use tracing::{Level, error, info, span, warn};
 
@@ -231,7 +229,7 @@ impl RtmpConnectionState {
 pub(crate) fn start_connection_thread(
     ctx: Arc<PipelineCtx>,
     input_ref: Ref<InputId>,
-    receiver: mpsc::Receiver<RtmpEvent>,
+    receiver: RtmpEventReceiver,
     options: RtmpConnectionOptions,
 ) -> JoinHandle<()> {
     std::thread::Builder::new()
@@ -248,7 +246,7 @@ pub(crate) fn start_connection_thread(
             let mut state = RtmpConnectionState::new(ctx, input_ref, options);
             info!("RTMP stream connection opened");
 
-            while let Ok(rtmp_event) = receiver.recv() {
+            for rtmp_event in receiver {
                 state.handle_rtmp_event(rtmp_event);
             }
 

@@ -21,7 +21,7 @@ fn main() {
 
         info!(?app, ?stream_key, "Received stream");
         thread::spawn(move || {
-            while let Ok(media_data) = receiver.recv() {
+            for media_data in receiver {
                 match media_data {
                     RtmpEvent::H264Config(video_config) => {
                         info!(?video_config, "video config")
