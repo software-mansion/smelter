@@ -111,9 +111,11 @@ mod main_module {
                         ("tune".into(), "zerolatency".into()),
                         ("thread_type".into(), "slice".into()),
                     ],
+                    bitstream_format: H264BitstreamFormat::Avcc,
                 })),
                 audio: None,
-                url: format!("rtmp://127.0.0.1:{PORT}").into(),
+                connection: RtmpConnectionOptions::from_url(&format!("rtmp://127.0.0.1:{PORT}"))
+                    .unwrap(),
             }),
             video: Some(RegisterOutputVideoOptions {
                 initial: Component::InputStream(InputStreamComponent { id: None, input_id }),

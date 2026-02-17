@@ -58,7 +58,8 @@ fn main() {
 
     let output_options = RegisterOutputOptions {
         output_options: ProtocolOutputOptions::Rtmp(RtmpOutputOptions {
-            url: format!("rtmp://127.0.0.1:{OUTPUT_PORT}").into(),
+            connection: RtmpConnectionOptions::from_url(&format!("rtmp://127.0.0.1:{OUTPUT_PORT}"))
+                .unwrap(),
             video: Some(VideoEncoderOptions::FfmpegH264(FfmpegH264EncoderOptions {
                 preset: FfmpegH264EncoderPreset::Ultrafast,
                 bitrate: None,
@@ -69,6 +70,7 @@ fn main() {
                 },
                 pixel_format: OutputPixelFormat::YUV420P,
                 raw_options: vec![],
+                bitstream_format: H264BitstreamFormat::Avcc,
             })),
             audio: None,
         }),

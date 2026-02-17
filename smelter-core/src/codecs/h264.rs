@@ -32,7 +32,7 @@ pub struct FfmpegH264EncoderOptions {
     pub resolution: Resolution,
     pub pixel_format: OutputPixelFormat,
     pub raw_options: Vec<(Arc<str>, Arc<str>)>,
-    pub output_format: H264BitstreamFormat,
+    pub bitstream_format: H264BitstreamFormat,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

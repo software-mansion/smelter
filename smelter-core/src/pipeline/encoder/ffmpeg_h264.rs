@@ -48,7 +48,7 @@ impl VideoEncoder for FfmpegH264Encoder {
         encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
         encoder.set_colorspace(ffmpeg_next::color::Space::BT709);
         encoder.set_color_range(ffmpeg_next::color::Range::MPEG);
-        if options.output_format == H264BitstreamFormat::Avcc {
+        if options.bitstream_format == H264BitstreamFormat::Avcc {
             encoder.set_flags(ffmpeg_next::codec::Flags::GLOBAL_HEADER);
         }
         unsafe {

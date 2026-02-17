@@ -41,15 +41,14 @@ impl RtmpConnectionOptions {
             return Err(RtmpConnectionUrlError::NoHostFound(host.to_string()));
         };
 
-        let path_segments: Vec<&str> = url.path().trim_start_matches('/').splitn(2, '/').collect();
-        let [app, stream_key] = &path_segments[..] else {
-            return Err(RtmpConnectionUrlError::InvalidFormat);
-        };
+        let mut path_segments = url.path().trim_start_matches('/').splitn(2, '/');
+        let app = path_segments.next().unwrap_or("").to_string();
+        let stream_key = path_segments.next().unwrap_or("").to_string();
 
         Ok(RtmpConnectionOptions {
             address,
-            app: app.to_string(),
-            stream_key: stream_key.to_string(),
+            app,
+            stream_key,
         })
     }
 }
@@ -105,7 +104,7 @@ pub enum RtmpConnectionUrlError {
     #[error(transparent)]
     ParsingError(#[from] url::ParseError),
 
-    #[error("URL needs have following format rtmp://<IP>:<PORT>/<APP>/<STREAM_KEY>")]
+    #[error("URL needs have following format rtmp://<HOST>:<PORT>/<APP>/<STREAM_KEY>")]
     InvalidFormat,
 
     #[error("Failed to resolve host address {0}.")]
