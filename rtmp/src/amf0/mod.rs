@@ -4,7 +4,7 @@ mod decoding;
 mod encoding;
 
 pub use decoding::decode_amf0_values;
-pub use encoding::encode_amf0_values;
+pub use encoding::{encode_amf0_values, encode_avmplus_values};
 
 use crate::amf3::Amf3Value;
 

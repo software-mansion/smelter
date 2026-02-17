@@ -5,7 +5,14 @@ use tracing::warn;
 use crate::{AmfEncodingError, amf0::*, amf3::Amf3EncoderState};
 
 pub fn encode_amf0_values(amf_values: &[Amf0Value]) -> Result<Bytes, AmfEncodingError> {
-    let encoder = Amf0EncoderState::new();
+    let encoder = Amf0EncoderState::new(BytesMut::new());
+    encoder.encode_values(amf_values)
+}
+
+pub fn encode_avmplus_values(amf_values: &[Amf0Value]) -> Result<Bytes, AmfEncodingError> {
+    let mut buf = BytesMut::new();
+    buf.put_u8(0);
+    let encoder = Amf0EncoderState::new(buf);
     encoder.encode_values(amf_values)
 }
 
@@ -14,10 +21,8 @@ struct Amf0EncoderState {
 }
 
 impl Amf0EncoderState {
-    fn new() -> Self {
-        Self {
-            buf: BytesMut::new(),
-        }
+    fn new(buf: BytesMut) -> Self {
+        Self { buf }
     }
 
     fn encode_values(mut self, amf_values: &[Amf0Value]) -> Result<Bytes, AmfEncodingError> {
