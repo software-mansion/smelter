@@ -108,7 +108,7 @@ impl AacAudioConfig {
     }
 
     pub fn channels(&self) -> Result<AudioChannels, ParseError> {
-        Ok(AudioChannels::Stereo)
+        todo!()
     }
 }
 
