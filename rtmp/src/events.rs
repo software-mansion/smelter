@@ -254,6 +254,9 @@ fn bytes_debug(data: &[u8]) -> String {
 
 #[cfg(test)]
 mod asc_parser_test {
+    // ASC formatting:
+    // https://wiki.multimedia.cx/index.php/MPEG-4_Audio#Audio_Specific_Config
+
     use bytes::Bytes;
 
     use crate::AacAudioConfig;
@@ -283,6 +286,17 @@ mod asc_parser_test {
             0b00000100,
             0b00101100,
             0b1_0000000,
+        ]);
+        let asc = AacAudioConfig::new(asc_bytes);
+        assert_eq!(asc.sample_rate().unwrap(), 2137);
+
+        // Encoded with custom sample rate (2137 Hz). object_type == 31
+        let asc_bytes = Bytes::from_iter([
+            0b11111_000,
+            0b000_1111_0,
+            0b00000000,
+            0b00010000,
+            0b1011001_0,
         ]);
         let asc = AacAudioConfig::new(asc_bytes);
         assert_eq!(asc.sample_rate().unwrap(), 2137);
