@@ -25,7 +25,6 @@ use crate::{
             vulkan_h264::VulkanH264Encoder,
         },
         output::{Output, OutputAudio, OutputVideo},
-        utils::{annexb_to_avcc, build_avc_decoder_config},
     },
     thread_utils::InitializableThread,
 };
@@ -122,10 +121,9 @@ impl RtmpClientOutput {
         })?;
 
         if let Some(config) = video_config {
-            match build_avc_decoder_config(&config.extradata) {
-                Some(avcc) => client.send(H264VideoConfig { data: avcc })?,
-                None => return Err(RtmpClientError::MissingH264DecoderConfig),
-            }
+            client.send(H264VideoConfig {
+                data: config.extradata.clone(),
+            })?;
         }
 
         if let Some(config) = audio_config {
@@ -266,7 +264,7 @@ fn run_rtmp_output_thread(
                 MediaKind::Video(_video) => client.send(H264VideoData {
                     pts: chunk.pts,
                     dts: chunk.dts.unwrap_or(chunk.pts),
-                    data: annexb_to_avcc(&chunk.data),
+                    data: chunk.data,
                     is_keyframe: chunk.is_keyframe,
                 })?,
                 MediaKind::Audio(_audio) => client.send(AacAudioData {
