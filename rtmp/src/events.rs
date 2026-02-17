@@ -290,16 +290,16 @@ fn bytes_debug(data: &[u8]) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::unusual_byte_groupings)]
 mod asc_parser_test {
     // ASC formatting:
     // https://wiki.multimedia.cx/index.php/MPEG-4_Audio#Audio_Specific_Config
 
     use bytes::Bytes;
 
-    use crate::AacAudioConfig;
+    use crate::{AacAudioConfig, AudioChannels};
 
     #[test]
-    #[allow(clippy::unusual_byte_groupings)]
     fn test_sound_frequency() {
         // Encoded with sample rate 44100 Hz.
         let asc_bytes = Bytes::from_iter([0b00010_010, 0b0_0000000]);
@@ -337,5 +337,41 @@ mod asc_parser_test {
         ]);
         let asc = AacAudioConfig::new(asc_bytes);
         assert_eq!(asc.sample_rate().unwrap(), 2137);
+    }
+
+    #[test]
+    fn test_channels() {
+        // Encoded with channels value 2.
+        let asc_bytes = Bytes::from_iter([0b00010_001, 0b1_0010_000]);
+        let asc = AacAudioConfig::new(asc_bytes);
+        assert_eq!(asc.channels().unwrap(), AudioChannels::Stereo);
+
+        // Encoded with channels value 2. object_type == 31
+        let asc_bytes = Bytes::from_iter([0b11111_000, 0b000_0011_0, 0b010_00000]);
+        let asc = AacAudioConfig::new(asc_bytes);
+        assert_eq!(asc.channels().unwrap(), AudioChannels::Stereo);
+
+        // Encoded with channels value 2. frequency_index == 15
+        let asc_bytes = Bytes::from_iter([
+            0b00010_111,
+            0b1_0000000,
+            0b00000000,
+            0b00000000,
+            0b0_0010_000,
+        ]);
+        let asc = AacAudioConfig::new(asc_bytes);
+        assert_eq!(asc.channels().unwrap(), AudioChannels::Stereo);
+
+        // Encoded with channels value 2. object_type == 31, frequency_index == 15
+        let asc_bytes = Bytes::from_iter([
+            0b11111_000,
+            0b000_1111_0,
+            0b00000000,
+            0b00000000,
+            0b0000000_0,
+            0b010_00000,
+        ]);
+        let asc = AacAudioConfig::new(asc_bytes);
+        assert_eq!(asc.channels().unwrap(), AudioChannels::Stereo);
     }
 }
