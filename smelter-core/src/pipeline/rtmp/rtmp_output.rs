@@ -39,7 +39,7 @@ pub struct RtmpClientOutput {
 struct AudioConfig {
     extradata: Bytes,
     channels: AudioChannels,
-    sample_rate: u32,
+    _sample_rate: u32,
 }
 
 struct VideoConfig {
@@ -127,15 +127,7 @@ impl RtmpClientOutput {
         }
 
         if let Some(config) = audio_config {
-            let channels = match config.channels {
-                AudioChannels::Mono => rtmp::AudioChannels::Mono,
-                AudioChannels::Stereo => rtmp::AudioChannels::Stereo,
-            };
-            let config = AacAudioConfig {
-                channels,
-                sample_rate: config.sample_rate,
-                data: config.extradata.clone(),
-            };
+            let config = AacAudioConfig::new(config.extradata.clone());
             client.send(config)?;
         }
         Ok(client)
@@ -217,7 +209,7 @@ impl RtmpClientOutput {
             AudioConfig {
                 extradata,
                 channels,
-                sample_rate,
+                _sample_rate: sample_rate,
             },
         ))
     }

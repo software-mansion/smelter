@@ -190,7 +190,7 @@ impl RtmpConnectionState {
 
     fn process_audio_config(&mut self, config: AacAudioConfig) -> Result<(), RtmpConnectionError> {
         let options = FdkAacDecoderOptions {
-            asc: Some(config.data.clone()),
+            asc: Some(config.data().clone()),
         };
         let decoder_thread_options = AudioDecoderThreadOptions::<FdkAacDecoder> {
             ctx: self.ctx.clone(),

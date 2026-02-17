@@ -32,7 +32,7 @@ pub struct AacAudioData {
 
 #[derive(Clone)]
 pub struct AacAudioConfig {
-    data: Bytes, // TODO: Audio specific config
+    data: Bytes,
 }
 
 impl AacAudioConfig {
@@ -40,8 +40,8 @@ impl AacAudioConfig {
         Self { data }
     }
 
-    pub fn data(&self) -> Bytes {
-        self.data.clone()
+    pub fn data(&self) -> &Bytes {
+        &self.data
     }
 
     pub fn sample_rate(&self) -> Result<u32, ParseError> {

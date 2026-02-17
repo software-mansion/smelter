@@ -138,7 +138,7 @@ pub(super) fn event_into_raw(
                 channels: config
                     .channels()
                     .map_err(|_| SerializationError::AscParsingError)?,
-                data: config.data(),
+                data: config.data().clone(),
             }
             .serialize()?,
         },
