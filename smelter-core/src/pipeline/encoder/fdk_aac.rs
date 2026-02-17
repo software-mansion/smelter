@@ -112,8 +112,6 @@ impl AudioEncoder for FdkAacEncoder {
                 samples_per_frame: info.frameLength,
             },
             AudioEncoderConfig {
-                //channels: options.channels,
-                //sample_rate: options.sample_rate,
                 extradata: Some(Bytes::copy_from_slice(
                     &info.confBuf[0..(info.confSize as usize)],
                 )),

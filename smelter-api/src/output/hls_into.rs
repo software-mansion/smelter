@@ -97,6 +97,7 @@ impl HlsVideoEncoderOptions {
                     .unwrap_or_default()
                     .into_iter()
                     .collect(),
+                bitstream_format: core::H264BitstreamFormat::AnnexB,
             }),
             HlsVideoEncoderOptions::VulkanH264 {
                 bitrate,

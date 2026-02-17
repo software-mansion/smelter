@@ -127,6 +127,7 @@ impl RtpVideoEncoderOptions {
                     .unwrap_or_default()
                     .into_iter()
                     .collect(),
+                bitstream_format: core::H264BitstreamFormat::AnnexB,
             }),
             RtpVideoEncoderOptions::VulkanH264 {
                 bitrate,

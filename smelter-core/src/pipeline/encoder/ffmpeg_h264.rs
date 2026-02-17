@@ -12,6 +12,7 @@ use crate::pipeline::encoder::utils::{
     bitrate_from_resolution_framerate, gop_size_from_ms_framerate,
 };
 use crate::pipeline::ffmpeg_utils::FfmpegOptions;
+use crate::pipeline::utils::{annexb_to_avcc, build_avc_decoder_config};
 use crate::prelude::*;
 
 use super::{VideoEncoder, VideoEncoderConfig};
@@ -21,6 +22,7 @@ const TIME_BASE: i32 = 1_000_000;
 pub struct FfmpegH264Encoder {
     encoder: ffmpeg_next::encoder::Video,
     packet: ffmpeg_next::Packet,
+    bitstream_format: H264BitstreamFormat,
 }
 
 impl VideoEncoder for FfmpegH264Encoder {
@@ -48,6 +50,9 @@ impl VideoEncoder for FfmpegH264Encoder {
         encoder.set_frame_rate(Some((framerate.num as i32, framerate.den as i32)));
         encoder.set_colorspace(ffmpeg_next::color::Space::BT709);
         encoder.set_color_range(ffmpeg_next::color::Range::MPEG);
+        if options.bitstream_format == H264BitstreamFormat::Avcc {
+            encoder.set_flags(ffmpeg_next::codec::Flags::GLOBAL_HEADER);
+        }
         unsafe {
             let encoder = encoder.as_mut_ptr();
             use ffmpeg_next::ffi;
@@ -58,12 +63,14 @@ impl VideoEncoder for FfmpegH264Encoder {
         let ffmpeg_options = initialize_ffmpeg_h264_options(ctx, &options, codec_name);
 
         let encoder = encoder.open_as_with(codec, ffmpeg_options.into_dictionary())?;
-        let extradata = read_extradata(&encoder);
+        let extradata =
+            read_extradata(&encoder).and_then(|extradata| build_avc_decoder_config(&extradata));
 
         Ok((
             Self {
                 encoder,
                 packet: ffmpeg_next::Packet::empty(),
+                bitstream_format: options.bitstream_format,
             },
             VideoEncoderConfig {
                 resolution: options.resolution,
@@ -115,7 +122,10 @@ impl FfmpegH264Encoder {
                         MediaKind::Video(VideoCodec::H264),
                         TIME_BASE,
                     ) {
-                        Ok(chunk) => {
+                        Ok(mut chunk) => {
+                            if self.bitstream_format == H264BitstreamFormat::Avcc {
+                                chunk.data = annexb_to_avcc(&chunk.data);
+                            };
                             trace!(pts=?self.packet.pts(), ?chunk, "H264 encoder produced an encoded packet.");
                             Some(chunk)
                         }

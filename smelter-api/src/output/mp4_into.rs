@@ -97,6 +97,7 @@ impl Mp4VideoEncoderOptions {
                     .unwrap_or_default()
                     .into_iter()
                     .collect(),
+                bitstream_format: core::H264BitstreamFormat::AnnexB,
             }),
             Mp4VideoEncoderOptions::VulkanH264 {
                 bitrate,

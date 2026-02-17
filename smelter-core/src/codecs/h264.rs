@@ -18,6 +18,12 @@ pub enum FfmpegH264EncoderPreset {
     Placebo,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum H264BitstreamFormat {
+    AnnexB,
+    Avcc,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FfmpegH264EncoderOptions {
     pub preset: FfmpegH264EncoderPreset,
@@ -26,6 +32,7 @@ pub struct FfmpegH264EncoderOptions {
     pub resolution: Resolution,
     pub pixel_format: OutputPixelFormat,
     pub raw_options: Vec<(Arc<str>, Arc<str>)>,
+    pub bitstream_format: H264BitstreamFormat,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
