@@ -7,6 +7,8 @@ use crate::{
     AudioTagSoundRate, ParseError, ScriptData, VideoCodec, VideoTagFrameType,
 };
 
+use tracing::warn;
+
 #[derive(Debug, Clone)]
 pub enum RtmpEvent {
     H264Data(H264VideoData),
@@ -43,19 +45,7 @@ impl AacAudioConfig {
     }
 
     pub fn sample_rate(&self) -> Result<u32, ParseError> {
-        if self.data.remaining() < 2 {
-            return Err(ParseError::NotEnoughData);
-        }
-
-        let object_type = (self.data[0] >> 3) & 0x1F;
-        let frequency_index = match object_type {
-            31 => (self.data[1] >> 1) & 0xF,
-            _ => {
-                let high = self.data[0] & 0b111;
-                let low = (self.data[1] >> 7) & 0b1;
-                (high << 1) | low
-            }
-        };
+        let (object_type, frequency_index) = self.object_type_frequency_index()?;
 
         let frequency: u32 = match frequency_index {
             0 => 96000,
@@ -108,7 +98,54 @@ impl AacAudioConfig {
     }
 
     pub fn channels(&self) -> Result<AudioChannels, ParseError> {
-        todo!()
+        let (object_type, frequency_index) = self.object_type_frequency_index()?;
+
+        let channel_configuration = match (object_type, frequency_index) {
+            (31, 15) => {
+                let high = self.data[4] & 0x1;
+                let low = (self.data[5] >> 5) & 0x7;
+
+                (high << 3) | low
+            }
+            (31, _) => {
+                let high = self.data[1] & 0x1;
+                let low = (self.data[2] >> 5) & 0x7;
+
+                (high << 3) | low
+            }
+            (_, 15) => (self.data[4] >> 3) & 0xF,
+            (_, _) => (self.data[1] >> 3) & 0xF,
+        };
+
+        match channel_configuration {
+            1 => Ok(AudioChannels::Mono),
+            2 => Ok(AudioChannels::Stereo),
+            3..=7 => {
+                warn!("Unsupported channel value: {channel_configuration}. Using stereo.");
+                Ok(AudioChannels::Stereo)
+            }
+            _ => Err(
+                AudioSpecificConfigParseError::InvalidAudioChannel(channel_configuration).into(),
+            ),
+        }
+    }
+
+    fn object_type_frequency_index(&self) -> Result<(u8, u8), ParseError> {
+        if self.data.remaining() < 2 {
+            return Err(ParseError::NotEnoughData);
+        }
+
+        let object_type = (self.data[0] >> 3) & 0x1F;
+        let frequency_index = match object_type {
+            31 => (self.data[1] >> 1) & 0xF,
+            _ => {
+                let high = self.data[0] & 0x7;
+                let low = (self.data[1] >> 7) & 0x1;
+                (high << 1) | low
+            }
+        };
+
+        Ok((object_type, frequency_index))
     }
 }
 

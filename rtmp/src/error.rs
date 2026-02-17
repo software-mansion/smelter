@@ -111,6 +111,9 @@ pub enum AudioTagParseError {
 pub enum AudioSpecificConfigParseError {
     #[error("Invalid frequency index: {0}")]
     InvalidFrequencyIndex(u8),
+
+    #[error("Invalid audio channel value in AAC audio specific config: {0}")]
+    InvalidAudioChannel(u8),
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
