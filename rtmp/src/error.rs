@@ -72,6 +72,9 @@ pub enum SerializationError {
 
     #[error("Packet type is required for H264")]
     H264PacketTypeRequired,
+
+    #[error("Failed to parse audio specific config to retrieve value.")]
+    AscParsingError,
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]

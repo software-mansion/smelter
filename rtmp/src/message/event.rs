@@ -18,11 +18,7 @@ pub(super) fn audio_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, Parse
             data: tag.data,
         }),
         (AudioCodec::Aac, Some(AudioTagAacPacketType::Config)) => {
-            RtmpEvent::AacConfig(AacAudioConfig {
-                sample_rate: 44_100, // TODO: use correct sample rate
-                channels: tag.channels,
-                data: tag.data,
-            })
+            RtmpEvent::AacConfig(AacAudioConfig::new(tag.data))
         }
         (codec, _) => RtmpEvent::GenericAudioData(GenericAudioData {
             timestamp: msg.timestamp,
@@ -139,8 +135,10 @@ pub(super) fn event_into_raw(
                 codec: AudioCodec::Aac,
                 sample_rate: AudioTagSoundRate::Rate44000,
                 sample_size: AudioTagSampleSize::Sample16Bit,
-                channels: config.channels,
-                data: config.data,
+                channels: config
+                    .channels()
+                    .map_err(|_| SerializationError::AscParsingError)?,
+                data: config.data(),
             }
             .serialize()?,
         },

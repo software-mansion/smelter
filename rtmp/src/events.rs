@@ -38,6 +38,10 @@ impl AacAudioConfig {
         Self { data }
     }
 
+    pub fn data(&self) -> Bytes {
+        self.data.clone()
+    }
+
     pub fn sample_rate(&self) -> Result<u32, ParseError> {
         if self.data.remaining() < 2 {
             return Err(ParseError::NotEnoughData);
