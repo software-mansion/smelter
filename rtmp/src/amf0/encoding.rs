@@ -48,9 +48,9 @@ impl Amf0EncoderState {
             } => self.put_date(*unix_time, *timezone_offset),
             Amf0Value::LongString(s) => self.put_long_string(s)?,
             Amf0Value::TypedObject {
-                class_name: _class_name,
-                properties: _properties,
-            } => unimplemented!(),
+                class_name,
+                properties,
+            } => self.put_typed_object(class_name, properties)?,
             Amf0Value::AvmPlus(amf3_value) => self.put_avmplus_object(amf3_value)?,
         };
         Ok(())
@@ -124,6 +124,20 @@ impl Amf0EncoderState {
         self.buf.put_u32(s.len() as u32);
         self.buf.put_slice(s.as_bytes());
         Ok(())
+    }
+
+    fn put_typed_object(
+        &mut self,
+        class_name: &str,
+        properties: &HashMap<String, Amf0Value>,
+    ) -> Result<(), AmfEncodingError> {
+        if class_name.len() > u16::MAX as usize {
+            return Err(AmfEncodingError::StringTooLong(class_name.len()));
+        }
+
+        self.buf.put_u8(TYPED_OBJECT);
+        self.buf.put_slice(class_name.as_bytes());
+        self.put_keyval_map(properties)
     }
 
     fn put_avmplus_object(&mut self, amf3_value: &Amf3Value) -> Result<(), AmfEncodingError> {
