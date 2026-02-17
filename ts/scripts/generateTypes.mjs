@@ -8,7 +8,7 @@ async function generateTypes() {
   const schemaPath = path.resolve(dirname, '../../tools/schemas/api_types.schema.json');
   const tsOutputPath = path.resolve(dirname, '../smelter/src/api.generated.ts');
 
-  await spawn('cargo', ['run', '--package', 'tools', '--bin', 'generate_json_schema']);
+  await spawn('cargo', ['run', '--package', 'tools', '--bin', 'generate_from_types']);
   const typesTs = await compileFromFile(schemaPath, {
     additionalProperties: false,
   });

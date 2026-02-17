@@ -1929,7 +1929,7 @@
           "web_renderer_enable_gpu",
           "whip_whep_server_port",
           "whip_whep_enable",
-          "whip_whep_stun_servers",
+          "webrtc_stun_servers",
           "rendering_mode"
         ],
         "properties": {
@@ -1973,7 +1973,7 @@
           "whip_whep_enable": {
             "type": "boolean"
           },
-          "whip_whep_stun_servers": {
+          "webrtc_stun_servers": {
             "type": "array",
             "items": {
               "type": "string"
