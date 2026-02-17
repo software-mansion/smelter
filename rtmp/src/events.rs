@@ -102,6 +102,10 @@ impl AacAudioConfig {
 
         Ok(frequency)
     }
+
+    pub fn channels(&self) -> Result<AudioChannels, ParseError> {
+        Ok(AudioChannels::Stereo)
+    }
 }
 
 // Raw RTMP message for codecs that we do not explicitly support.
@@ -198,8 +202,9 @@ impl std::fmt::Debug for AacAudioData {
 impl std::fmt::Debug for AacAudioConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let sample_rate = self.sample_rate().map_err(|_| std::fmt::Error)?;
+        let channels = self.channels().map_err(|_| std::fmt::Error)?;
         f.debug_struct("AacAudioConfig")
-            .field("channels", &self.channels)
+            .field("channels", &channels)
             .field("sample_rate", &sample_rate)
             .field("data", &bytes_debug(&self.data))
             .finish()
@@ -240,5 +245,25 @@ fn bytes_debug(data: &[u8]) -> String {
             &data[(data.len() - 3)..],
             data.len()
         )
+    }
+}
+
+#[cfg(test)]
+mod asc_parser_test {
+    use bytes::Bytes;
+
+    use crate::AacAudioConfig;
+
+    #[test]
+    fn test_sound_frequency() {
+        // Encoded with sample rate 44100 Hz
+        let asc_bytes = Bytes::from_iter([0b00010_010, 0b0_0000000]);
+        let asc = AacAudioConfig::new(asc_bytes);
+        assert_eq!(asc.sample_rate().unwrap(), 44_100);
+
+        // Encoded with sample rate 48000 Hz
+        let asc_bytes = Bytes::from_iter([0b00010_001, 0b1_0000000]);
+        let asc = AacAudioConfig::new(asc_bytes);
+        assert_eq!(asc.sample_rate().unwrap(), 48_000);
     }
 }
