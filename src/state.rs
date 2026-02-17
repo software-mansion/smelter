@@ -124,13 +124,15 @@ pub fn pipeline_options_from_config(
             force_gpu: opt.wgpu_force_gpu,
         },
 
-        whip_whep_stun_servers: opt.whip_whep_stun_servers.clone(),
+        webrtc_stun_servers: opt.webrtc_stun_servers.clone(),
         whip_whep_server: match opt.whip_whep_enable {
             true => PipelineWhipWhepServerOptions::Enable {
                 port: opt.whip_whep_server_port,
             },
             false => PipelineWhipWhepServerOptions::Disable,
         },
+        webrtc_port_range: opt.webrtc_udp_port_range,
+        webrtc_nat_1to1_ips: opt.webrtc_nat_1to1_ips.clone(),
 
         rtmp_server: match opt.rtmp_enable {
             true => PipelineRtmpServerOptions::Enable {

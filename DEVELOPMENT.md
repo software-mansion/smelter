@@ -164,7 +164,7 @@ This is crate when we keep most of our internal tools and build scripts.
 - `package_for_release` - builds release binaries that can be uploaded to GitHub Releases
 - `generate_docs_examples` - generates WEBP files with examples for documentation.
 - `generate_docs_example_inputs` - helper for `generate_docs_examples` (generates inputs for that binary).
-- `generate_json_schema` - generate JSON schema from `smelter-api` types. It needs to be called every
+- `generate_from_types` - generate JSON schema and OpenAPI definition from `smelter-api` types. It needs to be called every
   time API is changed and regenerated file needs to be committed.
 
 ## Examples
@@ -321,7 +321,7 @@ TypeScript SDK should always be compatible with the version of code from the rep
 Everything in the same PR.
 
 - Update Rust code.
-- Run `cargo run -p tools --bin generate_json_schema` that will generate **`./tools/schemas/scene.schema.json`** and **`./tools/schemas/api_types.schema.json`**.
+- Run `cargo run -p tools --bin generate_from_types` that will generate **`./tools/schemas/scene.schema.json`** and **`./tools/schemas/api_types.schema.json`**.
 - Run `pnpm run generate-types` in **`./ts`** that will generate **`./ts/smelter/src/api.generated.ts`**.
 - Update TypeScript code to support new changes.
 - Update CHANGELOG

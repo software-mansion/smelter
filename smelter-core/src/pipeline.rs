@@ -68,7 +68,9 @@ pub struct PipelineOptions {
     pub chromium_context: Option<Arc<ChromiumContext>>,
 
     pub whip_whep_server: PipelineWhipWhepServerOptions,
-    pub whip_whep_stun_servers: Arc<Vec<String>>,
+    pub webrtc_stun_servers: Arc<Vec<String>>,
+    pub webrtc_port_range: Option<(u16, u16)>,
+    pub webrtc_nat_1to1_ips: Arc<Vec<String>>,
 
     pub rtmp_server: PipelineRtmpServerOptions,
 }
@@ -106,11 +108,13 @@ pub(crate) struct PipelineCtx {
     pub mixing_sample_rate: u32,
     pub output_framerate: Framerate,
 
-    pub stun_servers: Arc<Vec<String>>,
     pub download_dir: Arc<Path>,
     pub graphics_context: GraphicsContext,
     pub event_emitter: Arc<EventEmitter>,
     pub stats_sender: StatsSender,
+    pub webrtc_stun_servers: Arc<Vec<String>>,
+    pub webrtc_port_range: Option<(u16, u16)>,
+    pub webrtc_nat_1to1_ips: Arc<Vec<String>>,
     tokio_rt: Arc<Runtime>,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
     rtmp_state: Option<Arc<RtmpPipelineState>>,

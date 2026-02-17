@@ -9,7 +9,7 @@ use std::{
 use rand::Rng;
 use smelter_core::DEFAULT_BUFFER_DURATION;
 use smelter_render::{Framerate, RenderingMode, WgpuFeatures};
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::logger::FfmpegLogLevel;
 
@@ -40,9 +40,11 @@ pub struct Config {
     pub web_renderer_enable: bool,
     pub web_renderer_gpu_enable: bool,
 
-    pub whip_whep_stun_servers: Arc<Vec<String>>,
     pub whip_whep_server_port: u16,
     pub whip_whep_enable: bool,
+    pub webrtc_stun_servers: Arc<Vec<String>>,
+    pub webrtc_udp_port_range: Option<(u16, u16)>,
+    pub webrtc_nat_1to1_ips: Arc<Vec<String>>,
 
     pub rtmp_server_port: u16,
     pub rtmp_enable: bool,
@@ -248,6 +250,36 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => true,
     };
 
+    let default_stun_servers = Arc::new(vec!["stun:stun.l.google.com:19302".to_string()]);
+    let webrtc_stun_servers =
+        match env::var("SMELTER_WEBRTC_STUN_SERVERS").or(env::var("SMELTER_STUN_SERVERS")) {
+            Ok(var) => {
+                if var.is_empty() {
+                    error!("empty stun servers env");
+                    Arc::new(Vec::new())
+                } else {
+                    Arc::new(var.split(',').map(String::from).collect())
+                }
+            }
+            Err(_) => default_stun_servers,
+        };
+
+    let webrtc_udp_port_range = match env::var("SMELTER_WEBRTC_UDP_PORT_RANGE") {
+        Ok(port_range) => match port_range_from_str(&port_range) {
+            Ok(port_range) => Some(port_range),
+            Err(err) => {
+                warn!("\"{port_range}\" is not a valid port range: {err}");
+                None
+            }
+        },
+        Err(_) => None,
+    };
+
+    let webrtc_nat_1to1_ips = match env::var("SMELTER_WEBRTC_1_TO_1_NAT_IPS") {
+        Ok(ips) => Arc::new(ips.split(",").map(ToString::to_string).collect()),
+        Err(_) => Arc::new(vec![]),
+    };
+
     let rtmp_server_port = match env::var("SMELTER_RTMP_SERVER_PORT") {
         Ok(rtmp_port) => rtmp_port
             .parse::<u16>()
@@ -263,20 +295,6 @@ fn try_read_config() -> Result<Config, String> {
     let log_file = match env::var("SMELTER_LOG_FILE") {
         Ok(path) => Some(Arc::from(PathBuf::from(path))),
         Err(_) => None,
-    };
-
-    let default_stun_servers = Arc::new(vec!["stun:stun.l.google.com:19302".to_string()]);
-
-    let stun_servers = match env::var("SMELTER_STUN_SERVERS") {
-        Ok(var) => {
-            if var.is_empty() {
-                error!("empty stun servers env");
-                Arc::new(Vec::new())
-            } else {
-                Arc::new(var.split(',').map(String::from).collect())
-            }
-        }
-        Err(_) => default_stun_servers,
     };
 
     let rendering_mode = match env::var("SMELTER_FORCE_CPU_OPTIMIZED_RENDERING_MODE") {
@@ -307,17 +325,19 @@ fn try_read_config() -> Result<Config, String> {
         web_renderer_gpu_enable,
         download_root,
         mixing_sample_rate,
-        whip_whep_stun_servers: stun_servers,
         wgpu_force_gpu,
         wgpu_required_features,
         gpu_device_id,
         gpu_driver_name,
         load_system_fonts,
-        whip_whep_server_port,
         whip_whep_enable,
-        rendering_mode,
+        whip_whep_server_port,
+        webrtc_stun_servers,
+        webrtc_udp_port_range,
+        webrtc_nat_1to1_ips,
         rtmp_server_port,
         rtmp_enable,
+        rendering_mode,
     };
     Ok(config)
 }
@@ -337,6 +357,17 @@ fn framerate_from_str(s: &str) -> Result<Framerate, &'static str> {
             den: 1,
         })
     }
+}
+
+fn port_range_from_str(s: &str) -> Result<(u16, u16), &'static str> {
+    const ERROR_MESSAGE: &str =
+        "Port range needs to be in the \"START:END\" format, where START < END.";
+    let Some((num_str, den_str)) = s.split_once(':') else {
+        return Err(ERROR_MESSAGE);
+    };
+    let start = num_str.parse::<u16>().map_err(|_| ERROR_MESSAGE)?;
+    let end = den_str.parse::<u16>().map_err(|_| ERROR_MESSAGE)?;
+    Ok((start, end))
 }
 
 fn bool_env_from_str(s: &str) -> Option<bool> {

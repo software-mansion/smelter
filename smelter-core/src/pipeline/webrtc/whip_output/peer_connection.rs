@@ -21,7 +21,11 @@ use webrtc::{
 
 use std::sync::Arc;
 
-use crate::{pipeline::webrtc::whip_output::codec_preferences::CodecParameters, prelude::*};
+use crate::pipeline::webrtc::{
+    default_setting_engine, whip_output::codec_preferences::CodecParameters,
+};
+
+use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct PeerConnection {
@@ -46,11 +50,12 @@ impl PeerConnection {
         let api = APIBuilder::new()
             .with_media_engine(media_engine)
             .with_interceptor_registry(registry)
+            .with_setting_engine(default_setting_engine(ctx))
             .build();
 
         let config = RTCConfiguration {
             ice_servers: vec![RTCIceServer {
-                urls: ctx.stun_servers.to_vec(),
+                urls: ctx.webrtc_stun_servers.to_vec(),
                 ..Default::default()
             }],
             ..Default::default()

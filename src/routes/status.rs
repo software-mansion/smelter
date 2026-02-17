@@ -41,7 +41,7 @@ struct InstanceConfiguration {
 
     whip_whep_server_port: u16,
     whip_whep_enable: bool,
-    whip_whep_stun_servers: Arc<Vec<String>>,
+    webrtc_stun_servers: Arc<Vec<String>>,
 
     rendering_mode: &'static str,
 }
@@ -121,7 +121,7 @@ pub async fn status_handler(
         never_drop_output_frames: state.config.never_drop_output_frames,
         run_late_scheduled_events: state.config.run_late_scheduled_events,
         download_root: state.config.download_root.clone(),
-        whip_whep_stun_servers: state.config.whip_whep_stun_servers.clone(),
+        webrtc_stun_servers: state.config.webrtc_stun_servers.clone(),
         web_renderer_enable: state.config.web_renderer_enable,
         web_renderer_enable_gpu: state.config.web_renderer_gpu_enable,
         whip_whep_enable: state.config.whip_whep_enable,

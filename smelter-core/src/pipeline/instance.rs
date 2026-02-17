@@ -556,7 +556,6 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         mixing_sample_rate: opts.mixing_sample_rate,
         output_framerate: opts.output_framerate,
 
-        stun_servers: opts.whip_whep_stun_servers.clone(),
         download_dir,
         event_emitter: Arc::new(EventEmitter::new()),
         stats_sender,
@@ -568,6 +567,9 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
             }
             PipelineWhipWhepServerOptions::Disable => None,
         },
+        webrtc_stun_servers: opts.webrtc_stun_servers.clone(),
+        webrtc_port_range: opts.webrtc_port_range,
+        webrtc_nat_1to1_ips: opts.webrtc_nat_1to1_ips,
         rtmp_state: rtmp_state.clone(),
     });
 
