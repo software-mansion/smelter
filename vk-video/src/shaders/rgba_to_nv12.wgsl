@@ -50,5 +50,3 @@ fn fs_main_uv(input: VertexOutput) -> @location(0) vec2<f32> {
 
     return clamp(conversion_weights * color + conversion_bias, vec2(0.0, 0.0), vec2(1.0, 1.0));
 }
-
-
