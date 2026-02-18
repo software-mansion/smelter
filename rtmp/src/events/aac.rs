@@ -1,5 +1,4 @@
 use bytes::{Buf, Bytes};
-use tracing::warn;
 
 use crate::{AudioChannels, AudioSpecificConfigParseError, ParseError};
 
@@ -112,10 +111,6 @@ impl AacAudioConfig {
         match channel_configuration {
             1 => Ok(AudioChannels::Mono),
             2 => Ok(AudioChannels::Stereo),
-            3..=7 => {
-                warn!("Unsupported channel value: {channel_configuration}. Using stereo.");
-                Ok(AudioChannels::Stereo)
-            }
             _ => Err(
                 AudioSpecificConfigParseError::InvalidAudioChannel(channel_configuration).into(),
             ),
