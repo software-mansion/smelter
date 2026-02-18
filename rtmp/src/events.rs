@@ -61,32 +61,37 @@ impl AacAudioConfig {
             10 => 11025,
             11 => 8000,
             12 => 7350,
-            15 => match object_type {
-                31 => {
-                    let first_chunk = self.data[1] & 0x1;
-                    let second_chunk = self.data[2];
-                    let third_chunk = self.data[3];
-                    let fourth_chunk = self.data[4] >> 1;
-
-                    let first_byte = (first_chunk << 7) | (second_chunk >> 1);
-                    let second_byte = (second_chunk << 7) | (third_chunk >> 1);
-                    let third_byte = (third_chunk << 7) | fourth_chunk;
-
-                    u32::from_be_bytes([0, first_byte, second_byte, third_byte])
+            15 => {
+                if self.data.remaining() < 5 {
+                    return Err(ParseError::NotEnoughData);
                 }
-                _ => {
-                    let first_chunk = self.data[1] & 0x7F;
-                    let second_chunk = self.data[2];
-                    let third_chunk = self.data[3];
-                    let fourth_chunk = self.data[4] >> 7;
+                match object_type {
+                    31 => {
+                        let first_chunk = self.data[1] & 0x1;
+                        let second_chunk = self.data[2];
+                        let third_chunk = self.data[3];
+                        let fourth_chunk = self.data[4] >> 1;
 
-                    let first_byte = (first_chunk << 1) | (second_chunk >> 7);
-                    let second_byte = (second_chunk << 1) | (third_chunk >> 7);
-                    let third_byte = (third_chunk << 1) | fourth_chunk;
+                        let first_byte = (first_chunk << 7) | (second_chunk >> 1);
+                        let second_byte = (second_chunk << 7) | (third_chunk >> 1);
+                        let third_byte = (third_chunk << 7) | fourth_chunk;
 
-                    u32::from_be_bytes([0, first_byte, second_byte, third_byte])
+                        u32::from_be_bytes([0, first_byte, second_byte, third_byte])
+                    }
+                    _ => {
+                        let first_chunk = self.data[1] & 0x7F;
+                        let second_chunk = self.data[2];
+                        let third_chunk = self.data[3];
+                        let fourth_chunk = self.data[4] >> 7;
+
+                        let first_byte = (first_chunk << 1) | (second_chunk >> 7);
+                        let second_byte = (second_chunk << 1) | (third_chunk >> 7);
+                        let third_byte = (third_chunk << 1) | fourth_chunk;
+
+                        u32::from_be_bytes([0, first_byte, second_byte, third_byte])
+                    }
                 }
-            },
+            }
             _ => {
                 return Err(
                     AudioSpecificConfigParseError::InvalidFrequencyIndex(frequency_index).into(),
@@ -102,18 +107,29 @@ impl AacAudioConfig {
 
         let channel_configuration = match (object_type, frequency_index) {
             (31, 15) => {
+                if self.data.remaining() < 6 {
+                    return Err(ParseError::NotEnoughData);
+                }
                 let high = self.data[4] & 0x1;
                 let low = (self.data[5] >> 5) & 0x7;
 
                 (high << 3) | low
             }
             (31, _) => {
+                if self.data.remaining() < 3 {
+                    return Err(ParseError::NotEnoughData);
+                }
                 let high = self.data[1] & 0x1;
                 let low = (self.data[2] >> 5) & 0x7;
 
                 (high << 3) | low
             }
-            (_, 15) => (self.data[4] >> 3) & 0xF,
+            (_, 15) => {
+                if self.data.remaining() < 5 {
+                    return Err(ParseError::NotEnoughData);
+                }
+                (self.data[4] >> 3) & 0xF
+            }
             (_, _) => (self.data[1] >> 3) & 0xF,
         };
 
