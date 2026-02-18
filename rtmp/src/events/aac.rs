@@ -186,109 +186,62 @@ mod asc_parser_test {
     use crate::{AacAudioConfig, AudioChannels};
 
     #[test]
-    fn test_sound_frequency() {
-        // Encoded with sample rate 48000 Hz.
+    fn test_asc_parsing() {
+        // Encoded with sample rate 48000 Hz, Stereo.
         // ASC format:
-        // - 5 bits - object type
-        // - 4 bits - frequency index
-        let asc_bytes = Bytes::from_iter([0b0001_0001, 0b1000_0000]);
+        // - 5 bits - object type (2)
+        // - 4 bits - frequency index (3)
+        // - 4 bits - channel configuration (2)
+        let asc_bytes = Bytes::from_iter([0b0001_0001, 0b1001_0000]);
         let asc = AacAudioConfig::try_from(asc_bytes).unwrap();
         assert_eq!(asc.sample_rate(), 48_000);
+        assert_eq!(asc.channels(), AudioChannels::Stereo);
 
-        // Encoded with sample rate 48000 Hz. object_type == 31
+        // Encoded with sample rate 48000 Hz, Stereo.
         // ASC format:
-        // - 5 bits - object type
-        // - 6 bits - object type extension
-        // - 4 bits - frequency index
-        let asc_bytes = Bytes::from_iter([0b1111_1000, 0b0000_0110]);
+        // - 5 bits - object type (31)
+        // - 6 bits - object type extension (0)
+        // - 4 bits - frequency index (3)
+        // - 4 bits - channel configuration (2)
+        let asc_bytes = Bytes::from_iter([0b1111_1000, 0b0000_0110, 0b0100_0000]);
         let asc = AacAudioConfig::try_from(asc_bytes).unwrap();
         assert_eq!(asc.sample_rate(), 48_000);
+        assert_eq!(asc.channels(), AudioChannels::Stereo);
 
-        // Encoded with custom sample rate (2137 Hz).
+        // Encoded with custom sample rate (2137 Hz), Stereo.
         // ASC format:
-        // - 5 bits - object type
-        // - 4 bits - frequency index
-        // - 24 bits - custom frequency
+        // - 5 bits - object type (2)
+        // - 4 bits - frequency index (15)
+        // - 24 bits - custom frequency (2137)
+        // - 4 bits - channel configuration (2)
         let asc_bytes = Bytes::from_iter([
             0b0001_0111,
             0b1000_0000,
             0b0000_0100,
             0b0010_1100,
-            0b1000_0000,
+            0b1001_0000,
         ]);
         let asc = AacAudioConfig::try_from(asc_bytes).unwrap();
         assert_eq!(asc.sample_rate(), 2137);
+        assert_eq!(asc.channels(), AudioChannels::Stereo);
 
-        // Encoded with custom sample rate (2137 Hz). object_type == 31
+        // Encoded with custom sample rate (2137 Hz), Stereo.
         // ASC format:
-        // - 5 bits - object type
-        // - 6 bits - object type extension
-        // - 4 bits - frequency index
-        // - 24 bits - custom frequency
+        // - 5 bits - object type (31)
+        // - 6 bits - object type extension (0)
+        // - 4 bits - frequency index (15)
+        // - 24 bits - custom frequency (2137)
+        // - 4 bits - channel configuration (2)
         let asc_bytes = Bytes::from_iter([
             0b1111_1000,
             0b0001_1110,
             0b0000_0000,
             0b0001_0000,
             0b1011_0010,
-        ]);
-        let asc = AacAudioConfig::try_from(asc_bytes).unwrap();
-        assert_eq!(asc.sample_rate(), 2137);
-    }
-
-    #[test]
-    fn test_channels() {
-        // Encoded with channels value 2.
-        // ASC format:
-        // - 5 bits - object type
-        // - 4 bits - frequency index
-        // - 4 bits - channel configuration
-        let asc_bytes = Bytes::from_iter([0b0001_0001, 0b1001_0000]);
-        let asc = AacAudioConfig::try_from(asc_bytes).unwrap();
-        assert_eq!(asc.channels(), AudioChannels::Stereo);
-
-        // Encoded with channels value 2. object_type == 31
-        // ASC format:
-        // - 5 bits - object type
-        // - 6 bits - object type extension
-        // - 4 bits - frequency index
-        // - 4 bits - channel configuration
-        let asc_bytes = Bytes::from_iter([0b1111_1000, 0b0000_0110, 0b0100_0000]);
-        let asc = AacAudioConfig::try_from(asc_bytes).unwrap();
-        assert_eq!(asc.channels(), AudioChannels::Stereo);
-
-        // Encoded with channels value 2. frequency_index == 15
-        // ASC format:
-        // - 5 bits - object type
-        // - 4 bits - frequency index
-        // - 24 bits - custom frequency
-        // - 4 bits - channel configuration
-        let asc_bytes = Bytes::from_iter([
-            0b0001_0111,
-            0b1000_0000,
-            0b0000_0000,
-            0b0000_0000,
-            0b0001_0000,
-        ]);
-        let asc = AacAudioConfig::try_from(asc_bytes).unwrap();
-        assert_eq!(asc.channels(), AudioChannels::Stereo);
-
-        // Encoded with channels value 2. object_type == 31, frequency_index == 15
-        // ASC format:
-        // - 5 bits - object type
-        // - 6 bits - object type extension
-        // - 4 bits - frequency index
-        // - 24 bits - custom frequency
-        // - 4 bits - channel configuration
-        let asc_bytes = Bytes::from_iter([
-            0b1111_1000,
-            0b0001_1110,
-            0b0000_0000,
-            0b0000_0000,
-            0b0000_0000,
             0b0100_0000,
         ]);
         let asc = AacAudioConfig::try_from(asc_bytes).unwrap();
+        assert_eq!(asc.sample_rate(), 2137);
         assert_eq!(asc.channels(), AudioChannels::Stereo);
     }
 }
