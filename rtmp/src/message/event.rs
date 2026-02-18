@@ -137,10 +137,9 @@ pub(super) fn event_into_raw(
                 codec: AudioCodec::Aac,
                 sample_rate: AudioTagSoundRate::Rate44000,
                 sample_size: AudioTagSampleSize::Sample16Bit,
-                channels: config.channels().map_err(|error| {
-                    error!(%error, "Audio specific config parse error.");
-                    SerializationError::AscParseError
-                })?,
+                channels: config
+                    .channels()
+                    .map_err(|_| SerializationError::AscParseError)?,
                 data: config.data().clone(),
             }
             .serialize()?,
