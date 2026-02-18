@@ -5,6 +5,7 @@
 ### 💥 Breaking changes
 
 ### ✨ New features
+- Added helpers for NV12 <-> RGBA wgpu texture conversion
 
 ### 🐛 Bug fixes
 
