@@ -1,8 +1,8 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{
-    SerializationError,
     error::{AudioTagParseError, ParseError},
+    SerializationError,
 };
 
 /// Struct representing flv AUDIODATA.
@@ -43,8 +43,6 @@ pub enum AudioCodec {
     Mp3_8k,
     DeviceSpecific,
 }
-
-pub struct AudioSpecificConfig {}
 
 impl AudioCodec {
     fn from_raw(id: u8) -> Result<Self, AudioTagParseError> {

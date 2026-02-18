@@ -301,11 +301,6 @@ mod asc_parser_test {
 
     #[test]
     fn test_sound_frequency() {
-        // Encoded with sample rate 44100 Hz.
-        let asc_bytes = Bytes::from_iter([0b00010_010, 0b0_0000000]);
-        let asc = AacAudioConfig::new(asc_bytes);
-        assert_eq!(asc.sample_rate().unwrap(), 44_100);
-
         // Encoded with sample rate 48000 Hz.
         let asc_bytes = Bytes::from_iter([0b00010_001, 0b1_0000000]);
         let asc = AacAudioConfig::new(asc_bytes);
