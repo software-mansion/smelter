@@ -42,7 +42,7 @@ impl AacAudioConfig {
                 }
                 match object_type {
                     31 => {
-                        let first_chunk = self.data[1] & 0x1;
+                        let first_chunk = self.data[1] & 0b1;
                         let second_chunk = self.data[2];
                         let third_chunk = self.data[3];
                         let fourth_chunk = self.data[4] >> 1;
@@ -54,7 +54,7 @@ impl AacAudioConfig {
                         u32::from_be_bytes([0, first_byte, second_byte, third_byte])
                     }
                     _ => {
-                        let first_chunk = self.data[1] & 0x7F;
+                        let first_chunk = self.data[1] & 0b0111_1111;
                         let second_chunk = self.data[2];
                         let third_chunk = self.data[3];
                         let fourth_chunk = self.data[4] >> 7;
@@ -86,8 +86,8 @@ impl AacAudioConfig {
                 if self.data.remaining() < 6 {
                     return Err(ParseError::NotEnoughData);
                 }
-                let high = self.data[4] & 0x1;
-                let low = (self.data[5] >> 5) & 0x7;
+                let high = self.data[4] & 0b1;
+                let low = (self.data[5] & 0b1110_0000) >> 5;
 
                 (high << 3) | low
             }
@@ -95,8 +95,8 @@ impl AacAudioConfig {
                 if self.data.remaining() < 3 {
                     return Err(ParseError::NotEnoughData);
                 }
-                let high = self.data[1] & 0x1;
-                let low = (self.data[2] >> 5) & 0x7;
+                let high = self.data[1] & 0b1;
+                let low = (self.data[2] & 0b1110_0000) >> 5;
 
                 (high << 3) | low
             }
@@ -104,9 +104,9 @@ impl AacAudioConfig {
                 if self.data.remaining() < 5 {
                     return Err(ParseError::NotEnoughData);
                 }
-                (self.data[4] >> 3) & 0xF
+                (self.data[4] & 0b0111_1000) >> 3
             }
-            (_, _) => (self.data[1] >> 3) & 0xF,
+            (_, _) => (self.data[1] & 0b0111_1000) >> 3,
         };
 
         match channel_configuration {
@@ -128,15 +128,15 @@ impl AacAudioConfig {
         }
 
         // 5 bit object_type
-        let object_type = (self.data[0] >> 3) & 0x1F;
+        let object_type = (self.data[0] & 0b1111_1000) >> 3;
 
         // 4 bit frequency_index
         let frequency_index = match object_type {
             // If object_type == 31, then additional 6 bits come after initial 5 bits.
-            31 => (self.data[1] >> 1) & 0xF,
+            31 => (self.data[1] & 0b0001_1110) >> 1,
             _ => {
-                let high = self.data[0] & 0x7;
-                let low = (self.data[1] >> 7) & 0x1;
+                let high = self.data[0] & 0b111;
+                let low = (self.data[1] & 0b1000_0000) >> 7;
                 (high << 1) | low
             }
         };
