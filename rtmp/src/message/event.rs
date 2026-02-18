@@ -1,13 +1,15 @@
 use std::time::Duration;
 
 use crate::{
-    AacAudioConfig, AacAudioData, AudioChannels, AudioCodec, AudioTag, AudioTagAacPacketType,
-    AudioTagSampleSize, AudioTagSoundRate, GenericAudioData, GenericVideoData, H264VideoConfig,
-    H264VideoData, ParseError, RtmpEvent, SerializationError, VideoCodec, VideoTag,
-    VideoTagFrameType, VideoTagH264PacketType, VideoTagParseError,
+    AacAudioConfig, AacAudioData, AudioCodec, AudioTag, AudioTagAacPacketType, AudioTagSampleSize,
+    AudioTagSoundRate, GenericAudioData, GenericVideoData, H264VideoConfig, H264VideoData,
+    ParseError, RtmpEvent, SerializationError, VideoCodec, VideoTag, VideoTagFrameType,
+    VideoTagH264PacketType, VideoTagParseError,
     message::RtmpMessage,
     protocol::{MessageType, RawMessage},
 };
+
+use tracing::error;
 
 pub(super) fn audio_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, ParseError> {
     let tag = AudioTag::parse(msg.payload)?;
@@ -135,7 +137,10 @@ pub(super) fn event_into_raw(
                 codec: AudioCodec::Aac,
                 sample_rate: AudioTagSoundRate::Rate44000,
                 sample_size: AudioTagSampleSize::Sample16Bit,
-                channels: config.channels().unwrap_or(AudioChannels::Stereo),
+                channels: config.channels().map_err(|error| {
+                    error!(%error, "Audio specific config parse error.");
+                    SerializationError::AscParseError
+                })?,
                 data: config.data().clone(),
             }
             .serialize()?,

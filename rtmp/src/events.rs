@@ -265,8 +265,8 @@ impl std::fmt::Debug for AacAudioData {
 
 impl std::fmt::Debug for AacAudioConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let sample_rate = self.sample_rate().map_err(|_| std::fmt::Error)?;
-        let channels = self.channels().map_err(|_| std::fmt::Error)?;
+        let sample_rate = self.sample_rate();
+        let channels = self.channels();
         f.debug_struct("AacAudioConfig")
             .field("channels", &channels)
             .field("sample_rate", &sample_rate)
