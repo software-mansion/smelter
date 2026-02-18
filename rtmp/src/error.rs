@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
+use crate::amf3::{I29_MAX, I29_MIN, MAX_SEALED_COUNT, U28_MAX, U29_MAX};
 use crate::{AudioCodec, VideoCodec, VideoTagFrameType, protocol::MessageType};
 
 #[derive(Error, Debug)]
@@ -138,14 +139,6 @@ pub enum AmfEncodingError {
     #[error("AMF3 encoding error: {0}.")]
     Amf3(#[from] Amf3EncodingError),
 }
-
-const U29_MAX: u32 = (1 << 29) - 1;
-const U28_MAX: u32 = (1 << 28) - 1;
-
-const I29_MAX: i32 = (1 << 28) - 1;
-const I29_MIN: i32 = -(1 << 28);
-
-const MAX_SEALED_COUNT: u32 = (1 << 25) - 1;
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum Amf3EncodingError {

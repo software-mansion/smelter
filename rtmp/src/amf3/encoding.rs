@@ -2,12 +2,13 @@ use bytes::{BufMut, Bytes};
 
 use crate::{Amf3EncodingError, AmfEncodingError, amf3::*};
 
-const U28_MAX: u32 = (1 << 28) - 1;
+pub(crate) const U29_MAX: u32 = (1 << 29) - 1;
+pub(crate) const U28_MAX: u32 = (1 << 28) - 1;
 
-const I29_MAX: i32 = (1 << 28) - 1;
-const I29_MIN: i32 = -(1 << 28);
+pub(crate) const I29_MAX: i32 = (1 << 28) - 1;
+pub(crate) const I29_MIN: i32 = -(1 << 28);
 
-const MAX_SEALED_COUNT: u32 = (1 << 25) - 1;
+pub(crate) const MAX_SEALED_COUNT: u32 = (1 << 25) - 1;
 
 pub(crate) struct Amf3EncoderState<T> {
     pub(super) buf: T,
