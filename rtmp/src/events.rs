@@ -61,6 +61,8 @@ impl AacAudioConfig {
             10 => 11025,
             11 => 8000,
             12 => 7350,
+
+            // If frequency_index == 15, then the frequency is encoded explicitly as 24 bit number
             15 => {
                 if self.data.remaining() < 5 {
                     return Err(ParseError::NotEnoughData);
@@ -105,6 +107,7 @@ impl AacAudioConfig {
     pub fn channels(&self) -> Result<AudioChannels, ParseError> {
         let (object_type, frequency_index) = self.object_type_frequency_index()?;
 
+        // 4 bit channel_configuration field
         let channel_configuration = match (object_type, frequency_index) {
             (31, 15) => {
                 if self.data.remaining() < 6 {
@@ -151,8 +154,12 @@ impl AacAudioConfig {
             return Err(ParseError::NotEnoughData);
         }
 
+        // 5 bit object_type
         let object_type = (self.data[0] >> 3) & 0x1F;
+
+        // 4 bit frequency_index
         let frequency_index = match object_type {
+            // If object_type == 31, then additional 6 bits come after initial 5 bits.
             31 => (self.data[1] >> 1) & 0xF,
             _ => {
                 let high = self.data[0] & 0x7;
