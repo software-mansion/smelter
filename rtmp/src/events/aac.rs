@@ -42,10 +42,10 @@ impl AacAudioConfig {
                 }
                 match object_type {
                     31 => {
-                        let first_chunk = self.data[1] & 0b1;
+                        let first_chunk = self.data[1] & 0b0000_0001;
                         let second_chunk = self.data[2];
                         let third_chunk = self.data[3];
-                        let fourth_chunk = self.data[4] >> 1;
+                        let fourth_chunk = (self.data[4] & 0b1111_1110) >> 1;
 
                         let first_byte = (first_chunk << 7) | (second_chunk >> 1);
                         let second_byte = (second_chunk << 7) | (third_chunk >> 1);
@@ -57,7 +57,7 @@ impl AacAudioConfig {
                         let first_chunk = self.data[1] & 0b0111_1111;
                         let second_chunk = self.data[2];
                         let third_chunk = self.data[3];
-                        let fourth_chunk = self.data[4] >> 7;
+                        let fourth_chunk = (self.data[4] & 0b1000_0000) >> 7;
 
                         let first_byte = (first_chunk << 1) | (second_chunk >> 7);
                         let second_byte = (second_chunk << 1) | (third_chunk >> 7);
@@ -86,7 +86,7 @@ impl AacAudioConfig {
                 if self.data.remaining() < 6 {
                     return Err(ParseError::NotEnoughData);
                 }
-                let high = self.data[4] & 0b1;
+                let high = self.data[4] & 0b0000_0001;
                 let low = (self.data[5] & 0b1110_0000) >> 5;
 
                 (high << 3) | low
@@ -95,7 +95,7 @@ impl AacAudioConfig {
                 if self.data.remaining() < 3 {
                     return Err(ParseError::NotEnoughData);
                 }
-                let high = self.data[1] & 0b1;
+                let high = self.data[1] & 0b0000_0001;
                 let low = (self.data[2] & 0b1110_0000) >> 5;
 
                 (high << 3) | low
@@ -135,7 +135,7 @@ impl AacAudioConfig {
             // If object_type == 31, then additional 6 bits come after initial 5 bits.
             31 => (self.data[1] & 0b0001_1110) >> 1,
             _ => {
-                let high = self.data[0] & 0b111;
+                let high = self.data[0] & 0b0000_0111;
                 let low = (self.data[1] & 0b1000_0000) >> 7;
                 (high << 1) | low
             }
