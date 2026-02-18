@@ -62,12 +62,7 @@ impl BufferedReader {
         &self.buf
     }
 
-    pub(crate) fn read_bytes(&mut self, len: usize) -> Result<Vec<u8>, RtmpError> {
-        if self.buf.len() < len {
-            return Err(RtmpError::InternalBufferError(
-                "insufficient data in buffer",
-            ));
-        }
-        Ok(self.buf.drain(0..len).collect())
+    pub(crate) fn data_mut(&mut self) -> &mut VecDeque<u8> {
+        &mut self.buf
     }
 }

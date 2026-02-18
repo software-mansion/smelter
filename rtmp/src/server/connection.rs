@@ -41,8 +41,8 @@ pub(crate) fn handle_connection(
         cb(connection_ctx);
     }
 
-    for msg in message_reader {
-        let msg = msg?;
+    for msg_result in message_reader {
+        let msg = msg_result?;
         trace!(?msg, "RTMP message received");
 
         let event = match msg {

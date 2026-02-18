@@ -1,75 +1,81 @@
 use std::{
-    cmp::min,
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
+    io::ErrorKind,
     net::TcpStream,
     sync::{Arc, atomic::AtomicBool},
 };
 
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 
 use crate::{
     error::RtmpError,
     message::RtmpMessage,
     protocol::{
         MessageType, RawMessage,
-        chunk::{ChunkType, RtmpChunk, RtmpChunkReader},
+        buffered_stream_reader::BufferedReader,
+        chunk::{
+            ChunkBaseHeader, ChunkExtendedTimestamp, ChunkHeaderTimestamp, ChunkMessageHeader,
+            ParseChunkError, VirtualMessageHeader,
+        },
     },
 };
 
+const DEFAULT_CHUNK_SIZE: usize = 128;
+
 pub(crate) struct RtmpMessageReader {
-    chunk_reader: RtmpChunkReader,
-    accumulators: HashMap<u32, PayloadAccumulator>,
+    reader: BufferedReader,
+    context: HashMap<u32, ChunkStreamContext>,
+    chunk_size: usize,
 }
 
 impl RtmpMessageReader {
     pub fn new(socket: TcpStream, should_close: Arc<AtomicBool>) -> Self {
         Self {
-            chunk_reader: RtmpChunkReader::new(socket, should_close),
-            accumulators: HashMap::new(),
+            reader: BufferedReader::new(socket, should_close),
+            context: HashMap::new(),
+            chunk_size: DEFAULT_CHUNK_SIZE,
         }
     }
 
     pub fn set_chunk_size(&mut self, size: usize) {
-        self.chunk_reader.set_chunk_size(size);
+        self.chunk_size = size;
     }
 
-    fn accumulate_chunk(&mut self, chunk: &RtmpChunk) {
-        let cs_id = chunk.header.cs_id;
+    fn try_read_msg(&mut self) -> Result<Option<RawMessage>, ParseChunkError> {
+        let buffer = self.reader.data_mut();
+        let (base_header, offset) = ChunkBaseHeader::try_read(buffer)?;
+        let (msg_header, offset) = ChunkMessageHeader::try_read(&base_header, buffer, offset)?;
 
-        match chunk.header.fmt {
-            ChunkType::Full | ChunkType::NoMessageStreamId => {
-                // types 0 and 1 start new message
-                self.accumulators.insert(
-                    cs_id,
-                    PayloadAccumulator::new(chunk.header.msg_len as usize),
-                );
+        let context = self.context.entry(base_header.cs_id).or_default();
+
+        let msg_header = VirtualMessageHeader::from_msg(context.header, msg_header)?;
+
+        let (extended_timestamp, offset) = match msg_header.timestamp.has_extended() {
+            true => {
+                let (ts, offset) = ChunkExtendedTimestamp::try_read(buffer, offset)?;
+                (Some(ts), offset)
             }
-            ChunkType::TimestampOnly | ChunkType::NoHeader => {
-                // types 2 and 3 continue existing message or start new with inherited message length
-                self.accumulators
-                    .entry(cs_id)
-                    .or_insert_with(|| PayloadAccumulator::new(chunk.header.msg_len as usize));
-            }
-        }
+            false => (None, offset),
+        };
 
-        let acc = self.accumulators.get_mut(&cs_id).unwrap();
-        acc.append(&chunk.payload);
-    }
-
-    fn try_complete_message(&mut self, chunk: &RtmpChunk) -> Option<RawMessage> {
-        let cs_id = chunk.header.cs_id;
-        let acc = self.accumulators.get(&cs_id)?;
-        if acc.buffer.len() < acc.expected_length {
-            return None;
+        // Current chunk size can be calculated based on max_chunk size
+        // and the message fragment we have already read
+        let msg_len = msg_header.msg_len as usize;
+        let payload_len = usize::min(
+            self.chunk_size,
+            msg_len.saturating_sub(context.payload_acc.len()),
+        );
+        if buffer.len() < offset + payload_len {
+            return Err(ParseChunkError::NotEnoughData);
         }
-        let acc = self.accumulators.remove(&cs_id)?;
-        let msg_type = MessageType::try_from_raw(chunk.header.msg_type_id).ok()?;
-        Some(RawMessage {
-            timestamp: chunk.header.timestamp,
-            msg_type,
-            stream_id: chunk.header.msg_stream_id,
-            payload: acc.buffer.freeze(),
-        })
+        let payload = Bytes::from_iter(buffer.iter().skip(offset).take(payload_len).copied());
+
+        // At this point whole chunk is in the buffer and we can remove that fragment from the
+        // buffer.
+        buffer.drain(..offset + payload_len);
+
+        let msg = context.process_chunk(msg_header, extended_timestamp, payload)?;
+        Ok(msg)
     }
 }
 
@@ -78,45 +84,84 @@ impl Iterator for RtmpMessageReader {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let chunk = match self.chunk_reader.read_chunk(&self.accumulators) {
-                Ok(chunk) => chunk,
-                Err(RtmpError::UnexpectedEof) => return None,
-                Err(RtmpError::Io(e)) if e.kind() == std::io::ErrorKind::ConnectionReset => {
-                    return None;
+            match self.try_read_msg() {
+                Ok(Some(msg)) => match RtmpMessage::from_raw(msg) {
+                    Ok(msg) => return Some(Ok(msg)),
+                    Err(err) => return Some(Err(err.into())),
+                },
+                Ok(None) | Err(ParseChunkError::NotEnoughData) => {
+                    // read next chunk
+                    let buf_len = self.reader.data().len();
+                    if let Err(err) = self.reader.read_until_buffer_size(buf_len + 1) {
+                        return Some(Err(err));
+                    }
                 }
-                Err(RtmpError::Io(e)) if e.kind() == std::io::ErrorKind::BrokenPipe => return None,
-                Err(e) => return Some(Err(e)),
-            };
-            self.accumulate_chunk(&chunk);
-            if let Some(msg) = self.try_complete_message(&chunk) {
-                return match RtmpMessage::from_raw(msg) {
-                    Ok(msg) => Some(Ok(msg)),
-                    Err(err) => Some(Err(err.into())),
-                };
+                Err(ParseChunkError::RtmpError(err)) => match err {
+                    RtmpError::UnexpectedEof => return None,
+                    RtmpError::Io(e) if e.kind() == ErrorKind::ConnectionReset => {
+                        return None;
+                    }
+                    RtmpError::Io(e) if e.kind() == ErrorKind::BrokenPipe => return None,
+                    err => return Some(Err(err)),
+                },
             }
         }
     }
 }
 
-pub(crate) struct PayloadAccumulator {
-    expected_length: usize,
-    buffer: BytesMut,
+#[derive(Debug, Default)]
+struct ChunkStreamContext {
+    header: Option<VirtualMessageHeader>,
+    // real timestamp that takes into account both extended timestamps
+    // and calculates all the timestamp deltas to absolute values.
+    timestamp: u32,
+    payload_acc: VecDeque<Bytes>,
 }
 
-impl PayloadAccumulator {
-    pub fn new(expected_length: usize) -> Self {
-        let initial_cap = min(expected_length, 4096);
-        Self {
-            expected_length,
-            buffer: BytesMut::with_capacity(initial_cap),
+impl ChunkStreamContext {
+    fn process_chunk(
+        &mut self,
+        msg_header: VirtualMessageHeader,
+        extended_timestamp: Option<ChunkExtendedTimestamp>,
+        payload: Bytes,
+    ) -> Result<Option<RawMessage>, RtmpError> {
+        self.header = Some(msg_header);
+        self.payload_acc.push_back(payload);
+        let current_len = self.payload_acc.iter().map(|p| p.len()).sum();
+
+        if current_len < msg_header.msg_len as usize {
+            return Ok(None);
+        } else if current_len > msg_header.msg_len as usize {
+            return Err(RtmpError::InternalError("Payload size too large"));
         }
-    }
 
-    pub fn append(&mut self, data: &[u8]) {
-        self.buffer.extend_from_slice(data);
-    }
+        self.timestamp = match msg_header.timestamp {
+            ChunkHeaderTimestamp::Timestamp(0xFFFFFF) => {
+                let Some(ChunkExtendedTimestamp(ext_ts)) = extended_timestamp else {
+                    return Err(RtmpError::InternalError("Missing extended timestamp"));
+                };
+                ext_ts
+            }
+            ChunkHeaderTimestamp::Delta(0xFFFFFF) => {
+                let Some(ChunkExtendedTimestamp(ext_ts)) = extended_timestamp else {
+                    return Err(RtmpError::InternalError("Missing extended timestamp"));
+                };
+                self.timestamp + ext_ts
+            }
+            ChunkHeaderTimestamp::Timestamp(ts) => ts,
+            ChunkHeaderTimestamp::Delta(ts) => self.timestamp + ts,
+        };
 
-    pub fn current_len(&self) -> usize {
-        self.buffer.len()
+        let mut payload = BytesMut::with_capacity(current_len);
+        while let Some(chunk) = self.payload_acc.pop_front() {
+            payload.extend_from_slice(&chunk);
+        }
+
+        Ok(Some(RawMessage {
+            msg_type: MessageType::try_from_raw(msg_header.msg_type_id)?,
+            stream_id: msg_header.msg_stream_id,
+            timestamp: self.timestamp,
+            payload: payload.freeze(),
+        }))
     }
 }

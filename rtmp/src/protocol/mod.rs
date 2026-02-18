@@ -8,6 +8,7 @@ pub(crate) mod handshake;
 pub(crate) mod message_reader;
 pub(crate) mod message_writer;
 
+#[derive(Debug)]
 pub(crate) struct RawMessage {
     pub msg_type: MessageType,
     pub stream_id: u32,
