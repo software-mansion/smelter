@@ -1,5 +1,4 @@
 use std::{
-    cmp::min,
     collections::{HashMap, VecDeque},
     net::TcpStream,
     sync::{Arc, atomic::AtomicBool},
@@ -11,7 +10,8 @@ use bytes::Bytes;
 use crate::{
     RtmpError,
     protocol::{
-        MessageType, buffered_stream_reader::BufferedReader, message_reader::PayloadAccumulator,
+        MessageType, RawMessage, buffered_stream_reader::BufferedReader,
+        message_reader::PayloadAccumulator,
     },
 };
 
@@ -20,17 +20,21 @@ const DEFAULT_CHUNK_SIZE: usize = 128;
 
 #[derive(Debug, Clone)]
 pub(crate) struct RtmpChunk {
-    pub header: ChunkHeader,
+    pub header: Chunk,
     pub payload: Bytes,
 }
 
+#[derive(thiserror::Error, Debug)]
 enum ParseChunkError {
+    #[error("Not enough data")]
     NotEnoughData,
-    RtmpError(RtmpError),
+
+    #[error(transparent)]
+    RtmpError(#[from] RtmpError),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ChunkHeader {
+pub(crate) struct Chunk {
     /// Basic Header
 
     /// Format 2 bits
@@ -39,14 +43,15 @@ pub(crate) struct ChunkHeader {
     pub cs_id: u32,
 
     /// Message Header
+    pub msg_header: MessageHeader,
+
+    /// Real timestamp (includes extra timestamp)
     pub timestamp: u32,
-    pub timestamp_delta: u32,
-    pub msg_len: u32,
-    pub msg_type_id: u8,
-    pub msg_stream_id: u32,
+
+    pub payload: Bytes,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum MessageHeader {
     // Type 0 - 11 bytes
     Full {
@@ -102,10 +107,12 @@ impl From<u8> for ChunkType {
 
 #[derive(Debug, Default)]
 struct ChunkStreamContext {
-    timestamp: Option<u32>,
-    msg_len: Option<u32>,
-    msg_type_id: Option<u8>,
-    msg_stream_id: Option<u32>,
+    timestamp: u32,
+    msg_len: u32,
+    msg_type_id: u8,
+    msg_stream_id: u32,
+
+    payload_acc: PayloadAccumulator,
 }
 
 pub(crate) struct RtmpChunkReader {
@@ -123,12 +130,9 @@ impl RtmpChunkReader {
         }
     }
 
-    pub fn read_chunk(
-        &mut self,
-        accumulators: &HashMap<u32, PayloadAccumulator>,
-    ) -> Result<RtmpChunk, RtmpError> {
+    pub fn read_chunk(&mut self) -> Result<RawMessage, RtmpError> {
         loop {
-            match self.try_parse_chunk(accumulators) {
+            match self.try_parse_chunk() {
                 Ok((chunk, len_to_read)) => {
                     self.reader.read_bytes(len_to_read)?;
                     return Ok(chunk);
@@ -146,11 +150,84 @@ impl RtmpChunkReader {
         self.chunk_size = size;
     }
 
+    fn try_parse_chunk(&mut self) -> Result<RawMessage, ParseChunkError> {
+        let data = self.reader.data();
+
+        if data.is_empty() {
+            return Err(ParseChunkError::NotEnoughData);
+        }
+
+        // basic header 1, 2 or 3 bytes
+        let fmt = ChunkType::from((data[1] & 0b1100_0000) >> 6);
+        let (cs_id, offset) = self.try_read_cs_id(&data)?;
+
+        let (msg_header, offset) = self.try_read_msg_header(fmt, &data, offset)?;
+
+        match msg_header {
+            MessageHeader::Full {
+                timestamp,
+                msg_len,
+                msg_type_id,
+                msg_stream_id,
+            } => self.context.entry(cs_id).or_insert_with(Default::default),
+            _ => {}
+        }
+        let context = self.context.entry(cs_id).or_insert_with(Default::default);
+        let (extended_timestamp, offset) = match msg_header.has_extended_timestamp(&context) {
+            true => {
+                if data.len() < offset + 4 {
+                    return Err(ParseChunkError::NotEnoughData);
+                }
+                (Some(read_u32_be(data, offset)), offset + 4)
+            }
+            false => (None, offset),
+        };
+
+        let msg_len = msg_header.msg_len(context)?;
+
+        if msg_len as usize > MAX_MESSAGE_SIZE {
+            return Err(RtmpError::MessageTooLarge(msg_len).into());
+        }
+
+        let payload_size = (msg_len as usize)
+            .saturating_sub(context.payload_acc.len())
+            .min(self.chunk_size);
+
+        if data.len() < offset + payload_size {
+            return Err(ParseChunkError::NotEnoughData);
+        }
+
+        context.update(msg_header, extended_timestamp)?;
+
+        let payload = Bytes::from_iter(data.iter().skip(offset).take(payload_size).copied());
+
+        let chunk = Chunk {
+            fmt,
+            cs_id,
+            msg_header,
+            timestamp: context.timestamp.unwrap(),
+            payload,
+        };
+
+        self.reader.read_bytes(offset + payload_size)?;
+
+        if let Some(msg_payload) = context.payload_acc.try_pop()? {
+            Ok(RawMessage {
+                timestamp: context.timestamp,
+                msg_type: MessageType::try_from_raw(context.msg_type_id)?,
+                stream_id: context.msg_stream_id,
+                payload: acc.buffer.freeze(),
+            })
+        } else {
+            Ok(Err(ParseChunkError::NotEnoughData))
+        }
+    }
+
     // let marker = [6 bits]
     // If marker == 0 Then cs_id = [next 8 bits] + 64
     // If marker == 1 Then cs_id = [next 16 bits] + 64
     // Else cs_id = x
-    fn try_read_cs_id(&mut self, data: &VecDeque<u8>) -> Result<(u32, usize), ParseChunkError> {
+    fn try_read_cs_id(&self, data: &VecDeque<u8>) -> Result<(u32, usize), ParseChunkError> {
         if data.len() < 1 {
             return Err(ParseChunkError::NotEnoughData);
         }
@@ -176,7 +253,7 @@ impl RtmpChunkReader {
     }
 
     fn try_read_msg_header(
-        &mut self,
+        &self,
         fmt: ChunkType,
         data: &VecDeque<u8>,
         offset: usize,
@@ -223,86 +300,6 @@ impl RtmpChunkReader {
         };
         Ok((header, offset))
     }
-
-    fn try_parse_chunk(
-        &mut self,
-        accumulators: &HashMap<u32, PayloadAccumulator>,
-    ) -> Result<(RtmpChunk, usize), ParseChunkError> {
-        let data = self.reader.data();
-
-        if data.is_empty() {
-            return Err(ParseChunkError::NotEnoughData);
-        }
-
-        // basic header 1, 2 or 3 bytes
-        let fmt = ChunkType::from((data[1] & 0b1100_0000) >> 6);
-        let (cs_id, offset) = self.try_read_cs_id(&data)?;
-
-        let (msg_header, offset) = self.try_read_msg_header(fmt, &data, offset)?;
-
-        let mut context = self.context.entry(cs_id).or_insert_with(Default::default);
-        let (timestamp, offset) = match msg_header.has_extended_timestamp(&context) {
-            true => {
-                if data.len() < offset + 4 {
-                    return Err(ParseChunkError::NotEnoughData);
-                }
-                (read_u32_be(data, offset), offset + 4)
-            }
-            false => {
-                // TODO: not sure what to do if timestamp was not provided in
-                // previous chunks
-                (msg_header.timestamp().unwrap_or(0), offset)
-            }
-        };
-
-        context.update(msg_header);
-
-        // message length from previous chunks
-        let current_acc = accumulators
-            .get(&cs_id)
-            .map(|a| a.current_len())
-            .unwrap_or(0);
-        let is_continuation = current_acc > 0;
-
-        // calculate timestamp (only advance on new message)
-        if fmt != ChunkType::Full && !is_continuation {
-            timestamp = timestamp.wrapping_add(timestamp_delta);
-        }
-
-        if msg_len as usize > MAX_MESSAGE_SIZE {
-            return Err(ParseChunkError::RtmpError(RtmpError::MessageTooLarge(
-                msg_len,
-            )));
-        }
-
-        let remaining_for_message = (msg_len as usize).saturating_sub(current_acc);
-        let chunk_payload_size = min(remaining_for_message, self.chunk_size);
-
-        if data.len() < cursor + chunk_payload_size {
-            return Err(ParseChunkError::NotEnoughData);
-        }
-
-        let header = ChunkHeader {
-            fmt,
-            cs_id,
-            timestamp,
-            timestamp_delta,
-            msg_len,
-            msg_type_id,
-            msg_stream_id,
-        };
-
-        self.context.insert(cs_id, header.clone());
-
-        let mut payload_vec = Vec::with_capacity(chunk_payload_size);
-        for i in 0..chunk_payload_size {
-            payload_vec.push(data[cursor + i]);
-        }
-        let payload = Bytes::from(payload_vec);
-        cursor += chunk_payload_size;
-
-        Ok((RtmpChunk { header, payload }, cursor))
-    }
 }
 
 impl MessageHeader {
@@ -330,10 +327,27 @@ impl MessageHeader {
             MessageHeader::NoHeader => None,
         }
     }
+
+    fn msg_len(&self, context: &ChunkStreamContext) -> Result<u32, ParseChunkError> {
+        match self {
+            MessageHeader::Full { msg_len, .. } => Ok(*msg_len),
+            MessageHeader::NoMessageStreamId { msg_len, .. } => Ok(*msg_len),
+            MessageHeader::TimestampOnly { .. } | MessageHeader::NoHeader => {
+                match context.msg_len {
+                    Some(_) => todo!(),
+                    None => Err(RtmpError::InternalError("missing msg_len")),
+                }
+            }
+        }
+    }
 }
 
 impl ChunkStreamContext {
-    fn update(&mut self, header: MessageHeader) {
+    fn update(
+        &mut self,
+        header: MessageHeader,
+        extended_timestamp: Option<u32>,
+    ) -> Result<(), ParseChunkError> {
         match header {
             MessageHeader::Full {
                 timestamp,
@@ -341,25 +355,31 @@ impl ChunkStreamContext {
                 msg_type_id,
                 msg_stream_id,
             } => {
-                self.timestamp = Some(timestamp);
-                self.msg_len = Some(msg_len);
-                self.msg_type_id = Some(msg_type_id);
-                self.msg_stream_id = Some(msg_stream_id);
+                self.timestamp = timestamp;
+                self.msg_len = msg_len;
+                self.msg_type_id = msg_type_id;
+                self.msg_stream_id = msg_stream_id;
             }
             MessageHeader::NoMessageStreamId {
                 timestamp_delta,
                 msg_len,
                 msg_type_id,
             } => {
-                self.timestamp = Some(timestamp_delta);
-                self.msg_len = Some(msg_len);
-                self.msg_type_id = Some(msg_type_id);
+                let timestamp_delta = extended_timestamp.unwrap_or(timestamp_delta);
+                self.timestamp = ts.wrapping_add(timestamp_delta);
+                self.msg_len = msg_len;
+                self.msg_type_id = msg_type_id;
             }
             MessageHeader::TimestampOnly { timestamp_delta } => {
-                self.timestamp = Some(timestamp_delta);
+                let Some(ts) = self.timestamp else {
+                    return Err(RtmpError::InternalError("missing timestamp").into());
+                };
+                let timestamp_delta = extended_timestamp.unwrap_or(timestamp_delta);
+                self.timestamp = Some(ts.wrapping_add(timestamp_delta));
             }
             MessageHeader::NoHeader => (),
         };
+        Ok(())
     }
 }
 

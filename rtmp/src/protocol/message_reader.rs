@@ -1,18 +1,19 @@
 use std::{
     cmp::min,
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
+    io::ErrorKind,
     net::TcpStream,
     sync::{Arc, atomic::AtomicBool},
 };
 
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 
 use crate::{
     error::RtmpError,
     message::RtmpMessage,
     protocol::{
         MessageType, RawMessage,
-        chunk::{ChunkType, RtmpChunk, RtmpChunkReader},
+        chunk::{Chunk, RtmpChunkReader},
     },
 };
 
@@ -33,43 +34,43 @@ impl RtmpMessageReader {
         self.chunk_reader.set_chunk_size(size);
     }
 
-    fn accumulate_chunk(&mut self, chunk: &RtmpChunk) {
-        let cs_id = chunk.header.cs_id;
+    fn try_complete_message(&mut self, chunk: &Chunk) -> Result<Option<RawMessage>, RtmpError> {
+        let cs_id = chunk.cs_id;
 
-        match chunk.header.fmt {
-            ChunkType::Full | ChunkType::NoMessageStreamId => {
-                // types 0 and 1 start new message
-                self.accumulators.insert(
-                    cs_id,
-                    PayloadAccumulator::new(chunk.header.msg_len as usize),
-                );
-            }
-            ChunkType::TimestampOnly | ChunkType::NoHeader => {
-                // types 2 and 3 continue existing message or start new with inherited message length
-                self.accumulators
-                    .entry(cs_id)
-                    .or_insert_with(|| PayloadAccumulator::new(chunk.header.msg_len as usize));
-            }
-        }
+        let acc = self
+            .accumulators
+            .entry(cs_id)
+            .or_insert_with(|| PayloadAccumulator::new());
+
+        match chunk.msg_header {
+            MessageHeader::Full {
+                timestamp,
+                msg_len,
+                msg_type_id,
+                msg_stream_id,
+            } => todo!(),
+            MessageHeader::NoMessageStreamId {
+                timestamp_delta,
+                msg_len,
+                msg_type_id,
+            } => todo!(),
+            MessageHeader::TimestampOnly { timestamp_delta } => todo!(),
+            MessageHeader::NoHeader => todo!(),
+        };
 
         let acc = self.accumulators.get_mut(&cs_id).unwrap();
-        acc.append(&chunk.payload);
-    }
-
-    fn try_complete_message(&mut self, chunk: &RtmpChunk) -> Option<RawMessage> {
-        let cs_id = chunk.header.cs_id;
-        let acc = self.accumulators.get(&cs_id)?;
-        if acc.buffer.len() < acc.expected_length {
-            return None;
+        acc.append(chunk.payload);
+        if let Some(message_payload) = acc.try_pop()? {
+            let msg_type = MessageType::try_from_raw(chunk.header.msg_type_id)?;
+            Ok(Some(RawMessage {
+                timestamp: chunk.timestamp,
+                msg_type,
+                stream_id: chunk.msg_stream_id,
+                payload: acc.buffer.freeze(),
+            }))
+        } else {
+            Ok(None)
         }
-        let acc = self.accumulators.remove(&cs_id)?;
-        let msg_type = MessageType::try_from_raw(chunk.header.msg_type_id).ok()?;
-        Some(RawMessage {
-            timestamp: chunk.header.timestamp,
-            msg_type,
-            stream_id: chunk.header.msg_stream_id,
-            payload: acc.buffer.freeze(),
-        })
     }
 }
 
@@ -81,14 +82,13 @@ impl Iterator for RtmpMessageReader {
             let chunk = match self.chunk_reader.read_chunk(&self.accumulators) {
                 Ok(chunk) => chunk,
                 Err(RtmpError::UnexpectedEof) => return None,
-                Err(RtmpError::Io(e)) if e.kind() == std::io::ErrorKind::ConnectionReset => {
+                Err(RtmpError::Io(e)) if e.kind() == ErrorKind::ConnectionReset => {
                     return None;
                 }
-                Err(RtmpError::Io(e)) if e.kind() == std::io::ErrorKind::BrokenPipe => return None,
+                Err(RtmpError::Io(e)) if e.kind() == ErrorKind::BrokenPipe => return None,
                 Err(e) => return Some(Err(e)),
             };
-            self.accumulate_chunk(&chunk);
-            if let Some(msg) = self.try_complete_message(&chunk) {
+            if let Some(msg) = self.try_complete_message(chunk) {
                 return match RtmpMessage::from_raw(msg) {
                     Ok(msg) => Some(Ok(msg)),
                     Err(err) => Some(Err(err.into())),
@@ -98,25 +98,32 @@ impl Iterator for RtmpMessageReader {
     }
 }
 
+#[derive(Debug, Default)]
 pub(crate) struct PayloadAccumulator {
-    expected_length: usize,
-    buffer: BytesMut,
+    current_message_length: usize,
+    buffer: VecDeque<Bytes>,
 }
 
 impl PayloadAccumulator {
-    pub fn new(expected_length: usize) -> Self {
-        let initial_cap = min(expected_length, 4096);
-        Self {
-            expected_length,
-            buffer: BytesMut::with_capacity(initial_cap),
+    pub fn append(&mut self, data: Bytes) {
+        self.buffer.push_back(data);
+    }
+
+    pub fn try_pop(&mut self) -> Result<Option<Bytes>, RtmpError> {
+        let current_buffer_size = self.len();
+        if self.current_message_length == 0 {
+            Err(RtmpError::InternalError(""))
+        } else if self.current_message_length == current_buffer_size {
+            Ok(Some(Bytes::from_iter(
+                std::mem::take(&mut self.buffer).iter().flatten().copied(),
+            )))
+        } else if self.current_message_length >= current_buffer_size {
+            Err(RtmpError::InternalError("Message to long"))
+        } else {
+            Ok(None)
         }
     }
-
-    pub fn append(&mut self, data: &[u8]) {
-        self.buffer.extend_from_slice(data);
-    }
-
-    pub fn current_len(&self) -> usize {
-        self.buffer.len()
+    pub fn len(&self) -> usize {
+        self.buffer.iter().map(|p| p.len()).sum()
     }
 }

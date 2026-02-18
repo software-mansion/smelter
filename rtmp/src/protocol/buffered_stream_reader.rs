@@ -64,9 +64,7 @@ impl BufferedReader {
 
     pub(crate) fn read_bytes(&mut self, len: usize) -> Result<Vec<u8>, RtmpError> {
         if self.buf.len() < len {
-            return Err(RtmpError::InternalBufferError(
-                "insufficient data in buffer",
-            ));
+            return Err(RtmpError::InternalError("insufficient data in buffer"));
         }
         Ok(self.buf.drain(0..len).collect())
     }

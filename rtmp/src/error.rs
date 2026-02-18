@@ -1,7 +1,10 @@
 use thiserror::Error;
 
-use crate::amf3::{I29_MAX, I29_MIN, MAX_SEALED_COUNT, U28_MAX, U29_MAX};
-use crate::{AudioCodec, VideoCodec, VideoTagFrameType, protocol::MessageType};
+use crate::{
+    AudioCodec, VideoCodec, VideoTagFrameType,
+    amf3::{I29_MAX, I29_MIN, MAX_SEALED_COUNT, U28_MAX, U29_MAX},
+    protocol::MessageType,
+};
 
 #[derive(Error, Debug)]
 pub enum RtmpError {
@@ -20,8 +23,8 @@ pub enum RtmpError {
     #[error("Unexpected EOF")]
     UnexpectedEof,
 
-    #[error("Internal buffer error: {0}")]
-    InternalBufferError(&'static str),
+    #[error("Internal error: {0}")]
+    InternalError(&'static str),
 
     #[error("Parsing error: {0}")]
     ParsingError(#[from] ParseError),
