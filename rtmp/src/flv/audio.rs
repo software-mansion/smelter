@@ -1,8 +1,8 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{
-    error::{AudioTagParseError, ParseError},
     SerializationError,
+    error::{AudioTagParseError, ParseError},
 };
 
 /// Struct representing flv AUDIODATA.
