@@ -19,6 +19,12 @@ impl Handshake {
         // C0 version
         let mut c0 = [0u8; 1];
         stream.read_exact(&mut c0)?;
+        if c0[0] != 3 {
+            return Err(RtmpError::HandshakeFailed(format!(
+                "C0 should be 3, but received {}",
+                c0[0]
+            )));
+        };
         let c0_read_time = Instant::now();
 
         // S0 version
@@ -76,6 +82,12 @@ impl Handshake {
         // S0 version
         let mut s0 = [0u8; 1];
         stream.read_exact(&mut s0)?;
+        if s0[0] != 3 {
+            return Err(RtmpError::HandshakeFailed(format!(
+                "S0 should be 3, but received {}",
+                s0[0]
+            )));
+        };
 
         // S1 timestamp(4 bytes), zero(4 bytes), random(1528 bytes)
         let mut s1 = [0u8; HANDSHAKE_SIZE];

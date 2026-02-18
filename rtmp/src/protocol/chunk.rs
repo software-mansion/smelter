@@ -3,13 +3,16 @@ use std::{
     collections::{HashMap, VecDeque},
     net::TcpStream,
     sync::{Arc, atomic::AtomicBool},
+    usize,
 };
 
 use bytes::Bytes;
 
 use crate::{
     RtmpError,
-    protocol::{buffered_stream_reader::BufferedReader, message_reader::PayloadAccumulator},
+    protocol::{
+        MessageType, buffered_stream_reader::BufferedReader, message_reader::PayloadAccumulator,
+    },
 };
 
 const MAX_MESSAGE_SIZE: usize = 5 * 1024 * 1024; // 5 MB
@@ -28,8 +31,14 @@ enum ParseChunkError {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ChunkHeader {
+    /// Basic Header
+
+    /// Format 2 bits
     pub fmt: ChunkType,
+    /// Chunk stream ID - 6, 14 or 22 bits (depends on first 6 bits)
     pub cs_id: u32,
+
+    /// Message Header
     pub timestamp: u32,
     pub timestamp_delta: u32,
     pub msg_len: u32,
@@ -37,11 +46,45 @@ pub(crate) struct ChunkHeader {
     pub msg_stream_id: u32,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) enum MessageHeader {
+    // Type 0 - 11 bytes
+    Full {
+        // 3 bytes
+        timestamp: u32,
+        // 3 bytes
+        msg_len: u32,
+        // 1 byte
+        msg_type_id: u8,
+        // 4 bytes
+        msg_stream_id: u32,
+    },
+    // Type 0 - 7 bytes
+    NoMessageStreamId {
+        // 3 bytes
+        timestamp_delta: u32,
+        // 3 bytes
+        msg_len: u32,
+        // 1 byte
+        msg_type_id: u8,
+    },
+    // Type 0 - 3 bytes
+    TimestampOnly {
+        // 3 bytes
+        timestamp_delta: u32,
+    },
+    NoHeader,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ChunkType {
+    // Type 0 - 11 bytes
     Full = 0,
+    // Type 1 - 7 bytes
     NoMessageStreamId = 1,
+    // Type 2 - 3 bytes
     TimestampOnly = 2,
+    // Type 3 - 0 bytes
     NoHeader = 3,
 }
 
@@ -57,9 +100,17 @@ impl From<u8> for ChunkType {
     }
 }
 
+#[derive(Debug, Default)]
+struct ChunkStreamContext {
+    timestamp: Option<u32>,
+    msg_len: Option<u32>,
+    msg_type_id: Option<u8>,
+    msg_stream_id: Option<u32>,
+}
+
 pub(crate) struct RtmpChunkReader {
     reader: BufferedReader,
-    prev_headers: HashMap<u32, ChunkHeader>,
+    context: HashMap<u32, ChunkStreamContext>,
     chunk_size: usize,
 }
 
@@ -67,7 +118,7 @@ impl RtmpChunkReader {
     pub fn new(socket: TcpStream, should_close: Arc<AtomicBool>) -> Self {
         Self {
             reader: BufferedReader::new(socket, should_close),
-            prev_headers: HashMap::new(),
+            context: HashMap::new(),
             chunk_size: DEFAULT_CHUNK_SIZE,
         }
     }
@@ -95,137 +146,116 @@ impl RtmpChunkReader {
         self.chunk_size = size;
     }
 
+    // let marker = [6 bits]
+    // If marker == 0 Then cs_id = [next 8 bits] + 64
+    // If marker == 1 Then cs_id = [next 16 bits] + 64
+    // Else cs_id = x
+    fn try_read_cs_id(&mut self, data: &VecDeque<u8>) -> Result<(u32, usize), ParseChunkError> {
+        if data.len() < 1 {
+            return Err(ParseChunkError::NotEnoughData);
+        }
+        let cs_id_marker = data[0] & 0b00111111;
+        let (cs_id, offset) = match cs_id_marker {
+            0 => {
+                if data.len() < 2 {
+                    return Err(ParseChunkError::NotEnoughData);
+                }
+                let cs_id = (data[1] as u32) + 64;
+                (cs_id, 2 as usize)
+            }
+            1 => {
+                if data.len() < 3 {
+                    return Err(ParseChunkError::NotEnoughData);
+                }
+                let cs_id = u16::from_le_bytes([data[1], data[2]]) as u32 + 64;
+                (cs_id, 3 as usize)
+            }
+            n => (n as u32, 1 as usize),
+        };
+        Ok((cs_id, offset))
+    }
+
+    fn try_read_msg_header(
+        &mut self,
+        fmt: ChunkType,
+        data: &VecDeque<u8>,
+        offset: usize,
+    ) -> Result<(MessageHeader, usize), ParseChunkError> {
+        let (header, offset) = match fmt {
+            ChunkType::Full => {
+                // Type 0 (11 bytes)
+                // [timestamp(3)] [msg_len(3)] [msg_type_id(1)] [msg_stream_id(4 LE)]
+                if data.len() < offset + 11 {
+                    return Err(ParseChunkError::NotEnoughData);
+                }
+                let header = MessageHeader::Full {
+                    timestamp: read_u24(data, offset),
+                    msg_len: read_u24(data, offset + 3),
+                    msg_type_id: data[offset + 6],
+                    msg_stream_id: read_u32_le(data, offset + 7),
+                };
+                (header, offset + 11)
+            }
+            ChunkType::NoMessageStreamId => {
+                // Type 1 (7 bytes)
+                // [timestamp_delta(3)] [msg_len(3)] [msg_type_id(1)]
+                if data.len() < offset + 7 {
+                    return Err(ParseChunkError::NotEnoughData);
+                }
+                let header = MessageHeader::NoMessageStreamId {
+                    timestamp_delta: read_u24(data, offset),
+                    msg_len: read_u24(data, offset + 3),
+                    msg_type_id: data[offset + 6],
+                };
+                (header, offset + 7)
+            }
+            ChunkType::TimestampOnly => {
+                // Type 2 (3 bytes)
+                if data.len() < offset + 3 {
+                    return Err(ParseChunkError::NotEnoughData);
+                }
+                let header = MessageHeader::TimestampOnly {
+                    timestamp_delta: read_u24(data, offset),
+                };
+                (header, offset + 3)
+            }
+            ChunkType::NoHeader => (MessageHeader::NoHeader, offset),
+        };
+        Ok((header, offset))
+    }
+
     fn try_parse_chunk(
         &mut self,
         accumulators: &HashMap<u32, PayloadAccumulator>,
     ) -> Result<(RtmpChunk, usize), ParseChunkError> {
         let data = self.reader.data();
-        let mut cursor = 0;
 
         if data.is_empty() {
             return Err(ParseChunkError::NotEnoughData);
         }
 
-        // basic header
-        let first_byte = data[cursor];
-        cursor += 1;
+        // basic header 1, 2 or 3 bytes
+        let fmt = ChunkType::from((data[1] & 0b1100_0000) >> 6);
+        let (cs_id, offset) = self.try_read_cs_id(&data)?;
 
-        let fmt = ChunkType::from(first_byte >> 6);
-        let cs_id_marker = first_byte & 0x3F;
+        let (msg_header, offset) = self.try_read_msg_header(fmt, &data, offset)?;
 
-        let cs_id = match cs_id_marker {
-            0 => {
-                if data.len() < cursor + 1 {
+        let mut context = self.context.entry(cs_id).or_insert_with(Default::default);
+        let (timestamp, offset) = match msg_header.has_extended_timestamp(&context) {
+            true => {
+                if data.len() < offset + 4 {
                     return Err(ParseChunkError::NotEnoughData);
                 }
-                let b = data[cursor];
-                cursor += 1;
-                64 + (b as u32)
+                (read_u32_be(data, offset), offset + 4)
             }
-            1 => {
-                if data.len() < cursor + 2 {
-                    return Err(ParseChunkError::NotEnoughData);
-                }
-                let b0 = data[cursor];
-                let b1 = data[cursor + 1];
-                cursor += 2;
-                64 + (b0 as u32) + ((b1 as u32) * 256)
+            false => {
+                // TODO: not sure what to do if timestamp was not provided in
+                // previous chunks
+                (msg_header.timestamp().unwrap_or(0), offset)
             }
-            n => n as u32,
         };
 
-        // prev header
-        let (mut timestamp, mut timestamp_delta, mut msg_len, mut msg_type_id, mut msg_stream_id) =
-            match self.prev_headers.get(&cs_id) {
-                Some(p) => (
-                    p.timestamp,
-                    p.timestamp_delta,
-                    p.msg_len,
-                    p.msg_type_id,
-                    p.msg_stream_id,
-                ),
-                None => (0, 0, 0, 0, 0),
-            };
-
-        // message header
-        let mut has_extended_ts = false;
-
-        match fmt {
-            ChunkType::Full => {
-                // Type 0 (11 bytes)
-                if data.len() < cursor + 11 {
-                    return Err(ParseChunkError::NotEnoughData);
-                }
-
-                // [timestamp(3)] [msg_len(3)] [msg_type_id(1)] [msg_stream_id(4 LE)]
-                let ts_raw = read_u24(data, cursor);
-                msg_len = read_u24(data, cursor + 3);
-                msg_type_id = data[cursor + 6];
-                msg_stream_id = read_u32_le(data, cursor + 7);
-                cursor += 11;
-
-                if ts_raw == 0xFFFFFF {
-                    has_extended_ts = true;
-                } else {
-                    timestamp = ts_raw;
-                }
-                timestamp_delta = 0;
-            }
-            ChunkType::NoMessageStreamId => {
-                // Type 1 (7 bytes)
-                if data.len() < cursor + 7 {
-                    return Err(ParseChunkError::NotEnoughData);
-                }
-
-                // [timestamp_delta(3)] [msg_len(3)] [msg_type_id(1)]
-                let ts_delta_raw = read_u24(data, cursor);
-                msg_len = read_u24(data, cursor + 3);
-                msg_type_id = data[cursor + 6];
-                cursor += 7;
-
-                if ts_delta_raw == 0xFFFFFF {
-                    has_extended_ts = true;
-                } else {
-                    timestamp_delta = ts_delta_raw;
-                }
-            }
-            ChunkType::TimestampOnly => {
-                // Type 2 (3 bytes)
-                if data.len() < cursor + 3 {
-                    return Err(ParseChunkError::NotEnoughData);
-                }
-
-                // [timestamp_delta(3)]
-                let ts_delta_raw = read_u24(data, cursor);
-                cursor += 3;
-
-                if ts_delta_raw == 0xFFFFFF {
-                    has_extended_ts = true;
-                } else {
-                    timestamp_delta = ts_delta_raw;
-                }
-            }
-            ChunkType::NoHeader => {
-                // Type 3 (0 bytes)
-                if timestamp_delta == 0xFFFFFF || timestamp == 0xFFFFFF {
-                    has_extended_ts = true;
-                }
-            }
-        }
-
-        // extended timestamp
-        if has_extended_ts {
-            if data.len() < cursor + 4 {
-                return Err(ParseChunkError::NotEnoughData);
-            }
-            let extended_ts = read_u32_be(data, cursor);
-            cursor += 4;
-
-            match fmt {
-                ChunkType::Full => timestamp = extended_ts,
-                _ => timestamp_delta = extended_ts,
-            }
-        }
+        context.update(msg_header);
 
         // message length from previous chunks
         let current_acc = accumulators
@@ -262,7 +292,7 @@ impl RtmpChunkReader {
             msg_stream_id,
         };
 
-        self.prev_headers.insert(cs_id, header.clone());
+        self.context.insert(cs_id, header.clone());
 
         let mut payload_vec = Vec::with_capacity(chunk_payload_size);
         for i in 0..chunk_payload_size {
@@ -275,25 +305,82 @@ impl RtmpChunkReader {
     }
 }
 
-fn read_u24(data: &VecDeque<u8>, start: usize) -> u32 {
-    let b0 = data[start] as u32;
-    let b1 = data[start + 1] as u32;
-    let b2 = data[start + 2] as u32;
-    (b0 << 16) | (b1 << 8) | b2
+impl MessageHeader {
+    fn has_extended_timestamp(&self, context: &ChunkStreamContext) -> bool {
+        match self {
+            MessageHeader::Full { timestamp, .. } => *timestamp == 0xFFFFFF,
+            MessageHeader::NoMessageStreamId {
+                timestamp_delta, ..
+            } => *timestamp_delta == 0xFFFFFF,
+            MessageHeader::TimestampOnly { timestamp_delta } => *timestamp_delta == 0xFFFFFF,
+            MessageHeader::NoHeader => match context.timestamp {
+                Some(prev) => prev == 0xFFFFFF,
+                None => false,
+            },
+        }
+    }
+
+    fn timestamp(&self) -> Option<u32> {
+        match self {
+            MessageHeader::Full { timestamp, .. } => Some(*timestamp),
+            MessageHeader::NoMessageStreamId {
+                timestamp_delta, ..
+            } => Some(*timestamp_delta),
+            MessageHeader::TimestampOnly { timestamp_delta } => Some(*timestamp_delta),
+            MessageHeader::NoHeader => None,
+        }
+    }
 }
 
-fn read_u32_be(data: &VecDeque<u8>, start: usize) -> u32 {
-    let b0 = data[start] as u32;
-    let b1 = data[start + 1] as u32;
-    let b2 = data[start + 2] as u32;
-    let b3 = data[start + 3] as u32;
-    (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
+impl ChunkStreamContext {
+    fn update(&mut self, header: MessageHeader) {
+        match header {
+            MessageHeader::Full {
+                timestamp,
+                msg_len,
+                msg_type_id,
+                msg_stream_id,
+            } => {
+                self.timestamp = Some(timestamp);
+                self.msg_len = Some(msg_len);
+                self.msg_type_id = Some(msg_type_id);
+                self.msg_stream_id = Some(msg_stream_id);
+            }
+            MessageHeader::NoMessageStreamId {
+                timestamp_delta,
+                msg_len,
+                msg_type_id,
+            } => {
+                self.timestamp = Some(timestamp_delta);
+                self.msg_len = Some(msg_len);
+                self.msg_type_id = Some(msg_type_id);
+            }
+            MessageHeader::TimestampOnly { timestamp_delta } => {
+                self.timestamp = Some(timestamp_delta);
+            }
+            MessageHeader::NoHeader => (),
+        };
+    }
 }
 
-fn read_u32_le(data: &VecDeque<u8>, start: usize) -> u32 {
-    let b0 = data[start] as u32;
-    let b1 = data[start + 1] as u32;
-    let b2 = data[start + 2] as u32;
-    let b3 = data[start + 3] as u32;
-    b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+fn read_u24(data: &VecDeque<u8>, offset: usize) -> u32 {
+    u32::from_be_bytes([0, data[offset], data[offset + 1], data[offset + 2]])
+}
+
+fn read_u32_be(data: &VecDeque<u8>, offset: usize) -> u32 {
+    u32::from_be_bytes([
+        data[offset],
+        data[offset + 1],
+        data[offset + 2],
+        data[offset + 3],
+    ])
+}
+
+fn read_u32_le(data: &VecDeque<u8>, offset: usize) -> u32 {
+    u32::from_le_bytes([
+        data[offset],
+        data[offset + 1],
+        data[offset + 2],
+        data[offset + 3],
+    ])
 }

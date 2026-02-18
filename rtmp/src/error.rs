@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use thiserror::Error;
 
 use crate::amf3::{I29_MAX, I29_MIN, MAX_SEALED_COUNT, U28_MAX, U29_MAX};
@@ -11,7 +9,7 @@ pub enum RtmpError {
     Io(#[from] std::io::Error),
 
     #[error("Handshake failed: {0}")]
-    HandshakeFailed(Arc<str>),
+    HandshakeFailed(String),
 
     #[error("Message too large: {0} bytes")]
     MessageTooLarge(u32),
