@@ -76,7 +76,7 @@ impl<Decoder: AudioDecoder + 'static> InitializableThread for RtpAudioThread<Dec
     fn run(self) {
         for event in self.stream {
             if self.samples_sender.send(event).is_err() {
-                warn!("Failed to send encoded audio chunk from decoder. Channel closed.");
+                warn!("Failed to send decoded audio samples from decoder. Channel closed.");
                 return;
             }
         }

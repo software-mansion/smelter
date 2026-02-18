@@ -58,7 +58,7 @@ impl<Decoder: VideoDecoder> InitializableThread for RtpVideoThread<Decoder> {
     fn run(self) {
         for event in self.stream {
             if self.frame_sender.send(event).is_err() {
-                warn!("Failed to send encoded video chunk from encoder. Channel closed.");
+                warn!("Failed to send decoded video frame from decoder. Channel closed.");
                 return;
             }
         }
