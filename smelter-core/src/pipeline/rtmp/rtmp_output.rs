@@ -39,7 +39,6 @@ pub struct RtmpClientOutput {
 struct AudioConfig {
     extradata: Bytes,
     channels: AudioChannels,
-    _sample_rate: u32,
 }
 
 struct VideoConfig {
@@ -186,7 +185,6 @@ impl RtmpClientOutput {
         encoded_chunks_sender: Sender<EncodedOutputEvent>,
     ) -> Result<(AudioEncoderThreadHandle, AudioConfig), OutputInitError> {
         let channels = options.channels();
-        let sample_rate = options.sample_rate();
         let encoder = match options {
             AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
                 output_id.clone(),
@@ -209,7 +207,6 @@ impl RtmpClientOutput {
             AudioConfig {
                 extradata,
                 channels,
-                _sample_rate: sample_rate,
             },
         ))
     }
