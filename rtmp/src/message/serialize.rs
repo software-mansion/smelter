@@ -2,7 +2,7 @@ use bytes::Bytes;
 
 use crate::{
     SerializationError,
-    amf0::encode_amf_values,
+    amf0::{encode_amf0_values, encode_avmplus_values},
     message::{RtmpMessage, event::event_into_raw},
     protocol::{MessageType, RawMessage, UserControlMessageEvent},
 };
@@ -37,11 +37,17 @@ impl RtmpMessage {
                     .concat(),
                 ),
             },
+            RtmpMessage::CommandMessageAmf3 { values, stream_id } => RawMessage {
+                msg_type: MessageType::CommandMessageAmf3,
+                stream_id,
+                timestamp: 0,
+                payload: encode_avmplus_values(&values)?,
+            },
             RtmpMessage::CommandMessageAmf0 { values, stream_id } => RawMessage {
                 msg_type: MessageType::CommandMessageAmf0,
                 stream_id,
                 timestamp: 0,
-                payload: encode_amf_values(&values)?,
+                payload: encode_amf0_values(&values)?,
             },
             RtmpMessage::SetChunkSize { chunk_size } => RawMessage {
                 msg_type: MessageType::SetChunkSize,

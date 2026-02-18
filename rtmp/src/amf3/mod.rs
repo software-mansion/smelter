@@ -5,7 +5,11 @@ use bytes::Bytes;
 mod decoding;
 mod encoding;
 
+#[cfg(test)]
+mod amf3_tests;
+
 pub(crate) use decoding::Amf3DecoderState;
+pub(crate) use encoding::{Amf3EncoderState, I29_MAX, I29_MIN, MAX_SEALED_COUNT, U28_MAX, U29_MAX};
 
 const UNDEFINED: u8 = 0x00;
 const NULL: u8 = 0x01;

@@ -28,8 +28,10 @@ pub enum MessageType {
 
     Audio,
     Video,
+    DataMessageAmf3,
     DataMessageAmf0,
 
+    CommandMessageAmf3,
     CommandMessageAmf0,
 }
 
@@ -44,6 +46,8 @@ impl MessageType {
             6 => Ok(MessageType::SetPeerBandwidth),
             8 => Ok(MessageType::Audio),
             9 => Ok(MessageType::Video),
+            15 => Ok(MessageType::DataMessageAmf3),
+            17 => Ok(MessageType::CommandMessageAmf3),
             18 => Ok(MessageType::DataMessageAmf0),
             20 => Ok(MessageType::CommandMessageAmf0),
             _ => Err(ParseError::UnknownMessageType(value)),
@@ -60,6 +64,8 @@ impl MessageType {
             MessageType::SetPeerBandwidth => 6,
             MessageType::Audio => 8,
             MessageType::Video => 9,
+            MessageType::DataMessageAmf3 => 15,
+            MessageType::CommandMessageAmf3 => 17,
             MessageType::DataMessageAmf0 => 18,
             MessageType::CommandMessageAmf0 => 20,
         }

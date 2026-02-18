@@ -171,6 +171,7 @@ pub(super) fn event_into_raw(
             }
             .serialize()?,
         },
+        // TODO: (@jbrs) This should depend on the encoding
         RtmpEvent::Metadata(script_data) => RawMessage {
             msg_type: MessageType::DataMessageAmf0,
             stream_id,
