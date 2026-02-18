@@ -136,6 +136,7 @@ impl Amf0EncoderState {
         }
 
         self.buf.put_u8(TYPED_OBJECT);
+        self.buf.put_u16(class_name.len() as u16);
         self.buf.put_slice(class_name.as_bytes());
         self.put_keyval_map(properties)
     }
