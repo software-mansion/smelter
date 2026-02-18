@@ -58,7 +58,8 @@ impl<'a> DecodingImages<'a> {
             dpb_format.image_usage_flags
                 & (vk::ImageUsageFlags::VIDEO_DECODE_DPB_KHR
                     | vk::ImageUsageFlags::VIDEO_DECODE_DST_KHR
-                    | vk::ImageUsageFlags::TRANSFER_SRC)
+                    | vk::ImageUsageFlags::TRANSFER_SRC
+                    | vk::ImageUsageFlags::STORAGE)
         };
 
         let queue_indices = [

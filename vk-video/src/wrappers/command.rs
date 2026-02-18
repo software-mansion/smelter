@@ -136,12 +136,17 @@ impl CommandBufferPool {
             .free
             .extend(inner.submitted.drain(..=last).map(|b| b.buffer));
     }
+
+    pub(crate) fn mark_all_submitted_as_free(&self) {
+        self.mark_submitted_as_free(SemaphoreWaitValue::MAX);
+    }
 }
 
 struct UnfinishedCommandBuffer {
     buffer: vk::CommandBuffer,
     pool: Arc<Mutex<CommandBufferPoolInner>>,
-    image_layout_transitions: FxHashMap<ImageKey, Box<[vk::ImageLayout]>>,
+    image_layout_transitions:
+        FxHashMap<ImageKey, (Arc<Mutex<ImageLayoutTracker>>, Box<[vk::ImageLayout]>)>,
     reset_on_drop: bool,
 }
 
@@ -202,19 +207,24 @@ impl OpenCommandBuffer {
     pub(crate) fn image_layout(
         &mut self,
         image: ImageKey,
-        tracker: &ImageLayoutTracker,
+        tracker: &Arc<Mutex<ImageLayoutTracker>>,
     ) -> Result<&mut [vk::ImageLayout], VulkanCommonError> {
         let entry = self.0.image_layout_transitions.entry(image);
 
         match entry {
-            Entry::Occupied(entry) => Ok(entry.into_mut()),
-            Entry::Vacant(entry) => Ok(entry.insert(
-                tracker
-                    .map
-                    .get(&image)
-                    .ok_or(VulkanCommonError::TriedToAccessNonexistentImageState(image))?
-                    .clone(),
-            )),
+            Entry::Occupied(entry) => Ok(&mut entry.into_mut().1),
+            Entry::Vacant(entry) => Ok(&mut entry
+                .insert((
+                    tracker.clone(),
+                    tracker
+                        .lock()
+                        .unwrap()
+                        .map
+                        .get(&image)
+                        .ok_or(VulkanCommonError::TriedToAccessNonexistentImageState(image))?
+                        .clone(),
+                ))
+                .1),
         }
     }
 }
@@ -222,7 +232,7 @@ impl OpenCommandBuffer {
 pub(crate) struct RecordedCommandBuffer(UnfinishedCommandBuffer);
 
 impl RecordedCommandBuffer {
-    pub(crate) fn mark_submitted(mut self, tracker: &mut ImageLayoutTracker, semaphore_value: SemaphoreWaitValue) {
+    pub(crate) fn mark_submitted(mut self, semaphore_value: SemaphoreWaitValue) {
         self.0
             .pool
             .lock()
@@ -232,8 +242,16 @@ impl RecordedCommandBuffer {
                 semaphore_value,
                 buffer: self.0.buffer,
             });
-        tracker.map.extend(self.0.image_layout_transitions.drain());
+
+        for (key, (tracker, layout)) in self.0.image_layout_transitions.drain() {
+            tracker.lock().unwrap().map.insert(key, layout);
+        }
+
         self.0.destroy_without_reset();
+    }
+
+    pub(crate) fn mark_submitted_no_wait_value(self) {
+        self.mark_submitted(SemaphoreWaitValue::MAX);
     }
 
     pub(crate) fn buffer(&self) -> vk::CommandBuffer {

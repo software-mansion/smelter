@@ -33,6 +33,8 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   let input_y = textureLoad(source_y, coords_input);
   textureStore(dest_y[i], coords_output, input_y);
 
-  let input_uv = textureLoad(source_uv, coords_input / 2);
-  textureStore(dest_uv[i], coords_output / 2, input_uv);
+  if (x % 2 == 0 && y % 2 == 0) {
+    let input_uv = textureLoad(source_uv, coords_input / 2);
+    textureStore(dest_uv[i], coords_output / 2, input_uv);
+  }
 }

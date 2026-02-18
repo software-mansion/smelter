@@ -40,9 +40,7 @@ pub(crate) const ENCODE_EXTENSIONS: &[&CStr] = &[
     vk::KHR_VIDEO_ENCODE_H264_NAME,
 ];
 
-pub(crate) const DEBUG_UTILS_EXTENSION: &[&CStr] = &[
-    vk::EXT_DEBUG_UTILS_NAME,
-];
+pub(crate) const DEBUG_UTILS_EXTENSION: &[&CStr] = &[vk::EXT_DEBUG_UTILS_NAME];
 
 /// A fraction
 #[derive(Debug, Clone, Copy)]
@@ -178,7 +176,8 @@ impl VulkanDevice {
             .chain(match info.supports_encoding {
                 true => ENCODE_EXTENSIONS.iter().copied(),
                 false => [].iter().copied(),
-            }).chain(match info.supports_debug_utils {
+            })
+            .chain(match info.supports_debug_utils {
                 true => DEBUG_UTILS_EXTENSION.iter().copied(),
                 false => [].iter().copied(),
             })
@@ -205,7 +204,9 @@ impl VulkanDevice {
             vk::PhysicalDeviceVideoMaintenance1FeaturesKHR::default().video_maintenance1(true);
 
         let mut vk_descriptor_feature = vk::PhysicalDeviceDescriptorIndexingFeatures::default()
-            .shader_storage_texel_buffer_array_non_uniform_indexing(true);
+            .shader_storage_texel_buffer_array_non_uniform_indexing(true)
+            .descriptor_binding_variable_descriptor_count(true)
+            .runtime_descriptor_array(true);
 
         let device_create_info = vk::DeviceCreateInfo::default()
             .queue_create_infos(&queue_create_infos)
@@ -350,7 +351,7 @@ impl VulkanDevice {
         let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
 
         let vulkan_decoder =
-            VulkanDecoder::new(Arc::new(self.decoding_device()?), parameters.usage_flags)?;
+            VulkanDecoder::new(Arc::new(self.decoding_device()?), parameters.usage_flags, Default::default())?;
         let frame_sorter = FrameSorter::<wgpu::Texture>::new();
 
         Ok(WgpuTexturesDecoder {
@@ -369,7 +370,7 @@ impl VulkanDevice {
         let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
 
         let vulkan_decoder =
-            VulkanDecoder::new(Arc::new(self.decoding_device()?), parameters.usage_flags)?;
+            VulkanDecoder::new(Arc::new(self.decoding_device()?), parameters.usage_flags, Default::default())?;
         let frame_sorter = FrameSorter::<RawFrameData>::new();
 
         Ok(BytesDecoder {
@@ -380,8 +381,11 @@ impl VulkanDevice {
         })
     }
 
-    pub fn create_transcoder(self: &Arc<Self>, parameters: &[EncoderParameters]) -> Result<Transcoder, TranscoderError> {
-        Transcoder::new(self.clone(), parameters)
+    pub fn create_transcoder(
+        self: &Arc<Self>,
+        parameters: &[EncoderParameters],
+    ) -> Result<Transcoder, TranscoderError> {
+        Transcoder::new(self.clone(), parameters.into())
     }
 
     pub fn wgpu_device(&self) -> wgpu::Device {

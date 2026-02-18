@@ -1,6 +1,6 @@
-use std::{num::NonZeroU32, time::Duration};
+use std::{fs::File, io::{Read, Write}, num::NonZeroU32, time::Duration};
 
-use vk_video::parameters::{RateControl, Rational, VideoParameters};
+use vk_video::{EncodedInputChunk, parameters::{RateControl, Rational, VideoParameters}};
 
 fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -28,7 +28,7 @@ fn main() {
         .create_device(Default::default(), Default::default(), Default::default())
         .unwrap();
 
-    let transcoder = device
+    let mut transcoder = device
         .create_transcoder(&[device
             .encoder_parameters_high_quality(
                 VideoParameters {
@@ -47,6 +47,22 @@ fn main() {
             )
             .unwrap()])
         .unwrap();
+
+    let mut input_file = File::open(input_file).unwrap();
+    let mut output_file = File::create("output.h264").unwrap();
+    let mut buffer = vec![0; 4096];
+    while let Ok(n) = input_file.read(&mut buffer) && n > 0 {
+        let input = EncodedInputChunk {
+            data: &buffer[..n],
+            pts: None
+        };
+        let output = transcoder.transcode(input).unwrap();
+
+        for output in output {
+            output_file.write_all(&output[0].data).unwrap();
+        }
+    }
+
 }
 
 fn print_usage_and_exit(executable_name: &str) -> ! {

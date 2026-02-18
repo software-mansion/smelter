@@ -23,10 +23,17 @@ pub(crate) use frame_sorter::FrameSorter;
 
 pub struct VulkanDecoder<'a> {
     video_session_resources: Option<VideoSessionResources<'a>>,
-    tracker: DecoderTracker,
+    pub(crate) tracker: DecoderTracker,
     reference_id_to_dpb_slot_index: std::collections::HashMap<ReferenceId, usize>,
     decoding_device: Arc<DecodingDevice>,
     usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
+    image_modifiers: ImageModifiers,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct ImageModifiers {
+    pub(crate) create_flags: vk::ImageCreateFlags,
+    pub(crate) usage_flags: vk::ImageUsageFlags,
 }
 
 pub(crate) enum DecoderTrackerWaitState {
@@ -35,7 +42,7 @@ pub(crate) enum DecoderTrackerWaitState {
     DownloadImageToBuffer,
 }
 
-struct DecoderTrackerKind {}
+pub(crate) struct DecoderTrackerKind {}
 
 impl TrackerKind for DecoderTrackerKind {
     type WaitState = DecoderTrackerWaitState;
@@ -43,7 +50,7 @@ impl TrackerKind for DecoderTrackerKind {
     type CommandBufferPools = DecoderCommandBufferPools;
 }
 
-struct DecoderCommandBufferPools {
+pub(crate) struct DecoderCommandBufferPools {
     decode: CommandBufferPool,
     transfer: CommandBufferPool,
 }
@@ -55,19 +62,19 @@ impl CommandBufferPoolStorage for DecoderCommandBufferPools {
     }
 }
 
-type DecoderTracker = Tracker<DecoderTrackerKind>;
+pub(crate) type DecoderTracker = Tracker<DecoderTrackerKind>;
 
 /// this cannot outlive the image and semaphore it borrows, but it seems very hard to encode that
 /// in the lifetimes
 pub(crate) struct DecodeSubmission {
-    image: Arc<Image>,
+    pub(crate) image: Arc<Image>,
     dimensions: vk::Extent2D,
     layer: u32,
-    picture_order_cnt: i32,
-    max_num_reorder_frames: u64,
-    is_idr: bool,
-    pts: Option<u64>,
-    semaphore_wait_value: SemaphoreWaitValue,
+    pub(crate) picture_order_cnt: i32,
+    pub(crate) max_num_reorder_frames: u64,
+    pub(crate) is_idr: bool,
+    pub(crate) pts: Option<u64>,
+    pub(crate) semaphore_wait_value: SemaphoreWaitValue,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -105,6 +112,7 @@ impl VulkanDecoder<'_> {
     pub fn new(
         decoding_device: Arc<DecodingDevice>,
         usage_flags: crate::parameters::DecoderUsageFlags,
+        image_modifiers: ImageModifiers,
     ) -> Result<Self, VulkanDecoderError> {
         let command_buffer_pools = DecoderCommandBufferPools {
             transfer: CommandBufferPool::new(
@@ -131,16 +139,17 @@ impl VulkanDecoder<'_> {
             tracker,
             reference_id_to_dpb_slot_index: Default::default(),
             usage_info,
+            image_modifiers,
         })
     }
 }
 
 pub(crate) struct DecodeResult<T> {
-    frame: T,
-    pts: Option<u64>,
-    pic_order_cnt: i32,
-    max_num_reorder_frames: u64,
-    is_idr: bool,
+    pub(crate) frame: T,
+    pub(crate) pts: Option<u64>,
+    pub(crate) pic_order_cnt: i32,
+    pub(crate) max_num_reorder_frames: u64,
+    pub(crate) is_idr: bool,
 }
 
 impl VulkanDecoder<'_> {
@@ -243,6 +252,7 @@ impl VulkanDecoder<'_> {
                     sps.clone(),
                     self.usage_info,
                     &mut self.tracker,
+                    self.image_modifiers,
                 )?)
             }
         }
@@ -549,7 +559,8 @@ impl VulkanDecoder<'_> {
                 )
         };
 
-        let semaphore_wait_value = self.decoding_device
+        let semaphore_wait_value = self
+            .decoding_device
             .h264_decode_queues
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
@@ -705,7 +716,8 @@ impl VulkanDecoder<'_> {
 
         // TODO: why?? will something weaker, such as PipelineStageFlags2::TRANSFER suffice? this
         // just needs a test
-        let semaphore_wait_value = self.decoding_device
+        let semaphore_wait_value = self
+            .decoding_device
             .queues
             .transfer
             .submit_chain_semaphore(
@@ -945,7 +957,8 @@ impl VulkanDecoder<'_> {
         };
 
         // TODO: test if just putting COPY here works as well
-        let value = self.decoding_device
+        let value = self
+            .decoding_device
             .queues
             .transfer
             .submit_chain_semaphore(

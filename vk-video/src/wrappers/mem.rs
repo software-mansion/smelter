@@ -442,7 +442,7 @@ impl Image {
         subresource_range: vk::ImageSubresourceRange,
     ) -> Result<(), VulkanCommonError> {
         let raw_buffer = command_buffer.buffer();
-        let layout = command_buffer.image_layout(self.key(), &self.tracker.lock().unwrap())?;
+        let layout = command_buffer.image_layout(self.key(), &self.tracker)?;
 
         self.transition_layout_raw(
             raw_buffer,

@@ -66,6 +66,10 @@ pub(crate) trait CommandBufferPoolStorage: Sized {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct SemaphoreWaitValue(pub(crate) u64);
 
+impl SemaphoreWaitValue {
+    pub(crate) const MAX: Self = SemaphoreWaitValue(u64::MAX);
+}
+
 pub(crate) struct TrackerWait<S> {
     pub(crate) value: SemaphoreWaitValue,
     pub(crate) _state: S,
@@ -99,7 +103,7 @@ impl<K: TrackerKind> Tracker<K> {
         let waited_for = self.semaphore_tracker.wait_for_all(timeout)?;
 
         if let Some(waited_for) = waited_for {
-            self.command_buffer_pools.mark_submitted_as_free(waited_for);
+            self.mark_waited(waited_for);
         }
 
         Ok(())
@@ -111,8 +115,13 @@ impl<K: TrackerKind> Tracker<K> {
         timeout: u64,
     ) -> Result<(), VulkanCommonError> {
         self.semaphore_tracker.wait_for(value, timeout)?;
-        self.command_buffer_pools.mark_submitted_as_free(value);
+        self.mark_waited(value);
         Ok(())
+    }
+
+    /// Call this to mark that this value was waited for already
+    pub(crate) fn mark_waited(&mut self, value: SemaphoreWaitValue) {
+        self.command_buffer_pools.mark_submitted_as_free(value);
     }
 }
 

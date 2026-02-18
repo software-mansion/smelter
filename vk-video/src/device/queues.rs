@@ -42,6 +42,7 @@ impl Queue {
             .value(signal_value.0)
             .stage_mask(signal_stages);
 
+        // TODO: is the take here correct? what if submit fails?
         let wait_info = match tracker.semaphore_tracker.wait_for.take() {
             Some(wait_for) => Some(
                 vk::SemaphoreSubmitInfo::default()
@@ -68,7 +69,7 @@ impl Queue {
             )?
         };
 
-        buffer.mark_submitted(&mut tracker.image_layout_tracker.lock().unwrap(), signal_value);
+        buffer.mark_submitted(signal_value);
 
         tracker.semaphore_tracker.wait_for = Some(TrackerWait {
             value: signal_value,
