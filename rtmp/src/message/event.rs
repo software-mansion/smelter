@@ -9,8 +9,6 @@ use crate::{
     protocol::{MessageType, RawMessage},
 };
 
-use tracing::error;
-
 pub(super) fn audio_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, ParseError> {
     let tag = AudioTag::parse(msg.payload)?;
     let event = match (tag.codec, tag.aac_packet_type) {
