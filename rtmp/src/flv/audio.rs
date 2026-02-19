@@ -2,7 +2,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{
     SerializationError,
-    error::{AudioTagParseError, ParseError},
+    error::{AudioTagParseError, ParseError, RtmpError},
 };
 
 /// Struct representing flv AUDIODATA.
@@ -185,9 +185,9 @@ impl AudioTag {
     /// Parses flv `AUDIODATA`. The `data` must be the entire content of the `Data` field of
     /// the flv tag with audio `TagType`.  
     /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
-    pub fn parse(data: Bytes) -> Result<Self, ParseError> {
+    pub fn parse(data: Bytes) -> Result<Self, RtmpError> {
         if data.is_empty() {
-            return Err(ParseError::NotEnoughData);
+            return Err(ParseError::NotEnoughData.into());
         }
 
         let sound_format = (data[0] & 0b11110000) >> 4;
@@ -195,7 +195,7 @@ impl AudioTag {
         let sample_size = (data[0] & 0b00000010) >> 1;
         let sound_type = data[0] & 0b00000001;
 
-        let codec = AudioCodec::from_raw(sound_format)?;
+        let codec = AudioCodec::from_raw(sound_format).map_err(ParseError::from)?;
         let sample_rate = AudioTagSoundRate::from_raw(sample_rate);
         let sample_size = AudioTagSampleSize::from_raw(sample_size);
         let channels = AudioChannels::from_raw(sound_type);
@@ -212,12 +212,12 @@ impl AudioTag {
         }
     }
 
-    fn parse_aac(data: Bytes, channels: AudioChannels) -> Result<Self, ParseError> {
+    fn parse_aac(data: Bytes, channels: AudioChannels) -> Result<Self, RtmpError> {
         if data.len() < 2 {
-            return Err(ParseError::NotEnoughData);
+            return Err(ParseError::NotEnoughData.into());
         }
 
-        let aac_packet_type = AudioTagAacPacketType::from_raw(data[1])?;
+        let aac_packet_type = AudioTagAacPacketType::from_raw(data[1]).map_err(ParseError::from)?;
         let audio_data = data.slice(2..);
         Ok(Self {
             codec: AudioCodec::Aac,

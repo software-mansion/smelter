@@ -6,7 +6,7 @@ use crate::{
     SerializationError,
     amf0::{Amf0Value, decode_amf0_values, encode_amf0_values},
     amf3::Amf3Value,
-    error::ParseError,
+    error::{ParseError, RtmpError},
 };
 
 /// Struct representing flv SCRIPTDATA.
@@ -82,12 +82,12 @@ pub enum ExtendedScriptDataValue {
 }
 
 impl ScriptData {
-    pub fn parse(data: Bytes) -> Result<Self, ParseError> {
+    pub fn parse(data: Bytes) -> Result<Self, RtmpError> {
         if data.is_empty() {
-            return Err(ParseError::NotEnoughData);
+            return Err(ParseError::NotEnoughData.into());
         }
 
-        let amf_values = decode_amf0_values(data)?;
+        let amf_values = decode_amf0_values(data).map_err(ParseError::from)?;
         let values = amf_values.into_iter().map(ScriptDataValue::from).collect();
         Ok(Self { values })
     }

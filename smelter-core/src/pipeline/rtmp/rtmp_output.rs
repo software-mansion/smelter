@@ -126,8 +126,7 @@ impl RtmpClientOutput {
         }
 
         if let Some(config) = audio_config {
-            let config =
-                AacAudioConfig::try_from(config.extradata.clone()).map_err(RtmpError::from)?;
+            let config = AacAudioConfig::try_from(config.extradata.clone())?;
             client.send(config)?;
         }
         Ok(client)

@@ -2,7 +2,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::{
     SerializationError,
-    error::{ParseError, VideoTagParseError},
+    error::{ParseError, RtmpError, VideoTagParseError},
 };
 
 /// Struct representing flv VIDEODATA.
@@ -121,16 +121,16 @@ impl VideoTag {
     /// Parses flv `VIDEODATA`. The `data` must be the entire content of the `Data` field of
     /// the flv tag with video `TagType`.  
     /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
-    pub fn parse(data: Bytes) -> Result<Self, ParseError> {
+    pub fn parse(data: Bytes) -> Result<Self, RtmpError> {
         if data.is_empty() {
-            return Err(ParseError::NotEnoughData);
+            return Err(ParseError::NotEnoughData.into());
         }
 
         let frame_type = (data[0] & 0b11110000) >> 4;
         let codec_id = data[0] & 0b00001111;
 
-        let frame_type = VideoTagFrameType::from_raw(frame_type)?;
-        let codec = VideoCodec::try_from_raw(codec_id)?;
+        let frame_type = VideoTagFrameType::from_raw(frame_type).map_err(ParseError::from)?;
+        let codec = VideoCodec::try_from_raw(codec_id).map_err(ParseError::from)?;
         match codec {
             VideoCodec::H264 => Self::parse_h264(data, frame_type),
             _ => Ok(Self {
@@ -143,11 +143,12 @@ impl VideoTag {
         }
     }
 
-    fn parse_h264(data: Bytes, frame_type: VideoTagFrameType) -> Result<Self, ParseError> {
+    fn parse_h264(data: Bytes, frame_type: VideoTagFrameType) -> Result<Self, RtmpError> {
         if data.len() < 5 {
-            return Err(ParseError::NotEnoughData);
+            return Err(ParseError::NotEnoughData.into());
         }
-        let avc_packet_type = VideoTagH264PacketType::from_raw(data[1])?;
+        let avc_packet_type =
+            VideoTagH264PacketType::from_raw(data[1]).map_err(ParseError::from)?;
         let composition_time = i32::from_be_bytes([0, data[2], data[3], data[4]]);
 
         Ok(Self {

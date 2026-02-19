@@ -91,7 +91,7 @@ impl Iterator for RtmpMessageReader {
             if let Some(msg) = self.try_complete_message(&chunk) {
                 return match RtmpMessage::from_raw(msg) {
                     Ok(msg) => Some(Ok(msg)),
-                    Err(err) => Some(Err(err.into())),
+                    Err(err) => Some(Err(err)),
                 };
             }
         }

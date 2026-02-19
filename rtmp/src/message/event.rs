@@ -3,13 +3,13 @@ use std::time::Duration;
 use crate::{
     AacAudioData, AudioCodec, AudioTag, AudioTagAacPacketType, AudioTagSampleSize,
     AudioTagSoundRate, GenericAudioData, GenericVideoData, H264VideoConfig, H264VideoData,
-    ParseError, RtmpEvent, SerializationError, VideoCodec, VideoTag, VideoTagFrameType,
+    ParseError, RtmpError, RtmpEvent, SerializationError, VideoCodec, VideoTag, VideoTagFrameType,
     VideoTagH264PacketType, VideoTagParseError,
     message::RtmpMessage,
     protocol::{MessageType, RawMessage},
 };
 
-pub(super) fn audio_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, ParseError> {
+pub(super) fn audio_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, RtmpError> {
     let tag = AudioTag::parse(msg.payload)?;
     let event = match (tag.codec, tag.aac_packet_type) {
         (AudioCodec::Aac, Some(AudioTagAacPacketType::Data)) => RtmpEvent::AacData(AacAudioData {
@@ -35,41 +35,43 @@ pub(super) fn audio_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, Parse
     })
 }
 
-pub(super) fn video_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, ParseError> {
+pub(super) fn video_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, RtmpError> {
     let tag = VideoTag::parse(msg.payload)?;
-    let event = match (tag.codec, tag.h264_packet_type) {
-        (VideoCodec::H264, Some(VideoTagH264PacketType::Data)) => {
-            RtmpEvent::H264Data(H264VideoData {
-                pts: Duration::from_millis(
-                    (msg.timestamp as i64 + tag.composition_time.unwrap_or(0) as i64) as u64,
-                ),
-                dts: Duration::from_millis(msg.timestamp.into()),
-                data: tag.data,
-                is_keyframe: match tag.frame_type {
-                    VideoTagFrameType::Keyframe => true,
-                    VideoTagFrameType::Interframe => false,
-                    _ => {
-                        return Err(
-                            VideoTagParseError::InvalidFrameTypeForH264(tag.frame_type).into()
-                        );
-                    }
-                },
-            })
-        }
-        (VideoCodec::H264, Some(VideoTagH264PacketType::Config)) => {
-            RtmpEvent::H264Config(H264VideoConfig { data: tag.data })
-        }
-        // TODO
-        // (VideoCodec::H264, Some(VideoTagH264PacketType::Eos)) => {
+    let event =
+        match (tag.codec, tag.h264_packet_type) {
+            (VideoCodec::H264, Some(VideoTagH264PacketType::Data)) => {
+                RtmpEvent::H264Data(H264VideoData {
+                    pts: Duration::from_millis(
+                        (msg.timestamp as i64 + tag.composition_time.unwrap_or(0) as i64) as u64,
+                    ),
+                    dts: Duration::from_millis(msg.timestamp.into()),
+                    data: tag.data,
+                    is_keyframe: match tag.frame_type {
+                        VideoTagFrameType::Keyframe => true,
+                        VideoTagFrameType::Interframe => false,
+                        _ => {
+                            return Err(ParseError::from(
+                                VideoTagParseError::InvalidFrameTypeForH264(tag.frame_type),
+                            )
+                            .into());
+                        }
+                    },
+                })
+            }
+            (VideoCodec::H264, Some(VideoTagH264PacketType::Config)) => {
+                RtmpEvent::H264Config(H264VideoConfig { data: tag.data })
+            }
+            // TODO
+            // (VideoCodec::H264, Some(VideoTagH264PacketType::Eos)) => {
 
-        // }
-        (codec, _) => RtmpEvent::GenericVideoData(GenericVideoData {
-            timestamp: msg.timestamp,
-            codec,
-            data: tag.data,
-            frame_type: tag.frame_type,
-        }),
-    };
+            // }
+            (codec, _) => RtmpEvent::GenericVideoData(GenericVideoData {
+                timestamp: msg.timestamp,
+                codec,
+                data: tag.data,
+                frame_type: tag.frame_type,
+            }),
+        };
     Ok(RtmpMessage::Event {
         event,
         stream_id: msg.stream_id,
