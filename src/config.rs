@@ -43,11 +43,17 @@ pub struct Config {
     pub whip_whep_server_port: u16,
     pub whip_whep_enable: bool,
     pub webrtc_stun_servers: Arc<Vec<String>>,
-    pub webrtc_udp_port_range: Option<(u16, u16)>,
+    pub webrtc_udp_port_strategy: Option<WebrtcUdpPortStrategy>,
     pub webrtc_nat_1to1_ips: Arc<Vec<String>>,
 
     pub rtmp_server_port: u16,
     pub rtmp_enable: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum WebrtcUdpPortStrategy {
+    PortRange(u16, u16),
+    Mux(u16),
 }
 
 #[derive(Debug, Clone)]
@@ -275,6 +281,28 @@ fn try_read_config() -> Result<Config, String> {
         Err(_) => None,
     };
 
+    let webrtc_udp_mux_port = match env::var("SMELTER_WEBRTC_UDP_MUX_PORT") {
+        Ok(mux_port) => mux_port
+            .parse::<u16>()
+            .inspect_err(|err| {
+                warn!("SMELTER_WEBRTC_UDP_MUX_PORT has to be valid port number: {err}")
+            })
+            .ok(),
+        Err(_) => None,
+    };
+
+    let webrtc_udp_port_strategy = match (webrtc_udp_mux_port, webrtc_udp_port_range) {
+        (None, None) => None,
+        (None, Some((start, end))) => Some(WebrtcUdpPortStrategy::PortRange(start, end)),
+        (Some(port), None) => Some(WebrtcUdpPortStrategy::Mux(port)),
+        (Some(port), Some(_)) => {
+            warn!(
+                "Options \"SMELTER_WEBRTC_UDP_MUX_PORT\" and \"SMELTER_WEBRTC_UDP_PORT_RANGE\" are conflicting. Ignoring \"SMELTER_WEBRTC_UDP_PORT_RANGE\""
+            );
+            Some(WebrtcUdpPortStrategy::Mux(port))
+        }
+    };
+
     let webrtc_nat_1to1_ips = match env::var("SMELTER_WEBRTC_1_TO_1_NAT_IPS") {
         Ok(ips) => Arc::new(ips.split(",").map(ToString::to_string).collect()),
         Err(_) => Arc::new(vec![]),
@@ -333,7 +361,7 @@ fn try_read_config() -> Result<Config, String> {
         whip_whep_enable,
         whip_whep_server_port,
         webrtc_stun_servers,
-        webrtc_udp_port_range,
+        webrtc_udp_port_strategy,
         webrtc_nat_1to1_ips,
         rtmp_server_port,
         rtmp_enable,
