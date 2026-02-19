@@ -1,4 +1,4 @@
-use crate::{error::RtmpError, message::RtmpMessage};
+use crate::{error::RtmpError, message::RtmpMessage, protocol::MessageType};
 use std::{cmp::min, io::Write, net::TcpStream};
 
 pub struct RtmpMessageWriter {
@@ -25,24 +25,36 @@ impl RtmpMessageWriter {
         let mut offset = 0;
         let total_len = msg.payload.len();
 
-        // negeotiaion usually on chunk stream id 2 according to spec
-        // https://rtmp.veriskope.com/docs/spec/#54-protocol-control-messages
-        const CS_ID: u8 = 2;
+        // Protocol Control Messages (types 1-6) MUST use chunk stream ID 2.
+        // Command messages use chunk stream ID 3.
+        // Audio uses chunk stream ID 4, Video uses chunk stream ID 5.
+        // Data messages use chunk stream ID 6.
+        let cs_id: u8 = match msg.msg_type {
+            MessageType::SetChunkSize
+            | MessageType::AbortMessage
+            | MessageType::Acknowledgement
+            | MessageType::UserControl
+            | MessageType::WindowAckSize
+            | MessageType::SetPeerBandwidth => 2,
+            MessageType::CommandMessageAmf0 | MessageType::CommandMessageAmf3 => 3,
+            MessageType::Audio => 4,
+            MessageType::Video => 5,
+            MessageType::DataMessageAmf0 | MessageType::DataMessageAmf3 => 6,
+        };
 
         while offset < total_len {
             let chunk_len = min(self.chunk_size, total_len - offset);
 
             if offset == 0 {
-                //  header type 0
-                self.stream.write_all(&[(CS_ID & 0x3F)])?;
-                // message header
+                // Chunk type 0 (full header)
+                self.stream.write_all(&[(cs_id & 0x3F)])?;
                 self.write_u24_be(msg.timestamp)?;
                 self.write_u24_be(total_len as u32)?;
                 self.stream.write_all(&[msg.msg_type.into_raw()])?;
                 self.write_u32_le(msg.stream_id)?;
             } else {
-                // header type 3
-                self.stream.write_all(&[0xC0 | (CS_ID & 0x3F)])?;
+                // Chunk type 3 (continuation)
+                self.stream.write_all(&[0xC0 | (cs_id & 0x3F)])?;
             }
 
             self.stream

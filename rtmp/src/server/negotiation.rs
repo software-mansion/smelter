@@ -10,17 +10,22 @@ use tracing::{debug, trace, warn};
 pub const WINDOW_ACK_SIZE: u32 = 2_500_000;
 pub const PEER_BANDWIDTH: u32 = 2_500_000;
 
-enum NegotiationStatus {
-    InProgress,
-    Completed { app: String, stream_key: String },
+// TODO: make sure that it is the only one valid negotation sequence
+enum NegotiationState {
+    // Waiting for `connect` command from client.
+    WaitingForConnect,
+    // `connect` handled, waiting for `createStream`.
+    Connected { app: String },
+    // `createStream` handled, waiting for `publish`.
+    StreamCreated { app: String, stream_id: u32 },
 }
 
 pub(crate) fn negotiate_rtmp_session(
     reader: &mut RtmpMessageReader,
     writer: &mut RtmpMessageWriter,
 ) -> Result<(String, String), RtmpError> {
-    let mut app_name = String::new();
-    let current_stream_id = 0;
+    let mut state = NegotiationState::WaitingForConnect;
+    let mut next_stream_id: u32 = 1;
 
     loop {
         let msg = match reader.next() {
@@ -34,19 +39,20 @@ pub(crate) fn negotiate_rtmp_session(
                 reader.set_chunk_size(chunk_size as usize);
                 debug!(chunk_size, "Client set chunk size during negotiation");
             }
-            RtmpMessage::CommandMessageAmf0 { values, .. } => {
-                match handle_command_message(values, writer, &mut app_name, current_stream_id)? {
-                    NegotiationStatus::InProgress => {}
-                    NegotiationStatus::Completed { app, stream_key } => {
-                        return Ok((app, stream_key));
-                    }
+            RtmpMessage::WindowAckSize { window_size } => {
+                debug!(
+                    window_size,
+                    "Client sent Window Acknowledgement Size during negotiation"
+                );
+            }
+            RtmpMessage::CommandMessageAmf0 { values, .. }
+            | RtmpMessage::CommandMessageAmf3 { values, .. } => {
+                if let Some((app, stream_key)) =
+                    handle_command_message(values, writer, &mut state, &mut next_stream_id)?
+                {
+                    return Ok((app, stream_key));
                 }
             }
-
-            //MessageType::WindowAckSize | MessageType::Acknowledgement => {
-            //    // handling is optional so leave for now
-            //    continue;
-            //}
             _ => continue,
         }
     }
@@ -56,16 +62,16 @@ pub(crate) fn negotiate_rtmp_session(
 fn handle_command_message(
     args: Vec<Amf0Value>,
     writer: &mut RtmpMessageWriter,
-    app_name: &mut String,
-    current_stream_id: u32,
-) -> Result<NegotiationStatus, RtmpError> {
+    state: &mut NegotiationState,
+    next_stream_id: &mut u32,
+) -> Result<Option<(String, String)>, RtmpError> {
     if args.is_empty() {
-        return Ok(NegotiationStatus::InProgress);
+        return Ok(None);
     }
 
     let cmd = match args.first() {
         Some(Amf0Value::String(s)) => s.as_str(),
-        _ => return Ok(NegotiationStatus::InProgress),
+        _ => return Ok(None),
     };
 
     let txn_id = match args.get(1) {
@@ -76,10 +82,16 @@ fn handle_command_message(
     match cmd {
         // https://rtmp.veriskope.com/docs/spec/#7211connect
         "connect" => {
+            if !matches!(state, NegotiationState::WaitingForConnect) {
+                warn!("Received duplicate connect command, ignoring");
+                return Ok(None);
+            }
+
+            let mut app_name = String::new();
             if let Some(Amf0Value::Object(map)) = args.get(2)
                 && let Some(Amf0Value::String(app)) = map.get("app")
             {
-                *app_name = app.clone();
+                app_name = app.clone();
             }
 
             writer.write(RtmpMessage::WindowAckSize {
@@ -128,33 +140,54 @@ fn handle_command_message(
                 stream_id: 0,
             })?;
             trace!("Sent connect _result response");
+
+            *state = NegotiationState::Connected { app: app_name };
         }
 
         "createStream" => {
+            if !matches!(state, NegotiationState::Connected { .. }) {
+                warn!("Received createStream in unexpected state, ignoring");
+                return Ok(None);
+            }
+
+            let app = match std::mem::replace(state, NegotiationState::WaitingForConnect) {
+                NegotiationState::Connected { app } => app,
+                _ => unreachable!(),
+            };
+
+            // Allocate a non-zero stream ID (stream 0 is reserved for NetConnection)
+            let stream_id = *next_stream_id;
+            *next_stream_id += 1;
+
             writer.write(RtmpMessage::CommandMessageAmf0 {
                 values: vec![
                     Amf0Value::String("_result".to_string()),
                     Amf0Value::Number(txn_id),
                     Amf0Value::Null,
-                    Amf0Value::Number(current_stream_id as f64),
+                    Amf0Value::Number(stream_id as f64),
                 ],
                 stream_id: 0,
             })?;
-            trace!(stream_id = current_stream_id, "Sent createStream _result");
+            trace!(stream_id, "Sent createStream _result");
 
-            writer.write(RtmpMessage::StreamBegin {
-                stream_id: current_stream_id,
-            })?;
-            trace!(
-                stream_id = current_stream_id,
-                "Sent Stream Begin for new stream"
-            );
+            writer.write(RtmpMessage::StreamBegin { stream_id })?;
+            trace!(stream_id, "Sent Stream Begin for new stream");
+
+            *state = NegotiationState::StreamCreated { app, stream_id };
         }
 
         "publish" => {
+            let (app, stream_id) = match state {
+                NegotiationState::StreamCreated { app, stream_id } => (app.clone(), *stream_id),
+                _ => {
+                    warn!("Received publish in unexpected state, ignoring");
+                    return Ok(None);
+                }
+            };
+
             let stream_key = match args.get(3) {
                 Some(Amf0Value::String(s)) => s.clone(),
-                _ => "default".to_string(),
+                _ => "".to_string(),
             };
 
             let status_info = HashMap::from([
@@ -176,18 +209,30 @@ fn handle_command_message(
                     Amf0Value::Null,
                     Amf0Value::Object(status_info),
                 ],
-                stream_id: current_stream_id,
+                stream_id,
             })?;
             trace!("Sent publish onStatus response");
 
-            return Ok(NegotiationStatus::Completed {
-                app: app_name.clone(),
-                stream_key,
-            });
+            return Ok(Some((app, stream_key)));
+        }
+
+        // Non-standard but commonly sent by clients (FFmpeg, OBS) before createStream.
+        // Acknowledge with empty _result to avoid stalling the client.
+        "releaseStream" | "FCPublish" => {
+            trace!(cmd, "Received non-standard command, sending empty _result");
+            writer.write(RtmpMessage::CommandMessageAmf0 {
+                values: vec![
+                    Amf0Value::String("_result".to_string()),
+                    Amf0Value::Number(txn_id),
+                    Amf0Value::Null,
+                    Amf0Value::Null,
+                ],
+                stream_id: 0,
+            })?;
         }
         _ => {
-            warn!("Unhandled command during negotiation: {}", cmd);
+            warn!("Unhandled command during negotiation: {cmd}");
         }
     }
-    Ok(NegotiationStatus::InProgress)
+    Ok(None)
 }
