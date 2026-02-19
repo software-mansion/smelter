@@ -40,7 +40,7 @@ pub fn benchmark_pipeline_options(
         rendering_mode,
         whip_whep_server: PipelineWhipWhepServerOptions::Disable,
         webrtc_stun_servers: Vec::new().into(),
-        webrtc_port_range: None,
+        webrtc_port_strategy: None,
         webrtc_nat_1to1_ips: Arc::new(vec![]),
         rtmp_server: PipelineRtmpServerOptions::Disable,
         wgpu_options: PipelineWgpuOptions::Context(graphics_context),

@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use axum::response::IntoResponse;
 use smelter_core::{
     Pipeline, PipelineOptions, PipelineRtmpServerOptions, PipelineWgpuOptions,
-    PipelineWhipWhepServerOptions, error::InitPipelineError,
+    PipelineWhipWhepServerOptions, error::InitPipelineError, protocols::WebrtcUdpPortStrategy,
 };
 use smelter_render::web_renderer::{ChromiumContext, ChromiumContextInitError};
 
@@ -131,7 +131,12 @@ pub fn pipeline_options_from_config(
             },
             false => PipelineWhipWhepServerOptions::Disable,
         },
-        webrtc_port_range: opt.webrtc_udp_port_range,
+        webrtc_port_strategy: opt.webrtc_udp_port_strategy.clone().map(|s| match s {
+            crate::config::WebrtcUdpPortStrategy::PortRange(start, end) => {
+                WebrtcUdpPortStrategy::PortRange(start, end)
+            }
+            crate::config::WebrtcUdpPortStrategy::Mux(port) => WebrtcUdpPortStrategy::Mux(port),
+        }),
         webrtc_nat_1to1_ips: opt.webrtc_nat_1to1_ips.clone(),
 
         rtmp_server: match opt.rtmp_enable {
