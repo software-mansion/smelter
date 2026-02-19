@@ -42,7 +42,7 @@ impl AacAudioConfig {
         data: &Bytes,
         object_type: u8,
         frequency_index: u8,
-    ) -> Result<u32, RtmpError> {
+    ) -> Result<u32, ParseError> {
         let frequency: u32 = match frequency_index {
             0 => 96000,
             1 => 88200,
@@ -61,7 +61,7 @@ impl AacAudioConfig {
             // If frequency_index == 15, then the frequency is encoded explicitly as 24 bit number
             15 => {
                 if data.remaining() < 5 {
-                    return Err(ParseError::NotEnoughData.into());
+                    return Err(ParseError::NotEnoughData);
                 }
                 match object_type {
                     31 => {
@@ -75,10 +75,9 @@ impl AacAudioConfig {
                 }
             }
             _ => {
-                return Err(ParseError::from(
-                    AudioSpecificConfigParseError::InvalidFrequencyIndex(frequency_index),
-                )
-                .into());
+                return Err(
+                    AudioSpecificConfigParseError::InvalidFrequencyIndex(frequency_index).into(),
+                );
             }
         };
 
@@ -89,12 +88,12 @@ impl AacAudioConfig {
         data: &Bytes,
         object_type: u8,
         frequency_index: u8,
-    ) -> Result<AudioChannels, RtmpError> {
+    ) -> Result<AudioChannels, ParseError> {
         // 4 bit channel_configuration field
         let channel_configuration = match (object_type, frequency_index) {
             (31, 15) => {
                 if data.remaining() < 6 {
-                    return Err(ParseError::NotEnoughData.into());
+                    return Err(ParseError::NotEnoughData);
                 }
                 let high = data[4] & 0b0000_0001;
                 let low = (data[5] & 0b1110_0000) >> 5;
@@ -103,7 +102,7 @@ impl AacAudioConfig {
             }
             (31, _) => {
                 if data.remaining() < 3 {
-                    return Err(ParseError::NotEnoughData.into());
+                    return Err(ParseError::NotEnoughData);
                 }
                 let high = data[1] & 0b0000_0001;
                 let low = (data[2] & 0b1110_0000) >> 5;
@@ -112,7 +111,7 @@ impl AacAudioConfig {
             }
             (_, 15) => {
                 if data.remaining() < 5 {
-                    return Err(ParseError::NotEnoughData.into());
+                    return Err(ParseError::NotEnoughData);
                 }
                 (data[4] & 0b0111_1000) >> 3
             }
@@ -123,17 +122,14 @@ impl AacAudioConfig {
             1 => Ok(AudioChannels::Mono),
             2 => Ok(AudioChannels::Stereo),
             _ => Err(
-                ParseError::from(AudioSpecificConfigParseError::InvalidAudioChannel(
-                    channel_configuration,
-                ))
-                .into(),
+                AudioSpecificConfigParseError::InvalidAudioChannel(channel_configuration).into(),
             ),
         }
     }
 
-    fn parse_object_type_frequency_index(data: &Bytes) -> Result<(u8, u8), RtmpError> {
+    fn parse_object_type_frequency_index(data: &Bytes) -> Result<(u8, u8), ParseError> {
         if data.remaining() < 2 {
-            return Err(ParseError::NotEnoughData.into());
+            return Err(ParseError::NotEnoughData);
         }
 
         // 5 bit object_type

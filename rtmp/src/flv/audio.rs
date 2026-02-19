@@ -212,12 +212,12 @@ impl AudioTag {
         }
     }
 
-    fn parse_aac(data: Bytes, channels: AudioChannels) -> Result<Self, RtmpError> {
+    fn parse_aac(data: Bytes, channels: AudioChannels) -> Result<Self, ParseError> {
         if data.len() < 2 {
-            return Err(ParseError::NotEnoughData.into());
+            return Err(ParseError::NotEnoughData);
         }
 
-        let aac_packet_type = AudioTagAacPacketType::from_raw(data[1]).map_err(ParseError::from)?;
+        let aac_packet_type = AudioTagAacPacketType::from_raw(data[1])?;
         let audio_data = data.slice(2..);
         Ok(Self {
             codec: AudioCodec::Aac,

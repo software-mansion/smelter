@@ -132,7 +132,7 @@ impl VideoTag {
         let frame_type = VideoTagFrameType::from_raw(frame_type).map_err(ParseError::from)?;
         let codec = VideoCodec::try_from_raw(codec_id).map_err(ParseError::from)?;
         match codec {
-            VideoCodec::H264 => Self::parse_h264(data, frame_type),
+            VideoCodec::H264 => Ok(Self::parse_h264(data, frame_type)?),
             _ => Ok(Self {
                 h264_packet_type: None,
                 composition_time: None,
@@ -143,12 +143,11 @@ impl VideoTag {
         }
     }
 
-    fn parse_h264(data: Bytes, frame_type: VideoTagFrameType) -> Result<Self, RtmpError> {
+    fn parse_h264(data: Bytes, frame_type: VideoTagFrameType) -> Result<Self, ParseError> {
         if data.len() < 5 {
-            return Err(ParseError::NotEnoughData.into());
+            return Err(ParseError::NotEnoughData);
         }
-        let avc_packet_type =
-            VideoTagH264PacketType::from_raw(data[1]).map_err(ParseError::from)?;
+        let avc_packet_type = VideoTagH264PacketType::from_raw(data[1])?;
         let composition_time = i32::from_be_bytes([0, data[2], data[3], data[4]]);
 
         Ok(Self {
