@@ -65,28 +65,12 @@ impl AacAudioConfig {
                 }
                 match object_type {
                     31 => {
-                        let first_chunk = data[1] & 0b0000_0001;
-                        let second_chunk = data[2];
-                        let third_chunk = data[3];
-                        let fourth_chunk = (data[4] & 0b1111_1110) >> 1;
-
-                        let first_byte = (first_chunk << 7) | (second_chunk >> 1);
-                        let second_byte = (second_chunk << 7) | (third_chunk >> 1);
-                        let third_byte = (third_chunk << 7) | fourth_chunk;
-
-                        u32::from_be_bytes([0, first_byte, second_byte, third_byte])
+                        let raw = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+                        (raw & 0x01_FF_FF_FE) >> 1
                     }
                     _ => {
-                        let first_chunk = data[1] & 0b0111_1111;
-                        let second_chunk = data[2];
-                        let third_chunk = data[3];
-                        let fourth_chunk = (data[4] & 0b1000_0000) >> 7;
-
-                        let first_byte = (first_chunk << 1) | (second_chunk >> 7);
-                        let second_byte = (second_chunk << 1) | (third_chunk >> 7);
-                        let third_byte = (third_chunk << 1) | fourth_chunk;
-
-                        u32::from_be_bytes([0, first_byte, second_byte, third_byte])
+                        let raw = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+                        (raw & 0x7F_FF_FF_80) >> 7
                     }
                 }
             }
