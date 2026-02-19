@@ -7,6 +7,9 @@ use crate::{
     VideoTagFrameType,
 };
 
+mod aac;
+pub use aac::AacAudioConfig;
+
 #[derive(Debug, Clone)]
 pub enum RtmpEvent {
     H264Data(H264VideoData),
@@ -26,13 +29,6 @@ pub struct AacAudioData {
     pub pts: Duration,
     pub data: Bytes,
     pub channels: AudioChannels,
-}
-
-#[derive(Clone)]
-pub struct AacAudioConfig {
-    pub channels: AudioChannels,
-    pub sample_rate: u32,
-    pub data: Bytes, // TODO: Audio specific config
 }
 
 // Raw RTMP message for codecs that we do not explicitly support.
@@ -122,16 +118,6 @@ impl std::fmt::Debug for AacAudioData {
             .field("pts", &self.pts)
             .field("data", &bytes_debug(&self.data))
             .field("channels", &self.channels)
-            .finish()
-    }
-}
-
-impl std::fmt::Debug for AacAudioConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AacAudioConfig")
-            .field("channels", &self.channels)
-            .field("sample_rate", &self.sample_rate)
-            .field("data", &bytes_debug(&self.data))
             .finish()
     }
 }

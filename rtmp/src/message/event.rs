@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    AacAudioConfig, AacAudioData, AudioCodec, AudioTag, AudioTagAacPacketType, AudioTagSampleSize,
+    AacAudioData, AudioCodec, AudioTag, AudioTagAacPacketType, AudioTagSampleSize,
     AudioTagSoundRate, GenericAudioData, GenericVideoData, H264VideoConfig, H264VideoData,
     ParseError, RtmpEvent, SerializationError, VideoCodec, VideoTag, VideoTagFrameType,
     VideoTagH264PacketType, VideoTagParseError,
@@ -18,11 +18,7 @@ pub(super) fn audio_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, Parse
             data: tag.data,
         }),
         (AudioCodec::Aac, Some(AudioTagAacPacketType::Config)) => {
-            RtmpEvent::AacConfig(AacAudioConfig {
-                sample_rate: 44_100, // TODO: use correct sample rate
-                channels: tag.channels,
-                data: tag.data,
-            })
+            RtmpEvent::AacConfig(tag.data.try_into()?)
         }
         (codec, _) => RtmpEvent::GenericAudioData(GenericAudioData {
             timestamp: msg.timestamp,
@@ -139,8 +135,8 @@ pub(super) fn event_into_raw(
                 codec: AudioCodec::Aac,
                 sample_rate: AudioTagSoundRate::Rate44000,
                 sample_size: AudioTagSampleSize::Sample16Bit,
-                channels: config.channels,
-                data: config.data,
+                channels: config.channels(),
+                data: config.data().clone(),
             }
             .serialize()?,
         },
