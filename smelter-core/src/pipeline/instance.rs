@@ -29,7 +29,9 @@ use crate::{
         input::{PipelineInput, new_external_input, register_pipeline_input},
         output::{OutputSender, PipelineOutput, new_external_output, register_pipeline_output},
         rtmp::spawn_rtmp_server,
-        webrtc::{WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle},
+        webrtc::{
+            WebrtcSettingEngineCtx, WhipWhepPipelineState, WhipWhepServer, WhipWhepServerHandle,
+        },
     },
     queue::{Queue, QueueAudioOutput, QueueOptions, QueueVideoOutput},
     stats::StatsMonitor,
@@ -366,7 +368,8 @@ impl Pipeline {
 impl Drop for Pipeline {
     fn drop(&mut self) {
         info!("Stopping pipeline");
-        self.queue.shutdown()
+        self.queue.shutdown();
+        self.ctx.webrtc_setting_engine.close();
     }
 }
 
@@ -549,6 +552,12 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
         PipelineRtmpServerOptions::Disable => None,
     };
 
+    let webrtc_setting_engine = WebrtcSettingEngineCtx::new(
+        opts.webrtc_nat_1to1_ips,
+        opts.webrtc_port_strategy,
+        &tokio_rt,
+    )?;
+
     let ctx = Arc::new(PipelineCtx {
         queue_sync_point: Instant::now(),
         default_buffer_duration: opts.default_buffer_duration,
@@ -568,8 +577,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
             PipelineWhipWhepServerOptions::Disable => None,
         },
         webrtc_stun_servers: opts.webrtc_stun_servers.clone(),
-        webrtc_port_range: opts.webrtc_port_range,
-        webrtc_nat_1to1_ips: opts.webrtc_nat_1to1_ips,
+        webrtc_setting_engine,
         rtmp_state: rtmp_state.clone(),
     });
 

@@ -45,6 +45,7 @@ uuid = "1.17.0"
 pollster = { workspace = true }
 audioadapter-buffers = "2.0.0"
 audioadapter = "2.0.0"
+async-trait = "0.1.89"
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 decklink = { path = "../decklink", optional = true }
