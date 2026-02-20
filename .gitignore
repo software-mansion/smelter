@@ -38,3 +38,5 @@ target/
 /result
 
 demo_json.json
+
+.claude/settings.local.json

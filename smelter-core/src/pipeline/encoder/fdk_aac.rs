@@ -24,9 +24,9 @@ pub struct FdkAacEncoder {
     sample_rate: u32,
     samples_per_frame: u32,
 
-    // This logic relays on the fact that input samples will always be continuous.
+    // This logic relies on the fact that input samples will always be continuous.
     first_input_pts: Option<Duration>,
-    encoded_samples: u128,
+    encoded_samples: u64,
 }
 
 impl AudioEncoder for FdkAacEncoder {
@@ -58,6 +58,7 @@ impl AudioEncoder for FdkAacEncoder {
                 fdk::AACENC_PARAM_AACENC_AOT,
                 fdk::AUDIO_OBJECT_TYPE_AOT_AAC_LC as u32,
             ))?;
+            // VBR mode 5 - highest quality variable bitrate
             check(fdk::aacEncoder_SetParam(
                 encoder,
                 fdk::AACENC_PARAM_AACENC_BITRATEMODE,
@@ -172,7 +173,7 @@ impl FdkAacEncoder {
             // It's unsafe to use pointers obtained by calling `as_ptr()` and `as_ptr_mut()` after moving / reallocating the buffer.
             let mut in_buf = self.input_buffer.as_ptr();
             let mut in_buf_ident: c_int = fdk::AACENC_BufferIdentifier_IN_AUDIO_DATA as c_int;
-            let mut in_buf_size: c_int = self.input_buffer.len() as c_int;
+            let mut in_buf_size: c_int = (self.input_buffer.len() * mem::size_of::<i16>()) as c_int;
             let mut in_buf_el_size: c_int = mem::size_of::<i16>() as c_int;
 
             let in_desc = fdk::AACENC_BufDesc {
@@ -186,7 +187,7 @@ impl FdkAacEncoder {
             let mut out_buf = self.output_buffer.as_mut_ptr();
             let mut out_buf_ident: c_int = fdk::AACENC_BufferIdentifier_OUT_BITSTREAM_DATA as c_int;
             let mut out_buf_size: c_int = self.output_buffer.len() as c_int;
-            let mut out_buf_el_size: c_int = mem::size_of::<i16>() as c_int;
+            let mut out_buf_el_size: c_int = mem::size_of::<u8>() as c_int;
 
             let out_desc = fdk::AACENC_BufDesc {
                 numBufs: 1,
@@ -225,7 +226,7 @@ impl FdkAacEncoder {
                     );
 
                 // assume that encoder is always producing batches representing full frame
-                self.encoded_samples += self.samples_per_frame as u128;
+                self.encoded_samples += self.samples_per_frame as u64;
 
                 output.push(EncodedOutputChunk {
                     data: Bytes::copy_from_slice(
@@ -253,13 +254,15 @@ impl FdkAacEncoder {
                 self.input_buffer.extend(
                     mono_samples
                         .iter()
-                        .map(|val| (*val * i16::MAX as f64) as i16),
+                        .map(|val| (val.clamp(-1.0, 1.0) * i16::MAX as f64) as i16),
                 );
             }
             AudioSamples::Stereo(stereo_samples) => {
                 for (l, r) in stereo_samples {
-                    self.input_buffer.push((l * i16::MAX as f64) as i16);
-                    self.input_buffer.push((r * i16::MAX as f64) as i16);
+                    self.input_buffer
+                        .push((l.clamp(-1.0, 1.0) * i16::MAX as f64) as i16);
+                    self.input_buffer
+                        .push((r.clamp(-1.0, 1.0) * i16::MAX as f64) as i16);
                 }
             }
         }
@@ -269,7 +272,10 @@ impl FdkAacEncoder {
 impl Drop for FdkAacEncoder {
     fn drop(&mut self) {
         unsafe {
-            fdk::aacEncClose(&mut self.encoder as *mut _);
+            let result = fdk::aacEncClose(&mut self.encoder as *mut _);
+            if result != fdk::AACENC_ERROR_AACENC_OK {
+                error!("aacEncClose failed with error: {:?}", result);
+            }
         }
     }
 }
