@@ -155,9 +155,14 @@ impl WhepOutputsState {
         };
 
         if let Some(output_state) = output {
+            let Some(handle) = tokio::runtime::Handle::try_current().ok() else {
+                // No Tokio runtime available (e.g. during pipeline reset).
+                // Peer connections will be cleaned up when dropped.
+                return;
+            };
             for (session_id, pc) in output_state.sessions.into_iter() {
                 let output_ref = output_ref.clone();
-                tokio::spawn(async move {
+                handle.spawn(async move {
                     if let Err(err) = pc.close().await {
                         error!(
                             ?output_ref,

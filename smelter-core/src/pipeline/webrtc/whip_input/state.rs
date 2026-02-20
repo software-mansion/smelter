@@ -98,8 +98,13 @@ impl WhipInputsState {
             return;
         };
 
+        let Some(handle) = tokio::runtime::Handle::try_current().ok() else {
+            // No Tokio runtime available (e.g. during pipeline reset).
+            // Peer connection will be cleaned up when dropped.
+            return;
+        };
         let input_ref = input_ref.clone();
-        tokio::spawn(async move {
+        handle.spawn(async move {
             if let Err(err) = session.peer_connection.close().await {
                 error!("Cannot close peer_connection for input {input_ref}: {err:?}");
             };
