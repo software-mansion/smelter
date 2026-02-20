@@ -319,6 +319,7 @@ impl<'a> VideoSessionResources<'a> {
             &dst_format,
             max_coded_extent,
             max_dpb_slots,
+            image_modifiers.additional_queue_index as u32,
         )?;
 
         decoding_device.h264_decode_queues.submit_chain_semaphore(

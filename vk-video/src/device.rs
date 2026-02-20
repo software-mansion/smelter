@@ -16,7 +16,7 @@ use crate::parameters::{
     EncoderContentFlags, EncoderTuningMode, EncoderUsageFlags, H264Profile, RateControl,
 };
 use crate::parser::{h264::H264Parser, reference_manager::ReferenceContext};
-use crate::vulkan_decoder::{FrameSorter, VulkanDecoder};
+use crate::vulkan_decoder::{FrameSorter, ImageModifiers, VulkanDecoder};
 use crate::vulkan_encoder::{FullEncoderParameters, VulkanEncoder};
 use crate::vulkan_transcoder::{Transcoder, TranscoderError};
 use crate::{
@@ -350,8 +350,15 @@ impl VulkanDevice {
         let parser = H264Parser::default();
         let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
 
-        let vulkan_decoder =
-            VulkanDecoder::new(Arc::new(self.decoding_device()?), parameters.usage_flags, Default::default())?;
+        let vulkan_decoder = VulkanDecoder::new(
+            Arc::new(self.decoding_device()?),
+            parameters.usage_flags,
+            ImageModifiers {
+                additional_queue_index: self.queues.transfer.family_index,
+                create_flags: Default::default(),
+                usage_flags: Default::default(),
+            },
+        )?;
         let frame_sorter = FrameSorter::<wgpu::Texture>::new();
 
         Ok(WgpuTexturesDecoder {
@@ -369,8 +376,15 @@ impl VulkanDevice {
         let parser = H264Parser::default();
         let reference_ctx = ReferenceContext::new(parameters.missed_frame_handling);
 
-        let vulkan_decoder =
-            VulkanDecoder::new(Arc::new(self.decoding_device()?), parameters.usage_flags, Default::default())?;
+        let vulkan_decoder = VulkanDecoder::new(
+            Arc::new(self.decoding_device()?),
+            parameters.usage_flags,
+            ImageModifiers {
+                additional_queue_index: self.queues.transfer.family_index,
+                create_flags: Default::default(),
+                usage_flags: Default::default(),
+            },
+        )?;
         let frame_sorter = FrameSorter::<RawFrameData>::new();
 
         Ok(BytesDecoder {

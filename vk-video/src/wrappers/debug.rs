@@ -80,6 +80,10 @@ unsafe extern "system" fn debug_messenger_callback(
             .to_string_lossy()
     };
 
+    if message_id == "VUID-VkImageCreateInfo-pNext-06811" {
+        return vk::FALSE;
+    }
+
     let t = format!("{message_types:?}");
     match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => {

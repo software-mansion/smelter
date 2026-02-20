@@ -54,6 +54,7 @@ pub(crate) struct Device {
 }
 
 impl Device {
+    #[cfg(feature = "vk_validation")]
     pub(crate) fn set_label<T: vk::Handle>(
         &self,
         object: T,
@@ -81,6 +82,15 @@ impl Device {
             }
         }
 
+        Ok(())
+    }
+
+    #[cfg(not(feature = "vk_validation"))]
+    pub(crate) fn set_label<T: vk::Handle>(
+        &self,
+        _object: T,
+        _label: Option<&str>,
+    ) -> Result<(), VulkanCommonError> {
         Ok(())
     }
 }

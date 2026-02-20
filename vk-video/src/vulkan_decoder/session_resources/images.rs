@@ -51,6 +51,7 @@ impl<'a> DecodingImages<'a> {
         dst_format: &Option<vk::VideoFormatPropertiesKHR<'a>>,
         dimensions: vk::Extent2D,
         max_dpb_slots: u32,
+        additional_queue_index: u32,
     ) -> Result<Self, VulkanDecoderError> {
         let dpb_image_usage = if dst_format.is_some() {
             dpb_format.image_usage_flags & vk::ImageUsageFlags::VIDEO_DECODE_DPB_KHR
@@ -63,7 +64,7 @@ impl<'a> DecodingImages<'a> {
         };
 
         let queue_indices = [
-            decoding_device.queues.transfer.family_index as u32,
+            additional_queue_index,
             decoding_device.h264_decode_queues.family_index as u32,
         ];
 
@@ -89,7 +90,8 @@ impl<'a> DecodingImages<'a> {
             .map(|dst_format| {
                 let dst_image_usage = dst_format.image_usage_flags
                     & (vk::ImageUsageFlags::VIDEO_DECODE_DST_KHR
-                        | vk::ImageUsageFlags::TRANSFER_SRC);
+                        | vk::ImageUsageFlags::TRANSFER_SRC
+                        | vk::ImageUsageFlags::STORAGE);
                 CodingImageBundle::new(
                     decoding_device,
                     command_buffer,

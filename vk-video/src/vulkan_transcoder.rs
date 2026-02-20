@@ -3,17 +3,10 @@ use std::sync::Arc;
 use ash::vk;
 
 use crate::{
-    DecoderError, EncodedInputChunk, EncodedOutputChunk, VulkanCommonError, VulkanDevice,
-    VulkanEncoderError,
-    device::EncoderParameters,
-    parser::{
-        decoder_instructions::compile_to_decoder_instructions, h264::H264Parser,
+    DecoderError, EncodedInputChunk, EncodedOutputChunk, Frame, VulkanCommonError, VulkanDevice, VulkanEncoderError, device::EncoderParameters, parser::{
+        decoder_instructions::{DecoderInstruction, compile_to_decoder_instructions}, h264::H264Parser,
         reference_manager::ReferenceContext,
-    },
-    vulkan_decoder::{DecodeResult, FrameSorter, ImageModifiers, VulkanDecoder},
-    vulkan_encoder::VulkanEncoder,
-    vulkan_transcoder::pipeline::{OutputConfig, Pipeline, ResizingImageBundle},
-    wrappers::SemaphoreWaitValue,
+    }, vulkan_decoder::{DecodeResult, FrameSorter, ImageModifiers, VulkanDecoder}, vulkan_encoder::VulkanEncoder, vulkan_transcoder::pipeline::{OutputConfig, Pipeline, ResizeSubmission, ResizingImageBundle}, wrappers::SemaphoreWaitValue
 };
 
 mod pipeline;
@@ -34,7 +27,7 @@ pub enum TranscoderError {
 }
 
 pub struct ResizedImages {
-    images: Vec<ResizingImageBundle>,
+    images: ResizeSubmission,
     decoder_wait_value: SemaphoreWaitValue,
 }
 
@@ -61,7 +54,12 @@ impl Transcoder {
                     .map_err(DecoderError::VulkanDecoderError)?,
             ),
             vk::VideoDecodeUsageFlagsKHR::TRANSCODING,
-            ImageModifiers { create_flags: vk::ImageCreateFlags::EXTENDED_USAGE | vk::ImageCreateFlags::MUTABLE_FORMAT, usage_flags: vk::ImageUsageFlags::STORAGE },
+            ImageModifiers {
+                create_flags: vk::ImageCreateFlags::EXTENDED_USAGE
+                    | vk::ImageCreateFlags::MUTABLE_FORMAT,
+                usage_flags: vk::ImageUsageFlags::STORAGE,
+                additional_queue_index: device.queues.wgpu.family_index,
+            },
         )
         .map_err(DecoderError::VulkanDecoderError)?;
 
@@ -105,6 +103,10 @@ impl Transcoder {
         let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units)
             .map_err(DecoderError::from)?;
 
+        self.transcode_instructions(instructions)
+    }
+
+    fn transcode_instructions(&mut self, instructions: Vec<DecoderInstruction>) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, TranscoderError> {
         let mut encoded_frames = Vec::new();
 
         for instruction in instructions {
@@ -133,46 +135,68 @@ impl Transcoder {
                 is_idr: frame.is_idr,
             });
 
-            for frame in sorted {
-                let mut submits = Vec::new();
-                for (encoder, frame) in self.encoders.iter_mut().zip(frame.data.images) {
-                    let submit = encoder.encode(frame.image, false)?;
-                    submits.push(submit);
-                }
-
-                let mut semaphores = Vec::new();
-                let mut values = Vec::new();
-                for submit in submits.iter() {
-                    semaphores.push(submit.encoder.tracker.semaphore_tracker.semaphore.semaphore);
-                    values.push(submit.wait_value.0);
-                }
-
-                let wait = vk::SemaphoreWaitInfo::default()
-                    .semaphores(&semaphores)
-                    .values(&values);
-                unsafe { self.device.device.wait_semaphores(&wait, u64::MAX)? };
-
-                let mut results = Vec::new();
-                for mut submit in submits {
-                    let is_keyframe = submit.is_idr;
-                    submit.mark_waited();
-                    let result = submit.download()?;
-                    results.push(EncodedOutputChunk {
-                        data: result,
-                        pts: frame.pts,
-                        is_keyframe,
-                    });
-                }
-
-                self.decoder
-                    .tracker
-                    .mark_waited(frame.data.decoder_wait_value);
-                self.pipeline.mark_command_buffers_completed();
-                encoded_frames.push(results);
+            for resized_images in sorted {
+                let encoded = self.handle_resized_images(resized_images)?;
+                encoded_frames.push(encoded);
             }
         }
 
         Ok(encoded_frames)
+    }
+
+    fn handle_resized_images(&mut self, resized_images: Frame<ResizedImages>) -> Result<Vec<EncodedOutputChunk<Vec<u8>>>, TranscoderError> {
+        let mut submits = Vec::new();
+        for (encoder, frame) in self.encoders.iter_mut().zip(resized_images.data.images.outputs.iter()) {
+            let submit = encoder.encode(frame.image.clone(), false)?;
+            submits.push(submit);
+        }
+
+        let mut semaphores = Vec::new();
+        let mut values = Vec::new();
+        for submit in submits.iter() {
+            semaphores.push(submit.encoder.tracker.semaphore_tracker.semaphore.semaphore);
+            values.push(submit.wait_value.0);
+        }
+
+        let wait = vk::SemaphoreWaitInfo::default()
+            .semaphores(&semaphores)
+            .values(&values);
+        unsafe { self.device.device.wait_semaphores(&wait, u64::MAX)? };
+
+        let mut results = Vec::new();
+        for mut submit in submits {
+            let is_keyframe = submit.is_idr;
+            submit.mark_waited();
+            let result = submit.download()?;
+            results.push(EncodedOutputChunk {
+                data: result,
+                pts: resized_images.pts,
+                is_keyframe,
+            });
+        }
+
+        self.decoder
+            .tracker
+            .mark_waited(resized_images.data.decoder_wait_value);
+        self.pipeline.mark_command_buffers_completed();
+        self.pipeline.free_descriptors(resized_images.data.images.descriptors);
+
+        Ok(results)
+    }
+
+    pub fn flush(&mut self) -> Result<Vec<Vec<EncodedOutputChunk<Vec<u8>>>>, TranscoderError> {
+        let access_units = self.parser.flush().map_err(DecoderError::from)?;
+        let instructions = compile_to_decoder_instructions(&mut self.reference_ctx, access_units).map_err(DecoderError::from)?;
+
+        let mut output = self.transcode_instructions(instructions)?;
+        let remaining = self.sorter.flush();
+
+        for resized_images in remaining {
+            let encoded = self.handle_resized_images(resized_images)?;
+            output.push(encoded);
+        }
+
+        Ok(output)
     }
 }
 

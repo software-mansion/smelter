@@ -1,6 +1,14 @@
-use std::{fs::File, io::{Read, Write}, num::NonZeroU32, time::Duration};
+use std::{
+    fs::File,
+    io::{Read, Write},
+    num::NonZeroU32,
+    time::Duration,
+};
 
-use vk_video::{EncodedInputChunk, parameters::{RateControl, Rational, VideoParameters}};
+use vk_video::{
+    EncodedInputChunk,
+    parameters::{RateControl, Rational, VideoParameters},
+};
 
 fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -29,40 +37,68 @@ fn main() {
         .unwrap();
 
     let mut transcoder = device
-        .create_transcoder(&[device
-            .encoder_parameters_high_quality(
-                VideoParameters {
-                    width: output_width,
-                    height: output_height,
-                    target_framerate: Rational {
-                        numerator: 30,
-                        denominator: NonZeroU32::new(1).unwrap(),
+        .create_transcoder(&[
+            device
+                .encoder_parameters_high_quality(
+                    VideoParameters {
+                        width: output_width,
+                        height: output_height,
+                        target_framerate: Rational {
+                            numerator: 30,
+                            denominator: NonZeroU32::new(1).unwrap(),
+                        },
                     },
-                },
-                RateControl::VariableBitrate {
-                    average_bitrate: 10_000_000,
-                    max_bitrate: 12_000_000,
-                    virtual_buffer_size: Duration::from_secs(2),
-                },
-            )
-            .unwrap()])
+                    RateControl::VariableBitrate {
+                        average_bitrate: 10_000_000,
+                        max_bitrate: 12_000_000,
+                        virtual_buffer_size: Duration::from_secs(2),
+                    },
+                )
+                .unwrap(),
+            device
+                .encoder_parameters_high_quality(
+                    VideoParameters {
+                        width: output_width.div_ceil(NonZeroU32::new(2).unwrap()),
+                        height: output_height,
+                        target_framerate: Rational {
+                            numerator: 30,
+                            denominator: NonZeroU32::new(1).unwrap(),
+                        },
+                    },
+                    RateControl::VariableBitrate {
+                        average_bitrate: 5_000_000,
+                        max_bitrate: 6_000_000,
+                        virtual_buffer_size: Duration::from_secs(2),
+                    },
+                )
+                .unwrap(),
+        ])
         .unwrap();
 
     let mut input_file = File::open(input_file).unwrap();
     let mut output_file = File::create("output.h264").unwrap();
+    let mut output_file2 = File::create("output2.h264").unwrap();
     let mut buffer = vec![0; 4096];
-    while let Ok(n) = input_file.read(&mut buffer) && n > 0 {
+    while let Ok(n) = input_file.read(&mut buffer)
+        && n > 0
+    {
         let input = EncodedInputChunk {
             data: &buffer[..n],
-            pts: None
+            pts: None,
         };
         let output = transcoder.transcode(input).unwrap();
 
         for output in output {
             output_file.write_all(&output[0].data).unwrap();
+            output_file2.write_all(&output[1].data).unwrap();
         }
     }
 
+    let flushed = transcoder.flush().unwrap();
+    for output in flushed {
+        output_file.write_all(&output[0].data).unwrap();
+        output_file2.write_all(&output[1].data).unwrap();
+    }
 }
 
 fn print_usage_and_exit(executable_name: &str) -> ! {
