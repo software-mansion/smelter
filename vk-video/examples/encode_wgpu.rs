@@ -1,5 +1,5 @@
 #[cfg(vulkan)]
-use vk_video::{Nv12Texture, RgbaTexture, WgpuRgbaToNv12Converter, WgpuTextureMapping};
+use vk_video::WgpuRgbaToNv12Converter;
 
 #[cfg(vulkan)]
 fn main() {
@@ -75,11 +75,7 @@ fn main() {
             encoder
                 .encode(
                     Frame {
-                        data: wgpu_state
-                            .rgba_to_nv12_texture_mapping
-                            .output()
-                            .texture()
-                            .clone(),
+                        data: wgpu_state.nv12_texture.clone(),
                         pts: None,
                     },
                     false,
@@ -94,11 +90,14 @@ fn main() {
 #[cfg(vulkan)]
 struct WgpuState {
     pipeline: wgpu::RenderPipeline,
-    view: wgpu::TextureView,
+    rgba_view: wgpu::TextureView,
+    rgba_bg: wgpu::BindGroup,
+    nv12_texture: wgpu::Texture,
+    y_plane_view: wgpu::TextureView,
+    uv_plane_view: wgpu::TextureView,
+    rgba_to_nv12_converter: WgpuRgbaToNv12Converter,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    rgba_to_nv12_converter: WgpuRgbaToNv12Converter,
-    rgba_to_nv12_texture_mapping: WgpuTextureMapping<RgbaTexture, Nv12Texture>,
 }
 
 #[cfg(vulkan)]
@@ -156,7 +155,7 @@ impl WgpuState {
             depth_stencil: None,
         });
 
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
+        let rgba_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("wgpu render target"),
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
@@ -170,22 +169,47 @@ impl WgpuState {
                 depth_or_array_layers: 1,
             },
         });
-
-        let view = texture.create_view(&wgpu::TextureViewDescriptor {
+        let rgba_view = rgba_texture.create_view(&wgpu::TextureViewDescriptor {
             label: Some("wgpu render target view"),
             ..Default::default()
         });
 
+        let nv12_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("encoder input"),
+            format: wgpu::TextureFormat::NV12,
+            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            dimension: wgpu::TextureDimension::D2,
+            sample_count: 1,
+            view_formats: &[],
+            mip_level_count: 1,
+            size: wgpu::Extent3d {
+                width: width.get(),
+                height: height.get(),
+                depth_or_array_layers: 1,
+            },
+        });
+        let y_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
+            aspect: wgpu::TextureAspect::Plane0,
+            ..Default::default()
+        });
+        let uv_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
+            aspect: wgpu::TextureAspect::Plane1,
+            ..Default::default()
+        });
+
         let rgba_to_nv12_converter = WgpuRgbaToNv12Converter::new(&device);
-        let rgba_to_nv12_texture_mapping = rgba_to_nv12_converter.create_mapping(&texture).unwrap();
+        let rgba_bg = rgba_to_nv12_converter.create_input_bind_group(&rgba_texture);
 
         WgpuState {
             pipeline,
-            view,
+            rgba_view,
+            rgba_bg,
+            nv12_texture,
+            y_plane_view,
+            uv_plane_view,
+            rgba_to_nv12_converter,
             device,
             queue,
-            rgba_to_nv12_converter,
-            rgba_to_nv12_texture_mapping,
         }
     }
 
@@ -203,7 +227,7 @@ impl WgpuState {
                 occlusion_query_set: None,
                 depth_stencil_attachment: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.view,
+                    view: &self.rgba_view,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
@@ -218,8 +242,21 @@ impl WgpuState {
             render_pass.set_immediates(0, &time.to_ne_bytes());
             render_pass.draw(0..3, 0..1);
         }
-        self.rgba_to_nv12_converter
-            .convert(&mut encoder, &self.rgba_to_nv12_texture_mapping);
+        self.rgba_to_nv12_converter.convert(
+            &mut encoder,
+            &self.rgba_bg,
+            &self.y_plane_view,
+            &self.uv_plane_view,
+        );
+        encoder.transition_resources(
+            [].into_iter(),
+            [wgpu::TextureTransition {
+                texture: &self.nv12_texture,
+                state: wgpu::TextureUses::COPY_SRC,
+                selector: None,
+            }]
+            .into_iter(),
+        );
 
         let buffer = encoder.finish();
 

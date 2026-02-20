@@ -1,16 +1,14 @@
-use std::marker::PhantomData;
-
-use crate::{Nv12Texture, RgbaTexture, WgpuTextureMapping};
+use crate::wgpu_helpers::WgpuSampler;
 
 /// Helper that lets you convert RGBA [`wgpu::Texture`] into NV12 [`wgpu::Texture`].
-/// Use [`WgpuRgbaToNv12Converter::create_mapping`] to create [`WgpuTextureMapping`] which represents
-/// converter's input and output.
+/// Use [`WgpuRgbaToNv12Converter::create_input_bind_group`] to create [`wgpu::BindGroup`] which represents
+/// RGBA bind group acceptable by the converter.
 pub struct WgpuRgbaToNv12Converter {
     y_plane_renderer: PlaneRenderer,
     uv_plane_renderer: PlaneRenderer,
 
     rgba_view_bgl: wgpu::BindGroupLayout,
-    sampler_bg: wgpu::BindGroup,
+    sampler: WgpuSampler,
 
     device: wgpu::Device,
 }
@@ -31,35 +29,12 @@ impl WgpuRgbaToNv12Converter {
             }],
         });
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::MipmapFilterMode::Linear,
-            ..Default::default()
-        });
-        let sampler_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                count: None,
-            }],
-        });
-        let sampler_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &sampler_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Sampler(&sampler),
-            }],
-        });
-
+        let sampler = WgpuSampler::new(device);
         let shader_module =
             device.create_shader_module(wgpu::include_wgsl!("../shaders/rgba_to_nv12.wgsl"));
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("vk-video rgba to nv12 converter pipeline layout"),
-            bind_group_layouts: &[&rgba_view_bgl, &sampler_bgl],
+            bind_group_layouts: &[&rgba_view_bgl, &sampler.bgl],
             immediate_size: 0,
         });
 
@@ -80,72 +55,45 @@ impl WgpuRgbaToNv12Converter {
             y_plane_renderer,
             uv_plane_renderer,
             rgba_view_bgl,
-            sampler_bg,
+            sampler,
             device: device.clone(),
         }
     }
 
-    pub fn create_mapping(
-        &self,
-        rgba_texture: &wgpu::Texture,
-    ) -> Result<WgpuTextureMapping<RgbaTexture, Nv12Texture>, RgbaToNv12ConverterError> {
-        if rgba_texture.format().remove_srgb_suffix() != wgpu::TextureFormat::Rgba8Unorm {
-            return Err(RgbaToNv12ConverterError::ExpectedRgbaTextureView {
-                received: rgba_texture.format(),
-            });
-        }
-        if !rgba_texture
-            .usage()
-            .contains(wgpu::TextureUsages::TEXTURE_BINDING)
-        {
-            return Err(RgbaToNv12ConverterError::ExpectedTextureBindingUsage);
-        }
-
+    /// Creates [`wgpu::BindGroup`] for RGBA [`wgpu::Texture`].
+    /// The texture's usage must contain [`wgpu::TextureUsages::TEXTURE_BINDING`].
+    pub fn create_input_bind_group(&self, rgba_texture: &wgpu::Texture) -> wgpu::BindGroup {
         let rgba_view = rgba_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let input_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &self.rgba_view_bgl,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::TextureView(&rgba_view),
             }],
-        });
-        let output_texture = Nv12Texture::new(&self.device, rgba_texture.size());
-
-        Ok(WgpuTextureMapping {
-            input_bg,
-            _input_texture: PhantomData,
-            output_texture,
         })
     }
 
-    /// Converts RGBA texture into NV12 texture. Input and output textures are taken from the `mapping`
+    /// Converts RGBA texture into NV12 texture.
+    /// NV12 texture's usage must contain [`wgpu::TextureUsages::RENDER_ATTACHMENT`].
     pub fn convert(
         &self,
         command_encoder: &mut wgpu::CommandEncoder,
-        mapping: &WgpuTextureMapping<RgbaTexture, Nv12Texture>,
+        src_rgba_bing_group: &wgpu::BindGroup,
+        dst_y_plane_view: &wgpu::TextureView,
+        dst_uv_plane_view: &wgpu::TextureView,
     ) {
         self.y_plane_renderer.draw(
             command_encoder,
-            &mapping.output_texture.y_plane_view,
-            &self.sampler_bg,
-            &mapping.input_bg,
+            src_rgba_bing_group,
+            &self.sampler.bg,
+            dst_y_plane_view,
         );
         self.uv_plane_renderer.draw(
             command_encoder,
-            &mapping.output_texture.uv_plane_view,
-            &self.sampler_bg,
-            &mapping.input_bg,
-        );
-
-        command_encoder.transition_resources(
-            [].into_iter(),
-            [wgpu::TextureTransition {
-                texture: &mapping.output().texture,
-                state: wgpu::TextureUses::COPY_SRC,
-                selector: None,
-            }]
-            .into_iter(),
+            src_rgba_bing_group,
+            &self.sampler.bg,
+            dst_uv_plane_view,
         );
     }
 }
@@ -194,9 +142,9 @@ impl PlaneRenderer {
     fn draw(
         &self,
         command_encoder: &mut wgpu::CommandEncoder,
-        plane_view: &wgpu::TextureView,
-        sampler_bg: &wgpu::BindGroup,
         texture_bg: &wgpu::BindGroup,
+        sampler_bg: &wgpu::BindGroup,
+        plane_view: &wgpu::TextureView,
     ) {
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -220,13 +168,4 @@ impl PlaneRenderer {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.draw(0..3, 0..1);
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum RgbaToNv12ConverterError {
-    #[error("Expected Rgba8 texture view format for the input texture, but received {received:?}")]
-    ExpectedRgbaTextureView { received: wgpu::TextureFormat },
-
-    #[error("Expected TEXTURE_BINDING usage for the input texture")]
-    ExpectedTextureBindingUsage,
 }
