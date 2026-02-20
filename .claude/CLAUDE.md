@@ -44,7 +44,7 @@ pnpm run generate-types    # after running generate_from_types
 
 ## Architecture
 
-Rust edition 2024, toolchain 1.93 stable. Workspace with 10 crates:
+Rust edition 2024, toolchain latest stable. Workspace with 10 crates:
 
 **Core pipeline:**
 - **`smelter` (root)** — HTTP server (Axum). Parses config, proxies calls to `smelter-core` Pipeline.
