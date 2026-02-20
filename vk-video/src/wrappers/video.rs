@@ -168,6 +168,9 @@ impl VideoSession {
                     &req.memory_requirements,
                     &vk_mem::AllocationCreateInfo {
                         usage: vk_mem::MemoryUsage::Unknown,
+                        // Mesa driver returns alignment 0 which means that each allocation must have memory offset set to 0,
+                        // so every allocation must be a separate memory block
+                        flags: vk_mem::AllocationCreateFlags::DEDICATED_MEMORY,
                         ..Default::default()
                     },
                 )
