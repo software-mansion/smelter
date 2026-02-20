@@ -483,6 +483,7 @@ impl Image {
 
     pub(crate) fn create_plane_view(
         self: &Arc<Self>,
+        layer: u32,
         plane: vk::ImageAspectFlags,
         usage: vk::ImageUsageFlags,
     ) -> Result<ImageView, VulkanCommonError> {
@@ -503,7 +504,7 @@ impl Image {
             .components(vk::ComponentMapping::default())
             .subresource_range(vk::ImageSubresourceRange {
                 aspect_mask: plane,
-                base_array_layer: 0,
+                base_array_layer: layer,
                 level_count: 1,
                 base_mip_level: 0,
                 layer_count: 1,

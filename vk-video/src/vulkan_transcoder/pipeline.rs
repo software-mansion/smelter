@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 
 use ash::vk;
 
@@ -13,7 +13,8 @@ use crate::{
     },
 };
 
-const MAX_OUTPUTS: usize = 8;
+const MAX_OUTPUTS: u32 = 8;
+const MAX_FRAMES_IN_FLIGHT: u32 = 16; // The max reorder in h264
 
 pub(crate) struct ResizingImageBundle {
     pub(crate) image: Arc<Image>,
@@ -21,12 +22,18 @@ pub(crate) struct ResizingImageBundle {
     view_uv: ImageView,
 }
 
+pub(crate) struct ResizeSubmission {
+    pub(crate) outputs: Vec<ResizingImageBundle>,
+    pub(crate) input: ResizingImageBundle,
+    pub(crate) descriptors: Descriptors,
+}
+
 impl ResizingImageBundle {
-    fn new(image: Arc<Image>) -> Result<Self, TranscoderError> {
+    fn new(image: Arc<Image>, layer: u32) -> Result<Self, TranscoderError> {
         let view_y =
-            image.create_plane_view(vk::ImageAspectFlags::PLANE_0, vk::ImageUsageFlags::STORAGE)?;
+            image.create_plane_view(layer, vk::ImageAspectFlags::PLANE_0, vk::ImageUsageFlags::STORAGE)?;
         let view_uv =
-            image.create_plane_view(vk::ImageAspectFlags::PLANE_1, vk::ImageUsageFlags::STORAGE)?;
+            image.create_plane_view(layer, vk::ImageAspectFlags::PLANE_1, vk::ImageUsageFlags::STORAGE)?;
 
         Ok(Self {
             image,
@@ -43,10 +50,76 @@ pub(crate) struct OutputConfig<'a> {
     pub(crate) profile: &'a H264EncodeProfileInfo<'a>,
 }
 
+pub(crate) struct Descriptors {
+    input: DescriptorSet,
+    output_y: DescriptorSet,
+    output_uv: DescriptorSet,
+}
+
+struct DescriptorHeap {
+    pool: Arc<DescriptorPool>,
+    freelist: Vec<Descriptors>,
+    output_counts: [u32; 2],
+    layout_input: Arc<DescriptorSetLayout>, // TODO: maybe no need to be in arcs?
+    layout_output: Arc<DescriptorSetLayout>,
+}
+
+impl DescriptorHeap {
+    fn new(
+        pool: Arc<DescriptorPool>,
+        output_counts: [u32; 2],
+        layout_input: Arc<DescriptorSetLayout>,
+        layout_output: Arc<DescriptorSetLayout>,
+    ) -> Self {
+        Self {
+            pool,
+            freelist: Vec::new(),
+            output_counts,
+            layout_input,
+            layout_output,
+        }
+    }
+
+    fn free(&mut self, descriptors: Descriptors) {
+        self.freelist.push(descriptors);
+    }
+
+    fn allocate(&mut self) -> Result<Descriptors, TranscoderError> {
+        if let Some(descriptors) = self.freelist.pop() {
+            return Ok(descriptors);
+        }
+
+        let input = DescriptorSet::new(
+            self.pool.clone(),
+            &vk::DescriptorSetAllocateInfo::default()
+                .descriptor_pool(self.pool.pool)
+                .set_layouts(&[self.layout_input.set_layout]),
+        )?
+        .pop()
+        .unwrap();
+
+        let mut count = vk::DescriptorSetVariableDescriptorCountAllocateInfo::default()
+            .descriptor_counts(&self.output_counts);
+        let mut descriptor_set_outputs = DescriptorSet::new(
+            self.pool.clone(),
+            &vk::DescriptorSetAllocateInfo::default()
+                .set_layouts(&[self.layout_output.set_layout, self.layout_output.set_layout])
+                .push_next(&mut count),
+        )?;
+
+        let output_uv = descriptor_set_outputs.pop().unwrap();
+        let output_y = descriptor_set_outputs.pop().unwrap();
+
+        Ok(Descriptors {
+            input,
+            output_y,
+            output_uv,
+        })
+    }
+}
+
 pub(crate) struct Pipeline {
-    descriptor_set_input: DescriptorSet,
-    descriptor_set_output_y: DescriptorSet,
-    descriptor_set_output_uv: DescriptorSet,
+    descriptor_heap: DescriptorHeap,
     pipeline: ComputePipeline,
     buffer_pool: CommandBufferPool,
     device: Arc<VulkanDevice>,
@@ -59,11 +132,11 @@ impl Pipeline {
     ) -> Result<Self, TranscoderError> {
         let pool_sizes = [vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::STORAGE_IMAGE)
-            .descriptor_count(2 * MAX_OUTPUTS as u32 + 2)];
+            .descriptor_count((2 * MAX_OUTPUTS as u32 + 2) * MAX_FRAMES_IN_FLIGHT)];
         let descriptor_pool = Arc::new(DescriptorPool::new(
             device.device.clone(),
             &vk::DescriptorPoolCreateInfo::default()
-                .max_sets(3)
+                .max_sets(3 * MAX_FRAMES_IN_FLIGHT)
                 .pool_sizes(&pool_sizes),
         )?);
 
@@ -87,15 +160,6 @@ impl Pipeline {
             &vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings_input),
         )?);
 
-        let descriptor_set_input = DescriptorSet::new(
-            descriptor_pool.clone(),
-            &vk::DescriptorSetAllocateInfo::default()
-                .descriptor_pool(descriptor_pool.pool)
-                .set_layouts(&[layout_input.set_layout]),
-        )?
-        .pop()
-        .unwrap();
-
         let bindings_output = [vk::DescriptorSetLayoutBinding::default()
             .descriptor_count(MAX_OUTPUTS as u32)
             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
@@ -113,18 +177,12 @@ impl Pipeline {
                 .push_next(&mut binding_flags),
         )?);
 
-        let counts = [configs.len() as u32, configs.len() as u32];
-        let mut count = vk::DescriptorSetVariableDescriptorCountAllocateInfo::default()
-            .descriptor_counts(&counts);
-        let mut descriptor_set_outputs = DescriptorSet::new(
+        let descriptor_heap = DescriptorHeap::new(
             descriptor_pool.clone(),
-            &vk::DescriptorSetAllocateInfo::default()
-                .set_layouts(&[layout_output.set_layout, layout_output.set_layout])
-                .push_next(&mut count),
-        )?;
-
-        let descriptor_set_output_uv = descriptor_set_outputs.pop().unwrap();
-        let descriptor_set_output_y = descriptor_set_outputs.pop().unwrap();
+            [configs.len() as u32; 2],
+            layout_input.clone(),
+            layout_output.clone(),
+        );
 
         let layouts = [
             layout_input.set_layout,
@@ -190,13 +248,15 @@ impl Pipeline {
         let buffer_pool = CommandBufferPool::new(device.clone(), device.queues.wgpu.family_index)?;
 
         Ok(Self {
-            descriptor_set_input,
-            descriptor_set_output_y,
-            descriptor_set_output_uv,
+            descriptor_heap,
             pipeline,
             buffer_pool,
             device,
         })
+    }
+
+    pub(crate) fn free_descriptors(&mut self, descriptors: Descriptors) {
+        self.descriptor_heap.free(descriptors);
     }
 
     fn allocate_images(
@@ -241,17 +301,17 @@ impl Pipeline {
                 config.tracker.image_layout_tracker.clone(),
             )?);
 
-            result.push(ResizingImageBundle::new(image)?);
+            result.push(ResizingImageBundle::new(image, 0)?);
         }
 
         Ok(result)
     }
 
     fn write_descriptors(
-        &self,
+        &mut self,
         input: &ResizingImageBundle,
         outputs: &[ResizingImageBundle],
-    ) -> Result<(), TranscoderError> {
+    ) -> Result<Descriptors, TranscoderError> {
         let image_info_input_y = vk::DescriptorImageInfo::default()
             .image_view(input.view_y.view)
             .image_layout(vk::ImageLayout::GENERAL);
@@ -273,24 +333,26 @@ impl Pipeline {
             })
             .unzip::<_, _, Vec<_>, Vec<_>>();
 
+        let descriptors = self.descriptor_heap.allocate()?;
+
         let writes = [
             (
-                self.descriptor_set_input.descriptor_set,
+                descriptors.input.descriptor_set,
                 std::slice::from_ref(&image_info_input_y),
                 0,
             ),
             (
-                self.descriptor_set_input.descriptor_set,
+                descriptors.input.descriptor_set,
                 std::slice::from_ref(&image_info_input_uv),
                 1,
             ),
             (
-                self.descriptor_set_output_y.descriptor_set,
+                descriptors.output_y.descriptor_set,
                 &image_infos_output_y,
                 0,
             ),
             (
-                self.descriptor_set_output_uv.descriptor_set,
+                descriptors.output_uv.descriptor_set,
                 &image_infos_output_uv,
                 0,
             ),
@@ -308,18 +370,18 @@ impl Pipeline {
         .collect::<Vec<_>>();
         unsafe { self.device.device.update_descriptor_sets(&writes, &[]) };
 
-        Ok(())
+        Ok(descriptors)
     }
 
     pub(crate) fn run(
-        &self,
+        &mut self,
         input_submission: &DecodeSubmission,
         decode_tracker: &mut DecoderTracker,
         configs: &mut [OutputConfig<'_>],
-    ) -> Result<Vec<ResizingImageBundle>, TranscoderError> {
-        let input = ResizingImageBundle::new(input_submission.image.clone())?;
+    ) -> Result<ResizeSubmission, TranscoderError> {
+        let input = ResizingImageBundle::new(input_submission.image.clone(), input_submission.layer)?;
         let outputs = self.allocate_images(configs)?;
-        self.write_descriptors(&input, &outputs)?;
+        let descriptors = self.write_descriptors(&input, &outputs)?;
 
         let mut buffer = self.buffer_pool.begin_buffer()?;
         input.image.transition_layout_single_layer(
@@ -338,6 +400,9 @@ impl Pipeline {
                 0,
             )?;
         }
+
+
+        // TODO: flushing and signal the decoder
 
         // TODO: move this and make this better
         let dispatch_size = outputs
@@ -359,9 +424,9 @@ impl Pipeline {
                 self.pipeline.layout.layout,
                 0,
                 &[
-                    self.descriptor_set_input.descriptor_set,
-                    self.descriptor_set_output_y.descriptor_set,
-                    self.descriptor_set_output_uv.descriptor_set,
+                    descriptors.input.descriptor_set,
+                    descriptors.output_y.descriptor_set,
+                    descriptors.output_uv.descriptor_set,
                 ],
                 &[],
             );
@@ -428,7 +493,7 @@ impl Pipeline {
             });
         });
 
-        Ok(outputs)
+        Ok(ResizeSubmission { outputs, input, descriptors })
     }
 
     pub(crate) fn mark_command_buffers_completed(&self) {

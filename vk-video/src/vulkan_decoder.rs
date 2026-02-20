@@ -30,10 +30,11 @@ pub struct VulkanDecoder<'a> {
     image_modifiers: ImageModifiers,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct ImageModifiers {
     pub(crate) create_flags: vk::ImageCreateFlags,
     pub(crate) usage_flags: vk::ImageUsageFlags,
+    pub(crate) additional_queue_index: usize,
 }
 
 pub(crate) enum DecoderTrackerWaitState {
@@ -69,7 +70,7 @@ pub(crate) type DecoderTracker = Tracker<DecoderTrackerKind>;
 pub(crate) struct DecodeSubmission {
     pub(crate) image: Arc<Image>,
     dimensions: vk::Extent2D,
-    layer: u32,
+    pub(crate) layer: u32,
     pub(crate) picture_order_cnt: i32,
     pub(crate) max_num_reorder_frames: u64,
     pub(crate) is_idr: bool,

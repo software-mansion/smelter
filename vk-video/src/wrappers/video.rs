@@ -390,10 +390,14 @@ impl<'a> CodingImageBundle<'a> {
             }
         }
 
+        let mut image_view_usage_info = vk::ImageViewUsageCreateInfo::default()
+            .usage(image_usage & (!vk::ImageUsageFlags::STORAGE));
+
         let mut image_view_create_info = vk::ImageViewCreateInfo::default()
             .flags(vk::ImageViewCreateFlags::empty())
             .components(vk::ComponentMapping::default())
-            .format(format.format);
+            .format(format.format)
+            .push_next(&mut image_view_usage_info);
 
         let subresource_range = vk::ImageSubresourceRange {
             aspect_mask: vk::ImageAspectFlags::COLOR,

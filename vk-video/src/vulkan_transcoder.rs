@@ -12,7 +12,7 @@ use crate::{
     },
     vulkan_decoder::{DecodeResult, FrameSorter, ImageModifiers, VulkanDecoder},
     vulkan_encoder::VulkanEncoder,
-    vulkan_transcoder::pipeline::{OutputConfig, Pipeline, ResizingImageBundle},
+    vulkan_transcoder::pipeline::{OutputConfig, Pipeline, ResizeSubmission, ResizingImageBundle},
     wrappers::SemaphoreWaitValue,
 };
 
@@ -34,7 +34,7 @@ pub enum TranscoderError {
 }
 
 pub struct ResizedImages {
-    images: Vec<ResizingImageBundle>,
+    images: ResizeSubmission,
     decoder_wait_value: SemaphoreWaitValue,
 }
 
@@ -61,7 +61,12 @@ impl Transcoder {
                     .map_err(DecoderError::VulkanDecoderError)?,
             ),
             vk::VideoDecodeUsageFlagsKHR::TRANSCODING,
-            ImageModifiers { create_flags: vk::ImageCreateFlags::EXTENDED_USAGE | vk::ImageCreateFlags::MUTABLE_FORMAT, usage_flags: vk::ImageUsageFlags::STORAGE },
+            ImageModifiers {
+                create_flags: vk::ImageCreateFlags::EXTENDED_USAGE
+                    | vk::ImageCreateFlags::MUTABLE_FORMAT,
+                usage_flags: vk::ImageUsageFlags::STORAGE,
+                additional_queue_index: device.queues.wgpu.family_index,
+            },
         )
         .map_err(DecoderError::VulkanDecoderError)?;
 
@@ -133,9 +138,9 @@ impl Transcoder {
                 is_idr: frame.is_idr,
             });
 
-            for frame in sorted {
+            for resized_images in sorted {
                 let mut submits = Vec::new();
-                for (encoder, frame) in self.encoders.iter_mut().zip(frame.data.images) {
+                for (encoder, frame) in self.encoders.iter_mut().zip(resized_images.data.images.outputs) {
                     let submit = encoder.encode(frame.image, false)?;
                     submits.push(submit);
                 }
@@ -159,15 +164,16 @@ impl Transcoder {
                     let result = submit.download()?;
                     results.push(EncodedOutputChunk {
                         data: result,
-                        pts: frame.pts,
+                        pts: resized_images.pts,
                         is_keyframe,
                     });
                 }
 
                 self.decoder
                     .tracker
-                    .mark_waited(frame.data.decoder_wait_value);
+                    .mark_waited(resized_images.data.decoder_wait_value);
                 self.pipeline.mark_command_buffers_completed();
+                self.pipeline.free_descriptors(resized_images.data.images.descriptors);
                 encoded_frames.push(results);
             }
         }
