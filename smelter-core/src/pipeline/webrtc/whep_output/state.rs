@@ -147,32 +147,35 @@ impl WhepOutputsState {
         }
     }
 
-    // called on drop (when output is unregistered)
-    pub fn ensure_output_closed(&self, output_ref: &Ref<OutputId>) {
-        let output = {
+    /// Drain sessions for a specific output and spawn graceful close tasks on the
+    /// provided runtime. Called by Pipeline before dropping the output.
+    pub fn close_sessions(&self, output_ref: &Ref<OutputId>, rt: &tokio::runtime::Runtime) {
+        let sessions = {
             let mut guard = self.0.lock().unwrap();
-            guard.remove(output_ref)
+            match guard.get_mut(output_ref) {
+                Some(output) => std::mem::take(&mut output.sessions),
+                None => return,
+            }
         };
 
-        if let Some(output_state) = output {
-            let Some(handle) = tokio::runtime::Handle::try_current().ok() else {
-                // No Tokio runtime available (e.g. during pipeline reset).
-                // Peer connections will be cleaned up when dropped.
-                return;
-            };
-            for (session_id, pc) in output_state.sessions.into_iter() {
-                let output_ref = output_ref.clone();
-                handle.spawn(async move {
-                    if let Err(err) = pc.close().await {
-                        error!(
-                            ?output_ref,
-                            ?session_id,
-                            ?err,
-                            "Cannot close peer_connection for WHEP output"
-                        );
-                    }
-                });
-            }
+        for (session_id, pc) in sessions.into_iter() {
+            let output_ref = output_ref.clone();
+            rt.spawn(async move {
+                if let Err(err) = pc.close().await {
+                    error!(
+                        ?output_ref,
+                        ?session_id,
+                        ?err,
+                        "Cannot close peer_connection for WHEP output"
+                    );
+                }
+            });
         }
+    }
+
+    /// Remove output entry from shared state. Sync-only, no async work.
+    /// Called from WhepOutput::drop.
+    pub fn remove_output(&self, output_ref: &Ref<OutputId>) {
+        self.0.lock().unwrap().remove(output_ref);
     }
 }

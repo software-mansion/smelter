@@ -39,6 +39,14 @@ pub enum Input {
 }
 
 impl Input {
+    /// Gracefully close async resources (e.g. WebRTC peer connections) before drop.
+    /// Called by Pipeline before removing the input.
+    pub(super) fn close(&mut self, rt: &tokio::runtime::Runtime) {
+        if let Input::Whip(whip) = self {
+            whip.close(rt);
+        }
+    }
+
     pub fn kind(&self) -> InputProtocolKind {
         match self {
             Input::Rtp(_input) => InputProtocolKind::Rtp,

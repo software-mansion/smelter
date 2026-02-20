@@ -73,8 +73,14 @@ impl WhipInput {
     }
 }
 
+impl WhipInput {
+    pub(crate) fn close(&mut self, rt: &tokio::runtime::Runtime) {
+        self.whip_inputs_state.close_session(&self.input_ref, rt);
+    }
+}
+
 impl Drop for WhipInput {
     fn drop(&mut self) {
-        self.whip_inputs_state.ensure_input_closed(&self.input_ref);
+        self.whip_inputs_state.remove_input(&self.input_ref);
     }
 }

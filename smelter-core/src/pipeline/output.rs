@@ -40,6 +40,9 @@ pub(crate) trait Output: Send {
     fn audio(&self) -> Option<OutputAudio<'_>>;
     fn video(&self) -> Option<OutputVideo<'_>>;
     fn kind(&self) -> OutputProtocolKind;
+    /// Gracefully close async resources (e.g. WebRTC peer connections) before drop.
+    /// Called by Pipeline before removing the output.
+    fn close(&mut self, _rt: &tokio::runtime::Runtime) {}
 }
 
 pub(super) fn new_external_output(

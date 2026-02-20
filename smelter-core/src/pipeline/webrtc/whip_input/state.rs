@@ -91,24 +91,28 @@ impl WhipInputsState {
         Ok(())
     }
 
-    // called on drop (when input is unregistered)
-    pub fn ensure_input_closed(&self, input_ref: &Ref<InputId>) {
-        let mut guard = self.0.lock().unwrap();
-        let Some(session) = guard.remove(input_ref).and_then(|input| input.session) else {
-            return;
+    /// Take session for a specific input and spawn graceful close on the
+    /// provided runtime. Called by Pipeline before dropping the input.
+    pub fn close_session(&self, input_ref: &Ref<InputId>, rt: &tokio::runtime::Runtime) {
+        let session = {
+            let mut guard = self.0.lock().unwrap();
+            guard.get_mut(input_ref).and_then(|input| input.session.take())
         };
 
-        let Some(handle) = tokio::runtime::Handle::try_current().ok() else {
-            // No Tokio runtime available (e.g. during pipeline reset).
-            // Peer connection will be cleaned up when dropped.
-            return;
-        };
-        let input_ref = input_ref.clone();
-        handle.spawn(async move {
-            if let Err(err) = session.peer_connection.close().await {
-                error!("Cannot close peer_connection for input {input_ref}: {err:?}");
-            };
-        });
+        if let Some(session) = session {
+            let input_ref = input_ref.clone();
+            rt.spawn(async move {
+                if let Err(err) = session.peer_connection.close().await {
+                    error!("Cannot close peer_connection for input {input_ref}: {err:?}");
+                };
+            });
+        }
+    }
+
+    /// Remove input entry from shared state. Sync-only, no async work.
+    /// Called from WhipInput::drop.
+    pub fn remove_input(&self, input_ref: &Ref<InputId>) {
+        self.0.lock().unwrap().remove(input_ref);
     }
 
     pub fn validate_session_id(

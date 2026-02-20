@@ -176,7 +176,7 @@ impl WhepOutput {
 
 impl Drop for WhepOutput {
     fn drop(&mut self) {
-        self.outputs_state.ensure_output_closed(&self.output_ref);
+        self.outputs_state.remove_output(&self.output_ref);
     }
 }
 
@@ -198,5 +198,9 @@ impl Output for WhepOutput {
 
     fn kind(&self) -> OutputProtocolKind {
         OutputProtocolKind::Whep
+    }
+
+    fn close(&mut self, rt: &tokio::runtime::Runtime) {
+        self.outputs_state.close_sessions(&self.output_ref, rt);
     }
 }

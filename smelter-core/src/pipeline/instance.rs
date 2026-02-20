@@ -106,6 +106,9 @@ impl Pipeline {
             return Err(UnregisterInputError::NotFound(input_id.clone()));
         }
 
+        if let Some(input) = self.inputs.get_mut(input_id) {
+            input.input.close(&self.ctx.tokio_rt);
+        }
         self.inputs.remove(input_id);
         self.queue.remove_input(input_id);
         self.renderer.unregister_input(input_id);
@@ -175,6 +178,9 @@ impl Pipeline {
             return Err(UnregisterOutputError::NotFound(output_id.clone()));
         }
 
+        if let Some(output) = self.outputs.get_mut(output_id) {
+            output.output.close(&self.ctx.tokio_rt);
+        }
         self.audio_mixer.unregister_output(output_id);
         self.outputs.remove(output_id);
         self.renderer.unregister_output(output_id);
@@ -366,6 +372,12 @@ impl Pipeline {
 impl Drop for Pipeline {
     fn drop(&mut self) {
         info!("Stopping pipeline");
+        for output in self.outputs.values_mut() {
+            output.output.close(&self.ctx.tokio_rt);
+        }
+        for input in self.inputs.values_mut() {
+            input.input.close(&self.ctx.tokio_rt);
+        }
         self.queue.shutdown()
     }
 }
