@@ -32,8 +32,11 @@ pub enum VulkanEncoderError {
     #[error("Cannot find enough memory of the right type on the deivce")]
     NoMemory,
 
-    #[error("The supplied textures format is {0:?}, when it should be NV12")]
+    #[error("The supplied texture's format is {0:?}, when it should be NV12")]
     NotNV12Texture(wgpu::TextureFormat),
+
+    #[error("The supplied texture does not have COPY_SRC usage. Texture's usages: {0:?}")]
+    NoCopySrcTextureUsage(wgpu::TextureUsages),
 
     #[error(transparent)]
     VulkanCommonError(#[from] VulkanCommonError),
@@ -664,6 +667,11 @@ impl VulkanEncoder<'_> {
         &mut self,
         frame: &Frame<wgpu::Texture>,
     ) -> Result<wgpu::hal::vulkan::CommandEncoder, VulkanEncoderError> {
+        if !frame.data.usage().contains(wgpu::TextureUsages::COPY_SRC) {
+            return Err(VulkanEncoderError::NoCopySrcTextureUsage(
+                frame.data.usage(),
+            ));
+        }
         if frame.data.format() != wgpu::TextureFormat::NV12 {
             return Err(VulkanEncoderError::NotNV12Texture(frame.data.format()));
         }

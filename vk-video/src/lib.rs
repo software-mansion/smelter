@@ -14,6 +14,11 @@ mod vulkan_encoder;
 pub(crate) mod wrappers;
 
 #[cfg(vulkan)]
+mod wgpu_helpers;
+#[cfg(vulkan)]
+pub use wgpu_helpers::*;
+
+#[cfg(vulkan)]
 mod vulkan_video;
 #[cfg(vulkan)]
 pub use vulkan_video::*;
