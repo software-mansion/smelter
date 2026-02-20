@@ -68,8 +68,11 @@ pub enum VulkanEncoderError {
 #[cfg(feature = "wgpu")]
 #[derive(Debug, thiserror::Error)]
 pub enum WgpuTextureEncoderError {
-    #[error("The supplied textures format is {0:?}, when it should be NV12")]
+    #[error("The supplied texture's format is {0:?}, when it should be NV12")]
     NotNV12Texture(wgpu::TextureFormat),
+
+    #[error("The supplied texture does not have COPY_SRC usage. Texture's usages: {0:?}")]
+    NoCopySrcTextureUsage(wgpu::TextureUsages),
 
     #[error(
         "The dimensions of the provided frame ({provided_dimensions:?}) are not the same as the expected dimensions ({expected_dimensions:?})"
@@ -742,6 +745,11 @@ impl<'a> VulkanEncoder<'a> {
     ) -> Result<wgpu::hal::vulkan::CommandEncoder, WgpuTextureEncoderError> {
         use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
 
+        if !frame.data.usage().contains(wgpu::TextureUsages::COPY_SRC) {
+            return Err(WgpuTextureEncoderError::NoCopySrcTextureUsage(
+                frame.data.usage(),
+            ));
+        }
         if frame.data.format() != wgpu::TextureFormat::NV12 {
             return Err(WgpuTextureEncoderError::NotNV12Texture(frame.data.format()));
         }
