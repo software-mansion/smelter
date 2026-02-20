@@ -10,7 +10,10 @@ use tokio::runtime::Runtime;
 use crate::{
     event::EventEmitter,
     graphics_context::GraphicsContext,
-    pipeline::{rtmp::RtmpPipelineState, webrtc::WhipWhepPipelineState},
+    pipeline::{
+        rtmp::RtmpPipelineState,
+        webrtc::{WebrtcSettingEngineCtx, WhipWhepPipelineState},
+    },
     stats::StatsSender,
 };
 
@@ -69,7 +72,7 @@ pub struct PipelineOptions {
 
     pub whip_whep_server: PipelineWhipWhepServerOptions,
     pub webrtc_stun_servers: Arc<Vec<String>>,
-    pub webrtc_port_range: Option<(u16, u16)>,
+    pub webrtc_port_strategy: Option<WebrtcUdpPortStrategy>,
     pub webrtc_nat_1to1_ips: Arc<Vec<String>>,
 
     pub rtmp_server: PipelineRtmpServerOptions,
@@ -113,8 +116,7 @@ pub(crate) struct PipelineCtx {
     pub event_emitter: Arc<EventEmitter>,
     pub stats_sender: StatsSender,
     pub webrtc_stun_servers: Arc<Vec<String>>,
-    pub webrtc_port_range: Option<(u16, u16)>,
-    pub webrtc_nat_1to1_ips: Arc<Vec<String>>,
+    pub webrtc_setting_engine: WebrtcSettingEngineCtx,
     tokio_rt: Arc<Runtime>,
     whip_whep_state: Option<Arc<WhipWhepPipelineState>>,
     rtmp_state: Option<Arc<RtmpPipelineState>>,

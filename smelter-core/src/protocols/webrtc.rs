@@ -78,6 +78,12 @@ pub enum WhipAudioEncoderOptions {
     Any(AudioChannels),
 }
 
+#[derive(Debug, Clone)]
+pub enum WebrtcUdpPortStrategy {
+    PortRange(u16, u16),
+    Mux(u16),
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum WebrtcServerError {
     #[error("Endpoint ID already in use (endpoint_id: {0})")]

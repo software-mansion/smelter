@@ -27,6 +27,9 @@ pub enum InitPipelineError {
 
     #[error("Failed to initialize RTMP server.")]
     RtmpServerInitError(#[source] rtmp::RtmpError),
+
+    #[error("Failed to bind UDP socket for WebRTC mux on port {0}.")]
+    BindUdpMuxSocket(u16, #[source] std::io::Error),
 }
 
 #[derive(Debug, thiserror::Error)]
