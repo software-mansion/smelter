@@ -7,6 +7,7 @@
 ### ✨ New features
 
 ### 🐛 Bug fixes
+- Fix `vkBindVideoSessionMemoryKHR` validation errors on Mesa drivers
 
 ## [v0.2.0](https://github.com/software-mansion/smelter/releases/tag/vk-video%2Fv0.2.0)
 
