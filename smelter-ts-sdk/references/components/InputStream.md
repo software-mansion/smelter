@@ -1,6 +1,6 @@
 # InputStream Component
 
-Displays a registered media input stream (video and/or audio). Requires pre-registration via `smelter.registerInput()` with a matching `inputId`.
+Displays a registered media input stream (video and/or audio). Requires pre-registration via `smelter.registerInput()` with a matching `inputId`. **IMPORTANT**: It does NOT have a `style` prop.
 
 ## Type Definition
 
