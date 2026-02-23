@@ -57,7 +57,7 @@ import { View, Text, InputStream, Tiles, Rescaler, Image, Mp4, Shader, Show, Sli
 | Component | Summary | When to use |
 |---|---|---|
 | **View** | Core container, like `<div>` | Structure any layout; supports absolute and static positioning, overflow, background color |
-| **Tiles** | Auto-arranges children in equal tiles | Multi-stream grids (e.g., video conferencing layout). Perfect (and better than `View` component) for simple layouts without custom sizing or placement|
+| **Tiles** | Auto-arranges children in equal tiles | Multi-stream grids (e.g., video conferencing layout). Works best for grid layouts or simple rectangular layouts. |
 | **Rescaler** | Scales single child to fit, preserving aspect ratio | Fit any stream/content into a fixed area |
 
 → `references/components/View.md`, `references/components/Tiles.md`, `references/components/Rescaler.md`
