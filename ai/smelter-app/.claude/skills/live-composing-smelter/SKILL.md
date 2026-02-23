@@ -57,7 +57,7 @@ import { View, Text, InputStream, Tiles, Rescaler, Image, Mp4, Shader, Show, Sli
 | Component | Summary | When to use |
 |---|---|---|
 | **View** | Core container, like `<div>` | Structure any layout; supports absolute and static positioning, overflow, background color |
-| **Tiles** | Auto-arranges children in equal tiles | Multi-stream grids (e.g., video conferencing layout). Works best for grid layouts or simple rectangular layouts. |
+| **Tiles** | Auto-arranges children in equal tiles | Multi-stream grids (e.g., video conferencing layout). Use when you need a grid layout or a simple rectangular layout. |
 | **Rescaler** | Scales single child to fit, preserving aspect ratio | Fit any stream/content into a fixed area |
 
 → `references/components/View.md`, `references/components/Tiles.md`, `references/components/Rescaler.md`
@@ -78,7 +78,7 @@ import { View, Text, InputStream, Tiles, Rescaler, Image, Mp4, Shader, Show, Sli
 
 | Component | Summary | When to use |
 |---|---|---|
-| **Text** | Renders styled text | Lower thirds, captions, labels, titles |
+| **Text** | Renders styled text | Whenever stream needs to display text, specifically for lower thirds, captions, labels, titles, etc. |
 | **Show** | Conditionally shows children based on timestamp | Scheduling elements in offline processing |
 | **SlideShow** | Sequences `<Slide>` children one after another | Intro/outro sequences, sequential content |
 
@@ -91,7 +91,7 @@ import { View, Text, InputStream, Tiles, Rescaler, Image, Mp4, Shader, Show, Sli
 | **ViewStyleProps** | `<View>` | Width/height, direction (row/column), absolute positioning, overflow, background, padding |
 | **TextStyleProps** | `<Text>` | fontSize (required), font family/weight/style, color, alignment, wrapping |
 | **TilesStyleProps** | `<Tiles>` | Width/height, tile aspect ratio, margin, padding, alignment |
-| **RescalerStyleProps** | `<Rescaler>` | Mode (fit/fill), alignment, absolute positioning |
+| **RescalerStyleProps** | `<Rescaler>` | Rescaling mode (fit/fill), alignment, absolute positioning |
 | **Transition** | `<View>`, `<Tiles>`, `<Rescaler>` | Animated scene updates with duration and easing |
 | **EasingFunction** | `Transition` | `"linear"`, `"bounce"`, or custom `cubic_bezier` |
 
@@ -101,7 +101,7 @@ import { View, Text, InputStream, Tiles, Rescaler, Image, Mp4, Shader, Show, Sli
 
 | Hook | Summary | When to use |
 |---|---|---|
-| **useInputStreams()** | Returns state of all registered inputs | Conditionally render based on stream status (ready/playing/finished) |
+| **useInputStreams()** | Returns state of all registered inputs | Conditionally render based on stream status (ready/playing/finished) - TODO: Change |
 | **useAudioInput(id, opts)** | Controls audio for an input without rendering it visually | Background audio mixing without visual component |
 | **useAfterTimestamp(ms)** | Returns `true` once a timestamp passes | Time-based scene changes in offline processing |
 | **useBlockingTask(fn)** | Runs async fn, blocks offline rendering until resolved | Load remote data before offline rendering proceeds |
@@ -133,9 +133,9 @@ Registered via `smelter.registerOutput(id, <ReactRoot />, options)`.
 
 | Output type | Runtime | Use when |
 |---|---|---|
-| `mp4` | Node.js, Web Client | Record to MP4 file |
+| `mp4` | Node.js, Web Client | Save to MP4 file |
 | `rtp_stream` | Node.js, Web Client | Stream over RTP |
-| `hls` | Node.js, Web Client | Write HLS playlist to disk |
+| `hls` | Node.js, Web Client | Write HLS playlist to disk - TODO: Change|
 | `whip_client` | Node.js, Web Client | Push via WebRTC WHIP |
 | `whep_server` | Node.js, Web Client | Serve via WebRTC WHEP to multiple viewers |
 | `rtmp_client` | Node.js, Web Client | Push to RTMP server (YouTube, Twitch) |
