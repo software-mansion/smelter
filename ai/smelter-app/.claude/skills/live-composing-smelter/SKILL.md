@@ -1,5 +1,5 @@
 ---
-name: smelter-ts-sdk
+name: live-composing-smelter
 description: >
   Comprehensive reference for building applications with the Smelter TypeScript SDK (@swmansion/smelter).
   Smelter is a media processing framework that uses React components to define video/audio compositions.
