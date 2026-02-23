@@ -73,6 +73,14 @@ jobs:
                   path: integration-tests/failed_snapshot_tests
                   retention-days: 2
 
+            - name: 📦 Upload failed offline processing test artifact
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                name: failed_offline_processing
+                path: /tmp/offline_processing_output.mp4
+                retention-days: 2
+
             - name: 📚 Run doctests
               run: cargo test --workspace --doc
 
