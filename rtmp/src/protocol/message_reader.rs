@@ -47,9 +47,11 @@ impl RtmpMessageReader {
         let (msg_header, offset) = ChunkMessageHeader::try_read(&base_header, buffer, offset)?;
 
         let context = self.context.entry(base_header.cs_id).or_default();
-
+        // Message header with all the information filled based on the context
         let msg_header = VirtualMessageHeader::from_msg(context.header, msg_header)?;
 
+        // We need the context of the previous message to check if extended_timestamp
+        // is present
         let (extended_timestamp, offset) = match msg_header.timestamp.has_extended() {
             true => {
                 let (ts, offset) = ChunkExtendedTimestamp::try_read(buffer, offset)?;
@@ -58,24 +60,36 @@ impl RtmpMessageReader {
             false => (None, offset),
         };
 
-        // Current chunk size can be calculated based on max_chunk size
-        // and the message fragment we have already read
-        let msg_len = msg_header.msg_len as usize;
-        let payload_len = usize::min(
-            self.chunk_size,
-            msg_len.saturating_sub(context.payload_acc.len()),
-        );
-        if buffer.len() < offset + payload_len {
-            return Err(ParseChunkError::NotEnoughData);
-        }
-        let payload = Bytes::from_iter(buffer.iter().skip(offset).take(payload_len).copied());
+        let (payload, offset) =
+            Self::try_chunk_read_payload(buffer, offset, self.chunk_size, msg_header, context)?;
 
         // At this point whole chunk is in the buffer and we can remove that fragment from the
         // buffer.
-        buffer.drain(..offset + payload_len);
+        buffer.drain(..offset);
 
         let msg = context.process_chunk(msg_header, extended_timestamp, payload)?;
         Ok(msg)
+    }
+
+    fn try_chunk_read_payload(
+        buffer: &VecDeque<u8>,
+        offset: usize,
+        chunk_size: usize,
+        msg_header: VirtualMessageHeader,
+        context: &ChunkStreamContext,
+    ) -> Result<(Bytes, usize), ParseChunkError> {
+        // We need to check how long entire message is and how much is still missing
+        let missing_payload_len =
+            (msg_header.msg_len as usize).saturating_sub(context.buffered_payload_len());
+
+        // Size of the payload can't be larger than chunk_size.
+        let payload_len = usize::min(chunk_size, missing_payload_len);
+        if buffer.len() < offset + payload_len {
+            return Err(ParseChunkError::NotEnoughData);
+        }
+
+        let payload = Bytes::from_iter(buffer.iter().skip(offset).take(payload_len).copied());
+        Ok((payload, offset + payload_len))
     }
 }
 
@@ -89,7 +103,8 @@ impl Iterator for RtmpMessageReader {
                     Ok(msg) => return Some(Ok(msg)),
                     Err(err) => return Some(Err(err.into())),
                 },
-                Ok(None) | Err(ParseChunkError::NotEnoughData) => {
+                Ok(None) => {}
+                Err(ParseChunkError::NotEnoughData) => {
                     // read next chunk
                     let buf_len = self.reader.data().len();
                     if let Err(err) = self.reader.read_until_buffer_size(buf_len + 1) {
@@ -127,7 +142,7 @@ impl ChunkStreamContext {
     ) -> Result<Option<RawMessage>, RtmpError> {
         self.header = Some(msg_header);
         self.payload_acc.push_back(payload);
-        let current_len = self.payload_acc.iter().map(|p| p.len()).sum();
+        let current_len = self.buffered_payload_len();
 
         if current_len < msg_header.msg_len as usize {
             return Ok(None);
@@ -163,5 +178,9 @@ impl ChunkStreamContext {
             timestamp: self.timestamp,
             payload: payload.freeze(),
         }))
+    }
+
+    fn buffered_payload_len(&self) -> usize {
+        self.payload_acc.iter().map(|p| p.len()).sum()
     }
 }

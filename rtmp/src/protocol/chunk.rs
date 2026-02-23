@@ -53,9 +53,7 @@ impl ChunkBaseHeader {
         if data.is_empty() {
             return Err(ParseChunkError::NotEnoughData);
         }
-        let fmt = ChunkType::from_raw((data[1] & 0b1100_0000) >> 6);
-
-        // let marker = [6 bits]
+        let fmt = ChunkType::from_raw((data[0] & 0b1100_0000) >> 6);
 
         let cs_id_marker = data[0] & 0b00111111;
         let (cs_id, offset) = match cs_id_marker {
