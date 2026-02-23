@@ -2,7 +2,10 @@
 fn main() {
     use std::io::Write;
 
-    use vk_video::{EncodedInputChunk, Frame, VulkanInstance, parameters::DecoderParameters};
+    use vk_video::{
+        EncodedInputChunk, Frame, VulkanInstance,
+        parameters::{DecoderParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor},
+    };
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::INFO)
@@ -18,17 +21,18 @@ fn main() {
     let h264_bytestream = std::fs::read(&args[1]).unwrap_or_else(|_| panic!("read {}", args[1]));
 
     let vulkan_instance = VulkanInstance::new().unwrap();
-    let vulkan_adapter = vulkan_instance.create_adapter(None).unwrap();
+    let vulkan_adapter = vulkan_instance
+        .create_adapter(&VulkanAdapterDescriptor::default())
+        .unwrap();
     let vulkan_device = vulkan_adapter
-        .create_device(
-            wgpu::Features::empty(),
-            wgpu::ExperimentalFeatures::disabled(),
-            wgpu::Limits {
-                max_immediate_size: 128,
+        .create_device(&VulkanDeviceDescriptor {
+            wgpu_limits: wgpu::Limits {
                 max_binding_array_elements_per_shader_stage: 128,
+                max_immediate_size: 128,
                 ..Default::default()
             },
-        )
+            ..Default::default()
+        })
         .unwrap();
 
     let mut decoder = vulkan_device

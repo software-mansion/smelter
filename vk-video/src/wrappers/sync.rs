@@ -105,6 +105,7 @@ impl<K: TrackerKind> Tracker<K> {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn wait_for_all(&mut self, timeout: u64) -> Result<(), VulkanCommonError> {
         let waited_for = self.semaphore_tracker.wait_for_all(timeout)?;
 
@@ -134,6 +135,8 @@ impl<K: TrackerKind> Tracker<K> {
 pub(crate) struct SemaphoreSubmitInfo<'a, S> {
     pub(crate) signal: TrackerWait<S>,
     tracker: &'a mut SemaphoreTracker<S>,
+
+    #[cfg(feature = "wgpu")]
     wgpu_fence: wgpu::hal::vulkan::Fence,
 }
 
@@ -150,6 +153,7 @@ impl<'a, S> SemaphoreSubmitInfo<'a, S> {
         })
     }
 
+    #[cfg(feature = "wgpu")]
     pub(crate) fn wgpu_wait_info(&mut self) -> (&mut wgpu::hal::vulkan::Fence, u64) {
         (&mut self.wgpu_fence, self.signal.value.0)
     }
@@ -204,12 +208,14 @@ impl<S> SemaphoreTracker<S> {
 
         SemaphoreSubmitInfo {
             signal,
+            #[cfg(feature = "wgpu")]
             wgpu_fence: wgpu::hal::vulkan::Fence::TimelineSemaphore(self.semaphore.semaphore),
             tracker: self,
         }
     }
 
     /// This is a noop if there's nothing to wait for
+    #[allow(dead_code)]
     pub(crate) fn wait_for_all(
         &mut self,
         timeout: u64,

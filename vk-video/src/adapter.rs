@@ -5,13 +5,15 @@ use std::{
     sync::Arc,
 };
 use tracing::{debug, debug_span, warn};
+
+#[cfg(feature = "wgpu")]
 use wgpu::hal::{DynAdapter, vulkan::Api as VkApi};
 
 use crate::{
     VulkanDevice, VulkanInitError, VulkanInstance,
     capabilities::EncodeCapabilities,
     device::{
-        DECODE_EXTENSIONS, ENCODE_EXTENSIONS, REQUIRED_EXTENSIONS,
+        DECODE_EXTENSIONS, ENCODE_EXTENSIONS, REQUIRED_EXTENSIONS, VulkanDeviceDescriptor,
         caps::{DecodeCapabilities, NativeDecodeCapabilities, NativeEncodeCapabilities},
         queues::{QueueIndex, QueueIndices},
     },
@@ -20,9 +22,11 @@ use crate::{
 /// Represents a handle to a physical device.
 /// Can be used to create [`VulkanDevice`].
 pub struct VulkanAdapter<'a> {
+    #[cfg(feature = "wgpu")]
+    pub(crate) wgpu_adapter: wgpu::hal::ExposedAdapter<VkApi>,
+
     pub(crate) instance: &'a VulkanInstance,
     pub(crate) physical_device: vk::PhysicalDevice,
-    pub(crate) wgpu_adapter: wgpu::hal::ExposedAdapter<wgpu::hal::vulkan::Api>,
     pub(crate) queue_indices: QueueIndices<'static>,
     pub(crate) decode_capabilities: Option<NativeDecodeCapabilities>,
     pub(crate) encode_capabilities: Option<NativeEncodeCapabilities>,
@@ -30,14 +34,11 @@ pub struct VulkanAdapter<'a> {
 }
 
 impl<'a> VulkanAdapter<'a> {
-    fn new(
-        vulkan_instance: &'a VulkanInstance,
-        compatible_surface: Option<&'a wgpu::Surface<'_>>,
-        device: vk::PhysicalDevice,
-    ) -> Option<Self> {
+    fn new(vulkan_instance: &'a VulkanInstance, device: vk::PhysicalDevice) -> Option<Self> {
         let instance = &vulkan_instance.instance;
-        let wgpu_instance = &vulkan_instance.wgpu_instance;
-        let wgpu_instance = unsafe { wgpu_instance.as_hal::<VkApi>() }.unwrap();
+
+        #[cfg(feature = "wgpu")]
+        let wgpu_adapter = expose_wgpu_adapter(vulkan_instance, device)?;
 
         let properties = unsafe { instance.get_physical_device_properties(device) };
         let device_name = properties
@@ -46,18 +47,6 @@ impl<'a> VulkanAdapter<'a> {
             .unwrap_or("unknown".into());
 
         let _span = debug_span!("creating adapter", device_name = %device_name).entered();
-
-        let wgpu_adapter = wgpu_instance.expose_adapter(device)?;
-
-        if let Some(surface) = compatible_surface {
-            unsafe {
-                surface.as_hal::<VkApi>().and_then(|surface| {
-                    wgpu_adapter
-                        .adapter
-                        .surface_capabilities(&surface as &wgpu::hal::vulkan::Surface)
-                })?;
-            }
-        }
 
         let mut vk_13_features = vk::PhysicalDeviceVulkan13Features::default();
         let mut features = vk::PhysicalDeviceFeatures2::default().push_next(&mut vk_13_features);
@@ -195,20 +184,11 @@ impl<'a> VulkanAdapter<'a> {
             false => ("unknown".to_owned(), "".to_owned()),
         };
 
-        let device_type = match properties.device_type {
-            vk::PhysicalDeviceType::OTHER => wgpu::DeviceType::Other,
-            vk::PhysicalDeviceType::DISCRETE_GPU => wgpu::DeviceType::DiscreteGpu,
-            vk::PhysicalDeviceType::INTEGRATED_GPU => wgpu::DeviceType::IntegratedGpu,
-            vk::PhysicalDeviceType::VIRTUAL_GPU => wgpu::DeviceType::VirtualGpu,
-            vk::PhysicalDeviceType::CPU => wgpu::DeviceType::Cpu,
-            _ => wgpu::DeviceType::Other,
-        };
-
         let info = AdapterInfo {
             name: device_name.into_owned(),
             driver_name,
             driver_info,
-            device_type,
+            device_type: properties.device_type,
             device_properties: properties,
             supports_decoding: decode_queue_idx.is_some(),
             supports_encoding: encode_queue_idx.is_some(),
@@ -225,9 +205,11 @@ impl<'a> VulkanAdapter<'a> {
         };
 
         Some(Self {
+            #[cfg(feature = "wgpu")]
+            wgpu_adapter,
+
             instance: vulkan_instance,
             physical_device: device,
-            wgpu_adapter,
             queue_indices: QueueIndices {
                 transfer: QueueIndex {
                     family_index: transfer_queue_idx,
@@ -270,20 +252,25 @@ impl<'a> VulkanAdapter<'a> {
         self.info.supports_encoding
     }
 
+    #[cfg(feature = "wgpu")]
+    pub fn supports_surface(&self, surface: &wgpu::Surface<'_>) -> bool {
+        unsafe {
+            surface
+                .as_hal::<VkApi>()
+                .and_then(|surface| {
+                    self.wgpu_adapter
+                        .adapter
+                        .surface_capabilities(&surface as &wgpu::hal::vulkan::Surface)
+                })
+                .is_some()
+        }
+    }
+
     pub fn create_device(
         self,
-        wgpu_features: wgpu::Features,
-        wgpu_experimental_features: wgpu::ExperimentalFeatures,
-        wgpu_limits: wgpu::Limits,
+        descriptor: &VulkanDeviceDescriptor,
     ) -> Result<Arc<VulkanDevice>, VulkanInitError> {
-        Ok(VulkanDevice::new(
-            self.instance,
-            wgpu_features,
-            wgpu_experimental_features,
-            wgpu_limits,
-            self,
-        )?
-        .into())
+        Ok(VulkanDevice::new(self.instance, self, descriptor)?.into())
     }
 
     pub fn info(&self) -> &AdapterInfo {
@@ -291,11 +278,48 @@ impl<'a> VulkanAdapter<'a> {
     }
 }
 
+// TODO: maybe there should be a way of specifying power preference / device preference (like wgpu)
+/// Describes a [`VulkanAdapter`].
+/// Used by [`VulkanInstance::create_adapter`]
+#[cfg(feature = "wgpu")]
+pub struct VulkanAdapterDescriptor<'a> {
+    pub supports_decoding: bool,
+    pub supports_encoding: bool,
+    pub compatible_surface: Option<&'a wgpu::Surface<'a>>,
+}
+
+#[cfg(not(feature = "wgpu"))]
+pub struct VulkanAdapterDescriptor {
+    pub supports_decoding: bool,
+    pub supports_encoding: bool,
+}
+
+#[cfg(feature = "wgpu")]
+impl Default for VulkanAdapterDescriptor<'_> {
+    fn default() -> Self {
+        Self {
+            supports_decoding: true,
+            supports_encoding: true,
+            compatible_surface: None,
+        }
+    }
+}
+
+#[cfg(not(feature = "wgpu"))]
+impl Default for VulkanAdapterDescriptor {
+    fn default() -> Self {
+        Self {
+            supports_decoding: true,
+            supports_encoding: true,
+        }
+    }
+}
+
 pub struct AdapterInfo {
     pub name: String,
     pub driver_name: String,
     pub driver_info: String,
-    pub device_type: wgpu::DeviceType,
+    pub device_type: vk::PhysicalDeviceType,
     pub supports_decoding: bool,
     pub supports_encoding: bool,
     pub device_properties: vk::PhysicalDeviceProperties,
@@ -357,12 +381,11 @@ macro_rules! find_ext {
 
 pub(crate) fn iter_adapters<'a>(
     vulkan_instance: &'a VulkanInstance,
-    compatible_surface: Option<&'a wgpu::Surface<'_>>,
 ) -> Result<impl Iterator<Item = VulkanAdapter<'a>> + 'a, VulkanInitError> {
     let physical_devices = unsafe { vulkan_instance.instance.enumerate_physical_devices()? };
     Ok(physical_devices
         .into_iter()
-        .filter_map(move |device| VulkanAdapter::new(vulkan_instance, compatible_surface, device)))
+        .filter_map(move |device| VulkanAdapter::new(vulkan_instance, device)))
 }
 
 /// Returns the list of missing extensions
@@ -418,4 +441,14 @@ fn find_video_queue_idx(
     }
 
     None
+}
+
+#[cfg(feature = "wgpu")]
+fn expose_wgpu_adapter(
+    vulkan_instance: &VulkanInstance,
+    device: vk::PhysicalDevice,
+) -> Option<wgpu::hal::ExposedAdapter<VkApi>> {
+    let wgpu_instance = &vulkan_instance.wgpu_instance;
+    let wgpu_instance = unsafe { wgpu_instance.as_hal::<VkApi>() }.unwrap();
+    wgpu_instance.expose_adapter(device)
 }

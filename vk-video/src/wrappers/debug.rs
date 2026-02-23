@@ -138,6 +138,7 @@ impl DecodingQueryPool {
         Ok(Self { pool })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_result_blocking(
         &self,
     ) -> Result<vk::QueryResultStatusKHR, VulkanDecoderError> {
