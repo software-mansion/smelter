@@ -45,14 +45,14 @@ async function run() {
   await smelter.registerInput('input_1', {
     type: 'rtp_stream',
     port: 10000,
-    video: { decoder: 'vulkan_h264' },
+    video: { decoder: 'ffmpeg_h264' },
   });
 
   // Stream 2 — video on port 10002
   await smelter.registerInput('input_2', {
     type: 'rtp_stream',
     port: 10002,
-    video: { decoder: 'vulkan_h264' },
+    video: { decoder: 'ffmpeg_h264' },
   });
 
   // Stream 1 — audio on port 10004
@@ -75,7 +75,7 @@ async function run() {
     type: 'rtmp_client',
     url: 'rtmp://127.0.0.1:8001',
     video: {
-      encoder: { type: 'vulkan_h264' },
+      encoder: { type: 'ffmpeg_h264' },
       resolution: { width: WIDTH, height: HEIGHT },
     },
     audio: {
