@@ -7,7 +7,7 @@ use crate::{
         RtmpMessage,
         event::{audio_event_from_raw, video_event_from_raw},
     },
-    protocol::{MessageType, RawMessage},
+    protocol::{MessageType, RawMessage, UserControlMessageKind},
 };
 
 impl RtmpMessage {
@@ -75,7 +75,20 @@ impl RtmpMessage {
                 return Err(ParseError::UnsupportedMessageType(msg.msg_type));
             }
             MessageType::UserControl => {
-                return Err(ParseError::UnsupportedMessageType(msg.msg_type));
+                if p.len() < 2 {
+                    return Err(ParseError::NotEnoughData);
+                }
+                let kind = UserControlMessageKind::from_raw(u16::from_be_bytes([p[0], p[1]]))?;
+                match kind {
+                    UserControlMessageKind::StreamBegin if p.len() >= 6 => {
+                        let stream_id = u32::from_be_bytes([p[2], p[3], p[4], p[5]]);
+                        Self::StreamBegin { stream_id }
+                    }
+                    _ => {
+                        // TODO: better error
+                        return Err(ParseError::UnsupportedMessageType(msg.msg_type));
+                    }
+                }
             }
         };
         Ok(result)

@@ -2,16 +2,17 @@ use bytes::Bytes;
 
 use crate::ParseError;
 
-mod buffered_stream_reader;
 mod chunk;
 pub(crate) mod handshake;
 pub(crate) mod message_reader;
 pub(crate) mod message_writer;
+pub(crate) mod socket;
 
 #[derive(Debug)]
 pub(crate) struct RawMessage {
     pub msg_type: MessageType,
     pub stream_id: u32,
+    pub chunk_stream_id: u32,
     pub timestamp: u32,
     pub payload: Bytes,
 }
@@ -76,18 +77,41 @@ impl MessageType {
 // https://rtmp.veriskope.com/docs/spec/#717user-control-message-events
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(unused)]
-pub enum UserControlMessageEvent {
-    StreamBegin = 0,
-    #[allow(unused)]
-    StreamEof = 1,
-    #[allow(unused)]
-    StreamDry = 2,
-    #[allow(unused)]
-    SetBufferLength = 3,
-    #[allow(unused)]
-    StreamIsRecorded = 4,
-    #[allow(unused)]
-    PingRequest = 6,
-    #[allow(unused)]
-    PingResponse = 7,
+pub enum UserControlMessageKind {
+    StreamBegin,
+    StreamEof,
+    StreamDry,
+    SetBufferLength,
+    StreamIsRecorded,
+    PingRequest,
+    PingResponse,
+}
+
+impl UserControlMessageKind {
+    pub fn from_raw(value: u16) -> Result<Self, ParseError> {
+        match value {
+            0 => Ok(Self::StreamBegin),
+            1 => Ok(Self::StreamEof),
+            2 => Ok(Self::StreamDry),
+            3 => Ok(Self::SetBufferLength),
+            4 => Ok(Self::StreamIsRecorded),
+            6 => Ok(Self::PingRequest),
+            7 => Ok(Self::PingResponse),
+            _ => Err(ParseError::InvalidData(format!(
+                "Unknown UserControlMessageKind {value}"
+            ))),
+        }
+    }
+
+    pub fn into_raw(self) -> u16 {
+        match self {
+            Self::StreamBegin => 0,
+            Self::StreamEof => 1,
+            Self::StreamDry => 2,
+            Self::SetBufferLength => 3,
+            Self::StreamIsRecorded => 4,
+            Self::PingRequest => 6,
+            Self::PingResponse => 7,
+        }
+    }
 }

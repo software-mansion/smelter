@@ -84,6 +84,7 @@ pub(super) fn event_into_raw(
         RtmpEvent::H264Data(chunk) => RawMessage {
             msg_type: MessageType::Video,
             stream_id,
+            chunk_stream_id: 6,
             timestamp: chunk.dts.as_millis() as u32,
             payload: VideoTag {
                 h264_packet_type: Some(VideoTagH264PacketType::Data),
@@ -102,6 +103,7 @@ pub(super) fn event_into_raw(
         RtmpEvent::H264Config(config) => RawMessage {
             msg_type: MessageType::Video,
             stream_id,
+            chunk_stream_id: 6,
             timestamp: 0,
             payload: VideoTag {
                 h264_packet_type: Some(VideoTagH264PacketType::Config),
@@ -115,6 +117,7 @@ pub(super) fn event_into_raw(
         RtmpEvent::AacData(chunk) => RawMessage {
             msg_type: MessageType::Audio,
             stream_id,
+            chunk_stream_id: 4,
             timestamp: chunk.pts.as_millis() as u32,
             payload: AudioTag {
                 aac_packet_type: Some(AudioTagAacPacketType::Data),
@@ -129,6 +132,7 @@ pub(super) fn event_into_raw(
         RtmpEvent::AacConfig(config) => RawMessage {
             msg_type: MessageType::Audio,
             stream_id,
+            chunk_stream_id: 4,
             timestamp: 0,
             payload: AudioTag {
                 aac_packet_type: Some(AudioTagAacPacketType::Config),
@@ -143,6 +147,7 @@ pub(super) fn event_into_raw(
         RtmpEvent::GenericAudioData(data) => RawMessage {
             msg_type: MessageType::Audio,
             stream_id,
+            chunk_stream_id: 4,
             timestamp: data.timestamp,
             payload: AudioTag {
                 aac_packet_type: None,
@@ -157,6 +162,7 @@ pub(super) fn event_into_raw(
         RtmpEvent::GenericVideoData(data) => RawMessage {
             msg_type: MessageType::Video,
             stream_id,
+            chunk_stream_id: 6,
             timestamp: data.timestamp,
             payload: VideoTag {
                 h264_packet_type: None,
@@ -171,6 +177,7 @@ pub(super) fn event_into_raw(
         RtmpEvent::Metadata(script_data) => RawMessage {
             msg_type: MessageType::DataMessageAmf0,
             stream_id,
+            chunk_stream_id: 5,
             timestamp: 0,
             payload: script_data.serialize()?,
         },

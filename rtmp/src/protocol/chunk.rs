@@ -1,9 +1,11 @@
 use std::collections::VecDeque;
 
+use bytes::{BufMut, Bytes, BytesMut};
+
 use crate::{ParseError, RtmpError};
 
 #[derive(thiserror::Error, Debug)]
-pub(super) enum ParseChunkError {
+pub(crate) enum ParseChunkError {
     #[error("Not enough data")]
     NotEnoughData,
 
@@ -74,6 +76,32 @@ impl ChunkBaseHeader {
             n => (n as u32, 1_usize),
         };
         Ok((Self { fmt, cs_id }, offset))
+    }
+
+    pub fn serialize(&self) -> Result<Bytes, RtmpError> {
+        let fmt_bits = ((self.fmt as u8) & 0b0000_0011) << 6;
+        match self.cs_id {
+            0 | 1 => Err(RtmpError::InternalError(
+                "Chunk stream ID 1 and 0 is reserved.",
+            )),
+            2..=63 => {
+                let mut buf = BytesMut::with_capacity(1);
+                buf.extend_from_slice(&[fmt_bits | self.cs_id as u8]);
+                Ok(buf.freeze())
+            }
+            64..=319 => {
+                let mut buf = BytesMut::with_capacity(2);
+                buf.extend_from_slice(&[fmt_bits, (self.cs_id - 64) as u8]);
+                Ok(buf.freeze())
+            }
+            _ => {
+                let id = (self.cs_id - 64) as u16;
+                let le = id.to_le_bytes();
+                let mut buf = BytesMut::with_capacity(3);
+                buf.extend_from_slice(&[fmt_bits | 0b0000_0001, le[0], le[1]]);
+                Ok(buf.freeze())
+            }
+        }
     }
 }
 
@@ -155,6 +183,48 @@ impl ChunkMessageHeader {
         };
         Ok((header, offset))
     }
+
+    pub fn chunk_type(&self) -> ChunkType {
+        match self {
+            ChunkMessageHeader::Full { .. } => ChunkType::Full,
+            ChunkMessageHeader::NoMessageStreamId { .. } => ChunkType::NoMessageStreamId,
+            ChunkMessageHeader::TimestampOnly { .. } => ChunkType::TimestampOnly,
+            ChunkMessageHeader::NoHeader => ChunkType::NoHeader,
+        }
+    }
+
+    pub fn serialize(self) -> Bytes {
+        match self {
+            ChunkMessageHeader::Full {
+                timestamp,
+                msg_len,
+                msg_type_id,
+                msg_stream_id,
+            } => {
+                let mut buf = BytesMut::with_capacity(11);
+                buf.put(&timestamp.to_be_bytes()[1..4]);
+                buf.put(&msg_len.to_be_bytes()[1..4]);
+                buf.put_u8(msg_type_id);
+                buf.put(&msg_stream_id.to_le_bytes()[..]);
+                buf.freeze()
+            }
+            ChunkMessageHeader::NoMessageStreamId {
+                timestamp_delta,
+                msg_len,
+                msg_type_id,
+            } => {
+                let mut buf = BytesMut::with_capacity(7);
+                buf.put(&timestamp_delta.to_be_bytes()[1..4]);
+                buf.put(&msg_len.to_be_bytes()[1..4]);
+                buf.put_u8(msg_type_id);
+                buf.freeze()
+            }
+            ChunkMessageHeader::TimestampOnly { timestamp_delta } => {
+                Bytes::copy_from_slice(&timestamp_delta.to_be_bytes()[1..4])
+            }
+            ChunkMessageHeader::NoHeader => Bytes::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -181,6 +251,13 @@ impl ChunkHeaderTimestamp {
         match self {
             ChunkHeaderTimestamp::Timestamp(ts) => *ts == 0xFFFFFF,
             ChunkHeaderTimestamp::Delta(ts) => *ts == 0xFFFFFF,
+        }
+    }
+
+    pub fn value(&self) -> u32 {
+        match self {
+            ChunkHeaderTimestamp::Timestamp(ts) => *ts,
+            ChunkHeaderTimestamp::Delta(ts) => *ts,
         }
     }
 }

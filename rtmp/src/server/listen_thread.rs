@@ -52,10 +52,6 @@ pub(super) fn start_listener_thread(
 
                         let on_connection_clone = on_connection.clone();
                         thread::spawn(move || {
-                            if let Err(err) = stream.set_nonblocking(false) {
-                                error!(%err, "Failed to set stream blocking");
-                                return;
-                            }
                             if let Err(err) = handle_connection(stream, on_connection_clone) {
                                 error!(%err, "Client handler error");
                             }
