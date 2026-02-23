@@ -9,7 +9,9 @@ fn main() {
 
     use vk_video::{
         EncodedInputChunk,
-        parameters::{RateControl, VideoParameters},
+        parameters::{
+            RateControl, VideoParameters, VulkanAdapterDescriptor, VulkanDeviceDescriptor,
+        },
     };
 
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -32,9 +34,11 @@ fn main() {
     };
 
     let instance = vk_video::VulkanInstance::new().unwrap();
-    let adapter = instance.create_adapter(None).unwrap();
+    let adapter = instance
+        .create_adapter(&VulkanAdapterDescriptor::default())
+        .unwrap();
     let device = adapter
-        .create_device(Default::default(), Default::default(), Default::default())
+        .create_device(&VulkanDeviceDescriptor::default())
         .unwrap();
 
     let params = device

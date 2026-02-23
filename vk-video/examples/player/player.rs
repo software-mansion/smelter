@@ -45,13 +45,14 @@ pub fn run() {
         .create_surface(&window)
         .unwrap();
 
-    let vulkan_adapter = vulkan_instance.create_adapter(Some(&surface)).unwrap();
+    let vulkan_adapter = vulkan_instance
+        .create_adapter(&vk_video::parameters::VulkanAdapterDescriptor {
+            compatible_surface: Some(&surface),
+            ..Default::default()
+        })
+        .unwrap();
     let vulkan_device = vulkan_adapter
-        .create_device(
-            wgpu::Features::empty(),
-            wgpu::ExperimentalFeatures::disabled(),
-            wgpu::Limits::default(),
-        )
+        .create_device(&vk_video::parameters::VulkanDeviceDescriptor::default())
         .unwrap();
 
     let (tx, rx) = mpsc::sync_channel(FRAMES_BUFFER_LEN);
