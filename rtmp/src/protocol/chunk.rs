@@ -90,7 +90,7 @@ pub(crate) enum ChunkMessageHeader {
         // 4 bytes
         msg_stream_id: u32,
     },
-    // Type 0 - 7 bytes
+    // Type 1 - 7 bytes
     NoMessageStreamId {
         // 3 bytes
         timestamp_delta: u32,
@@ -99,7 +99,7 @@ pub(crate) enum ChunkMessageHeader {
         // 1 byte
         msg_type_id: u8,
     },
-    // Type 0 - 3 bytes
+    // Type 2 - 3 bytes
     TimestampOnly {
         // 3 bytes
         timestamp_delta: u32,
