@@ -6,7 +6,6 @@ use std::{
 
 use ash::vk;
 use encode_parameter_sets::{pps, sps};
-use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
 
 use crate::{
     EncodedOutputChunk, Frame, RawFrameData, VulkanCommonError,
@@ -32,9 +31,6 @@ pub enum VulkanEncoderError {
     #[error("Cannot find enough memory of the right type on the deivce")]
     NoMemory,
 
-    #[error("The supplied textures format is {0:?}, when it should be NV12")]
-    NotNV12Texture(wgpu::TextureFormat),
-
     #[error(transparent)]
     VulkanCommonError(#[from] VulkanCommonError),
 
@@ -47,14 +43,6 @@ pub enum VulkanEncoderError {
     InconsistentPictureByteSize {
         bytes: usize,
         size_from_resolution: usize,
-    },
-
-    #[error(
-        "The dimensions of the provided frame ({provided_dimensions:?}) are not the same as the expected dimensions ({expected_dimensions:?})"
-    )]
-    InconsistentPictureDimensions {
-        provided_dimensions: wgpu::Extent3d,
-        expected_dimensions: wgpu::Extent3d,
     },
 
     #[error("The profile '{0:?}' is not supported by this device")]
@@ -72,8 +60,30 @@ pub enum VulkanEncoderError {
         problem: String,
     },
 
+    #[cfg(feature = "wgpu")]
+    #[error(transparent)]
+    WgpuTextureEcoderError(#[from] WgpuTextureEncoderError),
+}
+
+#[cfg(feature = "wgpu")]
+#[derive(Debug, thiserror::Error)]
+pub enum WgpuTextureEncoderError {
+    #[error("The supplied textures format is {0:?}, when it should be NV12")]
+    NotNV12Texture(wgpu::TextureFormat),
+
+    #[error(
+        "The dimensions of the provided frame ({provided_dimensions:?}) are not the same as the expected dimensions ({expected_dimensions:?})"
+    )]
+    InconsistentPictureDimensions {
+        provided_dimensions: wgpu::Extent3d,
+        expected_dimensions: wgpu::Extent3d,
+    },
+
     #[error("Wgpu device error: {0}")]
     WgpuDeviceError(#[from] wgpu::hal::DeviceError),
+
+    #[error(transparent)]
+    VulkanCommonError(#[from] VulkanCommonError),
 }
 
 struct VideoSessionResources<'a> {
@@ -276,6 +286,7 @@ pub(crate) enum EncoderTrackerWaitState {
     InitializeEncoder,
     ResizeInput,
     CopyBufferToImage,
+    #[allow(dead_code)]
     CopyImageToImage,
     Encode,
 }
@@ -381,6 +392,7 @@ pub struct VulkanEncoder<'a> {
     session_resources: VideoSessionResources<'a>,
     idr_period_counter: u32,
     idr_period: u32,
+    #[allow(dead_code)]
     input_image: Arc<Image>,
     output_buffer: Buffer,
     idr_pic_id: u16,
@@ -723,12 +735,15 @@ impl<'a> VulkanEncoder<'a> {
         Ok((image, buffer))
     }
 
+    #[cfg(feature = "wgpu")]
     fn copy_wgpu_texture_to_image(
         &mut self,
         frame: &Frame<wgpu::Texture>,
-    ) -> Result<wgpu::hal::vulkan::CommandEncoder, VulkanEncoderError> {
+    ) -> Result<wgpu::hal::vulkan::CommandEncoder, WgpuTextureEncoderError> {
+        use wgpu::hal::{CommandEncoder, Device, Queue, vulkan::Api as VkApi};
+
         if frame.data.format() != wgpu::TextureFormat::NV12 {
-            return Err(VulkanEncoderError::NotNV12Texture(frame.data.format()));
+            return Err(WgpuTextureEncoderError::NotNV12Texture(frame.data.format()));
         }
 
         let input_image_size = wgpu::Extent3d {
@@ -737,7 +752,7 @@ impl<'a> VulkanEncoder<'a> {
             depth_or_array_layers: self.input_image.extent.depth,
         };
         if frame.data.size() != input_image_size {
-            return Err(VulkanEncoderError::InconsistentPictureDimensions {
+            return Err(WgpuTextureEncoderError::InconsistentPictureDimensions {
                 provided_dimensions: frame.data.size(),
                 expected_dimensions: input_image_size,
             });
@@ -1284,6 +1299,7 @@ impl<'a> VulkanEncoder<'a> {
     /// # Safety
     /// - The texture cannot be a surface texture
     /// - The texture has to be transitioned to [`wgpu::TextureUses::COPY_SRC`] usage
+    #[cfg(feature = "wgpu")]
     pub unsafe fn encode_texture(
         &mut self,
         frame: Frame<wgpu::Texture>,

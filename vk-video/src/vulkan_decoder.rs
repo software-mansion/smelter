@@ -5,7 +5,6 @@ use ash::vk;
 use h264_reader::nal::{pps::PicParameterSet, sps::SeqParameterSet};
 use rustc_hash::FxHashMap;
 use session_resources::VideoSessionResources;
-use wgpu::hal::api::Vulkan as VkApi;
 
 use crate::{
     RawFrameData,
@@ -103,6 +102,7 @@ impl<'a, 'b> DecodeSubmission<'a, 'b> {
         self.finish(frame)
     }
 
+    #[cfg(feature = "wgpu")]
     fn output_to_wgpu_texture(self) -> Result<DecodeResult<wgpu::Texture>, VulkanDecoderError> {
         let wgpu_texture = self
             .decoder
@@ -209,6 +209,7 @@ impl<'a> VulkanDecoder<'a> {
         Ok(result)
     }
 
+    #[cfg(feature = "wgpu")]
     pub fn decode_to_wgpu_textures(
         &mut self,
         decoder_instructions: &[DecoderInstruction],
@@ -611,6 +612,7 @@ impl<'a> VulkanDecoder<'a> {
         })
     }
 
+    #[cfg(feature = "wgpu")]
     fn output_to_wgpu_texture(
         &mut self,
         decode_output: &DecodeSubmissionImageInfo,
@@ -618,7 +620,7 @@ impl<'a> VulkanDecoder<'a> {
         let wgpu_device = unsafe {
             self.decoding_device
                 .wgpu_device()
-                .as_hal::<VkApi>()
+                .as_hal::<wgpu::hal::vulkan::Api>()
                 .unwrap()
         };
         let copy_extent = vk::Extent3D {
@@ -791,8 +793,8 @@ impl<'a> VulkanDecoder<'a> {
 
         let wgpu_texture = unsafe {
             self.decoding_device
-                .wgpu_device
-                .create_texture_from_hal::<VkApi>(
+                .wgpu_device()
+                .create_texture_from_hal::<wgpu::hal::vulkan::Api>(
                     hal_texture,
                     &wgpu::TextureDescriptor {
                         label: Some("vulkan video output texture"),

@@ -38,13 +38,12 @@ fn decode_video(
 ) {
     let instance = vk_video::VulkanInstance::new().unwrap();
     let surface = instance.wgpu_instance().create_surface(window).unwrap();
-    let adapter = instance.create_adapter(Some(&surface)).unwrap();
+    let adapter = instance.create_adapter(&vk_video::parameters::VulkanAdapterDescriptor {
+        compatible_surface: Some(&surface),
+        ..Default::default()
+    }).unwrap();
     let device = adapter
-        .create_device(
-            wgpu::Features::empty(),
-            wgpu::ExperimentalFeatures::disabled(),
-            wgpu::Limits::default(),
-        )
+        .create_device(&vk_video::parameters::VulkanDeviceDescriptor::default())
         .unwrap();
 
     let mut decoder = device
@@ -84,13 +83,12 @@ fn encode_video(
 
     let instance = vk_video::VulkanInstance::new().unwrap();
     let surface = instance.wgpu_instance().create_surface(window).unwrap();
-    let adapter = instance.create_adapter(Some(&surface)).unwrap();
+    let adapter = instance.create_adapter(&vk_video::parameters::VulkanAdapterDescriptor {
+        compatible_surface: Some(&surface),
+        ..Default::default()
+    }).unwrap();
     let device = adapter
-        .create_device(
-            wgpu::Features::empty(),
-            wgpu::ExperimentalFeatures::disabled(),
-            wgpu::Limits::default(),
-        )
+        .create_device(&vk_video::parameters::VulkanDeviceDescriptor::default())
         .unwrap();
 
     let mut encoder = device
