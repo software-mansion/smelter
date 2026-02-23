@@ -55,7 +55,7 @@ impl ChunkBaseHeader {
         }
         let fmt = ChunkType::from_raw((data[0] & 0b1100_0000) >> 6);
 
-        let cs_id_marker = data[0] & 0b00111111;
+        let cs_id_marker = data[0] & 0b0011_1111;
         let (cs_id, offset) = match cs_id_marker {
             0 => {
                 if data.len() < 2 {
