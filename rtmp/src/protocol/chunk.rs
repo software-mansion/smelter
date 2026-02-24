@@ -82,7 +82,7 @@ impl ChunkBaseHeader {
         let fmt_bits = ((self.fmt as u8) & 0b0000_0011) << 6;
         match self.cs_id {
             0 | 1 => Err(RtmpError::InternalError(
-                "Chunk stream ID 1 and 0 is reserved.",
+                "Chunk stream ID 0 and 1 are reserved.",
             )),
             2..=63 => {
                 let mut buf = BytesMut::with_capacity(1);
