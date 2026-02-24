@@ -113,7 +113,7 @@ impl Iterator for RtmpMessageReader {
                 Err(ParseChunkError::RtmpError(err)) => match err {
                     RtmpError::Io(e)
                         if [
-                            ErrorKind::WriteZero,
+                            ErrorKind::UnexpectedEof,
                             ErrorKind::ConnectionReset,
                             ErrorKind::BrokenPipe,
                         ]

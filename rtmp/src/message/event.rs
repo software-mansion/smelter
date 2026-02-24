@@ -5,7 +5,7 @@ use crate::{
     AudioTagSoundRate, GenericAudioData, GenericVideoData, H264VideoConfig, H264VideoData,
     ParseError, RtmpEvent, SerializationError, VideoCodec, VideoTag, VideoTagFrameType,
     VideoTagH264PacketType, VideoTagParseError,
-    message::RtmpMessage,
+    message::{AUDIO_CHUNK_STREAM_ID, MAIN_CHUNK_STREAM_ID, RtmpMessage, VIDEO_CHUNK_STREAM_ID},
     protocol::{MessageType, RawMessage},
 };
 
@@ -84,7 +84,7 @@ pub(super) fn event_into_raw(
         RtmpEvent::H264Data(chunk) => RawMessage {
             msg_type: MessageType::Video,
             stream_id,
-            chunk_stream_id: 6,
+            chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
             timestamp: chunk.dts.as_millis() as u32,
             payload: VideoTag {
                 h264_packet_type: Some(VideoTagH264PacketType::Data),
@@ -103,7 +103,7 @@ pub(super) fn event_into_raw(
         RtmpEvent::H264Config(config) => RawMessage {
             msg_type: MessageType::Video,
             stream_id,
-            chunk_stream_id: 6,
+            chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
             timestamp: 0,
             payload: VideoTag {
                 h264_packet_type: Some(VideoTagH264PacketType::Config),
@@ -117,7 +117,7 @@ pub(super) fn event_into_raw(
         RtmpEvent::AacData(chunk) => RawMessage {
             msg_type: MessageType::Audio,
             stream_id,
-            chunk_stream_id: 4,
+            chunk_stream_id: AUDIO_CHUNK_STREAM_ID,
             timestamp: chunk.pts.as_millis() as u32,
             payload: AudioTag {
                 aac_packet_type: Some(AudioTagAacPacketType::Data),
@@ -132,7 +132,7 @@ pub(super) fn event_into_raw(
         RtmpEvent::AacConfig(config) => RawMessage {
             msg_type: MessageType::Audio,
             stream_id,
-            chunk_stream_id: 4,
+            chunk_stream_id: AUDIO_CHUNK_STREAM_ID,
             timestamp: 0,
             payload: AudioTag {
                 aac_packet_type: Some(AudioTagAacPacketType::Config),
@@ -144,10 +144,24 @@ pub(super) fn event_into_raw(
             }
             .serialize()?,
         },
+        RtmpEvent::GenericVideoData(data) => RawMessage {
+            msg_type: MessageType::Video,
+            stream_id,
+            chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
+            timestamp: data.timestamp,
+            payload: VideoTag {
+                h264_packet_type: None,
+                codec: data.codec,
+                composition_time: None,
+                frame_type: data.frame_type,
+                data: data.data,
+            }
+            .serialize()?,
+        },
         RtmpEvent::GenericAudioData(data) => RawMessage {
             msg_type: MessageType::Audio,
             stream_id,
-            chunk_stream_id: 4,
+            chunk_stream_id: AUDIO_CHUNK_STREAM_ID,
             timestamp: data.timestamp,
             payload: AudioTag {
                 aac_packet_type: None,
@@ -159,25 +173,11 @@ pub(super) fn event_into_raw(
             }
             .serialize()?,
         },
-        RtmpEvent::GenericVideoData(data) => RawMessage {
-            msg_type: MessageType::Video,
-            stream_id,
-            chunk_stream_id: 6,
-            timestamp: data.timestamp,
-            payload: VideoTag {
-                h264_packet_type: None,
-                codec: data.codec,
-                composition_time: None,
-                frame_type: data.frame_type,
-                data: data.data,
-            }
-            .serialize()?,
-        },
         // TODO: (@jbrs) This should depend on the encoding
         RtmpEvent::Metadata(script_data) => RawMessage {
             msg_type: MessageType::DataMessageAmf0,
             stream_id,
-            chunk_stream_id: 5,
+            chunk_stream_id: MAIN_CHUNK_STREAM_ID,
             timestamp: 0,
             payload: script_data.serialize()?,
         },

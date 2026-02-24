@@ -4,6 +4,13 @@ mod event;
 mod parse;
 mod serialize;
 
+// Low-level protocol control messages and commands
+const RESERVED_CHUNK_STREAM_ID: u32 = 2;
+// Main chunk stream for everything that is not actual media
+const MAIN_CHUNK_STREAM_ID: u32 = 3;
+const VIDEO_CHUNK_STREAM_ID: u32 = 6;
+const AUDIO_CHUNK_STREAM_ID: u32 = 4;
+
 #[derive(Debug)]
 pub(crate) enum RtmpMessage {
     WindowAckSize {
