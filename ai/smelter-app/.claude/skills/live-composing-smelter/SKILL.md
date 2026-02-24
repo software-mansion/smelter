@@ -135,7 +135,7 @@ Registered via `smelter.registerOutput(id, <ReactRoot />, options)`.
 |---|---|---|
 | `mp4` | Node.js, Web Client | Save to MP4 file |
 | `rtp_stream` | Node.js, Web Client | Stream over RTP |
-| `hls` | Node.js, Web Client | Write HLS playlist to disk - TODO: Change|
+| `hls` | Node.js, Web Client | Stream over HLS. User will need to handle serving the files on their own. |
 | `whip_client` | Node.js, Web Client | Push via WebRTC WHIP |
 | `whep_server` | Node.js, Web Client | Serve via WebRTC WHEP to multiple viewers |
 | `rtmp_client` | Node.js, Web Client | Push to RTMP server (YouTube, Twitch) |
