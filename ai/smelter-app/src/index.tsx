@@ -23,17 +23,18 @@ function App() {
     return () => { swapEmitter.off('swap', handler); };
   }, []);
 
-  const stream1 = <View id="stream1" key="stream1"><InputStream inputId="input_1" /></View>;
-  const stream2 = <View id="stream2" key="stream2"><InputStream inputId="input_2" /></View>;
+  const stream1 = <InputStream inputId="input_1" />;
+  const stream2 = <InputStream inputId="input_2" />;
 
   return (
-    <Tiles
-      id="main"
-      style={{ width: WIDTH, height: HEIGHT }}
-      transition={{ durationMs: 1000 }}
-    >
-      {swapped ? [stream2, stream1] : [stream1, stream2]}
-    </Tiles>
+    <View style={{ width: WIDTH, height: HEIGHT }}>
+      <Tiles
+        id="main"
+        transition={{ durationMs: 1000 }}
+      >
+        {swapped ? [stream2, stream1] : [stream1, stream2]}
+      </Tiles>
+    </View>
   );
 }
 
@@ -59,14 +60,14 @@ async function run() {
   await smelter.registerInput('input_3', {
     type: 'rtp_stream',
     port: 10004,
-    audio: { decoder: 'opus' },
+    audio: { decoder: 'aac', audioSpecificConfig: '1210' },
   });
 
   // Stream 2 — audio on port 10006
   await smelter.registerInput('input_4', {
     type: 'rtp_stream',
     port: 10006,
-    audio: { decoder: 'opus' },
+    audio: { decoder: 'aac', audioSpecificConfig: '1210' },
   });
 
   await ffplayStartPlayerAsync(8001);

@@ -1,5 +1,5 @@
 import Smelter from '@swmansion/smelter-node';
-import { View, InputStream, useAudioInput } from '@swmansion/smelter';
+import { View, InputStream, useAudioInput, Rescaler } from '@swmansion/smelter';
 import { useState, useEffect, useRef } from 'react';
 import { EventEmitter } from 'events';
 import { ffplayStartPlayerAsync } from './smelterFfplayHelper';
@@ -84,12 +84,12 @@ function App() {
 
   return (
     <View style={{ width: WIDTH, height: HEIGHT, overflow: 'visible' }}>
-      <View style={{ width: STREAM_WIDTH, height: STREAM_HEIGHT, top: y1, left: x1 }}>
+      <Rescaler style={{ width: STREAM_WIDTH, height: STREAM_HEIGHT, top: y1, left: x1 }}>
         <InputStream inputId="input_1" />
-      </View>
-      <View style={{ width: STREAM_WIDTH, height: STREAM_HEIGHT, top: y2, left: x2 }}>
+      </Rescaler>
+      <Rescaler style={{ width: STREAM_WIDTH, height: STREAM_HEIGHT, top: y2, left: x2 }}>
         <InputStream inputId="input_2" />
-      </View>
+      </Rescaler>
     </View>
   );
 }
@@ -116,14 +116,14 @@ async function run() {
   await smelter.registerInput('input_3', {
     type: 'rtp_stream',
     port: 10004,
-    audio: { decoder: 'opus' },
+    audio: { decoder: 'aac', audioSpecificConfig: '1210' },
   });
 
   // Stream 2 — audio on port 10006
   await smelter.registerInput('input_4', {
     type: 'rtp_stream',
     port: 10006,
-    audio: { decoder: 'opus' },
+    audio: { decoder: 'aac', audioSpecificConfig: '1210' },
   });
 
   // Display output with `ffplay`.
