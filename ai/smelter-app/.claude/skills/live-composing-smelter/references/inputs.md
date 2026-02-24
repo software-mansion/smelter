@@ -4,6 +4,7 @@ Inputs are registered via `smelter.registerInput(id, options)`. The `type` field
 
 ## Table of Contents
 
+- [Common Options](#common-options) — Common options appearing in multiple inputs
 - [MP4](#mp4) — Node.js, Web Client, Web WASM
 - [RTP](#rtp) — Node.js, Web Client
 - [HLS](#hls) — Node.js
@@ -14,6 +15,24 @@ Inputs are registered via `smelter.registerInput(id, options)`. The `type` field
 - [Screen Capture (WASM)](#screen-capture-wasm) — Web WASM only
 - [MediaStream (WASM)](#mediastream-wasm) — Web WASM only
 - [WHEP Client (WASM)](#whep-client-wasm) — Web WASM only
+
+---
+
+## Common Options
+
+### required
+When `true`, Smelter waits for this input before producing output frames.
+- **Default**: `false`
+
+### offsetMs
+Timing offset relative to pipeline start. If unspecified, synced based on when first frames arrive.
+
+### decoderMap / decoderPreferences
+Controls which decoder to use:
+- `"ffmpeg_h264"` — software H264 via FFmpeg
+- `"vulkan_h264"` — hardware H264 via Vulkan (requires GPU support)
+- `"ffmpeg_vp8"` / `"ffmpeg_vp9"` — software VP8/VP9 via FFmpeg
+- `"any"` — auto-select any supported decoder
 
 ---
 
@@ -176,21 +195,3 @@ type RegisterWhepClientInput = {
   bearerToken?: string;
 }
 ```
-
----
-
-## Common Options
-
-### required
-When `true`, Smelter waits for this input before producing output frames.
-- **Default**: `false`
-
-### offsetMs
-Timing offset relative to pipeline start. If unspecified, synced based on when first frames arrive.
-
-### decoderMap / decoderPreferences
-Controls which decoder to use:
-- `"ffmpeg_h264"` — software H264 via FFmpeg
-- `"vulkan_h264"` — hardware H264 via Vulkan (requires GPU support)
-- `"ffmpeg_vp8"` / `"ffmpeg_vp9"` — software VP8/VP9 via FFmpeg
-- `"any"` — auto-select any supported decoder
