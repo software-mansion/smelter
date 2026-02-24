@@ -35,7 +35,7 @@ Animation behavior during scene updates. Requires matching `id` in both old and 
 
 ## Resize Modes
 
-Configured via `style.mode`:
+Configured via `style.rescaleMode`:
 - `"fit"` (default) — fits child fully inside, may leave empty space
 - `"fill"` — covers entire area, may clip child
 
@@ -43,7 +43,7 @@ Configured via `style.mode`:
 
 Wrapping `InputStream` or `Mp4` to fit into a specific area:
 ```tsx
-<Rescaler style={{ width: 1920, height: 1080 }}>
+<Rescaler style={{ width: 1920, height: 1080, rescaleMode: 'fit' }}>
   <InputStream inputId="camera" />
 </Rescaler>
 ```

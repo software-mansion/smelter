@@ -4,7 +4,7 @@ Styling properties for the `Rescaler` component.
 
 ```tsx
 type RescalerStyleProps = {
-    mode?: "fit" | "fill";           // default: "fit"
+    rescaleMode?: "fit" | "fill";           // default: "fit"
     horizontalAlign?: "left" | "right" | "justified" | "center";  // default: "center"
     verticalAlign?: "top" | "center" | "bottom" | "justified";    // default: "center"
     width?: number;
@@ -19,7 +19,7 @@ type RescalerStyleProps = {
 
 ## Properties
 
-### mode
+### rescaleMode
 How the child is resized:
 - `"fit"` (default) — resizes to match one dimension, fully visible (may have empty space)
 - `"fill"` — covers entire parent area, excess is clipped
