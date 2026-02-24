@@ -567,8 +567,8 @@ impl VulkanDecoder<'_> {
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
                 &mut self.tracker,
-                vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
-                vk::PipelineStageFlags2::VIDEO_DECODE_KHR,
+                vk::PipelineStageFlags2::ALL_COMMANDS,
+                vk::PipelineStageFlags2::ALL_COMMANDS,
                 DecoderTrackerWaitState::Decode,
             )?;
 

@@ -205,8 +205,9 @@ impl VulkanDevice {
 
         let mut vk_descriptor_feature = vk::PhysicalDeviceDescriptorIndexingFeatures::default()
             .shader_storage_texel_buffer_array_non_uniform_indexing(true)
-            .descriptor_binding_variable_descriptor_count(true)
-            .runtime_descriptor_array(true);
+            .descriptor_binding_partially_bound(true);
+            // .descriptor_binding_variable_descriptor_count(true)
+            // .runtime_descriptor_array(true);
 
         let device_create_info = vk::DeviceCreateInfo::default()
             .queue_create_infos(&queue_create_infos)

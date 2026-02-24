@@ -46,7 +46,6 @@ fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, Vulkan
         h264_level_idc_to_max_dpb_mbs(sps.level_idc)?
             / ((sps.pic_width_in_mbs_minus1 as u64 + 1)
                 * (sps.pic_height_in_map_units_minus1 as u64 + 1))
-                .min(16)
     };
 
     let max_num_reorder_frames = sps
@@ -54,7 +53,8 @@ fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, Vulkan
         .as_ref()
         .and_then(|v| v.bitstream_restrictions.as_ref())
         .map(|b| b.max_num_reorder_frames as u64)
-        .unwrap_or(fallback_max_num_reorder_frames);
+        .unwrap_or(fallback_max_num_reorder_frames)
+        .min(16);
 
     Ok(max_num_reorder_frames)
 }

@@ -1,8 +1,8 @@
 @group(0) @binding(0) var source_y: texture_storage_2d<r8unorm, read>;
 @group(0) @binding(1) var source_uv: texture_storage_2d<rg8unorm, read>;
 
-@group(1) @binding(0) var dest_y: binding_array<texture_storage_2d<r8unorm, write> >;
-@group(2) @binding(0) var dest_uv: binding_array<texture_storage_2d<rg8unorm, write> >;
+@group(1) @binding(0) var dest_y: binding_array<texture_storage_2d<r8unorm, write>, 8>;
+@group(2) @binding(0) var dest_uv: binding_array<texture_storage_2d<rg8unorm, write>, 8>;
 
 var<immediate> output_number: u32;
 
@@ -26,7 +26,11 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   let x = remaining_offset % size.x;
   let coords_output = vec2(x, y);
 
-  let float_coords = vec2<f32>(coords_output) / vec2<f32>(size);
+  if y >= size.y {
+    return;
+  }
+
+  let float_coords = (vec2<f32>(coords_output) + 0.5) / vec2<f32>(size);
   let input_size = textureDimensions(source_y);
   let coords_input = vec2<u32>(vec2<f32>(input_size) * float_coords);
 

@@ -13,7 +13,10 @@ use crate::{
     device::{EncodingDevice, Rational},
     parameters::H264Profile,
     wrappers::{
-        Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image, ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool, SemaphoreWaitValue, Tracker, TrackerKind, TrackerWait, VideoEncodeQueueExt, VideoQueueExt, VideoSession, VideoSessionParameters
+        Buffer, CommandBufferPool, CommandBufferPoolStorage, DecodedPicturesBuffer, Image,
+        ImageLayoutTracker, ImageView, OpenCommandBuffer, ProfileInfo, QueryPool,
+        SemaphoreWaitValue, Tracker, TrackerKind, TrackerWait, VideoEncodeQueueExt, VideoQueueExt,
+        VideoSession, VideoSessionParameters,
     },
 };
 
@@ -318,6 +321,7 @@ pub struct EncodeSubmission<'borrow, 'encoder> {
     pub(crate) is_idr: bool,
     pub(crate) wait_value: SemaphoreWaitValue,
     pub(crate) encoder: &'borrow mut VulkanEncoder<'encoder>,
+    _image: Arc<Image>,
 }
 
 impl<'a, 'b> EncodeSubmission<'a, 'b> {
@@ -339,7 +343,6 @@ impl<'a, 'b> EncodeSubmission<'a, 'b> {
         self.download()
     }
 }
-
 
 pub struct VulkanEncoder<'a> {
     pub(crate) tracker: EncoderTracker,
@@ -384,8 +387,11 @@ impl<'a> VulkanEncoder<'a> {
         let profile_info = H264EncodeProfileInfo::new_encode(&parameters);
 
         let command_buffer_pools = EncoderCommandBufferPools::new(&encoding_device)?;
-        let mut tracker =
-            EncoderTracker::new(encoding_device.device.clone(), command_buffer_pools, Some("encoder"))?;
+        let mut tracker = EncoderTracker::new(
+            encoding_device.device.clone(),
+            command_buffer_pools,
+            Some("encoder"),
+        )?;
 
         let query_pool = EncodingQueryPool::new(
             &encoding_device,
@@ -1142,12 +1148,13 @@ impl<'a> VulkanEncoder<'a> {
                 );
         }
 
-        let wait_value = self.encoding_device
+        let wait_value = self
+            .encoding_device
             .h264_encode_queues
             .submit_chain_semaphore(
                 cmd_buffer.end()?,
                 &mut self.tracker,
-                vk::PipelineStageFlags2::VIDEO_ENCODE_KHR,
+                vk::PipelineStageFlags2::ALL_COMMANDS,
                 vk::PipelineStageFlags2::ALL_COMMANDS,
                 EncoderTrackerWaitState::Encode,
             )?;
@@ -1158,7 +1165,12 @@ impl<'a> VulkanEncoder<'a> {
         self.idr_period_counter += 1;
         self.idr_period_counter %= self.idr_period;
 
-        Ok(EncodeSubmission { is_idr, encoder: self, wait_value })
+        Ok(EncodeSubmission {
+            is_idr,
+            encoder: self,
+            wait_value,
+            _image: image,
+        })
     }
 
     pub fn download_output(&mut self, is_idr: bool) -> Result<Vec<u8>, VulkanEncoderError> {

@@ -36,48 +36,32 @@ fn main() {
         .create_device(Default::default(), Default::default(), Default::default())
         .unwrap();
 
-    let mut transcoder = device
-        .create_transcoder(&[
-            device
-                .encoder_parameters_high_quality(
-                    VideoParameters {
-                        width: output_width,
-                        height: output_height,
-                        target_framerate: Rational {
-                            numerator: 30,
-                            denominator: NonZeroU32::new(1).unwrap(),
-                        },
-                    },
-                    RateControl::VariableBitrate {
-                        average_bitrate: 10_000_000,
-                        max_bitrate: 12_000_000,
-                        virtual_buffer_size: Duration::from_secs(2),
-                    },
-                )
-                .unwrap(),
-            device
-                .encoder_parameters_high_quality(
-                    VideoParameters {
-                        width: output_width.div_ceil(NonZeroU32::new(2).unwrap()),
-                        height: output_height,
-                        target_framerate: Rational {
-                            numerator: 30,
-                            denominator: NonZeroU32::new(1).unwrap(),
-                        },
-                    },
-                    RateControl::VariableBitrate {
-                        average_bitrate: 5_000_000,
-                        max_bitrate: 6_000_000,
-                        virtual_buffer_size: Duration::from_secs(2),
-                    },
-                )
-                .unwrap(),
-        ])
+    let params = device
+        .encoder_parameters_high_quality(
+            VideoParameters {
+                width: output_width,
+                height: output_height,
+                target_framerate: Rational {
+                    numerator: 30,
+                    denominator: NonZeroU32::new(1).unwrap(),
+                },
+            },
+            RateControl::VariableBitrate {
+                average_bitrate: 10_000_000,
+                max_bitrate: 12_000_000,
+                virtual_buffer_size: Duration::from_secs(2),
+            },
+        )
         .unwrap();
+
+    let mut transcoder = device.create_transcoder(&[params, params, params]).unwrap();
 
     let mut input_file = File::open(input_file).unwrap();
     let mut output_file = File::create("output.h264").unwrap();
     let mut output_file2 = File::create("output2.h264").unwrap();
+    let mut output_file3 = File::create("output3.h264").unwrap();
+
+    let mut files = [&mut output_file, &mut output_file2, &mut output_file3];
     let mut buffer = vec![0; 4096];
     while let Ok(n) = input_file.read(&mut buffer)
         && n > 0
@@ -89,15 +73,21 @@ fn main() {
         let output = transcoder.transcode(input).unwrap();
 
         for output in output {
-            output_file.write_all(&output[0].data).unwrap();
-            output_file2.write_all(&output[1].data).unwrap();
+            for (output, file) in output.iter().zip(files.iter_mut()) {
+                file.write_all(&output.data).unwrap();
+            }
+            // output_file.write_all(&output[0].data).unwrap();
+            // output_file2.write_all(&output[1].data).unwrap();
         }
     }
 
     let flushed = transcoder.flush().unwrap();
     for output in flushed {
-        output_file.write_all(&output[0].data).unwrap();
-        output_file2.write_all(&output[1].data).unwrap();
+        for (output, file) in output.iter().zip(files.iter_mut()) {
+            file.write_all(&output.data).unwrap();
+        }
+        // output_file.write_all(&output[0].data).unwrap();
+        // output_file2.write_all(&output[1].data).unwrap();
     }
 }
 

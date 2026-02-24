@@ -104,13 +104,13 @@ impl DescriptorHeap {
         .pop()
         .unwrap();
 
-        let mut count = vk::DescriptorSetVariableDescriptorCountAllocateInfo::default()
-            .descriptor_counts(&self.output_counts);
+        // let mut count = vk::DescriptorSetVariableDescriptorCountAllocateInfo::default()
+        //     .descriptor_counts(&self.output_counts);
         let mut descriptor_set_outputs = DescriptorSet::new(
             self.pool.clone(),
             &vk::DescriptorSetAllocateInfo::default()
                 .set_layouts(&[self.layout_output.set_layout, self.layout_output.set_layout])
-                .push_next(&mut count),
+                // .push_next(&mut count),
         )?;
 
         let output_uv = descriptor_set_outputs.pop().unwrap();
@@ -172,7 +172,7 @@ impl Pipeline {
             .binding(0)
             .stage_flags(vk::ShaderStageFlags::COMPUTE)];
 
-        let flags = [vk::DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT_EXT];
+        let flags = [vk::DescriptorBindingFlags::PARTIALLY_BOUND];
         let mut binding_flags =
             vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(&flags);
 
@@ -231,10 +231,16 @@ impl Pipeline {
             }),
         )
         .unwrap();
+        // let spv = ash::util::read_spv(&mut std::io::Cursor::new(include_bytes!("../../out.spv"))).unwrap();
         let shader_module = Arc::new(ShaderModule::new(
             device.device.clone(),
             &vk::ShaderModuleCreateInfo::default().code(&compiled),
         )?);
+
+        // let shader_module = Arc::new(ShaderModule::new(
+        //     device.device.clone(),
+        //     &vk::ShaderModuleCreateInfo::default().code(&spv),
+        // )?);
 
         let shader = vk::PipelineShaderStageCreateInfo::default()
             .stage(vk::ShaderStageFlags::COMPUTE)
@@ -306,6 +312,8 @@ impl Pipeline {
                 &create_info,
                 config.tracker.image_layout_tracker.clone(),
             )?);
+
+            self.device.device.set_label(image.image, Some("resize image"))?;
 
             result.push(ResizingImageBundle::new(image, 0)?);
         }
@@ -391,6 +399,7 @@ impl Pipeline {
         let descriptors = self.write_descriptors(&input, &outputs)?;
 
         let mut buffer = self.buffer_pool.begin_buffer()?;
+        self.device.device.set_label(buffer.buffer(), Some("resize pipeline buffer"))?;
         input.image.transition_layout_single_layer(
             &mut buffer,
             vk::PipelineStageFlags2::NONE..vk::PipelineStageFlags2::COMPUTE_SHADER,
@@ -414,9 +423,11 @@ impl Pipeline {
         let dispatch_size = outputs
             .iter()
             .map(|&ResizingImageBundle { ref image, .. }| {
-                image.extent.width * image.extent.height * 3 / 2
+                image.extent.width * image.extent.height
             })
             .sum::<u32>();
+
+        println!("dispatch_size: {}", dispatch_size);
 
         unsafe {
             self.device.device.cmd_bind_pipeline(
@@ -455,17 +466,17 @@ impl Pipeline {
             .iter_mut()
             .map(|OutputConfig { tracker, .. }| {
                 let value = tracker.semaphore_tracker.next_sem_value();
-                let submit_info = vk::SemaphoreSubmitInfo::default()
-                    .stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                let signal = vk::SemaphoreSubmitInfo::default()
+                    .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
                     .semaphore(tracker.semaphore_tracker.semaphore.semaphore)
                     .value(value.0);
                 let wait = tracker.semaphore_tracker.wait_for.take().map(|wait| {
                     vk::SemaphoreSubmitInfo::default()
                         .value(wait.value.0)
                         .semaphore(tracker.semaphore_tracker.semaphore.semaphore)
-                        .stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                        .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
                 });
-                (wait, (submit_info, value))
+                (wait, (signal, value))
             })
             .unzip::<_, _, Vec<_>, Vec<_>>();
 
@@ -474,14 +485,14 @@ impl Pipeline {
         let mut waits = waits.into_iter().flatten().collect::<Vec<_>>();
         waits.push(
             vk::SemaphoreSubmitInfo::default()
-                .stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
                 .value(input_submission.semaphore_wait_value.0)
                 .semaphore(decode_tracker.semaphore_tracker.semaphore.semaphore),
         );
         let next_decoder_value = decode_tracker.semaphore_tracker.next_sem_value();
         signals.push(
             vk::SemaphoreSubmitInfo::default()
-                .stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
                 .value(next_decoder_value.0)
                 .semaphore(decode_tracker.semaphore_tracker.semaphore.semaphore),
         );

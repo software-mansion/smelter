@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use ash::vk;
+use wgpu::hal::vulkan;
 
 use crate::{
     VulkanCommonError, VulkanDevice,
@@ -420,6 +421,12 @@ impl<'a> CodingImageBundle<'a> {
                         image_tracker.clone(),
                     )
                     .map(Arc::new)
+                    .and_then(|i| {
+                        vulkan_ctx
+                            .device
+                            .set_label(i.image, Some("decoding image"))?;
+                        Ok(i)
+                    })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
@@ -467,6 +474,8 @@ impl<'a> CodingImageBundle<'a> {
                 &image_create_info,
                 image_tracker.clone(),
             )?);
+
+            vulkan_ctx.device.set_label(image.image, Some("decoding image"))?;
 
             image_view_create_info = image_view_create_info
                 .image(image.image)

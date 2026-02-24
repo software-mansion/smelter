@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use ash::vk;
 
@@ -118,6 +118,7 @@ impl Transcoder {
                 continue;
             };
 
+            // std::thread::sleep(Duration::from_millis(40));
             let output = self.pipeline.run(
                 &frame,
                 &mut self.decoder.tracker,
