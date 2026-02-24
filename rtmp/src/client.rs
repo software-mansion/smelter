@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 
-use tracing::{debug, info, trace};
+use tracing::{debug, trace};
 
 use crate::{
     RtmpEvent,
@@ -35,7 +35,7 @@ impl RtmpClient {
 
         let mut rw_stream = stream.try_clone()?;
         Handshake::perform_as_client(&mut rw_stream)?;
-        info!("Client handshake complete");
+        debug!("Client handshake complete");
 
         let mut writer = RtmpMessageWriter::new(stream.try_clone()?);
         let should_close = Arc::new(AtomicBool::new(false));
@@ -44,7 +44,7 @@ impl RtmpClient {
         let stream_id =
             ConnectionNegotiation::run(&mut reader, &mut writer, &config.app, &config.stream_key)?;
 
-        info!(stream_id, app = %config.app, stream_key = %config.stream_key, "RTMP client connected");
+        debug!(stream_id, app = %config.app, stream_key = %config.stream_key, "RTMP client connected");
 
         Ok(Self {
             writer,

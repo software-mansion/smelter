@@ -1,3 +1,5 @@
+use tracing::trace;
+
 use crate::{error::RtmpError, message::RtmpMessage};
 use std::{cmp::min, io::Write, net::TcpStream};
 
@@ -20,6 +22,7 @@ impl RtmpMessageWriter {
     }
 
     pub fn write(&mut self, msg: RtmpMessage) -> Result<(), RtmpError> {
+        trace!(?msg, "Sending RTMP message");
         let msg = msg.into_raw()?;
 
         let mut offset = 0;
