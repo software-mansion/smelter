@@ -65,14 +65,9 @@ function App() {
     <View style={{ width: WIDTH, height: HEIGHT, overflow: 'visible' }}>
       {positions.map((pos, i) =>
         visible[i] ? (
-          <View
-            key={i}
-            style={{ width: SCALED_WIDTH, height: SCALED_HEIGHT, top: pos.top, left: pos.left }}
-          >
-            <Rescaler style={{ rescaleMode: 'fit' }}>
-              <InputStream inputId={`input_${i + 1}`} />
-            </Rescaler>
-          </View>
+          <Rescaler key={i} style={{ width: SCALED_WIDTH, height: SCALED_HEIGHT, top: pos.top, left: pos.left, rescaleMode: 'fit' }}>
+            <InputStream inputId={`input_${i + 1}`} />
+          </Rescaler>
         ) : null
       )}
     </View>
