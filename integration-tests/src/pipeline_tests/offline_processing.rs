@@ -18,6 +18,7 @@ const BUNNY_URL: &str =
 
 #[test]
 pub fn offline_processing() -> Result<()> {
+    assert!(false); // Added to block any accidental merges by failing the CI
     const OUTPUT_FILE: &str = "/tmp/offline_processing_output.mp4";
     if Path::new(OUTPUT_FILE).exists() {
         fs::remove_file(OUTPUT_FILE)?;
