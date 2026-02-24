@@ -99,8 +99,8 @@ impl TcpWritePacketStream {
         // Timeout to make sure we are not left with unregistered
         // connections that are still maintained by a client side.
         socket
-            .set_nonblocking(false)
-            .expect("Cannot set blocking tcp output stream");
+            .set_nonblocking(true)
+            .expect("Cannot set non blocking tcp output stream");
         socket
             .set_write_timeout(Some(Duration::from_secs(30)))
             .expect("Cannot set write timeout");
