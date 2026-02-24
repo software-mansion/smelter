@@ -5,6 +5,7 @@ use std::{
 
 use crate::error::RtmpError;
 use rand::RngCore;
+use tracing::warn;
 
 const RTMP_VERSION: u8 = 3;
 const HANDSHAKE_SIZE: usize = 1536;
@@ -20,10 +21,7 @@ impl Handshake {
         let mut c0 = [0u8; 1];
         stream.read_exact(&mut c0)?;
         if c0[0] != RTMP_VERSION {
-            return Err(RtmpError::HandshakeFailed(format!(
-                "C0 should be {RTMP_VERSION}, but received {}",
-                c0[0]
-            )));
+            warn!("C0 should be {RTMP_VERSION}, but received {}", c0[0]);
         };
         let c0_read_time = Instant::now();
 
