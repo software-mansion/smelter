@@ -44,6 +44,9 @@ pub enum ParseError {
     #[error("Unsupported RTMP message type: {0:?}")]
     UnsupportedMessageType(MessageType),
 
+    #[error("Invalid data: {0}")]
+    InvalidData(String),
+
     #[error("Error parsing audio tag: {0}")]
     Audio(#[from] AudioTagParseError),
 

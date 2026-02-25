@@ -10,21 +10,26 @@ use crate::{
     message::RtmpMessage,
     protocol::{
         handshake::Handshake, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter,
+        socket::NonBlockingSocket,
     },
     server::{OnConnectionCallback, RtmpConnection, negotiation::negotiate_rtmp_session},
 };
 
 pub(crate) fn handle_connection(
-    mut stream: TcpStream,
+    stream: TcpStream,
     on_connection: Arc<Mutex<OnConnectionCallback>>,
 ) -> Result<(), RtmpError> {
-    Handshake::perform_as_server(&mut stream)?;
+    let should_close = Arc::new(AtomicBool::new(false));
+    let (mut reader, mut writer) = NonBlockingSocket::new(stream, should_close).split();
+
+    Handshake::perform_as_server(&mut reader, &mut writer)?;
+
     debug!("Handshake complete");
 
-    let mut message_writer = RtmpMessageWriter::new(stream.try_clone()?);
-    let mut message_reader = RtmpMessageReader::new(stream, Arc::new(AtomicBool::new(false)));
+    let mut writer = RtmpMessageWriter::new(writer);
+    let mut reader = RtmpMessageReader::new(reader);
 
-    let (app, stream_key) = negotiate_rtmp_session(&mut message_reader, &mut message_writer)?;
+    let (app, stream_key) = negotiate_rtmp_session(&mut reader, &mut writer)?;
 
     debug!(?app, ?stream_key, "Negotiation complete");
 
@@ -41,7 +46,7 @@ pub(crate) fn handle_connection(
         cb(connection_ctx);
     }
 
-    for msg_result in message_reader {
+    for msg_result in reader {
         let msg = msg_result?;
         trace!(?msg, "RTMP message received");
 

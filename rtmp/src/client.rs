@@ -13,6 +13,7 @@ use crate::{
     message::RtmpMessage,
     protocol::{
         handshake::Handshake, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter,
+        socket::NonBlockingSocket,
     },
 };
 
@@ -30,16 +31,16 @@ pub struct RtmpClient {
 
 impl RtmpClient {
     pub fn connect(config: RtmpClientConfig) -> Result<Self, RtmpError> {
-        let stream = TcpStream::connect(config.addr)?;
-        stream.set_nonblocking(false)?;
+        let should_close = Arc::new(AtomicBool::new(false));
 
-        let mut rw_stream = stream.try_clone()?;
-        Handshake::perform_as_client(&mut rw_stream)?;
+        let stream = TcpStream::connect(config.addr)?;
+        let (mut reader, mut writer) = NonBlockingSocket::new(stream, should_close).split();
+
+        Handshake::perform_as_client(&mut reader, &mut writer)?;
         debug!("Client handshake complete");
 
-        let mut writer = RtmpMessageWriter::new(stream.try_clone()?);
-        let should_close = Arc::new(AtomicBool::new(false));
-        let mut reader = RtmpMessageReader::new(stream, should_close);
+        let mut writer = RtmpMessageWriter::new(writer);
+        let mut reader = RtmpMessageReader::new(reader);
 
         let stream_id =
             ConnectionNegotiation::run(&mut reader, &mut writer, &config.app, &config.stream_key)?;

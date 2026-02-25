@@ -1,8 +1,6 @@
 use std::{
     collections::{HashMap, VecDeque},
     io::ErrorKind,
-    net::TcpStream,
-    sync::{Arc, atomic::AtomicBool},
 };
 
 use bytes::{Bytes, BytesMut};
@@ -12,11 +10,11 @@ use crate::{
     message::RtmpMessage,
     protocol::{
         MessageType, RawMessage,
-        buffered_stream_reader::BufferedReader,
         chunk::{
             ChunkBaseHeader, ChunkExtendedTimestamp, ChunkHeaderTimestamp, ChunkMessageHeader,
             ParseChunkError, VirtualMessageHeader,
         },
+        socket::BufferedReader,
     },
 };
 
@@ -29,9 +27,9 @@ pub(crate) struct RtmpMessageReader {
 }
 
 impl RtmpMessageReader {
-    pub fn new(socket: TcpStream, should_close: Arc<AtomicBool>) -> Self {
+    pub fn new(reader: BufferedReader) -> Self {
         Self {
-            reader: BufferedReader::new(socket, should_close),
+            reader,
             context: HashMap::new(),
             chunk_size: DEFAULT_CHUNK_SIZE,
         }
@@ -67,7 +65,8 @@ impl RtmpMessageReader {
         // buffer.
         buffer.drain(..offset);
 
-        let msg = context.process_chunk(msg_header, extended_timestamp, payload)?;
+        let msg =
+            context.process_chunk(base_header.cs_id, msg_header, extended_timestamp, payload)?;
         Ok(msg)
     }
 
@@ -108,15 +107,20 @@ impl Iterator for RtmpMessageReader {
                     // read next chunk
                     let buf_len = self.reader.data().len();
                     if let Err(err) = self.reader.read_until_buffer_size(buf_len + 1) {
-                        return Some(Err(err));
+                        return Some(Err(err.into()));
                     }
                 }
                 Err(ParseChunkError::RtmpError(err)) => match err {
-                    RtmpError::UnexpectedEof => return None,
-                    RtmpError::Io(e) if e.kind() == ErrorKind::ConnectionReset => {
+                    RtmpError::Io(e)
+                        if [
+                            ErrorKind::UnexpectedEof,
+                            ErrorKind::ConnectionReset,
+                            ErrorKind::BrokenPipe,
+                        ]
+                        .contains(&e.kind()) =>
+                    {
                         return None;
                     }
-                    RtmpError::Io(e) if e.kind() == ErrorKind::BrokenPipe => return None,
                     err => return Some(Err(err)),
                 },
             }
@@ -136,6 +140,7 @@ struct ChunkStreamContext {
 impl ChunkStreamContext {
     fn process_chunk(
         &mut self,
+        cs_id: u32,
         msg_header: VirtualMessageHeader,
         extended_timestamp: Option<ChunkExtendedTimestamp>,
         payload: Bytes,
@@ -151,13 +156,13 @@ impl ChunkStreamContext {
         }
 
         self.timestamp = match msg_header.timestamp {
-            ChunkHeaderTimestamp::Timestamp(0xFFFFFF) => {
+            ChunkHeaderTimestamp::Timestamp(0x00FFFFFF) => {
                 let Some(ChunkExtendedTimestamp(ext_ts)) = extended_timestamp else {
                     return Err(RtmpError::InternalError("Missing extended timestamp"));
                 };
                 ext_ts
             }
-            ChunkHeaderTimestamp::Delta(0xFFFFFF) => {
+            ChunkHeaderTimestamp::Delta(0x00FFFFFF) => {
                 let Some(ChunkExtendedTimestamp(ext_ts)) = extended_timestamp else {
                     return Err(RtmpError::InternalError("Missing extended timestamp"));
                 };
@@ -174,6 +179,7 @@ impl ChunkStreamContext {
 
         Ok(Some(RawMessage {
             msg_type: MessageType::try_from_raw(msg_header.msg_type_id)?,
+            chunk_stream_id: cs_id,
             stream_id: msg_header.msg_stream_id,
             timestamp: self.timestamp,
             payload: payload.freeze(),
