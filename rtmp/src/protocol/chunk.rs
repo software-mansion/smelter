@@ -249,8 +249,8 @@ pub(crate) enum ChunkHeaderTimestamp {
 impl ChunkHeaderTimestamp {
     pub fn has_extended(&self) -> bool {
         match self {
-            ChunkHeaderTimestamp::Timestamp(ts) => *ts == 0xFFFFFF,
-            ChunkHeaderTimestamp::Delta(ts) => *ts == 0xFFFFFF,
+            ChunkHeaderTimestamp::Timestamp(ts) => *ts == 0x00FFFFFF,
+            ChunkHeaderTimestamp::Delta(ts) => *ts == 0x00FFFFFF,
         }
     }
 

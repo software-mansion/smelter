@@ -156,13 +156,13 @@ impl ChunkStreamContext {
         }
 
         self.timestamp = match msg_header.timestamp {
-            ChunkHeaderTimestamp::Timestamp(0xFFFFFF) => {
+            ChunkHeaderTimestamp::Timestamp(0x00FFFFFF) => {
                 let Some(ChunkExtendedTimestamp(ext_ts)) = extended_timestamp else {
                     return Err(RtmpError::InternalError("Missing extended timestamp"));
                 };
                 ext_ts
             }
-            ChunkHeaderTimestamp::Delta(0xFFFFFF) => {
+            ChunkHeaderTimestamp::Delta(0x00FFFFFF) => {
                 let Some(ChunkExtendedTimestamp(ext_ts)) = extended_timestamp else {
                     return Err(RtmpError::InternalError("Missing extended timestamp"));
                 };

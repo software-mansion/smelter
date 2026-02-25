@@ -105,13 +105,13 @@ impl ChunkStreamContext {
         // true if (one of the conditions):
         // - both prev and current message requires extended timestamps
         // - previous message timestamp or timestamp delta is the same as current msg delta
-        let msg_timestamp_match = (prev.timestamp.has_extended() && timestamp_delta >= 0xFFFFFF)
+        let msg_timestamp_match = (prev.timestamp.has_extended() && timestamp_delta >= 0x00FFFFFF)
             || (!prev.timestamp.has_extended() && prev.timestamp.value() == timestamp_delta);
 
         if !msg_stream_id_match {
             return ChunkMessageHeader::Full {
-                timestamp: match msg.timestamp >= 0xFFFFFF {
-                    true => 0xFFFFFF,
+                timestamp: match msg.timestamp >= 0x00FFFFFF {
+                    true => 0x00FFFFFF,
                     false => msg.timestamp,
                 },
                 msg_len: msg.payload.len() as u32,
@@ -122,8 +122,8 @@ impl ChunkStreamContext {
 
         if msg_stream_id_match && (!msg_len_match || !msg_type_id_match) {
             return ChunkMessageHeader::NoMessageStreamId {
-                timestamp_delta: match timestamp_delta >= 0xFFFFFF {
-                    true => 0xFFFFFF,
+                timestamp_delta: match timestamp_delta >= 0x00FFFFFF {
+                    true => 0x00FFFFFF,
                     false => timestamp_delta,
                 },
                 msg_len: msg.payload.len() as u32,
@@ -133,8 +133,8 @@ impl ChunkStreamContext {
 
         if msg_stream_id_match && msg_type_id_match && msg_len_match && !msg_timestamp_match {
             return ChunkMessageHeader::TimestampOnly {
-                timestamp_delta: match timestamp_delta >= 0xFFFFFF {
-                    true => 0xFFFFFF,
+                timestamp_delta: match timestamp_delta >= 0x00FFFFFF {
+                    true => 0x00FFFFFF,
                     false => timestamp_delta,
                 },
             };
@@ -150,17 +150,17 @@ impl ChunkStreamContext {
 
     fn resolve_extended_timestamps(&self, msg: &ChunkMessageHeader, timestamp: u32) -> Option<u32> {
         let Some((_, prev_ts)) = self.0 else {
-            return match timestamp >= 0xFFFFFF {
+            return match timestamp >= 0x00FFFFFF {
                 true => Some(timestamp),
                 false => None,
             };
         };
         let delta = timestamp.saturating_sub(prev_ts);
         match msg {
-            ChunkMessageHeader::Full { .. } if timestamp >= 0xFFFFFF => Some(timestamp),
-            ChunkMessageHeader::NoMessageStreamId { .. } if delta >= 0xFFFFFF => Some(delta),
-            ChunkMessageHeader::TimestampOnly { .. } if delta >= 0xFFFFFF => Some(delta),
-            ChunkMessageHeader::NoHeader if delta >= 0xFFFFFF => Some(delta),
+            ChunkMessageHeader::Full { .. } if timestamp >= 0x00FFFFFF => Some(timestamp),
+            ChunkMessageHeader::NoMessageStreamId { .. } if delta >= 0x00FFFFFF => Some(delta),
+            ChunkMessageHeader::TimestampOnly { .. } if delta >= 0x00FFFFFF => Some(delta),
+            ChunkMessageHeader::NoHeader if delta >= 0x00FFFFFF => Some(delta),
             _ => None,
         }
     }
