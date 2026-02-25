@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use crossbeam_channel::{Receiver, Sender, bounded};
+use crossbeam_channel::{Receiver, bounded, select};
 use smelter_render::error::ErrorStack;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use rtmp::{
     AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpClient, RtmpClientConfig,
@@ -39,10 +39,12 @@ pub struct RtmpClientOutput {
 struct AudioConfig {
     extradata: Bytes,
     channels: AudioChannels,
+    chunks_receiver: Receiver<EncodedOutputEvent>,
 }
 
 struct VideoConfig {
     extradata: Bytes,
+    chunks_receiver: Receiver<EncodedOutputEvent>,
 }
 
 impl RtmpClientOutput {
@@ -51,16 +53,9 @@ impl RtmpClientOutput {
         output_ref: Ref<OutputId>,
         options: RtmpOutputOptions,
     ) -> Result<Self, OutputInitError> {
-        let (encoded_chunks_sender, encoded_chunks_receiver) = bounded(1000);
-
         let (video_encoder, video_config) = match &options.video {
             Some(video) => {
-                let (encoder, config) = Self::init_video_encoder(
-                    &ctx,
-                    &output_ref,
-                    video.clone(),
-                    encoded_chunks_sender.clone(),
-                )?;
+                let (encoder, config) = Self::init_video_encoder(&ctx, &output_ref, video.clone())?;
                 (Some(encoder), Some(config))
             }
             None => (None, None),
@@ -68,12 +63,7 @@ impl RtmpClientOutput {
 
         let (audio_encoder, audio_config) = match &options.audio {
             Some(audio) => {
-                let (encoder, config) = Self::init_audio_encoder(
-                    &ctx,
-                    &output_ref,
-                    audio.clone(),
-                    encoded_chunks_sender.clone(),
-                )?;
+                let (encoder, config) = Self::init_audio_encoder(&ctx, &output_ref, audio.clone())?;
                 (Some(encoder), Some(config))
             }
             None => (None, None),
@@ -86,12 +76,7 @@ impl RtmpClientOutput {
                 let _span = tracing::info_span!("RTMP sender", output_id = output_ref.to_string())
                     .entered();
 
-                let result = run_rtmp_output_thread(
-                    client,
-                    video_config,
-                    audio_config,
-                    encoded_chunks_receiver,
-                );
+                let result = run_rtmp_output_thread(client, video_config, audio_config);
                 if let Err(err) = result {
                     warn!("{}", ErrorStack::new(&err).into_string())
                 }
@@ -137,8 +122,8 @@ impl RtmpClientOutput {
         ctx: &Arc<PipelineCtx>,
         output_id: &Ref<OutputId>,
         options: VideoEncoderOptions,
-        encoded_chunks_sender: Sender<EncodedOutputEvent>,
     ) -> Result<(VideoEncoderThreadHandle, VideoConfig), OutputInitError> {
+        let (chunks_sender, chunks_receiver) = bounded(1000);
         let encoder = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 VideoEncoderThread::<FfmpegH264Encoder>::spawn(
@@ -146,7 +131,7 @@ impl RtmpClientOutput {
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
-                        chunks_sender: encoded_chunks_sender,
+                        chunks_sender,
                     },
                 )?
             }
@@ -161,7 +146,7 @@ impl RtmpClientOutput {
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
-                        chunks_sender: encoded_chunks_sender,
+                        chunks_sender,
                     },
                 )?
             }
@@ -176,23 +161,29 @@ impl RtmpClientOutput {
         let Some(extradata) = encoder.encoder_context() else {
             return Err(RtmpClientError::MissingH264DecoderConfig.into());
         };
-        Ok((encoder, VideoConfig { extradata }))
+        Ok((
+            encoder,
+            VideoConfig {
+                extradata,
+                chunks_receiver,
+            },
+        ))
     }
 
     fn init_audio_encoder(
         ctx: &Arc<PipelineCtx>,
         output_id: &Ref<OutputId>,
         options: AudioEncoderOptions,
-        encoded_chunks_sender: Sender<EncodedOutputEvent>,
     ) -> Result<(AudioEncoderThreadHandle, AudioConfig), OutputInitError> {
         let channels = options.channels();
+        let (chunks_sender, chunks_receiver) = bounded(1000);
         let encoder = match options {
             AudioEncoderOptions::FdkAac(options) => AudioEncoderThread::<FdkAacEncoder>::spawn(
                 output_id.clone(),
                 AudioEncoderThreadOptions {
                     ctx: ctx.clone(),
                     encoder_options: options,
-                    chunks_sender: encoded_chunks_sender,
+                    chunks_sender,
                 },
             )?,
             AudioEncoderOptions::Opus(_) => {
@@ -208,6 +199,7 @@ impl RtmpClientOutput {
             AudioConfig {
                 extradata,
                 channels,
+                chunks_receiver,
             },
         ))
     }
@@ -234,62 +226,124 @@ impl Output for RtmpClientOutput {
     }
 }
 
+fn video_chunk_to_event(chunk: EncodedOutputChunk) -> H264VideoData {
+    H264VideoData {
+        pts: chunk.pts,
+        dts: chunk.dts.unwrap_or(chunk.pts),
+        data: chunk.data,
+        is_keyframe: chunk.is_keyframe,
+    }
+}
+
+fn audio_chunk_to_event(chunk: EncodedOutputChunk, channels: rtmp::AudioChannels) -> AacAudioData {
+    AacAudioData {
+        pts: chunk.pts,
+        channels,
+        data: chunk.data,
+    }
+}
+
 fn run_rtmp_output_thread(
     mut client: RtmpClient,
     video_config: Option<VideoConfig>,
     audio_config: Option<AudioConfig>,
-    packets_receiver: Receiver<EncodedOutputEvent>,
 ) -> Result<(), RtmpError> {
-    let mut received_video_eos = video_config.as_ref().map(|_| false);
-    let mut received_audio_eos = audio_config.as_ref().map(|_| false);
-
     let channels = match audio_config.as_ref().map(|config| config.channels) {
         Some(AudioChannels::Mono) => rtmp::AudioChannels::Mono,
         Some(AudioChannels::Stereo) | None => rtmp::AudioChannels::Stereo,
     };
 
-    for packet in packets_receiver {
-        match packet {
-            EncodedOutputEvent::Data(chunk) => match chunk.kind {
-                MediaKind::Video(_video) => client.send(H264VideoData {
-                    pts: chunk.pts,
-                    dts: chunk.dts.unwrap_or(chunk.pts),
-                    data: chunk.data,
-                    is_keyframe: chunk.is_keyframe,
-                })?,
-                MediaKind::Audio(_audio) => client.send(AacAudioData {
-                    pts: chunk.pts,
-                    channels,
-                    data: chunk.data,
-                })?,
-            },
-            EncodedOutputEvent::VideoEOS => match received_video_eos {
-                Some(false) => {
-                    received_video_eos = Some(true);
-                }
-                Some(true) => {
-                    error!("Received multiple video EOS events.");
-                }
-                None => {
-                    error!("Received video EOS event on non video output.");
-                }
-            },
-            EncodedOutputEvent::AudioEOS => match received_audio_eos {
-                Some(false) => {
-                    received_audio_eos = Some(true);
-                }
-                Some(true) => {
-                    error!("Received multiple audio EOS events.");
-                }
-                None => {
-                    error!("Received audio EOS event on non audio output.");
-                }
-            },
-        };
+    match (video_config, audio_config) {
+        (Some(video), Some(audio)) => run_synced_av(
+            &mut client,
+            channels,
+            &video.chunks_receiver,
+            &audio.chunks_receiver,
+        ),
+        (Some(video), None) => {
+            while let Ok(EncodedOutputEvent::Data(chunk)) = video.chunks_receiver.recv() {
+                client.send(video_chunk_to_event(chunk))?;
+            }
+            Ok(())
+        }
+        (None, Some(audio)) => {
+            while let Ok(EncodedOutputEvent::Data(chunk)) = audio.chunks_receiver.recv() {
+                client.send(audio_chunk_to_event(chunk, channels))?;
+            }
+            Ok(())
+        }
+        (None, None) => Ok(()),
+    }
+}
 
-        if received_video_eos.unwrap_or(true) && received_audio_eos.unwrap_or(true) {
-            break;
+fn run_synced_av(
+    client: &mut RtmpClient,
+    channels: rtmp::AudioChannels,
+    video_rx: &Receiver<EncodedOutputEvent>,
+    audio_rx: &Receiver<EncodedOutputEvent>,
+) -> Result<(), RtmpError> {
+    let mut pending_video: Option<EncodedOutputChunk> = None;
+    let mut pending_audio: Option<EncodedOutputChunk> = None;
+    let mut video_eos = false;
+    let mut audio_eos = false;
+
+    loop {
+        let need_video = pending_video.is_none() && !video_eos;
+        let need_audio = pending_audio.is_none() && !audio_eos;
+
+        if need_video || need_audio {
+            match (need_video, need_audio) {
+                (true, true) => {
+                    select! {
+                        recv(video_rx) -> msg => {
+                            match msg {
+                                Ok(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
+                                _ => video_eos = true,
+                            }
+                        }
+                        recv(audio_rx) -> msg => {
+                            match msg {
+                                Ok(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
+                                _ => audio_eos = true,
+                            }
+                        }
+                    }
+                }
+                (true, false) => match video_rx.recv() {
+                    Ok(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
+                    _ => video_eos = true,
+                },
+                (false, true) => match audio_rx.recv() {
+                    Ok(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
+                    _ => audio_eos = true,
+                },
+                (false, false) => unreachable!(),
+            }
+        } else {
+            match (&pending_video, &pending_audio) {
+                (Some(video), Some(audio)) => {
+                    if video.pts <= audio.pts {
+                        client.send(video_chunk_to_event(pending_video.take().unwrap()))?;
+                    } else {
+                        client.send(audio_chunk_to_event(
+                            pending_audio.take().unwrap(),
+                            channels,
+                        ))?;
+                    }
+                }
+                (Some(_), None) => {
+                    client.send(video_chunk_to_event(pending_video.take().unwrap()))?;
+                }
+                (None, Some(_)) => {
+                    client.send(audio_chunk_to_event(
+                        pending_audio.take().unwrap(),
+                        channels,
+                    ))?;
+                }
+                (None, None) => break,
+            }
         }
     }
+
     Ok(())
 }
