@@ -3,8 +3,12 @@ use std::fmt::Debug;
 use crossbeam_channel::Receiver;
 use smelter_render::{
     InputId, OutputId,
+    error::ErrorStack,
     event_handler::{self, Emitter, emit_event},
 };
+use tracing::debug;
+
+use crate::error::{ErrorSeverity, OutputRuntimeError};
 
 #[derive(Debug, Clone)]
 pub enum Event {
@@ -15,6 +19,11 @@ pub enum Event {
     AudioInputStreamEos(InputId),
     VideoInputStreamEos(InputId),
     OutputDone(OutputId),
+    OutputError {
+        output_id: OutputId,
+        severity: ErrorSeverity,
+        err: OutputRuntimeError,
+    },
 }
 
 fn input_event(kind: &str, input_id: InputId) -> event_handler::Event {
@@ -41,6 +50,19 @@ impl From<Event> for event_handler::Event {
             Event::AudioInputStreamEos(id) => input_event("AUDIO_INPUT_EOS", id),
             Event::VideoInputStreamEos(id) => input_event("VIDEO_INPUT_EOS", id),
             Event::OutputDone(id) => output_event("OUTPUT_DONE", id),
+            Event::OutputError {
+                output_id,
+                err,
+                severity,
+            } => event_handler::Event {
+                kind: "OUTPUT_ERROR".to_string(),
+                properties: vec![
+                    ("output_id".to_string(), output_id.to_string()),
+                    ("severity".to_string(), severity.to_string()),
+                    ("err".to_string(), err.to_string()),
+                    ("stack".to_string(), ErrorStack::new(&err).into_string()),
+                ],
+            },
         }
     }
 }
@@ -63,8 +85,10 @@ impl EventEmitter {
     }
 
     pub(super) fn emit(&self, event: Event) {
+        debug!(?event, "Event emitted");
+        // emit pipeline specific event
         self.emitter.send_event(event.clone());
-        // emit global event
+        // emit global event, this will go through WebSocket
         emit_event(event)
     }
 

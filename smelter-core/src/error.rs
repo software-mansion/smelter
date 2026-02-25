@@ -8,6 +8,31 @@ use smelter_render::{
 
 use crate::{graphics_context::CreateGraphicsContextError, prelude::*};
 
+#[derive(Debug, Clone, Copy)]
+pub enum ErrorSeverity {
+    /// Unrecoverable failure of some element, e.g. for output
+    /// it means that output fully stopped/disconnected
+    Critical,
+
+    /// Significant issue with user-facing impact (e.g., artifacts, dropped frames).
+    /// The system remains operational and is expected to recover automatically.
+    Transient,
+
+    // Incorrect behavior that should be investigated, but did not
+    // cause any user-facing effects.
+    Warning,
+}
+
+impl std::fmt::Display for ErrorSeverity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ErrorSeverity::Critical => "critical".fmt(f),
+            ErrorSeverity::Transient => "transient".fmt(f),
+            ErrorSeverity::Warning => "warning".fmt(f),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum InitPipelineError {
     #[error(transparent)]
@@ -124,6 +149,27 @@ pub enum OutputInitError {
 
     #[error(transparent)]
     RtmpError(#[from] RtmpClientError),
+}
+
+/// Error that can happen after registration
+#[derive(Debug, thiserror::Error, Clone)]
+pub enum OutputRuntimeError {
+    #[error(transparent)]
+    Mp4(#[from] OutputMp4RuntimeError),
+}
+
+/// Error that can happen after registration
+#[derive(Debug, thiserror::Error, Clone)]
+pub enum OutputMp4RuntimeError {
+    #[error("Failed to write packet to mp4 file.")]
+    PacketWriteError(#[source] ffmpeg_next::Error),
+
+    #[error("Failed to write MP4 header")]
+    TrailerWriteError(#[source] ffmpeg_next::Error),
+
+    /// If this error is returned it is most likely a bug.
+    #[error("Internal error: {0}")]
+    InternalError(String),
 }
 
 #[derive(Debug, thiserror::Error)]
