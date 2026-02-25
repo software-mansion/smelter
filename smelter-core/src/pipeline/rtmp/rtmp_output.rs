@@ -287,40 +287,45 @@ fn run_synced_av(
     let mut video_eos = false;
     let mut audio_eos = false;
 
+    // Each iteration can either send or receive. It will never do both
+    // in the same iteration.
     loop {
         let need_video = pending_video.is_none() && !video_eos;
         let need_audio = pending_audio.is_none() && !audio_eos;
 
-        if need_video || need_audio {
-            match (need_video, need_audio) {
-                (true, true) => {
-                    select! {
-                        recv(video_rx) -> msg => {
-                            match msg {
-                                Ok(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
-                                _ => video_eos = true,
-                            }
+        match (need_video, need_audio) {
+            //
+            // Receive phase
+            //
+            (true, true) => {
+                select! {
+                    recv(video_rx) -> msg => {
+                        match msg {
+                            Ok(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
+                            _ => video_eos = true,
                         }
-                        recv(audio_rx) -> msg => {
-                            match msg {
-                                Ok(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
-                                _ => audio_eos = true,
-                            }
+                    }
+                    recv(audio_rx) -> msg => {
+                        match msg {
+                            Ok(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
+                            _ => audio_eos = true,
                         }
                     }
                 }
-                (true, false) => match video_rx.recv() {
-                    Ok(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
-                    _ => video_eos = true,
-                },
-                (false, true) => match audio_rx.recv() {
-                    Ok(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
-                    _ => audio_eos = true,
-                },
-                (false, false) => unreachable!(),
             }
-        } else {
-            match (&pending_video, &pending_audio) {
+            (true, false) => match video_rx.recv() {
+                Ok(EncodedOutputEvent::Data(chunk)) => pending_video = Some(chunk),
+                _ => video_eos = true,
+            },
+            (false, true) => match audio_rx.recv() {
+                Ok(EncodedOutputEvent::Data(chunk)) => pending_audio = Some(chunk),
+                _ => audio_eos = true,
+            },
+
+            //
+            // Send phase
+            //
+            (false, false) => match (&pending_video, &pending_audio) {
                 (Some(video), Some(audio)) => {
                     if video.pts <= audio.pts {
                         client.send(video_chunk_to_event(pending_video.take().unwrap()))?;
@@ -341,8 +346,8 @@ fn run_synced_av(
                     ))?;
                 }
                 (None, None) => break,
-            }
-        }
+            },
+        };
     }
 
     Ok(())
