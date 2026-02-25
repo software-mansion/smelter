@@ -206,7 +206,7 @@ impl Buffer {
         Ok(result)
     }
 
-    fn new(
+    pub(crate) fn new(
         allocator: Arc<Allocator>,
         create_info: vk::BufferCreateInfo,
         transfer_direction: TransferDirection,

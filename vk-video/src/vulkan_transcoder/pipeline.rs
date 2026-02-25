@@ -16,6 +16,7 @@ use crate::{
 
 const MAX_OUTPUTS: u32 = 8;
 const MAX_FRAMES_IN_FLIGHT: u32 = 16; // The max reorder in h264
+const DEBUG_BUFFER_SIZE: u64 = 4 * 1024 * 1024; // 4MB for debug storage buffer
 
 pub(crate) struct ResizingImageBundle {
     pub(crate) image: Arc<Image>,
@@ -130,6 +131,8 @@ pub(crate) struct Pipeline {
     pipeline: ComputePipeline,
     buffer_pool: CommandBufferPool,
     device: Arc<VulkanDevice>,
+    debug_buffer: Buffer,
+    debug_descriptor: DescriptorSet,
 }
 
 impl Pipeline {
@@ -137,13 +140,18 @@ impl Pipeline {
         device: Arc<VulkanDevice>,
         configs: &[OutputConfig<'_>],
     ) -> Result<Self, TranscoderError> {
-        let pool_sizes = [vk::DescriptorPoolSize::default()
-            .ty(vk::DescriptorType::STORAGE_IMAGE)
-            .descriptor_count((2 * MAX_OUTPUTS as u32 + 2) * MAX_FRAMES_IN_FLIGHT)];
+        let pool_sizes = [
+            vk::DescriptorPoolSize::default()
+                .ty(vk::DescriptorType::STORAGE_IMAGE)
+                .descriptor_count((2 * MAX_OUTPUTS as u32 + 2) * MAX_FRAMES_IN_FLIGHT),
+            vk::DescriptorPoolSize::default()
+                .ty(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1),
+        ];
         let descriptor_pool = Arc::new(DescriptorPool::new(
             device.device.clone(),
             &vk::DescriptorPoolCreateInfo::default()
-                .max_sets(3 * MAX_FRAMES_IN_FLIGHT)
+                .max_sets(3 * MAX_FRAMES_IN_FLIGHT + 1)
                 .pool_sizes(&pool_sizes),
         )?);
 
@@ -191,10 +199,21 @@ impl Pipeline {
             layout_output.clone(),
         );
 
+        let bindings_debug = [vk::DescriptorSetLayoutBinding::default()
+            .descriptor_count(1)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .binding(0)
+            .stage_flags(vk::ShaderStageFlags::COMPUTE)];
+        let layout_debug = Arc::new(DescriptorSetLayout::new(
+            device.device.clone(),
+            &vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings_debug),
+        )?);
+
         let layouts = [
             layout_input.set_layout,
             layout_output.set_layout,
             layout_output.set_layout,
+            layout_debug.set_layout,
         ];
         let push_constants = [vk::PushConstantRange::default()
             .size(4)
@@ -206,7 +225,7 @@ impl Pipeline {
         let pipeline_layout = Arc::new(PipelineLayout::new(
             device.device.clone(),
             &create_info,
-            vec![layout_input.clone(), layout_output.clone()],
+            vec![layout_input.clone(), layout_output.clone(), layout_debug.clone()],
         )?);
 
         let mut front = wgpu::naga::front::wgsl::Frontend::new();
@@ -260,11 +279,49 @@ impl Pipeline {
 
         let buffer_pool = CommandBufferPool::new(device.clone(), device.queues.wgpu.family_index)?;
 
+        // Debug storage buffer (host-visible for readback)
+        let debug_buffer = Buffer::new(
+            device.allocator.clone(),
+            vk::BufferCreateInfo::default()
+                .size(DEBUG_BUFFER_SIZE)
+                .usage(
+                    vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+                )
+                .sharing_mode(vk::SharingMode::EXCLUSIVE),
+            TransferDirection::GpuToMem,
+        )?;
+
+        let debug_descriptor = DescriptorSet::new(
+            descriptor_pool.clone(),
+            &vk::DescriptorSetAllocateInfo::default()
+                .descriptor_pool(descriptor_pool.pool)
+                .set_layouts(&[layout_debug.set_layout]),
+        )?
+        .pop()
+        .unwrap();
+
+        let debug_buffer_info = vk::DescriptorBufferInfo::default()
+            .buffer(debug_buffer.buffer)
+            .offset(0)
+            .range(DEBUG_BUFFER_SIZE);
+        unsafe {
+            device.device.update_descriptor_sets(
+                &[vk::WriteDescriptorSet::default()
+                    .dst_set(debug_descriptor.descriptor_set)
+                    .dst_binding(0)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .buffer_info(std::slice::from_ref(&debug_buffer_info))],
+                &[],
+            );
+        }
+
         Ok(Self {
             descriptor_heap,
             pipeline,
             buffer_pool,
             device,
+            debug_buffer,
+            debug_descriptor,
         })
     }
 
@@ -435,6 +492,30 @@ impl Pipeline {
 
         println!("dispatch_size: {}", dispatch_size);
 
+        // Clear debug buffer before dispatch
+        unsafe {
+            self.device.device.cmd_fill_buffer(
+                buffer.buffer(),
+                self.debug_buffer.buffer,
+                0,
+                DEBUG_BUFFER_SIZE,
+                0,
+            );
+            let fill_barrier = vk::MemoryBarrier2::default()
+                .src_stage_mask(vk::PipelineStageFlags2::TRANSFER)
+                .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
+                .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                .dst_access_mask(
+                    vk::AccessFlags2::SHADER_STORAGE_READ
+                        | vk::AccessFlags2::SHADER_STORAGE_WRITE,
+                );
+            let dep_info = vk::DependencyInfo::default()
+                .memory_barriers(std::slice::from_ref(&fill_barrier));
+            self.device
+                .device
+                .cmd_pipeline_barrier2(buffer.buffer(), &dep_info);
+        }
+
         unsafe {
             self.device.device.cmd_bind_pipeline(
                 buffer.buffer(),
@@ -450,6 +531,7 @@ impl Pipeline {
                     descriptors.input.descriptor_set,
                     descriptors.output_y.descriptor_set,
                     descriptors.output_uv.descriptor_set,
+                    self.debug_descriptor.descriptor_set,
                 ],
                 &[],
             );
@@ -605,7 +687,7 @@ impl Pipeline {
             _state: DecoderTrackerWaitState::ExternalProcessing,
         });
 
-        // Debug: read back staging buffers and write raw NV12 files
+        // Debug: read back staging buffers and debug buffer
         if let Some(staging_buffers) = staging_buffers {
             unsafe { self.device.device.device_wait_idle()? };
             for (idx, mut buf, w, h, total_size) in staging_buffers {
@@ -615,6 +697,65 @@ impl Pipeline {
                     eprintln!("Failed to write {path}: {e}");
                 });
                 eprintln!("Dumped transcoder output {idx} ({w}x{h}) to {path}");
+            }
+
+            // Read debug storage buffer
+            let data = unsafe {
+                self.debug_buffer
+                    .download_data_from_buffer(DEBUG_BUFFER_SIZE as usize)?
+            };
+            let u32s = unsafe {
+                std::slice::from_raw_parts(data.as_ptr() as *const u32, data.len() / 4)
+            };
+
+            // Per-output dimensions from shader's textureDimensions
+            eprintln!("=== Per-output textureDimensions ===");
+            for i in 0..configs.len() {
+                let base = i * 8;
+                eprintln!(
+                    "  Output {i}: dest_y={}x{}, dest_uv={}x{}, src_y={}x{}, src_uv={}x{}",
+                    u32s[base], u32s[base + 1],
+                    u32s[base + 2], u32s[base + 3],
+                    u32s[base + 4], u32s[base + 5],
+                    u32s[base + 6], u32s[base + 7],
+                );
+            }
+
+            // Y values for bottom 16 rows of last output
+            let last = configs.last().unwrap();
+            let w = last.width as usize;
+            let h = last.height as usize;
+
+            eprintln!("=== Last output Y values (bottom 16 rows) ===");
+            for row in 0..16usize {
+                let y = h - 16 + row;
+                let samples: Vec<String> = [0, w / 4, w / 2, 3 * w / 4, w - 1]
+                    .iter()
+                    .map(|&x| {
+                        let offset = 64 + row * w + x;
+                        let val = f32::from_bits(u32s[offset]);
+                        format!("x={x}:Y={val:.4}")
+                    })
+                    .collect();
+                eprintln!("  y={y}: {}", samples.join(", "));
+            }
+
+            // UV values for bottom 16 rows of last output (even rows only)
+            let uv_base = 64 + 16 * w;
+            let uv_w = w / 2;
+            eprintln!("=== Last output UV values (bottom 8 UV rows) ===");
+            for row in 0..8usize {
+                let y = h - 16 + row * 2;
+                let samples: Vec<String> = [0, uv_w / 4, uv_w / 2, 3 * uv_w / 4, uv_w - 1]
+                    .iter()
+                    .map(|&ux| {
+                        let offset = uv_base + (row * uv_w + ux) * 2;
+                        let u_val = f32::from_bits(u32s[offset]);
+                        let v_val = f32::from_bits(u32s[offset + 1]);
+                        format!("x={ux}:U={u_val:.4},V={v_val:.4}")
+                    })
+                    .collect();
+                eprintln!("  y={y}: {}", samples.join(", "));
             }
         }
 
