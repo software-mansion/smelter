@@ -8,8 +8,9 @@ use crate::{
     vulkan_encoder::{EncoderTracker, EncoderTrackerWaitState, H264EncodeProfileInfo},
     vulkan_transcoder::TranscoderError,
     wrappers::{
-        CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet, DescriptorSetLayout,
-        Image, ImageView, PipelineLayout, ShaderModule, TrackerWait,
+        Buffer, CommandBufferPool, ComputePipeline, DescriptorPool, DescriptorSet,
+        DescriptorSetLayout, Image, ImageView, PipelineLayout, ShaderModule, TrackerWait,
+        TransferDirection,
     },
 };
 
@@ -301,7 +302,12 @@ impl Pipeline {
                 .array_layers(1)
                 .samples(vk::SampleCountFlags::TYPE_1)
                 .tiling(vk::ImageTiling::OPTIMAL)
-                .usage(vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR)
+                .usage(vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::VIDEO_ENCODE_SRC_KHR
+                    | if std::env::var("DUMP_TRANSCODER_OUTPUT").is_ok() {
+                        vk::ImageUsageFlags::TRANSFER_SRC
+                    } else {
+                        vk::ImageUsageFlags::empty()
+                    })
                 .sharing_mode(vk::SharingMode::CONCURRENT)
                 .queue_family_indices(&queue_indices)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
@@ -459,6 +465,84 @@ impl Pipeline {
                 .cmd_dispatch(buffer.buffer(), dispatch_size.div_ceil(256), 1, 1);
         }
 
+        // Debug: dump raw transcoder output images to verify green bar source
+        let staging_buffers = if std::env::var("DUMP_TRANSCODER_OUTPUT").is_ok() {
+            let barrier = vk::MemoryBarrier2::default()
+                .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                .dst_stage_mask(vk::PipelineStageFlags2::TRANSFER)
+                .dst_access_mask(vk::AccessFlags2::TRANSFER_READ);
+            let dep_info = vk::DependencyInfo::default()
+                .memory_barriers(std::slice::from_ref(&barrier));
+            unsafe {
+                self.device
+                    .device
+                    .cmd_pipeline_barrier2(buffer.buffer(), &dep_info);
+            }
+
+            let mut staging = Vec::new();
+            for (idx, bundle) in outputs.iter().enumerate() {
+                let w = bundle.image.extent.width;
+                let h = bundle.image.extent.height;
+                let y_size = (w as u64) * (h as u64);
+                let total_size = y_size * 3 / 2;
+
+                let staging_buf = Buffer::new_transfer(
+                    self.device.allocator.clone(),
+                    total_size,
+                    TransferDirection::GpuToMem,
+                )?;
+
+                let copy_info = [
+                    vk::BufferImageCopy::default()
+                        .image_subresource(vk::ImageSubresourceLayers {
+                            aspect_mask: vk::ImageAspectFlags::PLANE_0,
+                            layer_count: 1,
+                            base_array_layer: 0,
+                            mip_level: 0,
+                        })
+                        .image_extent(vk::Extent3D {
+                            width: w,
+                            height: h,
+                            depth: 1,
+                        })
+                        .buffer_offset(0)
+                        .buffer_row_length(0)
+                        .buffer_image_height(0),
+                    vk::BufferImageCopy::default()
+                        .image_subresource(vk::ImageSubresourceLayers {
+                            aspect_mask: vk::ImageAspectFlags::PLANE_1,
+                            layer_count: 1,
+                            base_array_layer: 0,
+                            mip_level: 0,
+                        })
+                        .image_extent(vk::Extent3D {
+                            width: w / 2,
+                            height: h / 2,
+                            depth: 1,
+                        })
+                        .buffer_offset(y_size)
+                        .buffer_row_length(0)
+                        .buffer_image_height(0),
+                ];
+
+                unsafe {
+                    self.device.device.cmd_copy_image_to_buffer(
+                        buffer.buffer(),
+                        bundle.image.image,
+                        vk::ImageLayout::GENERAL,
+                        staging_buf.buffer,
+                        &copy_info,
+                    );
+                }
+
+                staging.push((idx, staging_buf, w, h, total_size));
+            }
+            Some(staging)
+        } else {
+            None
+        };
+
         let buffer = buffer.end()?;
         let buffer_info = vk::CommandBufferSubmitInfo::default().command_buffer(buffer.buffer());
 
@@ -520,6 +604,19 @@ impl Pipeline {
             value: next_decoder_value,
             _state: DecoderTrackerWaitState::ExternalProcessing,
         });
+
+        // Debug: read back staging buffers and write raw NV12 files
+        if let Some(staging_buffers) = staging_buffers {
+            unsafe { self.device.device.device_wait_idle()? };
+            for (idx, mut buf, w, h, total_size) in staging_buffers {
+                let data = unsafe { buf.download_data_from_buffer(total_size as usize)? };
+                let path = format!("/tmp/transcoder_output_{idx}_{w}x{h}.nv12");
+                std::fs::write(&path, &data).unwrap_or_else(|e| {
+                    eprintln!("Failed to write {path}: {e}");
+                });
+                eprintln!("Dumped transcoder output {idx} ({w}x{h}) to {path}");
+            }
+        }
 
         Ok(ResizeSubmission {
             outputs,

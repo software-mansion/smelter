@@ -56,7 +56,7 @@ fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, Vulkan
         .unwrap_or(fallback_max_num_reorder_frames)
         .min(16);
 
-    Ok(max_num_reorder_frames)
+    Ok(0)
 }
 
 impl<'a> VideoSessionResources<'a> {
