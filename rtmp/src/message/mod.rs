@@ -3,6 +3,9 @@ use crate::{RtmpEvent, amf0::Amf0Value};
 mod event;
 mod parse;
 mod serialize;
+mod user_control;
+
+pub(crate) use user_control::UserControlMessage;
 
 // Low-level protocol control messages and commands
 const RESERVED_CHUNK_STREAM_ID: u32 = 2;
@@ -20,9 +23,7 @@ pub(crate) enum RtmpMessage {
         bandwidth: u32,
         limit_type: u8,
     },
-    StreamBegin {
-        stream_id: u32,
-    },
+    UserControl(UserControlMessage),
 
     // Explanation why it is a sequence of amf0 values and not amf3 values:
     // https://zenomt.github.io/rtmp-errata-addenda/rtmp-errata-addenda.html#name-object-encoding-3-2

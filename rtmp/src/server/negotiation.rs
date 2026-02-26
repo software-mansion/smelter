@@ -1,7 +1,7 @@
 use crate::{
     RtmpConnectionError, RtmpStreamError,
     amf0::Amf0Value,
-    message::RtmpMessage,
+    message::{RtmpMessage, UserControlMessage},
     protocol::{message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
 };
 use std::collections::HashMap;
@@ -94,7 +94,9 @@ fn handle_command_message(
                 bandwidth: PEER_BANDWIDTH,
                 limit_type: 0,
             })?;
-            writer.write(RtmpMessage::StreamBegin { stream_id: 0 })?;
+            writer.write(RtmpMessage::UserControl(UserControlMessage::StreamBegin {
+                stream_id: 0,
+            }))?;
 
             // _result - connect response
             let props = HashMap::from([

@@ -6,6 +6,7 @@ use crate::{
     message::{
         RtmpMessage,
         event::{audio_event_from_raw, video_event_from_raw},
+        user_control::UserControlMessage,
     },
     protocol::{MessageType, RawMessage, UserControlMessageKind},
 };
@@ -85,26 +86,7 @@ impl RtmpMessage {
                     "{msg_type:?}",
                 )));
             }
-            MessageType::UserControl => {
-                if p.len() < 2 {
-                    return Err(RtmpMessageParseError::PayloadTooShort);
-                }
-                let kind = UserControlMessageKind::from_raw(u16::from_be_bytes([p[0], p[1]]))?;
-                match kind {
-                    UserControlMessageKind::StreamBegin if p.len() >= 6 => {
-                        let stream_id = u32::from_be_bytes([p[2], p[3], p[4], p[5]]);
-                        Self::StreamBegin { stream_id }
-                    }
-                    UserControlMessageKind::StreamBegin => {
-                        return Err(RtmpMessageParseError::PayloadTooShort);
-                    }
-                    kind => {
-                        return Err(RtmpMessageParseError::UnsupportedMessage(format!(
-                            "{kind:?}",
-                        )));
-                    }
-                }
-            }
+            MessageType::UserControl => RtmpMessage::UserControl(UserControlMessage::from_raw(&p)?),
         };
         Ok(result)
     }
