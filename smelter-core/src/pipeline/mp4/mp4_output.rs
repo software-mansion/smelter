@@ -130,6 +130,8 @@ impl Mp4Output {
                     tracing::info_span!("MP4 writer", output_id = output_ref.to_string()).entered();
 
                 run_ffmpeg_output_thread(
+                    &ctx,
+                    &output_ref,
                     output_ctx,
                     video_stream,
                     audio_stream,
@@ -149,7 +151,7 @@ impl Mp4Output {
 
     fn init_video_track(
         ctx: &Arc<PipelineCtx>,
-        output_id: &Ref<OutputId>,
+        output_ref: &Ref<OutputId>,
         options: VideoEncoderOptions,
         output_ctx: &mut ffmpeg::format::context::Output,
         encoded_chunks_sender: Sender<EncodedOutputEvent>,
@@ -159,7 +161,7 @@ impl Mp4Output {
         let encoder = match &options {
             VideoEncoderOptions::FfmpegH264(options) => {
                 VideoEncoderThread::<FfmpegH264Encoder>::spawn(
-                    output_id.clone(),
+                    output_ref.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
@@ -174,7 +176,7 @@ impl Mp4Output {
                     ));
                 }
                 VideoEncoderThread::<VulkanH264Encoder>::spawn(
-                    output_id.clone(),
+                    output_ref.clone(),
                     VideoEncoderThreadOptions {
                         ctx: ctx.clone(),
                         encoder_options: options.clone(),
@@ -287,50 +289,56 @@ const VIDEO_TIME_BASE: Rational = Rational(1, 90_000);
 const NS_TIME_BASE: Rational = Rational(1, 1_000_000_000);
 
 fn run_ffmpeg_output_thread(
+    ctx: &Arc<PipelineCtx>,
+    output_ref: &Ref<OutputId>,
     mut output_ctx: ffmpeg::format::context::Output,
     mut video_stream: Option<StreamState>,
     mut audio_stream: Option<StreamState>,
     packets_receiver: Receiver<EncodedOutputEvent>,
 ) {
-    let mut received_video_eos = video_stream.as_ref().map(|_| false);
-    let mut received_audio_eos = audio_stream.as_ref().map(|_| false);
+    let mut eos_state = EosState::new(video_stream.is_some(), audio_stream.is_some());
     let mut timestamp_offset = None;
 
     for packet in packets_receiver {
         match packet {
             EncodedOutputEvent::Data(chunk) => {
                 let timestamp_offset = *timestamp_offset.get_or_insert(chunk.pts);
-                write_chunk(
-                    chunk,
-                    &mut video_stream,
-                    &mut audio_stream,
-                    &mut output_ctx,
-                    timestamp_offset,
-                );
+                let stream = match chunk.kind {
+                    MediaKind::Video(_) => match &mut video_stream {
+                        Some(stream) => stream,
+                        None => {
+                            error!("Received unexpected video chunk.");
+                            continue;
+                        }
+                    },
+                    MediaKind::Audio(_) => match &mut audio_stream {
+                        Some(stream) => stream,
+                        None => {
+                            error!("Received unexpected audio chunk.");
+                            continue;
+                        }
+                    },
+                };
+                if let Err(err) = write_chunk(chunk, stream, &mut output_ctx, timestamp_offset) {
+                    ctx.event_emitter.emit(Event::OutputError {
+                        output_id: output_ref.id().clone(),
+                        err: OutputMp4RuntimeError::PacketWriteError(err).into(),
+                        severity: ErrorSeverity::Critical,
+                    });
+                    eos_state.force_abort();
+                }
             }
-            EncodedOutputEvent::VideoEOS => match received_video_eos {
-                Some(false) => received_video_eos = Some(true),
-                Some(true) => {
-                    error!("Received multiple video EOS events.");
-                }
-                None => {
-                    error!("Received video EOS event on non video output.");
-                }
-            },
-            EncodedOutputEvent::AudioEOS => match received_audio_eos {
-                Some(false) => received_audio_eos = Some(true),
-                Some(true) => {
-                    error!("Received multiple audio EOS events.");
-                }
-                None => {
-                    error!("Received audio EOS event on non audio output.");
-                }
-            },
+            EncodedOutputEvent::VideoEOS => eos_state.on_video_eos(),
+            EncodedOutputEvent::AudioEOS => eos_state.on_audio_eos(),
         };
 
-        if received_video_eos.unwrap_or(true) && received_audio_eos.unwrap_or(true) {
+        if eos_state.is_complete() {
             if let Err(err) = output_ctx.write_trailer() {
-                error!("Failed to write trailer to mp4 file: {}.", err);
+                ctx.event_emitter.emit(Event::OutputError {
+                    output_id: output_ref.id().clone(),
+                    err: OutputMp4RuntimeError::TrailerWriteError(err).into(),
+                    severity: ErrorSeverity::Critical,
+                });
             };
             break;
         }
@@ -339,32 +347,10 @@ fn run_ffmpeg_output_thread(
 
 fn write_chunk(
     chunk: EncodedOutputChunk,
-    video_stream: &mut Option<StreamState>,
-    audio_stream: &mut Option<StreamState>,
+    stream: &StreamState,
     output_ctx: &mut ffmpeg::format::context::Output,
     timestamp_offset: Duration,
-) {
-    let stream = match chunk.kind {
-        MediaKind::Video(_) => match video_stream {
-            Some(stream) => stream,
-            None => {
-                error!(
-                    "Failed to create packet for video chunk. No video stream registered on init."
-                );
-                return;
-            }
-        },
-        MediaKind::Audio(_) => match audio_stream {
-            Some(stream) => stream,
-            None => {
-                error!(
-                    "Failed to create packet for audio chunk. No audio stream registered on init."
-                );
-                return;
-            }
-        },
-    };
-
+) -> Result<(), ffmpeg_next::Error> {
     let pts = chunk.pts.saturating_sub(timestamp_offset);
     let dts = chunk
         .dts
@@ -389,7 +375,61 @@ fn write_chunk(
         packet.set_flags(ffmpeg::packet::Flags::KEY)
     }
 
-    if let Err(err) = packet.write(output_ctx) {
-        error!("Failed to write packet to mp4 file: {}.", err);
+    packet.write(output_ctx)?;
+    Ok(())
+}
+
+struct EosState {
+    received_video_eos: Option<bool>,
+    received_audio_eos: Option<bool>,
+    should_abort: bool,
+}
+
+impl EosState {
+    fn new(has_video: bool, has_audio: bool) -> Self {
+        Self {
+            received_video_eos: match has_video {
+                true => Some(false),
+                false => None,
+            },
+            received_audio_eos: match has_audio {
+                true => Some(false),
+                false => None,
+            },
+            should_abort: false,
+        }
+    }
+
+    fn on_audio_eos(&mut self) {
+        match self.received_audio_eos {
+            Some(false) => self.received_audio_eos = Some(true),
+            Some(true) => {
+                error!("Received multiple audio EOS events.");
+            }
+            None => {
+                error!("Received audio EOS event on non audio output.");
+            }
+        }
+    }
+
+    fn on_video_eos(&mut self) {
+        match self.received_video_eos {
+            Some(false) => self.received_video_eos = Some(true),
+            Some(true) => {
+                error!("Received multiple video EOS events.");
+            }
+            None => {
+                error!("Received video EOS event on non video output.");
+            }
+        }
+    }
+
+    fn force_abort(&mut self) {
+        self.should_abort = true
+    }
+
+    fn is_complete(&self) -> bool {
+        (self.received_video_eos.unwrap_or(true) && self.received_audio_eos.unwrap_or(true))
+            || self.should_abort
     }
 }
