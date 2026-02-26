@@ -170,6 +170,9 @@ pub enum OutputMp4RuntimeError {
     /// If this error is returned it is most likely a bug.
     #[error("Internal error: {0}")]
     InternalError(String),
+
+    #[error("No space left on device")]
+    NoSpaceLeftOnDevice,
 }
 
 #[derive(Debug, thiserror::Error)]

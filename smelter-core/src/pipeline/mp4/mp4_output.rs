@@ -322,7 +322,7 @@ fn run_ffmpeg_output_thread(
                 if let Err(err) = write_chunk(chunk, stream, &mut output_ctx, timestamp_offset) {
                     ctx.event_emitter.emit(Event::OutputError {
                         output_id: output_ref.id().clone(),
-                        err: OutputMp4RuntimeError::PacketWriteError(err).into(),
+                        err: err.into(),
                         severity: ErrorSeverity::Critical,
                     });
                     eos_state.force_abort();
@@ -334,9 +334,15 @@ fn run_ffmpeg_output_thread(
 
         if eos_state.is_complete() {
             if let Err(err) = output_ctx.write_trailer() {
+                let err = match err {
+                    ffmpeg::Error::Other {
+                        errno: ffmpeg::error::ENOSPC,
+                    } => OutputMp4RuntimeError::NoSpaceLeftOnDevice,
+                    err => OutputMp4RuntimeError::TrailerWriteError(err),
+                };
                 ctx.event_emitter.emit(Event::OutputError {
                     output_id: output_ref.id().clone(),
-                    err: OutputMp4RuntimeError::TrailerWriteError(err).into(),
+                    err: err.into(),
                     severity: ErrorSeverity::Critical,
                 });
             };
@@ -350,7 +356,7 @@ fn write_chunk(
     stream: &StreamState,
     output_ctx: &mut ffmpeg::format::context::Output,
     timestamp_offset: Duration,
-) -> Result<(), ffmpeg_next::Error> {
+) -> Result<(), OutputMp4RuntimeError> {
     let pts = chunk.pts.saturating_sub(timestamp_offset);
     let dts = chunk
         .dts
@@ -375,7 +381,12 @@ fn write_chunk(
         packet.set_flags(ffmpeg::packet::Flags::KEY)
     }
 
-    packet.write(output_ctx)?;
+    packet.write(output_ctx).map_err(|err| match err {
+        ffmpeg_next::Error::Other {
+            errno: ffmpeg::error::ENOSPC,
+        } => OutputMp4RuntimeError::NoSpaceLeftOnDevice,
+        err => OutputMp4RuntimeError::PacketWriteError(err),
+    })?;
     Ok(())
 }
 
