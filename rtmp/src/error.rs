@@ -3,64 +3,48 @@ use thiserror::Error;
 use crate::{
     AudioCodec, VideoCodec, VideoTagFrameType,
     amf3::{I29_MAX, I29_MIN, MAX_SEALED_COUNT, U28_MAX, U29_MAX},
-    protocol::MessageType,
 };
 
 #[derive(Error, Debug)]
 pub enum RtmpError {
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    #[error("Failed to establish RTMP connection.")]
+    NegotiationFailed(#[from] RtmpNegotiationError),
 
+    #[error("Failed to establish RTMP connection.")]
+    ConnectionFailed(#[from] RtmpConnectionError),
+}
+
+#[derive(Error, Debug)]
+pub enum RtmpNegotiationError {
     #[error("Handshake failed: {0}")]
     HandshakeFailed(String),
 
-    #[error("Message too large: {0} bytes")]
-    MessageTooLarge(u32),
-
-    #[error("Channel closed")]
-    ChannelClosed,
-
-    #[error("Unexpected EOF")]
-    UnexpectedEof,
-
-    #[error("Internal error: {0}")]
-    InternalError(&'static str),
-
-    #[error("Parsing error: {0}")]
-    ParsingError(#[from] ParseError),
-
-    #[error("Serialization error: {0}")]
-    SerializeError(#[from] SerializationError),
+    #[error(transparent)]
+    Other(#[from] RtmpConnectionError),
 }
 
-#[derive(Error, Debug, Clone, PartialEq)]
-pub enum ParseError {
-    #[error("Not enough data.")]
-    NotEnoughData,
+#[derive(Error, Debug)]
+pub enum RtmpConnectionError {
+    #[error("IO error: {0}")]
+    RtmpTcpSocket(#[from] std::io::Error),
 
-    #[error("Unknown RTMP message type: {0}")]
-    UnknownMessageType(u8),
+    #[error("Failed to parse RTMP message stream: {0}")]
+    MalformedRtmpStream(String),
 
-    #[error("Unsupported RTMP message type: {0:?}")]
-    UnsupportedMessageType(MessageType),
-
-    #[error("Invalid data: {0}")]
-    InvalidData(String),
+    #[error("Received unknown RTMP message: {0}")]
+    UnknownRtmpMessage(String),
 
     #[error("Error parsing audio tag: {0}")]
-    Audio(#[from] AudioTagParseError),
-
-    #[error("Error parsing audio specific config: {0}")]
-    AudioConfig(#[from] AudioSpecificConfigParseError),
+    FlvAudioParse(#[from] FlvAudioTagParseError),
 
     #[error("Error parsing video tag: {0}")]
-    Video(#[from] VideoTagParseError),
+    FlvVideoParse(#[from] FlvVideoTagParseError),
+
+    #[error("Error parsing audio specific config: {0}")]
+    AacConfigParse(#[from] AudioSpecificConfigParseError),
 
     #[error("Error decoding amf: {0}")]
     AmfDecoding(#[from] AmfDecodingError),
-
-    #[error("Malformed packet: {0}")]
-    MalformedPacket(&'static str),
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -82,7 +66,7 @@ pub enum SerializationError {
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
-pub enum VideoTagParseError {
+pub enum FlvVideoTagParseError {
     #[error("Invalid AvcPacketType header value: {0}")]
     InvalidAvcPacketType(u8),
 
@@ -97,7 +81,7 @@ pub enum VideoTagParseError {
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
-pub enum AudioTagParseError {
+pub enum FlvAudioTagParseError {
     #[error("Invalid sound rate header value: {0}")]
     InvalidSoundRate(u8),
 
