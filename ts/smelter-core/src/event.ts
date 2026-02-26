@@ -22,6 +22,14 @@ export function parseEvent(event: any, logger: Logger): SmelterEvent | null {
     return { type: event.type, inputRef: parseInputRef(event.input_id) };
   } else if (SmelterEventType.OUTPUT_DONE === event.type) {
     return { type: event.type, outputId: event.output_id };
+  } else if (SmelterEventType.OUTPUT_ERROR === event.type) {
+    return {
+      type: event.type,
+      outputId: event.output_id,
+      severity: event.severity,
+      error: event.err,
+      errorStack: event.stack,
+    };
   } else {
     logger.error(`Unknown event type: ${event.type}`);
     return null;
