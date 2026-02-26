@@ -7,7 +7,7 @@ use tracing::{debug, warn};
 
 use rtmp::{
     AacAudioConfig, AacAudioData, H264VideoConfig, H264VideoData, RtmpClient, RtmpClientConfig,
-    RtmpError,
+    RtmpStreamError,
 };
 
 use crate::{
@@ -111,8 +111,7 @@ impl RtmpClientOutput {
         }
 
         if let Some(config) = audio_config {
-            let config =
-                AacAudioConfig::try_from(config.extradata.clone()).map_err(RtmpError::from)?;
+            let config = AacAudioConfig::try_from(config.extradata.clone())?;
             client.send(config)?;
         }
         Ok(client)
@@ -247,7 +246,7 @@ fn run_rtmp_output_thread(
     mut client: RtmpClient,
     video_config: Option<VideoConfig>,
     audio_config: Option<AudioConfig>,
-) -> Result<(), RtmpError> {
+) -> Result<(), RtmpStreamError> {
     let channels = match audio_config.as_ref().map(|config| config.channels) {
         Some(AudioChannels::Mono) => rtmp::AudioChannels::Mono,
         Some(AudioChannels::Stereo) | None => rtmp::AudioChannels::Stereo,
@@ -281,7 +280,7 @@ fn run_synced_av(
     channels: rtmp::AudioChannels,
     video_rx: &Receiver<EncodedOutputEvent>,
     audio_rx: &Receiver<EncodedOutputEvent>,
-) -> Result<(), RtmpError> {
+) -> Result<(), RtmpStreamError> {
     let mut pending_video: Option<EncodedOutputChunk> = None;
     let mut pending_audio: Option<EncodedOutputChunk> = None;
     let mut video_eos = false;

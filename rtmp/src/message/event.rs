@@ -3,13 +3,14 @@ use std::time::Duration;
 use crate::{
     AacAudioData, AudioCodec, AudioTag, AudioTagAacPacketType, AudioTagSampleSize,
     AudioTagSoundRate, GenericAudioData, GenericVideoData, H264VideoConfig, H264VideoData,
-    ParseError, RtmpEvent, SerializationError, VideoCodec, VideoTag, VideoTagFrameType,
-    VideoTagH264PacketType, VideoTagParseError,
+    RtmpEvent, RtmpMessageParseError, RtmpMessageSerializeError, VideoCodec, VideoTag,
+    VideoTagFrameType, VideoTagH264PacketType,
+    error::FlvVideoTagParseError,
     message::{AUDIO_CHUNK_STREAM_ID, MAIN_CHUNK_STREAM_ID, RtmpMessage, VIDEO_CHUNK_STREAM_ID},
     protocol::{MessageType, RawMessage},
 };
 
-pub(super) fn audio_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, ParseError> {
+pub(super) fn audio_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, RtmpMessageParseError> {
     let tag = AudioTag::parse(msg.payload)?;
     let event = match (tag.codec, tag.aac_packet_type) {
         (AudioCodec::Aac, Some(AudioTagAacPacketType::Data)) => RtmpEvent::AacData(AacAudioData {
@@ -35,7 +36,7 @@ pub(super) fn audio_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, Parse
     })
 }
 
-pub(super) fn video_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, ParseError> {
+pub(super) fn video_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, RtmpMessageParseError> {
     let tag = VideoTag::parse(msg.payload)?;
     let event = match (tag.codec, tag.h264_packet_type) {
         (VideoCodec::H264, Some(VideoTagH264PacketType::Data)) => {
@@ -50,7 +51,7 @@ pub(super) fn video_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, Parse
                     VideoTagFrameType::Interframe => false,
                     _ => {
                         return Err(
-                            VideoTagParseError::InvalidFrameTypeForH264(tag.frame_type).into()
+                            FlvVideoTagParseError::InvalidFrameTypeForH264(tag.frame_type).into(),
                         );
                     }
                 },
@@ -79,10 +80,10 @@ pub(super) fn video_event_from_raw(msg: RawMessage) -> Result<RtmpMessage, Parse
 pub(super) fn event_into_raw(
     event: RtmpEvent,
     stream_id: u32,
-) -> Result<RawMessage, SerializationError> {
+) -> Result<RawMessage, RtmpMessageSerializeError> {
     let result = match event {
         RtmpEvent::H264Data(chunk) => RawMessage {
-            msg_type: MessageType::Video,
+            msg_type: MessageType::Video.into_raw(),
             stream_id,
             chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
             timestamp: chunk.dts.as_millis() as u32,
@@ -101,7 +102,7 @@ pub(super) fn event_into_raw(
             .serialize()?,
         },
         RtmpEvent::H264Config(config) => RawMessage {
-            msg_type: MessageType::Video,
+            msg_type: MessageType::Video.into_raw(),
             stream_id,
             chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
             timestamp: 0,
@@ -115,7 +116,7 @@ pub(super) fn event_into_raw(
             .serialize()?,
         },
         RtmpEvent::AacData(chunk) => RawMessage {
-            msg_type: MessageType::Audio,
+            msg_type: MessageType::Audio.into_raw(),
             stream_id,
             chunk_stream_id: AUDIO_CHUNK_STREAM_ID,
             timestamp: chunk.pts.as_millis() as u32,
@@ -130,7 +131,7 @@ pub(super) fn event_into_raw(
             .serialize()?,
         },
         RtmpEvent::AacConfig(config) => RawMessage {
-            msg_type: MessageType::Audio,
+            msg_type: MessageType::Audio.into_raw(),
             stream_id,
             chunk_stream_id: AUDIO_CHUNK_STREAM_ID,
             timestamp: 0,
@@ -145,7 +146,7 @@ pub(super) fn event_into_raw(
             .serialize()?,
         },
         RtmpEvent::GenericVideoData(data) => RawMessage {
-            msg_type: MessageType::Video,
+            msg_type: MessageType::Video.into_raw(),
             stream_id,
             chunk_stream_id: VIDEO_CHUNK_STREAM_ID,
             timestamp: data.timestamp,
@@ -159,7 +160,7 @@ pub(super) fn event_into_raw(
             .serialize()?,
         },
         RtmpEvent::GenericAudioData(data) => RawMessage {
-            msg_type: MessageType::Audio,
+            msg_type: MessageType::Audio.into_raw(),
             stream_id,
             chunk_stream_id: AUDIO_CHUNK_STREAM_ID,
             timestamp: data.timestamp,
@@ -175,7 +176,7 @@ pub(super) fn event_into_raw(
         },
         // TODO: (@jbrs) This should depend on the encoding
         RtmpEvent::Metadata(script_data) => RawMessage {
-            msg_type: MessageType::DataMessageAmf0,
+            msg_type: MessageType::DataMessageAmf0.into_raw(),
             stream_id,
             chunk_stream_id: MAIN_CHUNK_STREAM_ID,
             timestamp: 0,

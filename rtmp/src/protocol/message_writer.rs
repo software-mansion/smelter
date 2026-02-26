@@ -1,10 +1,11 @@
-use std::{collections::HashMap, io::Write};
+use std::collections::HashMap;
 
 use bytes::Bytes;
 use tracing::trace;
 
 use crate::{
-    error::RtmpError,
+    RtmpMessageSerializeError,
+    error::RtmpStreamError,
     message::RtmpMessage,
     protocol::{
         RawMessage,
@@ -33,7 +34,7 @@ impl RtmpMessageWriter {
         self.chunk_size = size;
     }
 
-    pub fn write(&mut self, msg: RtmpMessage) -> Result<(), RtmpError> {
+    pub fn write(&mut self, msg: RtmpMessage) -> Result<(), RtmpStreamError> {
         trace!(?msg, "Sending RTMP message");
         let msg = msg.into_raw()?;
         let cs_id = msg.chunk_stream_id;
@@ -65,18 +66,21 @@ impl RtmpMessageWriter {
         msg_header: ChunkMessageHeader,
         extended_timestamp: Option<u32>,
         payload: Bytes,
-    ) -> Result<(), RtmpError> {
+    ) -> Result<(), RtmpStreamError> {
         let base_header = ChunkBaseHeader {
             fmt: msg_header.chunk_type(),
             cs_id,
         };
 
-        self.stream.write_all(&base_header.serialize()?)?;
-        self.stream.write_all(&msg_header.serialize())?;
+        let base_header_data = base_header.serialize()?;
+        let msg_header_data = msg_header.serialize();
+
+        self.stream.write(&base_header_data)?;
+        self.stream.write(&msg_header_data)?;
         if let Some(ex_ts) = extended_timestamp {
-            self.stream.write_all(&ex_ts.to_be_bytes())?;
+            self.stream.write(&ex_ts.to_be_bytes())?;
         }
-        self.stream.write_all(&payload)?;
+        self.stream.write(&payload)?;
 
         Ok(())
     }
@@ -91,13 +95,13 @@ impl ChunkStreamContext {
             return ChunkMessageHeader::Full {
                 timestamp: msg.timestamp,
                 msg_len: msg.payload.len() as u32,
-                msg_type_id: msg.msg_type.into_raw(),
+                msg_type_id: msg.msg_type,
                 msg_stream_id: msg.stream_id,
             };
         };
 
         let msg_len_match = prev.msg_len == msg.payload.len() as u32;
-        let msg_type_id_match = prev.msg_type_id == msg.msg_type.into_raw();
+        let msg_type_id_match = prev.msg_type_id == msg.msg_type;
         let msg_stream_id_match = prev.msg_stream_id == msg.stream_id;
 
         let timestamp_delta = msg.timestamp.saturating_sub(prev_ts);
@@ -115,7 +119,7 @@ impl ChunkStreamContext {
                     false => msg.timestamp,
                 },
                 msg_len: msg.payload.len() as u32,
-                msg_type_id: msg.msg_type.into_raw(),
+                msg_type_id: msg.msg_type,
                 msg_stream_id: msg.stream_id,
             };
         }
@@ -127,7 +131,7 @@ impl ChunkStreamContext {
                     false => timestamp_delta,
                 },
                 msg_len: msg.payload.len() as u32,
-                msg_type_id: msg.msg_type.into_raw(),
+                msg_type_id: msg.msg_type,
             };
         }
 
@@ -165,9 +169,10 @@ impl ChunkStreamContext {
         }
     }
 
-    fn update(&mut self, msg: ChunkMessageHeader, timestamp: u32) -> Result<(), RtmpError> {
+    fn update(&mut self, msg: ChunkMessageHeader, timestamp: u32) -> Result<(), RtmpStreamError> {
         let prev = self.0.map(|prev| prev.0);
-        let header = VirtualMessageHeader::from_msg(prev, msg)?;
+        let header = VirtualMessageHeader::from_msg(prev, msg)
+            .map_err(RtmpMessageSerializeError::InternalError)?;
         self.0 = Some((header, timestamp));
         Ok(())
     }

@@ -4,7 +4,9 @@ use std::sync::{
     mpsc::Receiver,
 };
 
-use crate::{RtmpEvent, error::RtmpError, server::listen_thread::start_listener_thread};
+use crate::{
+    RtmpConnectionError, RtmpEvent, RtmpStreamError, server::listen_thread::start_listener_thread,
+};
 
 mod connection;
 mod listen_thread;
@@ -34,6 +36,15 @@ pub struct RtmpServer {
     shutdown: Arc<AtomicBool>,
 }
 
+#[derive(thiserror::Error, Debug)]
+pub(super) enum RtmpServerConnectionError {
+    #[error("Failed to establish RTMP connection.")]
+    NegotiationFailed(#[from] RtmpConnectionError),
+
+    #[error("Failed to establish RTMP connection.")]
+    ConnectionFailed(#[from] RtmpStreamError),
+}
+
 impl RtmpServer {
     pub fn config(&self) -> ServerConfig {
         self.config.clone()
@@ -42,7 +53,7 @@ impl RtmpServer {
     pub fn start(
         config: ServerConfig,
         on_connection: OnConnectionCallback,
-    ) -> Result<Arc<Mutex<Self>>, RtmpError> {
+    ) -> Result<Arc<Mutex<Self>>, std::io::Error> {
         start_listener_thread(config, on_connection)
     }
 

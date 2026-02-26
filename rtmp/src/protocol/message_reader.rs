@@ -1,15 +1,12 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    io::ErrorKind,
-};
+use std::collections::{HashMap, VecDeque};
 
 use bytes::{Bytes, BytesMut};
 
 use crate::{
-    error::RtmpError,
+    error::RtmpStreamError,
     message::RtmpMessage,
     protocol::{
-        MessageType, RawMessage,
+        RawMessage,
         chunk::{
             ChunkBaseHeader, ChunkExtendedTimestamp, ChunkHeaderTimestamp, ChunkMessageHeader,
             ParseChunkError, VirtualMessageHeader,
@@ -39,6 +36,23 @@ impl RtmpMessageReader {
         self.chunk_size = size;
     }
 
+    pub fn next(&mut self) -> Result<RtmpMessage, RtmpStreamError> {
+        loop {
+            match self.try_read_msg() {
+                Ok(Some(msg)) => return Ok(RtmpMessage::from_raw(msg)?),
+                Ok(None) => {}
+                Err(ParseChunkError::NotEnoughData) => {
+                    // read next chunk
+                    let buf_len = self.reader.data().len();
+                    self.reader.read_until_buffer_size(buf_len + 1)?;
+                }
+                Err(ParseChunkError::MalformedStream(err)) => {
+                    return Err(RtmpStreamError::ReceivedMalformedStream(err));
+                }
+            }
+        }
+    }
+
     fn try_read_msg(&mut self) -> Result<Option<RawMessage>, ParseChunkError> {
         let buffer = self.reader.data_mut();
         let (base_header, offset) = ChunkBaseHeader::try_read(buffer)?;
@@ -46,11 +60,12 @@ impl RtmpMessageReader {
 
         let context = self.context.entry(base_header.cs_id).or_default();
         // Message header with all the information filled based on the context
-        let msg_header = VirtualMessageHeader::from_msg(context.header, msg_header)?;
+        let msg_header = VirtualMessageHeader::from_msg(context.header, msg_header)
+            .map_err(ParseChunkError::MalformedStream)?;
 
         // We need the context of the previous message to check if extended_timestamp
         // is present
-        let (extended_timestamp, offset) = match msg_header.timestamp.has_extended() {
+        let (ex_ts, offset) = match msg_header.timestamp.has_extended() {
             true => {
                 let (ts, offset) = ChunkExtendedTimestamp::try_read(buffer, offset)?;
                 (Some(ts), offset)
@@ -65,8 +80,7 @@ impl RtmpMessageReader {
         // buffer.
         buffer.drain(..offset);
 
-        let msg =
-            context.process_chunk(base_header.cs_id, msg_header, extended_timestamp, payload)?;
+        let msg = context.process_chunk(base_header.cs_id, msg_header, ex_ts, payload)?;
         Ok(msg)
     }
 
@@ -92,42 +106,6 @@ impl RtmpMessageReader {
     }
 }
 
-impl Iterator for RtmpMessageReader {
-    type Item = Result<RtmpMessage, RtmpError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match self.try_read_msg() {
-                Ok(Some(msg)) => match RtmpMessage::from_raw(msg) {
-                    Ok(msg) => return Some(Ok(msg)),
-                    Err(err) => return Some(Err(err.into())),
-                },
-                Ok(None) => {}
-                Err(ParseChunkError::NotEnoughData) => {
-                    // read next chunk
-                    let buf_len = self.reader.data().len();
-                    if let Err(err) = self.reader.read_until_buffer_size(buf_len + 1) {
-                        return Some(Err(err.into()));
-                    }
-                }
-                Err(ParseChunkError::RtmpError(err)) => match err {
-                    RtmpError::Io(e)
-                        if [
-                            ErrorKind::UnexpectedEof,
-                            ErrorKind::ConnectionReset,
-                            ErrorKind::BrokenPipe,
-                        ]
-                        .contains(&e.kind()) =>
-                    {
-                        return None;
-                    }
-                    err => return Some(Err(err)),
-                },
-            }
-        }
-    }
-}
-
 #[derive(Debug, Default)]
 struct ChunkStreamContext {
     header: Option<VirtualMessageHeader>,
@@ -144,7 +122,7 @@ impl ChunkStreamContext {
         msg_header: VirtualMessageHeader,
         extended_timestamp: Option<ChunkExtendedTimestamp>,
         payload: Bytes,
-    ) -> Result<Option<RawMessage>, RtmpError> {
+    ) -> Result<Option<RawMessage>, ParseChunkError> {
         self.header = Some(msg_header);
         self.payload_acc.push_back(payload);
         let current_len = self.buffered_payload_len();
@@ -152,19 +130,25 @@ impl ChunkStreamContext {
         if current_len < msg_header.msg_len as usize {
             return Ok(None);
         } else if current_len > msg_header.msg_len as usize {
-            return Err(RtmpError::InternalError("Payload size too large"));
+            return Err(ParseChunkError::MalformedStream(
+                "Payload size too large".into(),
+            ));
         }
 
         self.timestamp = match msg_header.timestamp {
             ChunkHeaderTimestamp::Timestamp(0x00FFFFFF) => {
                 let Some(ChunkExtendedTimestamp(ext_ts)) = extended_timestamp else {
-                    return Err(RtmpError::InternalError("Missing extended timestamp"));
+                    return Err(ParseChunkError::MalformedStream(
+                        "Missing extended timestamp".into(),
+                    ));
                 };
                 ext_ts
             }
             ChunkHeaderTimestamp::Delta(0x00FFFFFF) => {
                 let Some(ChunkExtendedTimestamp(ext_ts)) = extended_timestamp else {
-                    return Err(RtmpError::InternalError("Missing extended timestamp"));
+                    return Err(ParseChunkError::MalformedStream(
+                        "Missing extended timestamp".into(),
+                    ));
                 };
                 self.timestamp + ext_ts
             }
@@ -178,7 +162,7 @@ impl ChunkStreamContext {
         }
 
         Ok(Some(RawMessage {
-            msg_type: MessageType::try_from_raw(msg_header.msg_type_id)?,
+            msg_type: msg_header.msg_type_id,
             chunk_stream_id: cs_id,
             stream_id: msg_header.msg_stream_id,
             timestamp: self.timestamp,

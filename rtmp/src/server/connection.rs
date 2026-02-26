@@ -3,10 +3,10 @@ use std::{
     sync::{Arc, Mutex, atomic::AtomicBool, mpsc::channel},
 };
 
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::{
-    error::RtmpError,
+    RtmpServerConnectionError, RtmpStreamError,
     message::RtmpMessage,
     protocol::{
         handshake::Handshake, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter,
@@ -16,14 +16,13 @@ use crate::{
 };
 
 pub(crate) fn handle_connection(
-    stream: TcpStream,
+    socket: TcpStream,
     on_connection: Arc<Mutex<OnConnectionCallback>>,
-) -> Result<(), RtmpError> {
+) -> Result<(), RtmpServerConnectionError> {
     let should_close = Arc::new(AtomicBool::new(false));
-    let (mut reader, mut writer) = NonBlockingSocket::new(stream, should_close).split();
+    let (mut reader, mut writer) = NonBlockingSocket::new(socket, should_close).split();
 
     Handshake::perform_as_server(&mut reader, &mut writer)?;
-
     debug!("Handshake complete");
 
     let mut writer = RtmpMessageWriter::new(writer);
@@ -46,8 +45,15 @@ pub(crate) fn handle_connection(
         cb(connection_ctx);
     }
 
-    for msg_result in reader {
-        let msg = msg_result?;
+    loop {
+        let msg = match reader.next() {
+            Ok(msg) => msg,
+            Err(RtmpStreamError::ParseMessage(err)) => {
+                warn!(?err, "Received unknown msg");
+                continue;
+            }
+            Err(err) => return Err(err.into()),
+        };
         trace!(?msg, "RTMP message received");
 
         let event = match msg {
@@ -55,7 +61,8 @@ pub(crate) fn handle_connection(
             _ => continue, // TODO: maybe handle
         };
 
-        sender.send(event).map_err(|_| RtmpError::ChannelClosed)?;
+        if sender.send(event).is_err() {
+            return Ok(());
+        }
     }
-    Ok(())
 }

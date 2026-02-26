@@ -1,9 +1,6 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::{
-    SerializationError,
-    error::{ParseError, VideoTagParseError},
-};
+use crate::{RtmpMessageSerializeError, error::FlvVideoTagParseError};
 
 /// Struct representing flv VIDEODATA.
 #[derive(Debug, Clone)]
@@ -33,14 +30,14 @@ pub enum VideoTagFrameType {
 }
 
 impl VideoTagFrameType {
-    fn from_raw(value: u8) -> Result<Self, VideoTagParseError> {
+    fn from_raw(value: u8) -> Result<Self, FlvVideoTagParseError> {
         match value {
             1 => Ok(Self::Keyframe),
             2 => Ok(Self::Interframe),
             3 => Ok(Self::DisposableInterframe),
             4 => Ok(Self::GeneratedKeyframe),
             5 => Ok(Self::VideoInfoOrCommandFrame),
-            _ => Err(VideoTagParseError::UnknownFrameType(value)),
+            _ => Err(FlvVideoTagParseError::UnknownFrameType(value)),
         }
     }
 
@@ -66,7 +63,7 @@ pub enum VideoCodec {
 }
 
 impl VideoCodec {
-    fn try_from_raw(value: u8) -> Result<Self, VideoTagParseError> {
+    fn try_from_raw(value: u8) -> Result<Self, FlvVideoTagParseError> {
         match value {
             2 => Ok(Self::SorensonH263),
             3 => Ok(Self::ScreenVideo),
@@ -74,7 +71,7 @@ impl VideoCodec {
             5 => Ok(Self::Vp6WithAlpha),
             6 => Ok(Self::ScreenVideo2),
             7 => Ok(Self::H264),
-            _ => Err(VideoTagParseError::UnknownCodecId(value)),
+            _ => Err(FlvVideoTagParseError::UnknownCodecId(value)),
         }
     }
 
@@ -98,12 +95,12 @@ pub enum VideoTagH264PacketType {
 }
 
 impl VideoTagH264PacketType {
-    fn from_raw(value: u8) -> Result<Self, VideoTagParseError> {
+    fn from_raw(value: u8) -> Result<Self, FlvVideoTagParseError> {
         match value {
             0 => Ok(Self::Config),
             1 => Ok(Self::Data),
             2 => Ok(Self::Eos),
-            _ => Err(VideoTagParseError::InvalidAvcPacketType(value)),
+            _ => Err(FlvVideoTagParseError::InvalidAvcPacketType(value)),
         }
     }
 
@@ -121,9 +118,9 @@ impl VideoTag {
     /// Parses flv `VIDEODATA`. The `data` must be the entire content of the `Data` field of
     /// the flv tag with video `TagType`.  
     /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
-    pub fn parse(data: Bytes) -> Result<Self, ParseError> {
+    pub fn parse(data: Bytes) -> Result<Self, FlvVideoTagParseError> {
         if data.is_empty() {
-            return Err(ParseError::NotEnoughData);
+            return Err(FlvVideoTagParseError::ToShort);
         }
 
         let frame_type = (data[0] & 0b11110000) >> 4;
@@ -143,9 +140,12 @@ impl VideoTag {
         }
     }
 
-    fn parse_h264(data: Bytes, frame_type: VideoTagFrameType) -> Result<Self, ParseError> {
+    fn parse_h264(
+        data: Bytes,
+        frame_type: VideoTagFrameType,
+    ) -> Result<Self, FlvVideoTagParseError> {
         if data.len() < 5 {
-            return Err(ParseError::NotEnoughData);
+            return Err(FlvVideoTagParseError::ToShort);
         }
         let avc_packet_type = VideoTagH264PacketType::from_raw(data[1])?;
         let composition_time = i32::from_be_bytes([0, data[2], data[3], data[4]]);
@@ -159,7 +159,7 @@ impl VideoTag {
         })
     }
 
-    pub fn serialize(&self) -> Result<Bytes, SerializationError> {
+    pub fn serialize(&self) -> Result<Bytes, RtmpMessageSerializeError> {
         let frame_type = self.frame_type.into_raw();
         let codec_id = self.codec.into_raw();
 
@@ -175,11 +175,13 @@ impl VideoTag {
         }
     }
 
-    fn serialize_h264(&self, first_byte: u8) -> Result<Bytes, SerializationError> {
+    fn serialize_h264(&self, first_byte: u8) -> Result<Bytes, RtmpMessageSerializeError> {
         let mut data = BytesMut::with_capacity(self.data.len() + 5);
         data.put_u8(first_byte);
         let Some(packet_type) = self.h264_packet_type else {
-            return Err(SerializationError::H264PacketTypeRequired);
+            return Err(RtmpMessageSerializeError::InternalError(
+                "Packet type is required for H264".into(),
+            ));
         };
         data.put_u8(packet_type.into_raw());
         // composition_time is 0 when packet type is config
