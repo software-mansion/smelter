@@ -40,14 +40,14 @@ impl RtmpMessage {
                 RtmpMessage::SetChunkSize { chunk_size }
             }
             MessageType::SetChunkSize => {
-                return Err(RtmpMessageParseError::PayloadToShort);
+                return Err(RtmpMessageParseError::PayloadTooShort);
             }
 
             MessageType::WindowAckSize if msg.payload.len() >= 4 => RtmpMessage::WindowAckSize {
                 window_size: u32::from_be_bytes([p[0], p[1], p[2], p[3]]),
             },
             MessageType::WindowAckSize => {
-                return Err(RtmpMessageParseError::PayloadToShort);
+                return Err(RtmpMessageParseError::PayloadTooShort);
             }
 
             MessageType::SetPeerBandwidth if msg.payload.len() >= 5 => {
@@ -57,7 +57,7 @@ impl RtmpMessage {
                 }
             }
             MessageType::SetPeerBandwidth => {
-                return Err(RtmpMessageParseError::PayloadToShort);
+                return Err(RtmpMessageParseError::PayloadTooShort);
             }
 
             MessageType::CommandMessageAmf3 => {
@@ -87,7 +87,7 @@ impl RtmpMessage {
             }
             MessageType::UserControl => {
                 if p.len() < 2 {
-                    return Err(RtmpMessageParseError::PayloadToShort);
+                    return Err(RtmpMessageParseError::PayloadTooShort);
                 }
                 let kind = UserControlMessageKind::from_raw(u16::from_be_bytes([p[0], p[1]]))?;
                 match kind {
@@ -96,7 +96,7 @@ impl RtmpMessage {
                         Self::StreamBegin { stream_id }
                     }
                     UserControlMessageKind::StreamBegin => {
-                        return Err(RtmpMessageParseError::PayloadToShort);
+                        return Err(RtmpMessageParseError::PayloadTooShort);
                     }
                     kind => {
                         return Err(RtmpMessageParseError::UnsupportedMessage(format!(

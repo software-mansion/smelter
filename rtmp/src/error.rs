@@ -72,7 +72,7 @@ pub enum RtmpMessageParseError {
     #[error("Received unsupported message: {0}")]
     UnsupportedMessage(String),
 
-    #[error("Unknown UserControlMessageKind {0} ")]
+    #[error("Unknown UserControlMessageKind {0}")]
     InvalidUserControlMessage(u16),
 
     #[error("Error parsing audio tag")]
@@ -87,8 +87,8 @@ pub enum RtmpMessageParseError {
     #[error("Error decoding AMF value")]
     AmfDecoding(#[from] AmfDecodingError),
 
-    #[error("Message payload to short")]
-    PayloadToShort,
+    #[error("Message payload too short")]
+    PayloadTooShort,
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -105,8 +105,8 @@ pub enum FlvVideoTagParseError {
     #[error("Invalid frame type for H264 packet: {0:?}")]
     InvalidFrameTypeForH264(VideoTagFrameType),
 
-    #[error("Invalid video tag, packet to short.")]
-    ToShort,
+    #[error("Invalid video tag, packet too short.")]
+    TooShort,
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -123,8 +123,8 @@ pub enum FlvAudioTagParseError {
     #[error("Unknown codec header value: {0}")]
     UnknownCodecId(u8),
 
-    #[error("Invalid audio tag, packet to short.")]
-    ToShort,
+    #[error("Invalid audio tag, packet too short.")]
+    TooShort,
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -135,7 +135,7 @@ pub enum AacConfigParseError {
     #[error("Invalid audio channel value in AAC audio specific config: {0}")]
     InvalidAudioChannel(u8),
 
-    #[error("Not enough data, config to short.")]
+    #[error("Not enough data, config too short")]
     ToShort,
 }
 

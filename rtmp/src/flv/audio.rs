@@ -184,7 +184,7 @@ impl AudioTag {
     /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
     pub fn parse(data: Bytes) -> Result<Self, FlvAudioTagParseError> {
         if data.is_empty() {
-            return Err(FlvAudioTagParseError::ToShort);
+            return Err(FlvAudioTagParseError::TooShort);
         }
 
         let sound_format = (data[0] & 0b11110000) >> 4;
@@ -211,7 +211,7 @@ impl AudioTag {
 
     fn parse_aac(data: Bytes, channels: AudioChannels) -> Result<Self, FlvAudioTagParseError> {
         if data.len() < 2 {
-            return Err(FlvAudioTagParseError::ToShort);
+            return Err(FlvAudioTagParseError::TooShort);
         }
 
         let aac_packet_type = AudioTagAacPacketType::from_raw(data[1])?;

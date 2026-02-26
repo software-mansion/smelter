@@ -120,7 +120,7 @@ impl VideoTag {
     /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
     pub fn parse(data: Bytes) -> Result<Self, FlvVideoTagParseError> {
         if data.is_empty() {
-            return Err(FlvVideoTagParseError::ToShort);
+            return Err(FlvVideoTagParseError::TooShort);
         }
 
         let frame_type = (data[0] & 0b11110000) >> 4;
@@ -145,7 +145,7 @@ impl VideoTag {
         frame_type: VideoTagFrameType,
     ) -> Result<Self, FlvVideoTagParseError> {
         if data.len() < 5 {
-            return Err(FlvVideoTagParseError::ToShort);
+            return Err(FlvVideoTagParseError::TooShort);
         }
         let avc_packet_type = VideoTagH264PacketType::from_raw(data[1])?;
         let composition_time = i32::from_be_bytes([0, data[2], data[3], data[4]]);

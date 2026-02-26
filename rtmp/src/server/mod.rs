@@ -41,7 +41,7 @@ pub(super) enum RtmpServerConnectionError {
     #[error("Failed to establish RTMP connection.")]
     NegotiationFailed(#[from] RtmpConnectionError),
 
-    #[error("Failed to establish RTMP connection.")]
+    #[error("Connection failed")]
     ConnectionFailed(#[from] RtmpStreamError),
 }
 
