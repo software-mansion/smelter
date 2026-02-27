@@ -1,6 +1,6 @@
 use crate::{
+    RtmpConnectionError, RtmpStreamError,
     amf0::Amf0Value,
-    error::RtmpError,
     message::RtmpMessage,
     protocol::{message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter},
 };
@@ -18,15 +18,18 @@ enum NegotiationStatus {
 pub(crate) fn negotiate_rtmp_session(
     reader: &mut RtmpMessageReader,
     writer: &mut RtmpMessageWriter,
-) -> Result<(String, String), RtmpError> {
+) -> Result<(String, String), RtmpConnectionError> {
     let mut app_name = String::new();
     let current_stream_id = 0;
 
     loop {
         let msg = match reader.next() {
-            Some(Ok(m)) => m,
-            Some(Err(e)) => return Err(e),
-            None => return Err(RtmpError::ChannelClosed),
+            Ok(msg) => msg,
+            Err(RtmpStreamError::ParseMessage(err)) => {
+                warn!(%err, "Received unknown msg");
+                continue;
+            }
+            Err(err) => return Err(err.into()),
         };
 
         match msg {
@@ -58,7 +61,7 @@ fn handle_command_message(
     writer: &mut RtmpMessageWriter,
     app_name: &mut String,
     current_stream_id: u32,
-) -> Result<NegotiationStatus, RtmpError> {
+) -> Result<NegotiationStatus, RtmpStreamError> {
     if args.is_empty() {
         return Ok(NegotiationStatus::InProgress);
     }

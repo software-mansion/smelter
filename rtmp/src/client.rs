@@ -4,12 +4,12 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::{
-    RtmpEvent,
+    RtmpConnectionError, RtmpEvent,
     amf0::Amf0Value,
-    error::RtmpError,
+    error::RtmpStreamError,
     message::RtmpMessage,
     protocol::{
         handshake::Handshake, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter,
@@ -30,7 +30,7 @@ pub struct RtmpClient {
 }
 
 impl RtmpClient {
-    pub fn connect(config: RtmpClientConfig) -> Result<Self, RtmpError> {
+    pub fn connect(config: RtmpClientConfig) -> Result<Self, RtmpConnectionError> {
         let should_close = Arc::new(AtomicBool::new(false));
 
         let stream = TcpStream::connect(config.addr)?;
@@ -54,7 +54,7 @@ impl RtmpClient {
         })
     }
 
-    pub fn send<T>(&mut self, event: T) -> Result<(), RtmpError>
+    pub fn send<T>(&mut self, event: T) -> Result<(), RtmpStreamError>
     where
         RtmpEvent: From<T>,
     {
@@ -63,7 +63,8 @@ impl RtmpClient {
         self.writer.write(RtmpMessage::Event {
             event,
             stream_id: self.stream_id,
-        })
+        })?;
+        Ok(())
     }
 }
 
@@ -82,15 +83,18 @@ impl ConnectionNegotiation {
         writer: &mut RtmpMessageWriter,
         app: &str,
         stream_key: &str,
-    ) -> Result<u32, RtmpError> {
+    ) -> Result<u32, RtmpConnectionError> {
         send_connect(writer, app)?;
         let mut negotiation = ConnectionNegotiation::Connect;
 
         loop {
             let msg = match reader.next() {
-                Some(Ok(m)) => m,
-                Some(Err(e)) => return Err(e),
-                None => return Err(RtmpError::ChannelClosed),
+                Ok(msg) => msg,
+                Err(RtmpStreamError::ParseMessage(err)) => {
+                    warn!(%err, "Received unknown msg");
+                    continue;
+                }
+                Err(err) => return Err(err.into()),
             };
             trace!(?msg, "RTMP message received");
 
@@ -137,7 +141,7 @@ impl ConnectionNegotiation {
     }
 }
 
-fn send_connect(writer: &mut RtmpMessageWriter, app: &str) -> Result<(), RtmpError> {
+fn send_connect(writer: &mut RtmpMessageWriter, app: &str) -> Result<(), RtmpConnectionError> {
     // TODO: Investigate those values
     debug!("Send connect");
     let props = HashMap::from([
@@ -171,10 +175,11 @@ fn send_connect(writer: &mut RtmpMessageWriter, app: &str) -> Result<(), RtmpErr
             Amf0Value::Object(props),
         ],
         stream_id: 0,
-    })
+    })?;
+    Ok(())
 }
 
-fn send_create_stream(writer: &mut RtmpMessageWriter) -> Result<(), RtmpError> {
+fn send_create_stream(writer: &mut RtmpMessageWriter) -> Result<(), RtmpConnectionError> {
     debug!("Send createStream");
 
     writer.write(RtmpMessage::CommandMessageAmf0 {
@@ -184,14 +189,15 @@ fn send_create_stream(writer: &mut RtmpMessageWriter) -> Result<(), RtmpError> {
             Amf0Value::Null,
         ],
         stream_id: 0,
-    })
+    })?;
+    Ok(())
 }
 
 fn send_publish(
     writer: &mut RtmpMessageWriter,
     stream_key: &str,
     stream_id: u32,
-) -> Result<(), RtmpError> {
+) -> Result<(), RtmpConnectionError> {
     debug!(?stream_id, "Send publish");
     writer.write(RtmpMessage::CommandMessageAmf0 {
         values: vec![
@@ -202,7 +208,8 @@ fn send_publish(
             Amf0Value::String("live".to_string()), // "live" | "record" | "append"
         ],
         stream_id,
-    })
+    })?;
+    Ok(())
 }
 
 fn maybe_connect_result(values: &[Amf0Value]) -> Option<()> {

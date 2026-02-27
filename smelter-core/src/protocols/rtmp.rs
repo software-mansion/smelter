@@ -86,8 +86,14 @@ pub enum RtmpServerError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RtmpClientError {
-    #[error(transparent)]
-    RtmpError(#[from] rtmp::RtmpError),
+    #[error("Failed to establish RTMP connection")]
+    RtmpNegotiationError(#[from] rtmp::RtmpConnectionError),
+
+    #[error("RTMP connection failed")]
+    RtmpStreamError(#[from] rtmp::RtmpStreamError),
+
+    #[error("RTMP AAC config error")]
+    AacConfigParseError(#[from] rtmp::AacConfigParseError),
 
     #[error("Failed to parse RTMP url")]
     RtmpConnectionError(#[from] RtmpConnectionUrlError),

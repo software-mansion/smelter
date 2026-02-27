@@ -3,10 +3,9 @@ use std::collections::HashMap;
 use bytes::Bytes;
 
 use crate::{
-    SerializationError,
+    AmfDecodingError, AmfEncodingError,
     amf0::{Amf0Value, decode_amf0_values, encode_amf0_values},
     amf3::Amf3Value,
-    error::ParseError,
 };
 
 /// Struct representing flv SCRIPTDATA.
@@ -82,9 +81,9 @@ pub enum ExtendedScriptDataValue {
 }
 
 impl ScriptData {
-    pub fn parse(data: Bytes) -> Result<Self, ParseError> {
+    pub fn parse(data: Bytes) -> Result<Self, AmfDecodingError> {
         if data.is_empty() {
-            return Err(ParseError::NotEnoughData);
+            return Ok(Self { values: vec![] });
         }
 
         let amf_values = decode_amf0_values(data)?;
@@ -92,9 +91,9 @@ impl ScriptData {
         Ok(Self { values })
     }
 
-    pub fn serialize(&self) -> Result<Bytes, SerializationError> {
+    pub fn serialize(&self) -> Result<Bytes, AmfEncodingError> {
         let amf_values: Vec<_> = self.values.iter().cloned().map(Into::into).collect();
-        Ok(encode_amf0_values(&amf_values)?)
+        encode_amf0_values(&amf_values)
     }
 }
 

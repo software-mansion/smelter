@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use rtmp::{RtmpConnection, RtmpError, RtmpServer, ServerConfig};
+use rtmp::{RtmpConnection, RtmpServer, ServerConfig};
 use smelter_render::error::ErrorStack;
 use tracing::{error, warn};
 
@@ -54,7 +54,7 @@ pub fn spawn_rtmp_server(
         }
     });
 
-    let mut last_error: Option<RtmpError> = None;
+    let mut last_error: Option<std::io::Error> = None;
     for _ in 0..5 {
         match RtmpServer::start(config.clone(), on_connection.clone()) {
             Ok(server) => return Ok(server),

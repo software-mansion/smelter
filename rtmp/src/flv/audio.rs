@@ -1,9 +1,6 @@
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::{
-    SerializationError,
-    error::{AudioTagParseError, ParseError},
-};
+use crate::{RtmpMessageSerializeError, error::FlvAudioTagParseError};
 
 /// Struct representing flv AUDIODATA.
 #[derive(Debug, Clone)]
@@ -45,7 +42,7 @@ pub enum AudioCodec {
 }
 
 impl AudioCodec {
-    fn from_raw(id: u8) -> Result<Self, AudioTagParseError> {
+    fn from_raw(id: u8) -> Result<Self, FlvAudioTagParseError> {
         match id {
             0 => Ok(Self::Pcm),
             1 => Ok(Self::Adpcm),
@@ -60,7 +57,7 @@ impl AudioCodec {
             11 => Ok(Self::Speex),
             14 => Ok(Self::Mp3_8k),
             15 => Ok(Self::DeviceSpecific),
-            _ => Err(AudioTagParseError::UnknownCodecId(id)),
+            _ => Err(FlvAudioTagParseError::UnknownCodecId(id)),
         }
     }
 
@@ -165,11 +162,11 @@ pub enum AudioTagAacPacketType {
 }
 
 impl AudioTagAacPacketType {
-    fn from_raw(value: u8) -> Result<Self, AudioTagParseError> {
+    fn from_raw(value: u8) -> Result<Self, FlvAudioTagParseError> {
         match value {
             0 => Ok(Self::Config),
             1 => Ok(Self::Data),
-            _ => Err(AudioTagParseError::InvalidAacPacketType(value)),
+            _ => Err(FlvAudioTagParseError::InvalidAacPacketType(value)),
         }
     }
 
@@ -185,9 +182,9 @@ impl AudioTag {
     /// Parses flv `AUDIODATA`. The `data` must be the entire content of the `Data` field of
     /// the flv tag with audio `TagType`.  
     /// Check <https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf#page=74> for more info.
-    pub fn parse(data: Bytes) -> Result<Self, ParseError> {
+    pub fn parse(data: Bytes) -> Result<Self, FlvAudioTagParseError> {
         if data.is_empty() {
-            return Err(ParseError::NotEnoughData);
+            return Err(FlvAudioTagParseError::TooShort);
         }
 
         let sound_format = (data[0] & 0b11110000) >> 4;
@@ -212,9 +209,9 @@ impl AudioTag {
         }
     }
 
-    fn parse_aac(data: Bytes, channels: AudioChannels) -> Result<Self, ParseError> {
+    fn parse_aac(data: Bytes, channels: AudioChannels) -> Result<Self, FlvAudioTagParseError> {
         if data.len() < 2 {
-            return Err(ParseError::NotEnoughData);
+            return Err(FlvAudioTagParseError::TooShort);
         }
 
         let aac_packet_type = AudioTagAacPacketType::from_raw(data[1])?;
@@ -229,7 +226,7 @@ impl AudioTag {
         })
     }
 
-    pub fn serialize(&self) -> Result<Bytes, SerializationError> {
+    pub fn serialize(&self) -> Result<Bytes, RtmpMessageSerializeError> {
         let sound_format = self.codec.into_raw();
         let sound_rate = self.sample_rate.into_raw();
         let sample_size = self.sample_size.into_raw();
@@ -248,11 +245,13 @@ impl AudioTag {
         }
     }
 
-    fn serialize_aac(&self, first_byte: u8) -> Result<Bytes, SerializationError> {
+    fn serialize_aac(&self, first_byte: u8) -> Result<Bytes, RtmpMessageSerializeError> {
         let mut data = BytesMut::with_capacity(self.data.len() + 2);
         data.put_u8(first_byte);
         let Some(aac_packet_type) = self.aac_packet_type else {
-            return Err(SerializationError::AacPacketTypeRequired);
+            return Err(RtmpMessageSerializeError::InternalError(
+                "Packet type is required for AAC".into(),
+            ));
         };
         data.put_u8(aac_packet_type.into_raw());
         data.put(&self.data[..]);

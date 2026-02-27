@@ -12,18 +12,17 @@ use std::{
 use tracing::{error, info};
 
 use crate::{
-    OnConnectionCallback, RtmpError, RtmpServer, ServerConfig,
-    server::connection::handle_connection,
+    OnConnectionCallback, RtmpServer, ServerConfig, server::connection::handle_connection,
 };
 
 pub(super) fn start_listener_thread(
     config: ServerConfig,
     on_connection: OnConnectionCallback,
-) -> Result<Arc<Mutex<RtmpServer>>, RtmpError> {
+) -> Result<Arc<Mutex<RtmpServer>>, std::io::Error> {
     let port = config.port;
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = TcpListener::bind(addr)?;
-    listener.set_nonblocking(true)?;
+    listener.set_nonblocking(true).unwrap();
     let on_connection = Arc::new(Mutex::new(on_connection));
 
     let shutdown = Arc::new(AtomicBool::new(false));
@@ -47,13 +46,13 @@ pub(super) fn start_listener_thread(
                 drop(server);
 
                 match listener.accept() {
-                    Ok((stream, peer_addr)) => {
+                    Ok((socket, peer_addr)) => {
                         info!("New connection from: {peer_addr:?}");
 
                         let on_connection_clone = on_connection.clone();
                         thread::spawn(move || {
-                            if let Err(err) = handle_connection(stream, on_connection_clone) {
-                                error!(%err, "Client handler error");
+                            if let Err(err) = handle_connection(socket, on_connection_clone) {
+                                error!(?err, "Connection terminated with an error");
                             }
                         });
                     }
@@ -66,7 +65,8 @@ pub(super) fn start_listener_thread(
                     }
                 }
             }
-        })?;
+        })
+        .unwrap();
 
     Ok(server)
 }

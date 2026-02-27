@@ -2,15 +2,12 @@ use std::collections::VecDeque;
 
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::{ParseError, RtmpError};
+use crate::RtmpMessageSerializeError;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub(crate) enum ParseChunkError {
-    #[error("Not enough data")]
     NotEnoughData,
-
-    #[error(transparent)]
-    RtmpError(#[from] RtmpError),
+    MalformedStream(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -78,11 +75,11 @@ impl ChunkBaseHeader {
         Ok((Self { fmt, cs_id }, offset))
     }
 
-    pub fn serialize(&self) -> Result<Bytes, RtmpError> {
+    pub fn serialize(&self) -> Result<Bytes, RtmpMessageSerializeError> {
         let fmt_bits = ((self.fmt as u8) & 0b0000_0011) << 6;
         match self.cs_id {
-            0 | 1 => Err(RtmpError::InternalError(
-                "Chunk stream ID 0 and 1 are reserved.",
+            0 | 1 => Err(RtmpMessageSerializeError::InternalError(
+                "Chunk stream ID 0 and 1 are reserved.".into(),
             )),
             2..=63 => {
                 let mut buf = BytesMut::with_capacity(1);
@@ -271,7 +268,7 @@ pub(crate) struct VirtualMessageHeader {
 }
 
 impl VirtualMessageHeader {
-    pub fn from_msg(prev: Option<Self>, msg_header: ChunkMessageHeader) -> Result<Self, RtmpError> {
+    pub fn from_msg(prev: Option<Self>, msg_header: ChunkMessageHeader) -> Result<Self, String> {
         match (msg_header, prev) {
             (
                 ChunkMessageHeader::Full {
@@ -313,10 +310,7 @@ impl VirtualMessageHeader {
                 };
                 Ok(prev)
             }
-            (_, None) => Err(ParseError::MalformedPacket(
-                "Type-0 header needs to be a first packet in a chunk stream",
-            )
-            .into()),
+            (_, None) => Err("Type-0 header needs to be a first packet in a chunk stream".into()),
         }
     }
 }

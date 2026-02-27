@@ -11,6 +11,8 @@ use std::{
 
 use bytes::Buf;
 
+use crate::RtmpStreamError;
+
 pub(crate) struct NonBlockingSocket {
     socket: TcpStream,
     should_close: Arc<AtomicBool>,
@@ -61,17 +63,19 @@ impl BufferedReader {
         }
     }
 
-    pub(crate) fn read_until_buffer_size(&mut self, buf_size: usize) -> Result<(), io::Error> {
+    pub(crate) fn read_until_buffer_size(
+        &mut self,
+        buf_size: usize,
+    ) -> Result<(), RtmpStreamError> {
         loop {
             if self.buf.len() >= buf_size {
                 return Ok(());
             }
             match (&self.socket.socket).read(&mut self.read_buf) {
                 Ok(0) => {
-                    return Err(io::Error::new(
-                        ErrorKind::UnexpectedEof,
-                        "connection closed",
-                    ));
+                    return Err(
+                        io::Error::new(ErrorKind::UnexpectedEof, "connection closed").into(),
+                    );
                 }
                 Ok(read_bytes) => {
                     self.buf.extend(self.read_buf[0..read_bytes].iter());
@@ -83,7 +87,7 @@ impl BufferedReader {
                             continue;
                         }
                         _ => {
-                            return Err(err);
+                            return Err(err.into());
                         }
                     }
                 }
@@ -91,7 +95,7 @@ impl BufferedReader {
         }
     }
 
-    pub(crate) fn read_exact(&mut self, buf: &mut [u8]) -> Result<(), io::Error> {
+    pub(crate) fn read_exact(&mut self, buf: &mut [u8]) -> Result<(), RtmpStreamError> {
         self.read_until_buffer_size(buf.len())?;
         self.buf.copy_to_slice(buf);
         Ok(())
@@ -141,17 +145,16 @@ impl BufferedWriter {
         }
         Ok(())
     }
-}
 
-impl Write for BufferedWriter {
-    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+    pub fn write(&mut self, data: &[u8]) -> Result<(), RtmpStreamError> {
         self.buf.extend_from_slice(data);
         self.write_to_socket()?;
-        Ok(data.len())
+        Ok(())
     }
 
-    fn flush(&mut self) -> io::Result<()> {
+    pub fn flush(&mut self) -> Result<(), RtmpStreamError> {
         self.write_to_socket()?;
-        (&self.socket.socket).flush()
+        (&self.socket.socket).flush()?;
+        Ok(())
     }
 }

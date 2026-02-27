@@ -1,6 +1,6 @@
 use bytes::Bytes;
 
-use crate::ParseError;
+use crate::RtmpMessageParseError;
 
 mod chunk;
 pub(crate) mod handshake;
@@ -10,7 +10,7 @@ pub(crate) mod socket;
 
 #[derive(Debug)]
 pub(crate) struct RawMessage {
-    pub msg_type: MessageType,
+    pub msg_type: u8,
     pub stream_id: u32,
     pub chunk_stream_id: u32,
     pub timestamp: u32,
@@ -38,7 +38,7 @@ pub enum MessageType {
 }
 
 impl MessageType {
-    pub(crate) fn try_from_raw(value: u8) -> Result<Self, ParseError> {
+    pub(crate) fn try_from_raw(value: u8) -> Result<Self, RtmpMessageParseError> {
         match value {
             1 => Ok(MessageType::SetChunkSize),
             2 => Ok(MessageType::AbortMessage),
@@ -52,7 +52,7 @@ impl MessageType {
             17 => Ok(MessageType::CommandMessageAmf3),
             18 => Ok(MessageType::DataMessageAmf0),
             20 => Ok(MessageType::CommandMessageAmf0),
-            _ => Err(ParseError::UnknownMessageType(value)),
+            _ => Err(RtmpMessageParseError::InvalidMessageType(value)),
         }
     }
 
@@ -88,7 +88,7 @@ pub enum UserControlMessageKind {
 }
 
 impl UserControlMessageKind {
-    pub fn from_raw(value: u16) -> Result<Self, ParseError> {
+    pub fn from_raw(value: u16) -> Result<Self, RtmpMessageParseError> {
         match value {
             0 => Ok(Self::StreamBegin),
             1 => Ok(Self::StreamEof),
@@ -97,9 +97,7 @@ impl UserControlMessageKind {
             4 => Ok(Self::StreamIsRecorded),
             6 => Ok(Self::PingRequest),
             7 => Ok(Self::PingResponse),
-            _ => Err(ParseError::InvalidData(format!(
-                "Unknown UserControlMessageKind {value}"
-            ))),
+            _ => Err(RtmpMessageParseError::InvalidUserControlMessage(value)),
         }
     }
 
