@@ -136,7 +136,7 @@ pub enum AacConfigParseError {
     InvalidAudioChannel(u8),
 
     #[error("Not enough data, config too short")]
-    ToShort,
+    TooShort,
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]

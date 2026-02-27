@@ -61,7 +61,7 @@ impl AacAudioConfig {
             // If frequency_index == 15, then the frequency is encoded explicitly as 24 bit number
             15 => {
                 if data.remaining() < 5 {
-                    return Err(AacConfigParseError::ToShort);
+                    return Err(AacConfigParseError::TooShort);
                 }
                 match object_type {
                     31 => {
@@ -91,7 +91,7 @@ impl AacAudioConfig {
         let channel_configuration = match (object_type, frequency_index) {
             (31, 15) => {
                 if data.remaining() < 6 {
-                    return Err(AacConfigParseError::ToShort);
+                    return Err(AacConfigParseError::TooShort);
                 }
                 let high = data[4] & 0b0000_0001;
                 let low = (data[5] & 0b1110_0000) >> 5;
@@ -100,7 +100,7 @@ impl AacAudioConfig {
             }
             (31, _) => {
                 if data.remaining() < 3 {
-                    return Err(AacConfigParseError::ToShort);
+                    return Err(AacConfigParseError::TooShort);
                 }
                 let high = data[1] & 0b0000_0001;
                 let low = (data[2] & 0b1110_0000) >> 5;
@@ -109,7 +109,7 @@ impl AacAudioConfig {
             }
             (_, 15) => {
                 if data.remaining() < 5 {
-                    return Err(AacConfigParseError::ToShort);
+                    return Err(AacConfigParseError::TooShort);
                 }
                 (data[4] & 0b0111_1000) >> 3
             }
@@ -127,7 +127,7 @@ impl AacAudioConfig {
 
     fn parse_object_type_frequency_index(data: &Bytes) -> Result<(u8, u8), AacConfigParseError> {
         if data.remaining() < 2 {
-            return Err(AacConfigParseError::ToShort);
+            return Err(AacConfigParseError::TooShort);
         }
 
         // 5 bit object_type
