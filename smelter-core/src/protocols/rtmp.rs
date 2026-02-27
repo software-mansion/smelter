@@ -1,8 +1,4 @@
-use std::{
-    io,
-    net::{SocketAddr, ToSocketAddrs},
-    sync::Arc,
-};
+use std::{io, sync::Arc};
 
 use smelter_render::InputId;
 use url::Url;
@@ -21,34 +17,44 @@ pub struct RtmpOutputOptions {
 
 #[derive(Debug, Clone)]
 pub struct RtmpConnectionOptions {
-    pub address: SocketAddr,
+    pub host: String,
+    pub port: u16,
     pub app: String,
     pub stream_key: String,
+    pub use_tls: bool,
 }
 
 impl RtmpConnectionOptions {
     pub fn from_url(url: &str) -> Result<Self, RtmpConnectionUrlError> {
         let url = Url::parse(url)?;
+
+        let use_tls = match url.scheme() {
+            "rtmp" => false,
+            "rtmps" => true,
+            scheme => {
+                return Err(RtmpConnectionUrlError::UnsupportedScheme(
+                    scheme.to_string(),
+                ));
+            }
+        };
+
         let Some(host) = url.host_str() else {
             return Err(RtmpConnectionUrlError::InvalidFormat);
         };
-        let port = url.port().unwrap_or(1935);
-        let Some(address) = (host, port)
-            .to_socket_addrs()
-            .map_err(|err| RtmpConnectionUrlError::HostLookupFailed(host.to_string(), err))?
-            .next()
-        else {
-            return Err(RtmpConnectionUrlError::NoHostFound(host.to_string()));
-        };
+
+        let default_port = if use_tls { 443 } else { 1935 };
+        let port = url.port().unwrap_or(default_port);
 
         let mut path_segments = url.path().trim_start_matches('/').splitn(2, '/');
         let app = path_segments.next().unwrap_or("").to_string();
         let stream_key = path_segments.next().unwrap_or("").to_string();
 
         Ok(RtmpConnectionOptions {
-            address,
+            host: host.to_string(),
+            port,
             app,
             stream_key,
+            use_tls,
         })
     }
 }
@@ -110,8 +116,11 @@ pub enum RtmpConnectionUrlError {
     #[error(transparent)]
     ParsingError(#[from] url::ParseError),
 
-    #[error("URL needs have following format rtmp://<HOST>:<PORT>/<APP>/<STREAM_KEY>")]
+    #[error("URL must have the format rtmp[s]://<HOST>[:<PORT>]/<APP>/<STREAM_KEY>")]
     InvalidFormat,
+
+    #[error("Unsupported URL scheme \"{0}\", expected \"rtmp\" or \"rtmps\"")]
+    UnsupportedScheme(String),
 
     #[error("Failed to resolve host address {0}.")]
     NoHostFound(String),

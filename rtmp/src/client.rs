@@ -1,10 +1,11 @@
 use std::{
     collections::HashMap,
-    net::{SocketAddr, TcpStream},
+    net::TcpStream,
     sync::{Arc, atomic::AtomicBool},
 };
 
-use tracing::{debug, trace, warn};
+use rustls::pki_types::ServerName;
+use tracing::{debug, trace};
 
 use crate::{
     RtmpConnectionError, RtmpEvent,
@@ -18,9 +19,11 @@ use crate::{
 };
 
 pub struct RtmpClientConfig {
-    pub addr: SocketAddr,
+    pub host: String,
+    pub port: u16,
     pub app: String,
     pub stream_key: String,
+    pub use_tls: bool,
 }
 
 pub struct RtmpClient {
@@ -33,11 +36,21 @@ impl RtmpClient {
     pub fn connect(config: RtmpClientConfig) -> Result<Self, RtmpConnectionError> {
         let should_close = Arc::new(AtomicBool::new(false));
 
-        let stream = TcpStream::connect(config.addr)?;
-        let (mut reader, mut writer) = NonBlockingSocket::new(stream, should_close).split();
+        let stream = TcpStream::connect((config.host.as_str(), config.port))?;
+
+        let socket = if config.use_tls {
+            let server_name = ServerName::try_from(config.host.clone())?;
+            NonBlockingSocket::new_tls(stream, server_name, should_close)?
+        } else {
+            NonBlockingSocket::new(stream, should_close)
+        };
+
+        let (mut reader, mut writer) = socket.split();
+
+        let protocol = if config.use_tls { "RTMPS" } else { "RTMP" };
 
         Handshake::perform_as_client(&mut reader, &mut writer)?;
-        debug!("Client handshake complete");
+        debug!(protocol, "Client handshake complete");
 
         let mut writer = RtmpMessageWriter::new(writer);
         let mut reader = RtmpMessageReader::new(reader);
@@ -45,7 +58,7 @@ impl RtmpClient {
         let stream_id =
             ConnectionNegotiation::run(&mut reader, &mut writer, &config.app, &config.stream_key)?;
 
-        debug!(stream_id, app = %config.app, stream_key = %config.stream_key, "RTMP client connected");
+        debug!(stream_id, app = %config.app, stream_key = %config.stream_key, "{protocol} client connected");
 
         Ok(Self {
             writer,
