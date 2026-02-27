@@ -8,17 +8,11 @@ use crate::RtmpMessageParseError;
 #[allow(unused)]
 pub(crate) enum UserControlMessage {
     /// Server -> Client
-    StreamBegin {
-        stream_id: u32,
-    },
+    StreamBegin { stream_id: u32 },
     /// Server -> Client
-    StreamEof {
-        stream_id: u32,
-    },
+    StreamEof { stream_id: u32 },
     /// Server -> Client
-    StreamDry {
-        stream_id: u32,
-    },
+    StreamDry { stream_id: u32 },
     /// Client -> Server
     /// Send before server starts to process stream.
     SetBufferLength {
@@ -26,9 +20,7 @@ pub(crate) enum UserControlMessage {
         buffer_duration: Duration,
     },
     /// Server -> Client
-    StreamIsRecorded {
-        stream_id: u32,
-    },
+    StreamIsRecorded { stream_id: u32 },
     /// Server -> Client
     PingRequest {
         // It represents server time, but it's not clear in what
@@ -36,9 +28,7 @@ pub(crate) enum UserControlMessage {
         timestamp: u32,
     },
     /// Client -> Server
-    PingResponse {
-        timestamp: u32,
-    },
+    PingResponse { timestamp: u32 },
 }
 
 impl UserControlMessage {

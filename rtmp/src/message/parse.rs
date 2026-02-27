@@ -86,7 +86,7 @@ impl RtmpMessage {
                     "{msg_type:?}",
                 )));
             }
-            MessageType::UserControl => RtmpMessage::UserControl(UserControlMessage::from_raw(&p)?),
+            MessageType::UserControl => RtmpMessage::UserControl(UserControlMessage::from_raw(p)?),
         };
         Ok(result)
     }
