@@ -8,7 +8,7 @@ use crate::{
         event::{audio_event_from_raw, video_event_from_raw},
         user_control::UserControlMessage,
     },
-    protocol::{MessageType, RawMessage, UserControlMessageKind},
+    protocol::{MessageType, RawMessage},
 };
 
 impl RtmpMessage {
