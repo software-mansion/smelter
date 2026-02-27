@@ -70,7 +70,7 @@ impl UserControlMessage {
             }
             UserControlMessageKind::StreamIsRecorded if p.len() >= 6 => {
                 let stream_id = u32::from_be_bytes([p[2], p[3], p[4], p[5]]);
-                Self::StreamEof { stream_id }
+                Self::StreamIsRecorded { stream_id }
             }
             UserControlMessageKind::PingRequest if p.len() >= 6 => {
                 let timestamp = u32::from_be_bytes([p[2], p[3], p[4], p[5]]);
