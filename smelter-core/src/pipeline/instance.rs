@@ -9,7 +9,7 @@ use crossbeam_channel::{Receiver, bounded};
 use glyphon::fontdb;
 use rtmp::RtmpServer;
 use tokio::runtime::Runtime;
-use tracing::{Level, error, info, span, trace, warn};
+use tracing::{Level, debug, error, info, span, trace, warn};
 
 use smelter_render::{
     FrameSet, InputId, OutputId, RegistryType, Renderer, RendererId, RendererOptions, RendererSpec,
@@ -430,7 +430,7 @@ fn run_renderer_thread(
             };
 
             if frame_sender.send(PipelineEvent::Data(frame)).is_err() {
-                warn!(?output_id, "Failed to send output frames. Channel closed.");
+                debug!(?output_id, "Failed to send output frames. Channel closed.");
             }
         }
     }
@@ -495,7 +495,7 @@ fn run_audio_mixer_thread(
             };
 
             if samples_sender.send(PipelineEvent::Data(batch)).is_err() {
-                warn!(?output_id, "Failed to send mixed audio. Channel closed.");
+                debug!(?output_id, "Failed to send mixed audio. Channel closed.");
             }
         }
     }
