@@ -5,7 +5,7 @@ use std::{
 };
 
 use rustls::pki_types::ServerName;
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::{
     RtmpConnectionError, RtmpEvent,
@@ -39,7 +39,11 @@ impl RtmpClient {
         let stream = TcpStream::connect((config.host.as_str(), config.port))?;
 
         let socket = if config.use_tls {
-            let server_name = ServerName::try_from(config.host.clone())?;
+            let server_name = if let Ok(ip) = config.host.parse::<std::net::IpAddr>() {
+                ServerName::IpAddress(ip.into())
+            } else {
+                ServerName::try_from(config.host.clone())?
+            };
             NonBlockingSocket::new_tls(stream, server_name, should_close)?
         } else {
             NonBlockingSocket::new(stream, should_close)

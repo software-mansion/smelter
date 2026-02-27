@@ -10,7 +10,11 @@ use std::{
 };
 
 use bytes::Buf;
-use rustls::{ClientConnection, StreamOwned, pki_types::ServerName};
+use rustls::{ClientConnection, RootCertStore, StreamOwned, pki_types::ServerName};
+use rustls_native_certs::load_native_certs;
+use tracing::warn;
+
+use crate::RtmpConnectionError;
 
 enum SocketKind {
     Plain(TcpStream),
@@ -42,19 +46,20 @@ impl NonBlockingSocket {
         socket: TcpStream,
         server_name: ServerName<'static>,
         should_close: Arc<AtomicBool>,
-    ) -> Result<Self, crate::RtmpError> {
+    ) -> Result<Self, RtmpConnectionError> {
         // Set timeouts on the raw TCP socket before wrapping — they remain
         // effective at the OS level regardless of the TLS layer on top.
         Self::configure_socket(&socket);
 
-        let certs = rustls_native_certs::load_native_certs();
+        let certs = load_native_certs();
         if !certs.errors.is_empty() {
-            tracing::warn!("Some CA certificates failed to load: {:?}", certs.errors);
+            warn!("Some CA certificates failed to load: {:?}", certs.errors);
         }
 
-        let mut root_store = rustls::RootCertStore::empty();
-        for cert in certs.certs {
-            root_store.add(cert)?;
+        let mut root_store = RootCertStore::empty();
+        let (added, skipped) = root_store.add_parsable_certificates(certs.certs);
+        if skipped > 0 {
+            warn!(%added, %skipped, "Some native CA certificates were rejected by rustls");
         }
 
         let config = rustls::ClientConfig::builder_with_provider(Arc::new(
@@ -220,6 +225,7 @@ impl BufferedWriter {
 
     pub fn flush(&mut self) -> Result<(), RtmpStreamError> {
         self.write_to_socket()?;
-        self.socket.flush()
+        self.socket.flush()?;
+        Ok(())
     }
 }

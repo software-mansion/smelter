@@ -9,7 +9,7 @@ use crate::{
 pub enum RtmpConnectionError {
     #[error("Handshake failed: {0}")]
     HandshakeFailed(String),
-    
+
     #[error("Failed to establish TCP connection")]
     TcpSocket(#[from] std::io::Error),
 
@@ -18,7 +18,7 @@ pub enum RtmpConnectionError {
 
     #[error("Invalid TLS hostname: {0}")]
     InvalidHostname(#[from] rustls::pki_types::InvalidDnsNameError),
-    
+
     #[error(transparent)]
     StreamError(#[from] RtmpStreamError),
 }
