@@ -320,12 +320,17 @@ fn run_ffmpeg_output_thread(
                     },
                 };
                 if let Err(err) = write_chunk(chunk, stream, &mut output_ctx, timestamp_offset) {
+                    let try_write_trailer =
+                        !matches!(err, OutputMp4RuntimeError::NoSpaceLeftOnDevice);
                     ctx.event_emitter.emit(Event::OutputError {
                         output_id: output_ref.id().clone(),
                         err: err.into(),
                         severity: ErrorSeverity::Critical,
                     });
-                    eos_state.force_abort();
+                    match try_write_trailer {
+                        true => eos_state.mark_for_abort(),
+                        false => return,
+                    }
                 }
             }
             EncodedOutputEvent::VideoEOS => eos_state.on_video_eos(),
@@ -435,7 +440,7 @@ impl EosState {
         }
     }
 
-    fn force_abort(&mut self) {
+    fn mark_for_abort(&mut self) {
         self.should_abort = true
     }
 
