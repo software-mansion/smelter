@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use ash::vk;
 use h264_reader::nal::{
     pps::PicParameterSet,
-    sps::{Profile, SeqParameterSet},
+    sps::{FrameMbsFlags, Profile, SeqParameterSet},
 };
 use images::DecodingImages;
 use parameters::{SessionParams, VideoSessionParametersManager};
@@ -33,6 +33,7 @@ pub(super) struct VideoSessionResources<'a> {
     parameters_scheduled_for_reset: Option<SessionParams<'a>>,
 }
 
+#[allow(non_snake_case)]
 fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, VulkanDecoderError> {
     let fallback_max_num_reorder_frames = if [44u8, 86, 100, 110, 122, 244]
         .contains(&sps.profile_idc.into())
@@ -42,10 +43,14 @@ fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, Vulkan
     } else if let Profile::Baseline = sps.profile() {
         0
     } else {
-        h264_level_idc_to_max_dpb_mbs(sps.level_idc)?
-            / ((sps.pic_width_in_mbs_minus1 as u64 + 1)
-                * (sps.pic_height_in_map_units_minus1 as u64 + 1))
-                .min(16)
+        let FrameHeightInMbs = (2 - (sps.frame_mbs_flags == FrameMbsFlags::Frames) as u64)
+            * sps.pic_height_in_map_units() as u64;
+
+        u64::min(
+            h264_level_idc_to_max_dpb_mbs(sps.level_idc)?
+                / (sps.pic_width_in_mbs() as u64 * FrameHeightInMbs),
+            16,
+        )
     };
 
     let max_num_reorder_frames = sps
