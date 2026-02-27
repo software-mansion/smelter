@@ -7,25 +7,35 @@ use crate::RtmpMessageParseError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(unused)]
 pub(crate) enum UserControlMessage {
+    /// Server -> Client
     StreamBegin {
         stream_id: u32,
     },
+    /// Server -> Client
     StreamEof {
         stream_id: u32,
     },
+    /// Server -> Client
     StreamDry {
         stream_id: u32,
     },
+    /// Client -> Server
+    /// Send before server starts to process stream.
     SetBufferLength {
         stream_id: u32,
         buffer_duration: Duration,
     },
+    /// Server -> Client
     StreamIsRecorded {
         stream_id: u32,
     },
+    /// Server -> Client
     PingRequest {
+        // It represents server time, but it's not clear in what
+        // format. Response needs to return the same value
         timestamp: u32,
     },
+    /// Client -> Server
     PingResponse {
         timestamp: u32,
     },
