@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
-use tracing::trace;
+use tracing::{debug, trace};
 
 use crate::{
     RtmpMessageSerializeError,
@@ -15,7 +15,7 @@ use crate::{
 };
 
 pub struct RtmpMessageWriter {
-    stream: BufferedWriter,
+    pub stream: BufferedWriter,
     chunk_size: usize,
     context: HashMap<u32, ChunkStreamContext>,
 }
@@ -29,13 +29,18 @@ impl RtmpMessageWriter {
         }
     }
 
-    #[allow(unused)]
     pub fn set_chunk_size(&mut self, size: usize) {
         self.chunk_size = size;
     }
 
     pub fn write(&mut self, msg: RtmpMessage) -> Result<(), RtmpStreamError> {
-        trace!(?msg, "Sending RTMP message");
+        match &msg {
+            RtmpMessage::Event { event, .. } if event.is_media_packet() => {
+                trace!(?msg, "Sending RTMP message")
+            }
+            msg => debug!(?msg, "Sending RTMP message"),
+        }
+
         let msg = msg.into_raw()?;
         let cs_id = msg.chunk_stream_id;
 

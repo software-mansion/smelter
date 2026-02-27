@@ -103,10 +103,10 @@ jobs:
               run: cargo fmt --all --check
 
             - name: 📎 Run clippy
-              run: cargo clippy --workspace --all-targets -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
+              run: cargo clippy --workspace --all-targets -- -D warnings
 
             - name: 📎 Run clippy (no-default-features)
-              run: cargo clippy --workspace --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
+              run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
     lint:
         runs-on: ubuntu-24.04
@@ -144,10 +144,10 @@ jobs:
               run: cargo fmt --all --check
 
             - name: 📎 Run clippy (all-features)
-              run: cargo clippy --workspace --all-targets --all-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
+              run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
             - name: 📎 Run clippy (no-default-features)
-              run: cargo clippy --workspace --all-targets --no-default-features -- -D clippy::todo -D clippy::uninlined_format_args -D warnings
+              run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
             - name: 📄 Generate JSON schema
               run: |

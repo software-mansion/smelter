@@ -49,27 +49,77 @@ pub(crate) struct NonBlockingSocket {
 }
 
 impl NonBlockingSocket {
-    pub fn new(
+    pub fn new_client(
         host: &str,
         port: u16,
         use_tls: bool,
         should_close: Arc<AtomicBool>,
     ) -> Result<Self, RtmpConnectionError> {
-        let stream = TcpStream::connect((host, port))?;
-        configure_socket(&stream);
-        let socket = if use_tls {
-            Socket::Tls(Box::new(TlsStream::connect(stream, host)?))
+        let socket = TcpStream::connect((host, port))?;
+        if use_tls {
+            // Socket is intentionally kept in blocking mode with short read/write
+            // timeouts to approximate non-blocking behavior and allow cooperative
+            // polling using the should_close flag. On some platforms, a socket
+            // created during connection inherits options from the listener socket,
+            // so we explicitly force it to blocking mode here.
+            socket
+                .set_nonblocking(false)
+                .expect("Cannot set blocking tcp input stream");
+            socket
+                .set_read_timeout(Some(Duration::from_micros(1)))
+                .expect("Cannot set read timeout");
+            socket
+                .set_write_timeout(Some(Duration::from_millis(50)))
+                .expect("Cannot set write timeout");
+            Ok(Self {
+                inner: Socket::Tls(Box::new(TlsStream::connect(socket, host)?)),
+                should_close,
+            })
         } else {
-            Socket::Tcp(stream)
-        };
-        Ok(Self {
-            inner: socket,
-            should_close,
-        })
+            Ok(Self::from_tcp_client(socket, should_close))
+        }
     }
 
-    pub fn from_tcp(socket: TcpStream, should_close: Arc<AtomicBool>) -> Self {
-        configure_socket(&socket);
+    pub fn from_tcp_client(socket: TcpStream, should_close: Arc<AtomicBool>) -> Self {
+        // Socket is intentionally kept in blocking mode with short read/write
+        // timeouts to approximate non-blocking behavior and allow cooperative
+        // polling using the should_close flag. On some platforms, a socket
+        // created during connection inherits options from the listener socket,
+        // so we explicitly force it to blocking mode here.
+        socket
+            .set_nonblocking(false)
+            .expect("Cannot set blocking tcp input stream");
+        // For client we try to read any pending messages on every
+        // write so the timeout needs to be as small as possible.
+        //
+        // On Linux this still takes almost 2ms
+        socket
+            .set_read_timeout(Some(Duration::from_micros(1)))
+            .expect("Cannot set read timeout");
+        socket
+            .set_write_timeout(Some(Duration::from_millis(50)))
+            .expect("Cannot set write timeout");
+        Self {
+            inner: Socket::Tcp(socket),
+            should_close,
+        }
+    }
+
+    pub fn from_tcp_server(socket: TcpStream, should_close: Arc<AtomicBool>) -> Self {
+        // Socket is intentionally kept in blocking mode with short read/write
+        // timeouts to approximate non-blocking behavior and allow cooperative
+        // polling using the should_close flag. On some platforms, a socket
+        // created during connection inherits options from the listener socket,
+        // so we explicitly force it to blocking mode here.
+        socket
+            .set_nonblocking(false)
+            .expect("Cannot set blocking tcp input stream");
+        socket
+            .set_read_timeout(Some(Duration::from_millis(50)))
+            .expect("Cannot set read timeout");
+        socket
+            .set_write_timeout(Some(Duration::from_millis(50)))
+            .expect("Cannot set write timeout");
         Self {
             inner: Socket::Tcp(socket),
             should_close,
@@ -100,6 +150,7 @@ pub(crate) struct BufferedReader {
     socket: Arc<NonBlockingSocket>,
     buf: VecDeque<u8>,
     read_buf: Vec<u8>,
+    bytes_read: u64,
 }
 
 impl BufferedReader {
@@ -108,52 +159,60 @@ impl BufferedReader {
             socket,
             buf: VecDeque::new(),
             read_buf: vec![0; 65536],
+            bytes_read: 0,
         }
     }
 
-    pub(crate) fn read_until_buffer_size(
-        &mut self,
-        buf_size: usize,
-    ) -> Result<(), RtmpStreamError> {
+    pub fn read_until_buffer_size(&mut self, buf_size: usize) -> Result<(), RtmpStreamError> {
         loop {
             if self.buf.len() >= buf_size {
                 return Ok(());
             }
-            match self.socket.read(&mut self.read_buf) {
-                Ok(0) => {
-                    return Err(
-                        io::Error::new(ErrorKind::UnexpectedEof, "connection closed").into(),
-                    );
-                }
-                Ok(read_bytes) => {
-                    self.buf.extend(self.read_buf[0..read_bytes].iter());
-                }
-                Err(err) => {
-                    let should_close = self.socket.should_close.load(Ordering::Relaxed);
-                    match err.kind() {
-                        ErrorKind::WouldBlock | ErrorKind::TimedOut if !should_close => {
-                            continue;
-                        }
-                        _ => {
-                            return Err(err.into());
-                        }
+            let should_close = self.socket.should_close.load(Ordering::Relaxed);
+            if let Err(err) = self.try_read() {
+                match err.kind() {
+                    ErrorKind::WouldBlock | ErrorKind::TimedOut if !should_close => {
+                        continue;
+                    }
+                    _ => {
+                        return Err(err.into());
                     }
                 }
-            };
+            }
         }
     }
 
-    pub(crate) fn read_exact(&mut self, buf: &mut [u8]) -> Result<(), RtmpStreamError> {
+    pub fn try_read(&mut self) -> Result<(), io::Error> {
+        match self.socket.read(&mut self.read_buf)? {
+            0 => {
+                return Err(io::Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "connection closed",
+                ));
+            }
+            bytes_read => {
+                self.buf.extend(self.read_buf[0..bytes_read].iter());
+                self.bytes_read += bytes_read as u64;
+            }
+        };
+        Ok(())
+    }
+
+    pub fn bytes_read(&self) -> u64 {
+        self.bytes_read
+    }
+
+    pub fn read_exact(&mut self, buf: &mut [u8]) -> Result<(), RtmpStreamError> {
         self.read_until_buffer_size(buf.len())?;
         self.buf.copy_to_slice(buf);
         Ok(())
     }
 
-    pub(crate) fn data(&self) -> &VecDeque<u8> {
+    pub fn data(&self) -> &VecDeque<u8> {
         &self.buf
     }
 
-    pub(crate) fn data_mut(&mut self) -> &mut VecDeque<u8> {
+    pub fn data_mut(&mut self) -> &mut VecDeque<u8> {
         &mut self.buf
     }
 }
@@ -205,21 +264,4 @@ impl BufferedWriter {
         self.socket.flush()?;
         Ok(())
     }
-}
-
-pub(crate) fn configure_socket(socket: &TcpStream) {
-    // Socket is intentionally kept in blocking mode with short read/write
-    // timeouts to approximate non-blocking behavior and allow cooperative
-    // polling using the should_close flag. On some platforms, a socket
-    // created during connection inherits options from the listener socket,
-    // so we explicitly force it to blocking mode here.
-    socket
-        .set_nonblocking(false)
-        .expect("Cannot set blocking tcp input stream");
-    socket
-        .set_read_timeout(Some(Duration::from_millis(50)))
-        .expect("Cannot set read timeout");
-    socket
-        .set_write_timeout(Some(Duration::from_millis(50)))
-        .expect("Cannot set write timeout");
 }

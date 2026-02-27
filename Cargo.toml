@@ -127,6 +127,7 @@ required-features = ["web-renderer"]
 [workspace.lints.clippy]
 todo = "warn"
 uninlined_format_args = "warn"
+enum_variant_names = "allow"
 
 [lints]
 workspace = true

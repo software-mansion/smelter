@@ -1,6 +1,10 @@
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+    io::ErrorKind,
+};
 
 use bytes::{Bytes, BytesMut};
+use tracing::{debug, trace};
 
 use crate::{
     error::RtmpStreamError,
@@ -32,19 +36,48 @@ impl RtmpMessageReader {
         }
     }
 
+    pub fn bytes_read(&self) -> u64 {
+        self.reader.bytes_read()
+    }
+
     pub fn set_chunk_size(&mut self, size: usize) {
         self.chunk_size = size;
     }
 
     pub fn next(&mut self) -> Result<RtmpMessage, RtmpStreamError> {
+        self.next_chunk(true)
+    }
+
+    pub fn try_next(&mut self) -> Result<Option<RtmpMessage>, RtmpStreamError> {
+        match self.next_chunk(false) {
+            Ok(msg) => Ok(Some(msg)),
+            Err(RtmpStreamError::TcpError(err)) if err.kind() == ErrorKind::WouldBlock => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
+
+    pub fn next_chunk(&mut self, force: bool) -> Result<RtmpMessage, RtmpStreamError> {
         loop {
             match self.try_read_msg() {
-                Ok(Some(msg)) => return Ok(RtmpMessage::from_raw(msg)?),
+                Ok(Some(msg)) => {
+                    let msg = RtmpMessage::from_raw(msg)?;
+                    match &msg {
+                        RtmpMessage::Event { event, .. } if event.is_media_packet() => {
+                            trace!(?msg, "Received RTMP message")
+                        }
+                        msg => debug!(?msg, "Received RTMP message"),
+                    }
+                    return Ok(msg);
+                }
                 Ok(None) => {}
                 Err(ParseChunkError::NotEnoughData) => {
-                    // read next chunk
-                    let buf_len = self.reader.data().len();
-                    self.reader.read_until_buffer_size(buf_len + 1)?;
+                    if force {
+                        // read next chunk
+                        let buf_len = self.reader.data().len();
+                        self.reader.read_until_buffer_size(buf_len + 1)?;
+                    } else {
+                        self.reader.try_read()?
+                    }
                 }
                 Err(ParseChunkError::MalformedStream(err)) => {
                     return Err(RtmpStreamError::ReceivedMalformedStream(err));

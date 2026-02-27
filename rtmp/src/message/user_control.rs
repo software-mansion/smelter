@@ -2,10 +2,9 @@ use std::time::Duration;
 
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::RtmpMessageParseError;
+use crate::{RtmpMessageParseError, message::RtmpMessage};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(unused)]
 pub(crate) enum UserControlMessage {
     /// Server -> Client
     StreamBegin { stream_id: u32 },
@@ -29,6 +28,12 @@ pub(crate) enum UserControlMessage {
     },
     /// Client -> Server
     PingResponse { timestamp: u32 },
+}
+
+impl From<UserControlMessage> for RtmpMessage {
+    fn from(value: UserControlMessage) -> Self {
+        Self::UserControl(value)
+    }
 }
 
 impl UserControlMessage {

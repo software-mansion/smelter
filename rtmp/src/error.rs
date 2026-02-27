@@ -10,6 +10,12 @@ pub enum RtmpConnectionError {
     #[error("Handshake failed: {0}")]
     HandshakeFailed(String),
 
+    #[error("Server returned _error in response to connect: {0:?}")]
+    ErrorOnConnect(String),
+
+    #[error("Server returned _error in response to createStream: {0:?}")]
+    ErrorOnCreateStream(String),
+
     #[error("Failed to establish TCP connection")]
     TcpSocket(#[from] std::io::Error),
 
@@ -32,6 +38,7 @@ impl RtmpConnectionError {
             Self::Tls(_) => true,
             Self::InvalidDnsName(_) => true,
             Self::StreamError(err) => err.is_critical(),
+            _ => true,
         }
     }
 }
@@ -83,6 +90,9 @@ pub enum RtmpMessageParseError {
     #[error("Unknown UserControlMessageKind {0}")]
     InvalidUserControlMessage(u16),
 
+    #[error("Failed to parse command message")]
+    CommandMessage(#[from] CommandMessageParseError),
+
     #[error("Error parsing audio tag")]
     FlvAudioParse(#[from] FlvAudioTagParseError),
 
@@ -97,6 +107,21 @@ pub enum RtmpMessageParseError {
 
     #[error("Message payload too short")]
     PayloadTooShort,
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq)]
+pub enum CommandMessageParseError {
+    #[error(transparent)]
+    Amf(#[from] AmfDecodingError),
+
+    #[error("Missing command name")]
+    MissingCommandName,
+
+    #[error("Missing transaction_id")]
+    MissingTransactionId,
+
+    #[error("Unexpected AMF value type for field: {field}")]
+    UnexpectedValueType { field: &'static str },
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]

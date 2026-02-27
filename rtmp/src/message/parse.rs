@@ -5,6 +5,7 @@ use crate::{
     amf0::decode_amf0_values,
     message::{
         RtmpMessage,
+        command::CommandMessage,
         event::{audio_event_from_raw, video_event_from_raw},
         user_control::UserControlMessage,
     },
@@ -71,16 +72,18 @@ impl RtmpMessage {
                     stream_id: msg.stream_id,
                 }
             }
-            MessageType::CommandMessageAmf0 => RtmpMessage::CommandMessageAmf0 {
-                values: decode_amf0_values(msg.payload)?,
+            MessageType::CommandMessageAmf0 => RtmpMessage::CommandMessage {
+                msg: CommandMessage::from_amf0_bytes(msg.payload)?,
                 stream_id: msg.stream_id,
             },
 
+            MessageType::Acknowledgement if p.len() >= 4 => RtmpMessage::Acknowledgement {
+                bytes_received: u32::from_be_bytes([p[0], p[1], p[2], p[3]]),
+            },
             MessageType::Acknowledgement => {
-                return Err(RtmpMessageParseError::UnsupportedMessage(format!(
-                    "{msg_type:?}",
-                )));
+                return Err(RtmpMessageParseError::PayloadTooShort);
             }
+
             MessageType::AbortMessage => {
                 return Err(RtmpMessageParseError::UnsupportedMessage(format!(
                     "{msg_type:?}",

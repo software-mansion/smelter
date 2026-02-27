@@ -24,6 +24,15 @@ pub enum RtmpEvent {
     Metadata(ScriptData),
 }
 
+impl RtmpEvent {
+    pub fn is_media_packet(&self) -> bool {
+        !matches!(
+            self,
+            RtmpEvent::H264Config(_) | RtmpEvent::AacConfig(_) | RtmpEvent::Metadata(_)
+        )
+    }
+}
+
 #[derive(Clone)]
 pub struct AacAudioData {
     pub pts: Duration,
