@@ -147,9 +147,9 @@ fn handle_command_message(
             })?;
             trace!(stream_id = current_stream_id, "Sent createStream _result");
 
-            writer.write(RtmpMessage::StreamBegin {
+            writer.write(RtmpMessage::UserControl(UserControlMessage::StreamBegin {
                 stream_id: current_stream_id,
-            })?;
+            }))?;
             trace!(
                 stream_id = current_stream_id,
                 "Sent Stream Begin for new stream"
