@@ -3,25 +3,23 @@ use std::{
     io::{self, ErrorKind, Read, Write},
     net::TcpStream,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
 
 use bytes::Buf;
-use rustls::{ClientConnection, RootCertStore, StreamOwned, pki_types::ServerName};
-use rustls_native_certs::load_native_certs;
-use tracing::warn;
+use rustls::pki_types::ServerName;
 
-use crate::RtmpConnectionError;
+use crate::{RtmpConnectionError, RtmpStreamError};
+
+use super::tls::TlsStream;
 
 enum SocketKind {
-    Plain(TcpStream),
-    Tls(Box<Mutex<StreamOwned<ClientConnection, TcpStream>>>),
+    Tcp(TcpStream),
+    Tls(Box<TlsStream>),
 }
-
-use crate::RtmpStreamError;
 
 pub(crate) struct NonBlockingSocket {
     inner: SocketKind,
@@ -30,14 +28,9 @@ pub(crate) struct NonBlockingSocket {
 
 impl NonBlockingSocket {
     pub fn new(socket: TcpStream, should_close: Arc<AtomicBool>) -> Self {
-        // Socket is intentionally kept in blocking mode with short read/write
-        // timeouts to approximate non-blocking behavior and allow cooperative
-        // polling using the should_close flag. On some platforms, a socket
-        // created during connection inherits options from the listener socket,
-        // so we explicitly force it to blocking mode here.
         Self::configure_socket(&socket);
         Self {
-            inner: SocketKind::Plain(socket),
+            inner: SocketKind::Tcp(socket),
             should_close,
         }
     }
@@ -50,35 +43,19 @@ impl NonBlockingSocket {
         // Set timeouts on the raw TCP socket before wrapping — they remain
         // effective at the OS level regardless of the TLS layer on top.
         Self::configure_socket(&socket);
-
-        let certs = load_native_certs();
-        if !certs.errors.is_empty() {
-            warn!("Some CA certificates failed to load: {:?}", certs.errors);
-        }
-
-        let mut root_store = RootCertStore::empty();
-        let (added, skipped) = root_store.add_parsable_certificates(certs.certs);
-        if skipped > 0 {
-            warn!(%added, %skipped, "Some native CA certificates were rejected by rustls");
-        }
-
-        let config = rustls::ClientConfig::builder_with_provider(Arc::new(
-            rustls::crypto::aws_lc_rs::default_provider(),
-        ))
-        .with_safe_default_protocol_versions()?
-        .with_root_certificates(root_store)
-        .with_no_client_auth();
-
-        let conn = ClientConnection::new(Arc::new(config), server_name)?;
-        let tls_stream = StreamOwned::new(conn, socket);
-
+        let tls = TlsStream::new(socket, server_name)?;
         Ok(Self {
-            inner: SocketKind::Tls(Box::new(Mutex::new(tls_stream))),
+            inner: SocketKind::Tls(Box::new(tls)),
             should_close,
         })
     }
 
     fn configure_socket(socket: &TcpStream) {
+        // Socket is intentionally kept in blocking mode with short read/write
+        // timeouts to approximate non-blocking behavior and allow cooperative
+        // polling using the should_close flag. On some platforms, a socket
+        // created during connection inherits options from the listener socket,
+        // so we explicitly force it to blocking mode here.
         socket
             .set_nonblocking(false)
             .expect("Cannot set blocking tcp input stream");
@@ -99,22 +76,22 @@ impl NonBlockingSocket {
 
     fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
         match &self.inner {
-            SocketKind::Plain(s) => (&*s).read(buf),
-            SocketKind::Tls(m) => m.lock().unwrap().read(buf),
+            SocketKind::Tcp(tcp) => (&*tcp).read(buf),
+            SocketKind::Tls(tls) => tls.read(buf),
         }
     }
 
     fn write(&self, buf: &[u8]) -> io::Result<usize> {
         match &self.inner {
-            SocketKind::Plain(s) => (&*s).write(buf),
-            SocketKind::Tls(m) => m.lock().unwrap().write(buf),
+            SocketKind::Tcp(tcp) => (&*tcp).write(buf),
+            SocketKind::Tls(tls) => tls.write(buf),
         }
     }
 
     fn flush(&self) -> io::Result<()> {
         match &self.inner {
-            SocketKind::Plain(s) => (&*s).flush(),
-            SocketKind::Tls(m) => m.lock().unwrap().flush(),
+            SocketKind::Tcp(tcp) => (&*tcp).flush(),
+            SocketKind::Tls(tls) => tls.flush(),
         }
     }
 }

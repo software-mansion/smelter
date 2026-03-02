@@ -7,6 +7,7 @@ pub(crate) mod handshake;
 pub(crate) mod message_reader;
 pub(crate) mod message_writer;
 pub(crate) mod socket;
+mod tls;
 
 #[derive(Debug)]
 pub(crate) struct RawMessage {
