@@ -1,10 +1,10 @@
 use crossbeam_channel::Receiver;
 use signal_hook::{consts, iterator::Signals};
 use smelter_render::error::ErrorStack;
-use tracing::error;
-use tracing::info;
+use tokio::runtime::Builder;
+use tracing::{debug, error, info};
 
-use std::{net::SocketAddr, process, sync::Arc, thread};
+use std::{env, net::SocketAddr, process, sync::Arc, thread};
 use tokio::runtime::Runtime;
 
 use crate::{config::read_config, logger::init_logger, routes::routes, state::ApiState};
@@ -15,7 +15,33 @@ pub fn run() {
     init_logger(config.logger.clone());
 
     info!("Starting Smelter with config:\n{:#?}", config);
-    let runtime = Arc::new(Runtime::new().unwrap());
+    let runtime = Arc::new({
+        const MINIMUM_WORKER_THREADS: usize = 3;
+        let available_threads = thread::available_parallelism()
+            .map(|val| val.get())
+            .unwrap_or(MINIMUM_WORKER_THREADS);
+        if available_threads >= MINIMUM_WORKER_THREADS {
+            debug!(
+                api_worker_threads = available_threads,
+                "Number of worker threads used for API."
+            );
+            Runtime::new().unwrap()
+        } else {
+            let threads = env::var("TOKIO_WORKER_THREADS")
+                .ok()
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(MINIMUM_WORKER_THREADS);
+            debug!(
+                api_worker_threads = threads,
+                "Number of worker threads used for API."
+            );
+            Builder::new_multi_thread()
+                .enable_all()
+                .worker_threads(threads)
+                .build()
+                .unwrap()
+        }
+    });
     let state = ApiState::new(config, runtime.clone()).unwrap_or_else(|err| {
         panic!(
             "Failed to start Smelter instance.\n{}",
