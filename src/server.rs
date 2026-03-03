@@ -15,33 +15,7 @@ pub fn run() {
     init_logger(config.logger.clone());
 
     info!("Starting Smelter with config:\n{:#?}", config);
-    let runtime = Arc::new({
-        const MINIMUM_WORKER_THREADS: usize = 3;
-        let available_threads = thread::available_parallelism()
-            .map(|val| val.get())
-            .unwrap_or(MINIMUM_WORKER_THREADS);
-        if available_threads >= MINIMUM_WORKER_THREADS {
-            debug!(
-                api_worker_threads = available_threads,
-                "Number of worker threads used for API."
-            );
-            Runtime::new().unwrap()
-        } else {
-            let threads = env::var("TOKIO_WORKER_THREADS")
-                .ok()
-                .and_then(|v| v.trim().parse().ok())
-                .unwrap_or(MINIMUM_WORKER_THREADS);
-            debug!(
-                api_worker_threads = threads,
-                "Number of worker threads used for API."
-            );
-            Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(threads)
-                .build()
-                .unwrap()
-        }
-    });
+    let runtime = Arc::new(init_runtime());
     let state = ApiState::new(config, runtime.clone()).unwrap_or_else(|err| {
         panic!(
             "Failed to start Smelter instance.\n{}",
@@ -93,6 +67,37 @@ pub fn run_api(
             })
             .await
     })
+}
+
+fn init_runtime() -> Runtime {
+    const MINIMUM_WORKER_THREADS: usize = 3;
+    let mut runtime_builder = Builder::new_multi_thread();
+    runtime_builder.enable_all();
+
+    let available_threads = thread::available_parallelism()
+        .map(|val| val.get())
+        .unwrap_or(MINIMUM_WORKER_THREADS);
+    if available_threads >= MINIMUM_WORKER_THREADS {
+        debug!(
+            worker_threads = available_threads,
+            "Number of worker threads used."
+        );
+        runtime_builder.build().unwrap()
+    } else {
+        let thread_count = env::var("TOKIO_WORKER_THREADS")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(MINIMUM_WORKER_THREADS);
+        debug!(
+            worker_threads = thread_count,
+            "Number of worker threads used."
+        );
+        runtime_builder
+            .enable_all()
+            .worker_threads(thread_count)
+            .build()
+            .unwrap()
+    }
 }
 
 #[cfg(target_os = "linux")]
