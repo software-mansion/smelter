@@ -1,22 +1,32 @@
 use std::{
     io::{self, Read, Write},
-    net::TcpStream,
+    net::{IpAddr, TcpStream},
     sync::{Arc, Mutex},
 };
 
-use rustls::{ClientConnection, RootCertStore, StreamOwned, pki_types::ServerName};
+use rustls::{
+    ClientConnection, RootCertStore, ServerConfig, ServerConnection, StreamOwned,
+    pki_types::ServerName,
+};
 use rustls_native_certs::load_native_certs;
 use tracing::warn;
 
 use crate::RtmpConnectionError;
 
-pub(crate) struct TlsStream(Mutex<StreamOwned<ClientConnection, TcpStream>>);
+pub(crate) enum TlsStream {
+    Client(Mutex<StreamOwned<ClientConnection, TcpStream>>),
+    #[allow(unused)]
+    Server(Mutex<StreamOwned<ServerConnection, TcpStream>>),
+}
 
 impl TlsStream {
-    pub(crate) fn new(
-        socket: TcpStream,
-        server_name: ServerName<'static>,
-    ) -> Result<Self, RtmpConnectionError> {
+    pub(crate) fn connect(socket: TcpStream, host: &str) -> Result<Self, RtmpConnectionError> {
+        let server_name = if let Ok(ip) = host.parse::<IpAddr>() {
+            ServerName::IpAddress(ip.into())
+        } else {
+            ServerName::try_from(host.to_owned())?
+        };
+
         let certs = load_native_certs();
         if !certs.errors.is_empty() {
             warn!("Some CA certificates failed to load: {:?}", certs.errors);
@@ -36,18 +46,36 @@ impl TlsStream {
         .with_no_client_auth();
 
         let conn = ClientConnection::new(Arc::new(config), server_name)?;
-        Ok(Self(Mutex::new(StreamOwned::new(conn, socket))))
+        Ok(Self::Client(Mutex::new(StreamOwned::new(conn, socket))))
+    }
+
+    #[allow(unused)]
+    pub(crate) fn accept(
+        socket: TcpStream,
+        config: Arc<ServerConfig>,
+    ) -> Result<Self, RtmpConnectionError> {
+        // TODO: support TLS on input
+        unimplemented!()
     }
 
     pub(crate) fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.lock().unwrap().read(buf)
+        match self {
+            TlsStream::Client(s) => s.lock().unwrap().read(buf),
+            TlsStream::Server(s) => s.lock().unwrap().read(buf),
+        }
     }
 
     pub(crate) fn write(&self, buf: &[u8]) -> io::Result<usize> {
-        self.0.lock().unwrap().write(buf)
+        match self {
+            TlsStream::Client(s) => s.lock().unwrap().write(buf),
+            TlsStream::Server(s) => s.lock().unwrap().write(buf),
+        }
     }
 
     pub(crate) fn flush(&self) -> io::Result<()> {
-        self.0.lock().unwrap().flush()
+        match self {
+            TlsStream::Client(s) => s.lock().unwrap().flush(),
+            TlsStream::Server(s) => s.lock().unwrap().flush(),
+        }
     }
 }

@@ -1,10 +1,8 @@
 use std::{
     collections::HashMap,
-    net::TcpStream,
     sync::{Arc, atomic::AtomicBool},
 };
 
-use rustls::pki_types::ServerName;
 use tracing::{debug, trace, warn};
 
 use crate::{
@@ -36,19 +34,8 @@ impl RtmpClient {
     pub fn connect(config: RtmpClientConfig) -> Result<Self, RtmpConnectionError> {
         let should_close = Arc::new(AtomicBool::new(false));
 
-        let stream = TcpStream::connect((config.host.as_str(), config.port))?;
-
-        let socket = if config.use_tls {
-            let server_name = if let Ok(ip) = config.host.parse::<std::net::IpAddr>() {
-                ServerName::IpAddress(ip.into())
-            } else {
-                ServerName::try_from(config.host.clone())?
-            };
-            NonBlockingSocket::new_tls(stream, server_name, should_close)?
-        } else {
-            NonBlockingSocket::new(stream, should_close)
-        };
-
+        let socket =
+            NonBlockingSocket::new(&config.host, config.port, config.use_tls, should_close)?;
         let (mut reader, mut writer) = socket.split();
 
         let protocol = if config.use_tls { "RTMPS" } else { "RTMP" };

@@ -20,7 +20,7 @@ pub(crate) fn handle_connection(
     on_connection: Arc<Mutex<OnConnectionCallback>>,
 ) -> Result<(), RtmpServerConnectionError> {
     let should_close = Arc::new(AtomicBool::new(false));
-    let (mut reader, mut writer) = NonBlockingSocket::new(socket, should_close).split();
+    let (mut reader, mut writer) = NonBlockingSocket::from_tcp(socket, should_close).split(); // TODO: support TLS on input
 
     Handshake::perform_as_server(&mut reader, &mut writer)?;
     debug!("Handshake complete");

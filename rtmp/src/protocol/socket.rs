@@ -10,61 +10,70 @@ use std::{
 };
 
 use bytes::Buf;
-use rustls::pki_types::ServerName;
 
 use crate::{RtmpConnectionError, RtmpStreamError};
 
 use super::tls::TlsStream;
 
-enum SocketKind {
+pub(crate) enum Socket {
     Tcp(TcpStream),
     Tls(Box<TlsStream>),
 }
 
+impl Socket {
+    fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Socket::Tcp(tcp) => (&*tcp).read(buf),
+            Socket::Tls(tls) => tls.read(buf),
+        }
+    }
+
+    fn write(&self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            Socket::Tcp(tcp) => (&*tcp).write(buf),
+            Socket::Tls(tls) => tls.write(buf),
+        }
+    }
+
+    fn flush(&self) -> io::Result<()> {
+        match self {
+            Socket::Tcp(tcp) => (&*tcp).flush(),
+            Socket::Tls(tls) => tls.flush(),
+        }
+    }
+}
+
 pub(crate) struct NonBlockingSocket {
-    inner: SocketKind,
+    inner: Socket,
     should_close: Arc<AtomicBool>,
 }
 
 impl NonBlockingSocket {
-    pub fn new(socket: TcpStream, should_close: Arc<AtomicBool>) -> Self {
-        Self::configure_socket(&socket);
-        Self {
-            inner: SocketKind::Tcp(socket),
-            should_close,
-        }
-    }
-
-    pub fn new_tls(
-        socket: TcpStream,
-        server_name: ServerName<'static>,
+    pub fn new(
+        host: &str,
+        port: u16,
+        use_tls: bool,
         should_close: Arc<AtomicBool>,
     ) -> Result<Self, RtmpConnectionError> {
-        // Set timeouts on the raw TCP socket before wrapping — they remain
-        // effective at the OS level regardless of the TLS layer on top.
-        Self::configure_socket(&socket);
-        let tls = TlsStream::new(socket, server_name)?;
+        let stream = TcpStream::connect((host, port))?;
+        configure_socket(&stream);
+        let socket = if use_tls {
+            Socket::Tls(Box::new(TlsStream::connect(stream, host)?))
+        } else {
+            Socket::Tcp(stream)
+        };
         Ok(Self {
-            inner: SocketKind::Tls(Box::new(tls)),
+            inner: socket,
             should_close,
         })
     }
 
-    fn configure_socket(socket: &TcpStream) {
-        // Socket is intentionally kept in blocking mode with short read/write
-        // timeouts to approximate non-blocking behavior and allow cooperative
-        // polling using the should_close flag. On some platforms, a socket
-        // created during connection inherits options from the listener socket,
-        // so we explicitly force it to blocking mode here.
-        socket
-            .set_nonblocking(false)
-            .expect("Cannot set blocking tcp input stream");
-        socket
-            .set_read_timeout(Some(Duration::from_millis(50)))
-            .expect("Cannot set read timeout");
-        socket
-            .set_write_timeout(Some(Duration::from_millis(50)))
-            .expect("Cannot set write timeout");
+    pub fn from_tcp(socket: TcpStream, should_close: Arc<AtomicBool>) -> Self {
+        configure_socket(&socket);
+        Self {
+            inner: Socket::Tcp(socket),
+            should_close,
+        }
     }
 
     pub fn split(self) -> (BufferedReader, BufferedWriter) {
@@ -75,24 +84,15 @@ impl NonBlockingSocket {
     }
 
     fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
-        match &self.inner {
-            SocketKind::Tcp(tcp) => (&*tcp).read(buf),
-            SocketKind::Tls(tls) => tls.read(buf),
-        }
+        self.inner.read(buf)
     }
 
     fn write(&self, buf: &[u8]) -> io::Result<usize> {
-        match &self.inner {
-            SocketKind::Tcp(tcp) => (&*tcp).write(buf),
-            SocketKind::Tls(tls) => tls.write(buf),
-        }
+        self.inner.write(buf)
     }
 
     fn flush(&self) -> io::Result<()> {
-        match &self.inner {
-            SocketKind::Tcp(tcp) => (&*tcp).flush(),
-            SocketKind::Tls(tls) => tls.flush(),
-        }
+        self.inner.flush()
     }
 }
 
@@ -205,4 +205,21 @@ impl BufferedWriter {
         self.socket.flush()?;
         Ok(())
     }
+}
+
+pub(crate) fn configure_socket(socket: &TcpStream) {
+    // Socket is intentionally kept in blocking mode with short read/write
+    // timeouts to approximate non-blocking behavior and allow cooperative
+    // polling using the should_close flag. On some platforms, a socket
+    // created during connection inherits options from the listener socket,
+    // so we explicitly force it to blocking mode here.
+    socket
+        .set_nonblocking(false)
+        .expect("Cannot set blocking tcp input stream");
+    socket
+        .set_read_timeout(Some(Duration::from_millis(50)))
+        .expect("Cannot set read timeout");
+    socket
+        .set_write_timeout(Some(Duration::from_millis(50)))
+        .expect("Cannot set write timeout");
 }
