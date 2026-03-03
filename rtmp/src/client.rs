@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    net::{SocketAddr, TcpStream},
     sync::{Arc, atomic::AtomicBool},
 };
 
@@ -18,9 +17,11 @@ use crate::{
 };
 
 pub struct RtmpClientConfig {
-    pub addr: SocketAddr,
+    pub host: String,
+    pub port: u16,
     pub app: String,
     pub stream_key: String,
+    pub use_tls: bool,
 }
 
 pub struct RtmpClient {
@@ -33,11 +34,14 @@ impl RtmpClient {
     pub fn connect(config: RtmpClientConfig) -> Result<Self, RtmpConnectionError> {
         let should_close = Arc::new(AtomicBool::new(false));
 
-        let stream = TcpStream::connect(config.addr)?;
-        let (mut reader, mut writer) = NonBlockingSocket::new(stream, should_close).split();
+        let socket =
+            NonBlockingSocket::new(&config.host, config.port, config.use_tls, should_close)?;
+        let (mut reader, mut writer) = socket.split();
+
+        let protocol = if config.use_tls { "RTMPS" } else { "RTMP" };
 
         Handshake::perform_as_client(&mut reader, &mut writer)?;
-        debug!("Client handshake complete");
+        debug!(protocol, "Client handshake complete");
 
         let mut writer = RtmpMessageWriter::new(writer);
         let mut reader = RtmpMessageReader::new(reader);
@@ -45,7 +49,7 @@ impl RtmpClient {
         let stream_id =
             ConnectionNegotiation::run(&mut reader, &mut writer, &config.app, &config.stream_key)?;
 
-        debug!(stream_id, app = %config.app, stream_key = %config.stream_key, "RTMP client connected");
+        debug!(stream_id, app = %config.app, stream_key = %config.stream_key, "{protocol} client connected");
 
         Ok(Self {
             writer,

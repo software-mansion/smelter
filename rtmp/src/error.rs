@@ -13,6 +13,12 @@ pub enum RtmpConnectionError {
     #[error("Failed to establish TCP connection")]
     TcpSocket(#[from] std::io::Error),
 
+    #[error("TLS error: {0}")]
+    Tls(#[from] rustls::Error),
+
+    #[error("Invalid DNS name: {0}")]
+    InvalidDnsName(#[from] rustls::pki_types::InvalidDnsNameError),
+
     #[error(transparent)]
     StreamError(#[from] RtmpStreamError),
 }
@@ -23,6 +29,8 @@ impl RtmpConnectionError {
         match self {
             Self::HandshakeFailed(_) => true,
             Self::TcpSocket(_) => true,
+            Self::Tls(_) => true,
+            Self::InvalidDnsName(_) => true,
             Self::StreamError(err) => err.is_critical(),
         }
     }

@@ -99,9 +99,11 @@ impl RtmpClientOutput {
         audio_config: &Option<AudioConfig>,
     ) -> Result<RtmpClient, RtmpClientError> {
         let mut client = RtmpClient::connect(RtmpClientConfig {
-            addr: connection_opts.address,
+            host: connection_opts.host,
+            port: connection_opts.port,
             app: connection_opts.app,
             stream_key: connection_opts.stream_key,
+            use_tls: connection_opts.use_tls,
         })?;
 
         if let Some(config) = video_config {
