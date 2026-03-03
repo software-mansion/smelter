@@ -116,6 +116,7 @@ impl DecodeInputBuffer {
         if self.capacity < size {
             let new_capacity = size.max(2 * self.capacity);
             self.buffer = Buffer::new_decode(self.allocator.clone(), new_capacity, profile)?;
+            self.capacity = new_capacity;
         }
 
         unsafe {
