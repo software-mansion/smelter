@@ -80,7 +80,7 @@ fn init_runtime() -> Runtime {
     if available_threads >= MINIMUM_WORKER_THREADS {
         debug!(
             worker_threads = available_threads,
-            "Number of worker threads used."
+            "Number of runtime worker threads used."
         );
         runtime_builder.build().unwrap()
     } else {
@@ -90,7 +90,7 @@ fn init_runtime() -> Runtime {
             .unwrap_or(MINIMUM_WORKER_THREADS);
         debug!(
             worker_threads = thread_count,
-            "Number of worker threads used."
+            "Number of runtime worker threads used."
         );
         runtime_builder
             .enable_all()
