@@ -15,9 +15,9 @@ use crate::{
         UserControlMessage,
     },
     protocol::{
-        handshake::Handshake, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter,
-        socket::NonBlockingSocket,
+        byte_stream::RtmpByteStream, handshake::Handshake, message_stream::RtmpMessageStream,
     },
+    transport::RtmpTransport,
 };
 
 const CONNECT_TRANSACTION_ID: u32 = 1;
@@ -37,8 +37,7 @@ pub struct RtmpClient {
 }
 
 struct RtmpClientState {
-    writer: RtmpMessageWriter,
-    reader: RtmpMessageReader,
+    stream: RtmpMessageStream,
 
     /// window size for data incoming from the server
     window_size: Option<u64>,
@@ -50,16 +49,18 @@ impl RtmpClient {
     pub fn connect(config: RtmpClientConfig) -> Result<Self, RtmpConnectionError> {
         let should_close = Arc::new(AtomicBool::new(false));
 
-        let socket =
-            NonBlockingSocket::new_client(&config.host, config.port, config.use_tls, should_close)?;
-        let (mut reader, mut writer) = socket.split();
+        let transport = if config.use_tls {
+            RtmpTransport::tls_client(&config.host, config.port)?
+        } else {
+            RtmpTransport::tcp_client(&config.host, config.port)?
+        };
+        let mut socket = RtmpByteStream::new(transport, should_close);
 
-        Handshake::perform_as_client(&mut reader, &mut writer)?;
+        Handshake::perform_as_client(&mut socket)?;
         debug!("Handshake complete");
 
         let mut state = RtmpClientState {
-            writer: RtmpMessageWriter::new(writer),
-            reader: RtmpMessageReader::new(reader),
+            stream: RtmpMessageStream::new(socket),
             window_size: None,
             last_ack: None,
         };
@@ -75,13 +76,13 @@ impl RtmpClient {
         RtmpEvent: From<T>,
     {
         let event = RtmpEvent::from(event);
-        self.state.writer.write(RtmpMessage::Event {
+        self.state.stream.write_msg(RtmpMessage::Event {
             event,
             stream_id: self.stream_id,
         })?;
 
         // try read any pending messages
-        while let Some(msg) = self.state.reader.try_next()? {
+        while let Some(msg) = self.state.stream.try_read_msg()? {
             self.state.default_msg_handler(msg)?;
         }
         Ok(())
@@ -95,10 +96,10 @@ impl RtmpClientState {
         stream_key: &str,
     ) -> Result<u32, RtmpConnectionError> {
         let mut state = NegotiationProgress::WaitingForConnectResult;
-        send_connect(&mut self.writer, app)?;
+        send_connect(&mut self.stream, app)?;
 
         loop {
-            let msg = match self.reader.next() {
+            let msg = match self.stream.read_msg() {
                 Ok(msg) => msg,
                 Err(RtmpStreamError::ParseMessage(err)) => {
                     warn!(%err, "Received unknown msg");
@@ -109,7 +110,7 @@ impl RtmpClientState {
 
             if let Some(_response) = state.try_match_connect_response(&msg)? {
                 state = NegotiationProgress::WaitingForCreateStreamResult;
-                send_create_stream(&mut self.writer)?;
+                send_create_stream(&mut self.stream)?;
                 continue;
             }
 
@@ -117,12 +118,12 @@ impl RtmpClientState {
                 state = NegotiationProgress::WaitingForOnStatus {
                     stream_id: response.stream_id,
                 };
-                send_publish(&mut self.writer, stream_key, response.stream_id)?;
+                send_publish(&mut self.stream, stream_key, response.stream_id)?;
 
                 // should be after StreamBegin but e.g. YouTube does not send it
-                self.writer
-                    .write(RtmpMessage::SetChunkSize { chunk_size: 4096 })?;
-                self.writer.set_chunk_size(4096);
+                self.stream
+                    .write_msg(RtmpMessage::SetChunkSize { chunk_size: 4096 })?;
+                self.stream.set_writer_chunk_size(4096);
                 continue;
             }
 
@@ -137,7 +138,7 @@ impl RtmpClientState {
     fn default_msg_handler(&mut self, msg: RtmpMessage) -> Result<(), RtmpStreamError> {
         match msg {
             RtmpMessage::SetChunkSize { chunk_size } => {
-                self.reader.set_chunk_size(chunk_size as usize);
+                self.stream.set_reader_chunk_size(chunk_size as usize);
             }
             RtmpMessage::WindowAckSize { window_size } => {
                 // Client does not receive much data, so sending ACKs
@@ -150,13 +151,13 @@ impl RtmpClientState {
             RtmpMessage::SetPeerBandwidth { bandwidth, .. } => {
                 // It configures how often client will be sending ACKs,
                 // it is different that self.window_size
-                self.writer.write(RtmpMessage::WindowAckSize {
+                self.stream.write_msg(RtmpMessage::WindowAckSize {
                     window_size: bandwidth,
                 })?;
             }
             RtmpMessage::UserControl(UserControlMessage::PingRequest { timestamp }) => {
                 let msg = UserControlMessage::PingResponse { timestamp };
-                self.writer.write(msg.into())?;
+                self.stream.write_msg(msg.into())?;
             }
             _ => {
                 debug!(?msg, "Unhandled message")
@@ -173,9 +174,9 @@ impl RtmpClientState {
         let (Some(window_size), Some(last_ack)) = (self.window_size, self.last_ack) else {
             return Ok(());
         };
-        let bytes_received = self.reader.bytes_read();
+        let bytes_received = self.stream.bytes_read();
         if last_ack.saturating_sub(bytes_received) > window_size / 2 {
-            self.writer.write(RtmpMessage::Acknowledgement {
+            self.stream.write_msg(RtmpMessage::Acknowledgement {
                 bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
             })?;
             self.last_ack = Some(bytes_received);
@@ -296,7 +297,7 @@ impl NegotiationProgress {
     }
 }
 
-fn send_connect(writer: &mut RtmpMessageWriter, app: &str) -> Result<(), RtmpConnectionError> {
+fn send_connect(stream: &mut RtmpMessageStream, app: &str) -> Result<(), RtmpConnectionError> {
     let props = HashMap::from_iter(
         [
             ("app", app.into()),
@@ -314,7 +315,7 @@ fn send_connect(writer: &mut RtmpMessageWriter, app: &str) -> Result<(), RtmpCon
         .map(|(k, v)| (k.into(), v)),
     );
 
-    writer.write(RtmpMessage::CommandMessage {
+    stream.write_msg(RtmpMessage::CommandMessage {
         msg: CommandMessage::Connect {
             transaction_id: CONNECT_TRANSACTION_ID,
             command_object: props,
@@ -325,8 +326,8 @@ fn send_connect(writer: &mut RtmpMessageWriter, app: &str) -> Result<(), RtmpCon
     Ok(())
 }
 
-fn send_create_stream(writer: &mut RtmpMessageWriter) -> Result<(), RtmpConnectionError> {
-    writer.write(RtmpMessage::CommandMessage {
+fn send_create_stream(stream: &mut RtmpMessageStream) -> Result<(), RtmpConnectionError> {
+    stream.write_msg(RtmpMessage::CommandMessage {
         msg: CommandMessage::CreateStream {
             transaction_id: CREATE_STREAM_TRANSACTION_ID,
             command_object: Amf0Value::Null,
@@ -337,11 +338,11 @@ fn send_create_stream(writer: &mut RtmpMessageWriter) -> Result<(), RtmpConnecti
 }
 
 fn send_publish(
-    writer: &mut RtmpMessageWriter,
+    stream: &mut RtmpMessageStream,
     stream_key: &str,
     stream_id: u32,
 ) -> Result<(), RtmpConnectionError> {
-    writer.write(RtmpMessage::CommandMessage {
+    stream.write_msg(RtmpMessage::CommandMessage {
         msg: CommandMessage::Publish {
             stream_key: stream_key.to_string(),
             publishing_type: "live".to_string(),

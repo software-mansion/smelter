@@ -14,13 +14,13 @@ use crate::{
         UserControlMessage,
     },
     protocol::{
-        handshake::Handshake, message_reader::RtmpMessageReader, message_writer::RtmpMessageWriter,
-        socket::NonBlockingSocket,
+        byte_stream::RtmpByteStream, handshake::Handshake, message_stream::RtmpMessageStream,
     },
     server::{
         OnConnectionCallback, RtmpConnection,
         negotiation::{NegotiationProgress, NegotiationResult, PEER_BANDWIDTH, WINDOW_ACK_SIZE},
     },
+    transport::RtmpTransport,
 };
 
 /// For server we can pick this number for client it would be based on value
@@ -32,14 +32,14 @@ pub(crate) fn handle_connection(
     on_connection: Arc<Mutex<OnConnectionCallback>>,
 ) -> Result<(), RtmpServerConnectionError> {
     let should_close = Arc::new(AtomicBool::new(false));
-    let (mut reader, mut writer) = NonBlockingSocket::from_tcp_server(socket, should_close).split(); // TODO: support TLS on input
+    let transport = RtmpTransport::tcp_server_stream(socket); // TODO: support TLS on input
+    let mut stream = RtmpByteStream::new(transport, should_close);
 
-    Handshake::perform_as_server(&mut reader, &mut writer)?;
+    Handshake::perform_as_server(&mut stream)?;
     debug!("Handshake complete");
 
     let mut state = RtmpServerConnectionState {
-        writer: RtmpMessageWriter::new(writer),
-        reader: RtmpMessageReader::new(reader),
+        stream: RtmpMessageStream::new(stream),
         window_size: None,
         last_ack: None,
     };
@@ -72,8 +72,7 @@ pub(crate) fn handle_connection(
 }
 
 struct RtmpServerConnectionState {
-    writer: RtmpMessageWriter,
-    reader: RtmpMessageReader,
+    stream: RtmpMessageStream,
 
     /// window size for data incoming from the client
     window_size: Option<u64>,
@@ -84,7 +83,7 @@ struct RtmpServerConnectionState {
 impl RtmpServerConnectionState {
     fn next_msg(&mut self) -> Result<RtmpMessage, RtmpServerConnectionError> {
         loop {
-            match self.reader.next() {
+            match self.stream.read_msg() {
                 // should catch unknown messages or parsing error that
                 // do not break stream continuity
                 Err(err) if !err.is_critical() => {
@@ -112,7 +111,7 @@ impl RtmpServerConnectionState {
             if let Some((transaction_id, app)) = state.try_match_create_stream(&msg)? {
                 state = NegotiationProgress::WaitingForPublish { app };
 
-                self.writer.write(RtmpMessage::CommandMessage {
+                self.stream.write_msg(RtmpMessage::CommandMessage {
                     msg: CommandMessageOk {
                         transaction_id,
                         command_object: Amf0Value::Null,
@@ -122,7 +121,7 @@ impl RtmpServerConnectionState {
                     stream_id: CONTROL_MESSAGE_STREAM_ID,
                 })?;
 
-                self.writer.write(
+                self.stream.write_msg(
                     UserControlMessage::StreamBegin {
                         stream_id: PUBLISHED_MESSAGE_STREAM_ID,
                     }
@@ -142,7 +141,7 @@ impl RtmpServerConnectionState {
                     .map(|(k, v)| (k.into(), v)),
                 );
 
-                self.writer.write(RtmpMessage::CommandMessage {
+                self.stream.write_msg(RtmpMessage::CommandMessage {
                     msg: CommandMessage::OnStatus(Amf0Value::Object(status_info)),
                     stream_id: PUBLISHED_MESSAGE_STREAM_ID,
                 })?;
@@ -154,16 +153,16 @@ impl RtmpServerConnectionState {
     }
 
     fn on_connect(&mut self, transaction_id: u32) -> Result<(), RtmpServerConnectionError> {
-        self.writer.write(RtmpMessage::WindowAckSize {
+        self.stream.write_msg(RtmpMessage::WindowAckSize {
             window_size: WINDOW_ACK_SIZE,
         })?;
-        self.writer.write(RtmpMessage::SetPeerBandwidth {
+        self.stream.write_msg(RtmpMessage::SetPeerBandwidth {
             bandwidth: PEER_BANDWIDTH,
             limit_type: 0, // 0 - Hard, 1 - Soft, 2 - Dynamic
         })?;
 
-        self.writer
-            .write(UserControlMessage::StreamBegin { stream_id: 0 }.into())?;
+        self.stream
+            .write_msg(UserControlMessage::StreamBegin { stream_id: 0 }.into())?;
 
         // _result - connect response
         let props = HashMap::from_iter(
@@ -184,7 +183,7 @@ impl RtmpServerConnectionState {
             .into_iter()
             .map(|(k, v)| (k.into(), v)),
         );
-        self.writer.write(RtmpMessage::CommandMessage {
+        self.stream.write_msg(RtmpMessage::CommandMessage {
             msg: CommandMessageOk {
                 transaction_id,
                 command_object: Amf0Value::Object(props),
@@ -200,7 +199,7 @@ impl RtmpServerConnectionState {
     fn default_msg_handler(&mut self, msg: RtmpMessage) -> Result<(), RtmpStreamError> {
         match msg {
             RtmpMessage::SetChunkSize { chunk_size } => {
-                self.reader.set_chunk_size(chunk_size as usize);
+                self.stream.set_reader_chunk_size(chunk_size as usize);
             }
             RtmpMessage::WindowAckSize { window_size } => {
                 self.window_size = Some(window_size as u64);
@@ -212,13 +211,13 @@ impl RtmpServerConnectionState {
             RtmpMessage::SetPeerBandwidth { bandwidth, .. } => {
                 // It configures how often client will be sending ACKs,
                 // it is different that self.window_size
-                self.writer.write(RtmpMessage::WindowAckSize {
+                self.stream.write_msg(RtmpMessage::WindowAckSize {
                     window_size: bandwidth,
                 })?;
             }
             RtmpMessage::UserControl(UserControlMessage::PingRequest { timestamp }) => {
                 let msg = UserControlMessage::PingResponse { timestamp };
-                self.writer.write(msg.into())?;
+                self.stream.write_msg(msg.into())?;
             }
             _ => {
                 debug!(?msg, "Unhandled message")
@@ -234,9 +233,9 @@ impl RtmpServerConnectionState {
         let (Some(window_size), Some(last_ack)) = (self.window_size, self.last_ack) else {
             return Ok(());
         };
-        let bytes_received = self.reader.bytes_read();
+        let bytes_received = self.stream.bytes_read();
         if last_ack.saturating_sub(bytes_received) > window_size / 2 {
-            self.writer.write(RtmpMessage::Acknowledgement {
+            self.stream.write_msg(RtmpMessage::Acknowledgement {
                 bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
             })?;
             self.last_ack = Some(bytes_received);
