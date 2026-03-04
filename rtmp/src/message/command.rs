@@ -194,7 +194,6 @@ impl CommandMessageOk {
 
 /// Parsed connect _result response (spec 7.2.1.1, server -> client).
 #[derive(Debug, Clone, PartialEq)]
-#[allow(unused)]
 pub(crate) struct CommandMessageConnectSuccess {
     pub properties: HashMap<String, Amf0Value>,
     pub information: HashMap<String, Amf0Value>,
@@ -202,7 +201,6 @@ pub(crate) struct CommandMessageConnectSuccess {
 
 /// Parsed createStream _result response (spec 7.2.1.3, server -> client).
 #[derive(Debug, Clone, PartialEq)]
-#[allow(unused)]
 pub(crate) struct CommandMessageCreateStreamSuccess {
     pub stream_id: u32,
 }
