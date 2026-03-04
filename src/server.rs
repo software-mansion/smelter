@@ -72,26 +72,17 @@ pub fn run_api(
 fn init_runtime() -> Runtime {
     const MINIMUM_WORKER_THREADS: usize = 3;
 
-    let available_threads = thread::available_parallelism().ok().map(|v| v.get());
-    trace!(available_parallelism=?available_threads, "Available cpus detected.");
-    let available_threads = available_threads
-        .unwrap_or(MINIMUM_WORKER_THREADS)
-        .max(MINIMUM_WORKER_THREADS);
+    let available_threads = thread::available_parallelism();
+    trace!(?available_threads, "Available threads detected.");
+    let available_threads = available_threads.map_or(MINIMUM_WORKER_THREADS, |v| v.get());
 
-    let thread_count = env::var("TOKIO_WORKER_THREADS")
-        .ok()
-        .map(|v| {
-            let val: usize = v
-                .parse()
-                .expect("Failed to parse TOKIO_WORKER_THREADS. Must be a number greater than 0.");
-            if val == 0 {
-                panic!("TOKIO_WORKER_THREADS must be greater than 0.");
-            } else {
-                val
-            }
-        })
-        .unwrap_or(available_threads);
-
+    let thread_count = env::var("TOKIO_WORKER_THREADS").map_or(available_threads, |v| {
+        let threads = v.trim().parse();
+        match threads {
+            Ok(t) if t > 0 => t,
+            Ok(_) | Err(_) => panic!("TOKIO_WORKER_THREADS must be a number greater than 0."),
+        }
+    });
     debug!(
         worker_threads = thread_count,
         "Number of runtime worker threads."
