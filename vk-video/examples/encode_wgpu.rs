@@ -1,4 +1,7 @@
 #[cfg(vulkan)]
+use vk_video::WgpuRgbaToNv12Converter;
+
+#[cfg(vulkan)]
 fn main() {
     use std::{io::Write, num::NonZeroU32};
     use vk_video::{
@@ -72,7 +75,7 @@ fn main() {
             encoder
                 .encode(
                     Frame {
-                        data: wgpu_state.texture.clone(),
+                        data: wgpu_state.nv12_texture.clone(),
                         pts: None,
                     },
                     false,
@@ -86,9 +89,13 @@ fn main() {
 
 #[cfg(vulkan)]
 struct WgpuState {
-    texture: wgpu::Texture,
-    y_renderer: PlaneRenderer,
-    uv_renderer: PlaneRenderer,
+    pipeline: wgpu::RenderPipeline,
+    rgba_view: wgpu::TextureView,
+    rgba_bg: wgpu::BindGroup,
+    nv12_texture: wgpu::Texture,
+    y_plane_view: wgpu::TextureView,
+    uv_plane_view: wgpu::TextureView,
+    rgba_to_nv12_converter: WgpuRgbaToNv12Converter,
     device: wgpu::Device,
     queue: wgpu::Queue,
 }
@@ -110,108 +117,23 @@ impl WgpuState {
             immediate_size: 4,
         });
 
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("wgpu render target"),
-            format: wgpu::TextureFormat::NV12,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-            dimension: wgpu::TextureDimension::D2,
-            sample_count: 1,
-            view_formats: &[],
-            mip_level_count: 1,
-            size: wgpu::Extent3d {
-                width: width.get(),
-                height: height.get(),
-                depth_or_array_layers: 1,
-            },
-        });
-
-        let y_renderer = PlaneRenderer::new(
-            &device,
-            &pipeline_layout,
-            &shader,
-            "fs_main_y",
-            &texture,
-            wgpu::TextureAspect::Plane0,
-        );
-        let uv_renderer = PlaneRenderer::new(
-            &device,
-            &pipeline_layout,
-            &shader,
-            "fs_main_uv",
-            &texture,
-            wgpu::TextureAspect::Plane1,
-        );
-
-        WgpuState {
-            texture,
-            y_renderer,
-            uv_renderer,
-            device,
-            queue,
-        }
-    }
-
-    fn render(&self, time: f32) {
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("wgpu encoder"),
-            });
-
-        self.y_renderer.render(&mut encoder, time);
-        self.uv_renderer.render(&mut encoder, time);
-
-        encoder.transition_resources(
-            [].into_iter(),
-            [wgpu::TextureTransition {
-                texture: &self.texture,
-                state: wgpu::TextureUses::COPY_SRC,
-                selector: None,
-            }]
-            .into_iter(),
-        );
-
-        let buffer = encoder.finish();
-
-        self.queue.submit([buffer]);
-    }
-}
-
-#[cfg(vulkan)]
-struct PlaneRenderer {
-    pipeline: wgpu::RenderPipeline,
-    plane: wgpu::TextureAspect,
-    plane_view: wgpu::TextureView,
-}
-
-#[cfg(vulkan)]
-impl PlaneRenderer {
-    fn new(
-        device: &wgpu::Device,
-        pipeline_layout: &wgpu::PipelineLayout,
-        shader: &wgpu::ShaderModule,
-        fragment_entry_point: &str,
-        texture: &wgpu::Texture,
-        plane: wgpu::TextureAspect,
-    ) -> Self {
-        let format = texture.format().aspect_specific_format(plane).unwrap();
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("wgpu pipeline"),
-            layout: Some(pipeline_layout),
+            layout: Some(&pipeline_layout),
             cache: None,
             vertex: wgpu::VertexState {
-                module: shader,
+                module: &shader,
                 buffers: &[],
                 entry_point: None,
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
-                module: shader,
-                entry_point: Some(fragment_entry_point),
+                module: &shader,
+                entry_point: None,
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     blend: None,
-                    format,
+                    format: wgpu::TextureFormat::Rgba8Unorm,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -233,52 +155,112 @@ impl PlaneRenderer {
             depth_stencil: None,
         });
 
-        let plane_view = texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("wgpu render target plane view"),
-            aspect: plane,
-            usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
+        let rgba_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("wgpu render target"),
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            dimension: wgpu::TextureDimension::D2,
+            sample_count: 1,
+            view_formats: &[],
+            mip_level_count: 1,
+            size: wgpu::Extent3d {
+                width: width.get(),
+                height: height.get(),
+                depth_or_array_layers: 1,
+            },
+        });
+        let rgba_view = rgba_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("wgpu render target view"),
             ..Default::default()
         });
 
-        Self {
+        let nv12_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("encoder input"),
+            format: wgpu::TextureFormat::NV12,
+            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            dimension: wgpu::TextureDimension::D2,
+            sample_count: 1,
+            view_formats: &[],
+            mip_level_count: 1,
+            size: wgpu::Extent3d {
+                width: width.get(),
+                height: height.get(),
+                depth_or_array_layers: 1,
+            },
+        });
+        let y_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
+            aspect: wgpu::TextureAspect::Plane0,
+            ..Default::default()
+        });
+        let uv_plane_view = nv12_texture.create_view(&wgpu::TextureViewDescriptor {
+            aspect: wgpu::TextureAspect::Plane1,
+            ..Default::default()
+        });
+
+        let rgba_to_nv12_converter = WgpuRgbaToNv12Converter::new(&device);
+        let rgba_bg = rgba_to_nv12_converter.create_input_bind_group(&rgba_texture);
+
+        WgpuState {
             pipeline,
-            plane,
-            plane_view,
+            rgba_view,
+            rgba_bg,
+            nv12_texture,
+            y_plane_view,
+            uv_plane_view,
+            rgba_to_nv12_converter,
+            device,
+            queue,
         }
     }
 
-    fn render(&self, encoder: &mut wgpu::CommandEncoder, time: f32) {
-        let clear_color = match self.plane {
-            wgpu::TextureAspect::Plane0 => wgpu::Color::BLACK,
-            wgpu::TextureAspect::Plane1 => wgpu::Color {
-                r: 0.5,
-                g: 0.5,
-                b: 0.0,
-                a: 1.0,
-            },
-            _ => unreachable!(),
-        };
+    fn render(&self, time: f32) {
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("wgpu encoder"),
+            });
 
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("wgpu render pass"),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            depth_stencil_attachment: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.plane_view,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(clear_color),
-                    store: wgpu::StoreOp::Store,
-                },
-                resolve_target: None,
-                depth_slice: None,
-            })],
-            multiview_mask: None,
-        });
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("wgpu render pass"),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                depth_stencil_attachment: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.rgba_view,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                    resolve_target: None,
+                    depth_slice: None,
+                })],
+                multiview_mask: None,
+            });
 
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_immediates(0, &time.to_ne_bytes());
-        render_pass.draw(0..3, 0..1);
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_immediates(0, &time.to_ne_bytes());
+            render_pass.draw(0..3, 0..1);
+        }
+        self.rgba_to_nv12_converter.convert(
+            &mut encoder,
+            &self.rgba_bg,
+            &self.y_plane_view,
+            &self.uv_plane_view,
+        );
+        encoder.transition_resources(
+            [].into_iter(),
+            [wgpu::TextureTransition {
+                texture: &self.nv12_texture,
+                state: wgpu::TextureUses::COPY_SRC,
+                selector: None,
+            }]
+            .into_iter(),
+        );
+
+        let buffer = encoder.finish();
+
+        self.queue.submit([buffer]);
     }
 }
 
