@@ -59,7 +59,7 @@ impl RtmpTransport {
             .set_nonblocking(false)
             .expect("Cannot set blocking tcp input stream");
         socket
-            .set_read_timeout(Some(Duration::from_micros(1)))
+            .set_read_timeout(Some(Duration::from_micros(500)))
             .expect("Cannot set read timeout");
         socket
             .set_write_timeout(Some(Duration::from_millis(50)))

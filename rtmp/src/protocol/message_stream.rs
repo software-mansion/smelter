@@ -87,7 +87,10 @@ impl RtmpMessageReader {
     ) -> Result<Option<RtmpMessage>, RtmpStreamError> {
         match self.next_chunk(socket, false) {
             Ok(msg) => Ok(Some(msg)),
-            Err(RtmpStreamError::TcpError(err)) if err.kind() == ErrorKind::WouldBlock => Ok(None),
+            Err(RtmpStreamError::TcpError(err)) => match err.kind() {
+                ErrorKind::WouldBlock | ErrorKind::TimedOut => Ok(None),
+                _ => Err(RtmpStreamError::TcpError(err)),
+            },
             Err(err) => Err(err),
         }
     }

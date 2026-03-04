@@ -42,7 +42,7 @@ struct RtmpClientState {
     /// window size for data incoming from the server
     window_size: Option<u64>,
     /// last ack sent to client
-    last_ack: Option<u64>,
+    last_ack: u64,
 }
 
 impl RtmpClient {
@@ -62,7 +62,7 @@ impl RtmpClient {
         let mut state = RtmpClientState {
             stream: RtmpMessageStream::new(socket),
             window_size: None,
-            last_ack: None,
+            last_ack: 0,
         };
 
         let stream_id = state.negotiate_connection(&config.app, &config.stream_key)?;
@@ -171,15 +171,15 @@ impl RtmpClientState {
     }
 
     fn maybe_send_ack(&mut self) -> Result<(), RtmpStreamError> {
-        let (Some(window_size), Some(last_ack)) = (self.window_size, self.last_ack) else {
+        let Some(window_size) = self.window_size else {
             return Ok(());
         };
         let bytes_received = self.stream.bytes_read();
-        if last_ack.saturating_sub(bytes_received) > window_size / 2 {
+        if bytes_received.saturating_sub(self.last_ack) > window_size / 2 {
             self.stream.write_msg(RtmpMessage::Acknowledgement {
                 bytes_received: (bytes_received % (u32::MAX as u64 + 1)) as u32,
             })?;
-            self.last_ack = Some(bytes_received);
+            self.last_ack = bytes_received;
         }
         Ok(())
     }

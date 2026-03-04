@@ -21,7 +21,7 @@ impl RtmpMessage {
                 payload: Bytes::copy_from_slice(&window_size.to_be_bytes()[..]),
             },
             RtmpMessage::Acknowledgement { bytes_received } => RawMessage {
-                msg_type: MessageType::WindowAckSize.into_raw(),
+                msg_type: MessageType::Acknowledgement.into_raw(),
                 stream_id: CONTROL_MESSAGE_STREAM_ID,
                 chunk_stream_id: RESERVED_CHUNK_STREAM_ID,
                 timestamp: 0,
