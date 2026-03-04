@@ -1,13 +1,14 @@
-mod tls;
-
 use std::{
     io::{self, Read, Write},
     net::TcpStream,
     time::Duration,
 };
 
-use crate::RtmpConnectionError;
 use tls::TlsClientStream;
+
+use crate::RtmpConnectionError;
+
+mod tls;
 
 /// Transport layer for RTMP connections. Wraps either a plain TCP or a TLS
 /// connection and implements [`Read`] + [`Write`].
