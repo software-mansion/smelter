@@ -2,7 +2,7 @@ use crossbeam_channel::Receiver;
 use signal_hook::{consts, iterator::Signals};
 use smelter_render::error::ErrorStack;
 use tokio::runtime::Builder;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 use std::{env, net::SocketAddr, process, sync::Arc, thread};
 use tokio::runtime::Runtime;
@@ -72,11 +72,12 @@ pub fn run_api(
 fn init_runtime() -> Runtime {
     const MINIMUM_WORKER_THREADS: usize = 3;
 
-    let available_threads = thread::available_parallelism()
-        .ok()
-        .map(|v| v.get())
+    let available_threads = thread::available_parallelism().ok().map(|v| v.get());
+    trace!(available_parallelism=?available_threads, "Available cpus detected.");
+    let available_threads = available_threads
         .unwrap_or(MINIMUM_WORKER_THREADS)
         .max(MINIMUM_WORKER_THREADS);
+
     let thread_count = env::var("TOKIO_WORKER_THREADS")
         .ok()
         .and_then(|v| v.trim().parse().ok())
