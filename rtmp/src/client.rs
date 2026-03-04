@@ -127,7 +127,7 @@ impl RtmpClientState {
                 continue;
             }
 
-            if let Some((_on_status, stream_id)) = state.try_match_on_status(&msg)? {
+            if let Some((_on_status, stream_id)) = state.try_match_on_status(&msg) {
                 return Ok(stream_id);
             }
 
@@ -274,12 +274,9 @@ impl NegotiationProgress {
         }
     }
 
-    fn try_match_on_status(
-        &self,
-        msg: &RtmpMessage,
-    ) -> Result<Option<(Amf0Value, u32)>, RtmpConnectionError> {
+    fn try_match_on_status(&self, msg: &RtmpMessage) -> Option<(Amf0Value, u32)> {
         let NegotiationProgress::WaitingForOnStatus { stream_id } = self else {
-            return Ok(None);
+            return None;
         };
 
         let RtmpMessage::CommandMessage {
@@ -287,13 +284,13 @@ impl NegotiationProgress {
             stream_id: on_status_stream_id,
         } = msg
         else {
-            return Ok(None);
+            return None;
         };
 
         if on_status_stream_id != stream_id {
-            return Ok(None);
+            return None;
         }
-        Ok(Some((status.clone(), *stream_id)))
+        Some((status.clone(), *stream_id))
     }
 }
 

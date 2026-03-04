@@ -1,7 +1,6 @@
 use std::{ops::Deref, sync::Arc};
 
 use crate::{
-    RtmpConnectionError,
     amf0::Amf0Value,
     message::{CommandMessage, RtmpMessage},
 };
@@ -41,16 +40,13 @@ pub(super) enum NegotiationProgress {
 }
 
 impl NegotiationProgress {
-    pub fn try_match_connect(
-        &self,
-        msg: &RtmpMessage,
-    ) -> Result<Option<(u32, Arc<str>)>, RtmpConnectionError> {
+    pub fn try_match_connect(&self, msg: &RtmpMessage) -> Option<(u32, Arc<str>)> {
         let NegotiationProgress::WaitingForConnect = self else {
-            return Ok(None);
+            return None;
         };
 
         let RtmpMessage::CommandMessage { msg, .. } = msg else {
-            return Ok(None);
+            return None;
         };
         let CommandMessage::Connect {
             transaction_id,
@@ -58,7 +54,7 @@ impl NegotiationProgress {
             ..
         } = msg
         else {
-            return Ok(None);
+            return None;
         };
 
         let app = match command_object.get("app") {
@@ -66,45 +62,39 @@ impl NegotiationProgress {
             None | Some(_) => "",
         };
 
-        Ok(Some((*transaction_id, Arc::from(app))))
+        Some((*transaction_id, Arc::from(app)))
     }
 
-    pub fn try_match_create_stream(
-        &self,
-        msg: &RtmpMessage,
-    ) -> Result<Option<(u32, Arc<str>)>, RtmpConnectionError> {
+    pub fn try_match_create_stream(&self, msg: &RtmpMessage) -> Option<(u32, Arc<str>)> {
         let NegotiationProgress::WaitingForCreateStream { app } = self else {
-            return Ok(None);
+            return None;
         };
 
         let RtmpMessage::CommandMessage { msg, .. } = msg else {
-            return Ok(None);
+            return None;
         };
         let CommandMessage::CreateStream { transaction_id, .. } = msg else {
-            return Ok(None);
+            return None;
         };
 
-        Ok(Some((*transaction_id, app.clone())))
+        Some((*transaction_id, app.clone()))
     }
 
-    pub fn try_match_publish(
-        &self,
-        msg: &RtmpMessage,
-    ) -> Result<Option<NegotiationResult>, RtmpConnectionError> {
+    pub fn try_match_publish(&self, msg: &RtmpMessage) -> Option<NegotiationResult> {
         let NegotiationProgress::WaitingForPublish { app } = self else {
-            return Ok(None);
+            return None;
         };
 
         let RtmpMessage::CommandMessage { msg, .. } = msg else {
-            return Ok(None);
+            return None;
         };
         let CommandMessage::Publish { stream_key, .. } = msg else {
-            return Ok(None);
+            return None;
         };
 
-        Ok(Some(NegotiationResult {
+        Some(NegotiationResult {
             app: app.clone(),
             stream_key: Arc::from(stream_key.deref()),
-        }))
+        })
     }
 }

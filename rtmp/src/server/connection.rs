@@ -102,13 +102,13 @@ impl RtmpServerConnectionState {
         loop {
             let msg = self.next_msg()?;
 
-            if let Some((transaction_id, app)) = state.try_match_connect(&msg)? {
+            if let Some((transaction_id, app)) = state.try_match_connect(&msg) {
                 state = NegotiationProgress::WaitingForCreateStream { app };
                 self.on_connect(transaction_id)?;
                 continue;
             }
 
-            if let Some((transaction_id, app)) = state.try_match_create_stream(&msg)? {
+            if let Some((transaction_id, app)) = state.try_match_create_stream(&msg) {
                 state = NegotiationProgress::WaitingForPublish { app };
 
                 self.stream.write_msg(RtmpMessage::CommandMessage {
@@ -130,7 +130,7 @@ impl RtmpServerConnectionState {
                 continue;
             }
 
-            if let Some(result) = state.try_match_publish(&msg)? {
+            if let Some(result) = state.try_match_publish(&msg) {
                 let status_info = HashMap::from_iter(
                     [
                         ("level", "status".into()),
