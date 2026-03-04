@@ -2,12 +2,10 @@ use bytes::Bytes;
 
 use crate::RtmpMessageParseError;
 
+pub(crate) mod byte_stream;
 mod chunk;
 pub(crate) mod handshake;
-pub(crate) mod message_reader;
-pub(crate) mod message_writer;
-pub(crate) mod socket;
-pub(crate) mod tls;
+pub(crate) mod message_stream;
 
 #[derive(Debug)]
 pub(crate) struct RawMessage {

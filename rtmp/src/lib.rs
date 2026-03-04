@@ -7,6 +7,7 @@ mod flv;
 mod message;
 mod protocol;
 mod server;
+mod transport;
 
 pub use client::*;
 pub use error::*;

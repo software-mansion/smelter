@@ -44,6 +44,18 @@ pub enum Amf0Value {
     AvmPlus(Amf3Value),
 }
 
+impl From<&'_ str> for Amf0Value {
+    fn from(val: &'_ str) -> Self {
+        Amf0Value::String(val.to_string())
+    }
+}
+
+impl From<String> for Amf0Value {
+    fn from(val: String) -> Self {
+        Amf0Value::String(val)
+    }
+}
+
 #[cfg(test)]
 mod amf0_tests {
     use crate::amf0::{Amf0Value, decode_amf0_values, encode_amf0_values};
