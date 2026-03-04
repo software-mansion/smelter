@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::stats::{
     WhepOutputStatsEvent, WhepOutputTrackStatsEvent,
     output_reports::{
-        WhepOutputStatsReport, WhepOutputTrackStatsReport, WhepOutputsTrackSlidingWindowStatsReport,
+        WhepOutputStatsReport, WhepOutputTrackSlidingWindowStatsReport, WhepOutputTrackStatsReport,
     },
     utils::SlidingWindowValue,
 };
@@ -66,7 +66,7 @@ impl WhepOutputTrackState {
             packets_sent: self.packets_sent,
             nacks_received: self.nacks_received,
 
-            last_10_seconds: WhepOutputsTrackSlidingWindowStatsReport {
+            last_10_seconds: WhepOutputTrackSlidingWindowStatsReport {
                 packets_sent: self.packets_sent_10_secs.sum(),
                 nacks_received: self.nacks_received_10_secs.sum(),
 
