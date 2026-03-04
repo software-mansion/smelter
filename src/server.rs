@@ -85,7 +85,7 @@ fn init_runtime() -> Runtime {
                 .parse()
                 .expect("Failed to parse TOKIO_WORKER_THREADS. Must be a number greater than 0.");
             if val == 0 {
-                panic!("TOKIO_WORKER_THREADS mut be greater than 0.");
+                panic!("TOKIO_WORKER_THREADS must be greater than 0.");
             } else {
                 val
             }
