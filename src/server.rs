@@ -82,6 +82,10 @@ fn init_runtime() -> Runtime {
         .and_then(|v| v.trim().parse().ok())
         .unwrap_or(available_threads);
 
+    debug!(
+        worker_threads = thread_count,
+        "Number of runtime worker threads."
+    );
     Builder::new_multi_thread()
         .enable_all()
         .worker_threads(thread_count)
