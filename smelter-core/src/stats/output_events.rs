@@ -21,11 +21,14 @@ pub(crate) enum WhepOutputStatsEvent {
     Audio(WhepOutputTrackStatsEvent),
 }
 
-// impl WhepOutputStatsEvent {
-//     pub fn into_event(self, input_ref: &Ref<OutputId>) -> StatsEvent {
-//         StatsEvent
-//     }
-// }
+impl WhepOutputStatsEvent {
+    pub fn into_event(self, output_ref: &Ref<OutputId>) -> StatsEvent {
+        StatsEvent::Output {
+            output_ref: output_ref.clone(),
+            event: OutputStatsEvent::Whep(self),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum WhepOutputTrackStatsEvent {
