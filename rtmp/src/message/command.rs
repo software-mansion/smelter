@@ -18,7 +18,7 @@ pub(crate) enum CommandMessage {
     /// 7.2.1.1 Client -> Server
     Connect {
         transaction_id: u32,
-        /// key-value pairs e.g. app, audioCodec, videoCodecs, objectEncoding
+        /// key-value pairs e.g. app, audioCodecs, videoCodecs, objectEncoding
         command_object: HashMap<String, Amf0Value>,
         optional_args: Option<Amf0Value>,
     },
