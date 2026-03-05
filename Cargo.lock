@@ -4757,6 +4757,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rubato",
+ "rustls",
  "schemars",
  "serde",
  "serde_json",

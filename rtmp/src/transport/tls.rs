@@ -31,12 +31,9 @@ impl TlsClientStream {
             warn!(%added, %skipped, "Some native CA certificates were rejected by rustls");
         }
 
-        let config = rustls::ClientConfig::builder_with_provider(Arc::new(
-            rustls::crypto::aws_lc_rs::default_provider(),
-        ))
-        .with_safe_default_protocol_versions()?
-        .with_root_certificates(root_store)
-        .with_no_client_auth();
+        let config = rustls::ClientConfig::builder()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
 
         let conn = ClientConnection::new(Arc::new(config), server_name)?;
         Ok(Self(StreamOwned::new(conn, socket)))
