@@ -388,6 +388,7 @@ pub struct VulkanEncoder<'a> {
     pic_order_cnt: u8,
     active_reference_slots: VecDeque<(usize, vk::native::StdVideoEncodeH264ReferenceInfo)>,
     rate_control: RateControl,
+    inline_stream_params: bool,
     encoding_device: Arc<EncodingDevice>,
 }
 
@@ -404,6 +405,7 @@ pub struct FullEncoderParameters {
     pub(crate) usage_flags: vk::VideoEncodeUsageFlagsKHR,
     pub(crate) tuning_mode: vk::VideoEncodeTuningModeKHR,
     pub(crate) content_flags: vk::VideoEncodeContentFlagsKHR,
+    pub(crate) inline_stream_params: bool,
 }
 
 impl<'a> VulkanEncoder<'a> {
@@ -494,6 +496,7 @@ impl<'a> VulkanEncoder<'a> {
             idr_period: parameters.idr_period.get(),
             output_buffer,
             rate_control: parameters.rate_control,
+            inline_stream_params: parameters.inline_stream_params,
         })
     }
 
@@ -1213,24 +1216,8 @@ impl<'a> VulkanEncoder<'a> {
             return Err(VulkanEncoderError::EncodeOperationFailed(feedback.status));
         }
 
-        let mut output = if is_idr {
-            let mut h264_get_info = vk::VideoEncodeH264SessionParametersGetInfoKHR::default()
-                .write_std_sps(true)
-                .write_std_pps(true)
-                .std_sps_id(0)
-                .std_pps_id(0);
-
-            let get_info = vk::VideoEncodeSessionParametersGetInfoKHR::default()
-                .video_session_parameters(self.session_resources.parameters.parameters)
-                .push_next(&mut h264_get_info);
-
-            unsafe {
-                self.encoding_device
-                    .vulkan_device
-                    .device
-                    .video_encode_queue_ext
-                    .get_encoded_video_session_parameters_khr(&get_info, None)?
-            }
+        let mut output = if is_idr && self.inline_stream_params {
+            self.stream_parameters(true, true)?
         } else {
             Vec::new()
         };
@@ -1247,6 +1234,36 @@ impl<'a> VulkanEncoder<'a> {
             pts,
             is_keyframe: is_idr,
         })
+    }
+
+    pub fn stream_parameters(
+        &self,
+        write_sps: bool,
+        write_pps: bool,
+    ) -> Result<Vec<u8>, VulkanEncoderError> {
+        if !write_sps && !write_pps {
+            return Ok(Vec::new());
+        }
+
+        let mut h264_get_info = vk::VideoEncodeH264SessionParametersGetInfoKHR::default()
+            .write_std_sps(write_sps)
+            .write_std_pps(write_pps)
+            .std_sps_id(0)
+            .std_pps_id(0);
+
+        let get_info = vk::VideoEncodeSessionParametersGetInfoKHR::default()
+            .video_session_parameters(self.session_resources.parameters.parameters)
+            .push_next(&mut h264_get_info);
+
+        let data = unsafe {
+            self.encoding_device
+                .vulkan_device
+                .device
+                .video_encode_queue_ext
+                .get_encoded_video_session_parameters_khr(&get_info, None)?
+        };
+
+        Ok(data)
     }
 
     pub fn encode_bytes(

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### 💥 Breaking changes
+- `EncoderParameters` has an extra field, which determines whether stream parameters are inlined in the output stream.
 
 ### ✨ New features
 - One-to-many transcoders via `VulkanDevice::create_transcoder`

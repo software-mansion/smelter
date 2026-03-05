@@ -286,6 +286,22 @@ impl BytesEncoder {
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         self.vulkan_encoder.encode_bytes(frame, force_keyframe)
     }
+
+    /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
+    ///
+    /// Useful when `inline_stream_params` is `false` and the parameters need to be
+    /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    pub fn sps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+        self.vulkan_encoder.stream_parameters(true, false)
+    }
+
+    /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
+    ///
+    /// Useful when `inline_stream_params` is `false` and the parameters need to be
+    /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    pub fn pps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+        self.vulkan_encoder.stream_parameters(false, true)
+    }
 }
 
 /// An encoder that takes input frames as [`wgpu::Texture`]s (in [`wgpu::TextureFormat::NV12`])
@@ -342,5 +358,21 @@ impl WgpuTexturesEncoder {
         force_keyframe: bool,
     ) -> Result<EncodedOutputChunk<Vec<u8>>, VulkanEncoderError> {
         unsafe { self.vulkan_encoder.encode_texture(frame, force_keyframe) }
+    }
+
+    /// Retrieve encoded SPS NAL units from the video session parameters, in Annex B.
+    ///
+    /// Useful when `inline_stream_params` is `false` and the parameters need to be
+    /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    pub fn sps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+        self.vulkan_encoder.stream_parameters(true, false)
+    }
+
+    /// Retrieve encoded PPS NAL units from the video session parameters, in Annex B.
+    ///
+    /// Useful when `inline_stream_params` is `false` and the parameters need to be
+    /// sent out-of-band (e.g. in RTMP or MP4 headers).
+    pub fn pps(&self) -> Result<Vec<u8>, VulkanEncoderError> {
+        self.vulkan_encoder.stream_parameters(false, true)
     }
 }
