@@ -4,17 +4,18 @@ use std::{
     time::Duration,
 };
 
-use tls::TlsClientStream;
+use tls::{TlsClientStream, TlsServerStream};
 
-use crate::RtmpConnectionError;
+use crate::{RtmpConnectionError, server::TlsConfig};
 
-mod tls;
+pub(crate) mod tls;
 
 /// Transport layer for RTMP connections. Wraps either a plain TCP or a TLS
 /// connection and implements [`Read`] + [`Write`].
 pub(crate) enum RtmpTransport {
     Tcp(TcpStream),
     TlsClient(Box<TlsClientStream>),
+    TlsServer(Box<TlsServerStream>),
 }
 
 impl RtmpTransport {
@@ -36,6 +37,16 @@ impl RtmpTransport {
     pub fn tcp_server_stream(socket: TcpStream) -> Self {
         Self::configure_server_socket(&socket);
         Self::Tcp(socket)
+    }
+
+    pub fn tls_server_stream(
+        socket: TcpStream,
+        tls_config: &TlsConfig,
+    ) -> Result<Self, RtmpConnectionError> {
+        Self::configure_server_socket(&socket);
+
+        let tls_stream = TlsServerStream::new(socket, tls_config)?;
+        Ok(Self::TlsServer(Box::new(tls_stream)))
     }
 
     fn configure_server_socket(socket: &TcpStream) {
@@ -73,6 +84,7 @@ impl Read for RtmpTransport {
         match self {
             RtmpTransport::Tcp(tcp) => tcp.read(buf),
             RtmpTransport::TlsClient(s) => s.read(buf),
+            RtmpTransport::TlsServer(s) => s.read(buf),
         }
     }
 }
@@ -82,6 +94,7 @@ impl Write for RtmpTransport {
         match self {
             RtmpTransport::Tcp(tcp) => tcp.write(buf),
             RtmpTransport::TlsClient(s) => s.write(buf),
+            RtmpTransport::TlsServer(s) => s.write(buf),
         }
     }
 
@@ -89,6 +102,7 @@ impl Write for RtmpTransport {
         match self {
             RtmpTransport::Tcp(tcp) => tcp.flush(),
             RtmpTransport::TlsClient(s) => s.flush(),
+            RtmpTransport::TlsServer(s) => s.flush(),
         }
     }
 }

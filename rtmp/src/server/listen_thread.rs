@@ -25,15 +25,21 @@ pub(super) fn start_listener_thread(
     listener.set_nonblocking(true).unwrap();
     let on_connection = Arc::new(Mutex::new(on_connection));
 
+    let protocol = if config.tls.is_some() {
+        "RTMPS"
+    } else {
+        "RTMP"
+    };
+    info!("{protocol} server running on port {port}");
+
+    let tls = config.tls.clone();
     let shutdown = Arc::new(AtomicBool::new(false));
     let server = Arc::new(Mutex::new(RtmpServer { config, shutdown }));
-
-    info!("RTMP server running on port {port}");
 
     let server_weak: Weak<Mutex<RtmpServer>> = Arc::downgrade(&server);
 
     thread::Builder::new()
-        .name("RTMP server".to_string())
+        .name(format!("{protocol} server"))
         .spawn(move || {
             loop {
                 let Some(server) = server_weak.upgrade() else {
@@ -50,8 +56,9 @@ pub(super) fn start_listener_thread(
                         info!("New connection from: {peer_addr:?}");
 
                         let on_connection_clone = on_connection.clone();
+                        let tls = tls.clone();
                         thread::spawn(move || {
-                            if let Err(err) = handle_connection(socket, on_connection_clone) {
+                            if let Err(err) = handle_connection(socket, on_connection_clone, tls) {
                                 error!(?err, "Connection terminated with an error");
                             }
                         });

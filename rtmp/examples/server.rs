@@ -7,10 +7,7 @@ fn main() {
 
     let config = ServerConfig {
         port: 1935,
-        use_ssl: false,
-        cert_file: None,
-        key_file: None,
-        ca_cert_file: None,
+        tls: None,
         client_timeout_secs: 30,
     };
 

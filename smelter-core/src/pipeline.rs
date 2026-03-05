@@ -97,7 +97,11 @@ pub enum PipelineWhipWhepServerOptions {
 
 #[derive(Debug)]
 pub enum PipelineRtmpServerOptions {
-    Enable { port: u16 }, // server config
+    Enable {
+        port: u16,
+        tls_cert_file: Option<Arc<str>>,
+        tls_key_file: Option<Arc<str>>,
+    },
     Disable,
 }
 
