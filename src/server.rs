@@ -2,10 +2,10 @@ use crossbeam_channel::Receiver;
 use rustls::crypto::aws_lc_rs;
 use signal_hook::{consts, iterator::Signals};
 use smelter_render::error::ErrorStack;
-use tracing::error;
-use tracing::info;
+use tokio::runtime::Builder;
+use tracing::{debug, error, info};
 
-use std::{net::SocketAddr, process, sync::Arc, thread};
+use std::{env, net::SocketAddr, process, sync::Arc, thread};
 use tokio::runtime::Runtime;
 
 use crate::{config::read_config, logger::init_logger, routes::routes, state::ApiState};
@@ -17,7 +17,7 @@ pub fn run() {
     aws_lc_rs::default_provider().install_default().unwrap();
 
     info!("Starting Smelter with config:\n{:#?}", config);
-    let runtime = Arc::new(Runtime::new().unwrap());
+    let runtime = Arc::new(init_runtime());
     let state = ApiState::new(config, runtime.clone()).unwrap_or_else(|err| {
         panic!(
             "Failed to start Smelter instance.\n{}",
@@ -69,6 +69,29 @@ pub fn run_api(
             })
             .await
     })
+}
+
+fn init_runtime() -> Runtime {
+    const MINIMUM_WORKER_THREADS: usize = 3;
+
+    let worker_threads = if let Ok(thread_count) = env::var("TOKIO_WORKER_THREADS") {
+        match thread_count.trim().parse() {
+            Ok(t) if t > 0 => t,
+            _ => panic!("TOKIO_WORKER_THREADS must be a number greater than 0."),
+        }
+    } else if let Ok(thread_count) = thread::available_parallelism() {
+        thread_count.get()
+    } else {
+        MINIMUM_WORKER_THREADS
+    };
+    let worker_threads = usize::max(worker_threads, MINIMUM_WORKER_THREADS);
+
+    debug!(worker_threads, "Initializing Tokio runtime");
+    Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(worker_threads)
+        .build()
+        .unwrap()
 }
 
 #[cfg(target_os = "linux")]
