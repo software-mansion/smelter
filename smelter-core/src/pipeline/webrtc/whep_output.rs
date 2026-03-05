@@ -102,6 +102,7 @@ impl WhepOutput {
                     output_ref.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: sender,
                     },
@@ -117,6 +118,7 @@ impl WhepOutput {
                     output_ref.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: sender,
                     },
@@ -127,6 +129,7 @@ impl WhepOutput {
                     output_ref.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: sender,
                     },
@@ -137,6 +140,7 @@ impl WhepOutput {
                     output_ref.clone(),
                     WhepVideoTrackThreadOptions {
                         ctx: ctx.clone(),
+                        output_ref: output_ref.clone(),
                         encoder_options: options.clone(),
                         chunks_sender: sender,
                     },
@@ -162,6 +166,7 @@ impl WhepOutput {
                 output_ref.clone(),
                 WhepAudioTrackThreadOptions {
                     ctx: ctx.clone(),
+                    output_ref: output_ref.clone(),
                     encoder_options: options.clone(),
                     chunks_sender: sender,
                 },
