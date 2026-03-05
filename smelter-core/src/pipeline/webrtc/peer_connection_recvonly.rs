@@ -28,10 +28,7 @@ use webrtc::{
 
 use crate::{
     AudioChannels,
-    pipeline::{
-        PipelineCtx,
-        webrtc::{default_setting_engine, supported_codec_parameters::opus_codec_params},
-    },
+    pipeline::{PipelineCtx, webrtc::supported_codec_parameters::opus_codec_params},
 };
 
 #[derive(Debug, Clone)]
@@ -56,7 +53,7 @@ impl RecvonlyPeerConnection {
         let api = APIBuilder::new()
             .with_media_engine(media_engine)
             .with_interceptor_registry(registry)
-            .with_setting_engine(default_setting_engine(ctx))
+            .with_setting_engine(ctx.webrtc_setting_engine.create_setting_engine())
             .build();
 
         let config = RTCConfiguration {

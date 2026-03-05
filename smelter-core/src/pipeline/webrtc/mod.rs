@@ -1,11 +1,6 @@
-use tokio::sync::oneshot;
-use webrtc::{
-    api::setting_engine::SettingEngine,
-    ice::udp_network::{EphemeralUDP, UDPNetwork},
-    ice_transport::ice_candidate_type::RTCIceCandidateType,
-};
-
 use std::sync::Arc;
+
+use tokio::sync::oneshot;
 use tracing::{error, info};
 
 mod bearer_token;
@@ -18,6 +13,7 @@ mod input_thread;
 mod negotiated_codecs;
 mod peer_connection_recvonly;
 mod server;
+mod setting_engine;
 mod supported_codec_parameters;
 mod trickle_ice_utils;
 
@@ -27,6 +23,7 @@ mod whip_input;
 mod whip_output;
 
 pub(super) use server::WhipWhepServer;
+pub(super) use setting_engine::WebrtcSettingEngineCtx;
 pub(super) use whep_input::WhepInput;
 pub(super) use whep_output::WhepOutput;
 pub(super) use whip_input::WhipInput;
@@ -87,21 +84,4 @@ impl<T> Iterator for AsyncReceiverIter<T> {
     fn next(&mut self) -> Option<Self::Item> {
         self.receiver.blocking_recv()
     }
-}
-
-fn default_setting_engine(ctx: &Arc<PipelineCtx>) -> SettingEngine {
-    let mut setting_engine = SettingEngine::default();
-    if !ctx.webrtc_nat_1to1_ips.is_empty() {
-        setting_engine
-            .set_nat_1to1_ips(ctx.webrtc_nat_1to1_ips.to_vec(), RTCIceCandidateType::Host);
-    }
-
-    if let Some((start, end)) = ctx.webrtc_port_range {
-        let mut ephemeral_udp = EphemeralUDP::default();
-        ephemeral_udp
-            .set_ports(start, u16::max(end, start))
-            .unwrap(); // It can only fail if start>port
-        setting_engine.set_udp_network(UDPNetwork::Ephemeral(ephemeral_udp));
-    }
-    setting_engine
 }
