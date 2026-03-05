@@ -34,9 +34,9 @@ pub struct EncodedOutputChunk {
 }
 
 impl EncodedOutputEvent {
-    pub fn data_size(&self) -> usize {
+    pub fn data_size(&self) -> u64 {
         match self {
-            Self::Data(data) => data.data.len(),
+            Self::Data(data) => data.data.len() as u64,
             Self::AudioEOS | Self::VideoEOS => 0,
         }
     }
