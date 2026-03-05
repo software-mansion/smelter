@@ -12,7 +12,7 @@ use crate::{
         encoder::{AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream},
         rtp::payloader::{PayloaderOptions, PayloaderStream},
     },
-    thread_utils::{InitializableThread, ThreadMetadata},
+    utils::{InitializableThread, ThreadMetadata},
 };
 
 use super::RtpOutputEvent;

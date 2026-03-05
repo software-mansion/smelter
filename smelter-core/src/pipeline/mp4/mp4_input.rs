@@ -25,7 +25,7 @@ use crate::{
         utils::{H264AvccToAnnexB, input_buffer::InputBuffer},
     },
     queue::QueueDataReceiver,
-    thread_utils::InitializableThread,
+    utils::InitializableThread,
 };
 
 use crate::prelude::*;

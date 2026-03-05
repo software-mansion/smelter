@@ -11,7 +11,7 @@ use crate::{
         BytestreamTransformStream, BytestreamTransformer, DecoderThreadHandle, EncodedInputEvent,
         VideoDecoderStream,
     },
-    thread_utils::{InitializableThread, ThreadMetadata},
+    utils::{InitializableThread, ThreadMetadata},
 };
 
 use super::VideoDecoder;

@@ -19,7 +19,7 @@ use crate::{
         },
         webrtc::AsyncReceiverIter,
     },
-    thread_utils::{InitializableThread, ThreadMetadata},
+    utils::{InitializableThread, ThreadMetadata},
 };
 
 use crate::prelude::*;

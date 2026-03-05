@@ -21,7 +21,7 @@ use crate::{
         },
         output::{Output, OutputAudio, OutputVideo},
     },
-    thread_utils::InitializableThread,
+    utils::InitializableThread,
 };
 
 use crate::prelude::*;

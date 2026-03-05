@@ -22,7 +22,7 @@ use crate::{
         ffmpeg_utils::{FfmpegOptions, StreamMutExt, write_extradata},
         output::{Output, OutputAudio, OutputVideo},
     },
-    thread_utils::InitializableThread,
+    utils::InitializableThread,
 };
 
 use crate::prelude::*;

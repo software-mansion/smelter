@@ -21,8 +21,8 @@ use crate::{
         },
         ffmpeg_utils::{StreamMutExt, write_extradata},
         output::{Output, OutputAudio, OutputVideo},
+        utils::InitializableThread,
     },
-    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;

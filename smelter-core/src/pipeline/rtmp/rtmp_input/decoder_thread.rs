@@ -10,7 +10,7 @@ use crate::{
         AudioDecoder, AudioDecoderStream, BytestreamTransformStream, BytestreamTransformer,
         DecoderThreadHandle, EncodedInputEvent, VideoDecoder, VideoDecoderStream,
     },
-    thread_utils::{InitializableThread, ThreadMetadata},
+    utils::{InitializableThread, ThreadMetadata},
 };
 
 use crate::prelude::*;

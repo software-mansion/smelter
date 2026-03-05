@@ -6,7 +6,7 @@ use tracing::warn;
 use crate::prelude::*;
 use crate::{
     pipeline::encoder::{AudioEncoder, AudioEncoderStream, resampler::ResampledForEncoderStream},
-    thread_utils::{InitializableThread, ThreadMetadata},
+    utils::{InitializableThread, ThreadMetadata},
 };
 
 #[derive(Debug, Clone)]

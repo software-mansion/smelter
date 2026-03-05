@@ -8,7 +8,7 @@ use tracing::warn;
 use crate::prelude::*;
 use crate::{
     pipeline::encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
-    thread_utils::{InitializableThread, ThreadMetadata},
+    utils::{InitializableThread, ThreadMetadata},
 };
 
 #[derive(Debug, Clone)]

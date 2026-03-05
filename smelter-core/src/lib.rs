@@ -1,6 +1,5 @@
 mod audio_mixer;
 mod queue;
-mod thread_utils;
 
 pub mod codecs;
 pub mod error;

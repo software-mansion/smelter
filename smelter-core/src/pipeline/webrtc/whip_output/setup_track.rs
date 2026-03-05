@@ -25,7 +25,7 @@ use crate::{
             },
         },
     },
-    thread_utils::InitializableThread,
+    utils::InitializableThread,
 };
 
 use crate::prelude::*;
