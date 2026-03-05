@@ -131,7 +131,7 @@ pub fn pipeline_options_from_config(
             },
             false => PipelineWhipWhepServerOptions::Disable,
         },
-        webrtc_port_strategy: opt.webrtc_udp_port_strategy.clone().map(|s| match s {
+        webrtc_udp_port_strategy: opt.webrtc_udp_port_strategy.clone().map(|s| match s {
             crate::config::WebrtcUdpPortStrategy::PortRange(start, end) => {
                 WebrtcUdpPortStrategy::PortRange(start, end)
             }

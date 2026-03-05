@@ -556,7 +556,7 @@ fn create_pipeline(opts: PipelineOptions) -> Result<Pipeline, InitPipelineError>
 
     let webrtc_setting_engine = WebrtcSettingEngineCtx::new(
         opts.webrtc_nat_1to1_ips,
-        opts.webrtc_port_strategy,
+        opts.webrtc_udp_port_strategy,
         &tokio_rt,
     )?;
 

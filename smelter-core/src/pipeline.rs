@@ -72,7 +72,7 @@ pub struct PipelineOptions {
 
     pub whip_whep_server: PipelineWhipWhepServerOptions,
     pub webrtc_stun_servers: Arc<Vec<String>>,
-    pub webrtc_port_strategy: Option<WebrtcUdpPortStrategy>,
+    pub webrtc_udp_port_strategy: Option<WebrtcUdpPortStrategy>,
     pub webrtc_nat_1to1_ips: Arc<Vec<String>>,
 
     pub rtmp_server: PipelineRtmpServerOptions,
