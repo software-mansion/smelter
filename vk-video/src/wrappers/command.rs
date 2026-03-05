@@ -1,5 +1,5 @@
 use std::{
-    collections::hash_map::Entry,
+    collections::{VecDeque, hash_map::Entry},
     sync::{Arc, Mutex},
 };
 
@@ -8,7 +8,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     VulkanCommonError, VulkanDevice,
-    wrappers::{ImageKey, ImageLayoutTracker},
+    wrappers::{ImageKey, ImageLayoutTracker, SemaphoreWaitValue},
 };
 
 struct CommandPool {
@@ -67,12 +67,17 @@ impl std::ops::Deref for CommandPool {
     }
 }
 
+pub(crate) struct SubmittedCommandBuffer {
+    semaphore_value: SemaphoreWaitValue,
+    buffer: vk::CommandBuffer,
+}
+
 pub(crate) struct CommandBufferPool(Arc<Mutex<CommandBufferPoolInner>>);
 
 pub(crate) struct CommandBufferPoolInner {
     command_pool: CommandPool,
     free: Vec<vk::CommandBuffer>,
-    submitted: Vec<vk::CommandBuffer>,
+    submitted: VecDeque<SubmittedCommandBuffer>,
 }
 
 impl CommandBufferPool {
@@ -85,7 +90,7 @@ impl CommandBufferPool {
         Ok(Self(Arc::new(Mutex::new(CommandBufferPoolInner {
             command_pool,
             free: Vec::new(),
-            submitted: Vec::new(),
+            submitted: VecDeque::new(),
         }))))
     }
 
@@ -112,17 +117,36 @@ impl CommandBufferPool {
         }))
     }
 
-    pub(crate) fn mark_submitted_as_free(&self) {
+    pub(crate) fn mark_submitted_as_free(&self, last_waited_semaphore: SemaphoreWaitValue) {
         let mut guard = self.0.lock().unwrap();
         let inner = &mut *guard;
-        inner.free.append(&mut inner.submitted);
+
+        let Some(last) = inner
+            .submitted
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.semaphore_value <= last_waited_semaphore)
+            .map(|(i, _)| i)
+            .next_back()
+        else {
+            return;
+        };
+
+        inner
+            .free
+            .extend(inner.submitted.drain(..=last).map(|b| b.buffer));
     }
+}
+
+struct ImageLayoutChange {
+    tracker: Arc<Mutex<ImageLayoutTracker>>,
+    new_layout: Box<[vk::ImageLayout]>,
 }
 
 struct UnfinishedCommandBuffer {
     buffer: vk::CommandBuffer,
     pool: Arc<Mutex<CommandBufferPoolInner>>,
-    image_layout_transitions: FxHashMap<ImageKey, Box<[vk::ImageLayout]>>,
+    image_layout_transitions: FxHashMap<ImageKey, ImageLayoutChange>,
     reset_on_drop: bool,
 }
 
@@ -183,19 +207,24 @@ impl OpenCommandBuffer {
     pub(crate) fn image_layout(
         &mut self,
         image: ImageKey,
-        tracker: &ImageLayoutTracker,
+        tracker: &Arc<Mutex<ImageLayoutTracker>>,
     ) -> Result<&mut [vk::ImageLayout], VulkanCommonError> {
         let entry = self.0.image_layout_transitions.entry(image);
 
         match entry {
-            Entry::Occupied(entry) => Ok(entry.into_mut()),
-            Entry::Vacant(entry) => Ok(entry.insert(
-                tracker
-                    .map
-                    .get(&image)
-                    .ok_or(VulkanCommonError::TriedToAccessNonexistentImageState(image))?
-                    .clone(),
-            )),
+            Entry::Occupied(entry) => Ok(&mut entry.into_mut().new_layout),
+            Entry::Vacant(entry) => Ok(&mut entry
+                .insert(ImageLayoutChange {
+                    tracker: tracker.clone(),
+                    new_layout: tracker
+                        .lock()
+                        .unwrap()
+                        .map
+                        .get(&image)
+                        .ok_or(VulkanCommonError::TriedToAccessNonexistentImageState(image))?
+                        .clone(),
+                })
+                .new_layout),
         }
     }
 }
@@ -203,9 +232,26 @@ impl OpenCommandBuffer {
 pub(crate) struct RecordedCommandBuffer(UnfinishedCommandBuffer);
 
 impl RecordedCommandBuffer {
-    pub(crate) fn mark_submitted(mut self, tracker: &mut ImageLayoutTracker) {
-        self.0.pool.lock().unwrap().submitted.push(self.0.buffer);
-        tracker.map.extend(self.0.image_layout_transitions.drain());
+    pub(crate) fn mark_submitted(mut self, semaphore_value: SemaphoreWaitValue) {
+        self.0
+            .pool
+            .lock()
+            .unwrap()
+            .submitted
+            .push_back(SubmittedCommandBuffer {
+                semaphore_value,
+                buffer: self.0.buffer,
+            });
+
+        for (key, layout_change) in self.0.image_layout_transitions.drain() {
+            layout_change
+                .tracker
+                .lock()
+                .unwrap()
+                .map
+                .insert(key, layout_change.new_layout);
+        }
+
         self.0.destroy_without_reset();
     }
 

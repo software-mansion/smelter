@@ -5,6 +5,7 @@
 ### 💥 Breaking changes
 
 ### ✨ New features
+- One-to-many transcoders via `VulkanDevice::create_transcoder`
 
 ### 🐛 Bug fixes
 - Fix `vkBindVideoSessionMemoryKHR` validation errors on Mesa drivers

@@ -7,11 +7,12 @@ use h264_reader::nal::{
 };
 use images::DecodingImages;
 use parameters::{SessionParams, VideoSessionParametersManager};
+use rustc_hash::FxHashMap;
 
 use crate::{
     VulkanDecoderError,
     device::DecodingDevice,
-    vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState},
+    vulkan_decoder::{DecoderTracker, DecoderTrackerWaitState, ImageModifiers},
     wrappers::{
         DecodeInputBuffer, DecodingQueryPool, H264DecodeProfileInfo, OpenCommandBuffer,
         SeqParameterSetExt, VideoSession, h264_level_idc_to_max_dpb_mbs, vk_to_h264_level_idc,
@@ -26,11 +27,12 @@ pub(super) struct VideoSessionResources<'a> {
     pub(crate) parameters: SessionParams<'a>,
     pub(crate) parameters_manager: VideoSessionParametersManager,
     pub(crate) decoding_images: DecodingImages<'a>,
-    pub(crate) sps: HashMap<u8, SeqParameterSet>,
-    pub(crate) pps: HashMap<(u8, u8), PicParameterSet>,
+    pub(crate) sps: FxHashMap<u8, SeqParameterSet>,
+    pub(crate) pps: FxHashMap<(u8, u8), PicParameterSet>,
     pub(crate) decode_query_pool: Option<DecodingQueryPool>,
     pub(crate) decode_buffer: DecodeInputBuffer,
     parameters_scheduled_for_reset: Option<SessionParams<'a>>,
+    image_modifiers: ImageModifiers,
 }
 
 fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, VulkanDecoderError> {
@@ -45,7 +47,6 @@ fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, Vulkan
         h264_level_idc_to_max_dpb_mbs(sps.level_idc)?
             / ((sps.pic_width_in_mbs_minus1 as u64 + 1)
                 * (sps.pic_height_in_map_units_minus1 as u64 + 1))
-                .min(16)
     };
 
     let max_num_reorder_frames = sps
@@ -53,7 +54,8 @@ fn calculate_max_num_reorder_frames(sps: &SeqParameterSet) -> Result<u64, Vulkan
         .as_ref()
         .and_then(|v| v.bitstream_restrictions.as_ref())
         .map(|b| b.max_num_reorder_frames as u64)
-        .unwrap_or(fallback_max_num_reorder_frames);
+        .unwrap_or(fallback_max_num_reorder_frames)
+        .min(16);
 
     Ok(max_num_reorder_frames)
 }
@@ -65,6 +67,7 @@ impl<'a> VideoSessionResources<'a> {
         sps: SeqParameterSet,
         usage_info: vk::VideoDecodeUsageInfoKHR<'a>,
         tracker: &mut DecoderTracker,
+        image_modifiers: ImageModifiers,
     ) -> Result<Self, VulkanDecoderError> {
         let profile_info = Arc::new(H264DecodeProfileInfo::from_sps_decode(&sps, usage_info)?);
 
@@ -114,6 +117,7 @@ impl<'a> VideoSessionResources<'a> {
             max_dpb_slots,
             decode_buffer,
             tracker,
+            image_modifiers,
         )?;
 
         let sps = HashMap::from_iter([(sps.id().id(), sps)]);
@@ -147,10 +151,11 @@ impl<'a> VideoSessionResources<'a> {
             parameters_manager,
             decoding_images,
             sps,
-            pps: HashMap::new(),
+            pps: FxHashMap::default(),
             decode_query_pool,
             decode_buffer,
             parameters_scheduled_for_reset: None,
+            image_modifiers,
         })
     }
 
@@ -263,6 +268,7 @@ impl<'a> VideoSessionResources<'a> {
             self.video_session.max_dpb_slots,
             decode_buffer,
             tracker,
+            self.image_modifiers,
         )?;
 
         self.parameters = new_params;
@@ -282,20 +288,39 @@ impl<'a> VideoSessionResources<'a> {
         max_dpb_slots: u32,
         mut decode_buffer: OpenCommandBuffer,
         tracker: &mut DecoderTracker,
+        image_modifiers: ImageModifiers,
     ) -> Result<DecodingImages<'a>, VulkanDecoderError> {
+        let mut dpb_format = decoding_device
+            .profile_capabilities
+            .h264_dpb_format_properties;
+        // image modifiers are only applied to the output picture, which is the dst_image if it
+        // exists, dpb otherwise
+        if decoding_device
+            .profile_capabilities
+            .h264_dst_format_properties
+            .is_none()
+        {
+            dpb_format.image_create_flags |= image_modifiers.create_flags;
+            dpb_format.image_usage_flags |= image_modifiers.usage_flags;
+        }
+        let dst_format = decoding_device
+            .profile_capabilities
+            .h264_dst_format_properties
+            .map(|p| {
+                p.image_create_flags(p.image_create_flags | image_modifiers.create_flags)
+                    .image_usage_flags(p.image_usage_flags | image_modifiers.usage_flags)
+            });
+
         let decoding_images = DecodingImages::new(
             decoding_device,
             &mut decode_buffer,
             tracker.image_layout_tracker.clone(),
             profile,
-            &decoding_device
-                .profile_capabilities
-                .h264_dpb_format_properties,
-            &decoding_device
-                .profile_capabilities
-                .h264_dst_format_properties,
+            &dpb_format,
+            &dst_format,
             max_coded_extent,
             max_dpb_slots,
+            image_modifiers.additional_queue_index as u32,
         )?;
 
         decoding_device.h264_decode_queues.submit_chain_semaphore(
