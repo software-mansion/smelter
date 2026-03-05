@@ -2,7 +2,7 @@ use crossbeam_channel::Receiver;
 use signal_hook::{consts, iterator::Signals};
 use smelter_render::error::ErrorStack;
 use tokio::runtime::Builder;
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info};
 
 use std::{env, net::SocketAddr, process, sync::Arc, thread};
 use tokio::runtime::Runtime;
@@ -72,24 +72,22 @@ pub fn run_api(
 fn init_runtime() -> Runtime {
     const MINIMUM_WORKER_THREADS: usize = 3;
 
-    let available_threads = thread::available_parallelism();
-    trace!(?available_threads, "Available threads detected.");
-    let available_threads = available_threads.map_or(MINIMUM_WORKER_THREADS, |v| v.get());
-
-    let thread_count = env::var("TOKIO_WORKER_THREADS").map_or(available_threads, |v| {
-        let threads = v.trim().parse();
-        match threads {
+    let worker_threads = if let Ok(thread_count) = env::var("TOKIO_WORKER_THREADS") {
+        match thread_count.trim().parse() {
             Ok(t) if t > 0 => t,
-            Ok(_) | Err(_) => panic!("TOKIO_WORKER_THREADS must be a number greater than 0."),
+            _ => panic!("TOKIO_WORKER_THREADS must be a number greater than 0."),
         }
-    });
-    debug!(
-        worker_threads = thread_count,
-        "Number of runtime worker threads."
-    );
+    } else if let Ok(thread_count) = thread::available_parallelism() {
+        thread_count.get()
+    } else {
+        MINIMUM_WORKER_THREADS
+    };
+    let worker_threads = usize::max(worker_threads, MINIMUM_WORKER_THREADS);
+
+    debug!(worker_threads, "Initializing Tokio runtime");
     Builder::new_multi_thread()
         .enable_all()
-        .worker_threads(thread_count)
+        .worker_threads(worker_threads)
         .build()
         .unwrap()
 }
