@@ -8,6 +8,7 @@ pub enum OutputStatsReport {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct WhepOutputStatsReport {
+    pub peers_connected: u64,
     pub video: WhepOutputTrackStatsReport,
     pub audio: WhepOutputTrackStatsReport,
 }

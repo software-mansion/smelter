@@ -84,7 +84,7 @@ impl WhepOutputsState {
         output_ref: &Ref<OutputId>,
         session_id: &Arc<str>,
     ) -> Result<(), WhipWhepServerError> {
-        let peer_connection = {
+        let (peer_connection, stats_sender) = {
             let mut guard = self.0.lock().unwrap();
             let Some(output) = guard.get_mut(output_ref) else {
                 return Err(WhipWhepServerError::NotFound(format!(
@@ -96,8 +96,12 @@ impl WhepOutputsState {
                     "Session {session_id:?} not found for {output_ref:?}"
                 )));
             };
-            pc
+            (pc, output.stats_sender.clone())
         };
+
+        stats_sender.send(vec![
+            WhepOutputStatsEvent::PeerDisconnected.into_event(output_ref),
+        ]);
 
         if let Err(e) = peer_connection.close().await {
             return Err(WhipWhepServerError::InternalError(format!(

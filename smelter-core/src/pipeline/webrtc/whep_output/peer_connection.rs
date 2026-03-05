@@ -246,7 +246,12 @@ impl PeerConnection {
         Ok(self.pc.close().await?)
     }
 
-    pub fn on_peer_connection_cleanup(&self, cleanup_session_handler: OnCleanupSessionHdlr) {
+    pub fn on_peer_connection_cleanup(
+        &self,
+        cleanup_session_handler: OnCleanupSessionHdlr,
+        stats_sender: StatsSender,
+        output_ref: Ref<OutputId>,
+    ) {
         let pc = self.pc.clone();
         let cleanup_task_handle = Arc::new(Mutex::new(None));
 
@@ -257,6 +262,8 @@ impl PeerConnection {
                     pc.clone(),
                     cleanup_task_handle.clone(),
                     cleanup_session_handler.clone(),
+                    stats_sender.clone(),
+                    output_ref.clone(),
                 );
                 Box::pin(async {})
             }
@@ -322,9 +329,14 @@ fn handle_cleanup_on_disconnect(
     pc: Arc<RTCPeerConnection>,
     cleanup_task_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     remove_session_handler: OnCleanupSessionHdlr,
+    stats_sender: StatsSender,
+    output_ref: Ref<OutputId>,
 ) {
     match state {
         RTCPeerConnectionState::Connected => {
+            stats_sender.send(vec![
+                WhepOutputStatsEvent::PeerConnected.into_event(&output_ref),
+            ]);
             if let Ok(mut handle) = cleanup_task_handle.lock()
                 && let Some(task) = handle.take()
             {
