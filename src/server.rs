@@ -1,4 +1,5 @@
 use crossbeam_channel::Receiver;
+use rustls::crypto::aws_lc_rs;
 use signal_hook::{consts, iterator::Signals};
 use smelter_render::error::ErrorStack;
 use tracing::error;
@@ -13,6 +14,7 @@ pub fn run() {
     listen_for_parent_termination();
     let config = read_config();
     init_logger(config.logger.clone());
+    aws_lc_rs::default_provider().install_default().unwrap();
 
     info!("Starting Smelter with config:\n{:#?}", config);
     let runtime = Arc::new(Runtime::new().unwrap());
