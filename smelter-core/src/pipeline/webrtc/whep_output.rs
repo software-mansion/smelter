@@ -77,7 +77,6 @@ impl WhepOutput {
             &output_ref,
             WhepOutputConnectionStateOptions {
                 bearer_token: bearer_token.clone(),
-                stats_sender: ctx.stats_sender.clone(),
                 video_options: video_options.clone(),
                 audio_options: audio_options.clone(),
             },

@@ -255,6 +255,8 @@ impl PeerConnection {
         let pc = self.pc.clone();
         let cleanup_task_handle = Arc::new(Mutex::new(None));
 
+        // TODO: (@jbrs) This is a terrible place to send that as it is called on every state
+        // change, and there is a wait for reconnect here
         self.pc.on_peer_connection_state_change(Box::new({
             move |state: RTCPeerConnectionState| {
                 handle_cleanup_on_disconnect(

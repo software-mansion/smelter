@@ -12,7 +12,6 @@ use crate::prelude::*;
 #[derive(Debug, Clone)]
 pub(crate) struct WhepOutputConnectionStateOptions {
     pub bearer_token: Option<Arc<str>>,
-    pub stats_sender: StatsSender,
     pub video_options: Option<WhepVideoConnectionOptions>,
     pub audio_options: Option<WhepAudioConnectionOptions>,
 }
@@ -20,7 +19,6 @@ pub(crate) struct WhepOutputConnectionStateOptions {
 #[derive(Debug, Clone)]
 pub(crate) struct WhepOutputConnectionState {
     pub bearer_token: Option<Arc<str>>,
-    pub stats_sender: StatsSender,
     pub sessions: HashMap<Arc<str>, PeerConnection>,
     pub video_options: Option<WhepVideoConnectionOptions>,
     pub audio_options: Option<WhepAudioConnectionOptions>,
@@ -44,7 +42,6 @@ impl WhepOutputConnectionState {
     pub fn new(options: WhepOutputConnectionStateOptions) -> Self {
         WhepOutputConnectionState {
             bearer_token: options.bearer_token,
-            stats_sender: options.stats_sender,
             sessions: HashMap::new(),
             video_options: options.video_options,
             audio_options: options.audio_options,
