@@ -123,6 +123,11 @@ pub struct EncoderParameters {
     ///
     /// Multiple flags can be combined using the `|` operator to indicate multiple usages.
     pub content_flags: Option<EncoderContentFlags>,
+
+    /// Whether to prepend SPS/PPS NAL units inline before IDR frames.
+    /// If `false`, SPS/PPS can be retrieved separately using methods defined on the encoder.
+    /// If [`None`], defaults to `true`.
+    pub inline_stream_params: Option<bool>,
 }
 
 /// Open connection to a coding-capable device. Also contains a [`wgpu::Device`], a [`wgpu::Queue`] and
@@ -487,6 +492,7 @@ impl VulkanDevice {
             usage_flags: Some(EncoderUsageFlags::DEFAULT),
             content_flags: Some(EncoderContentFlags::DEFAULT),
             tuning_mode: Some(EncoderTuningMode::LOW_LATENCY),
+            inline_stream_params: None,
         })
     }
 
@@ -514,6 +520,7 @@ impl VulkanDevice {
             usage_flags: Some(EncoderUsageFlags::DEFAULT),
             content_flags: Some(EncoderContentFlags::DEFAULT),
             tuning_mode: Some(EncoderTuningMode::HIGH_QUALITY),
+            inline_stream_params: None,
         })
     }
 
@@ -673,6 +680,7 @@ impl VulkanDevice {
             usage_flags,
             tuning_mode,
             content_flags,
+            inline_stream_params: encoder_parameters.inline_stream_params.unwrap_or(true),
         })
     }
 
