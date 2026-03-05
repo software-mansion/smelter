@@ -5,7 +5,7 @@ use tracing::warn;
 
 use crate::{
     pipeline::decoder::{AudioDecoderStream, DecoderThreadHandle, EncodedInputEvent},
-    thread_utils::{InitializableThread, ThreadMetadata},
+    utils::{InitializableThread, ThreadMetadata},
 };
 
 use crate::prelude::*;

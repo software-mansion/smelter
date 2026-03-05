@@ -7,7 +7,7 @@ use crate::{
     pipeline::encoder::{
         AudioEncoder, AudioEncoderConfig, AudioEncoderStream, resampler::ResampledForEncoderStream,
     },
-    thread_utils::{InitializableThread, ThreadMetadata},
+    utils::{InitializableThread, ThreadMetadata},
 };
 
 use crate::prelude::*;

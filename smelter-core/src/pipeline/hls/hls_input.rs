@@ -31,10 +31,11 @@ use crate::{
             fdk_aac, ffmpeg_h264, vulkan_h264,
         },
         input::Input,
-        utils::{H264AvcDecoderConfig, H264AvccToAnnexB, input_buffer::InputBuffer},
+        utils::{
+            H264AvcDecoderConfig, H264AvccToAnnexB, InitializableThread, input_buffer::InputBuffer,
+        },
     },
     queue::QueueDataReceiver,
-    thread_utils::InitializableThread,
 };
 
 use crate::prelude::*;

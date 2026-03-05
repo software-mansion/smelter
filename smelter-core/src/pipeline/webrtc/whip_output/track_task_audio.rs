@@ -13,7 +13,7 @@ use crate::{
             payloader::{PayloaderOptions, PayloaderStream},
         },
     },
-    thread_utils::{InitializableThread, ThreadMetadata},
+    utils::{InitializableThread, ThreadMetadata},
 };
 
 #[derive(Debug)]

@@ -12,7 +12,7 @@ use crate::{
         encoder::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream},
         rtp::payloader::{PayloaderOptions, PayloaderStream},
     },
-    thread_utils::{InitializableThread, ThreadMetadata},
+    utils::{InitializableThread, ThreadMetadata},
 };
 
 use super::RtpOutputEvent;

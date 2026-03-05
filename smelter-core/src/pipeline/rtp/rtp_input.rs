@@ -34,7 +34,7 @@ use crate::{
         },
     },
     queue::QueueDataReceiver,
-    thread_utils::InitializableThread,
+    utils::InitializableThread,
 };
 
 use crate::prelude::*;

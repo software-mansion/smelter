@@ -17,7 +17,7 @@ use crate::{
             whip_input::WhipTrackContext,
         },
     },
-    thread_utils::InitializableThread,
+    utils::InitializableThread,
 };
 
 use crate::prelude::*;

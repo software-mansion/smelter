@@ -6,7 +6,7 @@ use tracing::warn;
 
 use crate::{
     prelude::*,
-    thread_utils::{InitializableThread, ThreadMetadata},
+    utils::{InitializableThread, ThreadMetadata},
 };
 
 use super::{VideoEncoder, VideoEncoderConfig, VideoEncoderStream};
