@@ -58,7 +58,7 @@ pub struct Pipeline {
 
     #[allow(dead_code)]
     // triggers cleanup on drop
-    rtmp_server: Option<Arc<Mutex<RtmpServer>>>,
+    rtmp_server: Option<RtmpServer>,
 }
 
 impl Pipeline {
