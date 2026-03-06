@@ -106,10 +106,10 @@ impl RtmpInputState {
         input_ref: &Ref<InputId>,
     ) -> Result<(), RtmpServerError> {
         match &self.connection_handle {
-            Some(handle) if handle.is_finished() => Ok(()),
-            _ => Err(RtmpServerError::ConnectionAlreadyActive(
+            Some(handle) if !handle.is_finished() => Err(RtmpServerError::ConnectionAlreadyActive(
                 input_ref.id().clone(),
             )),
+            _ => Ok(()),
         }
     }
 }
