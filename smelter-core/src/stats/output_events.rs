@@ -23,6 +23,9 @@ impl From<&OutputStatsEvent> for OutputProtocolKind {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum WhepOutputStatsEvent {
+    PeerConnected,
+    PeerDisconnected,
+
     Video(WhepOutputTrackStatsEvent),
     Audio(WhepOutputTrackStatsEvent),
 }

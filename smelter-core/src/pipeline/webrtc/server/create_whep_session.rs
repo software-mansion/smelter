@@ -94,13 +94,17 @@ pub async fn handle_create_whep_session(
         .await?;
     trace!("SDP answer: {}", sdp_answer.sdp);
 
-    let session_id = outputs.add_session(&output_ref, peer_connection.clone())?;
-
-    peer_connection.on_peer_connection_cleanup(OnCleanupSessionHdlr::new(
-        &outputs,
+    let session_id = outputs.add_session(
         &output_ref,
-        &session_id,
-    ));
+        peer_connection.clone(),
+        ctx.stats_sender.clone(),
+    )?;
+
+    peer_connection.on_peer_connection_cleanup(
+        OnCleanupSessionHdlr::new(&outputs, &output_ref, &session_id, &ctx.stats_sender),
+        ctx.stats_sender.clone(),
+        output_ref.clone(),
+    );
 
     tokio::spawn(stream_media_to_peer(
         ctx.clone(),

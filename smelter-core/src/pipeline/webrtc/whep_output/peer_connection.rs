@@ -246,10 +246,17 @@ impl PeerConnection {
         Ok(self.pc.close().await?)
     }
 
-    pub fn on_peer_connection_cleanup(&self, cleanup_session_handler: OnCleanupSessionHdlr) {
+    pub fn on_peer_connection_cleanup(
+        &self,
+        cleanup_session_handler: OnCleanupSessionHdlr,
+        stats_sender: StatsSender,
+        output_ref: Ref<OutputId>,
+    ) {
         let pc = self.pc.clone();
         let cleanup_task_handle = Arc::new(Mutex::new(None));
 
+        // TODO: (@jbrs) This is a terrible place to send that as it is called on every state
+        // change, and there is a wait for reconnect here
         self.pc.on_peer_connection_state_change(Box::new({
             move |state: RTCPeerConnectionState| {
                 handle_cleanup_on_disconnect(
@@ -257,6 +264,8 @@ impl PeerConnection {
                     pc.clone(),
                     cleanup_task_handle.clone(),
                     cleanup_session_handler.clone(),
+                    stats_sender.clone(),
+                    output_ref.clone(),
                 );
                 Box::pin(async {})
             }
@@ -322,6 +331,8 @@ fn handle_cleanup_on_disconnect(
     pc: Arc<RTCPeerConnection>,
     cleanup_task_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     remove_session_handler: OnCleanupSessionHdlr,
+    stats_sender: StatsSender,
+    output_ref: Ref<OutputId>,
 ) {
     match state {
         RTCPeerConnectionState::Connected => {

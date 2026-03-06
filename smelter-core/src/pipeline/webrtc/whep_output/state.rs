@@ -65,12 +65,16 @@ impl WhepOutputsState {
         &self,
         output_ref: &Ref<OutputId>,
         peer_connection: PeerConnection,
+        stats_sender: StatsSender,
     ) -> Result<Arc<str>, WhipWhepServerError> {
         let mut guard = self.0.lock().unwrap();
         match guard.get_mut(output_ref) {
             Some(output) => {
                 let session_id: Arc<str> = Arc::from(Uuid::new_v4().to_string());
                 output.sessions.insert(session_id.clone(), peer_connection);
+                stats_sender.send(vec![
+                    WhepOutputStatsEvent::PeerConnected.into_event(output_ref),
+                ]);
                 Ok(session_id)
             }
             None => Err(WhipWhepServerError::NotFound(format!(
@@ -83,6 +87,7 @@ impl WhepOutputsState {
         &self,
         output_ref: &Ref<OutputId>,
         session_id: &Arc<str>,
+        stats_sender: &StatsSender,
     ) -> Result<(), WhipWhepServerError> {
         let peer_connection = {
             let mut guard = self.0.lock().unwrap();
@@ -104,6 +109,9 @@ impl WhepOutputsState {
                 "Failed to close session {session_id:?}: {e}"
             )));
         }
+        stats_sender.send(vec![
+            WhepOutputStatsEvent::PeerDisconnected.into_event(output_ref),
+        ]);
 
         Ok(())
     }

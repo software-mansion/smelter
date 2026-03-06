@@ -12,6 +12,8 @@ use crate::stats::{
 pub struct WhepOutputState {
     pub video: WhepOutputTrackState,
     pub audio: WhepOutputTrackState,
+
+    pub peers_connected: u64,
 }
 
 #[derive(Debug)]
@@ -30,11 +32,14 @@ impl WhepOutputState {
         Self {
             video: WhepOutputTrackState::new(),
             audio: WhepOutputTrackState::new(),
+
+            peers_connected: 0,
         }
     }
 
     pub fn report(&mut self) -> WhepOutputStatsReport {
         WhepOutputStatsReport {
+            peers_connected: self.peers_connected,
             video: self.video.report(),
             audio: self.audio.report(),
         }
@@ -44,6 +49,9 @@ impl WhepOutputState {
         match event {
             WhepOutputStatsEvent::Video(track_event) => self.video.handle_event(track_event),
             WhepOutputStatsEvent::Audio(track_event) => self.audio.handle_event(track_event),
+
+            WhepOutputStatsEvent::PeerConnected => self.peers_connected += 1,
+            WhepOutputStatsEvent::PeerDisconnected => self.peers_connected -= 1,
         }
     }
 }
