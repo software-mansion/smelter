@@ -4,6 +4,7 @@ use serde::Serialize;
 #[serde(rename_all = "snake_case")]
 pub enum OutputStatsReport {
     Whep(WhepOutputStatsReport),
+    Whip(WhipOutputStatsReport),
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -19,5 +20,21 @@ pub struct WhepOutputTrackStatsReport {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct WhepOutputTrackSlidingWindowStatsReport {
+    pub bitrate_avg: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct WhipOutputStatsReport {
+    pub video: WhipOutputTrackStatsReport,
+    pub audio: WhipOutputTrackStatsReport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct WhipOutputTrackStatsReport {
+    pub last_10_seconds: WhipOutputTrackSlidingWindowStatsReport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct WhipOutputTrackSlidingWindowStatsReport {
     pub bitrate_avg: u64,
 }
